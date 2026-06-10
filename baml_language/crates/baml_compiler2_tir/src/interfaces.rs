@@ -10,7 +10,7 @@
 //!
 //! Salsa-tracked so subtype calls don't rebuild the closure on each check.
 
-use baml_base::{Literal, Name};
+use baml_base::{Literal, Name, Span};
 use baml_compiler2_hir::{contributions::Definition, package::PackageId};
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -74,6 +74,9 @@ pub struct InterfaceImplRule {
     pub for_ty_pattern: Ty,
     pub interface_ty: Ty,
     pub origin: InterfaceImplOrigin,
+    /// Source location of the impl, used to attribute coherence diagnostics.
+    /// `None` for rules synthesized during lowering, which have no source text.
+    pub source_span: Option<Span>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1491,6 +1494,10 @@ pub fn package_implements_registry<'db>(
                         origin: InterfaceImplOrigin::InBodyClass {
                             class_qtn: class_qtn.clone(),
                         },
+                        source_span: Some(Span::new(
+                            class_loc.file(db).file_id(db),
+                            target.target.span,
+                        )),
                     });
                 }
             }
@@ -1584,6 +1591,7 @@ pub fn package_implements_registry<'db>(
                 for_ty_pattern: target_ty.clone(),
                 interface_ty,
                 origin: InterfaceImplOrigin::OutOfBody,
+                source_span: Some(Span::new(file.file_id(db), imp.span)),
             });
         }
     }
@@ -1619,6 +1627,461 @@ pub fn package_implements_registry<'db>(
         type_implements_type_args: compatibility_views.type_implements_type_args,
         interface_requires,
     }
+}
+
+/// A coherence violation: two implementations of the same interface whose
+/// subjects overlap. With no specialization, any overlap is a hard error.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CoherenceViolation {
+    /// The offending impl. Always owned by the package being checked, so the
+    /// diagnostic lands on a file the user can edit.
+    pub primary: Span,
+    /// The impl it overlaps with. May live in a dependency package.
+    pub secondary: Span,
+}
+
+/// Per-package interface coherence check.
+///
+/// Reports overlapping implementations of the same interface across the whole
+/// package *and its dependency closure* — the BAML analog of rustc's per-crate
+/// coherence plus knowability. The orphan rule (E0139) guarantees every blanket
+/// impl lives in its interface's package, and writing `implement I for …`
+/// requires depending on `pkg(I)`, so any overlapping pair has one side's
+/// package depending on the other's (or is intra-package). Checking each
+/// package against its dependencies is therefore complete without a
+/// whole-program pass, and stays sound under dynamic loading.
+///
+/// Only pairs with at least one impl owned by `pkg_id` are reported;
+/// dependency-internal conflicts are attributed to the dependency when *its*
+/// coherence is checked, so nothing is double-reported.
+#[salsa::tracked(returns(ref))]
+pub fn package_coherence_diagnostics<'db>(
+    db: &'db dyn crate::Db,
+    pkg_id: PackageId<'db>,
+) -> Vec<CoherenceViolation> {
+    let own_rules = &package_implements_registry(db, pkg_id).interface_impl_rules;
+    let deps = baml_compiler2_hir::package::package_dependencies(db, pkg_id);
+
+    // Type aliases (own package plus dependency exports) so alias-referencing
+    // for-types and interface args normalize before the overlap comparison.
+    let mut aliases =
+        crate::inference::collect_type_aliases(db, baml_compiler2_ppir::package_items(db, pkg_id));
+    for dep in deps {
+        for (qtn, ty) in
+            crate::inference::collect_type_aliases(db, baml_compiler2_ppir::package_items(db, *dep))
+        {
+            aliases.entry(qtn).or_insert(ty);
+        }
+    }
+
+    let dep_rules: Vec<&InterfaceImplRule> = deps
+        .iter()
+        .flat_map(|dep| {
+            package_implements_registry(db, *dep)
+                .interface_impl_rules
+                .iter()
+        })
+        .collect();
+
+    let mut violations = Vec::new();
+    for (i, own) in own_rules.iter().enumerate() {
+        let Some(own_span) = own.source_span else {
+            continue;
+        };
+        // own × own — each unordered pair once; the later impl carries the error.
+        for other in &own_rules[i + 1..] {
+            let Some(other_span) = other.source_span else {
+                continue;
+            };
+            if impls_conflict(db, pkg_id, own, other, &aliases) {
+                violations.push(CoherenceViolation {
+                    primary: other_span,
+                    secondary: own_span,
+                });
+            }
+        }
+        // own × dependency — the owning package's impl carries the error.
+        for dep_rule in &dep_rules {
+            let Some(dep_span) = dep_rule.source_span else {
+                continue;
+            };
+            if impls_conflict(db, pkg_id, own, dep_rule, &aliases) {
+                violations.push(CoherenceViolation {
+                    primary: own_span,
+                    secondary: dep_span,
+                });
+            }
+        }
+    }
+    violations
+}
+
+/// True iff two impls of the *same* interface conflict (overlap with no
+/// specialization to rescue them). Distinct interfaces never conflict, and two
+/// in-body blocks of the same class for the same interface are a duplicate
+/// (reported separately), not an overlap.
+fn impls_conflict<'db>(
+    db: &'db dyn crate::Db,
+    pkg_id: PackageId<'db>,
+    a: &InterfaceImplRule,
+    b: &InterfaceImplRule,
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+) -> bool {
+    let (Some(a_qtn), Some(b_qtn)) = (
+        interface_qtn(&a.interface_ty),
+        interface_qtn(&b.interface_ty),
+    ) else {
+        return false;
+    };
+    if a_qtn != b_qtn {
+        return false;
+    }
+    // An impl whose for-target is not a valid implementor (rejected by the E0138
+    // concreteness gate — union, interface, literal, enum variant, or an error
+    // type) must not contribute a coherence overlap, or it would stack a spurious
+    // E0132 on top of that rejection.
+    if !a.for_ty_pattern.is_valid_impl_subject() || !b.for_ty_pattern.is_valid_impl_subject() {
+        return false;
+    }
+    if same_in_body_origin(a, b)
+        && normalize::is_same_normalized_type(
+            &strip_interface_assoc(&a.interface_ty),
+            &strip_interface_assoc(&b.interface_ty),
+            aliases,
+        )
+    {
+        return false;
+    }
+    impls_overlap(db, pkg_id, a, b, aliases)
+}
+
+/// Conservative symmetric overlap test over two impls of the same interface.
+///
+/// Two impls overlap iff their *subjects* — the for-type plus the interface
+/// type-args — have a **common instance**: one concrete type + arg list that
+/// both impls would apply to. We decide this by first-order unification with
+/// *both* impls' generic params as fresh unification variables (renamed to
+/// disjoint names so they can bind on either side). This finds complementary
+/// pairs like `Pair<T, int>` vs `Pair<string, U>` (common instance
+/// `Pair<string, int>`) that a one-directional matcher misses.
+///
+/// Associated bindings are interface *outputs*, so only the args participate.
+///
+/// Once the subjects unify, a bound on a param the unifier pinned to a *ground*
+/// type is decided precisely (`type_implements_with_deps`): if that type
+/// provably does not satisfy the bound, the bounded impl cannot apply to the
+/// common instance, so the impls are disjoint. Bounds on params that remain
+/// variables (blanket-vs-blanket) stay conservative — without negative impls we
+/// cannot prove two bounded blankets disjoint, so they are assumed to overlap.
+fn impls_overlap<'db>(
+    db: &'db dyn crate::Db,
+    pkg_id: PackageId<'db>,
+    a: &InterfaceImplRule,
+    b: &InterfaceImplRule,
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+) -> bool {
+    let (a_for, a_args) = renamed_subject(a, 'a');
+    let (b_for, b_args) = renamed_subject(b, 'b');
+    if a_args.len() != b_args.len() {
+        return false;
+    }
+    let mut vars: Vec<Name> = Vec::with_capacity(a.generic_params.len() + b.generic_params.len());
+    vars.extend((0..a.generic_params.len()).map(|i| renamed_var('a', i)));
+    vars.extend((0..b.generic_params.len()).map(|i| renamed_var('b', i)));
+
+    let mut bindings = TypeBindings::default();
+    if unify_into(&a_for, &b_for, &vars, aliases, &mut bindings).is_none() {
+        return false;
+    }
+    if !a_args
+        .iter()
+        .zip(b_args.iter())
+        .all(|(x, y)| unify_into(x, y, &vars, aliases, &mut bindings).is_some())
+    {
+        return false;
+    }
+
+    // Subjects share a common instance; they still fail to overlap if either
+    // carries a bound the common instance provably violates.
+    bounds_hold_at_common_instance(db, pkg_id, a, 'a', &vars, &bindings)
+        && bounds_hold_at_common_instance(db, pkg_id, b, 'b', &vars, &bindings)
+}
+
+/// Whether every bound of `rule` could hold at the common instance the unifier
+/// produced. Returns `false` as soon as a bound whose subject the unifier pinned
+/// to a *ground* type is provably unsatisfiable — which makes the two impls
+/// disjoint. A bound whose subject is still a variable is undecidable in an open
+/// world and is assumed satisfiable.
+fn bounds_hold_at_common_instance<'db>(
+    db: &'db dyn crate::Db,
+    pkg_id: PackageId<'db>,
+    rule: &InterfaceImplRule,
+    prefix: char,
+    vars: &[Name],
+    bindings: &TypeBindings,
+) -> bool {
+    for i in 0..rule.generic_params.len() {
+        let Some(Some(bound)) = rule.generic_param_bounds.get(i) else {
+            continue;
+        };
+        let Some(bound_qtn) = interface_qtn(bound) else {
+            continue;
+        };
+        let subject = chase_var(
+            &Ty::TypeVar(renamed_var(prefix, i), TyAttr::default()),
+            vars,
+            bindings,
+        );
+        if contains_bound_typevar(&subject, vars) {
+            continue;
+        }
+        if !type_implements_with_deps(db, pkg_id, &subject, bound_qtn) {
+            return false;
+        }
+    }
+    true
+}
+
+/// Fresh unification-variable name for the `idx`-th generic param of the impl
+/// on side `prefix`. Guillemets can't appear in user type-var names, so the two
+/// impls' renamed params are guaranteed disjoint from each other and from any
+/// real type.
+fn renamed_var(prefix: char, idx: usize) -> Name {
+    Name::new(format!("«{prefix}{idx}»"))
+}
+
+/// The impl's subject — for-type and interface args — with its generic params
+/// renamed to side-`prefix` unification variables. Associated bindings are
+/// dropped (interface outputs, not part of overlap).
+fn renamed_subject(rule: &InterfaceImplRule, prefix: char) -> (Ty, Vec<Ty>) {
+    let rename: TypeBindings = rule
+        .generic_params
+        .iter()
+        .enumerate()
+        .map(|(i, p)| {
+            (
+                p.clone(),
+                Ty::TypeVar(renamed_var(prefix, i), TyAttr::default()),
+            )
+        })
+        .collect();
+    let for_ty = generics::substitute_ty(&rule.for_ty_pattern, &rename);
+    let args = match &rule.interface_ty {
+        Ty::Interface(_, args, _, _) => args
+            .iter()
+            .map(|arg| generics::substitute_ty(arg, &rename))
+            .collect(),
+        _ => Vec::new(),
+    };
+    (for_ty, args)
+}
+
+/// Symmetric first-order unification. `vars` is the combined (renamed-disjoint)
+/// unification-variable set of the two impls; either side may bind. Returns
+/// `Some(())` when the inputs have a common instance under `bindings`.
+///
+/// Functions and other variants without a structural arm fall through to
+/// equality: equal subjects unify, distinct ones are disjoint. This loses
+/// precision only for var-bearing function-typed interface args (never seen as
+/// impl subjects today), which would be conservatively treated as disjoint.
+fn unify_into(
+    x: &Ty,
+    y: &Ty,
+    vars: &[Name],
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    bindings: &mut TypeBindings,
+) -> Option<()> {
+    let x = chase_var(x, vars, bindings);
+    let y = chase_var(y, vars, bindings);
+
+    // Error-recovery types never unify: an unresolved for-type or arg already has
+    // its own diagnostic, so treating it as a common instance would stack a
+    // spurious overlap.
+    if matches!(x, Ty::Unknown { .. } | Ty::BuiltinUnknown { .. })
+        || matches!(y, Ty::Unknown { .. } | Ty::BuiltinUnknown { .. })
+    {
+        return None;
+    }
+
+    if let Ty::TypeVar(n, _) = &x
+        && vars.contains(n)
+    {
+        return bind_unify_var(n, &y, vars, aliases, bindings);
+    }
+    if let Ty::TypeVar(n, _) = &y
+        && vars.contains(n)
+    {
+        return bind_unify_var(n, &x, vars, aliases, bindings);
+    }
+
+    // Structurally-equal (or alias-equal) subjects unify with no new bindings;
+    // this also resolves ground unions order-insensitively via the normalizer.
+    if normalize::is_same_normalized_type(&x, &y, aliases) {
+        return Some(());
+    }
+
+    match (&x, &y) {
+        (Ty::Class(xq, xa, _), Ty::Class(yq, ya, _)) if xq == yq && xa.len() == ya.len() => xa
+            .iter()
+            .zip(ya.iter())
+            .try_for_each(|(xi, yi)| unify_into(xi, yi, vars, aliases, bindings)),
+        (Ty::Interface(xq, xa, _, _), Ty::Interface(yq, ya, _, _))
+            if xq == yq && xa.len() == ya.len() =>
+        {
+            xa.iter()
+                .zip(ya.iter())
+                .try_for_each(|(xi, yi)| unify_into(xi, yi, vars, aliases, bindings))
+        }
+        (Ty::List(xi, _), Ty::List(yi, _)) | (Ty::EvolvingList(xi, _), Ty::EvolvingList(yi, _)) => {
+            unify_into(xi, yi, vars, aliases, bindings)
+        }
+        (
+            Ty::Map {
+                key: xk, value: xv, ..
+            },
+            Ty::Map {
+                key: yk, value: yv, ..
+            },
+        )
+        | (Ty::EvolvingMap(xk, xv, _), Ty::EvolvingMap(yk, yv, _)) => {
+            unify_into(xk, yk, vars, aliases, bindings)?;
+            unify_into(xv, yv, vars, aliases, bindings)
+        }
+        (Ty::Future(xv, xe, _), Ty::Future(yv, ye, _)) => {
+            unify_into(xv, yv, vars, aliases, bindings)?;
+            unify_into(xe, ye, vars, aliases, bindings)
+        }
+        (Ty::Union(xm, _), Ty::Union(ym, _)) if xm.len() == ym.len() => {
+            unify_union_members(xm, ym, vars, aliases, bindings)
+        }
+        // A literal and its base primitive share runtime values, so they unify.
+        (Ty::Int { .. }, Ty::Literal(Literal::Int(_), _, _))
+        | (Ty::Literal(Literal::Int(_), _, _), Ty::Int { .. })
+        | (Ty::Bigint { .. }, Ty::Literal(Literal::Bigint(_), _, _))
+        | (Ty::Literal(Literal::Bigint(_), _, _), Ty::Bigint { .. })
+        | (Ty::Float { .. }, Ty::Literal(Literal::Float(_), _, _))
+        | (Ty::Literal(Literal::Float(_), _, _), Ty::Float { .. })
+        | (Ty::String { .. }, Ty::Literal(Literal::String(_), _, _))
+        | (Ty::Literal(Literal::String(_), _, _), Ty::String { .. })
+        | (Ty::Bool { .. }, Ty::Literal(Literal::Bool(_), _, _))
+        | (Ty::Literal(Literal::Bool(_), _, _), Ty::Bool { .. }) => Some(()),
+        _ => None,
+    }
+}
+
+/// Order-insensitive unification of two equal-length unions: every member of
+/// `xs` must unify with a distinct member of `ys`, with binding rollback on
+/// failed trials (a symmetric generalization of `match_union_members`).
+fn unify_union_members(
+    xs: &[Ty],
+    ys: &[Ty],
+    vars: &[Name],
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    bindings: &mut TypeBindings,
+) -> Option<()> {
+    let Some((x_head, x_tail)) = xs.split_first() else {
+        return ys.is_empty().then_some(());
+    };
+    for idx in 0..ys.len() {
+        let mut trial = bindings.clone();
+        if unify_into(x_head, &ys[idx], vars, aliases, &mut trial).is_none() {
+            continue;
+        }
+        let remaining: Vec<Ty> = ys
+            .iter()
+            .enumerate()
+            .filter(|(member_idx, _)| *member_idx != idx)
+            .map(|(_, member)| member.clone())
+            .collect();
+        if unify_union_members(x_tail, &remaining, vars, aliases, &mut trial).is_some() {
+            *bindings = trial;
+            return Some(());
+        }
+    }
+    None
+}
+
+/// Resolve a type through the current bindings: while it is a bound unification
+/// variable, replace it with its binding (so callers see the representative).
+fn chase_var(ty: &Ty, vars: &[Name], bindings: &TypeBindings) -> Ty {
+    let mut current = ty.clone();
+    while let Ty::TypeVar(name, _) = &current {
+        if vars.contains(name)
+            && let Some(bound) = bindings.get(name)
+        {
+            current = bound.clone();
+        } else {
+            break;
+        }
+    }
+    current
+}
+
+/// Bind unification variable `n` to (already-chased) `t`, unifying with any
+/// existing binding and rejecting cyclic bindings (the occurs check).
+fn bind_unify_var(
+    n: &Name,
+    t: &Ty,
+    vars: &[Name],
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    bindings: &mut TypeBindings,
+) -> Option<()> {
+    if let Ty::TypeVar(tn, _) = t
+        && tn == n
+    {
+        return Some(());
+    }
+    if let Some(existing) = bindings.get(n).cloned() {
+        return unify_into(&existing, t, vars, aliases, bindings);
+    }
+    if occurs_in(n, t, vars, bindings) {
+        return None;
+    }
+    bindings.insert(n.clone(), t.clone());
+    Some(())
+}
+
+/// Occurs check: does unification variable `n` appear anywhere in `t` (chasing
+/// bound vars)? A positive answer means binding `n := t` would build an
+/// infinite type, so the two subjects have no finite common instance.
+fn occurs_in(n: &Name, t: &Ty, vars: &[Name], bindings: &TypeBindings) -> bool {
+    let t = chase_var(t, vars, bindings);
+    match &t {
+        Ty::TypeVar(m, _) => m == n,
+        Ty::Class(_, args, _) | Ty::Union(args, _) => {
+            args.iter().any(|a| occurs_in(n, a, vars, bindings))
+        }
+        Ty::Interface(_, args, assoc, _) => {
+            args.iter().any(|a| occurs_in(n, a, vars, bindings))
+                || assoc.iter().any(|(_, ty)| occurs_in(n, ty, vars, bindings))
+        }
+        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => occurs_in(n, inner, vars, bindings),
+        Ty::Map {
+            key: k, value: v, ..
+        }
+        | Ty::EvolvingMap(k, v, _)
+        | Ty::Future(k, v, _) => occurs_in(n, k, vars, bindings) || occurs_in(n, v, vars, bindings),
+        _ => false,
+    }
+}
+
+fn strip_interface_assoc(ty: &Ty) -> Ty {
+    match ty {
+        Ty::Interface(qtn, args, _, attr) => {
+            Ty::Interface(qtn.clone(), args.clone(), Vec::new(), attr.clone())
+        }
+        other => other.clone(),
+    }
+}
+
+fn same_in_body_origin(a: &InterfaceImplRule, b: &InterfaceImplRule) -> bool {
+    matches!(
+        (&a.origin, &b.origin),
+        (
+            InterfaceImplOrigin::InBodyClass { class_qtn: ca },
+            InterfaceImplOrigin::InBodyClass { class_qtn: cb },
+        ) if ca == cb
+    )
 }
 
 /// Resolve a `TypeExpr::Path` to an interface declaration and its fully
@@ -2054,6 +2517,7 @@ mod tests {
                 for_ty_pattern: Ty::Class(dog_qtn.clone(), vec![], TyAttr::default()),
                 interface_ty: Ty::Interface(named_qtn.clone(), vec![], vec![], TyAttr::default()),
                 origin: InterfaceImplOrigin::InBodyClass { class_qtn: dog_qtn },
+                source_span: None,
             },
             InterfaceImplRule {
                 generic_params: vec![Name::new("T")],
@@ -2073,6 +2537,7 @@ mod tests {
                 origin: InterfaceImplOrigin::InBodyClass {
                     class_qtn: box_qtn.clone(),
                 },
+                source_span: None,
             },
         ];
         let views = derive_compatibility_views(&rules, std::slice::from_ref(&box_qtn));
@@ -2235,6 +2700,7 @@ mod tests {
             for_ty_pattern: class(&[], "Wrapper", vec![type_var("T")]),
             interface_ty: interface("Container", vec![type_var("T")]),
             origin: InterfaceImplOrigin::OutOfBody,
+            source_span: None,
         };
         let actual = class(&[], "Wrapper", vec![int()]);
         let requested = interface("Container", vec![string()]);
@@ -2272,6 +2738,7 @@ mod tests {
             for_ty_pattern: class(&[], "Wrapped", vec![type_var("T")]),
             interface_ty: interface_with_assoc("Renderable", vec![("Output", projected_item)]),
             origin: InterfaceImplOrigin::OutOfBody,
+            source_span: None,
         };
         let actual = class(&[], "Wrapped", vec![class(&[], "TextSource", vec![])]);
         let requested = interface_with_assoc("Renderable", vec![("Output", string())]);

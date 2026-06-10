@@ -601,15 +601,25 @@ fn check_interfaces<'db>(
         }
     }
 
-    validate_overlapping_implements(
-        db,
-        file_id,
-        items,
-        pkg_items,
-        namespace_path,
-        aliases,
-        &mut diagnostics,
-    );
+    // Interface coherence (overlap, E0132) is a per-package property over the
+    // whole dependency closure, not a per-file one. Compute it once for the
+    // package and surface the violations whose offending impl lives in this
+    // file (its conflicting partner may be in another file or a dependency).
+    let pkg_id = baml_compiler2_hir::package::PackageId::new(db, current_package.clone());
+    for violation in baml_compiler2_tir::interfaces::package_coherence_diagnostics(db, pkg_id) {
+        if violation.primary.file_id != file_id {
+            continue;
+        }
+        diagnostics.push(
+            Diagnostic::error(
+                DiagnosticId::OverlappingImplements,
+                "overlapping interface implementations for the same receiver/interface",
+            )
+            .with_primary_span(violation.primary)
+            .with_secondary(violation.secondary, "first implementation is here")
+            .with_phase(DiagnosticPhase::Type),
+        );
+    }
 
     for item in items {
         if let baml_compiler2_ast::Item::Interface(iface) = item {
@@ -4045,178 +4055,6 @@ fn has_sibling_implements_for_origin(
     })
 }
 
-#[derive(Clone)]
-struct ImplOverlapEntry {
-    iface_qtn: QualifiedTypeName,
-    iface_ty: Ty,
-    for_ty: Ty,
-    generic_params: Vec<Name>,
-    span: TextRange,
-    in_body_class: Option<QualifiedTypeName>,
-}
-
-fn validate_overlapping_implements<'db>(
-    db: &'db dyn Db,
-    file_id: FileId,
-    items: &[baml_compiler2_ast::Item],
-    pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
-    namespace_path: &[Name],
-    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
-    let entries = collect_impl_overlap_entries(db, items, pkg_items, namespace_path);
-    for (idx, lhs) in entries.iter().enumerate() {
-        for rhs in entries.iter().skip(idx + 1) {
-            if lhs.iface_qtn != rhs.iface_qtn {
-                continue;
-            }
-            if lhs.in_body_class.is_some()
-                && lhs.in_body_class == rhs.in_body_class
-                && baml_compiler2_tir::normalize::is_same_normalized_type(
-                    &lhs.iface_ty,
-                    &rhs.iface_ty,
-                    aliases,
-                )
-            {
-                continue;
-            }
-            if !impl_patterns_overlap(lhs, rhs, aliases) {
-                continue;
-            }
-            diagnostics.push(
-                Diagnostic::error(
-                    DiagnosticId::OverlappingImplements,
-                    "overlapping interface implementations for the same receiver/interface",
-                )
-                .with_primary_span(Span {
-                    file_id,
-                    range: rhs.span,
-                })
-                .with_secondary(
-                    Span {
-                        file_id,
-                        range: lhs.span,
-                    },
-                    "first implementation is here",
-                )
-                .with_phase(DiagnosticPhase::Type),
-            );
-        }
-    }
-}
-
-fn collect_impl_overlap_entries<'db>(
-    db: &'db dyn Db,
-    items: &[baml_compiler2_ast::Item],
-    pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
-    namespace_path: &[Name],
-) -> Vec<ImplOverlapEntry> {
-    use baml_compiler2_hir::contributions::Definition;
-
-    let mut entries = Vec::new();
-    for item in items {
-        match item {
-            baml_compiler2_ast::Item::Class(class) => {
-                let Some(Definition::Class(class_loc)) =
-                    pkg_items.lookup_type(namespace_path, &class.name)
-                else {
-                    continue;
-                };
-                let class_qtn = baml_compiler2_tir::lower_type_expr::qualify_def(
-                    db,
-                    Definition::Class(class_loc),
-                    &class.name,
-                );
-                let for_ty = Ty::Class(
-                    class_qtn.clone(),
-                    class
-                        .generic_params
-                        .iter()
-                        .map(|param| Ty::TypeVar(param.clone(), TyAttr::default()))
-                        .collect(),
-                    TyAttr::default(),
-                );
-                for block in &class.implements {
-                    let Some(resolved_iface) =
-                        resolve_interface_path(db, &block.target.expr, pkg_items, namespace_path)
-                    else {
-                        continue;
-                    };
-                    let iface_args = lower_path_generic_args(
-                        db,
-                        &block.target.expr,
-                        pkg_items,
-                        namespace_path,
-                        &class.generic_params,
-                    );
-                    entries.push(ImplOverlapEntry {
-                        iface_qtn: resolved_iface.qtn.clone(),
-                        iface_ty: Ty::Interface(
-                            resolved_iface.qtn.clone(),
-                            iface_args,
-                            vec![],
-                            TyAttr::default(),
-                        ),
-                        for_ty: for_ty.clone(),
-                        generic_params: class.generic_params.clone(),
-                        span: block.target.span,
-                        in_body_class: Some(class_qtn.clone()),
-                    });
-                }
-            }
-            baml_compiler2_ast::Item::ImplementsFor(imp) => {
-                let generic_params: Vec<Name> = imp
-                    .generic_params
-                    .iter()
-                    .map(|(name, _)| name.clone())
-                    .collect();
-                let Some(resolved_iface) = resolve_interface_path(
-                    db,
-                    &imp.interface_target.expr,
-                    pkg_items,
-                    namespace_path,
-                ) else {
-                    continue;
-                };
-                let mut diags = Vec::new();
-                let for_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
-                    db,
-                    &imp.for_target.expr,
-                    pkg_items,
-                    namespace_path,
-                    &generic_params,
-                    &mut diags,
-                );
-                if !diags.is_empty() {
-                    continue;
-                }
-                let iface_args = lower_path_generic_args(
-                    db,
-                    &imp.interface_target.expr,
-                    pkg_items,
-                    namespace_path,
-                    &generic_params,
-                );
-                entries.push(ImplOverlapEntry {
-                    iface_qtn: resolved_iface.qtn.clone(),
-                    iface_ty: Ty::Interface(
-                        resolved_iface.qtn.clone(),
-                        iface_args,
-                        vec![],
-                        TyAttr::default(),
-                    ),
-                    for_ty,
-                    generic_params,
-                    span: imp.span,
-                    in_body_class: None,
-                });
-            }
-            _ => {}
-        }
-    }
-    entries
-}
-
 fn lower_path_generic_args<'db>(
     db: &'db dyn Db,
     expr: &baml_compiler2_ast::TypeExpr,
@@ -4241,54 +4079,6 @@ fn lower_path_generic_args<'db>(
             )
         })
         .collect()
-}
-
-fn impl_patterns_overlap(
-    lhs: &ImplOverlapEntry,
-    rhs: &ImplOverlapEntry,
-    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
-) -> bool {
-    let lhs_for_rhs = baml_compiler2_tir::interfaces::match_ty_pattern(
-        &lhs.for_ty,
-        &rhs.for_ty,
-        &lhs.generic_params,
-        aliases,
-    )
-    .is_some();
-    let rhs_for_lhs = baml_compiler2_tir::interfaces::match_ty_pattern(
-        &rhs.for_ty,
-        &lhs.for_ty,
-        &rhs.generic_params,
-        aliases,
-    )
-    .is_some();
-    if !(lhs_for_rhs || rhs_for_lhs) {
-        return false;
-    }
-    if lhs.generic_params == rhs.generic_params
-        && baml_compiler2_tir::normalize::is_same_normalized_type(&lhs.for_ty, &rhs.for_ty, aliases)
-    {
-        return baml_compiler2_tir::normalize::is_same_normalized_type(
-            &lhs.iface_ty,
-            &rhs.iface_ty,
-            aliases,
-        );
-    }
-
-    baml_compiler2_tir::interfaces::match_ty_pattern(
-        &lhs.iface_ty,
-        &rhs.iface_ty,
-        &lhs.generic_params,
-        aliases,
-    )
-    .is_some()
-        || baml_compiler2_tir::interfaces::match_ty_pattern(
-            &rhs.iface_ty,
-            &lhs.iface_ty,
-            &rhs.generic_params,
-            aliases,
-        )
-        .is_some()
 }
 
 fn validate_interface_extends_fields(
@@ -4387,7 +4177,6 @@ fn expand_type_alias(ty: &Ty, aliases: &std::collections::HashMap<QualifiedTypeN
     current
 }
 
-#[allow(clippy::too_many_arguments)]
 /// Outcome of the BEP-044 orphan-rule check for an out-of-body impl.
 enum OrphanCheck<'a> {
     Ok,
@@ -4485,33 +4274,22 @@ fn validate_implements_for<'db>(
         return;
     }
 
-    // BEP-044: an interface may only be implemented for a single *concrete* type
-    // — a class/enum/primitive, a concrete type constructor (`T[]`, `map<K, V>`),
-    // or a blanket type parameter (`implements<T> I for T`, whose `T` is itself a
-    // type variable). A union, optional, or bare interface ("dyn"/existential)
-    // target is rejected: an optional is `T | null` (a union), so each case /
-    // union member would need its own body, and an existential has no single
-    // concrete implementor for dispatch to recover. The user-facing top type
-    // `unknown` (`Ty::BuiltinUnknown`) is rejected for the same reason — it
-    // denotes "any type", with no single implementor to dispatch on. (The
-    // distinct `Ty::Unknown` only arises from an already-diagnosed unresolved
-    // target, so it is matched here purely as defence-in-depth.) `never` is
-    // intentionally allowed: it can never be instantiated, so the impl is vacuous.
+    // BEP-044: only a *concrete* type may implement an interface (see
+    // `Ty::is_valid_impl_subject` for the full classification — e.g. a
+    // union/optional/interface has no single implementor, and a literal or enum
+    // variant is a singleton subtype whose values dispatch through their base).
     //
     // Aliases are expanded first so the gate sees through them — otherwise
     // `type U = int | string; implements I for U {}` would slip past as an
     // opaque `Ty::TypeAlias`.
     let resolved_target = expand_type_alias(&target_ty, aliases);
-    if matches!(
-        &resolved_target,
-        Ty::Interface(..) | Ty::Union(..) | Ty::Unknown { .. } | Ty::BuiltinUnknown { .. }
-    ) {
+    if !resolved_target.is_valid_impl_subject() {
         diagnostics.push(
             Diagnostic::error(
                 DiagnosticId::ImplTargetNotConcrete,
                 format!(
-                    "cannot implement interface `{}` for `{}`: the `for` target must be a single \
-                     concrete type, not a union, optional, or interface",
+                    "cannot implement interface `{}` for `{}`: only concrete types may \
+                     implement interfaces",
                     imp.interface_target.expr, imp.for_target.expr
                 ),
             )

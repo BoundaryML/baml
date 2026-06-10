@@ -4,21 +4,17 @@
 //! disambiguation, required-interface propagation, unions, destructuring, and
 //! runtime dispatch through associated interface views.
 
-use std::{collections::HashSet, sync::Arc};
+use std::collections::HashSet;
 
 use baml_compiler_diagnostics::Severity;
 use baml_fmt::FormatOptions;
-use baml_project::{
-    ProjectDatabase, collect_diagnostics,
-    testing::{compile_multi_file, setup_test_db},
-};
+use baml_project::{ProjectDatabase, collect_diagnostics, testing::setup_test_db};
 use baml_tests::{
     baml_test,
     engine::{OptLevel, compile_source_with_opt},
 };
-use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
+use bex_engine::BexExternalValue;
 use bex_vm_types::Object;
-use sys_native::SysOpsExt;
 
 fn collect_compile_errors(source: &str) -> Vec<String> {
     let db = setup_test_db(source);
@@ -82,6 +78,16 @@ fn assert_compile_error_code(source: &str, code: &str) {
 }
 
 #[track_caller]
+fn assert_compile_error_code_multi(files: &[(&str, &str)], code: &str) {
+    let errors = collect_compile_errors_multi(files);
+    assert!(
+        errors.iter().any(|error| error.contains(code)),
+        "expected compile error containing `{code}`, got:\n  {}",
+        errors.join("\n  ")
+    );
+}
+
+#[track_caller]
 fn assert_compile_error_contains(source: &str, needle: &str) {
     let errors = collect_compile_errors(source);
     assert!(
@@ -125,32 +131,6 @@ fn compiled_function_metadata(source: &str, display_name_suffix: &str) -> (Vec<S
             .collect(),
         function.return_type.to_string(),
     )
-}
-
-async fn run_multi_file_no_args(files: &[(&str, &str)], entry_suffix: &str) -> BexExternalValue {
-    let program = compile_multi_file(files);
-    let entry = program
-        .function_indices
-        .keys()
-        .find_map(|name| {
-            let display_name = name.strip_prefix("user.").unwrap_or(name.as_str());
-            display_name
-                .ends_with(entry_suffix)
-                .then(|| name.to_string())
-        })
-        .unwrap_or_else(|| panic!("function ending with `{entry_suffix}` not found"));
-    let engine = Arc::new(
-        BexEngine::new(program, Arc::new(sys_ops::SysOps::native()), Vec::new()).expect("engine"),
-    );
-    engine
-        .call_function_bound_args(
-            &entry,
-            Vec::new(),
-            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
-            true,
-        )
-        .await
-        .expect("multi-file function should execute")
 }
 
 fn compiled_function_display_metadata(
@@ -4477,9 +4457,12 @@ async fn runtime_destructure_filters_by_associated_type_binding() {
     assert_eq!(output.result.unwrap(), BexExternalValue::Int(9));
 }
 
-#[tokio::test]
-async fn runtime_dispatch_matches_partially_open_associated_binding_across_namespaces() {
-    let output = run_multi_file_no_args(
+// `Bucket<L>` + `Bucket<R>` on `Pair<L, R>` realize the same interface
+// `Bucket<T>` at the diagonal `Pair<T, T>`, so they overlap and are rejected —
+// even when the interface and impls live in different namespaces.
+#[test]
+fn partially_open_associated_binding_overlapping_impls_rejected_across_namespaces() {
+    assert_compile_error_code_multi(
         &[
             (
                 "ns_contracts/contracts.baml",
@@ -4539,16 +4522,15 @@ async fn runtime_dispatch_matches_partially_open_associated_binding_across_names
                 "#,
             ),
         ],
-        "app.main",
-    )
-    .await;
-
-    assert_eq!(output, BexExternalValue::String("right".into()));
+        "E0132",
+    );
 }
 
-#[tokio::test]
-async fn runtime_dispatch_matches_partially_open_associated_binding_structurally() {
-    let output = baml_test!(
+// `Bucket<L>` + `Bucket<R>` on `Pair<L, R>` realize the same interface
+// `Bucket<T>` at the diagonal `Pair<T, T>`, so they overlap and are rejected.
+#[test]
+fn partially_open_associated_binding_overlapping_impls_rejected_structurally() {
+    assert_compile_error_code(
         r#"
         interface Bucket<T> {
             type Shape
@@ -4594,12 +4576,8 @@ async fn runtime_dispatch_matches_partially_open_associated_binding_structurally
             let routed: Routed<Item = string> = p
             return routed.chosen()
         }
-        "#
-    );
-
-    assert_eq!(
-        output.result.unwrap(),
-        BexExternalValue::String("right".into())
+        "#,
+        "E0132",
     );
 }
 

@@ -1619,9 +1619,11 @@ async fn same_generic_interface_field_links_select_matching_type_args_runtime() 
     assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
 }
 
-#[tokio::test]
-async fn generic_interface_field_links_preserve_swapped_type_var_identity_runtime() {
-    let output = baml_test!(
+// `Slot<L, R>` and `Slot<R, L>` on `Pair<L, R>` realize the same interface
+// `Slot<T, T>` at the diagonal `Pair<T, T>`, so they overlap and are rejected.
+#[test]
+fn generic_interface_field_links_swapped_type_var_impls_overlap() {
+    assert_compile_error_code(
         r#"
         interface Slot<T, E> {
             value: T
@@ -1642,14 +1644,15 @@ async fn generic_interface_field_links_preserve_swapped_type_var_identity_runtim
             let rl: Slot<string, int> = p
             return lr.value == 7 && rl.value == "seven"
         }
-    "#
+    "#,
+        "E0132",
     );
-    assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
 }
 
-#[tokio::test]
-async fn generic_interface_method_dispatch_preserves_swapped_type_var_identity_runtime() {
-    let output = baml_test!(
+// As above, but the interface defines a method rather than a field link.
+#[test]
+fn generic_interface_method_swapped_type_var_impls_overlap() {
+    assert_compile_error_code(
         r#"
         interface Reporter<T, E> {
             function show(self) -> T
@@ -1674,9 +1677,9 @@ async fn generic_interface_method_dispatch_preserves_swapped_type_var_identity_r
             let rl: Reporter<string, int> = p
             return lr.show() == 7 && rl.show() == "seven"
         }
-    "#
+    "#,
+        "E0132",
     );
-    assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
 }
 
 #[tokio::test]
@@ -2619,8 +2622,10 @@ fn mixed_interface_and_generic_concrete_destructures_project_swapped_class_type_
 }
 
 #[test]
-fn mixed_interface_and_generic_concrete_destructures_project_second_implements_block() {
-    assert_zero_compile_errors(
+// `Slot<L>` and `Slot<R>` on `Pair<L, R>` realize the same interface `Slot<T>`
+// at the diagonal `Pair<T, T>`, so they overlap and are rejected.
+fn mixed_interface_generic_overlapping_type_arg_impls_overlap() {
+    assert_compile_error_code(
         r#"
         interface Slot<T> {
             value: T
@@ -2643,6 +2648,7 @@ fn mixed_interface_and_generic_concrete_destructures_project_second_implements_b
             }
         }
         "#,
+        "E0132",
     );
 }
 
@@ -6287,6 +6293,42 @@ fn implements_for_unknown_target_is_rejected() {
 }
 
 #[test]
+fn implements_for_literal_target_is_rejected() {
+    // A literal type (`1`) is a singleton subtype whose values dispatch through
+    // their base (`int`), so it cannot implement an interface itself (E0138).
+    assert_compile_error_code(
+        r#"
+        interface Tag {
+            function tag(self) -> int
+        }
+        implement Tag for 1 {
+            function tag(self) -> int { return 0 }
+        }
+        "#,
+        "E0138",
+    );
+}
+
+#[test]
+fn implements_for_enum_variant_target_is_rejected() {
+    // An enum variant (`Color.Red`) is likewise a singleton subtype: its values
+    // dispatch through the base enum (`Color`), so the variant cannot implement
+    // an interface on its own (E0138). Implementing for the enum is allowed.
+    assert_compile_error_code(
+        r#"
+        enum Color { Red, Green, Blue }
+        interface Tag {
+            function tag(self) -> int
+        }
+        implement Tag for Color.Red {
+            function tag(self) -> int { return 0 }
+        }
+        "#,
+        "E0138",
+    );
+}
+
+#[test]
 fn implements_for_concrete_container_target_is_allowed() {
     // A concrete type constructor (`T[]`) is a valid `for` target — the gate only
     // rejects unions / optionals / interfaces / `unknown`, not list/map/class.
@@ -7160,6 +7202,54 @@ fn overlapping_generic_rules_are_e0132() {
 }
 
 #[test]
+fn overlapping_complementary_generic_args_are_e0132() {
+    // The symmetric overlap unifier finds the common instance `Pair<string, int>`
+    // even though the shared variables sit in complementary positions. A
+    // one-directional matcher would miss this.
+    assert_compile_error_code(
+        r#"
+        interface Printable {
+            function display(self) -> string
+        }
+        class Pair<A, B> {
+            first: A
+            second: B
+        }
+        implements<T> Printable for Pair<T, int> {
+            function display(self) -> string { return "t,int" }
+        }
+        implements<U> Printable for Pair<string, U> {
+            function display(self) -> string { return "string,u" }
+        }
+        "#,
+        "E0132",
+    );
+}
+
+#[test]
+fn non_overlapping_disjoint_generic_args_are_ok() {
+    // No common instance: the first arg is `int` in one impl and `string` in the
+    // other, so the subjects never unify.
+    assert_no_interface_errors(
+        r#"
+        interface Printable {
+            function display(self) -> string
+        }
+        class Pair<A, B> {
+            first: A
+            second: B
+        }
+        implements<T> Printable for Pair<int, T> {
+            function display(self) -> string { return "int,t" }
+        }
+        implements<U> Printable for Pair<string, U> {
+            function display(self) -> string { return "string,u" }
+        }
+        "#,
+    );
+}
+
+#[test]
 fn overlapping_in_body_and_out_of_body_generic_rules_are_e0132() {
     assert_compile_error_code(
         r#"
@@ -7178,6 +7268,67 @@ fn overlapping_in_body_and_out_of_body_generic_rules_are_e0132() {
         "#,
         "E0132",
     );
+}
+
+#[test]
+fn cross_file_overlapping_impls_are_e0132() {
+    // Coherence is per-package, not per-file: a blanket impl in one file and a
+    // concrete impl in another (same package) still conflict. The old per-file
+    // check missed this because each file holds only one of the two impls.
+    assert_compile_error_contains_multi(
+        &[
+            (
+                "a.baml",
+                r#"
+                interface Printable {
+                    function display(self) -> string
+                }
+                class Box<T> { value: T }
+                implements<T> Printable for Box<T> {
+                    function display(self) -> string { return "box" }
+                }
+                "#,
+            ),
+            (
+                "b.baml",
+                r#"
+                implements Printable for Box<int> {
+                    function display(self) -> string { return "int box" }
+                }
+                "#,
+            ),
+        ],
+        "E0132",
+    );
+}
+
+#[test]
+fn cross_file_non_overlapping_impls_are_ok() {
+    // Two impls of the same interface for distinct classes never conflict, even
+    // when split across files in the same package.
+    assert_no_compile_errors_multi(&[
+        (
+            "a.baml",
+            r#"
+            interface Printable {
+                function display(self) -> string
+            }
+            class Apple {}
+            implements Printable for Apple {
+                function display(self) -> string { return "apple" }
+            }
+            "#,
+        ),
+        (
+            "b.baml",
+            r#"
+            class Banana {}
+            implements Printable for Banana {
+                function display(self) -> string { return "banana" }
+            }
+            "#,
+        ),
+    ]);
 }
 
 #[test]
@@ -7275,8 +7426,11 @@ fn non_overlapping_generic_receiver_rules_for_different_classes_are_ok() {
     );
 }
 
+// `User` implements `Named`, so the blanket `impl<T: Named> Printable for T`
+// applies to `User` and overlaps the concrete `impl Printable for User` — the
+// ground subject `User` satisfies the bound, so this is a precise overlap.
 #[test]
-fn bounded_type_var_rule_conservatively_overlaps_concrete_rule() {
+fn bounded_type_var_rule_overlaps_concrete_satisfying_bound() {
     assert_compile_error_code(
         r#"
         interface Named {
@@ -7297,6 +7451,153 @@ fn bounded_type_var_rule_conservatively_overlaps_concrete_rule() {
         }
         "#,
         "E0132",
+    );
+}
+
+// `User` does not implement `Named` in this package, so the blanket
+// `impl<T: Named> Printable for T` cannot apply to `User` and the two impls are
+// disjoint. Deciding this here is sound because `User` and `Named` are both
+// local: the orphan rule forbids any dependent package from adding `impl Named
+// for User`, so `User` can never gain `Named` and the impls can never collide.
+#[test]
+fn bounded_type_var_rule_disjoint_from_concrete_not_satisfying_bound() {
+    assert_no_interface_errors(
+        r#"
+        interface Named {
+            name: string
+        }
+        interface Printable {
+            function display(self) -> string
+        }
+        class User {
+            name: string
+        }
+        implements Printable for User {
+            function display(self) -> string { return "user" }
+        }
+        implements<T extends Named> Printable for T {
+            function display(self) -> string { return "named" }
+        }
+        "#,
+    );
+}
+
+// Two blanket impls bounded by *different* interfaces conflict: without negative
+// impls we cannot prove no type satisfies both, so they are assumed to overlap.
+#[test]
+fn distinct_bounded_blankets_overlap_e0132() {
+    assert_compile_error_code(
+        r#"
+        interface A { a: int }
+        interface B { b: int }
+        interface Printable { function display(self) -> string }
+        implements<T extends A> Printable for T {
+            function display(self) -> string { return "a" }
+        }
+        implements<T extends B> Printable for T {
+            function display(self) -> string { return "b" }
+        }
+        "#,
+        "E0132",
+    );
+}
+
+// An unbounded blanket and a concrete impl of the same interface overlap: the
+// blanket covers the concrete type.
+#[test]
+fn unbounded_blanket_overlaps_concrete_e0132() {
+    assert_compile_error_code(
+        r#"
+        interface Printable { function display(self) -> string }
+        class Widget {}
+        implements<T> Printable for T {
+            function display(self) -> string { return "any" }
+        }
+        implements Printable for Widget {
+            function display(self) -> string { return "widget" }
+        }
+        "#,
+        "E0132",
+    );
+}
+
+// A homogeneous blanket `Pair<T, T>` and a heterogeneous ground `Pair<int,
+// string>` have no common instance (`T` cannot be both `int` and `string`), so
+// they are disjoint and do not overlap.
+#[test]
+fn homogeneous_blanket_disjoint_from_heterogeneous_ground() {
+    assert_no_interface_errors(
+        r#"
+        interface Printable { function display(self) -> string }
+        class Pair<A, B> { first: A second: B }
+        implements<T> Printable for Pair<T, T> {
+            function display(self) -> string { return "tt" }
+        }
+        implements Printable for Pair<int, string> {
+            function display(self) -> string { return "is" }
+        }
+        "#,
+    );
+}
+
+// Containers are non-fundamental (like Rust's `Vec`): a local type nested inside
+// an array does not anchor an impl, so implementing a foreign interface for
+// `Local[]` violates the orphan rule.
+#[test]
+fn orphan_rejects_foreign_interface_for_local_array() {
+    assert_compile_error_code(
+        r#"
+        class Local {}
+        implement baml.ops.Equals for Local[] {}
+        "#,
+        "E0139",
+    );
+}
+
+// As above for `map<K, V>` — also a non-fundamental container, so a local type
+// nested in it does not anchor a foreign-interface impl.
+#[test]
+fn orphan_rejects_foreign_interface_for_map_of_local() {
+    assert_compile_error_code(
+        r#"
+        class Local {}
+        implement baml.ops.Equals for map<string, Local> {}
+        "#,
+        "E0139",
+    );
+}
+
+// Overlap where the shared variable sits in the interface type-arg on one side
+// (`P<T>`) and is pinned to a ground type on the other (`P<int>`): both realize
+// `P<int>` at the common instance `Box<int>`.
+#[test]
+fn shared_var_across_interface_arg_and_for_type_overlaps_e0132() {
+    assert_compile_error_code(
+        r#"
+        interface P<X> { function p(self) -> string }
+        class Box<T> { v: T }
+        implements<T> P<T> for Box<T> {
+            function p(self) -> string { return "t" }
+        }
+        implements<U> P<int> for Box<U> {
+            function p(self) -> string { return "int" }
+        }
+        "#,
+        "E0132",
+    );
+}
+
+// Two impls whose for-types fail to resolve must not additionally report an
+// overlap — the unresolved-type errors are the only relevant diagnostics. (An
+// unresolved for-type lowers to `Ty::Unknown`, which must never unify.)
+#[test]
+fn malformed_impls_do_not_spuriously_overlap() {
+    assert_no_interface_errors(
+        r#"
+        interface Marker {}
+        implement Marker for Nonexistent1 {}
+        implement Marker for Nonexistent2 {}
+        "#,
     );
 }
 
@@ -7842,10 +8143,13 @@ function main() -> int {
     assert_eq!(output.result.unwrap(), BexExternalValue::Int(42));
 }
 
-/// Finding #8 [wrong-result]: Generic class implementing single-T generic interface for both type params always dispatches to first implementor
-#[tokio::test]
-async fn fuzz_bug08_generic_class_dispatches_by_type_arg_to_correct_impl() {
-    let output = baml_test!(
+/// Finding #8: a generic class implementing the same single-`T` interface for
+/// both of its type params (`Getter<L>` + `Getter<R>`) overlaps at the diagonal
+/// `Pair<T, T>` (both realize `Getter<T>`), so the impls are rejected and the
+/// mis-dispatch the finding describes can no longer arise.
+#[test]
+fn fuzz_bug08_generic_class_overlapping_type_arg_impls_rejected() {
+    assert_compile_error_code(
         r##"interface Getter<T> {
     function get(self) -> T
 }
@@ -7867,9 +8171,9 @@ function main() -> bool {
     let val = gr.get()
     return val == "seven"
 }
-"##
+"##,
+        "E0132",
     );
-    assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
 }
 
 /// Finding #9 [wrongly-accepted]: Unqualified method call on class implementing same generic interface with different type args silently picks first impl (no E0121)
@@ -7953,10 +8257,12 @@ function main() -> int {
     );
 }
 
-/// Finding #12 [wrong-result]: Generic class Pair<L,R> always dispatches to the FIRST implements block for both Slot<L> and Slot<string> interface types
-#[tokio::test]
-async fn fuzz_bug12_generic_pair_dispatches_second_type_arg_correctly() {
-    let output = baml_test!(
+/// Finding #12: `Slot<L>` + `Slot<R>` on `GenPair<L, R>` overlap at the diagonal
+/// `GenPair<T, T>` (both realize `Slot<T>`), so the impls are rejected and the
+/// first-block mis-dispatch the finding describes can no longer arise.
+#[test]
+fn fuzz_bug12_generic_pair_overlapping_type_arg_impls_rejected() {
+    assert_compile_error_code(
         r##"interface Slot<T> {
     function get(self) -> T
 }
@@ -7982,15 +8288,17 @@ function main() -> bool {
     // lv == 42 (Slot<int>) && rv == "world" (Slot<string>).
     return lv == 42 && rv == "world"
 }
-"##
+"##,
+        "E0132",
     );
-    assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
 }
 
-/// Finding #13 [wrong-result]: Same dispatch bug affects field-link views: GenPair<L,R> with 'value as left' and 'value as right' returns wrong field for second type param
-#[tokio::test]
-async fn fuzz_bug13_generic_field_link_views_select_correct_type_arg() {
-    let output = baml_test!(
+/// Finding #13: the field-link form of the same overlap — `Slot<L>` + `Slot<R>`
+/// on `GenPair<L, R>` collide at the diagonal `GenPair<T, T>`, so the impls are
+/// rejected.
+#[test]
+fn fuzz_bug13_generic_field_link_overlapping_type_arg_impls_rejected() {
+    assert_compile_error_code(
         r##"interface Slot<T> {
     value: T
 }
@@ -8014,15 +8322,17 @@ function main() -> bool {
     // i.value == 7 (Slot<int>) && s.value == "seven" (Slot<string>).
     return i.value == 7 && s.value == "seven"
 }
-"##
+"##,
+        "E0132",
     );
-    assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
 }
 
-/// Finding #14 [wrong-result]: Explicit .as<Slot<string>> projection on a generic Pair<int,string> also dispatches to the wrong block
-#[tokio::test]
-async fn fuzz_bug14_explicit_as_projection_selects_generic_type_arg() {
-    let output = baml_test!(
+/// Finding #14: the `.as<>` projection form of the same overlap — `Slot<L>` +
+/// `Slot<R>` on `GenPair<L, R>` collide at the diagonal `GenPair<T, T>`, so the
+/// impls are rejected before any projection runs.
+#[test]
+fn fuzz_bug14_generic_overlapping_type_arg_impls_reject_as_projection() {
+    assert_compile_error_code(
         r##"interface Slot<T> {
     function get(self) -> T
 }
@@ -8044,9 +8354,9 @@ function main() -> bool {
     let rv = p.as<Slot<string>>.get()
     return rv == "world"
 }
-"##
+"##,
+        "E0132",
     );
-    assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
 }
 
 /// Finding #15 [crash]: Generic interface default method crashes with 'expected map, got instance' when calling self.method() through an interface-typed variable
@@ -9220,13 +9530,13 @@ async fn wf3_default_field_access_does_not_crash() {
 
 // ── High-severity wrong-result / soundness ───────────────────────────────────
 
-/// wf3 #5 [high]: a generic interface's default method calling `self.get()` must
-/// dispatch to the interface VIEW it was reached through, not the first impl
-/// block. Through `Slot<string>` it must return "seven", not 7.
-/// `_plan/wf3/generics-core/gen_pair_default_selfcall.baml`
-#[tokio::test]
-async fn wf3_generic_default_method_self_call_respects_interface_view_runtime() {
-    let output = baml_test!(
+/// wf3 #5: `Slot<L>` + `Slot<R>` on `GenPair<L, R>` (here with a default method)
+/// overlap at the diagonal `GenPair<T, T>`, so the impls are rejected — the
+/// interface-view default-method dispatch the finding describes can no longer
+/// arise. `_plan/wf3/generics-core/gen_pair_default_selfcall.baml`
+#[test]
+fn wf3_generic_default_method_overlapping_type_arg_impls_rejected() {
+    assert_compile_error_code(
         r#"
         interface Slot<T> {
             function get(self) -> T
@@ -9249,11 +9559,8 @@ async fn wf3_generic_default_method_self_call_respects_interface_view_runtime() 
             let s: Slot<string> = p
             return s.describe()
         }
-        "#
-    );
-    assert_eq!(
-        output.result.unwrap(),
-        BexExternalValue::String("seven".into())
+        "#,
+        "E0132",
     );
 }
 

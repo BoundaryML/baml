@@ -9554,6 +9554,7 @@ impl<'db> LoweringContext<'db> {
                             baml_compiler2_tir::ty::TyAttr::default(),
                         ),
                         origin: baml_compiler2_tir::interfaces::InterfaceImplOrigin::OutOfBody,
+                        source_span: None,
                     };
                     let candidate_ty =
                         if matches!(rule.for_ty_pattern, baml_compiler2_tir::ty::Ty::TypeVar(..))
@@ -10127,6 +10128,7 @@ impl<'db> LoweringContext<'db> {
                         baml_compiler2_tir::ty::TyAttr::default(),
                     ),
                     origin: baml_compiler2_tir::interfaces::InterfaceImplOrigin::OutOfBody,
+                    source_span: None,
                 };
                 let registry = baml_compiler2_tir::interfaces::package_implements_registry(
                     self.db,

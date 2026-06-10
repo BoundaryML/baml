@@ -422,6 +422,69 @@ impl Ty {
         }
     }
 
+    /// Whether this type may be the *implementor* (`for`-target) of an interface
+    /// implementation — i.e. `implement I for <Self>` is allowed.
+    ///
+    /// Valid: concrete user-facing types with a single runtime representation that
+    /// dispatch can key on — the primitives, `Media`, classes, enums, the
+    /// containers `T[]` / `map<K, V>`, the builtin handles `Future` / `Type` /
+    /// `Resource` / `PromptAst`, and a blanket type parameter or its
+    /// associated-type projection (both stand for a concrete type at use sites).
+    /// `Never` is vacuously allowed (it has no values).
+    ///
+    /// Rejected:
+    ///   - `Literal` / `EnumVariant` — singleton subtypes whose values dispatch
+    ///     through their base (`int`, `Color`), so they have no implementor of
+    ///     their own;
+    ///   - `Interface` (existential) and `Union` — no single concrete implementor;
+    ///   - `Function` (an arrow type) and `RustType` (an opaque native leaf);
+    ///   - `WatchAccessor` — the compiler-internal type of `x.$watch`, not a
+    ///     user-facing data type;
+    ///   - `Void`, the top type `BuiltinUnknown`, and the compiler-only sentinels
+    ///     `Unknown` / `Error` / `EvolvingList` / `EvolvingMap`;
+    ///   - `TypeAlias` — callers resolve aliases first, so a surviving alias here
+    ///     is unresolved (recursive or missing), i.e. not a valid bare target.
+    ///
+    /// The match is intentionally exhaustive (no wildcard) so a new `Ty` variant
+    /// must be classified here rather than silently defaulting to implementable.
+    pub fn is_valid_impl_subject(&self) -> bool {
+        match self {
+            Ty::Int { .. }
+            | Ty::Bigint { .. }
+            | Ty::Float { .. }
+            | Ty::String { .. }
+            | Ty::Bool { .. }
+            | Ty::Null { .. }
+            | Ty::Uint8Array { .. }
+            | Ty::Media(..)
+            | Ty::Class(..)
+            | Ty::Enum(..)
+            | Ty::List(..)
+            | Ty::Map { .. }
+            | Ty::Future(..)
+            | Ty::Type { .. }
+            | Ty::Resource { .. }
+            | Ty::PromptAst { .. }
+            | Ty::Never { .. }
+            | Ty::TypeVar(..)
+            | Ty::AssociatedTypeProjection { .. } => true,
+            Ty::Literal(..)
+            | Ty::EnumVariant(..)
+            | Ty::Interface(..)
+            | Ty::Union(..)
+            | Ty::Function { .. }
+            | Ty::RustType { .. }
+            | Ty::WatchAccessor(..)
+            | Ty::TypeAlias(..)
+            | Ty::Void { .. }
+            | Ty::BuiltinUnknown { .. }
+            | Ty::Unknown { .. }
+            | Ty::Error { .. }
+            | Ty::EvolvingList(..)
+            | Ty::EvolvingMap(..) => false,
+        }
+    }
+
     // --- Primitive constructors (default TyAttr) ---
 
     /// `int` with default attributes.
@@ -1286,6 +1349,82 @@ mod tests {
     fn test_literal_int_subtype_of_int() {
         let lit_42 = Ty::Literal(Literal::Int(42), Freshness::Regular, TyAttr::default());
         assert!(lit_42.is_subtype_of(&ty_int()));
+    }
+
+    #[test]
+    fn is_valid_impl_subject_classifies_variants() {
+        let qtn = |n: &str| QualifiedTypeName::local(Name::new(n));
+        let boxed = |t: Ty| Box::new(t);
+
+        // Concrete user-facing types — valid implementors.
+        let valid = [
+            ty_int(),
+            Ty::class("Foo"),
+            Ty::Enum(qtn("Color"), TyAttr::default()),
+            Ty::list(ty_int()),
+            Ty::Map {
+                key: boxed(ty_string()),
+                value: boxed(ty_int()),
+                attr: TyAttr::default(),
+            },
+            Ty::Future(boxed(ty_int()), boxed(Ty::null()), TyAttr::default()),
+            Ty::Type {
+                attr: TyAttr::default(),
+            },
+            Ty::resource(),
+            Ty::prompt_ast(),
+            Ty::Never {
+                attr: TyAttr::default(),
+            },
+            Ty::TypeVar(Name::new("T"), TyAttr::default()),
+            Ty::AssociatedTypeProjection {
+                base: boxed(Ty::TypeVar(Name::new("T"), TyAttr::default())),
+                interface: None,
+                member: Name::new("Item"),
+                attr: TyAttr::default(),
+            },
+        ];
+        for ty in &valid {
+            assert!(ty.is_valid_impl_subject(), "{ty:?} should be implementable");
+        }
+
+        // Singletons, existentials, opaque/native/compiler-only — not implementors.
+        let invalid = [
+            Ty::Literal(Literal::Int(1), Freshness::Regular, TyAttr::default()),
+            Ty::EnumVariant(qtn("Color"), Name::new("Red"), TyAttr::default()),
+            Ty::Interface(qtn("I"), vec![], vec![], TyAttr::default()),
+            Ty::union([ty_int(), ty_string()]),
+            Ty::Function {
+                generic_params: vec![],
+                generic_param_bounds: vec![],
+                params: vec![],
+                ret: boxed(Ty::null()),
+                throws: boxed(Ty::null()),
+                attr: TyAttr::default(),
+            },
+            Ty::RustType {
+                attr: TyAttr::default(),
+            },
+            Ty::WatchAccessor(boxed(ty_int()), TyAttr::default()),
+            Ty::TypeAlias(qtn("A"), TyAttr::default()),
+            Ty::Void {
+                attr: TyAttr::default(),
+            },
+            Ty::BuiltinUnknown {
+                attr: TyAttr::default(),
+            },
+            Ty::unknown(),
+            Ty::Error {
+                attr: TyAttr::default(),
+            },
+            Ty::EvolvingList(boxed(ty_int()), TyAttr::default()),
+        ];
+        for ty in &invalid {
+            assert!(
+                !ty.is_valid_impl_subject(),
+                "{ty:?} should not be implementable"
+            );
+        }
     }
 
     #[test]
