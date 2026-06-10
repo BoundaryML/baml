@@ -64,7 +64,7 @@ export function BamlCode({
   const hlSet = new Set(highlightLines);
 
   return (
-    <figure className="l2-code">
+    <figure className={`l2-code l2-code--${lang}`}>
       {filename ? (
         <figcaption className="l2-code-head">
           <span className="l2-code-dots" aria-hidden>

@@ -12,8 +12,8 @@
   --l6-muted: #6f6a63;
   --l6-soft: #8a8580;
   --l6-rule: #e7e2d6;
-  --l6-green: #047857;
-  --l6-green-soft: #34d399;
+  --l6-accent: #6d28d9;
+  --l6-accent-soft: #a78bfa;
   --l6-amber: #b45309;
   padding-bottom: 5rem;
   font-family:
@@ -67,13 +67,13 @@
   color: var(--l6-soft);
 }
 .l6-head-install {
-  color: var(--l6-green);
+  color: var(--l6-accent);
 }
 
 /* ---- sections: a reading column with wide breakouts ---- */
 .l6-section {
   width: min(760px, 94vw);
-  padding: 3.2rem 0 0.6rem;
+  padding: 4.4rem 0 1.2rem;
   margin: 0 auto;
 }
 /* Breakout: editors, playgrounds, and side-by-side pairs escape the
@@ -118,8 +118,8 @@
   margin-right: 0.6rem;
   font-size: 0.72em;
   font-weight: 600;
-  color: var(--l6-green);
-  border: 1.4px solid var(--l6-green);
+  color: var(--l6-accent);
+  border: 1.4px solid var(--l6-accent);
   border-radius: 60% 40% 55% 45% / 50% 60% 40% 55%;
   transform: translateY(-3px) rotate(-2deg);
 }
@@ -132,7 +132,7 @@
 }
 .l6-lead em {
   font-style: italic;
-  color: var(--l6-green);
+  color: var(--l6-accent);
 }
 .l6-dim {
   font-size: 14.5px;
@@ -146,15 +146,15 @@
   border-left: 2px solid var(--l6-rule);
 }
 .l6-link {
-  color: var(--l6-green);
+  color: var(--l6-accent);
   text-decoration: none;
-  border-bottom: 1px solid rgba(4, 120, 87, 0.35);
+  border-bottom: 1px solid rgba(109, 40, 217, 0.35);
 }
 .l6-link:hover {
-  border-bottom-color: var(--l6-green);
+  border-bottom-color: var(--l6-accent);
 }
 .l6-sub {
-  margin-top: 2.4rem;
+  margin-top: 3rem;
 }
 .l6-block {
   margin: 1.1rem 0;
@@ -187,7 +187,7 @@
 }
 .l6-hero-list li::marker {
   font-weight: 600;
-  color: var(--l6-green);
+  color: var(--l6-accent);
 }
 .l6-hero .l2-terminal {
   max-width: 440px;
@@ -215,7 +215,7 @@
   letter-spacing: 0.12em;
 }
 .l6-pane-label--after {
-  color: var(--l6-green);
+  color: var(--l6-accent);
 }
 .l6-stackv {
   display: flex;
@@ -252,7 +252,104 @@
 }
 .l6-table-accent td {
   font-weight: 600;
-  color: var(--l6-green);
+  color: var(--l6-accent);
+}
+
+/* ---- benchmark bar charts ---- */
+.l6-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+  max-width: 640px;
+  margin: 1.4rem 0 1rem;
+}
+.l6-chart-cap {
+  margin: 0 0 0.55rem;
+  font-size: 11px;
+  color: var(--l6-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+.l6-chart-row {
+  display: grid;
+  grid-template-columns: 10.5rem minmax(0, 1fr);
+  gap: 0.8rem;
+  align-items: center;
+  padding: 5px 0;
+}
+.l6-chart-name {
+  font-size: 12.5px;
+  color: var(--l6-body);
+}
+.l6-chart-track {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  min-width: 0;
+}
+.l6-chart-fill {
+  position: relative;
+  flex: none;
+  width: 0;
+  height: 24px;
+  overflow: hidden;
+  background: #d9d2c0;
+  border-radius: 4px;
+  animation: l6-chart-grow 0.6s ease-out forwards;
+}
+.l6-chart-fill--baml {
+  background: var(--l6-accent);
+}
+@keyframes l6-chart-grow {
+  to {
+    width: var(--w);
+  }
+}
+/* the lamb rides inside the bar, at its right end; recolored white so it
+   reads against the purple */
+.l6-chart-sheep {
+  position: absolute;
+  top: 50%;
+  right: 5px;
+  width: auto;
+  height: 17px;
+  filter: brightness(0) invert(1);
+  transform: translateY(-50%);
+}
+.l6-chart-val {
+  font-size: 12.5px;
+  color: var(--l6-ink);
+  white-space: nowrap;
+  opacity: 0;
+  animation: l6-chart-fade 0.3s ease forwards;
+}
+.l6-chart-sub {
+  font-size: 11px;
+  font-style: normal;
+  color: var(--l6-muted);
+}
+@keyframes l6-chart-fade {
+  to {
+    opacity: 1;
+  }
+}
+
+/* ---- expandable code (details/summary) ---- */
+.l6-details {
+  margin: 1rem 0;
+}
+.l6-details summary {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 12px;
+  color: var(--l6-muted);
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+.l6-details summary:hover {
+  color: var(--l6-ink);
+}
+.l6-details[open] summary {
+  margin-bottom: 0.7rem;
 }
 
 /* ---- the glow hint (error-handling section) ---- */
@@ -263,12 +360,12 @@
 @keyframes l6-glow {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(4, 120, 87, 0);
+    box-shadow: 0 0 0 0 rgba(109, 40, 217, 0);
     background: rgba(26, 22, 18, 0.055);
   }
   50% {
-    box-shadow: 0 0 0 3px rgba(4, 120, 87, 0.18);
-    background: rgba(4, 120, 87, 0.14);
+    box-shadow: 0 0 0 3px rgba(109, 40, 217, 0.18);
+    background: rgba(109, 40, 217, 0.14);
   }
 }
 
@@ -299,8 +396,8 @@
 }
 .l6-sdk-tab--on {
   color: var(--l6-ink);
-  border-color: var(--l6-green);
-  box-shadow: inset 0 0 0 1px var(--l6-green);
+  border-color: var(--l6-accent);
+  box-shadow: inset 0 0 0 1px var(--l6-accent);
 }
 .l6-sdk-soon {
   font-size: 9.5px;
@@ -346,7 +443,7 @@
     transform: scale(1);
   }
   2.5% {
-    background: #047857;
+    background: #6d28d9;
     transform: scale(1.4);
   }
   8%,
@@ -355,7 +452,7 @@
     transform: scale(1);
   }
   35.8% {
-    background: #047857;
+    background: #6d28d9;
     transform: scale(1.4);
   }
   41.3%,
@@ -364,7 +461,7 @@
     transform: scale(1);
   }
   69.2% {
-    background: #047857;
+    background: #6d28d9;
     transform: scale(1.4);
   }
   74.7%,
@@ -380,30 +477,30 @@
     transform: scale(1);
   }
   2.5% {
-    background: #047857;
+    background: #6d28d9;
     transform: scale(1.4);
   }
   8%,
   33.3% {
-    background: rgba(4, 120, 87, 0.32);
+    background: rgba(109, 40, 217, 0.32);
     transform: scale(1);
   }
   35.8% {
-    background: #047857;
+    background: #6d28d9;
     transform: scale(1.4);
   }
   41.3%,
   66.7% {
-    background: rgba(4, 120, 87, 0.48);
+    background: rgba(109, 40, 217, 0.48);
     transform: scale(1);
   }
   69.2% {
-    background: #047857;
+    background: #6d28d9;
     transform: scale(1.4);
   }
   74.7%,
   91% {
-    background: rgba(4, 120, 87, 0.66);
+    background: rgba(109, 40, 217, 0.66);
     transform: scale(1);
   }
   100% {
@@ -418,7 +515,7 @@
     transform: scale(1);
   }
   2.5% {
-    background: #047857;
+    background: #6d28d9;
     transform: scale(1.4);
   }
   8%,
@@ -427,21 +524,21 @@
     transform: scale(1);
   }
   35.8% {
-    background: #047857;
+    background: #6d28d9;
     transform: scale(1.4);
   }
   41.3%,
   66.7% {
-    background: rgba(4, 120, 87, 0.32);
+    background: rgba(109, 40, 217, 0.32);
     transform: scale(1);
   }
   69.2% {
-    background: #047857;
+    background: #6d28d9;
     transform: scale(1.4);
   }
   74.7%,
   91% {
-    background: rgba(4, 120, 87, 0.5);
+    background: rgba(109, 40, 217, 0.5);
     transform: scale(1);
   }
   100% {
@@ -456,7 +553,7 @@
     transform: scale(1);
   }
   2.5% {
-    background: #047857;
+    background: #6d28d9;
     transform: scale(1.4);
   }
   8%,
@@ -465,7 +562,7 @@
     transform: scale(1);
   }
   35.8% {
-    background: #047857;
+    background: #6d28d9;
     transform: scale(1.4);
   }
   41.3%,
@@ -474,12 +571,12 @@
     transform: scale(1);
   }
   69.2% {
-    background: #047857;
+    background: #6d28d9;
     transform: scale(1.4);
   }
   74.7%,
   91% {
-    background: rgba(4, 120, 87, 0.34);
+    background: rgba(109, 40, 217, 0.34);
     transform: scale(1);
   }
   100% {
@@ -514,7 +611,7 @@
 .l6-sch-bar {
   position: absolute;
   height: 14px;
-  background: var(--l6-green-soft);
+  background: var(--l6-accent-soft);
   border-radius: 2px;
   transform: scaleX(0);
   transform-origin: left center;
@@ -552,7 +649,22 @@
 
 /* the playground gets real height on this page */
 .l6 .l2-live {
+  --color-vsc-green: #6d28d9;
   height: min(76vh, 740px);
+}
+
+/* =========================================================================
+   BAML is purple on this page: run buttons and the editor's run codelens
+   follow the accent.
+   ========================================================================= */
+.l6 .l2-run-btn {
+  background: var(--l6-accent);
+}
+.l6 .l2-run-btn:hover:not(:disabled) {
+  background: #5b21b6;
+}
+.l6 .monaco-editor .codelens-decoration a {
+  color: var(--l6-accent) !important;
 }
 
 /* Reduced motion: only quiet the attention-grabbing inline glow. The

@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import type { ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 import { BamlCode } from '../../learn2/_components/BamlCode';
 import BamlEditor from '../../learn2/_components/BamlEditorLazy';
 import LivePlayground from '../../learn2/_components/LivePlaygroundLazy';
@@ -10,6 +10,7 @@ import { InfectionGraph } from '../../learn3/_components/InfectionGraph';
 import { MetricsDag } from '../../learn3/_components/MetricsDag';
 import { TermPlay } from '../../learn3/_components/TermPlay';
 import { SdkPipeline } from '../../learn4/_components/SdkPipeline';
+import { PackChart, SpawnChart } from './PackChart';
 import { Scheduler } from './Scheduler';
 import { SdkSwitcher } from './SdkSwitcher';
 import { SelfImprove } from './SelfImprove';
@@ -31,10 +32,8 @@ import {
   LS_EVENTS,
   NS_BAD,
   NS_GOOD,
-  PACK_BENCH,
   PACK_EVENTS,
   RUN_E_EVENTS,
-  SPAWN_BENCH,
   TS_CATCH,
   TS_INSTANCEOF,
   TS_LIES,
@@ -66,11 +65,64 @@ function Section({
   );
 }
 
-function Sub({ title, children }: { title: string; children: ReactNode }) {
+function Sub({
+  num,
+  title,
+  children,
+}: {
+  num?: string;
+  title: string;
+  children: ReactNode;
+}) {
   return (
     <div className="l6-sub">
-      <h3>{title}</h3>
+      <h3>
+        {num ? <span className="l6-num font-mono">{num}</span> : null}
+        {title}
+      </h3>
       {children}
+    </div>
+  );
+}
+
+/* "Try it out!" install tabs — humans get brew, agents get the plugin
+ * commands (mirrors the homepage hero's install paths). */
+const TRY_TABS = [
+  {
+    id: 'humans',
+    label: 'for humans',
+    lines: ['brew install boundaryml/tap/baml'],
+  },
+  {
+    id: 'agents',
+    label: 'for agents',
+    lines: [
+      '/plugin marketplace add BoundaryML/baml-skill',
+      '/plugin install baml@boundaryml-baml',
+    ],
+  },
+] as const;
+
+function TryItTabs() {
+  const [tab, setTab] = useState<'humans' | 'agents'>('humans');
+  const active = TRY_TABS.find((t) => t.id === tab) ?? TRY_TABS[0];
+  return (
+    <div className="l6-block">
+      <div aria-label="Install path" className="l6-sdk-tabs" role="tablist">
+        {TRY_TABS.map((t) => (
+          <button
+            aria-selected={tab === t.id}
+            className={`l6-sdk-tab font-mono${tab === t.id ? ' l6-sdk-tab--on' : ''}`}
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            role="tab"
+            type="button"
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      <Terminal lines={[...active.lines]} />
     </div>
   );
 }
@@ -108,7 +160,7 @@ export function Article() {
         </p>
         <p>
           {
-            'Our goal is to make it feel like TypeScript, but without the sins of Javascript: with better error handling, without type-erasure, no '
+            'Our goal is to make BAML feel like TypeScript, but without the sins of Javascript: with better error handling, without type-erasure, no '
           }
           <code>any</code>
           {', and more.'}
@@ -124,10 +176,10 @@ export function Article() {
       >
         <p>
           {
-            'BAML supports advanced features like generics on day 1. Types also exist at runtime, so you don’t need to choose between 5 different schema validation libraries. All your objects will always match the type BAML that’s annotated. There is also no '
+            'BAML supports advanced features like generics on day 1. Types also exist at runtime, so you don’t need to choose between 5 different schema validation libraries. Your objects always match their annotated type. And there is no '
           }
           <code>any</code>
-          {', So all code must be fully typed.'}
+          {' — all code must be fully typed.'}
         </p>
         <div className="l6-pair">
           <div>
@@ -233,33 +285,29 @@ export function Article() {
             ' prefix. There are no imports because everything is referred with its fully qualified name, like Go. Inside a namespace directory, all types, functions and objects are available in every file by default.'
           }
         </p>
-        <div className="l6-pair">
-          <div className="l6-stackv">
-            <div>
-              <BamlCode
-                code={NS_BAD}
-                diagnostics={[
-                  {
-                    line: 2,
-                    message:
-                      'unresolved type: Widget. Did you mean `root.a.Widget`?',
-                    severity: 'error',
-                  },
-                ]}
-                filename="ns_b/b.baml"
-              />
-            </div>
-            <div>
-              <BamlCode
-                code={NS_GOOD}
-                filename="ns_b/b.baml"
-                highlightLines={[2, 3]}
-              />
-            </div>
-          </div>
-          <div>
-            <TermPlay events={LS_EVENTS} title="the filesystem is the map" />
-          </div>
+        <div className="l6-block">
+          <TermPlay events={LS_EVENTS} title="the filesystem is the map" />
+        </div>
+        <div className="l6-block">
+          <BamlCode
+            code={NS_BAD}
+            diagnostics={[
+              {
+                line: 2,
+                message:
+                  'unresolved type: Widget. Did you mean `root.a.Widget`?',
+                severity: 'error',
+              },
+            ]}
+            filename="ns_b/b.baml"
+          />
+        </div>
+        <div className="l6-block">
+          <BamlCode
+            code={NS_GOOD}
+            filename="ns_b/b.baml"
+            highlightLines={[2, 3]}
+          />
         </div>
         <p className="l6-note">
           {
@@ -273,15 +321,13 @@ export function Article() {
       {/* ---- 3 · native testing ---- */}
       <Section id="testing" num="3" title="Native testing framework">
         <p>
-          {
-            'From day-1, you can write tests anywhere, in any file. (More on testing '
-          }
+          {'Write tests anywhere, in any file. (More on testing '}
           <a className="l6-link" href="#workflows">
             below
           </a>
           {'.)'}
         </p>
-        <div className="l6-block l6-breakout">
+        <div className="l6-block">
           <BamlEditor filename="tests.baml" initialCode={BAML_TEST} />
         </div>
       </Section>
@@ -293,8 +339,9 @@ export function Article() {
         title="baml describe — a built-in AST-based grep, to find things faster"
       >
         <p>
+          <code>describe</code>
           {
-            'Easier for agents to use than an LSP, and more informative than grep. Here’s a transcript of an agent searching with grep, versus with baml describe:'
+            ' is easier for agents to use than an LSP, and more informative than grep. Here’s a transcript of an agent searching with grep, versus with baml describe:'
           }
         </p>
         <div className="l6-pair">
@@ -344,35 +391,16 @@ export function Article() {
             <TermPlay events={PACK_EVENTS} title="baml pack" />
           </div>
         </div>
-        <Sub title="It’s 87% smaller than Bun, and starts ~30% faster">
+        <Sub title="The packed binary is 87% smaller than Bun’s, and starts ~30% faster">
           <p>
             {
               'Here’s a comparison of BAML vs Bun in creating a compiled binary — the same hello world, measured back-to-back on an idle machine (median of 20 runs). The binary size is just 7.9 MB:'
             }
           </p>
-          <table className="l6-table">
-            <thead>
-              <tr>
-                <th />
-                <th>binary</th>
-                <th>gzipped</th>
-                <th>startup</th>
-              </tr>
-            </thead>
-            <tbody>
-              {PACK_BENCH.map((r) => (
-                <tr className={r.accent ? 'l6-table-accent' : ''} key={r.tool}>
-                  <td className="font-mono">{r.tool}</td>
-                  <td>{r.size}</td>
-                  <td>{r.gzip}</td>
-                  <td>{r.startup}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <PackChart />
           <p className="l6-dim">
             {
-              'Bun 1.3.14, BAML release toolchain, aarch64-apple-darwin. Bun embeds a whole JavaScript engine; the BAML runtime is 7.9 MB all in.'
+              'Bun 1.3.14, BAML release toolchain, aarch64-apple-darwin. Bun embeds a whole JavaScript engine; the BAML runtime is 7.9 MB.'
             }
           </p>
         </Sub>
@@ -430,40 +458,18 @@ export function Article() {
               'This is the part Promise.all cannot do: JavaScript fans out I/O, but compute still shares one thread. We scanned 38 GB of log-like text for an error marker — 16 shards of ~48 MB, each scanned 50 times — with the same code in both runtimes:'
             }
           </p>
-          <div className="l6-pair">
-            <div>
-              <p className="l6-pane-label">the benchmark source</p>
+          <SpawnChart />
+          <p className="l6-dim">
+            {
+              'BAML’s stdlib string search is native Rust, so even one thread edges out Bun here — and spawn turns the same code into a 9× improvement. (The one place Bun still wins per core is tight arithmetic loops, where its JIT beats our interpreter.)'
+            }
+          </p>
+          <details className="l6-details">
+            <summary>show the benchmark source — bench.baml</summary>
+            <div className="l6-breakout">
               <BamlCode code={BENCH_BAML} filename="bench.baml" />
             </div>
-            <div className="l6-stackv">
-              <table className="l6-table">
-                <thead>
-                  <tr>
-                    <th />
-                    <th>time</th>
-                    <th>cpu</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {SPAWN_BENCH.map((r) => (
-                    <tr
-                      className={r.accent ? 'l6-table-accent' : ''}
-                      key={r.run}
-                    >
-                      <td className="font-mono">{r.run}</td>
-                      <td>{r.time}</td>
-                      <td>{r.cpu}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <p className="l6-dim">
-                {
-                  'BAML’s stdlib string search is native Rust, so even one thread edges out Bun here — and spawn turns the same code into a 9× improvement. (The one place Bun still wins per core is tight arithmetic loops, where its JIT beats our interpreter.)'
-                }
-              </p>
-            </div>
-          </div>
+          </details>
         </Sub>
 
         <p style={{ marginTop: '2rem' }}>
@@ -486,7 +492,7 @@ export function Article() {
       </Section>
 
       {/* ---- self improvement ---- */}
-      <Section id="self-improvement" title="Recursive self-improvement">
+      <Section id="self-improvement" num="9" title="Recursive self-improvement">
         <p>
           {
             'We take a data-driven approach to improving BAML, using feedback from agents themselves. We built '
@@ -534,7 +540,10 @@ export function Article() {
         <InfectionGraph />
         <p style={{ marginTop: '1.2rem' }}>{'Here are some highlights:'}</p>
 
-        <Sub title="Native LLM Functions — composable building blocks for agents and harnesses">
+        <Sub
+          num="1"
+          title="Native LLM Functions — composable building blocks for agents and harnesses"
+        >
           <p>
             {
               'An LLM call in BAML is just a function: the prompt is the body, the return type is the schema. Because it’s a real function, it can be evaluated, optimized, and tracked at runtime by observability platforms.'
@@ -558,7 +567,7 @@ export function Article() {
           </div>
         </Sub>
 
-        <Sub title="BAML Tests">
+        <Sub num="2" title="BAML Tests">
           <p>{'Write tests anywhere, in any file.'}</p>
           <p>
             {
@@ -604,7 +613,7 @@ export function Article() {
           </p>
         </Sub>
 
-        <Sub title="Built-in metrics primitive (design stage)">
+        <Sub num="3" title="Built-in metrics primitive (design stage)">
           <p>
             {
               'Metrics today live in dashboards, bound to code by strings — rename a function and the metric dies silently. We are designing metric blocks: attach one to a function and it carries typed measurements, wired into a dependency graph that computes as data arrives — even hours later, when a human label shows up.'
@@ -665,10 +674,8 @@ export function Article() {
       </Section>
 
       {/* ---- close ---- */}
-      <Section id="close" title="Try it">
-        <div className="l6-block">
-          <Terminal lines={['brew install boundaryml/tap/baml']} />
-        </div>
+      <Section id="close" title="Try it out!">
+        <TryItTabs />
         <p>
           <a
             className="l6-link"
@@ -678,6 +685,18 @@ export function Article() {
           >
             new.boundaryml.com/quickstart →
           </a>
+        </p>
+        <p>
+          {'Join our '}
+          <a
+            className="l6-link"
+            href="https://boundaryml.com/discord"
+            rel="noreferrer"
+            target="_blank"
+          >
+            Discord
+          </a>
+          {'.'}
         </p>
       </Section>
     </div>
