@@ -2934,12 +2934,14 @@ impl BexVm {
     }
 
     /// Encodes and pushes one profiling record into the per-resume ring
-    /// snapshot. No-op when profiling is off.
+    /// snapshot. No-op when profiling is off. The buffer is sized by
+    /// `CALL_FUNCTION_LEN` (the largest fixed record the VM emits) — the
+    /// 292-byte `MAX_RECORD_LEN` zeroing is measurable at per-call rates.
     #[inline]
     fn prof_push_record(&self, rec: &bex_events::prof::record::RawRecord<'_>) {
         if let Some(ring) = self.prof_ring {
-            let mut buf = [0u8; bex_events::prof::record::MAX_RECORD_LEN];
-            let len = rec.encode(&mut buf);
+            let mut buf = [0u8; bex_events::prof::record::CALL_FUNCTION_LEN];
+            let len = rec.encode_to(&mut buf);
             // SAFETY: the engine refreshed `prof_ring` from this OS thread's
             // TLS at the top of the current exec resume (D5a), and exec
             // never crosses an `.await`, so this thread is still the ring's
@@ -3032,20 +3034,32 @@ impl BexVm {
         }
         let parent_call_id = self.current_call_id;
         let call_id = self.mint_call_id();
-        self.prof_push_record(&bex_events::prof::record::RawRecord::CallFunction {
+        let Some(ring) = self.prof_ring else { return };
+        // Both records in one push: one bounds check + one Release store
+        // for the pair (the ring moves whole records; two at once is fine).
+        let mut buf = [0u8; bex_events::prof::record::CALL_FUNCTION_LEN
+            + bex_events::prof::record::END_FUNCTION_LEN];
+        let call_len = bex_events::prof::record::RawRecord::CallFunction {
             flags: 0,
             thread_id: self.prof_thread_id,
             call_id,
             parent_call_id,
             function_id,
             ts_ns: ts_start,
-        });
-        self.prof_push_record(&bex_events::prof::record::RawRecord::EndFunction {
+        }
+        .encode_to(&mut buf);
+        let end_len = bex_events::prof::record::RawRecord::EndFunction {
             status,
             thread_id: self.prof_thread_id,
             call_id,
             ts_ns: bex_events::prof::clock::now_ns(),
-        });
+        }
+        .encode_to(&mut buf[call_len..]);
+        // SAFETY: same D5a contract as prof_push_record.
+        #[expect(unsafe_code, reason = "ring push contract upheld by D5a refresh")]
+        unsafe {
+            ring.push(&buf[..call_len + end_len]);
+        }
     }
 
     /// Build the single-yield `SysOp::BamlHostCallHostValue` dispatch for

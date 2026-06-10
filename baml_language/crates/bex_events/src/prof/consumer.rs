@@ -685,4 +685,134 @@ mod tests {
     }
 
     use crate::prof::config;
+
+    /// PR5 orphan-path soak: rounds of short-lived producer threads (the
+    /// tokio blocking-pool churn pattern) against a LIVE consumer thread —
+    /// orphan → drain-to-empty → pool → claim must hold under the real
+    /// consumer loop, the registry must stay bounded by peak concurrency,
+    /// and every record must reach disk.
+    #[test]
+    fn soak_orphan_churn_with_live_consumer() {
+        const ENGINE: u64 = 0x50AC_0001;
+        let rounds: u64 = if cfg!(miri) { 4 } else { 64 };
+        let per_round: u64 = if cfg!(miri) { 20 } else { 500 };
+
+        let dir = temp_dir("soak");
+        let registry: &'static Registry = leak(Registry::new());
+        let ctx: &'static RingCtx = leak(RingCtx::new(1 << 40));
+        let (ctl_tx, ctl_rx) = mpsc::channel();
+        let env = ConsumerEnv {
+            registry,
+            ctx,
+            dir: dir.clone(),
+            wake_interval: Duration::from_millis(1),
+        };
+        std::thread::Builder::new()
+            .name("soak-prof-consumer".into())
+            .spawn(move || consumer_main(&ctl_rx, &env))
+            .unwrap();
+
+        for round in 0..rounds {
+            std::thread::spawn(move || {
+                // Tiny segments force growth + recycling every round.
+                let h = registry.acquire(ctx, 512, 2, ENGINE);
+                let mut buf = [0u8; MAX_RECORD_LEN];
+                for seq in 0..per_round {
+                    let len = RawRecord::CallFunction {
+                        flags: 0,
+                        thread_id: round + 1,
+                        call_id: seq + 1,
+                        parent_call_id: seq,
+                        function_id: 1,
+                        ts_ns: round * per_round + seq,
+                    }
+                    .encode(&mut buf);
+                    // SAFETY: claiming thread, alive for the whole closure.
+                    unsafe { h.push(&buf[..len]) };
+                }
+                h.ring().orphan(); // TLS-destructor stand-in
+            })
+            .join()
+            .unwrap();
+            // A dead thread's ring is claimable only after the consumer
+            // pools it; give the sweep a beat, like the seconds-long idle
+            // gaps of a real blocking pool. (Back-to-back churn without the
+            // gap legally allocates more rings — bounded by peak concurrent
+            // un-pooled threads, exercised in orphan_churn_reuses_rings.)
+            std::thread::sleep(Duration::from_millis(2));
+        }
+
+        // Flush through the live consumer and read everything back.
+        let (ack_tx, ack_rx) = mpsc::sync_channel(1);
+        ctl_tx.send(ControlMsg::Flush(ack_tx)).unwrap();
+        ctx.wake().force_wake();
+        ack_rx
+            .recv_timeout(Duration::from_secs(60))
+            .expect("soak consumer never acked");
+
+        // Sequential churn must reuse one pooled ring, not grow the registry
+        // (the consumer pools each orphan between rounds; a bounded handful
+        // is tolerated for rounds that overlapped a sweep).
+        let mut rings = 0;
+        registry.for_each(|_| rings += 1);
+        assert!(rings <= 4, "registry grew under churn: {rings} rings");
+
+        let paths: Vec<_> = std::fs::read_dir(&dir)
+            .unwrap()
+            .map(|e| e.unwrap().path())
+            .collect();
+        assert_eq!(paths.len(), 1);
+        let (_, events) = read_bamlprof(&paths[0]).expect("parse soak profile");
+        let calls = events
+            .iter()
+            .filter(|e| matches!(e.event, Some(pb::disk_event_v1::Event::CallFunction(_))))
+            .count();
+        assert_eq!(
+            calls as u64,
+            rounds * per_round,
+            "soak lost or duplicated records"
+        );
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// PR5: hitting `BAML_RING_MAX_OVERFLOW_BYTES` must be a hard process
+    /// error with the documented message (D6) — asserted from a subprocess
+    /// because the path aborts.
+    #[test]
+    #[cfg(not(miri))] // spawns a subprocess
+    fn overflow_cap_aborts_with_message() {
+        if std::env::var("BAML_PROF_OVERFLOW_CHILD").is_ok() {
+            // Child mode: a cap smaller than one segment aborts on the
+            // first allocation.
+            let ctx: &'static RingCtx = leak(RingCtx::new(1024));
+            let registry: &'static Registry = leak(Registry::new());
+            let _ = registry.acquire(ctx, 64 * 1024, 2, 1);
+            unreachable!("the segment allocation above must abort");
+        }
+        let exe = std::env::current_exe().expect("test binary path");
+        let output = std::process::Command::new(exe)
+            .args([
+                "prof::consumer::tests::overflow_cap_aborts_with_message",
+                "--exact",
+                "--nocapture",
+                "--test-threads=1",
+            ])
+            .env("BAML_PROF_OVERFLOW_CHILD", "1")
+            .output()
+            .expect("spawn child test process");
+        assert!(
+            !output.status.success(),
+            "child must die on the overflow abort"
+        );
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains("BAML_RING_MAX_OVERFLOW_BYTES"),
+            "abort message missing the knob name: {stderr}"
+        );
+        assert!(
+            stderr.contains("cannot keep up"),
+            "abort message missing the diagnosis: {stderr}"
+        );
+    }
 }

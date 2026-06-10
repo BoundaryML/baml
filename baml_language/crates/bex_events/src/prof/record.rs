@@ -176,7 +176,17 @@ impl RawRecord<'_> {
     /// `StartThread` names are truncated to [`MAX_THREAD_NAME_LEN`] bytes
     /// defensively; callers are expected to cap (UTF-8-safely) at capture
     /// time.
+    #[inline]
     pub fn encode(&self, buf: &mut [u8; MAX_RECORD_LEN]) -> usize {
+        self.encode_to(buf)
+    }
+
+    /// [`RawRecord::encode`] over a plain slice, for producers that size
+    /// their stack buffer to the record they emit ([`Self::encoded_len`])
+    /// instead of zeroing [`MAX_RECORD_LEN`] bytes on a hot path.
+    /// Panics (slice indexing) if `buf` is shorter than the encoded record.
+    #[inline]
+    pub fn encode_to(&self, buf: &mut [u8]) -> usize {
         let mut w = Writer { buf, pos: 0 };
         match *self {
             RawRecord::CallFunction {
@@ -357,28 +367,33 @@ impl<'a> Iterator for RecordIter<'a> {
 }
 
 struct Writer<'b> {
-    buf: &'b mut [u8; MAX_RECORD_LEN],
+    buf: &'b mut [u8],
     pos: usize,
 }
 
 impl Writer<'_> {
+    #[inline]
     fn u8(&mut self, v: u8) {
         self.buf[self.pos] = v;
         self.pos += 1;
     }
 
+    #[inline]
     fn u16(&mut self, v: u16) {
         self.bytes(&v.to_le_bytes());
     }
 
+    #[inline]
     fn u32(&mut self, v: u32) {
         self.bytes(&v.to_le_bytes());
     }
 
+    #[inline]
     fn u64(&mut self, v: u64) {
         self.bytes(&v.to_le_bytes());
     }
 
+    #[inline]
     fn bytes(&mut self, b: &[u8]) {
         self.buf[self.pos..self.pos + b.len()].copy_from_slice(b);
         self.pos += b.len();
