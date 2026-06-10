@@ -31,6 +31,20 @@ pub const SET_FUNCTION_ID_LEN: usize = 41;
 /// Upper bound on any encoded record; sizes producer-side stack buffers.
 pub const MAX_RECORD_LEN: usize = START_THREAD_FIXED_LEN + MAX_THREAD_NAME_LEN;
 
+/// Caps a thread name at [`MAX_THREAD_NAME_LEN`] bytes without splitting a
+/// UTF-8 character — the producer-side capture helper for `StartThread`.
+#[must_use]
+pub fn capped_name_bytes(name: &str) -> &[u8] {
+    if name.len() <= MAX_THREAD_NAME_LEN {
+        return name.as_bytes();
+    }
+    let mut end = MAX_THREAD_NAME_LEN;
+    while end > 0 && !name.is_char_boundary(end) {
+        end -= 1;
+    }
+    &name.as_bytes()[..end]
+}
+
 const TAG_CALL_FUNCTION: u8 = 0x01;
 const TAG_END_FUNCTION: u8 = 0x02;
 const TAG_START_THREAD: u8 = 0x03;

@@ -269,6 +269,7 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                 origin: function.origin,
                 body_meta: function.body_meta,
                 trace: function.trace,
+                function_id: 0, // synthetic; not in the profiling function table
             }))
         }
         other => other,

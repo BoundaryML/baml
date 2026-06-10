@@ -561,7 +561,23 @@ pub struct BexEngine {
     /// every spawned VM (including post-`$init` workers) sees the same map
     /// without cloning the underlying `IndexMap`.
     interface_implementors: Arc<InterfaceImplementors>,
+
+    /// Process-unique id for the BEX profiling event stream: demuxes this
+    /// engine's `.bamlprof` file (multiple `Arc<BexEngine>` per process are
+    /// legal). Minted from [`NEXT_ENGINE_ID`].
+    engine_id: u64,
+    /// Snapshot of the `BAML_PROFILE` master switch, taken once at
+    /// construction (the config is read-once per process). Gates every
+    /// profiling emission and the per-resume ring refresh.
+    prof_enabled: bool,
+    /// Mints logical BEX thread ids (one per root call or spawn; not OS
+    /// threads), starting at 1 — `0` means "root" in `parent_thread_id`.
+    prof_thread_counter: std::sync::atomic::AtomicU64,
 }
+
+/// Process-global engine-id mint for the profiling event stream. Ids start
+/// at 1 and are never reused.
+static NEXT_ENGINE_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
 #[cfg(target_arch = "wasm32")]
 fn _default_round_robin_start() -> usize {
@@ -846,6 +862,11 @@ impl BexEngine {
     ) -> Result<Self, EngineError> {
         let argv: Arc<[String]> = Arc::from(argv);
 
+        // BEX profiling event stream: mint the engine id and snapshot the
+        // master switch once (plan §2.2).
+        let engine_id = NEXT_ENGINE_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let prof_enabled = bex_events::prof::ProfConfig::global().enabled;
+
         // Extract package_init_order before consuming bytecode_program.
         let package_init_order = bytecode_program.package_init_order.clone();
 
@@ -871,15 +892,52 @@ impl BexEngine {
         // Encode compact bytecode for all functions before the heap freezes them.
         // This must happen before BexHeap::new() because objects become immutable
         // behind an Arc after that point.
+        //
+        // The same pre-freeze walk is the profiling interim function-id
+        // provider (plan §2.6): per-run sequential ids (1-based; 0 =
+        // unassigned), assigned unconditionally so ids are deterministic,
+        // with the header metadata table built only when profiling is on.
+        // M0 moves assignment to compile time and replaces this seam.
+        let mut prof_function_table: Vec<bex_events::prof::FunctionMetaEntry> = Vec::new();
+        let mut next_function_id: u32 = 0;
         let compile_time_objects: Vec<Object> = compile_time_objects
             .into_iter()
             .map(|mut obj| {
                 if let Object::Function(ref mut func) = obj {
                     func.bytecode.compact = Some(func.bytecode.lower_to_compact());
+                    next_function_id += 1;
+                    func.function_id = next_function_id;
+                    if prof_enabled {
+                        prof_function_table.push(bex_events::prof::FunctionMetaEntry {
+                            function_id: next_function_id,
+                            fqn: func.name.clone(),
+                            source_file: func.source_file.clone(),
+                            span_start: func.span.range.start().into(),
+                            span_end: func.span.range.end().into(),
+                            kind: match func.kind {
+                                bex_vm_types::FunctionKind::Bytecode => "bytecode",
+                                bex_vm_types::FunctionKind::SysOp(_) => "sysop",
+                                bex_vm_types::FunctionKind::Native(_)
+                                | bex_vm_types::FunctionKind::NativeUnresolved => "native",
+                            }
+                            .to_string(),
+                        });
+                    }
                 }
                 obj
             })
             .collect();
+        if prof_enabled {
+            bex_events::prof::register_engine_metadata(
+                engine_id,
+                bex_events::prof::EngineProfileMetadata {
+                    // What identifies a Program is still open (M0
+                    // coordination); empty for now.
+                    program_id: String::new(),
+                    functions: prof_function_table,
+                },
+            );
+        }
 
         // Pre-compute class and enum indices before moving objects to heap.
         // This is used for allocating instances/variants from sys-op results.
@@ -1101,6 +1159,9 @@ impl BexEngine {
             active_calls: Mutex::new(HashMap::new()),
             futures: FutureManager::new(futures_permit),
             interface_implementors,
+            engine_id,
+            prof_enabled,
+            prof_thread_counter: std::sync::atomic::AtomicU64::new(1),
         })
     }
 
@@ -1110,6 +1171,50 @@ impl BexEngine {
         bex_events::event_store::emit(&event);
         if let Some(sink) = &self.event_sink {
             sink.send(event);
+        }
+    }
+
+    // ── BEX profiling event stream (bex_events::prof) ──────────────────
+
+    /// Mints the next logical BEX thread id for the profiling stream.
+    fn next_prof_thread_id(&self) -> u64 {
+        self.prof_thread_counter
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Engine-side profiling emission — thread lifecycle and sys-op
+    /// completion, all cold paths. Always resolves the ring through the
+    /// calling OS thread's TLS lookup, **never** a stale VM snapshot:
+    /// engine arms run after `.await`s, where the task may have migrated
+    /// OS threads (the VM snapshot is only valid within one exec resume).
+    #[allow(unsafe_code)]
+    fn prof_emit(&self, rec: &bex_events::prof::record::RawRecord<'_>) {
+        if !self.prof_enabled {
+            return;
+        }
+        let handle = bex_events::prof::ring_for_engine(self.engine_id);
+        let mut buf = [0u8; bex_events::prof::record::MAX_RECORD_LEN];
+        let len = rec.encode(&mut buf);
+        // SAFETY: the handle was claimed via this live thread's TLS lookup
+        // on the line above; engine arms never run from TLS destructors.
+        unsafe { handle.push(&buf[..len]) };
+    }
+
+    /// Closes the sys-op call pair opened at the VM's `VmExecState::SysOp`
+    /// yield site (no-op when the VM minted nothing — profiling off or a
+    /// non-call sys-op source).
+    fn prof_end_sysop(&self, vm: &mut bex_vm::BexVm, ok: bool) {
+        if let Some(call_id) = vm.pending_sysop_call_id.take() {
+            self.prof_emit(&bex_events::prof::record::RawRecord::EndFunction {
+                status: if ok {
+                    bex_events::prof::record::FunctionEndStatus::Ok
+                } else {
+                    bex_events::prof::record::FunctionEndStatus::Error
+                },
+                thread_id: vm.prof_thread_id,
+                call_id,
+                ts_ns: bex_events::prof::clock::now_ns(),
+            });
         }
     }
 
@@ -1592,6 +1697,23 @@ impl BexEngine {
         // BEP-034: wrap the root VM in a `BexThread` from the outset so the
         // permit's `RootHaver` is the thread (delegating to the inner VM).
         // Spawned children build their own `BexThread`s in `spawn_thread`.
+        let mut vm = vm;
+        vm.prof_thread_id = self.next_prof_thread_id();
+        if self.prof_enabled {
+            // Snapshot the ring now (claimed on this thread) so the entry
+            // frame's CallFunction — emitted by set_entry_point, before the
+            // first loop-head refresh — has somewhere to land. The refresh
+            // re-snapshots on whatever thread each resume runs on.
+            vm.prof_ring = Some(bex_events::prof::ring_for_engine(self.engine_id).ring());
+            self.prof_emit(&bex_events::prof::record::RawRecord::StartThread {
+                flags: 0,
+                thread_id: vm.prof_thread_id,
+                parent_thread_id: 0, // engine-root thread
+                parent_call_id: 0,
+                ts_ns: bex_events::prof::clock::now_ns(),
+                name: b"",
+            });
+        }
         let root_thread = BexThread::new_root(vm, cancel);
         let inactive = self.heap_permit_manager.new_permit(root_thread).await;
         inactive.acquire().await
@@ -2515,6 +2637,10 @@ impl BexEngine {
     /// The future the child settles is pre-allocated by the caller (under the
     /// parent's permit) and identified by `future_id`.
     #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "spawn edge carries the full context"
+    )]
     fn spawn_thread(
         self: Arc<Self>,
         child_cancel: CancellationToken,
@@ -2526,6 +2652,7 @@ impl BexEngine {
         group: Option<Arc<TaskGroupInner>>,
         call_id: CallId,
         future_id: FutureId,
+        prof_thread_id: u64,
     ) -> std::pin::Pin<
         Box<dyn std::future::Future<Output = Result<(), EngineError>> + Send + 'static>,
     > {
@@ -2539,6 +2666,7 @@ impl BexEngine {
             group,
             call_id,
             future_id,
+            prof_thread_id,
         ))
     }
 
@@ -2563,6 +2691,7 @@ impl BexEngine {
         group: Option<Arc<TaskGroupInner>>,
         call_id: CallId,
         future_id: FutureId,
+        prof_thread_id: u64,
     ) -> Result<(), EngineError> {
         // BEP-034 spawn options: link a user-provided `CancelToken`
         // (`with baml.spawn.options(cancel = ...)`) into this spawn's effective
@@ -2608,6 +2737,14 @@ impl BexEngine {
             Arc::clone(&self.argv),
             Arc::clone(&self.interface_implementors),
         );
+        child_vm.prof_thread_id = prof_thread_id;
+        if self.prof_enabled {
+            // Snapshot the ring on the spawning thread so the entry frame's
+            // CallFunction (emitted by set_entry_point below) lands; the
+            // loop-head refresh re-snapshots on the child task's own thread
+            // before its first exec.
+            child_vm.prof_ring = Some(bex_events::prof::ring_for_engine(self.engine_id).ring());
+        }
         child_vm.set_entry_point(closure, &[]);
 
         // Register a new (inactive) permit for the child. `new_permit` only
@@ -2716,6 +2853,53 @@ impl BexEngine {
         }
     }
 
+    /// Runs a thread's event loop (see [`Self::run_thread_event_loop_inner`])
+    /// and closes its profiling lifecycle: one `EndThread` per `StartThread`,
+    /// on every exit path (the inner loop has many early returns; thread
+    /// join at shutdown makes the final commits visible to the consumer per
+    /// plan §1).
+    #[expect(clippy::too_many_arguments, reason = "mirrors the inner loop")]
+    async fn run_thread_event_loop(
+        self: &Arc<Self>,
+        return_type: Ty,
+        throws_type: Option<Ty>,
+        thread: ActiveHeapPermit<BexThread>,
+        call_id: CallId,
+        span_state: &mut Option<SpanState>,
+        cancel: &CancellationToken,
+        copy_objects: bool,
+    ) -> Result<ThreadOutcome, EngineError> {
+        let prof_thread_id = thread.vm.prof_thread_id;
+        let result = self
+            .run_thread_event_loop_inner(
+                return_type,
+                throws_type,
+                thread,
+                call_id,
+                span_state,
+                cancel,
+                copy_objects,
+            )
+            .await;
+        if self.prof_enabled {
+            let status = match &result {
+                Ok(_) | Err(EngineError::Exit { .. }) => {
+                    bex_events::prof::record::ThreadEndStatus::Completed
+                }
+                Err(_) if cancel.is_cancelled() => {
+                    bex_events::prof::record::ThreadEndStatus::Cancelled
+                }
+                Err(_) => bex_events::prof::record::ThreadEndStatus::Errored,
+            };
+            self.prof_emit(&bex_events::prof::record::RawRecord::EndThread {
+                status,
+                thread_id: prof_thread_id,
+                ts_ns: bex_events::prof::clock::now_ns(),
+            });
+        }
+        result
+    }
+
     /// Drive a `BexThread` to completion, dispatching sys-ops, awaits, span
     /// notifications, and early-yield events.
     ///
@@ -2732,7 +2916,7 @@ impl BexEngine {
     /// `Complete` / `ThrownUnhandled` / `InternalError` transitions
     /// through [`FutureManager`] so the awaiter resumes correctly.
     #[allow(clippy::too_many_arguments)]
-    async fn run_thread_event_loop(
+    async fn run_thread_event_loop_inner(
         self: &Arc<Self>,
         return_type: Ty,
         throws_type: Option<Ty>,
@@ -2746,6 +2930,18 @@ impl BexEngine {
             // Update the VM's span context so native functions can read it.
             thread.vm.current_span_context =
                 span_state.as_ref().map(Self::build_span_context_from_state);
+
+            // D5a: refresh the profiling ring snapshot once per exec resume
+            // — a TLS lookup here, never per push. Sound because exec()
+            // never crosses an .await and tokio migrates tasks only at
+            // .await points, so one refresh covers OS-thread migration
+            // (plan §6, invariant 4: if exec ever yields mid-step, this
+            // model must be revisited).
+            thread.vm.prof_ring = if self.prof_enabled {
+                Some(bex_events::prof::ring_for_engine(self.engine_id).ring())
+            } else {
+                None
+            };
 
             let exec_result = match thread.vm.exec() {
                 Ok(state) => state,
@@ -2975,6 +3171,7 @@ impl BexEngine {
                         // Cancelled so the heap Future no longer hangs
                         // at Pending; root threads surface the cancel
                         // to the host.
+                        self.prof_end_sysop(&mut thread.vm, false);
                         if let Some(future_id) = thread.vm_thread_settles_future() {
                             self.settle_child_cancelled(&mut thread, future_id).await?;
                             return Ok(ThreadOutcome::SettledChild);
@@ -3001,6 +3198,7 @@ impl BexEngine {
                             thread = inactive.acquire().await;
                             match outcome {
                                 SysOpOutcome::Cancelled => {
+                                    self.prof_end_sysop(&mut thread.vm, false);
                                     if let Some(future_id) = thread.vm_thread_settles_future() {
                                         self.settle_child_cancelled(&mut thread, future_id).await?;
                                         return Ok(ThreadOutcome::SettledChild);
@@ -3011,6 +3209,12 @@ impl BexEngine {
                             }
                         }
                     };
+
+                    // PR4b: close the sys-op call pair opened at the VM's
+                    // yield site. Post-await this task may sit on a
+                    // different OS thread — prof_end_sysop goes through the
+                    // TLS ring lookup, so that is fine.
+                    self.prof_end_sysop(&mut thread.vm, outcome.is_ok());
 
                     match outcome {
                         Ok(external) => {
@@ -3174,6 +3378,22 @@ impl BexEngine {
                     // per task (this `new_future` runs under `thread`) avoids
                     // it. The guard is dropped before the `spawn_thread` await
                     // so no non-`Send` guard crosses a yield point.
+                    // BEX profiling: the spawn edge. This is the one place
+                    // the parent thread id, the spawning call id, and the
+                    // child's name are all in hand (plan §2.2).
+                    let child_prof_thread_id = self.next_prof_thread_id();
+                    if self.prof_enabled {
+                        let name = spawn_name.as_deref().unwrap_or("");
+                        self.prof_emit(&bex_events::prof::record::RawRecord::StartThread {
+                            flags: 0,
+                            thread_id: child_prof_thread_id,
+                            parent_thread_id: thread.vm.prof_thread_id,
+                            parent_call_id: thread.vm.current_call_id(),
+                            ts_ns: bex_events::prof::clock::now_ns(),
+                            name: bex_events::prof::record::capped_name_bytes(name),
+                        });
+                    }
+
                     let future_ptr = {
                         let mut guard = self.futures.acquire(thread.proof()).await;
                         let (future_id, future_ptr) = guard.new_future(child_cancel.clone());
@@ -3189,6 +3409,7 @@ impl BexEngine {
                                 group,
                                 call_id,
                                 future_id,
+                                child_prof_thread_id,
                             )
                             .await?;
                         future_ptr

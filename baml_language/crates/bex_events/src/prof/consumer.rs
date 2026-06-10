@@ -29,7 +29,7 @@ use std::{
 };
 
 use crate::prof::{
-    clock,
+    EngineProfileMetadata, clock,
     config::ProfConfig,
     file::{ProfileWriter, build_header},
     pb,
@@ -41,35 +41,6 @@ use crate::prof::{
 /// How often the consumer stamps a process-liveness heartbeat into every
 /// open file (MVP: consumer-stamped, v2 §4).
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(1);
-
-/// Per-run metadata an engine registers before (or while) producing, written
-/// into its file's header. The function table is the §2.6 interim provider's
-/// output until the M0 id table replaces it.
-#[derive(Debug, Clone, Default)]
-pub struct EngineProfileMetadata {
-    /// What identifies a Program is still open (M0 coordination); empty for
-    /// now.
-    pub program_id: String,
-    /// Per-run function table; the FQN is the cross-run key.
-    pub functions: Vec<FunctionMetaEntry>,
-}
-
-/// One function-table row (mirrors `pb::FunctionMetadata`).
-#[derive(Debug, Clone)]
-pub struct FunctionMetaEntry {
-    /// Per-run id, as emitted in `CallFunction.function_id`.
-    pub function_id: u32,
-    /// Fully qualified name — the stable cross-run key.
-    pub fqn: String,
-    /// Source file path as known to the compiler.
-    pub source_file: String,
-    /// Span start byte offset.
-    pub span_start: u32,
-    /// Span end byte offset.
-    pub span_end: u32,
-    /// "bytecode" | "sysop" | "native".
-    pub kind: String,
-}
 
 fn engine_meta() -> &'static Mutex<HashMap<u64, EngineProfileMetadata>> {
     static META: OnceLock<Mutex<HashMap<u64, EngineProfileMetadata>>> = OnceLock::new();
@@ -426,6 +397,7 @@ mod tests {
 
     use super::*;
     use crate::prof::{
+        FunctionMetaEntry,
         file::{header_started_at_epoch_ns, read_bamlprof},
         record::MAX_RECORD_LEN,
     };

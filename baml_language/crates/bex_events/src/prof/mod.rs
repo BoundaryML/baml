@@ -54,12 +54,40 @@ mod concurrency_tests;
 
 pub use config::ProfConfig;
 #[cfg(all(not(target_arch = "wasm32"), not(baml_loom)))]
-pub use consumer::{
-    EngineProfileMetadata, FunctionMetaEntry, flush_and_join, register_engine_metadata,
-};
+pub use consumer::{flush_and_join, register_engine_metadata};
 #[cfg(not(baml_loom))]
 pub use registry::ring_for_engine;
 pub use ring::{Ring, RingHandle};
+
+/// Per-run metadata an engine registers before (or while) producing, written
+/// into its file's header. The function table is the §2.6 interim provider's
+/// output until the M0 id table replaces it. (Defined here, not in the
+/// consumer, so dual-target engine code can build it on wasm32 too.)
+#[derive(Debug, Clone, Default)]
+pub struct EngineProfileMetadata {
+    /// What identifies a Program is still open (M0 coordination); empty for
+    /// now.
+    pub program_id: String,
+    /// Per-run function table; the FQN is the cross-run key.
+    pub functions: Vec<FunctionMetaEntry>,
+}
+
+/// One function-table row (mirrors `pb::FunctionMetadata`).
+#[derive(Debug, Clone)]
+pub struct FunctionMetaEntry {
+    /// Per-run id, as emitted in `CallFunction.function_id`.
+    pub function_id: u32,
+    /// Fully qualified name — the stable cross-run key.
+    pub fqn: String,
+    /// Source file path as known to the compiler.
+    pub source_file: String,
+    /// Span start byte offset.
+    pub span_start: u32,
+    /// Span end byte offset.
+    pub span_end: u32,
+    /// "bytecode" | "sysop" | "native".
+    pub kind: String,
+}
 
 // wasm32: profiling is forced off (no consumer thread, no TSC clock); the
 // producer-facing surface compiles to no-ops so dual-target callers don't
@@ -68,3 +96,7 @@ pub use ring::{Ring, RingHandle};
 pub fn flush_and_join(_timeout: std::time::Duration) -> bool {
     true
 }
+
+/// See the native implementation in [`consumer`]. No-op on wasm32.
+#[cfg(target_arch = "wasm32")]
+pub fn register_engine_metadata(_engine_id: u64, _meta: EngineProfileMetadata) {}

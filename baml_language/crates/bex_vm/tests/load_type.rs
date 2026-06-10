@@ -72,6 +72,7 @@ fn inject_function(
         origin: FunctionOrigin::UserDefined,
         body_meta: None,
         trace: false,
+        function_id: 0,
     };
 
     let fn_obj_idx = program.add_object(Object::Function(Box::new(func)));

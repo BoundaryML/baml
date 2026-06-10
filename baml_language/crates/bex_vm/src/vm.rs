@@ -163,6 +163,15 @@ pub struct BytecodeFrame {
     /// Used by `capture_stack_trace`, `try_unwind_exception`, and event
     /// source location capture.
     pub(crate) faulting_pc: usize,
+    /// This call's profiling id (BEX event stream; also `$id` semantics —
+    /// minted unconditionally, M1 reads it). Frames live in a `Vec`, so this
+    /// is Vec-element cost, not `Object` cost.
+    pub(crate) call_id: u64,
+    /// The caller's `call_id` (`0` = thread-root call), restored into
+    /// `BexVm::current_call_id` when this frame pops. Stored here (rather
+    /// than recomputed from the frame below) so frameless native calls in
+    /// progress can't be skipped over.
+    pub(crate) parent_call_id: u64,
 }
 
 impl RootHaver for BytecodeFrame {
@@ -293,6 +302,11 @@ mod tests {
             interrupt_frame: None,
             traced_frames: Vec::new(),
             current_span_context: None,
+            prof_ring: None,
+            prof_thread_id: 0,
+            call_id_counter: 0,
+            current_call_id: 0,
+            pending_sysop_call_id: None,
             argv: Arc::from([]),
             pending_call_type_args: Vec::new(),
             interface_implementors: Arc::new(indexmap::IndexMap::new()),
@@ -331,6 +345,7 @@ mod tests {
             origin: FunctionOrigin::Internal,
             body_meta: None,
             trace: false,
+            function_id: 0,
         }))
     }
 
@@ -692,6 +707,32 @@ pub struct BexVm {
     /// Available to `//baml:mut_vm` native functions that need to emit events
     /// with the correct span context.
     pub current_span_context: Option<bex_events::SpanContext>,
+
+    /// D5a snapshot: the profiling ring this engine claimed on the current
+    /// OS thread, refreshed by the engine at the top of every exec resume
+    /// (`run_thread_event_loop`) and **never valid across an `.await`**.
+    /// `None` = profiling off. Pushes go through `prof_push_record`.
+    pub prof_ring: Option<&'static bex_events::prof::Ring>,
+
+    /// Logical BEX thread id for the profiling event stream, minted by the
+    /// engine per logical thread (root call or spawn) — not the OS thread.
+    pub prof_thread_id: u64,
+
+    /// Per-call id counter; ids start at 1 (`0` = none). Minted
+    /// unconditionally — it is `$id` language semantics (M1 reads it) — and
+    /// only the ring write is gated on `prof_ring`.
+    pub(crate) call_id_counter: u64,
+
+    /// The innermost live call's id (`0` = at thread root). Parent for the
+    /// next `CallFunction`; restored from the popped frame's
+    /// `parent_call_id` on every pop.
+    pub(crate) current_call_id: u64,
+
+    /// The profiling call id of the sys-op the VM just yielded (set at the
+    /// `VmExecState::SysOp` yield sites). The engine takes it and emits the
+    /// matching `EndFunction` once the op completes — possibly on a
+    /// different OS thread, hence engine-side via its TLS ring lookup.
+    pub pending_sysop_call_id: Option<u64>,
 
     /// Process argv passed to the engine at startup. Exposed to BAML via
     /// `baml.sys.argv()`. Shared (cheap to clone) across VMs.
@@ -1133,6 +1174,11 @@ impl BexVm {
             interrupt_frame: None,
             traced_frames: Vec::new(),
             current_span_context: None,
+            prof_ring: None,
+            prof_thread_id: 0,
+            call_id_counter: 0,
+            current_call_id: 0,
+            pending_sysop_call_id: None,
             argv,
             pending_call_type_args: Vec::new(),
             interface_implementors,
@@ -1534,12 +1580,12 @@ impl BexVm {
         // `GenericFunction` pointer.
         let mut dispatch_ptr = function;
         let mut effective_type_args = type_args;
-        let callable_kind = match self.get_object(function) {
-            Object::Function(f) => f.kind,
+        let (callable_kind, entry_function_id) = match self.get_object(function) {
+            Object::Function(f) => (f.kind, f.function_id),
             Object::Closure(closure) => {
                 let func_obj = unsafe { closure.function.get() };
                 match func_obj {
-                    Object::Function(f) => f.kind,
+                    Object::Function(f) => (f.kind, f.function_id),
                     other => unreachable!("expect closure function, got {other:?}"),
                 }
             }
@@ -1550,7 +1596,7 @@ impl BexVm {
                     .as_object_ptr(inner, FunctionType::Callable.into())
                     .expect("generic function global resolves to a function");
                 match unsafe { dispatch_ptr.get() } {
-                    Object::Function(f) => f.kind,
+                    Object::Function(f) => (f.kind, f.function_id),
                     other => unreachable!("expect generic function inner, got {other:?}"),
                 }
             }
@@ -1561,12 +1607,16 @@ impl BexVm {
             FunctionKind::Bytecode => {
                 self.pending_call_type_args.clone_from(&effective_type_args);
                 self.stack.extend(args.iter().copied());
+                // The thread-root call: parent_call_id is 0 on a fresh VM.
+                let (call_id, parent_call_id) = self.prof_enter_call(entry_function_id);
                 self.frames.push(Frame::Bytecode(BytecodeFrame {
                     function: dispatch_ptr,
                     instruction_ptr: 0,
                     locals_offset: StackIndex::from_raw(0),
                     type_args: effective_type_args,
                     faulting_pc: 0,
+                    call_id,
+                    parent_call_id,
                 }));
 
                 // Entry functions need the same frame-local pre-allocation as normal
@@ -1671,15 +1721,21 @@ impl BexVm {
             origin: FunctionOrigin::Internal,
             body_meta: None,
             trace: false,
+            function_id: 0, // synthetic; not in the profiling function table
         };
         let entry_ptr = self.tlab.alloc(Object::Function(Box::new(entry_function)));
 
+        // Synthetic `$entry::` wrapper frame; the wrapped native/sysop emits
+        // its own pair through the normal Call/SysOp instruction paths.
+        let (call_id, parent_call_id) = self.prof_enter_call(0);
         self.frames.push(Frame::Bytecode(BytecodeFrame {
             function: entry_ptr,
             instruction_ptr: 0,
             locals_offset: StackIndex::from_raw(0),
             type_args: Vec::new(),
             faulting_pc: 0,
+            call_id,
+            parent_call_id,
         }));
     }
 
@@ -2162,13 +2218,22 @@ impl BexVm {
         // Params.
         self.stack.extend(args.iter().copied());
 
-        // Push the new frame.
+        // Push the new frame. Interrupt frames participate in profiling like
+        // any call: their pop goes through the Return arm, which emits
+        // EndFunction — entry/exit must stay balanced.
+        let interrupt_function_id = self
+            .get_object(function_ptr)
+            .as_callable()
+            .map_or(0, |f| f.function_id);
+        let (call_id, parent_call_id) = self.prof_enter_call(interrupt_function_id);
         self.frames.push(Frame::Bytecode(BytecodeFrame {
             function: function_ptr,
             instruction_ptr: 0,
             locals_offset: StackIndex::from_raw(locals_offset),
             type_args: vec![],
             faulting_pc: 0,
+            call_id,
+            parent_call_id,
         }));
         self.allocate_real_locals_for_frame(function_ptr)?;
 
@@ -2632,6 +2697,8 @@ impl BexVm {
             // no eval stack region — just pop and continue unwinding.
             if matches!(frame, Frame::Native(_)) {
                 if self.frames.len() <= 1 {
+                    // Terminal unwind with a native entry frame: natives
+                    // emitted nothing on entry, so nothing to close here.
                     return Err(VmError::Thrown(exception_value));
                 }
                 self.frames.pop();
@@ -2720,7 +2787,20 @@ impl BexVm {
 
             // No handler in this frame -- pop it and try the caller.
             if self.frames.len() <= 1 {
-                // No more frames to unwind through.
+                // No more frames to unwind through. The remaining entry
+                // frame stays on the stack (stack-trace capture reads it),
+                // but its call is over: close its profiling pair so an
+                // unhandled throw keeps Call/End balance. (Other fatal exits
+                // — true VM-internal errors — can still leave open calls;
+                // those are process-level bugs, not program errors.)
+                if let Some(Frame::Bytecode(bf)) = self.frames.last() {
+                    let (call_id, parent_call_id) = (bf.call_id, bf.parent_call_id);
+                    self.prof_exit_call(
+                        call_id,
+                        parent_call_id,
+                        bex_events::prof::record::FunctionEndStatus::Error,
+                    );
+                }
                 return Err(VmError::ThrownUnhandled {
                     value: exception_value,
                     trace,
@@ -2731,6 +2811,14 @@ impl BexVm {
             match popped {
                 Frame::Bytecode(bf) => {
                     self.stack.drain(bf.locals_offset..);
+                    // Unwound frames end in Error; native frames emit nothing
+                    // (they emitted nothing on entry — keep entry/exit
+                    // symmetric per FunctionKind, plan §6 invariant 3).
+                    self.prof_exit_call(
+                        bf.call_id,
+                        bf.parent_call_id,
+                        bex_events::prof::record::FunctionEndStatus::Error,
+                    );
                 }
                 Frame::Native(_) => {} // native frames own no stack region
             }
@@ -2827,6 +2915,139 @@ impl BexVm {
         callee
     }
 
+    // ── BEX profiling event stream (bex_events::prof) ──────────────────
+
+    /// The innermost live call's profiling id (`0` = at thread root). The
+    /// engine reads this as the `parent_call_id` of a spawn edge; M1's `$id`
+    /// surface reads it too.
+    #[must_use]
+    pub fn current_call_id(&self) -> u64 {
+        self.current_call_id
+    }
+
+    /// Mints the next per-call id. Unconditional — call ids are `$id`
+    /// language semantics (M1 reads them); only ring writes are gated.
+    #[inline]
+    fn mint_call_id(&mut self) -> u64 {
+        self.call_id_counter += 1;
+        self.call_id_counter
+    }
+
+    /// Encodes and pushes one profiling record into the per-resume ring
+    /// snapshot. No-op when profiling is off.
+    #[inline]
+    fn prof_push_record(&self, rec: &bex_events::prof::record::RawRecord<'_>) {
+        if let Some(ring) = self.prof_ring {
+            let mut buf = [0u8; bex_events::prof::record::MAX_RECORD_LEN];
+            let len = rec.encode(&mut buf);
+            // SAFETY: the engine refreshed `prof_ring` from this OS thread's
+            // TLS at the top of the current exec resume (D5a), and exec
+            // never crosses an `.await`, so this thread is still the ring's
+            // live claimant. If exec ever yields mid-step, this model must
+            // be revisited (plan §6, invariant 4).
+            #[expect(unsafe_code, reason = "ring push contract upheld by D5a refresh")]
+            unsafe {
+                ring.push(&buf[..len]);
+            }
+        }
+    }
+
+    /// Call-entry bookkeeping for a frame about to be pushed: mints the call
+    /// id, updates `current_call_id`, and emits `CallFunction`. Returns
+    /// `(call_id, parent_call_id)` for the frame literal.
+    #[inline]
+    fn prof_enter_call(&mut self, function_id: u32) -> (u64, u64) {
+        let parent_call_id = self.current_call_id;
+        let call_id = self.mint_call_id();
+        self.current_call_id = call_id;
+        if self.prof_ring.is_some() {
+            self.prof_push_record(&bex_events::prof::record::RawRecord::CallFunction {
+                flags: 0,
+                thread_id: self.prof_thread_id,
+                call_id,
+                parent_call_id,
+                function_id,
+                ts_ns: bex_events::prof::clock::now_ns(),
+            });
+        }
+        (call_id, parent_call_id)
+    }
+
+    /// Call-exit bookkeeping for a popped frame: restores the caller as the
+    /// current call and emits `EndFunction`.
+    #[inline]
+    fn prof_exit_call(
+        &mut self,
+        call_id: u64,
+        parent_call_id: u64,
+        status: bex_events::prof::record::FunctionEndStatus,
+    ) {
+        self.current_call_id = parent_call_id;
+        if self.prof_ring.is_some() {
+            self.prof_push_record(&bex_events::prof::record::RawRecord::EndFunction {
+                status,
+                thread_id: self.prof_thread_id,
+                call_id,
+                ts_ns: bex_events::prof::clock::now_ns(),
+            });
+        }
+    }
+
+    /// Sys-op call entry: mints the id and emits `CallFunction`; the engine
+    /// emits the matching `EndFunction` when the op completes (it takes
+    /// [`BexVm::pending_sysop_call_id`]). `current_call_id` is left alone —
+    /// a sys-op makes no nested VM calls.
+    #[inline]
+    fn prof_enter_sysop(&mut self, function_id: u32) {
+        let parent_call_id = self.current_call_id;
+        let call_id = self.mint_call_id();
+        if self.prof_ring.is_some() {
+            self.prof_push_record(&bex_events::prof::record::RawRecord::CallFunction {
+                flags: 0,
+                thread_id: self.prof_thread_id,
+                call_id,
+                parent_call_id,
+                function_id,
+                ts_ns: bex_events::prof::clock::now_ns(),
+            });
+            self.pending_sysop_call_id = Some(call_id);
+        }
+    }
+
+    /// An inline native call pair (`PR4b`). Emitted only after the native
+    /// completed inline (`Done`/`Error`) — `YieldToCall` natives are
+    /// continuation-based and stay transparent in the event stream (their
+    /// callback calls attribute to the bytecode caller); tracking them
+    /// through the CPS frames is a follow-up. `ts_start` is captured before
+    /// the native ran, so the pair still spans its real duration.
+    #[inline]
+    fn prof_emit_native_pair(
+        &mut self,
+        function_id: u32,
+        ts_start: u64,
+        status: bex_events::prof::record::FunctionEndStatus,
+    ) {
+        if self.prof_ring.is_none() {
+            return;
+        }
+        let parent_call_id = self.current_call_id;
+        let call_id = self.mint_call_id();
+        self.prof_push_record(&bex_events::prof::record::RawRecord::CallFunction {
+            flags: 0,
+            thread_id: self.prof_thread_id,
+            call_id,
+            parent_call_id,
+            function_id,
+            ts_ns: ts_start,
+        });
+        self.prof_push_record(&bex_events::prof::record::RawRecord::EndFunction {
+            status,
+            thread_id: self.prof_thread_id,
+            call_id,
+            ts_ns: bex_events::prof::clock::now_ns(),
+        });
+    }
+
     /// Build the single-yield `SysOp::BamlHostCallHostValue` dispatch for
     /// invoking a host closure. `closure_ptr` is the `Object::HostClosure` heap
     /// pointer (passed straight through as the sys-op handle); `user_args` are
@@ -2878,6 +3099,9 @@ impl BexVm {
         let args_array_ptr = self.tlab.alloc(Object::Array(user_args.into()));
         let ret_ty_ptr = self.tlab.alloc(Object::Type(Box::new(ret_ty)));
         let throws_ty_ptr = self.tlab.alloc(Object::Type(Box::new(throws_ty)));
+        // PR4b: host-closure calls ride the sys-op pair too. No Function
+        // object backs them, so function_id 0 (unassigned).
+        self.prof_enter_sysop(0);
         VmExecState::SysOp {
             operation: bex_vm_types::SysOp::BamlHostCallHostValue,
             args: vec![
@@ -3043,6 +3267,7 @@ impl BexVm {
         }
 
         let is_traced = callee.trace;
+        let callee_function_id = callee.function_id;
 
         match callee.kind {
             FunctionKind::Native(func_ptr) => {
@@ -3081,6 +3306,16 @@ impl BexVm {
                 } else {
                     None
                 };
+                // PR4b: inline-native call pair. Capture the start stamp
+                // before running; the pair is emitted only if the native
+                // completes inline (Done/Error) — YieldToCall natives are
+                // continuation-based and stay transparent (see
+                // prof_emit_native_pair).
+                let native_ts_start = if self.prof_ring.is_some() {
+                    bex_events::prof::clock::now_ns()
+                } else {
+                    0
+                };
                 let native_result = func(self, &args);
                 if let Some(prev) = restore_pending {
                     self.pending_call_type_args = prev;
@@ -3089,9 +3324,19 @@ impl BexVm {
                 // Run Rust native function, converting NativeCallResult → VmError.
                 match native_result {
                     NativeCallResult::Done(v) => {
+                        self.prof_emit_native_pair(
+                            callee_function_id,
+                            native_ts_start,
+                            bex_events::prof::record::FunctionEndStatus::Ok,
+                        );
                         self.stack.push(v);
                     }
                     NativeCallResult::Error(e) => {
+                        self.prof_emit_native_pair(
+                            callee_function_id,
+                            native_ts_start,
+                            bex_events::prof::record::FunctionEndStatus::Error,
+                        );
                         return Err(self.native_error_to_vm_error(e));
                     }
                     NativeCallResult::YieldToCall {
@@ -3201,12 +3446,15 @@ impl BexVm {
                 } else {
                     closure_type_args
                 };
+                let (call_id, parent_call_id) = self.prof_enter_call(callee_function_id);
                 self.frames.push(Frame::Bytecode(BytecodeFrame {
                     function: callee_ptr,
                     instruction_ptr: 0,
                     locals_offset,
                     type_args: initial_type_args.into_vec(),
                     faulting_pc: 0,
+                    call_id,
+                    parent_call_id,
                 }));
                 self.allocate_real_locals_for_frame(callee_ptr)?;
 
@@ -4654,11 +4902,16 @@ impl BexVm {
                         }
                         .into());
                     };
+                    let sysop_function_id = callable_future.function_id;
                     let args_offset = self.stack.len().checked_sub(callable_future.arity).ok_or(
                         VmInternalError::NotEnoughItemsOnStack(callable_future.arity),
                     )?;
                     let args_offset = StackIndex::from_raw(args_offset);
                     let call_args: Vec<Value> = self.stack.drain(args_offset..).collect();
+                    // PR4b: sys-op calls (LLM calls included) appear on the
+                    // timeline as a CallFunction here; the engine emits the
+                    // matching EndFunction once the op completes.
+                    self.prof_enter_sysop(sysop_function_id);
                     return Ok(Some(VmExecState::SysOp {
                         operation: sys_op,
                         args: call_args,
@@ -5041,9 +5294,15 @@ impl BexVm {
                     let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
                         unreachable!()
                     };
+                    let (popped_call_id, popped_parent_call_id) = (bf.call_id, bf.parent_call_id);
                     self.stack.drain(bf.locals_offset..);
                     self.stack.push(result);
                     self.frames.pop();
+                    self.prof_exit_call(
+                        popped_call_id,
+                        popped_parent_call_id,
+                        bex_events::prof::record::FunctionEndStatus::Ok,
+                    );
                     // Update frame_idx so the outer loop detects the frame change
                     // and re-extracts code/pc/function for the parent frame.
                     if !self.frames.is_empty() {
