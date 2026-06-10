@@ -2,6 +2,7 @@ import { QdrantClient } from '@qdrant/js-client-rest';
 import { chunk } from 'lodash';
 import {
   EMBEDDING_MODEL,
+  type CorpusDocument,
   CorpusDocumentSchema,
   embedDocs,
   loadCorpusDocs,
@@ -48,7 +49,7 @@ export async function populateQdrant(docsYmlPath: string): Promise<void> {
   console.log(`✅ Successfully populated Qdrant with ${embeddings.length} chunks`);
 }
 
-export async function searchQdrant(query: string) {
+export async function searchQdrant(query: string): Promise<CorpusDocument[]> {
   const { data } = await openai.embeddings.create({ model: EMBEDDING_MODEL, input: query });
   const { points } = await qdrant.query(COLLECTION, { query: data[0].embedding, limit: 7, with_payload: true });
   console.info(`Found ${points.length} matches in Qdrant for query`);

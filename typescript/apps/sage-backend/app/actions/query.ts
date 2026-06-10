@@ -22,11 +22,10 @@ export async function submitQuery(request: QueryRequest): Promise<QueryResponse>
     }),
   });
 
-  const relevantDocs = (plan.ranked_docs ?? []).map((planDoc) => ({
-    title: planDoc.title,
-    url: contextDocs.find((d) => d.title === planDoc.title)?.url ?? '',
-    relevance: planDoc.relevance,
-  }));
+  const relevantDocs = (plan.ranked_docs ?? []).flatMap((planDoc) => {
+    const url = contextDocs.find((d) => d.title === planDoc.title)?.url;
+    return url ? [{ title: planDoc.title, url, relevance: planDoc.relevance }] : [];
+  });
 
   return {
     session_id: request.session_id,

@@ -27,6 +27,10 @@ async function waitForQdrantReady(queries: string[]) {
 }
 
 async function main() {
+  if (!process.argv[2]) {
+    console.error('Usage: tsx update-qdrant.ts <docsYmlPath>');
+    process.exit(1);
+  }
   console.log('Starting Qdrant update...');
   await populateQdrant(process.argv[2]);
   console.log('Qdrant update completed successfully!');

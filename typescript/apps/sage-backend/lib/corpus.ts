@@ -91,7 +91,8 @@ export function chunkMarkdown(text: string, maxChunkSize = 3000): string[] {
     }
   }
 
-  return validated.filter((c) => c.length > 50);
+  const nonEmpty = validated.filter((c) => c.trim().length > 0);
+  return nonEmpty.length > 0 ? nonEmpty : [text.trim()].filter(Boolean);
 }
 
 export async function loadCorpusDocs(docsYmlPath: string): Promise<CorpusDocument[]> {
