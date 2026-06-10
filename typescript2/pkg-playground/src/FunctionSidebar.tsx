@@ -200,8 +200,9 @@ function TestTreeNode({
 
 export interface FunctionSidebarProps {
   functions: FunctionInfo[];
+  /** Whether internal functions are currently shown (toggled from the
+   * panel's settings gear menu) — used only for the empty-state message. */
   showInternalFunctions: boolean;
-  onShowInternalFunctionsChange: (show: boolean) => void;
   internalFunctionCount: number;
   testTree?: any; // SerializedTestDef[] from BAML TestRegistry.serialize()
   selectedFn: string | null;
@@ -228,7 +229,6 @@ export interface FunctionSidebarProps {
 export const FunctionSidebar: FC<FunctionSidebarProps> = ({
   functions,
   showInternalFunctions,
-  onShowInternalFunctionsChange,
   internalFunctionCount,
   testTree,
   selectedFn,
@@ -243,6 +243,9 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
   onSelectCollectionView,
 }) => {
   const [search, setSearch] = useState('');
+  // Accordion state: tests are the primary view; functions start collapsed.
+  const [functionsOpen, setFunctionsOpen] = useState(false);
+  const [testsOpen, setTestsOpen] = useState(true);
 
   const lowerSearch = search.toLowerCase();
 
@@ -276,112 +279,129 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
             className="flex-1 h-6 border-none bg-transparent text-xs"
           />
         </div>
-        {internalFunctionCount > 0 && (
-          <label className="mt-1.5 flex items-center gap-1.5 text-[10px] text-vsc-text-faint cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={showInternalFunctions}
-              onChange={(e) =>
-                onShowInternalFunctionsChange(e.currentTarget.checked)
-              }
-              className="h-3 w-3 accent-vsc-accent"
-            />
-            <span>Show internal functions</span>
-            <span className="ml-auto font-vsc-mono">
-              {internalFunctionCount}
-            </span>
-          </label>
-        )}
       </div>
 
-      {/* Function list */}
+      {/* Accordion: Functions (collapsed by default) + Tests (open) */}
       <div className="flex-1 overflow-y-auto py-0.5">
-        {filteredFns.length === 0 && (
-          <div className="px-2 py-3 text-center text-vsc-text-faint text-[11px]">
-            {emptyFunctionMessage}
-          </div>
-        )}
-
-        {filteredFns.map((fn) => {
-          const isSelected = selectedFn === fn.name;
-          const isInternal = fn.origin !== 'userDefined';
-          const Icon = fn.kind === 'llm' ? Bot : FunctionSquare;
-
-          return (
-            <button
-              type="button"
-              key={fn.name}
-              className={`flex items-center gap-1 w-full px-2 py-1 cursor-pointer text-[11px] font-vsc-mono text-left ${
-                isSelected
-                  ? 'bg-vsc-accent/15 text-vsc-text font-semibold'
-                  : 'text-vsc-text-muted hover:bg-vsc-hover'
-              }`}
-              onClick={() => onSelectFn(isSelected ? null : fn.name)}
-            >
-              <span className="w-4 shrink-0" />
-              <Icon className="h-3.5 w-3.5 shrink-0 text-vsc-text-faint" />
-              <span className="truncate">{fn.name}</span>
-              {isInternal && (
-                <span className="ml-auto shrink-0 rounded border border-vsc-border px-1 py-0 text-[9px] text-vsc-text-faint">
-                  {fn.origin}
-                </span>
+        {/* Functions section — typing in the filter forces it open */}
+        <Collapsible
+          open={functionsOpen || search !== ''}
+          onOpenChange={setFunctionsOpen}
+        >
+          <CollapsibleTrigger className="flex items-center gap-1 w-full px-2 py-1 cursor-pointer text-[11px] font-semibold text-vsc-text-muted hover:bg-vsc-hover">
+            <ChevronRight
+              className={cn(
+                'h-3 w-3 text-vsc-text-faint transition-transform',
+                (functionsOpen || search !== '') && 'rotate-90',
               )}
-            </button>
-          );
-        })}
+            />
+            <FunctionSquare size={12} />
+            <span>Functions</span>
+            <span className="text-vsc-text-faint ml-1">
+              ({filteredFns.length})
+            </span>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            {filteredFns.length === 0 && (
+              <div className="px-2 py-3 text-center text-vsc-text-faint text-[11px]">
+                {emptyFunctionMessage}
+              </div>
+            )}
 
-        {/* Tests section */}
+            {filteredFns.map((fn) => {
+              const isSelected = selectedFn === fn.name;
+              const isInternal = fn.origin !== 'userDefined';
+              const Icon = fn.kind === 'llm' ? Bot : FunctionSquare;
+
+              return (
+                <button
+                  type="button"
+                  key={fn.name}
+                  className={`flex items-center gap-1 w-full px-2 py-1 cursor-pointer text-[11px] font-vsc-mono text-left ${
+                    isSelected
+                      ? 'bg-vsc-accent/15 text-vsc-text font-semibold'
+                      : 'text-vsc-text-muted hover:bg-vsc-hover'
+                  }`}
+                  onClick={() => onSelectFn(isSelected ? null : fn.name)}
+                >
+                  <span className="w-4 shrink-0" />
+                  <Icon className="h-3.5 w-3.5 shrink-0 text-vsc-text-faint" />
+                  <span className="truncate">{fn.name}</span>
+                  {isInternal && (
+                    <span className="ml-auto shrink-0 rounded border border-vsc-border px-1 py-0 text-[9px] text-vsc-text-faint">
+                      {fn.origin}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </CollapsibleContent>
+        </Collapsible>
+
+        {/* Tests section — open by default */}
         <div className="border-t border-vsc-border mt-1">
-          <div className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-vsc-text-muted">
-            <FlaskConical size={12} />
-            <span>Tests</span>
-            {onSelectCollectionView && (
+          <Collapsible open={testsOpen} onOpenChange={setTestsOpen}>
+            <div className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-vsc-text-muted">
+              <CollapsibleTrigger className="flex items-center gap-1 flex-1 min-w-0 cursor-pointer text-left bg-transparent border-none p-0 text-[11px] font-semibold text-vsc-text-muted hover:bg-vsc-hover">
+                <ChevronRight
+                  className={cn(
+                    'h-3 w-3 text-vsc-text-faint transition-transform',
+                    testsOpen && 'rotate-90',
+                  )}
+                />
+                <FlaskConical size={12} />
+                <span>Tests</span>
+              </CollapsibleTrigger>
+              {onSelectCollectionView && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={`ml-auto h-5 w-5 ${viewingCollection ? 'text-vsc-accent' : 'text-vsc-text-faint hover:text-vsc-text'}`}
+                  onClick={onSelectCollectionView}
+                  title={
+                    collectionRun && collectionRun.fetchLogs.length > 0
+                      ? `View collection logs (${collectionRun.fetchLogs.length} request${collectionRun.fetchLogs.length !== 1 ? 's' : ''})`
+                      : 'View collection logs'
+                  }
+                >
+                  <Wrench size={10} />
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="icon"
-                className={`ml-auto h-5 w-5 ${viewingCollection ? 'text-vsc-accent' : 'text-vsc-text-faint hover:text-vsc-text'}`}
-                onClick={onSelectCollectionView}
-                title={
-                  collectionRun && collectionRun.fetchLogs.length > 0
-                    ? `View collection logs (${collectionRun.fetchLogs.length} request${collectionRun.fetchLogs.length !== 1 ? 's' : ''})`
-                    : 'View collection logs'
-                }
+                className={`h-5 w-5 text-vsc-text-faint hover:text-vsc-text${onSelectCollectionView ? '' : ' ml-auto'}`}
+                onClick={onRefreshTests}
+                title="Re-collect tests"
               >
-                <Wrench size={10} />
+                <RefreshCw size={10} />
               </Button>
-            )}
-            <Button
-              variant="ghost"
-              size="icon"
-              className={`h-5 w-5 text-vsc-text-faint hover:text-vsc-text${onSelectCollectionView ? '' : ' ml-auto'}`}
-              onClick={onRefreshTests}
-              title="Re-collect tests"
-            >
-              <RefreshCw size={10} />
-            </Button>
-          </div>
-
-          {!testTree && (
-            <div className="px-4 py-2 text-[10px] text-vsc-text-faint italic">
-              No test data yet
             </div>
-          )}
 
-          {testTree && treeItems.length === 0 && (
-            <div className="px-4 py-2 text-[10px] text-vsc-text-faint italic">
-              No tests found
-            </div>
-          )}
+            <CollapsibleContent>
+              {!testTree && (
+                <div className="px-4 py-2 text-[10px] text-vsc-text-faint italic">
+                  No test data yet
+                </div>
+              )}
 
-          {treeItems.map((def, i) => (
-            <TestTreeNode
-              key={`${'name' in def ? def.name : i}-${i}`}
-              def={def}
-              onRunTest={onRunTest}
-              testRunResults={testRunResults}
-              failedExpands={failedExpands}
-            />
-          ))}
+              {testTree && treeItems.length === 0 && (
+                <div className="px-4 py-2 text-[10px] text-vsc-text-faint italic">
+                  No tests found
+                </div>
+              )}
+
+              {treeItems.map((def, i) => (
+                <TestTreeNode
+                  key={`${'name' in def ? def.name : i}-${i}`}
+                  def={def}
+                  onRunTest={onRunTest}
+                  testRunResults={testRunResults}
+                  failedExpands={failedExpands}
+                />
+              ))}
+            </CollapsibleContent>
+          </Collapsible>
         </div>
       </div>
     </div>

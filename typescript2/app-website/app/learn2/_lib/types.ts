@@ -8,6 +8,7 @@ export type CodeLang =
   | 'typescript'
   | 'bash'
   | 'go'
+  | 'rust'
   | 'json'
   | 'yaml';
 

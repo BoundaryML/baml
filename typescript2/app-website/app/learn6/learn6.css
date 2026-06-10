@@ -1,0 +1,565 @@
+/* =========================================================================
+   /learn6 — "BAML is the programming language for agents": a long-form
+   article. Reading column for prose, wide breakouts for editors and
+   terminals. Reuses learn2.css (code/editors/playground), learn3.css
+   (terminals, infection graph, metrics dag) and learn4.css (sdk pipeline,
+   rotating types) for embedded components.
+   ========================================================================= */
+
+.l6 {
+  --l6-ink: #1a1612;
+  --l6-body: #2b2520;
+  --l6-muted: #6f6a63;
+  --l6-soft: #8a8580;
+  --l6-rule: #e7e2d6;
+  --l6-green: #047857;
+  --l6-green-soft: #34d399;
+  --l6-amber: #b45309;
+  padding-bottom: 5rem;
+  font-family:
+    var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-size: 16.5px;
+  line-height: 1.68;
+  color: var(--l6-body);
+
+  background: #fdfbf5;
+}
+.l6 .font-mono,
+.l6 code,
+.l6 pre,
+.l6 kbd {
+  font-family: var(--font-geist-mono), ui-monospace, "SF Mono", monospace;
+}
+.l6 code {
+  padding: 0.08em 0.32em;
+  font-size: 0.9em;
+  background: rgba(26, 22, 18, 0.055);
+  border-radius: 4px;
+}
+.l6 pre code {
+  padding: 0;
+  background: none;
+}
+
+/* ---- top bar ---- */
+.l6-head {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.8rem 1.5rem;
+  font-size: 12.5px;
+  background: rgba(253, 251, 245, 0.92);
+  border-bottom: 1px solid var(--l6-rule);
+  backdrop-filter: blur(4px);
+}
+.l6-head a {
+  font-weight: 600;
+  color: var(--l6-ink);
+  letter-spacing: 0.05em;
+  text-decoration: none;
+}
+.l6-head a span {
+  margin-left: 0.4rem;
+  font-weight: 400;
+  color: var(--l6-soft);
+}
+.l6-head-install {
+  color: var(--l6-green);
+}
+
+/* ---- sections: a reading column with wide breakouts ---- */
+.l6-section {
+  width: min(760px, 94vw);
+  padding: 3.2rem 0 0.6rem;
+  margin: 0 auto;
+}
+/* Breakout: editors, playgrounds, and side-by-side pairs escape the
+   reading column (which stays one width so all headers align). They are
+   centered on the page via left/translate, so text width never changes. */
+.l6-breakout,
+.l6-pair {
+  position: relative;
+  left: 50%;
+  width: min(1200px, 96vw);
+  transform: translateX(-50%);
+}
+.l6-breakout--xl {
+  width: min(1400px, 97vw);
+}
+
+.l6 h1 {
+  margin: 1.2rem 0 1.4rem;
+  font-size: clamp(34px, 5vw, 52px);
+  font-weight: 680;
+  line-height: 1.08;
+  color: var(--l6-ink);
+  letter-spacing: -0.02em;
+}
+.l6 h2 {
+  margin: 0 0 1rem;
+  font-size: clamp(24px, 3vw, 32px);
+  font-weight: 650;
+  line-height: 1.18;
+  color: var(--l6-ink);
+  letter-spacing: -0.015em;
+}
+.l6 h3 {
+  margin: 0 0 0.8rem;
+  font-size: 19px;
+  font-weight: 620;
+  color: var(--l6-ink);
+}
+.l6-num {
+  display: inline-block;
+  padding: 1px 9px;
+  margin-right: 0.6rem;
+  font-size: 0.72em;
+  font-weight: 600;
+  color: var(--l6-green);
+  border: 1.4px solid var(--l6-green);
+  border-radius: 60% 40% 55% 45% / 50% 60% 40% 55%;
+  transform: translateY(-3px) rotate(-2deg);
+}
+.l6 p {
+  margin: 0 0 1rem;
+}
+.l6-lead {
+  font-size: clamp(17.5px, 1.9vw, 20px);
+  color: var(--l6-ink);
+}
+.l6-lead em {
+  font-style: italic;
+  color: var(--l6-green);
+}
+.l6-dim {
+  font-size: 14.5px;
+  color: var(--l6-muted);
+}
+.l6-note {
+  padding-left: 0.9rem;
+  margin-top: 1.1rem;
+  font-size: 13.5px;
+  color: var(--l6-muted);
+  border-left: 2px solid var(--l6-rule);
+}
+.l6-link {
+  color: var(--l6-green);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(4, 120, 87, 0.35);
+}
+.l6-link:hover {
+  border-bottom-color: var(--l6-green);
+}
+.l6-sub {
+  margin-top: 2.4rem;
+}
+.l6-block {
+  margin: 1.1rem 0;
+}
+.l6-breakout {
+  margin-top: 1.2rem;
+  margin-bottom: 1.2rem;
+}
+
+/* ---- hero ---- */
+.l6-hero {
+  padding-top: 4.5rem;
+}
+/* The sheep flows inline with the text, so it sits on the first line next
+   to "BAML" instead of centering against the whole wrapped headline. */
+.l6-hero-sheep {
+  display: inline-block;
+  width: auto;
+  height: 0.92em;
+  margin-right: 0.22em;
+  vertical-align: -0.08em;
+}
+.l6-hero-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  max-width: 72ch;
+  padding-left: 1.4rem;
+  margin: 0.4rem 0 1.6rem;
+}
+.l6-hero-list li::marker {
+  font-weight: 600;
+  color: var(--l6-green);
+}
+.l6-hero .l2-terminal {
+  max-width: 440px;
+}
+
+/* ---- pairs & labels ---- */
+.l6-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.1rem;
+  align-items: start;
+  margin: 1.2rem 0;
+}
+@media (max-width: 880px) {
+  .l6-pair {
+    grid-template-columns: 1fr;
+  }
+}
+.l6-pane-label {
+  margin: 0 0 0.5rem;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 11px;
+  color: var(--l6-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+.l6-pane-label--after {
+  color: var(--l6-green);
+}
+.l6-stackv {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  min-width: 0;
+}
+
+/* ---- benchmark tables ---- */
+.l6-table {
+  width: 100%;
+  margin: 0.4rem 0 0.8rem;
+  font-size: 14.5px;
+  border-collapse: collapse;
+}
+.l6-table th {
+  padding: 0.35rem 0.9rem 0.35rem 0;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--l6-soft);
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  border-bottom: 1px solid var(--l6-rule);
+}
+.l6-table td {
+  padding: 0.45rem 0.9rem 0.45rem 0;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--l6-rule);
+}
+.l6-table td:first-child {
+  font-size: 13px;
+}
+.l6-table-accent td {
+  font-weight: 600;
+  color: var(--l6-green);
+}
+
+/* ---- the glow hint (error-handling section) ---- */
+.l6-glow {
+  border-radius: 4px;
+  animation: l6-glow 2s ease-in-out infinite;
+}
+@keyframes l6-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(4, 120, 87, 0);
+    background: rgba(26, 22, 18, 0.055);
+  }
+  50% {
+    box-shadow: 0 0 0 3px rgba(4, 120, 87, 0.18);
+    background: rgba(4, 120, 87, 0.14);
+  }
+}
+
+/* ---- sdk switcher tabs ---- */
+.l6-sdk-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 1rem 0 0.2rem;
+}
+.l6-sdk-tab {
+  display: inline-flex;
+  gap: 0.45rem;
+  align-items: center;
+  padding: 0.32rem 0.75rem;
+  font-size: 12.5px;
+  color: var(--l6-muted);
+  cursor: pointer;
+  background: #fffdf6;
+  border: 1px solid var(--l6-rule);
+  border-radius: 8px;
+  transition:
+    border-color 120ms ease,
+    color 120ms ease;
+}
+.l6-sdk-tab:hover {
+  color: var(--l6-ink);
+}
+.l6-sdk-tab--on {
+  color: var(--l6-ink);
+  border-color: var(--l6-green);
+  box-shadow: inset 0 0 0 1px var(--l6-green);
+}
+.l6-sdk-soon {
+  font-size: 9.5px;
+  color: var(--l6-amber);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* =========================================================================
+   Recursive self-improvement — "the sweep". Ripples of refinement radiate
+   from the center (per-cell animation-delay = distance from center); the
+   keyframes carry three passes per 9s cycle. Latch classes keep their
+   improvement after pass N and deepen on later passes, then the field
+   resets with the loop.
+   ========================================================================= */
+.l6-si-sweep {
+  display: grid;
+  grid-template-columns: repeat(16, 8px);
+  gap: 3px;
+  width: max-content;
+  margin: 2.2rem auto 0.6rem;
+}
+.l6-swp-cell {
+  width: 8px;
+  height: 8px;
+  background: #e9e4d8;
+  border-radius: 1.5px;
+  animation: l6-swp 9s ease-in-out infinite;
+}
+.l6-swp-l1 {
+  animation-name: l6-swp-l1;
+}
+.l6-swp-l2 {
+  animation-name: l6-swp-l2;
+}
+.l6-swp-l3 {
+  animation-name: l6-swp-l3;
+}
+/* base: pulse on each of the three wavefronts, never keep anything */
+@keyframes l6-swp {
+  0% {
+    background: #e9e4d8;
+    transform: scale(1);
+  }
+  2.5% {
+    background: #047857;
+    transform: scale(1.4);
+  }
+  8%,
+  33.3% {
+    background: #e9e4d8;
+    transform: scale(1);
+  }
+  35.8% {
+    background: #047857;
+    transform: scale(1.4);
+  }
+  41.3%,
+  66.7% {
+    background: #e9e4d8;
+    transform: scale(1);
+  }
+  69.2% {
+    background: #047857;
+    transform: scale(1.4);
+  }
+  74.7%,
+  100% {
+    background: #e9e4d8;
+    transform: scale(1);
+  }
+}
+/* latches after pass 1, deepens on passes 2 and 3 */
+@keyframes l6-swp-l1 {
+  0% {
+    background: #e9e4d8;
+    transform: scale(1);
+  }
+  2.5% {
+    background: #047857;
+    transform: scale(1.4);
+  }
+  8%,
+  33.3% {
+    background: rgba(4, 120, 87, 0.32);
+    transform: scale(1);
+  }
+  35.8% {
+    background: #047857;
+    transform: scale(1.4);
+  }
+  41.3%,
+  66.7% {
+    background: rgba(4, 120, 87, 0.48);
+    transform: scale(1);
+  }
+  69.2% {
+    background: #047857;
+    transform: scale(1.4);
+  }
+  74.7%,
+  91% {
+    background: rgba(4, 120, 87, 0.66);
+    transform: scale(1);
+  }
+  100% {
+    background: #e9e4d8;
+    transform: scale(1);
+  }
+}
+/* latches after pass 2, deepens on pass 3 */
+@keyframes l6-swp-l2 {
+  0% {
+    background: #e9e4d8;
+    transform: scale(1);
+  }
+  2.5% {
+    background: #047857;
+    transform: scale(1.4);
+  }
+  8%,
+  33.3% {
+    background: #e9e4d8;
+    transform: scale(1);
+  }
+  35.8% {
+    background: #047857;
+    transform: scale(1.4);
+  }
+  41.3%,
+  66.7% {
+    background: rgba(4, 120, 87, 0.32);
+    transform: scale(1);
+  }
+  69.2% {
+    background: #047857;
+    transform: scale(1.4);
+  }
+  74.7%,
+  91% {
+    background: rgba(4, 120, 87, 0.5);
+    transform: scale(1);
+  }
+  100% {
+    background: #e9e4d8;
+    transform: scale(1);
+  }
+}
+/* latches after the final pass */
+@keyframes l6-swp-l3 {
+  0% {
+    background: #e9e4d8;
+    transform: scale(1);
+  }
+  2.5% {
+    background: #047857;
+    transform: scale(1.4);
+  }
+  8%,
+  33.3% {
+    background: #e9e4d8;
+    transform: scale(1);
+  }
+  35.8% {
+    background: #047857;
+    transform: scale(1.4);
+  }
+  41.3%,
+  66.7% {
+    background: #e9e4d8;
+    transform: scale(1);
+  }
+  69.2% {
+    background: #047857;
+    transform: scale(1.4);
+  }
+  74.7%,
+  91% {
+    background: rgba(4, 120, 87, 0.34);
+    transform: scale(1);
+  }
+  100% {
+    background: #e9e4d8;
+    transform: scale(1);
+  }
+}
+
+/* =========================================================================
+   Scheduler — two unlabeled lanes, bars draw in on schedule, sweep line.
+   Bar keyframes are generated inline by the component.
+   ========================================================================= */
+.l6-sch {
+  position: relative;
+  width: min(560px, 100%);
+  height: 84px;
+  margin: 1.2rem auto 0.4rem;
+}
+.l6-sch-lane {
+  position: absolute;
+  right: 8%;
+  left: 0;
+  height: 14px;
+  border-bottom: 1px dashed var(--l6-rule);
+}
+.l6-sch-lane:first-of-type {
+  top: calc(50% - 17px);
+}
+.l6-sch-lane:last-of-type {
+  top: calc(50% + 3px);
+}
+.l6-sch-bar {
+  position: absolute;
+  height: 14px;
+  background: var(--l6-green-soft);
+  border-radius: 2px;
+  transform: scaleX(0);
+  transform-origin: left center;
+}
+.l6-sch-now {
+  position: absolute;
+  top: calc(50% - 26px);
+  bottom: calc(50% - 26px);
+  width: 1.5px;
+  background: var(--l6-ink);
+  opacity: 0.45;
+  animation: l6-sch-now 8s linear infinite;
+}
+@keyframes l6-sch-now {
+  0% {
+    left: 0%;
+    opacity: 0.45;
+  }
+  82.5% {
+    left: 92%;
+    opacity: 0.45;
+  }
+  90% {
+    opacity: 0;
+  }
+  99% {
+    left: 0%;
+    opacity: 0;
+  }
+  100% {
+    left: 0%;
+    opacity: 0.45;
+  }
+}
+
+/* the playground gets real height on this page */
+.l6 .l2-live {
+  height: min(76vh, 740px);
+}
+
+/* Reduced motion: only quiet the attention-grabbing inline glow. The
+   diagram loops (cubes, scheduler) stay — same policy as /learn4, where
+   only layout-shifting one-shots are reduced. */
+@media (prefers-reduced-motion: reduce) {
+  .l6-glow {
+    animation: none;
+  }
+}

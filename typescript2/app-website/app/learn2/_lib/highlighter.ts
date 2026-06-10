@@ -24,6 +24,7 @@ export function getLearnHighlighter(): Promise<Highlighter> {
         'typescript',
         'bash',
         'go',
+        'rust',
         'json',
         'yaml',
       ],

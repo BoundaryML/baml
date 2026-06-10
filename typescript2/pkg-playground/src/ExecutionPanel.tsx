@@ -13,7 +13,7 @@ import type { ChangeEvent, FC, ReactNode, RefObject } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { encodeCallArgs } from '@b/pkg-proto';
 import type { BamlJsMedia, BamlJsValue } from '@b/pkg-proto';
-import { KeyRound, PanelLeft, Square } from 'lucide-react';
+import { KeyRound, PanelLeft, Settings, Square } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import { Input } from './components/ui/input';
@@ -540,7 +540,8 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   const [curlPreviewError, setCurlPreviewError] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(initialSidebarOpen);
-  const [sidebarWidth, setSidebarWidth] = useState(220);
+  const [sidebarWidth, setSidebarWidth] = useState(168);
+  const [showSettingsMenu, setShowSettingsMenu] = useState(false);
   const [logsPanelHeight, setLogsPanelHeight] = useState(
     LOGS_PANEL_DEFAULT_HEIGHT,
   );
@@ -1680,6 +1681,13 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   const canPreviewPrompt = selectedFnInfo?.capabilities?.renderPrompt ?? false;
   const canPreviewCurl = selectedFnInfo?.capabilities?.buildRequest ?? false;
   const latestGraphRun = findLatestGraphRun(runs, selectedFn);
+  // The run-history/logs strip is lifted out of the sidebar+content row so it
+  // spans the panel's full width; the row gets bottom padding to make room.
+  const runLogsVisible =
+    activeTab === 'run' &&
+    !!selectedFn &&
+    !viewingCollection &&
+    !viewingTestRun;
 
   useEffect(() => {
     setSelectedFn((prev) =>
@@ -1886,7 +1894,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
       <Tabs
         value={activeTab}
         onValueChange={(v) => setActiveTab(v as typeof activeTab)}
-        className="flex-1 flex flex-col min-h-0 gap-0"
+        className="relative flex-1 flex flex-col min-h-0 gap-0"
       >
         {/* ──── Combined top bar ──── */}
         <div className="flex items-center gap-1.5 px-2 py-1 shrink-0 border-b border-vsc-border bg-vsc-surface">
@@ -2034,6 +2042,51 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
+
+          {/* Settings (gear) menu */}
+          <div className="relative shrink-0">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 shrink-0"
+                    onClick={() => setShowSettingsMenu((v) => !v)}
+                  >
+                    <Settings size={14} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Playground settings</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            {showSettingsMenu && (
+              <>
+                <button
+                  type="button"
+                  aria-label="Close settings"
+                  className="fixed inset-0 z-40 cursor-default bg-transparent border-none"
+                  onClick={() => setShowSettingsMenu(false)}
+                />
+                <div className="absolute right-0 top-full mt-1 z-50 w-60 rounded border border-vsc-border bg-vsc-surface shadow-lg p-2.5">
+                  <label className="flex items-center gap-1.5 text-[11px] text-vsc-text-muted cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={showInternalFunctions}
+                      onChange={(e) =>
+                        setShowInternalFunctions(e.currentTarget.checked)
+                      }
+                      className="h-3 w-3 accent-vsc-accent"
+                    />
+                    <span>Show internal functions</span>
+                    <span className="ml-auto font-vsc-mono text-vsc-text-faint">
+                      {internalFunctionCount}
+                    </span>
+                  </label>
+                </div>
+              </>
+            )}
+          </div>
         </div>
 
         {/* WASM Panic banner */}
@@ -2123,8 +2176,15 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
           </div>
         )}
 
-        {/* Main layout: sidebar + content */}
-        <div className="flex flex-1 min-h-0">
+        {/* Main layout: sidebar + content. When the run-history strip is
+            visible it is absolutely positioned across the panel's full
+            width, so the row ends above it. */}
+        <div
+          className="flex flex-1 min-h-0"
+          style={{
+            paddingBottom: runLogsVisible ? logsPanelHeight + 6 : 0,
+          }}
+        >
           {/* Sidebar */}
           {sidebarOpen && (
             <>
@@ -2135,7 +2195,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                 <FunctionSidebar
                   functions={visibleFunctions}
                   showInternalFunctions={showInternalFunctions}
-                  onShowInternalFunctionsChange={setShowInternalFunctions}
                   internalFunctionCount={internalFunctionCount}
                   testTree={testTree}
                   selectedFn={selectedFn}
@@ -2664,16 +2723,20 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                     )}
                   </div>
 
+                  {/* Logs resize handle — spans the full panel width, pinned
+                      just above the run-history strip. */}
                   <div
                     onMouseDown={onLogsResizeStart}
-                    className="h-1.5 shrink-0 cursor-row-resize bg-vsc-surface hover:bg-vsc-accent/30 transition-colors border-y border-vsc-border"
+                    className="absolute left-0 right-0 z-10 h-1.5 cursor-row-resize bg-vsc-surface hover:bg-vsc-accent/30 transition-colors border-y border-vsc-border"
+                    style={{ bottom: logsPanelHeight }}
                     title="Resize logs"
                   />
 
-                  {/* Run history (scrollable) */}
+                  {/* Run history (scrollable) — full panel width, below the
+                      sidebar+content row. */}
                   <div
                     ref={outputRef}
-                    className="shrink-0 overflow-auto font-vsc-mono text-xs bg-vsc-bg"
+                    className="absolute left-0 right-0 bottom-0 z-10 overflow-auto font-vsc-mono text-xs bg-vsc-bg"
                     style={{ height: logsPanelHeight }}
                   >
                     {runs.length === 0 && (
