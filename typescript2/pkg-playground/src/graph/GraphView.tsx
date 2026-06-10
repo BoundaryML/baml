@@ -35,6 +35,9 @@ import type { WorkflowNode, WorkflowEdge } from './types';
 
 interface GraphViewProps {
   graph: ControlFlowGraph;
+  /** Function whose graph is displayed — keys the per-function layout
+   *  direction memory. */
+  functionName?: string | null;
   runtimeEvents?: DeserializedRuntimeEvent[];
   runStatus?: RunEntry['status'];
   runError?: string | null;
@@ -46,8 +49,41 @@ interface GraphViewProps {
 
 const EMPTY_RUNTIME_EVENTS: DeserializedRuntimeEvent[] = [];
 
+type LayoutDirection = 'horizontal' | 'vertical';
+
+const DIRECTION_STORAGE_PREFIX = 'baml-graph-direction:';
+
+/** Per-function layout direction, remembered across sessions. Vertical is
+ *  the default until the user toggles. */
+function storedDirection(functionName: string | null | undefined): LayoutDirection {
+  if (typeof window === 'undefined') return 'vertical';
+  try {
+    const v = window.localStorage.getItem(
+      DIRECTION_STORAGE_PREFIX + (functionName ?? ''),
+    );
+    return v === 'horizontal' || v === 'vertical' ? v : 'vertical';
+  } catch {
+    return 'vertical';
+  }
+}
+
+function storeDirection(
+  functionName: string | null | undefined,
+  direction: LayoutDirection,
+) {
+  try {
+    window.localStorage.setItem(
+      DIRECTION_STORAGE_PREFIX + (functionName ?? ''),
+      direction,
+    );
+  } catch {
+    /* private browsing / quota — direction just won't persist */
+  }
+}
+
 function GraphViewInner({
   graph,
+  functionName,
   runtimeEvents = EMPTY_RUNTIME_EVENTS,
   runStatus,
   runError,
@@ -58,8 +94,10 @@ function GraphViewInner({
 }: GraphViewProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<WorkflowEdge>([]);
-  const [direction, setDirection] = useState<'horizontal' | 'vertical'>(
-    'horizontal',
+  // The component is remounted (keyed) per function, so the lazy initializer
+  // re-reads the remembered direction whenever the function changes.
+  const [direction, setDirection] = useState<LayoutDirection>(() =>
+    storedDirection(functionName),
   );
   // Set when the user toggles layout direction — the next completed layout
   // re-fits the viewport so the rotated graph is fully visible.
@@ -382,7 +420,11 @@ function GraphViewInner({
       <button
         onClick={() => {
           refitAfterLayoutRef.current = true;
-          setDirection((d) => (d === 'horizontal' ? 'vertical' : 'horizontal'));
+          setDirection((d) => {
+            const next = d === 'horizontal' ? 'vertical' : 'horizontal';
+            storeDirection(functionName, next);
+            return next;
+          });
         }}
         style={{
           position: 'absolute',
@@ -428,7 +470,9 @@ function GraphViewInner({
 export function GraphView(props: GraphViewProps) {
   return (
     <ReactFlowProvider>
-      <GraphViewInner {...props} />
+      {/* Keyed per function so the remembered layout direction is re-read
+          when the displayed function changes. */}
+      <GraphViewInner key={props.functionName ?? ''} {...props} />
     </ReactFlowProvider>
   );
 }

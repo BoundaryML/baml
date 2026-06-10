@@ -14,7 +14,8 @@ export type GraphNodeType =
   | 'conditional'
   | 'loop'
   | 'scope'
-  | 'header';
+  | 'header'
+  | 'return';
 
 export interface GraphNode {
   id: string;

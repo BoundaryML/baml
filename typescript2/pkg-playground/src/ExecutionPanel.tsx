@@ -839,17 +839,25 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
       return;
     }
 
-    // Rule 4: navigate to the function the cursor is on — promoted to its
-    // TOPMOST workflow when it unambiguously belongs to one (same heuristic
-    // as clicking the function in the list). LineTotal inside
-    // Main→Review→ValidateInvoice shows Main's graph, not LineTotal's,
-    // with the call-site node on the path highlighted.
+    // Rule 4: navigate to the function the cursor is on — always promoted to
+    // a workflow that contains it. LineTotal inside Main→Review→ValidateInvoice
+    // shows Main's graph, not LineTotal's, with the call-site node on the path
+    // highlighted. When the helper belongs to several workflows, stay on the
+    // current one if it's among them (else pick the first) and offer a
+    // switcher above the graph. Whole-call-graph roots are preferred; the
+    // worker's direct-caller membership info is the fallback.
     const route = workflowRouteForRef.current(ctx.functionName);
-    const roots = route.roots;
-    if (roots.length === 1 && roots[0]) {
-      const root = roots[0];
-      const hop = route.firstHop.get(root);
-      const target = hop ? findCallSiteNode(root, hop) : null;
+    const workflows =
+      route.roots.length > 0 ? route.roots : ctx.workflowMemberships;
+    const root =
+      currentFn && workflows.includes(currentFn) ? currentFn : workflows[0];
+    if (root) {
+      // Prefer the node that calls the function under the cursor (its call
+      // site survives in the expanded graph, e.g. relabeled by a //# header
+      // above the function); fall back to the first hop from the root.
+      const hop = route.firstHop.get(root) ?? ctx.functionName;
+      const target =
+        findCallSiteNode(root, ctx.functionName) ?? findCallSiteNode(root, hop);
       if (root !== currentFn) {
         pendingHighlightRef.current =
           target != null ? { fn: root, nodeId: target } : null;
@@ -860,27 +868,21 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
       } else if (target != null) {
         setHighlightedNodeId(target);
       }
-      setWorkflowContext(null);
+      setWorkflowContext(
+        workflows.length > 1
+          ? { functionName: ctx.functionName, workflows }
+          : null,
+      );
       return;
     }
+    // Not part of any workflow — show the function's own graph.
     if (ctx.functionName !== currentFn) {
       setSelectedFn(ctx.functionName);
       setViewingCollection(false);
       setViewingTestRun(false);
       setHighlightedNodeId(null);
     }
-    // Ambiguous membership: ask via the picker above the graph. Prefer our
-    // whole-call-graph roots; fall back to the worker's membership info.
-    if (roots.length > 1) {
-      setWorkflowContext({ functionName: ctx.functionName, workflows: roots });
-    } else if (ctx.workflowMemberships.length > 0) {
-      setWorkflowContext({
-        functionName: ctx.functionName,
-        workflows: ctx.workflowMemberships,
-      });
-    } else {
-      setWorkflowContext(null);
-    }
+    setWorkflowContext(null);
   }
 
   // ── Port message handler ─────────────────────────────────────────────
@@ -1840,6 +1842,37 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   // Whether any known-required keys are missing — proactive, not just reactive to pending requests
   const hasMissingKeys = [...knownRequiredKeys].some((k) => !envVars[k]);
 
+  // Workflow switcher bar — shown above the graph when the function under
+  // the cursor belongs to more than one workflow. The graph always shows a
+  // containing workflow; this bar switches between them.
+  const workflowSwitcherBar = workflowContext && (
+    <div className="flex items-center gap-1.5 px-2.5 py-1 text-[10px] bg-vsc-bg-secondary border-b border-vsc-border shrink-0">
+      <span className="text-vsc-text-faint">Workflow:</span>
+      {workflowContext.workflows.map((wf) => (
+        <Button
+          key={wf}
+          variant={wf === selectedFn ? 'secondary' : 'outline'}
+          size="sm"
+          className="h-auto px-1.5 py-0.5 text-[10px]"
+          onClick={() => {
+            if (wf === selectedFn) return;
+            const route = workflowRouteFor(workflowContext.functionName);
+            const hop = route.firstHop.get(wf) ?? workflowContext.functionName;
+            const target =
+              findCallSiteNode(wf, workflowContext.functionName) ??
+              findCallSiteNode(wf, hop);
+            pendingHighlightRef.current =
+              target != null ? { fn: wf, nodeId: target } : null;
+            setSelectedFn(wf);
+            setHighlightedNodeId(null);
+          }}
+        >
+          {wf}
+        </Button>
+      ))}
+    </div>
+  );
+
   // ── Render ─────────────────────────────────────────────────────────────
 
   return (
@@ -2502,30 +2535,11 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                   className="flex-1 min-h-0 mt-0 flex flex-col"
                   style={{ minHeight: 300 }}
                 >
-                  {/* "Called from" bar — shown when the current function is called from workflows */}
-                  {workflowContext && (
-                    <div className="flex items-center gap-1.5 px-2.5 py-1 text-[10px] bg-vsc-bg-secondary border-b border-vsc-border shrink-0">
-                      <span className="text-vsc-text-faint">Called from:</span>
-                      {workflowContext.workflows.map((wf) => (
-                        <Button
-                          key={wf}
-                          variant="outline"
-                          size="sm"
-                          className="h-auto px-1.5 py-0.5 text-[10px]"
-                          onClick={() => {
-                            setWorkflowContext(null);
-                            setSelectedFn(wf);
-                            setHighlightedNodeId(null);
-                          }}
-                        >
-                          {wf}
-                        </Button>
-                      ))}
-                    </div>
-                  )}
+                  {workflowSwitcherBar}
                   {controlFlowGraph ? (
                     <GraphView
                       graph={controlFlowGraph}
+                      functionName={selectedFn}
                       runtimeEvents={latestGraphRun?.runtimeEvents}
                       runStatus={latestGraphRun?.status}
                       runError={latestGraphRun?.error}
@@ -2630,31 +2644,11 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                     className="flex-1 min-h-0 flex flex-col bg-vsc-bg border-b border-vsc-border"
                     style={{ minHeight: 180 }}
                   >
-                    {workflowContext && (
-                      <div className="flex items-center gap-1.5 px-2.5 py-1 text-[10px] bg-vsc-bg-secondary border-b border-vsc-border shrink-0">
-                        <span className="text-vsc-text-faint">
-                          Called from:
-                        </span>
-                        {workflowContext.workflows.map((wf) => (
-                          <Button
-                            key={wf}
-                            variant="outline"
-                            size="sm"
-                            className="h-auto px-1.5 py-0.5 text-[10px]"
-                            onClick={() => {
-                              setWorkflowContext(null);
-                              setSelectedFn(wf);
-                              setHighlightedNodeId(null);
-                            }}
-                          >
-                            {wf}
-                          </Button>
-                        ))}
-                      </div>
-                    )}
+                    {workflowSwitcherBar}
                     {controlFlowGraph ? (
                       <GraphView
                         graph={controlFlowGraph}
+                        functionName={selectedFn}
                         runtimeEvents={latestGraphRun?.runtimeEvents}
                         runStatus={latestGraphRun?.status}
                         runError={latestGraphRun?.error}

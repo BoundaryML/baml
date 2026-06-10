@@ -20,8 +20,8 @@ export const LLMNode: ComponentType<NodeProps> = memo(({ data }) => {
   const base = stateColors[d.executionState] ?? stateColors['not-started'];
   const colors = {
     ...base,
-    accent: '#a78bfa',
-    border: isHighlighted ? selectionRing.color : 'rgba(167,139,250,0.35)',
+    accent: '#6D28D9',
+    border: isHighlighted ? selectionRing.color : 'rgba(109,40,217,0.40)',
   };
 
   return (
@@ -57,9 +57,9 @@ export const LLMNode: ComponentType<NodeProps> = memo(({ data }) => {
               fontSize: 9,
               fontWeight: 700,
               letterSpacing: '0.06em',
-              background: 'rgba(167,139,250,0.15)',
-              color: '#c4b5fd',
-              boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.35)',
+              background: 'rgba(109,40,217,0.10)',
+              color: '#6D28D9',
+              boxShadow: 'inset 0 0 0 1px rgba(109,40,217,0.30)',
             }}
           >
             <Sparkles
@@ -77,7 +77,7 @@ export const LLMNode: ComponentType<NodeProps> = memo(({ data }) => {
             style={{
               fontSize: 12,
               fontWeight: 600,
-              color: '#ddd6fe',
+              color: colors.text,
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',

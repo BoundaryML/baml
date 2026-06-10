@@ -24,16 +24,13 @@ pub fn flatten_control_flow_graph(graph: &ControlFlowGraph) -> ControlFlowGraph 
 }
 
 /// Produces a visualization-ready graph by:
-/// 1. Hoisting branch arms with labeled fan-out edges (adapted Pass 2)
-/// 2. Renaming `_` branch arm labels to `"default"`
-/// 3. Inlining branch-arm containers so arms are represented as edge labels
-/// 4. Computing `is_container` for each node
-///
-/// Does NOT run Pass 1 (`remove_implicit_nodes`) or Pass 3
-/// (`inline_branch_arms_and_scopes`) — the playground needs all nodes
-/// visible. Branch arms are the exception: `ReactFlow` already renders branch
-/// structure as labeled fan-out edges, so keeping them as group containers
-/// creates redundant nested boxes.
+/// 1. Pruning to required nodes — only headers (`//#`), LLM functions/calls,
+///    structure that contains them (an annotated if-branch or loop body pulls
+///    in the whole if / loop), and early returns inside rendered scopes
+/// 2. Hoisting branch arms with labeled fan-out edges (adapted Pass 2)
+/// 3. Renaming `_` branch arm labels to `"default"`
+/// 4. Inlining branch-arm containers so arms are represented as edge labels
+/// 5. Computing `is_container` for each node
 pub fn prepare_control_flow_graph_for_visualization(graph: &ControlFlowGraph) -> ControlFlowGraph {
     struct BranchGroupInfo {
         node_id: NodeId,
@@ -43,7 +40,9 @@ pub fn prepare_control_flow_graph_for_visualization(graph: &ControlFlowGraph) ->
         successors: Vec<NodeId>,
     }
 
-    let mut graph = graph.clone();
+    // ── Step 0: Prune to header/LLM-anchored nodes ─────────────────────
+    let keep = compute_required_nodes(graph);
+    let mut graph = filter_graph(graph, &keep);
 
     // ── Step 1: Hoist branch arms with labeled fan-out edges ──────────
     // Adapted from hoist_branch_arms — same deepest-first BranchGroup
@@ -194,23 +193,85 @@ fn inline_branch_arms_for_visualization(graph: &mut ControlFlowGraph) {
 // ===========================================================================
 
 fn remove_implicit_nodes(graph: &ControlFlowGraph) -> ControlFlowGraph {
+    let keep = compute_required_nodes(graph);
+    filter_graph(graph, &keep)
+}
+
+/// A node that renders no matter where it appears: header comment nodes
+/// (`//#`) and LLM functions / calls to LLM functions.
+fn is_always_rendered(node: &Node) -> bool {
+    matches!(
+        node.node_type,
+        NodeType::HeaderContextEnter | NodeType::LlmFunction
+    ) || node.llm_client.is_some()
+}
+
+/// Compute the set of nodes that must be rendered:
+/// - the function root,
+/// - header comment nodes and LLM functions / LLM calls (always),
+/// - any structural node (loop, branch group, scope) whose subtree contains
+///   one of the above — a `//#` inside an if-branch or loop body forces the
+///   whole if / loop to render,
+/// - every arm of a rendered branch group (one annotated branch extracts all
+///   branches),
+/// - return nodes whose enclosing rendered scope survives, so early returns
+///   stay visible.
+fn compute_required_nodes(graph: &ControlFlowGraph) -> HashSet<NodeId> {
     let children = build_children_map(&graph.nodes);
     let mut memo: HashMap<NodeId, bool> = HashMap::new();
     for node in graph.nodes.values() {
-        compute_has_header(node.id, &graph.nodes, &children, &mut memo);
+        compute_has_anchor(node.id, &graph.nodes, &children, &mut memo);
     }
 
     let mut keep: HashSet<NodeId> = HashSet::new();
     for node in graph.nodes.values() {
-        if should_keep(node, &graph.nodes, &memo) {
+        let required = matches!(node.node_type, NodeType::FunctionRoot)
+            || *memo.get(&node.id).unwrap_or(&false);
+        if required {
             keep.insert(node.id);
         }
     }
 
-    filter_graph(graph, &keep)
+    // All arms of a kept branch group render, even header-less ones.
+    for node in graph.nodes.values() {
+        if !matches!(node.node_type, NodeType::BranchArm) {
+            continue;
+        }
+        if let Some(parent_id) = node.parent_node_id {
+            let parent_is_kept_group = keep.contains(&parent_id)
+                && matches!(
+                    graph.nodes.get(&parent_id).map(|p| &p.node_type),
+                    Some(NodeType::BranchGroup)
+                );
+            if parent_is_kept_group {
+                keep.insert(node.id);
+            }
+        }
+    }
+
+    // Early returns render whenever their enclosing scope renders. This runs
+    // after the arm pass so returns directly inside a kept arm survive.
+    for node in graph.nodes.values() {
+        if !matches!(node.node_type, NodeType::Return) {
+            continue;
+        }
+        match node.parent_node_id {
+            Some(parent_id) if keep.contains(&parent_id) => {
+                keep.insert(node.id);
+            }
+            None => {
+                keep.insert(node.id);
+            }
+            _ => {}
+        }
+    }
+
+    keep
 }
 
-fn compute_has_header(
+/// Whether `node_id` or any of its descendants is an always-rendered node
+/// (header / LLM).
+fn compute_has_anchor(
     node_id: NodeId,
     nodes: &IndexMap<NodeId, Node>,
     children: &HashMap<NodeId, Vec<NodeId>>,
@@ -225,10 +286,10 @@ fn compute_has_header(
         return false;
     };
 
-    let mut result = matches!(node.node_type, NodeType::HeaderContextEnter);
+    let mut result = is_always_rendered(node);
     if let Some(child_ids) = children.get(&node_id) {
         for child in child_ids {
-            if compute_has_header(*child, nodes, children, memo) {
+            if compute_has_anchor(*child, nodes, children, memo) {
                 result = true;
                 break;
             }
@@ -239,29 +300,9 @@ fn compute_has_header(
     result
 }
 
-fn should_keep(
-    node: &Node,
-    nodes: &IndexMap<NodeId, Node>,
-    has_header: &HashMap<NodeId, bool>,
-) -> bool {
-    match node.node_type {
-        NodeType::FunctionRoot | NodeType::LlmFunction | NodeType::HeaderContextEnter => true,
-        NodeType::BranchArm => {
-            if *has_header.get(&node.id).unwrap_or(&false) {
-                true
-            } else if let Some(parent_id) = node.parent_node_id {
-                matches!(
-                    nodes.get(&parent_id).map(|parent| &parent.node_type),
-                    Some(NodeType::BranchGroup)
-                ) && *has_header.get(&parent_id).unwrap_or(&false)
-            } else {
-                false
-            }
-        }
-        _ => *has_header.get(&node.id).unwrap_or(&false),
-    }
-}
-
+/// Drop all nodes outside `keep`, splicing sequential edges through removed
+/// nodes so surviving siblings stay connected (kept → dropped → kept becomes
+/// kept → kept).
 fn filter_graph(graph: &ControlFlowGraph, keep: &HashSet<NodeId>) -> ControlFlowGraph {
     let mut nodes = IndexMap::new();
     for (id, node) in &graph.nodes {
@@ -275,11 +316,26 @@ fn filter_graph(graph: &ControlFlowGraph, keep: &HashSet<NodeId>) -> ControlFlow
         if !keep.contains(src) {
             continue;
         }
-        let filtered: Vec<Edge> = edges
-            .iter()
-            .filter(|edge| keep.contains(&edge.dst))
-            .cloned()
-            .collect();
+        let mut filtered: Vec<Edge> = Vec::new();
+        let mut seen: HashSet<NodeId> = HashSet::new();
+        for edge in edges {
+            if keep.contains(&edge.dst) {
+                if seen.insert(edge.dst) {
+                    filtered.push(edge.clone());
+                }
+            } else {
+                // Walk through the dropped node(s) to the next kept nodes.
+                for dst in kept_successors_through(edge.dst, graph, keep) {
+                    if seen.insert(dst) {
+                        filtered.push(Edge {
+                            src: *src,
+                            dst,
+                            label: None,
+                        });
+                    }
+                }
+            }
+        }
         if !filtered.is_empty() {
             edges_by_src.insert(*src, filtered);
         }
@@ -289,6 +345,33 @@ fn filter_graph(graph: &ControlFlowGraph, keep: &HashSet<NodeId>) -> ControlFlow
         nodes,
         edges_by_src,
     }
+}
+
+/// Starting from a dropped node, follow outgoing edges through other dropped
+/// nodes and return the kept nodes reachable that way.
+fn kept_successors_through(
+    start: NodeId,
+    graph: &ControlFlowGraph,
+    keep: &HashSet<NodeId>,
+) -> Vec<NodeId> {
+    let mut result = Vec::new();
+    let mut visited: HashSet<NodeId> = HashSet::new();
+    let mut stack = vec![start];
+    while let Some(id) = stack.pop() {
+        if !visited.insert(id) {
+            continue;
+        }
+        if keep.contains(&id) {
+            result.push(id);
+            continue;
+        }
+        if let Some(edges) = graph.edges_by_src.get(&id) {
+            for edge in edges {
+                stack.push(edge.dst);
+            }
+        }
+    }
+    result
 }
 
 // ===========================================================================
@@ -499,8 +582,31 @@ fn collect_exit_nodes_recursive(
         .map(|edges| !edges.is_empty())
         .unwrap_or(false);
 
-    if !has_outgoing {
+    if !has_outgoing && !is_terminal_subtree(node_id, children_map, graph) {
         exits.push(node_id);
+    }
+}
+
+/// Whether control flow always leaves the function inside this subtree: the
+/// node is a `return`, or a container all of whose children are terminal.
+/// Terminal subtrees must never fan out to whatever comes after an inlined
+/// container — e.g. a header whose only content is an early return.
+fn is_terminal_subtree(
+    node_id: NodeId,
+    children_map: &HashMap<NodeId, Vec<NodeId>>,
+    graph: &ControlFlowGraph,
+) -> bool {
+    let Some(node) = graph.nodes.get(&node_id) else {
+        return false;
+    };
+    if matches!(node.node_type, NodeType::Return) {
+        return true;
+    }
+    match children_map.get(&node_id) {
+        Some(children) if !children.is_empty() => children
+            .iter()
+            .all(|child| is_terminal_subtree(*child, children_map, graph)),
+        _ => false,
     }
 }
 
@@ -894,28 +1000,25 @@ mod tests {
             "BranchGroup should NOT be a container (diamond dispatch)"
         );
 
-        // Header "True branch" (id=4): has child leaf → true
+        // Plain leaves "yes" (5) and "no" (8) are not header/LLM anchored →
+        // pruned from the visualization graph.
         assert!(
-            result.nodes.get(&NodeId::new(4)).unwrap().is_container,
-            "Header 'True branch' should be a container (has child leaf)"
+            result.nodes.get(&NodeId::new(5)).is_none(),
+            "Plain leaf 'yes' should be pruned"
+        );
+        assert!(
+            result.nodes.get(&NodeId::new(8)).is_none(),
+            "Plain leaf 'no' should be pruned"
         );
 
-        // Leaf "yes" (id=5): no children → false
+        // With their leaves pruned, the branch headers become leaf nodes.
         assert!(
-            !result.nodes.get(&NodeId::new(5)).unwrap().is_container,
-            "Leaf 'yes' should NOT be a container"
+            !result.nodes.get(&NodeId::new(4)).unwrap().is_container,
+            "Header 'True branch' should be a leaf after pruning"
         );
-
-        // Header "False branch" (id=7): has child leaf → true
         assert!(
-            result.nodes.get(&NodeId::new(7)).unwrap().is_container,
-            "Header 'False branch' should be a container (has child leaf)"
-        );
-
-        // Leaf "no" (id=8): no children → false
-        assert!(
-            !result.nodes.get(&NodeId::new(8)).unwrap().is_container,
-            "Leaf 'no' should NOT be a container"
+            !result.nodes.get(&NodeId::new(7)).unwrap().is_container,
+            "Header 'False branch' should be a leaf after pruning"
         );
     }
 
@@ -946,12 +1049,13 @@ mod tests {
     /// ```text
     /// FunctionRoot (0)
     ///   └─ Header "Setup" (1)
-    ///   │    └─ OtherScope "x = 1" (2)
+    ///   │    └─ OtherScope "x = 1" (2)      ← pruned (no header/LLM anchor)
     ///   └─ Header "Process" (3)
-    ///        └─ BranchGroup "if (x)" (4)
+    ///        └─ BranchGroup "if (x)" (4)    ← kept: header inside true arm
     ///             ├─ BranchArm "true" (5)
-    ///             └─ BranchArm "false" (6)
-    ///        └─ OtherScope "done" (7)  ← successor after the if/else
+    ///             │    └─ Header "Work" (8)
+    ///             └─ BranchArm "false" (6)  ← kept: sibling arm of annotated arm
+    ///        └─ Header "Done" (7)           ← successor after the if/else
     /// ```
     /// Edges: 1→3 (sequential headers), 4→7 (`BranchGroup` to successor)
     /// Within Header "Process": 4 and 7 are sequential children.
@@ -966,30 +1070,37 @@ mod tests {
         let bg = make_node(4, Some(3), "if (x)", NodeType::BranchGroup);
         let arm_true = make_node(5, Some(4), "true", NodeType::BranchArm);
         let arm_false = make_node(6, Some(4), "false", NodeType::BranchArm);
-        let leaf_done = make_node(7, Some(3), "done", NodeType::OtherScope);
+        let h_done = make_node(7, Some(3), "Done", NodeType::HeaderContextEnter);
+        let h_work = make_node(8, Some(5), "Work", NodeType::HeaderContextEnter);
 
         for n in [
-            root, h_setup, leaf_x, h_process, bg, arm_true, arm_false, leaf_done,
+            root, h_setup, leaf_x, h_process, bg, arm_true, arm_false, h_done, h_work,
         ] {
             graph.nodes.insert(n.id, n);
         }
 
         // Sequential edges:
         add_edge(&mut graph, 1, 3); // Setup → Process (at FunctionRoot level)
-        add_edge(&mut graph, 4, 7); // BranchGroup → done (at Header "Process" level)
+        add_edge(&mut graph, 4, 7); // BranchGroup → Done (at Header "Process" level)
 
         let result = prepare_control_flow_graph_for_visualization(&graph);
 
-        // Empty arms remain visible so implicit/synthetic branches are not
-        // hidden. The BranchGroup fans out to those arm leaf nodes.
+        // The plain leaf under "Setup" is pruned.
+        assert!(
+            result.nodes.get(&NodeId::new(2)).is_none(),
+            "plain OtherScope leaf should be pruned"
+        );
+
+        // The annotated arm is inlined (it has content); the empty false arm
+        // stays visible. Fan-out goes to the arm content / the empty arm.
         let bg_edges = result.edges_by_src.get(&NodeId::new(4));
         let bg_edges: Vec<_> = bg_edges.map(|es| es.iter().collect()).unwrap_or_default();
         let bg_edge_dsts: Vec<u32> = bg_edges.iter().map(|e| e.dst.raw()).collect();
         let bg_edge_labels: Vec<_> = bg_edges.iter().filter_map(|e| e.label.as_deref()).collect();
         assert_eq!(
             bg_edge_dsts,
-            vec![5, 6],
-            "BranchGroup should fan out to empty arm nodes, got: {bg_edge_dsts:?}"
+            vec![8, 6],
+            "BranchGroup should fan out to arm content and empty arm, got: {bg_edge_dsts:?}"
         );
         assert_eq!(
             bg_edge_labels,
@@ -998,15 +1109,15 @@ mod tests {
         );
 
         assert!(
-            result.nodes.get(&NodeId::new(5)).is_some(),
-            "empty true arm should stay visible"
+            result.nodes.get(&NodeId::new(5)).is_none(),
+            "non-empty true arm should be inlined"
         );
         assert!(
             result.nodes.get(&NodeId::new(6)).is_some(),
             "empty false arm should stay visible"
         );
         assert_eq!(
-            result.nodes.get(&NodeId::new(5)).unwrap().parent_node_id,
+            result.nodes.get(&NodeId::new(8)).unwrap().parent_node_id,
             Some(NodeId::new(3))
         );
         assert_eq!(
@@ -1014,14 +1125,14 @@ mod tests {
             Some(NodeId::new(3))
         );
 
-        let arm_true_dsts: Vec<u32> = result
+        let work_dsts: Vec<u32> = result
             .edges_by_src
-            .get(&NodeId::new(5))
+            .get(&NodeId::new(8))
             .map(|es| es.iter().map(|e| e.dst.raw()).collect())
             .unwrap_or_default();
         assert!(
-            arm_true_dsts.contains(&7),
-            "true arm should flow to successor 7, got: {arm_true_dsts:?}"
+            work_dsts.contains(&7),
+            "true arm content should flow to successor 7, got: {work_dsts:?}"
         );
         let arm_false_dsts: Vec<u32> = result
             .edges_by_src
@@ -1045,10 +1156,10 @@ mod tests {
         let h_process = make_node(1, Some(0), "Process", NodeType::HeaderContextEnter);
         let bg = make_node(2, Some(1), "if (x)", NodeType::BranchGroup);
         let arm_true = make_node(3, Some(2), "true", NodeType::BranchArm);
-        let leaf_true = make_node(4, Some(3), "work", NodeType::OtherScope);
+        let leaf_true = make_node(4, Some(3), "work", NodeType::HeaderContextEnter);
         let arm_false = make_node(5, Some(2), "false", NodeType::BranchArm);
-        let leaf_false = make_node(6, Some(5), "fallback", NodeType::OtherScope);
-        let leaf_done = make_node(7, Some(1), "done", NodeType::OtherScope);
+        let leaf_false = make_node(6, Some(5), "fallback", NodeType::HeaderContextEnter);
+        let leaf_done = make_node(7, Some(1), "done", NodeType::HeaderContextEnter);
 
         for n in [
             root, h_process, bg, arm_true, leaf_true, arm_false, leaf_false, leaf_done,
@@ -1105,10 +1216,11 @@ mod tests {
         let root = Node::root(NodeId::new(0), "f|root:0", "func");
         let bg = make_node(1, Some(0), "match", NodeType::BranchGroup);
         let arm1 = make_node(2, Some(1), "1", NodeType::BranchArm);
+        let h_one = make_node(5, Some(2), "Handle one", NodeType::HeaderContextEnter);
         let arm_wildcard = make_node(3, Some(1), "_", NodeType::BranchArm);
-        let done = make_node(4, Some(0), "done", NodeType::OtherScope);
+        let done = make_node(4, Some(0), "Done", NodeType::HeaderContextEnter);
 
-        for n in [root, bg, arm1, arm_wildcard, done] {
+        for n in [root, bg, arm1, h_one, arm_wildcard, done] {
             graph.nodes.insert(n.id, n);
         }
         add_edge(&mut graph, 1, 4);
@@ -1123,6 +1235,158 @@ mod tests {
                 .iter()
                 .any(|e| e.dst == NodeId::new(3) && e.label.as_deref() == Some("default")),
             "Wildcard branch should become a default-labeled edge to the branch node"
+        );
+    }
+
+    // -- Pruning tests (header / LLM anchoring) --
+
+    #[test]
+    fn viz_prep_prunes_unannotated_structure() {
+        // if/loop/call nodes with no header or LLM call anywhere inside are
+        // dropped; only the root survives.
+        let mut graph = ControlFlowGraph::default();
+        let root = Node::root(NodeId::new(0), "f|root:0", "func");
+        let bg = make_node(1, Some(0), "if (x)", NodeType::BranchGroup);
+        let arm1 = make_node(2, Some(1), "if (x)", NodeType::BranchArm);
+        let arm2 = make_node(3, Some(1), "else", NodeType::BranchArm);
+        let lp = make_node(4, Some(0), "while (y)", NodeType::Loop);
+        let call = make_node(5, Some(0), "Helper(x)", NodeType::OtherScope);
+        for n in [root, bg, arm1, arm2, lp, call] {
+            graph.nodes.insert(n.id, n);
+        }
+        add_edge(&mut graph, 1, 4);
+        add_edge(&mut graph, 4, 5);
+
+        let result = prepare_control_flow_graph_for_visualization(&graph);
+        let ids: Vec<u32> = result.nodes.keys().map(NodeId::raw).collect();
+        assert_eq!(ids, vec![0], "only the function root should survive");
+    }
+
+    #[test]
+    fn viz_prep_keeps_llm_calls_without_headers() {
+        let mut graph = ControlFlowGraph::default();
+        let root = Node::root(NodeId::new(0), "f|root:0", "func");
+        let llm_call = make_node(1, Some(0), "Summarize(text)", NodeType::OtherScope)
+            .with_llm_client("openai/gpt-4o");
+        let plain_call = make_node(2, Some(0), "Helper(x)", NodeType::OtherScope);
+        for n in [root, llm_call, plain_call] {
+            graph.nodes.insert(n.id, n);
+        }
+        add_edge(&mut graph, 1, 2);
+
+        let result = prepare_control_flow_graph_for_visualization(&graph);
+        assert!(
+            result.nodes.contains_key(&NodeId::new(1)),
+            "LLM call must always render"
+        );
+        assert!(
+            !result.nodes.contains_key(&NodeId::new(2)),
+            "plain call should be pruned"
+        );
+    }
+
+    #[test]
+    fn viz_prep_header_inside_loop_keeps_loop() {
+        let mut graph = ControlFlowGraph::default();
+        let root = Node::root(NodeId::new(0), "f|root:0", "func");
+        let lp = make_node(1, Some(0), "for (item in items)", NodeType::Loop);
+        let bg = make_node(2, Some(1), "if (x)", NodeType::BranchGroup);
+        let arm1 = make_node(3, Some(2), "if (x)", NodeType::BranchArm);
+        let header = make_node(4, Some(3), "Annotated", NodeType::HeaderContextEnter);
+        let arm2 = make_node(5, Some(2), "else", NodeType::BranchArm);
+        for n in [root, lp, bg, arm1, header, arm2] {
+            graph.nodes.insert(n.id, n);
+        }
+
+        let result = prepare_control_flow_graph_for_visualization(&graph);
+        assert!(
+            result.nodes.contains_key(&NodeId::new(1)),
+            "loop containing a header (transitively) must render"
+        );
+        assert!(
+            result.nodes.contains_key(&NodeId::new(2)),
+            "if containing a header must render"
+        );
+        assert!(
+            result.nodes.contains_key(&NodeId::new(5)),
+            "the unannotated sibling branch must render too"
+        );
+        assert!(result.nodes.contains_key(&NodeId::new(4)));
+    }
+
+    #[test]
+    fn viz_prep_splices_edges_through_pruned_nodes() {
+        // Header → plain call → Header: dropping the call must not disconnect
+        // the headers.
+        let mut graph = ControlFlowGraph::default();
+        let root = Node::root(NodeId::new(0), "f|root:0", "func");
+        let h1 = make_node(1, Some(0), "Step 1", NodeType::HeaderContextEnter);
+        let call = make_node(2, Some(0), "Helper(x)", NodeType::OtherScope);
+        let h2 = make_node(3, Some(0), "Step 2", NodeType::HeaderContextEnter);
+        for n in [root, h1, call, h2] {
+            graph.nodes.insert(n.id, n);
+        }
+        add_edge(&mut graph, 1, 2);
+        add_edge(&mut graph, 2, 3);
+
+        let result = prepare_control_flow_graph_for_visualization(&graph);
+        assert!(!result.nodes.contains_key(&NodeId::new(2)));
+        let h1_dsts: Vec<u32> = result
+            .edges_by_src
+            .get(&NodeId::new(1))
+            .map(|es| es.iter().map(|e| e.dst.raw()).collect())
+            .unwrap_or_default();
+        assert_eq!(
+            h1_dsts,
+            vec![3],
+            "edge must be spliced through the pruned call node"
+        );
+    }
+
+    #[test]
+    fn viz_prep_return_in_branch_does_not_reach_successor() {
+        // Header
+        //   └─ BranchGroup "if (x)" ── successor Header "Done"
+        //        ├─ arm "if (x)" └─ Return "return 1"
+        //        └─ arm "else"   └─ Header "Continue"
+        // The returning arm must NOT flow to "Done".
+        let mut graph = ControlFlowGraph::default();
+        let root = Node::root(NodeId::new(0), "f|root:0", "func");
+        let h = make_node(1, Some(0), "Process", NodeType::HeaderContextEnter);
+        let bg = make_node(2, Some(1), "if (x)", NodeType::BranchGroup);
+        let arm_ret = make_node(3, Some(2), "if (x)", NodeType::BranchArm);
+        let ret = make_node(4, Some(3), "return 1", NodeType::Return);
+        let arm_else = make_node(5, Some(2), "else", NodeType::BranchArm);
+        let h_cont = make_node(6, Some(5), "Continue", NodeType::HeaderContextEnter);
+        let h_done = make_node(7, Some(1), "Done", NodeType::HeaderContextEnter);
+        for n in [root, h, bg, arm_ret, ret, arm_else, h_cont, h_done] {
+            graph.nodes.insert(n.id, n);
+        }
+        add_edge(&mut graph, 2, 7); // BranchGroup → Done successor
+
+        let result = prepare_control_flow_graph_for_visualization(&graph);
+
+        assert!(
+            result.nodes.contains_key(&NodeId::new(4)),
+            "return inside a rendered arm must stay visible"
+        );
+        let ret_dsts: Vec<u32> = result
+            .edges_by_src
+            .get(&NodeId::new(4))
+            .map(|es| es.iter().map(|e| e.dst.raw()).collect())
+            .unwrap_or_default();
+        assert!(
+            ret_dsts.is_empty(),
+            "return node must not flow to the successor, got: {ret_dsts:?}"
+        );
+        let cont_dsts: Vec<u32> = result
+            .edges_by_src
+            .get(&NodeId::new(6))
+            .map(|es| es.iter().map(|e| e.dst.raw()).collect())
+            .unwrap_or_default();
+        assert!(
+            cont_dsts.contains(&7),
+            "non-returning arm should flow to the successor, got: {cont_dsts:?}"
         );
     }
 }

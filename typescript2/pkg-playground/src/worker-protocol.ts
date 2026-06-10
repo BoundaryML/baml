@@ -148,7 +148,8 @@ export type CfgNodeType =
   | 'branchGroup'
   | 'branchArm'
   | 'loop'
-  | 'otherScope';
+  | 'otherScope'
+  | 'return';
 
 export interface CfgNode {
   id: number;

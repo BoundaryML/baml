@@ -59,6 +59,9 @@ pub enum NodeType {
     BranchArm,
     Loop,
     OtherScope,
+    /// A `return` statement. Terminal: it never has outgoing edges, since
+    /// control flow leaves the function here.
+    Return,
 }
 
 /// Source range for a graph node.
@@ -393,6 +396,7 @@ pub fn describe_node_type(node_type: &NodeType) -> &'static str {
         NodeType::BranchArm => "branch-arm",
         NodeType::Loop => "loop",
         NodeType::OtherScope => "other-scope",
+        NodeType::Return => "return",
     }
 }
 

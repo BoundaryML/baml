@@ -58,6 +58,7 @@ function Abs(x: float) -> float {
     if x < 0.0 { -x } else { x }
 }
 
+//# add up the line items
 function LineTotal(items: LineItem[]) -> float {
     let total = 0.0;
     for (let item in items) {
@@ -66,8 +67,11 @@ function LineTotal(items: LineItem[]) -> float {
     return total;
 }
 
+//# validate the invoice
 function ValidateInvoice(inv: Invoice) -> ValidationIssue[] {
     let issues: ValidationIssue[] = [];
+
+    //# check the math
     if Abs(LineTotal(inv.line_items) - inv.total) > 0.02 {
         issues.push(ValidationIssue {
             path: "total",
@@ -75,6 +79,8 @@ function ValidateInvoice(inv: Invoice) -> ValidationIssue[] {
             message: "line item sum does not match total",
         });
     }
+
+    //# check the dates
     if inv.due_date == null {
         issues.push(ValidationIssue {
             path: "due_date",
@@ -82,25 +88,27 @@ function ValidateInvoice(inv: Invoice) -> ValidationIssue[] {
             message: "missing due date",
         });
     }
+
     return issues;
 }
 
+//# score the risk
 function RiskScore(inv: Invoice) -> RiskTier {
     if inv.total > 25000.0 {
+        //# block big invoices
         return RiskTier.Block;
     }
     if inv.due_date == null {
+        //# flag missing due dates
         return RiskTier.Review;
     }
     return RiskTier.Low;
 }
 
 function Review(inv: Invoice) -> Report {
-    return Report {
-        risk: RiskScore(inv),
-        issues: ValidateInvoice(inv),
-        total: inv.total,
-    };
+    let risk = RiskScore(inv);
+    let issues = ValidateInvoice(inv);
+    return Report { risk: risk, issues: issues, total: inv.total };
 }
 
 // ── Optional: same pipeline starting from raw text. Requires OPENAI_API_KEY.

@@ -1,19 +1,26 @@
-// The homepage hero playground example: one flat invoice-review workflow
-// (branching logic inline, so the graph view shows the decision structure
-// immediately), a single helper, and an optional LLM extraction step that
-// feeds the same pipeline. Main logic on top; data model and tests at the
-// bottom. Verified end-to-end with `baml check` + `baml test` (5/5 pass).
+// The homepage hero playground example: one flat invoice-review workflow,
+// a single helper, and an optional LLM extraction step that feeds the same
+// pipeline. Main logic on top; data model and tests at the bottom.
+// `//#` header comments name the sections — they become the nodes of the
+// graph view (a header inside an if-branch or loop pulls the whole branch
+// into the graph; a header above a function names its call sites).
+// Verified end-to-end with `baml check` + `baml test` (5/5 pass).
 
 export const DEFAULT_BAML = `// run baml in your browser
 
 // One flat workflow: validate the invoice, branch on what we find.
+// The //# headers become named nodes in the graph view.
+//# review the invoice
 function ReviewInvoice(inv: Invoice) -> Report {
   let issues: ValidationIssue[] = [];
 
-  let diff = LineTotal(inv.line_items) - inv.total;
+  //# check the math
+  let line_total = LineTotal(inv.line_items);
+  let diff = line_total - inv.total;
   if (diff < 0.0) { diff = -diff; };
 
   if (diff > 0.02) {
+    //## flag a mismatch
     issues.push(ValidationIssue {
       path: "total",
       severity: "error",
@@ -21,7 +28,9 @@ function ReviewInvoice(inv: Invoice) -> Report {
     });
   };
 
+  //# check the dates
   if (inv.due_date == null) {
+    //## flag a missing due date
     issues.push(ValidationIssue {
       path: "due_date",
       severity: "warn",
@@ -29,10 +38,13 @@ function ReviewInvoice(inv: Invoice) -> Report {
     });
   };
 
+  //# score the risk
   let risk = RiskTier.Low;
   if (inv.total > 25000.0) {
+    //## block big invoices
     risk = RiskTier.Block;
   } else if (inv.due_date == null) {
+    //## flag missing due dates
     risk = RiskTier.Review;
   };
 
@@ -51,6 +63,7 @@ function Main() -> Report {
   })
 }
 
+//# add up the line items
 function LineTotal(items: LineItem[]) -> float {
   let total = 0.0;
   for (let item in items) {
@@ -62,7 +75,8 @@ function LineTotal(items: LineItem[]) -> float {
 // The same pipeline from raw text: LLM extraction feeds the review.
 // Needs OPENAI_API_KEY -- set it via the key icon, then run this.
 function ReviewFromText(text: string) -> Report {
-  ReviewInvoice(ExtractInvoice(text))
+  let inv = ExtractInvoice(text);
+  ReviewInvoice(inv)
 }
 
 function ExtractInvoice(text: string) -> Invoice {

@@ -64,6 +64,8 @@ function cfgNodeTypeToGraphType(nt: CfgNodeType): GraphNodeType {
       return 'loop';
     case 'otherScope':
       return 'scope';
+    case 'return':
+      return 'return';
   }
 }
 
@@ -175,6 +177,8 @@ function graphTypeToReactflowType(gt: GraphNodeType): string {
     case 'scope':
       return 'base';
     case 'header':
+      return 'base';
+    case 'return':
       return 'base';
   }
 }
