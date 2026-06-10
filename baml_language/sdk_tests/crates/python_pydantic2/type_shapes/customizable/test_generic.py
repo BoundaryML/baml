@@ -20,16 +20,6 @@ streams, no `StreamFinished` union — just `WrapperMethods<T>.get_value(self)
 fix lands, this test goes green without touching the streaming path.
 """
 
-import pytest
-
-
-@pytest.mark.skip(
-    reason="Phase 4 (engine boundary substitution) not yet landed — "
-    "WrapperMethods<T>.get_value_or_marker's `T | WrapperMarker` return type "
-    "still lowers `T` to `Ty::Void`, so a concrete `string` payload "
-    "fails the union-member check. Tracked in 23a §'Engine boundary "
-    "substitution' / 22f. Flip back to enabled when Ty::TypeVar lands."
-)
 def test_generic():
     """`WrapperMethods<string>.get_value_or_marker()` should still round-trip
     a string when the declared return is `T | WrapperMarker`.
