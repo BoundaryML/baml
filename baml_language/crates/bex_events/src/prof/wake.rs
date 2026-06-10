@@ -51,9 +51,15 @@ mod imp {
         #[inline]
         pub(crate) fn wake_if_parked(&self) {
             if self.parked.load(Ordering::Relaxed) {
-                if let Some(consumer) = self.consumer.get() {
-                    consumer.unpark();
-                }
+                self.force_wake();
+            }
+        }
+
+        /// Unconditional wake (control-message paths like flush requests,
+        /// which must not depend on the parked flag's timing).
+        pub(crate) fn force_wake(&self) {
+            if let Some(consumer) = self.consumer.get() {
+                consumer.unpark();
             }
         }
 
@@ -105,6 +111,8 @@ mod imp {
         pub(crate) fn wake_if_parked(&self) {
             let _ = self.parked.load(Ordering::Relaxed);
         }
+
+        pub(crate) fn force_wake(&self) {}
 
         pub(crate) fn pre_park(&self) {
             self.parked.store(true, Ordering::SeqCst);

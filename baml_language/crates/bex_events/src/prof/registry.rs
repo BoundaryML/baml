@@ -153,10 +153,12 @@ impl Drop for Registry {
     }
 }
 
-#[cfg(all(not(baml_loom), test))]
+#[cfg(all(not(baml_loom), test, target_arch = "wasm32"))]
 pub(crate) use global::global_registry;
 #[cfg(not(baml_loom))]
 pub use global::ring_for_engine;
+#[cfg(all(not(baml_loom), not(target_arch = "wasm32")))]
+pub(crate) use global::{global_ctx, global_registry};
 
 #[cfg(not(baml_loom))]
 mod global {
@@ -216,6 +218,13 @@ mod global {
                 return unsafe { RingHandle::new(ring) };
             }
             let cfg = ProfConfig::global();
+            // The consumer drains every registered ring; it must exist
+            // before the first event can pile up. No-op when profiling is
+            // off (tests drive private registries as their own consumers).
+            #[cfg(not(target_arch = "wasm32"))]
+            if cfg.enabled {
+                crate::prof::consumer::ensure_started();
+            }
             let handle = REGISTRY.acquire(global_ctx(), cfg.seg_bytes, cfg.freelist_cap, engine_id);
             entries.push((engine_id, handle.ring()));
             handle

@@ -27,16 +27,44 @@
 
 pub mod clock;
 pub mod config;
+#[cfg(all(not(target_arch = "wasm32"), not(baml_loom)))]
+pub(crate) mod consumer;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod file;
 pub mod record;
 pub(crate) mod registry;
 pub(crate) mod ring;
 pub(crate) mod sync;
 pub(crate) mod wake;
 
+/// The `.bamlprof` wire types, generated from `prof/proto/bamlprof.proto`.
+#[cfg(not(target_arch = "wasm32"))]
+#[allow(
+    clippy::pedantic,
+    clippy::doc_markdown,
+    unreachable_pub,
+    reason = "prost-generated code"
+)]
+pub mod pb {
+    include!(concat!(env!("OUT_DIR"), "/baml.prof.v1.rs"));
+}
+
 #[cfg(test)]
 mod concurrency_tests;
 
 pub use config::ProfConfig;
+#[cfg(all(not(target_arch = "wasm32"), not(baml_loom)))]
+pub use consumer::{
+    EngineProfileMetadata, FunctionMetaEntry, flush_and_join, register_engine_metadata,
+};
 #[cfg(not(baml_loom))]
 pub use registry::ring_for_engine;
 pub use ring::{Ring, RingHandle};
+
+// wasm32: profiling is forced off (no consumer thread, no TSC clock); the
+// producer-facing surface compiles to no-ops so dual-target callers don't
+// need their own cfgs.
+#[cfg(target_arch = "wasm32")]
+pub fn flush_and_join(_timeout: std::time::Duration) -> bool {
+    true
+}

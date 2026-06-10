@@ -40,6 +40,15 @@ uuid = { workspace = true, features = [ "js" ] }
 [target.'cfg(not(any(target_arch = "wasm32", miri)))'.dependencies]
 minstant = { workspace = true }
 
+# The .bamlprof consumer (thread + file writer + protobuf transcode) is
+# native-only; wasm32 has no consumer thread (profiling forced off there).
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+prost = { workspace = true }
+
+[build-dependencies]
+prost-build = { workspace = true }
+protoc-bin-vendored = { workspace = true }
+
 # Only active under `RUSTFLAGS="--cfg baml_loom"` (the prof ring's model-checking
 # builds); a plain `cargo build` never compiles loom.
 [target.'cfg(baml_loom)'.dependencies]

@@ -19,6 +19,12 @@ pub const ENV_MAX_OVERFLOW_BYTES: &str = "BAML_RING_MAX_OVERFLOW_BYTES";
 pub const ENV_FREELIST_CAP: &str = "BAML_RING_FREELIST_CAP";
 /// Consumer park timeout in milliseconds (design D4).
 pub const ENV_WAKE_INTERVAL_MS: &str = "BAML_PROF_WAKE_INTERVAL_MS";
+/// Directory for `.bamlprof` artifacts.
+pub const ENV_PROFILE_DIR: &str = "BAML_PROFILE_DIR";
+
+/// Default `.bamlprof` home, relative to the working directory (`baml clean`
+/// integration is an open coordination point).
+pub const DEFAULT_PROFILE_DIR: &str = ".baml/profiles";
 
 /// Default ring segment size. At ~28–40 B per record this holds roughly
 /// 9,000 events, so the producer's slow path (segment link + possible wake)
@@ -54,6 +60,8 @@ pub struct ProfConfig {
     pub freelist_cap: usize,
     /// Consumer park timeout ([`ENV_WAKE_INTERVAL_MS`]).
     pub wake_interval: Duration,
+    /// Where `.bamlprof` files land ([`ENV_PROFILE_DIR`]).
+    pub profile_dir: std::path::PathBuf,
 }
 
 impl Default for ProfConfig {
@@ -64,6 +72,7 @@ impl Default for ProfConfig {
             max_overflow_bytes: DEFAULT_MAX_OVERFLOW_BYTES,
             freelist_cap: DEFAULT_FREELIST_CAP,
             wake_interval: DEFAULT_WAKE_INTERVAL,
+            profile_dir: std::path::PathBuf::from(DEFAULT_PROFILE_DIR),
         }
     }
 }
@@ -118,12 +127,16 @@ impl ProfConfig {
                 Duration::from_millis(ms.clamp(1, 10_000) as u64)
             });
 
+        let profile_dir =
+            get(ENV_PROFILE_DIR).map_or(defaults.profile_dir, std::path::PathBuf::from);
+
         ProfConfig {
             enabled,
             seg_bytes,
             max_overflow_bytes,
             freelist_cap,
             wake_interval,
+            profile_dir,
         }
     }
 }
@@ -167,12 +180,14 @@ mod tests {
             (ENV_MAX_OVERFLOW_BYTES, "536870912"),
             (ENV_FREELIST_CAP, "2"),
             (ENV_WAKE_INTERVAL_MS, "10"),
+            (ENV_PROFILE_DIR, "/tmp/profs"),
         ]));
         assert!(cfg.enabled);
         assert_eq!(cfg.seg_bytes, 128 * 1024);
         assert_eq!(cfg.max_overflow_bytes, 512 * 1024 * 1024);
         assert_eq!(cfg.freelist_cap, 2);
         assert_eq!(cfg.wake_interval, Duration::from_millis(10));
+        assert_eq!(cfg.profile_dir, std::path::PathBuf::from("/tmp/profs"));
     }
 
     #[test]

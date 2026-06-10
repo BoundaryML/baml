@@ -1049,6 +1049,7 @@ version = "0.0.0-beta"
 dependencies = [
  "baml_exec",
  "bex_engine",
+ "bex_events",
  "borsh",
  "libsui",
  "sys_native",
@@ -1233,6 +1234,9 @@ dependencies = [
  "indexmap",
  "loom",
  "minstant",
+ "prost",
+ "prost-build",
+ "protoc-bin-vendored",
  "serde",
  "serde_json",
  "smallvec",

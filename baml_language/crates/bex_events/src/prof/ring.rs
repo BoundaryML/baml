@@ -288,7 +288,7 @@ impl Ring {
     /// Caller is the ring's unique producer thread (it claimed the ring and
     /// the ring is `Active`), and `rec` is a whole encoded record with
     /// `0 < rec.len() <= seg_bytes`.
-    pub(crate) unsafe fn push(&self, rec: &[u8]) {
+    pub unsafe fn push(&self, rec: &[u8]) {
         debug_assert!(!rec.is_empty());
         self.p.with_mut(|p| {
             let p = unsafe { &mut *p };
@@ -591,7 +591,10 @@ impl RingHandle {
         unsafe { self.ring.push(rec) }
     }
 
-    pub(crate) fn ring(self) -> &'static Ring {
+    /// The underlying ring, for D5a snapshots: the engine stores this
+    /// `&'static Ring` in the VM and refreshes it once per exec resume.
+    #[must_use]
+    pub fn ring(self) -> &'static Ring {
         self.ring
     }
 }

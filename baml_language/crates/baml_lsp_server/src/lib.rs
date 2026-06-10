@@ -253,5 +253,8 @@ pub fn run_server(playground_via_browser: bool) -> anyhow::Result<()> {
 
     tracing::info!("LSP server shutting down");
     composed_sink.flush();
+    // Drain the profiling rings to .bamlprof before exit (no-op when
+    // BAML_PROFILE is off).
+    bex_events::prof::flush_and_join(std::time::Duration::from_secs(10));
     Ok(())
 }
