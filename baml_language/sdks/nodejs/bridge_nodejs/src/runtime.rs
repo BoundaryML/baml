@@ -63,7 +63,9 @@ impl BamlRuntime {
         abort_controller: Option<&AbortController>,
     ) -> napi::Result<Buffer> {
         let runtime = bridge_cffi::get_runtime().map_err(bridge_error_to_napi)?;
-        let kwargs = decode_args(args_proto.as_ref(), &function_name)?;
+        let (kwargs, type_refs) = decode_args(args_proto.as_ref(), &function_name)?;
+        let type_args =
+            bridge_cffi::resolve_type_args(&runtime, type_refs).map_err(bridge_error_to_napi)?;
         let host_ctx = ctx.and_then(|c| c.host_span_context());
         let cancel = abort_controller
             .map(AbortController::token)
@@ -76,7 +78,8 @@ impl BamlRuntime {
         let call_id = bex_project::CallId::next();
         let mut call_ctx = bex_project::FunctionCallContextBuilder::new(call_id)
             .with_collectors(collector_arcs)
-            .with_cancel_token(cancel);
+            .with_cancel_token(cancel)
+            .with_type_args(type_args);
 
         if let Some(host_ctx) = host_ctx {
             call_ctx = call_ctx.with_host_ctx(host_ctx);
@@ -112,7 +115,9 @@ impl BamlRuntime {
         abort_controller: Option<&AbortController>,
     ) -> napi::Result<PromiseRaw<'e, Buffer>> {
         let runtime = bridge_cffi::get_runtime().map_err(bridge_error_to_napi)?;
-        let kwargs = decode_args(args_proto.as_ref(), &function_name)?;
+        let (kwargs, type_refs) = decode_args(args_proto.as_ref(), &function_name)?;
+        let type_args =
+            bridge_cffi::resolve_type_args(&runtime, type_refs).map_err(bridge_error_to_napi)?;
         let host_ctx = ctx.and_then(|c| c.host_span_context());
         let cancel = abort_controller
             .map(AbortController::token)
@@ -125,7 +130,8 @@ impl BamlRuntime {
         let call_id = bex_project::CallId::next();
         let mut call_ctx = bex_project::FunctionCallContextBuilder::new(call_id)
             .with_collectors(collector_arcs)
-            .with_cancel_token(cancel);
+            .with_cancel_token(cancel)
+            .with_type_args(type_args);
 
         if let Some(host_ctx) = host_ctx {
             call_ctx = call_ctx.with_host_ctx(host_ctx);
@@ -160,7 +166,13 @@ pub fn get_runtime() -> napi::Result<BamlRuntime> {
 }
 
 /// Decode protobuf-encoded function arguments into `BexArgs`.
-fn decode_args(args_proto: &[u8], function_name: &str) -> napi::Result<bex_project::BexArgs> {
+fn decode_args(
+    args_proto: &[u8],
+    function_name: &str,
+) -> napi::Result<(
+    bex_project::BexArgs,
+    Vec<bridge_ctypes::baml_core::cffi::InboundTypeRef>,
+)> {
     let args =
         bridge_ctypes::baml_core::cffi::CallFunctionArgs::decode(args_proto).map_err(|e| {
             invalid_argument_error(format!(
@@ -174,5 +186,5 @@ fn decode_args(args_proto: &[u8], function_name: &str) -> napi::Result<bex_proje
         ))
     })?;
 
-    Ok(kwargs.into())
+    Ok((kwargs.into(), args.type_args))
 }

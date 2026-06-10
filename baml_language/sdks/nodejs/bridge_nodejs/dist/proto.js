@@ -16,6 +16,7 @@ import { BamlStream } from './stream.js';
 import { BamlError, BamlPanic } from './errors.js';
 import { registerHostError, tryRehydrateFromHandle, } from './host_error_registry.js';
 import { getTypeMap } from './typemap.js';
+import { registerHostOpaque, tryRehydrateHostValueByKey } from './host_error_registry.js';
 const CallFunctionArgs = baml_core.cffi.v1.CallFunctionArgs;
 const BamlOutboundValue = baml_core.cffi.v1.BamlOutboundValue;
 const BamlOutboundResult = baml_core.cffi.v1.BamlOutboundResult;
@@ -34,9 +35,47 @@ export class HostCallableSyncError extends Error {
         this.name = 'HostCallableSyncError';
     }
 }
+/**
+ * Explicit opt-in marker for opaque host-only encoding (bridge generics).
+ *
+ * TypeScript objects are *structural* by default at the BAML boundary —
+ * a class instance encodes as an untagged map (data copy, no identity).
+ * Wrapping a value in `opaque(v)` instead registers it in the host-value
+ * table and sends a sealed `HOST_VALUE_OPAQUE` handle: BAML cannot
+ * introspect it, `==` is host-object identity, and the same-process
+ * decoder returns the ORIGINAL object reference on round-trip.
+ *
+ * (Python needs no marker: its encoder is nominal — any non-pydantic,
+ * non-builtin object is automatically host-only. JS has no reliable
+ * runtime distinction between "data object" and "host-only instance",
+ * so the choice is explicit here.)
+ */
+export class BamlOpaque {
+    value;
+    constructor(value) {
+        this.value = value;
+    }
+}
+/** Convenience constructor for {@link BamlOpaque}. */
+export function opaque(value) {
+    return new BamlOpaque(value);
+}
+function encodeOpaque(iv, inner, ctx) {
+    let key = ctx.opaqueKeys?.get(inner);
+    if (key === undefined) {
+        key = registerHostOpaque(inner);
+        ctx.registered.push(key);
+        ctx.opaqueKeys?.set(inner, key);
+    }
+    iv.handle = { key, handleType: BamlHandleType.HOST_VALUE_OPAQUE };
+}
 function setInboundValue(iv, value, ctx) {
     if (value === null || value === undefined) {
         return; // Leave oneof unset → null
+    }
+    if (value instanceof BamlOpaque) {
+        encodeOpaque(iv, value.value, ctx);
+        return;
     }
     if (typeof value === 'boolean') {
         iv.boolValue = value;
@@ -176,7 +215,10 @@ function setInboundValue(iv, value, ctx) {
         iv.mapValue = { entries };
     }
     else {
-        throw new TypeError(`Cannot encode value of type ${Object.prototype.toString.call(value)} to protobuf`);
+        // No structural BAML representation (symbol, etc.): host-only.
+        // Register as an opaque handle — same treatment as an explicit
+        // `opaque(v)` wrapper.
+        encodeOpaque(iv, value, ctx);
     }
 }
 /**
@@ -196,8 +238,8 @@ function setInboundValue(iv, value, ctx) {
  * later kwarg fails, the engine never sees (and so never releases) the keys we
  * already registered, so we release them here.
  */
-export function encodeCallArgs(kwargs, syncMode = false) {
-    const ctx = { syncMode, registered: [] };
+export function encodeCallArgs(kwargs, syncMode = false, typeArgs) {
+    const ctx = { syncMode, registered: [], opaqueKeys: new Map() };
     try {
         const entries = [];
         for (const [key, value] of Object.entries(kwargs)) {
@@ -207,7 +249,8 @@ export function encodeCallArgs(kwargs, syncMode = false) {
             entry.value = iv;
             entries.push(entry);
         }
-        const msg = CallFunctionArgs.create({ kwargs: entries });
+        const typeArgRefs = (typeArgs ?? []).map(buildTypeRef);
+        const msg = CallFunctionArgs.create({ kwargs: entries, typeArgs: typeArgRefs });
         return Buffer.from(CallFunctionArgs.encode(msg).finish());
     }
     catch (err) {
@@ -225,6 +268,42 @@ export function encodeCallArgs(kwargs, syncMode = false) {
         }
         throw err;
     }
+}
+/**
+ * Build an `InboundTypeRef` from a $types token.
+ *
+ * Accepted tokens:
+ * - strings: builtin keywords ("string", "int", "float", "bool", "null",
+ *   "bigint", "uint8array", "unknown") or a BAML class/enum FQN;
+ * - generated class constructors (resolved via the typemap);
+ * - structural builders: `{ list: T }`, `{ map: [K, V] }`,
+ *   `{ optional: T }`, `{ union: [...] }`.
+ */
+function buildTypeRef(token) {
+    if (typeof token === 'string') {
+        return { name: token };
+    }
+    if (typeof token === 'function') {
+        const fqn = getTypeMap().jsTypeToBamlType(token);
+        if (fqn)
+            return { name: fqn };
+        throw new TypeError(`Unsupported $types token: constructor ${token.name} is not a generated BAML class`);
+    }
+    if (token !== null && typeof token === 'object') {
+        const t = token;
+        if ('list' in t)
+            return { name: 'list', args: [buildTypeRef(t.list)] };
+        if ('optional' in t)
+            return { name: 'optional', args: [buildTypeRef(t.optional)] };
+        if ('map' in t) {
+            const kv = t.map;
+            return { name: 'map', args: [buildTypeRef(kv[0]), buildTypeRef(kv[1])] };
+        }
+        if ('union' in t) {
+            return { name: 'union', args: t.union.map(buildTypeRef) };
+        }
+    }
+    throw new TypeError(`Unsupported $types token: ${String(token)}`);
 }
 // ─── Outbound (Rust → TS) ───
 // Hex / base sixteen on the wire. Shared by `bigint_value` (runtime
@@ -324,6 +403,15 @@ function decodeValueHolder(holder, typeMap) {
             return BamlVideo._fromHandle(handle);
         if (ht === BamlHandleType.ADT_MEDIA_PDF)
             return BamlPdf._fromHandle(handle);
+        if (ht === BamlHandleType.HOST_VALUE_OPAQUE) {
+            // Same-process rehydration (bridge generics): an opaque
+            // host-only value decodes back to the ORIGINAL JS reference.
+            // Dead/foreign keys degrade to the bare BamlHandle.
+            const original = tryRehydrateHostValueByKey(holder.handleValue.key, ht);
+            if (original !== undefined)
+                return original;
+            return handle;
+        }
         // ADT_MEDIA_GENERIC has no typed wrapper — stays a bare BamlHandle.
         // TODO: ADT_TAGGED_HEAP_HANDLE / RustData re-encode (handle-backed
         // stdlib types like baml.fs.File) needs cross-call handle-lifecycle

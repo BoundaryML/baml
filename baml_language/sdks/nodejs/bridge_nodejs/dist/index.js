@@ -17,7 +17,7 @@ export { _seedFunctionRefHandle, _seedGenericMediaHandle } from './native.js';
 export { BamlImage, BamlAudio, BamlVideo, BamlPdf } from './native.js';
 // Stream wrapper. Exported as `BamlStream`; codegen aliases it as `Stream`.
 export { BamlStream } from './stream.js';
-export { encodeCallArgs, decodeCallResult } from './proto.js';
+export { encodeCallArgs, decodeCallResult, BamlOpaque, opaque } from './proto.js';
 export { CtxManager } from './ctx_manager.js';
 // Codegen support: typemap + placeholder sentinel + free runtime initializer.
 export { BamlTypeMap, setTypeMap, getTypeMap } from './typemap.js';
@@ -93,12 +93,12 @@ export class Collector {
     /** Internal: get native collector for passing to Rust */
     _native() { return this._inner; }
 }
-export function callFunctionSync(rt, functionName, kwargs, ctx, collectors, abortController) {
+export function callFunctionSync(rt, functionName, kwargs, ctx, collectors, abortController, typeArgs) {
     // Encode in sync mode so a host callable in the kwargs fast-fails
     // with a clear error instead of registering a tsfn and then hanging —
     // the sync path blocks the Node main thread on a tokio `block_on`,
     // starving libuv so the dispatch could never run.
-    const argsProto = encodeCallArgs(kwargs, /* syncMode */ true);
+    const argsProto = encodeCallArgs(kwargs, /* syncMode */ true, typeArgs);
     const nativeCollectors = collectors?.map(c => c._native()) ?? null;
     // Only the napi call gets `wrapNativeError`'d — its `napi::Error`
     // messages need parsing into typed `Baml*Error` subclasses. The
@@ -114,8 +114,8 @@ export function callFunctionSync(rt, functionName, kwargs, ctx, collectors, abor
     }
     return new FunctionResult(decodeCallResult(resultBytes));
 }
-export async function callFunction(rt, functionName, kwargs, ctx, collectors, abortController) {
-    const argsProto = encodeCallArgs(kwargs);
+export async function callFunction(rt, functionName, kwargs, ctx, collectors, abortController, typeArgs) {
+    const argsProto = encodeCallArgs(kwargs, /* syncMode */ false, typeArgs);
     const nativeCollectors = collectors?.map(c => c._native()) ?? null;
     // Only the napi call gets `wrapNativeError`'d — its `napi::Error`
     // messages need parsing into typed `Baml*Error` subclasses. The

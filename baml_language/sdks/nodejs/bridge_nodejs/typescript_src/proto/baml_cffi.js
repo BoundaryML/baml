@@ -60,6 +60,7 @@ export const baml_core = $root.baml_core = (() => {
              * @property {number} ADT_TAGGED_HEAP_HANDLE=14 ADT_TAGGED_HEAP_HANDLE value
              * @property {number} HOST_VALUE_CALLABLE=15 HOST_VALUE_CALLABLE value
              * @property {number} HOST_VALUE_ERROR=16 HOST_VALUE_ERROR value
+             * @property {number} HOST_VALUE_OPAQUE=17 HOST_VALUE_OPAQUE value
              */
             v1.BamlHandleType = (function() {
                 const valuesById = {}, values = Object.create(valuesById);
@@ -78,6 +79,7 @@ export const baml_core = $root.baml_core = (() => {
                 values[valuesById[14] = "ADT_TAGGED_HEAP_HANDLE"] = 14;
                 values[valuesById[15] = "HOST_VALUE_CALLABLE"] = 15;
                 values[valuesById[16] = "HOST_VALUE_ERROR"] = 16;
+                values[valuesById[17] = "HOST_VALUE_OPAQUE"] = 17;
                 return values;
             })();
 
@@ -263,6 +265,7 @@ export const baml_core = $root.baml_core = (() => {
                         case 14:
                         case 15:
                         case 16:
+                        case 17:
                             break;
                         }
                     return null;
@@ -361,6 +364,10 @@ export const baml_core = $root.baml_core = (() => {
                     case "HOST_VALUE_ERROR":
                     case 16:
                         message.handleType = 16;
+                        break;
+                    case "HOST_VALUE_OPAQUE":
+                    case 17:
+                        message.handleType = 17;
                         break;
                     }
                     return message;
@@ -2410,6 +2417,278 @@ export const baml_core = $root.baml_core = (() => {
                 return InboundEnumValue;
             })();
 
+            v1.InboundTypeRef = (function() {
+
+                /**
+                 * Properties of an InboundTypeRef.
+                 * @memberof baml_core.cffi.v1
+                 * @interface IInboundTypeRef
+                 * @property {string|null} [name] InboundTypeRef name
+                 * @property {Array.<baml_core.cffi.v1.IInboundTypeRef>|null} [args] InboundTypeRef args
+                 */
+
+                /**
+                 * Constructs a new InboundTypeRef.
+                 * @memberof baml_core.cffi.v1
+                 * @classdesc Represents an InboundTypeRef.
+                 * @implements IInboundTypeRef
+                 * @constructor
+                 * @param {baml_core.cffi.v1.IInboundTypeRef=} [properties] Properties to set
+                 */
+                function InboundTypeRef(properties) {
+                    this.args = [];
+                    if (properties)
+                        for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                                this[keys[i]] = properties[keys[i]];
+                }
+
+                /**
+                 * InboundTypeRef name.
+                 * @member {string} name
+                 * @memberof baml_core.cffi.v1.InboundTypeRef
+                 * @instance
+                 */
+                InboundTypeRef.prototype.name = "";
+
+                /**
+                 * InboundTypeRef args.
+                 * @member {Array.<baml_core.cffi.v1.IInboundTypeRef>} args
+                 * @memberof baml_core.cffi.v1.InboundTypeRef
+                 * @instance
+                 */
+                InboundTypeRef.prototype.args = $util.emptyArray;
+
+                /**
+                 * Creates a new InboundTypeRef instance using the specified properties.
+                 * @function create
+                 * @memberof baml_core.cffi.v1.InboundTypeRef
+                 * @static
+                 * @param {baml_core.cffi.v1.IInboundTypeRef=} [properties] Properties to set
+                 * @returns {baml_core.cffi.v1.InboundTypeRef} InboundTypeRef instance
+                 */
+                InboundTypeRef.create = function create(properties) {
+                    return new InboundTypeRef(properties);
+                };
+
+                /**
+                 * Encodes the specified InboundTypeRef message. Does not implicitly {@link baml_core.cffi.v1.InboundTypeRef.verify|verify} messages.
+                 * @function encode
+                 * @memberof baml_core.cffi.v1.InboundTypeRef
+                 * @static
+                 * @param {baml_core.cffi.v1.IInboundTypeRef} message InboundTypeRef message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                InboundTypeRef.encode = function encode(message, writer, q) {
+                    if (!writer)
+                        writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
+                    if (message.name != null && Object.hasOwnProperty.call(message, "name"))
+                        writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
+                    if (message.args != null && message.args.length)
+                        for (let i = 0; i < message.args.length; ++i)
+                            $root.baml_core.cffi.v1.InboundTypeRef.encode(message.args[i], writer.uint32(/* id 2, wireType 2 =*/18).fork(), q + 1).ldelim();
+                    return writer;
+                };
+
+                /**
+                 * Encodes the specified InboundTypeRef message, length delimited. Does not implicitly {@link baml_core.cffi.v1.InboundTypeRef.verify|verify} messages.
+                 * @function encodeDelimited
+                 * @memberof baml_core.cffi.v1.InboundTypeRef
+                 * @static
+                 * @param {baml_core.cffi.v1.IInboundTypeRef} message InboundTypeRef message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                InboundTypeRef.encodeDelimited = function encodeDelimited(message, writer) {
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                };
+
+                /**
+                 * Decodes an InboundTypeRef message from the specified reader or buffer.
+                 * @function decode
+                 * @memberof baml_core.cffi.v1.InboundTypeRef
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @param {number} [length] Message length if known beforehand
+                 * @returns {baml_core.cffi.v1.InboundTypeRef} InboundTypeRef
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                InboundTypeRef.decode = function decode(reader, length, error, long) {
+                    if (!(reader instanceof $Reader))
+                        reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
+                    let end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.InboundTypeRef();
+                    while (reader.pos < end) {
+                        let tag = reader.uint32();
+                        if (tag === error)
+                            break;
+                        switch (tag >>> 3) {
+                        case 1: {
+                                message.name = reader.string();
+                                break;
+                            }
+                        case 2: {
+                                if (!(message.args && message.args.length))
+                                    message.args = [];
+                                message.args.push($root.baml_core.cffi.v1.InboundTypeRef.decode(reader, reader.uint32(), undefined, long + 1));
+                                break;
+                            }
+                        default:
+                            reader.skipType(tag & 7, long);
+                            break;
+                        }
+                    }
+                    return message;
+                };
+
+                /**
+                 * Decodes an InboundTypeRef message from the specified reader or buffer, length delimited.
+                 * @function decodeDelimited
+                 * @memberof baml_core.cffi.v1.InboundTypeRef
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @returns {baml_core.cffi.v1.InboundTypeRef} InboundTypeRef
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                InboundTypeRef.decodeDelimited = function decodeDelimited(reader) {
+                    if (!(reader instanceof $Reader))
+                        reader = new $Reader(reader);
+                    return this.decode(reader, reader.uint32());
+                };
+
+                /**
+                 * Verifies an InboundTypeRef message.
+                 * @function verify
+                 * @memberof baml_core.cffi.v1.InboundTypeRef
+                 * @static
+                 * @param {Object.<string,*>} message Plain object to verify
+                 * @returns {string|null} `null` if valid, otherwise the reason why it is not
+                 */
+                InboundTypeRef.verify = function verify(message, long) {
+                    if (typeof message !== "object" || message === null)
+                        return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
+                    if (message.name != null && message.hasOwnProperty("name"))
+                        if (!$util.isString(message.name))
+                            return "name: string expected";
+                    if (message.args != null && message.hasOwnProperty("args")) {
+                        if (!Array.isArray(message.args))
+                            return "args: array expected";
+                        for (let i = 0; i < message.args.length; ++i) {
+                            let error = $root.baml_core.cffi.v1.InboundTypeRef.verify(message.args[i], long + 1);
+                            if (error)
+                                return "args." + error;
+                        }
+                    }
+                    return null;
+                };
+
+                /**
+                 * Creates an InboundTypeRef message from a plain object. Also converts values to their respective internal types.
+                 * @function fromObject
+                 * @memberof baml_core.cffi.v1.InboundTypeRef
+                 * @static
+                 * @param {Object.<string,*>} object Plain object
+                 * @returns {baml_core.cffi.v1.InboundTypeRef} InboundTypeRef
+                 */
+                InboundTypeRef.fromObject = function fromObject(object, long) {
+                    if (object instanceof $root.baml_core.cffi.v1.InboundTypeRef)
+                        return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.InboundTypeRef: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
+                    let message = new $root.baml_core.cffi.v1.InboundTypeRef();
+                    if (object.name != null)
+                        message.name = String(object.name);
+                    if (object.args) {
+                        if (!Array.isArray(object.args))
+                            throw TypeError(".baml_core.cffi.v1.InboundTypeRef.args: array expected");
+                        message.args = [];
+                        for (let i = 0; i < object.args.length; ++i) {
+                            if (!$util.isObject(object.args[i]))
+                                throw TypeError(".baml_core.cffi.v1.InboundTypeRef.args: object expected");
+                            message.args[i] = $root.baml_core.cffi.v1.InboundTypeRef.fromObject(object.args[i], long + 1);
+                        }
+                    }
+                    return message;
+                };
+
+                /**
+                 * Creates a plain object from an InboundTypeRef message. Also converts values to other types if specified.
+                 * @function toObject
+                 * @memberof baml_core.cffi.v1.InboundTypeRef
+                 * @static
+                 * @param {baml_core.cffi.v1.InboundTypeRef} message InboundTypeRef
+                 * @param {$protobuf.IConversionOptions} [options] Conversion options
+                 * @returns {Object.<string,*>} Plain object
+                 */
+                InboundTypeRef.toObject = function toObject(message, options, q) {
+                    if (!options)
+                        options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
+                    let object = {};
+                    if (options.arrays || options.defaults)
+                        object.args = [];
+                    if (options.defaults)
+                        object.name = "";
+                    if (message.name != null && message.hasOwnProperty("name"))
+                        object.name = message.name;
+                    if (message.args && message.args.length) {
+                        object.args = [];
+                        for (let j = 0; j < message.args.length; ++j)
+                            object.args[j] = $root.baml_core.cffi.v1.InboundTypeRef.toObject(message.args[j], options, q + 1);
+                    }
+                    return object;
+                };
+
+                /**
+                 * Converts this InboundTypeRef to JSON.
+                 * @function toJSON
+                 * @memberof baml_core.cffi.v1.InboundTypeRef
+                 * @instance
+                 * @returns {Object.<string,*>} JSON object
+                 */
+                InboundTypeRef.prototype.toJSON = function toJSON() {
+                    return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+                };
+
+                /**
+                 * Gets the default type url for InboundTypeRef
+                 * @function getTypeUrl
+                 * @memberof baml_core.cffi.v1.InboundTypeRef
+                 * @static
+                 * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns {string} The default type url
+                 */
+                InboundTypeRef.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                    if (typeUrlPrefix === undefined) {
+                        typeUrlPrefix = "type.googleapis.com";
+                    }
+                    return typeUrlPrefix + "/baml_core.cffi.v1.InboundTypeRef";
+                };
+
+                return InboundTypeRef;
+            })();
+
             v1.CallFunctionArgs = (function() {
 
                 /**
@@ -2417,6 +2696,7 @@ export const baml_core = $root.baml_core = (() => {
                  * @memberof baml_core.cffi.v1
                  * @interface ICallFunctionArgs
                  * @property {Array.<baml_core.cffi.v1.IInboundMapEntry>|null} [kwargs] CallFunctionArgs kwargs
+                 * @property {Array.<baml_core.cffi.v1.IInboundTypeRef>|null} [typeArgs] CallFunctionArgs typeArgs
                  */
 
                 /**
@@ -2429,6 +2709,7 @@ export const baml_core = $root.baml_core = (() => {
                  */
                 function CallFunctionArgs(properties) {
                     this.kwargs = [];
+                    this.typeArgs = [];
                     if (properties)
                         for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
                             if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -2442,6 +2723,14 @@ export const baml_core = $root.baml_core = (() => {
                  * @instance
                  */
                 CallFunctionArgs.prototype.kwargs = $util.emptyArray;
+
+                /**
+                 * CallFunctionArgs typeArgs.
+                 * @member {Array.<baml_core.cffi.v1.IInboundTypeRef>} typeArgs
+                 * @memberof baml_core.cffi.v1.CallFunctionArgs
+                 * @instance
+                 */
+                CallFunctionArgs.prototype.typeArgs = $util.emptyArray;
 
                 /**
                  * Creates a new CallFunctionArgs instance using the specified properties.
@@ -2474,6 +2763,9 @@ export const baml_core = $root.baml_core = (() => {
                     if (message.kwargs != null && message.kwargs.length)
                         for (let i = 0; i < message.kwargs.length; ++i)
                             $root.baml_core.cffi.v1.InboundMapEntry.encode(message.kwargs[i], writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
+                    if (message.typeArgs != null && message.typeArgs.length)
+                        for (let i = 0; i < message.typeArgs.length; ++i)
+                            $root.baml_core.cffi.v1.InboundTypeRef.encode(message.typeArgs[i], writer.uint32(/* id 2, wireType 2 =*/18).fork(), q + 1).ldelim();
                     return writer;
                 };
 
@@ -2518,6 +2810,12 @@ export const baml_core = $root.baml_core = (() => {
                                 if (!(message.kwargs && message.kwargs.length))
                                     message.kwargs = [];
                                 message.kwargs.push($root.baml_core.cffi.v1.InboundMapEntry.decode(reader, reader.uint32(), undefined, long + 1));
+                                break;
+                            }
+                        case 2: {
+                                if (!(message.typeArgs && message.typeArgs.length))
+                                    message.typeArgs = [];
+                                message.typeArgs.push($root.baml_core.cffi.v1.InboundTypeRef.decode(reader, reader.uint32(), undefined, long + 1));
                                 break;
                             }
                         default:
@@ -2568,6 +2866,15 @@ export const baml_core = $root.baml_core = (() => {
                                 return "kwargs." + error;
                         }
                     }
+                    if (message.typeArgs != null && message.hasOwnProperty("typeArgs")) {
+                        if (!Array.isArray(message.typeArgs))
+                            return "typeArgs: array expected";
+                        for (let i = 0; i < message.typeArgs.length; ++i) {
+                            let error = $root.baml_core.cffi.v1.InboundTypeRef.verify(message.typeArgs[i], long + 1);
+                            if (error)
+                                return "typeArgs." + error;
+                        }
+                    }
                     return null;
                 };
 
@@ -2599,6 +2906,16 @@ export const baml_core = $root.baml_core = (() => {
                             message.kwargs[i] = $root.baml_core.cffi.v1.InboundMapEntry.fromObject(object.kwargs[i], long + 1);
                         }
                     }
+                    if (object.typeArgs) {
+                        if (!Array.isArray(object.typeArgs))
+                            throw TypeError(".baml_core.cffi.v1.CallFunctionArgs.typeArgs: array expected");
+                        message.typeArgs = [];
+                        for (let i = 0; i < object.typeArgs.length; ++i) {
+                            if (!$util.isObject(object.typeArgs[i]))
+                                throw TypeError(".baml_core.cffi.v1.CallFunctionArgs.typeArgs: object expected");
+                            message.typeArgs[i] = $root.baml_core.cffi.v1.InboundTypeRef.fromObject(object.typeArgs[i], long + 1);
+                        }
+                    }
                     return message;
                 };
 
@@ -2619,12 +2936,19 @@ export const baml_core = $root.baml_core = (() => {
                     if (q > $util.recursionLimit)
                         throw Error("max depth exceeded");
                     let object = {};
-                    if (options.arrays || options.defaults)
+                    if (options.arrays || options.defaults) {
                         object.kwargs = [];
+                        object.typeArgs = [];
+                    }
                     if (message.kwargs && message.kwargs.length) {
                         object.kwargs = [];
                         for (let j = 0; j < message.kwargs.length; ++j)
                             object.kwargs[j] = $root.baml_core.cffi.v1.InboundMapEntry.toObject(message.kwargs[j], options, q + 1);
+                    }
+                    if (message.typeArgs && message.typeArgs.length) {
+                        object.typeArgs = [];
+                        for (let j = 0; j < message.typeArgs.length; ++j)
+                            object.typeArgs[j] = $root.baml_core.cffi.v1.InboundTypeRef.toObject(message.typeArgs[j], options, q + 1);
                     }
                     return object;
                 };
@@ -4783,6 +5107,7 @@ export const baml_core = $root.baml_core = (() => {
                         case 14:
                         case 15:
                         case 16:
+                        case 17:
                             break;
                         }
                     if (message.name != null && message.hasOwnProperty("name")) {
@@ -4886,6 +5211,10 @@ export const baml_core = $root.baml_core = (() => {
                     case "HOST_VALUE_ERROR":
                     case 16:
                         message.handleType = 16;
+                        break;
+                    case "HOST_VALUE_OPAQUE":
+                    case 17:
+                        message.handleType = 17;
                         break;
                     }
                     if (object.name != null) {

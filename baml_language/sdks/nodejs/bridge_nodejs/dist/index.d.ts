@@ -11,7 +11,7 @@ export { Timing, Usage, LLMCall } from './native.js';
 export { _seedFunctionRefHandle, _seedGenericMediaHandle } from './native.js';
 export { BamlImage, BamlAudio, BamlVideo, BamlPdf } from './native.js';
 export { BamlStream } from './stream.js';
-export { encodeCallArgs, decodeCallResult } from './proto.js';
+export { encodeCallArgs, decodeCallResult, BamlOpaque, opaque } from './proto.js';
 export { CtxManager } from './ctx_manager.js';
 export { BamlTypeMap, setTypeMap, getTypeMap } from './typemap.js';
 export { defineFunction, defineInstanceFunction, UNSET } from './define_function.js';
@@ -57,6 +57,6 @@ export declare class Collector {
     /** Internal: get native collector for passing to Rust */
     _native(): NativeCollector;
 }
-export declare function callFunctionSync(rt: BamlRuntime, functionName: string, kwargs: Record<string, unknown>, ctx?: HostSpanManager, collectors?: Collector[], abortController?: AbortController): FunctionResult;
-export declare function callFunction(rt: BamlRuntime, functionName: string, kwargs: Record<string, unknown>, ctx?: HostSpanManager, collectors?: Collector[], abortController?: AbortController): Promise<FunctionResult>;
+export declare function callFunctionSync(rt: BamlRuntime, functionName: string, kwargs: Record<string, unknown>, ctx?: HostSpanManager, collectors?: Collector[], abortController?: AbortController, typeArgs?: unknown[]): FunctionResult;
+export declare function callFunction(rt: BamlRuntime, functionName: string, kwargs: Record<string, unknown>, ctx?: HostSpanManager, collectors?: Collector[], abortController?: AbortController, typeArgs?: unknown[]): Promise<FunctionResult>;
 //# sourceMappingURL=index.d.ts.map

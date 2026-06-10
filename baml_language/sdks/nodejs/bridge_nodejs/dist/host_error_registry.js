@@ -83,6 +83,18 @@ export function registerHostError(err) {
     return key;
 }
 /**
+ * Register an arbitrary JS value as an opaque host-only value (bridge
+ * generics) and return its native `HandleKey` for a
+ * `Handle(HOST_VALUE_OPAQUE, key)` wire slot. Shares the error map and the
+ * Rust-minted keyspace; the same release callback evicts entries when the
+ * engine drops its last `HostValueArc`.
+ */
+export function registerHostOpaque(value) {
+    const key = mintHostErrorKey();
+    errorMap.set(handleKeyToBigint(key), value);
+    return key;
+}
+/**
  * Look up a host-registered JS error by key. Returns `undefined` when:
  * - the key is the reserved sentinel `0n` (no real error was registered);
  * - the engine has already released the entry (last `HostValueArc` clone
@@ -122,6 +134,20 @@ export function tryRehydrateFromHandle(handle) {
     if (handle.handleType !== BamlHandleType.HOST_VALUE_ERROR)
         return undefined;
     return lookupHostError(handleKeyToBigint(handle.key));
+}
+/**
+ * Value-position rehydration (bridge generics): given a wire handle key
+ * (`{low, high}`-shaped) tagged `HOST_VALUE_OPAQUE` or
+ * `HOST_VALUE_CALLABLE`, return the original JS value if this process's
+ * registry still holds it. Opaque entries live in the shared map here;
+ * callable originals are not stored TS-side (the tsfn lives in Rust), so a
+ * callable key returns `undefined` and the decoder falls back to a bare
+ * `BamlHandle`.
+ */
+export function tryRehydrateHostValueByKey(key, handleType) {
+    if (handleType !== BamlHandleType.HOST_VALUE_OPAQUE)
+        return undefined;
+    return errorMap.get(handleKeyToBigint(key));
 }
 /**
  * Internal: remove the map entry for `key`. Wired at module init as the

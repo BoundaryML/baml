@@ -6,6 +6,27 @@ export declare class HostCallableSyncError extends Error {
     constructor(message: string);
 }
 /**
+ * Explicit opt-in marker for opaque host-only encoding (bridge generics).
+ *
+ * TypeScript objects are *structural* by default at the BAML boundary —
+ * a class instance encodes as an untagged map (data copy, no identity).
+ * Wrapping a value in `opaque(v)` instead registers it in the host-value
+ * table and sends a sealed `HOST_VALUE_OPAQUE` handle: BAML cannot
+ * introspect it, `==` is host-object identity, and the same-process
+ * decoder returns the ORIGINAL object reference on round-trip.
+ *
+ * (Python needs no marker: its encoder is nominal — any non-pydantic,
+ * non-builtin object is automatically host-only. JS has no reliable
+ * runtime distinction between "data object" and "host-only instance",
+ * so the choice is explicit here.)
+ */
+export declare class BamlOpaque {
+    readonly value: unknown;
+    constructor(value: unknown);
+}
+/** Convenience constructor for {@link BamlOpaque}. */
+export declare function opaque(value: unknown): BamlOpaque;
+/**
  * Encode kwargs into `CallFunctionArgs` bytes.
  *
  * `syncMode` (default false) selects the sync guard: a host callable in the
@@ -22,7 +43,7 @@ export declare class HostCallableSyncError extends Error {
  * later kwarg fails, the engine never sees (and so never releases) the keys we
  * already registered, so we release them here.
  */
-export declare function encodeCallArgs(kwargs: Record<string, unknown>, syncMode?: boolean): Buffer;
+export declare function encodeCallArgs(kwargs: Record<string, unknown>, syncMode?: boolean, typeArgs?: unknown[]): Buffer;
 /**
  * Decode a bare `BamlOutboundValue` to a JS value. Used for the host-callable
  * args path, where the engine sends a list-shaped `BamlOutboundValue` rather

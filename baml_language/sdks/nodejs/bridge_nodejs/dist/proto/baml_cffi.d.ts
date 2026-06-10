@@ -32,7 +32,8 @@ export namespace baml_core {
                 ADT_TYPE = 13,
                 ADT_TAGGED_HEAP_HANDLE = 14,
                 HOST_VALUE_CALLABLE = 15,
-                HOST_VALUE_ERROR = 16
+                HOST_VALUE_ERROR = 16,
+                HOST_VALUE_OPAQUE = 17
             }
 
             /** Properties of a BamlHandle. */
@@ -822,11 +823,117 @@ export namespace baml_core {
                 public static getTypeUrl(typeUrlPrefix?: string): string;
             }
 
+            /** Properties of an InboundTypeRef. */
+            interface IInboundTypeRef {
+
+                /** InboundTypeRef name */
+                name?: (string|null);
+
+                /** InboundTypeRef args */
+                args?: (baml_core.cffi.v1.IInboundTypeRef[]|null);
+            }
+
+            /** Represents an InboundTypeRef. */
+            class InboundTypeRef implements IInboundTypeRef {
+
+                /**
+                 * Constructs a new InboundTypeRef.
+                 * @param [properties] Properties to set
+                 */
+                constructor(properties?: baml_core.cffi.v1.IInboundTypeRef);
+
+                /** InboundTypeRef name. */
+                public name: string;
+
+                /** InboundTypeRef args. */
+                public args: baml_core.cffi.v1.IInboundTypeRef[];
+
+                /**
+                 * Creates a new InboundTypeRef instance using the specified properties.
+                 * @param [properties] Properties to set
+                 * @returns InboundTypeRef instance
+                 */
+                public static create(properties?: baml_core.cffi.v1.IInboundTypeRef): baml_core.cffi.v1.InboundTypeRef;
+
+                /**
+                 * Encodes the specified InboundTypeRef message. Does not implicitly {@link baml_core.cffi.v1.InboundTypeRef.verify|verify} messages.
+                 * @param message InboundTypeRef message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encode(message: baml_core.cffi.v1.IInboundTypeRef, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Encodes the specified InboundTypeRef message, length delimited. Does not implicitly {@link baml_core.cffi.v1.InboundTypeRef.verify|verify} messages.
+                 * @param message InboundTypeRef message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encodeDelimited(message: baml_core.cffi.v1.IInboundTypeRef, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Decodes an InboundTypeRef message from the specified reader or buffer.
+                 * @param reader Reader or buffer to decode from
+                 * @param [length] Message length if known beforehand
+                 * @returns InboundTypeRef
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml_core.cffi.v1.InboundTypeRef;
+
+                /**
+                 * Decodes an InboundTypeRef message from the specified reader or buffer, length delimited.
+                 * @param reader Reader or buffer to decode from
+                 * @returns InboundTypeRef
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml_core.cffi.v1.InboundTypeRef;
+
+                /**
+                 * Verifies an InboundTypeRef message.
+                 * @param message Plain object to verify
+                 * @returns `null` if valid, otherwise the reason why it is not
+                 */
+                public static verify(message: { [k: string]: any }): (string|null);
+
+                /**
+                 * Creates an InboundTypeRef message from a plain object. Also converts values to their respective internal types.
+                 * @param object Plain object
+                 * @returns InboundTypeRef
+                 */
+                public static fromObject(object: { [k: string]: any }): baml_core.cffi.v1.InboundTypeRef;
+
+                /**
+                 * Creates a plain object from an InboundTypeRef message. Also converts values to other types if specified.
+                 * @param message InboundTypeRef
+                 * @param [options] Conversion options
+                 * @returns Plain object
+                 */
+                public static toObject(message: baml_core.cffi.v1.InboundTypeRef, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+                /**
+                 * Converts this InboundTypeRef to JSON.
+                 * @returns JSON object
+                 */
+                public toJSON(): { [k: string]: any };
+
+                /**
+                 * Gets the default type url for InboundTypeRef
+                 * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns The default type url
+                 */
+                public static getTypeUrl(typeUrlPrefix?: string): string;
+            }
+
             /** Properties of a CallFunctionArgs. */
             interface ICallFunctionArgs {
 
                 /** CallFunctionArgs kwargs */
                 kwargs?: (baml_core.cffi.v1.IInboundMapEntry[]|null);
+
+                /** CallFunctionArgs typeArgs */
+                typeArgs?: (baml_core.cffi.v1.IInboundTypeRef[]|null);
             }
 
             /** Represents a CallFunctionArgs. */
@@ -840,6 +947,9 @@ export namespace baml_core {
 
                 /** CallFunctionArgs kwargs. */
                 public kwargs: baml_core.cffi.v1.IInboundMapEntry[];
+
+                /** CallFunctionArgs typeArgs. */
+                public typeArgs: baml_core.cffi.v1.IInboundTypeRef[];
 
                 /**
                  * Creates a new CallFunctionArgs instance using the specified properties.
