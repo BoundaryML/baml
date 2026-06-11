@@ -11062,3 +11062,35 @@ fn field_chain_abstract_interface_method_arity_checked() {
         "type argument",
     );
 }
+
+/// Two `implements` blocks of the same interface on one class that differ
+/// ONLY in their associated-type bindings are rejected, exactly like fully
+/// identical duplicates. The MIR dispatch-guard wildcard for unpinnable
+/// typevar-union bindings (`type Error = E1 | E2` matched against a
+/// normalized request) leans on this invariant: same-class arms can only
+/// coexist when their positional interface args differ, so leaving assoc
+/// bindings unpinned never has to discriminate between two arms.
+#[test]
+fn duplicate_implements_differing_only_in_assoc_bindings_is_compile_error() {
+    assert_compile_error_code(
+        r#"
+        interface Sink {
+            type Error
+            function push(self, v: int) -> string
+        }
+
+        class Buf<E1, E2> {
+            tag: string
+            implements Sink {
+                type Error = E1
+                function push(self, v: int) -> string { "a" }
+            }
+            implements Sink {
+                type Error = E2
+                function push(self, v: int) -> string { "b" }
+            }
+        }
+        "#,
+        "E0114",
+    );
+}

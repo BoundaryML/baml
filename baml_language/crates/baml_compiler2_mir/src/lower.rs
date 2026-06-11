@@ -519,9 +519,30 @@ fn infer_interface_class_bindings(
                 }
             }
             // Wildcard fallback (assoc bindings only): leave class-param
-            // members unpinned (the guard keeps `None` for them and the frame
-            // seeds from the matched runtime instance); every concrete formal
-            // member must still be present in the request.
+            // members unpinned — the guard keeps `None` for them and the
+            // callee frame seeds from the matched runtime instance's
+            // `class_type_args` (its TRUE args, not the guard's) — while
+            // every concrete formal member must still be present in the
+            // request.
+            //
+            // Unpinned assoc bindings are safe because dispatch never relies
+            // on them for correctness:
+            // 1. every arm first checks the receiver's concrete class
+            //    identity (`InterfaceDispatchGuard::Class { impl_tn, .. }`),
+            //    so an unpinned binding can never capture another class's
+            //    instance;
+            // 2. two arms for the SAME class can only coexist when their
+            //    positional interface args differ — blocks differing only in
+            //    assoc bindings are rejected at HIR (E0114; pinned by
+            //    `duplicate_implements_differing_only_in_assoc_bindings_is_compile_error`)
+            //    — and positional args keep strict pairwise pinning above
+            //    precisely so they stay discriminating;
+            // 3. a receiver whose runtime bindings don't satisfy the request
+            //    cannot reach the switch in a well-typed program (the
+            //    receiver's static type IS the requested view); guards
+            //    discriminate among candidates, they are not a soundness
+            //    barrier — a request that omits type args entirely already
+            //    produces `InterfaceClassGuard::Any`.
             assoc_union_wildcard
                 && fparts.iter().any(&is_class_param)
                 && fparts.iter().all(|f| {
@@ -612,7 +633,10 @@ fn interface_class_guard_for_args(
             .find(|(impl_name, _)| impl_name == requested_name)?;
         // A substituted binding still containing class params is a deliberate
         // wildcard (unpinnable typevar union): the runtime class guard plus
-        // instance-seeded frame args carry the discrimination instead.
+        // instance-seeded frame args carry the discrimination instead. This
+        // skip is only reachable after `infer_interface_class_bindings` has
+        // structurally vetted the same (formal, requested) pairs above — it
+        // never admits a pair that binding inference rejected.
         if baml_compiler2_tir::generics::contains_typevar(impl_ty) {
             continue;
         }
