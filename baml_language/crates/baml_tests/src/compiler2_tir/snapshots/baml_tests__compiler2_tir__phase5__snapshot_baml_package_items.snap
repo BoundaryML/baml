@@ -21,6 +21,48 @@ namespace baml:
   function _rust_sort<A>
   function deep_copy<T>
   function deep_equals<T>
+namespace baml.csv:
+  class CsvError { methods: [to_json, from_json] }
+  enum CsvErrorKind
+  class CsvHeaders { methods: [to_json, from_json] }
+  class CsvNeedData { methods: [to_json, from_json] }
+  class CsvPosition { methods: [to_json, from_json] }
+  class CsvReader { methods: [headers, rows, skipped, skipped_count, position, close, _poll, _poll_headers, _feed, _feed_eof, _mark_closed, _mark_exhausted, _read_chunk, to_json, from_json, iter, next] }
+  class CsvRecord { methods: [get, get_at, fields, length, position, decode, to_map, to_json, from_json] }
+  class CsvRows<T> { methods: [to_json, from_json, iter, next] }
+  class CsvSkip { methods: [to_json, from_json] }
+  type CsvValue
+  class CsvWriter { methods: [write_record, write_row, write_rows, write_header, records_written, text, flush, close, _encode_record, _encode_header, _bytes_written, _mark_closed, _emit, to_json, from_json] }
+  class ReaderOptions { methods: [to_json, from_json] }
+  class WriterOptions { methods: [to_json, from_json] }
+  function _buffer
+  function _cell_by_index<T>
+  function _cell_by_name<T>
+  function _decode_record<T>
+  function _encode_row<T>
+  function _encode_rows<T>
+  function _error
+  function _reader
+  function _to_markdown<T>
+  function _to_markdown_records
+  function _try_decode<T>
+  function _validate_columns<T>
+  function _writer
+  function buffer
+  function create
+  function decode<T>
+  function decode_one<T>
+  function decode_optional<T>
+  function open
+  function parse
+  function read<T>
+  function reader
+  function stringify<T>
+  function stringify_records
+  function to_markdown<T>
+  function to_markdown_records
+  function write<T>
+  function writer
 namespace baml.env:
   function get
   function get_or_panic

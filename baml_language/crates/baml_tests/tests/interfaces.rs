@@ -10999,3 +10999,66 @@ fn union_fuzz_f17_projection_failure_names_full_generic_interface() {
         "Cargo<int>",
     );
 }
+
+// ── Group R: dispatch-guard and call-site type-arg regressions ───────────────
+// Pinned while implementing BEP-060 (baml.csv), whose iterators were the
+// first stdlib classes to exercise these paths.
+
+/// Positional interface type args that are unions of two class params
+/// (`implements Pipe<E | E2>`) must keep their pairwise-pinned dispatch arm:
+/// the assoc-binding wildcard fallback (`type Error = E | E2` against a
+/// normalized request) must not erase positional pinning.
+#[tokio::test]
+async fn positional_typevar_union_interface_args_dispatch() {
+    let output = baml_test!(
+        r#"
+        class ErrA { m: string }
+        class ErrB { m: string }
+        interface Pipe<E> {
+            function run(self) -> string
+        }
+        class Multi<E, E2> {
+            tag: string
+            implements Pipe<E | E2> {
+                function run(self) -> string { "multi:" + self.tag }
+            }
+        }
+        function main() -> string {
+            let p: Pipe<ErrA | ErrB> = Multi<ErrA, ErrB> { tag: "x" };
+            p.run()
+        }
+    "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("multi:x".to_string().into())
+    );
+}
+
+/// Explicit call-site type args on an abstract interface method reached
+/// through a field chain still go through the declared-generic-params lookup:
+/// wrong arity is a compile error, not silently dropped type args.
+#[test]
+fn field_chain_abstract_interface_method_arity_checked() {
+    assert_compile_error_contains(
+        r#"
+        interface Conv {
+            function convert<T>(self, v: T) -> T
+        }
+        class Celsius {
+            tag: string
+            implements Conv {
+                function convert<T>(self, v: T) -> T { v }
+            }
+        }
+        class Holder {
+            c: Conv
+        }
+        function main() -> int {
+            let h = Holder { c: Celsius { tag: "x" } };
+            h.c.convert<int, string>(5)
+        }
+    "#,
+        "type argument",
+    );
+}
