@@ -148,6 +148,50 @@ test "iter_array_first_native_methods" {
   assert.is_true(iter_array_first_native_methods())
 }
 
+function iter_array_eager_filter_map_without_collect() -> int[] throws unknown {
+  [1, 2, 3, 4].filter((x: int) -> bool {
+    x % 2 == 0
+  }).map((x: int) -> int {
+    x + 10
+  })
+}
+
+test "iter_array_eager_filter_map_without_collect" {
+  assert.is_true(baml.deep_equals(iter_array_eager_filter_map_without_collect(), [12, 14]))
+}
+
+function iter_array_iter_lazy_over_source_details() -> int[] throws unknown {
+  let xs = [1, 2];
+  let seen = 0;
+  let it = xs.as<baml.iter.Iterable<Item = int, Error = never>>.iter().filter((x: int) -> bool {
+    seen += 1;
+    x % 2 == 1
+  });
+  xs.push(3);
+  let out = it.collect();
+  let details = [seen, out.length()];
+  for (let x in out) {
+    details.push(x);
+  }
+  details
+}
+
+test "iter_array_iter_lazy_over_source" {
+  assert.is_true(baml.deep_equals(iter_array_iter_lazy_over_source_details(), [3, 2, 1, 3]))
+}
+
+function iter_array_lazy_filter_map_collect() -> int[] throws unknown {
+  [1, 2, 3, 4].as<baml.iter.Iterable<Item = int, Error = never>>.iter().filter((x: int) -> bool {
+    x % 2 == 0
+  }).map((x: int) -> int {
+    x + 10
+  }).collect()
+}
+
+test "iter_array_lazy_filter_map_collect" {
+  assert.is_true(baml.deep_equals(iter_array_lazy_filter_map_collect(), [12, 14]))
+}
+
 function iter_array_first_adapter_defaults() -> bool throws unknown {
   let mapped = baml.iter.ArrayIterator.new([1, 2, 3, 4]).filter((x: int) -> bool {
     x % 2 == 0
@@ -185,7 +229,9 @@ test "iter_array_first_adapter_defaults" {
 }
 
 function iter_array_collect_count() -> bool {
-  baml.deep_equals([4, 5, 6].collect(), [4, 5, 6]) && [4, 5, 6].count() == 3
+  let xs = [4, 5, 6];
+  let iterable = xs.as<baml.iter.Iterable<Item = int, Error = never>>;
+  baml.deep_equals(iterable.iter().collect(), [4, 5, 6]) && iterable.iter().count() == 3
 }
 
 test "iter_array_collect_count" {
@@ -203,7 +249,7 @@ test "iter_array_filter_step_by" {
 }
 
 function iter_array_filter_map_fluent() -> int[] throws unknown {
-  [1, 2, 3, 4].filter_map((x: int) -> int? {
+  [1, 2, 3, 4].as<baml.iter.Iterable<Item = int, Error = never>>.iter().filter_map((x: int) -> int? {
     if (x % 2 == 0) {
       x * 10
     } else {
@@ -217,7 +263,7 @@ test "iter_array_filter_map_fluent" {
 }
 
 function iter_array_chain_fluent() -> int[] throws unknown {
-  [1, 2].chain([3, 4]).collect()
+  [1, 2].as<baml.iter.Iterable<Item = int, Error = never>>.iter().chain([3, 4]).collect()
 }
 
 test "iter_array_chain_fluent" {
@@ -225,7 +271,7 @@ test "iter_array_chain_fluent" {
 }
 
 function iter_array_peekable_fluent() -> int[] throws unknown {
-  let p = [8, 9].peekable();
+  let p = [8, 9].as<baml.iter.Iterable<Item = int, Error = never>>.iter().peekable();
   let out: int[] = [];
   match (p.peek()) {
     baml.iter.Done => {},
