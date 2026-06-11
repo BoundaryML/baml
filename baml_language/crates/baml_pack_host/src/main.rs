@@ -93,7 +93,6 @@ fn run_single(envelope: PackEnvelope) -> ExitCode {
     let engine = match BexEngine::new(
         envelope.program,
         Arc::new(sys_native::SysOps::native()),
-        None,
         argv.clone(),
     ) {
         Ok(e) => Arc::new(e),
@@ -167,7 +166,6 @@ fn run_subcommand(envelope: PackEnvelope) -> ExitCode {
     let mut engine = match BexEngine::new(
         envelope.program,
         Arc::new(sys_native::SysOps::native()),
-        None,
         bootstrap_argv,
     ) {
         Ok(e) => e,

@@ -80,13 +80,7 @@ async fn catch_stale_field_slot_invalid_field_access() {
     func.bytecode.compact = None;
 
     let engine = Arc::new(
-        BexEngine::new(
-            program,
-            Arc::new(sys_ops::SysOps::native()),
-            None,
-            Vec::new(),
-        )
-        .expect("engine"),
+        BexEngine::new(program, Arc::new(sys_ops::SysOps::native()), Vec::new()).expect("engine"),
     );
 
     let result = engine

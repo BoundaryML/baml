@@ -10,7 +10,7 @@
 //!   [`EngineId`]); [`BexCallId`] is allocated per thread (restarts at 1 for
 //!   each thread, the root call is always 1).
 //! - The process/engine half lives once per artifact in the file/batch
-//!   header ([`crate::EventFileHeaderV1`]), never on events.
+//!   header (`pb::EventFileHeaderV1`), never on events.
 //!
 //! # Encodings
 //!

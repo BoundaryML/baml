@@ -149,13 +149,8 @@ impl TestArgs {
             .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
 
         let engine = Arc::new(
-            BexEngine::new(
-                bytecode,
-                Arc::new(sys_native::SysOps::native()),
-                None,
-                Vec::new(),
-            )
-            .map_err(|e| anyhow!("Failed to create engine: {e:?}"))?,
+            BexEngine::new(bytecode, Arc::new(sys_native::SysOps::native()), Vec::new())
+                .map_err(|e| anyhow!("Failed to create engine: {e:?}"))?,
         );
         let rt = tokio::runtime::Runtime::new().context("Failed to create tokio runtime")?;
         let cancel = CancellationToken::new();

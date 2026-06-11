@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 4158
 ---
 === HIR2 ===
 
@@ -71,9 +72,7 @@ function baml.count(self: ?) -> int  [expr] {
 }
 function baml.delete(self: ?, key: K) -> V?  [builtin]
 function baml.every(self: ?, predicate: (T) -> bool throws E) -> bool  [builtin]
-function baml.filter(self: ?, predicate: (T) -> bool throws E) -> baml.iter.Iterator<Item = T, Error = never | E>  [expr] {
-  {  } baml.iter.ArrayIterator.new(self.slice(0, self.length())).filter(predicate)
-}
+function baml.filter(self: ?, predicate: (T) -> bool throws E) -> T[]  [builtin]
 function baml.filter_map(self: ?, fn: (T) -> U? throws E) -> baml.iter.Iterator<Item = U, Error = never | E>  [expr] {
   {  } baml.iter.ArrayIterator.new(self.slice(0, self.length())).filter_map(fn)
 }
@@ -109,6 +108,7 @@ function baml.peekable(self: ?) -> baml.iter.Peekable<T, never>  [expr] {
 function baml.pop(self: ?) -> T?  [builtin]
 function baml.push(self: ?, item: T) -> int  [builtin]
 function baml.reduce(self: ?, reducer: (A, T) -> A throws E, initial: A) -> A  [builtin]
+function baml.remove_at(self: ?, index: int) -> T?  [builtin]
 function baml.reverse(self: ?) -> T[]  [builtin]
 function baml.set(self: ?, key: K, value: V) -> V?  [builtin]
 function baml.shift(self: ?) -> T?  [builtin]
@@ -373,7 +373,6 @@ function baml.errors.to_json(self: ?) -> baml.json.json  [expr] {
 function baml.errors.to_string(self: ?) -> string  [builtin]
 
 --- <builtin>/baml/ns_events/events.baml ---
-function baml.events.send(event_name: string, data: map<string, unknown>) -> void  [builtin]
 
 --- <builtin>/baml/ns_fs/fs.baml ---
 class baml.fs.DirEntry {

@@ -4,7 +4,7 @@
 //! The join path is `program_id + function_id -> FunctionMetadata ->
 //! definition_key / source / revision / semantic lanes`. Events stay
 //! compact (ids only); everything semantic lives here, shipped once per
-//! artifact in the [`EventFileHeaderV1`]. Enrichment fields
+//! artifact in the `.bamlprof` header. Enrichment fields
 //! (`source_snapshot_id`, `revision_id`, `semantic_lanes`, lambda
 //! identity) are modeled but `None` until authoritative compiler/cloud
 //! sources populate them — consumers must tolerate that.
@@ -109,7 +109,7 @@ pub struct FunctionMetadata {
     pub semantic_lanes: Option<SemanticLanes>,
 }
 
-/// The function table shipped in every [`EventFileHeaderV1`]. Contains one
+/// The function table shipped in every `.bamlprof` header. Contains one
 /// row per compile-time function plus reserved synthetic rows (the
 /// spawn-closure root and the unknown-function sentinel) with ids just past
 /// the pool.

@@ -410,6 +410,41 @@ impl Continuation for MapContinuation {
     gc_impl_array!(f_ptr: f_ptr, values: [array, results]);
 }
 
+// ── filter ────────────────────────────────────────────────────────────────────
+
+/// Continuation for `Array.filter`. Accumulates the original elements whose
+/// predicate result is true, preserving order.
+struct FilterContinuation {
+    f_ptr: HeapPtr,
+    array: Vec<Value>,
+    idx: usize,
+    results: Vec<Value>,
+}
+
+impl Continuation for FilterContinuation {
+    fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
+        let keep = match expect_bool(vm, value) {
+            Ok(b) => b,
+            Err(e) => return e,
+        };
+        if keep {
+            self.results.push(self.array[self.idx]);
+        }
+        self.idx += 1;
+        if self.idx >= self.array.len() {
+            return NativeCallResult::Done(Value::object(vm.alloc_array(self.results)));
+        }
+        let next_arg = self.array[self.idx];
+        NativeCallResult::YieldToCall {
+            callee: self.f_ptr,
+            args: vec![next_arg],
+            type_args: vec![],
+            continuation: self,
+        }
+    }
+    gc_impl_array!(f_ptr: f_ptr, values: [array, results]);
+}
+
 // ── some / every ──────────────────────────────────────────────────────────────
 //
 // Both walk the array left-to-right, short-circuiting. `some` stops at the
@@ -755,6 +790,17 @@ impl BamlClassArray for PackageBamlImpl {
         array.pop()
     }
 
+    fn remove_at(array: &mut Vec<Value>, index: i64) -> Option<Value> {
+        let Ok(index) = usize::try_from(index) else {
+            return None;
+        };
+        if index >= array.len() {
+            None
+        } else {
+            Some(array.remove(index))
+        }
+    }
+
     fn reverse(array: &[Value]) -> Vec<Value> {
         let mut result = array.to_vec();
         result.reverse();
@@ -915,6 +961,30 @@ impl BamlClassArray for PackageBamlImpl {
             args: vec![first_arg],
             type_args: vec![],
             continuation: Box::new(MapContinuation {
+                f_ptr,
+                array,
+                idx: 0,
+                results: Vec::with_capacity(capacity),
+            }),
+        }
+    }
+
+    fn filter(vm: &mut BexVm, array: &[Value], predicate: &Value) -> NativeCallResult {
+        let f_ptr = match extract_callable(vm, *predicate) {
+            Ok(p) => p,
+            Err(e) => return e,
+        };
+        let array = array.to_vec();
+        if array.is_empty() {
+            return NativeCallResult::Done(Value::object(vm.alloc_array(vec![])));
+        }
+        let first_arg = array[0];
+        let capacity = array.len();
+        NativeCallResult::YieldToCall {
+            callee: f_ptr,
+            args: vec![first_arg],
+            type_args: vec![],
+            continuation: Box::new(FilterContinuation {
                 f_ptr,
                 array,
                 idx: 0,

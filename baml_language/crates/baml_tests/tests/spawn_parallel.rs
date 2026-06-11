@@ -35,13 +35,8 @@ async fn spawn_three_sleeps_runs_in_parallel() {
     // default `sys_ops` impl returns `Unsupported`, which would make the
     // "sleeps" no-ops and the test a false positive.
     let engine = Arc::new(
-        BexEngine::new(
-            program,
-            Arc::new(sys_native::SysOps::native()),
-            None,
-            Vec::new(),
-        )
-        .expect("engine"),
+        BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("engine"),
     );
 
     // Each sleep is 200ms. Sequential would be ~600ms; parallel ~200ms.

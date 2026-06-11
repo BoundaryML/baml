@@ -189,7 +189,6 @@ fn write_statement(f: &mut impl Write, stmt: &Statement) -> fmt::Result {
                 IntrinsicOp::Log(LogLevel::Debug) => "log_debug",
                 IntrinsicOp::Log(LogLevel::Warn) => "log_warn",
                 IntrinsicOp::Log(LogLevel::Error) => "log_error",
-                IntrinsicOp::SendEvent => "send_event",
             };
             write!(f, "intrinsic {op_str}(")?;
             for (i, arg) in args.iter().enumerate() {

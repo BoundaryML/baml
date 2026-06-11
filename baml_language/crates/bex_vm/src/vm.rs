@@ -124,7 +124,7 @@ use bex_heap::{BexHeap, Tlab};
 use bex_vm_types::{
     BinOp, CmpOp, FunctionKind, FutureRead, GlobalIndex, HeapPtr, Object, ObjectIndex, ObjectPool,
     ObjectType, PanicClass, PermitProof, StackIndex, UnaryOp, Value, Variant, VmGlobals,
-    bytecode::{self, BlockNotification, Instruction},
+    bytecode::{self, Instruction},
     types::{
         BoundMethod, Closure, ConstValue, Function, FunctionOrigin, FunctionType, Instance, Type,
         UnscheduledFuture,
@@ -301,8 +301,6 @@ mod tests {
             watch: Watch::new(),
             watched_vars: HashMap::new(),
             interrupt_frame: None,
-            traced_frames: Vec::new(),
-            current_span_context: None,
             prof_ring: None,
             prof_thread_id: 0,
             call_id_counter: 0,
@@ -332,8 +330,6 @@ mod tests {
             local_names: Vec::new(),
             debug_locals: Vec::new(),
             span: baml_type::Span::fake(),
-            block_notifications: Vec::new(),
-            viz_nodes: Vec::new(),
             return_type: int_ty(),
             stream_return_type: Ty::Null {
                 attr: TyAttr::default(),
@@ -347,7 +343,6 @@ mod tests {
             throws_type: None,
             origin: FunctionOrigin::Internal,
             body_meta: None,
-            trace: false,
             function_id: 0,
         }))
     }
@@ -702,15 +697,6 @@ pub struct BexVm {
 
     pub interrupt_frame: Option<usize>,
 
-    /// Frame depths for traced function calls. Always sorted ascending (LIFO).
-    /// Checked on `Return` to yield `FunctionExit` notifications.
-    traced_frames: Vec<usize>,
-
-    /// Current span context, set by the engine before each VM execution step.
-    /// Available to `//baml:mut_vm` native functions that need to emit events
-    /// with the correct span context.
-    pub current_span_context: Option<bex_events::SpanContext>,
-
     /// D5a snapshot: the profiling ring this engine claimed on the current
     /// OS thread, refreshed by the engine at the top of every exec resume
     /// (`run_thread_event_loop`) and **never valid across an `.await`**.
@@ -752,7 +738,6 @@ pub struct BexVm {
     /// caller's override underneath. Call ids are minted monotonically per
     /// thread, so entries are strictly increasing by call id.
     pub(crate) id_overrides: Vec<(u64, String)>,
-
     /// Process argv passed to the engine at startup. Exposed to BAML via
     /// `baml.sys.argv()`. Shared (cheap to clone) across VMs.
     pub argv: Arc<[String]>,
@@ -860,9 +845,6 @@ pub enum VmExecState {
     /// Notify about watched variables.
     Notify(WatchNotification),
 
-    /// Notify about span lifecycle (from traced `Call` / `Return`).
-    SpanNotify(SpanNotification),
-
     /// The VM is yielding a custom event to be emitted.
     ///
     /// The engine handles this by converting both values to `BexExternalValue`
@@ -885,48 +867,6 @@ pub enum VmExecState {
 #[derive(Debug, PartialEq)]
 pub enum WatchNotification {
     Variables(Vec<watch::NodeId>),
-    Block(BlockNotification),
-    Viz {
-        function_name: String,
-        event: bex_vm_types::bytecode::VizExecEvent,
-    },
-}
-
-/// Span notifications yielded by the VM for callstack tracking.
-///
-/// The VM provides args and result values from the eval stack so the engine
-/// can emit `FunctionStart`/`FunctionEnd` events without additional lookups.
-/// The VM itself has no span state (no `SpanId`, no timing) — all observability
-/// logic lives in the engine.
-#[derive(Clone, Debug, PartialEq)]
-pub enum SpanNotification {
-    /// A traced function call was entered.
-    /// `args` are snapshotted from the eval stack before the frame is pushed.
-    FunctionEnter {
-        function_name: String,
-        /// Heap pointer to the resolved `Object::Function` (never the
-        /// Closure/BoundMethod wrapper). The engine maps it to a `FunctionId`
-        /// without a name lookup.
-        function: HeapPtr,
-        frame_depth: usize,
-        args: Vec<Value>,
-    },
-    /// A traced function call is returning.
-    /// `result` is the return value popped from the eval stack.
-    FunctionExit {
-        function_name: String,
-        /// Frame index of the returning frame — matches the `frame_depth` the
-        /// paired `FunctionEnter` carried, so the engine can resynchronize its
-        /// span stack positionally.
-        frame_depth: usize,
-        result: Value,
-    },
-    /// An exception unwound past one or more traced frames before being
-    /// caught. All frames with index >= `frames_remaining` are gone; the
-    /// engine must close their spans (no `FunctionExit` will ever arrive for
-    /// them). Yielded after the unwinder has positioned the VM at the catch
-    /// handler, before the handler runs.
-    Unwound { frames_remaining: usize },
 }
 
 /// Intermediate representation of a compiled BAML program.
@@ -1205,8 +1145,6 @@ impl BexVm {
             watch: Watch::new(),
             watched_vars: HashMap::new(),
             interrupt_frame: None,
-            traced_frames: Vec::new(),
-            current_span_context: None,
             prof_ring: None,
             prof_thread_id: 0,
             call_id_counter: 0,
@@ -1740,8 +1678,6 @@ impl BexVm {
             local_names: Vec::new(),
             debug_locals: Vec::new(),
             span: baml_type::Span::fake(),
-            block_notifications: Vec::new(),
-            viz_nodes: Vec::new(),
             return_type,
             stream_return_type: baml_type::Ty::Null {
                 attr: baml_type::TyAttr::default(),
@@ -1755,7 +1691,6 @@ impl BexVm {
             throws_type,
             origin: FunctionOrigin::Internal,
             body_meta: None,
-            trace: false,
             function_id: 0, // synthetic; not in the profiling function table
         };
         let entry_ptr = self.tlab.alloc(Object::Function(Box::new(entry_function)));
@@ -2274,21 +2209,18 @@ impl BexVm {
 
         // Execute the interrupt code and return the result.
         //
-        // The dispatch loop yields notification states that this synchronous
-        // mini-runner has no consumer for, so they are swallowed here instead
-        // of surfacing as `ExpectedCompletion` errors in the caller:
-        // - `SpanNotify`: trace
-        //   notifications for calls made *inside* the interrupt body.
-        //   Swallowing them is deliberate — the engine never observes these
-        //   enters or exits, so its traced-span stack stays balanced. (This
-        //   also covers `Unwound` from exceptions caught inside the
-        //   interrupt body: the popped frames were never announced to the
-        //   engine either.) Interrupt-internal calls DO mint call ids and,
-        //   with profiling on, write balanced CallFunction/EndFunction
-        //   records to the ring — only the engine-facing span stream is
-        //   suppressed. (§7 decision 6, settled: filter calls stay in the
-        //   .bamlprof stream — they are code that runs, attached under the
-        //   interrupted call; program-only views hide them renderer-side.)
+        // Interrupt-internal calls mint call ids and, with profiling on,
+        // write balanced CallFunction/EndFunction records to the ring (§7
+        // decision 6, settled: filter calls stay in the .bamlprof stream —
+        // they are code that runs, attached under the interrupted call;
+        // program-only views hide them renderer-side). An exception CAUGHT
+        // inside the interrupt body unwinds normally; one that escapes the
+        // boundary fails loudly at the unwind site (see
+        // try_unwind_exception's crossed-boundary contract).
+        //
+        // The dispatch loop can yield states this synchronous mini-runner
+        // has no consumer for; they are handled here instead of surfacing as
+        // `ExpectedCompletion` errors in the caller:
         // - `EarlyYield`: honoring it would suspend mid-interrupt with no way
         //   to resume from `process_notifications`, so parking is delayed
         //   until the interrupt completes. Note this delays the *engine-wide*
@@ -2310,8 +2242,7 @@ impl BexVm {
         // completion as the filter verdict.
         loop {
             match self.exec()? {
-                VmExecState::SpanNotify(_) | VmExecState::EarlyYield
-                    if self.interrupt_frame.is_some() => {}
+                VmExecState::EarlyYield if self.interrupt_frame.is_some() => {}
                 state => return Ok(state),
             }
         }
@@ -2749,20 +2680,19 @@ impl BexVm {
     /// Walk the call stack outward from the current frame looking for an
     /// exception handler.
     ///
-    /// On `Ok(n)` a handler was found and the VM is positioned at it; `n`
-    /// counts the *traced* frames popped on the way (each had a
-    /// `FunctionEnter` notification but will never produce a
-    /// `FunctionExit`), plus one if the unwind crossed the interrupt
-    /// boundary. When `n > 0` the caller must surface a
-    /// [`SpanNotification::Unwound`] so the engine closes unwound spans and
-    /// an escaping watch-filter exception stops `interrupt()`'s swallow
-    /// loop (see the unwind-notify yields at every in-loop call site).
+    /// On `Ok(crossed)` a handler was found and the VM is positioned at it;
+    /// `crossed` reports whether the unwind crossed the interrupt boundary —
+    /// an escaping watch-filter exception caught by the *interrupted
+    /// program's* own handler must still fail the filter loudly (the in-loop
+    /// call sites turn `crossed` into an error) instead of letting
+    /// `interrupt()`'s mini-runner keep executing the outer program and
+    /// consume its completion as the filter verdict.
     fn try_unwind_exception(
         &mut self,
         frame_idx: &mut usize,
         function: &mut &'static Function,
         exception_value: Value,
-    ) -> Result<usize, VmError> {
+    ) -> Result<bool, VmError> {
         // Capture the stack trace before unwinding destroys frame information.
         let trace: Vec<StackFrame> = self.capture_stack_trace();
 
@@ -2771,9 +2701,8 @@ impl BexVm {
         // here; per-frame truthful whether or not a handler catches it.
         let unwind_status = self.prof_unwind_status(exception_value);
 
-        // Notified (traced / runtime-call) frames popped without a
-        // FunctionExit notification.
-        let mut popped_notified_frames = 0usize;
+        // Whether this unwind popped past the live interrupt frame.
+        let mut crossed_interrupt_boundary = false;
 
         // The innermost (first) bytecode frame's faulting PC is the live
         // `cur_pc`; outer frames use the call-site PC they recorded at call time.
@@ -2798,26 +2727,16 @@ impl BexVm {
                     return Err(VmError::Thrown(exception_value));
                 }
                 self.frames.pop();
-                // Clean up tracing / interrupt bookkeeping
-                while self
-                    .traced_frames
-                    .last()
-                    .is_some_and(|d| *d >= self.frames.len())
-                {
-                    self.traced_frames.pop();
-                    popped_notified_frames += 1;
-                }
+                // Clean up interrupt bookkeeping
                 if let Some(interrupt_depth) = self.interrupt_frame
                     && interrupt_depth >= self.frames.len()
                 {
                     self.interrupt_frame = None;
                     // Crossing the interrupt boundary must surface to the
-                    // caller even when no traced frame was popped: the
-                    // forced `Unwound` yield is what stops `interrupt()`'s
-                    // swallow loop (gated on `interrupt_frame.is_some()`),
-                    // so the escape fails loudly instead of the program's
+                    // caller: the in-loop call sites turn it into a loud
+                    // error, so the escape fails instead of the program's
                     // own completion being consumed as the filter verdict.
-                    popped_notified_frames += 1;
+                    crossed_interrupt_boundary = true;
                 }
                 continue; // try next outer frame
             }
@@ -2886,7 +2805,7 @@ impl BexVm {
                 // Update caller's frame_idx / function references.
                 *frame_idx = depth;
                 *function = frame_function;
-                return Ok(popped_notified_frames);
+                return Ok(crossed_interrupt_boundary);
             }
 
             // No handler in this frame -- pop it and try the caller.
@@ -2920,24 +2839,14 @@ impl BexVm {
                 Frame::Native(_) => {} // native frames own no stack region
             }
 
-            // Clean up tracing / interrupt bookkeeping for popped frames.
-            while self
-                .traced_frames
-                .last()
-                .is_some_and(|d| *d >= self.frames.len())
-            {
-                self.traced_frames.pop();
-                popped_notified_frames += 1;
-            }
-
+            // Clean up interrupt bookkeeping for popped frames.
             if let Some(interrupt_depth) = self.interrupt_frame
                 && interrupt_depth >= self.frames.len()
             {
                 self.interrupt_frame = None;
                 // See the native-frame arm above: an interrupt-boundary
-                // crossing forces the `Unwound` yield so the escape stays
-                // loud.
-                popped_notified_frames += 1;
+                // crossing fails the filter loudly.
+                crossed_interrupt_boundary = true;
             }
         }
     }
@@ -3387,7 +3296,7 @@ impl BexVm {
         // `Object::Function` itself (unwrapped from any Closure/BoundMethod/
         // GenericFunction), carried on call notifications so the engine can map
         // it to a `FunctionId` without a name lookup.
-        let (callee, callee_fn_ptr) = match self.get_object(callee_ptr) {
+        let (callee, _callee_fn_ptr) = match self.get_object(callee_ptr) {
             Object::Function(f) => (f, callee_ptr),
             Object::Closure(c) => {
                 // SAFETY: closure.function is a compile-time or TLAB-allocated
@@ -3467,7 +3376,6 @@ impl BexVm {
             ));
         }
 
-        let is_traced = callee.trace;
         let callee_function_id = callee.function_id;
 
         match callee.kind {
@@ -3614,16 +3522,6 @@ impl BexVm {
             }
 
             FunctionKind::Bytecode => {
-                // For traced functions, snapshot args before pushing the frame.
-                // Non-traced calls clone nothing: their notification carries
-                // only the function pointer and frame depth.
-                let trace_data = if is_traced {
-                    let args: Vec<Value> = self.stack[locals_offset..].to_owned();
-                    Some((callee.name.clone(), args))
-                } else {
-                    None
-                };
-
                 // Push the new frame.
                 // Seed frame.type_args from:
                 //  1. BoundMethod callees: the receiver's class_type_args (De
@@ -3662,25 +3560,10 @@ impl BexVm {
                 // Update frame_idx to point to the new frame.
                 *frame_idx = self.frames.len() - 1;
 
-                // If traced, record the frame and yield a span notification.
-                if let Some((callee_name, args)) = trace_data {
-                    self.traced_frames.push(*frame_idx);
-
-                    return Ok(Some(VmExecState::SpanNotify(
-                        SpanNotification::FunctionEnter {
-                            function_name: callee_name,
-                            function: callee_fn_ptr,
-                            frame_depth: *frame_idx,
-                            args,
-                        },
-                    )));
-                }
-
                 // No per-call engine yield here: per-call lifecycle flows
                 // through the profiling ring (prof_enter_call above), which
                 // costs one memcpy + one Release store instead of breaking
                 // out of the exec loop on every call.
-
                 // SAFETY: See `load_function` doc comment.
                 *function = unsafe { self.load_function(*frame_idx)? };
             }
@@ -4133,7 +4016,7 @@ impl BexVm {
     pub fn try_handle_external_exception(
         &mut self,
         exception_value: Value,
-    ) -> Result<usize, VmError> {
+    ) -> Result<bool, VmError> {
         if self.frames.is_empty() {
             let trace = self.capture_stack_trace();
             return Err(VmError::ThrownUnhandled {
@@ -4165,10 +4048,7 @@ impl BexVm {
         self.try_unwind_exception(&mut frame_idx, &mut function, exception_value)
     }
 
-    /// Number of live frames on the VM call stack. After
-    /// [`Self::try_handle_external_exception`] reports popped notified frames,
-    /// the embedder truncates its span bookkeeping to entries whose frame
-    /// depth is below this count.
+    /// Number of live frames on the VM call stack.
     #[must_use]
     pub fn frame_count(&self) -> usize {
         self.frames.len()
@@ -4455,17 +4335,16 @@ impl BexVm {
                     }
                     NativeCallResult::Error(e) => match self.native_error_to_vm_error(e) {
                         VmError::Thrown(exception_value) => {
-                            let unwound = self.try_unwind_exception(
+                            let crossed = self.try_unwind_exception(
                                 &mut frame_idx,
                                 &mut function,
                                 exception_value,
                             )?;
-                            if unwound > 0 {
-                                // Close unwound spans engine-side before the
-                                // handler runs.
-                                return Ok(VmExecState::SpanNotify(SpanNotification::Unwound {
-                                    frames_remaining: self.frames.len(),
-                                }));
+                            if crossed {
+                                // The exception escaped the watch filter:
+                                // fail the interrupt loudly (see
+                                // try_unwind_exception).
+                                return Err(VmInternalError::ExpectedCompletion.into());
                             }
                             break;
                         }
@@ -4515,19 +4394,16 @@ impl BexVm {
                         let ecflo_result = match ecflo_outcome {
                             Ok(result) => result,
                             Err(VmError::Thrown(exception_value)) => {
-                                let unwound = self.try_unwind_exception(
+                                let crossed = self.try_unwind_exception(
                                     &mut frame_idx,
                                     &mut function,
                                     exception_value,
                                 )?;
-                                if unwound > 0 {
-                                    // Close unwound spans engine-side before
-                                    // the handler runs.
-                                    return Ok(VmExecState::SpanNotify(
-                                        SpanNotification::Unwound {
-                                            frames_remaining: self.frames.len(),
-                                        },
-                                    ));
+                                if crossed {
+                                    // The exception escaped the watch
+                                    // filter: fail the interrupt loudly
+                                    // (see try_unwind_exception).
+                                    return Err(VmInternalError::ExpectedCompletion.into());
                                 }
                                 break;
                             }
@@ -4594,17 +4470,16 @@ impl BexVm {
                     }
                     Err(VmError::Thrown(exception_value)) => {
                         // Throw saves pc inside its handler before unwinding.
-                        let unwound = self.try_unwind_exception(
+                        let crossed = self.try_unwind_exception(
                             &mut frame_idx,
                             &mut function,
                             exception_value,
                         )?;
-                        if unwound > 0 {
-                            // Close unwound spans engine-side before the
-                            // handler runs (see SpanNotification::Unwound).
-                            return Ok(VmExecState::SpanNotify(SpanNotification::Unwound {
-                                frames_remaining: self.frames.len(),
-                            }));
+                        if crossed {
+                            // The exception escaped the watch filter: fail
+                            // the interrupt loudly (see
+                            // try_unwind_exception).
+                            return Err(VmInternalError::ExpectedCompletion.into());
                         }
                         break; // re-extract code/function after unwind
                     }
@@ -5234,7 +5109,7 @@ impl BexVm {
                     return Ok(Some(VmExecState::Spawn(object_index)));
                 }
 
-                // ── Watch / Unwatch / Notify / NotifyBlock ────────────────────
+                // ── Watch / Unwatch / Notify ──────────────────────────────────
                 OpCode::Watch => {
                     let index = { read_u32_unchecked(code, pc) as usize };
                     let popped = self.stack.ensure_pop();
@@ -5323,49 +5198,6 @@ impl BexVm {
                     return Ok(Some(VmExecState::Notify(WatchNotification::Variables(
                         notifications,
                     ))));
-                }
-
-                OpCode::NotifyBlock => {
-                    let block_index = { read_u32_unchecked(code, pc) as usize };
-                    let notification = &function.block_notifications[block_index];
-                    let full_notification = bytecode::BlockNotification {
-                        function_name: function.name.clone(),
-                        block_name: notification.block_name.clone(),
-                        level: notification.level,
-                        block_type: notification.block_type,
-                        is_enter: notification.is_enter,
-                    };
-                    return Ok(Some(VmExecState::Notify(WatchNotification::Block(
-                        full_notification,
-                    ))));
-                }
-
-                // ── VizEnter / VizExit ────────────────────────────────────────
-                OpCode::VizEnter | OpCode::VizExit => {
-                    let index = { read_u32_unchecked(code, pc) as usize };
-                    let delta = if op == OpCode::VizEnter {
-                        bytecode::VizExecDelta::Enter
-                    } else {
-                        bytecode::VizExecDelta::Exit
-                    };
-                    #[allow(clippy::cast_possible_wrap)]
-                    let node = function.viz_nodes.get(index).ok_or({
-                        VmError::Thrown(self.panic_to_exception_value(VmPanic::IndexOutOfBounds {
-                            index: index as i64,
-                            length: function.viz_nodes.len(),
-                        }))
-                    })?;
-                    let event = bytecode::VizExecEvent {
-                        delta,
-                        node_id: node.node_id,
-                        node_type: node.node_type,
-                        label: node.label.clone(),
-                        header_level: node.header_level,
-                    };
-                    return Ok(Some(VmExecState::Notify(WatchNotification::Viz {
-                        function_name: function.name.clone(),
-                        event,
-                    })));
                 }
 
                 // ── Call ──────────────────────────────────────────────────────
@@ -5548,18 +5380,7 @@ impl BexVm {
                 // ── Return ────────────────────────────────────────────────────
                 OpCode::Return => {
                     let result = self.stack.ensure_pop();
-                    let returning_frame = *frame_idx;
-                    let span_exit = if self.traced_frames.last() == Some(frame_idx) {
-                        let func_name = self
-                            .get_object(self.frames[*frame_idx].function())
-                            .as_callable()
-                            .map(|f| f.name.clone())
-                            .ok();
-                        self.traced_frames.pop();
-                        func_name
-                    } else {
-                        None
-                    };
+
                     let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
                         unreachable!()
                     };
@@ -5584,15 +5405,7 @@ impl BexVm {
                     if self.frames.is_empty() {
                         return Ok(Some(VmExecState::Complete(self.stack.ensure_pop())));
                     }
-                    if let Some(name) = span_exit {
-                        return Ok(Some(VmExecState::SpanNotify(
-                            SpanNotification::FunctionExit {
-                                function_name: name,
-                                frame_depth: returning_frame,
-                                result,
-                            },
-                        )));
-                    }
+
                     if self.early_yield.should_early_yield() {
                         return Ok(Some(VmExecState::EarlyYield));
                     }
@@ -5723,15 +5536,11 @@ impl BexVm {
                     if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(*frame_idx) {
                         bf.instruction_ptr = *pc;
                     }
-                    let unwound = self.try_unwind_exception(frame_idx, function, value)?;
-                    if unwound > 0 {
-                        // Notified frames were popped without FunctionExit
-                        // yields; tell the engine before the handler runs. The
-                        // handler frame's instruction_ptr is already set, so
-                        // resuming re-enters at the catch body.
-                        return Ok(Some(VmExecState::SpanNotify(SpanNotification::Unwound {
-                            frames_remaining: self.frames.len(),
-                        })));
+                    let crossed = self.try_unwind_exception(frame_idx, function, value)?;
+                    if crossed {
+                        // The exception escaped the watch filter: fail the
+                        // interrupt loudly (see try_unwind_exception).
+                        return Err(VmInternalError::ExpectedCompletion.into());
                     }
                     if self.early_yield.should_early_yield() {
                         return Ok(Some(VmExecState::EarlyYield));
@@ -5930,13 +5739,11 @@ impl BexVm {
                         if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(*frame_idx) {
                             bf.instruction_ptr = *pc;
                         }
-                        let unwound = self.try_unwind_exception(frame_idx, function, value)?;
-                        if unwound > 0 {
-                            // See OpCode::Throw: close unwound spans before the
-                            // handler runs.
-                            return Ok(Some(VmExecState::SpanNotify(SpanNotification::Unwound {
-                                frames_remaining: self.frames.len(),
-                            })));
+                        let crossed = self.try_unwind_exception(frame_idx, function, value)?;
+                        if crossed {
+                            // See OpCode::Throw: an escaping watch-filter
+                            // exception fails the interrupt loudly.
+                            return Err(VmInternalError::ExpectedCompletion.into());
                         }
                     }
                     if self.early_yield.should_early_yield() {

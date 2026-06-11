@@ -320,8 +320,6 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                 local_names: function.local_names,
                 debug_locals: function.debug_locals,
                 span: function.span,
-                block_notifications: function.block_notifications,
-                viz_nodes: function.viz_nodes,
                 return_type: function.return_type,
                 stream_return_type: function.stream_return_type,
                 param_names: function.param_names,
@@ -333,7 +331,6 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                 throws_type: function.throws_type,
                 origin: function.origin,
                 body_meta: function.body_meta,
-                trace: function.trace,
                 function_id: 0, // synthetic; not in the profiling function table
             }))
         }

@@ -4,7 +4,8 @@
 //! (`bex-event-stream-design-v2.md`): a segmented SPSC ring per
 //! `(engine, os-thread)` pair, a raw fixed-layout record format, and the
 //! clock/knob scaffolding they share. It exists to replace the global
-//! `Mutex<CollectorStore>` path in [`crate::event_store`] for per-call
+//! `Mutex<CollectorStore>` path (since deleted with the legacy event
+//! system) for per-call
 //! profiling: producers (VM threads) write records with one `memcpy` plus one
 //! `Release` store per event and never block; a background consumer drains
 //! rings and transcodes to per-engine `.bamlprof` files.

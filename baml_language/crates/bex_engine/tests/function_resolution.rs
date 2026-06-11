@@ -21,7 +21,6 @@ fn engine(files: &[(&str, &str)]) -> Arc<BexEngine> {
         BexEngine::new(
             compile_multi_file(files),
             Arc::new(sys_native::SysOps::native()),
-            None,
             Vec::new(),
         )
         .expect("BexEngine::new should succeed"),

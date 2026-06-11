@@ -1,7 +1,5 @@
 //! BamlRuntime PyO3 class - wraps `Arc<dyn Bex>`.
 
-use std::sync::Arc;
-
 use bridge_ctypes::{HANDLE_TABLE, kwargs_to_bex_values};
 use prost::Message;
 use pyo3::{
@@ -102,8 +100,8 @@ impl BamlRuntime {
     /// # Arguments
     /// * `function_name` - Name of the BAML function to call
     /// * `args_proto` - Protobuf-encoded HostFunctionArguments bytes
-    /// * `ctx` - Host span manager; if active spans exist, nests under host trace
-    /// * `collectors` - Optional list of Collector objects to track this call
+    /// * `ctx` - Accepted for ABI compatibility; currently ignored
+    /// * `collectors` - Accepted for ABI compatibility; currently ignored
     #[pyo3(signature = (function_name, args_proto, ctx=None, collectors=None))]
     fn call_function<'py>(
         &self,
@@ -123,23 +121,9 @@ impl BamlRuntime {
             Ok((runtime, decoded))
         })();
 
-        let host_ctx = ctx.and_then(|c| c.host_span_context());
-
-        let collector_arcs: Vec<Arc<bex_events::Collector>> = collectors
-            .as_ref()
-            .map(|colls| colls.iter().map(|c| c.inner_arc()).collect())
-            .unwrap_or_default();
-
-        let mut call_ctx = match &prepared {
-            Ok((_, decoded)) => bridge_cffi::function_call_context_builder(decoded.call_id)
-                .with_collectors(collector_arcs),
-            Err(_) => bex_project::FunctionCallContextBuilder::new(bex_project::CallId(0))
-                .with_collectors(collector_arcs),
-        };
-
-        if let Some(host_ctx) = host_ctx {
-            call_ctx = call_ctx.with_host_ctx(host_ctx);
-        }
+        // Tracing is a no-op: `ctx`/`collectors` are accepted for ABI
+        // stability but no longer wired into the call context.
+        let _ = (&ctx, &collectors);
 
         // The whole Result -> BamlOutboundResult translation (incl. the
         // catch_unwind -> SdkPanic boundary) lives in bridge_cffi; we just
@@ -147,13 +131,10 @@ impl BamlRuntime {
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let bytes = match prepared {
                 Ok((runtime, decoded)) => {
-                    bridge_cffi::call_and_encode(
-                        runtime,
-                        function_name,
-                        decoded.kwargs,
-                        call_ctx.build(),
-                    )
-                    .await
+                    let call_ctx =
+                        bridge_cffi::function_call_context_builder(decoded.call_id).build();
+                    bridge_cffi::call_and_encode(runtime, function_name, decoded.kwargs, call_ctx)
+                        .await
                 }
                 Err(e) => bridge_cffi::error_to_outbound(e),
             };
@@ -167,8 +148,8 @@ impl BamlRuntime {
     /// # Arguments
     /// * `function_name` - Name of the BAML function to call
     /// * `args_proto` - Protobuf-encoded HostFunctionArguments bytes
-    /// * `ctx` - Host span manager; if active spans exist, nests under host trace
-    /// * `collectors` - Optional list of Collector objects to track this call
+    /// * `ctx` - Accepted for ABI compatibility; currently ignored
+    /// * `collectors` - Accepted for ABI compatibility; currently ignored
     #[pyo3(signature = (function_name, args_proto, ctx=None, collectors=None))]
     fn call_function_sync(
         &self,
@@ -194,19 +175,10 @@ impl BamlRuntime {
             Err(e) => return Ok(bridge_cffi::error_to_outbound(e)),
         };
 
-        let host_ctx = ctx.and_then(|c| c.host_span_context());
-
-        let collector_arcs: Vec<Arc<bex_events::Collector>> = collectors
-            .as_ref()
-            .map(|colls| colls.iter().map(|c| c.inner_arc()).collect())
-            .unwrap_or_default();
-
-        let mut call_ctx = bridge_cffi::function_call_context_builder(decoded.call_id)
-            .with_collectors(collector_arcs);
-
-        if let Some(host_ctx) = host_ctx {
-            call_ctx = call_ctx.with_host_ctx(host_ctx);
-        }
+        // Tracing is a no-op: `ctx`/`collectors` are accepted for ABI
+        // stability but no longer wired into the call context.
+        let _ = (&ctx, &collectors);
+        let call_ctx = bridge_cffi::function_call_context_builder(decoded.call_id).build();
 
         // Same shared call_and_encode as the async + C-ABI paths — returns the
         // encoded BamlOutboundResult envelope bytes.
@@ -215,7 +187,7 @@ impl BamlRuntime {
                 runtime,
                 function_name,
                 decoded.kwargs,
-                call_ctx.build(),
+                call_ctx,
             ))
         });
 

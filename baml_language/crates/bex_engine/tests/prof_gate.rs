@@ -85,13 +85,8 @@ fn init_prof_env() {
 async fn run_main(source: &str) -> Result<BexExternalValue, EngineError> {
     let program = compile_for_engine(source);
     let engine = Arc::new(
-        BexEngine::new(
-            program,
-            Arc::new(sys_native::SysOps::native()),
-            None,
-            Vec::new(),
-        )
-        .expect("engine construction"),
+        BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("engine construction"),
     );
     engine
         .call_function(
@@ -689,13 +684,8 @@ async fn call_callable_has_real_identity_and_balance() {
     "#;
     let program = compile_for_engine(source);
     let engine = Arc::new(
-        BexEngine::new(
-            program,
-            Arc::new(sys_native::SysOps::native()),
-            None,
-            Vec::new(),
-        )
-        .expect("engine construction"),
+        BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("engine construction"),
     );
     let handle = match engine
         .call_function(
@@ -778,13 +768,8 @@ async fn root_cancellation_ends_thread_cancelled() {
     "#;
     let program = compile_for_engine(source);
     let engine = Arc::new(
-        BexEngine::new(
-            program,
-            Arc::new(sys_native::SysOps::native()),
-            None,
-            Vec::new(),
-        )
-        .expect("engine construction"),
+        BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("engine construction"),
     );
     let cancel = CancellationToken::new();
     let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
@@ -1283,13 +1268,8 @@ async fn early_yield_resume_produces_identical_stream() {
     let plain = {
         let program = compile_for_engine(&source("ey_plain_pin"));
         let engine = Arc::new(
-            BexEngine::new(
-                program,
-                Arc::new(sys_native::SysOps::native()),
-                None,
-                Vec::new(),
-            )
-            .expect("engine construction"),
+            BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new())
+                .expect("engine construction"),
         );
         let value = engine
             .call_function(
@@ -1311,13 +1291,8 @@ async fn early_yield_resume_produces_identical_stream() {
     let parked = {
         let program = compile_for_engine(&source("ey_parked_pin"));
         let engine = Arc::new(
-            BexEngine::new(
-                program,
-                Arc::new(sys_native::SysOps::native()),
-                None,
-                Vec::new(),
-            )
-            .expect("engine construction"),
+            BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new())
+                .expect("engine construction"),
         );
         let call_handle = {
             let engine = Arc::clone(&engine);
@@ -1391,13 +1366,8 @@ async fn dropped_call_future_truncates_stream_by_policy() {
     "#;
     let program = compile_for_engine(source);
     let engine = Arc::new(
-        BexEngine::new(
-            program,
-            Arc::new(sys_native::SysOps::native()),
-            None,
-            Vec::new(),
-        )
-        .expect("engine construction"),
+        BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("engine construction"),
     );
     {
         let engine = Arc::clone(&engine);
