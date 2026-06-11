@@ -4142,13 +4142,6 @@ function iter_impl_generics_only.core.Flatten.Iterator<R, E | E3>.next(self: ite
     unreachable
 }
 
-function iter_impl_generics_only.core.Iterable<T, never>$for$T[].iter(self: unknown[]) -> iter_impl_generics_only.core.Iterator<unknown, void> {
-    load_type #0
-    load_var self
-    call user.iter_impl_generics_only.core.ArrayIterator.new
-    return
-}
-
 function iter_impl_generics_only.core.Iterator.chain(self: iter_impl_generics_only.core.Iterator<unknown, unknown>, other: iter_impl_generics_only.core.Iterator<unknown, unknown>) -> iter_impl_generics_only.core.Iterator<unknown, unknown> {
     load_var2 1 2
     load_const false

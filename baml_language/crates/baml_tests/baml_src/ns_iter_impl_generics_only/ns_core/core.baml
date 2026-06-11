@@ -431,9 +431,3 @@ class Chain<T, E> {
     }
   }
 }
-
-implements<T> Iterable<T, never> for T[] {
-  function iter(self) -> Iterator<T, never> throws never {
-    ArrayIterator.new(self)
-  }
-}
