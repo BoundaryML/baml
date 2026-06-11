@@ -5,7 +5,7 @@ expression: output
 class            Bigint                           <builtin>/baml/bigint.baml:26
 class            Bool                             <builtin>/baml/bool.baml:2
 class            Array                            <builtin>/baml/containers.baml:2
-class            Map                              <builtin>/baml/containers.baml:419
+class            Map                              <builtin>/baml/containers.baml:447
 function         deep_copy                        <builtin>/baml/core.baml:3
 function         deep_equals                      <builtin>/baml/core.baml:9
 class            Float                            <builtin>/baml/float.baml:2
