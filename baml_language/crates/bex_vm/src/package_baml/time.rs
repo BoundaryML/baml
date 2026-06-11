@@ -35,7 +35,10 @@ fn parse_error(message: String) -> VmRustFnError {
 
 /// Interprets a civil ("wall-clock") reading — nanoseconds since
 /// 1970-01-01T00:00:00, as if the reading were UTC — as a datetime.
-pub(crate) fn civil_datetime(ns: &num_bigint::BigInt, what: &str) -> Result<OffsetDateTime, VmRustFnError> {
+pub(crate) fn civil_datetime(
+    ns: &num_bigint::BigInt,
+    what: &str,
+) -> Result<OffsetDateTime, VmRustFnError> {
     i128::try_from(ns)
         .ok()
         .and_then(|n| OffsetDateTime::from_unix_timestamp_nanos(n).ok())
@@ -108,7 +111,13 @@ pub(crate) fn format_date_into(out: &mut String, date: Date) {
 
 /// Formats `07:32:00` / `07:32:00.5` into `out`, truncating trailing
 /// subsecond zeros.
-pub(crate) fn format_clock_into(out: &mut String, hour: u8, minute: u8, second: u8, subsec_nanos: u32) {
+pub(crate) fn format_clock_into(
+    out: &mut String,
+    hour: u8,
+    minute: u8,
+    second: u8,
+    subsec_nanos: u32,
+) {
     let _ = write!(out, "{hour:02}:{minute:02}:{second:02}");
     if subsec_nanos != 0 {
         let digits = format!("{subsec_nanos:09}");

@@ -29,7 +29,10 @@ async fn parse_quoted_cells() {
         }
     "#
     );
-    assert_eq!(output.result.map_err(|e| format!("{e:?}")), ok_string("2:x,\ny"));
+    assert_eq!(
+        output.result.map_err(|e| format!("{e:?}")),
+        ok_string("2:x,\ny")
+    );
 }
 
 /// Typed decode into a user class, with an optional null cell.
@@ -159,7 +162,10 @@ async fn on_error_skip() {
         }
     "#
     );
-    assert_eq!(output.result.map_err(|e| format!("{e:?}")), ok_string("2:1"));
+    assert_eq!(
+        output.result.map_err(|e| format!("{e:?}")),
+        ok_string("2:1")
+    );
 }
 
 /// Markdown rendering for prompt context.
@@ -206,6 +212,8 @@ async fn typed_returns_probe() {
     );
     assert_eq!(
         output.result.map_err(|e| format!("{e:?}")),
-        Ok(bex_engine::BexExternalValue::String("alice:2".to_string().into()))
+        Ok(bex_engine::BexExternalValue::String(
+            "alice:2".to_string().into()
+        ))
     );
 }

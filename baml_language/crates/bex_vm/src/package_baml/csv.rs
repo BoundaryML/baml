@@ -211,13 +211,11 @@ fn state_arc<T: Send + Sync + 'static>(
             name: "csv handle field is not an object".to_string(),
         })?;
     match vm.get_object(ptr) {
-        Object::RustData(arc) => {
-            arc.clone()
-                .downcast::<T>()
-                .map_err(|_| VmRustFnError::InternalError(VmInternalError::MissingNativeFunction {
-                    name: "csv handle holds an unexpected Rust type".to_string(),
-                }))
-        }
+        Object::RustData(arc) => arc.clone().downcast::<T>().map_err(|_| {
+            VmRustFnError::InternalError(VmInternalError::MissingNativeFunction {
+                name: "csv handle holds an unexpected Rust type".to_string(),
+            })
+        }),
         _ => Err(VmRustFnError::InternalError(
             VmInternalError::MissingNativeFunction {
                 name: "csv handle field is not RustData".to_string(),
@@ -377,11 +375,7 @@ fn opt_string_list(vm: &BexVm, v: Value) -> Result<Option<Vec<String>>, VmRustFn
     Ok(Some(out))
 }
 
-fn single_ascii_byte(
-    vm: &mut BexVm,
-    name: &str,
-    s: &str,
-) -> Result<u8, VmRustFnError> {
+fn single_ascii_byte(vm: &mut BexVm, name: &str, s: &str) -> Result<u8, VmRustFnError> {
     let bytes = s.as_bytes();
     if bytes.len() != 1 || !bytes[0].is_ascii() {
         return Err(options_err(
@@ -657,6 +651,7 @@ struct ReaderState {
     lines_to_skip: i64,
     header: Option<Arc<Header>>,
     header_done: bool,
+    header_error: Option<ErrInfo>,
     expected_width: Option<usize>,
     /// Position of the next unread byte/record.
     byte: i64,
@@ -681,6 +676,7 @@ impl ReaderState {
             lines_to_skip,
             header: None,
             header_done: false,
+            header_error: None,
             expected_width: None,
             byte: 0,
             line: 1,
@@ -785,10 +781,7 @@ fn finish_cell(
         }
         // One drain, not remove(0) per byte: a multi-MB run of leading
         // whitespace must stay O(n), not O(n^2), inside this native call.
-        let lead = bytes
-            .iter()
-            .position(|b| !is_ws(*b))
-            .unwrap_or(bytes.len());
+        let lead = bytes.iter().position(|b| !is_ws(*b)).unwrap_or(bytes.len());
         bytes.drain(..lead);
     }
     cells.push(RawCell {
@@ -820,7 +813,6 @@ fn scan_record(buf: &[u8], start: usize, eof: bool, o: &ReaderOpts, trim: bool) 
         }
     }
 
-
     let mut cells: Vec<RawCell> = Vec::new();
     let mut cell: Vec<u8> = Vec::new();
     let mut cell_quoted = false;
@@ -830,7 +822,6 @@ fn scan_record(buf: &[u8], start: usize, eof: bool, o: &ReaderOpts, trim: bool) 
     let mut err: Option<(Kind, String)> = None;
     let mut i = start;
     let span_end;
-
 
     loop {
         if i >= buf.len() {
@@ -851,7 +842,13 @@ fn scan_record(buf: &[u8], start: usize, eof: bool, o: &ReaderOpts, trim: bool) 
                 };
             }
             span_end = i;
-            finish_cell(&mut cells, &mut cell, &mut cell_quoted, &mut after_close, trim);
+            finish_cell(
+                &mut cells,
+                &mut cell,
+                &mut cell_quoted,
+                &mut after_close,
+                trim,
+            );
             break;
         }
         let b = buf[i];
@@ -903,7 +900,13 @@ fn scan_record(buf: &[u8], start: usize, eof: bool, o: &ReaderOpts, trim: bool) 
         }
 
         if b == o.delimiter {
-            finish_cell(&mut cells, &mut cell, &mut cell_quoted, &mut after_close, trim);
+            finish_cell(
+                &mut cells,
+                &mut cell,
+                &mut cell_quoted,
+                &mut after_close,
+                trim,
+            );
             i += 1;
             continue;
         }
@@ -912,7 +915,13 @@ fn scan_record(buf: &[u8], start: usize, eof: bool, o: &ReaderOpts, trim: bool) 
                 return Scan::NeedData; // need to see whether \n follows
             }
             span_end = i;
-            finish_cell(&mut cells, &mut cell, &mut cell_quoted, &mut after_close, trim);
+            finish_cell(
+                &mut cells,
+                &mut cell,
+                &mut cell_quoted,
+                &mut after_close,
+                trim,
+            );
             lines += 1;
             i += if i + 1 < buf.len() && buf[i + 1] == b'\n' {
                 2
@@ -923,7 +932,13 @@ fn scan_record(buf: &[u8], start: usize, eof: bool, o: &ReaderOpts, trim: bool) 
         }
         if b == b'\n' {
             span_end = i;
-            finish_cell(&mut cells, &mut cell, &mut cell_quoted, &mut after_close, trim);
+            finish_cell(
+                &mut cells,
+                &mut cell,
+                &mut cell_quoted,
+                &mut after_close,
+                trim,
+            );
             lines += 1;
             i += 1;
             break;
@@ -984,10 +999,7 @@ fn scan_record(buf: &[u8], start: usize, eof: bool, o: &ReaderOpts, trim: bool) 
     }
 }
 
-fn cells_to_text(
-    cells: Vec<RawCell>,
-    lossy: bool,
-) -> Result<Vec<CellData>, (usize, String)> {
+fn cells_to_text(cells: Vec<RawCell>, lossy: bool) -> Result<Vec<CellData>, (usize, String)> {
     let mut out = Vec::with_capacity(cells.len());
     for (i, c) in cells.into_iter().enumerate() {
         let text = if lossy {
@@ -1052,6 +1064,9 @@ fn ensure_preamble(s: &mut ReaderState) -> bool {
 /// Resolve the header (consuming the header record if necessary).
 /// `Ok(None)` means more input is required.
 fn ensure_header(s: &mut ReaderState) -> Result<Option<()>, ErrInfo> {
+    if let Some(info) = &s.header_error {
+        return Err(info.clone());
+    }
     if s.header_done {
         return Ok(Some(()));
     }
@@ -1098,9 +1113,10 @@ fn ensure_header(s: &mut ReaderState) -> Result<Option<()>, ErrInfo> {
                 // swallowing it and mis-mapping every name-based access.
                 // Header errors are always thrown; `on_error` governs data
                 // iteration only.
-                s.finished = true;
                 let mut info = ErrInfo::new(kind, format!("in header record: {message}"));
                 info.line = Some(line);
+                s.finished = true;
+                s.header_error = Some(info.clone());
                 return Err(info);
             }
             Scan::Record {
@@ -1117,6 +1133,8 @@ fn ensure_header(s: &mut ReaderState) -> Result<Option<()>, ErrInfo> {
                             ErrInfo::new(Kind::Encoding, format!("in header record: {msg}"));
                         info.line = Some(line);
                         info.field = Some(field as i64);
+                        s.finished = true;
+                        s.header_error = Some(info.clone());
                         return Err(info);
                     }
                 };
@@ -1195,8 +1213,7 @@ fn poll_record(s: &mut ReaderState) -> Result<Polled, ErrInfo> {
                 let mut cells = match cells_to_text(cells, s.opts.lossy) {
                     Ok(c) => c,
                     Err((field, msg)) => {
-                        let mut info =
-                            ErrInfo::new(Kind::Encoding, msg).at(start_line, record_idx);
+                        let mut info = ErrInfo::new(Kind::Encoding, msg).at(start_line, record_idx);
                         info.field = Some(field as i64);
                         if s.opts.skip_on_error {
                             s.register_skip(&info);
@@ -1236,10 +1253,7 @@ fn poll_record(s: &mut ReaderState) -> Result<Polled, ErrInfo> {
                     if fail {
                         let mut info = ErrInfo::new(
                             Kind::FieldCount,
-                            format!(
-                                "record has {} fields, expected {expected}",
-                                cells.len()
-                            ),
+                            format!("record has {} fields, expected {expected}", cells.len()),
                         )
                         .at(start_line, record_idx);
                         info.expected = Some(expected as i64);
@@ -1269,6 +1283,14 @@ fn poll_record(s: &mut ReaderState) -> Result<Polled, ErrInfo> {
 fn poll_headers(s: &mut ReaderState) -> Result<HeadersPolled, ErrInfo> {
     if s.closed {
         return Err(ErrInfo::new(Kind::Closed, "reader is closed"));
+    }
+    if let Some(info) = &s.header_error {
+        return Err(info.clone());
+    }
+    if s.finished {
+        return Ok(HeadersPolled::Ready(
+            s.header.as_ref().map(|h| h.names.clone()),
+        ));
     }
     if !ensure_preamble(s) {
         return Ok(HeadersPolled::NeedData);
@@ -1310,7 +1332,11 @@ fn class_key(qtn: &baml_type::TypeName) -> String {
 fn classify_cell_ty(ty: &baml_type::Ty) -> Result<CellTy, String> {
     use baml_type::Ty;
     let nullable = ty.is_nullable_union();
-    let base = if nullable { ty.strip_null() } else { ty.clone() };
+    let base = if nullable {
+        ty.strip_null()
+    } else {
+        ty.clone()
+    };
     let target = match &base {
         Ty::String { .. } => Target::Str,
         Ty::Int { .. } => Target::Int,
@@ -1345,9 +1371,7 @@ fn convert_cell(vm: &mut BexVm, text: &str, target: &Target) -> Result<Conv, VmR
             }
             match text.parse::<i64>().ok().and_then(Value::try_int) {
                 Some(v) => Conv::Ok(v),
-                None => Conv::Bad(format!(
-                    "integer {text:?} is outside the BAML int range"
-                )),
+                None => Conv::Bad(format!("integer {text:?} is outside the BAML int range")),
             }
         }
         Target::Bigint => {
@@ -1402,15 +1426,11 @@ fn convert_cell(vm: &mut BexVm, text: &str, target: &Target) -> Result<Conv, VmR
             match parsed {
                 Ok(dt) => {
                     let instant = copy::time::Instant {
-                        _nanoseconds: Arc::new(num_bigint::BigInt::from(
-                            dt.unix_timestamp_nanos(),
-                        )),
+                        _nanoseconds: Arc::new(num_bigint::BigInt::from(dt.unix_timestamp_nanos())),
                     };
                     Conv::Ok(instant.to_value(vm))
                 }
-                Err(_) => Conv::Bad(format!(
-                    "cannot convert {text:?} to baml.time.Instant"
-                )),
+                Err(_) => Conv::Bad(format!("cannot convert {text:?} to baml.time.Instant")),
             }
         }
         Target::PlainDate => match Date::parse(text, super::time::DATE_FORMAT) {
@@ -1420,9 +1440,7 @@ fn convert_cell(vm: &mut BexVm, text: &str, target: &Target) -> Result<Conv, VmR
                 }
                 .to_value(vm),
             ),
-            Err(_) => Conv::Bad(format!(
-                "cannot convert {text:?} to baml.time.PlainDate"
-            )),
+            Err(_) => Conv::Bad(format!("cannot convert {text:?} to baml.time.PlainDate")),
         },
         Target::PlainDateTime => {
             match PrimitiveDateTime::parse(text, super::time::DATETIME_FORMAT) {
@@ -1698,14 +1716,9 @@ impl WriterState {
     }
 }
 
-const FORMULA_TRIGGERS: [char; 10] =
-    ['=', '+', '-', '@', '\t', '\r', '\n', '＝', '＋', '－'];
+const FORMULA_TRIGGERS: [char; 10] = ['=', '+', '-', '@', '\t', '\r', '\n', '＝', '＋', '－'];
 
-fn encode_cell_into(
-    out: &mut String,
-    cell: &str,
-    o: &WriterOpts,
-) -> Result<(), ErrInfo> {
+fn encode_cell_into(out: &mut String, cell: &str, o: &WriterOpts) -> Result<(), ErrInfo> {
     let mut content = std::borrow::Cow::Borrowed(cell);
     if o.sanitize {
         let triggers_full = ['＠'];
@@ -1861,7 +1874,13 @@ fn plaindatetime_cell_text(inst: &Instance) -> Result<String, CellTextErr> {
     let mut out = String::new();
     super::time::format_date_into(&mut out, dt.date());
     out.push('T');
-    super::time::format_clock_into(&mut out, dt.hour(), dt.minute(), dt.second(), dt.nanosecond());
+    super::time::format_clock_into(
+        &mut out,
+        dt.hour(),
+        dt.minute(),
+        dt.second(),
+        dt.nanosecond(),
+    );
     Ok(out)
 }
 
@@ -1876,11 +1895,7 @@ fn instant_cell_text(inst: &Instance) -> Result<String, CellTextErr> {
 }
 
 /// Canonical cell text for a BAML value (`CsvValue` or a typed-row field).
-fn value_cell_text(
-    vm: &BexVm,
-    v: Value,
-    null_value: &str,
-) -> Result<String, CellTextErr> {
+fn value_cell_text(vm: &BexVm, v: Value, null_value: &str) -> Result<String, CellTextErr> {
     Ok(match v.kind() {
         ValueKind::Null => null_value.to_string(),
         ValueKind::Bool(b) => if b { "true" } else { "false" }.to_string(),
@@ -1902,9 +1917,8 @@ fn value_cell_text(
                 })?
             }
             Object::Instance(inst) => {
-                let class_is = |fqn: &str| {
-                    vm.resolved_class_names.get(fqn).copied() == Some(inst.class)
-                };
+                let class_is =
+                    |fqn: &str| vm.resolved_class_names.get(fqn).copied() == Some(inst.class);
                 if class_is(INSTANT_FQN) {
                     instant_cell_text(inst)?
                 } else if class_is(PLAINDATE_FQN) {
@@ -1937,10 +1951,7 @@ fn cell_text_err_info(e: CellTextErr, context: &str) -> ErrInfo {
 }
 
 /// Field names and per-row field values for a typed row instance.
-fn row_fields(
-    vm: &BexVm,
-    row: Value,
-) -> Result<(Vec<String>, Vec<Value>), ErrInfo> {
+fn row_fields(vm: &BexVm, row: Value) -> Result<(Vec<String>, Vec<Value>), ErrInfo> {
     let inst = vm.as_instance(&row).map_err(|_| {
         ErrInfo::new(
             Kind::Options,
@@ -2535,7 +2546,11 @@ impl BamlNamespaceCsv for PackageBamlImpl {
         cell_to_optional(vm, &rd, col, &ty)
     }
 
-    fn _encode_row(vm: &mut BexVm, w: &Value, row: &Value) -> Result<bex_str::BexStr, VmRustFnError> {
+    fn _encode_row(
+        vm: &mut BexVm,
+        w: &Value,
+        row: &Value,
+    ) -> Result<bex_str::BexStr, VmRustFnError> {
         let st = state_arc::<Mutex<WriterState>>(vm, *w, 0)?;
         let mut s = lock(&st);
         if s.closed {

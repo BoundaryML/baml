@@ -418,9 +418,14 @@ fn infer_interface_class_bindings(
         (_, Tir2Ty::TypeVar(_, _)) => true,
         (Tir2Ty::List(f, _), Tir2Ty::List(a, _))
         | (Tir2Ty::EvolvingList(f, _), Tir2Ty::EvolvingList(a, _))
-        | (Tir2Ty::Future(f, _, _), Tir2Ty::Future(a, _, _)) => {
-            infer_interface_class_bindings(f, a, class_params, aliases, bindings, assoc_union_wildcard)
-        }
+        | (Tir2Ty::Future(f, _, _), Tir2Ty::Future(a, _, _)) => infer_interface_class_bindings(
+            f,
+            a,
+            class_params,
+            aliases,
+            bindings,
+            assoc_union_wildcard,
+        ),
         (
             Tir2Ty::Map {
                 key: fk, value: fv, ..
@@ -430,8 +435,21 @@ fn infer_interface_class_bindings(
             },
         )
         | (Tir2Ty::EvolvingMap(fk, fv, _), Tir2Ty::EvolvingMap(ak, av, _)) => {
-            infer_interface_class_bindings(fk, ak, class_params, aliases, bindings, assoc_union_wildcard)
-                && infer_interface_class_bindings(fv, av, class_params, aliases, bindings, assoc_union_wildcard)
+            infer_interface_class_bindings(
+                fk,
+                ak,
+                class_params,
+                aliases,
+                bindings,
+                assoc_union_wildcard,
+            ) && infer_interface_class_bindings(
+                fv,
+                av,
+                class_params,
+                aliases,
+                bindings,
+                assoc_union_wildcard,
+            )
         }
         (
             Tir2Ty::Function {
@@ -455,48 +473,83 @@ fn infer_interface_class_bindings(
                             &ap.ty,
                             class_params,
                             aliases,
-                            bindings, assoc_union_wildcard)
+                            bindings,
+                            assoc_union_wildcard,
+                        )
                 })
-                && infer_interface_class_bindings(fr, ar, class_params, aliases, bindings, assoc_union_wildcard)
-                && infer_interface_class_bindings(fth, ath, class_params, aliases, bindings, assoc_union_wildcard)
+                && infer_interface_class_bindings(
+                    fr,
+                    ar,
+                    class_params,
+                    aliases,
+                    bindings,
+                    assoc_union_wildcard,
+                )
+                && infer_interface_class_bindings(
+                    fth,
+                    ath,
+                    class_params,
+                    aliases,
+                    bindings,
+                    assoc_union_wildcard,
+                )
         }
         (Tir2Ty::Class(fqtn, fargs, _), Tir2Ty::Class(aqtn, aargs, _))
             if fqtn == aqtn && fargs.len() == aargs.len() =>
         {
-            fargs
-                .iter()
-                .zip(aargs.iter())
-                .all(|(f, a)| infer_interface_class_bindings(f, a, class_params, aliases, bindings, assoc_union_wildcard))
+            fargs.iter().zip(aargs.iter()).all(|(f, a)| {
+                infer_interface_class_bindings(
+                    f,
+                    a,
+                    class_params,
+                    aliases,
+                    bindings,
+                    assoc_union_wildcard,
+                )
+            })
         }
         (
             Tir2Ty::Interface(fqtn, fargs, f_assoc, _),
             Tir2Ty::Interface(aqtn, aargs, a_assoc, _),
         ) if fqtn == aqtn && fargs.len() == aargs.len() => {
-            fargs
-                .iter()
-                .zip(aargs.iter())
-                .all(|(f, a)| infer_interface_class_bindings(f, a, class_params, aliases, bindings, assoc_union_wildcard))
-                && a_assoc.iter().all(|(name, actual_ty)| {
-                    f_assoc
-                        .iter()
-                        .find(|(formal_name, _)| formal_name == name)
-                        .is_some_and(|(_, formal_ty)| {
-                            infer_interface_class_bindings(
-                                formal_ty,
-                                actual_ty,
-                                class_params,
-                                aliases,
-                                bindings, assoc_union_wildcard)
-                        })
-                })
+            fargs.iter().zip(aargs.iter()).all(|(f, a)| {
+                infer_interface_class_bindings(
+                    f,
+                    a,
+                    class_params,
+                    aliases,
+                    bindings,
+                    assoc_union_wildcard,
+                )
+            }) && a_assoc.iter().all(|(name, actual_ty)| {
+                f_assoc
+                    .iter()
+                    .find(|(formal_name, _)| formal_name == name)
+                    .is_some_and(|(_, formal_ty)| {
+                        infer_interface_class_bindings(
+                            formal_ty,
+                            actual_ty,
+                            class_params,
+                            aliases,
+                            bindings,
+                            assoc_union_wildcard,
+                        )
+                    })
+            })
         }
-        (Tir2Ty::Union(fparts, _), actual @ Tir2Ty::Never { .. }) => fparts
-            .iter()
-            .all(|f| infer_interface_class_bindings(f, actual, class_params, aliases, bindings, assoc_union_wildcard)),
+        (Tir2Ty::Union(fparts, _), actual @ Tir2Ty::Never { .. }) => fparts.iter().all(|f| {
+            infer_interface_class_bindings(
+                f,
+                actual,
+                class_params,
+                aliases,
+                bindings,
+                assoc_union_wildcard,
+            )
+        }),
         (Tir2Ty::Union(fparts, _), Tir2Ty::Union(aparts, _)) => {
-            let is_class_param = |ty: &Tir2Ty| {
-                matches!(ty, Tir2Ty::TypeVar(name, _) if class_params.contains(name))
-            };
+            let is_class_param =
+                |ty: &Tir2Ty| matches!(ty, Tir2Ty::TypeVar(name, _) if class_params.contains(name));
             // For ASSOCIATED-type bindings, pairwise decomposition is only
             // trustworthy when it cannot mis-pin: with two or more class-param
             // members (`E | E2`), the assignment of requested members to
@@ -512,7 +565,14 @@ fn infer_interface_class_bindings(
             {
                 let mut trial = bindings.clone();
                 if fparts.iter().zip(aparts.iter()).all(|(f, a)| {
-                    infer_interface_class_bindings(f, a, class_params, aliases, &mut trial, assoc_union_wildcard)
+                    infer_interface_class_bindings(
+                        f,
+                        a,
+                        class_params,
+                        aliases,
+                        &mut trial,
+                        assoc_union_wildcard,
+                    )
                 }) {
                     *bindings = trial;
                     return true;

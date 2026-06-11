@@ -118,6 +118,140 @@ test "csv_tsv" {
     assert.equal(csv_tsv(), "a|b;1|2")
 }
 
+// ─── External parser corpus: PapaParse and csv-spectrum ────────────────────
+//
+// These cases are adapted from:
+// - PapaParse `tests/test-cases.js`
+//   https://github.com/mholt/PapaParse/blob/master/tests/test-cases.js
+// - csv-spectrum fixtures
+//   https://github.com/max-mapper/csv-spectrum
+//
+// Keep this section focused on portable CSV edge cases that match BAML's
+// documented behavior. PapaParse-specific APIs and intentional divergences
+// (delimiter guessing, dynamic typing, duplicate-header renaming, browser
+// callbacks, etc.) belong outside this conformance block.
+
+function csv_papaparse_quote_boundaries() -> string {
+    let opts = baml.csv.ReaderOptions { has_header: false };
+
+    // PapaParse: "Quoted field with escaped quotes at boundaries".
+    let boundaries = grid(baml.csv.parse("A,\"\"\"B\"\"\",C", options = opts));
+
+    // PapaParse: "Quoted field with quotes around delimiter".
+    let around_delimiter = grid(baml.csv.parse("A,\"\"\",\"\"\",C", options = opts));
+
+    // PapaParse: "Quoted field with 5 quotes in a row and a delimiter in there, too".
+    let dense_quotes = grid(baml.csv.parse("\"1\",\"cnonce=\"\"\"\",nc=\"\"\"\"\",\"2\"", options = opts));
+
+    boundaries + " / " + around_delimiter + " / " + dense_quotes
+}
+
+test "csv_papaparse_quote_boundaries" {
+    assert.equal(
+        csv_papaparse_quote_boundaries(),
+        "A|\"B\"|C / A|\",\"|C / 1|cnonce=\"\",nc=\"\"|2",
+    )
+}
+
+function csv_papaparse_empty_field_edges() -> string {
+    let opts = baml.csv.ReaderOptions { has_header: false };
+
+    // PapaParse: "Input is just the delimiter (2 empty fields)".
+    let delimiter_only = grid(baml.csv.parse(",", options = opts));
+
+    // PapaParse: "Multiple consecutive empty fields".
+    let consecutive = grid(baml.csv.parse("a,b,,,c,d\n,,e,,,f", options = opts));
+
+    // PapaParse: "Line starts with unquoted empty field".
+    let starts_empty = grid(baml.csv.parse(",b,c\n\"d\",e,f", options = opts));
+
+    // PapaParse: "Empty quoted field at EOF is empty".
+    let quoted_empty_eof = grid(baml.csv.parse("a,b,\"\"\na,b,\"\"", options = opts));
+
+    delimiter_only + " / " + consecutive + " / " + starts_empty + " / " + quoted_empty_eof
+}
+
+test "csv_papaparse_empty_field_edges" {
+    assert.equal(
+        csv_papaparse_empty_field_edges(),
+        "| / a|b|||c|d;||e|||f / |b|c;d|e|f / a|b|;a|b|",
+    )
+}
+
+function csv_papaparse_comment_runs() -> string {
+    let opts = baml.csv.ReaderOptions { has_header: false, comment: "#" };
+
+    // PapaParse: consecutive comments at beginning/middle/end and comment-only input.
+    let at_beginning = grid(baml.csv.parse("#comment1\n#comment2\n#comment3\na,b,c", options = opts));
+    let in_middle = grid(baml.csv.parse("a,b,c\n#comment1\n#comment2\nd,e,f", options = opts));
+    let at_end = grid(baml.csv.parse("a,b,c\n#comment1\n#comment2", options = opts));
+    let only_comments = baml.csv.parse("#comment1\n#comment2\n#comment3", options = opts).length();
+
+    at_beginning + " / " + in_middle + " / " + at_end + " / only=" + baml.json.stringify(only_comments)
+}
+
+test "csv_papaparse_comment_runs" {
+    assert.equal(csv_papaparse_comment_runs(), "a|b|c / a|b|c;d|e|f / a|b|c / only=0")
+}
+
+function csv_papaparse_line_endings_inside_quotes() -> string {
+    let opts = baml.csv.ReaderOptions { has_header: false };
+
+    // PapaParse: quoted fields with CRLF, CR, and LF inside the cell.
+    let crlf = grid(baml.csv.parse("A,\"B\r\nB\",C", options = opts));
+    let cr = grid(baml.csv.parse("A,\"B\rB\",C", options = opts));
+    let lf = grid(baml.csv.parse("A,\"B\nB\",C", options = opts));
+
+    crlf + " / " + cr + " / " + lf
+}
+
+test "csv_papaparse_line_endings_inside_quotes" {
+    assert.equal(csv_papaparse_line_endings_inside_quotes(), "A|B\r\nB|C / A|B\rB|C / A|B\nB|C")
+}
+
+class SpectrumAB {
+    a string
+    b string
+}
+
+class SpectrumAddress {
+    first string
+    last string
+    address string
+    city string
+    zip string
+}
+
+function csv_spectrum_core_fixtures() -> string {
+    let comma = baml.csv.decode<SpectrumAddress>("first,last,address,city,zip\nJohn,Doe,120 any st.,\"Anytown, WW\",08123");
+    let escaped = baml.csv.decode<SpectrumAB>("a,b\n1,\"ha \"\"ha\"\" ha\"\n3,4");
+    let quotes_newlines = baml.csv.decode<SpectrumAB>("a,b\n1,\"ha \n\"\"ha\"\" \nha\"\n3,4");
+
+    let city = match (comma.at(0)) {
+        null => "missing",
+        let row: SpectrumAddress => row.city + ":" + row.zip,
+    };
+    let escaped_b = match (escaped.at(0)) {
+        null => "missing",
+        let row: SpectrumAB => row.b,
+    };
+    let newline_b = match (quotes_newlines.at(0)) {
+        null => "missing",
+        let row: SpectrumAB => row.b,
+    };
+
+    city
+        + " / " + baml.json.stringify(escaped.length()) + ":" + escaped_b
+        + " / " + baml.json.stringify(quotes_newlines.length()) + ":" + newline_b
+}
+
+test "csv_spectrum_core_fixtures" {
+    assert.equal(
+        csv_spectrum_core_fixtures(),
+        "Anytown, WW:08123 / 2:ha \"ha\" ha / 2:ha \n\"ha\" \nha",
+    )
+}
+
 // ─── Dialect: BOM, comments, skip_lines, blank records, trim ───────────────
 
 function csv_bom_stripped_by_default() -> string {
@@ -1246,6 +1380,68 @@ function csv_malformed_header_exhausts_reader() -> string {
 
 test "csv_malformed_header_exhausts_reader" {
     assert.equal(csv_malformed_header_exhausts_reader(), "<Quote>/done")
+}
+
+function csv_malformed_header_failure_is_terminal_for_headers() -> string {
+    // After the malformed header is consumed and thrown from next(), headers()
+    // must not reinterpret the first data row ("a,b") as column names.
+    let r = baml.csv.reader("\"h1\"x,h2\na,b\nc,d\n");
+    let first = {
+        match (r.next()) {
+            baml.iter.Done => "done",
+            let rec: baml.csv.CsvRecord => join(rec.fields(), "|"),
+        }
+    } catch (e) {
+        baml.csv.CsvError => "<" + kind_name(e.kind) + ">",
+    };
+    let headers_after = {
+        match (r.headers()) {
+            null => "<null>",
+            let h: string[] => join(h, "|"),
+        }
+    } catch (e) {
+        baml.csv.CsvError => "<" + kind_name(e.kind) + ">",
+    };
+    let next_after = match (r.next()) {
+        baml.iter.Done => "done",
+        let rec: baml.csv.CsvRecord => join(rec.fields(), "|"),
+    };
+    first + "/" + headers_after + "/" + next_after
+}
+
+test "csv_malformed_header_failure_is_terminal_for_headers" {
+    assert.equal(csv_malformed_header_failure_is_terminal_for_headers(), "<Quote>/<Quote>/done")
+}
+
+function csv_header_encoding_failure_is_terminal_for_headers() -> string {
+    // Header UTF-8 failures also consume the header record. A later headers()
+    // call must not promote the first data row to headers.
+    let r = baml.csv.reader(b"\xff,h2\na,b\nc,d\n");
+    let first = {
+        match (r.next()) {
+            baml.iter.Done => "done",
+            let rec: baml.csv.CsvRecord => join(rec.fields(), "|"),
+        }
+    } catch (e) {
+        baml.csv.CsvError => "<" + kind_name(e.kind) + ">",
+    };
+    let headers_after = {
+        match (r.headers()) {
+            null => "<null>",
+            let h: string[] => join(h, "|"),
+        }
+    } catch (e) {
+        baml.csv.CsvError => "<" + kind_name(e.kind) + ">",
+    };
+    let next_after = match (r.next()) {
+        baml.iter.Done => "done",
+        let rec: baml.csv.CsvRecord => join(rec.fields(), "|"),
+    };
+    first + "/" + headers_after + "/" + next_after
+}
+
+test "csv_header_encoding_failure_is_terminal_for_headers" {
+    assert.equal(csv_header_encoding_failure_is_terminal_for_headers(), "<Encoding>/<Encoding>/done")
 }
 
 function csv_writer_state_survives_encode_error() -> string {
