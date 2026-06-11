@@ -665,6 +665,7 @@ impl LoweringContext {
             SyntaxKind::IS_EXPR => self.lower_is_expr(node),
             SyntaxKind::UNARY_EXPR => self.lower_unary_expr(node),
             SyntaxKind::CALL_EXPR => self.lower_call_expr(node),
+            SyntaxKind::ARRAY_CONSTRUCTOR_EXPR => self.lower_array_constructor_expr(node),
             SyntaxKind::IF_EXPR => self.lower_if_expr(node),
             SyntaxKind::IF_LET_EXPR => self.lower_if_let_expr(node),
             SyntaxKind::MATCH_EXPR => self.lower_match_expr(node),
@@ -2251,6 +2252,90 @@ impl LoweringContext {
             self.needs_chain_wrap.insert(id);
         }
         id
+    }
+
+    fn lower_array_constructor_expr(&mut self, node: &SyntaxNode) -> ExprId {
+        let item_type = node
+            .children()
+            .find(|n| n.kind() != SyntaxKind::CALL_ARGS)
+            .and_then(|n| Self::array_constructor_item_type(&n))
+            .unwrap_or(TypeExpr::Unknown { attrs: Vec::new() });
+
+        let lowered_args = node
+            .children()
+            .find(|n| n.kind() == SyntaxKind::CALL_ARGS)
+            .map(|args_node| self.lower_call_args_node(&args_node))
+            .unwrap_or_default();
+        let (args, label_spans) = Self::finalize_call_args(lowered_args);
+
+        let callee = self.alloc_expr(
+            Expr::Path(vec![
+                Name::new("baml"),
+                Name::new("Array"),
+                Name::new("new"),
+            ]),
+            node.text_range(),
+        );
+        let id = self.alloc_expr(
+            Expr::Call {
+                callee,
+                type_args: vec![item_type],
+                args,
+            },
+            node.text_range(),
+        );
+        self.record_call_arg_label_spans(id, label_spans);
+        id
+    }
+
+    fn array_constructor_item_type(node: &SyntaxNode) -> Option<TypeExpr> {
+        match node.kind() {
+            SyntaxKind::PATH_EXPR => {
+                let segments = Self::path_segments_from_node(node)?;
+                let generic_args = node
+                    .children()
+                    .find(|n| n.kind() == SyntaxKind::GENERIC_ARGS)
+                    .map(|n| Self::lower_generic_args_node(&n))
+                    .unwrap_or_default();
+                let dotted = segments
+                    .iter()
+                    .map(smol_str::SmolStr::as_str)
+                    .collect::<Vec<_>>()
+                    .join(".");
+                Some(
+                    crate::lower_type_expr::lower_from_type_name_with_generic_args(
+                        &dotted,
+                        generic_args,
+                        Vec::new(),
+                    ),
+                )
+            }
+            SyntaxKind::PAREN_EXPR => node.children().find_map(|child| {
+                if child.kind() == SyntaxKind::GENERIC_ARGS {
+                    None
+                } else {
+                    Self::array_constructor_item_type(&child)
+                }
+            }),
+            _ => None,
+        }
+    }
+
+    fn path_segments_from_node(node: &SyntaxNode) -> Option<Vec<Name>> {
+        let segments: Vec<Name> = node
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| is_ident_token(token.kind()))
+            .map(|token| Name::new(token.text()))
+            .collect();
+
+        if !segments.is_empty() {
+            return Some(segments);
+        }
+
+        node.children()
+            .find(|child| child.kind() != SyntaxKind::GENERIC_ARGS)
+            .and_then(|child| Self::path_segments_from_node(&child))
     }
 
     fn finalize_call_args(

@@ -19,6 +19,34 @@ class Array<T> {
     $rust_function
   }
 
+  /// Creates a new array of `size` elements, each initialized to `default`.
+  ///
+  /// Throws `InvalidArgument` if `size` is negative.
+  ///
+  /// # Examples
+  /// ```
+  /// int[](3, 0)                    // [0, 0, 0]
+  /// string[](size = 2, default = "") // ["", ""]
+  /// ```
+  function new(size: int, default: T) -> T[] throws root.errors.InvalidArgument {
+    $rust_function
+  }
+
+  /// Replaces the element at `index` with `value`. Mutates `self`.
+  ///
+  /// Throws `InvalidArgument` if `index` is negative or outside the array.
+  ///
+  /// # Examples
+  /// ```
+  /// let xs = [10, 20, 30];
+  /// xs.set(1, 99);
+  /// xs.at(1)  // 99
+  /// ```
+  //baml:mut_self
+  function set(self, index: int, value: T) -> null throws root.errors.InvalidArgument {
+    $rust_function
+  }
+
   /// Appends `item` to the end of the array. Returns the new length. Mutates `self`.
   //baml:mut_self
   function push(self, item: T) -> int throws never {

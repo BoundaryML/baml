@@ -226,6 +226,10 @@ pub enum SyntaxKind {
     UNARY_EXPR,
     CALL_EXPR,
     INDEX_EXPR,
+    /// Fixed-size array constructor shorthand: `T[](size, default)`.
+    ///
+    /// Lowered in AST to `baml.Array.new<T>(size, default)`.
+    ARRAY_CONSTRUCTOR_EXPR,
     /// Optional call: `func?.(args)` — short-circuits to null if callee is null.
     OPTIONAL_CALL_EXPR,
     /// Optional index: `obj?.[expr]` — short-circuits to null if base is null.

@@ -476,7 +476,7 @@ pub(crate) fn lower_associated_type_binding(
     })
 }
 
-fn lower_from_type_name_with_generic_args(
+pub(crate) fn lower_from_type_name_with_generic_args(
     name: &str,
     generic_args: Vec<TypeExpr>,
     associated_type_bindings: Vec<AssociatedTypeBinding>,
