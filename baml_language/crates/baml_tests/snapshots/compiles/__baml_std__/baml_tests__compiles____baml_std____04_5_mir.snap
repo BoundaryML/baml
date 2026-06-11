@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 4252
 ---
 === MIR2 ===
 
@@ -4206,6 +4205,12 @@ fn baml.http.Server.to_json(self: baml.http.Server) -> baml.json.json {
         return;
     }
 }
+
+fn baml.id.current = builtin(vm)
+
+fn baml.id.new = builtin(vm)
+
+fn baml.id.set = builtin(vm)
 
 fn baml.io.eprint = builtin(io)
 

@@ -7519,6 +7519,12 @@ impl<'db> LoweringContext<'db> {
         self.builder.set_current_block(resume);
     }
 
+    /// The `$id` runtime-identity special form. MIR owns its lowering (reads
+    /// → `baml.id.current()`, plain `=` writes → `baml.id.set(...)`); TIR
+    /// owns its typing and rejects the invalid shapes (compound assignment,
+    /// member access, call-site labels, `$id` bindings) — see
+    /// `infer_path` / `Stmt::Assign` / `Stmt::AssignOp` in
+    /// `baml_compiler2_tir/src/builder.rs`. Keep the two layers in sync.
     fn is_runtime_id_path(expr: &AstExpr) -> bool {
         matches!(expr, AstExpr::Path(segments) if segments.len() == 1 && segments[0].as_str() == "$id")
     }
@@ -11230,6 +11236,21 @@ impl LoweringContext<'_> {
                     // Assignment to a captured variable in a closure body.
                     Place::Capture(cap_idx)
                 } else {
+                    // Unresolved single-segment assignment target. This is
+                    // only reachable for programs TIR already rejected (an
+                    // unresolved name, or a special form like `$id` in a
+                    // position its TIR checks forbid). Fail loudly at runtime
+                    // instead of silently writing into a throwaway temp —
+                    // a silent temp here is how `$id = ...` once compiled to
+                    // a no-op (MIR has no compile-diagnostic channel).
+                    self.emit_panic_call(
+                        &format!(
+                            "internal compiler error: MIR failed to resolve assignment \
+                             target `{}` (TIR should have rejected this program)",
+                            segments[0]
+                        ),
+                        expr_id,
+                    );
                     let temp = self.builder.temp(Ty::Null {
                         attr: TyAttr::default(),
                     });

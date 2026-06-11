@@ -1,3 +1,25 @@
+//! BEX runtime identity: the quad-scoped local IDs and their reversible,
+//! versioned string encodings.
+//!
+//! # Scoping model
+//!
+//! Events carry *local* IDs only; global identity is the quad
+//! `(process_euid, engine_id, thread_id, call_id)`:
+//!
+//! - [`BexThreadId`] is allocated per engine (restarts at 1 for each
+//!   [`EngineId`]); [`BexCallId`] is allocated per thread (restarts at 1 for
+//!   each thread, the root call is always 1).
+//! - The process/engine half lives once per artifact in the file/batch
+//!   header ([`crate::EventFileHeaderV1`]), never on events.
+//!
+//! # Encodings
+//!
+//! [`ThreadRef`] / [`CallRef`] / [`RuntimeId`] encode to prefixed,
+//! versioned, base64url strings (`baml_thread_1_…`, `baml_call_1_…`,
+//! `baml_id_1_…`) and decode losslessly back; decoding validates prefix,
+//! base64, payload length, and version, and never panics on malformed
+//! input. The typed decoders reject each other's prefixes.
+
 use std::{fmt, sync::OnceLock};
 
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
@@ -10,6 +32,8 @@ const CALL_REF_LEN: usize = 1 + 16 + 8 + 8 + 8;
 const THREAD_REF_LEN: usize = 1 + 16 + 8 + 8;
 const OVERRIDE_ID_LEN: usize = 16;
 
+/// Effectively-unique process identifier, minted once per process
+/// ([`ProcessEuid::current`]) — the outermost scope of the identity quad.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ProcessEuid(pub [u8; 16]);
 
@@ -26,9 +50,15 @@ impl ProcessEuid {
     }
 }
 
+/// Process-local engine counter (starts at 1). Two engines in one process
+/// always get distinct ids; the id is only meaningful together with the
+/// [`ProcessEuid`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct EngineId(pub u64);
 
+/// Identity of a compiled program. Currently random per engine construction
+/// — good enough for event-file-local joins, NOT a durable content identity
+/// (identical programs in two engines get different ids).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ProgramId(pub [u8; 16]);
 
@@ -39,18 +69,33 @@ impl ProgramId {
     }
 }
 
+/// Identity of the source snapshot a program was compiled from. Modeled for
+/// the metadata join path but not yet populated by the runtime — consumers
+/// must tolerate `None`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct SourceSnapshotId(pub [u8; 32]);
 
+/// Engine-local BEX thread id (starts at 1 per engine; the root call's
+/// thread first, spawned children after).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct BexThreadId(pub u64);
 
+/// Index into the engine's function metadata table
+/// ([`crate::FunctionMetadataTable`]) — for real functions this IS the
+/// compile-time object-pool index. NOT stable across recompiles: joins are
+/// valid only against the same artifact's header. Synthetic rows
+/// (spawn-closure, unknown-function) sit just past the pool indices.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct FunctionId(pub u32);
 
+/// Thread-local call counter (starts at 1 per thread; the thread's root
+/// call is always 1). Minted for every bytecode call whether or not an
+/// event sink is configured — `$id` depends on it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct CallId(pub u64);
+pub struct BexCallId(pub u64);
 
+/// Fully-scoped thread identity (the quad minus `call_id`); encodes to a
+/// reversible `baml_thread_1_…` string.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ThreadRef {
     pub process_euid: ProcessEuid,
@@ -58,14 +103,20 @@ pub struct ThreadRef {
     pub thread_id: BexThreadId,
 }
 
+/// Fully-scoped call identity (the complete quad); encodes to a reversible
+/// `baml_call_1_…` string — the default value of `$id`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct CallRef {
     pub process_euid: ProcessEuid,
     pub engine_id: EngineId,
     pub thread_id: BexThreadId,
-    pub call_id: CallId,
+    pub call_id: BexCallId,
 }
 
+/// The value of `$id`: either the call's default [`CallRef`], or a 16-byte
+/// override minted by `baml.id.new()` and installed via `baml.id.set` /
+/// `$id = …` (`baml_id_1_…`). An override applies to exactly one call —
+/// absence of a `SetId` event for a call means its `$id` is the [`CallRef`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum RuntimeId {
     DefaultCall(CallRef),
@@ -147,7 +198,7 @@ impl CallRef {
             thread_id: BexThreadId(u64::from_be_bytes(
                 payload[25..33].try_into().expect("fixed-width slice"),
             )),
-            call_id: CallId(u64::from_be_bytes(
+            call_id: BexCallId(u64::from_be_bytes(
                 payload[33..41].try_into().expect("fixed-width slice"),
             )),
         })
@@ -215,7 +266,7 @@ mod tests {
             process_euid: ProcessEuid([7; 16]),
             engine_id: EngineId(2),
             thread_id: BexThreadId(3),
-            call_id: CallId(4),
+            call_id: BexCallId(4),
         }
     }
 
@@ -277,7 +328,7 @@ mod tests {
         );
         assert_ne!(
             CallRef {
-                call_id: CallId(5),
+                call_id: BexCallId(5),
                 ..base
             }
             .encode(),
@@ -299,6 +350,80 @@ mod tests {
         assert_eq!(
             CallRef::decode(&encoded),
             Err(DecodeError::UnsupportedVersion(99))
+        );
+    }
+
+    #[test]
+    fn malformed_thread_refs_fail_cleanly() {
+        assert_eq!(ThreadRef::decode("bad"), Err(DecodeError::InvalidPrefix));
+        assert!(matches!(
+            ThreadRef::decode("baml_thread_1_!"),
+            Err(DecodeError::InvalidBase64)
+        ));
+
+        let mut payload = vec![PAYLOAD_VERSION; THREAD_REF_LEN];
+        payload[0] = 99;
+        let encoded = format!("{THREAD_REF_PREFIX}{}", URL_SAFE_NO_PAD.encode(payload));
+        assert_eq!(
+            ThreadRef::decode(&encoded),
+            Err(DecodeError::UnsupportedVersion(99))
+        );
+    }
+
+    #[test]
+    fn truncated_payloads_fail_with_invalid_length() {
+        let truncated = vec![PAYLOAD_VERSION; CALL_REF_LEN - 1];
+        let encoded = format!("{CALL_REF_PREFIX}{}", URL_SAFE_NO_PAD.encode(truncated));
+        assert_eq!(
+            CallRef::decode(&encoded),
+            Err(DecodeError::InvalidLength {
+                expected: CALL_REF_LEN,
+                actual: CALL_REF_LEN - 1,
+            })
+        );
+
+        let truncated = vec![PAYLOAD_VERSION; THREAD_REF_LEN - 1];
+        let encoded = format!("{THREAD_REF_PREFIX}{}", URL_SAFE_NO_PAD.encode(truncated));
+        assert_eq!(
+            ThreadRef::decode(&encoded),
+            Err(DecodeError::InvalidLength {
+                expected: THREAD_REF_LEN,
+                actual: THREAD_REF_LEN - 1,
+            })
+        );
+
+        // Override payloads are raw 16-byte uuids (no version byte).
+        let short = vec![0u8; OVERRIDE_ID_LEN - 1];
+        let encoded = format!("{OVERRIDE_ID_PREFIX}{}", URL_SAFE_NO_PAD.encode(short));
+        assert_eq!(
+            RuntimeId::decode(&encoded),
+            Err(DecodeError::InvalidLength {
+                expected: OVERRIDE_ID_LEN,
+                actual: OVERRIDE_ID_LEN - 1,
+            })
+        );
+    }
+
+    #[test]
+    fn cross_type_prefixes_are_rejected() {
+        let thread_ref = ThreadRef {
+            process_euid: ProcessEuid([9; 16]),
+            engine_id: EngineId(10),
+            thread_id: BexThreadId(11),
+        };
+        // A thread ref is not a runtime id (only call refs and overrides are).
+        assert_eq!(
+            RuntimeId::decode(&thread_ref.encode()),
+            Err(DecodeError::InvalidPrefix)
+        );
+        // And the typed decoders reject each other's prefixes.
+        assert_eq!(
+            CallRef::decode(&thread_ref.encode()),
+            Err(DecodeError::InvalidPrefix)
+        );
+        assert_eq!(
+            ThreadRef::decode(&sample_call_ref().encode()),
+            Err(DecodeError::InvalidPrefix)
         );
     }
 }

@@ -1,11 +1,29 @@
+//! Program/function metadata: the per-artifact join table that turns the
+//! compact `function_id` on every event back into a real definition.
+//!
+//! The join path is `program_id + function_id -> FunctionMetadata ->
+//! definition_key / source / revision / semantic lanes`. Events stay
+//! compact (ids only); everything semantic lives here, shipped once per
+//! artifact in the [`EventFileHeaderV1`]. Enrichment fields
+//! (`source_snapshot_id`, `revision_id`, `semantic_lanes`, lambda
+//! identity) are modeled but `None` until authoritative compiler/cloud
+//! sources populate them — consumers must tolerate that.
+
 use crate::ids::{EngineId, FunctionId, ProcessEuid, ProgramId, SourceSnapshotId};
 
+/// Identity of a definition revision (BEP-053). Not yet populated by the
+/// runtime.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RevisionId(pub String);
 
+/// Stable key naming a definition site (`function:pkg.f`, `class:pkg.C`).
+/// The cross-revision join handle: two revisions of the same definition
+/// share a `DefinitionKey` but differ in [`RevisionId`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DefinitionKey(pub String);
 
+/// A 256-bit semantic hash (BEP-053 lane value). The runtime never computes
+/// these on hot paths; they arrive via compiler/cloud enrichment.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Hash256(pub [u8; 32]);
 
@@ -56,6 +74,9 @@ impl From<bex_vm_types::FunctionOrigin> for RuntimeFunctionOrigin {
     }
 }
 
+/// BEP-053 semantic-hash lanes for a definition. Distinct revisions may
+/// share identical lanes (a formatting-only change) — consumers must not
+/// collapse revisions by lane equality.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SemanticLanes {
     pub direct_interface: Hash256,
@@ -64,6 +85,10 @@ pub struct SemanticLanes {
     pub effective_implementation: Option<Hash256>,
 }
 
+/// One row of the per-artifact function table. `function_id` is the join
+/// key from events; it is NOT stable across recompiles (it is the
+/// compile-time pool index), so rows are only meaningful with their own
+/// artifact's header.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FunctionMetadata {
     pub function_id: FunctionId,
@@ -84,6 +109,10 @@ pub struct FunctionMetadata {
     pub semantic_lanes: Option<SemanticLanes>,
 }
 
+/// The function table shipped in every [`EventFileHeaderV1`]. Contains one
+/// row per compile-time function plus reserved synthetic rows (the
+/// spawn-closure root and the unknown-function sentinel) with ids just past
+/// the pool.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct FunctionMetadataTable {
     pub functions: Vec<FunctionMetadata>,
@@ -104,6 +133,9 @@ impl FunctionMetadataTable {
     }
 }
 
+/// Program-level metadata an engine derives at construction. `program_id`
+/// is currently random per engine instance (artifact-local joins only, not
+/// durable cross-run identity).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ProgramMetadata {
     pub program_id: ProgramId,
@@ -112,6 +144,9 @@ pub struct ProgramMetadata {
     pub function_table: FunctionMetadataTable,
 }
 
+/// The once-per-engine artifact header: process/engine/program scoping for
+/// every following event (events carry local ids only) plus the function
+/// join table. Emitted before any events.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EventFileHeaderV1 {
     pub process_euid: ProcessEuid,
@@ -119,6 +154,10 @@ pub struct EventFileHeaderV1 {
     pub program_id: ProgramId,
     pub source_snapshot_id: Option<SourceSnapshotId>,
     pub revision_id: Option<RevisionId>,
+    /// Wall-clock anchor for rebasing event timestamps: every event's
+    /// `timestamp_ns` is monotonic nanos since the *process* clock anchor
+    /// ([`crate::process_started_at_epoch_ns`]), so
+    /// `wall(event) = started_at_epoch_ns + event.timestamp_ns`.
     pub started_at_epoch_ns: u128,
     pub function_table: FunctionMetadataTable,
 }

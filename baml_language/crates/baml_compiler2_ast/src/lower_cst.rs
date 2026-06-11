@@ -262,6 +262,13 @@ fn lower_function(
     };
     let name = Name::new(name_token.text());
     let name_span = name_token.text_range();
+    // A function named `$id` is unreachable through a bare call (`$id()`
+    // resolves to the runtime-identity special form first) — reject the
+    // declaration with the reserved-name diagnostic instead of letting use
+    // sites fail with a misleading "`string` is not a function".
+    if name.as_str() == "$id" {
+        diags.push(LoweringDiagnostic::ReservedRuntimeIdBindingName { span: name_span });
+    }
 
     let generic_params_with_bounds = extract_generic_params_with_bounds(node);
     let generic_params: Vec<Name> = generic_params_with_bounds
@@ -504,6 +511,13 @@ pub(crate) fn lower_param(
         return None;
     };
     let param_name_str = name_token.text().to_string();
+    // `$id` is the runtime-identity special form; a parameter named `$id`
+    // would be a silently-dead binding (reads hit the special cases first).
+    if param_name_str == "$id" {
+        diags.push(LoweringDiagnostic::ReservedRuntimeIdBindingName {
+            span: name_token.text_range(),
+        });
+    }
     Some(Param {
         name: Name::new(&param_name_str),
         type_expr: param.ty().map(|te| {

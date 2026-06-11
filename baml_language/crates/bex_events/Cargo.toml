@@ -19,10 +19,10 @@ workspace = true
 
 [dependencies]
 baml_builtins2 = { workspace = true }
-base64 = { workspace = true }
 bex_external_types = { workspace = true }
 bex_vm_types = { workspace = true }
 sys_types = { workspace = true }
+base64 = { workspace = true }
 indexmap = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

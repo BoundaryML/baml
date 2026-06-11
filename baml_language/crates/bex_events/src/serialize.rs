@@ -239,8 +239,15 @@ pub fn event_to_jsonl(event: &RuntimeEvent) -> String {
 }
 
 /// Serialize a compact disk/batch BEX event to a single-line JSON string.
-pub fn disk_event_to_jsonl(event: &DiskEventV1) -> String {
-    let event_json = match event {
+///
+/// `engine_id` is written onto every line. This is interim-transport-only:
+/// the contract scopes events by their file/batch header (which carries the
+/// engine id once), but this JSONL writer appends events from *every* engine
+/// in the process to one file, where header-only scoping is ambiguous —
+/// after the second header, `{thread 1, call 1}` could belong to either
+/// engine. Delete the per-line field when per-engine transport lands.
+pub fn disk_event_to_jsonl(engine_id: crate::ids::EngineId, event: &DiskEventV1) -> String {
+    let mut event_json = match event {
         DiskEventV1::StartThread {
             thread_id,
             parent_thread_id,
@@ -308,6 +315,9 @@ pub fn disk_event_to_jsonl(event: &DiskEventV1) -> String {
             "timestamp_ns": timestamp_ns,
         }),
     };
+    if let Some(map) = event_json.as_object_mut() {
+        map.insert("engine_id".to_string(), serde_json::json!(engine_id.0));
+    }
 
     serde_json::to_string(&event_json).unwrap_or_else(|e| {
         #[allow(clippy::print_stderr)]
@@ -723,7 +733,7 @@ mod tests {
     use crate::{
         DefinitionKey, DiskEventV1, EventFileHeaderV1, FunctionMetadata, FunctionMetadataTable,
         RuntimeFunctionKind, RuntimeFunctionOrigin,
-        ids::{BexThreadId, CallId as BexCallId, EngineId, FunctionId, ProcessEuid, ProgramId},
+        ids::{BexCallId, BexThreadId, EngineId, FunctionId, ProcessEuid, ProgramId},
     };
 
     struct NoopHeap;
@@ -835,16 +845,19 @@ mod tests {
 
     #[test]
     fn disk_set_id_serializes_override_uuid_payload() {
-        let json: serde_json::Value =
-            serde_json::from_str(&disk_event_to_jsonl(&DiskEventV1::SetId {
+        let json: serde_json::Value = serde_json::from_str(&disk_event_to_jsonl(
+            EngineId(3),
+            &DiskEventV1::SetId {
                 thread_id: BexThreadId(7),
                 call_id: BexCallId(8),
                 id: [1; 16],
                 timestamp_ns: 9,
-            }))
-            .unwrap();
+            },
+        ))
+        .unwrap();
 
         assert_eq!(json["type"], "bex_set_id");
+        assert_eq!(json["engine_id"], 3);
         assert_eq!(json["thread_id"], 7);
         assert_eq!(json["call_id"], 8);
         assert_eq!(json["id"], "AQEBAQEBAQEBAQEBAQEBAQ");
@@ -894,6 +907,183 @@ mod tests {
         assert_eq!(
             json["function_table"][0]["definition_key"],
             "function:user.main"
+        );
+    }
+
+    /// T33: per-variant JSONL shape pins — exact key sets and `type` strings
+    /// are wire contract for interim consumers; a key typo here ships
+    /// silently otherwise.
+    #[test]
+    fn disk_event_jsonl_shapes_are_pinned_per_variant() {
+        use crate::{FunctionEndStatus, ThreadEndStatus};
+        fn keys(value: &serde_json::Value) -> Vec<String> {
+            let mut k: Vec<String> = value.as_object().unwrap().keys().cloned().collect();
+            k.sort();
+            k
+        }
+
+        let engine = EngineId(5);
+
+        let start_thread = serde_json::from_str::<serde_json::Value>(&disk_event_to_jsonl(
+            engine,
+            &DiskEventV1::StartThread {
+                thread_id: BexThreadId(1),
+                parent_thread_id: Some(BexThreadId(2)),
+                parent_call_id: Some(BexCallId(3)),
+                name: Some("worker".to_string()),
+                timestamp_ns: 4,
+            },
+        ))
+        .unwrap();
+        assert_eq!(start_thread["type"], "bex_start_thread");
+        assert_eq!(
+            keys(&start_thread),
+            [
+                "engine_id",
+                "name",
+                "parent_call_id",
+                "parent_thread_id",
+                "thread_id",
+                "timestamp_ns",
+                "type"
+            ]
+        );
+        assert_eq!(start_thread["parent_thread_id"], 2);
+        assert_eq!(start_thread["parent_call_id"], 3);
+
+        // Option fields serialize as null, not as absent keys.
+        let root_start = serde_json::from_str::<serde_json::Value>(&disk_event_to_jsonl(
+            engine,
+            &DiskEventV1::StartThread {
+                thread_id: BexThreadId(1),
+                parent_thread_id: None,
+                parent_call_id: None,
+                name: None,
+                timestamp_ns: 4,
+            },
+        ))
+        .unwrap();
+        assert!(root_start["parent_thread_id"].is_null());
+        assert!(root_start["parent_call_id"].is_null());
+        assert!(root_start["name"].is_null());
+
+        let call_function = serde_json::from_str::<serde_json::Value>(&disk_event_to_jsonl(
+            engine,
+            &DiskEventV1::CallFunction {
+                thread_id: BexThreadId(1),
+                call_id: BexCallId(2),
+                parent_call_id: Some(BexCallId(1)),
+                function_id: FunctionId(7),
+                timestamp_ns: 4,
+            },
+        ))
+        .unwrap();
+        assert_eq!(call_function["type"], "bex_call_function");
+        assert_eq!(
+            keys(&call_function),
+            [
+                "call_id",
+                "engine_id",
+                "function_id",
+                "parent_call_id",
+                "thread_id",
+                "timestamp_ns",
+                "type"
+            ]
+        );
+        assert_eq!(call_function["function_id"], 7);
+
+        let end_function = serde_json::from_str::<serde_json::Value>(&disk_event_to_jsonl(
+            engine,
+            &DiskEventV1::EndFunction {
+                thread_id: BexThreadId(1),
+                call_id: BexCallId(2),
+                status: FunctionEndStatus::Ok,
+                timestamp_ns: 4,
+            },
+        ))
+        .unwrap();
+        assert_eq!(end_function["type"], "bex_end_function");
+        assert_eq!(
+            keys(&end_function),
+            [
+                "call_id",
+                "engine_id",
+                "status",
+                "thread_id",
+                "timestamp_ns",
+                "type"
+            ]
+        );
+
+        let end_thread = serde_json::from_str::<serde_json::Value>(&disk_event_to_jsonl(
+            engine,
+            &DiskEventV1::EndThread {
+                thread_id: BexThreadId(1),
+                status: ThreadEndStatus::Completed,
+                timestamp_ns: 4,
+            },
+        ))
+        .unwrap();
+        assert_eq!(end_thread["type"], "bex_end_thread");
+        assert_eq!(
+            keys(&end_thread),
+            ["engine_id", "status", "thread_id", "timestamp_ns", "type"]
+        );
+
+        let heartbeat = serde_json::from_str::<serde_json::Value>(&disk_event_to_jsonl(
+            engine,
+            &DiskEventV1::Heartbeat { timestamp_ns: 4 },
+        ))
+        .unwrap();
+        assert_eq!(heartbeat["type"], "bex_heartbeat");
+        assert_eq!(keys(&heartbeat), ["engine_id", "timestamp_ns", "type"]);
+
+        let set_id = serde_json::from_str::<serde_json::Value>(&disk_event_to_jsonl(
+            engine,
+            &DiskEventV1::SetId {
+                thread_id: BexThreadId(1),
+                call_id: BexCallId(2),
+                id: [1; 16],
+                timestamp_ns: 4,
+            },
+        ))
+        .unwrap();
+        assert_eq!(set_id["type"], "bex_set_id");
+        assert_eq!(
+            keys(&set_id),
+            [
+                "call_id",
+                "engine_id",
+                "id",
+                "thread_id",
+                "timestamp_ns",
+                "type"
+            ]
+        );
+    }
+
+    /// T33 (statuses): the status strings are wire contract.
+    #[test]
+    fn status_strings_are_wire_contract() {
+        use crate::{FunctionEndStatus, ThreadEndStatus};
+        assert_eq!(super::function_end_status(&FunctionEndStatus::Ok), "ok");
+        assert_eq!(
+            super::function_end_status(&FunctionEndStatus::Error),
+            "error"
+        );
+        assert_eq!(
+            super::function_end_status(&FunctionEndStatus::Cancelled),
+            "cancelled"
+        );
+        assert_eq!(
+            super::thread_end_status(&ThreadEndStatus::Completed),
+            "completed"
+        );
+        assert_eq!(super::thread_end_status(&ThreadEndStatus::Error), "error");
+        assert_eq!(
+            super::thread_end_status(&ThreadEndStatus::Cancelled),
+            "cancelled"
         );
     }
 }

@@ -13,7 +13,7 @@ use std::{
     sync::{Mutex, OnceLock},
 };
 
-use crate::{DiskEventV1, EventFileHeaderV1, RuntimeEvent, SpanId};
+use crate::{DiskEventV1, EventFileHeaderV1, RuntimeEvent, SpanId, ids::EngineId};
 
 // ─────────────────────────── Event Sink ─────────────────────────────────
 
@@ -26,7 +26,13 @@ pub trait EventSink: Send + Sync {
     fn send(&self, event: RuntimeEvent);
     /// Send a compact BEX disk/batch event. Default is no-op for sinks that
     /// only understand the legacy span event stream.
-    fn send_disk_event(&self, _event: DiskEventV1) {}
+    ///
+    /// `engine` identifies the emitting engine: one sink instance may be
+    /// shared by every engine in the process (LSP, bridges), and disk events
+    /// deliberately don't carry engine scoping themselves (header-only
+    /// scoping); without it, two engines' `{thread 1, call 1}` streams are
+    /// indistinguishable in a shared artifact.
+    fn send_disk_event(&self, _engine: EngineId, _event: DiskEventV1) {}
     /// Send a file/batch header carrying scoping and program metadata. Default
     /// is no-op for sinks that only consume live event streams.
     fn send_event_file_header(&self, _header: EventFileHeaderV1) {}
@@ -52,9 +58,9 @@ impl EventSink for FanOutEventSink {
         }
     }
 
-    fn send_disk_event(&self, event: DiskEventV1) {
+    fn send_disk_event(&self, engine: EngineId, event: DiskEventV1) {
         for sink in &self.sinks {
-            sink.send_disk_event(event.clone());
+            sink.send_disk_event(engine, event.clone());
         }
     }
 

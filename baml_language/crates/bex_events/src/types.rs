@@ -6,7 +6,7 @@ use web_time::SystemTime;
 
 use crate::{
     SpanContext, SpanId,
-    ids::{BexThreadId, CallId as BexCallId, CallRef, FunctionId},
+    ids::{BexCallId, BexThreadId, CallRef, FunctionId},
 };
 
 /// Compact runtime identity attached to events that occur inside a BEX call.

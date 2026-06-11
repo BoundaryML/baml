@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 4158
 ---
 === HIR2 ===
 
@@ -564,6 +563,11 @@ function baml.http.to_json(self: ?) -> baml.json.json  [expr] {
 function baml.http.to_json(self: ?) -> baml.json.json  [expr] {
   baml.json.parse(baml.json.to_string(self))
 }
+
+--- <builtin>/baml/ns_id/id.baml ---
+function baml.id.current() -> string  [builtin]
+function baml.id.new() -> string  [builtin]
+function baml.id.set(id: string) -> string  [builtin]
 
 --- <builtin>/baml/ns_io/io.baml ---
 function baml.io.eprint(s: string) -> null  [builtin]

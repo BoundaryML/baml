@@ -1197,6 +1197,7 @@ dependencies = [
  "baml_project",
  "baml_type",
  "bex_events",
+ "bex_events_native",
  "bex_external_types",
  "bex_heap",
  "bex_resource_types",

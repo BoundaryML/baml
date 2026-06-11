@@ -388,6 +388,14 @@ impl ThrowsAnalysisContext for BuilderThrowsAnalysis<'_, '_> {
         let target = self.builder.call_target_name(callee_expr_id, body)?;
         self.builder.lookup_named_throw_summary(&target)
     }
+
+    fn runtime_id_set_throws(&self) -> Option<BTreeSet<Ty>> {
+        // Throw-set keys are namespace-relative within their package: the
+        // builtin lives in package `baml`, namespace `id`, so its key is
+        // `id.set` (own-package lookup covers compiling the std lib itself).
+        self.builder
+            .lookup_named_throw_summary(&Name::new("id.set"))
+    }
 }
 
 /// How the receiver of an interface-member resolution pins `Self`.
@@ -1982,9 +1990,16 @@ impl<'db> TypeInferenceBuilder<'db> {
             if let Some(label) = label {
                 saw_named = true;
                 let Some(param_index) = name_to_index.get(label).copied() else {
+                    // `foo($id = x)` deserves a targeted message: overrides
+                    // are set inside the callee, not at the call site (the
+                    // call-site form is not part of the language surface).
                     self.context.report_simple(
-                        TirTypeError::UnknownNamedArgument {
-                            name: label.clone(),
+                        if label.as_str() == "$id" {
+                            TirTypeError::RuntimeIdCallSiteArgument
+                        } else {
+                            TirTypeError::UnknownNamedArgument {
+                                name: label.clone(),
+                            }
                         },
                         arg_expr,
                     );
@@ -4203,6 +4218,21 @@ impl<'db> TypeInferenceBuilder<'db> {
         base: ExprId,
         member: &Name,
     ) -> Ty {
+        // Member access rooted at `$id` gets the same targeted diagnostic as
+        // the plain-path form (`infer_path`'s multi-segment branch); without
+        // this, the generic machinery suggests rewriting `$id?.m` to `$id.m`
+        // — which is itself rejected.
+        if Self::is_runtime_id_path(body, base) {
+            self.context.report_simple(
+                TirTypeError::RuntimeIdMemberAccess {
+                    member: member.clone(),
+                },
+                expr_id,
+            );
+            return Ty::Unknown {
+                attr: TyAttr::default(),
+            };
+        }
         // Optional chaining: a?.b — if a is null, short-circuits to null.
         // Type: if a: T?, resolve member on T, wrap result in Optional.
         let base_ty = self.infer_expr(base, body);
@@ -5860,7 +5890,17 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // variable's *declared* type, not its potentially-narrowed type.
                 // Narrowing may have refined x: int? → null inside an if-branch,
                 // but assignment should still accept any value assignable to int?.
-                let declared_ty = self.get_declared_type(*target, body);
+                //
+                // `$id = e` is a special form (MIR lowers it to `baml.id.set(e)`,
+                // see lower.rs); `$id` is not a local, so type-check the RHS
+                // against the builtin's `string` parameter here.
+                let declared_ty = if Self::is_runtime_id_path(body, *target) {
+                    Some(Ty::String {
+                        attr: TyAttr::default(),
+                    })
+                } else {
+                    self.get_declared_type(*target, body)
+                };
                 let value_ty = self.infer_expr(*value, body);
                 if let Some(ref decl_ty) = declared_ty {
                     if !matches!(decl_ty, Ty::Unknown { .. } | Ty::Error { .. })
@@ -5878,9 +5918,10 @@ impl<'db> TypeInferenceBuilder<'db> {
                     } else {
                         self.record_function_coercion_if_needed(*value, &value_ty, decl_ty);
                     }
-                    // Update the local to the assigned value's type (invalidates narrowing)
+                    // Update the local to the assigned value's type (invalidates
+                    // narrowing). `$id` is not a local — don't create one.
                     if let Expr::Path(segments) = &body.exprs[*target] {
-                        if segments.len() == 1 {
+                        if segments.len() == 1 && segments[0].as_str() != "$id" {
                             self.assign_local(segments[0].clone(), value_ty);
                         }
                     }
@@ -5894,6 +5935,17 @@ impl<'db> TypeInferenceBuilder<'db> {
                 false
             }
             Stmt::AssignOp { target, op, value } => {
+                // `$id OP= e` can never be meaningful: `baml.id.set` only
+                // accepts fresh overrides from `baml.id.new()`, so a derived
+                // value (e.g. `$id + "-suffix"`) is always rejected at
+                // runtime. Fail at compile time instead of silently no-oping
+                // (MIR's lvalue lowering has no `$id` write target).
+                if Self::is_runtime_id_path(body, *target) {
+                    self.context
+                        .report_simple(TirTypeError::RuntimeIdCompoundAssignment, *target);
+                    self.infer_expr(*value, body);
+                    return false;
+                }
                 let target_has_optional = Self::expr_contains_optional(*target, body);
                 if target_has_optional {
                     self.in_optional_chain += 1;
@@ -6092,6 +6144,14 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
         }
         None
+    }
+
+    /// True when `expr` is the bare `$id` special form (the runtime-identity
+    /// read/write target — see the `$id` stub in `infer_path` and the MIR
+    /// lowering in lower.rs).
+    fn is_runtime_id_path(body: &ExprBody, expr: ExprId) -> bool {
+        matches!(&body.exprs[expr], Expr::Path(segments)
+            if segments.len() == 1 && segments[0].as_str() == "$id")
     }
 
     fn report_refutable_pattern_in_irrefutable_context(
@@ -7594,6 +7654,19 @@ impl<'db> TypeInferenceBuilder<'db> {
             Stmt::Assign { target, value } | Stmt::AssignOp { target, value, .. } => {
                 self.collect_throw_facts_from_expr(*target, body, out);
                 self.collect_throw_facts_from_expr(*value, body, out);
+                // `$id = e` is an implicit `baml.id.set(e)` call (MIR
+                // `lower_set_runtime_id`); its declared throws escape here
+                // exactly as a direct call's would.
+                if Self::is_runtime_id_path(body, *target) {
+                    match self.lookup_named_throw_summary(&Name::new("id.set")) {
+                        Some(summary) => out.extend(summary),
+                        None => {
+                            out.insert(Ty::Unknown {
+                                attr: TyAttr::default(),
+                            });
+                        }
+                    }
+                }
             }
             Stmt::Throw { value } => {
                 self.collect_throw_facts_from_expr(*value, body, out);
@@ -7740,6 +7813,10 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
         if segments.len() == 1 {
             let name = &segments[0];
+            // `$id` is the runtime-identity special form: it types as
+            // `string` here, and MIR lowers the read to `baml.id.current()`
+            // (lower.rs `lower_path`) and `$id = e` to `baml.id.set(e)`
+            // (lower.rs `AstStmt::Assign`). Keep the three sites in sync.
             if name.as_str() == "$id" {
                 return Ty::String {
                     attr: TyAttr::default(),
@@ -7779,6 +7856,20 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             ty
         } else if segments.len() >= 2 {
+            // Member access rooted at `$id` (`$id.len()`): `$id` is a value,
+            // not a binding, and the member machinery below would report a
+            // misleading "unresolved name: $id". Give the targeted fix.
+            if segments[0].as_str() == "$id" {
+                self.context.report_simple(
+                    TirTypeError::RuntimeIdMemberAccess {
+                        member: segments[1].clone(),
+                    },
+                    expr_id,
+                );
+                return Ty::Unknown {
+                    attr: TyAttr::default(),
+                };
+            }
             // Dispatch based on whether the root segment is a known local variable.
             // We check self.locals directly rather than going through the HIR
             // path_resolution_query, because ExprIds are per-function-body arenas

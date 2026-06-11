@@ -139,10 +139,9 @@ pub fn runtime_event_to_bytes(
 mod tests {
     use std::time::Duration;
 
-    use bex_events::{FunctionEnd, FunctionStart, SpanContext, SpanId};
     use bex_events::{
-        RuntimeEventIdentity,
-        ids::{BexThreadId, CallId as BexCallId, CallRef, EngineId, FunctionId, ProcessEuid},
+        FunctionEnd, FunctionStart, RuntimeEventIdentity, SpanContext, SpanId,
+        ids::{BexCallId, BexThreadId, CallRef, EngineId, FunctionId, ProcessEuid},
     };
     use bex_project::BexExternalValue;
     use web_time::SystemTime;
