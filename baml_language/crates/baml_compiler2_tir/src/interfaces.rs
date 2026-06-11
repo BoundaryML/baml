@@ -1380,7 +1380,7 @@ pub fn type_implements_with_deps<'db>(
     if package_implements_registry(db, package_id).type_implements(ty, iface_qtn) {
         return true;
     }
-    baml_compiler2_hir::package::package_dependencies(db, package_id)
+    baml_compiler2_hir::package::package_dependency_closure(db, package_id)
         .iter()
         .any(|dep| package_implements_registry(db, *dep).type_implements(ty, iface_qtn))
 }
@@ -1660,7 +1660,7 @@ pub fn package_coherence_diagnostics<'db>(
     pkg_id: PackageId<'db>,
 ) -> Vec<CoherenceViolation> {
     let own_rules = &package_implements_registry(db, pkg_id).interface_impl_rules;
-    let deps = baml_compiler2_hir::package::package_dependencies(db, pkg_id);
+    let deps = baml_compiler2_hir::package::package_dependency_closure(db, pkg_id);
 
     // Type aliases (own package plus dependency exports) so alias-referencing
     // for-types and interface args normalize before the overlap comparison.
