@@ -1658,6 +1658,14 @@ struct LoweringContext<'db> {
     // access through the interface dispatch machinery.
     generic_param_bounds: FxHashMap<Name, Tir2Ty>,
 
+    // TIR types of the in-scope lambda parameters, by name. TIR does not record
+    // `path_segment_types` for a lambda-parameter receiver (`(a: T) -> a.m()`),
+    // so interface dispatch on such a receiver falls back to this map to learn
+    // its static type — e.g. a bounded type variable whose `extends` bound
+    // names the dispatching interface (`a.compare(b)` where `T extends
+    // Comparable`). Saved/restored across nested lambdas.
+    lambda_param_tir_types: FxHashMap<Name, Tir2Ty>,
+
     // The FileScopeId of the expression body currently being lowered.
     // Updated when descending into lambda bodies (Phase 3+).
     current_scope: FileScopeId,
@@ -2830,6 +2838,7 @@ impl<'db> LoweringContext<'db> {
             call_plans,
             function_coercions,
             generic_param_bounds,
+            lambda_param_tir_types: FxHashMap::default(),
             current_scope: func_scope_id,
             current_metadata_scope: MetadataScope::Body(func_scope_id),
             body: expr_body,
@@ -3050,6 +3059,7 @@ impl<'db> LoweringContext<'db> {
             call_plans,
             function_coercions,
             generic_param_bounds: FxHashMap::default(),
+            lambda_param_tir_types: FxHashMap::default(),
             current_scope: let_scope_id,
             current_metadata_scope: MetadataScope::Body(let_scope_id),
             body: expr_body,
@@ -4216,7 +4226,15 @@ impl<'db> LoweringContext<'db> {
             false,
         );
 
-        // Declare parameter locals _1..=_n.
+        // Declare parameter locals _1..=_n. Lower their annotations with the
+        // enclosing generic params in scope so a parameter typed as an
+        // enclosing type variable (`(a: T) -> ...`) resolves to that variable,
+        // and record the lowered TIR type so interface dispatch on the
+        // parameter can recover its (possibly bounded) static type — TIR does
+        // not surface it via `path_segment_types` for lambda receivers.
+        // Restored after the body (`saved_lambda_param_tir_types` below).
+        let saved_lambda_param_tir_types = self.lambda_param_tir_types.clone();
+        let enclosing_generics = self.enclosing_generic_params();
         for (param_idx, param) in func_def.params.iter().enumerate() {
             let param_ty = match &param.type_expr {
                 Some(spanned_te) => {
@@ -4226,9 +4244,11 @@ impl<'db> LoweringContext<'db> {
                         &spanned_te.expr,
                         pkg_items,
                         &pkg_info.namespace_path,
-                        &[],
+                        &enclosing_generics,
                         &mut diags,
                     );
+                    self.lambda_param_tir_types
+                        .insert(param.name.clone(), tir_ty.clone());
                     self.resolved_aliases.convert(&tir_ty)
                 }
                 None => baml_type::Ty::Null {
@@ -4296,6 +4316,7 @@ impl<'db> LoweringContext<'db> {
         let newly_needed_transitive = std::mem::take(&mut self.transitive_captures_needed);
 
         // Restore parent state.
+        self.lambda_param_tir_types = saved_lambda_param_tir_types;
         self.builder = saved_builder;
         self.body = saved_body;
         self.source_map = saved_source_map;
@@ -6059,6 +6080,16 @@ impl LoweringContext<'_> {
                                 Name::new("Self"),
                                 baml_compiler2_tir::ty::TyAttr::default(),
                             ))
+                        } else {
+                            None
+                        }
+                    })
+                    // A lambda-parameter receiver (`(a: T) -> a.compare(b)`) has
+                    // no `path_segment_types` entry; recover its declared type so
+                    // a method on its (bounded) type variable dispatches.
+                    .or_else(|| {
+                        if segments.len() == 2 {
+                            self.lambda_param_tir_types.get(&segments[0]).cloned()
                         } else {
                             None
                         }
@@ -8729,17 +8760,19 @@ impl<'db> LoweringContext<'db> {
                 method,
             )
         {
+            // A concrete non-class receiver (e.g. `int[]`, `map<string, T>`)
+            // statically pins exactly one implementor of `method` — there is
+            // nothing to discriminate at runtime. Return that single candidate
+            // so dispatch lowers to an unconditional call: this is both an
+            // optimization and a correctness fix, since a container receiver's
+            // `Type` guard (`int[]`) has no representable `IsType` form and
+            // would otherwise always fail and hit the `unreachable` arm.
             let runtime_ty = self.convert_tir_ty_for_runtime(recv_tir_ty);
-            if !resolved.iter().any(|candidate| {
-                matches!(&candidate.guard, InterfaceDispatchGuard::Type(ty) if *ty == runtime_ty)
-                    && candidate.item_ref == item_ref
-            }) {
-                resolved.push(InterfaceMethodCandidate {
-                    guard: InterfaceDispatchGuard::Type(runtime_ty),
-                    item_ref,
-                    frame_seed: CalleeFrameSeed::Static(frame_type_args),
-                });
-            }
+            return vec![InterfaceMethodCandidate {
+                guard: InterfaceDispatchGuard::Type(runtime_ty),
+                item_ref,
+                frame_seed: CalleeFrameSeed::Static(frame_type_args),
+            }];
         }
         resolved
     }
@@ -8771,6 +8804,14 @@ impl<'db> LoweringContext<'db> {
         let bb_join = self.builder.create_block();
         let bb_otherwise = self.builder.create_block();
 
+        // A single candidate means the static receiver type admits exactly one
+        // implementor, so it provably matches at runtime and the guard is
+        // redundant. Skipping it also handles concrete container receivers
+        // (e.g. `int[]` dispatched through a blanket `implements ... for T[]`),
+        // whose `IsType` guard has no representable form and would otherwise
+        // always fail and fall to the `unreachable` arm.
+        let single_candidate = resolved.len() == 1;
+
         let mut next_check = bb_entry;
         for (idx, candidate) in resolved.iter().enumerate() {
             let bb_body = self.builder.create_block();
@@ -8781,12 +8822,16 @@ impl<'db> LoweringContext<'db> {
             };
 
             self.builder.set_current_block(next_check);
-            self.emit_interface_dispatch_guard_branch(
-                recv_local,
-                &candidate.guard,
-                bb_body,
-                bb_next,
-            );
+            if single_candidate {
+                self.builder.goto(bb_body);
+            } else {
+                self.emit_interface_dispatch_guard_branch(
+                    recv_local,
+                    &candidate.guard,
+                    bb_body,
+                    bb_next,
+                );
+            }
             self.builder.set_current_block(bb_body);
             // Seed the callee frame's `type_args` so a dispatched method that
             // reads its enclosing `T` at runtime — e.g. building `Other<T>{}` or
@@ -9014,6 +9059,11 @@ impl<'db> LoweringContext<'db> {
         let bb_join = self.builder.create_block();
         let bb_otherwise = self.builder.create_block();
 
+        // See `emit_method_candidate_switch`: a single candidate provably
+        // matches, so the guard is redundant (and unrepresentable for some
+        // concrete container receiver types).
+        let single_candidate = resolved.len() == 1;
+
         let mut next_check = bb_entry;
         for (idx, candidate) in resolved.iter().enumerate() {
             let bb_body = self.builder.create_block();
@@ -9024,12 +9074,16 @@ impl<'db> LoweringContext<'db> {
             };
 
             self.builder.set_current_block(next_check);
-            self.emit_interface_dispatch_guard_branch(
-                recv_local,
-                &candidate.guard,
-                bb_body,
-                bb_next,
-            );
+            if single_candidate {
+                self.builder.goto(bb_body);
+            } else {
+                self.emit_interface_dispatch_guard_branch(
+                    recv_local,
+                    &candidate.guard,
+                    bb_body,
+                    bb_next,
+                );
+            }
             self.builder.set_current_block(bb_body);
             self.builder.assign(
                 dest.clone(),

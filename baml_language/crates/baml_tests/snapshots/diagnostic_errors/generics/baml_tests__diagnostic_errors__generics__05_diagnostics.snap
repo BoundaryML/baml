@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 40539
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] error: type mismatch: expected T, got string
@@ -46,12 +47,32 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0001
 ─────╯
 
+  [type] error: type `Box` expects 1 type argument(s), got 2
+     ╭─[ classes.baml:129:1 ]
+     │
+ 129 │     Box<int, string> { value: 42 }
+     │ ─────────────────┬────────────────  
+     │                  ╰────────────────── type `Box` expects 1 type argument(s), got 2
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
   [type] error: type `Pair` expects 2 type argument(s), got 1
      ╭─[ classes.baml:133:34 ]
      │
  133 │ function wrong_arity_partial() -> Pair<int> {
      │                                  ─────┬────  
      │                                       ╰────── type `Pair` expects 2 type argument(s), got 1
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] error: type `Pair` expects 2 type argument(s), got 1
+     ╭─[ classes.baml:134:1 ]
+     │
+ 134 │     Pair<int> { first: 1, second: "two" }
+     │ ────────────────────┬────────────────────  
+     │                     ╰────────────────────── type `Pair` expects 2 type argument(s), got 1
      │ 
      │ Note: Error code: E0001
 ─────╯
@@ -76,6 +97,16 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0001
 ─────╯
 
+  [type] error: type `Plain` expects 0 type argument(s), got 1
+     ╭─[ classes.baml:146:1 ]
+     │
+ 146 │     Plain<int> { name: "hello" }
+     │ ────────────────┬───────────────  
+     │                 ╰───────────────── type `Plain` expects 0 type argument(s), got 1
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
   [type] error: unreachable arm
      ╭─[ classes.baml:197:21 ]
      │
@@ -96,6 +127,18 @@ source: crates/baml_tests/src/generated_tests.rs
    │     
    │     Note: Error code: E0003
 ───╯
+
+  [type] error: unresolved type: baml.HttpRequest
+    ╭─[ fetch_as.baml:9:25 ]
+    │
+  9 │ ╭─▶     baml.fetch_as<Todo>(baml.HttpRequest {
+    ┆ ┆   
+ 12 │ ├─▶     })
+    │ │            
+    │ ╰──────────── unresolved type: baml.HttpRequest
+    │     
+    │     Note: Error code: E0002
+────╯
 
   [type] error: unresolved name: HttpMethod
     ╭─[ fetch_as.baml:10:16 ]

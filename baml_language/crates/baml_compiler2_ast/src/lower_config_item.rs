@@ -48,13 +48,13 @@ pub(crate) fn lower_config_value_with_env_refs(
     let is_int = cv_node
         .descendants_with_tokens()
         .filter_map(rowan::NodeOrToken::into_token)
-        .filter(|t| !matches!(t.kind(), SyntaxKind::WHITESPACE | SyntaxKind::NEWLINE))
+        .filter(|t| !t.kind().is_trivia())
         .all(|t| t.kind() == SyntaxKind::INTEGER_LITERAL);
 
     let is_float = cv_node
         .descendants_with_tokens()
         .filter_map(rowan::NodeOrToken::into_token)
-        .filter(|t| !matches!(t.kind(), SyntaxKind::WHITESPACE | SyntaxKind::NEWLINE))
+        .filter(|t| !t.kind().is_trivia())
         .all(|t| t.kind() == SyntaxKind::FLOAT_LITERAL);
 
     if is_float {
@@ -176,13 +176,7 @@ mod tests {
     /// client definition's config block.
     fn find_config_item(root: &SyntaxNode, target_key: &str) -> cst::ConfigItem {
         root.descendants()
-            .filter_map(cst::ClientDef::cast)
-            .flat_map(|client| {
-                client
-                    .config_block()
-                    .into_iter()
-                    .flat_map(|cb| cb.items().collect::<Vec<_>>())
-            })
+            .filter_map(cst::ConfigItem::cast)
             .find(|item| item.key().map(|k| k.text().to_string()) == Some(target_key.to_string()))
             .expect("config item not found")
     }
@@ -284,5 +278,36 @@ client MyClient {
             exprs[inner_entries[0].1],
             Expr::Literal(Literal::String("secret".to_string()))
         );
+    }
+
+    #[test]
+    fn commented_numeric_config_value_lowers_to_int() {
+        let source = r#"
+client MyClient {
+  provider openai
+  options {
+    max_retries // key trailing
+    // value leading
+    3 // value trailing
+    max_delay_ms /* key trailing */
+    /* value leading */
+    1000 /* value trailing */
+  }
+}
+"#;
+        let root = parse(source);
+        let max_retries = find_config_item(&root, "max_retries");
+        let max_delay_ms = find_config_item(&root, "max_delay_ms");
+
+        let mut exprs: la_arena::Arena<Expr> = la_arena::Arena::new();
+        let mut alloc = |expr: Expr| -> ExprId { exprs.alloc(expr) };
+
+        let max_retries_id =
+            lower_config_value_with_env_refs(&max_retries, &mut alloc, &mut Vec::new());
+        let max_delay_ms_id =
+            lower_config_value_with_env_refs(&max_delay_ms, &mut alloc, &mut Vec::new());
+
+        assert_eq!(exprs[max_retries_id], Expr::Literal(Literal::Int(3)));
+        assert_eq!(exprs[max_delay_ms_id], Expr::Literal(Literal::Int(1000)));
     }
 }

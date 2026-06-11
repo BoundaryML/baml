@@ -75,35 +75,57 @@ function Foo() -> Bar {
 //    ╭─[ expr_constructors_invalid.baml:7:20 ]
 //    │
 //  7 │   let x = Bar { a: "hello", c: 12 };
-//    │                    ───┬───  
+//    │                    ───┬───
 //    │                       ╰───── type mismatch: expected int, got "hello"
-//    │ 
+//    │
 //    │ Note: Error code: E0001
 // ───╯
+// error: unresolved type: baml.HttpRequest
+//     ╭─[ expr_constructors_invalid.baml:8:16 ]
+//     │
+//   8 │ ╭─▶   let req_bad = baml.HttpRequest {
+//     ┆ ┆
+//  12 │ ├─▶   };
+//     │ │
+//     │ ╰────────── unresolved type: baml.HttpRequest
+//     │
+//     │     Note: Error code: E0002
+// ────╯
 // error: unresolved name: a
 //     ╭─[ expr_constructors_invalid.baml:11:21 ]
 //     │
 //  11 │     query_params: { a 10 },
-//     │                     ┬  
+//     │                     ┬
 //     │                     ╰── unresolved name: a
-//     │ 
+//     │
 //     │ Note: Error code: E0003
+// ────╯
+// error: unresolved type: baml.HttpRequest
+//     ╭─[ expr_constructors_invalid.baml:13:17 ]
+//     │
+//  13 │ ╭─▶   let req_good = baml.HttpRequest {
+//     ┆ ┆
+//  17 │ ├─▶   };
+//     │ │
+//     │ ╰────────── unresolved type: baml.HttpRequest
+//     │
+//     │     Note: Error code: E0002
 // ────╯
 // error: unresolved name: Authorization
 //     ╭─[ expr_constructors_invalid.baml:15:16 ]
 //     │
 //  15 │     headers: { Authorization "Bearer mytoken" },
-//     │                ──────┬──────  
+//     │                ──────┬──────
 //     │                      ╰──────── unresolved name: Authorization
-//     │ 
+//     │
 //     │ Note: Error code: E0003
 // ────╯
 // error: unresolved name: foo
 //     ╭─[ expr_constructors_invalid.baml:16:21 ]
 //     │
 //  16 │     query_params: { foo "bar" },
-//     │                     ─┬─  
+//     │                     ─┬─
 //     │                      ╰─── unresolved name: foo
-//     │ 
+//     │
 //     │ Note: Error code: E0003
 // ────╯

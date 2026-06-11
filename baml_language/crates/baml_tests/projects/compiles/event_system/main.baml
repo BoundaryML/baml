@@ -6,6 +6,10 @@ class User {
     email string
 }
 
+enum LogStatus {
+    Active
+}
+
 function simple_function() -> int {
     42
 }
@@ -39,6 +43,19 @@ function test_logging() -> void {
     log.info({ user: user, status: "processing" })
     log.warn({ warning: "Resource usage high" })
     log.error({ code: "E001", retries: 3 })
+}
+
+function test_logging_any_values() -> void {
+    let user = User { id: 123, name: "Alice", email: "alice@example.com" }
+
+    log.info("plain message")
+    log.debug(2)
+    log.warn(true)
+    log.error(null)
+    log.info(["a", "b"])
+    log.info(user)
+    log.info(LogStatus.Active)
+    log.info({ event: "structured", user: user })
 }
 
 // Test combined function execution with events

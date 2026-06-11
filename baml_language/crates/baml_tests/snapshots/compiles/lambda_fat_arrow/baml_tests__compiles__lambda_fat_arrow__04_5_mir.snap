@@ -55,10 +55,10 @@ fn user.test_generic() -> int {
 }
 
 // lambda[0]
-fn .<lambda(test_generic, 0)>(x: void) -> null {
+fn .<lambda(test_generic, 0)>(x: unknown) -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: void // x // param
+    let _1: unknown // x // param
 
     bb0: {
         _0 = copy _1;

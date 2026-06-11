@@ -113,6 +113,11 @@ pub enum TirTypeError {
         scrutinee_type: Ty,
         missing_cases: Vec<String>,
     },
+    /// `catch_all` is missing arms for one or more caught throw types.
+    NonExhaustiveCatchAll {
+        caught_type: Ty,
+        missing_cases: Vec<String>,
+    },
     /// A `match`/`catch` arm can never execute because previous arms are exhaustive.
     UnreachableArm,
     /// Or-pattern alternatives bind the same name with conflicting narrow
@@ -478,6 +483,17 @@ impl fmt::Display for TirTypeError {
                     f,
                     "non-exhaustive match on `{}`; missing: {}",
                     scrutinee_type.render_user_facing(),
+                    missing_cases.join(", ")
+                )
+            }
+            TirTypeError::NonExhaustiveCatchAll {
+                caught_type,
+                missing_cases,
+            } => {
+                write!(
+                    f,
+                    "non-exhaustive catch_all on `{}`; missing: {}",
+                    caught_type.render_user_facing(),
                     missing_cases.join(", ")
                 )
             }
@@ -1104,6 +1120,22 @@ impl<'db> InferContext<'db> {
     /// [`diagnostic_count`](Self::diagnostic_count)).
     pub fn truncate_diagnostics(&self, n: usize) {
         self.diagnostics.borrow_mut().diagnostics.truncate(n);
+    }
+
+    pub fn remap_diagnostics_after(&self, n: usize, source_map: &AstSourceMap) {
+        let mut diagnostics = self.diagnostics.borrow_mut();
+        for diagnostic in diagnostics.diagnostics.iter_mut().skip(n) {
+            diagnostic.primary = DiagnosticLocation::Span(match diagnostic.primary {
+                DiagnosticLocation::Expr(id) => source_map.expr_span(id),
+                DiagnosticLocation::ExprMember(id) => source_map.member_access_member_span(id),
+                DiagnosticLocation::ExprSegment(id, segment_idx) => {
+                    source_map.path_segment_span(id, segment_idx)
+                }
+                DiagnosticLocation::Stmt(id) => source_map.stmt_span(id),
+                DiagnosticLocation::TypeAnnot(id) => source_map.type_annotation_span(id),
+                DiagnosticLocation::Span(range) => range,
+            });
+        }
     }
 
     pub fn scope(&self) -> ScopeId<'db> {

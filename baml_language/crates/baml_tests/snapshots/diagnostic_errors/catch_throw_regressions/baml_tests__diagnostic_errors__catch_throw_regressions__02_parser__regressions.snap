@@ -455,6 +455,158 @@ SOURCE_FILE
                 QUOTE """
             R_BRACE "}"
         R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "BuildError"
+    L_BRACE "{"
+    FIELD
+      WORD "reason"
+      TYPE_EXPR "string"
+        WORD "string"
+    R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "GenerateWithBuildError"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "ok"
+        COLON ":"
+        TYPE_EXPR "bool"
+          WORD "bool"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        IF_EXPR
+          KW_IF "if"
+          PAREN_EXPR
+            L_PAREN "("
+            UNARY_EXPR "!ok"
+              NOT "!"
+              WORD "ok"
+            R_PAREN ")"
+          BLOCK_EXPR
+            L_BRACE "{"
+            THROW_STMT
+              THROW_EXPR
+                KW_THROW "throw"
+                OBJECT_LITERAL
+                  WORD "BuildError"
+                  L_BRACE "{"
+                  OBJECT_FIELD
+                    WORD "reason"
+                    COLON ":"
+                    STRING_LITERAL "generate failed"
+                      QUOTE """
+                      WORD "generate"
+                      WORD "failed"
+                      QUOTE """
+                  R_BRACE "}"
+              SEMICOLON ";"
+            R_BRACE "}"
+        SEMICOLON ";"
+        IF_EXPR
+          KW_IF "if"
+          PAREN_EXPR "(ok)"
+            L_PAREN "("
+            WORD "ok"
+            R_PAREN ")"
+          BLOCK_EXPR
+            L_BRACE "{"
+            THROW_STMT
+              THROW_EXPR
+                KW_THROW "throw"
+                STRING_LITERAL "string"
+                  QUOTE """
+                  WORD "string"
+                  QUOTE """
+            R_BRACE "}"
+        STRING_LITERAL "ok"
+          QUOTE """
+          WORD "ok"
+          QUOTE """
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "BuildWithBuildError"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "ok"
+        COLON ":"
+        TYPE_EXPR "bool"
+          WORD "bool"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "GenerateWithBuildError"
+          CALL_ARGS
+            L_PAREN "("
+            CALL_ARG "ok"
+              WORD "ok"
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "CatchAllMissingString"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "ok"
+        COLON ":"
+        TYPE_EXPR "bool"
+          WORD "bool"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CATCH_EXPR
+          CALL_EXPR
+            WORD "BuildWithBuildError"
+            CALL_ARGS
+              L_PAREN "("
+              CALL_ARG "ok"
+                WORD "ok"
+              R_PAREN ")"
+          CATCH_CLAUSE
+            KW_CATCH_ALL "catch_all"
+            L_PAREN "("
+            CATCH_BINDING "e"
+              WORD "e"
+            R_PAREN ")"
+            L_BRACE "{"
+            CATCH_ARM
+              PATTERN
+                TYPE_PATTERN
+                  TYPE_EXPR "BuildError"
+                    WORD "BuildError"
+              FAT_ARROW "=>"
+              BINARY_EXPR
+                STRING_LITERAL "recovered: "
+                  QUOTE """
+                  WORD "recovered"
+                  COLON ":"
+                  QUOTE """
+                PLUS "+"
+                PATH_EXPR "e.reason"
+                  WORD "e"
+                  DOT "."
+                  WORD "reason"
+              COMMA ","
+            R_BRACE "}"
+        R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
     WORD "UnreachableTailStillChecked"

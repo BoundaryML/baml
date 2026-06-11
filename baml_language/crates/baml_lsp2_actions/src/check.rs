@@ -6237,6 +6237,20 @@ fn source_aware_tir_type_error_message(
                 )
             }
         }
+        TirTypeError::NonExhaustiveCatchAll {
+            caught_type,
+            missing_cases,
+        } => {
+            if missing_cases.is_empty() {
+                format!("non-exhaustive catch_all on type {}", ty(caught_type))
+            } else {
+                format!(
+                    "non-exhaustive catch_all on type {}; missing: {}",
+                    ty(caught_type),
+                    missing_cases.join(", ")
+                )
+            }
+        }
         TirTypeError::OrPatternBindingTypeMismatch {
             name,
             first_type,
@@ -6317,7 +6331,9 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::MissingReturn { .. } => DiagnosticId::MissingReturnExpression,
         TirTypeError::AliasCycle { .. } => DiagnosticId::AliasCycle,
         TirTypeError::ClassCycle { .. } => DiagnosticId::ClassCycle,
-        TirTypeError::NonExhaustiveMatch { .. } => DiagnosticId::NonExhaustiveMatch,
+        TirTypeError::NonExhaustiveMatch { .. } | TirTypeError::NonExhaustiveCatchAll { .. } => {
+            DiagnosticId::NonExhaustiveMatch
+        }
         TirTypeError::UnreachableArm => DiagnosticId::UnreachableArm,
         TirTypeError::OrPatternBindingTypeMismatch { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::GenericClassDestructureRequiresTypeArgs { .. } => DiagnosticId::TypeMismatch,

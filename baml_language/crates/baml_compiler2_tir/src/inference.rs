@@ -1558,7 +1558,23 @@ pub fn infer_scope_types<'db>(
                                                                     .collect()
                                                             })
                                                             .unwrap_or_default();
-                                                        Ty::Class(qtn, class_args, TyAttr::default())
+                                                        // The builtin `Array<T>` is the array sugar
+                                                        // `T[]` (`Ty::List`), not a nominal class:
+                                                        // type its methods' `self` structurally so a
+                                                        // body that returns `self` (e.g. the in-place
+                                                        // `sort_by`/`sort_by_key`) matches the `T[]`
+                                                        // return type. Members still resolve (a `List`
+                                                        // receiver dispatches to the `Array` builtins).
+                                                        if qtn.is_builtin_root_type("Array")
+                                                            && class_args.len() == 1
+                                                        {
+                                                            Ty::List(
+                                                                Box::new(class_args[0].clone()),
+                                                                TyAttr::default(),
+                                                            )
+                                                        } else {
+                                                            Ty::Class(qtn, class_args, TyAttr::default())
+                                                        }
                                                     }
                                                 }
                                             })

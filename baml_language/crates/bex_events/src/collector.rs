@@ -118,9 +118,8 @@ pub struct FunctionLog {
     pub tags: HashMap<String, String>,
     pub args: Vec<BexExternalValue>,
     pub result: Option<BexExternalValue>,
-    /// Structured log events emitted via `log.info()`, `log.debug()`, etc.
-    /// Extracted from `CustomEvent`s with name="log" that were emitted during
-    /// this function invocation.
+    /// Log events emitted via `log.info()`, `log.debug()`, etc.
+    /// Extracted from log events emitted during this function invocation.
     pub log_events: Vec<LogEvent>,
 }
 
@@ -294,7 +293,7 @@ fn sum_option(a: Option<i64>, b: Option<i64>) -> Option<i64> {
 ///
 /// The `log.*` BAML functions emit custom events with `name="$baml_log"` (reserved name
 /// to distinguish from user events) and data structured as:
-/// `{ level: string, data: map<string, unknown> }`.
+/// `{ level: string, data: unknown }`.
 fn extract_log_from_custom(custom: &CustomEvent) -> Option<LogEvent> {
     if custom.name != "$baml_log" {
         return None;
