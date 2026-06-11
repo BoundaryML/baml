@@ -1,17 +1,16 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 42255
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] error: type mismatch: expected string, got int
-   ╭─[ lambda_errors.baml:2:39 ]
+   ╭─[ lambda_errors.baml:3:36 ]
    │
- 2 │ ╭─▶ function test_return_mismatch() -> int {
-   ┆ ┆   
- 5 │ ├─▶ }
-   │ │       
-   │ ╰─────── type mismatch: expected string, got int
-   │     
-   │     Note: Error code: E0001
+ 3 │     let bad = (x: int) -> string { x * 2 }
+   │                                    ──┬──  
+   │                                      ╰──── type mismatch: expected string, got int
+   │ 
+   │ Note: Error code: E0001
 ───╯
 
   [type] error: cannot infer type of lambda parameter `x` — add a type annotation or provide context
@@ -35,21 +34,21 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] error: type mismatch: expected int, got string
-    ╭─[ lambda_errors.baml:21:25 ]
-    │
- 21 │     let items: int[] = [1, 2, 3]
-    │                         ┬  
-    │                         ╰── type mismatch: expected int, got string
-    │ 
-    │ Note: Error code: E0001
-────╯
-
-  [type] error: type mismatch: expected int, got string
     ╭─[ lambda_errors.baml:22:15 ]
     │
  22 │     items.map((x: string) -> { x })
     │               ──────────┬─────────  
     │                         ╰─────────── type mismatch: expected int, got string
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] error: type mismatch: expected int, got string
+    ╭─[ lambda_errors.baml:22:32 ]
+    │
+ 22 │     items.map((x: string) -> { x })
+    │                                ┬  
+    │                                ╰── type mismatch: expected int, got string
     │ 
     │ Note: Error code: E0001
 ────╯

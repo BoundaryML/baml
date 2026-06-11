@@ -85,17 +85,15 @@ use ::bex_vm_types::{
 };
 use ::core::sync::atomic::AtomicBool;
 use async_trait::async_trait;
-use bex_events::{EventKind, FunctionEnd, FunctionEvent, FunctionStart, SpanContext};
-pub use bex_events::{HostSpanContext, RuntimeEvent, SpanId};
 pub use bex_external_types::{BexExternalValue, Ty, TypeName, UnionMetadata};
+use bex_heap::BexHeap;
 // Re-export GcStats for users of the engine
 pub use bex_heap::GcStats;
 pub use bex_heap::{ActiveHeapPermit, HeapGuard, HeapPermitManager, InactiveHeapPermit};
-use bex_heap::{BexHeap, TlabHolder};
-use bex_vm::{BexVm, SpanNotification, VmExecState};
+use bex_vm::{BexVm, VmExecState};
 use bex_vm_types::{
     FunctionMeta, FunctionOrigin, GlobalPool, HeapPtr, Object, SharedGlobals, SysOp,
-    TaskGroupInner, Value, ValueKind, VmGlobals,
+    TaskGroupInner, Value, VmGlobals,
 };
 pub use conversion::test_arg_to_external;
 // Re-export CancellationToken for callers.
@@ -104,7 +102,6 @@ pub use sys_types::{CallId, ClassDefinition, ClassFieldDefinition};
 use sys_types::{OpError, SysOpResult};
 use thiserror::Error;
 pub use tokio_util::sync::CancellationToken;
-use web_time::{Instant, SystemTime};
 
 pub use crate::{
     future::{FutureManager, FutureManagerGuard, FutureManagerInner},
@@ -174,6 +171,12 @@ pub enum BexCallArg {
 /// the registry insert are atomic — there is no window during which the
 /// slot exists without an owning guard, so a panic at the registration
 /// site cannot leak entries.
+#[derive(Clone)]
+struct ActiveCall {
+    cancel: CancellationToken,
+    pending: bool,
+}
+
 struct ActiveCallGuard {
     engine: Arc<BexEngine>,
     call_id: CallId,
@@ -187,17 +190,51 @@ impl ActiveCallGuard {
         engine: Arc<BexEngine>,
         call_id: CallId,
         cancel: CancellationToken,
-    ) -> Result<Self, EngineError> {
+    ) -> Result<(Self, CancellationToken), EngineError> {
         let mut map = engine
             .active_calls
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if map.contains_key(&call_id) {
-            return Err(EngineError::DuplicateCallId { call_id });
-        }
-        map.insert(call_id, cancel);
+        let cancel = match map.get_mut(&call_id) {
+            Some(existing) if existing.pending => {
+                existing.pending = false;
+                existing.cancel.clone()
+            }
+            Some(_) => return Err(EngineError::DuplicateCallId { call_id }),
+            None => {
+                map.insert(
+                    call_id,
+                    ActiveCall {
+                        cancel: cancel.clone(),
+                        pending: false,
+                    },
+                );
+                cancel
+            }
+        };
         drop(map);
-        Ok(Self { engine, call_id })
+        Ok((Self { engine, call_id }, cancel))
+    }
+
+    fn reserve_cancelled(engine: &BexEngine, call_id: CallId) {
+        let mut map = engine
+            .active_calls
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        match map.get(&call_id) {
+            Some(existing) => existing.cancel.cancel(),
+            None => {
+                let cancel = CancellationToken::new();
+                cancel.cancel();
+                map.insert(
+                    call_id,
+                    ActiveCall {
+                        cancel,
+                        pending: true,
+                    },
+                );
+            }
+        }
     }
 }
 
@@ -212,29 +249,6 @@ impl Drop for ActiveCallGuard {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         map.remove(&self.call_id);
     }
-}
-
-/// A single active span in the engine's per-invocation span stack.
-struct EngineSpan {
-    span_id: SpanId,
-    parent_span_id: Option<SpanId>,
-    /// The BAML function name this span represents.
-    label: String,
-    started_at: Instant,
-}
-
-/// Per-invocation span tracking state.
-///
-/// Created as a local in `call_function` and threaded through the event
-/// loop. NOT stored on the shared `BexEngine`.
-struct SpanState {
-    /// Stack of active spans (LIFO).
-    stack: Vec<EngineSpan>,
-    /// Root span ID for the entire call tree.
-    root_span_id: SpanId,
-    /// Host-side call stack prefix (from Python @trace spans).
-    /// Prepended to the engine's call stack in emitted events.
-    host_call_stack: Vec<SpanId>,
 }
 
 /// Errors that can occur during engine execution.
@@ -494,9 +508,6 @@ pub struct BexEngine {
     sys_ops: std::sync::Arc<sys_ops::SysOps>,
     /// Context passed to `sys_ops` that need engine-level information.
     sys_op_ctx: sys_types::EngineSysOpContext,
-    /// Optional event sink for persisting events (JSONL file, JS callback, etc.).
-    /// If `None`, events are only stored in the `CollectorStore` for in-memory queries.
-    event_sink: Option<std::sync::Arc<dyn bex_events::EventSink>>,
     /// Compiled test cases from the BAML program.
     test_cases: Vec<bex_vm_types::TestCase>,
     /// Process argv passed in at engine creation. Exposed to BAML via
@@ -513,7 +524,7 @@ pub struct BexEngine {
     park_requested: Arc<AtomicBool>,
 
     /// Map of active function calls by ID.
-    active_calls: Mutex<HashMap<CallId, CancellationToken>>,
+    active_calls: Mutex<HashMap<CallId, ActiveCall>>,
 
     futures: FutureManager,
 
@@ -531,7 +542,7 @@ fn _default_round_robin_start() -> usize {
 
 #[cfg(not(target_arch = "wasm32"))]
 fn _default_round_robin_start() -> usize {
-    use web_time::UNIX_EPOCH;
+    use web_time::{SystemTime, UNIX_EPOCH};
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.subsec_nanos());
@@ -795,13 +806,11 @@ impl BexEngine {
     ///
     /// * `bytecode_program` - The compiled BAML program bytecode
     /// * `sys_ops` - System operations provider (use `sys_types_native::SysOps::native()` for default)
-    /// * `event_sink` - Optional event sink for persisting events.
     /// * `argv` - Process-style argv values exposed to BAML via `baml.sys.argv()`.
     ///   Pass `Vec::new()` when argv is not applicable (e.g. tests, IDE, library embedding).
     pub fn new(
         bytecode_program: bex_vm_types::Program,
         sys_ops: std::sync::Arc<sys_ops::SysOps>,
-        event_sink: Option<std::sync::Arc<dyn bex_events::EventSink>>,
         argv: Vec<String>,
     ) -> Result<Self, EngineError> {
         let argv: Arc<[String]> = Arc::from(argv);
@@ -955,8 +964,8 @@ impl BexEngine {
                             };
                             break;
                         }
-                        Ok(VmExecState::Notify(_) | VmExecState::SpanNotify(_)) => {
-                            // Ignore watch/span notifications during init.
+                        Ok(VmExecState::Notify(_)) => {
+                            // Ignore watch notifications during init.
                             continue;
                         }
                         Ok(VmExecState::Event { .. }) => {
@@ -1051,7 +1060,6 @@ impl BexEngine {
             resolved_enum_names,
             sys_ops,
             sys_op_ctx,
-            event_sink,
             test_cases,
             argv,
             heap_permit_manager,
@@ -1062,54 +1070,6 @@ impl BexEngine {
             futures: FutureManager::new(futures_permit),
             interface_implementors,
         })
-    }
-
-    /// Emit an event: store in `CollectorStore` for in-memory queries,
-    /// then forward to the event sink (if set) for persistence.
-    fn emit(&self, event: bex_events::RuntimeEvent) {
-        bex_events::event_store::emit(&event);
-        if let Some(sink) = &self.event_sink {
-            sink.send(event);
-        }
-    }
-
-    fn emit_error_function_end_events(
-        &self,
-        call_id: CallId,
-        span_state: &mut Option<SpanState>,
-        error: &str,
-    ) {
-        let Some(state) = span_state.as_mut() else {
-            return;
-        };
-
-        while let Some(span) = state.stack.pop() {
-            let mut call_stack = state.host_call_stack.clone();
-            call_stack.extend(state.stack.iter().map(|s| s.span_id.clone()));
-            call_stack.push(span.span_id.clone());
-
-            self.emit(RuntimeEvent {
-                call_id,
-                ctx: SpanContext {
-                    span_id: span.span_id,
-                    parent_span_id: span.parent_span_id,
-                    root_span_id: state.root_span_id.clone(),
-                },
-                call_stack,
-                timestamp: SystemTime::now(),
-                event: EventKind::Function(FunctionEvent::End(Box::new(FunctionEnd {
-                    name: span.label,
-                    result: BexExternalValue::Null,
-                    duration: span.started_at.elapsed(),
-                    error: Some(error.to_string()),
-                }))),
-            });
-        }
-    }
-
-    /// Return the event sink for this engine (if any). Used by bridges for flush / `HostSpanManager`.
-    pub fn event_sink(&self) -> Option<std::sync::Arc<dyn bex_events::EventSink>> {
-        self.event_sink.clone()
     }
 
     /// Pre-extract LLM function metadata from heap objects.
@@ -1156,7 +1116,7 @@ impl BexEngine {
                 defs.insert(
                     cls.name.clone(),
                     sys_types::ClassDefinition {
-                        name: cls.name.display_name.to_string(),
+                        name: cls.name.display_name().to_string(),
                         description: cls.description.clone(),
                         alias: cls.alias.clone(),
                         fields: cls
@@ -1189,7 +1149,7 @@ impl BexEngine {
                 defs.insert(
                     enm.name.clone(),
                     sys_types::EnumDefinition {
-                        name: enm.name.display_name.to_string(),
+                        name: enm.name.display_name().to_string(),
                         description: enm.description.clone(),
                         alias: enm.alias.clone(),
                         variants: enm
@@ -1346,19 +1306,7 @@ impl BexEngine {
         stats
     }
 
-    /// Execute a function by name with tracing.
-    ///
-    /// Every call emits [`RuntimeEvent`]s to the global event store for each
-    /// traced function span boundary the VM crosses. The entry-point function
-    /// itself gets a root span automatically.
-    ///
-    /// If `host_ctx` is provided, the engine's root span is nested under the
-    /// host's active span tree (e.g., Python `@trace` spans). The host's
-    /// call stack is prepended to the engine's call stack in events.
-    ///
-    /// To collect events for a call, use [`bex_events::event_store::track`]
-    /// before calling and [`bex_events::event_store::events_for_span`] +
-    /// [`bex_events::event_store::untrack`] after.
+    /// Execute a function by name.
     ///
     /// # Arguments
     ///
@@ -1381,8 +1329,6 @@ impl BexEngine {
         args: Vec<BexExternalValue>,
         FunctionCallContext {
             call_id,
-            host_ctx,
-            collectors,
             cancel,
             type_args,
         }: FunctionCallContext,
@@ -1397,8 +1343,6 @@ impl BexEngine {
             args,
             FunctionCallContext {
                 call_id,
-                host_ctx,
-                collectors,
                 cancel,
                 type_args,
             },
@@ -1413,14 +1357,18 @@ impl BexEngine {
         args: Vec<BexCallArg>,
         FunctionCallContext {
             call_id,
-            host_ctx,
-            collectors,
             cancel,
             type_args,
         }: FunctionCallContext,
         copy_objects: bool,
     ) -> Result<BexExternalValue, EngineError> {
-        // Fail fast if already cancelled — guarantees pre-cancelled tokens
+        // Register this call so `cancel_function_call(call_id)` can target
+        // it. The RAII guard removes the entry on drop (including panic
+        // unwind). Insertion and guard construction are atomic, so a panic
+        // here cannot leak registry entries.
+        let (_call_guard, cancel) = ActiveCallGuard::register(Arc::clone(self), call_id, cancel)?;
+
+        // Fail fast if already cancelled — guarantees pre-cancelled IDs
         // always produce a `baml.panics.Cancelled` panic regardless of
         // function contents.
         if cancel.is_cancelled() {
@@ -1466,42 +1414,8 @@ impl BexEngine {
             })
             .collect::<Result<_, EngineError>>()?;
 
-        // Register this call so `cancel_function_call(call_id)` can target
-        // it. The RAII guard removes the entry on drop (including panic
-        // unwind). Insertion and guard construction are atomic, so a panic
-        // here cannot leak registry entries.
-        let _call_guard = ActiveCallGuard::register(Arc::clone(self), call_id, cancel.clone())?;
-
-        // Create VM with shared heap (each VM gets its own TLAB).
-        // Globals are shared as a frozen `Arc<[Value]>` — cloning is a refcount bump.
-        let vm = BexVm::new(
-            Arc::clone(&self.heap),
-            VmGlobals::Shared(self.globals.clone()),
-            self.resolved_class_names
-                .iter()
-                .chain(self.resolved_enum_names.iter())
-                .map(|(k, v)| (k.clone(), *v))
-                .collect(),
-            #[cfg(not(target_arch = "wasm32"))]
-            Arc::clone(&self.park_requested),
-            Arc::clone(&self.argv),
-            Arc::clone(&self.interface_implementors),
-        );
-        // BEP-034: wrap the root VM in a `BexThread` from the outset so the
-        // permit's `RootHaver` is the thread (delegating to the inner VM).
-        // Spawned children build their own `BexThread`s in `spawn_thread`.
-        let root_thread = BexThread::new_root(vm, cancel.clone());
-        let inactive = self.heap_permit_manager.new_permit(root_thread).await;
-        let mut thread = inactive.acquire().await;
-
-        // Snapshot args for the root FunctionStart event before converting to VM values
-        let args_snapshot = args
-            .iter()
-            .filter_map(|arg| match arg {
-                BexCallArg::Provided(value) => Some(value.as_ref().clone()),
-                BexCallArg::OmittedDefault => None,
-            })
-            .collect();
+        // Create the root thread (shared heap, own TLAB) and acquire its permit.
+        let mut thread = self.new_root_thread(cancel.clone()).await;
 
         // Snapshot the declared parameter types so we can thread the
         // expected `Ty` into per-arg conversion. Binding a `HostValue` to an
@@ -1526,98 +1440,84 @@ impl BexEngine {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        // Canary moved the root VM into `thread.vm` for BEP-034 spawn
-        // threading; pack/run still needs the generic-function type-args
-        // path. Combine both: typed-args setter on the threaded VM.
+        // `function_index` is the entry function's `HeapPtr`; `type_args` are the
+        // explicit BEP-039 type args from the host (closures/bound methods instead
+        // seed their captured/class type args — see `call_callable`).
+        self.run_entry_point(
+            thread,
+            function_index,
+            vm_args,
+            type_args,
+            return_type,
+            throws_type,
+            call_id,
+            cancel,
+            copy_objects,
+        )
+        .await
+    }
+
+    /// Build a fresh root [`BexThread`] over the shared heap and acquire its
+    /// heap permit. Shared by the named-entry (`call_function_bound_args`) and
+    /// callable-entry (`call_callable`) paths.
+    async fn new_root_thread(
+        self: &Arc<Self>,
+        cancel: CancellationToken,
+    ) -> ActiveHeapPermit<BexThread> {
+        // Globals are shared as a frozen `Arc<[Value]>` — cloning is a refcount bump.
+        let vm = BexVm::new(
+            Arc::clone(&self.heap),
+            VmGlobals::Shared(self.globals.clone()),
+            self.resolved_class_names
+                .iter()
+                .chain(self.resolved_enum_names.iter())
+                .map(|(k, v)| (k.clone(), *v))
+                .collect(),
+            #[cfg(not(target_arch = "wasm32"))]
+            Arc::clone(&self.park_requested),
+            Arc::clone(&self.argv),
+            Arc::clone(&self.interface_implementors),
+        );
+        // BEP-034: wrap the root VM in a `BexThread` from the outset so the
+        // permit's `RootHaver` is the thread (delegating to the inner VM).
+        // Spawned children build their own `BexThread`s in `spawn_thread`.
+        let root_thread = BexThread::new_root(vm, cancel);
+        let inactive = self.heap_permit_manager.new_permit(root_thread).await;
+        inactive.acquire().await
+    }
+
+    /// Shared entry-point core: set the VM's entry frame, run the thread event
+    /// loop, and extract the root value. Used by both the named-function path
+    /// and the closure path; the callers differ only in how they resolve the
+    /// entry pointer and its `return`/`throws` types.
+    #[expect(clippy::too_many_arguments)]
+    async fn run_entry_point(
+        self: &Arc<Self>,
+        mut thread: ActiveHeapPermit<BexThread>,
+        entry_ptr: HeapPtr,
+        vm_args: Vec<Value>,
+        type_args: Vec<Ty>,
+        return_type: Ty,
+        throws_type: Option<Ty>,
+        call_id: CallId,
+        cancel: CancellationToken,
+        copy_objects: bool,
+    ) -> Result<BexExternalValue, EngineError> {
         thread
             .vm
-            .set_entry_point_with_type_args(function_index, &vm_args, type_args);
+            .set_entry_point_with_type_args(entry_ptr, &vm_args, type_args);
 
-        // Initialize span tracking for the root call.
-        // If host context is provided, nest under the host's span tree.
-        let engine_span_id = SpanId::new();
-        let (parent_span_id, effective_root_span_id, host_call_stack) = match &host_ctx {
-            Some(ctx) => (
-                Some(ctx.parent_span_id.clone()),
-                ctx.root_span_id.clone(),
-                ctx.call_stack.clone(),
-            ),
-            None => (None, engine_span_id.clone(), vec![]),
-        };
-
-        // Wire up collector tracking before emitting any events.
-        // Track by engine_span_id (unique per call) so each call gets its own log,
-        // even when multiple calls share the same root under @trace.
-        //
-        // The event store routes events to buckets by matching the event's span_id
-        // or parent_span_id against tracked IDs. So the function's own events
-        // (span_id == engine_span_id) and child events like LLM calls
-        // (parent_span_id == engine_span_id) both land in the same bucket.
-        for collector in &collectors {
-            collector.track(&engine_span_id);
-        }
-
-        // Allocate collectors on the heap for future $collector syntax.
-        let _collector_values: Vec<Value> = collectors
-            .iter()
-            .map(|c| {
-                let collector_ref = bex_vm_types::CollectorRef(
-                    Arc::clone(c) as Arc<dyn std::any::Any + Send + Sync>
-                );
-                Value::object(thread.vm.alloc_collector(collector_ref))
-            })
-            .collect();
-
-        // Build the call stack: host prefix + this engine span
-        let mut call_stack = host_call_stack.clone();
-        call_stack.push(engine_span_id.clone());
-
-        let root_ctx = SpanContext {
-            span_id: engine_span_id.clone(),
-            parent_span_id: parent_span_id.clone(),
-            root_span_id: effective_root_span_id.clone(),
-        };
-
-        self.emit(RuntimeEvent {
-            call_id,
-            ctx: root_ctx,
-            call_stack,
-            timestamp: SystemTime::now(),
-            event: EventKind::Function(FunctionEvent::Start(FunctionStart {
-                name: function_name.to_string(),
-                args: args_snapshot,
-                tags: vec![],
-            })),
-        });
-
-        let mut span_state = Some(SpanState {
-            stack: vec![EngineSpan {
-                span_id: engine_span_id.clone(),
-                parent_span_id,
-                label: function_name.to_string(),
-                started_at: Instant::now(),
-            }],
-            root_span_id: effective_root_span_id,
-            host_call_stack,
-        });
-
-        // Run the event loop with span tracking. On errors, emit FunctionEnd
-        // events for every active span so consumers can mark each node failed.
+        // Run the event loop.
         let result = self
             .run_thread_event_loop(
                 return_type,
                 throws_type,
                 thread,
                 call_id,
-                &mut span_state,
                 &cancel,
                 copy_objects,
             )
             .await;
-        if let Err(err) = &result {
-            let error = err.to_string();
-            self.emit_error_function_end_events(call_id, &mut span_state, &error);
-        }
 
         // Flush any host-value releases queued during this call. The root
         // thread's `ActiveHeapPermit` was consumed by `run_thread_event_loop`
@@ -1646,19 +1546,159 @@ impl BexEngine {
         }
     }
 
+    /// Invoke a callable BAML value — a raw function, a closure (with captures),
+    /// or a bound method — referenced by a host [`Handle`](bex_external_types::Handle), as a fresh root call,
+    /// returning its result. This is the by-value counterpart of
+    /// [`Self::call_function`], used to call a BAML callback passed to a sys-op
+    /// (e.g. an HTTP server `handler`). The callee's `return`/`throws` types and
+    /// type args are read from the heap object rather than a name lookup; a bound
+    /// method's receiver is injected as `self` and its instance's class type args
+    /// are seeded — mirroring the VM's normal call path
+    /// (`execute_call_from_locals_offset`).
+    pub async fn call_callable(
+        self: &Arc<Self>,
+        handle: bex_external_types::Handle,
+        args: Vec<BexExternalValue>,
+        FunctionCallContext {
+            call_id,
+            cancel,
+            type_args: _,
+        }: FunctionCallContext,
+        copy_objects: bool,
+    ) -> Result<BexExternalValue, EngineError> {
+        if cancel.is_cancelled() {
+            return Err(cancelled_unhandled_throw());
+        }
+
+        let _call_guard = ActiveCallGuard::register(Arc::clone(self), call_id, cancel.clone())?;
+        let mut thread = self.new_root_thread(cancel.clone()).await;
+
+        // Resolve the handle to the live heap object. The handle keeps it rooted.
+        let entry_ptr = self
+            .resolve_handle(thread.proof(), &handle)
+            .ok_or_else(|| {
+                EngineError::Other("call_callable: stale callable handle".to_string())
+            })?;
+
+        // Unwrap to the entry pointer to run, the receiver to inject as `self`
+        // (bound methods only), the type args to seed the frame, and the inner
+        // `Function` pointer to read metadata from. `entry` is the closure value
+        // itself (so its captures/upvalues resolve) or, for a bound method, the
+        // inner function (its `self` is supplied positionally).
+        let (entry, receiver, seed_type_args, func_ptr) = match thread.vm.get_object(entry_ptr) {
+            Object::Function(_) => (entry_ptr, None, Vec::new(), entry_ptr),
+            Object::Closure(closure) => (
+                entry_ptr,
+                None,
+                closure.captured_type_args.to_vec(),
+                closure.function,
+            ),
+            Object::BoundMethod(bm) => {
+                let receiver = bm.receiver;
+                let class_type_args = receiver
+                    .as_object_ptr()
+                    .and_then(|ptr| match thread.vm.get_object(ptr) {
+                        Object::Instance(inst) => Some(inst.class_type_args.clone()),
+                        _ => None,
+                    })
+                    .unwrap_or_default();
+                (bm.function, Some(receiver), class_type_args, bm.function)
+            }
+            other => {
+                return Err(EngineError::TypeMismatch {
+                    message: format!("call_callable: handle is not callable ({other:?})"),
+                });
+            }
+        };
+
+        // Read the inner function's metadata. `param_types` carries declared
+        // parameter types (including `self` for methods) for type-directed
+        // coercion; lambdas leave it empty (types inferred, not stored), so the
+        // real arity comes from `arity` and coercion is best-effort.
+        let (return_type, throws_type, arity, param_types) = match thread.vm.get_object(func_ptr) {
+            Object::Function(func) => {
+                // A value referencing an unresolved native builtin can't be an
+                // entry point (parity with `call_function_bound_args`).
+                if matches!(func.kind, bex_vm_types::FunctionKind::NativeUnresolved) {
+                    return Err(EngineError::NotInvokableAsEntry {
+                        name: func.name.clone(),
+                        kind: format!("{:?}", func.kind),
+                    });
+                }
+                (
+                    func.return_type.clone(),
+                    func.throws_type.clone(),
+                    func.arity,
+                    func.param_types.clone(),
+                )
+            }
+            _ => {
+                return Err(EngineError::TypeMismatch {
+                    message: "call_callable: value does not wrap a function".to_string(),
+                });
+            }
+        };
+
+        // A bound method's `arity` counts the implicit `self`; callers don't pass
+        // it (the receiver is injected below), so the visible arity drops by one.
+        let self_offset = usize::from(receiver.is_some());
+        let user_arity = arity.saturating_sub(self_offset);
+        if args.len() != user_arity {
+            return Err(EngineError::TypeMismatch {
+                message: format!(
+                    "callable expects {user_arity} argument(s), got {}",
+                    args.len()
+                ),
+            });
+        }
+
+        // Coerce each provided arg to its declared param type (offset by `self`
+        // for bound methods).
+        let coerced: Vec<BexExternalValue> = args
+            .into_iter()
+            .enumerate()
+            .map(|(idx, arg)| match param_types.get(idx + self_offset) {
+                Some(ty) => crate::conversion::coerce_arg_to_declared_type(arg, ty),
+                None => Ok(arg),
+            })
+            .collect::<Result<_, _>>()?;
+
+        // Build VM args: the receiver as `self` in slot 0 (bound methods), then
+        // the converted user args.
+        let mut vm_args: Vec<Value> = Vec::with_capacity(coerced.len() + self_offset);
+        if let Some(receiver) = receiver {
+            vm_args.push(receiver);
+        }
+        for (idx, arg) in coerced.into_iter().enumerate() {
+            vm_args.push(self.convert_external_to_vm_value_with_ty(
+                &mut thread,
+                arg,
+                param_types.get(idx + self_offset),
+            )?);
+        }
+
+        self.run_entry_point(
+            thread,
+            entry,
+            vm_args,
+            seed_type_args,
+            return_type,
+            throws_type,
+            call_id,
+            cancel,
+            copy_objects,
+        )
+        .await
+    }
+
     /// Cancel a function call by its ID.
     ///
     /// If the call is still running, it will be interrupted at the next
-    /// cancellation check point. If the call has already completed or the ID
-    /// is unknown, this will return an error.
+    /// cancellation check point. If the ID is not active yet, reserve it with
+    /// an already-cancelled token so the later call starts cancelled.
     pub fn cancel_function_call(&self, call_id: CallId) -> Result<(), EngineError> {
-        let mut active_calls = self.active_calls.lock().unwrap();
-        if let Some(call) = active_calls.remove(&call_id) {
-            call.cancel();
-            Ok(())
-        } else {
-            Err(EngineError::FunctionCallNotFound { call_id })
-        }
+        ActiveCallGuard::reserve_cancelled(self, call_id);
+        Ok(())
     }
 
     fn validate_bound_args(
@@ -2388,11 +2428,8 @@ impl BexEngine {
         );
         let inactive = self.heap_permit_manager.new_permit(child_thread).await;
 
-        // Phase B note: v1 spans for spawned bodies are deferred. We pass
-        // `None` for `span_state` so the child does not emit FunctionStart/
-        // FunctionEnd events through the engine span machinery.
-        // Return type / throws type are also approximated; the future's
-        // value is converted via `vm_value_to_owned` on the awaiter side.
+        // Return type / throws type are approximated; the future's value is
+        // converted on the awaiter side.
         let engine = self;
         let return_type = Ty::Null {
             attr: baml_type::TyAttr::default(),
@@ -2424,17 +2461,8 @@ impl BexEngine {
                 None => None,
             };
             let permit = inactive.acquire().await;
-            let mut local_span_state: Option<SpanState> = None;
             match engine
-                .run_thread_event_loop(
-                    return_type,
-                    None,
-                    permit,
-                    call_id,
-                    &mut local_span_state,
-                    &child_cancel,
-                    true,
-                )
+                .run_thread_event_loop(return_type, None, permit, call_id, &child_cancel, true)
                 .await
             {
                 Ok(_) => {}
@@ -2502,15 +2530,10 @@ impl BexEngine {
         throws_type: Option<Ty>,
         mut thread: ActiveHeapPermit<BexThread>,
         call_id: CallId,
-        span_state: &mut Option<SpanState>,
         cancel: &CancellationToken,
         copy_objects: bool,
     ) -> Result<ThreadOutcome, EngineError> {
         loop {
-            // Update the VM's span context so native functions can read it.
-            thread.vm.current_span_context =
-                span_state.as_ref().map(Self::build_span_context_from_state);
-
             let exec_result = match thread.vm.exec() {
                 Ok(state) => state,
                 Err(bex_vm::errors::VmError::ThrownUnhandled { value, trace }) => {
@@ -2588,12 +2611,9 @@ impl BexEngine {
                     // "Cancel wins" semantics: if cancellation races with a
                     // completed VM step, report a cancellation panic rather
                     // than returning a success value.
-                    //
-                    // Still emit FunctionEnd first so tracing consumers see
-                    // a paired root FunctionStart/FunctionEnd span.
                     let cancelled = cancel.is_cancelled();
 
-                    let (return_value, event_result) = if !copy_objects {
+                    let (return_value, _event_result) = if !copy_objects {
                         if let Some(ptr) = value.as_object_ptr() {
                             // SAFETY: the active thread holds the heap permit
                             // through `thread.proof()`.
@@ -2644,37 +2664,6 @@ impl BexEngine {
                         )?;
                         (external.clone(), external)
                     };
-
-                    // Emit FunctionEnd for the root entry-point span after the
-                    // final return value conversion succeeds. If conversion fails,
-                    // the active root span remains on the stack and the caller's
-                    // error path emits exactly one failing FunctionEnd.
-                    if let Some(state) = span_state.as_mut() {
-                        if let Some(root_span) = state.stack.pop() {
-                            let mut full_call_stack = state.host_call_stack.clone();
-                            full_call_stack.extend(state.stack.iter().map(|s| s.span_id.clone()));
-                            full_call_stack.push(root_span.span_id.clone());
-                            let end_event = RuntimeEvent {
-                                call_id,
-                                ctx: SpanContext {
-                                    span_id: root_span.span_id,
-                                    parent_span_id: root_span.parent_span_id,
-                                    root_span_id: state.root_span_id.clone(),
-                                },
-                                call_stack: full_call_stack,
-                                timestamp: SystemTime::now(),
-                                event: EventKind::Function(FunctionEvent::End(Box::new(
-                                    FunctionEnd {
-                                        name: root_span.label,
-                                        result: event_result,
-                                        duration: root_span.started_at.elapsed(),
-                                        error: None,
-                                    },
-                                ))),
-                            };
-                            self.emit(end_event);
-                        }
-                    }
 
                     if cancelled {
                         return Err(cancelled_unhandled_throw());
@@ -3141,81 +3130,14 @@ impl BexEngine {
                 }
 
                 VmExecState::Event {
-                    event_name,
-                    data,
-                    source_location,
+                    event_name: _,
+                    data: _,
+                    source_location: _,
                 } => {
-                    // Emit a CustomEvent or LogEvent with the current span context.
-                    if let Some(state) = span_state.as_ref() {
-                        let ctx = Self::build_span_context_from_state(state);
-                        let mut call_stack = state.host_call_stack.clone();
-                        call_stack.extend(state.stack.iter().map(|s| s.span_id.clone()));
-
-                        let external_data = self.vm_value_to_owned(thread.proof(), data);
-
-                        // Convert source location tuple to SourceLocation struct.
-                        let source = source_location.map(
-                            |(file_id, line, column, start_offset, end_offset)| {
-                                bex_events::SourceLocation {
-                                    file_id,
-                                    line,
-                                    column,
-                                    start_offset,
-                                    end_offset,
-                                }
-                            },
-                        );
-
-                        // Check if this is a log event (emitted by log.info, log.debug, etc.)
-                        // Uses reserved name "$baml_log" to distinguish from user events.
-                        let event = if event_name == "$baml_log" {
-                            // Extract level and data from the log payload.
-                            if let BexExternalValue::Map { entries, .. } = &external_data {
-                                let level = entries
-                                    .get("level")
-                                    .and_then(|v| {
-                                        if let BexExternalValue::String(s) = v {
-                                            Some(s.to_string())
-                                        } else {
-                                            None
-                                        }
-                                    })
-                                    .unwrap_or_else(|| "info".to_string());
-                                let log_data = entries
-                                    .get("data")
-                                    .cloned()
-                                    .unwrap_or(BexExternalValue::Null);
-                                EventKind::Log(bex_events::LogEvent {
-                                    level,
-                                    data: log_data,
-                                    source,
-                                })
-                            } else {
-                                // Fallback: treat as custom event if structure is unexpected.
-                                EventKind::Custom(bex_events::CustomEvent {
-                                    name: event_name,
-                                    data: external_data,
-                                })
-                            }
-                        } else {
-                            EventKind::Custom(bex_events::CustomEvent {
-                                name: event_name,
-                                data: external_data,
-                            })
-                        };
-
-                        self.emit(RuntimeEvent {
-                            call_id,
-                            ctx,
-                            call_stack,
-                            timestamp: SystemTime::now(),
-                            event,
-                        });
-                    }
-                    // `baml.events.send()` returns null.  The SendEvent instruction
-                    // pops its two arguments but does not push a return value, so we
-                    // push null here before the VM resumes at the next instruction
-                    // (which will store or discard the return value).
+                    // Tracing removed: `baml.events.send()` is a no-op. It still
+                    // returns null — the SendEvent instruction pops its two
+                    // arguments but does not push a return value, so push null
+                    // before the VM resumes at the next instruction.
                     thread.vm.stack.push(Value::NULL);
                 }
 
@@ -3223,116 +3145,9 @@ impl BexEngine {
                     // Ignore watch notifications for now
                 }
 
-                VmExecState::SpanNotify(notification) => {
-                    if let Some(state) = span_state.as_mut() {
-                        match notification {
-                            SpanNotification::FunctionEnter {
-                                function_name,
-                                frame_depth: _,
-                                args,
-                            } => {
-                                let span_id = SpanId::new();
-                                let parent_span_id = state.stack.last().map(|s| s.span_id.clone());
-
-                                // Build call_stack: host prefix + existing engine spans + new span
-                                let mut call_stack = state.host_call_stack.clone();
-                                call_stack.extend(state.stack.iter().map(|s| s.span_id.clone()));
-                                call_stack.push(span_id.clone());
-
-                                // Convert VM args to fully owned values for the event
-                                let external_args: Vec<BexExternalValue> = args
-                                    .iter()
-                                    .filter(|v| !matches!(v.kind(), ValueKind::OmittedArg))
-                                    .map(|v| self.vm_value_to_owned(thread.proof(), *v))
-                                    .collect();
-
-                                let enter_event = RuntimeEvent {
-                                    call_id,
-                                    ctx: SpanContext {
-                                        span_id: span_id.clone(),
-                                        parent_span_id: parent_span_id.clone(),
-                                        root_span_id: state.root_span_id.clone(),
-                                    },
-                                    call_stack,
-                                    timestamp: SystemTime::now(),
-                                    event: EventKind::Function(FunctionEvent::Start(
-                                        FunctionStart {
-                                            name: function_name.clone(),
-                                            args: external_args,
-                                            tags: vec![],
-                                        },
-                                    )),
-                                };
-                                self.emit(enter_event);
-
-                                state.stack.push(EngineSpan {
-                                    span_id,
-                                    parent_span_id,
-                                    label: function_name,
-                                    started_at: Instant::now(),
-                                });
-                            }
-                            SpanNotification::FunctionExit {
-                                function_name,
-                                result,
-                            } => {
-                                if let Some(span) = state.stack.pop() {
-                                    let external_result =
-                                        self.vm_value_to_owned(thread.proof(), result);
-                                    // call_stack: host prefix + remaining engine spans + exiting span
-                                    let mut call_stack = state.host_call_stack.clone();
-                                    call_stack
-                                        .extend(state.stack.iter().map(|s| s.span_id.clone()));
-                                    call_stack.push(span.span_id.clone());
-                                    let exit_event = RuntimeEvent {
-                                        call_id,
-                                        ctx: SpanContext {
-                                            span_id: span.span_id,
-                                            parent_span_id: span.parent_span_id,
-                                            root_span_id: state.root_span_id.clone(),
-                                        },
-                                        call_stack,
-                                        timestamp: SystemTime::now(),
-                                        event: EventKind::Function(FunctionEvent::End(Box::new(
-                                            FunctionEnd {
-                                                name: function_name,
-                                                result: external_result,
-                                                duration: span.started_at.elapsed(),
-                                                error: None,
-                                            },
-                                        ))),
-                                    };
-                                    self.emit(exit_event);
-                                }
-                            }
-                        }
-                    }
-                }
                 VmExecState::EarlyYield => {
                     thread = self.gc_safepoint(thread).await;
                 }
-            }
-        }
-    }
-
-    /// Build a `SpanContext` from the current `SpanState`.
-    ///
-    /// Returns the context for the innermost active span, or uses the root span
-    /// if the stack is empty (e.g. between span transitions).
-    fn build_span_context_from_state(state: &SpanState) -> bex_events::SpanContext {
-        if let Some(current_span) = state.stack.last() {
-            bex_events::SpanContext {
-                span_id: current_span.span_id.clone(),
-                parent_span_id: current_span.parent_span_id.clone(),
-                root_span_id: state.root_span_id.clone(),
-            }
-        } else {
-            // Stack is empty (e.g. root span has not been pushed yet, or has been popped).
-            // Use the root span as a fallback.
-            bex_events::SpanContext {
-                span_id: state.root_span_id.clone(),
-                parent_span_id: None,
-                root_span_id: state.root_span_id.clone(),
             }
         }
     }
@@ -3403,6 +3218,24 @@ impl sys_types::VmSpawner for BexEngine {
     ) -> Result<BexExternalValue, Box<dyn Send + Sync + 'static>> {
         self.call_function(
             &function_name,
+            args,
+            FunctionCallContextBuilder::new(sys_types::CallId::next())
+                .with_cancel_token(cancel)
+                .build(),
+            true,
+        )
+        .await
+        .map_err(|e| Box::new(e) as Box<dyn Send + Sync + 'static>)
+    }
+
+    async fn spawn_with_callable(
+        self: Arc<Self>,
+        callable: bex_external_types::Handle,
+        args: Vec<BexExternalValue>,
+        cancel: CancellationToken,
+    ) -> Result<BexExternalValue, Box<dyn Send + Sync + 'static>> {
+        self.call_callable(
+            callable,
             args,
             FunctionCallContextBuilder::new(sys_types::CallId::next())
                 .with_cancel_token(cancel)

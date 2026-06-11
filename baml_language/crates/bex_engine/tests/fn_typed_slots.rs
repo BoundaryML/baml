@@ -10,13 +10,8 @@ use sys_native::SysOpsExt;
 async fn run(source: &str) -> BexExternalValue {
     let snapshot = compile_for_engine(source);
     let engine = Arc::new(
-        BexEngine::new(
-            snapshot,
-            Arc::new(sys_native::SysOps::native()),
-            None,
-            Vec::new(),
-        )
-        .expect("engine"),
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("engine"),
     );
     engine
         .call_function(

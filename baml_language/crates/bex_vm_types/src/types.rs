@@ -416,17 +416,6 @@ pub struct Function {
     /// Span of the function as computed by the parser.
     pub span: baml_base::Span,
 
-    /// Block notifications for this function.
-    ///
-    /// Stores metadata about annotated blocks (//# annotations) in this function.
-    /// Instructions reference these by index.
-    pub block_notifications: Vec<crate::bytecode::BlockNotification>,
-
-    /// Control-flow visualization metadata indexed by VizEnter/VizExit instructions.
-    ///
-    /// Stores metadata about control flow structure (branches, loops, scopes).
-    pub viz_nodes: Vec<crate::bytecode::VizNodeMeta>,
-
     /// Return type of the function.
     pub return_type: Ty,
 
@@ -468,10 +457,6 @@ pub struct Function {
 
     /// LLM-specific metadata (prompt template, client name). `None` for non-LLM functions.
     pub body_meta: Option<FunctionMeta>,
-
-    /// Whether this function should be traced (emit span notifications on call/return).
-    /// Set to `true` for LLM functions by the compiler.
-    pub trace: bool,
 }
 
 impl std::fmt::Display for Function {

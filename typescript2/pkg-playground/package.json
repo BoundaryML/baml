@@ -11,7 +11,8 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "src"
   ],
   "scripts": {
     "build:wasm": "wasm-pack build ../../baml_language/crates/bridge_wasm --target web --out-dir ../../../typescript2/pkg-playground/wasm --release",

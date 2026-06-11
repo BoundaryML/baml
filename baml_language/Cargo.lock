@@ -733,8 +733,6 @@ dependencies = [
  "baml_version",
  "baml_workspace",
  "bex_engine",
- "bex_events",
- "bex_events_native",
  "bex_vm_types",
  "borsh",
  "clap",
@@ -750,7 +748,6 @@ dependencies = [
  "sdkgen_typescript_node",
  "serde",
  "serde_json",
- "serde_yaml",
  "strsim",
  "sys_native",
  "tar",
@@ -758,6 +755,7 @@ dependencies = [
  "text-size",
  "tokio",
  "toml 0.8.23",
+ "yaml_serde",
 ]
 
 [[package]]
@@ -1014,8 +1012,6 @@ dependencies = [
  "baml_compiler2_visualization",
  "baml_version",
  "base64",
- "bex_events",
- "bex_events_native",
  "bex_heap",
  "bex_project",
  "bridge_ctypes",
@@ -1023,6 +1019,7 @@ dependencies = [
  "futures",
  "indexmap",
  "lsp-server",
+ "num-bigint",
  "parking_lot",
  "prost",
  "regex",
@@ -1143,6 +1140,7 @@ version = "0.0.0-beta"
 dependencies = [
  "baml_base",
  "borsh",
+ "subenum",
 ]
 
 [[package]]
@@ -1194,7 +1192,6 @@ dependencies = [
  "baml_builtins2",
  "baml_project",
  "baml_type",
- "bex_events",
  "bex_external_types",
  "bex_heap",
  "bex_resource_types",
@@ -1224,29 +1221,8 @@ dependencies = [
 name = "bex_events"
 version = "0.0.0-beta"
 dependencies = [
- "baml_builtins2",
  "bex_external_types",
- "bex_vm_types",
- "indexmap",
- "serde",
- "serde_json",
- "sys_types",
  "uuid",
- "web-time",
-]
-
-[[package]]
-name = "bex_events_native"
-version = "0.0.0-beta"
-dependencies = [
- "baml_type",
- "bex_events",
- "bex_external_types",
- "indexmap",
- "tempfile",
- "time",
- "tracing",
- "web-time",
 ]
 
 [[package]]
@@ -1293,7 +1269,6 @@ dependencies = [
  "baml_version",
  "baml_workspace",
  "bex_engine",
- "bex_events",
  "bex_external_types",
  "bex_heap",
  "bex_vm_types",
@@ -1362,7 +1337,6 @@ dependencies = [
  "baml_project",
  "baml_type",
  "base64",
- "bex_events",
  "bex_heap",
  "bex_str",
  "bex_vm_types",
@@ -1371,6 +1345,7 @@ dependencies = [
  "indexmap",
  "log",
  "num-bigint",
+ "serde",
  "serde_json",
  "smallvec",
  "time",
@@ -1379,6 +1354,7 @@ dependencies = [
  "toml 0.8.23",
  "wasm-bindgen-futures",
  "web-time",
+ "yaml_serde",
 ]
 
 [[package]]
@@ -1509,7 +1485,6 @@ version = "0.218.1"
 dependencies = [
  "baml_version",
  "bex_events",
- "bex_events_native",
  "bex_project",
  "bridge_ctypes",
  "futures",
@@ -1530,7 +1505,6 @@ name = "bridge_ctypes"
 version = "0.1.0"
 dependencies = [
  "baml_type",
- "bex_events",
  "bex_project",
  "indexmap",
  "num-bigint",
@@ -1585,7 +1559,7 @@ version = "0.1.0"
 dependencies = [
  "baml_type",
  "baml_version",
- "bex_events",
+ "bex_heap",
  "bex_project",
  "bridge_ctypes",
  "bytes",
@@ -4174,6 +4148,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "libyaml-rs"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2e126dda6f34391ab7b444f9922055facc83c07a910da3eb16f1e4d9c45dc777"
+
+[[package]]
 name = "linux-raw-sys"
 version = "0.4.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6185,6 +6165,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ef86cd5876211988985292b91c96a8f2d298df24e75989a43a3c73f2d4d8168b"
 dependencies = [
  "aws-lc-rs",
+ "log",
  "once_cell",
  "ring",
  "rustls-pki-types",
@@ -6203,6 +6184,15 @@ dependencies = [
  "rustls-pki-types",
  "schannel",
  "security-framework",
+]
+
+[[package]]
+name = "rustls-pemfile"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dce314e5fee3f39953d46bb63bb8a46d40c2f8fb7cc5a3b6cab2bde9721d6e50"
+dependencies = [
+ "rustls-pki-types",
 ]
 
 [[package]]
@@ -6620,19 +6610,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "serde_yaml"
-version = "0.9.34+deprecated"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a8b1a1a2ebf674015cc02edccce75287f1a0130d394307b36743c2f5d504b47"
-dependencies = [
- "indexmap",
- "itoa",
- "ryu",
- "serde",
- "unsafe-libyaml",
-]
-
-[[package]]
 name = "sha1"
 version = "0.10.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6939,6 +6916,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "subenum"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5eee3fb942ed39f3971438fcc7e05e20717e599e14c5c7cb50edd0df2a44b274"
+dependencies = [
+ "heck 0.5.0",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
 name = "subtle"
 version = "2.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7058,7 +7047,11 @@ dependencies = [
  "bex_heap",
  "bex_resource_types",
  "bridge_ctypes",
+ "bytes",
  "futures",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
  "indexmap",
  "jiff",
  "num-bigint",
@@ -7066,11 +7059,13 @@ dependencies = [
  "prost",
  "reqwest",
  "rustls",
+ "rustls-pemfile",
  "serde_json",
  "sys_glob",
  "sys_ops",
  "sys_types",
  "tokio",
+ "tokio-rustls",
  "tracing",
  "walkdir",
 ]
@@ -7892,12 +7887,6 @@ name = "unit-prefix"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "81e544489bf3d8ef66c953931f56617f423cd4b5494be343d9b9d3dda037b9a3"
-
-[[package]]
-name = "unsafe-libyaml"
-version = "0.2.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "673aac59facbab8a9007c7f6108d11f63b603f7cabff99fabf650fea5c32b861"
 
 [[package]]
 name = "untrusted"
@@ -9234,6 +9223,19 @@ name = "xml-rs"
 version = "0.8.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ae8337f8a065cfc972643663ea4279e04e7256de865aa66fe25cec5fb912d3f"
+
+[[package]]
+name = "yaml_serde"
+version = "0.10.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08c7c1b1a6a7c8a6b2741a6c21a4f8918e51899b111cfa08d1288202656e3975"
+dependencies = [
+ "indexmap",
+ "itoa",
+ "libyaml-rs",
+ "ryu",
+ "serde",
+]
 
 [[package]]
 name = "yansi"

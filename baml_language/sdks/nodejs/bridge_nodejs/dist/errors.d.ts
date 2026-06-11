@@ -32,6 +32,12 @@ export declare class BamlClientError extends BamlError {
 export declare class BamlCancelledError extends BamlError {
     constructor(message: string);
 }
+export declare class BamlAbortError extends Error {
+    readonly reason: unknown;
+    constructor(message: string, options?: {
+        reason?: unknown;
+    });
+}
 /**
  * Raised for SDK-setup failures and BAML-runtime panics — the Node analog of
  * `bridge_python`'s `BamlPanic`. The in-call panic path (`decodeCallResult`'s

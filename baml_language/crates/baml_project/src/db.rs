@@ -497,14 +497,17 @@ impl ProjectDatabase {
         use baml_compiler2_visualization::control_flow::NodeType;
 
         for (call_expr, callee_name) in Self::call_sites_by_source_expr(body) {
-            let Some(call_node_id) = graph
+            let Some((call_node_id, is_return_node)) = graph
                 .nodes
                 .values()
                 .find(|node| node.source_expr == Some(call_expr))
-                .map(|node| node.id)
+                .map(|node| (node.id, matches!(node.node_type, NodeType::Return)))
             else {
                 continue;
             };
+            if is_return_node {
+                continue;
+            }
 
             let Some(callee_graph) = self.ast_control_flow_graph_impl(&callee_name, expanding)
             else {
@@ -547,8 +550,11 @@ impl ProjectDatabase {
 
     /// Find the `//#` header comment immediately above a function declaration,
     /// if any. Blank lines and regular `//` comments between the header and
-    /// the declaration are skipped; any other code stops the search.
+    /// the declaration are skipped; any other code stops the search. If multiple
+    /// same-named declarations have different headers, do not guess which one a
+    /// name-only call resolved to.
     fn function_header_title(&self, function_name: &str) -> Option<String> {
+        let mut unique_title = None;
         for source_file in self.file_map.values().copied() {
             let index = baml_compiler2_ppir::file_semantic_index(self, source_file);
             for func_data in index.item_tree.functions.values() {
@@ -557,10 +563,16 @@ impl ProjectDatabase {
                 }
                 let text = source_file.text(self);
                 let start = usize::from(func_data.span.start()).min(text.len());
-                return header_title_above(&text[..start]);
+                if let Some(title) = header_title_above(&text[..start]) {
+                    match &unique_title {
+                        Some(existing) if existing != &title => return None,
+                        Some(_) => {}
+                        None => unique_title = Some(title),
+                    }
+                }
             }
         }
-        None
+        unique_title
     }
 
     fn call_sites_by_source_expr(body: &baml_compiler2_ast::ExprBody) -> Vec<(u32, String)> {
@@ -1573,6 +1585,44 @@ function Caller(x: int) -> int {
     }
 
     #[test]
+    fn test_function_header_title_keeps_searching_after_missing_header() {
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("/tmp"));
+        db.add_or_update_file(
+            std::path::Path::new("/tmp/dupe.baml"),
+            r#"
+function helper(x: int) -> int { x }
+
+//# titled helper
+function helper(x: int) -> int { x + 1 }
+"#,
+        );
+
+        assert_eq!(
+            db.function_header_title("helper"),
+            Some("titled helper".to_string())
+        );
+    }
+
+    #[test]
+    fn test_function_header_title_ignores_ambiguous_same_name_headers() {
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("/tmp"));
+        db.add_or_update_file(
+            std::path::Path::new("/tmp/dupe.baml"),
+            r#"
+//# first helper
+function helper(x: int) -> int { x }
+
+//# second helper
+function helper(x: int) -> int { x + 1 }
+"#,
+        );
+
+        assert_eq!(db.function_header_title("helper"), None);
+    }
+
+    #[test]
     fn test_early_return_renders_as_terminal_node() {
         use baml_compiler2_visualization::control_flow::{
             NodeType, prepare_control_flow_graph_for_visualization,
@@ -1618,6 +1668,53 @@ function Early(x: int) -> string {
         assert_eq!(
             outgoing, 0,
             "return node must not be connected to later nodes"
+        );
+    }
+
+    #[test]
+    fn test_return_call_is_not_expanded_under_return_node() {
+        use baml_compiler2_visualization::control_flow::NodeType;
+
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("/tmp"));
+        db.add_or_update_file(
+            std::path::Path::new("/tmp/return-call.baml"),
+            r#"
+function Helper() -> string {
+    //# helper body
+    "ok"
+}
+
+function Early(x: int) -> string {
+    if (x < 0) {
+        return Helper();
+    }
+
+    "later"
+}
+"#,
+        );
+
+        let graph = db
+            .ast_control_flow_graph("Early")
+            .expect("expected graph for Early");
+        let ret_node = graph
+            .nodes
+            .values()
+            .find(|n| matches!(n.node_type, NodeType::Return))
+            .expect("return call should create a Return node");
+
+        assert_eq!(ret_node.label, "return Helper()");
+        assert!(
+            graph
+                .edges_by_src
+                .get(&ret_node.id)
+                .is_none_or(Vec::is_empty),
+            "return-call node must stay terminal instead of owning callee edges"
+        );
+        assert!(
+            graph.nodes.values().all(|n| n.label != "helper body"),
+            "callee body headers should not be expanded below a terminal return"
         );
     }
 

@@ -2,19 +2,30 @@
 
 import {
     BamlRuntime,
-    AbortController,
     BamlHandle,
+    BamlCallContext,
     HostSpanManager,
     Collector as NativeCollector,
     FunctionLog as NativeFunctionLog,
     Timing,
     Usage,
     LLMCall,
+    cancelFunctionCall as nativeCancelFunctionCall,
+    newFunctionCall as nativeNewFunctionCall,
 } from './native.js';
 import { encodeCallArgs, decodeCallResult } from './proto.js';
 import { installFlushOnExit } from './exit_hook.js';
+import { wrapNativeError } from './errors.js';
 
-export { BamlRuntime, AbortController, BamlHandle, HostSpanManager, getRuntime, getVersion, flushEvents } from './native.js';
+export {
+    BamlRuntime,
+    BamlCallContext,
+    BamlHandle,
+    HostSpanManager,
+    getRuntime,
+    getVersion,
+    flushEvents,
+} from './native.js';
 export { Timing, Usage, LLMCall } from './native.js';
 export { _seedFunctionRefHandle, _seedGenericMediaHandle } from './native.js';
 // Runtime-owned stdlib value classes. Exported under their `Baml*` names only;
@@ -46,7 +57,6 @@ export function initializeRuntime(srcDir: string, files: Record<string, string>)
 export function initializeRuntimeFromBytecode(bytecode: Buffer | Uint8Array): void {
     BamlRuntime.initializeRuntimeFromBytecode(Buffer.from(bytecode));
 }
-import { wrapNativeError } from './errors.js';
 export {
     BamlError,
     BamlInvalidArgumentError,
@@ -55,6 +65,27 @@ export {
     BamlPanic,
     wrapNativeError,
 } from './errors.js';
+
+interface CallContextBinding {
+    detach(): void;
+}
+
+export function newFunctionCall(): bigint {
+    return BigInt(nativeNewFunctionCall());
+}
+
+export function cancelFunctionCall(callId: bigint): boolean {
+    return nativeCancelFunctionCall(callId.toString());
+}
+
+function attachCallContext(ctx: BamlCallContext | undefined, callId: bigint): CallContextBinding {
+    ctx?._attachCallId(callId.toString());
+    return {
+        detach() {
+            ctx?._detachCallId(callId.toString());
+        },
+    };
+}
 
 export class FunctionResult {
     private _value: unknown;
@@ -119,13 +150,15 @@ export function callFunctionSync(
     kwargs: Record<string, unknown>,
     ctx?: HostSpanManager,
     collectors?: Collector[],
-    abortController?: AbortController,
+    callCtx?: BamlCallContext,
 ): FunctionResult {
     // Encode in sync mode so a host callable in the kwargs fast-fails
     // with a clear error instead of registering a tsfn and then hanging —
     // the sync path blocks the Node main thread on a tokio `block_on`,
     // starving libuv so the dispatch could never run.
-    const argsProto = encodeCallArgs(kwargs, /* syncMode */ true);
+    const callId = newFunctionCall();
+    const argsProto = encodeCallArgs(kwargs, { syncMode: true, callId });
+    const callCtxBinding = attachCallContext(callCtx, callId);
     const nativeCollectors = collectors?.map(c => c._native()) ?? null;
     // Only the napi call gets `wrapNativeError`'d — its `napi::Error`
     // messages need parsing into typed `Baml*Error` subclasses. The
@@ -134,9 +167,11 @@ export function callFunctionSync(
     // already carry the right type and must propagate by identity.
     let resultBytes: Buffer;
     try {
-        resultBytes = rt.callFunctionSync(functionName, argsProto, ctx ?? null, nativeCollectors, abortController ?? null);
+        resultBytes = rt.callFunctionSync(functionName, argsProto, ctx ?? null, nativeCollectors);
     } catch (err) {
         throw wrapNativeError(err);
+    } finally {
+        callCtxBinding.detach();
     }
     return new FunctionResult(decodeCallResult(resultBytes));
 }
@@ -147,9 +182,11 @@ export async function callFunction(
     kwargs: Record<string, unknown>,
     ctx?: HostSpanManager,
     collectors?: Collector[],
-    abortController?: AbortController,
+    callCtx?: BamlCallContext,
 ): Promise<FunctionResult> {
-    const argsProto = encodeCallArgs(kwargs);
+    const callId = newFunctionCall();
+    const argsProto = encodeCallArgs(kwargs, { callId });
+    const callCtxBinding = attachCallContext(callCtx, callId);
     const nativeCollectors = collectors?.map(c => c._native()) ?? null;
     // Only the napi call gets `wrapNativeError`'d — its `napi::Error`
     // messages need parsing into typed `Baml*Error` subclasses. The
@@ -158,9 +195,11 @@ export async function callFunction(
     // already carry the right type and must propagate by identity.
     let resultBytes: Buffer;
     try {
-        resultBytes = await rt.callFunction(functionName, argsProto, ctx ?? null, nativeCollectors, abortController ?? null);
+        resultBytes = await rt.callFunction(functionName, argsProto, ctx ?? null, nativeCollectors);
     } catch (err) {
         throw wrapNativeError(err);
+    } finally {
+        callCtxBinding.detach();
     }
     return new FunctionResult(decodeCallResult(resultBytes));
 }

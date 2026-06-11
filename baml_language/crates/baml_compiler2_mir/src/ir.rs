@@ -245,8 +245,6 @@ pub enum LogLevel {
 pub enum IntrinsicOp {
     /// `log.info`, `log.debug`, `log.warn`, `log.error` — emit a `$baml_log` event.
     Log(LogLevel),
-    /// `baml.events.send` — emit a custom user event.
-    SendEvent,
 }
 
 /// The kind of a MIR statement.

@@ -120,7 +120,13 @@ export interface ProjectUpdate {
 export type PlaygroundNotification =
   | { type: 'listProjects'; projects: string[] }
   | { type: 'updateProject'; project: string; update: ProjectUpdate }
-  | { type: 'openPlayground'; project: string; functionName?: string }
+  | {
+      type: 'openPlayground';
+      project: string;
+      functionName?: string;
+      testName?: string;
+      testsetName?: string;
+    }
   | {
       type: 'controlFlowGraphResult';
       functionName: string;
@@ -259,6 +265,8 @@ export type WorkerOutMessage =
       error: string;
       cancelled?: boolean;
     }
+  | { type: 'nextFunctionCallResult'; id: number; callId: number }
+  | { type: 'nextFunctionCallError'; id: number; error: string }
   | { type: 'fetchLogNew'; entry: FetchLogEntry }
   | { type: 'fetchLogUpdate'; logId: number; patch: Partial<FetchLogEntry> }
   | {
@@ -296,6 +304,7 @@ export type WorkerOutMessage =
 // ---------------------------------------------------------------------------
 
 export type WorkerInMessage =
+  | { type: 'nextFunctionCall'; id: number }
   | {
       type: 'callFunction';
       id: number;

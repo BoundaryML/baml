@@ -51,7 +51,6 @@ async fn cancel_before_call_returns_cancelled() {
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
             Vec::new(),
         )
         .expect("Failed to create engine"),
@@ -92,7 +91,6 @@ async fn cancel_during_sleep_returns_promptly() {
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
             Vec::new(),
         )
         .expect("Failed to create engine"),
@@ -167,7 +165,6 @@ async fn cancel_during_http_returns_promptly() {
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
             Vec::new(),
         )
         .expect("Failed to create engine"),
@@ -230,7 +227,6 @@ async fn selective_cancellation_only_affects_target() {
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
             Vec::new(),
         )
         .expect("Failed to create engine"),
@@ -309,7 +305,6 @@ async fn cancel_interrupts_sequential_sleeps() {
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
             Vec::new(),
         )
         .expect("Failed to create engine"),
@@ -368,7 +363,6 @@ async fn non_cancelled_token_completes_normally() {
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
             Vec::new(),
         )
         .expect("Failed to create engine"),
@@ -405,7 +399,6 @@ async fn cancel_is_idempotent() {
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
             Vec::new(),
         )
         .expect("Failed to create engine"),
@@ -464,7 +457,6 @@ async fn cancel_function_call_by_id_actually_cancels() {
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
             Vec::new(),
         )
         .expect("Failed to create engine"),
@@ -502,11 +494,44 @@ async fn cancel_function_call_by_id_actually_cancels() {
         "cancel_function_call took too long: {elapsed:?} (expected < 2s)"
     );
 
-    // After completion, the entry is gone — a second cancel returns NotFound.
-    assert!(matches!(
-        engine.cancel_function_call(call_id),
-        Err(EngineError::FunctionCallNotFound { .. })
-    ));
+    // After completion, the entry is gone; a second cancel reserves the same
+    // ID as already-cancelled for any future call that tries to use it.
+    assert!(engine.cancel_function_call(call_id).is_ok());
+}
+
+#[tokio::test]
+async fn cancel_function_call_by_id_before_registration_pre_cancels() {
+    let source = r#"
+        function main() -> int {
+            7
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(
+            snapshot,
+            std::sync::Arc::new(sys_native::SysOps::native()),
+            Vec::new(),
+        )
+        .expect("Failed to create engine"),
+    );
+
+    let call_id = sys_types::CallId::next();
+    engine
+        .cancel_function_call(call_id)
+        .expect("unknown call_id should be reserved as pre-cancelled");
+
+    let result = engine
+        .call_function(
+            "main",
+            vec![],
+            FunctionCallContextBuilder::new(call_id).build(),
+            true,
+        )
+        .await;
+
+    assert_cancelled(&result);
 }
 
 #[tokio::test]
@@ -525,7 +550,6 @@ async fn duplicate_call_id_is_rejected() {
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
             Vec::new(),
         )
         .expect("Failed to create engine"),
@@ -612,7 +636,6 @@ async fn cancelled_panic_shape_equivalence() {
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
             Vec::new(),
         )
         .expect("Failed to create engine"),
@@ -683,7 +706,6 @@ async fn spawn_with_options_cancel_token_propagates() {
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
             Vec::new(),
         )
         .expect("Failed to create engine"),
@@ -728,7 +750,6 @@ async fn spawn_with_options_cancel_token_is_catchable() {
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
             Vec::new(),
         )
         .expect("Failed to create engine"),
@@ -764,7 +785,6 @@ async fn spawn_with_options_uncancelled_completes_normally() {
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
             Vec::new(),
         )
         .expect("Failed to create engine"),
@@ -808,7 +828,6 @@ async fn spawn_with_options_cancel_token_any_composes() {
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
             Vec::new(),
         )
         .expect("Failed to create engine"),
@@ -852,7 +871,6 @@ async fn spawn_with_options_detach_completes_normally() {
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
             Vec::new(),
         )
         .expect("Failed to create engine"),
@@ -893,7 +911,6 @@ async fn spawn_with_options_detach_still_honors_cancel_token() {
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
             Vec::new(),
         )
         .expect("Failed to create engine"),

@@ -36,6 +36,10 @@ pub(super) struct OpenBamlPanel {
     pub project_path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub function_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub test_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub testset_name: Option<String>,
     /// Lens title override (display-only; not serialized into command args).
     #[serde(skip)]
     pub title: Option<String>,

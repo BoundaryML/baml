@@ -30,8 +30,6 @@ rustls = [ "aws-crypto" ]
 [dependencies]
 baml_compiler2_visualization = { workspace = true }
 baml_version = { workspace = true }
-bex_events = { workspace = true }
-bex_events_native = { workspace = true }
 bex_heap = { workspace = true }
 bex_project = { workspace = true }
 bridge_ctypes = { workspace = true }
@@ -45,6 +43,7 @@ crossbeam-channel = { workspace = true }
 futures = { workspace = true }
 indexmap = { workspace = true }
 lsp-server = { workspace = true }
+num-bigint = { workspace = true }
 parking_lot = { workspace = true, features = [ "deadlock_detection" ] }
 prost = { workspace = true }
 regex = { workspace = true }

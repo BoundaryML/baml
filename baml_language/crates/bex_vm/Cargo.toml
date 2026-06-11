@@ -20,7 +20,6 @@ workspace = true
 [dependencies]
 baml_builtins2 = { workspace = true }
 baml_type = { workspace = true }
-bex_events = { workspace = true }
 bex_heap = { workspace = true }
 bex_str = { workspace = true }
 bex_vm_types = { workspace = true }
@@ -30,7 +29,9 @@ getrandom = { workspace = true }
 indexmap = { workspace = true }
 log = { workspace = true }
 num-bigint = { workspace = true }
+serde = { workspace = true }
 serde_json = { workspace = true }
+serde_yaml = { workspace = true }
 smallvec = { workspace = true }
 time = { workspace = true }
 tokio = { workspace = true, features = [ "macros" ] }

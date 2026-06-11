@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 45993
 ---
 === COMPILER2 DIAGNOSTICS ===
   [hir] error: Duplicate field `age` in class destructure pattern
@@ -136,17 +135,6 @@ assertion_line: 45993
  141 │ ├─▶         let value: Box => 1
      │ │                                 
      │ ╰───────────────────────────────── type mismatch: expected Box<int>, got Box
-     │     
-     │     Note: Error code: E0001
-─────╯
-
-  [type] error: type mismatch: expected Box<int>, got Box
-     ╭─[ patterns_class_destructure.baml:145:80 ]
-     │
- 145 │ ╭─▶ function generic_class_destructure_requires_type_args(boxed: Box<int>) -> int {
- 146 │ ├─▶     let Box { value } = boxed;
-     │ │                                    
-     │ ╰──────────────────────────────────── type mismatch: expected Box<int>, got Box
      │     
      │     Note: Error code: E0001
 ─────╯

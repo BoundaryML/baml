@@ -118,6 +118,7 @@ message InboundEnumValue {
 
 message CallFunctionArgs {
   repeated InboundMapEntry kwargs = 1;
+  uint64 call_id = 2;
 }
 
 // CallAck is the engine's acknowledgment of an inbound call. It flows

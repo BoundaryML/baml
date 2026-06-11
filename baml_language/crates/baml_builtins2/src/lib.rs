@@ -82,6 +82,7 @@ macro_rules! builtin {
 pub const ALL: &[BuiltinFile] = &[
     // --- Root namespace (no ns_* prefix) ---
     builtin!("baml", "containers.baml"),
+    builtin!("baml", "comparable.baml"),
     builtin!("baml", "core.baml"),
     builtin!("baml", "int.baml"),
     builtin!("baml", "bigint.baml"),
@@ -98,6 +99,7 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_env/env.baml"),
     builtin!("baml", "ns_io/io.baml"),
     builtin!("baml", "ns_http/http.baml"),
+    builtin!("baml", "ns_http/server.baml"),
     builtin!("baml", "ns_events/events.baml"),
     builtin!("baml", "ns_math/math.baml"),
     builtin!("baml", "ns_sys/sys.baml"),
@@ -106,7 +108,9 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_net/net.baml"),
     builtin!("baml", "ns_media/media.baml"),
     builtin!("baml", "ns_json/json.baml"),
+    builtin!("baml", "ns_yaml/yaml.baml"),
     builtin!("baml", "ns_toml/toml.baml"),
+    builtin!("baml", "ns_csv/csv.baml"),
     builtin!("baml", "ns_unstable/unstable.baml"),
     builtin!("baml", "ns_llm/llm_types.baml"),
     builtin!("baml", "ns_llm/llm.baml"),

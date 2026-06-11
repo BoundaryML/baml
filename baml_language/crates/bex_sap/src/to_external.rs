@@ -43,18 +43,26 @@ impl ToBamlTy for TyResolvedRef<'_, TypeName> {
             TyResolvedRef::Bool(_) => baml_type::Ty::Bool { attr },
             TyResolvedRef::Null(_) => baml_type::Ty::Null { attr },
             TyResolvedRef::Media(media) => baml_type::Ty::Media(media.to_baml_media_kind(), attr),
-            TyResolvedRef::LiteralInt(v) => {
-                baml_type::Ty::Literal(baml_type::Literal::Int(v.0), attr)
-            }
-            TyResolvedRef::LiteralBigint(v) => {
-                baml_type::Ty::Literal(baml_type::Literal::Bigint(v.0.clone()), attr)
-            }
-            TyResolvedRef::LiteralString(v) => {
-                baml_type::Ty::Literal(baml_type::Literal::String(v.0.to_string()), attr)
-            }
-            TyResolvedRef::LiteralBool(v) => {
-                baml_type::Ty::Literal(baml_type::Literal::Bool(v.0), attr)
-            }
+            TyResolvedRef::LiteralInt(v) => baml_type::Ty::Literal(
+                baml_type::Literal::Int(v.0),
+                baml_type::Freshness::Regular,
+                attr,
+            ),
+            TyResolvedRef::LiteralBigint(v) => baml_type::Ty::Literal(
+                baml_type::Literal::Bigint(v.0.clone()),
+                baml_type::Freshness::Regular,
+                attr,
+            ),
+            TyResolvedRef::LiteralString(v) => baml_type::Ty::Literal(
+                baml_type::Literal::String(v.0.to_string()),
+                baml_type::Freshness::Regular,
+                attr,
+            ),
+            TyResolvedRef::LiteralBool(v) => baml_type::Ty::Literal(
+                baml_type::Literal::Bool(v.0),
+                baml_type::Freshness::Regular,
+                attr,
+            ),
             TyResolvedRef::Array(a) => a.to_baml_ty(),
             TyResolvedRef::Map(m) => m.to_baml_ty(),
             TyResolvedRef::Class(c) => c.to_baml_ty(),

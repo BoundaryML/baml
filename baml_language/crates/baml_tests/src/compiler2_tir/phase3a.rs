@@ -110,6 +110,75 @@ fn unresolved_variable_in_let() {
     ");
 }
 
+#[test]
+fn unresolved_function_call_reports_callee_span() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function Main() -> int {
+  MissingFunction(1)
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    function user.Main() -> int throws never {
+      { : unknown
+        MissingFunction(1) : unknown
+      }
+      !! 28..43: unresolved name: MissingFunction
+    }
+    "#);
+}
+
+#[test]
+fn unresolved_function_call_in_testset_reports_call_site_span() {
+    let mut db = make_db();
+    let source = r#"
+function ReviewInvoicee() -> int {
+  1
+}
+
+testset "invoice pipeline" {
+  test "full pipeline report" {
+    assert.equal(ReviewInvoice(), 1);
+  }
+}
+"#;
+    db.add_file("test.baml", source);
+
+    let diagnostics = baml_project::collect_compiler2_diagnostics(&db);
+    let unresolved = diagnostics
+        .iter()
+        .filter(|diag| diag.message.contains("unresolved name: ReviewInvoice"))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        unresolved.len(),
+        1,
+        "expected one unresolved ReviewInvoice diagnostic, got:\n{diagnostics:#?}"
+    );
+    let span = unresolved[0]
+        .primary_span()
+        .expect("unresolved name diagnostic should have a primary span");
+    assert_ne!(
+        u32::from(span.range.start()),
+        u32::from(span.range.end()),
+        "unresolved name diagnostic should not have an empty span:\n{diagnostics:#?}"
+    );
+    assert_ne!(
+        u32::from(span.range.start()),
+        0,
+        "unresolved name diagnostic should not point at 0..0:\n{diagnostics:#?}"
+    );
+    let start = usize::from(span.range.start());
+    let end = usize::from(span.range.end());
+    assert_eq!(
+        &source[start..end],
+        "ReviewInvoice",
+        "unresolved name diagnostic should point at the missing callee name:\n{diagnostics:#?}"
+    );
+}
+
 // ── Optional function parameters ─────────────────────────────────────────
 
 #[test]
@@ -221,6 +290,37 @@ function f() -> int {
     );
     assert!(tir.contains("get() : int"), "{tir}");
     assert!(!tir.contains("!!"), "unexpected diagnostics:\n{tir}");
+}
+
+#[test]
+fn misspelled_explicit_constructor_in_checked_context_errors() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class ValidationIssue {
+  path string
+  severity string
+  message string
+}
+
+function f() -> ValidationIssue[] {
+  [
+    ValidationIssu {
+      path: "due_date",
+      severity: "warn",
+      message: "missing due date",
+    },
+  ]
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    let unresolved_count = tir.matches("unresolved type: ValidationIssu").count();
+    assert!(
+        unresolved_count == 1,
+        "expected misspelled explicit constructor to error, got:\n{tir}"
+    );
 }
 
 #[test]

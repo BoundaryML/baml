@@ -60,7 +60,6 @@
       "editor.tabSize": 2
   },
   "baml.enablePlaygroundProxy": true,
-  "editor.accessibilitySupport": "off",
   "explorer.sortOrder": "mixed",
   "nixEnvSelector.suggestion": false,
 }

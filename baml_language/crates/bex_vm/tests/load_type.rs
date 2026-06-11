@@ -56,8 +56,6 @@ fn inject_function(
         local_names: vec![],
         debug_locals: vec![],
         span: baml_type::Span::fake(),
-        block_notifications: vec![],
-        viz_nodes: vec![],
         return_type: Ty::int(),
         stream_return_type: Ty::Null {
             attr: TyAttr::default(),
@@ -71,7 +69,6 @@ fn inject_function(
         throws_type: None,
         origin: FunctionOrigin::UserDefined,
         body_meta: None,
-        trace: false,
     };
 
     let fn_obj_idx = program.add_object(Object::Function(Box::new(func)));

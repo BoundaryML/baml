@@ -80,6 +80,8 @@ def attach_baml_traceback(exc: _E) -> _E:
     delivery never depends on the cosmetic splice."""
     trace = getattr(exc, "baml_trace", None)
     if not trace:
+        trace = getattr(getattr(exc, "reason", None), "baml_trace", None)
+    if not trace:
         return exc
     try:
         synth = _synthesize_traceback(trace)
@@ -115,6 +117,7 @@ class BamlError(Exception):
     ) -> None:
         self._value = value
         self._baml_trace: List[str] = list(baml_trace) if baml_trace else []
+        self._class_name = class_name
         super().__init__(_format_message(class_name, value))
 
     @property
@@ -124,6 +127,14 @@ class BamlError(Exception):
     @property
     def baml_trace(self) -> List[str]:
         return self._baml_trace
+
+    @property
+    def class_name(self) -> Optional[str]:
+        return self._class_name
+
+
+class BamlCancelledError(BamlError):
+    """Structured BAML cancellation reason carried by host cancellation."""
 
 
 class BamlPanic(BaseException):
@@ -141,6 +152,7 @@ class BamlPanic(BaseException):
     ) -> None:
         self._value = value
         self._baml_trace: List[str] = list(baml_trace) if baml_trace else []
+        self._class_name = class_name
         super().__init__(_format_message(class_name, value))
 
     @property
@@ -150,6 +162,10 @@ class BamlPanic(BaseException):
     @property
     def baml_trace(self) -> List[str]:
         return self._baml_trace
+
+    @property
+    def class_name(self) -> Optional[str]:
+        return self._class_name
 
 
 def make_sdk_panic(message: str) -> BamlPanic:
@@ -172,6 +188,7 @@ def make_sdk_panic(message: str) -> BamlPanic:
 
 __all__ = [
     "BamlError",
+    "BamlCancelledError",
     "BamlPanic",
     "make_sdk_panic",
 ]

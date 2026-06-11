@@ -239,13 +239,8 @@ function main() -> int {
             },
         )
         .expect("compilation failed");
-        let engine = BexEngine::new(
-            bytecode,
-            Arc::new(sys_native::SysOps::native()),
-            None,
-            vec![],
-        )
-        .expect("engine creation failed");
+        let engine = BexEngine::new(bytecode, Arc::new(sys_native::SysOps::native()), vec![])
+            .expect("engine creation failed");
         (db, engine)
     }
 

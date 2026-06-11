@@ -41,6 +41,8 @@ impl bex_project::PlaygroundSender for NativePlaygroundSender {
         if let bex_project::PlaygroundNotification::OpenPlayground {
             ref project,
             ref function_name,
+            ref test_name,
+            ref testset_name,
         } = notification
         {
             if self.playground_via_browser {
@@ -53,6 +55,8 @@ impl bex_project::PlaygroundSender for NativePlaygroundSender {
                     "port": self.playground_port,
                     "projectPath": project,
                     "functionName": function_name,
+                    "testName": test_name,
+                    "testsetName": testset_name,
                 });
                 let notif =
                     lsp_server::Notification::new("baml/openPlayground".to_string(), params);

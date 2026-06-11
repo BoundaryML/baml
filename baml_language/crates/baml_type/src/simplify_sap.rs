@@ -507,12 +507,12 @@ fn is_sap_structural_subtype(sub: &Ty, sup: &Ty) -> bool {
 
     matches!(
         (&sub_s, &sup_s),
-        (Ty::Literal(Literal::Int(_), _), Ty::Int { .. })
-            | (Ty::Literal(Literal::Int(_), _), Ty::Bigint { .. })
-            | (Ty::Literal(Literal::Bigint(_), _), Ty::Bigint { .. })
-            | (Ty::Literal(Literal::Float(_), _), Ty::Float { .. })
-            | (Ty::Literal(Literal::String(_), _), Ty::String { .. })
-            | (Ty::Literal(Literal::Bool(_), _), Ty::Bool { .. })
+        (Ty::Literal(Literal::Int(_), _, _), Ty::Int { .. })
+            | (Ty::Literal(Literal::Int(_), _, _), Ty::Bigint { .. })
+            | (Ty::Literal(Literal::Bigint(_), _, _), Ty::Bigint { .. })
+            | (Ty::Literal(Literal::Float(_), _, _), Ty::Float { .. })
+            | (Ty::Literal(Literal::String(_), _, _), Ty::String { .. })
+            | (Ty::Literal(Literal::Bool(_), _, _), Ty::Bool { .. })
             // The one cross-type widening allowed by SAP: `int → bigint`
             // is lossless, unlike `int → float` which loses precision past
             // 2^53.

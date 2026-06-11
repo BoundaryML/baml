@@ -13,8 +13,6 @@ pub extern "C" fn free_buffer(buf: Buffer) {
     }
 }
 
-/// Flush the event sink.
+/// Flush the event sink. No-op: tracing/event production has been removed.
 #[unsafe(no_mangle)]
-pub extern "C" fn flush_events() {
-    crate::flush_event_sink();
-}
+pub extern "C" fn flush_events() {}

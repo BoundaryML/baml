@@ -10,7 +10,9 @@
 //! - `math` — `BamlNamespaceMath` (trunc)
 //! - `media` — `BamlClassMedia{Pdf,Audio,Video,Image}` + `BamlNamespaceMedia`
 //! - `unstable` — `BamlNamespaceUnstable` (string)
-//! - `root` — `BamlPackageBaml` (`deep_copy`, `deep_equals`)
+//! - `root` — `BamlPackageBaml` (`deep_copy`, `deep_equals`, and the
+//!   `Sortable.sort` shims `_compare_shim` / `_is_primitive_array` /
+//!   `_rust_sort` / `_float_total_cmp`)
 //!
 //! # Adding a new builtin
 //!
@@ -19,6 +21,7 @@
 
 mod array;
 pub(crate) mod bigint;
+mod csv;
 mod float;
 mod future;
 mod int;
@@ -37,6 +40,7 @@ mod toml;
 mod type_class;
 mod uint8array;
 mod unstable;
+mod yaml;
 
 use std::collections::HashMap;
 
@@ -170,7 +174,10 @@ pub(super) fn make_to_json_callee(vm: &mut BexVm, v: Value) -> Result<HeapPtr, V
             Object::Instance(inst) => {
                 let class_ptr = inst.class;
                 let fqn = match vm.get_object(class_ptr) {
-                    Object::Class(c) => c.name.display_name.as_str().to_string(),
+                    // Dispatch key must be the fully-qualified name (keeping the
+                    // package), matching how functions are registered — not the
+                    // user-facing `display_name` that elides `user`.
+                    Object::Class(c) => c.name.render_dotted(false),
                     _ => {
                         return Err(VmRustFnError::InternalError(
                             VmInternalError::MissingNativeFunction {
@@ -198,6 +205,68 @@ pub(super) fn make_to_json_callee(vm: &mut BexVm, v: Value) -> Result<HeapPtr, V
     })?;
 
     // Allocate a BoundMethod with the value as receiver.
+    Ok(vm.alloc_bound_method(bex_vm_types::BoundMethod {
+        function: fn_ptr,
+        receiver: v,
+    }))
+}
+
+/// For a value `v` whose type implements `baml.Comparable`, look up the
+/// matching `compare` function and return a `BoundMethod { compare, receiver: v }`.
+///
+/// Builtin impls are out-of-body (`baml.Comparable$for$int.compare`, …); user
+/// classes carry the in-body impl method `{class_fqn}.baml.Comparable.compare`.
+/// The bound method has `receiver = v` baked in, so the VM inserts it as `self`
+/// and the comparison call only passes the `other` argument
+/// (`YieldToCall { args: [other] }`).
+///
+/// Used by the native `baml._compare_shim` (`root.rs`) that the BAML
+/// `Sortable.sort` passes to `sort_by` on its non-primitive path: `compare`'s
+/// two `Self` params make it undispatchable through an interface-typed value,
+/// so the per-pair comparison is resolved here on the receiver's runtime class
+/// (the homogeneous `T[]` guarantees the other element shares that class).
+pub(super) fn make_compare_callee(vm: &mut BexVm, v: Value) -> Result<HeapPtr, VmRustFnError> {
+    use bex_vm_types::ValueKind;
+    let fn_name: String = match v.kind() {
+        ValueKind::Int(_) => "baml.Comparable$for$int.compare".to_string(),
+        ValueKind::Object(ptr) => match vm.get_object(ptr) {
+            Object::Float(_) => "baml.Comparable$for$float.compare".to_string(),
+            Object::String(_) => "baml.Comparable$for$string.compare".to_string(),
+            Object::Bigint(_) => "baml.Comparable$for$bigint.compare".to_string(),
+            Object::Instance(inst) => {
+                let class_ptr = inst.class;
+                let fqn = match vm.get_object(class_ptr) {
+                    Object::Class(c) => c.name.render_dotted(false),
+                    _ => {
+                        return Err(VmRustFnError::InternalError(
+                            VmInternalError::MissingNativeFunction {
+                                name: "compare dispatch: instance.class is not a Class".to_string(),
+                            },
+                        ));
+                    }
+                };
+                format!("{fqn}.baml.Comparable.compare")
+            }
+            _ => {
+                return Err(VmRustFnError::BamlError(VmBamlError::InvalidArgument {
+                    message: "_compare_shim: element type does not implement Comparable"
+                        .to_string(),
+                }));
+            }
+        },
+        _ => {
+            return Err(VmRustFnError::BamlError(VmBamlError::InvalidArgument {
+                message: "_compare_shim: element type does not implement Comparable".to_string(),
+            }));
+        }
+    };
+
+    let fn_ptr = vm.find_function_by_name(&fn_name).ok_or_else(|| {
+        VmRustFnError::InternalError(VmInternalError::MissingNativeFunction {
+            name: format!("compare dispatch: function '{fn_name}' not found in globals"),
+        })
+    })?;
+
     Ok(vm.alloc_bound_method(bex_vm_types::BoundMethod {
         function: fn_ptr,
         receiver: v,
@@ -251,8 +320,6 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                 local_names: function.local_names,
                 debug_locals: function.debug_locals,
                 span: function.span,
-                block_notifications: function.block_notifications,
-                viz_nodes: function.viz_nodes,
                 return_type: function.return_type,
                 stream_return_type: function.stream_return_type,
                 param_names: function.param_names,
@@ -264,7 +331,6 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                 throws_type: function.throws_type,
                 origin: function.origin,
                 body_meta: function.body_meta,
-                trace: function.trace,
             }))
         }
         other => other,

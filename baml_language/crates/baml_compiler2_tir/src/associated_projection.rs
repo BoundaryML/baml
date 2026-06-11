@@ -149,11 +149,11 @@ impl<'a, 'db, B: TypeVarBounds + ?Sized> AssociatedProjectionResolver<'a, 'db, B
                 Box::new(self.resolve_deep_inner(inner, resolving)),
                 attr.clone(),
             ),
-            Ty::Map(key, value, attr) => Ty::Map(
-                Box::new(self.resolve_deep_inner(key, resolving)),
-                Box::new(self.resolve_deep_inner(value, resolving)),
-                attr.clone(),
-            ),
+            Ty::Map { key, value, attr } => Ty::Map {
+                key: Box::new(self.resolve_deep_inner(key, resolving)),
+                value: Box::new(self.resolve_deep_inner(value, resolving)),
+                attr: attr.clone(),
+            },
             Ty::EvolvingMap(key, value, attr) => Ty::EvolvingMap(
                 Box::new(self.resolve_deep_inner(key, resolving)),
                 Box::new(self.resolve_deep_inner(value, resolving)),
@@ -344,7 +344,81 @@ impl<'a, 'db, B: TypeVarBounds + ?Sized> AssociatedProjectionResolver<'a, 'db, B
                 };
                 self.resolve_projection(&bound_projection)
             }),
+            // Primitive / non-class concrete base types (`int`, `string`, …)
+            // can carry out-of-body `implements I for int` blocks, so a
+            // projection like `int.CmpError` must resolve through those rules.
+            // Classes have an in-body path above; this mirrors it for the
+            // builtin types stdlib interfaces are implemented on.
+            other if crate::interfaces::implementation_key_for_ty(other).is_some() => {
+                self.resolve_primitive_projection(other, interface.as_deref(), member)
+            }
             _ => None,
+        }
+    }
+
+    /// Resolve a projection whose base is a primitive / non-class concrete
+    /// type by consulting the out-of-body `implements` rules visible to the
+    /// resolver.
+    fn resolve_primitive_projection(
+        &self,
+        base_ty: &Ty,
+        projected_interface: Option<&Ty>,
+        member: &Name,
+    ) -> Option<Ty> {
+        let candidate_ty = crate::interfaces::implementation_key_for_ty(base_ty)
+            .unwrap_or_else(|| base_ty.clone());
+        let mut matches = Vec::new();
+        for pkg_name in self.candidate_registry_packages() {
+            let registry = crate::interfaces::package_implements_registry(
+                self.db,
+                PackageId::new(self.db, pkg_name),
+            );
+            self.collect_out_of_body_matches_in_registry(
+                registry,
+                &candidate_ty,
+                projected_interface,
+                member,
+                &mut matches,
+            );
+        }
+        let mut unique = Vec::new();
+        for ty in matches {
+            if !unique.contains(&ty) {
+                unique.push(ty);
+            }
+        }
+        if unique.len() == 1 {
+            unique.pop()
+        } else {
+            None
+        }
+    }
+
+    /// Packages whose `implements` registries are visible to this resolver.
+    ///
+    /// Out-of-body impls on primitives live in the package that owns the
+    /// `implements … for int` block — which (per the orphan rule) is either
+    /// the user's own package or the interface's package. With a resolution
+    /// context we know those directly; without one (VM metadata / MIR
+    /// lowering) we fall back to every package in the program.
+    fn candidate_registry_packages(&self) -> Vec<Name> {
+        if let Some(res_ctx) = self.res_ctx {
+            let mut pkgs = vec![res_ctx.own_package_name.clone()];
+            for (name, _) in &res_ctx.dep_interfaces {
+                if !pkgs.contains(name) {
+                    pkgs.push(name.clone());
+                }
+            }
+            pkgs
+        } else {
+            let mut pkgs = Vec::new();
+            for file in baml_compiler2_hir::compiler2_all_files(self.db) {
+                let pkg = baml_compiler2_hir::file_package::file_package(self.db, file).package;
+                if !pkgs.contains(&pkg) {
+                    pkgs.push(pkg);
+                }
+            }
+            pkgs
         }
     }
 
@@ -779,7 +853,26 @@ impl<'a, 'db, B: TypeVarBounds + ?Sized> AssociatedProjectionResolver<'a, 'db, B
             class_args.to_vec(),
             crate::ty::TyAttr::default(),
         );
+        self.collect_out_of_body_matches_in_registry(
+            registry,
+            &candidate_ty,
+            projected_interface,
+            member,
+            matches,
+        );
+    }
 
+    /// Scan one package's out-of-body `implements` rules for a rule whose
+    /// `for` target matches `candidate_ty` and whose interface declares
+    /// `member`, pushing the projected member type into `matches`.
+    fn collect_out_of_body_matches_in_registry(
+        &self,
+        registry: &crate::interfaces::ImplementsRegistry,
+        candidate_ty: &Ty,
+        projected_interface: Option<&Ty>,
+        member: &Name,
+        matches: &mut Vec<Ty>,
+    ) {
         for rule in &registry.interface_impl_rules {
             if !matches!(
                 rule.origin,
@@ -794,7 +887,7 @@ impl<'a, 'db, B: TypeVarBounds + ?Sized> AssociatedProjectionResolver<'a, 'db, B
             let Some(instantiation) = registry.instantiate_rule_for_requested_interface(
                 rule,
                 &requested_iface_ty,
-                Some(&candidate_ty),
+                Some(candidate_ty),
                 self.aliases,
                 |actual, bound| self.type_satisfies_bound(actual, bound),
             ) else {

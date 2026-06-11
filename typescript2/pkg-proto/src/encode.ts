@@ -74,7 +74,7 @@ function serializeValue(val: unknown): InboundValue {
       typeof (bamlMarker as Record<string, unknown>).type === 'string'
     ) {
       const typeStr = (bamlMarker as { type: string }).type;
-      const sepIdx = typeStr.indexOf('::');
+      const sepIdx = typeStr.lastIndexOf('::');
       const className =
         sepIdx >= 0 ? typeStr.slice(sepIdx + 2) : typeStr;
       const fields: InboundMapEntry[] = Object.entries(val)
@@ -108,6 +108,7 @@ function serializeValue(val: unknown): InboundValue {
 
 export function encodeCallArgs(
   kwargs: Record<string, unknown>,
+  callId: number,
 ): Uint8Array {
   const entries: InboundMapEntry[] = Object.entries(kwargs).map(
     ([k, v]) => ({
@@ -118,6 +119,7 @@ export function encodeCallArgs(
 
   const args: CallFunctionArgsType = {
     kwargs: entries,
+    callId,
   };
 
   return CallFunctionArgs.encode(args).finish();

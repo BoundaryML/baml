@@ -596,9 +596,9 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { AbortController, BamlAudio, BamlHandle, BamlImage, BamlPdf, BamlRuntime, BamlVideo, Collector, FunctionLog, HostSpanManager, LlmCall, LLMCall, Timing, Usage, _seedFunctionRefHandle, _seedGenericMediaHandle, completeHostCall, flushEvents, getRuntime, getVersion, mintHostErrorKey, registerErrorReleaseCallback, registerHostCallable, releaseHostCallable } = nativeBinding
-export { AbortController }
+const { BamlAudio, BamlCallContext, BamlHandle, BamlImage, BamlPdf, BamlRuntime, BamlVideo, Collector, FunctionLog, HostSpanManager, LlmCall, LLMCall, Timing, Usage, _seedFunctionRefHandle, _seedGenericMediaHandle, cancelFunctionCall, completeHostCall, flushEvents, getRuntime, getVersion, mintHostErrorKey, newFunctionCall, registerErrorReleaseCallback, registerHostCallable, releaseHostCallable } = nativeBinding
 export { BamlAudio }
+export { BamlCallContext }
 export { BamlHandle }
 export { BamlImage }
 export { BamlPdf }
@@ -613,11 +613,13 @@ export { Timing }
 export { Usage }
 export { _seedFunctionRefHandle }
 export { _seedGenericMediaHandle }
+export { cancelFunctionCall }
 export { completeHostCall }
 export { flushEvents }
 export { getRuntime }
 export { getVersion }
 export { mintHostErrorKey }
+export { newFunctionCall }
 export { registerErrorReleaseCallback }
 export { registerHostCallable }
 export { releaseHostCallable }

@@ -19,10 +19,10 @@
 //!   the Playground.
 
 use baml_base::SourceFile;
-use baml_compiler2_ast::ast::FunctionOrigin;
-use baml_compiler2_hir::{contributions::Definition, file_item_tree, file_symbol_contributions};
 use baml_compiler_parser::syntax_tree;
 use baml_compiler_syntax::{SyntaxElement, SyntaxKind, SyntaxNode, ast::StringLiteral};
+use baml_compiler2_ast::ast::FunctionOrigin;
+use baml_compiler2_hir::{contributions::Definition, file_item_tree, file_symbol_contributions};
 use rowan::ast::AstNode;
 use text_size::TextRange;
 
@@ -107,15 +107,21 @@ pub fn file_actions(db: &dyn Db, file: SourceFile) -> Vec<FileAction> {
     // synthesized `$init_test` function during CST->AST lowering, so they never
     // appear as contributions. Enumerate them directly from the syntax tree.
     let tree = syntax_tree(db, file);
-    for node in tree.children() {
-        let (keyword, kind) = match node.kind() {
-            SyntaxKind::TEST_EXPR_DEF => (SyntaxKind::KW_TEST, FileActionKind::RunTest),
-            SyntaxKind::TESTSET_DEF => (SyntaxKind::KW_TESTSET, FileActionKind::RunTestSet),
-            _ => continue,
-        };
-        let Some(name_el) = test_name_element(&node, keyword) else {
-            continue;
-        };
+    collect_expr_body_test_actions(&tree, &mut actions);
+
+    actions
+}
+
+fn collect_expr_body_test_actions(node: &SyntaxNode, actions: &mut Vec<FileAction>) {
+    let action = match node.kind() {
+        SyntaxKind::TEST_EXPR_DEF => Some((SyntaxKind::KW_TEST, FileActionKind::RunTest)),
+        SyntaxKind::TESTSET_DEF => Some((SyntaxKind::KW_TESTSET, FileActionKind::RunTestSet)),
+        _ => None,
+    };
+
+    if let Some((keyword, kind)) = action
+        && let Some(name_el) = test_name_element(node, keyword)
+    {
         let name = match name_el.as_node() {
             Some(n) => StringLiteral::cast(n.clone())
                 .map(|s| s.value())
@@ -132,7 +138,9 @@ pub fn file_actions(db: &dyn Db, file: SourceFile) -> Vec<FileAction> {
         });
     }
 
-    actions
+    for child in node.children() {
+        collect_expr_body_test_actions(&child, actions);
+    }
 }
 
 /// Find the name element of a `test`/`testset` CST node: the first non-trivia
@@ -192,5 +200,42 @@ function Summarize(input: string) -> string {
 
         assert_eq!(playground_actions.len(), 1);
         assert_eq!(playground_actions[0].name, "Summarize");
+    }
+
+    #[test]
+    fn file_actions_include_tests_nested_in_testsets() {
+        let mut builder = ProjectTest::builder();
+        builder.source(
+            "main.baml",
+            r##"
+testset "math" {
+    test "adds" {
+        assert.equal(1 + 1, 2)
+    }
+
+    testset "nested" {
+        test "subtracts" {
+            assert.equal(2 - 1, 1)
+        }
+    }
+}
+"##,
+        );
+        let project = builder.build();
+
+        let actions = file_actions(&project.db, project.files[0]);
+        let tests: Vec<_> = actions
+            .iter()
+            .filter(|action| action.kind == FileActionKind::RunTest)
+            .map(|action| action.name.as_str())
+            .collect();
+        let testsets: Vec<_> = actions
+            .iter()
+            .filter(|action| action.kind == FileActionKind::RunTestSet)
+            .map(|action| action.name.as_str())
+            .collect();
+
+        assert_eq!(tests, vec!["adds", "subtracts"]);
+        assert_eq!(testsets, vec!["math", "nested"]);
     }
 }

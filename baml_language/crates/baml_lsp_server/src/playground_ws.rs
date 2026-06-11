@@ -12,6 +12,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type")]
 pub enum WsInMessage {
+    #[serde(rename = "nextFunctionCall")]
+    NextFunctionCall { id: u64 },
     #[serde(rename = "callFunction")]
     CallFunction {
         id: u64,
@@ -109,6 +111,14 @@ pub enum WsOutMessage {
         #[serde(skip_serializing_if = "Option::is_none")]
         cancelled: Option<bool>,
     },
+    #[serde(rename = "nextFunctionCallResult")]
+    NextFunctionCallResult {
+        id: u64,
+        #[serde(rename = "callId")]
+        call_id: u64,
+    },
+    #[serde(rename = "nextFunctionCallError")]
+    NextFunctionCallError { id: u64, error: String },
     #[serde(rename = "envVarRequest")]
     EnvVarRequest { id: u64, variable: String },
     /// Bulk send of all process env vars on session init.

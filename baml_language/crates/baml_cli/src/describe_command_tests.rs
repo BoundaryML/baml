@@ -434,6 +434,13 @@ fn render_describe_builtin_deep_copy() {
     insta::assert_snapshot!(output);
 }
 
+#[test]
+fn render_describe_log_info_builtin() {
+    let db = simple_project();
+    let output = describe_via_dispatch(&db, "log.info");
+    insta::assert_snapshot!(output);
+}
+
 /// Describe a builtin item via describe_by_definition (baml.String).
 #[test]
 fn render_describe_builtin_item_by_definition() {
@@ -862,8 +869,11 @@ fn render_describe_methods_respect_budget() {
     let tight = capture_description(&db, &descs[0], 5);
     let full = capture_description(&db, &descs[0], 1000);
 
-    // Section headers + elision marker are always present under a tight budget.
-    for needle in ["methods:", "more lines (re-run with a higher --budget)"] {
+    for needle in [
+        "methods:",
+        "static_methods:",
+        "more lines (re-run with a higher --budget)",
+    ] {
         assert!(
             tight.contains(needle),
             "`{needle}` missing from describe output under budget 5:\n{tight}"
@@ -895,11 +905,19 @@ fn render_describe_methods_respect_budget() {
         !full.contains("re-run with a higher --budget"),
         "no elision marker expected at budget 1000:\n{full}"
     );
+    assert!(
+        !tight.contains("function to_json(self) -> json"),
+        "late methods should be elided under budget 5:\n{tight}"
+    );
+    assert!(
+        full.contains("function to_json(self) -> json")
+            && full.contains("function from_code_points(unicode: int[]) -> string"),
+        "generous budgets should still show full method details:\n{full}"
+    );
 }
 
-/// A class with a fields-only body (no docstring) renders identically at a tight
-/// budget and a generous one — the body fits any reasonable budget. This is the
-/// spec's `baml describe User --budget 5` guarantee.
+/// A class with a fields-only body (no docstring) still fits that body under a
+/// tight budget, while later method sections use elision markers as needed.
 #[test]
 fn render_describe_fields_only_body_fits_tight_budget() {
     let db = methods_project();
@@ -920,6 +938,21 @@ fn render_describe_fields_only_body_fits_tight_budget() {
     assert!(
         tight.contains("more lines (re-run with a higher --budget)"),
         "methods exceeding the tight budget must be elided with a marker:\n{tight}"
+    );
+    for needle in ["class User {", "    name: string,", "    age: int,", "}"] {
+        assert!(
+            tight.contains(needle),
+            "`{needle}` missing from fields-only body under budget 5:\n{tight}"
+        );
+    }
+    assert!(
+        tight.contains("methods:\n  … 2 more lines"),
+        "methods should be summarized after the tight body budget is spent:\n{tight}"
+    );
+    assert!(
+        full.contains("function Greet(self) -> string")
+            && full.contains("function IsAdult(self) -> bool"),
+        "generous budgets should still show full methods:\n{full}"
     );
 }
 

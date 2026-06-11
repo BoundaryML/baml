@@ -112,8 +112,20 @@ fn expect_int(vm: &BexVm, value: Value) -> Result<i64, NativeCallResult> {
     }
 }
 
+// ── Natural-order sort machinery (`baml._rust_sort` fast path) ───────────────
+//
+// `Sortable.sort` routes homogeneous primitive arrays (int/bigint/string/
+// float) here via the `_is_primitive_array` guard; everything else goes
+// through `sort_by` + `_compare_shim`. The float domain orders by
+// `f64::total_cmp` — a total order over all doubles including NaN — kept
+// bit-exact with `_float_total_cmp` (which backs `Comparable for float`), so
+// the fast path and the comparator path can never disagree on an ordering.
+// The mixed-domain / null / non-primitive rejections below are defensive:
+// `_rust_sort` is only reached for arrays the type system already proved
+// homogeneous primitive.
+
 #[derive(Clone, Copy)]
-enum NaturalDomain {
+pub(super) enum NaturalDomain {
     Int,
     Float,
     Bigint,
@@ -174,16 +186,9 @@ fn natural_kind(vm: &BexVm, context: &str, value: Value) -> Result<NaturalKind, 
         ));
     };
     match vm.get_object(ptr) {
-        Object::Float(f) => {
-            if f.is_nan() {
-                Err(invalid_sort(
-                    context,
-                    "natural ordering does not support NaN",
-                ))
-            } else {
-                Ok(NaturalKind::Float)
-            }
-        }
+        // NaN is *not* rejected: the float domain orders by `total_cmp`,
+        // which gives NaN a defined position.
+        Object::Float(_) => Ok(NaturalKind::Float),
         Object::Bigint(_) => Ok(NaturalKind::Bigint),
         Object::String(_) => Ok(NaturalKind::String),
         _ => Err(invalid_sort(
@@ -196,7 +201,7 @@ fn natural_kind(vm: &BexVm, context: &str, value: Value) -> Result<NaturalKind, 
     }
 }
 
-fn validate_natural_order_with_vm(
+pub(super) fn validate_natural_order_with_vm(
     vm: &BexVm,
     context: &str,
     values: &[Value],
@@ -276,7 +281,7 @@ fn value_as_string_for_sort(vm: &BexVm, value: Value) -> &bex_str::BexStr {
     }
 }
 
-fn compare_natural_values(
+pub(super) fn compare_natural_values(
     vm: &BexVm,
     domain: NaturalDomain,
     left: Value,
@@ -291,14 +296,35 @@ fn compare_natural_values(
                     .as_int()
                     .expect("validated int sort value should be int"),
             ),
-        NaturalDomain::Float => value_as_float_for_sort(vm, left)
-            .partial_cmp(&value_as_float_for_sort(vm, right))
-            .expect("validated float sort values should not be NaN"),
+        NaturalDomain::Float => {
+            value_as_float_for_sort(vm, left).total_cmp(&value_as_float_for_sort(vm, right))
+        }
         NaturalDomain::Bigint => {
             value_as_bigint_cow_for_sort(vm, left).cmp(&value_as_bigint_cow_for_sort(vm, right))
         }
         NaturalDomain::String => {
             value_as_string_for_sort(vm, left).cmp(value_as_string_for_sort(vm, right))
+        }
+    }
+}
+
+/// Whether the first element's runtime type tag puts `values` in one of the
+/// natural-sort primitive domains. Decides `Sortable.sort`'s dispatch (see
+/// `baml._is_primitive_array` in `comparable.baml`). Empty → `true`.
+pub(super) fn is_primitive_array_values(vm: &BexVm, values: &[Value]) -> bool {
+    match values.first() {
+        None => true,
+        Some(v) => {
+            if v.as_int().is_some() {
+                true
+            } else if let Some(ptr) = v.as_object_ptr() {
+                matches!(
+                    vm.get_object(ptr),
+                    Object::Float(_) | Object::Bigint(_) | Object::String(_)
+                )
+            } else {
+                false
+            }
         }
     }
 }
@@ -324,19 +350,6 @@ fn write_back_array_result(
         Ok(value) => NativeCallResult::Done(value),
         Err(e) => NativeCallResult::Error(e),
     }
-}
-
-fn sort_values_natural(
-    vm: &BexVm,
-    context: &str,
-    values: &mut [Value],
-) -> Result<(), VmRustFnError> {
-    if values.is_empty() {
-        return Ok(());
-    }
-    let domain = validate_natural_order_with_vm(vm, context, values)?;
-    values.sort_by(|left, right| compare_natural_values(vm, domain, *left, *right));
-    Ok(())
 }
 
 // Boilerplate macro for the standard `Continuation` GC impls. Captures named
@@ -382,6 +395,41 @@ struct MapContinuation {
 impl Continuation for MapContinuation {
     fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
         self.results.push(value);
+        self.idx += 1;
+        if self.idx >= self.array.len() {
+            return NativeCallResult::Done(Value::object(vm.alloc_array(self.results)));
+        }
+        let next_arg = self.array[self.idx];
+        NativeCallResult::YieldToCall {
+            callee: self.f_ptr,
+            args: vec![next_arg],
+            type_args: vec![],
+            continuation: self,
+        }
+    }
+    gc_impl_array!(f_ptr: f_ptr, values: [array, results]);
+}
+
+// ── filter ────────────────────────────────────────────────────────────────────
+
+/// Continuation for `Array.filter`. Accumulates the original elements whose
+/// predicate result is true, preserving order.
+struct FilterContinuation {
+    f_ptr: HeapPtr,
+    array: Vec<Value>,
+    idx: usize,
+    results: Vec<Value>,
+}
+
+impl Continuation for FilterContinuation {
+    fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
+        let keep = match expect_bool(vm, value) {
+            Ok(b) => b,
+            Err(e) => return e,
+        };
+        if keep {
+            self.results.push(self.array[self.idx]);
+        }
         self.idx += 1;
         if self.idx >= self.array.len() {
             return NativeCallResult::Done(Value::object(vm.alloc_array(self.results)));
@@ -607,46 +655,12 @@ impl Continuation for FlatMapContinuation {
     gc_impl_array!(f_ptr: f_ptr, values: [array, results]);
 }
 
-// ─── Array.to_json continuation ──────────────────────────────────────────────
-
-/// Continuation for `Array.to_json`. Dispatches `v.to_json()` for each element
-/// in order, accumulating json results and finalizing into a `json[]` value.
-struct ToJsonContinuation {
-    /// The original array elements.
-    array: Vec<Value>,
-    /// Index of the element whose `to_json()` callback result we are about to receive.
-    /// Starts at 0 (we yield for index 0 before constructing the continuation).
-    idx: usize,
-    /// Accumulated json results so far (does not include in-flight result).
-    results: Vec<Value>,
-}
-
-impl Continuation for ToJsonContinuation {
-    fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
-        self.results.push(value);
-        self.idx += 1;
-
-        if self.idx >= self.array.len() {
-            return NativeCallResult::Done(Value::object(vm.alloc_array(self.results)));
-        }
-
-        let next_val = self.array[self.idx];
-        match make_to_json_callee(vm, next_val) {
-            Ok(callee) => NativeCallResult::YieldToCall {
-                callee,
-                args: vec![],
-                type_args: vec![],
-                continuation: self,
-            },
-            Err(e) => NativeCallResult::Error(e),
-        }
-    }
-
-    gc_impl_array!(values: [array, results]);
-}
-
 // ─── Array.sort_by continuation ─────────────────────────────────────────────
 
+/// CPS insertion sort: builds `sorted` one element at a time, yielding to the
+/// BAML comparator for each `(current, sorted[insert_idx])` pair. The receiver
+/// is only written back once the whole sort completes, so a throwing
+/// comparator leaves the array in its pre-sort state.
 struct SortByContinuation {
     receiver: Value,
     f_ptr: HeapPtr,
@@ -713,64 +727,42 @@ impl Continuation for SortByContinuation {
     }
 }
 
-// ─── Array.sort_by_key continuation ─────────────────────────────────────────
+// ─── Array.to_json continuation ──────────────────────────────────────────────
 
-struct SortByKeyContinuation {
-    receiver: Value,
-    f_ptr: HeapPtr,
-    items: Vec<Value>,
+/// Continuation for `Array.to_json`. Dispatches `v.to_json()` for each element
+/// in order, accumulating json results and finalizing into a `json[]` value.
+struct ToJsonContinuation {
+    /// The original array elements.
+    array: Vec<Value>,
+    /// Index of the element whose `to_json()` callback result we are about to receive.
+    /// Starts at 0 (we yield for index 0 before constructing the continuation).
     idx: usize,
-    keys: Vec<Value>,
+    /// Accumulated json results so far (does not include in-flight result).
+    results: Vec<Value>,
 }
 
-impl SortByKeyContinuation {
-    fn finish(self, vm: &mut BexVm) -> NativeCallResult {
-        let domain = match validate_natural_order_with_vm(vm, "array.sort_by_key", &self.keys) {
-            Ok(domain) => domain,
-            Err(e) => return NativeCallResult::Error(e),
-        };
-        let mut indices: Vec<usize> = (0..self.items.len()).collect();
-        indices.sort_by(|left, right| {
-            compare_natural_values(vm, domain, self.keys[*left], self.keys[*right])
-                .then_with(|| left.cmp(right))
-        });
-        let sorted = indices
-            .into_iter()
-            .map(|idx| self.items[idx])
-            .collect::<Vec<_>>();
-        write_back_array_result(vm, self.receiver, sorted)
-    }
-}
-
-impl Continuation for SortByKeyContinuation {
+impl Continuation for ToJsonContinuation {
     fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
-        self.keys.push(value);
+        self.results.push(value);
         self.idx += 1;
-        if self.idx >= self.items.len() {
-            return self.finish(vm);
+
+        if self.idx >= self.array.len() {
+            return NativeCallResult::Done(Value::object(vm.alloc_array(self.results)));
         }
-        NativeCallResult::YieldToCall {
-            callee: self.f_ptr,
-            args: vec![self.items[self.idx]],
-            type_args: vec![],
-            continuation: self,
+
+        let next_val = self.array[self.idx];
+        match make_to_json_callee(vm, next_val) {
+            Ok(callee) => NativeCallResult::YieldToCall {
+                callee,
+                args: vec![],
+                type_args: vec![],
+                continuation: self,
+            },
+            Err(e) => NativeCallResult::Error(e),
         }
     }
 
-    fn gc_roots(&self) -> Vec<HeapPtr> {
-        let mut roots = vec![self.f_ptr];
-        collect_value_roots(&[self.receiver], &mut roots);
-        collect_value_roots(&self.items, &mut roots);
-        collect_value_roots(&self.keys, &mut roots);
-        roots
-    }
-
-    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-        forward_ptr(&mut self.f_ptr, forwarding);
-        forward_values(std::slice::from_mut(&mut self.receiver), forwarding);
-        forward_values(&mut self.items, forwarding);
-        forward_values(&mut self.keys, forwarding);
-    }
+    gc_impl_array!(values: [array, results]);
 }
 
 impl BamlClassArray for PackageBamlImpl {
@@ -798,77 +790,21 @@ impl BamlClassArray for PackageBamlImpl {
         array.pop()
     }
 
+    fn remove_at(array: &mut Vec<Value>, index: i64) -> Option<Value> {
+        let Ok(index) = usize::try_from(index) else {
+            return None;
+        };
+        if index >= array.len() {
+            None
+        } else {
+            Some(array.remove(index))
+        }
+    }
+
     fn reverse(array: &[Value]) -> Vec<Value> {
         let mut result = array.to_vec();
         result.reverse();
         result
-    }
-
-    fn sort(vm: &mut BexVm, array: &Value) -> NativeCallResult {
-        let mut values = match vm.as_array(array) {
-            Ok(array) => array.to_vec(),
-            Err(e) => return NativeCallResult::Error(e.into()),
-        };
-        if let Err(e) = sort_values_natural(vm, "array.sort", &mut values) {
-            return NativeCallResult::Error(e);
-        }
-        write_back_array_result(vm, *array, values)
-    }
-
-    fn sort_by(vm: &mut BexVm, array: &Value, compare: &Value) -> NativeCallResult {
-        let f_ptr = match extract_callable(vm, *compare) {
-            Ok(p) => p,
-            Err(e) => return e,
-        };
-        let items = match vm.as_array(array) {
-            Ok(array) => array.to_vec(),
-            Err(e) => return NativeCallResult::Error(e.into()),
-        };
-        if items.len() <= 1 {
-            return write_back_array_result(vm, *array, items);
-        }
-        let first_sorted = items[0];
-        let first_current = items[1];
-        NativeCallResult::YieldToCall {
-            callee: f_ptr,
-            args: vec![first_current, first_sorted],
-            type_args: vec![],
-            continuation: Box::new(SortByContinuation {
-                receiver: *array,
-                f_ptr,
-                items,
-                next_idx: 2,
-                sorted: vec![first_sorted],
-                insert_idx: 0,
-                current: first_current,
-            }),
-        }
-    }
-
-    fn sort_by_key(vm: &mut BexVm, array: &Value, key: &Value) -> NativeCallResult {
-        let f_ptr = match extract_callable(vm, *key) {
-            Ok(p) => p,
-            Err(e) => return e,
-        };
-        let items = match vm.as_array(array) {
-            Ok(array) => array.to_vec(),
-            Err(e) => return NativeCallResult::Error(e.into()),
-        };
-        if items.is_empty() {
-            return write_back_array_result(vm, *array, items);
-        }
-        NativeCallResult::YieldToCall {
-            callee: f_ptr,
-            args: vec![items[0]],
-            type_args: vec![],
-            continuation: Box::new(SortByKeyContinuation {
-                receiver: *array,
-                f_ptr,
-                items,
-                idx: 0,
-                keys: Vec::new(),
-            }),
-        }
     }
 
     #[allow(
@@ -979,6 +915,36 @@ impl BamlClassArray for PackageBamlImpl {
         Ok(())
     }
 
+    fn sort_by(vm: &mut BexVm, array: &Value, compare: &Value) -> NativeCallResult {
+        let f_ptr = match extract_callable(vm, *compare) {
+            Ok(p) => p,
+            Err(e) => return e,
+        };
+        let items = match vm.as_array(array) {
+            Ok(array) => array.to_vec(),
+            Err(e) => return NativeCallResult::Error(e.into()),
+        };
+        if items.len() <= 1 {
+            return write_back_array_result(vm, *array, items);
+        }
+        let first_sorted = items[0];
+        let first_current = items[1];
+        NativeCallResult::YieldToCall {
+            callee: f_ptr,
+            args: vec![first_current, first_sorted],
+            type_args: vec![],
+            continuation: Box::new(SortByContinuation {
+                receiver: *array,
+                f_ptr,
+                items,
+                next_idx: 2,
+                sorted: vec![first_sorted],
+                insert_idx: 0,
+                current: first_current,
+            }),
+        }
+    }
+
     fn map(vm: &mut BexVm, array: &[Value], f: &Value) -> NativeCallResult {
         let f_ptr = match extract_callable(vm, *f) {
             Ok(p) => p,
@@ -995,6 +961,30 @@ impl BamlClassArray for PackageBamlImpl {
             args: vec![first_arg],
             type_args: vec![],
             continuation: Box::new(MapContinuation {
+                f_ptr,
+                array,
+                idx: 0,
+                results: Vec::with_capacity(capacity),
+            }),
+        }
+    }
+
+    fn filter(vm: &mut BexVm, array: &[Value], predicate: &Value) -> NativeCallResult {
+        let f_ptr = match extract_callable(vm, *predicate) {
+            Ok(p) => p,
+            Err(e) => return e,
+        };
+        let array = array.to_vec();
+        if array.is_empty() {
+            return NativeCallResult::Done(Value::object(vm.alloc_array(vec![])));
+        }
+        let first_arg = array[0];
+        let capacity = array.len();
+        NativeCallResult::YieldToCall {
+            callee: f_ptr,
+            args: vec![first_arg],
+            type_args: vec![],
+            continuation: Box::new(FilterContinuation {
                 f_ptr,
                 array,
                 idx: 0,

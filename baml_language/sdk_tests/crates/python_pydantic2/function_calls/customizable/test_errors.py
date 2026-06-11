@@ -32,12 +32,12 @@ import traceback
 import pytest
 
 import baml_sdk  # noqa: F401  — importing initializes the BAML runtime
-from baml_core import AbortController, call_function, get_runtime
+from baml_core import BamlCallContext, BamlCancelledError, call_function, get_runtime
 from baml_sdk import hello_world
 from baml_sdk.baml import BamlError, BamlPanic
 from baml_sdk.baml.errors import InvalidArgument
 from baml_sdk.baml.json import JsonParseError
-from baml_sdk.baml.panics import Cancelled, UserPanic
+from baml_sdk.baml.panics import UserPanic
 from baml_sdk.throws_test import MyError, ParseJson, SleepMs, ThrowMyError
 
 # stdlib native builtins (`baml.json.parse`, `baml.sys.*`) can't be called as
@@ -85,23 +85,20 @@ def test_user_panic_surfaces_as_baml_panic():
 
 
 async def test_cancellation_surfaces_as_baml_panic():
-    """Cancelling an in-flight call → `BamlPanic` whose `.value` is a
-    `baml.panics.Cancelled` (panics subclass `BaseException`)."""
+    """Async cancellation maps to `asyncio.CancelledError` with BAML reason."""
     rt = get_runtime()
-    controller = AbortController()
+    ctx = BamlCallContext()
 
     async def _abort_soon():
         await asyncio.sleep(0.1)
-        controller.abort()
+        ctx.abort()
 
-    with pytest.raises(BamlPanic) as exc_info:
+    with pytest.raises(asyncio.CancelledError) as exc_info:
         await asyncio.gather(
-            call_function(
-                rt, "user.throws_test.SleepMs", {"ms": 2000}, abort_controller=controller
-            ),
+            call_function(rt, "user.throws_test.SleepMs", {"ms": 2000}, _ctx=ctx),
             _abort_soon(),
         )
-    assert isinstance(exc_info.value.value, Cancelled)
+    assert isinstance(exc_info.value.reason, BamlCancelledError)
 
 
 def test_str_is_non_empty():
