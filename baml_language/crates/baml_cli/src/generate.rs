@@ -152,6 +152,7 @@ impl GenerateArgs {
                         &baml_bytecode,
                         generator.naming_convention,
                     )
+                    .map_err(|e| anyhow!(e))?
                 }
                 OutputType::TypescriptNode => sdkgen_typescript_node::to_source_code_with_bytecode(
                     &pool,
@@ -238,11 +239,17 @@ fn discover_generators(
                 file_id,
                 &mut diags,
             );
+            let naming_convention_expected = match output_type {
+                Some(OutputType::PythonPydantic | OutputType::PythonPydanticV1) => {
+                    r#""preserve-case""#
+                }
+                Some(OutputType::TypescriptNode) | None => r#""preserve-case" or "language""#,
+            };
             let naming_convention = parse_required_property::<NamingConvention>(
                 *id,
                 generator_item,
                 "naming_convention",
-                r#""preserve-case" or "language""#,
+                naming_convention_expected,
                 &source_map,
                 file_id,
                 &mut diags,
@@ -263,6 +270,18 @@ fn discover_generators(
                 continue;
             };
 
+            if !validate_target_naming_convention(
+                *id,
+                generator_item,
+                output_type,
+                naming_convention,
+                &source_map,
+                file_id,
+                &mut diags,
+            ) {
+                continue;
+            }
+
             generators.push(GeneratorDef {
                 name: generator_item.name.to_string(),
                 output_type,
@@ -273,6 +292,43 @@ fn discover_generators(
     }
 
     (generators, diags)
+}
+
+fn validate_target_naming_convention(
+    id: LocalItemId<GeneratorMarker>,
+    generator: &Generator,
+    output_type: OutputType,
+    naming_convention: NamingConvention,
+    source_map: &ItemTreeSourceMap,
+    file_id: baml_db::FileId,
+    diags: &mut Vec<Diagnostic>,
+) -> bool {
+    match (output_type, naming_convention) {
+        (OutputType::PythonPydantic | OutputType::PythonPydanticV1, NamingConvention::Language) => {
+            let item_range =
+                generator_config_item_span(id, generator, "naming_convention", source_map);
+            diags.push(
+                Diagnostic::error(
+                    DiagnosticId::InvalidGeneratorPropertyValue,
+                    format!(
+                        "invalid value `language` for `naming_convention` on generator `{}` \
+                         with output_type `{output_type}` (expected \"preserve-case\")",
+                        generator.name
+                    ),
+                )
+                .with_primary(
+                    Span {
+                        file_id,
+                        range: item_range,
+                    },
+                    "`language` is not supported by this generator",
+                )
+                .with_phase(DiagnosticPhase::Validation),
+            );
+            false
+        }
+        _ => true,
+    }
 }
 
 /// Look up `property` on a generator block and parse it as `T` via strum.
@@ -325,11 +381,7 @@ fn parse_required_property<T: std::str::FromStr>(
     match value.parse::<T>() {
         Ok(parsed) => Some(parsed),
         Err(_) => {
-            let item_range = source_map
-                .generator_config_item_spans
-                .get(&id)
-                .and_then(|spans| spans.get(item_idx).copied())
-                .unwrap_or(block_range);
+            let item_range = generator_config_item_span(id, generator, property, source_map);
             diags.push(
                 Diagnostic::error(
                     DiagnosticId::InvalidGeneratorPropertyValue,
@@ -351,6 +403,31 @@ fn parse_required_property<T: std::str::FromStr>(
             None
         }
     }
+}
+
+fn generator_config_item_span(
+    id: LocalItemId<GeneratorMarker>,
+    generator: &Generator,
+    property: &str,
+    source_map: &ItemTreeSourceMap,
+) -> text_size::TextRange {
+    let block_range = source_map
+        .generator_block_spans
+        .get(&id)
+        .copied()
+        .unwrap_or_default();
+    let Some(item_idx) = generator
+        .config_items
+        .iter()
+        .position(|c| c.key.as_str() == property)
+    else {
+        return block_range;
+    };
+    source_map
+        .generator_config_item_spans
+        .get(&id)
+        .and_then(|spans| spans.get(item_idx).copied())
+        .unwrap_or(block_range)
 }
 
 /// Look up a config key in a generator's config items.

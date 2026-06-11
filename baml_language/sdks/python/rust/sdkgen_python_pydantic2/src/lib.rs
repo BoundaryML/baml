@@ -29,6 +29,23 @@ use crate::{
     routing::{LeafPath, route},
 };
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UnsupportedNamingConvention {
+    pub naming_convention: NamingConvention,
+}
+
+impl std::fmt::Display for UnsupportedNamingConvention {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "sdkgen_python_pydantic2 only supports naming_convention = PreserveCase (got {})",
+            self.naming_convention
+        )
+    }
+}
+
+impl std::error::Error for UnsupportedNamingConvention {}
+
 /// Banner prepended to every generated `.py` / `.pyi` file. Mirrors
 /// the legacy `engine/generators/languages/python` `CONTENT_PREFIX`,
 /// plus a block of file-level lint/format ignore directives matching
@@ -109,7 +126,7 @@ pub fn to_source_code(
     pool: &SymbolPool,
     user_baml_files: &[UserBamlFile],
     naming_convention: NamingConvention,
-) -> HashMap<PathBuf, String> {
+) -> Result<HashMap<PathBuf, String>, UnsupportedNamingConvention> {
     to_source_code_internal(
         pool,
         RuntimePayload::SourceFiles(user_baml_files),
@@ -123,7 +140,7 @@ pub fn to_source_code_with_bytecode(
     pool: &SymbolPool,
     baml_bytecode: &[u8],
     naming_convention: NamingConvention,
-) -> HashMap<PathBuf, String> {
+) -> Result<HashMap<PathBuf, String>, UnsupportedNamingConvention> {
     to_source_code_internal(
         pool,
         RuntimePayload::Bytecode(baml_bytecode),
@@ -135,14 +152,11 @@ fn to_source_code_internal(
     pool: &SymbolPool,
     runtime_payload: RuntimePayload<'_>,
     naming_convention: NamingConvention,
-) -> HashMap<PathBuf, String> {
-    // Only `PreserveCase` is wired up so far; `Language`-mode rewriting
-    // is the next piece of work and panics loudly until then.
-    assert!(
-        matches!(naming_convention, NamingConvention::PreserveCase),
-        "sdkgen_python_pydantic2 only supports naming_convention = PreserveCase \
-         (got {naming_convention})",
-    );
+) -> Result<HashMap<PathBuf, String>, UnsupportedNamingConvention> {
+    if !matches!(naming_convention, NamingConvention::PreserveCase) {
+        return Err(UnsupportedNamingConvention { naming_convention });
+    }
+
     let mut out: HashMap<PathBuf, String> = HashMap::new();
 
     // Every symbol in the pool routes to exactly one leaf. Dedup via
@@ -266,7 +280,7 @@ fn to_source_code_internal(
         }
     }
 
-    out
+    Ok(out)
 }
 
 fn init_py_path(dir: &[String]) -> PathBuf {
@@ -635,9 +649,22 @@ mod tests {
     }
 
     #[test]
+    fn language_naming_convention_returns_error() {
+        let pool: SymbolPool = HashMap::new();
+
+        let err = to_source_code(&pool, &[], NamingConvention::Language).unwrap_err();
+
+        assert_eq!(err.naming_convention, NamingConvention::Language);
+        assert_eq!(
+            err.to_string(),
+            "sdkgen_python_pydantic2 only supports naming_convention = PreserveCase (got language)"
+        );
+    }
+
+    #[test]
     fn empty_pool_emits_structural_files() {
         let pool: SymbolPool = HashMap::new();
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
 
         assert!(out.contains_key(&PathBuf::from("__init__.py")));
         assert!(out.contains_key(&PathBuf::from("baml/__init__.py")));
@@ -689,7 +716,7 @@ mod tests {
         let n = cg_name("user", &["lorem"], "Resume");
         pool.insert(n.clone(), class(n));
 
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
 
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(leaf.starts_with(HEADER));
@@ -710,7 +737,7 @@ mod tests {
         let n = cg_name("user", &["lorem"], "Sentiment");
         pool.insert(n.clone(), enum_(n, "x.baml", 0));
 
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(leaf.contains("import enum\n"));
         assert!(leaf.contains("class Sentiment(str, enum.Enum):\n    A = \"A\"\n"));
@@ -722,7 +749,7 @@ mod tests {
         let n = cg_name("user", &["lorem"], "Foo");
         pool.insert(n.clone(), alias(n, "x.baml", 0));
 
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(leaf.contains("import typing\n"));
         assert!(leaf.contains("Foo: typing.TypeAlias = int\n"));
@@ -763,7 +790,7 @@ mod tests {
             ),
         );
 
-        let leaf = &to_source_code(&pool, &[], NamingConvention::PreserveCase)
+        let leaf = &to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap()
             [&PathBuf::from("lorem/__init__.py")];
         assert!(
             leaf.contains(
@@ -790,7 +817,7 @@ mod tests {
             ),
         );
 
-        let leaf = &to_source_code(&pool, &[], NamingConvention::PreserveCase)
+        let leaf = &to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap()
             [&PathBuf::from("lorem/__init__.py")];
         // Field /// goes into the class body docstring as an
         // Attributes: section — there is no inline `# ` comment.
@@ -830,7 +857,7 @@ mod tests {
             ),
         );
 
-        let leaf = &to_source_code(&pool, &[], NamingConvention::PreserveCase)
+        let leaf = &to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap()
             [&PathBuf::from("lorem/__init__.py")];
         assert!(
             leaf.contains(
@@ -857,7 +884,7 @@ mod tests {
             ),
         );
 
-        let leaf = &to_source_code(&pool, &[], NamingConvention::PreserveCase)
+        let leaf = &to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap()
             [&PathBuf::from("lorem/__init__.py")];
         assert!(
             leaf.contains("    \"\"\"\n    first line\n    second line\n    \"\"\""),
@@ -890,7 +917,7 @@ mod tests {
             }),
         );
 
-        let leaf = &to_source_code(&pool, &[], NamingConvention::PreserveCase)
+        let leaf = &to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap()
             [&PathBuf::from("lorem/__init__.py")];
         // Once at least one variant carries a `///`, the Members: block
         // appears and lists *every* variant — undocumented ones render
@@ -931,7 +958,7 @@ mod tests {
             }),
         );
 
-        let leaf = &to_source_code(&pool, &[], NamingConvention::PreserveCase)
+        let leaf = &to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap()
             [&PathBuf::from("lorem/__init__.py")];
         assert!(
             leaf.contains(
@@ -971,7 +998,7 @@ mod tests {
             ),
         );
 
-        let leaf = &to_source_code(&pool, &[], NamingConvention::PreserveCase)
+        let leaf = &to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap()
             [&PathBuf::from("lorem/__init__.py")];
         assert!(
             !leaf.contains("Attributes:"),
@@ -1006,7 +1033,7 @@ mod tests {
             ),
         );
 
-        let leaf = &to_source_code(&pool, &[], NamingConvention::PreserveCase)
+        let leaf = &to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap()
             [&PathBuf::from("lorem/__init__.py")];
         assert!(
             leaf.contains(
@@ -1022,7 +1049,7 @@ mod tests {
         let n = cg_name("user", &["lorem"], "Resume");
         pool.insert(n.clone(), class(n));
 
-        let leaf = &to_source_code(&pool, &[], NamingConvention::PreserveCase)
+        let leaf = &to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap()
             [&PathBuf::from("lorem/__init__.py")];
         assert!(!leaf.contains("\"\"\""));
         assert!(
@@ -1041,7 +1068,7 @@ mod tests {
             Symbol::Function(f),
         );
 
-        let leaf = &to_source_code(&pool, &[], NamingConvention::PreserveCase)
+        let leaf = &to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap()
             [&PathBuf::from("lorem/__init__.pyi")];
         assert!(
             leaf.contains(
@@ -1060,7 +1087,7 @@ mod tests {
             Symbol::Function(f),
         );
 
-        let leaf = &to_source_code(&pool, &[], NamingConvention::PreserveCase)
+        let leaf = &to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap()
             [&PathBuf::from("lorem/__init__.pyi")];
         assert!(leaf.contains("def ExtractResume(x: int) -> int: ..."));
     }
@@ -1094,7 +1121,7 @@ mod tests {
             }),
         );
 
-        let leaf = &to_source_code(&pool, &[], NamingConvention::PreserveCase)
+        let leaf = &to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap()
             [&PathBuf::from("lorem/__init__.pyi")];
         assert!(
             leaf.contains(":\n        \"\"\"Summarize the resume.\"\"\"\n"),
@@ -1108,7 +1135,7 @@ mod tests {
         let n = cg_name("user", &["lorem"], "extract_resume");
         pool.insert(n, func_sym("extract_resume", "x.baml", 0));
 
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         let sync_line = "extract_resume       = _define_function(\"user.lorem.extract_resume\", \"sync\",  [\"x\"])\n";
         let async_line = "extract_resume_async = _define_function(\"user.lorem.extract_resume\", \"async\", [\"x\"])\n";
@@ -1137,7 +1164,7 @@ mod tests {
             vec![("stream", companion)],
         );
 
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(
             leaf.contains(
@@ -1167,7 +1194,7 @@ mod tests {
             vec![("build_request", companion)],
         );
 
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(
             leaf.contains(
@@ -1189,7 +1216,7 @@ mod tests {
         let n = cg_name("user", &["lorem"], "Resume$stream");
         pool.insert(n.clone(), class(n));
 
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let leaf = &out[&PathBuf::from("stream_types/lorem/__init__.py")];
         assert!(leaf.contains("class Resume(pydantic.BaseModel):\n"));
         // The Python identifier strips `$stream`; the engine FQN keeps
@@ -1213,7 +1240,7 @@ mod tests {
         pool.insert(late.clone(), class_at(late, "x.baml", 200));
         pool.insert(early.clone(), class_at(early, "x.baml", 100));
 
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         let idx_foo = leaf.find("class Foo(pydantic.BaseModel):").unwrap();
         let idx_bar = leaf.find("class Bar(pydantic.BaseModel):").unwrap();
@@ -1230,7 +1257,7 @@ mod tests {
         pool.insert(a.clone(), class_at(a, "b.baml", 0));
         pool.insert(b.clone(), class_at(b, "a.baml", 0));
 
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         // B (a.baml) sorts before A (b.baml).
         let idx_a = leaf.find("class A(pydantic.BaseModel):").unwrap();
@@ -1246,7 +1273,7 @@ mod tests {
         pool.insert(c.clone(), class_at(c, "x.baml", 0));
         pool.insert(e.clone(), enum_(e, "x.baml", 50));
 
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(leaf.contains("__all__ = [\n    \"Resume\",\n    \"Sentiment\",\n]"));
     }
@@ -1257,7 +1284,7 @@ mod tests {
         let n = cg_name("aws", &["s3"], "Bucket");
         pool.insert(n.clone(), class(n));
 
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
 
         assert!(out.contains_key(&PathBuf::from("vendor/__init__.py")));
         assert!(out.contains_key(&PathBuf::from("vendor/aws/__init__.py")));
@@ -1294,7 +1321,7 @@ mod tests {
         let n = cg_name("user", &[], "Foo");
         pool.insert(n.clone(), class(n));
 
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let root = &out[&PathBuf::from("__init__.py")];
         assert!(root.contains("BamlRuntime.initialize_runtime("));
         // Body appended after the runtime init + re-exports.
@@ -1321,7 +1348,7 @@ mod tests {
         let c2 = cg_name("user", &["ipsum"], "Tag");
         pool.insert(c2.clone(), class(c2));
 
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
 
         let lorem = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(
@@ -1361,7 +1388,7 @@ mod tests {
         let n = cg_name("user", &["lorem"], "Resume$stream");
         pool.insert(n.clone(), class(n));
 
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
 
         assert!(out.contains_key(&PathBuf::from("stream_types/__init__.py")));
         assert!(out.contains_key(&PathBuf::from("stream_types/lorem/__init__.py")));
@@ -1385,7 +1412,7 @@ mod tests {
                 "function foo() -> int { 1 }\n".to_string(),
             ),
         ];
-        let out = to_source_code(&pool, &files, NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &files, NamingConvention::PreserveCase).unwrap();
 
         let inl = &out[&PathBuf::from("_inlinedbaml.py")];
         assert!(inl.starts_with(HEADER));
@@ -1406,7 +1433,8 @@ mod tests {
     fn bytecode_payload_initializes_runtime_from_bytecode() {
         let pool: SymbolPool = HashMap::new();
         let bytecode = b"\x00BAML\"\n\xff";
-        let out = to_source_code_with_bytecode(&pool, bytecode, NamingConvention::PreserveCase);
+        let out =
+            to_source_code_with_bytecode(&pool, bytecode, NamingConvention::PreserveCase).unwrap();
 
         let root = &out[&PathBuf::from("__init__.py")];
         assert!(
@@ -1475,7 +1503,7 @@ mod tests {
                 0,
             ),
         );
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         let expected = "class Resume(pydantic.BaseModel):\n\
                         \x20   model_config = pydantic.ConfigDict(extra=\"forbid\")\n\
@@ -1490,7 +1518,7 @@ mod tests {
         let mut pool: SymbolPool = HashMap::new();
         let n = cg_name("user", &["lorem"], "Empty");
         pool.insert(n.clone(), class_with_props(n, vec![], "x.baml", 0));
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         let expected = "class Empty(pydantic.BaseModel):\n\
                         \x20   model_config = pydantic.ConfigDict(extra=\"forbid\")\n";
@@ -1526,7 +1554,7 @@ mod tests {
                 origin: origin("x.baml", 0),
             }),
         );
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let leaf = &out[&PathBuf::from("ipsum/__init__.py")];
         let expected = "class Sentiment(str, enum.Enum):\n\
                         \x20   POSITIVE = \"POSITIVE\"\n\
@@ -1548,7 +1576,7 @@ mod tests {
                 origin: origin("x.baml", 0),
             }),
         );
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(leaf.contains("class Nothing(str, enum.Enum):\n    pass\n"));
     }
@@ -1569,7 +1597,7 @@ mod tests {
             Ty::List(Box::new(Ty::TypeAlias(n.clone()))),
         ]);
         pool.insert(n.clone(), alias_full(n, rhs, true, "tree.baml", 0));
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let leaf = &out[&PathBuf::from("tree/__init__.py")];
         assert!(leaf.contains("import typing_extensions\n"));
         assert!(leaf.contains(
@@ -1605,7 +1633,7 @@ mod tests {
                 0,
             ),
         );
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(
             leaf.contains(
@@ -1641,7 +1669,7 @@ mod tests {
                 100,
             ),
         );
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let leaf = &out[&PathBuf::from("tree/__init__.py")];
         assert!(leaf.contains("Bar: typing.TypeAlias = typing.List[JsonValue]\n"));
     }
@@ -1669,7 +1697,7 @@ mod tests {
                 0,
             ),
         );
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
 
         // Non-stream leaf has the sibling.
         let non_stream_leaf = &out[&PathBuf::from("lorem/__init__.py")];
@@ -1728,7 +1756,7 @@ mod tests {
                 0,
             ),
         );
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let lorem_leaf = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(lorem_leaf.contains("    sentiment: ipsum.Sentiment\n"));
         // 25b2 Phase 4: cross-leaf Pydantic field-edge import is now
@@ -1805,7 +1833,7 @@ mod tests {
     fn function_zero_args_renders_empty_param_list() {
         let mut pool: SymbolPool = HashMap::new();
         insert_parent_only(&mut pool, "user", &["lorem"], "ping", &[], "x.baml", 0);
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(
             leaf.contains("ping       = _define_function(\"user.lorem.ping\", \"sync\",  [])\n")
@@ -1827,7 +1855,7 @@ mod tests {
             "x.baml",
             0,
         );
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(leaf.contains(
             "make       = _define_function(\"user.lorem.make\", \"sync\",  [\"a\", \"b\", \"c\"])\n"
@@ -1899,7 +1927,7 @@ mod tests {
             }),
         );
 
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let py = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(py.contains(
             "search       = _define_function(\"user.lorem.search\", \"sync\",  [\"query\"], [\"max_results\", \"filter\", \"tags\", \"metadata\", \"fallback\"])\n"
@@ -1968,7 +1996,7 @@ mod tests {
             }),
         );
 
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let py = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(py.contains(
             "extract_resume       = _define_function(\"user.lorem.extract_resume\", \"sync\",  [\"resume\"], [\"client\"])\n"
@@ -2026,7 +2054,7 @@ mod tests {
             }),
         );
 
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
 
         assert!(pyi.contains(
@@ -2051,7 +2079,7 @@ mod tests {
             "x.baml",
             0,
         );
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         // Parent uses parent params.
         assert!(leaf.contains(
@@ -2083,7 +2111,7 @@ mod tests {
             "x.baml",
             0,
         );
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         // Each companion pair appears.
         for needle in [
@@ -2134,7 +2162,7 @@ mod tests {
     fn vendor_function_fqn_uses_vendor_pkg() {
         let mut pool: SymbolPool = HashMap::new();
         insert_parent_only(&mut pool, "aws", &["s3"], "create_bucket", &[], "x.baml", 0);
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let leaf = &out[&PathBuf::from("vendor/aws/s3/__init__.py")];
         assert!(leaf.contains(
             "create_bucket       = _define_function(\"aws.s3.create_bucket\", \"sync\",  [])\n"
@@ -2145,7 +2173,7 @@ mod tests {
     fn baml_pkg_function_fqn_keeps_baml_prefix() {
         let mut pool: SymbolPool = HashMap::new();
         insert_parent_only(&mut pool, "baml", &["http"], "fetch", &["url"], "x.baml", 0);
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let leaf = &out[&PathBuf::from("baml/http/__init__.py")];
         assert!(leaf.contains(
             "fetch       = _define_function(\"baml.http.fetch\", \"sync\",  [\"url\"])\n"
@@ -2156,7 +2184,7 @@ mod tests {
     fn root_no_namespace_function_fqn_drops_segment() {
         let mut pool: SymbolPool = HashMap::new();
         insert_parent_only(&mut pool, "user", &[], "ping", &[], "x.baml", 0);
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let root = &out[&PathBuf::from("__init__.py")];
         assert!(
             root.contains("ping       = _define_function(\"user.ping\", \"sync\",  [])\n"),
@@ -2177,8 +2205,8 @@ mod tests {
             b.clone(),
             class_with_props(b, vec![("y", Ty::String)], "b.baml", 0),
         );
-        let out1 = to_source_code(&pool, &[], NamingConvention::PreserveCase);
-        let out2 = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out1 = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
+        let out2 = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         // Same keys + same contents on every path.
         let mut k1: Vec<_> = out1.keys().collect();
         let mut k2: Vec<_> = out2.keys().collect();
@@ -2244,7 +2272,7 @@ mod tests {
             ),
         );
 
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(
             leaf.contains("define_function as _define_function"),
@@ -2283,7 +2311,7 @@ mod tests {
             ),
         );
 
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(
             leaf.contains("define_function as _define_function"),
@@ -2324,7 +2352,7 @@ mod tests {
             ),
         );
 
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         // Both static and instance methods route through the same
         // `define_function` factory, so the import collapses to one
@@ -2343,7 +2371,7 @@ mod tests {
         let n = cg_name("user", &["lorem"], "Resume");
         pool.insert(n.clone(), class(n));
 
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(
             !leaf.contains("_define_function"),
@@ -2358,7 +2386,7 @@ mod tests {
     #[test]
     fn no_legacy_output_paths() {
         let pool: SymbolPool = HashMap::new();
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         for path in out.keys() {
             let s = path.to_string_lossy();
             assert!(!s.starts_with("baml_types/"));
@@ -2390,7 +2418,7 @@ mod tests {
         let bucket = cg_name("aws", &["s3"], "Bucket");
         pool.insert(bucket.clone(), class(bucket));
 
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
 
         for path in out.keys() {
             let s = path.to_string_lossy();
@@ -2423,7 +2451,7 @@ mod tests {
             ),
         );
 
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let leaf = &out[&PathBuf::from("lorem/__init__.pyi")];
 
         // Field declarations are mirrored into the stub so type
@@ -2466,7 +2494,7 @@ mod tests {
             }),
         );
 
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let leaf = &out[&PathBuf::from("ipsum/__init__.pyi")];
 
         let expected = "class Sentiment(str, enum.Enum):\n\
@@ -2503,7 +2531,7 @@ mod tests {
             }),
         );
 
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let leaf = &out[&PathBuf::from("lorem/__init__.pyi")];
 
         assert!(
@@ -2570,7 +2598,7 @@ mod tests {
             }),
         );
 
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let leaf = &out[&PathBuf::from("lorem/__init__.pyi")];
 
         // Parent uses parent params/return.
@@ -2592,7 +2620,7 @@ mod tests {
         let n = cg_name("user", &["util"], "Foo");
         pool.insert(n.clone(), alias(n, "x.baml", 0));
 
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let leaf = &out[&PathBuf::from("util/__init__.pyi")];
         // 12d §3.3: type-alias body is identical between `.py` and `.pyi`.
         assert!(leaf.contains("Foo: typing.TypeAlias = int\n"));
@@ -2611,7 +2639,7 @@ mod tests {
         ]);
         pool.insert(n.clone(), alias_full(n, rhs, true, "tree.baml", 0));
 
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let leaf = &out[&PathBuf::from("tree/__init__.pyi")];
         assert!(leaf.contains("import typing_extensions\n"));
         assert!(leaf.contains(
@@ -2634,7 +2662,7 @@ mod tests {
             ),
         );
 
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let leaf = &out[&PathBuf::from("lorem/__init__.pyi")];
 
         // 12b method-bearing class: body is the method block, not `...`.
@@ -2666,7 +2694,7 @@ mod tests {
             ),
         );
 
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let leaf = &out[&PathBuf::from("lorem/__init__.pyi")];
 
         // Instance methods: `self` (no annotation) + typed remaining params.
@@ -2688,7 +2716,7 @@ mod tests {
         let n = cg_name("user", &["lorem"], "Resume");
         pool.insert(n.clone(), class(n));
 
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let leaf = &out[&PathBuf::from("lorem/__init__.pyi")];
 
         // Field declaration is mirrored, but no method block exists.
@@ -2704,7 +2732,7 @@ mod tests {
         pool.insert(c.clone(), class_at(c, "x.baml", 0));
         pool.insert(e.clone(), enum_(e, "x.baml", 50));
 
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let py = &out[&PathBuf::from("lorem/__init__.py")];
         let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
         assert!(py.contains("__all__ = [\n    \"Resume\",\n    \"Sentiment\",\n]"));
@@ -2721,14 +2749,14 @@ mod tests {
         let n = cg_name("user", &["lorem"], "Resume");
         pool.insert(n.clone(), class(n));
 
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let leaf = &out[&PathBuf::from("lorem/__init__.pyi")];
         assert!(leaf.contains("import typing"), "typing expected:\n{leaf}");
 
         // Adding a function still results in typing being imported.
         let f = cg_name("user", &["lorem"], "ping");
         pool.insert(f, func_sym("ping", "x.baml", 100));
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let leaf = &out[&PathBuf::from("lorem/__init__.pyi")];
         assert!(leaf.contains("import typing"));
     }
@@ -2739,7 +2767,7 @@ mod tests {
         let n = cg_name("user", &["lorem"], "extract_resume");
         pool.insert(n, func_sym("extract_resume", "x.baml", 100));
 
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         for (path, content) in &out {
             if !path.to_string_lossy().ends_with(".pyi") {
                 continue;
@@ -2789,7 +2817,7 @@ mod tests {
             ),
         );
 
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let py = &out[&PathBuf::from("lorem/__init__.py")];
         // 25b2 Phase 4: cross-leaf Pydantic field-edge import is now
         // unconditional in `.py` (the typemap installs sentinel-resolved
@@ -2834,7 +2862,7 @@ mod tests {
                 0,
             ),
         );
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let py = &out[&PathBuf::from("lorem/__init__.py")];
         // 25b2 Phase 4: lifted out of TYPE_CHECKING in `.py`.
         assert!(
@@ -2870,7 +2898,7 @@ mod tests {
                 0,
             ),
         );
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let py = &out[&PathBuf::from("__init__.py")];
         assert!(
             !py.contains("from . import Foo") && !py.contains("from .. import Foo"),
@@ -2897,7 +2925,7 @@ mod tests {
                 0,
             ),
         );
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let py = &out[&PathBuf::from("lorem/__init__.py")];
         // Import the top-level segment (`baml`) from the SDK root; the
         // annotation uses the fully-qualified `baml.http.Response`.
@@ -2930,7 +2958,7 @@ mod tests {
                 0,
             ),
         );
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let py = &out[&PathBuf::from("lorem/__init__.py")];
         // Import the top-level segment `vendor` from the SDK root;
         // annotation uses `vendor.aws.s3.Bucket`.
@@ -2965,7 +2993,7 @@ mod tests {
                 0,
             ),
         );
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let py = &out[&PathBuf::from("stream_types/lorem/__init__.py")];
         // 25b2 Phase 4: lifted out of TYPE_CHECKING in `.py`. Different
         // first segments (stream_types vs lorem) so import stays root-
@@ -2999,7 +3027,7 @@ mod tests {
                 0,
             ),
         );
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let py = &out[&PathBuf::from("stream_types/vendor/aws/s3/__init__.py")];
         assert!(
             py.contains("\nfrom ..... import baml\n"),
@@ -3050,7 +3078,7 @@ mod tests {
                 0,
             ),
         );
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let py = &out[&PathBuf::from("lorem/__init__.py")];
         // Every cross-leaf field-edge import lifts to a runtime
         // `from <root_dots> import <top_seg>` line — no TYPE_CHECKING
@@ -3100,7 +3128,7 @@ mod tests {
                 0,
             ),
         );
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let py = &out[&PathBuf::from("lorem/__init__.py")];
         assert_eq!(
             py.matches("from .. import vendor").count(),
@@ -3123,7 +3151,7 @@ mod tests {
             other.clone(),
             class_with_props(other, vec![("r", Ty::Class(resume, vec![]))], "x.baml", 100),
         );
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let py = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(!py.contains("if typing.TYPE_CHECKING:"));
         assert!(!py.contains("from .."));
@@ -3170,7 +3198,7 @@ mod tests {
                 origin: origin("x.baml", 100),
             }),
         );
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
         assert!(
             pyi.contains("if typing.TYPE_CHECKING:\n    from .. import ipsum\n"),
@@ -3199,7 +3227,7 @@ mod tests {
             0,
         );
 
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let leaf = &out[&PathBuf::from("lorem/__init__.pyi")];
         // Sync→async→companion sync→companion async should appear
         // contiguously without blank-line separators.
@@ -3271,7 +3299,7 @@ mod tests {
             }),
         );
 
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(
             leaf.contains("T = typing.TypeVar(\"T\")"),
@@ -3344,7 +3372,7 @@ mod tests {
                 origin: origin("echo.baml", 0),
             }),
         );
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
         assert!(
             pyi.contains("T = typing.TypeVar(\"T\")"),
@@ -3367,7 +3395,7 @@ mod tests {
         // sdk_root is deleted in Phase 5; codegen drops the kwarg now (no
         // runtime consumer, no diagnostic value worth a separate argument).
         let pool: SymbolPool = HashMap::new();
-        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase).unwrap();
         let root = &out[&PathBuf::from("__init__.py")];
         assert!(
             root.contains(

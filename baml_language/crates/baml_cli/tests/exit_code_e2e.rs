@@ -229,6 +229,93 @@ fn generate_valid_project_returns_zero_exit_code() {
     );
 }
 
+#[test]
+fn generate_python_pydantic_language_naming_convention_returns_diagnostic() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(
+        tmp.path(),
+        r#"generator target {
+  output_type "python/pydantic"
+  output_dir "../"
+  default_client_mode "sync"
+  naming_convention "language"
+}
+
+function main() -> string {
+  "hello"
+}
+"#,
+    );
+
+    let output = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
+
+    assert!(
+        !output.status.success(),
+        "Expected non-zero exit code for unsupported python/pydantic naming_convention, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert_eq!(output.status.code(), Some(4));
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("invalid value `language` for `naming_convention`"),
+        "Expected structured invalid-value diagnostic, got: {stderr}",
+    );
+    assert!(
+        stderr.contains("expected \"preserve-case\""),
+        "Expected diagnostic to list only the supported value, got: {stderr}",
+    );
+    assert!(
+        !stderr.contains("panicked at"),
+        "Diagnostic path should not panic, got: {stderr}",
+    );
+}
+
+#[test]
+fn generate_python_pydantic_missing_naming_convention_lists_supported_value() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(
+        tmp.path(),
+        r#"generator target {
+  output_type "python/pydantic"
+  output_dir "../"
+}
+
+function main() -> string {
+  "hello"
+}
+"#,
+    );
+
+    let output = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
+
+    assert!(
+        !output.status.success(),
+        "Expected non-zero exit code for missing naming_convention, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert_eq!(output.status.code(), Some(4));
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr
+            .contains("missing required property `naming_convention` (expected \"preserve-case\")"),
+        "Expected pydantic-specific naming_convention guidance, got: {stderr}",
+    );
+    assert!(
+        !stderr.contains("\"language\""),
+        "python/pydantic guidance should not advertise unsupported `language`, got: {stderr}",
+    );
+}
+
 // ============================================================================
 // Tests for `baml run` exit codes
 // ============================================================================
