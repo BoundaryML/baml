@@ -35,7 +35,10 @@ fn parse_error(message: String) -> VmRustFnError {
 
 /// Interprets a civil ("wall-clock") reading — nanoseconds since
 /// 1970-01-01T00:00:00, as if the reading were UTC — as a datetime.
-fn civil_datetime(ns: &num_bigint::BigInt, what: &str) -> Result<OffsetDateTime, VmRustFnError> {
+pub(crate) fn civil_datetime(
+    ns: &num_bigint::BigInt,
+    what: &str,
+) -> Result<OffsetDateTime, VmRustFnError> {
     i128::try_from(ns)
         .ok()
         .and_then(|n| OffsetDateTime::from_unix_timestamp_nanos(n).ok())
@@ -61,7 +64,7 @@ pub(crate) fn days_since_epoch(date: Date) -> i64 {
     (date - UNIX_EPOCH_DATE).whole_days()
 }
 
-fn date_for_days(days: i64, what: &str) -> Result<Date, VmRustFnError> {
+pub(crate) fn date_for_days(days: i64, what: &str) -> Result<Date, VmRustFnError> {
     UNIX_EPOCH_DATE
         .checked_add(time::Duration::days(days))
         .ok_or_else(|| {
@@ -96,7 +99,7 @@ fn clock_nanos(
 }
 
 /// Formats `2026-03-18` into `out`. Negative years carry a sign.
-fn format_date_into(out: &mut String, date: Date) {
+pub(crate) fn format_date_into(out: &mut String, date: Date) {
     let year = date.year();
     if year < 0 {
         let _ = write!(out, "-{:04}", -i64::from(year));
@@ -108,7 +111,13 @@ fn format_date_into(out: &mut String, date: Date) {
 
 /// Formats `07:32:00` / `07:32:00.5` into `out`, truncating trailing
 /// subsecond zeros.
-fn format_clock_into(out: &mut String, hour: u8, minute: u8, second: u8, subsec_nanos: u32) {
+pub(crate) fn format_clock_into(
+    out: &mut String,
+    hour: u8,
+    minute: u8,
+    second: u8,
+    subsec_nanos: u32,
+) {
     let _ = write!(out, "{hour:02}:{minute:02}:{second:02}");
     if subsec_nanos != 0 {
         let digits = format!("{subsec_nanos:09}");
@@ -130,11 +139,11 @@ fn format_offset_into(out: &mut String, offset_ns: i64, allow_z: bool) {
     let _ = write!(out, "{sign}{hours:02}:{minutes:02}");
 }
 
-const DATE_FORMAT: &[time::format_description::BorrowedFormatItem<'_>] =
+pub(crate) const DATE_FORMAT: &[time::format_description::BorrowedFormatItem<'_>] =
     format_description!("[year]-[month]-[day]");
 const TIME_FORMAT: &[time::format_description::BorrowedFormatItem<'_>] =
     format_description!("[hour]:[minute]:[second][optional [.[subsecond]]]");
-const DATETIME_FORMAT: &[time::format_description::BorrowedFormatItem<'_>] =
+pub(crate) const DATETIME_FORMAT: &[time::format_description::BorrowedFormatItem<'_>] =
     format_description!("[year]-[month]-[day]T[hour]:[minute]:[second][optional [.[subsecond]]]");
 
 impl BamlClassTimeInstant for PackageBamlImpl {
