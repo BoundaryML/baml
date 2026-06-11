@@ -8,10 +8,20 @@ import {
   Zap,
 } from 'lucide-react';
 import Link from 'next/link';
+import { createMetadata } from '@/app/_lib/metadata';
 import { FooterSection } from '@/components/footer-section';
 import { Navbar } from '@/components/navbar';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+
+export const metadata = createMetadata({
+  description:
+    'The case for a purpose-built language for LLMs: fewer AI bugs, reliable structured output, and prompts you can actually maintain.',
+  eyebrow: 'Essay',
+  path: '/why-the-f-did-we-make-a-language',
+  title: 'Why the f*** did we make a language?',
+  titleAbsolute: 'Why the f*** did we make a language?',
+});
 
 const problems = [
   {

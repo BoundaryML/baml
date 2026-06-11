@@ -1,26 +1,13 @@
-import type { Metadata } from 'next';
-
+import { createMetadata } from '@/app/_lib/metadata';
 import { Navbar } from '@/components/navbar';
 
 // Minimal static early-access page: just the onboarding-session signup links.
-const baseUrl =
-  process.env.NEXT_PUBLIC_BASE_URL ??
-  (process.env.VERCEL_PROJECT_PRODUCTION_URL
-    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-    : 'https://boundaryml.com');
-
-export const metadata: Metadata = {
-  alternates: { canonical: `${baseUrl}/eap` },
+export const metadata = createMetadata({
   description: 'Sign up for a BAML early access onboarding session.',
-  openGraph: {
-    description: 'Sign up for a BAML early access onboarding session.',
-    siteName: 'BAML',
-    title: 'Early Access Sign Up',
-    type: 'website',
-    url: `${baseUrl}/eap`,
-  },
-  title: 'Early Access Sign Up | BAML',
-};
+  eyebrow: 'Early Access',
+  path: '/eap',
+  title: 'Early Access Sign Up',
+});
 
 const SESSIONS = [
   { date: 'June 11', href: 'https://luma.com/baml-eap-jun-11' },

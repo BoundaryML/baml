@@ -1,10 +1,15 @@
-import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
-export const metadata: Metadata = {
+import { createMetadata } from '@/app/_lib/metadata';
+
+export const metadata = createMetadata({
   description:
     'BAML is a statically-typed, expression-oriented language with first-class LLM functions.',
-  title: 'BAML - First-class LLM functions',
-};
+  eyebrow: 'The Language',
+  ogTitle: 'BAML — First-class LLM functions',
+  path: '/baml',
+  title: 'First-class LLM functions',
+  titleAbsolute: 'BAML — First-class LLM functions',
+});
 
 export default function Home() {
   redirect('/');

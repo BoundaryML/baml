@@ -9,10 +9,20 @@ import {
   Workflow,
 } from 'lucide-react';
 import Link from 'next/link';
+import { createMetadata } from '@/app/_lib/metadata';
 import { FooterSection } from '@/components/footer-section';
 import { Navbar } from '@/components/navbar';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+
+export const metadata = createMetadata({
+  description:
+    "Go from idea to working prototype in hours, not weeks, with BAML's typed LLM functions, instant prototyping, and production-ready tooling.",
+  eyebrow: 'Solutions',
+  ogTitle: 'From idea to prototype in hours',
+  path: '/solutions',
+  title: 'Solutions',
+});
 
 const solutions = [
   {

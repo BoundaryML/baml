@@ -1,6 +1,15 @@
 import { Navbar } from '@/components/navbar';
 import { FooterSection } from '@/components/footer-section';
 import Link from 'next/link';
+import { createMetadata } from '@/app/_lib/metadata';
+
+export const metadata = createMetadata({
+  description:
+    'The terms governing your use of BAML and Boundary ML services.',
+  eyebrow: 'Legal',
+  path: '/tos',
+  title: 'Terms of Service',
+});
 
 export default function TermsOfServicePage() {
   return (

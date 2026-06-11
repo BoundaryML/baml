@@ -1,5 +1,4 @@
-import type { Metadata } from 'next';
-
+import { createMetadata } from '@/app/_lib/metadata';
 import { FooterSection } from '@/components/footer-section';
 import { Navbar } from '@/components/navbar';
 import { ChangelogList } from './changelog-list';
@@ -12,24 +11,13 @@ import { ChangelogList } from './changelog-list';
 // highlighted client-side with shiki (incl. the BAML grammar). Clicking a
 // release opens its article via a `?v=` query param, handled fully client-side.
 
-const baseUrl =
-  process.env.NEXT_PUBLIC_BASE_URL ??
-  (process.env.VERCEL_PROJECT_PRODUCTION_URL
-    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-    : 'https://boundaryml.com');
-
-export const metadata: Metadata = {
-  alternates: { canonical: `${baseUrl}/changelog` },
-  description: 'The latest releases of BAML.',
-  openGraph: {
-    description: 'The latest releases of BAML.',
-    siteName: 'BAML',
-    title: 'BAML Changelog',
-    type: 'website',
-    url: `${baseUrl}/changelog`,
-  },
-  title: 'Changelog | BAML',
-};
+export const metadata = createMetadata({
+  description: 'The latest releases of BAML, shipped continuously.',
+  eyebrow: 'Changelog',
+  ogTitle: 'BAML Changelog',
+  path: '/changelog',
+  title: 'Changelog',
+});
 
 const CSS = `
 .chlog-wrap { margin: 0 auto; max-width: 760px; padding: 96px 24px 128px; }

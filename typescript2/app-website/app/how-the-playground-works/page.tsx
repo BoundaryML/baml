@@ -1,13 +1,15 @@
-import type { Metadata } from 'next';
 import Link from 'next/link';
+import { createMetadata } from '@/app/_lib/metadata';
 import { FooterSection } from '@/components/footer-section';
 import { Navbar } from '@/components/navbar';
 
-export const metadata: Metadata = {
+export const metadata = createMetadata({
   description:
     'The BAML playground runs entirely in your browser. Learn how BAML compiles to WebAssembly so you can edit, typecheck, and run BAML code without a backend.',
+  eyebrow: 'Playground',
+  path: '/how-the-playground-works',
   title: 'How the BAML Playground Works',
-};
+});
 
 export default function HowThePlaygroundWorks() {
   return (

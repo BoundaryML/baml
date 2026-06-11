@@ -1,13 +1,14 @@
-import type { Metadata } from 'next';
-
+import { createMetadata } from '@/app/_lib/metadata';
 import { Navbar } from '@/components/navbar';
 import { CouncilGate } from './council-gate';
 
-export const metadata: Metadata = {
+export const metadata = createMetadata({
   description: 'Members only.',
-  robots: { follow: false, index: false },
-  title: 'The Sheep Council | BAML',
-};
+  eyebrow: 'Members Only',
+  indexable: false,
+  path: '/sheep-council',
+  title: 'The Sheep Council',
+});
 
 const CSS = `
 .sc-root { position: relative; min-height: 100vh; display: flex; align-items: center;
