@@ -124,7 +124,7 @@ fn codegen_fixture(
         )
     }));
     match codegen_result {
-        Ok(output) => {
+        Ok(Ok(output)) => {
             for (rel, content) in output {
                 let path = baml_sdk.join(&rel);
                 if let Some(parent) = path.parent() {
@@ -145,6 +145,9 @@ fn codegen_fixture(
                     );
                 }
             }
+        }
+        Ok(Err(e)) => {
+            diagnostics.record("codegen", fixture, e.to_string());
         }
         Err(_) => {
             diagnostics.record(
