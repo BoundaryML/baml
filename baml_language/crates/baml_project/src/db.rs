@@ -547,8 +547,11 @@ impl ProjectDatabase {
 
     /// Find the `//#` header comment immediately above a function declaration,
     /// if any. Blank lines and regular `//` comments between the header and
-    /// the declaration are skipped; any other code stops the search.
+    /// the declaration are skipped; any other code stops the search. If multiple
+    /// same-named declarations have different headers, do not guess which one a
+    /// name-only call resolved to.
     fn function_header_title(&self, function_name: &str) -> Option<String> {
+        let mut unique_title = None;
         for source_file in self.file_map.values().copied() {
             let index = baml_compiler2_ppir::file_semantic_index(self, source_file);
             for func_data in index.item_tree.functions.values() {
@@ -558,11 +561,15 @@ impl ProjectDatabase {
                 let text = source_file.text(self);
                 let start = usize::from(func_data.span.start()).min(text.len());
                 if let Some(title) = header_title_above(&text[..start]) {
-                    return Some(title);
+                    match &unique_title {
+                        Some(existing) if existing != &title => return None,
+                        Some(_) => {}
+                        None => unique_title = Some(title),
+                    }
                 }
             }
         }
-        None
+        unique_title
     }
 
     fn call_sites_by_source_expr(body: &baml_compiler2_ast::ExprBody) -> Vec<(u32, String)> {
@@ -1592,6 +1599,24 @@ function helper(x: int) -> int { x + 1 }
             db.function_header_title("helper"),
             Some("titled helper".to_string())
         );
+    }
+
+    #[test]
+    fn test_function_header_title_ignores_ambiguous_same_name_headers() {
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("/tmp"));
+        db.add_or_update_file(
+            std::path::Path::new("/tmp/dupe.baml"),
+            r#"
+//# first helper
+function helper(x: int) -> int { x }
+
+//# second helper
+function helper(x: int) -> int { x + 1 }
+"#,
+        );
+
+        assert_eq!(db.function_header_title("helper"), None);
     }
 
     #[test]

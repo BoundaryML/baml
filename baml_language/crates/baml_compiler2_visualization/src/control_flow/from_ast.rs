@@ -2050,29 +2050,29 @@ mod tests {
         assert_eq!(rendered, "Resp { ... }");
     }
 
-    /// Calls embedded inside another node's expression must surface via
-    /// `callee_names` even though they don't get CFG nodes of their own.
-    ///
-    /// Fixture mirrors:
-    /// ```baml
-    /// function ValidateInvoice(inv: Invoice) -> ValidationIssue[] {
-    ///     if (Abs(LineTotal(inv.line_items) - inv.total) > 0.02) {
-    ///         // ...
-    ///     }
-    /// }
-    /// ```
-    ///
-    /// Resulting nodes (documented here as the contract):
-    /// - `[0]` FunctionRoot "ValidateInvoice"            — calleeNames: []
-    /// - `[1]` BranchGroup  "if (Abs(LineTotal(inv.line_items) - inv.total) > 0.02)"
-    ///                                                    — calleeNames: ["Abs", "LineTotal"]
-    /// - `[2]` BranchArm    "if (...)" (then branch)      — calleeNames: []
-    /// - `[3]` Header       "Flag mismatch"               — calleeNames: []
-    /// - `[4]` BranchArm    "else" (synthetic)            — calleeNames: []
-    ///
-    /// Names come out exactly as written in source — bare `"Abs"` /
-    /// `"LineTotal"`, NOT qualified (`main.Abs`), in first-encounter order
-    /// (outermost call first).
+    // Calls embedded inside another node's expression must surface via
+    // `callee_names` even though they don't get CFG nodes of their own.
+    //
+    // Fixture mirrors:
+    // ```baml
+    // function ValidateInvoice(inv: Invoice) -> ValidationIssue[] {
+    //     if (Abs(LineTotal(inv.line_items) - inv.total) > 0.02) {
+    //         // ...
+    //     }
+    // }
+    // ```
+    //
+    // Resulting nodes (documented here as the contract):
+    // - `[0]` FunctionRoot "ValidateInvoice"            - calleeNames: []
+    // - `[1]` BranchGroup  "if (Abs(LineTotal(inv.line_items) - inv.total) > 0.02)"
+    //                                                    - calleeNames: ["Abs", "LineTotal"]
+    // - `[2]` BranchArm    "if (...)" (then branch)      - calleeNames: []
+    // - `[3]` Header       "Flag mismatch"               - calleeNames: []
+    // - `[4]` BranchArm    "else" (synthetic)            - calleeNames: []
+    //
+    // Names come out exactly as written in source: bare `"Abs"` /
+    // `"LineTotal"`, not qualified (`main.Abs`), in first-encounter order
+    // (outermost call first).
     #[test]
     fn embedded_calls_in_if_condition_surface_in_callee_names() {
         let body = make_ast_body(|exprs, stmts, _, _| {
@@ -2155,9 +2155,9 @@ mod tests {
         );
     }
 
-    /// Nested calls in call arguments surface on the call's own node too:
-    /// `Process(Helper(x))` yields calleeNames ["Process", "Helper"] while
-    /// callee_name (singular) remains just "Process".
+    // Nested calls in call arguments surface on the call's own node too:
+    // `Process(Helper(x))` yields calleeNames ["Process", "Helper"] while
+    // `callee_name` (singular) remains just "Process".
     #[test]
     fn nested_call_arguments_surface_in_callee_names() {
         let body = make_ast_body(|exprs, _, _, _| {

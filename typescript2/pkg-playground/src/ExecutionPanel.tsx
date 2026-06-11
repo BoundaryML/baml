@@ -132,18 +132,26 @@ function collectAllTestNames(item: SerializedTestDef): string[] {
 function collectTestNamesInSet(
   items: SerializedTestDef[],
   target: string,
-): string[] | null {
+): string[] | 'pending' | null {
   for (const item of items) {
     if ('type' in item && item.type === 'lazyTestSet') {
-      if (testTargetMatches(item.name, target)) return null;
+      if (testTargetMatches(item.name, target)) return 'pending';
       continue;
     }
     if (!isExpandedTestSet(item)) continue;
     if (testTargetMatches(item.name, target)) return collectAllTestNames(item);
     const nested = collectTestNamesInSet(item.items, target);
-    if (nested) return nested;
+    if (nested !== null) return nested;
   }
   return null;
+}
+
+function hasLazyTestSets(items: SerializedTestDef[]): boolean {
+  for (const item of items) {
+    if ('type' in item && item.type === 'lazyTestSet') return true;
+    if (isExpandedTestSet(item) && hasLazyTestSets(item.items)) return true;
+  }
+  return false;
 }
 
 function findLatestGraphRun(
@@ -1720,20 +1728,34 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
       return;
     }
     if (pendingTestTarget.project !== selectedProject) {
+      setPendingTestTarget(null);
+      setViewingTestRun(false);
       return;
     }
 
     const treeItems = testTree as SerializedTestDef[];
+    const hasPendingLazyTestSets = hasLazyTestSets(treeItems);
     if (pendingTestTarget.kind === 'test') {
       const testName = findTestNameInTree(treeItems, pendingTestTarget.name);
-      if (!testName) return;
+      if (!testName) {
+        if (hasPendingLazyTestSets) return;
+        setPendingTestTarget(null);
+        setViewingTestRun(false);
+        return;
+      }
       setPendingTestTarget(null);
       void handleRunTest(testName);
       return;
     }
 
     const testNames = collectTestNamesInSet(treeItems, pendingTestTarget.name);
-    if (!testNames) return;
+    if (testNames === 'pending') return;
+    if (testNames === null) {
+      if (hasPendingLazyTestSets) return;
+      setPendingTestTarget(null);
+      setViewingTestRun(false);
+      return;
+    }
     setPendingTestTarget(null);
     setViewingTestRun(true);
     void (async () => {
