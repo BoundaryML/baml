@@ -573,7 +573,7 @@ fn vm_metadata_resolves_self_associated_type_return_in_implements_method() {
 }
 
 #[test]
-fn vm_metadata_erases_unresolved_generic_associated_projection_to_unknown_not_void() {
+fn vm_metadata_preserves_unresolved_generic_associated_projection_symbolically() {
     let (params, return_type) = compiled_function_metadata(
         r#"
         interface BoxLike {
@@ -588,8 +588,12 @@ fn vm_metadata_erases_unresolved_generic_associated_projection_to_unknown_not_vo
         "read_item",
     );
 
-    assert_eq!(params, vec!["unknown"]);
-    assert_eq!(return_type, "unknown");
+    // `T` and the projection `T.Item` cannot be resolved statically here, but
+    // they are *not* erased: `RuntimeTy` carries the type variable and the
+    // symbolic projection so the runtime can resolve them from the receiver's
+    // actual type.
+    assert_eq!(params, vec!["T"]);
+    assert_eq!(return_type, "T.Item");
 }
 
 #[test]

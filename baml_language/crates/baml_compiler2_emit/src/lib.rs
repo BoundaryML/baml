@@ -1459,10 +1459,12 @@ fn compute_function_metadata_from_item_tree(
     };
 
     let runtime_from_display_tir = |tir_ty: &baml_compiler2_tir::ty::Ty| -> baml_type::RuntimeTy {
-        let runtime_ty = baml_compiler2_tir::generics::erase_typevars_matching(tir_ty, &|name| {
-            generic_param_bounds.contains_key(name)
-        });
-        cache.convert(&runtime_ty)
+        // `resolve_display_tir` already resolved associated projections against
+        // statically-known bounds. Convert what remains faithfully — type
+        // variables and symbolic projections are carried by `RuntimeTy` so the
+        // runtime can resolve them; erasing them to `unknown` would discard the
+        // information needed to do that.
+        cache.convert(tir_ty)
     };
 
     let display_type_params: Vec<String> = scoped_generic_param_names

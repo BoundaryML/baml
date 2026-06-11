@@ -3231,15 +3231,52 @@ impl<'db> LoweringContext<'db> {
         (self.current_metadata_scope, pat_id)
     }
 
-    fn erase_bound_typevars_for_runtime(&self, ty: &Tir2Ty) -> Tir2Ty {
-        baml_compiler2_tir::generics::erase_typevars_matching(ty, &|name| {
-            self.generic_param_bounds.contains_key(name)
-        })
+    fn convert_tir_ty_for_runtime(&self, ty: &Tir2Ty) -> RuntimeTy {
+        // Resolve associated-type projections against the bounds the compiler
+        // knows statically; anything still symbolic — a `TypeVar` or a
+        // projection off one — is kept faithfully so the runtime can resolve it
+        // from the receiver's actual type. We deliberately do *not* erase type
+        // variables: `RuntimeTy` carries them, and erasing to `unknown` would
+        // throw away the information needed to resolve the type at run time.
+        let resolved =
+            baml_compiler2_tir::associated_projection::AssociatedProjectionResolver::new(
+                self.db,
+                &self.resolved_aliases.aliases,
+                &self.generic_param_bounds,
+            )
+            .resolve_deep(ty);
+        self.resolved_aliases.convert(&resolved)
     }
 
-    fn convert_tir_ty_for_runtime(&self, ty: &Tir2Ty) -> RuntimeTy {
-        let erased = self.erase_bound_typevars_for_runtime(ty);
-        self.resolved_aliases.convert(&erased)
+    /// Lower a method-signature type expression (a parameter or return type) to
+    /// a runtime type. In a method signature `Self` is the receiver type
+    /// variable and `Self.Assoc` is an associated-type projection onto it.
+    /// A bare `lower_type_expr_in_ns` has neither in scope and would erase both
+    /// to `Ty::Unknown`, tripping the runtime lowering boundary — so rewrite
+    /// `Self.Assoc` paths into projections and bind `Self` as a type variable.
+    fn lower_signature_runtime_ty(
+        &self,
+        te: &baml_compiler2_ast::TypeExpr,
+        pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+        ns_context: &[baml_base::Name],
+    ) -> RuntimeTy {
+        let self_subst = std::collections::HashMap::from([(
+            baml_base::Name::new("Self"),
+            baml_compiler2_tir::lower_type_expr::type_expr_for_name(baml_base::Name::new("Self")),
+        )]);
+        let te = baml_compiler2_tir::lower_type_expr::substitute_paths_in(te, &self_subst);
+        let mut generic_params = self.enclosing_generic_params();
+        generic_params.push(baml_base::Name::new("Self"));
+        let mut diags = Vec::new();
+        let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+            self.db,
+            &te,
+            pkg_items,
+            ns_context,
+            &generic_params,
+            &mut diags,
+        );
+        self.convert_tir_ty_for_runtime(&tir_ty)
     }
 
     fn interface_dispatch_target_for_tir_ty(&self, ty: &Tir2Ty) -> Option<InterfaceTypeView> {
@@ -3677,23 +3714,7 @@ impl<'db> LoweringContext<'db> {
         let ret_ty = sig
             .return_type
             .as_ref()
-            .map(|te| {
-                let mut diags = Vec::new();
-                // Lower the declared return type with the function's generic
-                // params in scope (as parameters do), so a return type that
-                // mentions a type parameter — `fn foo<T>() -> T` — resolves to
-                // that `TypeVar` rather than an unresolved `Unknown`.
-                let generic_params = self.enclosing_generic_params();
-                let tir_ty = lower_type_expr_in_ns(
-                    self.db,
-                    te,
-                    pkg_items,
-                    &pkg_info.namespace_path,
-                    &generic_params,
-                    &mut diags,
-                );
-                self.convert_tir_ty_for_runtime(&tir_ty)
-            })
+            .map(|te| self.lower_signature_runtime_ty(te, pkg_items, &pkg_info.namespace_path))
             .unwrap_or(RuntimeTy::Null {
                 attr: TyAttr::default(),
             });
@@ -3767,17 +3788,7 @@ impl<'db> LoweringContext<'db> {
                         })
                 }
             } else {
-                let mut diags = Vec::new();
-                let generic_params = self.enclosing_generic_params();
-                let tir_ty = lower_type_expr_in_ns(
-                    self.db,
-                    &param.ty,
-                    pkg_items,
-                    &pkg_info.namespace_path,
-                    &generic_params,
-                    &mut diags,
-                );
-                self.convert_tir_ty_for_runtime(&tir_ty)
+                self.lower_signature_runtime_ty(&param.ty, pkg_items, &pkg_info.namespace_path)
             };
             let local = self
                 .builder
