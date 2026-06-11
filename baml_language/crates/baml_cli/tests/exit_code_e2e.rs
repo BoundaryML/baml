@@ -227,6 +227,15 @@ fn generate_valid_project_returns_zero_exit_code() {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr),
     );
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains(&format!(
+            "Generating clients with CLI version: {}",
+            baml_version::CANONICAL_VERSION
+        )),
+        "Expected generate output to include CLI version, got: {stderr}",
+    );
 }
 
 // ============================================================================
