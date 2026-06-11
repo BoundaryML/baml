@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 4158
 ---
 === HIR2 ===
 
@@ -58,24 +57,12 @@ class baml.Array {
 class baml.Map {
 }
 function baml.at(self: ?, index: int) -> T?  [builtin]
-function baml.chain(self: ?, other: baml.iter.Iterable<Item = T, Error = E>) -> baml.iter.Iterator<Item = T, Error = never | E>  [expr] {
-  {  } baml.iter.ArrayIterator.new(self.slice(0, self.length())).chain(other)
-}
 function baml.clear(self: ?) -> null  [builtin]
 function baml.clear(self: ?) -> null  [builtin]
-function baml.collect(self: ?) -> T[]  [expr] {
-  {  } self.slice(0, self.length())
-}
 function baml.concat(self: ?, other: T[]) -> T[]  [builtin]
-function baml.count(self: ?) -> int  [expr] {
-  {  } self.length()
-}
 function baml.delete(self: ?, key: K) -> V?  [builtin]
 function baml.every(self: ?, predicate: (T) -> bool throws E) -> bool  [builtin]
 function baml.filter(self: ?, predicate: (T) -> bool throws E) -> T[]  [builtin]
-function baml.filter_map(self: ?, fn: (T) -> U? throws E) -> baml.iter.Iterator<Item = U, Error = never | E>  [expr] {
-  {  } baml.iter.ArrayIterator.new(self.slice(0, self.length())).filter_map(fn)
-}
 function baml.find(self: ?, predicate: (T) -> bool throws E) -> T?  [builtin]
 function baml.find_index(self: ?, predicate: (T) -> bool throws E) -> int?  [builtin]
 function baml.find_last(self: ?, predicate: (T) -> bool throws E) -> T?  [builtin]
@@ -102,9 +89,6 @@ function baml.last_index_of(self: ?, item: T) -> int?  [builtin]
 function baml.length(self: ?) -> int  [builtin]
 function baml.length(self: ?) -> int  [builtin]
 function baml.map(self: ?, f: (T) -> U throws E) -> U[]  [builtin]
-function baml.peekable(self: ?) -> baml.iter.Peekable<T, never>  [expr] {
-  {  } baml.iter.Peekable { source: baml.iter.ArrayIterator.new(self.slice(0, self.length())), buffer: baml.iter.Done {  }, has_buffer: false }
-}
 function baml.pop(self: ?) -> T?  [builtin]
 function baml.push(self: ?, item: T) -> int  [builtin]
 function baml.reduce(self: ?, reducer: (A, T) -> A throws E, initial: A) -> A  [builtin]
@@ -119,9 +103,6 @@ function baml.sort_by_key(self: ?, key: (T) -> U throws E) -> T[]  [expr] {
   { let n = self.length(); if (n Le 1) { return self }; let items = self.slice(0, n); let keys: U[] = []; for x in items { keys.push(key(x)) }; let order: int[] = []; let p = 0; while p Lt n { order.push(p); p Add= 1 }; order.sort_by((i: int, j: int) -> int throws U.CmpError { {  } match (keys.at(i)) { null => 0, ki: U => match (keys.at(j)) { null => 0, kj: U => ki.compare(kj) } } }); let sorted: T[] = []; for i in order {  } match (items.at(i)) { null => {  }, item: T => { sorted.push(item) } }; self.clear(); for s in sorted { self.push(s) }; return self }
 }
 function baml.splice(self: ?, start: int, count: int, replace: T[]) -> null  [builtin]
-function baml.step_by(self: ?, n: int) -> baml.iter.Iterator<Item = T, Error = never>  [expr] {
-  {  } baml.iter.ArrayIterator.new(self.slice(0, self.length())).step_by(n)
-}
 function baml.to_json(self: ?) -> baml.json.json  [builtin]
 function baml.to_json(self: ?) -> baml.json.json  [builtin]
 function baml.unshift(self: ?, item: T) -> int  [builtin]
@@ -1034,7 +1015,7 @@ function baml.iter.new(min: int, max: int, step: int = 1) -> baml.iter.Range  [e
   {  } baml.iter.Range { i: min, max: max, step: step }
 }
 function baml.iter.new(arr: T[]) -> baml.iter.ArrayIterator<T>  [expr] {
-  {  } baml.iter.ArrayIterator { arr: arr.slice(0, arr.length()), idx: 0 }
+  {  } baml.iter.ArrayIterator { arr: arr, idx: 0 }
 }
 function baml.iter.next(self: ?) -> T | baml.iter.Done  [expr] {
   { while true {  } match (self.source.next()) { baml.iter.Done => { return baml.iter.Done {  } }, x: T => {  } if (self.predicate(x)) { return x } } } baml.iter.Done {  }

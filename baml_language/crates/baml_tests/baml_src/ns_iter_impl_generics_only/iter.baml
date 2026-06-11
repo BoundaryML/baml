@@ -211,7 +211,7 @@ test "iter_step_by" {
 }
 
 function iter_array_iter() -> int[] throws unknown {
-  [1, 2, 3].as<user.iter_impl_generics_only.core.Iterable<int, never>>.iter().collect()
+  user.iter_impl_generics_only.core.ArrayIterator.new([1, 2, 3]).collect()
 }
 
 test "iter_array_iter" {

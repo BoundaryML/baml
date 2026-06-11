@@ -138,7 +138,7 @@ function iter_impl_generics_only.iter_array_iter() -> int[] {
     load_const 2
     load_const 3
     alloc_array 3
-    call user.iter_impl_generics_only.core.Iterable<T, never>$for$T[].iter
+    call user.iter_impl_generics_only.core.ArrayIterator.new
     store_var _1
     load_var _1
     is_type iter_impl_generics_only.core.Flatten<...>

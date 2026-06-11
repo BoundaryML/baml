@@ -135,7 +135,7 @@ class ArrayIterator<T> {
   idx: int
 
   function new(arr: T[]) -> ArrayIterator<T> throws never {
-    ArrayIterator<T> { arr: arr.slice(0, arr.length()), idx: 0 }
+    ArrayIterator<T> { arr: arr, idx: 0 }
   }
 
   implements Iterable {
