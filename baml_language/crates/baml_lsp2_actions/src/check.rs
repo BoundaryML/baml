@@ -794,6 +794,12 @@ struct SignatureMatchContext<'a, 'db> {
     actual_namespace_path: &'a [Name],
     aliases: &'a std::collections::HashMap<QualifiedTypeName, Ty>,
     ignore_param_names: bool,
+    /// Generic params of the enclosing class / `implements` target. Method
+    /// signatures in an impl may reference them (e.g. `type Item = T` on a
+    /// generic implementor), so semantic lowering must treat them as type
+    /// vars on both sides — otherwise lowering fails and the comparison
+    /// degrades to brittle string equality.
+    outer_generic_params: &'a [Name],
 }
 
 #[derive(Clone, Copy)]
@@ -999,7 +1005,13 @@ impl MethodSignature {
         {
             return false;
         }
-        let gp = &self.generic_params;
+        let mut gp_all: Vec<Name> = self.generic_params.clone();
+        for p in ctx.outer_generic_params {
+            if !gp_all.contains(p) {
+                gp_all.push(p.clone());
+            }
+        }
+        let gp: &[Name] = &gp_all;
         let cmp = |a: &baml_compiler2_ast::TypeExpr, b: &baml_compiler2_ast::TypeExpr| {
             type_exprs_compatible(
                 ctx.db,
@@ -4644,6 +4656,7 @@ fn validate_implements_for<'db>(
                         actual_namespace_path: namespace_path,
                         aliases,
                         ignore_param_names: false,
+                        outer_generic_params: &generic_param_names,
                     },
                 ) {
                     diagnostics.push(
@@ -4702,6 +4715,7 @@ fn validate_implements_for<'db>(
                     actual_namespace_path: &source.namespace_path,
                     aliases,
                     ignore_param_names: true,
+                    outer_generic_params: &generic_param_names,
                 },
             )
         {
@@ -5040,6 +5054,7 @@ fn validate_class_implements<'db>(
                             actual_namespace_path: namespace_path,
                             aliases,
                             ignore_param_names: false,
+                            outer_generic_params: &class.generic_params,
                         },
                     ) {
                         diagnostics.push(
@@ -5092,6 +5107,7 @@ fn validate_class_implements<'db>(
                         actual_namespace_path: namespace_path,
                         aliases,
                         ignore_param_names: true,
+                        outer_generic_params: &class.generic_params,
                     },
                 ) {
                     diagnostics.push(

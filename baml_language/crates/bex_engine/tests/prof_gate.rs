@@ -104,7 +104,7 @@ async fn run_main(source: &str) -> Result<BexExternalValue, EngineError> {
 /// profile directory.
 fn load_profile(marker_fqn: &str) -> (pb::EventFileHeaderV1, Vec<Event>) {
     assert!(
-        bex_events::prof::flush_and_join(Duration::from_secs(60)),
+        bex_events::prof::flush_and_join(Duration::from_mins(1)),
         "consumer never acked the flush"
     );
     let mut found = None;
@@ -473,7 +473,7 @@ async fn engine_teardown_closes_profile() {
     // Two heartbeat intervals: a still-open writer would have grown.
     std::thread::sleep(Duration::from_millis(2_500));
     assert!(
-        bex_events::prof::flush_and_join(Duration::from_secs(60)),
+        bex_events::prof::flush_and_join(Duration::from_mins(1)),
         "post-close flush must still ack"
     );
     let size_after = std::fs::metadata(&path).unwrap().len();

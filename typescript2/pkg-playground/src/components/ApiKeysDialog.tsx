@@ -1,11 +1,18 @@
 import { useState, useMemo, useRef, type FC } from 'react';
-import { Eye, EyeOff, Trash2, Plus, Upload, AlertTriangle, Undo2, Terminal, ChevronDown, ChevronRight, Search } from 'lucide-react';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from './ui/dialog';
+  Eye,
+  EyeOff,
+  Trash2,
+  Plus,
+  Upload,
+  AlertTriangle,
+  Undo2,
+  Terminal,
+  ChevronDown,
+  ChevronRight,
+  Search,
+} from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
@@ -43,7 +50,17 @@ interface ApiKeysDialogProps {
 }
 
 export const ApiKeysDialog: FC<ApiKeysDialogProps> = ({
-  open, onOpenChange, envVars, requiredKeys, shellEnvVars, shellOverriddenKeys, shellDeletedKeys, onSetEnvVar, onDeleteEnvVar, onImportEnvVars, onRevertToShell,
+  open,
+  onOpenChange,
+  envVars,
+  requiredKeys,
+  shellEnvVars,
+  shellOverriddenKeys,
+  shellDeletedKeys,
+  onSetEnvVar,
+  onDeleteEnvVar,
+  onImportEnvVars,
+  onRevertToShell,
 }) => {
   const [showValues, setShowValues] = useState<Set<string>>(new Set());
   const [newKey, setNewKey] = useState('');
@@ -52,7 +69,9 @@ export const ApiKeysDialog: FC<ApiKeysDialogProps> = ({
   const [importText, setImportText] = useState('');
   const [shellExpanded, setShellExpanded] = useState(false);
   const [shellFilter, setShellFilter] = useState('');
-  const debounceTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const debounceTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(
+    new Map(),
+  );
 
   const missingKeys = new Set([...requiredKeys].filter((k) => !envVars[k]));
 
@@ -67,7 +86,13 @@ export const ApiKeysDialog: FC<ApiKeysDialogProps> = ({
       if (!(k in shellEnvVars)) keys.add(k);
     }
     return [...keys].sort();
-  }, [envVars, requiredKeys, shellEnvVars, shellDeletedKeys, shellOverriddenKeys]);
+  }, [
+    envVars,
+    requiredKeys,
+    shellEnvVars,
+    shellDeletedKeys,
+    shellOverriddenKeys,
+  ]);
 
   // Shell keys not already shown in primary section
   const shellOnlyKeys = useMemo(() => {
@@ -89,7 +114,10 @@ export const ApiKeysDialog: FC<ApiKeysDialogProps> = ({
   const handleInlineEdit = (key: string, value: string) => {
     const existing = debounceTimers.current.get(key);
     if (existing) clearTimeout(existing);
-    debounceTimers.current.set(key, setTimeout(() => onSetEnvVar(key, value), 200));
+    debounceTimers.current.set(
+      key,
+      setTimeout(() => onSetEnvVar(key, value), 200),
+    );
   };
 
   const handleAdd = () => {
@@ -108,7 +136,10 @@ export const ApiKeysDialog: FC<ApiKeysDialogProps> = ({
       if (eqIdx === -1) continue;
       const key = trimmed.slice(0, eqIdx).trim();
       let value = trimmed.slice(eqIdx + 1).trim();
-      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+      ) {
         value = value.slice(1, -1);
       }
       if (key) vars[key] = value;
@@ -125,23 +156,51 @@ export const ApiKeysDialog: FC<ApiKeysDialogProps> = ({
     const isOverridden = shellOverriddenKeys.has(key);
     const isDeleted = shellDeletedKeys.has(key);
     return (
-      <div key={key} className={`flex items-center gap-2 ${isDeleted ? 'opacity-50' : ''}`}>
+      <div
+        key={key}
+        className={`flex items-center gap-2 ${isDeleted ? 'opacity-50' : ''}`}
+      >
         <div className="flex items-center gap-1 shrink-0 w-[160px]">
-          {isMissing && !isDeleted && <AlertTriangle size={12} className="text-yellow-400" />}
-          {isFromShell && !isMissing && <Terminal size={10} className="text-vsc-description shrink-0" />}
-          <span className={`font-vsc-mono text-[11px] truncate ${isDeleted ? 'line-through text-vsc-description' : 'text-vsc-text'}`}>{key}</span>
+          {isMissing && !isDeleted && (
+            <AlertTriangle size={12} className="text-yellow-400" />
+          )}
+          {isFromShell && !isMissing && (
+            <Terminal size={10} className="text-vsc-description shrink-0" />
+          )}
+          <span
+            className={`font-vsc-mono text-[11px] truncate ${isDeleted ? 'line-through text-vsc-description' : 'text-vsc-text'}`}
+          >
+            {key}
+          </span>
           {isDeleted && (
-            <span className="text-[9px] text-vsc-red shrink-0" title="Deleted (was from shell)">deleted</span>
+            <span
+              className="text-[9px] text-vsc-red shrink-0"
+              title="Deleted (was from shell)"
+            >
+              deleted
+            </span>
           )}
           {isFromShell && !isOverridden && !isDeleted && (
-            <span className="text-[9px] text-vsc-description shrink-0" title="From shell environment">shell</span>
+            <span
+              className="text-[9px] text-vsc-description shrink-0"
+              title="From shell environment"
+            >
+              shell
+            </span>
           )}
           {isOverridden && !isDeleted && (
-            <span className="text-[9px] text-yellow-500 shrink-0" title="Overridden (shell value differs)">edited</span>
+            <span
+              className="text-[9px] text-yellow-500 shrink-0"
+              title="Overridden (shell value differs)"
+            >
+              edited
+            </span>
           )}
         </div>
         {isDeleted ? (
-          <div className="flex-1 text-[11px] font-vsc-mono text-vsc-description italic px-2">removed</div>
+          <div className="flex-1 text-[11px] font-vsc-mono text-vsc-description italic px-2">
+            removed
+          </div>
         ) : (
           <Input
             type="text"
@@ -154,16 +213,32 @@ export const ApiKeysDialog: FC<ApiKeysDialogProps> = ({
           />
         )}
         {!isDeleted && (
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => toggleShow(key)}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => toggleShow(key)}
+          >
             {showValues.has(key) ? <EyeOff size={12} /> : <Eye size={12} />}
           </Button>
         )}
         {isOverridden || isDeleted ? (
-          <Button variant="ghost" size="icon" className="h-7 w-7 text-vsc-link" onClick={() => onRevertToShell(key)} title="Revert to shell value">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-vsc-link"
+            onClick={() => onRevertToShell(key)}
+            title="Revert to shell value"
+          >
             <Undo2 size={12} />
           </Button>
         ) : (
-          <Button variant="ghost" size="icon" className="h-7 w-7 text-vsc-red" onClick={() => onDeleteEnvVar(key)}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-vsc-red"
+            onClick={() => onDeleteEnvVar(key)}
+          >
             <Trash2 size={12} />
           </Button>
         )}
@@ -183,14 +258,13 @@ export const ApiKeysDialog: FC<ApiKeysDialogProps> = ({
         <div className="flex-1 overflow-auto p-4 space-y-3">
           {/* Primary section: required + manually added */}
           {primaryKeys.length > 0 && (
-            <div className="space-y-2">
-              {primaryKeys.map(renderRow)}
-            </div>
+            <div className="space-y-2">{primaryKeys.map(renderRow)}</div>
           )}
 
           {primaryKeys.length === 0 && (
             <div className="text-[11px] text-vsc-description text-center py-2">
-              No variables required yet. Run a function to see which env vars are needed.
+              No variables required yet. Run a function to see which env vars
+              are needed.
             </div>
           )}
 
@@ -222,7 +296,9 @@ export const ApiKeysDialog: FC<ApiKeysDialogProps> = ({
               <Textarea
                 value={importText}
                 onChange={(e) => setImportText(e.target.value)}
-                placeholder={"Paste .env contents here...\nKEY=value\nANOTHER_KEY=value"}
+                placeholder={
+                  'Paste .env contents here...\nKEY=value\nANOTHER_KEY=value'
+                }
                 rows={5}
                 className="text-[11px] font-vsc-mono resize-none"
               />
@@ -230,13 +306,25 @@ export const ApiKeysDialog: FC<ApiKeysDialogProps> = ({
                 <Button variant="default" size="sm" onClick={handleImport}>
                   Import
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => { setImportMode(false); setImportText(''); }}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setImportMode(false);
+                    setImportText('');
+                  }}
+                >
                   Cancel
                 </Button>
               </div>
             </div>
           ) : (
-            <Button variant="link" size="sm" className="text-vsc-link text-[11px] gap-1 px-0" onClick={() => setImportMode(true)}>
+            <Button
+              variant="link"
+              size="sm"
+              className="text-vsc-link text-[11px] gap-1 px-0"
+              onClick={() => setImportMode(true)}
+            >
               <Upload size={12} /> Import from .env
             </Button>
           )}
@@ -248,7 +336,11 @@ export const ApiKeysDialog: FC<ApiKeysDialogProps> = ({
                 onClick={() => setShellExpanded((prev) => !prev)}
                 className="flex items-center gap-1 text-[11px] text-vsc-description hover:text-vsc-text w-full text-left py-1"
               >
-                {shellExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                {shellExpanded ? (
+                  <ChevronDown size={12} />
+                ) : (
+                  <ChevronRight size={12} />
+                )}
                 <Terminal size={10} />
                 <span>All shell environment ({shellVarCount})</span>
               </button>
@@ -257,7 +349,10 @@ export const ApiKeysDialog: FC<ApiKeysDialogProps> = ({
                 <div className="mt-2 space-y-2">
                   {/* Search filter */}
                   <div className="relative">
-                    <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-vsc-description" />
+                    <Search
+                      size={12}
+                      className="absolute left-2 top-1/2 -translate-y-1/2 text-vsc-description"
+                    />
                     <Input
                       placeholder="Filter variables..."
                       value={shellFilter}
@@ -269,21 +364,39 @@ export const ApiKeysDialog: FC<ApiKeysDialogProps> = ({
                   <div className="space-y-1 max-h-[200px] overflow-auto">
                     {shellOnlyKeys.map((key) => (
                       <div key={key} className="flex items-center gap-2 py-0.5">
-                        <span className="font-vsc-mono text-[10px] text-vsc-description shrink-0 w-[160px] truncate" title={key}>{key}</span>
+                        <span
+                          className="font-vsc-mono text-[10px] text-vsc-description shrink-0 w-[160px] truncate"
+                          title={key}
+                        >
+                          {key}
+                        </span>
                         <Input
                           type="text"
                           defaultValue={shellEnvVars[key]}
-                          onChange={(e) => handleInlineEdit(key, e.target.value)}
+                          onChange={(e) =>
+                            handleInlineEdit(key, e.target.value)
+                          }
                           className={`flex-1 text-[10px] font-vsc-mono h-6 ${showValues.has(key) ? '' : '[text-security:disc] [-webkit-text-security:disc]'}`}
                           {...apiKeyInputProps(key)}
                         />
-                        <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => toggleShow(key)}>
-                          {showValues.has(key) ? <EyeOff size={10} /> : <Eye size={10} />}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-5"
+                          onClick={() => toggleShow(key)}
+                        >
+                          {showValues.has(key) ? (
+                            <EyeOff size={10} />
+                          ) : (
+                            <Eye size={10} />
+                          )}
                         </Button>
                       </div>
                     ))}
                     {shellOnlyKeys.length === 0 && shellFilter && (
-                      <div className="text-[10px] text-vsc-description text-center py-2">No matches</div>
+                      <div className="text-[10px] text-vsc-description text-center py-2">
+                        No matches
+                      </div>
                     )}
                   </div>
                 </div>

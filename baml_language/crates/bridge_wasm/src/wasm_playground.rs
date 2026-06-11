@@ -75,7 +75,12 @@ pub enum PlaygroundNotification {
     #[serde(rename_all = "camelCase")]
     OpenPlayground {
         project: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
         function_name: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        test_name: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        testset_name: Option<String>,
     },
     #[serde(rename_all = "camelCase")]
     ControlFlowGraphResult {
@@ -157,9 +162,13 @@ impl From<bex_project::PlaygroundNotification> for PlaygroundNotification {
             bex_project::PlaygroundNotification::OpenPlayground {
                 project,
                 function_name,
+                test_name,
+                testset_name,
             } => PlaygroundNotification::OpenPlayground {
                 project,
                 function_name,
+                test_name,
+                testset_name,
             },
             bex_project::PlaygroundNotification::ControlFlowGraphResult {
                 function_name,
@@ -207,6 +216,24 @@ impl bex_project::PlaygroundSender for WasmPlaygroundSender {
     fn send_playground_notification(&self, notification: bex_project::PlaygroundNotification) {
         let wasm_notif: PlaygroundNotification = notification.into();
         let callback = self.callback.inner();
-        let _ = callback.call1(&JsValue::NULL, &wasm_notif.into());
+        // Variants carrying `serde_json::Value` payloads must cross the
+        // boundary as JSON text: with serde_json's `arbitrary_precision`
+        // feature, serde-wasm-bindgen/Tsify renders every Value number as
+        // `{ "$serde_json::private::Number": "…" }`, which broke graph
+        // node ids / parent ids / edges on the JS side.
+        let js_notif: JsValue = match &wasm_notif {
+            PlaygroundNotification::ControlFlowGraphResult { .. }
+            | PlaygroundNotification::CursorContext { .. } => {
+                match crate::wasm_lsp::to_json_jsvalue(&wasm_notif, "playground notification") {
+                    Ok(value) => value,
+                    Err(e) => {
+                        log::error!("failed to serialize playground notification for JS: {e}");
+                        return;
+                    }
+                }
+            }
+            _ => wasm_notif.into(),
+        };
+        let _ = callback.call1(&JsValue::NULL, &js_notif);
     }
 }

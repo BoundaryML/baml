@@ -33,6 +33,8 @@ interface CursorPosition {
 interface OpenPlaygroundTarget {
   project: string;
   functionName?: string;
+  testName?: string;
+  testsetName?: string;
 }
 
 function isBamlEditor(editor: TextEditor): boolean {

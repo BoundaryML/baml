@@ -262,6 +262,6 @@ mod tests {
         let cfg = ProfConfig::from_lookup(lookup(&[(ENV_WAKE_INTERVAL_MS, "0")]));
         assert_eq!(cfg.wake_interval, Duration::from_millis(1));
         let cfg = ProfConfig::from_lookup(lookup(&[(ENV_WAKE_INTERVAL_MS, "999999")]));
-        assert_eq!(cfg.wake_interval, Duration::from_millis(10_000));
+        assert_eq!(cfg.wake_interval, Duration::from_secs(10));
     }
 }

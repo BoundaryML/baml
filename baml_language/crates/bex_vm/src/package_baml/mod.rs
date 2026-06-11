@@ -21,6 +21,7 @@
 
 mod array;
 pub(crate) mod bigint;
+mod csv;
 mod float;
 mod future;
 mod id;

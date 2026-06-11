@@ -111,6 +111,7 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_json/json.baml"),
     builtin!("baml", "ns_yaml/yaml.baml"),
     builtin!("baml", "ns_toml/toml.baml"),
+    builtin!("baml", "ns_csv/csv.baml"),
     builtin!("baml", "ns_unstable/unstable.baml"),
     builtin!("baml", "ns_llm/llm_types.baml"),
     builtin!("baml", "ns_llm/llm.baml"),

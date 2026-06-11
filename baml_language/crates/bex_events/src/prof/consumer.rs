@@ -647,7 +647,7 @@ mod tests {
         ctl_tx.send(ControlMsg::Flush(ack_tx)).unwrap();
         ctx.wake().force_wake();
         ack_rx
-            .recv_timeout(Duration::from_secs(60))
+            .recv_timeout(Duration::from_mins(1))
             .expect("consumer never acked the flush");
 
         let paths: Vec<_> = std::fs::read_dir(&dir)
@@ -849,7 +849,7 @@ mod tests {
         ctl_tx.send(ControlMsg::Flush(ack_tx)).unwrap();
         ctx.wake().force_wake();
         ack_rx
-            .recv_timeout(Duration::from_secs(60))
+            .recv_timeout(Duration::from_mins(1))
             .expect("soak consumer never acked");
 
         // Sequential churn must reuse one pooled ring, not grow the registry

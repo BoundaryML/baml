@@ -35,7 +35,12 @@ export function isHttpRequest(value: unknown): value is HttpRequestShape {
 
 function safeHeredoc(body: string): string {
   let tag = 'EOF';
-  while (body.includes(`\n${tag}\n`) || body.startsWith(`${tag}\n`) || body.endsWith(`\n${tag}`)) {
+  while (
+    body.includes(`\n${tag}\n`) ||
+    body.startsWith(`${tag}\n`) ||
+    body.endsWith(`\n${tag}`) ||
+    body === tag
+  ) {
     tag += '_';
   }
   return tag;
@@ -76,7 +81,9 @@ function toCurl(req: HttpRequestShape): string {
       const heredoc = safeHeredoc(formatted);
       parts.push('-d @-');
       parts.push(`'${url.replace(/'/g, "'\\''")}'`);
-      return parts.join(' \\\n  ') + ` <<'${heredoc}'\n${formatted}\n${heredoc}`;
+      return (
+        parts.join(' \\\n  ') + ` <<'${heredoc}'\n${formatted}\n${heredoc}`
+      );
     }
   }
   parts.push(`'${url.replace(/'/g, "'\\''")}'`);
@@ -96,14 +103,20 @@ function toJsFetch(req: HttpRequestShape): string {
   if (Object.keys(headers).length > 0) {
     const headersStr = Object.entries(headers)
       .filter(([, v]) => v != null)
-      .map(([k, v]) => `    '${escapeJsSingle(k)}': '${escapeJsSingle(String(v))}'`)
+      .map(
+        ([k, v]) =>
+          `    '${escapeJsSingle(k)}': '${escapeJsSingle(String(v))}'`,
+      )
       .join(',\n');
     opts.push(`  headers: {\n${headersStr}\n  }`);
   }
   if (body != null && body !== '') {
     const preserve = preserveExactBody(req);
     const formatted = preserve ? body : prettyBody(body);
-    const escaped = formatted.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$');
+    const escaped = formatted
+      .replace(/\\/g, '\\\\')
+      .replace(/`/g, '\\`')
+      .replace(/\$/g, '\\$');
     opts.push(`  body: \`${escaped}\``);
   }
   return `fetch('${escapeJsSingle(url)}', {\n${opts.join(',\n')}\n});`;
@@ -124,7 +137,10 @@ function toPythonRequests(req: HttpRequestShape): string {
   if (Object.keys(headers).length > 0) {
     const headersStr = Object.entries(headers)
       .filter(([, v]) => v != null)
-      .map(([k, v]) => `        '${escapePySingle(k)}': '${escapePySingle(String(v))}'`)
+      .map(
+        ([k, v]) =>
+          `        '${escapePySingle(k)}': '${escapePySingle(String(v))}'`,
+      )
       .join(',\n');
     kwargs.push(`    headers={\n${headersStr}\n    }`);
   }
@@ -144,7 +160,11 @@ function toPythonRequests(req: HttpRequestShape): string {
 }
 
 function escapeGoString(s: string): string {
-  return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r');
+  return s
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r');
 }
 
 function toGo(req: HttpRequestShape): string {
@@ -152,8 +172,14 @@ function toGo(req: HttpRequestShape): string {
   const url = req.url ?? '';
   const headers = req.headers ?? {};
   const body = req.body ?? '';
-  const bodyFormatted = body ? (preserveExactBody(req) ? body : prettyBody(body)) : '';
-  const bodyArg = body ? `strings.NewReader("${escapeGoString(bodyFormatted)}")` : 'nil';
+  const bodyFormatted = body
+    ? preserveExactBody(req)
+      ? body
+      : prettyBody(body)
+    : '';
+  const bodyArg = body
+    ? `strings.NewReader("${escapeGoString(bodyFormatted)}")`
+    : 'nil';
   const lines: string[] = [
     `req, err := http.NewRequest("${method}", "${escapeGoString(url)}", ${bodyArg})`,
     'if err != nil { log.Fatal(err) }',
@@ -162,7 +188,10 @@ function toGo(req: HttpRequestShape): string {
     lines.push('defer req.Body.Close()');
   }
   for (const [k, v] of Object.entries(headers)) {
-    if (v != null) lines.push(`req.Header.Set("${escapeGoString(k)}", "${escapeGoString(String(v))}")`);
+    if (v != null)
+      lines.push(
+        `req.Header.Set("${escapeGoString(k)}", "${escapeGoString(String(v))}")`,
+      );
   }
   lines.push('resp, err := http.DefaultClient.Do(req)');
   lines.push('if err != nil { log.Fatal(err) }');
@@ -177,17 +206,32 @@ function toGo(req: HttpRequestShape): string {
 }
 
 function escapeRustString(s: string): string {
-  return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r');
+  return s
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r');
 }
 
-const REQWEST_SHORTCUT_METHODS = new Set(['get', 'post', 'put', 'patch', 'delete', 'head']);
+const REQWEST_SHORTCUT_METHODS = new Set([
+  'get',
+  'post',
+  'put',
+  'patch',
+  'delete',
+  'head',
+]);
 
 function toRust(req: HttpRequestShape): string {
   const method = (req.method ?? 'GET').toLowerCase();
   const url = req.url ?? '';
   const headers = req.headers ?? {};
   const body = req.body ?? '';
-  const bodyFormatted = body ? (preserveExactBody(req) ? body : prettyBody(body)) : '';
+  const bodyFormatted = body
+    ? preserveExactBody(req)
+      ? body
+      : prettyBody(body)
+    : '';
   const clientCall = REQWEST_SHORTCUT_METHODS.has(method)
     ? `client.${method}("${escapeRustString(url)}")`
     : `client.request("${method.toUpperCase()}".parse().unwrap(), "${escapeRustString(url)}")`;
@@ -196,7 +240,10 @@ function toRust(req: HttpRequestShape): string {
     `let response = ${clientCall}`,
   ];
   for (const [k, v] of Object.entries(headers)) {
-    if (v != null) lines.push(`    .header("${escapeRustString(k)}", "${escapeRustString(String(v))}")`);
+    if (v != null)
+      lines.push(
+        `    .header("${escapeRustString(k)}", "${escapeRustString(String(v))}")`,
+      );
   }
   if (body) {
     const preserve = preserveExactBody(req);
@@ -216,10 +263,18 @@ function toRust(req: HttpRequestShape): string {
     }
   }
   lines.push('    .send()?;');
-  return '// reqwest = { version = "0.11", features = ["blocking"] }\n\n' + lines.join('\n');
+  return (
+    '// reqwest = { version = "0.11", features = ["blocking"] }\n\n' +
+    lines.join('\n')
+  );
 }
 
-export type HttpRequestSnippetFormat = 'curl' | 'fetch' | 'python' | 'go' | 'rust';
+export type HttpRequestSnippetFormat =
+  | 'curl'
+  | 'fetch'
+  | 'python'
+  | 'go'
+  | 'rust';
 
 const FORMATS: { id: HttpRequestSnippetFormat; label: string }[] = [
   { id: 'curl', label: 'curl' },
@@ -237,7 +292,10 @@ const FORMAT_TO_LANGUAGE: Record<HttpRequestSnippetFormat, string> = {
   rust: 'rust',
 };
 
-function formatSnippet(req: HttpRequestShape, format: HttpRequestSnippetFormat): string {
+function formatSnippet(
+  req: HttpRequestShape,
+  format: HttpRequestSnippetFormat,
+): string {
   switch (format) {
     case 'curl':
       return toCurl(req);
@@ -262,7 +320,10 @@ export function httpRequestToCurl(req: HttpRequestShape): string {
 const preCls =
   'whitespace-pre font-vsc-mono text-xs leading-relaxed p-3 rounded bg-vsc-bg border border-vsc-border text-vsc-text overflow-auto max-h-[400px] m-0';
 
-export const HttpRequestCurlRenderer: FC<ResultRendererProps> = ({ value, displayMode }) => {
+export const HttpRequestCurlRenderer: FC<ResultRendererProps> = ({
+  value,
+  displayMode,
+}) => {
   const [copied, setCopied] = useState(false);
   const [format, setFormat] = useState<HttpRequestSnippetFormat>('curl');
   const httpReq = isHttpRequest(value) ? value : null;
@@ -287,7 +348,11 @@ export const HttpRequestCurlRenderer: FC<ResultRendererProps> = ({ value, displa
   }
 
   if (displayMode === 'inline') {
-    return <span className="font-vsc-mono text-xs text-vsc-text">{httpReq.method} {httpReq.url}</span>;
+    return (
+      <span className="font-vsc-mono text-xs text-vsc-text">
+        {httpReq.method} {httpReq.url}
+      </span>
+    );
   }
 
   return (

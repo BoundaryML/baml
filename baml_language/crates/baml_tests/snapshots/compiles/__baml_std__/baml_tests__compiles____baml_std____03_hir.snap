@@ -219,6 +219,281 @@ function baml.to_json(self: ?) -> baml.json.json  [builtin]
 function baml.trailing_ones(self: ?) -> int  [builtin]
 function baml.trailing_zeros(self: ?) -> int  [builtin]
 
+--- <builtin>/baml/ns_csv/csv.baml ---
+class baml.csv.CsvError {
+  kind: baml.csv.CsvErrorKind
+  message: string
+  line: int?
+  record: int?
+  field: int?
+  column: string?
+  expected: int?
+  found: int?
+}
+class baml.csv.CsvHeaders {
+  names: string[]?
+}
+class baml.csv.CsvNeedData {
+}
+class baml.csv.CsvPosition {
+  byte: int
+  line: int
+  record: int
+}
+class baml.csv.CsvReader {
+  _handle: $rust_type
+  _file: root.fs.File?
+  _on_skip: (baml.csv.CsvError) -> null?
+  _owns_file: bool
+}
+class baml.csv.CsvRecord {
+  _handle: $rust_type
+}
+class baml.csv.CsvRows {
+  reader: baml.csv.CsvReader
+}
+class baml.csv.CsvSkip {
+  error: baml.csv.CsvError
+}
+class baml.csv.CsvWriter {
+  _handle: $rust_type
+  _file: root.fs.File?
+  _owns_file: bool
+}
+class baml.csv.ReaderOptions {
+  delimiter: string?
+  quote: string?
+  quoting: bool?
+  escape: string?
+  has_header: bool?
+  headers: string[]?
+  comment: string?
+  trim: "none" | "headers" | "fields" | "all"?
+  skip_lines: int?
+  skip_blank_records: bool?
+  ragged: "strict" | "pad" | "truncate"?
+  null_values: string[]?
+  encoding: "utf8" | "utf8-lossy"?
+  bom: "strip" | "keep"?
+  on_error: "throw" | "skip"?
+  on_skip: (baml.csv.CsvError) -> null?
+  max_skipped: int?
+  limit: int?
+}
+class baml.csv.WriterOptions {
+  delimiter: string?
+  quote: string?
+  quote_style: "minimal" | "all" | "never"?
+  escape: string?
+  terminator: "lf" | "crlf"?
+  write_header: bool?
+  headers: string[]?
+  null_value: string?
+  bom: bool?
+  sanitize_formulas: bool?
+}
+enum baml.csv.CsvErrorKind {Options, Quote, FieldCount, Encoding, Header, Decode, Encode, NotFound, TooManyRows, Closed}
+type baml.csv.CsvValue = null | bool | int | bigint | float | string
+function baml.csv._buffer(options: baml.csv.WriterOptions?) -> baml.csv.CsvWriter  [builtin]
+function baml.csv._bytes_written(self: ?) -> int  [builtin]
+function baml.csv._cell_by_index(rec: baml.csv.CsvRecord, index: int) -> T?  [builtin]
+function baml.csv._cell_by_name(rec: baml.csv.CsvRecord, column: string) -> T?  [builtin]
+function baml.csv._decode_record(rec: baml.csv.CsvRecord) -> T  [builtin]
+function baml.csv._emit(self: ?, out: string) -> null  [expr] {
+  {  } match (self._file) { null => null, f: root.fs.File => { if (out.length() Gt 0) { f.write(out) catch (_) { root.errors.InvalidArgument { message: message } => throw root.errors.Io { message: "underlying file h..." Add message } } } } null }
+}
+function baml.csv._encode_header(self: ?, names: string[]) -> string  [builtin]
+function baml.csv._encode_record(self: ?, record: baml.csv.CsvValue[]) -> string  [builtin]
+function baml.csv._encode_row(w: baml.csv.CsvWriter, row: T) -> string  [builtin]
+function baml.csv._encode_rows(w: baml.csv.CsvWriter, rows: T[]) -> string  [builtin]
+function baml.csv._error(kind: baml.csv.CsvErrorKind, message: string) -> baml.csv.CsvError  [expr] {
+  {  } baml.csv.CsvError { kind: kind, message: message, line: null, record: null, field: null, column: null, expected: null, found: null }
+}
+function baml.csv._feed(self: ?, chunk: uint8array) -> null  [builtin]
+function baml.csv._feed_eof(self: ?) -> null  [builtin]
+function baml.csv._mark_closed(self: ?) -> null  [builtin]
+function baml.csv._mark_closed(self: ?) -> null  [builtin]
+function baml.csv._mark_exhausted(self: ?) -> null  [builtin]
+function baml.csv._poll(self: ?) -> baml.csv.CsvRecord | baml.csv.CsvSkip | baml.csv.CsvNeedData | root.iter.Done  [builtin]
+function baml.csv._poll_headers(self: ?) -> baml.csv.CsvHeaders | baml.csv.CsvNeedData  [builtin]
+function baml.csv._read_chunk(self: ?) -> null  [expr] {
+  {  } match (self._file) { null => { self._feed_eof() } null, f: root.fs.File => { let chunk = f.read_bytes(65536) catch (e) { root.errors.InvalidArgument { message: message } => throw _error(CsvErrorKind.Closed, "underlying file h..." Add message), root.errors.Io => { self._mark_exhausted(); throw e } }; if (chunk.length() Eq 0) { self._feed_eof() } else { self._feed(chunk) } } null }
+}
+function baml.csv._reader(source: string | uint8array | root.fs.File, options: baml.csv.ReaderOptions?, owns_file: bool) -> baml.csv.CsvReader  [builtin]
+function baml.csv._to_markdown(rows: T[], max_rows: int) -> string  [builtin]
+function baml.csv._to_markdown_records(records: string[][], headers: string[]?, max_rows: int) -> string  [builtin]
+function baml.csv._try_decode(rec: baml.csv.CsvRecord, r: baml.csv.CsvReader) -> T | baml.csv.CsvSkip  [builtin]
+function baml.csv._validate_columns(r: baml.csv.CsvReader) -> null  [builtin]
+function baml.csv._writer(file: root.fs.File, options: baml.csv.WriterOptions?, owns_file: bool) -> baml.csv.CsvWriter  [builtin]
+function baml.csv.buffer(options: baml.csv.WriterOptions? = null) -> baml.csv.CsvWriter  [expr] {
+  {  } _buffer(options = options)
+}
+function baml.csv.close(self: ?) -> null  [expr] {
+  { self._mark_closed() } match (self._file) { null => null, f: root.fs.File => { if (self._owns_file) { f.close() catch (_) { root.errors.InvalidArgument => null } } } null }
+}
+function baml.csv.close(self: ?) -> null  [expr] {
+  { self._mark_closed() } match (self._file) { null => null, f: root.fs.File => { if (self._owns_file) { f.close() catch (_) { root.errors.InvalidArgument => null } } } null }
+}
+function baml.csv.create(path: string, options: baml.csv.WriterOptions? = null) -> baml.csv.CsvWriter  [expr] {
+  { let f = baml.fs.open(path, "w") catch (_) { root.errors.InvalidArgument { message: message } => throw root.errors.Io { message: message } } } _writer(f, options, true)
+}
+function baml.csv.decode(source: string | uint8array, options: baml.csv.ReaderOptions? = null) -> T[]  [expr] {
+  {  } {  } reader(source, options = options).rows().collect() catch (_) { root.errors.Io { message: message } => root.sys.panic("unreachable: in-m..." Add message) }
+}
+function baml.csv.decode(self: ?) -> T  [expr] {
+  {  } _decode_record(self)
+}
+function baml.csv.decode_one(source: string | uint8array, options: baml.csv.ReaderOptions? = null) -> T  [expr] {
+  { let all = decode(source, options = options); if (all.length() Eq 0) { throw _error(CsvErrorKind.NotFound, "expected exactly ...") }; if (all.length() Gt 1) { throw _error(CsvErrorKind.TooManyRows, "expected exactly ..." Add root.json.stringify(all.length())) } } match (all.at(0)) { null => root.sys.panic("unreachable: deco..."), v: T => v }
+}
+function baml.csv.decode_optional(source: string | uint8array, options: baml.csv.ReaderOptions? = null) -> T?  [expr] {
+  { let all = decode(source, options = options); if (all.length() Gt 1) { throw _error(CsvErrorKind.TooManyRows, "expected at most ..." Add root.json.stringify(all.length())) } } all.at(0)
+}
+function baml.csv.fields(self: ?) -> string[]  [builtin]
+function baml.csv.flush(self: ?) -> null  [expr] {
+  {  } null
+}
+function baml.csv.from_json(j: baml.json.json) -> baml.csv.CsvNeedData  [expr] {
+  baml.csv.CsvNeedData {  }
+}
+function baml.csv.from_json(j: baml.json.json) -> baml.csv.CsvWriter  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function baml.csv.from_json(j: baml.json.json) -> baml.csv.WriterOptions  [expr] {
+  baml.csv.WriterOptions { delimiter: baml.json.from_json(baml.json.field(j, "delimiter")), quote: baml.json.from_json(baml.json.field(j, "quote")), quote_style: baml.json.from_json(baml.json.field(j, "quote_style")), escape: baml.json.from_json(baml.json.field(j, "escape")), terminator: baml.json.from_json(baml.json.field(j, "terminator")), write_header: baml.json.from_json(baml.json.field(j, "write_header")), headers: baml.json.from_json(baml.json.field(j, "headers")), null_value: baml.json.from_json(baml.json.field(j, "null_value")), bom: baml.json.from_json(baml.json.field(j, "bom")), sanitize_formulas: baml.json.from_json(baml.json.field(j, "sanitize_formulas")) }
+}
+function baml.csv.from_json(j: baml.json.json) -> baml.csv.CsvRows<T>  [expr] {
+  baml.csv.CsvRows { reader: baml.json.from_json(baml.json.field(j, "reader")) }
+}
+function baml.csv.from_json(j: baml.json.json) -> baml.csv.ReaderOptions  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function baml.csv.from_json(j: baml.json.json) -> baml.csv.CsvReader  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function baml.csv.from_json(j: baml.json.json) -> baml.csv.CsvPosition  [expr] {
+  baml.csv.CsvPosition { byte: baml.json.from_json(baml.json.field(j, "byte")), line: baml.json.from_json(baml.json.field(j, "line")), record: baml.json.from_json(baml.json.field(j, "record")) }
+}
+function baml.csv.from_json(j: baml.json.json) -> baml.csv.CsvRecord  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function baml.csv.from_json(j: baml.json.json) -> baml.csv.CsvError  [expr] {
+  baml.csv.CsvError { kind: baml.json.from_json(baml.json.field(j, "kind")), message: baml.json.from_json(baml.json.field(j, "message")), line: baml.json.from_json(baml.json.field(j, "line")), record: baml.json.from_json(baml.json.field(j, "record")), field: baml.json.from_json(baml.json.field(j, "field")), column: baml.json.from_json(baml.json.field(j, "column")), expected: baml.json.from_json(baml.json.field(j, "expected")), found: baml.json.from_json(baml.json.field(j, "found")) }
+}
+function baml.csv.from_json(j: baml.json.json) -> baml.csv.CsvHeaders  [expr] {
+  baml.csv.CsvHeaders { names: baml.json.from_json(baml.json.field(j, "names")) }
+}
+function baml.csv.from_json(j: baml.json.json) -> baml.csv.CsvSkip  [expr] {
+  baml.csv.CsvSkip { error: baml.json.from_json(baml.json.field(j, "error")) }
+}
+function baml.csv.get(self: ?, column: string) -> T?  [expr] {
+  {  } _cell_by_name(self, column)
+}
+function baml.csv.get_at(self: ?, index: int) -> T?  [expr] {
+  {  } _cell_by_index(self, index)
+}
+function baml.csv.headers(self: ?) -> string[]?  [expr] {
+  { while true {  } match (self._poll_headers()) { h: baml.csv.CsvHeaders => { return h.names }, baml.csv.CsvNeedData => { self._read_chunk() } } } root.sys.panic("unreachable: CsvR...")
+}
+function baml.csv.iter(self: ?) -> root.iter.Iterator<Item = baml.csv.CsvRecord, Error = baml.csv.CsvError | root.errors.Io>  [expr] {
+  {  } self
+}
+function baml.csv.iter(self: ?) -> root.iter.Iterator<Item = T, Error = baml.csv.CsvError | root.errors.Io>  [expr] {
+  {  } self
+}
+function baml.csv.length(self: ?) -> int  [builtin]
+function baml.csv.next(self: ?) -> T | root.iter.Done  [expr] {
+  { while true {  } match (self.reader.next()) { d: root.iter.Done => { return d }, rec: baml.csv.CsvRecord => {  } match (_try_decode(rec, self.reader)) { s: baml.csv.CsvSkip => { match (self.reader._on_skip) { null => null, cb: (baml.csv.CsvError) -> null => cb(s.error) } }, v: T => { return v } } } } root.sys.panic("unreachable: CsvR...")
+}
+function baml.csv.next(self: ?) -> baml.csv.CsvRecord | root.iter.Done  [expr] {
+  { while true {  } match (self._poll()) { rec: baml.csv.CsvRecord => { return rec }, d: root.iter.Done => { return d }, s: baml.csv.CsvSkip => { match (self._on_skip) { null => null, cb: (baml.csv.CsvError) -> null => cb(s.error) } }, baml.csv.CsvNeedData => { self._read_chunk() } } } root.sys.panic("unreachable: CsvR...")
+}
+function baml.csv.open(path: string, options: baml.csv.ReaderOptions? = null) -> baml.csv.CsvReader  [expr] {
+  { let f = baml.fs.open(path, "r") catch (_) { root.errors.InvalidArgument { message: message } => throw root.errors.Io { message: message } } } _reader(f, options, true)
+}
+function baml.csv.parse(source: string | uint8array, options: baml.csv.ReaderOptions? = null) -> string[][]  [expr] {
+  {  } { let r = reader(source, options = options); let out: string[][] = []; while true {  } match (r.next()) { root.iter.Done => { break }, rec: baml.csv.CsvRecord => { out.push(rec.fields()) } } } out catch (_) { root.errors.Io { message: message } => root.sys.panic("unreachable: in-m..." Add message) }
+}
+function baml.csv.position(self: ?) -> baml.csv.CsvPosition  [builtin]
+function baml.csv.position(self: ?) -> baml.csv.CsvPosition  [builtin]
+function baml.csv.read(path: string, options: baml.csv.ReaderOptions? = null) -> T[]  [expr] {
+  { let r = open(path, options = options); let result = r.rows().collect(); r.close() } result
+}
+function baml.csv.reader(source: string | uint8array | root.fs.File, options: baml.csv.ReaderOptions? = null) -> baml.csv.CsvReader  [expr] {
+  {  } _reader(source, options, false)
+}
+function baml.csv.records_written(self: ?) -> int  [builtin]
+function baml.csv.rows(self: ?) -> root.iter.Iterator<Item = T, Error = baml.csv.CsvError | root.errors.Io>  [expr] {
+  { self.headers(); _validate_columns(self) } baml.csv.CsvRows { reader: self }
+}
+function baml.csv.skipped(self: ?) -> baml.csv.CsvError[]  [builtin]
+function baml.csv.skipped_count(self: ?) -> int  [builtin]
+function baml.csv.stringify(rows: T[], options: baml.csv.WriterOptions? = null) -> string  [expr] {
+  {  } { let w = buffer(options = options); w.write_rows(rows) } w.text() catch (_) { root.errors.Io { message: message } => root.sys.panic("unreachable: buff..." Add message) }
+}
+function baml.csv.stringify_records(records: baml.csv.CsvValue[][], options: baml.csv.WriterOptions? = null) -> string  [expr] {
+  {  } { let w = buffer(options = options); for rec in records { w.write_record(rec) } } w.text() catch (_) { root.errors.Io { message: message } => root.sys.panic("unreachable: buff..." Add message) }
+}
+function baml.csv.text(self: ?) -> string  [builtin]
+function baml.csv.to_json(self: ?) -> baml.json.json  [expr] {
+  map {  }
+}
+function baml.csv.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}
+function baml.csv.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "delimiter": self.delimiter?.to_json(), "quote": self.quote?.to_json(), "quote_style": self.quote_style?.to_json(), "escape": self.escape?.to_json(), "terminator": self.terminator?.to_json(), "write_header": self.write_header?.to_json(), "headers": self.headers?.to_json(), "null_value": self.null_value?.to_json(), "bom": self.bom?.to_json(), "sanitize_formulas": self.sanitize_formulas?.to_json() }
+}
+function baml.csv.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "reader": self.reader.to_json() }
+}
+function baml.csv.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}
+function baml.csv.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}
+function baml.csv.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "byte": self.byte.to_json(), "line": self.line.to_json(), "record": self.record.to_json() }
+}
+function baml.csv.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}
+function baml.csv.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "kind": self.kind.to_json(), "message": self.message.to_json(), "line": self.line?.to_json(), "record": self.record?.to_json(), "field": self.field?.to_json(), "column": self.column?.to_json(), "expected": self.expected?.to_json(), "found": self.found?.to_json() }
+}
+function baml.csv.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "names": self.names?.to_json() }
+}
+function baml.csv.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "error": self.error.to_json() }
+}
+function baml.csv.to_map(self: ?) -> map<string, string>  [builtin]
+function baml.csv.to_markdown(rows: T[], max_rows: int = 100) -> string  [expr] {
+  {  } _to_markdown(rows, max_rows = max_rows)
+}
+function baml.csv.to_markdown_records(records: string[][], headers: string[]? = null, max_rows: int = 100) -> string  [expr] {
+  {  } _to_markdown_records(records, headers = headers, max_rows = max_rows)
+}
+function baml.csv.write(path: string, rows: T[], options: baml.csv.WriterOptions? = null) -> int  [expr] {
+  { let w = create(path, options = options); w.write_rows(rows); w.close() } w._bytes_written()
+}
+function baml.csv.write_header(self: ?, names: string[]) -> null  [expr] {
+  {  } self._emit(self._encode_header(names))
+}
+function baml.csv.write_record(self: ?, record: baml.csv.CsvValue[]) -> null  [expr] {
+  {  } self._emit(self._encode_record(record))
+}
+function baml.csv.write_row(self: ?, row: T) -> null  [expr] {
+  {  } self._emit(_encode_row(self, row))
+}
+function baml.csv.write_rows(self: ?, rows: T[]) -> null  [expr] {
+  {  } self._emit(_encode_rows(self, rows))
+}
+function baml.csv.writer(file: root.fs.File, options: baml.csv.WriterOptions? = null) -> baml.csv.CsvWriter  [expr] {
+  {  } _writer(file, options, false)
+}
+
 --- <builtin>/baml/ns_env/env.baml ---
 function baml.env.get(key: string) -> string?  [builtin]
 function baml.env.get_or_panic(key: string) -> string  [expr] {

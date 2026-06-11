@@ -246,28 +246,37 @@ impl<'a> AstGraphBuilder<'a> {
                 self.visit_expr(*value);
             }
 
+            ast::Stmt::For {
+                binding,
+                collection,
+                body,
+            } => {
+                let label = format!(
+                    "for ({} in {})",
+                    self.format_pattern(*binding),
+                    render_expr_compact_ast(self.body, *collection)
+                );
+                self.visit_loop_with_label(label, *collection, *body);
+            }
+
             ast::Stmt::Return(Some(expr_id)) => {
-                let return_expr = self.body.exprs[*expr_id].clone();
-                match &return_expr {
-                    // Calls already produce their own graph node via visit_expr.
-                    ast::Expr::Call { .. } | ast::Expr::OptionalCall { .. } => {
-                        self.visit_expr(*expr_id);
-                    }
-                    // For other return values, emit a leaf node showing the
-                    // return path so branching returns are visible in the graph.
-                    _ => {
-                        let label =
-                            format!("return {}", render_expr_compact_ast(self.body, *expr_id));
-                        self.emit_return_leaf(*expr_id, &label);
-                    }
-                }
+                let label = format!("return {}", render_expr_compact_ast(self.body, *expr_id));
+                self.emit_return_leaf(Some(*expr_id), None, &label);
+                // Control flow leaves the function here: statements after an
+                // early return must not receive an edge from the return node.
+                self.mark_flow_terminal();
+            }
+
+            ast::Stmt::Return(None) => {
+                self.emit_return_leaf(None, Some(id), "return");
+                self.mark_flow_terminal();
             }
 
             ast::Stmt::Assign { value, .. } | ast::Stmt::AssignOp { value, .. } => {
                 self.visit_expr(*value);
             }
 
-            // Break, Continue, bare Return, Assert, Missing — no graph nodes.
+            // Break, Continue, Assert, Missing — no graph nodes.
             _ => {}
         }
     }
@@ -309,7 +318,8 @@ impl<'a> AstGraphBuilder<'a> {
             label,
             Some(if_expr.into_raw().into_u32()),
             NodeType::BranchGroup,
-        );
+        )
+        .with_callee_names(collect_callee_names(self.body, if_expr));
         self.graph.add_node(node);
         let parent_index = self.current_parent_index();
         self.register_child_with_parent(parent_index, node_id);
@@ -321,6 +331,7 @@ impl<'a> AstGraphBuilder<'a> {
         self.visit_branch_arm(arm_label, then_branch);
 
         // Flatten else-if chains
+        let mut has_final_else = false;
         let mut current_else = else_branch;
         while let Some(else_id) = current_else {
             let else_expr = self.body.exprs[else_id].clone();
@@ -339,13 +350,15 @@ impl<'a> AstGraphBuilder<'a> {
                 }
                 _ => {
                     self.visit_branch_arm("else".to_string(), else_id);
+                    has_final_else = true;
                     current_else = None;
                 }
             }
         }
 
-        // Synthetic "else" arm if no else branch
-        if else_branch.is_none() {
+        // Synthetic "else" arm when the if — or the last else-if in a chain —
+        // has no explicit else branch, so the fall-through path stays visible.
+        if !has_final_else {
             self.emit_synthetic_branch_arm("else".to_string());
         }
 
@@ -378,7 +391,8 @@ impl<'a> AstGraphBuilder<'a> {
             label,
             Some(body_expr.into_raw().into_u32()),
             NodeType::BranchArm,
-        );
+        )
+        .with_callee_names(collect_callee_names(self.body, body_expr));
         self.graph.add_node(node);
         let parent_index = self.current_parent_index();
         self.register_child_with_parent(parent_index, node_id);
@@ -455,7 +469,8 @@ impl<'a> AstGraphBuilder<'a> {
             label,
             Some(match_expr.into_raw().into_u32()),
             NodeType::BranchGroup,
-        );
+        )
+        .with_callee_names(collect_callee_names(self.body, match_expr));
         self.graph.add_node(node);
         let parent_index = self.current_parent_index();
         self.register_child_with_parent(parent_index, node_id);
@@ -474,14 +489,6 @@ impl<'a> AstGraphBuilder<'a> {
     // -- While / for loops --
 
     fn visit_loop(&mut self, condition: ast::ExprId, body: ast::ExprId, origin: ast::LoopOrigin) {
-        let parent_depth = self.frames.len();
-        let ordinal = {
-            let frame = self
-                .frames
-                .last_mut()
-                .expect("frame stack should not be empty");
-            frame.next_ordinal(&CounterKind::Loop)
-        };
         let keyword = match origin {
             ast::LoopOrigin::While => "while",
             ast::LoopOrigin::For => "for",
@@ -490,6 +497,21 @@ impl<'a> AstGraphBuilder<'a> {
             "{keyword} ({})",
             render_expr_compact_ast(self.body, condition)
         );
+        self.visit_loop_with_label(label, condition, body);
+    }
+
+    /// Emit a loop node with a pre-rendered label. `condition` is the
+    /// expression shown in the loop header (while-condition or for-in
+    /// collection); it provides the node's source span and embedded calls.
+    fn visit_loop_with_label(&mut self, label: String, condition: ast::ExprId, body: ast::ExprId) {
+        let parent_depth = self.frames.len();
+        let ordinal = {
+            let frame = self
+                .frames
+                .last_mut()
+                .expect("frame stack should not be empty");
+            frame.next_ordinal(&CounterKind::Loop)
+        };
         let slug_base = slugify(&label);
         let slug = if slug_base.is_empty() {
             format!("loop-{ordinal}")
@@ -507,7 +529,8 @@ impl<'a> AstGraphBuilder<'a> {
             label,
             Some(condition.into_raw().into_u32()),
             NodeType::Loop,
-        );
+        )
+        .with_callee_names(collect_callee_names(self.body, condition));
         self.graph.add_node(node);
         let parent_index = self.current_parent_index();
         self.register_child_with_parent(parent_index, node_id);
@@ -590,16 +613,22 @@ impl<'a> AstGraphBuilder<'a> {
             Some(call_expr.into_raw().into_u32()),
             NodeType::OtherScope,
         )
-        .with_callee_name(callee_name);
+        .with_callee_name(callee_name)
+        .with_callee_names(collect_callee_names(self.body, call_expr));
         self.graph.add_node(node);
         let parent_index = self.current_parent_index();
         self.register_child_with_parent(parent_index, node_id);
         // Note: no frame push / recursion — call nodes are leaves.
     }
 
-    // -- Return leaf (leaf node for return statements with non-call values) --
+    // -- Return leaf (terminal node for return statements) --
 
-    fn emit_return_leaf(&mut self, return_expr: ast::ExprId, label: &str) {
+    fn emit_return_leaf(
+        &mut self,
+        return_expr: Option<ast::ExprId>,
+        return_stmt: Option<ast::StmtId>,
+        label: &str,
+    ) {
         let ordinal = {
             let frame = self
                 .frames
@@ -617,17 +646,40 @@ impl<'a> AstGraphBuilder<'a> {
         let log_filter_key = self.build_log_filter_key(&segment);
         let node_id = self.graph.allocate_id();
         let parent_id = self.current_parent_id();
-        let node = Node::new(
+        let source_expr = return_expr
+            .map(|e| e.into_raw().into_u32())
+            .or_else(|| return_stmt.map(stmt_id_to_source_expr));
+        let mut node = Node::new(
             node_id,
             parent_id,
             log_filter_key,
             label.to_string(),
-            Some(return_expr.into_raw().into_u32()),
-            NodeType::OtherScope,
+            source_expr,
+            NodeType::Return,
         );
+        if let Some(expr) = return_expr {
+            // `return Foo(...)` — keep the callee visible so the call can be
+            // expanded / recognized as an LLM call like any other call node.
+            if matches!(
+                self.body.exprs[expr],
+                ast::Expr::Call { .. } | ast::Expr::OptionalCall { .. }
+            ) {
+                node = node.with_callee_name(call_callee_name(self.body, expr));
+            }
+            node = node.with_callee_names(collect_callee_names(self.body, expr));
+        }
         self.graph.add_node(node);
         let parent_index = self.current_parent_index();
         self.register_child_with_parent(parent_index, node_id);
+    }
+
+    /// Stop linear-flow edge chaining in the current frame: the next sibling
+    /// node will not receive an incoming edge from the node just emitted.
+    /// Used after `return`, which exits the function.
+    fn mark_flow_terminal(&mut self) {
+        if let Some(frame) = self.frames.last_mut() {
+            frame.last_linear_child = None;
+        }
     }
 
     // -- OtherScope --
@@ -660,7 +712,8 @@ impl<'a> AstGraphBuilder<'a> {
             node_label,
             Some(inner_expr.into_raw().into_u32()),
             NodeType::OtherScope,
-        );
+        )
+        .with_callee_names(collect_callee_names(self.body, inner_expr));
         self.graph.add_node(node);
         let parent_index = self.current_parent_index();
         self.register_child_with_parent(parent_index, node_id);
@@ -760,6 +813,231 @@ fn call_callee_name(body: &ast::ExprBody, id: ast::ExprId) -> String {
             render_expr_compact_ast(body, *callee)
         }
         _ => render_expr_compact_ast(body, id),
+    }
+}
+
+/// Render the display name of a call's callee expression.
+///
+/// Generic instantiations (`foo<int>(x)`) unwrap to the base path so the
+/// name stays a plain identifier instead of the renderer's `...` fallback.
+fn callee_display_name(body: &ast::ExprBody, callee: ast::ExprId) -> String {
+    match &body.exprs[callee] {
+        ast::Expr::GenericApply { base, .. } => render_expr_compact_ast(body, *base),
+        _ => render_expr_compact_ast(body, callee),
+    }
+}
+
+/// Collect the names of ALL functions called anywhere within the expression
+/// subtree rooted at `id` — nested calls, call arguments, binary operands,
+/// block statements, match arms, catch arms, etc.
+///
+/// This generalizes [`call_callee_name`] (which only inspects the top-level
+/// expression) so that calls embedded inside another node's expression — for
+/// example `if (Abs(LineTotal(items) - total) > 0.02)` — become visible on
+/// the CFG node for that expression.
+///
+/// Names are rendered exactly as written in source (`LineTotal` stays bare;
+/// `utils.Abs` stays qualified), deduplicated, in first-encounter order.
+fn collect_callee_names(body: &ast::ExprBody, id: ast::ExprId) -> Vec<String> {
+    let mut names = Vec::new();
+    collect_callee_names_expr(body, id, &mut names);
+    names
+}
+
+fn push_callee_name(names: &mut Vec<String>, name: String) {
+    if !names.contains(&name) {
+        names.push(name);
+    }
+}
+
+fn collect_callee_names_expr(body: &ast::ExprBody, id: ast::ExprId, names: &mut Vec<String>) {
+    match &body.exprs[id] {
+        ast::Expr::Call { callee, args, .. } => {
+            push_callee_name(names, callee_display_name(body, *callee));
+            collect_callee_names_expr(body, *callee, names);
+            for arg in args {
+                collect_callee_names_expr(body, arg.expr, names);
+            }
+        }
+        ast::Expr::OptionalCall { callee, args } => {
+            push_callee_name(names, callee_display_name(body, *callee));
+            collect_callee_names_expr(body, *callee, names);
+            for arg in args {
+                collect_callee_names_expr(body, arg.expr, names);
+            }
+        }
+
+        ast::Expr::GenericApply { base, .. } => collect_callee_names_expr(body, *base, names),
+        ast::Expr::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => {
+            collect_callee_names_expr(body, *condition, names);
+            collect_callee_names_expr(body, *then_branch, names);
+            if let Some(else_branch) = else_branch {
+                collect_callee_names_expr(body, *else_branch, names);
+            }
+        }
+        ast::Expr::IfLet {
+            scrutinee,
+            then_branch,
+            else_branch,
+            ..
+        } => {
+            collect_callee_names_expr(body, *scrutinee, names);
+            collect_callee_names_expr(body, *then_branch, names);
+            if let Some(else_branch) = else_branch {
+                collect_callee_names_expr(body, *else_branch, names);
+            }
+        }
+        ast::Expr::Match {
+            scrutinee, arms, ..
+        } => {
+            collect_callee_names_expr(body, *scrutinee, names);
+            for arm_id in arms {
+                let arm = &body.match_arms[*arm_id];
+                if let Some(guard) = arm.guard {
+                    collect_callee_names_expr(body, guard, names);
+                }
+                collect_callee_names_expr(body, arm.body, names);
+            }
+        }
+        ast::Expr::Is { scrutinee, .. } => collect_callee_names_expr(body, *scrutinee, names),
+        ast::Expr::Catch { base, clauses } => {
+            collect_callee_names_expr(body, *base, names);
+            for clause in clauses {
+                for arm_id in &clause.arms {
+                    collect_callee_names_expr(body, body.catch_arms[*arm_id].body, names);
+                }
+            }
+        }
+        ast::Expr::Throw { value } => collect_callee_names_expr(body, *value, names),
+        ast::Expr::Spawn {
+            name,
+            with_exprs,
+            body: spawn_body,
+        } => {
+            if let Some(name) = name {
+                collect_callee_names_expr(body, *name, names);
+            }
+            for with_expr in with_exprs {
+                collect_callee_names_expr(body, *with_expr, names);
+            }
+            collect_callee_names_expr(body, *spawn_body, names);
+        }
+        ast::Expr::Await { future } => collect_callee_names_expr(body, *future, names),
+        ast::Expr::Binary { lhs, rhs, .. } => {
+            collect_callee_names_expr(body, *lhs, names);
+            collect_callee_names_expr(body, *rhs, names);
+        }
+        ast::Expr::Unary { expr, .. } => collect_callee_names_expr(body, *expr, names),
+        ast::Expr::Object {
+            fields, spreads, ..
+        } => {
+            for (_, field_expr) in fields {
+                collect_callee_names_expr(body, *field_expr, names);
+            }
+            for spread in spreads {
+                collect_callee_names_expr(body, spread.expr, names);
+            }
+        }
+        ast::Expr::Array { elements } => {
+            for element in elements {
+                collect_callee_names_expr(body, *element, names);
+            }
+        }
+        ast::Expr::Map { entries } => {
+            for (key, value) in entries {
+                collect_callee_names_expr(body, *key, names);
+                collect_callee_names_expr(body, *value, names);
+            }
+        }
+        ast::Expr::Block { stmts, tail_expr } => {
+            for stmt_id in stmts {
+                collect_callee_names_stmt(body, *stmt_id, names);
+            }
+            if let Some(tail) = tail_expr {
+                collect_callee_names_expr(body, *tail, names);
+            }
+        }
+        ast::Expr::MemberAccess { base, .. }
+        | ast::Expr::OptionalMemberAccess { base, .. }
+        | ast::Expr::Upcast { base, .. } => collect_callee_names_expr(body, *base, names),
+        ast::Expr::Index { base, index } | ast::Expr::OptionalIndex { base, index } => {
+            collect_callee_names_expr(body, *base, names);
+            collect_callee_names_expr(body, *index, names);
+        }
+        ast::Expr::OptionalChain { expr } => collect_callee_names_expr(body, *expr, names),
+
+        // Leaves (no nested expressions in this body's arena). Lambda bodies
+        // live in their own ExprBody, so they cannot be walked from here.
+        ast::Expr::Literal(_)
+        | ast::Expr::ByteStringLiteral(_)
+        | ast::Expr::Null
+        | ast::Expr::Path(_)
+        | ast::Expr::Lambda(_)
+        | ast::Expr::Missing => {}
+    }
+}
+
+fn collect_callee_names_stmt(body: &ast::ExprBody, id: ast::StmtId, names: &mut Vec<String>) {
+    match &body.stmts[id] {
+        ast::Stmt::Expr(expr) => collect_callee_names_expr(body, *expr, names),
+        ast::Stmt::Let {
+            initializer,
+            else_branch,
+            ..
+        } => {
+            if let Some(init) = initializer {
+                collect_callee_names_expr(body, *init, names);
+            }
+            if let Some(else_branch) = else_branch {
+                collect_callee_names_expr(body, *else_branch, names);
+            }
+        }
+        ast::Stmt::While {
+            condition,
+            body: loop_body,
+            after,
+            ..
+        } => {
+            collect_callee_names_expr(body, *condition, names);
+            collect_callee_names_expr(body, *loop_body, names);
+            if let Some(after) = after {
+                collect_callee_names_stmt(body, *after, names);
+            }
+        }
+        ast::Stmt::WhileLet {
+            scrutinee,
+            body: loop_body,
+            ..
+        } => {
+            collect_callee_names_expr(body, *scrutinee, names);
+            collect_callee_names_expr(body, *loop_body, names);
+        }
+        ast::Stmt::For {
+            collection,
+            body: loop_body,
+            ..
+        } => {
+            collect_callee_names_expr(body, *collection, names);
+            collect_callee_names_expr(body, *loop_body, names);
+        }
+        ast::Stmt::Return(expr) => {
+            if let Some(expr) = expr {
+                collect_callee_names_expr(body, *expr, names);
+            }
+        }
+        ast::Stmt::Throw { value } => collect_callee_names_expr(body, *value, names),
+        ast::Stmt::Assign { target, value } | ast::Stmt::AssignOp { target, value, .. } => {
+            collect_callee_names_expr(body, *target, names);
+            collect_callee_names_expr(body, *value, names);
+        }
+        ast::Stmt::Break
+        | ast::Stmt::Continue
+        | ast::Stmt::Missing
+        | ast::Stmt::HeaderComment { .. } => {}
     }
 }
 
@@ -1107,6 +1385,39 @@ mod tests {
             .filter(|n| matches!(n.node_type, NodeType::BranchGroup))
             .collect();
         assert_eq!(groups.len(), 1);
+    }
+
+    #[test]
+    fn else_if_chain_without_final_else_gets_synthetic_else() {
+        // if (a) {} else if (b) {}  — no trailing else
+        let body = make_ast_body(|exprs, _, _, _| {
+            let cond1 = exprs.alloc(ast::Expr::Literal(ast::Literal::Bool(true)));
+            let then1 = exprs.alloc(ast::Expr::Null);
+            let cond2 = exprs.alloc(ast::Expr::Literal(ast::Literal::Bool(false)));
+            let then2 = exprs.alloc(ast::Expr::Null);
+
+            let inner_if = exprs.alloc(ast::Expr::If {
+                condition: cond2,
+                then_branch: then2,
+                else_branch: None,
+            });
+
+            Some(exprs.alloc(ast::Expr::If {
+                condition: cond1,
+                then_branch: then1,
+                else_branch: Some(inner_if),
+            }))
+        });
+        let graph = build_control_flow_graph_from_ast("Func", &body);
+        // Root + BranchGroup + 3 arms (if, else if, synthetic else)
+        assert_eq!(graph.nodes.len(), 5);
+        let else_arm = graph
+            .nodes
+            .values()
+            .find(|n| n.label == "else")
+            .expect("chain without final else should get a synthetic else arm");
+        assert!(matches!(else_arm.node_type, NodeType::BranchArm));
+        assert!(else_arm.source_expr.is_none());
     }
 
     #[test]
@@ -1519,7 +1830,7 @@ mod tests {
             .values()
             .find(|n| n.label.starts_with("return"))
             .expect("should have return node");
-        assert!(matches!(ret_node.node_type, NodeType::OtherScope));
+        assert!(matches!(ret_node.node_type, NodeType::Return));
         assert!(
             ret_node.label.contains("MyResponse"),
             "Return label should include the type name, got: {}",
@@ -1548,14 +1859,117 @@ mod tests {
             }))
         });
         let graph = build_control_flow_graph_from_ast("Func", &body);
-        // Root + call scope (no extra return node — calls are handled by visit_expr)
+        // Root + a single Return node that doubles as the call site.
         assert_eq!(graph.nodes.len(), 2);
         let call_node = graph
             .nodes
             .values()
             .find(|n| n.label.contains("Process"))
-            .expect("should have call node");
-        assert!(matches!(call_node.node_type, NodeType::OtherScope));
+            .expect("should have return-call node");
+        assert!(matches!(call_node.node_type, NodeType::Return));
+        assert_eq!(
+            call_node.callee_name.as_deref(),
+            Some("Process"),
+            "return-of-call keeps the callee visible for expansion/LLM marking"
+        );
+        assert!(
+            call_node.source_expr.is_some(),
+            "return-of-call points at the call expression for expansion"
+        );
+    }
+
+    #[test]
+    fn bare_return_creates_terminal_node() {
+        let body = make_ast_body(|exprs, stmts, _, _| {
+            let ret = stmts.alloc(ast::Stmt::Return(None));
+            Some(exprs.alloc(ast::Expr::Block {
+                stmts: vec![ret],
+                tail_expr: None,
+            }))
+        });
+        let graph = build_control_flow_graph_from_ast("Func", &body);
+        assert_eq!(graph.nodes.len(), 2);
+        let ret_node = graph
+            .nodes
+            .values()
+            .find(|n| matches!(n.node_type, NodeType::Return))
+            .expect("bare return should create a node");
+        assert_eq!(ret_node.label, "return");
+        let se = ret_node.source_expr.expect("bare return has a stmt span");
+        assert!(se & STMT_SOURCE_EXPR_TAG != 0);
+    }
+
+    #[test]
+    fn early_return_has_no_outgoing_edges() {
+        // { return 1; Cleanup() } — the statement after the return must not
+        // receive an edge from the return node.
+        let body = make_ast_body(|exprs, stmts, _, _| {
+            let one = exprs.alloc(ast::Expr::Literal(ast::Literal::Int(1)));
+            let ret = stmts.alloc(ast::Stmt::Return(Some(one)));
+            let callee = exprs.alloc(ast::Expr::Path(vec!["Cleanup".into()]));
+            let call = exprs.alloc(ast::Expr::Call {
+                callee,
+                type_args: vec![],
+                args: vec![],
+            });
+            let call_stmt = stmts.alloc(ast::Stmt::Expr(call));
+            Some(exprs.alloc(ast::Expr::Block {
+                stmts: vec![ret, call_stmt],
+                tail_expr: None,
+            }))
+        });
+        let graph = build_control_flow_graph_from_ast("Func", &body);
+        let ret_node = graph
+            .nodes
+            .values()
+            .find(|n| matches!(n.node_type, NodeType::Return))
+            .expect("should have return node");
+        assert!(
+            graph.edges_by_src.get(&ret_node.id).is_none(),
+            "return node must be terminal (no outgoing edges)"
+        );
+    }
+
+    #[test]
+    fn for_in_loop_creates_loop_node_and_visits_body() {
+        // for (let item in items) { //# Inside }
+        let body = make_ast_body(|exprs, stmts, patterns, _| {
+            let collection = exprs.alloc(ast::Expr::Path(vec!["items".into()]));
+            let binding = patterns.alloc(ast::Pattern::Bind {
+                name: "item".into(),
+                subpat: None,
+            });
+            let header = stmts.alloc(ast::Stmt::HeaderComment {
+                name: "Inside".into(),
+                level: 1,
+            });
+            let loop_body = exprs.alloc(ast::Expr::Block {
+                stmts: vec![header],
+                tail_expr: None,
+            });
+            let for_stmt = stmts.alloc(ast::Stmt::For {
+                binding,
+                collection,
+                body: loop_body,
+            });
+            Some(exprs.alloc(ast::Expr::Block {
+                stmts: vec![for_stmt],
+                tail_expr: None,
+            }))
+        });
+        let graph = build_control_flow_graph_from_ast("Func", &body);
+        let loop_node = graph
+            .nodes
+            .values()
+            .find(|n| matches!(n.node_type, NodeType::Loop))
+            .expect("for-in loop should create a Loop node");
+        assert!(loop_node.label.starts_with("for ("), "{}", loop_node.label);
+        let header = graph
+            .nodes
+            .values()
+            .find(|n| matches!(n.node_type, NodeType::HeaderContextEnter))
+            .expect("header inside for body should be visited");
+        assert_eq!(header.parent_node_id, Some(loop_node.id));
     }
 
     #[test]
@@ -1634,5 +2048,143 @@ mod tests {
 
         let rendered = render_expr_compact_ast(&body, obj);
         assert_eq!(rendered, "Resp { ... }");
+    }
+
+    // Calls embedded inside another node's expression must surface via
+    // `callee_names` even though they don't get CFG nodes of their own.
+    //
+    // Fixture mirrors:
+    // ```baml
+    // function ValidateInvoice(inv: Invoice) -> ValidationIssue[] {
+    //     if (Abs(LineTotal(inv.line_items) - inv.total) > 0.02) {
+    //         // ...
+    //     }
+    // }
+    // ```
+    //
+    // Resulting nodes (documented here as the contract):
+    // - `[0]` FunctionRoot "ValidateInvoice"            - calleeNames: []
+    // - `[1]` BranchGroup  "if (Abs(LineTotal(inv.line_items) - inv.total) > 0.02)"
+    //                                                    - calleeNames: ["Abs", "LineTotal"]
+    // - `[2]` BranchArm    "if (...)" (then branch)      - calleeNames: []
+    // - `[3]` Header       "Flag mismatch"               - calleeNames: []
+    // - `[4]` BranchArm    "else" (synthetic)            - calleeNames: []
+    //
+    // Names come out exactly as written in source: bare `"Abs"` /
+    // `"LineTotal"`, not qualified (`main.Abs`), in first-encounter order
+    // (outermost call first).
+    #[test]
+    fn embedded_calls_in_if_condition_surface_in_callee_names() {
+        let body = make_ast_body(|exprs, stmts, _, _| {
+            // LineTotal(inv.line_items)
+            let line_total_callee = exprs.alloc(ast::Expr::Path(vec!["LineTotal".into()]));
+            let line_items = exprs.alloc(ast::Expr::Path(vec!["inv".into(), "line_items".into()]));
+            let line_total_call = exprs.alloc(ast::Expr::Call {
+                callee: line_total_callee,
+                type_args: vec![],
+                args: vec![ast::CallArg::positional(line_items)],
+            });
+            // LineTotal(inv.line_items) - inv.total
+            let inv_total = exprs.alloc(ast::Expr::Path(vec!["inv".into(), "total".into()]));
+            let diff = exprs.alloc(ast::Expr::Binary {
+                op: ast::BinaryOp::Sub,
+                lhs: line_total_call,
+                rhs: inv_total,
+            });
+            // Abs(...)
+            let abs_callee = exprs.alloc(ast::Expr::Path(vec!["Abs".into()]));
+            let abs_call = exprs.alloc(ast::Expr::Call {
+                callee: abs_callee,
+                type_args: vec![],
+                args: vec![ast::CallArg::positional(diff)],
+            });
+            // Abs(...) > 0.02
+            let threshold = exprs.alloc(ast::Expr::Literal(ast::Literal::Float("0.02".into())));
+            let cond = exprs.alloc(ast::Expr::Binary {
+                op: ast::BinaryOp::Gt,
+                lhs: abs_call,
+                rhs: threshold,
+            });
+            // A header inside the then-branch keeps the if rendered through
+            // the visualization prep pruning.
+            let header = stmts.alloc(ast::Stmt::HeaderComment {
+                name: "Flag mismatch".into(),
+                level: 1,
+            });
+            let then_b = exprs.alloc(ast::Expr::Block {
+                stmts: vec![header],
+                tail_expr: None,
+            });
+            Some(exprs.alloc(ast::Expr::If {
+                condition: cond,
+                then_branch: then_b,
+                else_branch: None,
+            }))
+        });
+        let graph = build_control_flow_graph_from_ast("ValidateInvoice", &body);
+
+        // Root + BranchGroup + then arm + header + synthetic else arm.
+        assert_eq!(graph.nodes.len(), 5);
+        let if_node = graph
+            .nodes
+            .values()
+            .find(|n| matches!(n.node_type, NodeType::BranchGroup))
+            .expect("should have BranchGroup for the if");
+        assert_eq!(
+            if_node.label,
+            "if (Abs(LineTotal(inv.line_items) - inv.total) > 0.02)"
+        );
+        assert_eq!(
+            if_node.callee_names,
+            vec!["Abs".to_string(), "LineTotal".to_string()],
+            "if-condition node must expose embedded calls, bare and outermost-first"
+        );
+        // `callee_name` (singular) stays reserved for nodes that ARE a call.
+        assert!(if_node.callee_name.is_none());
+
+        // The field must survive the visualization prep pipeline.
+        let prepared = super::super::prepare_control_flow_graph_for_visualization(&graph);
+        let prepared_if = prepared
+            .nodes
+            .values()
+            .find(|n| matches!(n.node_type, NodeType::BranchGroup))
+            .expect("BranchGroup survives visualization prep");
+        assert_eq!(
+            prepared_if.callee_names,
+            vec!["Abs".to_string(), "LineTotal".to_string()]
+        );
+    }
+
+    // Nested calls in call arguments surface on the call's own node too:
+    // `Process(Helper(x))` yields calleeNames ["Process", "Helper"] while
+    // `callee_name` (singular) remains just "Process".
+    #[test]
+    fn nested_call_arguments_surface_in_callee_names() {
+        let body = make_ast_body(|exprs, _, _, _| {
+            let helper_callee = exprs.alloc(ast::Expr::Path(vec!["Helper".into()]));
+            let x = exprs.alloc(ast::Expr::Path(vec!["x".into()]));
+            let helper_call = exprs.alloc(ast::Expr::Call {
+                callee: helper_callee,
+                type_args: vec![],
+                args: vec![ast::CallArg::positional(x)],
+            });
+            let process_callee = exprs.alloc(ast::Expr::Path(vec!["Process".into()]));
+            Some(exprs.alloc(ast::Expr::Call {
+                callee: process_callee,
+                type_args: vec![],
+                args: vec![ast::CallArg::positional(helper_call)],
+            }))
+        });
+        let graph = build_control_flow_graph_from_ast("Func", &body);
+        let call_node = graph
+            .nodes
+            .values()
+            .find(|n| matches!(n.node_type, NodeType::OtherScope))
+            .expect("should have call node");
+        assert_eq!(call_node.callee_name.as_deref(), Some("Process"));
+        assert_eq!(
+            call_node.callee_names,
+            vec!["Process".to_string(), "Helper".to_string()]
+        );
     }
 }

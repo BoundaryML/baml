@@ -1,4 +1,7 @@
-import type { Node as ReactFlowNode, Edge as ReactFlowEdge } from '@xyflow/react';
+import type {
+  Node as ReactFlowNode,
+  Edge as ReactFlowEdge,
+} from '@xyflow/react';
 import type { BamlJsMedia, BamlJsValue } from '@b/pkg-proto';
 import type { FC } from 'react';
 import type { ResultRendererProps } from '../result-renderers';
@@ -11,7 +14,8 @@ export type GraphNodeType =
   | 'conditional'
   | 'loop'
   | 'scope'
-  | 'header';
+  | 'header'
+  | 'return';
 
 export interface GraphNode {
   id: string;

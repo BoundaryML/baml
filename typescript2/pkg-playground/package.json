@@ -2,13 +2,21 @@
   "name": "@b/pkg-playground",
   "version": "0.1.0",
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
   "files": [
-    "dist"
+    "dist",
+    "src"
   ],
   "scripts": {
     "build:wasm": "wasm-pack build ../../baml_language/crates/bridge_wasm --target web --out-dir ../../../typescript2/pkg-playground/wasm --release",
+    "prep:wasm-publish": "node scripts/prep-wasm-publish.mjs",
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch --preserveWatchOutput",
     "typecheck": "tsc --noEmit",
