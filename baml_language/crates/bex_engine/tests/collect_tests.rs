@@ -383,6 +383,46 @@ async fn collect_tests_testset_let_used_in_test_name_concat() {
     );
 }
 
+#[tokio::test]
+async fn collect_tests_preserves_long_test_names_over_concat_boundary() {
+    let long_name = "a".repeat(41);
+    let expected_path = format!("levenshtein distance/{long_name}");
+    let source = format!(
+        r#"
+        testset "levenshtein distance" {{
+            test "equal strings return 0" {{
+                assert.is_true(true)
+            }}
+            test "kitten to sitting returns 3" {{
+                assert.is_true(true)
+            }}
+            test "{long_name}" {{
+                assert.is_true(true)
+            }}
+        }}
+    "#
+    );
+
+    let engine = make_engine(&source);
+    let registry = engine
+        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .await
+        .expect("collect_tests should succeed");
+
+    let expanded = expand_testset(&engine, registry.clone(), "levenshtein distance")
+        .await
+        .expect("expand_set should succeed");
+    let repr = format!("{expanded:?}");
+    assert!(
+        repr.contains(&expected_path),
+        "expected serialized registry to contain {expected_path:?}: {repr}"
+    );
+
+    run_named_test(&engine, registry, &expected_path)
+        .await
+        .expect("long test name should remain runnable");
+}
+
 /// If-condition reading a let-bound bool in a testset body.
 #[tokio::test]
 async fn collect_tests_testset_let_then_if_condition() {

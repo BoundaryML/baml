@@ -145,6 +145,24 @@ fn concat_flatten_idempotent() {
 }
 
 #[test]
+fn flattening_parent_concat_preserves_shared_child_concat() {
+    let name = "a".repeat(41);
+    let full_name = BexStr::concat(
+        BexStr::from("levenshtein distance/"),
+        BexStr::from(name.as_str()),
+    );
+    let expected = format!("levenshtein distance/{name}");
+    assert_eq!(full_name.len(), expected.len());
+    assert_eq!(full_name.as_str(), expected);
+
+    // This mirrors the test registry's `hash_prefix = full_name + "#"` path:
+    // flattening the derived parent must not corrupt the stored full name.
+    let hash_prefix = BexStr::concat(full_name.clone(), BexStr::from("#"));
+    assert_eq!(hash_prefix.as_str(), format!("{expected}#"));
+    assert_eq!(full_name.as_str(), expected);
+}
+
+#[test]
 fn empty_concat_variants() {
     let e = BexStr::empty();
     let a = BexStr::from("hello");
