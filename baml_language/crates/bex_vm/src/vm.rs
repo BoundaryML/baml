@@ -4117,7 +4117,7 @@ impl BexVm {
     /// frame, the exception value is stored in the handler's binding slot, the
     /// instruction pointer is at the handler's PC, and the next [`Self::exec`]
     /// resumes the catch body. `n` is the number of *notified* frames (see
-    /// [`Self::try_unwind_exception`]) popped on the way — when `n > 0` the
+    /// `try_unwind_exception`) popped on the way — when `n > 0` the
     /// caller must close those frames' spans itself (the VM cannot yield here;
     /// pair with [`Self::frame_count`] to truncate to the surviving depth).
     /// On `Err(VmError::ThrownUnhandled { .. })` (or, for a degenerate
