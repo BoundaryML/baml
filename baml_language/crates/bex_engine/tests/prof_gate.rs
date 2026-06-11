@@ -138,6 +138,39 @@ fn load_profile(marker_fqn: &str) -> (pb::EventFileHeaderV1, Vec<Event>) {
     found.unwrap_or_else(|| panic!("no profile contains {marker_fqn}"))
 }
 
+/// [`load_profile`] for tests whose program SPAWNS children: a spawned
+/// thread's `EndThread` is emitted by its own tokio task after the parent
+/// observes the settle, so nothing orders it before this test's flush.
+/// Re-flush (bounded) until every started thread has ended — under heavy
+/// parallel test load the child task can otherwise lose the race with the
+/// first flush and the balance asserts see a truncated stream.
+fn load_profile_quiesced(marker_fqn: &str) -> (pb::EventFileHeaderV1, Vec<Event>) {
+    for _ in 0..40 {
+        let (header, events) = load_profile(marker_fqn);
+        let started: HashSet<u64> = events
+            .iter()
+            .filter_map(|e| match e {
+                Event::StartThread(st) => Some(st.thread_id),
+                _ => None,
+            })
+            .collect();
+        let ended: HashSet<u64> = events
+            .iter()
+            .filter_map(|e| match e {
+                Event::EndThread(et) => Some(et.thread_id),
+                _ => None,
+            })
+            .collect();
+        if started == ended {
+            return (header, events);
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    // Quiescence never arrived: return the last read; the caller's balance
+    // asserts will fail with the truncated stream visible.
+    load_profile(marker_fqn)
+}
+
 /// Asserts the G3 balance invariants and returns per-fqn `CallFunction`
 /// counts plus the set of thread ids.
 fn assert_balance(
@@ -245,7 +278,7 @@ async fn g3_lossless_spawn_and_call_heavy() {
     "#;
     run_main(source).await.expect("g3 program runs");
 
-    let (header, events) = load_profile("user.g3_work");
+    let (header, events) = load_profile_quiesced("user.g3_work");
     let (counts, threads) = assert_balance(&header, &events);
 
     // 1 root + 8 spawned children.
@@ -274,7 +307,7 @@ async fn reconstruction_smoke() {
     "#;
     run_main(source).await.expect("rc program runs");
 
-    let (header, events) = load_profile("user.rc_mid");
+    let (header, events) = load_profile_quiesced("user.rc_mid");
     assert_balance(&header, &events);
 
     // Group events per thread, sorted by timestamp (events for one logical
@@ -415,7 +448,7 @@ async fn engine_teardown_closes_profile() {
     // run_main dropped its Arc<BexEngine> on return -> EngineClosed was sent
     // before this flush on the same channel (FIFO), so the ack implies the
     // close (sync + writer removed) already happened.
-    let (_, events) = load_profile("user.td_work");
+    let (_, events) = load_profile_quiesced("user.td_work");
     assert!(!events.is_empty());
 
     let path = {
@@ -455,7 +488,7 @@ async fn engine_teardown_closes_profile() {
         function main() -> int { td_after(1) }
     "#;
     run_main(source2).await.expect("post-teardown engine runs");
-    let (_, events2) = load_profile("user.td_after");
+    let (_, events2) = load_profile_quiesced("user.td_after");
     assert!(!events2.is_empty());
 }
 
@@ -835,7 +868,7 @@ async fn spawned_child_cancellation_ends_child_cancelled() {
     let value = run_main(source).await.expect("scc program runs");
     assert_eq!(value, BexExternalValue::Int(7));
 
-    let (header, events) = load_profile("user.scc_pin");
+    let (header, events) = load_profile_quiesced("user.scc_pin");
     assert_balance(&header, &events);
     let statuses = end_statuses_by_fqn(&header, &events);
     // Two lambdas exist here: the `baml.spawn.options` argument closure
@@ -905,7 +938,7 @@ async fn unobserved_child_error_drains_parent_frames() {
         "the dropped child error must surface as UnhandledThrow: {result:?}"
     );
 
-    let (header, events) = load_profile("user.uce_pin");
+    let (header, events) = load_profile_quiesced("user.uce_pin");
     assert_balance(&header, &events);
     let statuses = end_statuses_by_fqn(&header, &events);
     assert_eq!(
@@ -952,7 +985,7 @@ async fn spawned_child_error_ends_child_errored() {
     let value = run_main(source).await.expect("sce program runs");
     assert_eq!(value, BexExternalValue::Int(9));
 
-    let (header, events) = load_profile("user.sce_boom");
+    let (header, events) = load_profile_quiesced("user.sce_boom");
     // The error path DOES unwind the VM, so (unlike cancellation) the
     // child's stream is fully balanced.
     assert_balance(&header, &events);
