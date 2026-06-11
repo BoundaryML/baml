@@ -49,6 +49,12 @@ function ada() -> User {
 test "types exist at runtime" {
   assert.equal(load(ada()), "ada@x.com");
   assert.equal(load(42), "not a user");
+}
+
+// types are values: reflect on them at runtime
+test "types are values too" {
+  let t = reflect.type_of<User>();
+  assert.equal(t.to_string(), "User");
 }`;
 
 /* ---------------- 1b · error handling ---------------- */
@@ -148,7 +154,7 @@ function use_widget() -> Widget {
   Widget { label: "x" }
 }`;
 
-export const NS_GOOD = `// one name, one meaning — and the error told us the name
+export const NS_GOOD = `// there's a single fully qualified name, every time
 function use_widget() -> root.a.Widget {
   root.a.Widget { label: "x" }
 }`;

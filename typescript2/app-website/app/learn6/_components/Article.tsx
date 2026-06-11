@@ -72,7 +72,7 @@ function Sub({
 }: {
   id?: string;
   num?: string;
-  title: string;
+  title: ReactNode;
   children: ReactNode;
 }) {
   return (
@@ -172,7 +172,7 @@ const TOC: { id: string; label: string; sub?: boolean }[] = [
   { id: 'wf-llm', label: '1 · Native LLM Functions', sub: true },
   { id: 'wf-tests', label: '2 · BAML Tests', sub: true },
   { id: 'wf-metrics', label: '3 · Metrics primitive', sub: true },
-  { id: 'adoption', label: 'Incremental Adoption' },
+  { id: 'adoption', label: 'BAML is incrementally adoptable' },
   { id: 'close', label: 'Try it out!' },
 ];
 
@@ -503,7 +503,7 @@ export function Article() {
       >
         <p>
           {
-            'BAML pack is a CLI that takes your baml program and auto-creates a CLI for you from the function signature. It can compile and run on any target architecture.'
+            'BAML pack is a CLI that takes your baml program and auto-creates a CLI for you from the function signature. It can compile and run on any target architecture. Useful for agents creating shareable mini programs.'
           }
         </p>
         <div className="l6-block">
@@ -579,7 +579,14 @@ export function Article() {
           }
         </p>
 
-        <Sub title="spawn can run cpu-bound code in parallel">
+        <Sub
+          title={
+            <>
+              <code>spawn</code>
+              {' can run cpu-bound code in parallel'}
+            </>
+          }
+        >
           <p>
             {
               'This is the part Promise.all cannot do: JavaScript fans out I/O, but compute still shares one thread. We scanned 38 GB of log-like text for an error marker — 16 shards of ~48 MB, each scanned 50 times — with the same code in both runtimes:'
@@ -754,7 +761,7 @@ export function Article() {
       </Section>
 
       {/* ---- incremental adoption ---- */}
-      <Section id="adoption" title="Incremental Adoption">
+      <Section id="adoption" title="BAML is incrementally adoptable">
         <p>
           {
             'When we first made BAML 2 years ago we decided it had to be callable from other languages, with an amazing developer experience.'
