@@ -2,7 +2,7 @@
   "name": "baml-language",
   "displayName": "BAML",
   "description": "BAML language support — syntax highlighting, hover, completions, diagnostics, go-to-definition",
-  "version": "0.11.2",
+  "version": "0.12.0",
   "publisher": "Boundary",
   "private": true,
   "type": "commonjs",
