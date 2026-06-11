@@ -1261,3 +1261,70 @@ impl BamlClassArray for PackageBamlImpl {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use bex_vm_types::types::Value;
+
+    use super::{BamlClassArray, PackageBamlImpl};
+    use crate::errors::{VmBamlError, VmRustFnError};
+
+    fn expect_invalid_argument<T>(result: Result<T, VmRustFnError>, expected: &str) {
+        match result {
+            Err(VmRustFnError::BamlError(VmBamlError::InvalidArgument { message })) => {
+                assert!(
+                    message.contains(expected),
+                    "expected InvalidArgument message to contain {expected:?}, got {message:?}"
+                );
+            }
+            Err(err) => panic!("expected InvalidArgument containing {expected:?}, got {err:?}"),
+            Ok(_) => panic!("expected InvalidArgument containing {expected:?}, got Ok"),
+        }
+    }
+
+    #[test]
+    fn array_constructor_fills_fixed_size() {
+        let default = Value::int(7);
+        let array = <PackageBamlImpl as BamlClassArray>::new(3, &default).unwrap();
+
+        assert_eq!(array, vec![default; 3]);
+    }
+
+    #[test]
+    fn array_set_replaces_existing_index() {
+        let mut array = vec![Value::int(1), Value::int(2), Value::int(3)];
+        let replacement = Value::int(99);
+
+        <PackageBamlImpl as BamlClassArray>::set(&mut array, 1, &replacement).unwrap();
+
+        assert_eq!(array, vec![Value::int(1), replacement, Value::int(3)]);
+    }
+
+    #[test]
+    fn array_constructor_negative_size_throws() {
+        expect_invalid_argument(
+            <PackageBamlImpl as BamlClassArray>::new(-1, &Value::int(0)),
+            "negative",
+        );
+    }
+
+    #[test]
+    fn array_set_negative_index_throws() {
+        let mut array = vec![Value::int(1)];
+
+        expect_invalid_argument(
+            <PackageBamlImpl as BamlClassArray>::set(&mut array, -1, &Value::int(0)),
+            "negative",
+        );
+    }
+
+    #[test]
+    fn array_set_index_past_length_throws() {
+        let mut array = vec![Value::int(1)];
+
+        expect_invalid_argument(
+            <PackageBamlImpl as BamlClassArray>::set(&mut array, 1, &Value::int(0)),
+            "outside the array length",
+        );
+    }
+}

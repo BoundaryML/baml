@@ -8419,6 +8419,54 @@ type Callback = (value: int) -> string throws Foo
     }
 
     #[test]
+    fn array_constructor_shorthand_parses_as_array_constructor_expr() {
+        let source = r#"
+function Demo(size: int, default: int) -> int[] {
+  int[](size, default)
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let constructor_count = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::ARRAY_CONSTRUCTOR_EXPR)
+            .count();
+        assert_eq!(constructor_count, 1);
+        assert_eq!(
+            root.descendants()
+                .filter(|n| n.kind() == SyntaxKind::INDEX_EXPR)
+                .count(),
+            0,
+            "empty [] followed by call args must not parse as INDEX_EXPR"
+        );
+    }
+
+    #[test]
+    fn indexed_access_parses_as_index_expr_not_array_constructor() {
+        let source = r#"
+function Demo(xs: int[], index: int) -> int {
+  xs[index]
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let index_count = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::INDEX_EXPR)
+            .count();
+        assert_eq!(index_count, 1);
+        assert_eq!(
+            root.descendants()
+                .filter(|n| n.kind() == SyntaxKind::ARRAY_CONSTRUCTOR_EXPR)
+                .count(),
+            0,
+            "non-empty [] must remain an INDEX_EXPR"
+        );
+    }
+
+    #[test]
     fn pattern_destructure_basic_with_let() {
         // `let Class { field } = ...` — destructure with a `let` prefix at
         // the let-statement level. The chain link is a single
