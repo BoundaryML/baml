@@ -7,7 +7,9 @@
 //!   exact per-function call counts.
 //! - **Reconstruction smoke**: rebuild the per-thread call trees from the
 //!   `.bamlprof` (v2 §7.2 shape) and assert nesting + spawn-edge sanity.
-//! - Sys-op pairs (`PR4b`) and the unwind (`EndFunction{Error}`) path.
+//! - Sys-op pairs (`PR4b`) and the unwind (`EndFunction{Errored}`) path,
+//!   plus the §7 status taxonomy: `Cancelled` (cancel drain + in-flight
+//!   sysop) and `Exited` (`baml.sys.exit` unwinds).
 //!
 //! This file is its own test binary: the profiling knobs are environment
 //! variables latched once per process (`ProfConfig::global`), so they must
@@ -305,6 +307,14 @@ async fn reconstruction_smoke() {
     let mut calls_per_thread: HashMap<u64, HashSet<u64>> = HashMap::new();
     for (tid, mut thread_events) in per_thread.clone() {
         thread_events.sort_by_key(|e| ts_of(e));
+        // §7 decision 7: every thread's first record is its StartThread —
+        // roots emit it just before the entry frame's CallFunction, children
+        // at the Spawn arm before their entry push.
+        assert!(
+            matches!(thread_events.first(), Some(Event::StartThread(_))),
+            "thread {tid}: first record must be StartThread, got {:?}",
+            thread_events.first()
+        );
         // Stack discipline: a call's parent must be the innermost open call.
         let mut stack: Vec<u64> = Vec::new();
         for event in thread_events {
@@ -554,7 +564,7 @@ async fn unwind_emits_error_ends() {
     let mut thread_errored = false;
     for event in &events {
         match event {
-            Event::EndFunction(ef) if ef.status == pb::FunctionEndStatus::Error as i32 => {
+            Event::EndFunction(ef) if ef.status == pb::FunctionEndStatus::Errored as i32 => {
                 errored_fqns.insert(fqn_by_call[&(ef.thread_id, ef.call_id)]);
             }
             Event::EndThread(et) if et.status == pb::ThreadEndStatus::Errored as i32 => {
@@ -615,89 +625,6 @@ fn end_statuses_by_fqn(
     statuses
 }
 
-/// Cancellation-tolerant variant of [`assert_balance`]: duplicates are
-/// still illegal, every `EndFunction` must match a recorded `CallFunction`,
-/// and every started thread must still end — but calls that were OPEN when
-/// their thread was cancelled may lack an `EndFunction` (see the
-/// `KNOWN GAP` notes at the call sites). Returns the fqns of the unended
-/// calls, sorted.
-fn assert_balance_allowing_unended(
-    header: &pb::EventFileHeaderV1,
-    events: &[Event],
-) -> Vec<String> {
-    let fqn_by_id: HashMap<u32, &str> = header
-        .function_table
-        .as_ref()
-        .map(|t| {
-            t.functions
-                .iter()
-                .map(|f| (f.function_id, f.fqn.as_str()))
-                .collect()
-        })
-        .unwrap_or_default();
-
-    let mut calls: HashMap<(u64, u64), &str> = HashMap::new();
-    let mut ends: HashSet<(u64, u64)> = HashSet::new();
-    let mut started_threads: HashSet<u64> = HashSet::new();
-    let mut ended_threads: HashSet<u64> = HashSet::new();
-    for event in events {
-        match event {
-            Event::CallFunction(cf) => {
-                let fqn = fqn_by_id
-                    .get(&cf.function_id)
-                    .copied()
-                    .unwrap_or("<unassigned>");
-                assert!(
-                    calls.insert((cf.thread_id, cf.call_id), fqn).is_none(),
-                    "duplicate CallFunction ({}, {})",
-                    cf.thread_id,
-                    cf.call_id
-                );
-            }
-            Event::EndFunction(ef) => {
-                assert!(
-                    ends.insert((ef.thread_id, ef.call_id)),
-                    "duplicate EndFunction ({}, {})",
-                    ef.thread_id,
-                    ef.call_id
-                );
-            }
-            Event::StartThread(st) => {
-                assert!(
-                    started_threads.insert(st.thread_id),
-                    "duplicate StartThread {}",
-                    st.thread_id
-                );
-            }
-            Event::EndThread(et) => {
-                assert!(
-                    ended_threads.insert(et.thread_id),
-                    "duplicate EndThread {}",
-                    et.thread_id
-                );
-            }
-            Event::SetFunctionId(_) | Event::Heartbeat(_) => {}
-        }
-    }
-    for key in &ends {
-        assert!(
-            calls.contains_key(key),
-            "orphan EndFunction {key:?} without a CallFunction"
-        );
-    }
-    assert_eq!(
-        started_threads, ended_threads,
-        "every StartThread must have exactly one EndThread"
-    );
-    let mut unended: Vec<String> = calls
-        .iter()
-        .filter(|(key, _)| !ends.contains(key))
-        .map(|(_, fqn)| (*fqn).to_string())
-        .collect();
-    unended.sort();
-    unended
-}
-
 /// A throw caught two frames above the thrower (port of the JSONL-era
 /// `bex_disk_events_balance_across_catch_two_frames_up`): the multi-frame
 /// unwind must keep the ring balanced — the unwound frames end `Error`, the
@@ -729,7 +656,7 @@ async fn caught_exception_keeps_ring_balance() {
     for fqn in ["user.ce_boom", "user.ce_mid"] {
         assert_eq!(
             statuses.get(fqn),
-            Some(&vec![pb::FunctionEndStatus::Error as i32]),
+            Some(&vec![pb::FunctionEndStatus::Errored as i32]),
             "{fqn} was unwound and must end Error: {statuses:?}"
         );
     }
@@ -832,16 +759,11 @@ async fn call_callable_has_real_identity_and_balance() {
 }
 
 /// Cancelling the root call mid-`sleep` (port of the JSONL-era
-/// `root_cancellation_emits_cancelled_statuses`): the call errors out and
-/// the root thread's `EndThread` lands with `Cancelled`.
-///
-/// KNOWN GAP: unlike the old JSONL stream (which drained every open span
-/// with a `Cancelled` `EndFunction`), engine-side cancellation does not
-/// unwind the VM — the root call's `CallFunction` gets NO `EndFunction` at
-/// all (the in-flight sleep sysop pair does close, with `Error`). So full
-/// `assert_balance` cannot hold here; this pins what does: no duplicates,
-/// no orphan ends, the thread closes `Cancelled`, and the only unended
-/// call is the open root frame.
+/// `root_cancellation_emits_cancelled_statuses`): §7 decision 2 — the
+/// engine drains the calls left open by the cancel with
+/// `EndFunction{Cancelled}` (cancelled threads never strand open calls),
+/// the in-flight sleep sysop pair closes `Cancelled` (§7 decision 1), the
+/// thread ends `Cancelled`, and full balance holds.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn root_cancellation_ends_thread_cancelled() {
     let _guard = test_lock().await;
@@ -881,11 +803,17 @@ async fn root_cancellation_ends_thread_cancelled() {
     drop(engine);
 
     let (header, events) = load_profile("user.rcx_pin");
-    let unended = assert_balance_allowing_unended(&header, &events);
+    assert_balance(&header, &events);
+    let statuses = end_statuses_by_fqn(&header, &events);
     assert_eq!(
-        unended,
-        vec!["user.main".to_string()],
-        "only the frame open at cancellation (the root call) may lack an EndFunction"
+        statuses.get("user.main"),
+        Some(&vec![pb::FunctionEndStatus::Cancelled as i32]),
+        "the cancel drain closes the open root call Cancelled: {statuses:?}"
+    );
+    assert_eq!(
+        statuses.get("baml.sys.sleep"),
+        Some(&vec![pb::FunctionEndStatus::Cancelled as i32]),
+        "the in-flight sysop pair closes Cancelled: {statuses:?}"
     );
     assert!(
         events.iter().any(|e| matches!(e, Event::EndThread(et)
@@ -897,12 +825,9 @@ async fn root_cancellation_ends_thread_cancelled() {
 /// Cancelling only a spawned child (port of the JSONL-era
 /// `spawned_child_cancellation_emits_cancelled`): the child's `EndThread`
 /// is `Cancelled` while the root (which catches at the `await`) completes.
-///
-/// KNOWN GAP: as with root cancellation, the child's open root frame (the
-/// spawn-closure lambda) gets NO `EndFunction` — cancellation does not
-/// unwind the VM — so full `assert_balance` cannot hold; the old JSONL
-/// contract's `EndFunction{Cancelled}` has no ring equivalent (the proto's
-/// `FunctionEndStatus` is Ok | Error only).
+/// §7 decision 2: the engine's cancel drain closes the child's open
+/// spawn-closure frame with `EndFunction{Cancelled}`, so full balance
+/// holds.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn spawned_child_cancellation_ends_child_cancelled() {
     let _guard = test_lock().await;
@@ -926,15 +851,22 @@ async fn spawned_child_cancellation_ends_child_cancelled() {
     assert_eq!(value, BexExternalValue::Int(7));
 
     let (header, events) = load_profile("user.scc_pin");
-    let unended = assert_balance_allowing_unended(&header, &events);
+    assert_balance(&header, &events);
+    let statuses = end_statuses_by_fqn(&header, &events);
+    // Two lambdas exist here: the `baml.spawn.options` argument closure
+    // (runs to completion, Ok) and the spawned body. Exactly the spawned
+    // body is closed Cancelled by the drain.
+    let cancelled_lambdas: Vec<&String> = statuses
+        .iter()
+        .filter(|(fqn, s)| {
+            fqn.contains("<lambda") && **s == vec![pb::FunctionEndStatus::Cancelled as i32]
+        })
+        .map(|(fqn, _)| fqn)
+        .collect();
     assert_eq!(
-        unended.len(),
+        cancelled_lambdas.len(),
         1,
-        "only the child's open root frame may lack an EndFunction"
-    );
-    assert!(
-        unended[0].contains("<lambda"),
-        "the unended call is the spawn-closure lambda, got {unended:?}"
+        "the cancel drain closes exactly the spawned-body lambda Cancelled: {statuses:?}"
     );
     let child_threads: HashSet<u64> = events
         .iter()
@@ -955,6 +887,64 @@ async fn spawned_child_cancellation_ends_child_cancelled() {
             if !child_threads.contains(&et.thread_id)
                 && et.status == pb::ThreadEndStatus::Completed as i32)),
         "the root thread must end Completed"
+    );
+}
+
+/// An UNOBSERVED fire-and-forget child error (BEP-034) surfaces at the
+/// spawner's next await and terminates the parent thread *without*
+/// unwinding its VM — the parent is parked at the Await opcode with every
+/// frame open. The §7 decision 2 drain (Errored flavor) closes those
+/// frames, so full balance holds. Found by the post-decision adversarial
+/// review: before the fix this was the one remaining systematic
+/// frame-strander (the awaited-future error path in
+/// `spawned_child_error_ends_child_errored` below unwinds VM-side and
+/// never hit it).
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn unobserved_child_error_drains_parent_frames() {
+    let _guard = test_lock().await;
+    init_prof_env();
+    let source = r#"
+        function uce_pin() -> int { 0 }
+        function uce_bad() -> int throws string { throw "boom" }
+        function uce_other() -> int { baml.sys.sleep(50); 1 }
+        function main() -> int {
+            uce_pin();
+            spawn { uce_bad() };
+            let g = spawn { uce_other() };
+            await g
+        }
+    "#;
+    let result = run_main(source).await;
+    assert!(
+        matches!(result, Err(EngineError::UnhandledThrow { .. })),
+        "the dropped child error must surface as UnhandledThrow: {result:?}"
+    );
+
+    let (header, events) = load_profile("user.uce_pin");
+    assert_balance(&header, &events);
+    let statuses = end_statuses_by_fqn(&header, &events);
+    assert_eq!(
+        statuses.get("user.main"),
+        Some(&vec![pb::FunctionEndStatus::Errored as i32]),
+        "the drain closes the parent's open root frame Errored: {statuses:?}"
+    );
+    assert_eq!(
+        statuses.get("user.uce_bad"),
+        Some(&vec![pb::FunctionEndStatus::Errored as i32]),
+        "the child's thrower was unwound VM-side and ends Errored: {statuses:?}"
+    );
+    let child_threads: HashSet<u64> = events
+        .iter()
+        .filter_map(|e| match e {
+            Event::StartThread(st) if st.parent_thread_id.is_some() => Some(st.thread_id),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        events.iter().any(|e| matches!(e, Event::EndThread(et)
+            if !child_threads.contains(&et.thread_id)
+                && et.status == pb::ThreadEndStatus::Errored as i32)),
+        "the root thread must end Errored"
     );
 }
 
@@ -1008,11 +998,11 @@ async fn spawned_child_error_ends_child_errored() {
 /// thread ends `Completed`; a non-zero code ends it `Errored`. Two separate
 /// programs/profiles, one per code.
 ///
-/// Observed (not pinned): exit is implemented as a synthetic VM throw, so
-/// `main`'s `EndFunction` is `Error` for BOTH exit(0) and exit(3) — a delta
-/// from the old JSONL contract, where exit(0) ended the root frame `Ok`.
-/// The thread-level mapping above is the deliberate contract; the
-/// frame-level statuses are left unasserted.
+/// §7 decision 3: exit is a recognized unwind class. Frames unwound by a
+/// `baml.panics.Exit` close `Exited` (the frame's fate — true for any exit
+/// code; the code itself is a thread/program-level fact carried by
+/// `EndThread.status`), and the `baml.sys.exit` native's own pair closes
+/// `Exited` too.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn sys_exit_status_mapping() {
     let _guard = test_lock().await;
@@ -1033,6 +1023,14 @@ async fn sys_exit_status_mapping() {
     );
     let (header, events) = load_profile("user.sxz_pin");
     assert_balance(&header, &events);
+    let statuses = end_statuses_by_fqn(&header, &events);
+    for fqn in ["user.main", "baml.sys.exit"] {
+        assert_eq!(
+            statuses.get(fqn),
+            Some(&vec![pb::FunctionEndStatus::Exited as i32]),
+            "exit(0): {fqn} ends Exited: {statuses:?}"
+        );
+    }
     assert!(
         events.iter().any(|e| matches!(e, Event::EndThread(et)
             if et.status == pb::ThreadEndStatus::Completed as i32)),
@@ -1054,6 +1052,14 @@ async fn sys_exit_status_mapping() {
     );
     let (header, events) = load_profile("user.sxn_pin");
     assert_balance(&header, &events);
+    let statuses = end_statuses_by_fqn(&header, &events);
+    for fqn in ["user.main", "baml.sys.exit"] {
+        assert_eq!(
+            statuses.get(fqn),
+            Some(&vec![pb::FunctionEndStatus::Exited as i32]),
+            "exit(3): {fqn} ends Exited (frame fate; the code is thread-level): {statuses:?}"
+        );
+    }
     assert!(
         events.iter().any(|e| matches!(e, Event::EndThread(et)
             if et.status == pb::ThreadEndStatus::Errored as i32)),

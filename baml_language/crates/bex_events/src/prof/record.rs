@@ -51,14 +51,22 @@ const TAG_START_THREAD: u8 = 0x03;
 const TAG_END_THREAD: u8 = 0x04;
 const TAG_SET_FUNCTION_ID: u8 = 0x05;
 
-/// How a function call ended. Minimal by design; extensible.
+/// How a function call ended — a closed taxonomy of the ways a frame can be
+/// popped. Statuses describe the frame's fate, not the program's outcome (a
+/// frame unwound by an exit that is later caught still ended `Exited`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum FunctionEndStatus {
     /// Normal return.
     Ok = 0,
-    /// Unwound by error propagation.
-    Error = 1,
+    /// Unwound by exception propagation.
+    Errored = 1,
+    /// Closed by cancellation: unwound by a `baml.panics.Cancelled` panic,
+    /// or drained open by the engine when its thread was cancelled.
+    Cancelled = 2,
+    /// Unwound by a `baml.panics.Exit` panic (`baml.sys.exit`). The exit
+    /// code is a thread-level fact (see [`ThreadEndStatus`]).
+    Exited = 3,
 }
 
 /// How a logical BEX thread ended. Minimal by design; extensible.
@@ -93,9 +101,9 @@ pub enum RawRecord<'a> {
         /// Nanoseconds since the process zero point ([`crate::prof::clock`]).
         ts_ns: u64,
     },
-    /// Tag `0x02`: a function call ended (return or unwind).
+    /// Tag `0x02`: a function call ended (return, unwind, or cancel drain).
     EndFunction {
-        /// Ok on return, Error on unwind.
+        /// How the frame ended (see [`FunctionEndStatus`]).
         status: FunctionEndStatus,
         /// Logical BEX thread id.
         thread_id: u64,
@@ -286,7 +294,9 @@ pub fn decode(buf: &[u8]) -> Result<(RawRecord<'_>, usize), DecodeError> {
         TAG_END_FUNCTION => RawRecord::EndFunction {
             status: match r.u8()? {
                 0 => FunctionEndStatus::Ok,
-                1 => FunctionEndStatus::Error,
+                1 => FunctionEndStatus::Errored,
+                2 => FunctionEndStatus::Cancelled,
+                3 => FunctionEndStatus::Exited,
                 bad => return Err(DecodeError::InvalidStatus(bad)),
             },
             thread_id: r.u64()?,
@@ -490,12 +500,18 @@ mod tests {
                 ts_ns: v,
             });
         }
-        roundtrip(RawRecord::EndFunction {
-            status: FunctionEndStatus::Error,
-            thread_id: 7,
-            call_id: 9,
-            ts_ns: 11,
-        });
+        for status in [
+            FunctionEndStatus::Errored,
+            FunctionEndStatus::Cancelled,
+            FunctionEndStatus::Exited,
+        ] {
+            roundtrip(RawRecord::EndFunction {
+                status,
+                thread_id: 7,
+                call_id: 9,
+                ts_ns: 11,
+            });
+        }
         roundtrip(RawRecord::EndThread {
             status: ThreadEndStatus::Completed,
             thread_id: 7,
@@ -601,8 +617,8 @@ mod tests {
             ts_ns: 0,
         }
         .encode(&mut buf);
-        buf[1] = 9; // corrupt the status byte
-        assert_eq!(decode(&buf[..len]), Err(DecodeError::InvalidStatus(9)));
+        buf[1] = 4; // first byte past the status range {Ok,Errored,Cancelled,Exited}
+        assert_eq!(decode(&buf[..len]), Err(DecodeError::InvalidStatus(4)));
     }
 
     #[test]

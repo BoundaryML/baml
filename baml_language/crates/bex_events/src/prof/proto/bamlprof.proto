@@ -11,7 +11,20 @@
 // Ordering: events appear in per-ring drain order, and one logical thread's
 // events can arrive via several rings (tasks migrate OS threads), so FILE
 // ORDER IS NOT EVENT ORDER. Readers must sort by timestamp_ns within each
-// thread_id before reconstructing call trees.
+// thread_id before reconstructing call trees. After that sort, every
+// thread's first record is its StartThread.
+//
+// Renderer contract (the reconciliation §7 decisions):
+// - function_id 0 means the call could not be attributed to a function_table
+//   row (synthetic entry trampolines, host-injected callables). Display such
+//   calls under the reserved `baml.<unknown-function>` table row; no record
+//   ever references that row's id directly.
+// - Watch-filter calls appear in the stream like any other call (they are
+//   code that runs, attached under the interrupted call). Program-only views
+//   may hide subtrees rooted at calls to watch-filter functions.
+// - A call's effective $id at a point in time is its most recent
+//   SetFunctionId; for a single display label take the last one (last-wins).
+//   One record is emitted per baml.id.set() call, deliberately undeduplicated.
 syntax = "proto3";
 
 package baml.prof.v1;
@@ -78,10 +91,27 @@ message Heartbeat {
   uint64 timestamp_ns = 1;
 }
 
-// Minimal by design; protobuf-compatible extension point.
+// How a single call frame ended — a closed taxonomy of the ways a frame can
+// be popped: normal return, exception unwind, cancellation, exit unwind.
+// Statuses describe the FRAME's fate, not the program's outcome (a frame
+// unwound by an exit that is later caught still ended EXITED).
 enum FunctionEndStatus {
   FUNCTION_END_STATUS_OK = 0;
-  FUNCTION_END_STATUS_ERROR = 1;
+  // Unwound by an exception (including a baml.panics.Exit / .Cancelled value
+  // whose class could not be inspected; see EXITED/CANCELLED for the
+  // recognized cases).
+  FUNCTION_END_STATUS_ERRORED = 1;
+  // Closed by cancellation: either unwound by a baml.panics.Cancelled panic,
+  // or drained open by the engine when its thread was cancelled (cancelled
+  // threads never strand open calls).
+  FUNCTION_END_STATUS_CANCELLED = 2;
+  // Unwound by a baml.panics.Exit panic (baml.sys.exit). The exit code is
+  // not recorded at frame level; it surfaces only on the ROOT thread's
+  // EndThread.status (COMPLETED for exit(0), ERRORED otherwise). A spawned
+  // child terminated by an exit settles like any unhandled throw — its
+  // EndThread is ERRORED regardless of code — so EXITED frames are the
+  // reliable exit signal off the root.
+  FUNCTION_END_STATUS_EXITED = 3;
 }
 
 // Minimal by design; protobuf-compatible extension point.

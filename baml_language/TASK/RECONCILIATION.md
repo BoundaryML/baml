@@ -180,51 +180,55 @@ claim, sysop early-return-leak claim.
 
 ## 7. Pending items / things to check before & after landing
 
-### Decisions needed (Antonio + Paulo)
+### Decisions — RESOLVED 2026-06-11 (Antonio) and implemented on this branch
 
-1. **Function-level `Cancelled` status.** Ring proto `FunctionEndStatus` is
-   `{Ok, Error}` — so cancellation cannot mark frames, and the old JSONL
-   `Cancelled` mapping has no ring equivalent. Decide: add
-   `FUNCTION_END_STATUS_CANCELLED` (additive, non-breaking) or document
-   Error-on-cancel.
-2. **Cancellation balance gap** (`// KNOWN GAP` in
-   `prof_gate.rs::root_cancellation_ends_thread_cancelled`): engine-side
-   cancellation doesn't unwind the VM, so the frame open at cancel time gets
-   **no `EndFunction` at all** (root and spawned children alike; the
-   in-flight sysop pair does close). The thread closes `Cancelled`. The old
-   JSONL stream drained every open span. Decide: engine-side drain of open
-   call ids at cancel, or pin "cancelled threads may strand open calls" as
-   renderer contract.
-3. **exit(0) frame status** (pinned-by-comment in
-   `prof_gate.rs::sys_exit_status_mapping`): exit is a synthetic VM throw,
-   so `main` ends `EndFunction{Error}` even for `exit(0)` (thread level is
-   correct: Completed). Old contract said Ok. Needs either a
-   VM-visible exit flag or an accepted-deviation note.
-4. **`Errored` vs `Error` naming** (REVIEW §6) — proto says `ERRORED` for
-   threads, `ERROR` for functions; fine, but confirm and close the item.
-5. **Unknown-function sentinel attribution.** Unresolvable callees stamp
-   `function_id: 0` ("unassigned"); the header's `baml.<unknown-function>`
-   row (max+2) is reserved but **never referenced by records**. Decide:
-   re-point the id-0 paths (`vm.rs` `prof_enter_call(0)` for the `$entry::`
-   wrapper, host-closure sysop pairs, interrupt callees) at the sentinel, or
-   bless id-0 as the wire contract and keep the row as a display bucket.
-6. **Watch-filter calls in the stream.** Filter-internal calls now mint ids
-   and emit balanced ring records attached to the interrupted call (old
-   scoping decision said: no identity, no events). Balanced, but pollutes
-   timelines. Decide whether to gate ring emission under
-   `interrupt_frame.is_some()`.
-7. **Root-thread record order** (pre-existing on the ring branch): root
-   threads emit the entry `CallFunction` *before* their `StartThread`;
-   children are the opposite. Renderer must not assume StartThread-first —
-   either document, or move the root StartThread emission ahead of
-   `set_entry_point` (uniform invariant; see review notes for the
-   balance-safety argument).
-8. **`$id` call-site form** `foo($id = ...)` (§3.6): both design docs show
-   it; implementation is callee-side assignment with a targeted diagnostic.
-   Product decision — changes `SetFunctionId` adjacency.
-9. **SetFunctionId dedup**: emitted per `set()` call (review wanted
-   once-per-override). Probably fine — consumer takes last-wins — but
-   confirm renderer semantics.
+1. **Function-level `Cancelled` status** → DECIDED: added
+   `FUNCTION_END_STATUS_CANCELLED = 2`. In-flight sysop pairs at cancel now
+   close `Cancelled` (was `Error`), as does the queued-then-cancelled
+   spawn's entry close.
+2. **Cancellation balance gap** → DECIDED: drain at cancel. The engine
+   closes every open call frame of the suspended VM innermost-first with
+   `EndFunction{Cancelled}` (`prof_drain_open_calls`, called at the seven
+   blocks that terminate a thread without unwinding the VM: six cancel
+   blocks with `Cancelled`, plus the unobserved fire-and-forget child-error
+   surfacing with `Errored` — found by the post-decision adversarial
+   review; previously that path stranded every open parent frame).
+   Cancelled threads never strand open calls; the KNOWN GAP tests now
+   assert full balance and `assert_balance_allowing_unended` is deleted.
+3. **exit(0) frame status** → DECIDED: exit is a recognized unwind class.
+   Added `FUNCTION_END_STATUS_EXITED = 3`; the unwinder peeks the thrown
+   value's panic class (`prof_unwind_status`: Exit→Exited,
+   Cancelled→Cancelled, else Errored — frame fate, not program outcome) and
+   `baml.sys.exit`'s own native pair closes `Exited`. Thread-level mapping
+   unchanged (root threads: exit(0)→Completed, nonzero→Errored; a child
+   terminated by an exit settles like any unhandled throw → Errored, so
+   EXITED frames are the reliable exit signal off the root).
+4. **`Errored` vs `Error` naming** → DECIDED: uniform "STATUS_ prefix +
+   past tense": `FUNCTION_END_STATUS_ERROR` renamed to
+   `FUNCTION_END_STATUS_ERRORED` (tag 1 unchanged); `OK` stays (Result
+   convention). Thread enum already conformed.
+5. **Unknown-function sentinel** → DECIDED: bless `function_id: 0` as the
+   wire contract for unattributable calls; the `baml.<unknown-function>`
+   row (max+2) stays as the display bucket. Documented in the proto header;
+   no re-pointing (0 is also where forgot-to-stamp bugs land — a soft,
+   honest failure mode).
+6. **Watch-filter calls in the stream** → DECIDED: keep emission — "it's
+   code that runs". Filter time is real and attaches under the interrupted
+   call; program-only views hide it renderer-side. Documented in the proto
+   header and at `interrupt()`.
+7. **Root-thread record order** → DECIDED: moved the root `StartThread`
+   emission into `run_entry_point`, immediately before `set_entry_point` —
+   "every thread's first record is its StartThread" is now a wire invariant
+   (pinned in `reconstruction_smoke`). BALANCE: no early return may be
+   introduced between that emission and the `run_thread_event_loop` call
+   (comments pin both ends).
+8. **`$id` call-site form `foo($id = ...)`** → DECIDED: defer (product
+   call). The targeted diagnostic stays; design docs need a
+   "not yet implemented" marker. Purely additive later; `SetFunctionId`
+   last-wins semantics already accommodate it.
+9. **SetFunctionId dedup** → DECIDED: keep per-`set()` emission; a call's
+   effective `$id` at a point in time is its most recent record, last-wins
+   for a single label. Documented in the proto header.
 
 ### Follow-up work (either of us, post-land)
 

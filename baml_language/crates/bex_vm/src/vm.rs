@@ -2285,8 +2285,9 @@ impl BexVm {
         //   engine either.) Interrupt-internal calls DO mint call ids and,
         //   with profiling on, write balanced CallFunction/EndFunction
         //   records to the ring — only the engine-facing span stream is
-        //   suppressed. (Whether filter-internal calls should appear in the
-        //   .bamlprof stream at all is an open cross-team question.)
+        //   suppressed. (§7 decision 6, settled: filter calls stay in the
+        //   .bamlprof stream — they are code that runs, attached under the
+        //   interrupted call; program-only views hide them renderer-side.)
         // - `EarlyYield`: honoring it would suspend mid-interrupt with no way
         //   to resume from `process_notifications`, so parking is delayed
         //   until the interrupt completes. Note this delays the *engine-wide*
@@ -2764,6 +2765,11 @@ impl BexVm {
         // Capture the stack trace before unwinding destroys frame information.
         let trace: Vec<StackFrame> = self.capture_stack_trace();
 
+        // Frames popped by this unwind close with a status derived from the
+        // thrown value's class (Exited / Cancelled / Errored) — chosen once
+        // here; per-frame truthful whether or not a handler catches it.
+        let unwind_status = self.prof_unwind_status(exception_value);
+
         // Notified (traced / runtime-call) frames popped without a
         // FunctionExit notification.
         let mut popped_notified_frames = 0usize;
@@ -2892,11 +2898,7 @@ impl BexVm {
                 // those are process-level bugs, not program errors.)
                 if let Some(Frame::Bytecode(bf)) = self.frames.last() {
                     let (call_id, parent_call_id) = (bf.call_id, bf.parent_call_id);
-                    self.prof_exit_call(
-                        call_id,
-                        parent_call_id,
-                        bex_events::prof::record::FunctionEndStatus::Error,
-                    );
+                    self.prof_exit_call(call_id, parent_call_id, unwind_status);
                 }
                 return Err(VmError::ThrownUnhandled {
                     value: exception_value,
@@ -2908,14 +2910,11 @@ impl BexVm {
             match popped {
                 Frame::Bytecode(bf) => {
                     self.stack.drain(bf.locals_offset..);
-                    // Unwound frames end in Error; native frames emit nothing
-                    // (they emitted nothing on entry — keep entry/exit
+                    // Unwound frames close with the unwind status (Errored /
+                    // Cancelled / Exited by thrown class); native frames emit
+                    // nothing (they emitted nothing on entry — keep entry/exit
                     // symmetric per FunctionKind, plan §6 invariant 3).
-                    self.prof_exit_call(
-                        bf.call_id,
-                        bf.parent_call_id,
-                        bex_events::prof::record::FunctionEndStatus::Error,
-                    );
+                    self.prof_exit_call(bf.call_id, bf.parent_call_id, unwind_status);
                 }
                 Frame::Native(_) => {} // native frames own no stack region
             }
@@ -3106,6 +3105,62 @@ impl BexVm {
                 call_id,
                 ts_ns: bex_events::prof::clock::now_ns(),
             });
+        }
+    }
+
+    /// Call ids of every currently-open call frame, innermost first — the
+    /// engine's cancel drain (§7 decision 2) closes these. Native
+    /// continuation frames mint no call records and are skipped.
+    pub fn prof_open_call_ids(&self) -> impl Iterator<Item = u64> + '_ {
+        self.frames.iter().rev().filter_map(|frame| match frame {
+            Frame::Bytecode(bf) => Some(bf.call_id),
+            Frame::Native(_) => None,
+        })
+    }
+
+    /// Maps an in-flight exception value to the `FunctionEndStatus` the
+    /// frames it unwinds close with: `Exited` for `baml.panics.Exit`,
+    /// `Cancelled` for `baml.panics.Cancelled`, `Errored` for everything
+    /// else (reconciliation §7 decisions 1–3). The status describes the
+    /// frame's fate, not the program's outcome — it is chosen once at unwind
+    /// start and stays valid whether or not a handler later catches the
+    /// value (the frames are gone either way). Class identity is a pointer
+    /// compare against the pre-resolved panic classes, mirroring the
+    /// engine's class-tag recognition (`extract_exit_code`).
+    fn prof_unwind_status(
+        &self,
+        exception_value: Value,
+    ) -> bex_events::prof::record::FunctionEndStatus {
+        use bex_events::prof::record::FunctionEndStatus;
+        let Some(ptr) = exception_value.as_object_ptr() else {
+            return FunctionEndStatus::Errored;
+        };
+        let Object::Instance(instance) = self.get_object(ptr) else {
+            return FunctionEndStatus::Errored;
+        };
+        let class = Some(&instance.class);
+        if class == self.panic_class_ptrs.get(PanicClass::Exit as usize) {
+            FunctionEndStatus::Exited
+        } else if class == self.panic_class_ptrs.get(PanicClass::Cancelled as usize) {
+            FunctionEndStatus::Cancelled
+        } else {
+            FunctionEndStatus::Errored
+        }
+    }
+
+    /// [`Self::prof_unwind_status`] for a native error that has not been
+    /// materialized into a heap value yet (the inline native-pair close —
+    /// e.g. `baml.sys.exit`'s own pair closes `Exited`).
+    fn prof_native_error_status(
+        &self,
+        err: &VmRustFnError,
+    ) -> bex_events::prof::record::FunctionEndStatus {
+        use bex_events::prof::record::FunctionEndStatus;
+        match err {
+            VmRustFnError::Panic(VmPanic::Exit { .. }) => FunctionEndStatus::Exited,
+            VmRustFnError::Panic(VmPanic::Cancelled) => FunctionEndStatus::Cancelled,
+            VmRustFnError::Thrown(value) => self.prof_unwind_status(*value),
+            _ => FunctionEndStatus::Errored,
         }
     }
 
@@ -3477,11 +3532,10 @@ impl BexVm {
                         self.stack.push(v);
                     }
                     NativeCallResult::Error(e) => {
-                        self.prof_emit_native_pair(
-                            callee_function_id,
-                            native_ts_start,
-                            bex_events::prof::record::FunctionEndStatus::Error,
-                        );
+                        // Status by error class: baml.sys.exit's own pair
+                        // closes Exited, a cancel panic Cancelled (§7 1–3).
+                        let status = self.prof_native_error_status(&e);
+                        self.prof_emit_native_pair(callee_function_id, native_ts_start, status);
                         return Err(self.native_error_to_vm_error(e));
                     }
                     NativeCallResult::YieldToCall {
@@ -3745,7 +3799,7 @@ impl BexVm {
                                 self.prof_exit_call(
                                     call_id,
                                     parent,
-                                    bex_events::prof::record::FunctionEndStatus::Error,
+                                    bex_events::prof::record::FunctionEndStatus::Errored,
                                 );
                             }
                             return Err(VmInternalError::ExpectedCompletion.into());

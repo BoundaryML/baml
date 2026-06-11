@@ -422,7 +422,9 @@ fn to_disk_event(raw: &RawRecord<'_>) -> pb::DiskEventV1 {
             call_id,
             status: match status {
                 FunctionEndStatus::Ok => pb::FunctionEndStatus::Ok,
-                FunctionEndStatus::Error => pb::FunctionEndStatus::Error,
+                FunctionEndStatus::Errored => pb::FunctionEndStatus::Errored,
+                FunctionEndStatus::Cancelled => pb::FunctionEndStatus::Cancelled,
+                FunctionEndStatus::Exited => pb::FunctionEndStatus::Exited,
             } as i32,
             timestamp_ns: ts_ns,
         }),
@@ -714,14 +716,14 @@ mod tests {
             other => panic!("wrong variant {other:?}"),
         }
         let raw = RawRecord::EndFunction {
-            status: FunctionEndStatus::Error,
+            status: FunctionEndStatus::Errored,
             thread_id: 9,
             call_id: 1,
             ts_ns: 5,
         };
         match to_disk_event(&raw).event.unwrap() {
             Event::EndFunction(ef) => {
-                assert_eq!(ef.status, pb::FunctionEndStatus::Error as i32);
+                assert_eq!(ef.status, pb::FunctionEndStatus::Errored as i32);
             }
             other => panic!("wrong variant {other:?}"),
         }

@@ -1547,19 +1547,83 @@ impl BexEngine {
 
     /// Closes the sys-op call pair opened at the VM's `VmExecState::SysOp`
     /// yield site (no-op when the VM minted nothing — profiling off or a
-    /// non-call sys-op source).
-    fn prof_end_sysop(&self, vm: &mut bex_vm::BexVm, ok: bool) {
+    /// non-call sys-op source). Cancellation paths pass `Cancelled` — the
+    /// in-flight op was cancelled, not failed (§7 decision 1).
+    fn prof_end_sysop(
+        &self,
+        vm: &mut bex_vm::BexVm,
+        status: bex_events::prof::record::FunctionEndStatus,
+    ) {
         if let Some(call_id) = vm.pending_sysop_call_id.take() {
             self.prof_emit(&bex_events::prof::record::RawRecord::EndFunction {
-                status: if ok {
-                    bex_events::prof::record::FunctionEndStatus::Ok
-                } else {
-                    bex_events::prof::record::FunctionEndStatus::Error
-                },
+                status,
                 thread_id: vm.prof_thread_id,
                 call_id,
                 ts_ns: bex_events::prof::clock::now_ns(),
             });
+        }
+    }
+
+    /// §7 decision 2: terminated threads never strand open calls. Closes
+    /// every call frame still open in the suspended VM (innermost-first),
+    /// plus any armed-but-unclosed sysop pair, with `status` `EndFunction`s.
+    /// Called exactly once per terminated thread, at the blocks that end it
+    /// *without* unwinding the VM (each returns immediately after): the six
+    /// cancel blocks (`Cancelled`) and the unobserved fire-and-forget
+    /// child-error surfacing (`Errored`). Threads whose terminal panic
+    /// unwound VM-side already closed their frames in the unwinder — those
+    /// paths must NOT also drain. Emits via the TLS ring lookup, so it is
+    /// safe on any OS thread regardless of the VM's ring snapshot (D5a).
+    fn prof_drain_open_calls(
+        &self,
+        vm: &mut bex_vm::BexVm,
+        status: bex_events::prof::record::FunctionEndStatus,
+    ) {
+        use bex_events::prof::record::RawRecord;
+        if !self.prof_enabled {
+            return;
+        }
+        let thread_id = vm.prof_thread_id;
+        if let Some(call_id) = vm.pending_sysop_call_id.take() {
+            self.prof_emit(&RawRecord::EndFunction {
+                status,
+                thread_id,
+                call_id,
+                ts_ns: bex_events::prof::clock::now_ns(),
+            });
+        }
+        for call_id in vm.prof_open_call_ids() {
+            self.prof_emit(&RawRecord::EndFunction {
+                status,
+                thread_id,
+                call_id,
+                ts_ns: bex_events::prof::clock::now_ns(),
+            });
+        }
+    }
+
+    /// Status for a sysop pair that ended in an op error, classified by
+    /// error class exactly like the VM's inline-native close
+    /// (`prof_native_error_status`): cancel-classed → `Cancelled`,
+    /// exit-classed → `Exited`, everything else → `Errored`. Needed because
+    /// a cancel-classed payload can arrive through the *generic* result
+    /// path (host drops the `CompletionHandle` without completing — the
+    /// thread's own token never fired), and the frames the injected throw
+    /// subsequently unwinds will close `Cancelled` via the unwinder's
+    /// class peek — the pair must agree.
+    fn prof_sysop_error_status(
+        err: &sys_types::OpError,
+    ) -> bex_events::prof::record::FunctionEndStatus {
+        use bex_events::prof::record::FunctionEndStatus;
+        use bex_vm_types::errors::{VmPanic, VmRustFnError};
+        match &err.payload {
+            sys_types::OpErrorPayload::Vm(VmRustFnError::Panic(VmPanic::Cancelled)) => {
+                FunctionEndStatus::Cancelled
+            }
+            sys_types::OpErrorPayload::Vm(VmRustFnError::Panic(VmPanic::Exit { .. })) => {
+                FunctionEndStatus::Exited
+            }
+            _ => FunctionEndStatus::Errored,
         }
     }
 
@@ -2172,9 +2236,11 @@ impl BexEngine {
         // below awaits (the snapshot would go stale across an OS-thread
         // migration), and early-error returns between here and the run loop
         // would leak a StartThread with no EndThread. Both happen at
-        // guaranteed-balanced points instead: the StartThread in the
-        // run_thread_event_loop wrapper, the snapshot right before
-        // set_entry_point (run_entry_point) and at each loop-head resume.
+        // guaranteed-balanced points instead: the StartThread in
+        // run_entry_point right before set_entry_point (§7 decision 7 —
+        // straight-line into run_thread_event_loop, whose every exit path
+        // emits the EndThread), and the snapshot at the same spot plus each
+        // loop-head resume.
         let root_thread = BexThread::new_root(vm, cancel);
         let inactive = self.heap_permit_manager.new_permit(root_thread).await;
         inactive.acquire().await
@@ -2206,6 +2272,24 @@ impl BexEngine {
         // D5a: the entry-frame CallFunction below pushes into the snapshot;
         // take it on THIS thread, after the last await before the push.
         self.prof_refresh_vm_ring(&mut thread.vm);
+        // §7 decision 7: the root StartThread is emitted before the entry
+        // frame's CallFunction so that every thread's first record is its
+        // StartThread — a uniform invariant for renderers (children get
+        // theirs at the Spawn arm, before their entry push). BALANCE: the
+        // matching EndThread is emitted by run_thread_event_loop on every
+        // exit path; no early return / `?` may be introduced between this
+        // emission and the run_thread_event_loop call below, or an error
+        // path would leak an unclosed StartThread.
+        if self.prof_enabled {
+            self.prof_emit(&bex_events::prof::record::RawRecord::StartThread {
+                flags: 0,
+                thread_id: thread.vm.prof_thread_id,
+                parent_thread_id: 0, // engine-root thread
+                parent_call_id: 0,
+                ts_ns: bex_events::prof::clock::now_ns(),
+                name: b"",
+            });
+        }
         thread
             .vm
             .set_entry_point_with_type_args(entry_ptr, &vm_args, type_args);
@@ -3330,7 +3414,10 @@ impl BexEngine {
                             if entry_call != 0 {
                                 engine.prof_emit(
                                     &bex_events::prof::record::RawRecord::EndFunction {
-                                        status: bex_events::prof::record::FunctionEndStatus::Error,
+                                        // Queued-then-cancelled: the entry
+                                        // call was cancelled, not failed.
+                                        status:
+                                            bex_events::prof::record::FunctionEndStatus::Cancelled,
                                         thread_id: vm.prof_thread_id,
                                         call_id: entry_call,
                                         ts_ns: bex_events::prof::clock::now_ns(),
@@ -3487,21 +3574,12 @@ impl BexEngine {
         copy_objects: bool,
     ) -> Result<ThreadOutcome, EngineError> {
         let prof_thread_id = thread.vm.prof_thread_id;
-        // Root threads get their StartThread here — the same function that
-        // emits the EndThread — so every emitted start is closed on every
-        // exit path. (Children get theirs at the Spawn arm, where the spawn
-        // edge is in hand; their queued-then-cancelled early exit closes the
-        // lifecycle in spawn_thread_inner's task body.)
-        if self.prof_enabled && thread.vm_thread_settles_future().is_none() {
-            self.prof_emit(&bex_events::prof::record::RawRecord::StartThread {
-                flags: 0,
-                thread_id: prof_thread_id,
-                parent_thread_id: 0, // engine-root thread
-                parent_call_id: 0,
-                ts_ns: bex_events::prof::clock::now_ns(),
-                name: b"",
-            });
-        }
+        // StartThread was already emitted before this function: roots in
+        // run_entry_point (right before `set_entry_point`, §7 decision 7 —
+        // StartThread-first is a wire invariant), children at the Spawn
+        // arm. This wrapper owns the matching EndThread on every exit path;
+        // queued-then-cancelled spawns (which never reach this loop) close
+        // their lifecycle in spawn_thread_inner's task body.
         let result = self
             .run_thread_event_loop_inner(
                 return_type,
@@ -3888,7 +3966,14 @@ impl BexEngine {
                         // Cancelled so the heap Future no longer hangs
                         // at Pending; root threads surface the cancel
                         // to the host.
-                        self.prof_end_sysop(&mut thread.vm, false);
+                        self.prof_end_sysop(
+                            &mut thread.vm,
+                            bex_events::prof::record::FunctionEndStatus::Cancelled,
+                        );
+                        self.prof_drain_open_calls(
+                            &mut thread.vm,
+                            bex_events::prof::record::FunctionEndStatus::Cancelled,
+                        );
                         if let Some(future_id) = thread.vm_thread_settles_future() {
                             self.emit_function_end_events_with_status(
                                 call_id,
@@ -3926,7 +4011,14 @@ impl BexEngine {
                             self.prof_refresh_vm_ring(&mut thread.vm);
                             match outcome {
                                 SysOpOutcome::Cancelled => {
-                                    self.prof_end_sysop(&mut thread.vm, false);
+                                    self.prof_end_sysop(
+                                        &mut thread.vm,
+                                        bex_events::prof::record::FunctionEndStatus::Cancelled,
+                                    );
+                                    self.prof_drain_open_calls(
+                                        &mut thread.vm,
+                                        bex_events::prof::record::FunctionEndStatus::Cancelled,
+                                    );
                                     if let Some(future_id) = thread.vm_thread_settles_future() {
                                         self.emit_function_end_events_with_status(
                                             call_id,
@@ -3949,8 +4041,18 @@ impl BexEngine {
                     // PR4b: close the sys-op call pair opened at the VM's
                     // yield site. Post-await this task may sit on a
                     // different OS thread — prof_end_sysop goes through the
-                    // TLS ring lookup, so that is fine.
-                    self.prof_end_sysop(&mut thread.vm, outcome.is_ok());
+                    // TLS ring lookup, so that is fine. Errors classify by
+                    // class like the inline-native close: a host-abandoned
+                    // op (CompletionHandle dropped → cancel-classed payload,
+                    // no token fired) closes Cancelled, matching the
+                    // Cancelled frames its injected throw then unwinds.
+                    self.prof_end_sysop(
+                        &mut thread.vm,
+                        match &outcome {
+                            Ok(_) => bex_events::prof::record::FunctionEndStatus::Ok,
+                            Err(op_err) => Self::prof_sysop_error_status(op_err),
+                        },
+                    );
 
                     match outcome {
                         Ok(external) => {
@@ -4180,6 +4282,10 @@ impl BexEngine {
                     // Pending. Mirrors the `VmError::ThrownUnhandled`
                     // arm above for a Cancelled panic from the VM side.
                     if cancel.is_cancelled() {
+                        self.prof_drain_open_calls(
+                            &mut thread.vm,
+                            bex_events::prof::record::FunctionEndStatus::Cancelled,
+                        );
                         if let Some(future_id) = thread.vm_thread_settles_future() {
                             self.emit_function_end_events_with_status(
                                 call_id,
@@ -4234,6 +4340,10 @@ impl BexEngine {
                     self.prof_refresh_vm_ring(&mut thread.vm);
                     match outcome {
                         AwaitOutcome::Cancelled => {
+                            self.prof_drain_open_calls(
+                                &mut thread.vm,
+                                bex_events::prof::record::FunctionEndStatus::Cancelled,
+                            );
                             if let Some(future_id) = thread.vm_thread_settles_future() {
                                 self.emit_function_end_events_with_status(
                                     call_id,
@@ -4265,6 +4375,15 @@ impl BexEngine {
                     // `future_id`: stable across GC moves and producer settles.
                     thread.vm_thread_consume_pending_child_error_for(future_id);
                     if let Some(value) = self.drain_one_pending_child_error(&mut thread).await? {
+                        // This terminates the thread WITHOUT unwinding the
+                        // VM (it is parked at its Await opcode with every
+                        // frame open) — drain the open calls like the
+                        // cancel blocks do, with Errored: an unobserved
+                        // child error killed this thread.
+                        self.prof_drain_open_calls(
+                            &mut thread.vm,
+                            bex_events::prof::record::FunctionEndStatus::Errored,
+                        );
                         if let Some(our_future_id) = thread.vm_thread_settles_future() {
                             self.emit_function_end_events_with_status(
                                 call_id,
@@ -4297,6 +4416,10 @@ impl BexEngine {
                     // does: the next suspension point after the token fires
                     // must surface `Cancelled`.
                     if cancel.is_cancelled() {
+                        self.prof_drain_open_calls(
+                            &mut thread.vm,
+                            bex_events::prof::record::FunctionEndStatus::Cancelled,
+                        );
                         if let Some(future_id) = thread.vm_thread_settles_future() {
                             self.emit_function_end_events_with_status(
                                 call_id,
@@ -4356,6 +4479,10 @@ impl BexEngine {
                     self.prof_refresh_vm_ring(&mut thread.vm);
                     match outcome {
                         AwaitAnyOutcome::Cancelled => {
+                            self.prof_drain_open_calls(
+                                &mut thread.vm,
+                                bex_events::prof::record::FunctionEndStatus::Cancelled,
+                            );
                             if let Some(future_id) = thread.vm_thread_settles_future() {
                                 self.emit_function_end_events_with_status(
                                     call_id,
