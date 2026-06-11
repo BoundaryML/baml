@@ -1858,6 +1858,21 @@ function baml.toml.to_json(self: ?) -> baml.json.json  [expr] {
 --- <builtin>/baml/ns_unstable/unstable.baml ---
 function baml.unstable.string(value: T) -> string  [builtin]
 
+--- <builtin>/baml/ns_yaml/yaml.baml ---
+class baml.yaml.YamlParseError {
+  message: string
+}
+function baml.yaml.deserialize(s: string) -> T  [expr] {
+  {  } baml.json.from_json(parse(s)) catch (e) { err: baml.json.JsonParseError => throw baml.json.JsonDecodeError { message: err.message, path: "" } }
+}
+function baml.yaml.from_json(j: baml.json.json) -> baml.yaml.YamlParseError  [expr] {
+  baml.yaml.YamlParseError { message: baml.json.from_json(baml.json.field(j, "message")) }
+}
+function baml.yaml.parse(s: string) -> baml.json.json  [builtin]
+function baml.yaml.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "message": self.message.to_json() }
+}
+
 --- <builtin>/baml/null.baml ---
 class baml.Null {
 }

@@ -156,6 +156,9 @@ pub fn flush_event_sink() {
     {
         sink.flush();
     }
+    // Also drain the profiling rings to .bamlprof (no-op when BAML_PROFILE
+    // is off).
+    bex_events::prof::flush_and_join(std::time::Duration::from_secs(10));
 }
 
 /// Get the current runtime's event sink (for passing to HostSpanManager).

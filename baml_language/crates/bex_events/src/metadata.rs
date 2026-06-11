@@ -86,9 +86,9 @@ pub struct SemanticLanes {
 }
 
 /// One row of the per-artifact function table. `function_id` is the join
-/// key from events; it is NOT stable across recompiles (it is the
-/// compile-time pool index), so rows are only meaningful with their own
-/// artifact's header.
+/// key from events; it is NOT stable across recompiles (it is a per-run
+/// sequential id), so rows are only meaningful with their own artifact's
+/// header.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FunctionMetadata {
     pub function_id: FunctionId,

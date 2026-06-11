@@ -1000,6 +1000,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             origin: FunctionOrigin::Internal,
             body_meta: None,
             trace: false,
+            function_id: 0, // assigned at engine init (interim provider)
         }
     }
 

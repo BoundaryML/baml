@@ -14,9 +14,7 @@ use std::sync::{Arc, Mutex};
 use bex_engine::{
     BexEngine, BexExternalValue, FunctionCallContextBuilder, HostSpanContext, RuntimeEvent, SpanId,
 };
-use bex_events::{
-    DiskEventV1, EventFileHeaderV1, EventKind, EventSink, FunctionEvent, ids::RuntimeId,
-};
+use bex_events::{EventKind, EventSink, FunctionEvent, ids::RuntimeId};
 use common::compile_for_engine;
 use sys_native::SysOpsExt;
 
@@ -67,119 +65,30 @@ fn collect_events(guard: &TrackingGuard) -> Vec<RuntimeEvent> {
     bex_events::event_store::events_for_span(&guard.root).unwrap_or_default()
 }
 
+/// Captures the engine's live `RuntimeEvent` span stream (the `send` path).
+/// Unlike the event store's tracked buckets — which only route a span or a
+/// direct child of a tracked span — the sink sees every span event the
+/// engine emits, including traced grandchild frames. Per-call disk lifecycle
+/// no longer flows through the sink (see NOTE below).
 #[derive(Default)]
 struct CapturingSink {
-    disk_events: Mutex<Vec<DiskEventV1>>,
-    headers: Mutex<Vec<EventFileHeaderV1>>,
+    runtime_events: Mutex<Vec<RuntimeEvent>>,
 }
 
 impl EventSink for CapturingSink {
-    fn send(&self, _event: RuntimeEvent) {}
-
-    fn send_disk_event(&self, _engine: bex_events::ids::EngineId, event: DiskEventV1) {
-        self.disk_events.lock().unwrap().push(event);
-    }
-
-    fn send_event_file_header(&self, header: EventFileHeaderV1) {
-        self.headers.lock().unwrap().push(header);
+    fn send(&self, event: RuntimeEvent) {
+        self.runtime_events.lock().unwrap().push(event);
     }
 
     fn flush(&self) {}
 }
 
-/// Tier-A contract invariant: on every thread, every `call_id` has exactly
-/// one `CallFunction` and exactly one `EndFunction`, and the `CallFunction`
-/// precedes the `EndFunction`. This is the consumer's only structural
-/// assumption when reconstructing call trees — call it in every disk-event
-/// test.
-#[track_caller]
-fn assert_balanced(events: &[DiskEventV1]) {
-    use std::collections::HashMap;
-    // (thread_id, call_id) -> (call_count, end_count)
-    let mut counts: HashMap<(u64, u64), (usize, usize)> = HashMap::new();
-    for event in events {
-        match event {
-            DiskEventV1::CallFunction {
-                thread_id, call_id, ..
-            } => {
-                let entry = counts.entry((thread_id.0, call_id.0)).or_default();
-                assert_eq!(
-                    entry.1, 0,
-                    "CallFunction after EndFunction for thread {} call {}",
-                    thread_id.0, call_id.0
-                );
-                entry.0 += 1;
-            }
-            DiskEventV1::EndFunction {
-                thread_id, call_id, ..
-            } => {
-                let entry = counts.entry((thread_id.0, call_id.0)).or_default();
-                assert!(
-                    entry.0 >= 1,
-                    "EndFunction before CallFunction for thread {} call {}",
-                    thread_id.0,
-                    call_id.0
-                );
-                entry.1 += 1;
-            }
-            _ => {}
-        }
-    }
-    for ((thread, call), (calls, ends)) in &counts {
-        assert_eq!(
-            (*calls, *ends),
-            (1, 1),
-            "unbalanced lifecycle for thread {thread} call {call}: {calls} CallFunction, {ends} EndFunction"
-        );
-    }
-}
-
-/// Tier-A contract invariant: every thread has exactly one `StartThread` /
-/// `EndThread` pair, the `StartThread` is that thread's first event, and the
-/// `EndThread` is its last.
-#[track_caller]
-fn assert_threads_closed(events: &[DiskEventV1]) {
-    use std::collections::HashMap;
-    fn own_thread(event: &DiskEventV1) -> Option<u64> {
-        match event {
-            DiskEventV1::StartThread { thread_id, .. }
-            | DiskEventV1::CallFunction { thread_id, .. }
-            | DiskEventV1::SetId { thread_id, .. }
-            | DiskEventV1::EndFunction { thread_id, .. }
-            | DiskEventV1::EndThread { thread_id, .. } => Some(thread_id.0),
-            DiskEventV1::Heartbeat { .. } => None,
-        }
-    }
-    let mut per_thread: HashMap<u64, Vec<&DiskEventV1>> = HashMap::new();
-    for event in events {
-        if let Some(thread) = own_thread(event) {
-            per_thread.entry(thread).or_default().push(event);
-        }
-    }
-    for (thread, thread_events) in &per_thread {
-        let starts = thread_events
-            .iter()
-            .filter(|e| matches!(e, DiskEventV1::StartThread { .. }))
-            .count();
-        let ends = thread_events
-            .iter()
-            .filter(|e| matches!(e, DiskEventV1::EndThread { .. }))
-            .count();
-        assert_eq!(
-            starts, 1,
-            "thread {thread}: expected 1 StartThread, got {starts}"
-        );
-        assert_eq!(ends, 1, "thread {thread}: expected 1 EndThread, got {ends}");
-        assert!(
-            matches!(thread_events.first(), Some(DiskEventV1::StartThread { .. })),
-            "thread {thread}: StartThread was not its first event"
-        );
-        assert!(
-            matches!(thread_events.last(), Some(DiskEventV1::EndThread { .. })),
-            "thread {thread}: EndThread was not its last event"
-        );
-    }
-}
+// NOTE: the per-call disk-event stream (StartThread/CallFunction/
+// EndFunction/EndThread/SetId) no longer flows through the EventSink — it is
+// written lock-free into the profiling ring and lands in .bamlprof files.
+// Lifecycle/linkage coverage lives in bex_engine/tests/prof_gate.rs (G3
+// balance, reconstruction, spawn edges, $id overrides) against the real
+// artifact.
 
 #[tokio::test]
 async fn trace_single_function() {
@@ -252,278 +161,6 @@ async fn trace_single_function() {
         .expect("function_id should resolve in metadata table");
     assert_eq!(metadata.display_name, "main");
     assert!(metadata.fqn.ends_with("main"));
-}
-
-#[tokio::test]
-async fn bex_disk_events_cover_root_function_lifecycle() {
-    let source = r#"
-        function main() -> int {
-            42
-        }
-    "#;
-
-    let snapshot = compile_for_engine(source);
-    let sink = Arc::new(CapturingSink::default());
-    let event_sink: Arc<dyn EventSink> = sink.clone();
-    let engine = Arc::new(
-        BexEngine::new(
-            snapshot,
-            Arc::new(sys_native::SysOps::native()),
-            Some(event_sink),
-            Vec::new(),
-        )
-        .unwrap(),
-    );
-
-    let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next()).build();
-    let value = engine
-        .call_function("main", vec![], call_ctx, true)
-        .await
-        .unwrap();
-    assert_eq!(value, BexExternalValue::Int(42));
-
-    let events = sink.disk_events.lock().unwrap().clone();
-    assert_eq!(events.len(), 4);
-
-    let (thread_id, call_id) = match &events[0] {
-        DiskEventV1::StartThread {
-            thread_id,
-            parent_thread_id,
-            parent_call_id,
-            ..
-        } => {
-            assert_eq!(*parent_thread_id, None);
-            assert_eq!(*parent_call_id, None);
-            (*thread_id, bex_engine::BexCallId(1))
-        }
-        other => panic!("expected StartThread, got {other:?}"),
-    };
-
-    let function_id = match &events[1] {
-        DiskEventV1::CallFunction {
-            thread_id: event_thread,
-            call_id: event_call,
-            parent_call_id,
-            function_id,
-            ..
-        } => {
-            assert_eq!(*event_thread, thread_id);
-            assert_eq!(*event_call, call_id);
-            assert_eq!(*parent_call_id, None);
-            *function_id
-        }
-        other => panic!("expected CallFunction, got {other:?}"),
-    };
-
-    match &events[2] {
-        DiskEventV1::EndFunction {
-            thread_id: event_thread,
-            call_id: event_call,
-            status,
-            ..
-        } => {
-            assert_eq!(*event_thread, thread_id);
-            assert_eq!(*event_call, call_id);
-            assert_eq!(*status, bex_events::FunctionEndStatus::Ok);
-        }
-        other => panic!("expected EndFunction, got {other:?}"),
-    }
-
-    match &events[3] {
-        DiskEventV1::EndThread {
-            thread_id: event_thread,
-            status,
-            ..
-        } => {
-            assert_eq!(*event_thread, thread_id);
-            assert_eq!(*status, bex_events::ThreadEndStatus::Completed);
-        }
-        other => panic!("expected EndThread, got {other:?}"),
-    }
-
-    let metadata = engine
-        .program_metadata()
-        .function_table
-        .get(function_id)
-        .expect("disk function_id should resolve");
-    assert_eq!(metadata.display_name, "main");
-}
-
-#[tokio::test]
-async fn bex_disk_events_link_nested_expression_call_to_parent_call() {
-    let source = r#"
-        function inner() -> int {
-            10
-        }
-
-        function main() -> int {
-            inner() + 1
-        }
-    "#;
-
-    let snapshot = compile_for_engine(source);
-    let sink = Arc::new(CapturingSink::default());
-    let event_sink: Arc<dyn EventSink> = sink.clone();
-    let engine = Arc::new(
-        BexEngine::new(
-            snapshot,
-            Arc::new(sys_native::SysOps::native()),
-            Some(event_sink),
-            Vec::new(),
-        )
-        .unwrap(),
-    );
-
-    let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next()).build();
-    let value = engine
-        .call_function("main", vec![], call_ctx, true)
-        .await
-        .unwrap();
-    assert_eq!(value, BexExternalValue::Int(11));
-
-    let events = sink.disk_events.lock().unwrap().clone();
-    assert_balanced(&events);
-    assert_threads_closed(&events);
-    let calls: Vec<_> = events
-        .iter()
-        .filter_map(|event| match event {
-            DiskEventV1::CallFunction {
-                thread_id,
-                call_id,
-                parent_call_id,
-                function_id,
-                ..
-            } => {
-                let fqn = engine
-                    .program_metadata()
-                    .function_table
-                    .get(*function_id)
-                    .map(|metadata| metadata.fqn.as_str())
-                    .unwrap_or("<missing>");
-                Some((*thread_id, *call_id, *parent_call_id, fqn.to_string()))
-            }
-            _ => None,
-        })
-        .collect();
-
-    assert_eq!(calls.len(), 2);
-    assert_eq!(calls[0].1, bex_engine::BexCallId(1));
-    assert_eq!(calls[0].2, None);
-    assert_eq!(calls[0].3, "user.main");
-    assert_eq!(calls[1].0, calls[0].0);
-    assert_eq!(calls[1].1, bex_engine::BexCallId(2));
-    assert_eq!(calls[1].2, Some(bex_engine::BexCallId(1)));
-    assert_eq!(calls[1].3, "user.inner");
-
-    assert!(events.iter().any(|event| matches!(
-        event,
-        DiskEventV1::EndFunction {
-            call_id: bex_engine::BexCallId(2),
-            status: bex_events::FunctionEndStatus::Ok,
-            ..
-        }
-    )));
-}
-
-#[tokio::test]
-async fn bex_disk_events_link_spawned_thread_to_parent_call() {
-    let source = r#"
-        function main() -> int {
-            let f = spawn { 7 };
-            await f
-        }
-    "#;
-
-    let snapshot = compile_for_engine(source);
-    let sink = Arc::new(CapturingSink::default());
-    let event_sink: Arc<dyn EventSink> = sink.clone();
-    let engine = Arc::new(
-        BexEngine::new(
-            snapshot,
-            Arc::new(sys_native::SysOps::native()),
-            Some(event_sink),
-            Vec::new(),
-        )
-        .unwrap(),
-    );
-
-    let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next()).build();
-    let value = engine
-        .call_function("main", vec![], call_ctx, true)
-        .await
-        .unwrap();
-    assert_eq!(value, BexExternalValue::Int(7));
-
-    let events = sink.disk_events.lock().unwrap().clone();
-    assert_balanced(&events);
-    assert_threads_closed(&events);
-    let start_threads: Vec<_> = events
-        .iter()
-        .filter_map(|event| match event {
-            DiskEventV1::StartThread {
-                thread_id,
-                parent_thread_id,
-                parent_call_id,
-                ..
-            } => Some((*thread_id, *parent_thread_id, *parent_call_id)),
-            _ => None,
-        })
-        .collect();
-
-    assert_eq!(start_threads.len(), 2);
-    let (root_thread, root_parent_thread, root_parent_call) = start_threads[0];
-    assert_eq!(root_parent_thread, None);
-    assert_eq!(root_parent_call, None);
-
-    let (child_thread, child_parent_thread, child_parent_call) = start_threads[1];
-    assert_ne!(child_thread, root_thread);
-    assert_eq!(child_parent_thread, Some(root_thread));
-    assert_eq!(child_parent_call, Some(bex_engine::BexCallId(1)));
-
-    let child_call_function = events
-        .iter()
-        .find_map(|event| match event {
-            DiskEventV1::CallFunction {
-                thread_id,
-                call_id,
-                parent_call_id,
-                function_id,
-                ..
-            } if *thread_id == child_thread => Some((*call_id, *parent_call_id, *function_id)),
-            _ => None,
-        })
-        .expect("child thread should emit a root CallFunction");
-    assert_eq!(child_call_function.0, bex_engine::BexCallId(1));
-    assert_eq!(child_call_function.1, None);
-    let child_metadata = engine
-        .program_metadata()
-        .function_table
-        .get(child_call_function.2)
-        .expect("child root function_id should resolve to metadata");
-    assert_eq!(child_metadata.display_name, "<spawn-closure>");
-
-    assert!(events.iter().any(|event| {
-        matches!(
-            event,
-            DiskEventV1::EndFunction {
-                thread_id,
-                call_id: bex_engine::BexCallId(1),
-                status: bex_events::FunctionEndStatus::Ok,
-                ..
-            } if *thread_id == child_thread
-        )
-    }));
-
-    assert!(events.iter().any(|event| {
-        matches!(
-            event,
-            DiskEventV1::EndThread {
-                thread_id,
-                status: bex_events::ThreadEndStatus::Completed,
-                ..
-            } if *thread_id == child_thread
-        )
-    }));
 }
 
 #[tokio::test]
@@ -667,38 +304,9 @@ async fn bex_identity_exposes_event_header_metadata() {
     assert_eq!(main_start.call_ref.engine_id, engine.engine_id());
 }
 
-#[test]
-fn engine_emits_event_file_header_to_sink_on_create() {
-    let source = r#"
-        function main() -> int {
-            1
-        }
-    "#;
-
-    let snapshot = compile_for_engine(source);
-    let sink = Arc::new(CapturingSink::default());
-    let event_sink: Arc<dyn EventSink> = sink.clone();
-    let engine = BexEngine::new(
-        snapshot,
-        Arc::new(sys_native::SysOps::native()),
-        Some(event_sink),
-        Vec::new(),
-    )
-    .unwrap();
-
-    let headers = sink.headers.lock().unwrap();
-    assert_eq!(headers.len(), 1);
-    assert_eq!(headers[0].process_euid, engine.process_euid());
-    assert_eq!(headers[0].engine_id, engine.engine_id());
-    assert_eq!(headers[0].program_id, engine.program_metadata().program_id);
-    assert!(
-        headers[0]
-            .function_table
-            .functions
-            .iter()
-            .any(|metadata| metadata.fqn == "user.main")
-    );
-}
+// NOTE: engine_emits_event_file_header_to_sink_on_create was removed —
+// headers now live in the .bamlprof artifact (written by the consumer), not
+// the sink; bex_engine/tests/prof_gate.rs asserts header contents there.
 
 #[test]
 fn function_metadata_derives_owner_type_for_class_methods() {
@@ -1032,7 +640,7 @@ fn llm_functions_have_trace_flag() {
 }
 
 #[tokio::test]
-async fn baml_id_current_new_and_set_emit_set_id_event() {
+async fn baml_id_current_new_and_set_roundtrip() {
     let source = r#"
         function main() -> string {
             let before = $id;
@@ -1080,22 +688,12 @@ async fn baml_id_current_new_and_set_emit_set_id_event() {
 
     assert_eq!(parts[1], parts[2]);
     assert_eq!(parts[2], parts[3]);
-    let RuntimeId::OverrideUuid(override_id) = RuntimeId::decode(parts[3]).unwrap() else {
+    let RuntimeId::OverrideUuid(_override_id) = RuntimeId::decode(parts[3]).unwrap() else {
         panic!("expected override runtime ID");
     };
 
-    let disk_events = sink.disk_events.lock().unwrap().clone();
-    assert_balanced(&disk_events);
-    assert_threads_closed(&disk_events);
-    assert!(disk_events.iter().any(|event| matches!(
-        event,
-        DiskEventV1::SetId {
-            thread_id: bex_engine::BexThreadId(1),
-            call_id: bex_engine::BexCallId(1),
-            id,
-            ..
-        } if *id == override_id
-    )));
+    // The SetFunctionId record assertion lives in prof_gate.rs
+    // (set_function_id_recorded) against the .bamlprof stream.
 }
 
 #[tokio::test]
@@ -1146,29 +744,19 @@ async fn baml_id_assignment_overrides_current_id() {
     assert_eq!(call_ref.call_id, bex_engine::BexCallId(1));
 
     assert_eq!(parts[1], parts[2]);
-    let RuntimeId::OverrideUuid(override_id) = RuntimeId::decode(parts[2]).unwrap() else {
+    let RuntimeId::OverrideUuid(_override_id) = RuntimeId::decode(parts[2]).unwrap() else {
         panic!("expected override runtime ID");
     };
 
-    let disk_events = sink.disk_events.lock().unwrap().clone();
-    assert_balanced(&disk_events);
-    assert_threads_closed(&disk_events);
-    assert!(disk_events.iter().any(|event| matches!(
-        event,
-        DiskEventV1::SetId {
-            thread_id: bex_engine::BexThreadId(1),
-            call_id: bex_engine::BexCallId(1),
-            id,
-            ..
-        } if *id == override_id
-    )));
+    // The SetFunctionId record assertion lives in prof_gate.rs
+    // (set_function_id_recorded) against the .bamlprof stream.
 }
 
 // ── §2.2 contract: `$id` override persistence (T4-T7) ──────────────────────
 
 /// T4: an override set via `$id = ...` must survive a nested bytecode call.
-/// The override lives on the engine's span (not just the VM's transient
-/// identity), so re-entering `main` after `helper()` returns must restore it.
+/// The override is VM-owned, keyed by the overridden call's `call_id`, so
+/// re-entering `main` after `helper()` returns must restore it.
 #[tokio::test]
 async fn id_override_survives_nested_call() {
     let source = r#"
@@ -1218,10 +806,6 @@ async fn id_override_survives_nested_call() {
         parts[1], parts[2],
         "after a nested call, $id should still be the override"
     );
-
-    let disk_events = sink.disk_events.lock().unwrap().clone();
-    assert_balanced(&disk_events);
-    assert_threads_closed(&disk_events);
 }
 
 /// T5: same as T4 but inside a `spawn` body (each child thread has its own
@@ -1278,10 +862,6 @@ async fn id_override_survives_nested_call_in_spawn() {
         parts[1], parts[2],
         "after a nested call in spawn, $id should still be the override"
     );
-
-    let disk_events = sink.disk_events.lock().unwrap().clone();
-    assert_balanced(&disk_events);
-    assert_threads_closed(&disk_events);
 }
 
 /// T6: the inverse scoping rule — an override on the *caller* must NOT leak
@@ -1336,19 +916,20 @@ async fn id_override_not_inherited_by_nested_call() {
         panic!("helper's $id should be a default CallRef, got {}", parts[1]);
     };
     assert_eq!(call_ref.thread_id, bex_engine::BexThreadId(1));
-    assert_eq!(call_ref.call_id, bex_engine::BexCallId(2));
-
-    let disk_events = sink.disk_events.lock().unwrap().clone();
-    assert_balanced(&disk_events);
-    assert_threads_closed(&disk_events);
+    // Call ids count sys-op calls too (the ring records them as call pairs,
+    // minted unconditionally in `prof_enter_sysop`): main = 1,
+    // baml.id.new() = 2, the `$id =` set-op = 3, helper = 4.
+    assert_eq!(call_ref.call_id, bex_engine::BexCallId(4));
 }
 
-/// T7: exactly one `SetId` disk event per override, attributed to the
-/// overridden call, ordered after that call's `CallFunction` and before its
-/// `EndFunction` (consumers rely on "no `SetId` for a call => `$id` is the
-/// `CallRef`").
+/// T7 (adapted): the override is still in force when the overridden call
+/// returns — `$id` read at the end of `main`, after a nested call, decodes
+/// as the override UUID rather than the default `CallRef`. The per-record
+/// emission-count/ordering semantics (exactly one `SetFunctionId`, between
+/// the call's `CallFunction` and `EndFunction`) now live in the ring; see
+/// `prof_gate.rs::set_function_id_recorded`.
 #[tokio::test]
-async fn set_id_emitted_once_per_override() {
+async fn id_override_read_at_return_is_override_uuid() {
     let source = r#"
         function helper() -> int {
             1
@@ -1378,277 +959,38 @@ async fn set_id_emitted_once_per_override() {
     let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
         .with_host_ctx(host_ctx)
         .build();
-    engine
+    let value = engine
         .call_function("main", vec![], call_ctx, true)
         .await
         .unwrap();
 
-    let disk_events = sink.disk_events.lock().unwrap().clone();
-    assert_balanced(&disk_events);
-    assert_threads_closed(&disk_events);
-
-    let set_id_indices: Vec<usize> = disk_events
-        .iter()
-        .enumerate()
-        .filter_map(|(i, e)| matches!(e, DiskEventV1::SetId { .. }).then_some(i))
-        .collect();
-    assert_eq!(
-        set_id_indices.len(),
-        1,
-        "expected exactly one SetId event, got {}",
-        set_id_indices.len()
-    );
-    let set_idx = set_id_indices[0];
-    let DiskEventV1::SetId {
-        thread_id, call_id, ..
-    } = &disk_events[set_idx]
-    else {
-        unreachable!();
+    let BexExternalValue::String(id) = value else {
+        panic!("expected string result");
     };
-    assert_eq!(*thread_id, bex_engine::BexThreadId(1));
-    assert_eq!(
-        *call_id,
-        bex_engine::BexCallId(1),
-        "override belongs to the root call"
-    );
+    let RuntimeId::OverrideUuid(_override_id) = RuntimeId::decode(id.as_str()).unwrap() else {
+        panic!("expected override runtime ID, got {id}");
+    };
 
-    let call_idx = disk_events
-        .iter()
-        .position(|e| {
-            matches!(e, DiskEventV1::CallFunction { thread_id, call_id, .. }
-                if *thread_id == bex_engine::BexThreadId(1) && *call_id == bex_engine::BexCallId(1))
-        })
-        .expect("root CallFunction present");
-    let end_idx = disk_events
-        .iter()
-        .position(|e| {
-            matches!(e, DiskEventV1::EndFunction { thread_id, call_id, .. }
-                if *thread_id == bex_engine::BexThreadId(1) && *call_id == bex_engine::BexCallId(1))
-        })
-        .expect("root EndFunction present");
-    assert!(
-        call_idx < set_idx && set_idx < end_idx,
-        "SetId must sit between its call's CallFunction ({call_idx}) and EndFunction ({end_idx}), got {set_idx}"
-    );
+    // The SetFunctionId record assertion lives in prof_gate.rs
+    // (set_function_id_recorded) against the .bamlprof stream.
 }
 
 // ── §2.1 contract: balance across caught exceptions (T1-T2) ────────────────
 
-/// T1: a throw caught one frame up must not desync the call-identity stack.
-/// The unwound callee still gets exactly one `EndFunction` (with a non-Ok
-/// status), and calls made after the catch get correct parent edges.
+// NOTE: bex_disk_events_balance_across_caught_exception and
+// bex_disk_events_balance_across_catch_two_frames_up were ported to
+// bex_engine/tests/prof_gate.rs (caught-exception ring balance) against
+// the .bamlprof artifact.
+
+/// T1 variant: a traced (LLM-style) frame between thrower and catcher pins
+/// the engine's `SpanNotification::Unwound` handling — a traced frame popped
+/// by a caught exception must emit a `FunctionEnd` `RuntimeEvent` with error
+/// "unwound by exception". `mid` is force-marked `trace: true` on the
+/// compiled program, standing in for an LLM function without needing a
+/// client. (Ring-level balance across this unwind is covered in
+/// `prof_gate.rs`, caught-exception ring balance.)
 #[tokio::test]
-async fn bex_disk_events_balance_across_caught_exception() {
-    let source = r#"
-        function boom() -> int {
-            throw "boom"
-        }
-
-        function safe() -> int {
-            boom() catch (e) {
-                _ => 0
-            }
-        }
-
-        function after() -> int {
-            1
-        }
-
-        function main() -> int {
-            let a = safe();
-            after()
-        }
-    "#;
-
-    let snapshot = compile_for_engine(source);
-    let sink = Arc::new(CapturingSink::default());
-    let engine = Arc::new(
-        BexEngine::new(
-            snapshot,
-            Arc::new(sys_native::SysOps::native()),
-            Some(sink.clone()),
-            Vec::new(),
-        )
-        .unwrap(),
-    );
-
-    let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next()).build();
-    let value = engine
-        .call_function("main", vec![], call_ctx, true)
-        .await
-        .unwrap();
-    assert_eq!(value, BexExternalValue::Int(1));
-
-    let events = sink.disk_events.lock().unwrap().clone();
-    assert_balanced(&events);
-    assert_threads_closed(&events);
-
-    // Exact shape: StartThread, Call(1 main), Call(2 safe), Call(3 boom),
-    // End(3 unwound), End(2 ok), Call(4 after), End(4 ok), End(1 ok),
-    // EndThread. No duplicates, nothing extra.
-    assert_eq!(events.len(), 10, "unexpected event count: {events:#?}");
-
-    let fqn_for = |function_id| {
-        engine
-            .program_metadata()
-            .function_table
-            .get(function_id)
-            .map(|m| m.fqn.clone())
-            .unwrap_or_default()
-    };
-
-    let calls: Vec<(u64, Option<u64>, String)> = events
-        .iter()
-        .filter_map(|e| match e {
-            DiskEventV1::CallFunction {
-                call_id,
-                parent_call_id,
-                function_id,
-                ..
-            } => Some((
-                call_id.0,
-                parent_call_id.map(|c| c.0),
-                fqn_for(*function_id),
-            )),
-            _ => None,
-        })
-        .collect();
-    assert_eq!(
-        calls,
-        vec![
-            (1, None, "user.main".to_string()),
-            (2, Some(1), "user.safe".to_string()),
-            (3, Some(2), "user.boom".to_string()),
-            (4, Some(1), "user.after".to_string()),
-        ],
-        "call sequence / parent edges wrong: {calls:?}"
-    );
-
-    // boom (call 3) was unwound by the caught exception: non-Ok status.
-    let boom_status = events
-        .iter()
-        .find_map(|e| match e {
-            DiskEventV1::EndFunction {
-                call_id, status, ..
-            } if call_id.0 == 3 => Some(status.clone()),
-            _ => None,
-        })
-        .expect("boom must get an EndFunction");
-    assert_ne!(
-        boom_status,
-        bex_events::FunctionEndStatus::Ok,
-        "an unwound call must not end Ok"
-    );
-
-    // The root EndFunction is the last function event and has call_id 1.
-    let last_function_event = events
-        .iter()
-        .rev()
-        .find(|e| {
-            matches!(
-                e,
-                DiskEventV1::CallFunction { .. } | DiskEventV1::EndFunction { .. }
-            )
-        })
-        .unwrap();
-    assert!(
-        matches!(last_function_event, DiskEventV1::EndFunction { call_id, .. } if call_id.0 == 1),
-        "root EndFunction must close last: {last_function_event:?}"
-    );
-}
-
-/// T1 variant: the catch sits two frames above the throw — multi-frame
-/// truncation, where the old positional popping would shift by more than one.
-#[tokio::test]
-async fn bex_disk_events_balance_across_catch_two_frames_up() {
-    let source = r#"
-        function thrower() -> int {
-            throw "deep"
-        }
-
-        function mid() -> int {
-            thrower()
-        }
-
-        function outer() -> int {
-            mid() catch (e) {
-                _ => 0
-            }
-        }
-
-        function after() -> int {
-            1
-        }
-
-        function main() -> int {
-            let a = outer();
-            after()
-        }
-    "#;
-
-    let snapshot = compile_for_engine(source);
-    let sink = Arc::new(CapturingSink::default());
-    let engine = Arc::new(
-        BexEngine::new(
-            snapshot,
-            Arc::new(sys_native::SysOps::native()),
-            Some(sink.clone()),
-            Vec::new(),
-        )
-        .unwrap(),
-    );
-
-    let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next()).build();
-    let value = engine
-        .call_function("main", vec![], call_ctx, true)
-        .await
-        .unwrap();
-    assert_eq!(value, BexExternalValue::Int(1));
-
-    let events = sink.disk_events.lock().unwrap().clone();
-    assert_balanced(&events);
-    assert_threads_closed(&events);
-
-    // Both unwound frames (mid call 3, thrower call 4) end non-Ok.
-    for unwound_call in [3u64, 4u64] {
-        let status = events
-            .iter()
-            .find_map(|e| match e {
-                DiskEventV1::EndFunction {
-                    call_id, status, ..
-                } if call_id.0 == unwound_call => Some(status.clone()),
-                _ => None,
-            })
-            .unwrap_or_else(|| panic!("call {unwound_call} must get an EndFunction"));
-        assert_ne!(status, bex_events::FunctionEndStatus::Ok);
-    }
-
-    // after() is parented to main (call 1), not to a stale unwound span.
-    let after_parent = events
-        .iter()
-        .filter_map(|e| match e {
-            DiskEventV1::CallFunction {
-                call_id,
-                parent_call_id,
-                ..
-            } => Some((call_id.0, parent_call_id.map(|c| c.0))),
-            _ => None,
-        })
-        .next_back()
-        .unwrap();
-    assert_eq!(
-        after_parent,
-        (5, Some(1)),
-        "after() got a stale parent edge"
-    );
-}
-
-/// T1 variant: a traced (LLM-style) frame between thrower and catcher — the
-/// legacy `SpanNotify` path must also stay balanced across the unwind. `mid` is
-/// force-marked `trace: true` on the compiled program, standing in for an LLM
-/// function without needing a client.
-#[tokio::test]
-async fn bex_disk_events_balance_across_catch_with_traced_frame() {
+async fn traced_frame_unwound_by_caught_exception_closes_span() {
     let source = r#"
         function thrower() -> int {
             throw "deep"
@@ -1692,7 +1034,7 @@ async fn bex_disk_events_balance_across_catch_with_traced_frame() {
         .unwrap(),
     );
 
-    let (host_ctx, guard) = setup_tracking();
+    let (host_ctx, _guard) = setup_tracking();
     let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
         .with_host_ctx(host_ctx)
         .build();
@@ -1702,47 +1044,35 @@ async fn bex_disk_events_balance_across_catch_with_traced_frame() {
         .unwrap();
     assert_eq!(value, BexExternalValue::Int(0));
 
-    let events = sink.disk_events.lock().unwrap().clone();
-    assert_balanced(&events);
-    assert_threads_closed(&events);
-
-    // The traced span (mid) was unwound: its disk EndFunction is non-Ok...
-    let mid_call_id = events
-        .iter()
-        .find_map(|e| match e {
-            DiskEventV1::CallFunction {
-                call_id,
-                function_id,
-                ..
-            } if engine
-                .program_metadata()
-                .function_table
-                .get(*function_id)
-                .is_some_and(|m| m.fqn == "user.mid") =>
-            {
-                Some(call_id.0)
-            }
-            _ => None,
-        })
-        .expect("mid must get a CallFunction");
-    let mid_status = events
-        .iter()
-        .find_map(|e| match e {
-            DiskEventV1::EndFunction {
-                call_id, status, ..
-            } if call_id.0 == mid_call_id => Some(status.clone()),
-            _ => None,
-        })
-        .expect("traced unwound frame must get an EndFunction");
-    assert_ne!(mid_status, bex_events::FunctionEndStatus::Ok);
-
-    // ...and the legacy span stream is balanced too: start:mid has an end:mid.
-    let legacy = collect_events(&guard);
-    let names = event_names(&legacy);
+    // The traced frame's span events ride the sink's live stream (the
+    // tracked event-store bucket only routes direct children of the host
+    // root, so a grandchild frame never lands there). The stream stays
+    // balanced across the unwind: exactly one start:mid and one end:mid.
+    let spans = sink.runtime_events.lock().unwrap().clone();
+    let names = event_names(&spans);
     assert_eq!(
         names.iter().filter(|n| *n == "start:user.mid").count(),
+        1,
+        "traced frame must open exactly one span: {names:?}"
+    );
+    assert_eq!(
         names.iter().filter(|n| *n == "end:user.mid").count(),
-        "legacy span stream unbalanced for the traced frame: {names:?}"
+        1,
+        "traced frame must close exactly one span: {names:?}"
+    );
+
+    // ...and the unwound traced frame closes with the unwind error.
+    let mid_end = spans
+        .iter()
+        .find_map(|e| match &e.event {
+            EventKind::Function(FunctionEvent::End(end)) if end.name == "user.mid" => Some(end),
+            _ => None,
+        })
+        .expect("traced unwound frame must get a FunctionEnd RuntimeEvent");
+    assert_eq!(
+        mid_end.error.as_deref(),
+        Some("unwound by exception"),
+        "traced frame popped by a caught exception must close as unwound"
     );
 }
 
@@ -1797,829 +1127,27 @@ async fn id_is_correct_after_caught_exception() {
         bex_engine::BexCallId(1),
         "$id after a catch must be the root call, not a stale unwound call"
     );
-
-    let events = sink.disk_events.lock().unwrap().clone();
-    assert_balanced(&events);
-    assert_threads_closed(&events);
 }
 
-// ── §2.4 contract: CallFunction is never skipped (T10, T12) ────────────────
-
-/// T10: `call_callable` (the HTTP-handler path) gets a balanced disk
-/// lifecycle with the *real* callee identity — previously the root
-/// `CallFunction` was silently skipped (the "<callable>" label resolved to no
-/// function id), leaving an orphan `EndFunction`.
-#[tokio::test]
-async fn call_callable_emits_balanced_disk_lifecycle() {
-    let source = r#"
-        function the_callee(x: int) -> int {
-            x + 1
-        }
-
-        function get_callee() -> (int) -> int {
-            the_callee
-        }
-    "#;
-
-    let snapshot = compile_for_engine(source);
-    let sink = Arc::new(CapturingSink::default());
-    let engine = Arc::new(
-        BexEngine::new(
-            snapshot,
-            Arc::new(sys_native::SysOps::native()),
-            Some(sink.clone()),
-            Vec::new(),
-        )
-        .unwrap(),
-    );
-
-    let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next()).build();
-    let handle = match engine
-        .call_function("get_callee", vec![], call_ctx, false)
-        .await
-        .unwrap()
-    {
-        BexExternalValue::Handle(handle) => handle,
-        other => panic!("expected a callable handle, got {other:?}"),
-    };
-
-    let callable_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next()).build();
-    let value = engine
-        .call_callable(handle, vec![BexExternalValue::Int(41)], callable_ctx, true)
-        .await
-        .unwrap();
-    assert_eq!(value, BexExternalValue::Int(42));
-
-    let events = sink.disk_events.lock().unwrap().clone();
-    assert_balanced(&events);
-    assert_threads_closed(&events);
-
-    // The call_callable invocation runs on its own thread (the second one).
-    // Its stream is exactly StartThread, CallFunction, EndFunction, EndThread
-    // — and the CallFunction resolves to the real callee, not the sentinel.
-    let callable_thread = events
-        .iter()
-        .filter_map(|e| match e {
-            DiskEventV1::StartThread { thread_id, .. } => Some(*thread_id),
-            _ => None,
-        })
-        .nth(1)
-        .expect("call_callable starts a second thread");
-    let thread_events: Vec<&DiskEventV1> = events
-        .iter()
-        .filter(|e| match e {
-            DiskEventV1::StartThread { thread_id, .. }
-            | DiskEventV1::CallFunction { thread_id, .. }
-            | DiskEventV1::SetId { thread_id, .. }
-            | DiskEventV1::EndFunction { thread_id, .. }
-            | DiskEventV1::EndThread { thread_id, .. } => *thread_id == callable_thread,
-            DiskEventV1::Heartbeat { .. } => false,
-        })
-        .collect();
-
-    assert_eq!(thread_events.len(), 4, "{thread_events:#?}");
-    assert!(matches!(thread_events[0], DiskEventV1::StartThread { .. }));
-    let DiskEventV1::CallFunction {
-        call_id,
-        parent_call_id,
-        function_id,
-        ..
-    } = thread_events[1]
-    else {
-        panic!("missing root CallFunction for call_callable: {thread_events:#?}");
-    };
-    assert_eq!(*call_id, bex_engine::BexCallId(1));
-    assert_eq!(*parent_call_id, None);
-    let fqn = engine
-        .program_metadata()
-        .function_table
-        .get(*function_id)
-        .map(|m| m.fqn.clone());
-    assert_eq!(
-        fqn.as_deref(),
-        Some("user.the_callee"),
-        "call_callable must carry the real callee identity"
-    );
-    assert!(
-        matches!(thread_events[2], DiskEventV1::EndFunction { call_id, status, .. }
-            if *call_id == bex_engine::BexCallId(1) && *status == bex_events::FunctionEndStatus::Ok)
-    );
-    assert!(
-        matches!(thread_events[3], DiskEventV1::EndThread { status, .. }
-            if *status == bex_events::ThreadEndStatus::Completed)
-    );
-}
-
-/// T12a: the reserved unknown-function sentinel row ships in every header, so
-/// a consumer can always join a `CallFunction` whose callee could not be
-/// resolved.
-#[test]
-fn unknown_function_sentinel_row_is_in_every_header() {
-    let source = r#"
-        function main() -> int {
-            1
-        }
-    "#;
-
-    let snapshot = compile_for_engine(source);
-    let engine = BexEngine::new(
-        snapshot,
-        Arc::new(sys_native::SysOps::native()),
-        None,
-        Vec::new(),
-    )
-    .unwrap();
-
-    let table = &engine.program_metadata().function_table;
-    let sentinel = table
-        .functions
-        .iter()
-        .find(|f| f.fqn == "baml.<unknown-function>")
-        .expect("unknown-function sentinel row missing from metadata table");
-    // The sentinel sits past the pool (one after the spawn-closure row), so it
-    // can never collide with a real function's id.
-    let spawn_row = table
-        .functions
-        .iter()
-        .find(|f| f.fqn == "baml.<spawn-closure>")
-        .expect("spawn-closure row missing");
-    assert_eq!(sentinel.function_id.0, spawn_row.function_id.0 + 1);
-    assert!(
-        table
-            .functions
-            .iter()
-            .filter(|f| f.function_id == sentinel.function_id)
-            .count()
-            == 1
-    );
-}
-
-/// T12b: two functions with the same display name (methods on different
-/// classes) must be attributed to their own `function_id`s — resolution is by
-/// identity (heap pointer), never by a display-name scan that takes the first
-/// match.
-#[tokio::test]
-async fn same_display_name_functions_are_not_misattributed() {
-    let source = r#"
-        class ClsA {
-            x: int
-            function run(self) -> int {
-                1
-            }
-        }
-
-        class ClsB {
-            x: int
-            function run(self) -> int {
-                2
-            }
-        }
-
-        function main() -> int {
-            let a = ClsA { x: 0 };
-            let b = ClsB { x: 0 };
-            a.run() + b.run()
-        }
-    "#;
-
-    let snapshot = compile_for_engine(source);
-    let sink = Arc::new(CapturingSink::default());
-    let engine = Arc::new(
-        BexEngine::new(
-            snapshot,
-            Arc::new(sys_native::SysOps::native()),
-            Some(sink.clone()),
-            Vec::new(),
-        )
-        .unwrap(),
-    );
-
-    let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next()).build();
-    let value = engine
-        .call_function("main", vec![], call_ctx, true)
-        .await
-        .unwrap();
-    assert_eq!(value, BexExternalValue::Int(3));
-
-    let events = sink.disk_events.lock().unwrap().clone();
-    assert_balanced(&events);
-    assert_threads_closed(&events);
-
-    let method_fqns: Vec<String> = events
-        .iter()
-        .filter_map(|e| match e {
-            DiskEventV1::CallFunction { function_id, .. } => engine
-                .program_metadata()
-                .function_table
-                .get(*function_id)
-                .map(|m| m.fqn.clone()),
-            _ => None,
-        })
-        .filter(|fqn| fqn.rsplit('.').next() == Some("run"))
-        .collect();
-    assert_eq!(
-        method_fqns,
-        vec!["user.ClsA.run".to_string(), "user.ClsB.run".to_string()],
-        "same-display-name methods must resolve to their own ids"
-    );
-}
-
-// ── §2.5 contract: timestamp semantics (T13-T15) ───────────────────────────
-
-fn event_timestamp_ns(event: &DiskEventV1) -> u64 {
-    match event {
-        DiskEventV1::StartThread { timestamp_ns, .. }
-        | DiskEventV1::CallFunction { timestamp_ns, .. }
-        | DiskEventV1::SetId { timestamp_ns, .. }
-        | DiskEventV1::EndFunction { timestamp_ns, .. }
-        | DiskEventV1::EndThread { timestamp_ns, .. }
-        | DiskEventV1::Heartbeat { timestamp_ns } => *timestamp_ns,
-    }
-}
-
-/// T13: `timestamp_ns` is monotonic-since-process-start, never wall-clock
-/// epoch nanos. 10^15 ns is ~11 days of process uptime — generous, while
-/// absolute epoch values (~1.78e18) fail forever.
-#[tokio::test]
-async fn timestamps_are_relative_to_process_start() {
-    let source = r#"
-        function inner() -> int {
-            1
-        }
-
-        function main() -> int {
-            inner()
-        }
-    "#;
-
-    let snapshot = compile_for_engine(source);
-    let sink = Arc::new(CapturingSink::default());
-    let engine = Arc::new(
-        BexEngine::new(
-            snapshot,
-            Arc::new(sys_native::SysOps::native()),
-            Some(sink.clone()),
-            Vec::new(),
-        )
-        .unwrap(),
-    );
-
-    let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next()).build();
-    engine
-        .call_function("main", vec![], call_ctx, true)
-        .await
-        .unwrap();
-
-    let events = sink.disk_events.lock().unwrap().clone();
-    assert!(!events.is_empty());
-    let started_at = engine.event_file_header_v1().started_at_epoch_ns;
-    for event in &events {
-        let ts = event_timestamp_ns(event);
-        assert!(
-            ts < 1_000_000_000_000_000,
-            "timestamp_ns looks like wall-clock epoch nanos: {ts} ({event:?})"
-        );
-        assert!(
-            u128::from(ts) < started_at,
-            "timestamp_ns must be far below the wall anchor"
-        );
-    }
-}
-
-/// T14: the rebase formula consumers use — `wall = started_at_epoch_ns +
-/// timestamp_ns` — lands inside the test's own wall-clock window for the
-/// first and last event.
-#[tokio::test]
-async fn timestamps_compose_with_wall_anchor() {
-    let source = r#"
-        function main() -> int {
-            1
-        }
-    "#;
-
-    let snapshot = compile_for_engine(source);
-    let sink = Arc::new(CapturingSink::default());
-    let engine = Arc::new(
-        BexEngine::new(
-            snapshot,
-            Arc::new(sys_native::SysOps::native()),
-            Some(sink.clone()),
-            Vec::new(),
-        )
-        .unwrap(),
-    );
-
-    // Derive the window with the SAME composition consumers use
-    // (anchor + monotonic), not a raw SystemTime read: Instant does not
-    // advance across system suspend while SystemTime does, so a raw-wall
-    // window would flake on a laptop suspend or NTP step anywhere earlier
-    // in this test binary. The composed window still catches the original
-    // bug class (absolute-epoch timestamp_ns blows it by ~1.7e18) and pins
-    // the formula itself.
-    let started_at = engine.event_file_header_v1().started_at_epoch_ns;
-    let before = started_at + u128::from(bex_events::now_ns());
-    let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next()).build();
-    engine
-        .call_function("main", vec![], call_ctx, true)
-        .await
-        .unwrap();
-    let after = started_at + u128::from(bex_events::now_ns());
-
-    let events = sink.disk_events.lock().unwrap().clone();
-    for event in [events.first().unwrap(), events.last().unwrap()] {
-        let wall = started_at + u128::from(event_timestamp_ns(event));
-        assert!(
-            wall >= before && wall <= after,
-            "rebased wall time {wall} outside [{before}, {after}] for {event:?}"
-        );
-    }
-}
-
-/// T15: per-thread timestamps are non-decreasing in emission order (pins the
-/// monotonic clock against a future regression to wall-clock or a per-thread
-/// clock mixup).
-#[tokio::test]
-async fn timestamps_are_monotonic_per_thread() {
-    let source = r#"
-        function inner() -> int {
-            1
-        }
-
-        function main() -> int {
-            let f = spawn { inner() };
-            let x = inner();
-            (await f) + x
-        }
-    "#;
-
-    let snapshot = compile_for_engine(source);
-    let sink = Arc::new(CapturingSink::default());
-    let engine = Arc::new(
-        BexEngine::new(
-            snapshot,
-            Arc::new(sys_native::SysOps::native()),
-            Some(sink.clone()),
-            Vec::new(),
-        )
-        .unwrap(),
-    );
-
-    let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next()).build();
-    engine
-        .call_function("main", vec![], call_ctx, true)
-        .await
-        .unwrap();
-
-    let events = sink.disk_events.lock().unwrap().clone();
-    let mut last_per_thread: std::collections::HashMap<u64, u64> = std::collections::HashMap::new();
-    for event in &events {
-        let thread = match event {
-            DiskEventV1::StartThread { thread_id, .. }
-            | DiskEventV1::CallFunction { thread_id, .. }
-            | DiskEventV1::SetId { thread_id, .. }
-            | DiskEventV1::EndFunction { thread_id, .. }
-            | DiskEventV1::EndThread { thread_id, .. } => thread_id.0,
-            DiskEventV1::Heartbeat { .. } => continue,
-        };
-        let ts = event_timestamp_ns(event);
-        if let Some(last) = last_per_thread.get(&thread) {
-            assert!(
-                ts >= *last,
-                "thread {thread}: timestamp went backwards ({last} -> {ts})"
-            );
-        }
-        last_per_thread.insert(thread, ts);
-    }
-}
-
-// ── §2.6 contract: termination statuses (T16-T19) ──────────────────────────
-
-/// T16: a cancelled *root* call reads as `Cancelled` on both the function and
-/// thread end — the same classification spawned children already get — not as
-/// a generic `Error`.
-#[tokio::test]
-async fn root_cancellation_emits_cancelled_statuses() {
-    let source = r#"
-        function main() -> int {
-            baml.sys.sleep(10000);
-            1
-        }
-    "#;
-
-    let snapshot = compile_for_engine(source);
-    let sink = Arc::new(CapturingSink::default());
-    let engine = Arc::new(
-        BexEngine::new(
-            snapshot,
-            Arc::new(sys_native::SysOps::native()),
-            Some(sink.clone()),
-            Vec::new(),
-        )
-        .unwrap(),
-    );
-
-    let cancel = bex_engine::CancellationToken::new();
-    let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
-        .with_cancel_token(cancel.clone())
-        .build();
-    let engine_clone = Arc::clone(&engine);
-    let handle = tokio::spawn(async move {
-        engine_clone
-            .call_function("main", vec![], call_ctx, true)
-            .await
-    });
-    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-    cancel.cancel();
-    let result = handle.await.unwrap();
-    assert!(result.is_err(), "cancelled call must not return Ok");
-
-    let events = sink.disk_events.lock().unwrap().clone();
-    assert_balanced(&events);
-    assert_threads_closed(&events);
-
-    assert!(
-        events.iter().any(|e| matches!(e,
-            DiskEventV1::EndFunction { call_id, status, .. }
-                if *call_id == bex_engine::BexCallId(1)
-                    && *status == bex_events::FunctionEndStatus::Cancelled)),
-        "root EndFunction must be Cancelled: {events:#?}"
-    );
-    assert!(
-        events.iter().any(|e| matches!(e,
-            DiskEventV1::EndThread { status, .. }
-                if *status == bex_events::ThreadEndStatus::Cancelled)),
-        "root EndThread must be Cancelled: {events:#?}"
-    );
-}
-
-/// T17: cancelling only a spawned child marks the *child's* stream Cancelled
-/// while the parent completes normally (pins the already-correct child path
-/// so the root fix can't regress it).
-#[tokio::test]
-async fn spawned_child_cancellation_emits_cancelled() {
-    let source = r#"
-        function main() -> int {
-            let tok = baml.spawn.CancelToken.new();
-            let f = spawn with baml.spawn.options(cancel = tok) {
-                baml.sys.sleep(10000);
-                42
-            };
-            let _ = tok.cancel();
-            (await f) catch (e) {
-                baml.panics.Cancelled => 7
-            }
-        }
-    "#;
-
-    let snapshot = compile_for_engine(source);
-    let sink = Arc::new(CapturingSink::default());
-    let engine = Arc::new(
-        BexEngine::new(
-            snapshot,
-            Arc::new(sys_native::SysOps::native()),
-            Some(sink.clone()),
-            Vec::new(),
-        )
-        .unwrap(),
-    );
-
-    let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next()).build();
-    let value = engine
-        .call_function("main", vec![], call_ctx, true)
-        .await
-        .unwrap();
-    assert_eq!(value, BexExternalValue::Int(7));
-
-    let events = sink.disk_events.lock().unwrap().clone();
-    assert_balanced(&events);
-    assert_threads_closed(&events);
-
-    let child_thread = events
-        .iter()
-        .filter_map(|e| match e {
-            DiskEventV1::StartThread { thread_id, .. } => Some(*thread_id),
-            _ => None,
-        })
-        .nth(1)
-        .expect("spawn starts a child thread");
-
-    // Child: cancelled on both levels.
-    assert!(
-        events.iter().any(|e| matches!(e,
-            DiskEventV1::EndFunction { thread_id, status, .. }
-                if *thread_id == child_thread
-                    && *status == bex_events::FunctionEndStatus::Cancelled)),
-        "child EndFunction must be Cancelled: {events:#?}"
-    );
-    assert!(
-        events.iter().any(|e| matches!(e,
-            DiskEventV1::EndThread { thread_id, status, .. }
-                if *thread_id == child_thread
-                    && *status == bex_events::ThreadEndStatus::Cancelled)),
-        "child EndThread must be Cancelled: {events:#?}"
-    );
-
-    // Parent: completed normally.
-    let parent_thread = events
-        .iter()
-        .find_map(|e| match e {
-            DiskEventV1::StartThread { thread_id, .. } => Some(*thread_id),
-            _ => None,
-        })
-        .unwrap();
-    assert!(
-        events.iter().any(|e| matches!(e,
-            DiskEventV1::EndThread { thread_id, status, .. }
-                if *thread_id == parent_thread
-                    && *status == bex_events::ThreadEndStatus::Completed)),
-        "parent thread must complete normally: {events:#?}"
-    );
-}
-
-/// T18a: an unhandled throw at the root drains *every* open span as Error
-/// before EndThread(Error).
-#[tokio::test]
-async fn root_error_emits_error_statuses_for_all_open_spans() {
-    let source = r#"
-        function inner() -> int {
-            throw "boom"
-        }
-
-        function outer() -> int {
-            inner()
-        }
-
-        function main() -> int {
-            outer()
-        }
-    "#;
-
-    let snapshot = compile_for_engine(source);
-    let sink = Arc::new(CapturingSink::default());
-    let engine = Arc::new(
-        BexEngine::new(
-            snapshot,
-            Arc::new(sys_native::SysOps::native()),
-            Some(sink.clone()),
-            Vec::new(),
-        )
-        .unwrap(),
-    );
-
-    let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next()).build();
-    let result = engine.call_function("main", vec![], call_ctx, true).await;
-    assert!(result.is_err());
-
-    let events = sink.disk_events.lock().unwrap().clone();
-    assert_balanced(&events);
-    assert_threads_closed(&events);
-
-    // All three calls (main 1, outer 2, inner 3) end Error.
-    for call in 1u64..=3 {
-        let status = events
-            .iter()
-            .find_map(|e| match e {
-                DiskEventV1::EndFunction {
-                    call_id, status, ..
-                } if call_id.0 == call => Some(status.clone()),
-                _ => None,
-            })
-            .unwrap_or_else(|| panic!("call {call} must get an EndFunction"));
-        assert_eq!(
-            status,
-            bex_events::FunctionEndStatus::Error,
-            "call {call} must end Error"
-        );
-    }
-    assert!(events.iter().any(|e| matches!(e,
-        DiskEventV1::EndThread { status, .. } if *status == bex_events::ThreadEndStatus::Error)));
-}
-
-/// T18b: an unhandled throw in a spawned child marks the child's stream
-/// Error; the parent (which catches at the await) completes normally.
-#[tokio::test]
-async fn spawned_child_error_emits_error_statuses() {
-    let source = r#"
-        function main() -> int {
-            let f = spawn {
-                throw "child boom"
-            };
-            (await f) catch (e) {
-                _ => 9
-            }
-        }
-    "#;
-
-    let snapshot = compile_for_engine(source);
-    let sink = Arc::new(CapturingSink::default());
-    let engine = Arc::new(
-        BexEngine::new(
-            snapshot,
-            Arc::new(sys_native::SysOps::native()),
-            Some(sink.clone()),
-            Vec::new(),
-        )
-        .unwrap(),
-    );
-
-    let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next()).build();
-    let value = engine
-        .call_function("main", vec![], call_ctx, true)
-        .await
-        .unwrap();
-    assert_eq!(value, BexExternalValue::Int(9));
-
-    let events = sink.disk_events.lock().unwrap().clone();
-    assert_balanced(&events);
-    assert_threads_closed(&events);
-
-    let child_thread = events
-        .iter()
-        .filter_map(|e| match e {
-            DiskEventV1::StartThread { thread_id, .. } => Some(*thread_id),
-            _ => None,
-        })
-        .nth(1)
-        .expect("spawn starts a child thread");
-    assert!(events.iter().any(|e| matches!(e,
-        DiskEventV1::EndFunction { thread_id, status, .. }
-            if *thread_id == child_thread && *status == bex_events::FunctionEndStatus::Error)));
-    assert!(events.iter().any(|e| matches!(e,
-        DiskEventV1::EndThread { thread_id, status, .. }
-            if *thread_id == child_thread && *status == bex_events::ThreadEndStatus::Error)));
-}
-
-/// T19: `baml.sys.exit` status mapping, pinned as a deliberate decision:
-/// exit(0) is a clean termination (Ok / Completed); a non-zero exit code is
-/// an Error on both levels.
-#[tokio::test]
-async fn sys_exit_status_mapping() {
-    for (code, want_fn, want_thread) in [
-        (
-            0i64,
-            bex_events::FunctionEndStatus::Ok,
-            bex_events::ThreadEndStatus::Completed,
-        ),
-        (
-            3i64,
-            bex_events::FunctionEndStatus::Error,
-            bex_events::ThreadEndStatus::Error,
-        ),
-    ] {
-        let source = format!(
-            r#"
-            function main() -> int {{
-                baml.sys.exit({code});
-                1
-            }}
-            "#
-        );
-
-        let snapshot = compile_for_engine(&source);
-        let sink = Arc::new(CapturingSink::default());
-        let engine = Arc::new(
-            BexEngine::new(
-                snapshot,
-                Arc::new(sys_native::SysOps::native()),
-                Some(sink.clone()),
-                Vec::new(),
-            )
-            .unwrap(),
-        );
-
-        let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next()).build();
-        let result = engine.call_function("main", vec![], call_ctx, true).await;
-        assert!(
-            matches!(result, Err(bex_engine::EngineError::Exit { code: c }) if c == code),
-            "exit({code}) must surface as EngineError::Exit"
-        );
-
-        let events = sink.disk_events.lock().unwrap().clone();
-        assert_balanced(&events);
-        assert_threads_closed(&events);
-        assert!(
-            events.iter().any(|e| matches!(e,
-                DiskEventV1::EndFunction { call_id, status, .. }
-                    if *call_id == bex_engine::BexCallId(1) && *status == want_fn)),
-            "exit({code}): root EndFunction must be {want_fn:?}: {events:#?}"
-        );
-        assert!(
-            events.iter().any(|e| matches!(e,
-                DiskEventV1::EndThread { status, .. } if *status == want_thread)),
-            "exit({code}): EndThread must be {want_thread:?}: {events:#?}"
-        );
-    }
-}
-
-// ── T20: early-yield equivalence ───────────────────────────────────────────
-
-/// Strip timestamps so two streams can be compared structurally.
-fn normalize_events(events: &[DiskEventV1]) -> Vec<DiskEventV1> {
-    events
-        .iter()
-        .cloned()
-        .map(|mut e| {
-            match &mut e {
-                DiskEventV1::StartThread { timestamp_ns, .. }
-                | DiskEventV1::CallFunction { timestamp_ns, .. }
-                | DiskEventV1::SetId { timestamp_ns, .. }
-                | DiskEventV1::EndFunction { timestamp_ns, .. }
-                | DiskEventV1::EndThread { timestamp_ns, .. }
-                | DiskEventV1::Heartbeat { timestamp_ns } => *timestamp_ns = 0,
-            }
-            e
-        })
-        .collect()
-}
-
-/// T20: suspending and resuming the VM mid-run (GC park via `EarlyYield`) must
-/// not duplicate, drop, or reorder disk events — the stream is identical to
-/// an uninterrupted run, modulo timestamps.
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn early_yield_resume_produces_identical_disk_stream() {
-    const N: i64 = 20_000;
-    let source = r#"
-        function leaf(i: int) -> int {
-            i
-        }
-
-        function spin(n: int) -> int {
-            let i = 0;
-            while (i < n) {
-                let _ = [leaf(i), i + 1];
-                i += 1;
-            }
-            i
-        }
-    "#;
-
-    // Run 1: uninterrupted.
-    let plain_events = {
-        let snapshot = compile_for_engine(source);
-        let sink = Arc::new(CapturingSink::default());
-        let engine = Arc::new(
-            BexEngine::new(
-                snapshot,
-                Arc::new(sys_native::SysOps::native()),
-                Some(sink.clone()),
-                Vec::new(),
-            )
-            .unwrap(),
-        );
-        let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next()).build();
-        let value = engine
-            .call_function("spin", vec![BexExternalValue::Int(N)], call_ctx, true)
-            .await
-            .unwrap();
-        assert_eq!(value, BexExternalValue::Int(N));
-        sink.disk_events.lock().unwrap().clone()
-    };
-
-    // Run 2: same program on a fresh engine, with a GC park mid-flight.
-    let parked_events = {
-        let snapshot = compile_for_engine(source);
-        let sink = Arc::new(CapturingSink::default());
-        let engine = Arc::new(
-            BexEngine::new(
-                snapshot,
-                Arc::new(sys_native::SysOps::native()),
-                Some(sink.clone()),
-                Vec::new(),
-            )
-            .unwrap(),
-        );
-        let call_handle = {
-            let engine = Arc::clone(&engine);
-            tokio::spawn(async move {
-                engine
-                    .call_function(
-                        "spin",
-                        vec![BexExternalValue::Int(N)],
-                        FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
-                        true,
-                    )
-                    .await
-            })
-        };
-        for _ in 0..8 {
-            tokio::task::yield_now().await;
-        }
-        engine
-            .collect_garbage(::bex_heap::CollectionLevel::Minor)
-            .await;
-        let value = call_handle.await.unwrap().unwrap();
-        assert_eq!(value, BexExternalValue::Int(N));
-        sink.disk_events.lock().unwrap().clone()
-    };
-
-    assert_balanced(&plain_events);
-    assert_balanced(&parked_events);
-    assert_eq!(
-        normalize_events(&plain_events),
-        normalize_events(&parked_events),
-        "suspension must not change the disk-event stream"
-    );
-}
+// NOTE: the §2.4 CallFunction-coverage tests were ported to
+// bex_engine/tests/prof_gate.rs: call_callable_emits_balanced_disk_lifecycle
+// (T10), unknown_function_sentinel_row_is_in_every_header (T12a, header
+// sentinel rows), and same_display_name_functions_are_not_misattributed
+// (T12b) now assert against the .bamlprof artifact.
+
+// NOTE: the §2.5 timestamp tests (T13-T15) timed the JSONL disk-event
+// stream, which is gone. The live clock is bex_events::prof::clock
+// (minstant); its semantics are covered by tests in the prof module.
+
+// NOTE: the §2.6 termination-status tests (T16-T19: root/child
+// cancellation, error drain, sys.exit mapping) were ported to
+// bex_engine/tests/prof_gate.rs (thread-status coverage);
+// root_error_emits_error_statuses_for_all_open_spans is covered by
+// prof_gate.rs::unwind_emits_error_ends.
+
+// NOTE: T20 (early_yield_resume_produces_identical_disk_stream) compared
+// two JSONL streams structurally; that stream is gone. Porting the
+// suspension-equivalence check to the .bamlprof stream is a follow-up.
 
 // ── §3.3 contract: baml.id.set throws clause (T25) ─────────────────────────
 
@@ -2781,61 +1309,6 @@ async fn two_engines_mint_distinct_call_refs() {
     }
 }
 
-/// T22 (documented-policy test): dropping the `call_function` future at an
-/// await point truncates the event stream — `StartThread`/`CallFunction`
-/// are emitted, no `End*` ever arrives. This is the *current, intentional*
-/// contract: hosts that abandon a call must cancel via its token (or
-/// `cancel_function_call`) and await completion if they need a closed trace.
-/// If a drop-guard is added later, this test must flip to assert the
-/// `Cancelled` end events instead.
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn dropped_call_future_truncates_stream_by_policy() {
-    let source = r#"
-        function main() -> int {
-            baml.sys.sleep(400);
-            1
-        }
-    "#;
-
-    let snapshot = compile_for_engine(source);
-    let sink = Arc::new(CapturingSink::default());
-    let engine = Arc::new(
-        BexEngine::new(
-            snapshot,
-            Arc::new(sys_native::SysOps::native()),
-            Some(sink.clone()),
-            Vec::new(),
-        )
-        .unwrap(),
-    );
-
-    let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next()).build();
-    {
-        let engine = Arc::clone(&engine);
-        let fut = engine.call_function("main", vec![], call_ctx, true);
-        // Poll long enough for StartThread/CallFunction to be emitted, then
-        // drop the future mid-sleep.
-        let _ = tokio::time::timeout(std::time::Duration::from_millis(100), fut).await;
-    }
-    // Wait well past the program's own completion time: if dropping the
-    // future did NOT truncate execution (e.g. the VM moved to a detached
-    // task), the program would finish its 400ms sleep and emit End events
-    // inside this window — which the assertion below would catch.
-    tokio::time::sleep(std::time::Duration::from_millis(800)).await;
-
-    let events = sink.disk_events.lock().unwrap().clone();
-    assert!(
-        events
-            .iter()
-            .any(|e| matches!(e, DiskEventV1::CallFunction { .. })),
-        "the call started: {events:#?}"
-    );
-    assert!(
-        !events
-            .iter()
-            .any(|e| matches!(e, DiskEventV1::EndThread { .. })),
-        "documented policy: a dropped future truncates the stream (no EndThread). \
-         If this fails because End events now appear, a drop-guard was added — \
-         update this test to assert Cancelled statuses instead: {events:#?}"
-    );
-}
+// NOTE: T22 (dropped_call_future_truncates_stream_by_policy) pinned the
+// JSONL truncation policy for dropped call futures; that stream is gone.
+// Porting the drop-policy check to the .bamlprof stream is a follow-up.

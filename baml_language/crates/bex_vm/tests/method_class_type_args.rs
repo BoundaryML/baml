@@ -64,6 +64,7 @@ fn inject_function(
         origin: FunctionOrigin::UserDefined,
         body_meta: None,
         trace: false,
+        function_id: 0,
     };
     let fn_obj_idx = program.add_object(Object::Function(Box::new(func)));
     let global_slot = program.globals.len();
@@ -89,7 +90,7 @@ fn run_fn(program: Program, fn_name: &str) -> (Value, BexVm) {
     loop {
         match vm.exec().expect("exec") {
             VmExecState::Complete(v) => return (v, vm),
-            VmExecState::EarlyYield | VmExecState::RuntimeCallNotify(_) => continue,
+            VmExecState::EarlyYield => continue,
             other => panic!("unexpected VM state: {other:?}"),
         }
     }
@@ -232,7 +233,7 @@ fn method_frame_type_args_seeded_with_class_type_args() {
     let result = loop {
         match vm.exec().expect("exec") {
             VmExecState::Complete(v) => break v,
-            VmExecState::EarlyYield | VmExecState::RuntimeCallNotify(_) => continue,
+            VmExecState::EarlyYield => continue,
             other => panic!("unexpected: {other:?}"),
         }
     };
@@ -282,7 +283,7 @@ fn method_frame_type_args_seeded_string() {
     let result = loop {
         match vm.exec().expect("exec") {
             VmExecState::Complete(v) => break v,
-            VmExecState::EarlyYield | VmExecState::RuntimeCallNotify(_) => continue,
+            VmExecState::EarlyYield => continue,
             other => panic!("unexpected: {other:?}"),
         }
     };

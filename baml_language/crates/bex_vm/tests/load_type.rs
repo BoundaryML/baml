@@ -72,6 +72,7 @@ fn inject_function(
         origin: FunctionOrigin::UserDefined,
         body_meta: None,
         trace: false,
+        function_id: 0,
     };
 
     let fn_obj_idx = program.add_object(Object::Function(Box::new(func)));
@@ -110,7 +111,7 @@ fn run_with_bytecode_keep_vm(
     loop {
         match vm.exec().expect("exec") {
             VmExecState::Complete(v) => return (v, vm),
-            VmExecState::EarlyYield | VmExecState::RuntimeCallNotify(_) => continue,
+            VmExecState::EarlyYield => continue,
             other => panic!("unexpected VM state: {other:?}"),
         }
     }
@@ -220,7 +221,7 @@ fn load_type_type_arg_ref_substitutes_from_frame() {
     let result = loop {
         match vm.exec().expect("exec") {
             VmExecState::Complete(v) => break v,
-            VmExecState::EarlyYield | VmExecState::RuntimeCallNotify(_) => continue,
+            VmExecState::EarlyYield => continue,
             other => panic!("unexpected state: {other:?}"),
         }
     };
@@ -277,7 +278,7 @@ fn load_type_array_of_type_arg_ref() {
     let result = loop {
         match vm.exec().expect("exec") {
             VmExecState::Complete(v) => break v,
-            VmExecState::EarlyYield | VmExecState::RuntimeCallNotify(_) => continue,
+            VmExecState::EarlyYield => continue,
             other => panic!("unexpected state: {other:?}"),
         }
     };
@@ -360,7 +361,7 @@ fn call_ntypeargs_threads_type_arg_into_callee() {
     let result = loop {
         match vm.exec().expect("exec") {
             VmExecState::Complete(v) => break v,
-            VmExecState::EarlyYield | VmExecState::RuntimeCallNotify(_) => continue,
+            VmExecState::EarlyYield => continue,
             other => panic!("unexpected state: {other:?}"),
         }
     };

@@ -23,11 +23,38 @@ bex_external_types = { workspace = true }
 bex_vm_types = { workspace = true }
 sys_types = { workspace = true }
 base64 = { workspace = true }
+crossbeam-utils = { workspace = true }
 indexmap = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+smallvec = { workspace = true }
 uuid = { workspace = true }
 web-time = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 uuid = { workspace = true, features = [ "js" ] }
+
+# The profiling clock (prof::clock) needs a TSC-calibrated time source; wasm32
+# compiles a stub instead (profiling is forced off there — plan §2.2). miri
+# also gets the stub: minstant's `#[ctor]` probes the TSC with `_rdtsc`, which
+# miri cannot execute, and it runs before any test gets to opt out.
+[target.'cfg(not(any(target_arch = "wasm32", miri)))'.dependencies]
+minstant = { workspace = true }
+
+# The .bamlprof consumer (thread + file writer + protobuf transcode) is
+# native-only; wasm32 has no consumer thread (profiling forced off there).
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+prost = { workspace = true }
+
+[build-dependencies]
+prost-build = { workspace = true }
+protoc-bin-vendored = { workspace = true }
+
+# Only active under `RUSTFLAGS="--cfg baml_loom"` (the prof ring's model-checking
+# builds); a plain `cargo build` never compiles loom.
+[target.'cfg(baml_loom)'.dependencies]
+loom = { workspace = true }
+
+[[bench]]
+name = "prof_clock"
+harness = false

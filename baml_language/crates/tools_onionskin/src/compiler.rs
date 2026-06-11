@@ -4035,10 +4035,6 @@ impl CompilerRunner {
                     // Span notifications are ignored — push null and continue.
                     vm.stack.push(Value::NULL);
                 }
-                Ok(VmExecState::RuntimeCallNotify(_)) => {
-                    // Compact runtime call notifications are ignored.
-                    continue;
-                }
                 Ok(VmExecState::Event { .. }) => {
                     // Custom events are not surfaced — push null and continue.
                     vm.stack.push(Value::NULL);

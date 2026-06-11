@@ -670,6 +670,10 @@ impl RunArgs {
         if let Some(sink) = &event_sink {
             sink.flush();
         }
+        // Drain the profiling rings to .bamlprof before exit (no-op when
+        // BAML_PROFILE is off). The VM work finished inside block_on, so the
+        // final commits are visible to the consumer.
+        bex_events::prof::flush_and_join(std::time::Duration::from_secs(10));
 
         match dispatch_result {
             Ok(baml_exec::DispatchResult::Ok) => {
@@ -967,6 +971,10 @@ impl RunArgs {
         if let Some(sink) = &event_sink {
             sink.flush();
         }
+        // Drain the profiling rings to .bamlprof before exit (no-op when
+        // BAML_PROFILE is off). The VM work finished inside block_on, so the
+        // final commits are visible to the consumer.
+        bex_events::prof::flush_and_join(std::time::Duration::from_secs(10));
 
         match result {
             Ok(()) => {

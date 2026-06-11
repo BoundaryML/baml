@@ -81,10 +81,11 @@ pub struct SourceSnapshotId(pub [u8; 32]);
 pub struct BexThreadId(pub u64);
 
 /// Index into the engine's function metadata table
-/// ([`crate::FunctionMetadataTable`]) — for real functions this IS the
-/// compile-time object-pool index. NOT stable across recompiles: joins are
-/// valid only against the same artifact's header. Synthetic rows
-/// (spawn-closure, unknown-function) sit just past the pool indices.
+/// ([`crate::FunctionMetadataTable`]) — 1-based sequential in object-pool
+/// walk order (0 = unassigned). NOT stable across recompiles: joins are
+/// valid only against the same artifact's header (cross-run joins use the
+/// FQN). Synthetic rows (spawn-closure, unknown-function) sit just past
+/// the real functions.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct FunctionId(pub u32);
 

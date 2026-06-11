@@ -215,3 +215,7 @@ namespace baml.toml:
   function item_to_json
 namespace baml.unstable:
   function string<T>
+namespace baml.yaml:
+  class YamlParseError { methods: [to_json, from_json] }
+  function deserialize<T>
+  function parse

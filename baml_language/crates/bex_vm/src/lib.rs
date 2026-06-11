@@ -23,6 +23,5 @@ pub use errors::{StackFrame, VmPanic, format_traceback};
 pub use indexable::EvalStack;
 pub use package_baml::NativeFunction;
 pub use vm::{
-    BexVm, BytecodeFrame, BytecodeProgram, CurrentBexIdentity, Frame, RuntimeCallNotification,
-    SpanNotification, VmExecState, convert_program,
+    BexVm, BytecodeFrame, BytecodeProgram, Frame, SpanNotification, VmExecState, convert_program,
 };

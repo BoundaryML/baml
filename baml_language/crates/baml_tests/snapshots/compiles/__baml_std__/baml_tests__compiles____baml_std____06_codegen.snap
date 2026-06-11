@@ -19607,3 +19607,55 @@ function baml.toml.item_to_json(item: baml.toml.Item) -> baml.json.json {
 
 function baml.unstable.string(value: unknown) -> string {
 }
+
+function baml.yaml.YamlParseError.from_json(j: baml.json.json) -> baml.yaml.YamlParseError {
+    load_var j
+    load_const "message"
+    call baml.json.field
+    store_var _3
+    load_type string
+    load_var _3
+    call baml.json.from_json
+    init_instance baml.yaml.YamlParseError .message
+    return
+}
+
+function baml.yaml.YamlParseError.to_json(self: baml.yaml.YamlParseError) -> baml.json.json {
+    load_var self
+    load_field .message
+    call baml.String.to_json
+    load_const "message"
+    alloc_map 1
+    return
+}
+
+function baml.yaml.deserialize(s: string) -> unknown {
+    load_var s
+    call baml.yaml.parse
+    store_var _3
+    load_type #0
+    load_var _3
+    call baml.json.from_json
+    jump L2
+    load_var e
+    is_type baml.json.JsonParseError
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    throw
+
+  L1:
+    load_var e
+    load_field .message
+    load_const ""
+    init_instance baml.json.JsonDecodeError .message, .path
+    throw
+
+  L2:
+    return
+}
+
+function baml.yaml.parse(s: string) -> baml.json.json {
+}

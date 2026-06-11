@@ -1,7 +1,15 @@
-use bex_events::{
-    DiskEventV1,
-    ids::{DecodeError, RuntimeId},
-};
+//! The `baml.id` namespace (M1): the `$id` surface over BEX runtime
+//! identity.
+//!
+//! Identity is sourced VM-live — `(process_euid, engine_id)` from the seed
+//! the engine attaches at VM construction, plus the VM's own logical thread
+//! id and the *current call's* id (minted unconditionally per call, plan §6
+//! invariant 5) — so `$id` works in every function, traced or not, with
+//! profiling on or off, and the ids it exposes are byte-for-byte the ids in
+//! the `.bamlprof` event stream. `CallRef` encoding happens lazily, only
+//! when `$id` is actually read.
+
+use bex_events::ids::{BexCallId, BexThreadId, CallRef, DecodeError, RuntimeId};
 
 use super::{BamlNamespaceId, PackageBamlImpl};
 use crate::{
@@ -12,10 +20,10 @@ use crate::{
 
 impl BamlNamespaceId for PackageBamlImpl {
     fn current(vm: &BexVm) -> bex_str::BexStr {
-        vm.current_bex_identity
-            .as_ref()
-            .map(|identity| bex_str::BexStr::from(identity.runtime_id.as_str()))
-            .unwrap_or_else(|| bex_str::BexStr::from(""))
+        current_runtime_id(vm).map_or_else(
+            || bex_str::BexStr::from(""),
+            |id| bex_str::BexStr::from(id.as_str()),
+        )
     }
 
     fn new() -> Result<bex_str::BexStr, VmRustFnError> {
@@ -39,23 +47,50 @@ impl BamlNamespaceId for PackageBamlImpl {
             .into());
         };
 
-        let identity =
-            vm.current_bex_identity
-                .as_mut()
-                .ok_or_else(|| VmBamlError::InvalidArgument {
-                    message: "baml.id.set is only available while a BEX function is running"
-                        .to_string(),
-                })?;
-        identity.runtime_id.clone_from(&id);
-        vm.pending_disk_events.push(DiskEventV1::SetId {
-            thread_id: identity.thread_id,
-            call_id: identity.call_id,
-            id: uuid,
-            timestamp_ns: bex_events::now_ns(),
-        });
+        let call_id = vm.current_call_id();
+        if call_id == 0 || vm.bex_ref_seed.is_none() {
+            return Err(VmBamlError::InvalidArgument {
+                message: "baml.id.set is only available while a BEX function is running"
+                    .to_string(),
+            }
+            .into());
+        }
+
+        // The override lives exactly as long as the current call: it is read
+        // only while `current_call_id` still matches.
+        vm.current_id_override = Some((call_id, id.clone()));
+
+        // Record the override in the event stream (tag 0x05; gated on the
+        // ring like every emission — the override itself works regardless).
+        vm.prof_push_set_function_id(call_id, uuid);
 
         Ok(bex_str::BexStr::from(id.as_str()))
     }
+}
+
+/// The current call's runtime id: the override if one was set for this call,
+/// otherwise the call's `CallRef`, encoded on demand. `None` outside a call
+/// (or before the engine attached identity).
+fn current_runtime_id(vm: &BexVm) -> Option<String> {
+    let call_id = vm.current_call_id();
+    if call_id == 0 {
+        return None;
+    }
+    if let Some((override_call, encoded)) = &vm.current_id_override
+        && *override_call == call_id
+    {
+        return Some(encoded.clone());
+    }
+    let (process_euid, engine_id) = vm.bex_ref_seed?;
+    Some(
+        CallRef {
+            process_euid,
+            engine_id,
+            thread_id: BexThreadId(vm.prof_thread_id),
+            call_id: BexCallId(call_id),
+        }
+        .encode(),
+    )
 }
 
 fn invalid_id_error(id: &str, source: &DecodeError) -> VmRustFnError {

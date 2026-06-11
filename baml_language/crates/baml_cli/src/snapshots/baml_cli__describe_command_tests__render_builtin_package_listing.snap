@@ -1,6 +1,5 @@
 ---
 source: crates/baml_cli/src/describe_command_tests.rs
-assertion_line: 354
 expression: output
 ---
 class            Bigint                           <builtin>/baml/bigint.baml:26
@@ -66,6 +65,9 @@ function         http.send                        <builtin>/baml/ns_http/http.ba
 function         http.fetch_sse                   <builtin>/baml/ns_http/http.baml:78
 class            http.Server                      <builtin>/baml/ns_http/server.baml:10
 class            http.TlsConfig                   <builtin>/baml/ns_http/server.baml:110
+function         id.current                       <builtin>/baml/ns_id/id.baml:6
+function         id.new                           <builtin>/baml/ns_id/id.baml:13
+function         id.set                           <builtin>/baml/ns_id/id.baml:25
 function         io.input                         <builtin>/baml/ns_io/io.baml:2
 function         io.print                         <builtin>/baml/ns_io/io.baml:8
 function         io.println                       <builtin>/baml/ns_io/io.baml:13
@@ -189,3 +191,6 @@ function         toml.item_to_json                <builtin>/baml/ns_toml/toml.ba
 function         toml.item_from_json              <builtin>/baml/ns_toml/toml.baml:59
 class            toml.TomlParseError              <builtin>/baml/ns_toml/toml.baml:68
 function         unstable.string                  <builtin>/baml/ns_unstable/unstable.baml:5
+class            yaml.YamlParseError              <builtin>/baml/ns_yaml/yaml.baml:3
+function         yaml.parse                       <builtin>/baml/ns_yaml/yaml.baml:15
+function         yaml.deserialize                 <builtin>/baml/ns_yaml/yaml.baml:27

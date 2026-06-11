@@ -1,24 +1,43 @@
-//! VM-level contract tests for `RuntimeCallNotification` balance.
+//! VM-level contract tests for `SpanNotification` balance.
 //!
-//! The engine reconstructs a per-thread call stack purely from the VM's call
+//! The engine reconstructs its traced-span stack purely from the VM's span
 //! notifications, so the VM must uphold: every `FunctionEnter` is balanced by
 //! exactly one `FunctionExit` *or* covered by an `Unwound` notification when
 //! an exception pops the frame before it can return. This pins the invariant
-//! independently of the engine — if event emission later moves into the VM,
-//! the balance guarantee survives the move.
+//! independently of the engine.
+//!
+//! (Pre-merge history: these contracts were originally pinned on the
+//! per-call `RuntimeCallNotification` stream. That stream was replaced by
+//! the profiling ring — per-call lifecycle balance is now pinned at the
+//! artifact level in `bex_engine/tests/prof_gate.rs` — and the same
+//! enter/exit/unwound contract continues to hold for the traced
+//! (`@trace`) span stream tested here.)
 
 #![cfg(not(target_arch = "wasm32"))]
 
 use std::sync::{Arc, atomic::AtomicBool};
 
 use baml_project::testing::compile_source;
-use bex_vm::{BexVm, RuntimeCallNotification, VmExecState};
+use bex_vm::{BexVm, SpanNotification, VmExecState};
 
 /// Cap exec-loop iterations so regressions fail fast instead of hanging CI.
 const MAX_EXEC_CALLS: usize = 256;
 
-fn make_vm(source: &str, entry: &str) -> BexVm {
-    let program = compile_source(source);
+/// Compile `source`, mark every function in `traced` with the `trace` flag
+/// (what `@trace` / LLM-function lowering produces), and return a VM with
+/// `entry` set as the entry point.
+fn make_traced_vm(source: &str, entry: &str, traced: &[&str]) -> BexVm {
+    let mut program = compile_source(source);
+    let mut marked = 0usize;
+    for obj in &mut program.objects.0 {
+        if let bex_vm_types::Object::Function(f) = obj
+            && traced.contains(&f.name.as_str())
+        {
+            f.trace = true;
+            marked += 1;
+        }
+    }
+    assert_eq!(marked, traced.len(), "not every traced fn was found");
     let function_index = program
         .function_index(entry)
         .unwrap_or_else(|| panic!("function {entry} not found in compiled program"));
@@ -27,6 +46,10 @@ fn make_vm(source: &str, entry: &str) -> BexVm {
     let function_ptr = vm.heap.compile_time_ptr(function_index);
     vm.set_entry_point(function_ptr, &[]);
     vm
+}
+
+fn make_vm(source: &str, entry: &str) -> BexVm {
+    make_traced_vm(source, entry, &[])
 }
 
 /// Mirror of the engine's span bookkeeping: a stack of frame depths, pushed
@@ -40,13 +63,13 @@ struct BalanceTracker {
 }
 
 impl BalanceTracker {
-    fn observe(&mut self, notification: &RuntimeCallNotification) {
+    fn observe(&mut self, notification: &SpanNotification) {
         match notification {
-            RuntimeCallNotification::FunctionEnter { frame_depth, .. } => {
+            SpanNotification::FunctionEnter { frame_depth, .. } => {
                 self.enters += 1;
                 self.depths.push(*frame_depth);
             }
-            RuntimeCallNotification::FunctionExit { frame_depth } => {
+            SpanNotification::FunctionExit { frame_depth, .. } => {
                 self.exits += 1;
                 let top = self.depths.pop();
                 assert_eq!(
@@ -55,7 +78,7 @@ impl BalanceTracker {
                     "exit depth must match the matching enter"
                 );
             }
-            RuntimeCallNotification::Unwound { frames_remaining } => {
+            SpanNotification::Unwound { frames_remaining } => {
                 while self.depths.last().is_some_and(|d| *d >= *frames_remaining) {
                     self.depths.pop();
                     self.unwound += 1;
@@ -90,7 +113,7 @@ fn caught_cross_frame_throw_keeps_notifications_balanced() {
         }
     "#;
 
-    let mut vm = make_vm(source, "user.main");
+    let mut vm = make_traced_vm(source, "user.main", &["user.safe", "user.mid", "user.boom"]);
     let mut tracker = BalanceTracker::default();
 
     for _ in 0..MAX_EXEC_CALLS {
@@ -108,7 +131,7 @@ fn caught_cross_frame_throw_keeps_notifications_balanced() {
                 assert_eq!(tracker.enters, tracker.exits + tracker.unwound);
                 return;
             }
-            VmExecState::RuntimeCallNotify(notification) => tracker.observe(&notification),
+            VmExecState::SpanNotify(notification) => tracker.observe(&notification),
             VmExecState::EarlyYield => {}
             other => panic!("unexpected state: {other:?}"),
         }
@@ -133,7 +156,7 @@ fn nested_calls_balance_without_exceptions() {
         }
     "#;
 
-    let mut vm = make_vm(source, "user.main");
+    let mut vm = make_traced_vm(source, "user.main", &["user.middle", "user.inner"]);
     let mut tracker = BalanceTracker::default();
 
     for _ in 0..MAX_EXEC_CALLS {
@@ -146,7 +169,7 @@ fn nested_calls_balance_without_exceptions() {
                 assert_eq!(tracker.unwound, 0);
                 return;
             }
-            VmExecState::RuntimeCallNotify(notification) => tracker.observe(&notification),
+            VmExecState::SpanNotify(notification) => tracker.observe(&notification),
             VmExecState::EarlyYield => {}
             other => panic!("unexpected state: {other:?}"),
         }
@@ -173,7 +196,7 @@ fn single_frame_unwind_is_covered_by_unwound_notification() {
         }
     "#;
 
-    let mut vm = make_vm(source, "user.main");
+    let mut vm = make_traced_vm(source, "user.main", &["user.may_fail"]);
     let mut tracker = BalanceTracker::default();
 
     for _ in 0..MAX_EXEC_CALLS {
@@ -186,7 +209,7 @@ fn single_frame_unwind_is_covered_by_unwound_notification() {
                 assert_eq!(tracker.unwound, 1, "may_fail is unwound");
                 return;
             }
-            VmExecState::RuntimeCallNotify(notification) => tracker.observe(&notification),
+            VmExecState::SpanNotify(notification) => tracker.observe(&notification),
             VmExecState::EarlyYield => {}
             other => panic!("unexpected state: {other:?}"),
         }
@@ -273,19 +296,16 @@ fn watch_filter_calling_helper_function_works() {
                     filter_installed = true;
                 }
             }
-            VmExecState::Notify(_)
-            | VmExecState::RuntimeCallNotify(_)
-            | VmExecState::SpanNotify(_)
-            | VmExecState::EarlyYield => {}
+            VmExecState::Notify(_) | VmExecState::SpanNotify(_) | VmExecState::EarlyYield => {}
             other => panic!("unexpected state: {other:?}"),
         }
     }
     panic!("vm did not complete within {MAX_EXEC_CALLS} exec() calls");
 }
 
-/// T9: filter-internal calls are invisible to the notification stream — the
-/// engine never sees enters/exits for them, so its span bookkeeping stays
-/// balanced (filter-internal calls mint no identity, by design).
+/// T9: filter-internal calls are invisible to the traced notification stream
+/// — the engine never sees enters/exits for them, so its span bookkeeping
+/// stays balanced. (`interrupt()` swallows the mini-runner's notifications.)
 #[test]
 fn watch_filter_calls_do_not_leak_call_notifications() {
     let source = r#"
@@ -309,7 +329,17 @@ fn watch_filter_calls_do_not_leak_call_notifications() {
         }
     "#;
 
-    let program = compile_source(source);
+    let mut program = compile_source(source);
+    let mut marked = 0usize;
+    for obj in &mut program.objects.0 {
+        if let bex_vm_types::Object::Function(f) = obj
+            && ["user.threshold", "user.is_big", "user.helper"].contains(&f.name.as_str())
+        {
+            f.trace = true;
+            marked += 1;
+        }
+    }
+    assert_eq!(marked, 3);
     let is_big_index = program
         .function_index("user.is_big")
         .expect("user.is_big not found");
@@ -340,7 +370,7 @@ fn watch_filter_calls_do_not_leak_call_notifications() {
                 assert_eq!(tracker.exits, 1);
                 return;
             }
-            VmExecState::RuntimeCallNotify(notification) => tracker.observe(&notification),
+            VmExecState::SpanNotify(notification) => tracker.observe(&notification),
             VmExecState::Notify(bex_vm::vm::WatchNotification::Variables(nodes)) => {
                 if filter_installed {
                     continue;
@@ -354,7 +384,7 @@ fn watch_filter_calls_do_not_leak_call_notifications() {
                     filter_installed = true;
                 }
             }
-            VmExecState::Notify(_) | VmExecState::SpanNotify(_) | VmExecState::EarlyYield => {}
+            VmExecState::Notify(_) | VmExecState::EarlyYield => {}
             other => panic!("unexpected state: {other:?}"),
         }
     }
@@ -383,7 +413,7 @@ fn id_without_engine_identity_is_empty_sentinel() {
                 assert_eq!(s.as_str(), "", "no-identity $id is the empty sentinel");
                 return;
             }
-            VmExecState::RuntimeCallNotify(_) | VmExecState::EarlyYield => {}
+            VmExecState::SpanNotify(_) | VmExecState::EarlyYield => {}
             other => panic!("unexpected state: {other:?}"),
         }
     }
@@ -453,12 +483,7 @@ fn watch_filter_exception_escaping_interrupt_fails_loudly() {
                     filter_installed = true;
                 }
             }
-            Ok(
-                VmExecState::Notify(_)
-                | VmExecState::RuntimeCallNotify(_)
-                | VmExecState::SpanNotify(_)
-                | VmExecState::EarlyYield,
-            ) => {}
+            Ok(VmExecState::Notify(_) | VmExecState::SpanNotify(_) | VmExecState::EarlyYield) => {}
             Ok(other) => panic!("unexpected state: {other:?}"),
             Err(err) => {
                 assert!(filter_installed, "error must come from the filter run");

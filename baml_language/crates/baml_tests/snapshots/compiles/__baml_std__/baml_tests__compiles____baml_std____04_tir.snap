@@ -3463,6 +3463,28 @@ class baml.toml.TomlParseError$stream {
 
 --- <builtin>/baml/ns_unstable/unstable.baml ---
 
+--- <builtin>/baml/ns_yaml/yaml.baml ---
+class baml.yaml.YamlParseError {
+  message: string
+}
+function baml.yaml.YamlParseError.to_json(self: baml.yaml.YamlParseError) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "message": self.message.to_json() } : map<string, baml.json.json>
+}
+function baml.yaml.YamlParseError.from_json(j: baml.json.json) -> baml.yaml.YamlParseError throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  YamlParseError { message: baml.json.from_json<string>(baml.json.field(j, "message")) } : baml.yaml.YamlParseError
+}
+function baml.yaml.deserialize<T>(s: string) -> T throws baml.yaml.YamlParseError | baml.json.JsonDecodeError {
+  { : T
+    catch (baml.json.from_json<T>(parse(s)) : T) : unknown
+      catch (e)
+        err: baml.json.JsonParseError =>
+          throw baml.json.JsonDecodeError { message: err.message, path: "" } : never
+  }
+}
+class baml.yaml.YamlParseError$stream {
+  message: string | null
+}
+
 --- <builtin>/baml/null.baml ---
 class baml.Null {
 }
