@@ -911,6 +911,9 @@ function baml.Array.length(self: baml.Array<unknown>) -> int {
 function baml.Array.map(self: baml.Array<unknown>, f: (unknown) -> unknown throws unknown) -> unknown[] {
 }
 
+function baml.Array.new(size: int, default: unknown) -> unknown[] {
+}
+
 function baml.Array.peekable(self: baml.Array<unknown>) -> baml.iter.Peekable<unknown, void> {
     load_type #0
     load_var self
@@ -942,6 +945,9 @@ function baml.Array.reduce(self: baml.Array<unknown>, reducer: (unknown, unknown
 }
 
 function baml.Array.reverse(self: baml.Array<unknown>) -> unknown[] {
+}
+
+function baml.Array.set(self: baml.Array<unknown>, index: int, value: unknown) -> null {
 }
 
 function baml.Array.shift(self: baml.Array<unknown>) -> unknown | null {

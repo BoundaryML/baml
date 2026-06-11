@@ -82,6 +82,7 @@ function baml.last_index_of(self: ?, item: T) -> int?  [builtin]
 function baml.length(self: ?) -> int  [builtin]
 function baml.length(self: ?) -> int  [builtin]
 function baml.map(self: ?, f: (T) -> U throws E) -> U[]  [builtin]
+function baml.new(size: int, default: T) -> T[]  [builtin]
 function baml.peekable(self: ?) -> baml.iter.Peekable<T, never>  [expr] {
   {  } baml.iter.Peekable { source: baml.iter.ArrayIterator.new(self.slice(0, self.length())), buffer: baml.iter.Done {  }, has_buffer: false }
 }
@@ -90,6 +91,7 @@ function baml.push(self: ?, item: T) -> int  [builtin]
 function baml.reduce(self: ?, reducer: (A, T) -> A throws E, initial: A) -> A  [builtin]
 function baml.reverse(self: ?) -> T[]  [builtin]
 function baml.set(self: ?, key: K, value: V) -> V?  [builtin]
+function baml.set(self: ?, index: int, value: T) -> null  [builtin]
 function baml.shift(self: ?) -> T?  [builtin]
 function baml.slice(self: ?, start: int, end: int) -> T[]  [builtin]
 function baml.some(self: ?, predicate: (T) -> bool throws E) -> bool  [builtin]

@@ -1097,6 +1097,8 @@ fn baml.Array.length = builtin(vm)
 
 fn baml.Array.map = builtin(vm)
 
+fn baml.Array.new = builtin(vm)
+
 fn baml.Array.peekable(self: baml.Array) -> baml.iter.Peekable<void, void> {
     // Locals:
     let _0: baml.iter.Peekable<void, void> // _0 // return
@@ -1143,6 +1145,8 @@ fn baml.Array.reduce = builtin(vm)
 fn baml.Array.reverse = builtin(vm)
 
 fn baml.Map.set = builtin(vm)
+
+fn baml.Array.set = builtin(vm)
 
 fn baml.Array.shift = builtin(vm)
 
