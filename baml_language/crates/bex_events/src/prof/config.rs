@@ -6,10 +6,10 @@
 
 use std::{sync::OnceLock, time::Duration};
 
-/// Master switch: `1`/`true` enables the profiling event stream.
-///
-/// Ships default-off; the flip to default-on is a deliberate follow-up once
-/// the producer-side integration has CI history.
+/// Master switch for the profiling event stream. DEFAULT-ON (reconciliation
+/// follow-up 16): set `0`/`false` to opt out. Any value other than
+/// `1`/`true` disables; unset means enabled (native targets only — wasm32
+/// is forced off).
 pub const ENV_PROFILE: &str = "BAML_PROFILE";
 /// Ring segment size in bytes, clamped to `[MIN_SEG_BYTES, MAX_SEG_BYTES]`.
 pub const ENV_SEG_BYTES: &str = "BAML_RING_SEG_BYTES";
@@ -48,9 +48,9 @@ pub const DEFAULT_WAKE_INTERVAL: Duration = Duration::from_millis(50);
 /// Parsed profiling knobs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProfConfig {
-    /// Master switch ([`ENV_PROFILE`]). Always `false` on wasm32: there is no
-    /// consumer thread or TSC clock there (cooperative drain is a designed
-    /// but deferred follow-up).
+    /// Master switch ([`ENV_PROFILE`]); default-on (follow-up 16). Always
+    /// `false` on wasm32: there is no consumer thread or TSC clock there
+    /// (cooperative drain is a designed but deferred follow-up).
     pub enabled: bool,
     /// Ring segment size in bytes ([`ENV_SEG_BYTES`]).
     pub seg_bytes: usize,
@@ -67,7 +67,7 @@ pub struct ProfConfig {
 impl Default for ProfConfig {
     fn default() -> Self {
         ProfConfig {
-            enabled: false,
+            enabled: cfg!(not(target_arch = "wasm32")),
             seg_bytes: DEFAULT_SEG_BYTES,
             max_overflow_bytes: DEFAULT_MAX_OVERFLOW_BYTES,
             freelist_cap: DEFAULT_FREELIST_CAP,
@@ -169,7 +169,16 @@ mod tests {
     fn defaults_when_unset() {
         let cfg = ProfConfig::from_lookup(lookup(&[]));
         assert_eq!(cfg, ProfConfig::default());
-        assert!(!cfg.enabled);
+        // Follow-up 16: profiling ships default-on (native targets).
+        assert_eq!(cfg.enabled, cfg!(not(target_arch = "wasm32")));
+    }
+
+    #[test]
+    fn opt_out_disables() {
+        for v in ["0", "false", "FALSE", "off"] {
+            let cfg = ProfConfig::from_lookup(lookup(&[(ENV_PROFILE, v)]));
+            assert!(!cfg.enabled, "BAML_PROFILE={v} must disable profiling");
+        }
     }
 
     #[test]

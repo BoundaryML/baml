@@ -531,10 +531,13 @@ mod stress {
     };
 
     use super::{BIG_CAP, leak_ctx, rec};
-    use crate::prof::{
-        record::{self, RawRecord},
-        registry::Registry,
-        ring::RingState,
+    use crate::{
+        ids::{BexCallId, BexThreadId, FunctionId},
+        prof::{
+            record::{self, RawRecord},
+            registry::Registry,
+            ring::RingState,
+        },
     };
 
     /// The 2+1-thread flood (plan §5 PR2 gate): real record framing through
@@ -565,13 +568,13 @@ mod stress {
                     let engine = engine_idx as u64;
                     let h = reg.acquire(ctx, seg_bytes, freelist_cap, engine);
                     let mut buf = [0u8; record::MAX_RECORD_LEN];
-                    for seq in 1..=per_producer {
+                    for seq in 1u64..=per_producer {
                         let len = RawRecord::CallFunction {
                             flags: 0,
-                            thread_id: engine,
-                            call_id: seq,
-                            parent_call_id: seq.saturating_sub(1),
-                            function_id: u32::try_from(engine).unwrap(),
+                            thread_id: BexThreadId(engine),
+                            call_id: BexCallId(seq),
+                            parent_call_id: BexCallId(seq.saturating_sub(1)),
+                            function_id: FunctionId(u32::try_from(engine).unwrap()),
                             ts_ns: seq,
                         }
                         .encode(&mut buf);
@@ -601,10 +604,10 @@ mod stress {
                         thread_id, call_id, ..
                     } => {
                         assert_eq!(
-                            thread_id, engine,
+                            thread_id.0, engine,
                             "record demuxed to the wrong engine's ring"
                         );
-                        per_engine[usize::try_from(engine).unwrap()].push(call_id);
+                        per_engine[usize::try_from(engine).unwrap()].push(call_id.0);
                     }
                     other => panic!("unexpected record {other:?}"),
                 }
@@ -761,6 +764,21 @@ mod stress {
         use crate::prof::registry::{global_registry, ring_for_engine};
 
         const ENGINE: u64 = 0xBEEF_0001;
+
+        // This test is its own consumer of the PROCESS-GLOBAL registry, so
+        // the real `bex-prof-consumer` must never spawn (two consumers on
+        // one ring is the exact SPSC violation the suite exists to rule
+        // out). Profiling is default-on (follow-up 16): latch the global
+        // config off before `ring_for_engine` reads it. This is the only
+        // lib test touching the global path; the assert keeps that true.
+        // SAFETY: single-threaded at this point in the test; the config is
+        // latched once immediately below.
+        unsafe { std::env::set_var(crate::prof::config::ENV_PROFILE, "0") };
+        assert!(
+            !crate::prof::ProfConfig::global().enabled,
+            "another test latched the global ProfConfig with profiling \
+             enabled — the global-registry tests need it off"
+        );
 
         let ptr1 = std::thread::spawn(|| {
             let h = ring_for_engine(ENGINE);

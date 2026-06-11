@@ -230,7 +230,20 @@ claim, sysop early-return-leak claim.
    effective `$id` at a point in time is its most recent record, last-wins
    for a single label. Documented in the proto header.
 
-### Follow-up work (either of us, post-land)
+### Follow-up work — DONE 2026-06-11 (Antonio; on this branch, not separate PRs)
+
+All seven follow-ups below are implemented on this branch: 10 (JSONL plumbing
+deleted end-to-end, including the legacy `types::{DiskEventV1,
+FunctionEndStatus, ThreadEndStatus}`, the legacy top-level `clock`, the dead
+engine span-status params, and the orphaned `EventFileHeaderV1`), 11
+(`SpawnProfCloser` RAII guard — also replaced the queued-then-cancelled
+manual close), 12 (`RawRecord` fields are `BexThreadId`/`BexCallId`/
+`FunctionId` newtypes end-to-end), 13 (T20/T22 ported to `.bamlprof` in
+`prof_gate.rs`; T20 joins runs by FQN — ids are not stable across compiles),
+14 (`tools/speedtest/workloads/compute/pure-call-1m.md`), 15 (died with 10),
+16 (`BAML_PROFILE` default-on, `0`/`false` opts out, wasm32 still forced
+off; `.baml/profiles/` gitignored). Original items kept below for reference.
+
 
 10. **Delete the producer-less interim JSONL plumbing end-to-end**:
     `EventSink::send_disk_event`/`send_event_file_header` (+ FanOut/native

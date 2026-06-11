@@ -1167,3 +1167,260 @@ async fn same_display_name_functions_are_not_misattributed() {
         "DnClsB.run must get exactly its own call: {counts:?}"
     );
 }
+
+/// Renders events as comparable strings: timestamps stripped, function ids
+/// joined to fqns (ids are NOT stable across compiles — the fqn is the
+/// cross-run key), the run's marker fqn unified to "<pin>", grouped per
+/// thread and sorted by timestamp (file order interleaves rings, so only
+/// the per-thread timestamp order is the stream's real shape).
+fn normalized_per_thread_streams(
+    header: &pb::EventFileHeaderV1,
+    events: &[Event],
+    marker_fqn: &str,
+) -> Vec<Vec<String>> {
+    let fqn_by_id: HashMap<u32, &str> = header
+        .function_table
+        .as_ref()
+        .map(|t| {
+            t.functions
+                .iter()
+                .map(|f| (f.function_id, f.fqn.as_str()))
+                .collect()
+        })
+        .unwrap_or_default();
+    let fqn = |id: u32| -> String {
+        let name = fqn_by_id.get(&id).copied().unwrap_or("<unassigned>");
+        if name == marker_fqn {
+            "<pin>".to_string()
+        } else {
+            name.to_string()
+        }
+    };
+    let ts_of = |e: &Event| match e {
+        Event::CallFunction(cf) => cf.timestamp_ns,
+        Event::EndFunction(ef) => ef.timestamp_ns,
+        Event::StartThread(st) => st.timestamp_ns,
+        Event::EndThread(et) => et.timestamp_ns,
+        Event::SetFunctionId(sf) => sf.timestamp_ns,
+        Event::Heartbeat(hb) => hb.timestamp_ns,
+    };
+    let tid_of = |e: &Event| match e {
+        Event::CallFunction(cf) => cf.thread_id,
+        Event::EndFunction(ef) => ef.thread_id,
+        Event::StartThread(st) => st.thread_id,
+        Event::EndThread(et) => et.thread_id,
+        Event::SetFunctionId(sf) => sf.thread_id,
+        Event::Heartbeat(_) => 0,
+    };
+    let mut per_thread: HashMap<u64, Vec<&Event>> = HashMap::new();
+    for e in events {
+        per_thread.entry(tid_of(e)).or_default().push(e);
+    }
+    let mut threads: Vec<(u64, Vec<&Event>)> = per_thread.into_iter().collect();
+    threads.sort_by_key(|(tid, _)| *tid);
+    threads
+        .into_iter()
+        .map(|(_, mut es)| {
+            es.sort_by_key(|e| ts_of(e));
+            es.into_iter()
+                .map(|e| match e {
+                    Event::CallFunction(cf) => format!(
+                        "call {} id={} parent={:?}",
+                        fqn(cf.function_id),
+                        cf.call_id,
+                        cf.parent_call_id
+                    ),
+                    Event::EndFunction(ef) => {
+                        format!("end id={} status={}", ef.call_id, ef.status)
+                    }
+                    Event::StartThread(st) => format!(
+                        "start-thread parent={:?} pcall={:?}",
+                        st.parent_thread_id, st.parent_call_id
+                    ),
+                    Event::EndThread(et) => format!("end-thread status={}", et.status),
+                    Event::SetFunctionId(sf) => format!("set-id id={}", sf.call_id),
+                    Event::Heartbeat(_) => "heartbeat".to_string(),
+                })
+                .collect()
+        })
+        .collect()
+}
+
+/// T20 port (JSONL-era `early_yield_resume_produces_identical_disk_stream`):
+/// suspending and resuming the VM mid-run (GC park via `EarlyYield`) must
+/// not duplicate, drop, or reorder `.bamlprof` records — the per-thread
+/// stream is identical to an uninterrupted run, modulo timestamps. The two
+/// runs differ only in their marker function's *name* (same position, so
+/// the same-walk function ids are identical), which is what demuxes their
+/// per-engine profiles in the shared directory.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn early_yield_resume_produces_identical_stream() {
+    const N: i64 = 20_000;
+    let _guard = test_lock().await;
+    init_prof_env();
+    let source = |pin: &str| {
+        format!(
+            r#"
+        function {pin}() -> int {{ 0 }}
+        function leaf(i: int) -> int {{
+            i
+        }}
+
+        function spin(n: int) -> int {{
+            {pin}();
+            let i = 0;
+            while (i < n) {{
+                let _ = [leaf(i), i + 1];
+                i += 1;
+            }}
+            i
+        }}
+    "#
+        )
+    };
+
+    // Run 1: uninterrupted.
+    let plain = {
+        let program = compile_for_engine(&source("ey_plain_pin"));
+        let engine = Arc::new(
+            BexEngine::new(
+                program,
+                Arc::new(sys_native::SysOps::native()),
+                None,
+                Vec::new(),
+            )
+            .expect("engine construction"),
+        );
+        let value = engine
+            .call_function(
+                "spin",
+                vec![bex_engine::BexExternalValue::Int(N)],
+                FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                true,
+            )
+            .await
+            .expect("plain run completes");
+        assert_eq!(value, BexExternalValue::Int(N));
+        let (header, events) = load_profile("user.ey_plain_pin");
+        assert_balance(&header, &events);
+        normalized_per_thread_streams(&header, &events, "user.ey_plain_pin")
+    };
+
+    // Run 2: same program (marker renamed in place — identical ids), with a
+    // GC park mid-flight.
+    let parked = {
+        let program = compile_for_engine(&source("ey_parked_pin"));
+        let engine = Arc::new(
+            BexEngine::new(
+                program,
+                Arc::new(sys_native::SysOps::native()),
+                None,
+                Vec::new(),
+            )
+            .expect("engine construction"),
+        );
+        let call_handle = {
+            let engine = Arc::clone(&engine);
+            tokio::spawn(async move {
+                engine
+                    .call_function(
+                        "spin",
+                        vec![bex_engine::BexExternalValue::Int(N)],
+                        FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                        true,
+                    )
+                    .await
+            })
+        };
+        for _ in 0..8 {
+            tokio::task::yield_now().await;
+        }
+        engine
+            .collect_garbage(bex_heap::CollectionLevel::Minor)
+            .await;
+        let value = call_handle
+            .await
+            .expect("task joins")
+            .expect("parked run completes");
+        assert_eq!(value, BexExternalValue::Int(N));
+        let (header, events) = load_profile("user.ey_parked_pin");
+        assert_balance(&header, &events);
+        normalized_per_thread_streams(&header, &events, "user.ey_parked_pin")
+    };
+
+    let plain_streams = plain;
+    let parked_streams = parked;
+    assert_eq!(
+        plain_streams.len(),
+        parked_streams.len(),
+        "thread count differs"
+    );
+    for (tid, (a, b)) in plain_streams.iter().zip(&parked_streams).enumerate() {
+        assert_eq!(a.len(), b.len(), "thread #{tid}: record count differs");
+        for (i, (ea, eb)) in a.iter().zip(b).enumerate() {
+            assert_eq!(
+                ea,
+                eb,
+                "thread #{tid}: first divergence at record {i} of {} \
+                 (plain vs parked)",
+                a.len()
+            );
+        }
+    }
+}
+
+/// T22 port (documented-policy test): dropping the `call_function` future at
+/// an await point truncates the `.bamlprof` stream — `StartThread`/
+/// `CallFunction` are written, no `End*` ever arrives (the torn artifact is
+/// what the reader's truncation tolerance exists for). This is the current,
+/// intentional contract: hosts that abandon a call must cancel via its token
+/// (or `cancel_function_call`) and await completion if they need a closed
+/// trace. If a root drop-guard is added later, this test must flip to assert
+/// `Cancelled` end records instead.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn dropped_call_future_truncates_stream_by_policy() {
+    let _guard = test_lock().await;
+    init_prof_env();
+    let source = r#"
+        function dft_pin() -> int { 0 }
+        function main() -> int {
+            dft_pin();
+            baml.sys.sleep(400);
+            1
+        }
+    "#;
+    let program = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(
+            program,
+            Arc::new(sys_native::SysOps::native()),
+            None,
+            Vec::new(),
+        )
+        .expect("engine construction"),
+    );
+    {
+        let engine = Arc::clone(&engine);
+        let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next()).build();
+        let fut = engine.call_function("main", vec![], call_ctx, true);
+        // Poll long enough for StartThread/CallFunction to land, then drop
+        // the future mid-sleep.
+        let _ = tokio::time::timeout(Duration::from_millis(100), fut).await;
+    }
+    // Wait past the program's natural completion: if the drop did NOT
+    // truncate execution, the 400ms sleep would finish and End records
+    // would land inside this window.
+    tokio::time::sleep(Duration::from_millis(800)).await;
+
+    let (_header, events) = load_profile("user.dft_pin");
+    assert!(
+        events.iter().any(|e| matches!(e, Event::CallFunction(_))),
+        "the call started: {events:#?}"
+    );
+    assert!(
+        !events.iter().any(|e| matches!(e, Event::EndThread(_))),
+        "documented policy: a dropped root future truncates the stream (no \
+         EndThread). If End records now appear, a root drop-guard was added — \
+         flip this test to assert Cancelled statuses instead: {events:#?}"
+    );
+}

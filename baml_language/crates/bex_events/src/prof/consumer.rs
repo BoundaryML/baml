@@ -406,10 +406,10 @@ fn to_disk_event(raw: &RawRecord<'_>) -> pb::DiskEventV1 {
             function_id,
             ts_ns,
         } => Event::CallFunction(pb::CallFunction {
-            thread_id,
-            call_id,
-            parent_call_id: (parent_call_id != 0).then_some(parent_call_id),
-            function_id,
+            thread_id: thread_id.0,
+            call_id: call_id.0,
+            parent_call_id: (parent_call_id.0 != 0).then_some(parent_call_id.0),
+            function_id: function_id.0,
             timestamp_ns: ts_ns,
         }),
         RawRecord::EndFunction {
@@ -418,8 +418,8 @@ fn to_disk_event(raw: &RawRecord<'_>) -> pb::DiskEventV1 {
             call_id,
             ts_ns,
         } => Event::EndFunction(pb::EndFunction {
-            thread_id,
-            call_id,
+            thread_id: thread_id.0,
+            call_id: call_id.0,
             status: match status {
                 FunctionEndStatus::Ok => pb::FunctionEndStatus::Ok,
                 FunctionEndStatus::Errored => pb::FunctionEndStatus::Errored,
@@ -436,9 +436,9 @@ fn to_disk_event(raw: &RawRecord<'_>) -> pb::DiskEventV1 {
             ts_ns,
             name,
         } => Event::StartThread(pb::StartThread {
-            thread_id,
-            parent_thread_id: (parent_thread_id != 0).then_some(parent_thread_id),
-            parent_call_id: (parent_call_id != 0).then_some(parent_call_id),
+            thread_id: thread_id.0,
+            parent_thread_id: (parent_thread_id.0 != 0).then_some(parent_thread_id.0),
+            parent_call_id: (parent_call_id.0 != 0).then_some(parent_call_id.0),
             name: (!name.is_empty()).then(|| String::from_utf8_lossy(name).into_owned()),
             timestamp_ns: ts_ns,
         }),
@@ -447,7 +447,7 @@ fn to_disk_event(raw: &RawRecord<'_>) -> pb::DiskEventV1 {
             thread_id,
             ts_ns,
         } => Event::EndThread(pb::EndThread {
-            thread_id,
+            thread_id: thread_id.0,
             status: match status {
                 ThreadEndStatus::Completed => pb::ThreadEndStatus::Completed,
                 ThreadEndStatus::Cancelled => pb::ThreadEndStatus::Cancelled,
@@ -461,8 +461,8 @@ fn to_disk_event(raw: &RawRecord<'_>) -> pb::DiskEventV1 {
             id,
             ts_ns,
         } => Event::SetFunctionId(pb::SetFunctionId {
-            thread_id,
-            call_id,
+            thread_id: thread_id.0,
+            call_id: call_id.0,
             id: id.to_vec(),
             timestamp_ns: ts_ns,
         }),
@@ -492,10 +492,13 @@ mod tests {
     use pb::disk_event_v1::Event;
 
     use super::*;
-    use crate::prof::{
-        FunctionMetaEntry,
-        file::{header_started_at_epoch_ns, read_bamlprof},
-        record::MAX_RECORD_LEN,
+    use crate::{
+        ids::{BexCallId, BexThreadId, FunctionId},
+        prof::{
+            FunctionMetaEntry,
+            file::{header_started_at_epoch_ns, read_bamlprof},
+            record::MAX_RECORD_LEN,
+        },
     };
 
     fn temp_dir(tag: &str) -> PathBuf {
@@ -600,39 +603,39 @@ mod tests {
             };
             push(RawRecord::StartThread {
                 flags: 0,
-                thread_id: 1,
-                parent_thread_id: 0,
-                parent_call_id: 0,
+                thread_id: BexThreadId(1),
+                parent_thread_id: BexThreadId(0),
+                parent_call_id: BexCallId(0),
                 ts_ns: 1,
                 name: b"worker",
             });
             for seq in 1..=PAIRS {
                 push(RawRecord::CallFunction {
                     flags: 0,
-                    thread_id: 1,
-                    call_id: seq,
-                    parent_call_id: seq - 1,
-                    function_id: 7,
+                    thread_id: BexThreadId(1),
+                    call_id: BexCallId(seq),
+                    parent_call_id: BexCallId(seq - 1),
+                    function_id: FunctionId(7),
                     ts_ns: seq * 2,
                 });
             }
             push(RawRecord::SetFunctionId {
-                thread_id: 1,
-                call_id: PAIRS,
+                thread_id: BexThreadId(1),
+                call_id: BexCallId(PAIRS),
                 id: [0xAB; 16],
                 ts_ns: PAIRS * 2 + 1,
             });
             for seq in (1..=PAIRS).rev() {
                 push(RawRecord::EndFunction {
                     status: FunctionEndStatus::Ok,
-                    thread_id: 1,
-                    call_id: seq,
+                    thread_id: BexThreadId(1),
+                    call_id: BexCallId(seq),
                     ts_ns: 10_000 + seq,
                 });
             }
             push(RawRecord::EndThread {
                 status: ThreadEndStatus::Completed,
-                thread_id: 1,
+                thread_id: BexThreadId(1),
                 ts_ns: 99_999,
             });
         })
@@ -689,9 +692,9 @@ mod tests {
     fn transcode_none_conventions() {
         let raw = RawRecord::StartThread {
             flags: 0,
-            thread_id: 9,
-            parent_thread_id: 0,
-            parent_call_id: 0,
+            thread_id: BexThreadId(9),
+            parent_thread_id: BexThreadId(0),
+            parent_call_id: BexCallId(0),
             ts_ns: 5,
             name: b"",
         };
@@ -705,10 +708,10 @@ mod tests {
         }
         let raw = RawRecord::CallFunction {
             flags: 0,
-            thread_id: 9,
-            call_id: 1,
-            parent_call_id: 0,
-            function_id: 0,
+            thread_id: BexThreadId(9),
+            call_id: BexCallId(1),
+            parent_call_id: BexCallId(0),
+            function_id: FunctionId(0),
             ts_ns: 5,
         };
         match to_disk_event(&raw).event.unwrap() {
@@ -717,8 +720,8 @@ mod tests {
         }
         let raw = RawRecord::EndFunction {
             status: FunctionEndStatus::Errored,
-            thread_id: 9,
-            call_id: 1,
+            thread_id: BexThreadId(9),
+            call_id: BexCallId(1),
             ts_ns: 5,
         };
         match to_disk_event(&raw).event.unwrap() {
@@ -750,10 +753,10 @@ mod tests {
         for seq in 1..=EVENTS {
             let len = RawRecord::CallFunction {
                 flags: 0,
-                thread_id: 1,
-                call_id: seq,
-                parent_call_id: seq.saturating_sub(1),
-                function_id: 1,
+                thread_id: BexThreadId(1),
+                call_id: BexCallId(seq),
+                parent_call_id: BexCallId(seq.saturating_sub(1)),
+                function_id: FunctionId(1),
                 ts_ns: seq,
             }
             .encode(&mut buf);
@@ -819,10 +822,10 @@ mod tests {
                 for seq in 0..per_round {
                     let len = RawRecord::CallFunction {
                         flags: 0,
-                        thread_id: round + 1,
-                        call_id: seq + 1,
-                        parent_call_id: seq,
-                        function_id: 1,
+                        thread_id: BexThreadId(round + 1),
+                        call_id: BexCallId(seq + 1),
+                        parent_call_id: BexCallId(seq),
+                        function_id: FunctionId(1),
                         ts_ns: round * per_round + seq,
                     }
                     .encode(&mut buf);

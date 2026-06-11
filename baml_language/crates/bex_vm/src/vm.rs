@@ -119,6 +119,7 @@ use ::bex_vm_types::{
 use ::core::any::TypeId;
 #[cfg(not(target_arch = "wasm32"))]
 use ::core::sync::atomic::AtomicBool;
+use bex_events::ids::{BexCallId, BexThreadId, FunctionId as ProfFunctionId};
 use bex_heap::{BexHeap, Tlab};
 use bex_vm_types::{
     BinOp, CmpOp, FunctionKind, FutureRead, GlobalIndex, HeapPtr, Object, ObjectIndex, ObjectPool,
@@ -3067,10 +3068,10 @@ impl BexVm {
         if self.prof_ring.is_some() {
             self.prof_push_record(&bex_events::prof::record::RawRecord::CallFunction {
                 flags: 0,
-                thread_id: self.prof_thread_id,
-                call_id,
-                parent_call_id,
-                function_id,
+                thread_id: BexThreadId(self.prof_thread_id),
+                call_id: BexCallId(call_id),
+                parent_call_id: BexCallId(parent_call_id),
+                function_id: ProfFunctionId(function_id),
                 ts_ns: bex_events::prof::clock::now_ns(),
             });
         }
@@ -3101,8 +3102,8 @@ impl BexVm {
         if self.prof_ring.is_some() {
             self.prof_push_record(&bex_events::prof::record::RawRecord::EndFunction {
                 status,
-                thread_id: self.prof_thread_id,
-                call_id,
+                thread_id: BexThreadId(self.prof_thread_id),
+                call_id: BexCallId(call_id),
                 ts_ns: bex_events::prof::clock::now_ns(),
             });
         }
@@ -3175,10 +3176,10 @@ impl BexVm {
         if self.prof_ring.is_some() {
             self.prof_push_record(&bex_events::prof::record::RawRecord::CallFunction {
                 flags: 0,
-                thread_id: self.prof_thread_id,
-                call_id,
-                parent_call_id,
-                function_id,
+                thread_id: BexThreadId(self.prof_thread_id),
+                call_id: BexCallId(call_id),
+                parent_call_id: BexCallId(parent_call_id),
+                function_id: ProfFunctionId(function_id),
                 ts_ns: bex_events::prof::clock::now_ns(),
             });
             self.pending_sysop_call_id = Some(call_id);
@@ -3191,8 +3192,8 @@ impl BexVm {
     pub(crate) fn prof_push_set_function_id(&mut self, call_id: u64, id: [u8; 16]) {
         if self.prof_ring.is_some() {
             self.prof_push_record(&bex_events::prof::record::RawRecord::SetFunctionId {
-                thread_id: self.prof_thread_id,
-                call_id,
+                thread_id: BexThreadId(self.prof_thread_id),
+                call_id: BexCallId(call_id),
                 id,
                 ts_ns: bex_events::prof::clock::now_ns(),
             });
@@ -3223,17 +3224,17 @@ impl BexVm {
             + bex_events::prof::record::END_FUNCTION_LEN];
         let call_len = bex_events::prof::record::RawRecord::CallFunction {
             flags: 0,
-            thread_id: self.prof_thread_id,
-            call_id,
-            parent_call_id,
-            function_id,
+            thread_id: BexThreadId(self.prof_thread_id),
+            call_id: BexCallId(call_id),
+            parent_call_id: BexCallId(parent_call_id),
+            function_id: ProfFunctionId(function_id),
             ts_ns: ts_start,
         }
         .encode_to(&mut buf);
         let end_len = bex_events::prof::record::RawRecord::EndFunction {
             status,
-            thread_id: self.prof_thread_id,
-            call_id,
+            thread_id: BexThreadId(self.prof_thread_id),
+            call_id: BexCallId(call_id),
             ts_ns: bex_events::prof::clock::now_ns(),
         }
         .encode_to(&mut buf[call_len..]);

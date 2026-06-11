@@ -13,31 +13,19 @@ use std::{
     sync::{Mutex, OnceLock},
 };
 
-use crate::{DiskEventV1, EventFileHeaderV1, RuntimeEvent, SpanId, ids::EngineId};
+use crate::{RuntimeEvent, SpanId};
 
 // ─────────────────────────── Event Sink ─────────────────────────────────
 
-/// Sink for events; implemented by the runtime layer.
+/// Sink for host-facing runtime events; implemented by the runtime layer.
+/// Per-call lifecycle flows through the profiling ring into per-engine
+/// `.bamlprof` files (`bex_events::prof`), not through sinks.
 ///
 /// Native: thread + channel + JSONL file writer (in `bex_events_native`).
 /// WASM: no-op (or future JS callback).
 pub trait EventSink: Send + Sync {
     /// Send an event (e.g. into a channel). Should be non-blocking.
     fn send(&self, event: RuntimeEvent);
-    /// Send a compact BEX disk/batch event. Default is no-op.
-    ///
-    /// Currently producer-less: per-call lifecycle now flows through the
-    /// profiling ring into per-engine `.bamlprof` files
-    /// (`bex_events::prof`), not through sinks. Retained for the interim
-    /// JSONL wire format and its tests until that path is deleted
-    /// end-to-end. `engine` identified the emitting engine when the shared
-    /// JSONL path was live (one sink instance per process; disk events
-    /// carry no engine scoping of their own).
-    fn send_disk_event(&self, _engine: EngineId, _event: DiskEventV1) {}
-    /// Send a file/batch header carrying scoping and program metadata.
-    /// Default is no-op. Currently producer-less — headers are written into
-    /// `.bamlprof` by the profiling consumer, not sent to sinks.
-    fn send_event_file_header(&self, _header: EventFileHeaderV1) {}
     /// Flush buffered events. May block until the consumer has written.
     fn flush(&self);
 }
@@ -57,18 +45,6 @@ impl EventSink for FanOutEventSink {
     fn send(&self, event: RuntimeEvent) {
         for sink in &self.sinks {
             sink.send(event.clone());
-        }
-    }
-
-    fn send_disk_event(&self, engine: EngineId, event: DiskEventV1) {
-        for sink in &self.sinks {
-            sink.send_disk_event(engine, event.clone());
-        }
-    }
-
-    fn send_event_file_header(&self, header: EventFileHeaderV1) {
-        for sink in &self.sinks {
-            sink.send_event_file_header(header.clone());
         }
     }
 

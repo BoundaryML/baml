@@ -265,23 +265,9 @@ async fn bex_identity_exposes_event_header_metadata() {
         .unwrap(),
     );
 
-    let header = engine.event_file_header_v1();
-    assert_eq!(header.process_euid, engine.process_euid());
-    assert_eq!(header.engine_id, engine.engine_id());
-    assert!(
-        header
-            .function_table
-            .functions
-            .iter()
-            .any(|f| f.display_name == "main")
-    );
-    assert!(
-        header
-            .function_table
-            .functions
-            .iter()
-            .any(|f| f.display_name == "inner")
-    );
+    let table = &engine.program_metadata().function_table;
+    assert!(table.functions.iter().any(|f| f.display_name == "main"));
+    assert!(table.functions.iter().any(|f| f.display_name == "inner"));
 
     let (host_ctx, guard) = setup_tracking();
     let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())

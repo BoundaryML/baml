@@ -9,7 +9,7 @@
 //! identity) are modeled but `None` until authoritative compiler/cloud
 //! sources populate them — consumers must tolerate that.
 
-use crate::ids::{EngineId, FunctionId, ProcessEuid, ProgramId, SourceSnapshotId};
+use crate::ids::{FunctionId, ProgramId, SourceSnapshotId};
 
 /// Identity of a definition revision (BEP-053). Not yet populated by the
 /// runtime.
@@ -141,24 +141,6 @@ pub struct ProgramMetadata {
     pub program_id: ProgramId,
     pub source_snapshot_id: Option<SourceSnapshotId>,
     pub revision_id: Option<RevisionId>,
-    pub function_table: FunctionMetadataTable,
-}
-
-/// The once-per-engine artifact header: process/engine/program scoping for
-/// every following event (events carry local ids only) plus the function
-/// join table. Emitted before any events.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct EventFileHeaderV1 {
-    pub process_euid: ProcessEuid,
-    pub engine_id: EngineId,
-    pub program_id: ProgramId,
-    pub source_snapshot_id: Option<SourceSnapshotId>,
-    pub revision_id: Option<RevisionId>,
-    /// Wall-clock anchor for rebasing event timestamps: every event's
-    /// `timestamp_ns` is monotonic nanos since the *process* clock anchor
-    /// ([`crate::process_started_at_epoch_ns`]), so
-    /// `wall(event) = started_at_epoch_ns + event.timestamp_ns`.
-    pub started_at_epoch_ns: u128,
     pub function_table: FunctionMetadataTable,
 }
 

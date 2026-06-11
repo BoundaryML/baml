@@ -45,6 +45,8 @@ pub fn capped_name_bytes(name: &str) -> &[u8] {
     &name.as_bytes()[..end]
 }
 
+use crate::ids::{BexCallId, BexThreadId, FunctionId};
+
 const TAG_CALL_FUNCTION: u8 = 0x01;
 const TAG_END_FUNCTION: u8 = 0x02;
 const TAG_START_THREAD: u8 = 0x03;
@@ -89,15 +91,15 @@ pub enum RawRecord<'a> {
         /// Reserved flag bits (zero today).
         flags: u8,
         /// Logical BEX thread id (not the OS thread).
-        thread_id: u64,
+        thread_id: BexThreadId,
         /// Per-logical-thread call id (counters start at 1; always
         /// interpret together with `thread_id` — `(thread_id, call_id)` is
         /// the unique key).
-        call_id: u64,
+        call_id: BexCallId,
         /// Intra-thread caller; `0` = thread-root call.
-        parent_call_id: u64,
-        /// Per-run function id (interim provider until the M0 id table).
-        function_id: u32,
+        parent_call_id: BexCallId,
+        /// Per-run function id (see the header's function table; 0 = unattributable).
+        function_id: FunctionId,
         /// Nanoseconds since the process zero point ([`crate::prof::clock`]).
         ts_ns: u64,
     },
@@ -106,9 +108,9 @@ pub enum RawRecord<'a> {
         /// How the frame ended (see [`FunctionEndStatus`]).
         status: FunctionEndStatus,
         /// Logical BEX thread id.
-        thread_id: u64,
+        thread_id: BexThreadId,
         /// Matches the `CallFunction` it closes.
-        call_id: u64,
+        call_id: BexCallId,
         /// Nanoseconds since the process zero point.
         ts_ns: u64,
     },
@@ -117,11 +119,11 @@ pub enum RawRecord<'a> {
         /// Reserved flag bits (zero today).
         flags: u8,
         /// Logical BEX thread id.
-        thread_id: u64,
+        thread_id: BexThreadId,
         /// Spawning thread; `0` = engine-root thread.
-        parent_thread_id: u64,
+        parent_thread_id: BexThreadId,
         /// Spawning call in the parent thread; `0` = none.
-        parent_call_id: u64,
+        parent_call_id: BexCallId,
         /// Nanoseconds since the process zero point.
         ts_ns: u64,
         /// User-defined thread name, ≤ [`MAX_THREAD_NAME_LEN`] bytes of UTF-8
@@ -133,7 +135,7 @@ pub enum RawRecord<'a> {
         /// How the thread ended.
         status: ThreadEndStatus,
         /// Logical BEX thread id.
-        thread_id: u64,
+        thread_id: BexThreadId,
         /// Nanoseconds since the process zero point.
         ts_ns: u64,
     },
@@ -141,9 +143,9 @@ pub enum RawRecord<'a> {
     /// surface; the shape is fixed so the ring format doesn't change).
     SetFunctionId {
         /// Logical BEX thread id.
-        thread_id: u64,
+        thread_id: BexThreadId,
         /// The call whose `$id` is overridden.
-        call_id: u64,
+        call_id: BexCallId,
         /// The override UUID bytes (`baml.id.new()`).
         id: [u8; 16],
         /// Nanoseconds since the process zero point.
@@ -209,10 +211,10 @@ impl RawRecord<'_> {
             } => {
                 w.u8(TAG_CALL_FUNCTION);
                 w.u8(flags);
-                w.u64(thread_id);
-                w.u64(call_id);
-                w.u64(parent_call_id);
-                w.u32(function_id);
+                w.u64(thread_id.0);
+                w.u64(call_id.0);
+                w.u64(parent_call_id.0);
+                w.u32(function_id.0);
                 w.u64(ts_ns);
             }
             RawRecord::EndFunction {
@@ -223,8 +225,8 @@ impl RawRecord<'_> {
             } => {
                 w.u8(TAG_END_FUNCTION);
                 w.u8(status as u8);
-                w.u64(thread_id);
-                w.u64(call_id);
+                w.u64(thread_id.0);
+                w.u64(call_id.0);
                 w.u64(ts_ns);
             }
             RawRecord::StartThread {
@@ -238,9 +240,9 @@ impl RawRecord<'_> {
                 let name = &name[..name.len().min(MAX_THREAD_NAME_LEN)];
                 w.u8(TAG_START_THREAD);
                 w.u8(flags);
-                w.u64(thread_id);
-                w.u64(parent_thread_id);
-                w.u64(parent_call_id);
+                w.u64(thread_id.0);
+                w.u64(parent_thread_id.0);
+                w.u64(parent_call_id.0);
                 w.u64(ts_ns);
                 #[expect(
                     clippy::cast_possible_truncation,
@@ -256,7 +258,7 @@ impl RawRecord<'_> {
             } => {
                 w.u8(TAG_END_THREAD);
                 w.u8(status as u8);
-                w.u64(thread_id);
+                w.u64(thread_id.0);
                 w.u64(ts_ns);
             }
             RawRecord::SetFunctionId {
@@ -266,8 +268,8 @@ impl RawRecord<'_> {
                 ts_ns,
             } => {
                 w.u8(TAG_SET_FUNCTION_ID);
-                w.u64(thread_id);
-                w.u64(call_id);
+                w.u64(thread_id.0);
+                w.u64(call_id.0);
                 w.bytes(&id);
                 w.u64(ts_ns);
             }
@@ -285,10 +287,10 @@ pub fn decode(buf: &[u8]) -> Result<(RawRecord<'_>, usize), DecodeError> {
     let rec = match tag {
         TAG_CALL_FUNCTION => RawRecord::CallFunction {
             flags: r.u8()?,
-            thread_id: r.u64()?,
-            call_id: r.u64()?,
-            parent_call_id: r.u64()?,
-            function_id: r.u32()?,
+            thread_id: BexThreadId(r.u64()?),
+            call_id: BexCallId(r.u64()?),
+            parent_call_id: BexCallId(r.u64()?),
+            function_id: FunctionId(r.u32()?),
             ts_ns: r.u64()?,
         },
         TAG_END_FUNCTION => RawRecord::EndFunction {
@@ -299,15 +301,15 @@ pub fn decode(buf: &[u8]) -> Result<(RawRecord<'_>, usize), DecodeError> {
                 3 => FunctionEndStatus::Exited,
                 bad => return Err(DecodeError::InvalidStatus(bad)),
             },
-            thread_id: r.u64()?,
-            call_id: r.u64()?,
+            thread_id: BexThreadId(r.u64()?),
+            call_id: BexCallId(r.u64()?),
             ts_ns: r.u64()?,
         },
         TAG_START_THREAD => {
             let flags = r.u8()?;
-            let thread_id = r.u64()?;
-            let parent_thread_id = r.u64()?;
-            let parent_call_id = r.u64()?;
+            let thread_id = BexThreadId(r.u64()?);
+            let parent_thread_id = BexThreadId(r.u64()?);
+            let parent_call_id = BexCallId(r.u64()?);
             let ts_ns = r.u64()?;
             let name_len = r.u16()?;
             if usize::from(name_len) > MAX_THREAD_NAME_LEN {
@@ -329,12 +331,12 @@ pub fn decode(buf: &[u8]) -> Result<(RawRecord<'_>, usize), DecodeError> {
                 2 => ThreadEndStatus::Errored,
                 bad => return Err(DecodeError::InvalidStatus(bad)),
             },
-            thread_id: r.u64()?,
+            thread_id: BexThreadId(r.u64()?),
             ts_ns: r.u64()?,
         },
         TAG_SET_FUNCTION_ID => RawRecord::SetFunctionId {
-            thread_id: r.u64()?,
-            call_id: r.u64()?,
+            thread_id: BexThreadId(r.u64()?),
+            call_id: BexCallId(r.u64()?),
             id: {
                 let bytes = r.bytes(16)?;
                 let mut id = [0u8; 16];
@@ -476,26 +478,26 @@ mod tests {
         for v in [0u64, 1, 42, u64::MAX] {
             roundtrip(RawRecord::CallFunction {
                 flags: v as u8,
-                thread_id: v,
-                call_id: v.wrapping_add(1),
-                parent_call_id: v / 2,
-                function_id: v as u32,
+                thread_id: BexThreadId(v),
+                call_id: BexCallId(v.wrapping_add(1)),
+                parent_call_id: BexCallId(v / 2),
+                function_id: FunctionId(v as u32),
                 ts_ns: v,
             });
             roundtrip(RawRecord::EndFunction {
                 status: FunctionEndStatus::Ok,
-                thread_id: v,
-                call_id: v,
+                thread_id: BexThreadId(v),
+                call_id: BexCallId(v),
                 ts_ns: v,
             });
             roundtrip(RawRecord::EndThread {
                 status: ThreadEndStatus::Cancelled,
-                thread_id: v,
+                thread_id: BexThreadId(v),
                 ts_ns: v,
             });
             roundtrip(RawRecord::SetFunctionId {
-                thread_id: v,
-                call_id: v,
+                thread_id: BexThreadId(v),
+                call_id: BexCallId(v),
                 id: [v as u8; 16],
                 ts_ns: v,
             });
@@ -507,19 +509,19 @@ mod tests {
         ] {
             roundtrip(RawRecord::EndFunction {
                 status,
-                thread_id: 7,
-                call_id: 9,
+                thread_id: BexThreadId(7),
+                call_id: BexCallId(9),
                 ts_ns: 11,
             });
         }
         roundtrip(RawRecord::EndThread {
             status: ThreadEndStatus::Completed,
-            thread_id: 7,
+            thread_id: BexThreadId(7),
             ts_ns: 11,
         });
         roundtrip(RawRecord::EndThread {
             status: ThreadEndStatus::Errored,
-            thread_id: 7,
+            thread_id: BexThreadId(7),
             ts_ns: 11,
         });
     }
@@ -530,9 +532,9 @@ mod tests {
             let name = vec![b'x'; len];
             roundtrip(RawRecord::StartThread {
                 flags: 1,
-                thread_id: 2,
-                parent_thread_id: 0,
-                parent_call_id: 3,
+                thread_id: BexThreadId(2),
+                parent_thread_id: BexThreadId(0),
+                parent_call_id: BexCallId(3),
                 ts_ns: 4,
                 name: &name,
             });
@@ -544,9 +546,9 @@ mod tests {
         let name = vec![b'y'; 300];
         let rec = RawRecord::StartThread {
             flags: 0,
-            thread_id: 1,
-            parent_thread_id: 0,
-            parent_call_id: 0,
+            thread_id: BexThreadId(1),
+            parent_thread_id: BexThreadId(0),
+            parent_call_id: BexCallId(0),
             ts_ns: 0,
             name: &name,
         };
@@ -565,38 +567,38 @@ mod tests {
         let mut buf = [0u8; MAX_RECORD_LEN];
         let call = RawRecord::CallFunction {
             flags: 0,
-            thread_id: 1,
-            call_id: 1,
-            parent_call_id: 0,
-            function_id: 0,
+            thread_id: BexThreadId(1),
+            call_id: BexCallId(1),
+            parent_call_id: BexCallId(0),
+            function_id: FunctionId(0),
             ts_ns: 0,
         };
         assert_eq!(call.encode(&mut buf), 38);
         let end = RawRecord::EndFunction {
             status: FunctionEndStatus::Ok,
-            thread_id: 1,
-            call_id: 1,
+            thread_id: BexThreadId(1),
+            call_id: BexCallId(1),
             ts_ns: 0,
         };
         assert_eq!(end.encode(&mut buf), 26);
         let start_thread = RawRecord::StartThread {
             flags: 0,
-            thread_id: 1,
-            parent_thread_id: 0,
-            parent_call_id: 0,
+            thread_id: BexThreadId(1),
+            parent_thread_id: BexThreadId(0),
+            parent_call_id: BexCallId(0),
             ts_ns: 0,
             name: b"",
         };
         assert_eq!(start_thread.encode(&mut buf), 36);
         let end_thread = RawRecord::EndThread {
             status: ThreadEndStatus::Completed,
-            thread_id: 1,
+            thread_id: BexThreadId(1),
             ts_ns: 0,
         };
         assert_eq!(end_thread.encode(&mut buf), 18);
         let set_id = RawRecord::SetFunctionId {
-            thread_id: 1,
-            call_id: 1,
+            thread_id: BexThreadId(1),
+            call_id: BexCallId(1),
             id: [0; 16],
             ts_ns: 0,
         };
@@ -612,8 +614,8 @@ mod tests {
         let mut buf = [0u8; MAX_RECORD_LEN];
         let len = RawRecord::EndFunction {
             status: FunctionEndStatus::Ok,
-            thread_id: 1,
-            call_id: 1,
+            thread_id: BexThreadId(1),
+            call_id: BexCallId(1),
             ts_ns: 0,
         }
         .encode(&mut buf);
@@ -626,9 +628,9 @@ mod tests {
         let mut buf = [0u8; MAX_RECORD_LEN];
         let len = RawRecord::StartThread {
             flags: 0,
-            thread_id: 1,
-            parent_thread_id: 0,
-            parent_call_id: 0,
+            thread_id: BexThreadId(1),
+            parent_thread_id: BexThreadId(0),
+            parent_call_id: BexCallId(0),
             ts_ns: 0,
             name: b"hi",
         }
@@ -645,23 +647,23 @@ mod tests {
         let records = [
             RawRecord::CallFunction {
                 flags: 1,
-                thread_id: 2,
-                call_id: 3,
-                parent_call_id: 4,
-                function_id: 5,
+                thread_id: BexThreadId(2),
+                call_id: BexCallId(3),
+                parent_call_id: BexCallId(4),
+                function_id: FunctionId(5),
                 ts_ns: 6,
             },
             RawRecord::StartThread {
                 flags: 0,
-                thread_id: 1,
-                parent_thread_id: 2,
-                parent_call_id: 3,
+                thread_id: BexThreadId(1),
+                parent_thread_id: BexThreadId(2),
+                parent_call_id: BexCallId(3),
                 ts_ns: 4,
                 name: &name,
             },
             RawRecord::SetFunctionId {
-                thread_id: 1,
-                call_id: 2,
+                thread_id: BexThreadId(1),
+                call_id: BexCallId(2),
                 id: [3; 16],
                 ts_ns: 4,
             },
@@ -685,29 +687,29 @@ mod tests {
         let records = vec![
             RawRecord::StartThread {
                 flags: 0,
-                thread_id: 1,
-                parent_thread_id: 0,
-                parent_call_id: 0,
+                thread_id: BexThreadId(1),
+                parent_thread_id: BexThreadId(0),
+                parent_call_id: BexCallId(0),
                 ts_ns: 1,
                 name,
             },
             RawRecord::CallFunction {
                 flags: 0,
-                thread_id: 1,
-                call_id: 1,
-                parent_call_id: 0,
-                function_id: 7,
+                thread_id: BexThreadId(1),
+                call_id: BexCallId(1),
+                parent_call_id: BexCallId(0),
+                function_id: FunctionId(7),
                 ts_ns: 2,
             },
             RawRecord::EndFunction {
                 status: FunctionEndStatus::Ok,
-                thread_id: 1,
-                call_id: 1,
+                thread_id: BexThreadId(1),
+                call_id: BexCallId(1),
                 ts_ns: 3,
             },
             RawRecord::EndThread {
                 status: ThreadEndStatus::Completed,
-                thread_id: 1,
+                thread_id: BexThreadId(1),
                 ts_ns: 4,
             },
         ];
