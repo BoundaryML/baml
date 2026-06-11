@@ -261,12 +261,7 @@ impl RunArgs {
     }
 
     /// Compile `db` to bytecode and build a `BexEngine`.
-    fn compile_to_engine(
-        &self,
-        db: &ProjectDatabase,
-        event_sink: Option<Arc<dyn bex_events::EventSink>>,
-        argv: Vec<String>,
-    ) -> Result<BexEngine> {
+    fn compile_to_engine(&self, db: &ProjectDatabase, argv: Vec<String>) -> Result<BexEngine> {
         let bytecode = baml_compiler2_emit::generate_project_bytecode(
             db,
             &baml_compiler2_emit::CompileOptions {
@@ -274,13 +269,8 @@ impl RunArgs {
             },
         )
         .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
-        BexEngine::new(
-            bytecode,
-            Arc::new(sys_native::SysOps::native()),
-            event_sink,
-            argv,
-        )
-        .map_err(|e| anyhow!("Failed to create engine: {e:?}"))
+        BexEngine::new(bytecode, Arc::new(sys_native::SysOps::native()), argv)
+            .map_err(|e| anyhow!("Failed to create engine: {e:?}"))
     }
 
     pub fn run(&self) -> Result<crate::ExitCode> {
@@ -352,14 +342,6 @@ impl RunArgs {
             }
         }
 
-        let event_sink: Option<Arc<dyn bex_events::EventSink>> =
-            Some(if let Some(path) = self.log_file.as_ref() {
-                self.vlog(format_args!("Writing logs to {}", path.display()));
-                bex_events_native::start(path.clone())
-            } else {
-                bex_events_native::start_stderr()
-            });
-
         if self.help
             && self.functions.is_empty()
             && self.target.is_none()
@@ -373,7 +355,7 @@ impl RunArgs {
             // `-e -` reads stdin / `-e @file` reads file. Load once so
             // the engine compile and `argv[1]` see the same text.
             let expr_body = load_expression_source(expr_source)?;
-            return self.run_expression(&expr_body, event_sink, reporter);
+            return self.run_expression(&expr_body, reporter);
         }
 
         // `--list` short-circuit doesn't need a resolved target; load
@@ -386,8 +368,7 @@ impl RunArgs {
                     .unwrap_or_else(|| "baml".to_string()),
                 "--list".to_string(),
             ];
-            let (db, engine, _) =
-                self.load_and_compile(event_sink.clone(), bootstrap_argv, reporter)?;
+            let (db, engine, _) = self.load_and_compile(bootstrap_argv, reporter)?;
             let _ = db;
             // `--file` mode is hermetic — skip the project `[scripts]`
             // lookup the same way `run_single_target` does.
@@ -422,22 +403,16 @@ impl RunArgs {
                      \n    baml run --file {target} -f <NAME>\n",
                 );
             }
-            return self.run_single_target(target, event_sink, reporter);
+            return self.run_single_target(target, reporter);
         }
-        self.run_subcommand_targets(event_sink, reporter)
+        self.run_subcommand_targets(reporter)
     }
 
     /// Positional `<TARGET>` path: one function, no subcommand layer.
     /// `[scripts]` aliases are resolved here too (positional only).
-    fn run_single_target(
-        &self,
-        target: &str,
-        event_sink: Option<Arc<dyn bex_events::EventSink>>,
-        reporter: &Reporter,
-    ) -> Result<crate::ExitCode> {
+    fn run_single_target(&self, target: &str, reporter: &Reporter) -> Result<crate::ExitCode> {
         let argv = self.build_argv_for_single(target);
-        let (db, mut engine, needs_format_hint) =
-            self.load_and_compile(event_sink.clone(), argv.clone(), reporter)?;
+        let (db, mut engine, needs_format_hint) = self.load_and_compile(argv.clone(), reporter)?;
         let _ = db;
         Self::emit_format_hint_if_needed(reporter, needs_format_hint);
 
@@ -527,20 +502,14 @@ impl RunArgs {
             &function_name,
             parsed.cli_values,
             json_args,
-            event_sink,
             reporter,
         )
     }
 
     /// `-f` mode: build a multi-subcommand parser, dispatch the chosen one.
-    fn run_subcommand_targets(
-        &self,
-        event_sink: Option<Arc<dyn bex_events::EventSink>>,
-        reporter: &Reporter,
-    ) -> Result<crate::ExitCode> {
+    fn run_subcommand_targets(&self, reporter: &Reporter) -> Result<crate::ExitCode> {
         let argv = self.build_argv_for_subcommand();
-        let (db, mut engine, needs_format_hint) =
-            self.load_and_compile(event_sink.clone(), argv.clone(), reporter)?;
+        let (db, mut engine, needs_format_hint) = self.load_and_compile(argv.clone(), reporter)?;
         let _ = db;
         Self::emit_format_hint_if_needed(reporter, needs_format_hint);
 
@@ -582,14 +551,7 @@ impl RunArgs {
             None => None,
         };
 
-        self.dispatch_and_finish(
-            engine,
-            &chosen,
-            parsed.cli_values,
-            json_args,
-            event_sink,
-            reporter,
-        )
+        self.dispatch_and_finish(engine, &chosen, parsed.cli_values, json_args, reporter)
     }
 
     /// Walk `self.functions`, resolve each to an engine-canonical
@@ -646,7 +608,6 @@ impl RunArgs {
         function_name: &str,
         cli_values: HashMap<String, bex_engine::BexExternalValue>,
         json_args: Option<serde_json::Value>,
-        event_sink: Option<Arc<dyn bex_events::EventSink>>,
         reporter: &Reporter,
     ) -> Result<crate::ExitCode> {
         self.vlog(format_args!("Calling {function_name}"));
@@ -666,10 +627,6 @@ impl RunArgs {
         ));
 
         self.vlog(format_args!("Completed in {:.2?}", start.elapsed()));
-
-        if let Some(sink) = &event_sink {
-            sink.flush();
-        }
 
         match dispatch_result {
             Ok(baml_exec::DispatchResult::Ok) => {
@@ -748,12 +705,11 @@ impl RunArgs {
     /// compile to bytecode, create engine.
     fn load_and_compile(
         &self,
-        event_sink: Option<Arc<dyn bex_events::EventSink>>,
         argv: Vec<String>,
         reporter: &Reporter,
     ) -> Result<(ProjectDatabase, BexEngine, bool)> {
         if let Some(file) = self.file.as_deref() {
-            return self.load_and_compile_standalone(file, event_sink, argv, reporter);
+            return self.load_and_compile_standalone(file, argv, reporter);
         }
 
         // `load_project_from_reporting` emits one `Loading <file>`
@@ -782,7 +738,7 @@ impl RunArgs {
         let compile_verb = if self.list { "Resolving" } else { "Compiling" };
         reporter.spin(compile_verb, format!("{} file(s)", baml_files.len()));
         self.vlog(format_args!("Compiling..."));
-        let engine = self.compile_to_engine(&db, event_sink, argv)?;
+        let engine = self.compile_to_engine(&db, argv)?;
         self.vlog(format_args!(
             "Compiled {} user function(s)",
             engine.user_functions().len()
@@ -797,7 +753,6 @@ impl RunArgs {
     fn load_and_compile_standalone(
         &self,
         file_path: &Path,
-        event_sink: Option<Arc<dyn bex_events::EventSink>>,
         argv: Vec<String>,
         reporter: &Reporter,
     ) -> Result<(ProjectDatabase, BexEngine, bool)> {
@@ -831,7 +786,7 @@ impl RunArgs {
         // verb when --list is the destination, "Compiling" otherwise.
         let compile_verb = if self.list { "Resolving" } else { "Compiling" };
         reporter.spin(compile_verb, &display);
-        let engine = self.compile_to_engine(&db, event_sink, argv)?;
+        let engine = self.compile_to_engine(&db, argv)?;
         self.vlog(format_args!(
             "Compiled {} function(s) from standalone file",
             engine.user_functions().len()
@@ -851,12 +806,7 @@ impl RunArgs {
     /// `expr_body` is the resolved expression text — already de-referenced
     /// from inline / `@file` / stdin by the caller. We avoid re-reading
     /// because `-e -` reads stdin once.
-    fn run_expression(
-        &self,
-        expr_body: &str,
-        event_sink: Option<Arc<dyn bex_events::EventSink>>,
-        reporter: &Reporter,
-    ) -> Result<crate::ExitCode> {
+    fn run_expression(&self, expr_body: &str, reporter: &Reporter) -> Result<crate::ExitCode> {
         reporter.spin("Compiling", "expression");
         self.vlog(format_args!(
             "Expression mode: evaluating {} byte(s)",
@@ -924,11 +874,7 @@ impl RunArgs {
         // source" — the loaded body text, not the `@path` reference. This
         // matches the inline case: `-e '2 + 2'` and `-e @file` (with
         // `file` containing `2 + 2`) produce the same argv.
-        let engine = self.compile_to_engine(
-            &db,
-            event_sink.clone(),
-            self.build_argv_for_expression(expr_body),
-        )?;
+        let engine = self.compile_to_engine(&db, self.build_argv_for_expression(expr_body))?;
 
         // Cargo-shape `     Running …` before the program's stdout
         // starts; then clear the spinner so the evaluated expression's
@@ -963,10 +909,6 @@ impl RunArgs {
             }
             Ok(())
         });
-
-        if let Some(sink) = &event_sink {
-            sink.flush();
-        }
 
         match result {
             Ok(()) => {
@@ -1889,7 +1831,6 @@ mod tests {
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),
-            None,
             Vec::new(),
         )
         .expect("BexEngine::new should succeed")

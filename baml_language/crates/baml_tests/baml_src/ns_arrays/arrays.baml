@@ -319,6 +319,53 @@ test "array_map_string_elements" {
     assert.is_true(baml.deep_equals(items.map((s: string) -> string { s + "!" }), ["a!", "b!", "c!"]))
 }
 
+// ============================================================================
+// Array.filter tests
+// ============================================================================
+
+test "array_filter_even_numbers" {
+    let items = [1, 2, 3, 4, 5, 6];
+    let result = items.filter((x: int) -> bool { x % 2 == 0 });
+    let expected = [2, 4, 6];
+    assert.is_true(baml.deep_equals(result, expected))
+}
+
+test "array_filter_empty_array_does_not_call_callback" {
+    let items: int[] = [];
+    let result = items.filter((x: int) -> bool throws string { throw "should not call" });
+    let expected: int[] = [];
+    assert.is_true(baml.deep_equals(result, expected))
+}
+
+test "array_filter_does_not_mutate_source" {
+    let items = [1, 2, 3, 4];
+    let result = items.filter((x: int) -> bool { x > 2 });
+    let expected_result = [3, 4];
+    let expected_items = [1, 2, 3, 4];
+    assert.is_true(baml.deep_equals(result, expected_result));
+    assert.is_true(baml.deep_equals(items, expected_items))
+}
+
+test "array_filter_callback_throws" {
+    let items = [1, 2, 3];
+    assert.is_true(baml.deep_equals(
+        items.filter((x: int) -> bool throws string {
+            if (x == 2) { throw "bad value" }
+            true
+        }) catch (e) {
+            string => "caught"
+        },
+        "caught"
+    ))
+}
+
+test "array_filter_string_elements" {
+    let items = ["ant", "bear", "cat"];
+    let result = items.filter((s: string) -> bool { s.length() == 3 });
+    let expected = ["ant", "cat"];
+    assert.is_true(baml.deep_equals(result, expected))
+}
+
 // ─── clear ────────────────────────────────────────────────────────────────────
 
 test "array_clear_non_empty" {
@@ -339,6 +386,53 @@ test "array_clear_returns_array_after" {
     // `expected` is a local: a test-block local compares unequal to a literal (VM bug)
     let expected: int[] = [];
     assert.is_true(baml.deep_equals(xs, expected))
+}
+
+// ─── remove_at ────────────────────────────────────────────────────────────────
+
+test "array_remove_at_returns_removed_element" {
+    let xs = [10, 20, 30];
+    assert.equal(xs.remove_at(1), 20)
+}
+
+test "array_remove_at_modifies_array_in_place" {
+    let xs = [10, 20, 30];
+    let _ = xs.remove_at(1);
+    let expected = [10, 30];
+    assert.is_true(baml.deep_equals(xs, expected))
+}
+
+test "array_remove_at_zero_removes_first_element" {
+    let xs = [10, 20, 30];
+    assert.equal(xs.remove_at(0), 10);
+    let expected = [20, 30];
+    assert.is_true(baml.deep_equals(xs, expected))
+}
+
+test "array_remove_at_last_index_removes_last_element" {
+    let xs = [10, 20, 30];
+    assert.equal(xs.remove_at(2), 30);
+    let expected = [10, 20];
+    assert.is_true(baml.deep_equals(xs, expected))
+}
+
+test "array_remove_at_out_of_bounds_returns_null_and_keeps_array" {
+    let xs = [10, 20, 30];
+    assert.equal(xs.remove_at(99), null);
+    let expected = [10, 20, 30];
+    assert.is_true(baml.deep_equals(xs, expected))
+}
+
+test "array_remove_at_negative_returns_null_and_keeps_array" {
+    let xs = [10, 20, 30];
+    assert.equal(xs.remove_at(-1), null);
+    let expected = [10, 20, 30];
+    assert.is_true(baml.deep_equals(xs, expected))
+}
+
+test "array_remove_at_empty_returns_null" {
+    let xs: int[] = [];
+    assert.equal(xs.remove_at(0), null)
 }
 
 // ─── shift ────────────────────────────────────────────────────────────────────

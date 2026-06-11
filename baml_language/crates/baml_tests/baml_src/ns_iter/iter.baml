@@ -149,26 +149,26 @@ test "iter_array_first_native_methods" {
 }
 
 function iter_array_first_adapter_defaults() -> bool throws unknown {
-  let mapped = [1, 2, 3, 4].filter((x: int) -> bool {
+  let mapped = baml.iter.ArrayIterator.new([1, 2, 3, 4]).filter((x: int) -> bool {
     x % 2 == 0
   }).map((x: int) -> int {
     x * 10
   }).collect();
 
-  let flattened = [1, 2, 3].filter((x: int) -> bool {
+  let flattened = baml.iter.ArrayIterator.new([1, 2, 3]).filter((x: int) -> bool {
     x < 3
   }).flat_map((x: int) -> baml.iter.Iterable<Item = int, Error = never> {
     [x, x + 10]
   }).collect();
 
-  let reduced = [1, 2, 3, 4].filter((x: int) -> bool {
+  let reduced = baml.iter.ArrayIterator.new([1, 2, 3, 4]).filter((x: int) -> bool {
     x >= 2
   }).reduce((acc: int, x: int) -> int {
     acc + x
   }, 0);
 
   let visited: int[] = [];
-  [1, 2, 3].filter((x: int) -> bool {
+  baml.iter.ArrayIterator.new([1, 2, 3]).filter((x: int) -> bool {
     x != 2
   }).for_each((x: int) -> void {
     visited.push(x * 3);
@@ -193,7 +193,7 @@ test "iter_array_collect_count" {
 }
 
 function iter_array_filter_step_by() -> int[] throws unknown {
-  [1, 2, 3, 4, 5, 6].filter((x: int) -> bool {
+  baml.iter.ArrayIterator.new([1, 2, 3, 4, 5, 6]).filter((x: int) -> bool {
     x % 2 == 0
   }).step_by(2).collect()
 }

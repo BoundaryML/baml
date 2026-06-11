@@ -110,11 +110,6 @@ function baml.Array.for_each<E>(self: baml.Array, fn: (unknown) -> void throws E
       }
   }
 }
-function baml.Array.filter<E>(self: baml.Array, predicate: (unknown) -> bool throws E) -> baml.iter.Iterator<Item = unknown, Error = never | E> throws never {
-  { : baml.iter.Iterator<Item = T, Error = E>
-    baml.iter.ArrayIterator.new(self.slice(0, self.length())).filter<T, E2>(predicate) : baml.iter.Iterator<Item = T, Error = E>
-  }
-}
 function baml.Array.filter_map<U, E>(self: baml.Array, fn: (unknown) -> U | null throws E) -> baml.iter.Iterator<Item = U, Error = never | E> throws never {
   { : baml.iter.Iterator<Item = U, Error = E>
     baml.iter.ArrayIterator.new(self.slice(0, self.length())).filter_map<T, R, E2>(fn) : baml.iter.Iterator<Item = U, Error = E>

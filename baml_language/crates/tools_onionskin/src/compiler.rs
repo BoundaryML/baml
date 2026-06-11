@@ -4031,10 +4031,6 @@ impl CompilerRunner {
                     ));
                     break;
                 }
-                Ok(VmExecState::SpanNotify(_)) => {
-                    // Span notifications are ignored — push null and continue.
-                    vm.stack.push(Value::NULL);
-                }
                 Ok(VmExecState::Event { .. }) => {
                     // Custom events are not surfaced — push null and continue.
                     vm.stack.push(Value::NULL);

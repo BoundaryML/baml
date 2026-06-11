@@ -31,6 +31,24 @@ class Array<T> {
     $rust_function
   }
 
+  /// Removes and returns the element at `index`, or `null` if out of bounds.
+  /// Mutates `self` in place.
+  ///
+  /// `O(n)` because subsequent elements shift backward. For `O(1)` removal from
+  /// the back use `pop`.
+  ///
+  /// # Examples
+  /// ```
+  /// let xs = [10, 20, 30];
+  /// xs.remove_at(1)   // 20
+  /// xs                // [10, 30]
+  /// xs.remove_at(99)  // null
+  /// ```
+  //baml:mut_self
+  function remove_at(self, index: int) -> T? throws never {
+    $rust_function
+  }
+
   /// Returns a new array with the elements of `self` followed by the elements of `other`.
   function concat(self, other: T[]) -> T[] throws never {
     $rust_function
@@ -43,9 +61,13 @@ class Array<T> {
     }
   }
 
-  /// Returns an iterator over the elements matching `predicate`.
-  function filter<E>(self, predicate: (T) -> bool throws E) -> baml.iter.Iterator<Item = T, Error = never | E> throws never {
-    baml.iter.ArrayIterator.new(self.slice(0, self.length())).filter(predicate)
+  /// Returns a new array containing the elements for which `predicate` returns
+  /// true. The predicate is called once per element, left-to-right. Does not
+  /// mutate `self`.
+  //baml:mut_vm
+  //baml:may_yield
+  function filter<E>(self, predicate: (T) -> bool throws E) -> T[] throws E {
+    $rust_function
   }
 
   /// Returns an iterator over non-null results produced by `fn`.

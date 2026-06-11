@@ -92,7 +92,6 @@ bridge_ctypes = { path = "crates/bridge_ctypes", default-features = false }
 bridge_cffi = { path = "crates/bridge_cffi", default-features = false }
 baml_exec = { path = "crates/baml_exec" }
 bex_events = { path = "crates/bex_events" }
-bex_events_native = { path = "crates/bex_events_native" }
 bex_resource_types = { path = "crates/bex_resource_types" }
 darwin-kperf = "0.1.0"
 darwin-kperf-events = "0.1.0"

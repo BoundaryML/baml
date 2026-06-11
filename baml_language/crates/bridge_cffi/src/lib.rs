@@ -104,10 +104,7 @@ pub fn initialize_runtime(
         .map(|(k, v)| (bex_project::FsPath::from_str(k), v))
         .collect();
 
-    let event_sink = runtime_event_sink();
-
-    let rt: Arc<dyn Bex> =
-        bex_project::new(vfs_path, bex_project::SysOps::native(), files, event_sink)?;
+    let rt = bex_project::new(vfs_path, bex_project::SysOps::native(), files)?;
 
     replace_runtime(rt.clone())?;
 
@@ -121,24 +118,11 @@ pub fn initialize_runtime(
 /// live behind `bex_project::new_from_bytecode` so the bridge stays on the
 /// `bex_project` surface rather than reaching into bex internals.
 pub fn initialize_runtime_from_bytecode(bytecode: &[u8]) -> Result<Arc<dyn Bex>, BridgeError> {
-    let rt: Arc<dyn Bex> = bex_project::new_from_bytecode(
-        bytecode,
-        bex_project::SysOps::native(),
-        runtime_event_sink(),
-    )?;
+    let rt: Arc<dyn Bex> = bex_project::new_from_bytecode(bytecode, bex_project::SysOps::native())?;
 
     replace_runtime(rt.clone())?;
 
     Ok(rt)
-}
-
-fn runtime_event_sink() -> Option<Arc<dyn bex_events::EventSink>> {
-    Some(
-        std::env::var("BAML_TRACE_FILE")
-            .ok()
-            .map(|trace_file| bex_events_native::start(trace_file.into()))
-            .unwrap_or_else(bex_events_native::start_stderr),
-    )
 }
 
 fn replace_runtime(rt: Arc<dyn Bex>) -> Result<(), BridgeError> {
@@ -147,20 +131,6 @@ fn replace_runtime(rt: Arc<dyn Bex>) -> Result<(), BridgeError> {
         .map_err(|_| BridgeError::LockPoisoned)?;
     *guard = Some(rt);
     Ok(())
-}
-
-/// Flush the current runtime's event sink. Called by `bridge_python::flush_events()`.
-pub fn flush_event_sink() {
-    if let Ok(rt) = get_runtime()
-        && let Some(sink) = rt.event_sink()
-    {
-        sink.flush();
-    }
-}
-
-/// Get the current runtime's event sink (for passing to HostSpanManager).
-pub fn get_event_sink() -> Option<Arc<dyn bex_events::EventSink>> {
-    get_runtime().ok().and_then(|rt| rt.event_sink())
 }
 
 // ============================================================================
