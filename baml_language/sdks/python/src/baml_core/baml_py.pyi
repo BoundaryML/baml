@@ -451,7 +451,7 @@ def lookup_host_value(handle: BamlPyHandle) -> typing.Optional[typing.Any]:
     r"""
     Look up the host-registered Python object referenced by a
     `BamlPyHandle` whose `handle_type` is `HOST_VALUE_CALLABLE` /
-    `HOST_VALUE_ERROR`, returning a fresh strong reference if the entry
+    `HOST_VALUE_OPAQUE`, returning a fresh strong reference if the entry
     is still live. Used by the outbound error decoder in
     `baml_core.proto` to rehydrate a `baml.errors.HostCallable` thrown
     by BAML back to the original Python exception object on same-host

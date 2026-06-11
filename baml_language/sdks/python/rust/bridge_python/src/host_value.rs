@@ -99,17 +99,17 @@ pub fn register_host_callable(callable: Py<PyAny>) -> u64 {
     key
 }
 
-/// Insert a Python exception object into the registry and return its key.
+/// Insert an arbitrary host Python object into the registry and return its key.
 ///
-/// Used by the host-throw path to register the originating native
+/// The host-throw path uses this to register the originating native
 /// exception so the BAML→host decoder on the same runtime can resolve
 /// the `_handle` slot of a `baml.errors.HostCallable` back to the
 /// original Python object on round-trip. The table is shared with
 /// callable entries (keys are globally unique), and the same
 /// `host_release_callback` releases either kind on last-Arc-drop.
-fn register_host_error(exc: Py<PyAny>) -> u64 {
+fn register_host_opaque(value: Py<PyAny>) -> u64 {
     let key = next_key();
-    REGISTRY.table.lock().unwrap().insert(key, exc);
+    REGISTRY.table.lock().unwrap().insert(key, value);
     key
 }
 
@@ -462,9 +462,9 @@ fn send_dispatch_success(call_id: u32, bytes: &[u8]) {
 
 /// Build an `InboundValue` carrying a `baml.errors.HostCallable` Instance.
 /// `handle_key` references the originating native exception in the
-/// process-global registry (set by [`register_host_error`]); the BAML
+/// process-global registry (set by [`register_host_opaque`]); the BAML
 /// class's `_handle` field carries it as a `BamlHandle` of type
-/// `HOST_VALUE_ERROR` so a same-host decoder can rehydrate the exact
+/// `HOST_VALUE_OPAQUE` so a same-host decoder can rehydrate the exact
 /// Python exception object on round-trip. The remaining
 /// `class_name` / `message` / `language` / `traceback` fields are
 /// metadata for debugging/printing/user convenience and do not
@@ -627,7 +627,7 @@ fn send_dispatch_error_from_pyerr(call_id: u32, py: Python<'_>, py_err: &pyo3::P
     // host-value table so the BAML→host decoder on this runtime can
     // resolve `_handle` back to the original `ValueError`/`KeyError`/...
     // object on round-trip.
-    let handle_key = register_host_error(py_err.value(py).clone().unbind().into_any());
+    let handle_key = register_host_opaque(py_err.value(py).clone().unbind().into_any());
 
     let bytes =
         build_host_callable_inbound(&class_name, &message, traceback.as_deref(), handle_key)
