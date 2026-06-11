@@ -2821,6 +2821,7 @@ impl LetStmt {
                     | SyntaxKind::BINARY_EXPR
                     | SyntaxKind::UNARY_EXPR
                     | SyntaxKind::CALL_EXPR
+                    | SyntaxKind::ARRAY_CONSTRUCTOR_EXPR
                     | SyntaxKind::PATH_EXPR
                     | SyntaxKind::FIELD_ACCESS_EXPR
                     | SyntaxKind::UPCAST_EXPR
@@ -3011,6 +3012,7 @@ impl BlockExpr {
                         | SyntaxKind::IS_EXPR
                         | SyntaxKind::UNARY_EXPR
                         | SyntaxKind::CALL_EXPR
+                        | SyntaxKind::ARRAY_CONSTRUCTOR_EXPR
                         | SyntaxKind::IF_EXPR
                         | SyntaxKind::IF_LET_EXPR
                         | SyntaxKind::MATCH_EXPR

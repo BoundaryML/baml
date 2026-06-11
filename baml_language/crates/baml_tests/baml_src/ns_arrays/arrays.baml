@@ -77,7 +77,7 @@ test "array_set_index_past_length_throws" {
 
 test "array_constructor_negative_size_throws" {
     {
-        int[](-1, 0);
+        let _ = int[](-1, 0);
         baml.sys.panic("expected constructor to throw")
     } catch (e) {
         baml.errors.InvalidArgument => null
