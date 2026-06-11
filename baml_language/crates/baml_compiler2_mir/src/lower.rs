@@ -393,6 +393,11 @@ fn infer_interface_class_bindings(
     class_params: &[Name],
     aliases: &HashMap<QualifiedTypeName, Tir2Ty>,
     bindings: &mut FxHashMap<Name, Tir2Ty>,
+    // Associated-type bindings tolerate an unpinnable typevar union
+    // (`Error = E | E2` vs a normalized request) by leaving the params
+    // unpinned; positional interface args must keep strict pairwise
+    // decomposition, where pinning is what discriminates between blocks.
+    assoc_union_wildcard: bool,
 ) -> bool {
     match (formal, actual) {
         // A dispatch request like `Iterator<Item = Self.Item, Error = Self.Error>`
@@ -413,9 +418,14 @@ fn infer_interface_class_bindings(
         (_, Tir2Ty::TypeVar(_, _)) => true,
         (Tir2Ty::List(f, _), Tir2Ty::List(a, _))
         | (Tir2Ty::EvolvingList(f, _), Tir2Ty::EvolvingList(a, _))
-        | (Tir2Ty::Future(f, _, _), Tir2Ty::Future(a, _, _)) => {
-            infer_interface_class_bindings(f, a, class_params, aliases, bindings)
-        }
+        | (Tir2Ty::Future(f, _, _), Tir2Ty::Future(a, _, _)) => infer_interface_class_bindings(
+            f,
+            a,
+            class_params,
+            aliases,
+            bindings,
+            assoc_union_wildcard,
+        ),
         (
             Tir2Ty::Map {
                 key: fk, value: fv, ..
@@ -425,8 +435,21 @@ fn infer_interface_class_bindings(
             },
         )
         | (Tir2Ty::EvolvingMap(fk, fv, _), Tir2Ty::EvolvingMap(ak, av, _)) => {
-            infer_interface_class_bindings(fk, ak, class_params, aliases, bindings)
-                && infer_interface_class_bindings(fv, av, class_params, aliases, bindings)
+            infer_interface_class_bindings(
+                fk,
+                ak,
+                class_params,
+                aliases,
+                bindings,
+                assoc_union_wildcard,
+            ) && infer_interface_class_bindings(
+                fv,
+                av,
+                class_params,
+                aliases,
+                bindings,
+                assoc_union_wildcard,
+            )
         }
         (
             Tir2Ty::Function {
@@ -451,51 +474,144 @@ fn infer_interface_class_bindings(
                             class_params,
                             aliases,
                             bindings,
+                            assoc_union_wildcard,
                         )
                 })
-                && infer_interface_class_bindings(fr, ar, class_params, aliases, bindings)
-                && infer_interface_class_bindings(fth, ath, class_params, aliases, bindings)
+                && infer_interface_class_bindings(
+                    fr,
+                    ar,
+                    class_params,
+                    aliases,
+                    bindings,
+                    assoc_union_wildcard,
+                )
+                && infer_interface_class_bindings(
+                    fth,
+                    ath,
+                    class_params,
+                    aliases,
+                    bindings,
+                    assoc_union_wildcard,
+                )
         }
         (Tir2Ty::Class(fqtn, fargs, _), Tir2Ty::Class(aqtn, aargs, _))
             if fqtn == aqtn && fargs.len() == aargs.len() =>
         {
-            fargs
-                .iter()
-                .zip(aargs.iter())
-                .all(|(f, a)| infer_interface_class_bindings(f, a, class_params, aliases, bindings))
+            fargs.iter().zip(aargs.iter()).all(|(f, a)| {
+                infer_interface_class_bindings(
+                    f,
+                    a,
+                    class_params,
+                    aliases,
+                    bindings,
+                    assoc_union_wildcard,
+                )
+            })
         }
         (
             Tir2Ty::Interface(fqtn, fargs, f_assoc, _),
             Tir2Ty::Interface(aqtn, aargs, a_assoc, _),
         ) if fqtn == aqtn && fargs.len() == aargs.len() => {
-            fargs
-                .iter()
-                .zip(aargs.iter())
-                .all(|(f, a)| infer_interface_class_bindings(f, a, class_params, aliases, bindings))
-                && a_assoc.iter().all(|(name, actual_ty)| {
-                    f_assoc
-                        .iter()
-                        .find(|(formal_name, _)| formal_name == name)
-                        .is_some_and(|(_, formal_ty)| {
-                            infer_interface_class_bindings(
-                                formal_ty,
-                                actual_ty,
-                                class_params,
-                                aliases,
-                                bindings,
-                            )
+            fargs.iter().zip(aargs.iter()).all(|(f, a)| {
+                infer_interface_class_bindings(
+                    f,
+                    a,
+                    class_params,
+                    aliases,
+                    bindings,
+                    assoc_union_wildcard,
+                )
+            }) && a_assoc.iter().all(|(name, actual_ty)| {
+                f_assoc
+                    .iter()
+                    .find(|(formal_name, _)| formal_name == name)
+                    .is_some_and(|(_, formal_ty)| {
+                        infer_interface_class_bindings(
+                            formal_ty,
+                            actual_ty,
+                            class_params,
+                            aliases,
+                            bindings,
+                            assoc_union_wildcard,
+                        )
+                    })
+            })
+        }
+        (Tir2Ty::Union(fparts, _), actual @ Tir2Ty::Never { .. }) => fparts.iter().all(|f| {
+            infer_interface_class_bindings(
+                f,
+                actual,
+                class_params,
+                aliases,
+                bindings,
+                assoc_union_wildcard,
+            )
+        }),
+        (Tir2Ty::Union(fparts, _), Tir2Ty::Union(aparts, _)) => {
+            let is_class_param =
+                |ty: &Tir2Ty| matches!(ty, Tir2Ty::TypeVar(name, _) if class_params.contains(name));
+            // For ASSOCIATED-type bindings, pairwise decomposition is only
+            // trustworthy when it cannot mis-pin: with two or more class-param
+            // members (`E | E2`), the assignment of requested members to
+            // params is not unique — the requested union is already normalized
+            // (deduped, `never` dropped), so e.g. `E | E2` vs `A | B` may
+            // really be `E = A | B, E2 = never` at runtime. POSITIONAL args
+            // keep the strict pairwise zip: their pinning is what
+            // discriminates between same-class implements blocks, and the
+            // guard post-check re-validates them.
+            if fparts.len() == aparts.len()
+                && (!assoc_union_wildcard
+                    || fparts.iter().filter(|f| is_class_param(f)).count() <= 1)
+            {
+                let mut trial = bindings.clone();
+                if fparts.iter().zip(aparts.iter()).all(|(f, a)| {
+                    infer_interface_class_bindings(
+                        f,
+                        a,
+                        class_params,
+                        aliases,
+                        &mut trial,
+                        assoc_union_wildcard,
+                    )
+                }) {
+                    *bindings = trial;
+                    return true;
+                }
+            }
+            // Wildcard fallback (assoc bindings only): leave class-param
+            // members unpinned — the guard keeps `None` for them and the
+            // callee frame seeds from the matched runtime instance's
+            // `class_type_args` (its TRUE args, not the guard's) — while
+            // every concrete formal member must still be present in the
+            // request.
+            //
+            // Unpinned assoc bindings are safe because dispatch never relies
+            // on them for correctness:
+            // 1. every arm first checks the receiver's concrete class
+            //    identity (`InterfaceDispatchGuard::Class { impl_tn, .. }`),
+            //    so an unpinned binding can never capture another class's
+            //    instance;
+            // 2. two arms for the SAME class can only coexist when their
+            //    positional interface args differ — blocks differing only in
+            //    assoc bindings are rejected at HIR (E0114; pinned by
+            //    `duplicate_implements_differing_only_in_assoc_bindings_is_compile_error`)
+            //    — and positional args keep strict pairwise pinning above
+            //    precisely so they stay discriminating;
+            // 3. a receiver whose runtime bindings don't satisfy the request
+            //    cannot reach the switch in a well-typed program (the
+            //    receiver's static type IS the requested view); guards
+            //    discriminate among candidates, they are not a soundness
+            //    barrier — a request that omits type args entirely already
+            //    produces `InterfaceClassGuard::Any`.
+            assoc_union_wildcard
+                && fparts.iter().any(&is_class_param)
+                && fparts.iter().all(|f| {
+                    is_class_param(f)
+                        || aparts.iter().any(|a| {
+                            baml_compiler2_tir::normalize::is_same_normalized_type(f, a, aliases)
                         })
                 })
         }
-        (Tir2Ty::Union(fparts, _), Tir2Ty::Union(aparts, _)) if fparts.len() == aparts.len() => {
-            fparts
-                .iter()
-                .zip(aparts.iter())
-                .all(|(f, a)| infer_interface_class_bindings(f, a, class_params, aliases, bindings))
-        }
-        (Tir2Ty::Union(fparts, _), actual @ Tir2Ty::Never { .. }) => fparts
-            .iter()
-            .all(|f| infer_interface_class_bindings(f, actual, class_params, aliases, bindings)),
         _ => baml_compiler2_tir::normalize::is_same_normalized_type(formal, actual, aliases),
     }
 }
@@ -528,6 +644,7 @@ fn interface_class_guard_for_args(
                 class_params,
                 aliases,
                 &mut bindings,
+                false,
             ) {
                 return None;
             }
@@ -543,6 +660,7 @@ fn interface_class_guard_for_args(
             class_params,
             aliases,
             &mut bindings,
+            true,
         ) {
             return None;
         }
@@ -573,6 +691,15 @@ fn interface_class_guard_for_args(
         let (_, impl_ty) = substituted_assoc
             .iter()
             .find(|(impl_name, _)| impl_name == requested_name)?;
+        // A substituted binding still containing class params is a deliberate
+        // wildcard (unpinnable typevar union): the runtime class guard plus
+        // instance-seeded frame args carry the discrimination instead. This
+        // skip is only reachable after `infer_interface_class_bindings` has
+        // structurally vetted the same (formal, requested) pairs above — it
+        // never admits a pair that binding inference rejected.
+        if baml_compiler2_tir::generics::contains_typevar(impl_ty) {
+            continue;
+        }
         if !tir_type_satisfies_dispatch_request(impl_ty, requested_ty, aliases) {
             return None;
         }

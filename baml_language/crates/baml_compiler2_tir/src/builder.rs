@@ -1699,7 +1699,29 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// `MemberResolution`; `None` when the callee is not a declared function
     /// (lambda values, unresolved callees).
     fn callee_declared_generic_params(&self, callee_id: ExprId) -> Option<(Vec<Name>, Name)> {
-        let Some(resolution) = self.resolutions.get(&callee_id).cloned() else {
+        // Method calls on a local receiver (`rec.get<int>(...)`) parse as a
+        // multi-segment Path callee, whose member resolution is recorded in
+        // `path_member_resolutions` rather than `resolutions`. Only trust a
+        // method-like final entry there: the vec is NOT parallel to the path
+        // segments (builtin/primitive members and abstract interface methods
+        // record no entry), so a Field/Variant tail from an earlier segment
+        // must fall through to the interface-method fallback below instead of
+        // short-circuiting the lookup.
+        let resolved = self.resolutions.get(&callee_id).cloned().or_else(|| {
+            self.path_member_resolutions
+                .get(&callee_id)
+                .and_then(|resolutions| resolutions.last().cloned())
+                .filter(|resolution| {
+                    matches!(
+                        resolution,
+                        crate::inference::MemberResolution::Free { .. }
+                            | crate::inference::MemberResolution::UnboundMethod { .. }
+                            | crate::inference::MemberResolution::BoundMethod { .. }
+                            | crate::inference::MemberResolution::InterfaceDefaultMethod { .. }
+                    )
+                })
+        });
+        let Some(resolution) = resolved else {
             // Interface methods aren't in `resolutions`; their declared generic
             // params are recorded separately during interface checking.
             let (callee_name, declared_params) = self

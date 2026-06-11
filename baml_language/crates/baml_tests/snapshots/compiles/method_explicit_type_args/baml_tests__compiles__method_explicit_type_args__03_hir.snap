@@ -1,0 +1,19 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR2 ===
+class user.Foo {
+  tag: string
+}
+function user.from_json(j: baml.json.json) -> user.Foo  [expr] {
+  user.Foo { tag: baml.json.from_json(baml.json.field(j, "tag")) }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "tag": self.tag.to_json() }
+}
+function user.use_method_type_args() -> int  [expr] {
+  { let f = user.Foo { tag: "x" }; let v: int = f.zero() NullCoalesce 5 } v
+}
+function user.zero(self: ?) -> T?  [expr] {
+  {  } null
+}

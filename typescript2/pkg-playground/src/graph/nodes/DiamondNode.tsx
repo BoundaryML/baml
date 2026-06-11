@@ -1,7 +1,12 @@
 import { type NodeProps } from '@xyflow/react';
 import { GitBranch } from 'lucide-react';
 import { type ComponentType, memo } from 'react';
-import { nodeBackground, nodeShadow, selectionRing, stateColors } from '../constants';
+import {
+  nodeBackground,
+  nodeShadow,
+  selectionRing,
+  stateColors,
+} from '../constants';
 import type { WorkflowNodeData } from '../types';
 import { NodeHandles } from './NodeHandles';
 
@@ -33,7 +38,8 @@ export const DiamondNode: ComponentType<NodeProps> = memo(({ data }) => {
           height: '100%',
           boxSizing: 'border-box',
           color: colors.text,
-          fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
+          fontFamily:
+            'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
           transition: 'box-shadow 120ms ease, border-color 120ms ease',
         }}
       >
@@ -49,7 +55,11 @@ export const DiamondNode: ComponentType<NodeProps> = memo(({ data }) => {
             boxShadow: 'inset 0 0 0 1px rgba(245,158,11,0.35)',
           }}
         >
-          <GitBranch size={12} color="#fbbf24" style={{ transform: 'rotate(180deg)' }} />
+          <GitBranch
+            size={12}
+            color="#fbbf24"
+            style={{ transform: 'rotate(180deg)' }}
+          />
         </span>
         <div
           style={{

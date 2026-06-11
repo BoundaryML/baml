@@ -21,7 +21,9 @@ export function mediaToSrc(media: BamlJsMedia): string | null {
 }
 
 export function mediaLabel(media: BamlJsMedia): string {
-  return media.mime_type ? `${media.media_type} (${media.mime_type})` : media.media_type;
+  return media.mime_type
+    ? `${media.media_type} (${media.mime_type})`
+    : media.media_type;
 }
 
 export function findImageMedia(
@@ -34,7 +36,8 @@ export function findImageMedia(
   const seen = new WeakSet<object>();
 
   function visit(current: unknown, depth: number) {
-    if (images.length >= maxItems || current == null || depth > maxDepth) return;
+    if (images.length >= maxItems || current == null || depth > maxDepth)
+      return;
 
     if (isBamlMedia(current)) {
       if (current.media_type === 'image') images.push(current);
@@ -51,7 +54,9 @@ export function findImageMedia(
       return;
     }
 
-    for (const [key, child] of Object.entries(current as Record<string, unknown>)) {
+    for (const [key, child] of Object.entries(
+      current as Record<string, unknown>,
+    )) {
       if (key === '$baml') continue;
       visit(child, depth + 1);
     }
