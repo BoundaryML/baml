@@ -137,14 +137,14 @@ pub fn annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> {
             continue;
         };
 
-        let owner_scope = function_scope_for(&index, func_data.span, &func_data.name)
+        let owner_scope = function_scope_for(index, func_data.span, &func_data.name)
             .unwrap_or_else(|| {
                 index.scope_at_offset(func_data.span.start(), Some(&func_data.name))
             });
         process_body(
             db,
             file,
-            &index,
+            index,
             owner_scope,
             expr_body,
             &source_map,

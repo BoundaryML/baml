@@ -60,9 +60,9 @@ const App: React.FC = () => {
         notification: {
           type: 'openPlayground',
           project: target.project,
-          ...(target.functionName ? { functionName: target.functionName } : {}),
-          ...(target.testName ? { testName: target.testName } : {}),
-          ...(target.testsetName ? { testsetName: target.testsetName } : {}),
+          ...(target.functionName !== undefined ? { functionName: target.functionName } : {}),
+          ...(target.testName !== undefined ? { testName: target.testName } : {}),
+          ...(target.testsetName !== undefined ? { testsetName: target.testsetName } : {}),
         },
       });
     }
@@ -116,9 +116,9 @@ const App: React.FC = () => {
         notification: {
           type: 'openPlayground',
           project: target.project,
-          ...(target.functionName ? { functionName: target.functionName } : {}),
-          ...(target.testName ? { testName: target.testName } : {}),
-          ...(target.testsetName ? { testsetName: target.testsetName } : {}),
+          ...(target.functionName !== undefined ? { functionName: target.functionName } : {}),
+          ...(target.testName !== undefined ? { testName: target.testName } : {}),
+          ...(target.testsetName !== undefined ? { testsetName: target.testsetName } : {}),
         },
       });
     };

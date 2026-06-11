@@ -227,9 +227,9 @@ function wireClient(projectRoot: string, client: LanguageClient) {
     }) => {
       await WebviewPanel.render(context.extensionUri, params.port, {
         project: params.projectPath,
-        ...(params.functionName ? { functionName: params.functionName } : {}),
-        ...(params.testName ? { testName: params.testName } : {}),
-        ...(params.testsetName ? { testsetName: params.testsetName } : {}),
+        ...(params.functionName !== undefined ? { functionName: params.functionName } : {}),
+        ...(params.testName !== undefined ? { testName: params.testName } : {}),
+        ...(params.testsetName !== undefined ? { testsetName: params.testsetName } : {}),
       });
     },
   );
