@@ -19,6 +19,11 @@ const nextConfig = {
   // pages that would be force-dynamic (e.g. /changelog) are kept STATIC and
   // fetch their data client-side through an edge rewrite (see rewrites()).
   outputFileTracingRoot: __dirname,
+  // The /api/og link-preview renderer reads brand fonts + the lamb mark from
+  // components/og via fs; force-include them so NFT ships them to Vercel.
+  outputFileTracingIncludes: {
+    '/api/og': ['./components/og/**'],
+  },
   reactStrictMode: true,
   typescript: { ignoreBuildErrors: true },
   poweredByHeader: false,
