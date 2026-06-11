@@ -24,6 +24,82 @@ function baml.Bool.from_json(j: baml.json.json) -> baml.Bool throws baml.json.Js
 class baml.Bool$stream {
 }
 
+--- <builtin>/baml/comparable.baml ---
+function baml.compare(self: unknown, other: unknown) -> int throws never {
+  { : -1 | 1 | 0
+    if (self < other : bool) : -1 | 1 | 0
+      { : -1
+        Neg 1 : -1
+      }
+    else
+      if (self > other : bool) : 1 | 0
+        { : 1
+          1 : 1
+        }
+      else
+        { : 0
+          0 : 0
+        }
+  }
+}
+function baml.compare(self: unknown, other: unknown) -> int throws never {
+  { : -1 | 1 | 0
+    if (self < other : bool) : -1 | 1 | 0
+      { : -1
+        Neg 1 : -1
+      }
+    else
+      if (self > other : bool) : 1 | 0
+        { : 1
+          1 : 1
+        }
+      else
+        { : 0
+          0 : 0
+        }
+  }
+}
+function baml.compare(self: unknown, other: unknown) -> int throws never {
+  { : -1 | 1 | 0
+    if (self < other : bool) : -1 | 1 | 0
+      { : -1
+        Neg 1 : -1
+      }
+    else
+      if (self > other : bool) : 1 | 0
+        { : 1
+          1 : 1
+        }
+      else
+        { : 0
+          0 : 0
+        }
+  }
+}
+function baml.sort(self: unknown) -> unknown throws unknown {
+  { : T[]
+    if (root._is_primitive_array(self) : bool) : T[]
+      { : T[]
+        root._rust_sort<A>(self) : T[]
+      }
+    else
+      { : T[]
+        self.sort_by<T, E>((a: T, b: T) -> int throws T.CmpError { ... }) : T[]
+          (a: T, b: T) -> int throws T.CmpError { ... } : (a: T, b: T) -> int throws T.CmpError
+            {
+              root._compare_shim(a, b)
+            }
+      }
+  }
+}
+lambda baml.sort {
+}
+function baml.compare(self: unknown, other: unknown) -> int throws never {
+  { : int
+    root._float_total_cmp(self, other) : int
+  }
+}
+
 --- <builtin>/baml/containers.baml ---
 class baml.Array {
 }
@@ -67,8 +143,55 @@ function baml.Array.collect(self: baml.Array) -> unknown[] throws never {
 }
 function baml.Array.count(self: baml.Array) -> int throws never {
   { : int
-    self.length() : int
+    self.length<T>() : int
   }
+}
+function baml.Array.sort_by_key<U, E>(self: baml.Array, key: (unknown) -> U throws E) -> unknown[] throws E | U.CmpError {
+  { : never
+    let n = self.length<T>() : int
+    if (n <= 1 : bool) : void
+      { : never
+        return self : T[]
+      }
+    let items = self.slice<T>(0, n) : T[]
+    let keys: U[] = [] : U[]
+    for x in items
+      { : void
+        keys.push<U>(key(x)) : int
+      }
+    let order: int[] = [] : int[]
+    let p = 0 : 0 -> int
+    while p < n
+      { : void
+        order.push(p) : int
+        p Add= 1 : int
+      }
+    order.sort_by<E>((i: int, j: int) -> int throws U.CmpError { ... }) : int[]
+      (i: int, j: int) -> int throws U.CmpError { ... } : (i: int, j: int) -> int throws U.CmpError
+        {
+          match (keys.at(i)) { null => 0, ki: U => match (keys.at(j)) { null => 0, kj: U => ki.compare(kj) } }
+        }
+    let sorted: T[] = [] : T[]
+    for i in order
+      { : void
+        match (items.at(i) : T | null) : void
+          null =>
+            { : void
+            }
+          item: T =>
+            { : void
+              sorted.push<T>(item) : int
+            }
+      }
+    self.clear<T>() : null
+    for s in sorted
+      { : void
+        self.push<T>(s) : int
+      }
+    return self : T[]
+  }
+}
+lambda baml.Array.sort_by_key {
 }
 function baml.Array.from_json(j: baml.json.json) -> baml.Array<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Array {  } : baml.Array<T>

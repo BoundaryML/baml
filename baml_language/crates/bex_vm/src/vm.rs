@@ -4888,6 +4888,7 @@ impl BexVm {
                         .checked_sub(arg_count)
                         .ok_or(VmInternalError::NotEnoughItemsOnStack(arg_count))?;
                     let locals_offset = StackIndex::from_raw(args_offset);
+
                     // Save pc as return address before pushing new frame.
                     let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
                         verifier_unreachable!()
