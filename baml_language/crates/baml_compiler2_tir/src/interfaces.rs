@@ -1994,10 +1994,16 @@ fn unify_into(
         (Ty::Class(xq, xa, _), Ty::Class(yq, ya, _)) if xq == yq && xa.len() == ya.len() => {
             unify_all(xa, ya, vars, aliases, bindings)
         }
-        (Ty::Interface(xq, xa, _, _), Ty::Interface(yq, ya, _, _))
+        (Ty::Interface(xq, xa, xb, _), Ty::Interface(yq, ya, yb, _))
             if xq == yq && xa.len() == ya.len() =>
         {
+            // Generic args *and* associated bindings are part of an interface-existential
+            // type's identity: `I<Item=int>` and `I<Item=string>` are distinct (disjoint)
+            // types, because coherence gives each concrete type a single `impl I`, hence
+            // one `Item`. (Distinct from the *impl's own* interface, where the bindings
+            // are outputs and dropped by `renamed_subject`.)
             unify_all(xa, ya, vars, aliases, bindings)
+                .and(unify_associated_bindings(xb, yb, vars, aliases, bindings))
         }
         (Ty::List(xi, _), Ty::List(yi, _)) | (Ty::EvolvingList(xi, _), Ty::EvolvingList(yi, _)) => {
             unify_into(xi, yi, vars, aliases, bindings)
@@ -2046,6 +2052,30 @@ fn unify_all(
             Overlap::No => return Overlap::No,
             Overlap::Unknown => result = Overlap::Unknown,
             Overlap::Yes => {}
+        }
+    }
+    result
+}
+
+/// Unify two interface-existentials' associated bindings (`Item=…`) — a conjunction
+/// over names common to both. A name on only one side does not constrain (conservative:
+/// well-formed existentials specify the same associated types, so this is exact in
+/// practice; a missing name only ever loosens toward `Yes`, never a wrong `No`).
+fn unify_associated_bindings(
+    xb: &[(Name, Ty)],
+    yb: &[(Name, Ty)],
+    vars: &[Name],
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    bindings: &mut TypeBindings,
+) -> Overlap {
+    let mut result = Overlap::Yes;
+    for (name, xty) in xb {
+        if let Some((_, yty)) = yb.iter().find(|(n, _)| n == name) {
+            match unify_into(xty, yty, vars, aliases, bindings) {
+                Overlap::No => return Overlap::No,
+                Overlap::Unknown => result = Overlap::Unknown,
+                Overlap::Yes => {}
+            }
         }
     }
     result
@@ -2185,15 +2215,15 @@ fn unions_set_equal(
 /// union member lies inside the other union iff it is a subtype of one of its members.
 ///
 /// `unify_into` supplies the bulk (equality ⟹ subtype: same-constructor members,
-/// variable binding, ground equality). On top of it sit the two top-level subtypings
-/// that invariance leaves above the constructor level — `literal <: base` and
-/// `variant <: enum` (`is_literal_subtype`) — and the cases `unify_into` cannot cheaply
-/// decide — a concrete type implementing an interface, two distinct interfaces, an
-/// opaque `$rust_type` (`involves_interface_or_rust_type`) — which are treated
-/// conservatively as a *possible* overlap (`Yes`), never a wrong `No`. All of these arms
-/// only fire when `unify_into` already returned `No` without binding anything, so they
-/// leave `bindings` untouched. Registry-precise interface membership is a later
-/// refinement.
+/// variable binding, ground equality, and same-name interfaces via their generic args +
+/// associated bindings). On top of it sit the two top-level subtypings that invariance
+/// leaves above the constructor level — `literal <: base` and `variant <: enum`
+/// (`is_literal_subtype`) — and the pairs `unify_into` cannot decide without the impl
+/// registry — a concrete type vs an interface, two *different* interfaces, an opaque
+/// `$rust_type` (`needs_conservative_membership`) — which are treated conservatively as
+/// a *possible* overlap (`Yes`), never a wrong `No`. All of these arms only fire when
+/// `unify_into` already returned `No` without binding anything, so they leave `bindings`
+/// untouched. Registry-precise `C implements I` / `I requires J` is a later refinement.
 fn cover(
     member: &Ty,
     candidate: &Ty,
@@ -2204,7 +2234,7 @@ fn cover(
     match unify_into(member, candidate, vars, aliases, bindings) {
         Overlap::No
             if is_literal_subtype(member, candidate)
-                || involves_interface_or_rust_type(member, candidate) =>
+                || needs_conservative_membership(member, candidate) =>
         {
             Overlap::Yes
         }
@@ -2228,13 +2258,20 @@ fn is_literal_subtype(member: &Ty, candidate: &Ty) -> bool {
     }
 }
 
-/// True if either type is an interface-existential or an opaque `$rust_type` — the
-/// members whose disjointness `unify_into` (structural equality) cannot decide, so the
-/// covering oracle treats them conservatively.
-fn involves_interface_or_rust_type(a: &Ty, b: &Ty) -> bool {
-    [a, b]
-        .into_iter()
-        .any(|t| matches!(t, Ty::Interface(..) | Ty::RustType { .. }))
+/// Whether this pair's subtyping cannot be decided without the impl registry, so the
+/// covering oracle must fall back to a conservative `Yes`: a concrete type vs an
+/// interface (needs `C implements I`), two *different* interfaces (needs `I requires J`),
+/// or an opaque `$rust_type`. Two interfaces of the *same* name are decided precisely by
+/// `unify_into` (generic args + associated bindings), so they are **not** conservative.
+fn needs_conservative_membership(a: &Ty, b: &Ty) -> bool {
+    if matches!(a, Ty::RustType { .. }) || matches!(b, Ty::RustType { .. }) {
+        return true;
+    }
+    match (a, b) {
+        (Ty::Interface(qa, ..), Ty::Interface(qb, ..)) => qa != qb,
+        (Ty::Interface(..), _) | (_, Ty::Interface(..)) => true,
+        _ => false,
+    }
 }
 
 /// Solve the covering obligations jointly: is there one substitution under which every
@@ -3258,6 +3295,59 @@ mod tests {
             unify_union_members(&xs, &ys, &vars, &aliases, &mut bindings),
             Overlap::No
         );
+    }
+
+    #[test]
+    fn interface_distinct_associated_binding_is_disjoint() {
+        // `I<Item=int>` and `I<Item=string>` are distinct existential types — the
+        // associated binding is part of the type's identity (one `impl I` per concrete
+        // type ⇒ one `Item`), so they are provably disjoint.
+        let aliases = std::collections::HashMap::default();
+        let mut bindings = TypeBindings::default();
+        let a = interface_with_assoc("I", vec![("Item", int())]);
+        let b = interface_with_assoc("I", vec![("Item", string())]);
+        assert_eq!(
+            unify_into(&a, &b, &[], &aliases, &mut bindings),
+            Overlap::No
+        );
+    }
+
+    #[test]
+    fn interface_associated_binding_unifies_variable() {
+        // `I<Item=int>` unifies with `I<Item=T>` by binding `T = int`.
+        let vars = vec![Name::new("T")];
+        let aliases = std::collections::HashMap::default();
+        let mut bindings = TypeBindings::default();
+        let a = interface_with_assoc("I", vec![("Item", int())]);
+        let b = interface_with_assoc("I", vec![("Item", type_var("T"))]);
+        assert_eq!(
+            unify_into(&a, &b, &vars, &aliases, &mut bindings),
+            Overlap::Yes
+        );
+        assert_eq!(bindings.get(&Name::new("T")), Some(&int()));
+    }
+
+    #[test]
+    fn cover_distinct_interface_binding_is_not_conservative() {
+        // Same-name interfaces are decided precisely by `unify_into`, so `cover` does not
+        // fall back to the conservative `Yes` — `I<Item=int>` does not cover `I<Item=string>`.
+        let aliases = std::collections::HashMap::default();
+        let mut bindings = TypeBindings::default();
+        let a = interface_with_assoc("I", vec![("Item", int())]);
+        let b = interface_with_assoc("I", vec![("Item", string())]);
+        assert_eq!(cover(&a, &b, &[], &aliases, &mut bindings), Overlap::No);
+    }
+
+    #[test]
+    fn cover_class_vs_interface_is_conservative_yes() {
+        // Whether a concrete class implements an interface needs the impl registry, which
+        // the solver does not yet consult here, so `cover` conservatively reports a
+        // possible overlap (`Yes`) — never a wrong `No`.
+        let aliases = std::collections::HashMap::default();
+        let mut bindings = TypeBindings::default();
+        let a = class(&[], "A", vec![]);
+        let b = interface("I", vec![]);
+        assert_eq!(cover(&a, &b, &[], &aliases, &mut bindings), Overlap::Yes);
     }
 
     // Probe helper for the pigeonhole experiments below.
