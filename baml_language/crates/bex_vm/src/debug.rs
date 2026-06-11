@@ -155,6 +155,8 @@ pub(crate) fn display_instruction(
         Instruction::LoadVar(index)
         | Instruction::StoreVar(index)
         | Instruction::StoreVarLoadVar(index)
+        | Instruction::AddIntStoreVar(index)
+        | Instruction::AddIntSmallStoreVar { slot: index, .. }
         | Instruction::Watch(index)
         | Instruction::Unwatch(index)
         | Instruction::Notify(index) => match function.local_names.get(*index) {
@@ -370,6 +372,8 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::LoadMapElement => Style::new().blue(),
         Instruction::StoreVar(_)
         | Instruction::StoreVarLoadVar(_)
+        | Instruction::AddIntStoreVar(_)
+        | Instruction::AddIntSmallStoreVar { .. }
         | Instruction::StoreVar2(..)
         | Instruction::StoreGlobal(_)
         | Instruction::StoreField(_)
@@ -730,6 +734,10 @@ fn display_instruction_textual(
         Instruction::LoadVar(idx) => format!("load_var {}", meta_str(idx)),
         Instruction::StoreVar(idx) => format!("store_var {}", meta_str(idx)),
         Instruction::StoreVarLoadVar(idx) => format!("store_var_load_var {}", meta_str(idx)),
+        Instruction::AddIntStoreVar(idx) => format!("add_int_store_var {}", meta_str(idx)),
+        Instruction::AddIntSmallStoreVar { slot, imm } => {
+            format!("add_int_small_store_var {} {imm}", meta_str(slot))
+        }
         Instruction::LoadVar2(a, b) => format!("load_var2 {a} {b}"),
         Instruction::StoreVar2(a, b) => format!("store_var2 {a} {b}"),
 
@@ -1133,6 +1141,8 @@ fn display_expanded_metadata(ip: usize, instruction: &Instruction, function: &Fu
         | Instruction::LoadVar(_)
         | Instruction::StoreVar(_)
         | Instruction::StoreVarLoadVar(_)
+        | Instruction::AddIntStoreVar(_)
+        | Instruction::AddIntSmallStoreVar { .. }
         | Instruction::LoadGlobal(_)
         | Instruction::StoreGlobal(_)
         | Instruction::LoadField(_)
@@ -1332,6 +1342,7 @@ pub fn display_compact_bytecode(
             OpCode::LoadVar
             | OpCode::StoreVar
             | OpCode::StoreVarLoadVar
+            | OpCode::AddIntStoreVar
             | OpCode::LoadGlobal
             | OpCode::StoreGlobal
             | OpCode::LoadField
@@ -1362,6 +1373,13 @@ pub fn display_compact_bytecode(
             | OpCode::CaptureRef => {
                 let val = read_u32(code, &mut pc);
                 writeln!(f, "{val}")?;
+            }
+
+            OpCode::AddIntSmallStoreVar => {
+                let slot = read_u32(code, &mut pc);
+                let imm = code[pc] as i8;
+                pc += 1;
+                writeln!(f, "{slot} {imm}")?;
             }
 
             // Jump i32 operand: show relative offset and resolved absolute target

@@ -815,6 +815,69 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         }
     }
 
+    fn operand_is_local(operand: &Operand, local: Local) -> bool {
+        matches!(
+            operand,
+            Operand::Copy(Place::Local(candidate)) | Operand::Move(Place::Local(candidate))
+                if *candidate == local
+        )
+    }
+
+    fn small_int_constant(operand: &Operand) -> Option<i8> {
+        let Operand::Constant(Constant::Int(value)) = operand else {
+            return None;
+        };
+        i8::try_from(*value).ok()
+    }
+
+    fn try_emit_int_local_add_store(&mut self, local: Local, value: &Rvalue) -> bool {
+        let Rvalue::BinaryOp {
+            op: BinOp::Add,
+            left,
+            right,
+        } = value
+        else {
+            return false;
+        };
+
+        if self.captured_locals.contains(&local)
+            || !self.binary_operands_can_use_specialized_op(left, right)
+        {
+            return false;
+        }
+
+        let Some(left_ty) = self.resolve_operand_type(left) else {
+            return false;
+        };
+        let Some(right_ty) = self.resolve_operand_type(right) else {
+            return false;
+        };
+        if Self::classify_arith_ty(&left_ty) != Some(ArithTyClass::Int)
+            || Self::classify_arith_ty(&right_ty) != Some(ArithTyClass::Int)
+        {
+            return false;
+        }
+
+        let rhs = if Self::operand_is_local(left, local) {
+            right
+        } else if Self::operand_is_local(right, local) {
+            left
+        } else {
+            return false;
+        };
+
+        let slot = self.local_slot_or_panic(local, "int local add-store");
+        if let Some(imm) = Self::small_int_constant(rhs) {
+            let inst = self.emit(Instruction::AddIntSmallStoreVar { slot, imm });
+            self.set_var_operand(inst, slot);
+        } else {
+            self.emit_operand_pull(rhs);
+            let inst = self.emit(Instruction::AddIntStoreVar(slot));
+            self.set_var_operand(inst, slot);
+        }
+        true
+    }
+
     fn local_slot_or_panic(&self, local: Local, context: &str) -> usize {
         *self.local_slots.get(&local).unwrap_or_else(|| {
             panic!("local {local} has no allocated slot while emitting {context}")
@@ -1367,6 +1430,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
                 match destination {
                     Place::Local(local) => {
+                        if self.try_emit_int_local_add_store(*local, value) {
+                            return;
+                        }
+
                         // Local assignment: emit rvalue then store
                         self.emit_rvalue_pull(value);
                         self.emit_store_place(destination);

@@ -4350,6 +4350,35 @@ impl BexVm {
                     }
                 }
 
+                OpCode::AddIntStoreVar => {
+                    let slot = { read_u32_unchecked(code, pc) as usize };
+                    let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
+                        unreachable!()
+                    };
+                    let local_var_index = Self::local_slot_stack_index(bf.locals_offset, slot);
+                    let rhs = self.stack.ensure_pop();
+                    let lhs = self.stack.get_at(local_var_index);
+                    let value = Value::tagged_int_add(lhs, rhs);
+                    if let Some(state) = self.store_local_value(local_var_index, value)? {
+                        return Ok(Some(state));
+                    }
+                }
+
+                OpCode::AddIntSmallStoreVar => {
+                    let slot = { read_u32_unchecked(code, pc) as usize };
+                    let imm = { read_i8_unchecked(code, pc) };
+                    let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
+                        unreachable!()
+                    };
+                    let local_var_index = Self::local_slot_stack_index(bf.locals_offset, slot);
+                    let lhs = self.stack.get_at(local_var_index);
+                    let rhs = Value::int(i64::from(imm));
+                    let value = Value::tagged_int_add(lhs, rhs);
+                    if let Some(state) = self.store_local_value(local_var_index, value)? {
+                        return Ok(Some(state));
+                    }
+                }
+
                 // ── LoadGlobal / StoreGlobal ──────────────────────────────────
                 OpCode::LoadGlobal => {
                     let raw = { read_u32_unchecked(code, pc) };
@@ -6061,7 +6090,12 @@ impl BexVm {
                             },
                         )));
                     }
-                    self.stack.push(Value::int(l % r));
+                    let result = if l >= 0 && r > 0 && (r & (r - 1)) == 0 {
+                        l & (r - 1)
+                    } else {
+                        l % r
+                    };
+                    self.stack.push(Value::int(result));
                 }
 
                 // ── Specialized float arithmetic (skip type dispatch) ─────────

@@ -465,9 +465,8 @@ function typed_inputs.sum(arr: int[]) -> int {
     jump L47
 
   L46:
-    load_var2 2 4
-    add_int
-    store_var total
+    load_var _35
+    add_int_store_var total
     jump L24
 
   L47:

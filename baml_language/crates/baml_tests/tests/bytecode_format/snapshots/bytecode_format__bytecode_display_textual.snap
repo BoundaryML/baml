@@ -887,10 +887,7 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
 
   L47:
     pop_jump_if_false L25
-    load_var count
-    load_const 1
-    add_int
-    store_var count
+    add_int_small_store_var count 1
     jump L25
 
   L48:
@@ -1280,10 +1277,7 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
 
   L47:
     pop_jump_if_false L25
-    load_var count
-    load_const 1
-    add_int
-    store_var count
+    add_int_small_store_var count 1
     jump L25
 
   L48:

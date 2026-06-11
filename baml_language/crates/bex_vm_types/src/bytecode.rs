@@ -210,6 +210,17 @@ pub enum Instruction {
     /// in `Vm::stack` array.
     StoreVarLoadVar(usize),
 
+    /// Adds the stack top to a local integer slot and stores the result.
+    ///
+    /// Equivalent to `LOAD_VAR i; ADD_INT; STORE_VAR i` when the left operand
+    /// is local `i`, but avoids the local reload and result stack round-trip.
+    AddIntStoreVar(usize),
+
+    /// Adds a small immediate integer to a local integer slot and stores the result.
+    ///
+    /// Equivalent to `LOAD_VAR i; LOAD_INT_SMALL n; ADD_INT; STORE_VAR i`.
+    AddIntSmallStoreVar { slot: usize, imm: i8 },
+
     /// Load a global variable from the `Vm::globals` array.
     ///
     /// Format: `LOAD_GLOBAL i` where `i` is the index of the global variable
@@ -944,6 +955,10 @@ pub enum OpCode {
     // ── Unit op appended out of group order to preserve discriminants ──
     // BEP-034 `baml.future.__await_any`: no operands (1 byte), like `Await`.
     AwaitAny,
+
+    // ── Local integer update superinstructions, appended to preserve discriminants ──
+    AddIntStoreVar,      // u32 slot
+    AddIntSmallStoreVar, // u32 slot + i8 imm
 }
 
 impl OpCode {
@@ -1030,11 +1045,15 @@ impl OpCode {
             // 2-byte: opcode + i8
             Self::LoadIntSmall => 2,
 
+            // 6-byte: opcode + u32 + i8
+            Self::AddIntSmallStoreVar => 6,
+
             // 5-byte: opcode + u32/i32
             Self::LoadConst
             | Self::LoadVar
             | Self::StoreVar
             | Self::StoreVarLoadVar
+            | Self::AddIntStoreVar
             | Self::LoadGlobal
             | Self::StoreGlobal
             | Self::LoadField
@@ -1093,6 +1112,8 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::Return as u8 => Ok(Self::Return),
             x if x == Self::Await as u8 => Ok(Self::Await),
             x if x == Self::AwaitAny as u8 => Ok(Self::AwaitAny),
+            x if x == Self::AddIntStoreVar as u8 => Ok(Self::AddIntStoreVar),
+            x if x == Self::AddIntSmallStoreVar as u8 => Ok(Self::AddIntSmallStoreVar),
             x if x == Self::Throw as u8 => Ok(Self::Throw),
             x if x == Self::LoadArrayElement as u8 => Ok(Self::LoadArrayElement),
             x if x == Self::LoadMapElement as u8 => Ok(Self::LoadMapElement),
@@ -1222,6 +1243,8 @@ impl std::fmt::Display for OpCode {
             Self::Return => "RETURN",
             Self::Await => "AWAIT",
             Self::AwaitAny => "AWAIT_ANY",
+            Self::AddIntStoreVar => "ADD_INT_STORE_VAR",
+            Self::AddIntSmallStoreVar => "ADD_INT_SMALL_STORE_VAR",
             Self::Throw => "THROW",
             Self::LoadArrayElement => "LOAD_ARRAY_ELEMENT",
             Self::LoadMapElement => "LOAD_MAP_ELEMENT",
@@ -1532,6 +1555,10 @@ impl std::fmt::Display for Instruction {
             Instruction::LoadVar(i) => write!(f, "LOAD_VAR {i}"),
             Instruction::StoreVar(i) => write!(f, "STORE_VAR {i}"),
             Instruction::StoreVarLoadVar(i) => write!(f, "STORE_VAR_LOAD_VAR {i}"),
+            Instruction::AddIntStoreVar(i) => write!(f, "ADD_INT_STORE_VAR {i}"),
+            Instruction::AddIntSmallStoreVar { slot, imm } => {
+                write!(f, "ADD_INT_SMALL_STORE_VAR {slot} {imm}")
+            }
             Instruction::LoadGlobal(i) => write!(f, "LOAD_GLOBAL {i}"),
             Instruction::StoreGlobal(i) => write!(f, "STORE_GLOBAL {i}"),
             Instruction::LoadField(i) => write!(f, "LOAD_FIELD {i}"),
@@ -2072,6 +2099,7 @@ impl Bytecode {
                 Instruction::LoadVar(v)
                 | Instruction::StoreVar(v)
                 | Instruction::StoreVarLoadVar(v)
+                | Instruction::AddIntStoreVar(v)
                 | Instruction::LoadField(v)
                 | Instruction::StoreField(v)
                 | Instruction::InitField(v)
@@ -2098,6 +2126,16 @@ impl Bytecode {
                     code.extend_from_slice(
                         &u32::try_from(*v).expect("operand fits u32").to_le_bytes(),
                     );
+                }
+
+                // ── Local update with small immediate ───────────────
+                Instruction::AddIntSmallStoreVar { slot, imm } => {
+                    code.extend_from_slice(
+                        &u32::try_from(*slot)
+                            .expect("operand fits u32")
+                            .to_le_bytes(),
+                    );
+                    code.push(*imm as u8);
                 }
 
                 // ── GlobalIndex operand → u32 ───────────────────────
@@ -2378,6 +2416,8 @@ impl Bytecode {
             Instruction::LoadVar(_) => OpCode::LoadVar,
             Instruction::StoreVar(_) => OpCode::StoreVar,
             Instruction::StoreVarLoadVar(_) => OpCode::StoreVarLoadVar,
+            Instruction::AddIntStoreVar(_) => OpCode::AddIntStoreVar,
+            Instruction::AddIntSmallStoreVar { .. } => OpCode::AddIntSmallStoreVar,
             Instruction::LoadGlobal(_) => OpCode::LoadGlobal,
             Instruction::StoreGlobal(_) => OpCode::StoreGlobal,
             Instruction::LoadField(_) => OpCode::LoadField,
@@ -2564,6 +2604,41 @@ mod compact_tests {
         let compact = bc.lower_to_compact();
         assert_eq!(compact.code.len(), 1);
         assert_eq!(compact.code[0], OpCode::Add as u8);
+    }
+
+    #[test]
+    fn encode_int_local_update_superinstructions() {
+        let bc = make_bytecode(
+            vec![
+                Instruction::AddIntStoreVar(7),
+                Instruction::AddIntSmallStoreVar { slot: 9, imm: -3 },
+            ],
+            vec![],
+        );
+        let compact = bc.lower_to_compact();
+
+        assert_eq!(compact.code.len(), 11);
+        assert_eq!(compact.code[0], OpCode::AddIntStoreVar as u8);
+        assert_eq!(
+            u32::from_le_bytes([
+                compact.code[1],
+                compact.code[2],
+                compact.code[3],
+                compact.code[4],
+            ]),
+            7
+        );
+        assert_eq!(compact.code[5], OpCode::AddIntSmallStoreVar as u8);
+        assert_eq!(
+            u32::from_le_bytes([
+                compact.code[6],
+                compact.code[7],
+                compact.code[8],
+                compact.code[9],
+            ]),
+            9
+        );
+        assert_eq!(compact.code[10] as i8, -3);
     }
 
     #[test]

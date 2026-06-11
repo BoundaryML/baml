@@ -69,10 +69,8 @@ function while_loops.while_loops_break_at_two() -> int {
     load_const 5
     cmp_int_op <
     pop_jump_if_false L1
+    add_int_small_store_var a 1
     load_var a
-    load_const 1
-    add_int
-    store_var_load_var a
     load_const 2
     cmp_int_op ==
     pop_jump_if_false L0

@@ -84,13 +84,9 @@ function for_loops.for_loops_c_for_sum_to_ten() -> int {
     return
 
   L2:
-    load_var2 1 2
-    add_int
-    store_var s
     load_var i
-    load_const 1
-    add_int
-    store_var i
+    add_int_store_var s
+    add_int_small_store_var i 1
     jump L0
 }
 
@@ -767,9 +763,8 @@ function for_loops.for_loops_for_with_break(xs: int[]) -> int {
     jump L48
 
   L47:
-    load_var2 2 5
-    add_int
-    store_var result
+    load_var x
+    add_int_store_var result
     jump L24
 
   L48:
@@ -1111,9 +1106,8 @@ function for_loops.for_loops_for_with_continue(xs: int[]) -> int {
     jump L24
 
   L47:
-    load_var2 2 5
-    add_int
-    store_var result
+    load_var x
+    add_int_store_var result
     jump L24
 
   L48:
@@ -2380,11 +2374,9 @@ function for_loops.for_loops_nested_for(arr_a: int[], arr_b: int[]) -> int {
     jump L24
 
   L93:
-    load_var2 3 6
-    load_var _99
+    load_var2 6 8
     mul_int
-    add_int
-    store_var result
+    add_int_store_var result
     jump L71
 
   L94:
@@ -3045,9 +3037,8 @@ function for_loops.for_loops_sum(xs: int[]) -> int {
     jump L47
 
   L46:
-    load_var2 2 4
-    add_int
-    store_var result
+    load_var _35
+    add_int_store_var result
     jump L24
 
   L47:
@@ -3385,9 +3376,8 @@ function for_loops.for_loops_sum_let_var() -> int {
     jump L47
 
   L46:
-    load_var2 1 4
-    add_int
-    store_var sum
+    load_var _36
+    add_int_store_var sum
     jump L24
 
   L47:
@@ -3725,9 +3715,8 @@ function for_loops.for_loops_sum_let_var_no_parens() -> int {
     jump L47
 
   L46:
-    load_var2 1 4
-    add_int
-    store_var sum
+    load_var _36
+    add_int_store_var sum
     jump L24
 
   L47:

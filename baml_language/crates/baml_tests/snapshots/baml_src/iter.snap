@@ -6900,10 +6900,9 @@ function iter.iter_for_in_array_of_classes() -> int {
     jump L43
 
   L42:
-    load_var2 1 4
+    load_var _36
     load_field .value
-    add_int
-    store_var total
+    add_int_store_var total
     jump L22
 
   L43:
@@ -7228,16 +7227,12 @@ function iter.iter_for_in_array_of_unions() -> int {
     load_const "two"
     cmp_op ==
     pop_jump_if_false L22
-    load_var total
-    load_const 20
-    add_int
-    store_var total
+    add_int_small_store_var total 20
     jump L22
 
   L44:
-    load_var2 1 5
-    add_int
-    store_var total
+    load_var x
+    add_int_store_var total
     jump L22
 
   L45:

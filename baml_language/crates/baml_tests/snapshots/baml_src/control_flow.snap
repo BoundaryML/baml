@@ -229,10 +229,7 @@ function control_flow.concat_oks(items: (control_flow.Ok | control_flow.Err)[]) 
     load_var2 1 3
     load_array_element
     store_var item
-    load_var i
-    load_const 1
-    add_int
-    store_var i
+    add_int_small_store_var i 1
     load_var item
     store_var_load_var _9
     is_type control_flow.Ok
@@ -267,17 +264,11 @@ function control_flow.continue_loop(x: int) -> int {
     jump L4
 
   L3:
-    load_var i
-    load_const 10
-    add_int
-    store_var i
+    add_int_small_store_var i 10
     jump L0
 
   L4:
-    load_var i
-    load_const 1
-    add_int
-    store_var i
+    add_int_small_store_var i 1
     jump L0
 }
 
@@ -517,10 +508,7 @@ function control_flow.pick_first_ok(items: (control_flow.Ok | control_flow.Err)[
     load_var _9
     load_field .value
     store_var result
-    load_var i
-    load_const 1
-    add_int
-    store_var i
+    add_int_small_store_var i 1
     jump L0
 }
 

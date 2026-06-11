@@ -4467,10 +4467,7 @@ function iter_impl_generics_only.core.Iterator.count(self: iter_impl_generics_on
     jump L23
 
   L22:
-    load_var n
-    load_const 1
-    add_int
-    store_var n
+    add_int_small_store_var n 1
     jump L0
 
   L23:
@@ -6545,10 +6542,7 @@ function iter_impl_generics_only.core.StepBy$stream.Iterator<T, E>.next(self: it
     jump L46
 
   L45:
-    load_var i
-    load_const 1
-    add_int
-    store_var i
+    add_int_small_store_var i 1
     jump L1
 
   L46:
@@ -6992,10 +6986,7 @@ function iter_impl_generics_only.core.StepBy.Iterator<T, E>.next(self: iter_impl
     jump L46
 
   L45:
-    load_var i
-    load_const 1
-    add_int
-    store_var i
+    add_int_small_store_var i 1
     jump L1
 
   L46:

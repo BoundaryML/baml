@@ -1096,10 +1096,9 @@ function patterns_new_runtime.from_array_boxes(boxes: patterns_new_runtime.BoxT<
     jump L43
 
   L42:
-    load_var2 2 4
+    load_var _34
     load_field .value
-    add_int
-    store_var total
+    add_int_store_var total
     jump L22
 
   L43:
@@ -4246,12 +4245,11 @@ function patterns_new_runtime.test_for_deep_class_sums() -> int {
     jump L43
 
   L42:
-    load_var2 1 4
+    load_var _44
     load_field .address
     load_field .coordinate
     load_field .zip
-    add_int
-    store_var total
+    add_int_store_var total
     jump L22
 
   L43:
@@ -4575,9 +4573,8 @@ function patterns_new_runtime.test_for_inside_class_destruct() -> int {
     load_field .scores
     container_len
     store_var _72
-    load_var2 1 5
-    add_int
-    store_var total
+    load_var _72
+    add_int_store_var total
     jump L22
 
   L43:
@@ -5292,12 +5289,10 @@ function patterns_new_runtime.test_for_let_chain_of_bindings() -> int {
 
   L46:
     load_var _35
-    store_var _64
-    load_var2 1 5
+    store_var_load_var _64
     load_var _64
     add_int
-    add_int
-    store_var total
+    add_int_store_var total
     jump L24
 
   L47:
@@ -5620,7 +5615,7 @@ function patterns_new_runtime.test_for_let_chain_trailing_type() -> int {
     load_var row
     container_len
     store_var _69
-    load_var2 1 6
+    load_var _69
     load_const 100
     mul_int
     load_var row
@@ -5632,8 +5627,7 @@ function patterns_new_runtime.test_for_let_chain_trailing_type() -> int {
     load_var row
     container_len
     add_int
-    add_int
-    store_var total
+    add_int_store_var total
     jump L22
 
   L43:
@@ -5974,9 +5968,8 @@ function patterns_new_runtime.test_for_let_or_same_binding() -> int {
   L46:
     load_var _35
     store_var _64
-    load_var2 1 5
-    add_int
-    store_var total
+    load_var _64
+    add_int_store_var total
     jump L24
 
   L47:
@@ -6316,9 +6309,8 @@ function patterns_new_runtime.test_for_let_or_six_bindings() -> int {
   L46:
     load_var _35
     store_var _64
-    load_var2 1 5
-    add_int
-    store_var total
+    load_var _64
+    add_int_store_var total
     jump L24
 
   L47:
@@ -6624,10 +6616,7 @@ function patterns_new_runtime.test_for_nested_rest_irrefutable() -> int {
     jump L43
 
   L42:
-    load_var total
-    load_const 1
-    add_int
-    store_var total
+    add_int_small_store_var total 1
     jump L22
 
   L43:
@@ -7302,9 +7291,8 @@ function patterns_new_runtime.test_for_rest_sums_rows() -> int {
     load_var _38
     container_len
     store_var _68
-    load_var2 1 5
-    add_int
-    store_var total
+    load_var _68
+    add_int_store_var total
     jump L22
 
   L43:
@@ -7610,10 +7598,7 @@ function patterns_new_runtime.test_for_rest_wildcard_irrefutable() -> int {
     jump L43
 
   L42:
-    load_var count
-    load_const 1
-    add_int
-    store_var count
+    add_int_small_store_var count 1
     jump L22
 
   L43:
