@@ -35,10 +35,11 @@ function nodeSize(node: WorkflowNode): { w: number; h: number } {
     if (imageCount > 0) {
       const visibleCount = Math.min(imageCount, NODE_IMAGE_PREVIEW_MAX);
       const previewRows = visibleCount === 1 ? 1 : Math.ceil(visibleCount / 2);
-      const previewHeight = visibleCount === 1
-        ? NODE_IMAGE_PREVIEW_SINGLE_HEIGHT
-        : previewRows * NODE_IMAGE_PREVIEW_TILE_HEIGHT
-          + (previewRows - 1) * NODE_IMAGE_PREVIEW_GAP;
+      const previewHeight =
+        visibleCount === 1
+          ? NODE_IMAGE_PREVIEW_SINGLE_HEIGHT
+          : previewRows * NODE_IMAGE_PREVIEW_TILE_HEIGHT +
+            (previewRows - 1) * NODE_IMAGE_PREVIEW_GAP;
       return {
         w: Math.max(base.w, NODE_IMAGE_PREVIEW_WIDTH),
         h: base.h + previewHeight + 14,
@@ -87,7 +88,13 @@ function buildElkNodes(
     const elkNode: ElkNode = { id: node.id };
 
     if (isGroup) {
-      const children = buildElkNodes(allNodes, direction, edgesByOwner, portsByNode, node.id);
+      const children = buildElkNodes(
+        allNodes,
+        direction,
+        edgesByOwner,
+        portsByNode,
+        node.id,
+      );
       elkNode.layoutOptions = {
         'elk.algorithm': 'layered',
         'elk.direction': isHorizontal ? 'RIGHT' : 'DOWN',
@@ -140,7 +147,10 @@ function buildElkNodes(
 // Placing each edge on the deepest group containing both endpoints
 // gives ELK correct local context for layer ordering and spacing.
 
-function getAncestorChain(nodeId: string, nodeById: Map<string, WorkflowNode>): string[] {
+function getAncestorChain(
+  nodeId: string,
+  nodeById: Map<string, WorkflowNode>,
+): string[] {
   const chain: string[] = [];
   let cur = nodeById.get(nodeId);
   while (cur) {
@@ -176,8 +186,12 @@ export async function layoutGraph(
 
   const isHorizontal = direction === 'horizontal';
   const nodeIds = new Set(nodes.map((n) => n.id));
-  const validEdges = edges.filter((e) => nodeIds.has(e.source) && nodeIds.has(e.target));
-  const groupNodeIds = new Set(nodes.filter((n) => n.type === 'group').map((n) => n.id));
+  const validEdges = edges.filter(
+    (e) => nodeIds.has(e.source) && nodeIds.has(e.target),
+  );
+  const groupNodeIds = new Set(
+    nodes.filter((n) => n.type === 'group').map((n) => n.id),
+  );
   const nodeById = new Map(nodes.map((n) => [n.id, n]));
 
   // Count outgoing/incoming edges per (non-group) node so we can declare
@@ -200,7 +214,10 @@ export async function layoutGraph(
   // Per-edge port index counters — give each edge a unique slot.
   const sourceIdx = new Map<string, number>();
   const targetIdx = new Map<string, number>();
-  const edgePortIds = new Map<string, { sourcePort: string; targetPort: string }>();
+  const edgePortIds = new Map<
+    string,
+    { sourcePort: string; targetPort: string }
+  >();
 
   // Distribute edges to their LCA group for better within-group layout.
   const edgesByOwner = new Map<string, ElkExtendedEdge[]>();
@@ -252,7 +269,10 @@ export async function layoutGraph(
 
   // Extract node positions. ELK returns parent-relative coordinates,
   // which is exactly what ReactFlow expects for nodes inside groups.
-  const positionMap = new Map<string, { x: number; y: number; w: number; h: number }>();
+  const positionMap = new Map<
+    string,
+    { x: number; y: number; w: number; h: number }
+  >();
 
   function extractPositions(elkNodes: ElkNode[] | undefined) {
     if (!elkNodes) return;
@@ -270,7 +290,10 @@ export async function layoutGraph(
   extractPositions(layouted.children);
 
   // ── Compute absolute positions for handle selection ─────────────────
-  const absPositions = new Map<string, { x: number; y: number; w: number; h: number }>();
+  const absPositions = new Map<
+    string,
+    { x: number; y: number; w: number; h: number }
+  >();
   for (const n of nodes) {
     let absX = positionMap.get(n.id)?.x ?? 0;
     let absY = positionMap.get(n.id)?.y ?? 0;
@@ -301,10 +324,15 @@ export async function layoutGraph(
     endPoint?: { x: number; y: number };
     bendPoints?: { x: number; y: number }[];
   };
-  const elkEdgeOwners = new Map<string, { ownerId: string; sections: ElkSection[] }>();
+  const elkEdgeOwners = new Map<
+    string,
+    { ownerId: string; sections: ElkSection[] }
+  >();
   function collectElkEdges(elkNode: ElkNode, ownerId: string) {
     if (elkNode.edges) {
-      for (const e of elkNode.edges as Array<ElkExtendedEdge & { sections?: ElkSection[] }>) {
+      for (const e of elkNode.edges as Array<
+        ElkExtendedEdge & { sections?: ElkSection[] }
+      >) {
         const sections = e.sections ?? [];
         if (sections.length > 0) elkEdgeOwners.set(e.id, { ownerId, sections });
       }
@@ -330,14 +358,21 @@ export async function layoutGraph(
     if (elkInfo) {
       // Owner offset: edges owned by 'root' need no offset; edges owned
       // by a group are shifted by that group's absolute position.
-      const ownerAbs = elkInfo.ownerId === 'root'
-        ? { x: 0, y: 0 }
-        : absPositions.get(elkInfo.ownerId) ?? { x: 0, y: 0 };
+      const ownerAbs =
+        elkInfo.ownerId === 'root'
+          ? { x: 0, y: 0 }
+          : (absPositions.get(elkInfo.ownerId) ?? { x: 0, y: 0 });
       const ox = ownerAbs.x;
       const oy = ownerAbs.y;
       const points = elkInfo.sections.flatMap((sec) => {
-        const start = { x: (sec.startPoint?.x ?? 0) + ox, y: (sec.startPoint?.y ?? 0) + oy };
-        const end = { x: (sec.endPoint?.x ?? 0) + ox, y: (sec.endPoint?.y ?? 0) + oy };
+        const start = {
+          x: (sec.startPoint?.x ?? 0) + ox,
+          y: (sec.startPoint?.y ?? 0) + oy,
+        };
+        const end = {
+          x: (sec.endPoint?.x ?? 0) + ox,
+          y: (sec.endPoint?.y ?? 0) + oy,
+        };
         const bends = (sec.bendPoints ?? []).map((p) => ({
           x: p.x + ox,
           y: p.y + oy,
@@ -363,8 +398,8 @@ export async function layoutGraph(
     // Fallback: no ELK route available — keep direction-heuristic handles
     // so getSmoothStepPath at least picks a reasonable side.
     if (!srcPos || !tgtPos) return { ...edge, sourceHandle, targetHandle };
-    const dx = (tgtPos.x + tgtPos.w / 2) - (srcPos.x + srcPos.w / 2);
-    const dy = (tgtPos.y + tgtPos.h / 2) - (srcPos.y + srcPos.h / 2);
+    const dx = tgtPos.x + tgtPos.w / 2 - (srcPos.x + srcPos.w / 2);
+    const dy = tgtPos.y + tgtPos.h / 2 - (srcPos.y + srcPos.h / 2);
     let sH: string;
     let tH: string;
     if (Math.abs(dx) >= Math.abs(dy)) {

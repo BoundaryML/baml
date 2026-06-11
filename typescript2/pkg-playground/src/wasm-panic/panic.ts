@@ -19,7 +19,10 @@ export function getWasmPanicRegistry(): WasmPanicRegistry {
   return globalWithWasm.BAML_WASM_PANIC_REGISTRY;
 }
 
-export function getWasmError(error: WasmPanic): { message: string; stack: string } {
+export function getWasmError(error: WasmPanic): {
+  message: string;
+  stack: string;
+} {
   const registry = getWasmPanicRegistry();
   const panicMessage = registry.get();
   const message = panicMessage || error.message || 'Unknown WASM panic';

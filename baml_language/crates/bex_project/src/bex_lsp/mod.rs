@@ -138,7 +138,12 @@ pub enum PlaygroundNotification {
     #[serde(rename_all = "camelCase")]
     OpenPlayground {
         project: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
         function_name: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        test_name: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        testset_name: Option<String>,
     },
     #[serde(rename_all = "camelCase")]
     ControlFlowGraphResult {

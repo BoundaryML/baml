@@ -38,7 +38,10 @@ describe('media-values', () => {
   });
 
   it('extracts nested image media while ignoring non-image media', () => {
-    const value = ['caption', { first: imageUrl, nested: [audio, imageBase64] }];
+    const value = [
+      'caption',
+      { first: imageUrl, nested: [audio, imageBase64] },
+    ];
     expect(findImageMedia(value)).toEqual([imageUrl, imageBase64]);
   });
 });
