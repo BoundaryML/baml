@@ -1,10 +1,13 @@
 import Link from 'next/link';
+import { createMetadata } from '@/app/_lib/metadata';
 
-export const metadata = {
+export const metadata = createMetadata({
   description:
     'BAML for agents: why BAML exists, why agents are good at writing it, and the practical loop for editing BAML safely.',
+  eyebrow: 'For Agents',
+  path: '/agent',
   title: 'BAML for Agents',
-};
+});
 
 const INK = '#1A1612';
 const MUTED = '#5C5852';

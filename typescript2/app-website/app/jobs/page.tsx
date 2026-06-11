@@ -1,5 +1,5 @@
-import type { Metadata } from 'next';
 import Link from 'next/link';
+import { createMetadata } from '@/app/_lib/metadata';
 import { FooterSection } from '@/components/footer-section';
 import { Navbar } from '@/components/navbar';
 
@@ -11,14 +11,13 @@ const ACCENT = '#6D28D9';
 const EYEBROW = '#8A8580';
 const CARD_BG = '#FBF8F1';
 
-export const metadata: Metadata = {
-  title: 'Jobs at Boundary',
+export const metadata = createMetadata({
   description:
     "We're a small team building the first language designed for LLMs. If that sounds interesting, we'd love to hear from you.",
-  alternates: {
-    canonical: 'https://boundaryml.com/jobs',
-  },
-};
+  eyebrow: 'Careers',
+  path: '/jobs',
+  title: 'Jobs at Boundary',
+});
 
 type Role = {
   title: string;

@@ -1,8 +1,18 @@
 import { ArrowRight, Github, MessageCircle } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { createMetadata } from '@/app/_lib/metadata';
 import { FooterSection } from '@/components/footer-section';
 import { Navbar } from '@/components/navbar';
+
+export const metadata = createMetadata({
+  description:
+    'Meet the team building BAML — the language for agents and structured-output LLM work.',
+  eyebrow: 'Team',
+  ogTitle: 'Who are we',
+  path: '/who-are-we',
+  title: 'Who are we',
+});
 
 const BG = '#FBF7ED';
 const INK = '#1A1612';

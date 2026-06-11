@@ -1,6 +1,6 @@
-import type { Metadata } from 'next';
 import { codeToHtml } from 'shiki';
 
+import { createMetadata } from '@/app/_lib/metadata';
 import { FooterSection } from '@/components/footer-section';
 import { Navbar } from '@/components/navbar';
 
@@ -9,26 +9,14 @@ import { Navbar } from '@/components/navbar';
 // prerendered to plain HTML — no client-side shiki, no serverless function,
 // no 500 risk.
 
-const baseUrl =
-  process.env.NEXT_PUBLIC_BASE_URL ??
-  (process.env.VERCEL_PROJECT_PRODUCTION_URL
-    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-    : 'https://boundaryml.com');
-
-export const metadata: Metadata = {
-  alternates: { canonical: `${baseUrl}/quickstart` },
+export const metadata = createMetadata({
   description:
     'Install BAML and its toolchain, agent skills, and editor extensions.',
-  openGraph: {
-    description:
-      'Install BAML and its toolchain, agent skills, and editor extensions.',
-    siteName: 'BAML',
-    title: 'BAML Quickstart',
-    type: 'website',
-    url: `${baseUrl}/quickstart`,
-  },
-  title: 'Quickstart | BAML',
-};
+  eyebrow: 'Quickstart',
+  ogTitle: 'Install BAML in minutes',
+  path: '/quickstart',
+  title: 'Quickstart',
+});
 
 /** Build-time syntax-highlighted code block. */
 async function Code({

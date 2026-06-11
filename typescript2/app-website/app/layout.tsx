@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { ogImagePath, TWITTER_HANDLE } from '@/app/_lib/metadata';
 import { SiteBanner } from '@/components/site-banner';
 import { ThemeProvider } from '@/components/theme-provider';
 import { cn } from '@/lib/utils';
@@ -37,6 +38,14 @@ const baseUrl =
   (process.env.VERCEL_PROJECT_PRODUCTION_URL
     ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
     : 'http://localhost:3000');
+const homeDescription =
+  'BAML is a statically-typed, expression-oriented language with first-class LLM functions.';
+const homeOgImage = ogImagePath({
+  description: homeDescription,
+  eyebrow: 'Boundary ML',
+  title: 'First-class LLM functions',
+});
+
 export const metadata: Metadata = {
   alternates: {
     canonical: `${baseUrl}/`,
@@ -44,8 +53,7 @@ export const metadata: Metadata = {
       'text/plain': '/llms.txt',
     },
   },
-  description:
-    'BAML is a statically-typed, expression-oriented language with first-class LLM functions.',
+  description: homeDescription,
   icons: {
     icon: '/favico.ico',
   },
@@ -55,21 +63,32 @@ export const metadata: Metadata = {
       : 'http://localhost:3000',
   ),
   openGraph: {
-    description:
-      'BAML is a statically-typed, expression-oriented language with first-class LLM functions.',
+    description: homeDescription,
+    images: [
+      {
+        alt: 'BAML — First-class LLM functions',
+        height: 630,
+        url: homeOgImage,
+        width: 1200,
+      },
+    ],
     locale: 'en_US',
     siteName: 'BAML',
-    title: 'BAML',
+    title: 'BAML — First-class LLM functions',
     type: 'website',
     url: 'https://boundaryml.com',
   },
-  title: 'BAML',
+  title: {
+    default: 'BAML — First-class LLM functions',
+    template: '%s | BAML',
+  },
   twitter: {
     card: 'summary_large_image',
-    creator: '@boundaryml',
-    description: 'Typed prompt boundaries for structured-output LLM work.',
-    site: '@boundaryml',
-    title: 'BAML | First-class LLM functions',
+    creator: TWITTER_HANDLE,
+    description: homeDescription,
+    images: [homeOgImage],
+    site: TWITTER_HANDLE,
+    title: 'BAML — First-class LLM functions',
   },
 };
 

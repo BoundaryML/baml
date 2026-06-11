@@ -1,13 +1,16 @@
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { createMetadata } from '@/app/_lib/metadata';
 import { readBamlAgentGuideMarkdown } from '@/lib/agent-content';
 
-export const metadata = {
+export const metadata = createMetadata({
   description:
     'BAML Agent Guide — how AI coding agents should write idiomatic BAML.',
+  eyebrow: 'Agent Guide',
+  path: '/agent/guide',
   title: 'BAML Agent Guide',
-};
+});
 
 const MONO =
   'ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Consolas, monospace';

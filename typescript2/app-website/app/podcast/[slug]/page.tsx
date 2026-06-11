@@ -9,6 +9,7 @@ import { FooterSection } from '@/components/footer-section';
 import { EpisodesCarousel } from '../_components/episodes-carousel';
 import { fetchPodcastEpisodes } from '../podcast-data';
 import type { Metadata } from 'next';
+import { ogImagePath, TWITTER_HANDLE } from '@/app/_lib/metadata';
 
 // Pre-render every episode page at build time so each is served as static HTML
 // from the CDN, never as a serverless function. Dynamic rendering hit this
@@ -125,16 +126,20 @@ export async function generateMetadata({
   const baseUrl = process.env.SITE_URL || 'https://boundaryml.com';
   const episodeUrl = `${baseUrl}/podcast/${episode.slug}`;
 
-  // Extract YouTube thumbnail if available
   const videoId = episode.youtubeUrl
     ? getYouTubeVideoId(episode.youtubeUrl)
     : null;
-  const thumbnailUrl = videoId
-    ? `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`
-    : `${baseUrl}/baml-og-background.png`; // Fallback to default image
 
   const fullTitle = `🦄 ai that works: ${episode.title} | BAML Podcast`;
+  const cardTitle = `ai that works: ${episode.title}`;
   const fullDescription = `${episode.episodeNumber}: ${episode.description}`;
+
+  // On-brand link-preview card (matches every other page).
+  const ogImage = ogImagePath({
+    description: episode.description,
+    eyebrow: 'ai that works',
+    title: episode.title,
+  });
 
   return {
     title: fullTitle,
@@ -151,7 +156,7 @@ export async function generateMetadata({
       'Podcast',
     ].join(', '),
     openGraph: {
-      title: fullTitle,
+      title: cardTitle,
       description: fullDescription,
       url: episodeUrl,
       siteName: 'BAML',
@@ -159,10 +164,10 @@ export async function generateMetadata({
       publishedTime: episode.date,
       images: [
         {
-          url: thumbnailUrl,
-          width: 1280,
-          height: 720,
-          alt: `${episode.title} - Episode ${episode.episodeNumber}`,
+          url: ogImage,
+          width: 1200,
+          height: 630,
+          alt: `${episode.title} — ai that works`,
         },
       ],
       videos: videoId
@@ -179,11 +184,11 @@ export async function generateMetadata({
     },
     twitter: {
       card: 'summary_large_image',
-      title: fullTitle,
+      title: cardTitle,
       description: fullDescription,
-      images: [thumbnailUrl],
-      creator: '@boundaryml',
-      site: '@boundaryml',
+      images: [ogImage],
+      creator: TWITTER_HANDLE,
+      site: TWITTER_HANDLE,
     },
   };
 }

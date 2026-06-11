@@ -12,6 +12,7 @@ import {
   WorkerRuntimePort,
   type RuntimePort,
 } from '@b/pkg-playground';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { BamlEditor } from './BamlEditor';
 
 // ---------------------------------------------------------------------------
@@ -20,7 +21,10 @@ import { BamlEditor } from './BamlEditor';
 
 import { DEFAULT_BAML, EXAMPLE_ARGS } from './homepage-example';
 
-
+// Editor pane starts narrower than the execution panel so the playground
+// (results) gets the room by default; users can drag the splitter wider or
+// collapse the editor entirely with the toggle on the divider.
+const DEFAULT_EDITOR_PCT = 38;
 
 // ---------------------------------------------------------------------------
 // BamlPlayground — full-feature inline hero embed (desktop only)
@@ -131,8 +135,11 @@ export function BamlPlayground() {
 
   // Split between the editor (left %) and execution panel (right %).
   const splitContainerRef = useRef<HTMLDivElement>(null);
-  const [editorPct, setEditorPct] = useState(50);
+  const [editorPct, setEditorPct] = useState(DEFAULT_EDITOR_PCT);
+  const [editorCollapsed, setEditorCollapsed] = useState(false);
   const [dragging, setDragging] = useState(false);
+
+  const toggleEditor = useCallback(() => setEditorCollapsed((c) => !c), []);
 
   const onSplitPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -147,6 +154,8 @@ export function BamlPlayground() {
       if (!el) return;
       const rect = el.getBoundingClientRect();
       const pct = ((e.clientX - rect.left) / rect.width) * 100;
+      // Dragging the divider always re-opens a collapsed editor.
+      setEditorCollapsed(false);
       setEditorPct(Math.max(20, Math.min(80, pct)));
     };
     const onUp = () => setDragging(false);
@@ -182,7 +191,15 @@ export function BamlPlayground() {
       style={{ cursor: dragging ? 'col-resize' : undefined }}
     >
       {/* Editor — left pane */}
-      <div className="flex min-w-0 flex-col" style={{ width: `${editorPct}%` }}>
+      <div
+        aria-hidden={editorCollapsed}
+        className={`flex min-w-0 flex-col overflow-hidden ${
+          dragging
+            ? ''
+            : 'motion-safe:transition-[width] motion-safe:duration-[180ms] motion-safe:ease-in-out'
+        }`}
+        style={{ width: editorCollapsed ? '0%' : `${editorPct}%` }}
+      >
         <div className="flex min-h-0 flex-1 flex-col border-l border-r border-[#6D28D9]">
           <BamlEditor
             value={code}
@@ -193,15 +210,18 @@ export function BamlPlayground() {
         </div>
       </div>
 
-      {/* Splitter */}
+      {/* Splitter + collapse toggle */}
       <div
         aria-label="Resize editor and execution panel"
         aria-orientation="vertical"
         aria-valuemax={80}
         aria-valuemin={20}
-        aria-valuenow={Math.round(editorPct)}
+        aria-valuenow={editorCollapsed ? 0 : Math.round(editorPct)}
         className="group relative flex w-1 flex-shrink-0 cursor-col-resize items-center justify-center bg-vsc-border"
-        onDoubleClick={() => setEditorPct(50)}
+        onDoubleClick={() => {
+          setEditorCollapsed(false);
+          setEditorPct(DEFAULT_EDITOR_PCT);
+        }}
         onPointerDown={onSplitPointerDown}
         role="separator"
         style={{ touchAction: 'none' }}
@@ -216,6 +236,25 @@ export function BamlPlayground() {
             dragging ? 'bg-[#6D28D9]' : 'group-hover:bg-[#6D28D9]/60'
           }`}
         />
+        {/* Collapse / expand the editor — a click toggle alongside the drag. */}
+        <button
+          type="button"
+          aria-label={editorCollapsed ? 'Show code editor' : 'Hide code editor'}
+          title={editorCollapsed ? 'Show code' : 'Hide code'}
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleEditor();
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+          onDoubleClick={(e) => e.stopPropagation()}
+          className="absolute top-2.5 z-10 flex h-6 w-6 cursor-pointer items-center justify-center rounded-full border border-[#6D28D9]/40 bg-white text-[#6D28D9] shadow-sm transition-colors hover:bg-[#6D28D9] hover:text-white"
+        >
+          {editorCollapsed ? (
+            <ChevronRight className="h-3.5 w-3.5" />
+          ) : (
+            <ChevronLeft className="h-3.5 w-3.5" />
+          )}
+        </button>
       </div>
 
       {/* ExecutionPanel — right pane */}

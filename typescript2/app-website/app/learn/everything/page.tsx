@@ -1,7 +1,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import ReactMarkdown from 'react-markdown';
+import { createMetadata } from '@/app/_lib/metadata';
 import './everything.css';
+
+export const metadata = createMetadata({
+  description:
+    'A complete, single-page tour of the BAML language — every concept, type, and feature in one place.',
+  eyebrow: 'Learn',
+  ogTitle: 'Everything in BAML',
+  path: '/learn/everything',
+  title: 'Everything',
+});
 
 interface NavSection {
   chapter: string;

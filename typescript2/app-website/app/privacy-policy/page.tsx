@@ -1,6 +1,14 @@
 import Link from 'next/link';
+import { createMetadata } from '@/app/_lib/metadata';
 import { FooterSection } from '@/components/footer-section';
 import { Navbar } from '@/components/navbar';
+
+export const metadata = createMetadata({
+  description: 'How Boundary ML collects, uses, and protects your data.',
+  eyebrow: 'Legal',
+  path: '/privacy-policy',
+  title: 'Privacy Policy',
+});
 
 export default function PrivacyPolicyPage() {
   return (

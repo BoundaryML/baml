@@ -1,6 +1,6 @@
 import { ArrowRight, Sparkles } from 'lucide-react';
-import type { Metadata } from 'next';
 import Link from 'next/link';
+import { createMetadata } from '@/app/_lib/metadata';
 import { FooterSection } from '@/components/footer-section';
 import { Navbar } from '@/components/navbar';
 
@@ -15,11 +15,14 @@ const CARD_BG = '#FBF8F1';
 const FUNDING_POST_SLUG = 'announcing-our-funding';
 const FUNDING_POST_HREF = `/blog/${FUNDING_POST_SLUG}`;
 
-export const metadata: Metadata = {
-  title: 'BAML raised — building the language for agents',
+export const metadata = createMetadata({
   description:
     'We raised funding to keep building BAML: a statically typed, Turing complete programming language for agents.',
-};
+  eyebrow: 'Announcement',
+  path: '/fundraiser',
+  title: 'BAML raised — building the language for agents',
+  titleAbsolute: 'BAML raised — building the language for agents',
+});
 
 export default function FundraiserPage() {
   return (
