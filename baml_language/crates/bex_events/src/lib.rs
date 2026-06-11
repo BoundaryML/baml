@@ -1,14 +1,24 @@
+pub mod clock;
 pub mod collector;
 pub mod event_store;
+pub mod ids;
+pub mod metadata;
 pub mod serialize;
 mod span_id;
 mod types;
 
+pub use clock::{now_ns, process_started_at_epoch_ns};
 pub use collector::{Collector, FunctionLog, LLMCall, Timing, Usage};
 pub use event_store::{EventSink, FanOutEventSink};
+pub use metadata::{
+    DefinitionKey, EventFileHeaderV1, FunctionMetadata, FunctionMetadataTable, Hash256,
+    ProgramMetadata, RevisionId, RuntimeFunctionKind, RuntimeFunctionOrigin, SemanticLanes,
+    SourceSpan,
+};
 pub use span_id::{HostSpanContext, SpanContext, SpanId};
 pub use sys_types::CallId;
 pub use types::{
-    CustomEvent, EventKind, FunctionEnd, FunctionEvent, FunctionStart, LogEvent, RuntimeEvent,
-    SourceLocation, TraceTags,
+    CustomEvent, DiskEventV1, EventKind, FunctionEnd, FunctionEndStatus, FunctionEvent,
+    FunctionStart, LogEvent, RuntimeEvent, RuntimeEventIdentity, SourceLocation, ThreadEndStatus,
+    TraceTags,
 };

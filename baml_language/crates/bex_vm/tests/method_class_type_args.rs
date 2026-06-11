@@ -89,7 +89,7 @@ fn run_fn(program: Program, fn_name: &str) -> (Value, BexVm) {
     loop {
         match vm.exec().expect("exec") {
             VmExecState::Complete(v) => return (v, vm),
-            VmExecState::EarlyYield => continue,
+            VmExecState::EarlyYield | VmExecState::RuntimeCallNotify(_) => continue,
             other => panic!("unexpected VM state: {other:?}"),
         }
     }
@@ -232,7 +232,7 @@ fn method_frame_type_args_seeded_with_class_type_args() {
     let result = loop {
         match vm.exec().expect("exec") {
             VmExecState::Complete(v) => break v,
-            VmExecState::EarlyYield => continue,
+            VmExecState::EarlyYield | VmExecState::RuntimeCallNotify(_) => continue,
             other => panic!("unexpected: {other:?}"),
         }
     };
@@ -282,7 +282,7 @@ fn method_frame_type_args_seeded_string() {
     let result = loop {
         match vm.exec().expect("exec") {
             VmExecState::Complete(v) => break v,
-            VmExecState::EarlyYield => continue,
+            VmExecState::EarlyYield | VmExecState::RuntimeCallNotify(_) => continue,
             other => panic!("unexpected: {other:?}"),
         }
     };

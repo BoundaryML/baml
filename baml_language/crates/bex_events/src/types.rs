@@ -4,12 +4,28 @@ use bex_external_types::BexExternalValue;
 use sys_types::CallId;
 use web_time::SystemTime;
 
-use crate::{SpanContext, SpanId};
+use crate::{
+    SpanContext, SpanId,
+    ids::{BexCallId, BexThreadId, CallRef, FunctionId},
+};
+
+/// Compact runtime identity attached to events that occur inside a BEX call.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RuntimeEventIdentity {
+    pub thread_id: BexThreadId,
+    pub call_id: BexCallId,
+    pub parent_call_id: Option<BexCallId>,
+    pub function_id: Option<FunctionId>,
+    pub call_ref: CallRef,
+}
 
 /// A single runtime event emitted during BAML execution.
 #[derive(Clone, Debug)]
 pub struct RuntimeEvent {
+    /// Host/API-level call id used for cancellation and bridge correlation.
     pub call_id: CallId,
+    /// BEX runtime identity for this specific function invocation.
+    pub identity: Option<RuntimeEventIdentity>,
     pub ctx: SpanContext,
     /// Full ancestor chain from root to current span, populated at emission time.
     pub call_stack: Vec<SpanId>,
@@ -91,4 +107,56 @@ pub struct FunctionEnd {
     pub result: BexExternalValue,
     pub duration: Duration,
     pub error: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum FunctionEndStatus {
+    Ok,
+    Error,
+    Cancelled,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ThreadEndStatus {
+    Completed,
+    Error,
+    Cancelled,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum DiskEventV1 {
+    StartThread {
+        thread_id: BexThreadId,
+        parent_thread_id: Option<BexThreadId>,
+        parent_call_id: Option<BexCallId>,
+        name: Option<String>,
+        timestamp_ns: u64,
+    },
+    CallFunction {
+        thread_id: BexThreadId,
+        call_id: BexCallId,
+        parent_call_id: Option<BexCallId>,
+        function_id: FunctionId,
+        timestamp_ns: u64,
+    },
+    SetId {
+        thread_id: BexThreadId,
+        call_id: BexCallId,
+        id: [u8; 16],
+        timestamp_ns: u64,
+    },
+    EndFunction {
+        thread_id: BexThreadId,
+        call_id: BexCallId,
+        status: FunctionEndStatus,
+        timestamp_ns: u64,
+    },
+    EndThread {
+        thread_id: BexThreadId,
+        status: ThreadEndStatus,
+        timestamp_ns: u64,
+    },
+    Heartbeat {
+        timestamp_ns: u64,
+    },
 }

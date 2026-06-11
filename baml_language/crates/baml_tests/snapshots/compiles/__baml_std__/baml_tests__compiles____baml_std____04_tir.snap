@@ -714,6 +714,8 @@ class baml.http.TlsConfig$stream {
   _handshake_timeout_nanos: bigint | null
 }
 
+--- <builtin>/baml/ns_id/id.baml ---
+
 --- <builtin>/baml/ns_io/io.baml ---
 
 --- <builtin>/baml/ns_iter/iter.baml ---

@@ -25,16 +25,29 @@ use std::{
     time::Duration,
 };
 
-use bex_events::{EventKind, EventSink, RuntimeEvent};
+use bex_events::{
+    DiskEventV1, EventFileHeaderV1, EventKind, EventSink, RuntimeEvent, ids::EngineId,
+};
 use time::{OffsetDateTime, format_description::FormatItem, macros::format_description};
 
 /// Messages sent to the publisher thread.
 #[allow(clippy::large_enum_variant)]
 enum PublisherMessage {
     /// A new event to buffer.
-    Event(RuntimeEvent),
+    Event(BufferedEvent),
     /// Flush buffered events to disk; ack when done.
     Flush(mpsc::SyncSender<()>),
+}
+
+#[derive(Clone)]
+#[allow(clippy::large_enum_variant)] // Runtime events are inherently large; see PublisherMessage
+enum BufferedEvent {
+    Header(EventFileHeaderV1),
+    Runtime(RuntimeEvent),
+    /// Disk events carry their engine id: one sink (one trace file) is shared
+    /// by every engine in the process, and disk events have no engine scoping
+    /// of their own.
+    Disk(EngineId, DiskEventV1),
 }
 
 const AUTO_FLUSH_INTERVAL: Duration = Duration::from_secs(5);
@@ -47,6 +60,17 @@ const TIMESTAMP_FORMAT: &[FormatItem<'static>] =
 /// Created via [`start()`]. Implements [`EventSink`] — `send` dispatches to the
 /// channel (non-blocking, drops on full), `flush` blocks until the publisher
 /// thread writes all buffered events.
+///
+/// # Interim lossiness
+///
+/// This JSONL writer is interim transport: event sends never block, so when
+/// the channel backs up (capacity 4096) events are **dropped** and only an
+/// aggregate counter (logged on `flush`) records the loss. A dropped
+/// `CallFunction`/`EndFunction` leaves the artifact unbalanced — consumers
+/// of the interim file must tolerate that until lossless-by-growth transport
+/// replaces this writer. Headers are the one exception: they carry the
+/// function table every later line is interpreted against, so
+/// [`Self::send_event_file_header`] blocks instead of dropping.
 pub struct NativeEventSink {
     tx: mpsc::SyncSender<PublisherMessage>,
     dropped: AtomicUsize,
@@ -54,9 +78,49 @@ pub struct NativeEventSink {
 
 impl EventSink for NativeEventSink {
     fn send(&self, event: RuntimeEvent) {
-        if self.tx.try_send(PublisherMessage::Event(event)).is_err() {
+        if self
+            .tx
+            .try_send(PublisherMessage::Event(BufferedEvent::Runtime(event)))
+            .is_err()
+        {
             self.dropped.fetch_add(1, Ordering::Relaxed);
         }
+    }
+
+    fn send_disk_event(&self, engine: EngineId, event: DiskEventV1) {
+        if self
+            .tx
+            .try_send(PublisherMessage::Event(BufferedEvent::Disk(engine, event)))
+            .is_err()
+        {
+            self.dropped.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    fn send_event_file_header(&self, header: EventFileHeaderV1) {
+        // Headers are once-per-engine and load-bearing (they carry the
+        // function table needed to interpret every later line): retry hard
+        // before giving up rather than dropping on first contention like
+        // ordinary events. The retry is BOUNDED — an unbounded blocking send
+        // would wedge `BexEngine::new` (and with it LSP document sync)
+        // forever if the publisher thread stalls on something outside its
+        // control (an undrained stderr pipe, a FIFO/NFS trace target).
+        let mut message = PublisherMessage::Event(BufferedEvent::Header(header));
+        for _ in 0..200 {
+            match self.tx.try_send(message) {
+                Ok(()) => return,
+                Err(mpsc::TrySendError::Full(returned)) => {
+                    message = returned;
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+                Err(mpsc::TrySendError::Disconnected(_)) => break,
+            }
+        }
+        self.dropped.fetch_add(1, Ordering::Relaxed);
+        tracing::error!(
+            "bex-publisher: DROPPED an event file header after 2s of backpressure — \
+             the trace file's later lines cannot be interpreted without it"
+        );
     }
 
     fn flush(&self) {
@@ -104,7 +168,7 @@ fn start_inner(trace_file: Option<PathBuf>) -> Arc<dyn EventSink> {
 /// unbounded buffer growth.
 #[allow(clippy::needless_pass_by_value)] // rx is moved into this thread and must be owned
 fn publisher_loop(rx: mpsc::Receiver<PublisherMessage>, trace_file: Option<PathBuf>) {
-    let mut buffer: Vec<RuntimeEvent> = Vec::new();
+    let mut buffer: Vec<BufferedEvent> = Vec::new();
 
     // Block on the first message so we don't spin when idle.
     let first = rx.recv();
@@ -160,14 +224,17 @@ fn publisher_loop(rx: mpsc::Receiver<PublisherMessage>, trace_file: Option<PathB
     }
 }
 
-fn flush_buffer(buffer: &mut Vec<RuntimeEvent>, trace_file: Option<&Path>) {
+fn flush_buffer(buffer: &mut Vec<BufferedEvent>, trace_file: Option<&Path>) {
     if let Some(trace_file) = trace_file {
         write_jsonl_to_file(buffer, trace_file);
     }
     buffer.clear();
 }
 
-fn write_log_event_to_stderr(event: &RuntimeEvent) {
+fn write_log_event_to_stderr(event: &BufferedEvent) {
+    let BufferedEvent::Runtime(event) = event else {
+        return;
+    };
     if let Some(line) = format_log_event_for_stderr(event) {
         #[allow(clippy::print_stderr)]
         {
@@ -210,7 +277,7 @@ fn format_timestamp(timestamp: web_time::SystemTime) -> String {
 }
 
 /// Write buffered events to the given JSONL file (append mode).
-fn write_jsonl_to_file(events: &[RuntimeEvent], trace_file: &Path) {
+fn write_jsonl_to_file(events: &[BufferedEvent], trace_file: &Path) {
     if events.is_empty() {
         return;
     }
@@ -227,8 +294,21 @@ fn write_jsonl_to_file(events: &[RuntimeEvent], trace_file: &Path) {
         return;
     };
     for event in events {
-        let line = bex_events::serialize::event_to_jsonl(event);
-        let _ = writeln!(file, "{line}");
+        let mut line = match event {
+            BufferedEvent::Header(header) => {
+                bex_events::serialize::event_file_header_to_jsonl(header)
+            }
+            BufferedEvent::Runtime(event) => bex_events::serialize::event_to_jsonl(event),
+            BufferedEvent::Disk(engine, event) => {
+                bex_events::serialize::disk_event_to_jsonl(*engine, event)
+            }
+        };
+        // One write(2) per line, newline included: the file is opened in
+        // append mode and may have concurrent writers (multiple sinks in one
+        // process, multiple processes); separate line/newline writes can
+        // interleave mid-line and corrupt the JSONL.
+        line.push('\n');
+        let _ = file.write_all(line.as_bytes());
     }
 }
 
@@ -237,7 +317,9 @@ mod tests {
     use std::time::Duration;
 
     use bex_events::{
-        CallId, EventKind, FunctionEvent, FunctionStart, RuntimeEvent, SpanContext, SpanId,
+        CallId, EventFileHeaderV1, EventKind, FunctionEvent, FunctionMetadataTable, FunctionStart,
+        RuntimeEvent, SpanContext, SpanId,
+        ids::{EngineId, ProcessEuid, ProgramId},
     };
     use web_time::SystemTime;
 
@@ -246,6 +328,7 @@ mod tests {
     fn make_event(span_id: SpanId) -> RuntimeEvent {
         RuntimeEvent {
             call_id: CallId(0),
+            identity: None,
             ctx: SpanContext {
                 span_id: span_id.clone(),
                 parent_span_id: None,
@@ -277,10 +360,33 @@ mod tests {
     }
 
     #[test]
+    fn test_emit_header_and_flush_to_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let trace_path = dir.path().join("trace.jsonl");
+
+        let sink = start(trace_path.clone());
+        sink.send_event_file_header(EventFileHeaderV1 {
+            process_euid: ProcessEuid([1; 16]),
+            engine_id: EngineId(2),
+            program_id: ProgramId([3; 16]),
+            source_snapshot_id: None,
+            revision_id: None,
+            started_at_epoch_ns: 4,
+            function_table: FunctionMetadataTable::default(),
+        });
+        sink.flush();
+
+        let contents = std::fs::read_to_string(&trace_path).unwrap();
+        assert!(contents.contains("\"type\":\"bex_header_v1\""));
+        assert!(contents.contains("\"engine_id\":2"));
+    }
+
+    #[test]
     fn test_format_log_event_for_stderr() {
         let span_id = SpanId::new();
         let event = RuntimeEvent {
             call_id: CallId(0),
+            identity: None,
             ctx: SpanContext {
                 span_id: span_id.clone(),
                 parent_span_id: None,
@@ -332,6 +438,7 @@ mod tests {
         let span_id = SpanId::new();
         let event = RuntimeEvent {
             call_id: CallId(0),
+            identity: None,
             ctx: SpanContext {
                 span_id: span_id.clone(),
                 parent_span_id: None,

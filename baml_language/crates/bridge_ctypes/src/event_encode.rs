@@ -6,8 +6,8 @@ use crate::{
     CffiHandleTableOptions,
     baml_core::cffi::{
         self, EventKind as ProtoEventKind, FunctionEndEvent, FunctionStartEvent,
-        RuntimeEvent as ProtoRuntimeEvent, SetTagsEvent, TagEntry,
-        event_kind::Kind as ProtoEventKindVariant,
+        RuntimeEvent as ProtoRuntimeEvent, RuntimeEventIdentity as ProtoRuntimeEventIdentity,
+        SetTagsEvent, TagEntry, event_kind::Kind as ProtoEventKindVariant,
     },
     error::CtypesError,
     value_encode::external_to_outbound,
@@ -36,6 +36,16 @@ pub fn runtime_event_to_proto(
         call_stack,
         event: Some(event_kind),
         call_id: event.call_id.0,
+        bex_identity: event
+            .identity
+            .as_ref()
+            .map(|identity| ProtoRuntimeEventIdentity {
+                thread_id: identity.thread_id.0,
+                call_id: identity.call_id.0,
+                parent_call_id: identity.parent_call_id.map(|id| id.0),
+                function_id: identity.function_id.map(|id| id.0),
+                call_ref: identity.call_ref.encode(),
+            }),
     })
 }
 
@@ -129,7 +139,10 @@ pub fn runtime_event_to_bytes(
 mod tests {
     use std::time::Duration;
 
-    use bex_events::{FunctionEnd, FunctionStart, SpanContext, SpanId};
+    use bex_events::{
+        FunctionEnd, FunctionStart, RuntimeEventIdentity, SpanContext, SpanId,
+        ids::{BexCallId, BexThreadId, CallRef, EngineId, FunctionId, ProcessEuid},
+    };
     use bex_project::BexExternalValue;
     use web_time::SystemTime;
 
@@ -142,6 +155,7 @@ mod tests {
         let span_id = SpanId::new();
         let event = RuntimeEvent {
             call_id: CallId(0),
+            identity: None,
             ctx: SpanContext {
                 span_id: span_id.clone(),
                 parent_span_id: None,
@@ -182,12 +196,57 @@ mod tests {
     }
 
     #[test]
+    fn test_bex_identity_to_proto() {
+        use bex_events::CallId;
+
+        let span_id = SpanId::new();
+        let call_ref = CallRef {
+            process_euid: ProcessEuid([1; 16]),
+            engine_id: EngineId(2),
+            thread_id: BexThreadId(3),
+            call_id: BexCallId(4),
+        };
+        let event = RuntimeEvent {
+            call_id: CallId(99),
+            identity: Some(RuntimeEventIdentity {
+                thread_id: BexThreadId(3),
+                call_id: BexCallId(4),
+                parent_call_id: Some(BexCallId(1)),
+                function_id: Some(FunctionId(42)),
+                call_ref,
+            }),
+            ctx: SpanContext {
+                span_id: span_id.clone(),
+                parent_span_id: None,
+                root_span_id: span_id.clone(),
+            },
+            call_stack: vec![span_id],
+            timestamp: SystemTime::now(),
+            event: EventKind::Function(FunctionEvent::Start(FunctionStart {
+                name: "my_func".into(),
+                args: vec![],
+                tags: vec![],
+            })),
+        };
+
+        let options = CffiHandleTableOptions::for_in_process();
+        let proto = runtime_event_to_proto(&event, &options).unwrap();
+        let identity = proto.bex_identity.expect("identity should be encoded");
+        assert_eq!(identity.thread_id, 3);
+        assert_eq!(identity.call_id, 4);
+        assert_eq!(identity.parent_call_id, Some(1));
+        assert_eq!(identity.function_id, Some(42));
+        assert_eq!(identity.call_ref, call_ref.encode());
+    }
+
+    #[test]
     fn test_log_event_to_proto() {
         use bex_events::CallId;
 
         let span_id = SpanId::new();
         let event = RuntimeEvent {
             call_id: CallId(0),
+            identity: None,
             ctx: SpanContext {
                 span_id: span_id.clone(),
                 parent_span_id: None,
@@ -233,6 +292,7 @@ mod tests {
         let span_id = SpanId::new();
         let event = RuntimeEvent {
             call_id: CallId(0),
+            identity: None,
             ctx: SpanContext {
                 span_id: span_id.clone(),
                 parent_span_id: None,
@@ -281,6 +341,7 @@ mod tests {
         );
         let event = RuntimeEvent {
             call_id: CallId(0),
+            identity: None,
             ctx: SpanContext {
                 span_id: span_id.clone(),
                 parent_span_id: None,
@@ -327,6 +388,7 @@ mod tests {
         let span_id = SpanId::new();
         let event = RuntimeEvent {
             call_id: CallId(0),
+            identity: None,
             ctx: SpanContext {
                 span_id: span_id.clone(),
                 parent_span_id: None,

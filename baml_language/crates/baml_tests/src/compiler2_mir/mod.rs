@@ -425,3 +425,43 @@ fn reflect_type_of_array_of_typevar() {
     );
     mir_snapshot!("reflect_type_of_array_of_typevar", render_mir(&db, file));
 }
+
+/// Bare `$id` read is a special form: it must lower to a call of
+/// `baml.id.current` — never to a name lookup or a local read.
+#[test]
+fn runtime_id_read_lowers_to_baml_id_current() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+        function f() -> string {
+            $id
+        }
+        "#,
+    );
+    mir_snapshot!(
+        "runtime_id_read_lowers_to_baml_id_current",
+        render_mir(&db, file)
+    );
+}
+
+/// `$id = e` is the write special form: it must lower to `baml.id.set(e)` —
+/// never to an assignment into a (silently dead) temp.
+#[test]
+fn runtime_id_assignment_lowers_to_baml_id_set() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+        function f() -> string {
+            let next = baml.id.new();
+            $id = next;
+            $id
+        }
+        "#,
+    );
+    mir_snapshot!(
+        "runtime_id_assignment_lowers_to_baml_id_set",
+        render_mir(&db, file)
+    );
+}

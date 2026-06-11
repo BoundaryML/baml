@@ -81,6 +81,7 @@ impl HostSpanManager {
 
         let event = RuntimeEvent {
             call_id: CallId(0),
+            identity: None,
             ctx: SpanContext {
                 span_id: span_id.clone(),
                 parent_span_id,
@@ -129,6 +130,7 @@ impl HostSpanManager {
 
             let event = RuntimeEvent {
                 call_id: CallId(0),
+                identity: None,
                 ctx: SpanContext {
                     span_id: entry.span_id.clone(),
                     parent_span_id: self.stack.iter().rev().nth(1).map(|e| e.span_id.clone()),
@@ -175,6 +177,7 @@ impl HostSpanManager {
 
         let event = RuntimeEvent {
             call_id: CallId(0),
+            identity: None,
             ctx: SpanContext {
                 span_id: entry.span_id,
                 parent_span_id: self.stack.last().map(|e| e.span_id.clone()),

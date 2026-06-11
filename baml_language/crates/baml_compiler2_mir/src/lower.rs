@@ -5093,6 +5093,10 @@ impl<'db> LoweringContext<'db> {
         }
 
         let name = &segments[0];
+        if name.as_str() == "$id" {
+            self.lower_current_runtime_id(dest);
+            return;
+        }
 
         let span_start = self
             .source_map
@@ -7515,6 +7519,45 @@ impl<'db> LoweringContext<'db> {
         // Start a new block for any code after this (dead code)
         let dead = self.builder.create_block();
         self.builder.set_current_block(dead);
+    }
+
+    fn lower_current_runtime_id(&mut self, dest: Place) {
+        let callee = Operand::Constant(Constant::Function(ItemRef::Free {
+            package: Name::new("baml"),
+            namespace: vec![Name::new("id")],
+            name: Name::new("current"),
+        }));
+        let resume = self.builder.create_block();
+        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
+        self.builder.call(callee, Vec::new(), dest, resume, unwind);
+        self.builder.set_current_block(resume);
+    }
+
+    fn lower_set_runtime_id(&mut self, value: AstExprId) {
+        let callee = Operand::Constant(Constant::Function(ItemRef::Free {
+            package: Name::new("baml"),
+            namespace: vec![Name::new("id")],
+            name: Name::new("set"),
+        }));
+        let arg = self.lower_to_operand(value);
+        let dest = self.builder.temp(Ty::String {
+            attr: TyAttr::default(),
+        });
+        let resume = self.builder.create_block();
+        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
+        self.builder
+            .call(callee, vec![arg], Place::local(dest), resume, unwind);
+        self.builder.set_current_block(resume);
+    }
+
+    /// The `$id` runtime-identity special form. MIR owns its lowering (reads
+    /// → `baml.id.current()`, plain `=` writes → `baml.id.set(...)`); TIR
+    /// owns its typing and rejects the invalid shapes (compound assignment,
+    /// member access, call-site labels, `$id` bindings) — see
+    /// `infer_path` / `Stmt::Assign` / `Stmt::AssignOp` in
+    /// `baml_compiler2_tir/src/builder.rs`. Keep the two layers in sync.
+    fn is_runtime_id_path(expr: &AstExpr) -> bool {
+        matches!(expr, AstExpr::Path(segments) if segments.len() == 1 && segments[0].as_str() == "$id")
     }
 
     fn lower_if(
@@ -11152,7 +11195,9 @@ impl LoweringContext<'_> {
 
             AstStmt::Assign { target, value } => {
                 let target_expr = &self.body.exprs[target];
-                if let AstExpr::OptionalChain { expr: inner } = target_expr {
+                if Self::is_runtime_id_path(target_expr) {
+                    self.lower_set_runtime_id(value);
+                } else if let AstExpr::OptionalChain { expr: inner } = target_expr {
                     let inner = *inner;
                     self.lower_assign_optional_chain(inner, value);
                 } else {
@@ -11245,6 +11290,21 @@ impl LoweringContext<'_> {
                     // Assignment to a captured variable in a closure body.
                     Place::Capture(cap_idx)
                 } else {
+                    // Unresolved single-segment assignment target. This is
+                    // only reachable for programs TIR already rejected (an
+                    // unresolved name, or a special form like `$id` in a
+                    // position its TIR checks forbid). Fail loudly at runtime
+                    // instead of silently writing into a throwaway temp —
+                    // a silent temp here is how `$id = ...` once compiled to
+                    // a no-op (MIR has no compile-diagnostic channel).
+                    self.emit_panic_call(
+                        &format!(
+                            "internal compiler error: MIR failed to resolve assignment \
+                             target `{}` (TIR should have rejected this program)",
+                            segments[0]
+                        ),
+                        expr_id,
+                    );
                     let temp = self.builder.temp(Ty::Null {
                         attr: TyAttr::default(),
                     });
