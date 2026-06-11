@@ -1173,7 +1173,7 @@ mod tests {
                 language: None,
                 handle: bex_external_types::HostValueArc::new(
                     1,
-                    bex_external_types::HostValueKind::Error,
+                    bex_external_types::HostValueKind::Opaque,
                 ),
             },
         ];

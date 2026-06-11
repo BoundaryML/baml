@@ -67,8 +67,9 @@ impl io::IoNamespaceHost for NativeSysOps {
         // Extract the HostValueArc from the incoming handle and confirm
         // it's a callable. Only `HostValueKind::Callable` is dispatchable —
         // the bridge's dispatcher invokes a host *function* through this
-        // path. An `HostValueKind::Error` arc represents an opaque
-        // host-thrown exception and has no callable identity; dispatching
+        // path. An `HostValueKind::Opaque` arc represents an opaque
+        // host value (e.g. a host-thrown exception) and has no callable
+        // identity; dispatching
         // it would either find no entry in the bridge's callable registry
         // (returning a confusing "no callable for key" error) or, worse,
         // collide with a callable that happens to share its key. Reject
@@ -358,7 +359,7 @@ mod tests {
                     language: Some("python".to_string()),
                     handle: bex_resource_types::HostValueArc::new(
                         42,
-                        bex_resource_types::HostValueKind::Error,
+                        bex_resource_types::HostValueKind::Opaque,
                     ),
                 },
             ),

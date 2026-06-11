@@ -153,7 +153,7 @@ pub extern "C" fn host_release_callback(host_value_key: u64) {
 
 /// Look up the host-registered Python object referenced by a
 /// `BamlPyHandle` whose `handle_type` is `HOST_VALUE_CALLABLE` /
-/// `HOST_VALUE_ERROR`, returning a fresh strong reference if the entry
+/// `HOST_VALUE_OPAQUE`, returning a fresh strong reference if the entry
 /// is still live. Used by the outbound error decoder in
 /// `baml_core.proto` to rehydrate a `baml.errors.HostCallable` thrown
 /// by BAML back to the original Python exception object on same-host
@@ -172,7 +172,7 @@ pub fn lookup_host_value(
     use bridge_ctypes::baml_core::cffi::BamlHandleType;
     let ht_i32 = i32::try_from(handle.handle_type).ok()?;
     if ht_i32 != BamlHandleType::HostValueCallable as i32
-        && ht_i32 != BamlHandleType::HostValueError as i32
+        && ht_i32 != BamlHandleType::HostValueOpaque as i32
     {
         return None;
     }
@@ -488,7 +488,7 @@ fn build_host_callable_inbound(
         value: Some(InboundValue {
             value: Some(InboundValueVariant::Handle(BamlHandle {
                 key: handle_key,
-                handle_type: BamlHandleType::HostValueError as i32,
+                handle_type: BamlHandleType::HostValueOpaque as i32,
             })),
         }),
     };
