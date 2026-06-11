@@ -967,9 +967,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             return_type: baml_type::Ty::Null {
                 attr: baml_type::TyAttr::default(),
             },
-            stream_return_type: baml_type::Ty::Null {
-                attr: baml_type::TyAttr::default(),
-            },
             param_names: Vec::new(),
             param_types: Vec::new(),
             param_has_default: Vec::new(),

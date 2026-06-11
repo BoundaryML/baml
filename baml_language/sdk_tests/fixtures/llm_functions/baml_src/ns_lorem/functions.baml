@@ -63,10 +63,12 @@ function StreamingExtract(text: string) -> StreamingDoc {
 }
 
 // End-to-end streaming smoke. Returns plain `string` so the synthesized
-// `$stream` companion is `Stream<string, null | string>` — the only
-// streaming type the BAML engine accepts today. Class-typed return
-// values fail at `StreamCache.new` with "Non-parsable type: Void"
-// (tracked separately; see 21b §"Engine constraint").
+// `$stream` companion is `Stream<string, null | string>`. (Class-typed
+// returns used to fail at `StreamCache.new` with "Non-parsable type:
+// Void" — once believed an engine constraint per 21b, actually an
+// emit-phase namespace-resolution bug in `compute_stream_return_type`,
+// fixed; see thoughts/sam-projects/bridge-generics/streaming/00. The
+// class-typed path is covered by `StreamE2EExtractDoc` below.)
 //
 // The 8-bullet plain-text format forces multi-chunk SSE: the model
 // emits one bullet at a time, so `Stream.next()` yields a series of
@@ -91,12 +93,83 @@ function StreamE2EExtract(text: string) -> string {
   "#
 }
 
+// === Class-typed streaming coverage (bridge-generics/streaming) ===
+//
+// Unlike `StreamE2EExtract` (returns plain `string`), these return a
+// *class*. The synthesized `$stream` companion is therefore
+// `Stream<StreamingDoc$stream, StreamingDoc>` (multi-field T) /
+// `Stream<Resume$stream, Resume>`. They use the streaming-capable
+// `StreamStub` client (openai) so the request actually reaches the
+// engine — `StreamingExtract` above can't be used for this because its
+// `openai-responses` provider rejects streaming outright with
+// `NotImplemented`, masking any class-typed-`T` failure.
+//
+// These originally reproduced the "Non-parsable type: Void" failure at
+// `StreamCache.new` (an emit-phase bug: `compute_stream_return_type`
+// passed the namespace path in `lower_type_expr`'s generic-params slot,
+// so in-namespace classes lowered to Void — see
+// thoughts/sam-projects/bridge-generics/streaming/00). Now fixed; they
+// guard the class-typed `stream.next()` / `stream.final()` path. Used
+// by `customizable/test_streaming_class_e2e.py`.
+function StreamE2EExtractDoc(text: string) -> StreamingDoc {
+  client StreamStub
+  prompt #"
+    Read the resume below and produce a structured doc.
+
+    Respond in JSON with this exact schema:
+    {"title": "string", "body": "string", "word_count": integer}
+
+    `title` is a one-line headline for the candidate, `body` is a 2-3
+    sentence summary, and `word_count` is the number of words in `body`.
+
+    Resume:
+    {{ text }}
+
+    JSON:
+  "#
+}
+
+function StreamE2EExtractResume(text: string) -> Resume {
+  client StreamStub
+  prompt #"
+    Extract a resume from the following text.
+
+    Respond in JSON with this exact schema:
+    {"name": "string", "email": "string or null"}
+
+    Text:
+    {{ text }}
+
+    JSON:
+  "#
+}
+
+// BAML-driven counterpart that keeps the `S | StreamFinished` union on
+// the engine side (like `StreamE2ECollect`), but for a class-typed
+// stream. If this succeeds while the host-driven
+// `StreamE2EExtractDoc$stream` fails, the break is in the host bridge's
+// handling of the class-typed `Stream<T, S>`, not the engine SAP path.
+function StreamE2ECollectDoc(text: string) -> StreamingDoc {
+  let s = StreamE2EExtractDoc$stream(text);
+  while (true) {
+    let v = s.next();
+    match (v) {
+      baml.stream.StreamFinished => {
+        break;
+      }
+      _ => {}
+    }
+  }
+  s.final()
+}
+
 // Drives `Stream.next()` from inside BAML so the partials never cross
 // the FFI boundary as `S | StreamFinished`. The two values that do
 // cross — `next_calls` and `final_call` — are typed concretely
-// (`(null | string)[]` and `string`), sidestepping the `Ty::TypeVar →
-// Ty::Void` fallback in `tir2_to_template` that the host-side
-// `test_stream_next_reaches_finished` runs into.
+// (`(null | string)[]` and `string`). (Historical note: this was added
+// to sidestep a suspected `Ty::TypeVar → Ty::Void` fallback in
+// `tir2_to_template`; the real Void source turned out to be namespace
+// resolution in `compute_stream_return_type`, since fixed.)
 function StreamE2ECollect(text: string) -> StreamE2ECollectResult {
   let s = StreamE2EExtract$stream(text);
   let next_calls: (null | string)[] = [];

@@ -67,9 +67,6 @@ function user.AskDocs$build_request(query: string, max_results: int = 10, filter
 function user.AskDocs$build_request_stream(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.llm.Client = TestClient) -> baml.http.Request throws never {
   baml.llm.build_request_stream(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter }) : baml.http.Request
 }
-function user.AskDocs$parse(json: string, client: baml.llm.Client = TestClient) -> string throws never {
-  baml.llm.parse<TFinal>("AskDocs", json) : string
-}
 class user.SearchService {
   base: string
 }
@@ -95,7 +92,10 @@ function user.AskDocs$stream(query: string, max_results: int = 10, filter: strin
   baml.llm.stream_llm_function(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter }) : baml.llm.Stream<string | null, string>
 }
 function user.AskDocs$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = TestClient) -> baml.llm.Stream<string | null, string> throws never {
-  client.__make_stream(sse, "AskDocs") : baml.llm.Stream<string | null, string>
+  client.__make_stream(sse) : baml.llm.Stream<string | null, string>
+}
+function user.AskDocs$parse(json: string, client: baml.llm.Client = TestClient) -> string throws never {
+  baml.llm.parse<TFinal>(json) : string
 }
 class user.SearchService$stream {
   base: string | null

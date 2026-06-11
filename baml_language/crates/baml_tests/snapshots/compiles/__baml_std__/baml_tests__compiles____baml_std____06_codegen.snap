@@ -17157,24 +17157,19 @@ function baml.llm.BedrockOptions.to_json(self: baml.llm.BedrockOptions) -> baml.
     return
 }
 
-function baml.llm.Client.__make_stream(self: baml.llm.Client, sse: baml.http.SseStream, function_name: string) -> baml.llm.Stream<unknown, unknown> {
+function baml.llm.Client.__make_stream(self: baml.llm.Client, sse: baml.http.SseStream) -> baml.llm.Stream<unknown, unknown> {
     load_var self
     call baml.llm.Client.to_primitive_client
     store_var primitive
-    load_var function_name
-    sys_op baml.llm.get_return_type
-    store_var return_type
-    load_var function_name
-    sys_op baml.llm.get_stream_return_type
-    store_var stream_return_type
     load_var primitive
     sys_op baml.llm.PrimitiveClient.new_stream_accumulator
     store_var acc
-    load_var2 5 6
+    load_type #0
+    load_type #1
     sys_op baml.llm.StreamCache.new
     store_var cache
-    load_var2 4 7
-    load_var2 2 8
+    load_var2 3 4
+    load_var2 2 5
     load_type #0
     load_type #1
     init_instance<2> baml.llm.Stream ._client, ._acc, ._sse, ._cache
@@ -18141,7 +18136,7 @@ function baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: bam
   L2:
     load_var self
     load_field .counter
-    store_var _67
+    store_var _66
     load_var self
     copy 0
     load_field .counter
@@ -18169,146 +18164,146 @@ function baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: bam
   L4:
     load_var self
     load_field .sub_clients
-    store_var _24
+    store_var _23
     load_type baml.llm.Client
-    load_var _24
+    load_var _23
     call baml.iter.Iterable$for$T[].iter
-    store_var _25
+    store_var _24
 
   L5:
-    load_var _25
+    load_var _24
     is_type baml.iter.Flatten<...>
     pop_jump_if_false L6
     jump L23
 
   L6:
-    load_var _25
+    load_var _24
     is_type baml.iter.ArrayIterator<...>
     pop_jump_if_false L7
     jump L22
 
   L7:
-    load_var _25
+    load_var _24
     is_type baml.iter.StepBy<...>
     pop_jump_if_false L8
     jump L21
 
   L8:
-    load_var _25
+    load_var _24
     is_type baml.iter.Chain<...>
     pop_jump_if_false L9
     jump L20
 
   L9:
-    load_var _25
+    load_var _24
     is_type baml.iter.Repeat<...>
     pop_jump_if_false L10
     jump L19
 
   L10:
-    load_var _25
+    load_var _24
     is_type baml.iter.Map<...>
     pop_jump_if_false L11
     jump L18
 
   L11:
-    load_var _25
+    load_var _24
     is_type baml.iter.Filter<...>
     pop_jump_if_false L12
     jump L17
 
   L12:
-    load_var _25
+    load_var _24
     is_type baml.iter.FilterMap<...>
     pop_jump_if_false L13
     jump L16
 
   L13:
-    load_var _25
+    load_var _24
     is_type baml.iter.FlatMap<...>
     pop_jump_if_false L14
     jump L15
 
   L14:
-    load_var _25
+    load_var _24
     is_type baml.iter.Peekable<...>
     pop_jump_if_false L30
     load_type baml.llm.Client
     load_type void
-    load_var _25
+    load_var _24
     call baml.iter.Peekable.Iterator.next
-    store_var _27
+    store_var _26
     jump L24
 
   L15:
-    load_var _25
+    load_var _24
     make_bound_method baml.iter.FlatMap.Iterator.next
     call_indirect
-    store_var _27
+    store_var _26
     jump L24
 
   L16:
-    load_var _25
+    load_var _24
     make_bound_method baml.iter.FilterMap.Iterator.next
     call_indirect
-    store_var _27
+    store_var _26
     jump L24
 
   L17:
     load_type baml.llm.Client
     load_type void
     load_type void
-    load_var _25
+    load_var _24
     call baml.iter.Filter.Iterator.next
-    store_var _27
+    store_var _26
     jump L24
 
   L18:
-    load_var _25
+    load_var _24
     make_bound_method baml.iter.Map.Iterator.next
     call_indirect
-    store_var _27
+    store_var _26
     jump L24
 
   L19:
     load_type baml.llm.Client
-    load_var _25
+    load_var _24
     call baml.iter.Repeat.Iterator.next
-    store_var _27
+    store_var _26
     jump L24
 
   L20:
     load_type baml.llm.Client
     load_type void
     load_type void
-    load_var _25
+    load_var _24
     call baml.iter.Chain.Iterator.next
-    store_var _27
+    store_var _26
     jump L24
 
   L21:
     load_type baml.llm.Client
     load_type void
-    load_var _25
+    load_var _24
     call baml.iter.StepBy.Iterator.next
-    store_var _27
+    store_var _26
     jump L24
 
   L22:
     load_type baml.llm.Client
-    load_var _25
+    load_var _24
     call baml.iter.ArrayIterator.Iterator.next
-    store_var _27
+    store_var _26
     jump L24
 
   L23:
-    load_var _25
+    load_var _24
     make_bound_method baml.iter.Flatten.Iterator.next
     call_indirect
-    store_var _27
+    store_var _26
 
   L24:
-    load_var _27
+    load_var _26
     is_type baml.iter.Done
     pop_jump_if_false L25
     jump L27
@@ -18356,8 +18351,6 @@ function baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: bam
     load_type #0
     load_type #1
     load_var2 1 8
-    load_var context
-    load_field .function_name
     call baml.llm.Client.__make_stream
 
   L29:
@@ -19455,7 +19448,7 @@ function baml.llm.StreamCache.from_json(j: baml.json.json) -> baml.llm.StreamCac
     return
 }
 
-function baml.llm.StreamCache.new(target: type, streaming: type) -> baml.llm.StreamCache<unknown, unknown> {
+function baml.llm.StreamCache.new(t_stream: type, t_final: type) -> baml.llm.StreamCache<unknown, unknown> {
 }
 
 function baml.llm.StreamCache.to_json(self: baml.llm.StreamCache<unknown, unknown>) -> baml.json.json {
@@ -19652,20 +19645,12 @@ function baml.llm.get_jinja_template(function_name: string) -> string {
 function baml.llm.get_return_type(function_name: string) -> type {
 }
 
-function baml.llm.get_stream_return_type(function_name: string) -> type {
-}
-
-function baml.llm.parse(function_name: string, json: string) -> unknown {
-    load_var function_name
-    sys_op baml.llm.get_return_type
-    store_var return_type
-    load_var function_name
-    sys_op baml.llm.get_stream_return_type
-    store_var stream_return_type
-    load_var2 3 4
+function baml.llm.parse(json: string) -> unknown {
+    load_type #0
+    load_type #1
     sys_op baml.llm.StreamCache.new
     store_var cache
-    load_var2 2 5
+    load_var2 1 2
     load_type #0
     load_type #1
     sys_op baml.llm.__sap_parse_final

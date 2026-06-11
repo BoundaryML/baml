@@ -7267,7 +7267,13 @@ impl LoweringContext<'_> {
 
         let pkg_info = file_package(self.db, self.file);
         let pkg_id = PackageId::new(self.db, pkg_info.package);
-        let pkg_items = package_items(self.db, pkg_id);
+        // The canonical (PPIR-merged) package items, NOT HIR's: explicit type
+        // args synthesized by PPIR companions reference `*$stream` classes
+        // (e.g. `parse<Payload$stream | null, Payload>`), which only exist in
+        // the PPIR-expanded item universe. Resolving against HIR's original
+        // items lowered them to `Unknown` → `Void` and broke `StreamCache.new`
+        // at runtime.
+        let pkg_items = baml_compiler2_ppir::package_items(self.db, pkg_id);
         let mut diags = Vec::new();
         let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
             self.db,

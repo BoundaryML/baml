@@ -574,9 +574,6 @@ function user.TestTarget$build_request(client: baml.llm.Client = BasicClient) ->
 function user.TestTarget$build_request_stream(client: baml.llm.Client = BasicClient) -> baml.http.Request  [expr] {
   baml.llm.build_request_stream(client, "TestTarget", map {  })
 }
-function user.TestTarget$parse(json: string, client: baml.llm.Client = BasicClient) -> string  [expr] {
-  baml.llm.parse("TestTarget", json)
-}
 function user.TestTarget$render_prompt(client: baml.llm.Client = BasicClient) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "TestTarget", map {  })
 }
@@ -662,9 +659,6 @@ function user.LlmBasic$build_request(name: string, client: baml.llm.Client = GPT
 function user.LlmBasic$build_request_stream(name: string, client: baml.llm.Client = GPT4) -> baml.http.Request  [expr] {
   baml.llm.build_request_stream(client, "LlmBasic", map { "name": name })
 }
-function user.LlmBasic$parse(json: string, client: baml.llm.Client = GPT4) -> string  [expr] {
-  baml.llm.parse("LlmBasic", json)
-}
 function user.LlmBasic$render_prompt(name: string, client: baml.llm.Client = GPT4) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "LlmBasic", map { "name": name })
 }
@@ -676,9 +670,6 @@ function user.LlmMultiLine$build_request(text: string, client: baml.llm.Client =
 }
 function user.LlmMultiLine$build_request_stream(text: string, client: baml.llm.Client = GPT4) -> baml.http.Request  [expr] {
   baml.llm.build_request_stream(client, "LlmMultiLine", map { "text": text })
-}
-function user.LlmMultiLine$parse(json: string, client: baml.llm.Client = GPT4) -> string  [expr] {
-  baml.llm.parse("LlmMultiLine", json)
 }
 function user.LlmMultiLine$render_prompt(text: string, client: baml.llm.Client = GPT4) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "LlmMultiLine", map { "text": text })
@@ -692,9 +683,6 @@ function user.LlmReversedOrder$build_request(text: string, client: baml.llm.Clie
 function user.LlmReversedOrder$build_request_stream(text: string, client: baml.llm.Client = GPT4) -> baml.http.Request  [expr] {
   baml.llm.build_request_stream(client, "LlmReversedOrder", map { "text": text })
 }
-function user.LlmReversedOrder$parse(json: string, client: baml.llm.Client = GPT4) -> string  [expr] {
-  baml.llm.parse("LlmReversedOrder", json)
-}
 function user.LlmReversedOrder$render_prompt(text: string, client: baml.llm.Client = GPT4) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "LlmReversedOrder", map { "text": text })
 }
@@ -707,9 +695,6 @@ function user.LlmStringClient$build_request(text: string, client: baml.llm.Clien
 function user.LlmStringClient$build_request_stream(text: string, client: baml.llm.Client = ...) -> baml.http.Request  [expr] {
   baml.llm.build_request_stream(client, "LlmStringClient", map { "text": text })
 }
-function user.LlmStringClient$parse(json: string, client: baml.llm.Client = ...) -> string  [expr] {
-  baml.llm.parse("LlmStringClient", json)
-}
 function user.LlmStringClient$render_prompt(text: string, client: baml.llm.Client = ...) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "LlmStringClient", map { "text": text })
 }
@@ -721,9 +706,6 @@ function user.LlmWithLongSignature$build_request(first_context: string, second_c
 }
 function user.LlmWithLongSignature$build_request_stream(first_context: string, second_context: string, third_context: string, user_query: string, client: baml.llm.Client = GPT4) -> baml.http.Request  [expr] {
   baml.llm.build_request_stream(client, "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query })
-}
-function user.LlmWithLongSignature$parse(json: string, client: baml.llm.Client = GPT4) -> string  [expr] {
-  baml.llm.parse("LlmWithLongSignature", json)
 }
 function user.LlmWithLongSignature$render_prompt(first_context: string, second_context: string, third_context: string, user_query: string, client: baml.llm.Client = GPT4) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query })

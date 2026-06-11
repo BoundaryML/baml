@@ -722,9 +722,6 @@ pub struct LlmFunctionInfo {
     pub client_name: String,
     /// The expected return type, used for response parsing.
     pub return_type: baml_type::Ty,
-    /// The stream-expanded return type (e.g. `null | MyClass$stream`).
-    /// Used by `get_stream_return_type` for constructing `StreamCache`.
-    pub stream_return_type: baml_type::Ty,
 }
 
 /// Pre-extracted class definition for output format rendering.

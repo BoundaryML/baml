@@ -58,12 +58,11 @@ function build_request_stream(client: Client, function_name: string, args: map<s
 
 /// UNSAFE: do not call from user code
 ///
-/// Used by LLM function companion functions.
+/// Used by LLM function `$parse` companions, which pass
+/// `<STREAM_EXPANDED, ORIGINAL>` as explicit type args.
 /// Only parses full responses, not partials.
-function parse<TStream, TFinal>(function_name: string, json: string) -> TFinal {
-  let return_type = get_return_type(function_name);
-  let stream_return_type = get_stream_return_type(function_name);
-  let cache = StreamCache.new(return_type, stream_return_type);
+function parse<TStream, TFinal>(json: string) -> TFinal {
+  let cache: StreamCache<TStream, TFinal> = StreamCache.new(reflect.type_of<TStream>(), reflect.type_of<TFinal>());
   __sap_parse_final<TStream, TFinal>(json, cache)
 }
 

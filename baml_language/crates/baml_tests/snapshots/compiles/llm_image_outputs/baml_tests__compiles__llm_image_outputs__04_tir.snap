@@ -17,9 +17,6 @@ function user.GenerateImage$build_request(prompt: string, client: baml.llm.Clien
 function user.GenerateImage$build_request_stream(prompt: string, client: baml.llm.Client = OpenAIImageResponses) -> baml.http.Request throws never {
   baml.llm.build_request_stream(client, "GenerateImage", map { "prompt": prompt }) : baml.http.Request
 }
-function user.GenerateImage$parse(json: string, client: baml.llm.Client = OpenAIImageResponses) -> image throws never {
-  baml.llm.parse<TFinal>("GenerateImage", json) : image
-}
 function user.GenerateImageSet(prompt: string, client: baml.llm.Client = OpenAIImageResponses) -> image[] throws never {
   baml.llm.call_llm_function<T>(client, "GenerateImageSet", map { "prompt": prompt }) : image[]
 }
@@ -31,9 +28,6 @@ function user.GenerateImageSet$build_request(prompt: string, client: baml.llm.Cl
 }
 function user.GenerateImageSet$build_request_stream(prompt: string, client: baml.llm.Client = OpenAIImageResponses) -> baml.http.Request throws never {
   baml.llm.build_request_stream(client, "GenerateImageSet", map { "prompt": prompt }) : baml.http.Request
-}
-function user.GenerateImageSet$parse(json: string, client: baml.llm.Client = OpenAIImageResponses) -> image[] throws never {
-  baml.llm.parse<TFinal>("GenerateImageSet", json) : image[]
 }
 function user.GenerateMixedImageNarrative(prompt: string, client: baml.llm.Client = OpenAIImageResponses) -> (image | string)[] throws never {
   baml.llm.call_llm_function<T>(client, "GenerateMixedImag...", map { "prompt": prompt }) : (image | string)[]
@@ -47,24 +41,30 @@ function user.GenerateMixedImageNarrative$build_request(prompt: string, client: 
 function user.GenerateMixedImageNarrative$build_request_stream(prompt: string, client: baml.llm.Client = OpenAIImageResponses) -> baml.http.Request throws never {
   baml.llm.build_request_stream(client, "GenerateMixedImag...", map { "prompt": prompt }) : baml.http.Request
 }
-function user.GenerateMixedImageNarrative$parse(json: string, client: baml.llm.Client = OpenAIImageResponses) -> (image | string)[] throws never {
-  baml.llm.parse<TFinal>("GenerateMixedImag...", json) : (image | string)[]
-}
 function user.GenerateImage$stream(prompt: string, client: baml.llm.Client = OpenAIImageResponses) -> baml.llm.Stream<image, image> throws never {
   baml.llm.stream_llm_function(client, "GenerateImage", map { "prompt": prompt }) : baml.llm.Stream<image, image>
 }
 function user.GenerateImage$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = OpenAIImageResponses) -> baml.llm.Stream<image, image> throws never {
-  client.__make_stream(sse, "GenerateImage") : baml.llm.Stream<image, image>
+  client.__make_stream(sse) : baml.llm.Stream<image, image>
+}
+function user.GenerateImage$parse(json: string, client: baml.llm.Client = OpenAIImageResponses) -> image throws never {
+  baml.llm.parse<TFinal>(json) : image
 }
 function user.GenerateImageSet$stream(prompt: string, client: baml.llm.Client = OpenAIImageResponses) -> baml.llm.Stream<image[], image[]> throws never {
   baml.llm.stream_llm_function(client, "GenerateImageSet", map { "prompt": prompt }) : baml.llm.Stream<image[], image[]>
 }
 function user.GenerateImageSet$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = OpenAIImageResponses) -> baml.llm.Stream<image[], image[]> throws never {
-  client.__make_stream(sse, "GenerateImageSet") : baml.llm.Stream<image[], image[]>
+  client.__make_stream(sse) : baml.llm.Stream<image[], image[]>
+}
+function user.GenerateImageSet$parse(json: string, client: baml.llm.Client = OpenAIImageResponses) -> image[] throws never {
+  baml.llm.parse<TFinal>(json) : image[]
 }
 function user.GenerateMixedImageNarrative$stream(prompt: string, client: baml.llm.Client = OpenAIImageResponses) -> baml.llm.Stream<(image | string)[], (image | string)[]> throws never {
   baml.llm.stream_llm_function(client, "GenerateMixedImag...", map { "prompt": prompt }) : baml.llm.Stream<(image | string)[], (image | string)[]>
 }
 function user.GenerateMixedImageNarrative$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = OpenAIImageResponses) -> baml.llm.Stream<(image | string)[], (image | string)[]> throws never {
-  client.__make_stream(sse, "GenerateMixedImag...") : baml.llm.Stream<(image | string)[], (image | string)[]>
+  client.__make_stream(sse) : baml.llm.Stream<(image | string)[], (image | string)[]>
+}
+function user.GenerateMixedImageNarrative$parse(json: string, client: baml.llm.Client = OpenAIImageResponses) -> (image | string)[] throws never {
+  baml.llm.parse<TFinal>(json) : (image | string)[]
 }

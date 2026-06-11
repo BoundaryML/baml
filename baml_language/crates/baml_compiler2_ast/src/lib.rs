@@ -19,6 +19,7 @@ pub(crate) mod lower_type_expr;
 pub mod lowering_diagnostic;
 
 pub use ast::*;
+pub use companions::llm_parse as llm_parse_companion;
 pub use disambiguate::is_field_attr;
 pub use docstring::extract_docstring;
 pub use lower_cst::{

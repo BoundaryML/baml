@@ -13,7 +13,7 @@
 use std::sync::{Arc, atomic::AtomicBool};
 
 use baml_project::testing::compile_source;
-use baml_type::{Ty, TyAttr, TyTemplate};
+use baml_type::{Ty, TyTemplate};
 use bex_vm::{BexVm, VmExecState};
 use bex_vm_types::{
     ConstValue, GlobalIndex, Instruction, Object, ObjectIndex, Value,
@@ -57,9 +57,6 @@ fn inject_function(
         debug_locals: vec![],
         span: baml_type::Span::fake(),
         return_type: Ty::int(),
-        stream_return_type: Ty::Null {
-            attr: TyAttr::default(),
-        },
         param_names: vec![],
         param_types: vec![],
         param_has_default: vec![],

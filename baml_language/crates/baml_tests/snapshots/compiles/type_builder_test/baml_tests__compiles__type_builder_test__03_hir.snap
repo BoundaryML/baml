@@ -15,9 +15,6 @@ function user.Fn$build_request(client: baml.llm.Client = ...) -> baml.http.Reque
 function user.Fn$build_request_stream(client: baml.llm.Client = ...) -> baml.http.Request  [expr] {
   baml.llm.build_request_stream(client, "Fn", map {  })
 }
-function user.Fn$parse(json: string, client: baml.llm.Client = ...) -> string  [expr] {
-  baml.llm.parse("Fn", json)
-}
 function user.Fn$render_prompt(client: baml.llm.Client = ...) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "Fn", map {  })
 }

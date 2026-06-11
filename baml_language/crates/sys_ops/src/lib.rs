@@ -564,13 +564,15 @@ impl<T> io::IoClassLlmStreamAccumulator for T {
 }
 
 /// Blanket impl — `StreamCache.new()` creates a SAP cache from a type descriptor.
+/// Parameter order follows the BAML decl (`new(streaming, target)` — stream
+/// type first, mirroring `StreamCache<TStream, TFinal>`).
 impl<T> io::IoClassLlmStreamCache for T {
     fn new(
         &self,
         _heap: &std::sync::Arc<BexHeap>,
         _call_id: CallId,
-        target: baml_type::Ty,
         stream_target: baml_type::Ty,
+        target: baml_type::Ty,
         ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::llm::StreamCache> {
         let compiled =
@@ -627,20 +629,6 @@ impl<T> io::IoNamespaceLlm for T {
             return SysOpOutput::err(llm_function_lookup_error(&function_name, &outcome));
         };
         SysOpOutput::ok(info.return_type.clone())
-    }
-
-    fn get_stream_return_type(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        function_name: String,
-        ctx: &SysOpContext,
-    ) -> SysOpOutput<baml_type::Ty> {
-        let outcome = lookup_llm_function(&function_name, &ctx.llm_functions);
-        let sys_types::ResolveOutcome::Found(_, info) = outcome else {
-            return SysOpOutput::err(llm_function_lookup_error(&function_name, &outcome));
-        };
-        SysOpOutput::ok(info.stream_return_type.clone())
     }
 
     fn from_shorthand(

@@ -947,36 +947,6 @@ fn user.ClassifySentiment$build_request_stream(text: string, client: baml.llm.Cl
     }
 }
 
-fn user.ClassifySentiment$parse(json: string, client: baml.llm.Client) -> Sentiment {
-    // Locals:
-    let _0: Sentiment // _0 // return
-    let _1: string // json // param
-    let _2: baml.llm.Client // client // param
-    let _3: bool
-    let _4: type
-    let _5: type
-
-    bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _2 = const fn user.GPT4o;
-        goto -> bb2;
-    }
-
-    bb2: {
-        _4 = load_type(unknown);
-        _5 = load_type(Sentiment);
-        _0 = call const fn baml.llm.parse<copy _4, copy _5>(const "ClassifySentiment", copy _1) -> [bb3];
-    }
-
-    bb3: {
-        return;
-    }
-}
-
 fn user.ClassifySentiment$render_prompt(text: string, client: baml.llm.Client) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -1084,36 +1054,6 @@ fn user.ClassifySentiment2$build_request_stream(text: string, client: baml.llm.C
     bb2: {
         _4 = { const "text": copy _1 };
         _0 = call const fn baml.llm.build_request_stream(copy _2, const "ClassifySentiment2", copy _4) -> [bb3];
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.ClassifySentiment2$parse(json: string, client: baml.llm.Client) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: string // json // param
-    let _2: baml.llm.Client // client // param
-    let _3: bool
-    let _4: type
-    let _5: type
-
-    bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _2 = const fn user.GPT4o;
-        goto -> bb2;
-    }
-
-    bb2: {
-        _4 = load_type(unknown);
-        _5 = load_type(string);
-        _0 = call const fn baml.llm.parse<copy _4, copy _5>(const "ClassifySentiment2", copy _1) -> [bb3];
     }
 
     bb3: {
@@ -1304,36 +1244,6 @@ fn user.GenerateTests$build_request_stream(count: int, topic: string, client: ba
     bb2: {
         _5 = { const "count": copy _1, const "topic": copy _2 };
         _0 = call const fn baml.llm.build_request_stream(copy _3, const "GenerateTests", copy _5) -> [bb3];
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.GenerateTests$parse(json: string, client: baml.llm.Client) -> string[] {
-    // Locals:
-    let _0: string[] // _0 // return
-    let _1: string // json // param
-    let _2: baml.llm.Client // client // param
-    let _3: bool
-    let _4: type
-    let _5: type
-
-    bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _2 = const fn user.GPT4o;
-        goto -> bb2;
-    }
-
-    bb2: {
-        _4 = load_type(unknown);
-        _5 = load_type(string[]);
-        _0 = call const fn baml.llm.parse<copy _4, copy _5>(const "GenerateTests", copy _1) -> [bb3];
     }
 
     bb3: {

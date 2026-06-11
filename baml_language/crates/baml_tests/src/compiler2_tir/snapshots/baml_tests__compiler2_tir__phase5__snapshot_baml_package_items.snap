@@ -188,7 +188,6 @@ namespace baml.llm:
   function from_shorthand
   function get_jinja_template
   function get_return_type
-  function get_stream_return_type
   function parse<TStream, TFinal>
   function render_prompt
   function stream_llm_function<TStream, TFinal>

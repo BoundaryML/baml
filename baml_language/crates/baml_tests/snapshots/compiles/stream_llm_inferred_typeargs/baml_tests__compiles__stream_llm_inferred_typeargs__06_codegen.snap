@@ -95,9 +95,8 @@ function user.TestFunc$parse(json: string, client: baml.llm.Client) -> string {
     store_var client
 
   L0:
-    load_type unknown
+    load_type string | null
     load_type string
-    load_const "TestFunc"
     load_var json
     call baml.llm.parse
     return
@@ -115,7 +114,6 @@ function user.TestFunc$parse_stream(sse: baml.http.SseStream, client: baml.llm.C
     load_type string | null
     load_type string
     load_var2 2 1
-    load_const "TestFunc"
     call baml.llm.Client.__make_stream
     return
 }
