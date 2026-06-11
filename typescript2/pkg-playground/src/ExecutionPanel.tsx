@@ -52,7 +52,11 @@ import {
   isHttpRequest,
 } from './renderers/HttpRequestCurl';
 import { GraphView } from './graph/GraphView';
-import { FunctionSidebar } from './FunctionSidebar';
+import {
+  FunctionSidebar,
+  type SerializedTestDef,
+  type SerializedTestSet,
+} from './FunctionSidebar';
 import { EventValueDisplay } from './EventValueDisplay';
 import { findImageMedia, mediaToSrc } from './shared/media-values';
 import { companionFunctionName } from './shared/companion-functions';
@@ -82,6 +86,64 @@ function stringifyResult(value: BamlJsValue): string {
     (_, v) => (typeof v === 'bigint' ? v.toString() : v),
     2,
   );
+}
+
+type PendingTestTarget = {
+  project: string;
+  kind: 'test' | 'testset';
+  name: string;
+};
+
+function testTargetMatches(candidate: string, target: string): boolean {
+  return (
+    candidate === target ||
+    candidate.endsWith(`/${target}`) ||
+    candidate.split('/').pop() === target
+  );
+}
+
+function isExpandedTestSet(def: SerializedTestDef): def is SerializedTestSet {
+  return Array.isArray((def as { items?: unknown }).items);
+}
+
+function findTestNameInTree(
+  items: SerializedTestDef[],
+  target: string,
+): string | null {
+  for (const item of items) {
+    if ('type' in item && item.type === 'test') {
+      if (testTargetMatches(item.name, target)) return item.name;
+      continue;
+    }
+    if (isExpandedTestSet(item)) {
+      const found = findTestNameInTree(item.items, target);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+function collectAllTestNames(item: SerializedTestDef): string[] {
+  if ('type' in item && item.type === 'test') return [item.name];
+  if (!isExpandedTestSet(item)) return [];
+  return item.items.flatMap(collectAllTestNames);
+}
+
+function collectTestNamesInSet(
+  items: SerializedTestDef[],
+  target: string,
+): string[] | null {
+  for (const item of items) {
+    if ('type' in item && item.type === 'lazyTestSet') {
+      if (testTargetMatches(item.name, target)) return null;
+      continue;
+    }
+    if (!isExpandedTestSet(item)) continue;
+    if (testTargetMatches(item.name, target)) return collectAllTestNames(item);
+    const nested = collectTestNamesInSet(item.items, target);
+    if (nested) return nested;
+  }
+  return null;
 }
 
 function findLatestGraphRun(
@@ -229,6 +291,10 @@ export interface ExecutionPanelProps {
   initialTab?: 'run' | 'graph' | 'prompt' | 'curl';
   /** Auto-select this function once the project reports it (applied once). */
   initialFunctionName?: string;
+  /** Auto-run this test once the test tree reports it (applied once). */
+  initialTestName?: string;
+  /** Auto-run tests under this testset once the test tree reports it (applied once). */
+  initialTestsetName?: string;
   /** Seed for the args JSON editor (default '{}'). */
   initialArgsJson?: string;
   /** Per-function seeds for the args editor, keyed by bare or fully-qualified
@@ -474,6 +540,8 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   onNavigateToSource,
   initialTab,
   initialFunctionName,
+  initialTestName,
+  initialTestsetName,
   initialArgsJson,
   argsByFunction,
   initialSidebarOpen = true,
@@ -496,6 +564,8 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   // When true, the main content area shows the test run history panel
   const [viewingTestRun, setViewingTestRun] = useState(false);
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
+  const [pendingTestTarget, setPendingTestTarget] =
+    useState<PendingTestTarget | null>(null);
 
   const [selectedFn, setSelectedFn] = useState<string | null>(null);
   const [showInternalFunctions, setShowInternalFunctions] = useState(false);
@@ -955,6 +1025,24 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                 setSelectedFn(n.functionName);
                 setViewingCollection(false);
                 setViewingTestRun(false);
+              } else if (n.testName || n.testsetName) {
+                setWorkflowContext(null);
+                setSelectedFn(null);
+                setViewingCollection(false);
+                setViewingTestRun(true);
+                setTestTree(null);
+                setCollectionCallId(null);
+                setCollectionRun(null);
+                setTestRunResults(new Map());
+                setPendingTestTarget({
+                  project: n.project,
+                  kind: n.testName ? 'test' : 'testset',
+                  name: n.testName ?? n.testsetName!,
+                });
+                port.postMessage({
+                  type: 'requestCollectTests',
+                  project: n.project,
+                });
               }
               break;
             case 'controlFlowGraphResult':
@@ -1518,6 +1606,33 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     port.postMessage({ type: 'requestCollectTests', project: selectedProject });
   }, [selectedProject, port]);
 
+  const appliedInitialTestTargetRef = useRef(false);
+  useEffect(() => {
+    if (
+      appliedInitialTestTargetRef.current ||
+      !selectedProject ||
+      (!initialTestName && !initialTestsetName)
+    ) {
+      return;
+    }
+
+    appliedInitialTestTargetRef.current = true;
+    setWorkflowContext(null);
+    setSelectedFn(null);
+    setViewingCollection(false);
+    setViewingTestRun(true);
+    setTestTree(null);
+    setCollectionCallId(null);
+    setCollectionRun(null);
+    setTestRunResults(new Map());
+    setPendingTestTarget({
+      project: selectedProject,
+      kind: initialTestName ? 'test' : 'testset',
+      name: initialTestName ?? initialTestsetName!,
+    });
+    port.postMessage({ type: 'requestCollectTests', project: selectedProject });
+  }, [initialTestName, initialTestsetName, selectedProject, port]);
+
   const handleRunTest = useCallback(
     async (name: string) => {
       if (!selectedProject) return;
@@ -1599,6 +1714,34 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     },
     [selectedProject, generation, port],
   );
+
+  useEffect(() => {
+    if (!pendingTestTarget || !selectedProject || !Array.isArray(testTree)) {
+      return;
+    }
+    if (pendingTestTarget.project !== selectedProject) {
+      return;
+    }
+
+    const treeItems = testTree as SerializedTestDef[];
+    if (pendingTestTarget.kind === 'test') {
+      const testName = findTestNameInTree(treeItems, pendingTestTarget.name);
+      if (!testName) return;
+      setPendingTestTarget(null);
+      void handleRunTest(testName);
+      return;
+    }
+
+    const testNames = collectTestNamesInSet(treeItems, pendingTestTarget.name);
+    if (!testNames) return;
+    setPendingTestTarget(null);
+    setViewingTestRun(true);
+    void (async () => {
+      for (const testName of testNames) {
+        await handleRunTest(testName);
+      }
+    })();
+  }, [pendingTestTarget, selectedProject, testTree, handleRunTest]);
 
   // Track which testsets we've already requested expansion for (per generation)
   const pendingExpandsRef = useRef<{

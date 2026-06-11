@@ -29,6 +29,8 @@ interface OpenPlaygroundMessage {
   target: {
     project: string;
     functionName?: string;
+    testName?: string;
+    testsetName?: string;
   };
 }
 
@@ -59,6 +61,8 @@ const App: React.FC = () => {
           type: 'openPlayground',
           project: target.project,
           ...(target.functionName ? { functionName: target.functionName } : {}),
+          ...(target.testName ? { testName: target.testName } : {}),
+          ...(target.testsetName ? { testsetName: target.testsetName } : {}),
         },
       });
     }
@@ -113,6 +117,8 @@ const App: React.FC = () => {
           type: 'openPlayground',
           project: target.project,
           ...(target.functionName ? { functionName: target.functionName } : {}),
+          ...(target.testName ? { testName: target.testName } : {}),
+          ...(target.testsetName ? { testsetName: target.testsetName } : {}),
         },
       });
     };

@@ -38,7 +38,8 @@ function safeHeredoc(body: string): string {
   while (
     body.includes(`\n${tag}\n`) ||
     body.startsWith(`${tag}\n`) ||
-    body.endsWith(`\n${tag}`)
+    body.endsWith(`\n${tag}`) ||
+    body === tag
   ) {
     tag += '_';
   }

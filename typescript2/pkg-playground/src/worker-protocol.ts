@@ -120,7 +120,13 @@ export interface ProjectUpdate {
 export type PlaygroundNotification =
   | { type: 'listProjects'; projects: string[] }
   | { type: 'updateProject'; project: string; update: ProjectUpdate }
-  | { type: 'openPlayground'; project: string; functionName?: string }
+  | {
+      type: 'openPlayground';
+      project: string;
+      functionName?: string;
+      testName?: string;
+      testsetName?: string;
+    }
   | {
       type: 'controlFlowGraphResult';
       functionName: string;

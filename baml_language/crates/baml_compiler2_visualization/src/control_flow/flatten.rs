@@ -249,20 +249,32 @@ fn compute_required_nodes(graph: &ControlFlowGraph) -> HashSet<NodeId> {
         }
     }
 
-    // Early returns render whenever their enclosing scope renders. This runs
-    // after the arm pass so returns directly inside a kept arm survive.
+    // Early returns render whenever their enclosing rendered scope renders.
+    // Keep any wrapper nodes needed to connect the return back to that scope.
     for node in graph.nodes.values() {
         if !matches!(node.node_type, NodeType::Return) {
             continue;
         }
-        match node.parent_node_id {
-            Some(parent_id) if keep.contains(&parent_id) => {
-                keep.insert(node.id);
+
+        let Some(parent_id) = node.parent_node_id else {
+            keep.insert(node.id);
+            continue;
+        };
+
+        let mut current = Some(parent_id);
+        let mut path = Vec::new();
+        let mut seen = HashSet::new();
+        while let Some(ancestor_id) = current {
+            if !seen.insert(ancestor_id) {
+                break;
             }
-            None => {
+            path.push(ancestor_id);
+            if keep.contains(&ancestor_id) {
                 keep.insert(node.id);
+                keep.extend(path);
+                break;
             }
-            _ => {}
+            current = graph.nodes.get(&ancestor_id).and_then(|n| n.parent_node_id);
         }
     }
 
@@ -1388,5 +1400,28 @@ mod tests {
             cont_dsts.contains(&7),
             "non-returning arm should flow to the successor, got: {cont_dsts:?}"
         );
+    }
+
+    #[test]
+    fn pass1_keeps_wrapper_path_for_nested_return_under_header() {
+        let mut graph = ControlFlowGraph::default();
+        let root = Node::root(NodeId::new(0), "f|root:0", "func");
+        let header = make_node(1, Some(0), "Process", NodeType::HeaderContextEnter);
+        let wrapper = make_node(2, Some(1), "let x = if ...", NodeType::OtherScope);
+        let bg = make_node(3, Some(2), "if (x)", NodeType::BranchGroup);
+        let arm = make_node(4, Some(3), "if (x)", NodeType::BranchArm);
+        let ret = make_node(5, Some(4), "return 1", NodeType::Return);
+        for n in [root, header, wrapper, bg, arm, ret] {
+            graph.nodes.insert(n.id, n);
+        }
+
+        let filtered = remove_implicit_nodes(&graph);
+
+        for id in [1, 2, 3, 4, 5] {
+            assert!(
+                filtered.nodes.contains_key(&NodeId::new(id)),
+                "expected node {id} to survive so the nested return stays visible"
+            );
+        }
     }
 }

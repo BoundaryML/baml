@@ -557,7 +557,9 @@ impl ProjectDatabase {
                 }
                 let text = source_file.text(self);
                 let start = usize::from(func_data.span.start()).min(text.len());
-                return header_title_above(&text[..start]);
+                if let Some(title) = header_title_above(&text[..start]) {
+                    return Some(title);
+                }
             }
         }
         None
@@ -1569,6 +1571,26 @@ function Caller(x: int) -> int {
         assert!(
             prepared.nodes.contains_key(&plain_node.id),
             "function-level header alone is enough to render the call node"
+        );
+    }
+
+    #[test]
+    fn test_function_header_title_keeps_searching_after_missing_header() {
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("/tmp"));
+        db.add_or_update_file(
+            std::path::Path::new("/tmp/dupe.baml"),
+            r#"
+function helper(x: int) -> int { x }
+
+//# titled helper
+function helper(x: int) -> int { x + 1 }
+"#,
+        );
+
+        assert_eq!(
+            db.function_header_title("helper"),
+            Some("titled helper".to_string())
         );
     }
 

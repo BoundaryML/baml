@@ -218,10 +218,18 @@ function wireClient(projectRoot: string, client: LanguageClient) {
 
   client.onNotification(
     'baml/openPlayground',
-    async (params: { port: number; projectPath: string; functionName?: string }) => {
+    async (params: {
+      port: number;
+      projectPath: string;
+      functionName?: string;
+      testName?: string;
+      testsetName?: string;
+    }) => {
       await WebviewPanel.render(context.extensionUri, params.port, {
         project: params.projectPath,
         ...(params.functionName ? { functionName: params.functionName } : {}),
+        ...(params.testName ? { testName: params.testName } : {}),
+        ...(params.testsetName ? { testsetName: params.testsetName } : {}),
       });
     },
   );

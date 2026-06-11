@@ -34,8 +34,9 @@
 //!
 //! ## Scopes
 //!
-//! Types are resolved across the file's scopes (any-scope lookup) so a
-//! binding/expression living in a nested block or lambda still resolves.
+//! Types are resolved through the source span's ancestor scopes so a
+//! binding/expression living in a nested block or lambda resolves without
+//! accidentally matching an arena-local id from a different body.
 //!
 //! ## Suppression
 //!
@@ -56,7 +57,11 @@ use baml_compiler2_ast::{
     Expr, ExprId, Stmt,
     ast::{AstSourceMap, DeclarativeMeta, ExprBody, FunctionBodyDef, FunctionOrigin},
 };
-use baml_compiler2_hir::{body::FunctionBody, loc::FunctionLoc};
+use baml_compiler2_hir::{
+    body::FunctionBody,
+    loc::FunctionLoc,
+    scope::{FileScopeId, ScopeKind},
+};
 use baml_compiler2_tir::{inference::infer_scope_types, ty::Ty};
 use text_size::TextSize;
 
@@ -132,7 +137,19 @@ pub fn annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> {
             continue;
         };
 
-        process_body(db, file, &index, expr_body, &source_map, &mut out);
+        let owner_scope = function_scope_for(&index, func_data.span, &func_data.name)
+            .unwrap_or_else(|| {
+                index.scope_at_offset(func_data.span.start(), Some(&func_data.name))
+            });
+        process_body(
+            db,
+            file,
+            &index,
+            owner_scope,
+            expr_body,
+            &source_map,
+            &mut out,
+        );
     }
 
     // Sort by offset to ensure document order (required by LSP).
@@ -148,6 +165,7 @@ fn process_body(
     db: &dyn Db,
     file: SourceFile,
     index: &SemanticIndex<'_>,
+    owner_scope: FileScopeId,
     body: &ExprBody,
     source_map: &AstSourceMap,
     out: &mut Vec<InlineAnnotation>,
@@ -163,8 +181,10 @@ fn process_body(
         let pat = &body.patterns[*pattern];
         if matches!(
             pat,
-            baml_compiler2_ast::Pattern::Bind { subpat: Some(_), .. }
-                | baml_compiler2_ast::Pattern::Type(_)
+            baml_compiler2_ast::Pattern::Bind {
+                subpat: Some(_),
+                ..
+            } | baml_compiler2_ast::Pattern::Type(_)
         ) {
             continue;
         }
@@ -179,11 +199,14 @@ fn process_body(
             continue;
         }
 
-        // Resolve the binding's type across all scopes (the binding may live in
-        // a nested block / lambda scope, not the body's own scope).
+        // Resolve through the binding's real source scope chain. PatIds are
+        // arena-local, so scanning every file scope can hit a foreign body that
+        // happens to reuse the same numeric id.
         let mut ty_str: Option<String> = None;
-        for scope_id in &index.scope_ids {
-            let inference = infer_scope_types(db, *scope_id);
+        let use_scope = scope_at_offset_within_body(index, pat_span.start(), owner_scope);
+        for file_scope_id in ancestor_scopes_within_body(index, use_scope, owner_scope) {
+            let scope_id = index.scope_ids[file_scope_id.index() as usize];
+            let inference = infer_scope_types(db, scope_id);
             if let Some(ty) = inference.binding_type(*pattern) {
                 if !should_suppress_type(ty) {
                     ty_str = Some(utils::display_ty_for_file(db, file, ty));
@@ -205,7 +228,7 @@ fn process_body(
     }
 
     // ── Parameter-name hints on calls + recurse into lambdas ──────────────────
-    for (_expr_id, expr) in body.exprs.iter() {
+    for (expr_id, expr) in body.exprs.iter() {
         match expr {
             Expr::Call { callee, args, .. } => {
                 // Skip synthesized test/testset registration calls — their
@@ -215,12 +238,20 @@ fn process_body(
                 if is_synthetic_registration(body, *callee) {
                     continue;
                 }
+                let callee_span = source_map.expr_span(*callee);
+                if callee_span.is_empty() {
+                    continue;
+                }
+
                 // Find a scope where the callee resolves to a function type.
-                // ExprIds are arena-local (per body), so a foreign scope may
-                // hold the same numeric id; on an arity mismatch keep searching
-                // rather than giving up, so the correct same-arena scope wins.
-                for scope_id in &index.scope_ids {
-                    let inference = infer_scope_types(db, *scope_id);
+                // ExprIds are arena-local (per body), so restrict lookup to the
+                // callee's source scope chain instead of scanning every scope in
+                // the file for the first matching numeric id.
+                let use_scope =
+                    scope_at_offset_within_body(index, callee_span.start(), owner_scope);
+                for file_scope_id in ancestor_scopes_within_body(index, use_scope, owner_scope) {
+                    let scope_id = index.scope_ids[file_scope_id.index() as usize];
+                    let inference = infer_scope_types(db, scope_id);
                     let Some(Ty::Function { params, .. }) = inference.expression_type(*callee)
                     else {
                         continue;
@@ -259,7 +290,10 @@ fn process_body(
             // own body + source map — recurse so their lets and calls get hints.
             Expr::Lambda(func_def) => {
                 if let Some(FunctionBodyDef::Expr(lbody, lsmap)) = &func_def.body {
-                    process_body(db, file, index, lbody, lsmap, out);
+                    let lambda_scope = index
+                        .lambda_scope_for(source_map.expr_span(expr_id))
+                        .unwrap_or(owner_scope);
+                    process_body(db, file, index, lambda_scope, lbody, lsmap, out);
                 }
             }
             _ => {}
@@ -296,6 +330,64 @@ fn is_synthetic_registration(body: &ExprBody, callee: ExprId) -> bool {
         _ => return false,
     };
     matches!(name, "register_test" | "register_test_set")
+}
+
+fn function_scope_for(
+    index: &SemanticIndex<'_>,
+    span: text_size::TextRange,
+    name: &baml_base::Name,
+) -> Option<FileScopeId> {
+    index
+        .scopes
+        .iter()
+        .enumerate()
+        .find(|(_, scope)| {
+            matches!(scope.kind, ScopeKind::Function)
+                && scope.range == span
+                && scope.name.as_ref() == Some(name)
+        })
+        .map(|(idx, _)| FileScopeId::new(u32::try_from(idx).expect("scope index fits in u32")))
+}
+
+fn scope_at_offset_within_body(
+    index: &SemanticIndex<'_>,
+    offset: TextSize,
+    owner_scope: FileScopeId,
+) -> FileScopeId {
+    let scope_id = index.scope_at_offset(offset, None);
+    if scope_is_descendant_or_self(index, scope_id, owner_scope) {
+        scope_id
+    } else {
+        owner_scope
+    }
+}
+
+fn ancestor_scopes_within_body(
+    index: &SemanticIndex<'_>,
+    start_scope: FileScopeId,
+    owner_scope: FileScopeId,
+) -> Vec<FileScopeId> {
+    let mut scopes = Vec::new();
+    let mut current = Some(start_scope);
+    while let Some(scope_id) = current {
+        scopes.push(scope_id);
+        if scope_id == owner_scope {
+            return scopes;
+        }
+        current = index.scopes[scope_id.index() as usize].parent;
+    }
+    vec![owner_scope]
+}
+
+fn scope_is_descendant_or_self(
+    index: &SemanticIndex<'_>,
+    scope_id: FileScopeId,
+    owner_scope: FileScopeId,
+) -> bool {
+    scope_id == owner_scope
+        || index.scopes[owner_scope.index() as usize]
+            .descendants
+            .contains(&scope_id)
 }
 
 #[cfg(test)]
@@ -432,6 +524,46 @@ testset "math" {
                 .iter()
                 .all(|label| !matches!(*label, "name: " | "body: " | "collector: " | "runner: ")),
             "synthesized test/testset registration hints should be suppressed, got {labels:?}"
+        );
+    }
+
+    #[test]
+    fn call_parameter_hints_use_the_calls_own_scope() {
+        let mut builder = ProjectTest::builder();
+        let source = r##"
+function Left(alpha: string) -> string {
+    alpha
+}
+
+function Right(beta: string) -> string {
+    beta
+}
+
+function Earlier() -> string {
+    Left("x")
+}
+
+function Later() -> string {
+    Right("y")
+}
+"##;
+        builder.source("main.baml", source);
+        let project = builder.build();
+
+        let hints = annotations(&project.db, project.files[0]);
+        let y_offset = TextSize::from(
+            u32::try_from(source.find("\"y\"").expect("test arg")).expect("offset fits"),
+        );
+        let labels_at_y: Vec<_> = hints
+            .iter()
+            .filter(|hint| hint.offset == y_offset)
+            .map(|hint| hint.label.as_str())
+            .collect();
+
+        assert_eq!(
+            labels_at_y,
+            vec!["beta: "],
+            "expected Later's call to use Right's parameter, got {labels_at_y:?}"
         );
     }
 }
