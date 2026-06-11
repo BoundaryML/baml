@@ -79,7 +79,9 @@ export function BamlEditor({
       ));
 
   return (
-    <div className="relative flex flex-col h-full bg-[#FFFDF6]">
+    // `nokey` opts the editor out of React Flow's global key capture
+    // (the playground graph grabs Space/Backspace/etc otherwise).
+    <div className="nokey relative flex flex-col h-full bg-[#FFFDF6]">
       {!chromeless && (
         <div className="flex items-center justify-between border-b border-border bg-muted/50 px-4 py-2">
           <span className="text-sm font-medium">main.baml</span>

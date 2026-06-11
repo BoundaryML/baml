@@ -526,8 +526,10 @@ export function BamlEditor({
     }, 200);
   }, []);
 
+  // `nokey` opts the editor out of React Flow's global key capture
+  // (the playground graph grabs Space/Backspace/etc otherwise).
   return (
-    <div className="l2-bamled-wrap">
+    <div className="l2-bamled-wrap nokey">
       <div className="l2-bamled-frame">
         {filename || hasTests ? (
           <div className="l2-code-head">

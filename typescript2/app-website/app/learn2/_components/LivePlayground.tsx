@@ -250,8 +250,10 @@ export default function LivePlayground({
       className={`baml-playground-root l2-live${fill ? ' l2-live--fill' : ''}`}
     >
       <ResizablePanelGroup direction="horizontal">
+        {/* `nokey` opts the editor out of React Flow's global key capture
+            (the graph pane grabs Space/Backspace/etc otherwise). */}
         <ResizablePanel
-          className="l2-live-editor"
+          className="l2-live-editor nokey"
           defaultSize={56}
           minSize={28}
         >

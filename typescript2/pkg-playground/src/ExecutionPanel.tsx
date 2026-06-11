@@ -2685,7 +2685,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                   className="flex-1 flex flex-col min-h-0 mt-0"
                 >
                   {/* Args */}
-                  <div className="flex items-center border-b border-vsc-border shrink-0">
+                  {/* `nokey`: keep React Flow's global key capture (Space,
+                      Backspace, ...) out of the args input */}
+                  <div className="nokey flex items-center border-b border-vsc-border shrink-0">
                     <span className="px-2 py-1 text-[10px] text-vsc-text-faint font-vsc-mono bg-vsc-surface border-r border-vsc-border self-stretch flex items-center">
                       args
                     </span>
