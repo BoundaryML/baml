@@ -21,6 +21,9 @@
 use baml_base::SourceFile;
 use baml_compiler2_ast::ast::FunctionOrigin;
 use baml_compiler2_hir::{contributions::Definition, file_item_tree, file_symbol_contributions};
+use baml_compiler_parser::syntax_tree;
+use baml_compiler_syntax::{SyntaxElement, SyntaxKind, SyntaxNode, ast::StringLiteral};
+use rowan::ast::AstNode;
 use text_size::TextRange;
 
 use crate::Db;
@@ -37,6 +40,8 @@ pub enum FileActionKind {
     RunInPlayground,
     /// Run this test case in the BAML Playground.
     RunTest,
+    /// Run all tests in this testset.
+    RunTestSet,
 }
 
 // ── FileAction ────────────────────────────────────────────────────────────────
@@ -98,7 +103,66 @@ pub fn file_actions(db: &dyn Db, file: SourceFile) -> Vec<FileAction> {
         }
     }
 
+    // New expr-body `test "..."` and `testset "..."` blocks are desugared into a
+    // synthesized `$init_test` function during CST->AST lowering, so they never
+    // appear as contributions. Enumerate them directly from the syntax tree.
+    let tree = syntax_tree(db, file);
+    for node in tree.children() {
+        let (keyword, kind) = match node.kind() {
+            SyntaxKind::TEST_EXPR_DEF => (SyntaxKind::KW_TEST, FileActionKind::RunTest),
+            SyntaxKind::TESTSET_DEF => (SyntaxKind::KW_TESTSET, FileActionKind::RunTestSet),
+            _ => continue,
+        };
+        let Some(name_el) = test_name_element(&node, keyword) else {
+            continue;
+        };
+        let name = match name_el.as_node() {
+            Some(n) => StringLiteral::cast(n.clone())
+                .map(|s| s.value())
+                .unwrap_or_else(|| n.text().to_string()),
+            None => name_el
+                .as_token()
+                .map(|t| t.text().to_string())
+                .unwrap_or_default(),
+        };
+        actions.push(FileAction {
+            name,
+            name_span: name_el.text_range(),
+            kind,
+        });
+    }
+
     actions
+}
+
+/// Find the name element of a `test`/`testset` CST node: the first non-trivia
+/// element after the keyword, stopping at a `with` clause or the body block.
+fn test_name_element(node: &SyntaxNode, keyword: SyntaxKind) -> Option<SyntaxElement> {
+    let mut past_keyword = false;
+    for child in node.children_with_tokens() {
+        let k = child.kind();
+        if matches!(
+            k,
+            SyntaxKind::WHITESPACE
+                | SyntaxKind::NEWLINE
+                | SyntaxKind::LINE_COMMENT
+                | SyntaxKind::BLOCK_COMMENT
+                | SyntaxKind::HEADER_COMMENT
+        ) {
+            continue;
+        }
+        if k == keyword {
+            past_keyword = true;
+            continue;
+        }
+        if k == SyntaxKind::KW_WITH || k == SyntaxKind::BLOCK_EXPR {
+            break;
+        }
+        if past_keyword {
+            return Some(child);
+        }
+    }
+    None
 }
 
 #[cfg(test)]

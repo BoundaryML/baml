@@ -1,11 +1,16 @@
 import { deserializeValue, type RuntimeEvent } from '@b/pkg-proto';
-import type { DeserializedRuntimeEvent, DeserializedEventKind } from '../worker-protocol';
+import type {
+  DeserializedRuntimeEvent,
+  DeserializedEventKind,
+} from '../worker-protocol';
 
 function wrapHandle(key: bigint, handleType: number, typeName: string) {
   return { handle_key: key, handle_type: handleType, type_name: typeName };
 }
 
-export function deserializeRuntimeEvent(event: RuntimeEvent): DeserializedRuntimeEvent {
+export function deserializeRuntimeEvent(
+  event: RuntimeEvent,
+): DeserializedRuntimeEvent {
   let deserializedKind: DeserializedEventKind | undefined;
   const kind = event.event?.kind;
   if (kind) {
@@ -15,7 +20,9 @@ export function deserializeRuntimeEvent(event: RuntimeEvent): DeserializedRuntim
           $case: 'functionStart',
           functionStart: {
             name: kind.functionStart.name,
-            args: kind.functionStart.args.map((arg) => deserializeValue(arg, wrapHandle)),
+            args: kind.functionStart.args.map((arg) =>
+              deserializeValue(arg, wrapHandle),
+            ),
           },
         };
         break;
@@ -36,7 +43,9 @@ export function deserializeRuntimeEvent(event: RuntimeEvent): DeserializedRuntim
         deserializedKind = {
           $case: 'log',
           log: {
-            data: kind.log.data ? deserializeValue(kind.log.data, wrapHandle) : null,
+            data: kind.log.data
+              ? deserializeValue(kind.log.data, wrapHandle)
+              : null,
             level: kind.log.level,
             source: kind.log.source,
           },
@@ -47,7 +56,9 @@ export function deserializeRuntimeEvent(event: RuntimeEvent): DeserializedRuntim
           $case: 'custom',
           custom: {
             name: kind.custom.name,
-            data: kind.custom.data ? deserializeValue(kind.custom.data, wrapHandle) : null,
+            data: kind.custom.data
+              ? deserializeValue(kind.custom.data, wrapHandle)
+              : null,
           },
         };
         break;

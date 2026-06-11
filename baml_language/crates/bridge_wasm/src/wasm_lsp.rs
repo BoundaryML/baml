@@ -6,6 +6,18 @@ use wasm_bindgen::JsValue;
 
 use crate::send_wrapper::SendWrapper;
 
+/// Serialize a value to a `JsValue` via `serde_json` (NOT serde-wasm-bindgen),
+/// so `arbitrary_precision` numbers come out as plain JSON numbers instead of
+/// the `{ "$serde_json::private::Number": "8" }` struct. Used for outbound LSP
+/// payloads, whose `serde_json::Value` params would otherwise leak that tag and
+/// make every position read as 0 on the JS side.
+pub(crate) fn to_json_jsvalue<T: Serialize>(value: &T) -> JsValue {
+    serde_json::to_string(value)
+        .ok()
+        .and_then(|s| js_sys::JSON::parse(&s).ok())
+        .unwrap_or(JsValue::NULL)
+}
+
 #[derive(Tsify, Serialize, Deserialize)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct LspNotification {
@@ -153,19 +165,19 @@ impl WasmLsp {
     fn send_notification(&self, notification: lsp_server::Notification) {
         let send_notification_fn = self.send_notification_fn.inner();
         let notif: LspNotification = notification.into();
-        let _ = send_notification_fn.call1(&JsValue::NULL, &notif.into());
+        let _ = send_notification_fn.call1(&JsValue::NULL, &to_json_jsvalue(&notif));
     }
 
     fn send_response(&self, response: lsp_server::Response) {
         let send_response_fn = self.send_response_fn.inner();
         let response: LspResponse = response.into();
-        let _ = send_response_fn.call1(&JsValue::NULL, &response.into());
+        let _ = send_response_fn.call1(&JsValue::NULL, &to_json_jsvalue(&response));
     }
 
     fn make_request(&self, request: lsp_server::Request) {
         let make_request_fn = self.make_request_fn.inner();
         let request: LspRequest = request.into();
-        let _ = make_request_fn.call1(&JsValue::NULL, &request.into());
+        let _ = make_request_fn.call1(&JsValue::NULL, &to_json_jsvalue(&request));
     }
 }
 
