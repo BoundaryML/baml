@@ -65,12 +65,15 @@ const TIMESTAMP_FORMAT: &[FormatItem<'static>] =
 ///
 /// This JSONL writer is interim transport: event sends never block, so when
 /// the channel backs up (capacity 4096) events are **dropped** and only an
-/// aggregate counter (logged on `flush`) records the loss. A dropped
-/// `CallFunction`/`EndFunction` leaves the artifact unbalanced — consumers
-/// of the interim file must tolerate that until lossless-by-growth transport
-/// replaces this writer. Headers are the one exception: they carry the
-/// function table every later line is interpreted against, so
-/// [`Self::send_event_file_header`] blocks instead of dropping.
+/// aggregate counter (logged on `flush`) records the loss. Per-call
+/// lifecycle (`CallFunction`/`EndFunction`) no longer flows through this
+/// sink — it is written lossless-by-growth to the profiling ring
+/// (`bex_events::prof`) and lands in `.bamlprof`, so an unbalanced
+/// `.bamlprof` is never caused by this drop counter. What can still drop
+/// here are `RuntimeEvent`s (traced spans, `log.*`). The disk-event and
+/// header paths below are currently producer-less and retained only for
+/// the interim JSONL wire format; headers keep their bounded-retry send
+/// ([`Self::send_event_file_header`]) for as long as the path exists.
 pub struct NativeEventSink {
     tx: mpsc::SyncSender<PublisherMessage>,
     dropped: AtomicUsize,

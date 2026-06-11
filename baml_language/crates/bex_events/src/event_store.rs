@@ -24,17 +24,19 @@ use crate::{DiskEventV1, EventFileHeaderV1, RuntimeEvent, SpanId, ids::EngineId}
 pub trait EventSink: Send + Sync {
     /// Send an event (e.g. into a channel). Should be non-blocking.
     fn send(&self, event: RuntimeEvent);
-    /// Send a compact BEX disk/batch event. Default is no-op for sinks that
-    /// only understand the legacy span event stream.
+    /// Send a compact BEX disk/batch event. Default is no-op.
     ///
-    /// `engine` identifies the emitting engine: one sink instance may be
-    /// shared by every engine in the process (LSP, bridges), and disk events
-    /// deliberately don't carry engine scoping themselves (header-only
-    /// scoping); without it, two engines' `{thread 1, call 1}` streams are
-    /// indistinguishable in a shared artifact.
+    /// Currently producer-less: per-call lifecycle now flows through the
+    /// profiling ring into per-engine `.bamlprof` files
+    /// (`bex_events::prof`), not through sinks. Retained for the interim
+    /// JSONL wire format and its tests until that path is deleted
+    /// end-to-end. `engine` identified the emitting engine when the shared
+    /// JSONL path was live (one sink instance per process; disk events
+    /// carry no engine scoping of their own).
     fn send_disk_event(&self, _engine: EngineId, _event: DiskEventV1) {}
-    /// Send a file/batch header carrying scoping and program metadata. Default
-    /// is no-op for sinks that only consume live event streams.
+    /// Send a file/batch header carrying scoping and program metadata.
+    /// Default is no-op. Currently producer-less — headers are written into
+    /// `.bamlprof` by the profiling consumer, not sent to sinks.
     fn send_event_file_header(&self, _header: EventFileHeaderV1) {}
     /// Flush buffered events. May block until the consumer has written.
     fn flush(&self);

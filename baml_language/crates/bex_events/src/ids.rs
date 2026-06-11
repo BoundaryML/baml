@@ -117,7 +117,7 @@ pub struct CallRef {
 /// The value of `$id`: either the call's default [`CallRef`], or a 16-byte
 /// override minted by `baml.id.new()` and installed via `baml.id.set` /
 /// `$id = …` (`baml_id_1_…`). An override applies to exactly one call —
-/// absence of a `SetId` event for a call means its `$id` is the [`CallRef`].
+/// absence of a `SetFunctionId` record for a call in the `.bamlprof` stream means its `$id` is the [`CallRef`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum RuntimeId {
     DefaultCall(CallRef),

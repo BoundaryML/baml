@@ -240,12 +240,13 @@ pub fn event_to_jsonl(event: &RuntimeEvent) -> String {
 
 /// Serialize a compact disk/batch BEX event to a single-line JSON string.
 ///
-/// `engine_id` is written onto every line. This is interim-transport-only:
-/// the contract scopes events by their file/batch header (which carries the
-/// engine id once), but this JSONL writer appends events from *every* engine
-/// in the process to one file, where header-only scoping is ambiguous —
-/// after the second header, `{thread 1, call 1}` could belong to either
-/// engine. Delete the per-line field when per-engine transport lands.
+/// `engine_id` is written onto every line. Legacy interim-transport
+/// serializer: the shared multi-engine JSONL stream it fed was replaced by
+/// per-engine `.bamlprof` files (the profiling ring), and no production
+/// code emits these lines anymore. The per-line `engine_id` existed because
+/// the shared file had no per-engine scoping. Delete this function,
+/// `EventSink::send_disk_event`, the native sink's `Disk` path, and the
+/// shape-pin tests together as a follow-up.
 pub fn disk_event_to_jsonl(engine_id: crate::ids::EngineId, event: &DiskEventV1) -> String {
     let mut event_json = match event {
         DiskEventV1::StartThread {

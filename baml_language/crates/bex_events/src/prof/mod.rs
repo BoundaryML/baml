@@ -22,8 +22,11 @@
 //!
 //! Naming note: `sys_types::CallId` identifies one *engine root invocation*
 //! and is unrelated to the per-function-call ids that flow through these
-//! records as plain `u64`s. Final id newtypes land with the `ids.rs`
-//! milestone (M0); nothing here should reuse `sys_types::CallId`.
+//! records as plain `u64`s. The id newtypes ([`crate::ids::BexCallId`],
+//! [`crate::ids::BexThreadId`], [`crate::ids::FunctionId`]) landed with the
+//! M0 `ids.rs` milestone; adopting them in [`record::RawRecord`]'s fields
+//! is the remaining follow-up. Nothing here should reuse
+//! `sys_types::CallId`.
 
 pub mod clock;
 pub mod config;

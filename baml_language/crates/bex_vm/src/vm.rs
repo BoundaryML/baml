@@ -308,7 +308,7 @@ mod tests {
             current_call_id: 0,
             pending_sysop_call_id: None,
             bex_ref_seed: None,
-            current_id_override: None,
+            id_overrides: Vec::new(),
             argv: Arc::from([]),
             pending_call_type_args: Vec::new(),
             interface_implementors: Arc::new(indexmap::IndexMap::new()),
@@ -744,7 +744,13 @@ pub struct BexVm {
     /// `baml.id.set()` override for the *current* call: `(call_id, encoded
     /// override string, override uuid)`. Self-invalidating — read only while
     /// `current_call_id` still matches, so it dies with the call.
-    pub(crate) current_id_override: Option<(u64, String)>,
+    /// `$id` overrides set via `baml.id.set` / `$id = ...`, one entry per
+    /// overriding call, innermost last. An entry is read only while its
+    /// call id equals `current_call_id` (so it dies with the call) and is
+    /// popped when its frame exits (`prof_exit_call`), restoring the
+    /// caller's override underneath. Call ids are minted monotonically per
+    /// thread, so entries are strictly increasing by call id.
+    pub(crate) id_overrides: Vec<(u64, String)>,
 
     /// Process argv passed to the engine at startup. Exposed to BAML via
     /// `baml.sys.argv()`. Shared (cheap to clone) across VMs.
@@ -1206,7 +1212,7 @@ impl BexVm {
             current_call_id: 0,
             pending_sysop_call_id: None,
             bex_ref_seed: None,
-            current_id_override: None,
+            id_overrides: Vec::new(),
             argv,
             pending_call_type_args: Vec::new(),
             interface_implementors,
@@ -2272,12 +2278,15 @@ impl BexVm {
         // of surfacing as `ExpectedCompletion` errors in the caller:
         // - `SpanNotify`: trace
         //   notifications for calls made *inside* the interrupt body.
-        //   Swallowing them is deliberate v1 semantics — interrupt-internal
-        //   calls mint no BEX identity and emit no spans, and because the
-        //   engine never observes their enters or exits its span stack stays
-        //   balanced. (This also covers `Unwound` from exceptions caught
-        //   inside the interrupt body: the popped frames were never announced
-        //   to the engine either.)
+        //   Swallowing them is deliberate — the engine never observes these
+        //   enters or exits, so its traced-span stack stays balanced. (This
+        //   also covers `Unwound` from exceptions caught inside the
+        //   interrupt body: the popped frames were never announced to the
+        //   engine either.) Interrupt-internal calls DO mint call ids and,
+        //   with profiling on, write balanced CallFunction/EndFunction
+        //   records to the ring — only the engine-facing span stream is
+        //   suppressed. (Whether filter-internal calls should appear in the
+        //   .bamlprof stream at all is an open cross-team question.)
         // - `EarlyYield`: honoring it would suspend mid-interrupt with no way
         //   to resume from `process_notifications`, so parking is delayed
         //   until the interrupt completes. Note this delays the *engine-wide*
@@ -3079,6 +3088,17 @@ impl BexVm {
         status: bex_events::prof::record::FunctionEndStatus,
     ) {
         self.current_call_id = parent_call_id;
+        // Drop the exiting call's `$id` override (and any stale deeper
+        // entries — `>=` self-heals if a frame ever pops without an exit),
+        // restoring the caller's override underneath. Unconditional: `$id`
+        // is language semantics, not profiling.
+        while self
+            .id_overrides
+            .last()
+            .is_some_and(|(cid, _)| *cid >= call_id)
+        {
+            self.id_overrides.pop();
+        }
         if self.prof_ring.is_some() {
             self.prof_push_record(&bex_events::prof::record::RawRecord::EndFunction {
                 status,
@@ -3234,11 +3254,6 @@ impl BexVm {
         }
     }
 
-    // `function` became recursion-only when call-enter started yielding
-    // notifications (the inline `*function = load_function(...)` continuation
-    // is gone — the dispatch loop re-extracts on resume instead). Kept for
-    // signature stability until the per-call-yield seam is settled.
-    #[allow(clippy::only_used_in_recursion)]
     fn execute_call_from_locals_offset(
         &mut self,
         callee_ptr: HeapPtr,
@@ -3717,7 +3732,24 @@ impl BexVm {
                                 .into());
                             }
                         },
-                        _ => return Err(VmInternalError::ExpectedCompletion.into()),
+                        _ => {
+                            // The filter body yielded a state this
+                            // synchronous mini-runner cannot service
+                            // (SysOp/Await/Spawn/Event). A sys-op yield has
+                            // already written its CallFunction and armed
+                            // `pending_sysop_call_id`; its only close site
+                            // (the engine's SysOp arm) is unreachable from
+                            // here, so close the pair before failing loudly.
+                            if let Some(call_id) = self.pending_sysop_call_id.take() {
+                                let parent = self.current_call_id;
+                                self.prof_exit_call(
+                                    call_id,
+                                    parent,
+                                    bex_events::prof::record::FunctionEndStatus::Error,
+                                );
+                            }
+                            return Err(VmInternalError::ExpectedCompletion.into());
+                        }
                     }
                 }
             }

@@ -922,6 +922,71 @@ async fn id_override_not_inherited_by_nested_call() {
     assert_eq!(call_ref.call_id, bex_engine::BexCallId(4));
 }
 
+/// §2.2 (T4-T7 companion): overrides nest. A callee that sets its own
+/// override must shadow — never destroy — the caller's: after the callee
+/// returns, the caller's `$id` is its own override again (the VM keeps a
+/// per-call override stack, popped with the callee's frame).
+#[tokio::test]
+async fn id_override_survives_callee_override() {
+    let source = r#"
+        function helper() -> string {
+            let mine = baml.id.new();
+            $id = mine;
+            $id
+        }
+
+        function main() -> string {
+            let outer = baml.id.new();
+            $id = outer;
+            let inner = helper();
+            let after = $id;
+            outer + "|" + inner + "|" + after
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let sink = Arc::new(CapturingSink::default());
+    let engine = Arc::new(
+        BexEngine::new(
+            snapshot,
+            Arc::new(sys_native::SysOps::native()),
+            Some(sink.clone()),
+            Vec::new(),
+        )
+        .unwrap(),
+    );
+
+    let (host_ctx, _guard) = setup_tracking();
+    let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
+        .with_host_ctx(host_ctx)
+        .build();
+    let value = engine
+        .call_function("main", vec![], call_ctx, true)
+        .await
+        .unwrap();
+
+    let BexExternalValue::String(result) = value else {
+        panic!("expected string result");
+    };
+    let parts: Vec<&str> = result.as_str().split('|').collect();
+    assert_eq!(parts.len(), 3);
+
+    let RuntimeId::OverrideUuid(_) = RuntimeId::decode(parts[0]).unwrap() else {
+        panic!("outer should be an override ID");
+    };
+    let RuntimeId::OverrideUuid(_) = RuntimeId::decode(parts[1]).unwrap() else {
+        panic!("helper's $id should be the helper's own override");
+    };
+    assert_ne!(
+        parts[0], parts[1],
+        "helper's override is its own, not the caller's"
+    );
+    assert_eq!(
+        parts[0], parts[2],
+        "the caller's override must survive a callee that also overrides"
+    );
+}
+
 /// T7 (adapted): the override is still in force when the overridden call
 /// returns — `$id` read at the end of `main`, after a nested call, decodes
 /// as the override UUID rather than the default `CallRef`. The per-record
@@ -1130,10 +1195,11 @@ async fn id_is_correct_after_caught_exception() {
 }
 
 // NOTE: the §2.4 CallFunction-coverage tests were ported to
-// bex_engine/tests/prof_gate.rs: call_callable_emits_balanced_disk_lifecycle
-// (T10), unknown_function_sentinel_row_is_in_every_header (T12a, header
-// sentinel rows), and same_display_name_functions_are_not_misattributed
-// (T12b) now assert against the .bamlprof artifact.
+// bex_engine/tests/prof_gate.rs: call_callable_has_real_identity_and_balance
+// (T10, port of the JSONL-era call_callable_emits_balanced_disk_lifecycle),
+// sentinel_rows_present_in_header (T12a, header sentinel rows), and
+// same_display_name_functions_are_not_misattributed (T12b) now assert
+// against the .bamlprof artifact.
 
 // NOTE: the §2.5 timestamp tests (T13-T15) timed the JSONL disk-event
 // stream, which is gone. The live clock is bex_events::prof::clock

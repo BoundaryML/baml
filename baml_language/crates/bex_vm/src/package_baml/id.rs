@@ -57,8 +57,16 @@ impl BamlNamespaceId for PackageBamlImpl {
         }
 
         // The override lives exactly as long as the current call: it is read
-        // only while `current_call_id` still matches.
-        vm.current_id_override = Some((call_id, id.clone()));
+        // only while `current_call_id` still matches. Overrides nest — a
+        // callee's override shadows (never destroys) the caller's, and is
+        // popped with the callee's frame (see `prof_exit_call`).
+        if let Some(top) = vm.id_overrides.last_mut()
+            && top.0 == call_id
+        {
+            top.1.clone_from(&id);
+        } else {
+            vm.id_overrides.push((call_id, id.clone()));
+        }
 
         // Record the override in the event stream (tag 0x05; gated on the
         // ring like every emission — the override itself works regardless).
@@ -76,7 +84,7 @@ fn current_runtime_id(vm: &BexVm) -> Option<String> {
     if call_id == 0 {
         return None;
     }
-    if let Some((override_call, encoded)) = &vm.current_id_override
+    if let Some((override_call, encoded)) = vm.id_overrides.last()
         && *override_call == call_id
     {
         return Some(encoded.clone());

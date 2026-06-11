@@ -125,11 +125,14 @@ pub use crate::{
 const SPAWN_CLOSURE_FQN: &str = "baml.<spawn-closure>";
 const SPAWN_CLOSURE_DISPLAY_NAME: &str = "<spawn-closure>";
 
-/// Reserved metadata row for calls whose function identity cannot be resolved
-/// (e.g. runtime-synthesized functions absent from the compile-time pool).
-/// `CallFunction` disk events are *never* skipped — an unresolvable callee is
-/// attributed to this sentinel so every `EndFunction` has a matching
-/// `CallFunction` (the consumer's only structural assumption).
+/// Reserved header-table row for calls whose function identity cannot be
+/// resolved (e.g. runtime-synthesized functions absent from the compile-time
+/// pool). Ring `CallFunction` records do NOT reference this row today:
+/// unresolvable callees are stamped `function_id: 0` ("unassigned" — see
+/// `BexVm::prof_enter_call`) and the consumer transcodes ids verbatim. The
+/// row (id = max real id + 2) is reserved in every header for consumers that
+/// want a display bucket for such records; re-pointing the id-0 paths at it
+/// is an open cross-team item.
 const UNKNOWN_FUNCTION_FQN: &str = "baml.<unknown-function>";
 const UNKNOWN_FUNCTION_DISPLAY_NAME: &str = "<unknown-function>";
 
@@ -1117,10 +1120,6 @@ impl BexEngine {
         // monotonic since process start (see `bex_events::clock`).
         let started_at_epoch_ns = bex_events::process_started_at_epoch_ns();
         let program_metadata = Self::build_program_metadata(&bytecode_program);
-        // Pool size at metadata-build time. The compile-time object vec grows
-        // past this later (float boxing), and the synthetic metadata rows sit
-        // just past it — so this bound separates real function rows (id ==
-        // pool index, mappable to a heap pointer) from synthetic ones.
 
         // BEX profiling event stream: snapshot the master switch once
         // (plan §2.2). The engine id minted above demuxes both the host
@@ -1474,10 +1473,12 @@ impl BexEngine {
         BexThreadId(self.next_thread_id.fetch_add(1, Ordering::Relaxed))
     }
 
-    /// Resolve a function's identity from its heap pointer (the form call
-    /// notifications carry). `None` means the callee is not in the
-    /// compile-time pool (e.g. runtime-synthesized) — disk events attribute
-    /// it to the unknown-function sentinel.
+    /// Resolve a function's identity from its heap pointer (the form
+    /// `SpanNotification::FunctionEnter` carries). `None` means the callee
+    /// is not in the compile-time pool (e.g. runtime-synthesized) and
+    /// surfaces as `function_id: None` on host events. (The .bamlprof
+    /// stream is independent: it records the VM-stamped
+    /// `Function.function_id`, 0 when unassigned.)
     fn function_id_for_ptr(&self, function: HeapPtr) -> Option<FunctionId> {
         self.function_ids_by_ptr
             .get(&(function.as_ptr() as usize))
@@ -2471,10 +2472,11 @@ impl BexEngine {
         }
 
         // The legacy span label stays "<callable>" (host-facing name for a
-        // by-value invocation), but the disk-stream identity is the real
-        // callee: `func_ptr` is the unwrapped `Object::Function`, so the root
-        // `CallFunction` resolves to its actual pool row instead of the
-        // unknown-function sentinel.
+        // by-value invocation), but the host-event identity is the real
+        // callee: `func_ptr` is the unwrapped `Object::Function`, so it
+        // resolves to the actual function's metadata row. (The .bamlprof
+        // root `CallFunction` id is stamped independently by the VM in
+        // `prof_enter_call` from `Function.function_id`.)
         let root_function_id = self.function_id_for_ptr(func_ptr);
         self.run_entry_point(
             thread,
@@ -3625,12 +3627,6 @@ impl BexEngine {
                             self.settle_child_cancelled(&mut thread, future_id).await?;
                             ChildSettleKind::Cancelled
                         } else {
-                            self.emit_function_end_events_with_status(
-                                call_id,
-                                span_state,
-                                FunctionEndStatus::Error,
-                                Some("unhandled throw in spawned thread"),
-                            );
                             self.settle_child_errored(&mut thread, future_id, value)
                                 .await?;
                             ChildSettleKind::Errored
@@ -4480,8 +4476,11 @@ impl BexEngine {
                                 frame_depth,
                                 args,
                             } => {
-                                // Defensive resync — see the RuntimeCallNotify
-                                // enter arm.
+                                // Defensive resync: a span at or above
+                                // this frame depth means an earlier exit or
+                                // unwind notification was lost. Close the
+                                // stale spans before minting the new call so
+                                // parent edges stay correct.
                                 self.close_spans_at_depth(
                                     call_id,
                                     state,
