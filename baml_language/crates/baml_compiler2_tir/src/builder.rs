@@ -1084,17 +1084,63 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// binding; the actual capture's type is resolved by the parent scope.
     ///
     /// Exists so all `self.locals` writes are named.
-    fn seed_capture_unknown(&mut self, name: Name) {
+    fn seed_capture(&mut self, name: Name, ty: Ty) {
         self.locals.insert(
             name,
             LocalBinding {
-                current_ty: Ty::Unknown {
-                    attr: TyAttr::default(),
-                },
+                current_ty: ty,
                 declared_ty: None,
                 pattern: None,
             },
         );
+    }
+
+    /// Resolve the real type of a captured binding when it is not visible in
+    /// `locals` (a grandparent capture seen while inferring a lambda body
+    /// without its outer scopes in scope).
+    ///
+    /// The capture's `BindingId` names the scope that declares it, but that
+    /// scope may not be independently inferred (catch clause/arm, block). Its
+    /// type is recorded by the nearest enclosing inferred scope (function /
+    /// lambda / let), so resolve there — mirroring the lambda capture-seeding in
+    /// `infer_scope_types`.
+    ///
+    /// A capture only reaches here once name resolution has bound it (an
+    /// unresolved capture is a diagnostic, never an entry in `captures`), so a
+    /// valid program always yields a type. A missing type is a compiler-invariant
+    /// violation, not user error — panic rather than leak an `Unknown` to the
+    /// runtime lowering boundary.
+    fn resolve_capture_type(
+        &self,
+        binding_id: baml_compiler2_hir::semantic_index::BindingId,
+    ) -> Ty {
+        use baml_compiler2_hir::semantic_index::BindingKind;
+        let db = self.context.db();
+        let file = self.context.scope().file(db);
+        let index = baml_compiler2_ppir::file_semantic_index(db, file);
+        let scope_idx = binding_id.scope.index() as usize;
+
+        let inference_fsi = crate::inference::inference_owner_scope(index, binding_id.scope);
+        let inference_scope_id = index.scope_ids[inference_fsi.index() as usize];
+        let inference = crate::inference::infer_scope_types(db, inference_scope_id);
+        let resolved = match binding_id.kind {
+            BindingKind::Parameter(idx) => inference.param_type(idx).cloned(),
+            BindingKind::Local(idx) => index
+                .scope_bindings
+                .get(scope_idx)
+                .and_then(|bindings| bindings.bindings.get(idx as usize))
+                .and_then(|binding| inference.binding_type(binding.pattern).cloned()),
+        };
+        let resolved = resolved.unwrap_or_else(|| {
+            unreachable!("captured binding {binding_id:?} has no inferred type")
+        });
+        // A captured binding is no longer open, so freeze evolving empties just
+        // like an ordinary local reference does.
+        match resolved {
+            Ty::EvolvingList(inner, attr) => Ty::List(inner, attr),
+            Ty::EvolvingMap(key, value, attr) => Ty::Map { key, value, attr },
+            other => other,
+        }
     }
 
     fn sync_let_binding_type(&mut self, name: &Name, ty: Ty) {
@@ -1109,17 +1155,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     fn expand_alias_chains(&self, ty: Ty) -> Ty {
-        let mut ty = ty;
-        for _ in 0..64 {
-            match &ty {
-                Ty::TypeAlias(qtn, _) => match self.aliases.get(qtn) {
-                    Some(expanded) => ty = expanded.clone(),
-                    None => break,
-                },
-                _ => break,
-            }
-        }
-        ty
+        crate::inference::expand_alias_chains(ty, &self.aliases)
     }
 
     /// Pattern-matrix-internal normalization of a scrutinee type.
@@ -4063,7 +4099,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                 body: spawn_body,
             } => self.infer_spawn_expr(body, *name, with_exprs, *spawn_body),
             Expr::Await { future } => self.infer_await_expr(body, *future),
-            Expr::Missing => Ty::Unknown {
+            // A `Missing` node is an unparseable expression: MIR lowers it to a
+            // `panic` and the runtime never produces a value, so it diverges.
+            // `Never` (bottom) models that precisely — and, unlike the
+            // error-recovery `Unknown`, has a faithful runtime representation,
+            // so it doesn't trip the runtime lowering boundary.
+            Expr::Missing => Ty::Never {
                 attr: TyAttr::default(),
             },
         };
@@ -6652,8 +6693,14 @@ impl<'db> TypeInferenceBuilder<'db> {
         for clause in clauses {
             // Compute the clause-level binding type from the current residual throw set.
             // This is the type of the error variable (e.g. `e` in `catch (e)`).
+            //
+            // An empty residual means the base throws nothing the type system
+            // tracks, so the binding can never be assigned a (user-thrown) value:
+            // its type is the bottom type `Never`, not the error-recovery
+            // `Unknown`. Any runtime panic a `let`-binding arm catches is folded
+            // in per-arm via `ty_panic_subset` below.
             let clause_binding_ty = if residual.is_empty() {
-                Ty::Unknown {
+                Ty::Never {
                     attr: TyAttr::default(),
                 }
             } else {
@@ -7532,6 +7579,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         } else {
             callee_ty.clone()
         };
+        // Resolve a function-type alias callee to its underlying `Ty::Function`
+        // so its `throws` is read rather than dropped to `None`.
+        let typed_callee = self.expand_alias_chains(typed_callee);
 
         // When the callee has a union type (e.g., a method called on a union-typed
         // field like `(string | int | MyClass).to_json()`), every member of the union
@@ -15417,12 +15467,16 @@ impl<'db> TypeInferenceBuilder<'db> {
             // always should be, but be defensive).
             let found_fsi = index.lambda_scope_for(func_def.span);
             if let Some(fsi) = found_fsi {
-                for (capture_name, _def_site) in
-                    &index.scope_bindings[fsi.index() as usize].captures
-                {
-                    if !self.locals.contains_key(capture_name) {
-                        self.seed_capture_unknown(capture_name.clone());
-                    }
+                let captures_to_seed: Vec<(Name, baml_compiler2_hir::semantic_index::BindingId)> =
+                    index.scope_bindings[fsi.index() as usize]
+                        .captures
+                        .iter()
+                        .filter(|(name, _)| !self.locals.contains_key(name))
+                        .map(|(name, binding_id)| (name.clone(), *binding_id))
+                        .collect();
+                for (capture_name, binding_id) in captures_to_seed {
+                    let ty = self.resolve_capture_type(binding_id);
+                    self.seed_capture(capture_name, ty);
                 }
             }
             found_fsi

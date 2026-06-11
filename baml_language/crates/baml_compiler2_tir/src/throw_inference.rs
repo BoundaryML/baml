@@ -16,7 +16,7 @@ use baml_compiler2_hir::{
 
 use crate::{
     lower_type_expr::{lower_type_expr_in_ns, qualify_def},
-    ty::{PrimitiveType, Ty, TyAttr},
+    ty::{Ty, TyAttr},
 };
 
 /// A throw fact is now a proper `Ty` — no more lossy string round-trips.
@@ -114,7 +114,16 @@ pub fn function_throw_sets<'db>(
             let direct = if let Some(declared) = declared_throws.clone() {
                 declared
             } else if let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() {
-                collect_direct_throws(db, pkg_items, &func_ns, expr_body)
+                let item_tree = baml_compiler2_ppir::file_item_tree(db, func_loc.file(db));
+                let func_data = &item_tree[func_loc.id(db)];
+                let param_types = lower_param_types(
+                    db,
+                    pkg_items,
+                    &func_ns,
+                    &func_data.generic_params,
+                    &func_data.params,
+                );
+                collect_direct_throws(db, pkg_items, &func_ns, expr_body, &param_types)
             } else {
                 BTreeSet::new()
             };
@@ -168,7 +177,14 @@ pub fn function_throw_sets<'db>(
                 } else if let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) =
                     body.as_ref()
                 {
-                    collect_direct_throws(db, pkg_items, &method_ns, expr_body)
+                    let param_types = lower_param_types(
+                        db,
+                        pkg_items,
+                        &method_ns,
+                        &method_data.generic_params,
+                        &method_data.params,
+                    );
+                    collect_direct_throws(db, pkg_items, &method_ns, expr_body, &param_types)
                 } else {
                     BTreeSet::new()
                 };
@@ -273,54 +289,91 @@ pub fn collect_direct_throws<'db>(
     pkg_items: &PackageItems<'db>,
     ns_context: &[Name],
     body: &ExprBody,
+    param_types: &[(Name, Ty)],
 ) -> BTreeSet<ThrowFact> {
     let mut facts = BTreeSet::new();
+    let catch_bindings = collect_catch_binding_names(body);
 
     for (_, expr) in body.exprs.iter() {
-        if let Expr::Throw { value } = expr {
+        if let Expr::Throw { value } = expr
+            && !is_catch_binding_rethrow(*value, body, &catch_bindings)
+        {
             facts.insert(throw_fact_from_expr(
-                db, pkg_items, ns_context, *value, body,
+                db,
+                pkg_items,
+                ns_context,
+                param_types,
+                *value,
+                body,
             ));
         }
     }
     for (_, stmt) in body.stmts.iter() {
-        if let baml_compiler2_ast::Stmt::Throw { value } = stmt {
+        if let baml_compiler2_ast::Stmt::Throw { value } = stmt
+            && !is_catch_binding_rethrow(*value, body, &catch_bindings)
+        {
             facts.insert(throw_fact_from_expr(
-                db, pkg_items, ns_context, *value, body,
+                db,
+                pkg_items,
+                ns_context,
+                param_types,
+                *value,
+                body,
             ));
         }
-    }
-
-    // Remove facts that correspond to catch binding variable names.
-    // This is a heuristic: if a binding name happens to shadow a type name,
-    // the corresponding fact is suppressed.
-    let catch_bindings = collect_catch_binding_names(body);
-    if !catch_bindings.is_empty() {
-        facts.retain(|fact| {
-            let name = fact_display_name(fact);
-            !catch_bindings.contains(name.as_str())
-        });
     }
 
     facts
 }
 
-/// Get a display name for a throw fact, used for the catch binding name filter.
-fn fact_display_name(fact: &Ty) -> String {
-    match fact {
-        Ty::Int { .. } => PrimitiveType::Int.to_string(),
-        Ty::Bigint { .. } => PrimitiveType::Bigint.to_string(),
-        Ty::Float { .. } => PrimitiveType::Float.to_string(),
-        Ty::String { .. } => PrimitiveType::String.to_string(),
-        Ty::Bool { .. } => PrimitiveType::Bool.to_string(),
-        Ty::Null { .. } => PrimitiveType::Null.to_string(),
-        Ty::Uint8Array { .. } => PrimitiveType::Uint8Array.to_string(),
-        Ty::Media(kind, _) => kind.to_string(),
-        Ty::Class(qn, _, _) | Ty::Enum(qn, _) | Ty::TypeAlias(qn, _) => qn.to_string(),
-        Ty::EnumVariant(qn, variant, _) => format!("{qn}.{variant}"),
-        Ty::Unknown { .. } => "unknown".to_string(),
-        _ => format!("{fact}"),
-    }
+/// Lower a function's parameter declarations to `(name, Ty)` pairs.
+///
+/// Used so a `throw <param>` expression can be typed from the declaration site
+/// without invoking body inference (which would cycle back through throw-set
+/// computation). Parameters without a written type (e.g. `self`) are skipped.
+fn lower_param_types<'db>(
+    db: &'db dyn crate::Db,
+    pkg_items: &PackageItems<'db>,
+    ns_context: &[Name],
+    generic_params: &[Name],
+    params: &[baml_compiler2_hir::item_tree::FunctionParam],
+) -> Vec<(Name, Ty)> {
+    params
+        .iter()
+        .filter_map(|param| {
+            let type_expr = param.type_expr.as_ref()?;
+            let mut diags = Vec::new();
+            let ty = lower_type_expr_in_ns(
+                db,
+                &type_expr.expr,
+                pkg_items,
+                ns_context,
+                generic_params,
+                &mut diags,
+            );
+            Some((param.name.clone(), ty))
+        })
+        .collect()
+}
+
+/// Whether `value` is a bare reference to a catch-bound variable, i.e. the
+/// operand of a *rethrow* such as `catch (e) { _ => throw e }`.
+///
+/// A rethrow re-raises a value already accounted for by the caught expression's
+/// own throw set — its callees' throws and any direct throws are collected
+/// independently — so it contributes no new fact. Resolving the operand as a
+/// type path would instead treat a value binding as a type and yield
+/// `Ty::Unknown`, which has no runtime representation, so rethrows are skipped.
+fn is_catch_binding_rethrow(
+    value: baml_compiler2_ast::ExprId,
+    body: &ExprBody,
+    catch_bindings: &HashSet<&str>,
+) -> bool {
+    matches!(
+        &body.exprs[value],
+        Expr::Path(segments)
+            if segments.len() == 1 && catch_bindings.contains(segments[0].as_str())
+    )
 }
 
 pub fn collect_call_targets(body: &ExprBody) -> BTreeSet<Name> {
@@ -342,6 +395,7 @@ fn throw_fact_from_expr<'db>(
     db: &'db dyn crate::Db,
     pkg_items: &PackageItems<'db>,
     ns_context: &[Name],
+    param_types: &[(Name, Ty)],
     expr_id: baml_compiler2_ast::ExprId,
     body: &ExprBody,
 ) -> Ty {
@@ -362,7 +416,15 @@ fn throw_fact_from_expr<'db>(
             attr: TyAttr::default(),
         },
         Expr::Path(segments) if !segments.is_empty() => {
-            resolve_path_to_ty(db, pkg_items, ns_context, segments)
+            // A thrown bare identifier naming a parameter (`throw s`) carries
+            // that parameter's declared type — it is a value, not a type path.
+            if let [name] = segments.as_slice()
+                && let Some((_, ty)) = param_types.iter().find(|(param, _)| param == name)
+            {
+                ty.clone()
+            } else {
+                resolve_path_to_ty(db, pkg_items, ns_context, segments)
+            }
         }
         Expr::MemberAccess { .. } => expr_to_path(expr_id, body)
             .map(|segments| resolve_path_to_ty(db, pkg_items, ns_context, &segments))
@@ -398,59 +460,24 @@ fn resolve_path_to_ty<'db>(
     segments: &[Name],
 ) -> Ty {
     // Try treating the last segment as an enum variant and the prefix as
-    // the enum path. For bare `["Status", "HttpError"]` from a namespaced file,
-    // try namespace-qualified first, then unqualified.
+    // the enum path (e.g. `Status.HttpError` or `root.Status.Failed`).
     if segments.len() >= 2 {
         let enum_path = &segments[..segments.len() - 1];
         let variant = &segments[segments.len() - 1];
         let enum_name = enum_path.last().expect("enum_path is non-empty");
         let enum_ns = &enum_path[..enum_path.len() - 1];
-        // Try with namespace context for bare enum names
-        let def = if !ns_context.is_empty() && enum_ns.is_empty() {
-            pkg_items
-                .lookup_type(ns_context, enum_name)
-                .or_else(|| pkg_items.lookup_type(enum_ns, enum_name))
-        } else {
-            pkg_items.lookup_type(enum_ns, enum_name)
-        };
-        if let Some(def) = def {
-            if let Definition::Enum(_) = def {
-                let qtn = qualify_def(db, def, enum_name);
-                return Ty::EnumVariant(qtn, variant.clone(), TyAttr::default());
-            }
+        if let Some(def @ Definition::Enum(_)) =
+            lookup_type_in_scope(db, pkg_items, ns_context, enum_ns, enum_name)
+        {
+            let qtn = qualify_def(db, def, enum_name);
+            return Ty::EnumVariant(qtn, variant.clone(), TyAttr::default());
         }
     }
 
-    // Try the full path as a type lookup. For single-segment bare names,
-    // try namespace-qualified first, then unqualified.
+    // Otherwise resolve the full path as a type.
     let name = segments.last().expect("segments is non-empty");
     let seg_ns = &segments[..segments.len() - 1];
-    let def = if !ns_context.is_empty() && seg_ns.is_empty() {
-        let ns: Vec<Name> = ns_context.iter().chain(seg_ns.iter()).cloned().collect();
-        pkg_items
-            .lookup_type(&ns, name)
-            .or_else(|| pkg_items.lookup_type(seg_ns, name))
-    } else {
-        pkg_items.lookup_type(seg_ns, name)
-    };
-    // Cross-package fallback for qualified paths whose first segment names
-    // either the literal `root` package (own-package alias) or another
-    // package the resolver knows about. Mirrors `lower_type_expr_in_ns` so
-    // throw-set type recovery works for `root.http.Response { ... }` literals
-    // and `baml.errors.DevOther` references inside throw expressions.
-    let def = def.or_else(|| {
-        if segments.len() < 2 {
-            return None;
-        }
-        if segments[0].as_str() == "root" {
-            pkg_items.lookup_type(&segments[1..segments.len() - 1], name)
-        } else {
-            let pkg_id = PackageId::new(db, segments[0].clone());
-            let pkg = baml_compiler2_ppir::package_items(db, pkg_id);
-            pkg.lookup_type(&segments[1..segments.len() - 1], name)
-        }
-    });
-    if let Some(def) = def {
+    if let Some(def) = lookup_type_in_scope(db, pkg_items, ns_context, seg_ns, name) {
         return match def {
             Definition::Class(_) => {
                 Ty::Class(qualify_def(db, def, name), vec![], TyAttr::default())
@@ -468,6 +495,41 @@ fn resolve_path_to_ty<'db>(
     Ty::Unknown {
         attr: TyAttr::default(),
     }
+}
+
+/// Resolve `type_name` within namespace `ns`, applying the same fallbacks as
+/// `lower_type_expr_in_ns` so throw-set recovery resolves a path identically
+/// whether it appears as an enum-variant prefix or a plain type:
+///
+/// - a bare name (`ns` empty) is tried in `ns_context` first, then at the
+///   package root;
+/// - a `root.`-prefixed `ns` is retried against the current package with the
+///   prefix stripped (own-package alias);
+/// - any other leading segment is treated as a sibling package name.
+fn lookup_type_in_scope<'db>(
+    db: &'db dyn crate::Db,
+    pkg_items: &PackageItems<'db>,
+    ns_context: &[Name],
+    ns: &[Name],
+    type_name: &Name,
+) -> Option<Definition<'db>> {
+    let direct = if ns.is_empty() && !ns_context.is_empty() {
+        pkg_items
+            .lookup_type(ns_context, type_name)
+            .or_else(|| pkg_items.lookup_type(ns, type_name))
+    } else {
+        pkg_items.lookup_type(ns, type_name)
+    };
+    direct.or_else(|| {
+        let (first, rest) = ns.split_first()?;
+        if first.as_str() == "root" {
+            pkg_items.lookup_type(rest, type_name)
+        } else {
+            let pkg_id = PackageId::new(db, first.clone());
+            let pkg = baml_compiler2_ppir::package_items(db, pkg_id);
+            pkg.lookup_type(rest, type_name)
+        }
+    })
 }
 
 fn collect_catch_binding_names(body: &ExprBody) -> HashSet<&str> {

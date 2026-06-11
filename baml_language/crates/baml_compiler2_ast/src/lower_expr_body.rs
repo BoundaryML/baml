@@ -956,8 +956,8 @@ impl LoweringContext {
                         // Assignment operators are not valid in expression context.
                         // They are handled as statements by try_lower_assignment().
                         // If we see them here, the user wrote something like `(x = 5)`
-                        // which is not a valid expression — emit Missing instead of
-                        // silently defaulting to BinaryOp::Add.
+                        // which is not a valid expression — report it and lower to
+                        // Missing instead of silently defaulting to BinaryOp::Add.
                         SyntaxKind::EQUALS
                         | SyntaxKind::PLUS_EQUALS
                         | SyntaxKind::MINUS_EQUALS
@@ -969,6 +969,10 @@ impl LoweringContext {
                         | SyntaxKind::CARET_EQUALS
                         | SyntaxKind::LESS_LESS_EQUALS
                         | SyntaxKind::GREATER_GREATER_EQUALS => {
+                            self.diags
+                                .push(LoweringDiagnostic::AssignmentInExpressionPosition {
+                                    span: node.text_range(),
+                                });
                             return self.alloc_expr(Expr::Missing, node.text_range());
                         }
                         _ => {}
