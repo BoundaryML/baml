@@ -18,9 +18,9 @@ doctest = false
 workspace = true
 
 [dependencies]
-bex_events = { workspace = true }
 baml_builtins2 = { workspace = true }
 baml_type = { workspace = true }
+bex_events = { workspace = true }
 bex_heap = { workspace = true }
 bex_str = { workspace = true }
 bex_vm_types = { workspace = true }
