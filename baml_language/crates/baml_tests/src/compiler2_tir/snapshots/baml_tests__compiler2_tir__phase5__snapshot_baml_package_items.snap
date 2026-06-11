@@ -1,10 +1,9 @@
 ---
 source: crates/baml_tests/src/compiler2_tir/phase5.rs
-assertion_line: 389
 expression: output
 ---
 namespace baml:
-  class Array<T> { methods: [length, at, push, pop, remove_at, concat, for_each, filter, filter_map, step_by, chain, peekable, collect, count, reverse, sort_by, sort_by_key, slice, join, map, to_json, some, every, find, find_index, find_last, find_last_index, includes, index_of, last_index_of, reduce, flat_map, clear, shift, unshift, insert, splice, from_json] }
+  class Array<T> { methods: [length, at, push, pop, remove_at, concat, for_each, filter, reverse, sort_by, sort_by_key, slice, join, map, to_json, some, every, find, find_index, find_last, find_last_index, includes, index_of, last_index_of, reduce, flat_map, clear, shift, unshift, insert, splice, from_json] }
   class Bigint { methods: [to_json, abs, min, max, clamp, isqrt, pow, ilog, parse, random, from_json] }
   class Bool { methods: [to_json, from_json] }
   type Comparable
