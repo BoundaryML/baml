@@ -462,6 +462,32 @@ fn duplicate_same_generic_interface_instantiation_is_compile_error() {
 }
 
 #[test]
+fn duplicate_generic_interface_instantiation_via_alias_is_compile_error() {
+    // `Converter<IntAlias>` (where `type IntAlias = int`) and `Converter<int>`
+    // are the same realized view, so implementing both is a duplicate even though
+    // the source text differs — duplicate detection keys on the lowered args.
+    assert_compile_error_code(
+        r#"
+        interface Converter<T> {
+            function convert(self) -> T
+        }
+
+        type IntAlias = int
+
+        class MultiFormat {
+            implements Converter<IntAlias> {
+                function convert(self) -> int { return 1 }
+            }
+            implements Converter<int> {
+                function convert(self) -> int { return 2 }
+            }
+        }
+        "#,
+        "E0114",
+    );
+}
+
+#[test]
 fn requires_cycle_is_compile_error() {
     assert_compile_error_code(
         r#"
@@ -7597,6 +7623,119 @@ fn malformed_impls_do_not_spuriously_overlap() {
         interface Marker {}
         implement Marker for Nonexistent1 {}
         implement Marker for Nonexistent2 {}
+        "#,
+    );
+}
+
+// `Box<int | T>` and `Box<int | string | bool>` provably overlap: instantiating
+// `T = string | bool` makes them the same realized type. An unbounded variable
+// can stand for a union, so it absorbs the extra members — a definite overlap,
+// not an indeterminate one (it doesn't matter whether any code uses that `T`).
+#[test]
+fn variable_in_union_arg_overlaps_via_union_expansion() {
+    assert_compile_error_contains(
+        r#"
+        interface Marker {}
+        class Box<X> { v: X }
+        implements<T> Marker for Box<int | T> {}
+        implements Marker for Box<int | string | bool> {}
+        "#,
+        "overlapping interface implementations",
+    );
+}
+
+// A definite overlap keeps the plain "overlapping" wording (not the indeterminate
+// one) — confirms the tri-state labels the two cases distinctly.
+#[test]
+fn definite_overlap_reports_overlapping_message() {
+    assert_compile_error_contains(
+        r#"
+        interface Marker {}
+        class Widget {}
+        implements<T> Marker for T {}
+        implements Marker for Widget {}
+        "#,
+        "overlapping interface implementations",
+    );
+}
+
+// `Box<Pair<T, int>>` and `Box<Pair<string, U>>` overlap at the common instance
+// `Box<Pair<string, int>>` — variables in complementary positions of a nested
+// generic still unify.
+#[test]
+fn nested_generic_complementary_args_overlap_e0132() {
+    assert_compile_error_code(
+        r#"
+        interface Marker {}
+        class Box<X> { v: X }
+        class Pair<A, B> { first: A second: B }
+        implements<T> Marker for Box<Pair<T, int>> {}
+        implements<U> Marker for Box<Pair<string, U>> {}
+        "#,
+        "E0132",
+    );
+}
+
+// `Box<Pair<int, T>>` and `Box<Pair<string, U>>` are disjoint: the first nested
+// argument is `int` vs `string`, which can never coincide.
+#[test]
+fn nested_generic_disjoint_ground_arg_is_ok() {
+    assert_no_interface_errors(
+        r#"
+        interface Marker {}
+        class Box<X> { v: X }
+        class Pair<A, B> { first: A second: B }
+        implements<T> Marker for Box<Pair<int, T>> {}
+        implements<U> Marker for Box<Pair<string, U>> {}
+        "#,
+    );
+}
+
+// A union nested deep in a generic argument still overlaps via expansion:
+// `Pair<int, string | T>` and `Pair<int, string | bool>` coincide at `T = bool`.
+#[test]
+fn nested_union_in_generic_arg_overlaps_via_expansion() {
+    assert_compile_error_code(
+        r#"
+        interface Marker {}
+        class Box<X> { v: X }
+        class Pair<A, B> { first: A second: B }
+        implements<T> Marker for Box<Pair<int, string | T>> {}
+        implements Marker for Box<Pair<int, string | bool>> {}
+        "#,
+        "E0132",
+    );
+}
+
+// Three levels deep (`Box` ▷ `Pair` ▷ `[]`) with variables on both sides:
+// `Box<Pair<T[], int>>` and `Box<Pair<string[], U>>` overlap at
+// `Box<Pair<string[], int>>`.
+#[test]
+fn deeply_nested_generic_with_list_overlaps_e0132() {
+    assert_compile_error_code(
+        r#"
+        interface Marker {}
+        class Box<X> { v: X }
+        class Pair<A, B> { first: A second: B }
+        implements<T> Marker for Box<Pair<T[], int>> {}
+        implements<U> Marker for Box<Pair<string[], U>> {}
+        "#,
+        "E0132",
+    );
+}
+
+// A nested union whose rigid member can't be matched is disjoint even with a
+// variable present: `int | T` can never equal `string | float` (no `int` on the
+// right, and `T` cannot put one there).
+#[test]
+fn nested_union_in_generic_arg_disjoint_is_ok() {
+    assert_no_interface_errors(
+        r#"
+        interface Marker {}
+        class Box<X> { v: X }
+        class Pair<A, B> { first: A second: B }
+        implements<T> Marker for Box<Pair<int | T, bool>> {}
+        implements Marker for Box<Pair<string | float, bool>> {}
         "#,
     );
 }

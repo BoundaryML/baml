@@ -610,14 +610,21 @@ fn check_interfaces<'db>(
         if violation.primary.file_id != file_id {
             continue;
         }
+        // A definite overlap and an undecidable one are both rejected (overlap
+        // can't be ruled out, and the resolver assumes ≤1 impl), but the message
+        // distinguishes them so the user knows whether it's a proven conflict or a
+        // type too complex to analyze.
+        let message: &str = if violation.indeterminate {
+            "cannot prove these interface implementations are disjoint; rejected \
+             because an overlap cannot be ruled out"
+        } else {
+            "overlapping interface implementations for the same receiver/interface"
+        };
         diagnostics.push(
-            Diagnostic::error(
-                DiagnosticId::OverlappingImplements,
-                "overlapping interface implementations for the same receiver/interface",
-            )
-            .with_primary_span(violation.primary)
-            .with_secondary(violation.secondary, "first implementation is here")
-            .with_phase(DiagnosticPhase::Type),
+            Diagnostic::error(DiagnosticId::OverlappingImplements, message)
+                .with_primary_span(violation.primary)
+                .with_secondary(violation.secondary, "first implementation is here")
+                .with_phase(DiagnosticPhase::Type),
         );
     }
 
@@ -4702,18 +4709,23 @@ fn validate_class_implements<'db>(
             continue;
         };
         let iface_display_name = resolved_iface.display_name();
-        // Use the resolved interface identity plus its concrete type
-        // arguments for duplicate detection. `Foo` and `ns.Foo` should
-        // collide when they resolve to the same interface, but
-        // `Converter<int>` and `Converter<float>` are distinct views.
-        let type_arg_key = match &block.target.expr {
-            baml_compiler2_ast::TypeExpr::Path { generic_args, .. } => generic_args
-                .iter()
-                .map(ToString::to_string)
-                .collect::<Vec<_>>()
-                .join(","),
-            _ => String::new(),
-        };
+        // Use the resolved interface identity plus its *lowered* type arguments
+        // for duplicate detection: `Foo` and `ns.Foo` collide when they resolve
+        // to the same interface, `Converter<A>` (where `type A = int`) and
+        // `Converter<int>` collide as the same view, while `Converter<int>` and
+        // `Converter<float>` stay distinct. Keying on the lowered (alias-resolved)
+        // args rather than the source text is what makes the alias case collide.
+        let type_arg_key = lower_path_generic_args(
+            db,
+            &block.target.expr,
+            pkg_items,
+            namespace_path,
+            &class.generic_params,
+        )
+        .iter()
+        .map(|arg| expand_type_alias(arg, aliases).to_string())
+        .collect::<Vec<_>>()
+        .join(",");
         let key = format!(
             "{}:{}<{}>",
             resolved_iface.loc.file(db).file_id(db).as_u32(),

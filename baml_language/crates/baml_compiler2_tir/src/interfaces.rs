@@ -1629,8 +1629,54 @@ pub fn package_implements_registry<'db>(
     }
 }
 
-/// A coherence violation: two implementations of the same interface whose
-/// subjects overlap. With no specialization, any overlap is a hard error.
+/// Three-valued result of an overlap decision. Overlap is undecidable in general
+/// (it's ACI-unification — NP-hard — once unions with variables are involved), so
+/// the checker can report "couldn't tell" rather than guessing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Overlap {
+    /// A common instance provably exists — the impls overlap.
+    Yes,
+    /// No common instance can exist — the impls are provably disjoint.
+    No,
+    /// Could not be decided within the search bounds (a too-large or
+    /// variable-bearing union). Callers treat it as a possible overlap (the sound
+    /// direction) but report it distinctly.
+    Unknown,
+}
+
+impl Overlap {
+    /// Kleene conjunction: a compound overlaps only if *every* part can —
+    /// `No` dominates (one disjoint part ⇒ disjoint), then `Unknown`, then `Yes`.
+    fn and(self, other: Overlap) -> Overlap {
+        match (self, other) {
+            (Overlap::No, _) | (_, Overlap::No) => Overlap::No,
+            (Overlap::Unknown, _) | (_, Overlap::Unknown) => Overlap::Unknown,
+            (Overlap::Yes, Overlap::Yes) => Overlap::Yes,
+        }
+    }
+}
+
+/// Budget on the number of `cover` trials the covering search may perform before it
+/// gives up with `Overlap::Unknown` ("this type is too complex to decide — simplify
+/// it"). ACI-unification is NP-hard, so the search is bounded rather than risking a
+/// factorial blow-up. Easy cases (e.g. linear members) resolve in far fewer steps; the
+/// budget is reached only by large, deeply-coupled variable-bearing unions.
+const MAX_OVERLAP_SEARCH_STEPS: usize = 4096;
+
+/// Map an overlap result to a reportable violation: `None` = disjoint (no
+/// diagnostic); `Some(indeterminate)` = report it, where `indeterminate` is
+/// `true` for the conservative "couldn't prove disjoint" case.
+fn overlap_violation(overlap: Overlap) -> Option<bool> {
+    match overlap {
+        Overlap::No => None,
+        Overlap::Yes => Some(false),
+        Overlap::Unknown => Some(true),
+    }
+}
+
+/// A coherence violation: two implementations of the same interface that overlap,
+/// or that could not be proven disjoint. With no specialization, either is a hard
+/// error; `indeterminate` lets the caller word the diagnostic correctly.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CoherenceViolation {
     /// The offending impl. Always owned by the package being checked, so the
@@ -1638,6 +1684,9 @@ pub struct CoherenceViolation {
     pub primary: Span,
     /// The impl it overlaps with. May live in a dependency package.
     pub secondary: Span,
+    /// `true` when overlap could be neither proven nor disproven (conservatively
+    /// rejected) rather than a definite overlap.
+    pub indeterminate: bool,
 }
 
 /// Per-package interface coherence check.
@@ -1693,10 +1742,13 @@ pub fn package_coherence_diagnostics<'db>(
             let Some(other_span) = other.source_span else {
                 continue;
             };
-            if impls_conflict(db, pkg_id, own, other, &aliases) {
+            if let Some(indeterminate) =
+                overlap_violation(impls_conflict(db, pkg_id, own, other, &aliases))
+            {
                 violations.push(CoherenceViolation {
                     primary: other_span,
                     secondary: own_span,
+                    indeterminate,
                 });
             }
         }
@@ -1705,10 +1757,13 @@ pub fn package_coherence_diagnostics<'db>(
             let Some(dep_span) = dep_rule.source_span else {
                 continue;
             };
-            if impls_conflict(db, pkg_id, own, dep_rule, &aliases) {
+            if let Some(indeterminate) =
+                overlap_violation(impls_conflict(db, pkg_id, own, dep_rule, &aliases))
+            {
                 violations.push(CoherenceViolation {
                     primary: own_span,
                     secondary: dep_span,
+                    indeterminate,
                 });
             }
         }
@@ -1726,22 +1781,22 @@ fn impls_conflict<'db>(
     a: &InterfaceImplRule,
     b: &InterfaceImplRule,
     aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
-) -> bool {
+) -> Overlap {
     let (Some(a_qtn), Some(b_qtn)) = (
         interface_qtn(&a.interface_ty),
         interface_qtn(&b.interface_ty),
     ) else {
-        return false;
+        return Overlap::No;
     };
     if a_qtn != b_qtn {
-        return false;
+        return Overlap::No;
     }
     // An impl whose for-target is not a valid implementor (rejected by the E0138
     // concreteness gate — union, interface, literal, enum variant, or an error
     // type) must not contribute a coherence overlap, or it would stack a spurious
     // E0132 on top of that rejection.
     if !a.for_ty_pattern.is_valid_impl_subject() || !b.for_ty_pattern.is_valid_impl_subject() {
-        return false;
+        return Overlap::No;
     }
     if same_in_body_origin(a, b)
         && normalize::is_same_normalized_type(
@@ -1750,7 +1805,7 @@ fn impls_conflict<'db>(
             aliases,
         )
     {
-        return false;
+        return Overlap::No;
     }
     impls_overlap(db, pkg_id, a, b, aliases)
 }
@@ -1779,32 +1834,42 @@ fn impls_overlap<'db>(
     a: &InterfaceImplRule,
     b: &InterfaceImplRule,
     aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
-) -> bool {
+) -> Overlap {
     let (a_for, a_args) = renamed_subject(a, 'a');
     let (b_for, b_args) = renamed_subject(b, 'b');
     if a_args.len() != b_args.len() {
-        return false;
+        return Overlap::No;
     }
     let mut vars: Vec<Name> = Vec::with_capacity(a.generic_params.len() + b.generic_params.len());
     vars.extend((0..a.generic_params.len()).map(|i| renamed_var('a', i)));
     vars.extend((0..b.generic_params.len()).map(|i| renamed_var('b', i)));
 
     let mut bindings = TypeBindings::default();
-    if unify_into(&a_for, &b_for, &vars, aliases, &mut bindings).is_none() {
-        return false;
+    // Unify the for-type and each interface arg. A provably-disjoint part
+    // short-circuits the whole pair to disjoint; an undecidable part downgrades a
+    // would-be overlap to `Unknown`.
+    let mut result = unify_into(&a_for, &b_for, &vars, aliases, &mut bindings);
+    if result == Overlap::No {
+        return Overlap::No;
     }
-    if !a_args
-        .iter()
-        .zip(b_args.iter())
-        .all(|(x, y)| unify_into(x, y, &vars, aliases, &mut bindings).is_some())
-    {
-        return false;
+    for (x, y) in a_args.iter().zip(b_args.iter()) {
+        match unify_into(x, y, &vars, aliases, &mut bindings) {
+            Overlap::No => return Overlap::No,
+            Overlap::Unknown => result = Overlap::Unknown,
+            Overlap::Yes => {}
+        }
     }
 
-    // Subjects share a common instance; they still fail to overlap if either
-    // carries a bound the common instance provably violates.
-    bounds_hold_at_common_instance(db, pkg_id, a, 'a', &vars, &bindings)
-        && bounds_hold_at_common_instance(db, pkg_id, b, 'b', &vars, &bindings)
+    // The subjects share a common instance; the impls are still disjoint if either
+    // carries a bound the common instance provably violates (a ground subject that
+    // does not satisfy its bound). That conclusion holds even if `result` is
+    // `Unknown`, so it can override to `No`.
+    if !bounds_hold_at_common_instance(db, pkg_id, a, 'a', &vars, &bindings)
+        || !bounds_hold_at_common_instance(db, pkg_id, b, 'b', &vars, &bindings)
+    {
+        return Overlap::No;
+    }
+    result
 }
 
 /// Whether every bound of `rule` could hold at the common instance the unifier
@@ -1876,21 +1941,26 @@ fn renamed_subject(rule: &InterfaceImplRule, prefix: char) -> (Ty, Vec<Ty>) {
     (for_ty, args)
 }
 
-/// Symmetric first-order unification. `vars` is the combined (renamed-disjoint)
-/// unification-variable set of the two impls; either side may bind. Returns
-/// `Some(())` when the inputs have a common instance under `bindings`.
+/// Symmetric first-order **equality** unification: is there a substitution of the
+/// unification variables `vars` (the combined, renamed-disjoint var set of the two
+/// impls; either side may bind) that makes `x` and `y` the *same* type? Returns the
+/// tri-state `Overlap`, committing the binding on `Yes`. This is the structural engine
+/// of the overlap check — invariant constructor args and the for-types must be *equal*
+/// for the two impls to share a common instance.
 ///
-/// Functions and other variants without a structural arm fall through to
-/// equality: equal subjects unify, distinct ones are disjoint. This loses
-/// precision only for var-bearing function-typed interface args (never seen as
-/// impl subjects today), which would be conservatively treated as disjoint.
+/// Equality, not subtyping: `int` and `Literal(1)` are distinct types here (`No`), as
+/// are `K<int>` and `K<1>`. The `literal <: base` / `variant <: enum` subtyping lives in
+/// `cover` (the covering oracle, its only consumer). Variants with no structural arm
+/// fall through to `No`: anything equal already unified above via the normalizer, so the
+/// rest are disjoint — conservative, losing precision only for var-bearing
+/// function-typed args (never impl subjects today), treated as disjoint.
 fn unify_into(
     x: &Ty,
     y: &Ty,
     vars: &[Name],
     aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
     bindings: &mut TypeBindings,
-) -> Option<()> {
+) -> Overlap {
     let x = chase_var(x, vars, bindings);
     let y = chase_var(y, vars, bindings);
 
@@ -1900,7 +1970,7 @@ fn unify_into(
     if matches!(x, Ty::Unknown { .. } | Ty::BuiltinUnknown { .. })
         || matches!(y, Ty::Unknown { .. } | Ty::BuiltinUnknown { .. })
     {
-        return None;
+        return Overlap::No;
     }
 
     if let Ty::TypeVar(n, _) = &x
@@ -1917,20 +1987,17 @@ fn unify_into(
     // Structurally-equal (or alias-equal) subjects unify with no new bindings;
     // this also resolves ground unions order-insensitively via the normalizer.
     if normalize::is_same_normalized_type(&x, &y, aliases) {
-        return Some(());
+        return Overlap::Yes;
     }
 
     match (&x, &y) {
-        (Ty::Class(xq, xa, _), Ty::Class(yq, ya, _)) if xq == yq && xa.len() == ya.len() => xa
-            .iter()
-            .zip(ya.iter())
-            .try_for_each(|(xi, yi)| unify_into(xi, yi, vars, aliases, bindings)),
+        (Ty::Class(xq, xa, _), Ty::Class(yq, ya, _)) if xq == yq && xa.len() == ya.len() => {
+            unify_all(xa, ya, vars, aliases, bindings)
+        }
         (Ty::Interface(xq, xa, _, _), Ty::Interface(yq, ya, _, _))
             if xq == yq && xa.len() == ya.len() =>
         {
-            xa.iter()
-                .zip(ya.iter())
-                .try_for_each(|(xi, yi)| unify_into(xi, yi, vars, aliases, bindings))
+            unify_all(xa, ya, vars, aliases, bindings)
         }
         (Ty::List(xi, _), Ty::List(yi, _)) | (Ty::EvolvingList(xi, _), Ty::EvolvingList(yi, _)) => {
             unify_into(xi, yi, vars, aliases, bindings)
@@ -1944,61 +2011,310 @@ fn unify_into(
             },
         )
         | (Ty::EvolvingMap(xk, xv, _), Ty::EvolvingMap(yk, yv, _)) => {
-            unify_into(xk, yk, vars, aliases, bindings)?;
-            unify_into(xv, yv, vars, aliases, bindings)
+            unify_into(xk, yk, vars, aliases, bindings)
+                .and(unify_into(xv, yv, vars, aliases, bindings))
         }
         (Ty::Future(xv, xe, _), Ty::Future(yv, ye, _)) => {
-            unify_into(xv, yv, vars, aliases, bindings)?;
-            unify_into(xe, ye, vars, aliases, bindings)
+            unify_into(xv, yv, vars, aliases, bindings)
+                .and(unify_into(xe, ye, vars, aliases, bindings))
         }
-        (Ty::Union(xm, _), Ty::Union(ym, _)) if xm.len() == ym.len() => {
+        (Ty::Union(xm, _), Ty::Union(ym, _)) => {
             unify_union_members(xm, ym, vars, aliases, bindings)
         }
-        // A literal and its base primitive share runtime values, so they unify.
-        (Ty::Int { .. }, Ty::Literal(Literal::Int(_), _, _))
-        | (Ty::Literal(Literal::Int(_), _, _), Ty::Int { .. })
-        | (Ty::Bigint { .. }, Ty::Literal(Literal::Bigint(_), _, _))
-        | (Ty::Literal(Literal::Bigint(_), _, _), Ty::Bigint { .. })
-        | (Ty::Float { .. }, Ty::Literal(Literal::Float(_), _, _))
-        | (Ty::Literal(Literal::Float(_), _, _), Ty::Float { .. })
-        | (Ty::String { .. }, Ty::Literal(Literal::String(_), _, _))
-        | (Ty::Literal(Literal::String(_), _, _), Ty::String { .. })
-        | (Ty::Bool { .. }, Ty::Literal(Literal::Bool(_), _, _))
-        | (Ty::Literal(Literal::Bool(_), _, _), Ty::Bool { .. }) => Some(()),
-        _ => None,
+        // No structural arm: equal subjects already unified above (the normalizer); any
+        // remaining pair is distinct types. A literal and its base are *distinct* types
+        // here — `unify_into` decides equality, so `int ≢ 1`; the `literal <: base`
+        // subtyping is `cover`'s job (the covering oracle), not equality's.
+        _ => Overlap::No,
     }
 }
 
-/// Order-insensitive unification of two equal-length unions: every member of
-/// `xs` must unify with a distinct member of `ys`, with binding rollback on
-/// failed trials (a symmetric generalization of `match_union_members`).
+/// Unify two equal-length type-argument lists position-wise (a conjunction): a
+/// disjoint position short-circuits to `No`; an undecidable one downgrades the
+/// result to `Unknown`.
+fn unify_all(
+    xs: &[Ty],
+    ys: &[Ty],
+    vars: &[Name],
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    bindings: &mut TypeBindings,
+) -> Overlap {
+    debug_assert_eq!(xs.len(), ys.len());
+    let mut result = Overlap::Yes;
+    for (x, y) in xs.iter().zip(ys.iter()) {
+        match unify_into(x, y, vars, aliases, bindings) {
+            Overlap::No => return Overlap::No,
+            Overlap::Unknown => result = Overlap::Unknown,
+            Overlap::Yes => {}
+        }
+    }
+    result
+}
+
+/// Unify two unions — the `(Union, Union)` arm of `unify_into`. The overlap check asks
+/// whether two impl subjects share a common instance; at a union position that is: does
+/// some substitution of the unification variables unify these two unions into one type?
+/// Returns the tri-state `Overlap` (`Yes`/`No` when provable, `Unknown` when the search
+/// is truncated). Only `cover_search` writes to `bindings` (committing the bindings it
+/// discovers on a `Yes`); the all-ground and both-bare special-cases return `Yes` without
+/// touching `bindings`, and `No`/`Unknown` leave it unchanged — so a `Yes` does not imply
+/// a witness substitution was recorded.
+///
+/// Unions are ACI (associative, commutative, idempotent), hence *sets*: equality
+/// ignores order and duplicates, and a bare top-level type-variable member can be any
+/// type (including a union), so it may absorb several members at once. Deciding this is
+/// therefore ACI-unification, which is NP-hard; the search is bounded by
+/// `MAX_OVERLAP_SEARCH_STEPS`, past which it yields `Unknown` ("type too complex;
+/// simplify it") - the only thing that ever produces `Unknown`.
+///
+/// Members are matched by **covering**, not a one-to-one pairing: idempotency
+/// (`A | A = A`) lets several members collapse onto one, so a member need only unify with
+/// *some* member of the other side (many-to-one), not a private partner. An injective or
+/// bijective match would unsoundly reject collapses like `{C<T>, C<U>, C<W>}` vs
+/// `{C<X>, C<Y>}` (unifiable via `T=X, U=Y, W=X`) — do not "simplify" it back. Cheap
+/// special-cases run first (all-ground reduces to set equality; a bare variable on *each*
+/// side is immediately `Yes`, as each absorbs the other); otherwise the covering
+/// obligations — one-directional when a bare variable absorbs one side, mutual when
+/// neither does — are solved jointly by `cover_search`.
 fn unify_union_members(
     xs: &[Ty],
     ys: &[Ty],
     vars: &[Name],
     aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
     bindings: &mut TypeBindings,
-) -> Option<()> {
-    let Some((x_head, x_tail)) = xs.split_first() else {
-        return ys.is_empty().then_some(());
-    };
-    for idx in 0..ys.len() {
-        let mut trial = bindings.clone();
-        if unify_into(x_head, &ys[idx], vars, aliases, &mut trial).is_none() {
-            continue;
-        }
-        let remaining: Vec<Ty> = ys
+) -> Overlap {
+    // No variable on either side: overlap is exact set equality (any size).
+    if let Some(result) = try_union_set_equality(xs, ys, vars, aliases) {
+        return result;
+    }
+    // A bare variable on *each* side absorbs the other entirely ⇒ always overlap.
+    if let Some(result) = try_union_mutual_absorption(xs, ys, vars) {
+        return result;
+    }
+
+    let rigids = |members: &[Ty]| -> Vec<Ty> {
+        members
             .iter()
-            .enumerate()
-            .filter(|(member_idx, _)| *member_idx != idx)
-            .map(|(_, member)| member.clone())
-            .collect();
-        if unify_union_members(x_tail, &remaining, vars, aliases, &mut trial).is_some() {
-            *bindings = trial;
-            return Some(());
+            .filter(|m| !is_bare_var(m, vars))
+            .cloned()
+            .collect()
+    };
+    let xn = rigids(xs);
+    let yn = rigids(ys);
+    let x_has_bare = xs.iter().any(|m| is_bare_var(m, vars));
+    let y_has_bare = ys.iter().any(|m| is_bare_var(m, vars));
+
+    // Build the covering obligations. A side with a bare variable absorbs the *other*
+    // side's leftovers, so only its own rigids must be covered (one direction). With no
+    // bare variable anywhere, equality requires *mutual* covering (both directions),
+    // solved jointly so the substitution chosen for one direction is consistent with
+    // the other (a greedy two-pass would be unsound).
+    let mut obligations: Vec<(Ty, Vec<Ty>)> = Vec::new();
+    if x_has_bare {
+        for m in &xn {
+            obligations.push((m.clone(), yn.clone()));
+        }
+    } else if y_has_bare {
+        for m in &yn {
+            obligations.push((m.clone(), xn.clone()));
+        }
+    } else {
+        for m in &xn {
+            obligations.push((m.clone(), yn.clone()));
+        }
+        for m in &yn {
+            obligations.push((m.clone(), xn.clone()));
         }
     }
-    None
+
+    let mut budget = MAX_OVERLAP_SEARCH_STEPS;
+    cover_search(&obligations, vars, aliases, bindings, &mut budget)
+}
+
+/// Special case: with no variable on either side, overlap is exact set equality —
+/// decidable precisely at any size with no search. `None` if a variable is present.
+fn try_union_set_equality(
+    xs: &[Ty],
+    ys: &[Ty],
+    vars: &[Name],
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+) -> Option<Overlap> {
+    let has_var = |members: &[Ty]| members.iter().any(|m| contains_bound_typevar(m, vars));
+    if has_var(xs) || has_var(ys) {
+        return None;
+    }
+    Some(if unions_set_equal(xs, ys, aliases) {
+        Overlap::Yes
+    } else {
+        Overlap::No
+    })
+}
+
+/// Special case: a bare (top-level) variable can be instantiated to a *union*, so
+/// it absorbs any set of the other side's members. If both sides have one, a
+/// common instance always exists — a proven overlap, regardless of whether any
+/// package instantiates it that way. `None` if either side lacks a bare variable.
+fn try_union_mutual_absorption(xs: &[Ty], ys: &[Ty], vars: &[Name]) -> Option<Overlap> {
+    let has_bare = |members: &[Ty]| members.iter().any(|m| is_bare_var(m, vars));
+    (has_bare(xs) && has_bare(ys)).then_some(Overlap::Yes)
+}
+
+/// True iff `m` is a bare unification-variable member — a top-level type variable
+/// in `vars`, as opposed to a variable nested inside a constructor.
+fn is_bare_var(m: &Ty, vars: &[Name]) -> bool {
+    matches!(m, Ty::TypeVar(n, _) if vars.contains(n))
+}
+
+/// Whether two ground unions denote the same set of types (order-insensitive).
+/// Members are de-duplicated, so equal cardinality plus "every member of `xs`
+/// has an equal member in `ys`" implies a bijection.
+fn unions_set_equal(
+    xs: &[Ty],
+    ys: &[Ty],
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+) -> bool {
+    xs.len() == ys.len()
+        && xs.iter().all(|x| {
+            ys.iter()
+                .any(|y| normalize::is_same_normalized_type(x, y, aliases))
+        })
+}
+
+/// Whether `member` can be a *subtype* of `candidate` under some substitution
+/// (committing the bindings on success). Covering uses subtype, not equality, because a
+/// union member lies inside the other union iff it is a subtype of one of its members.
+///
+/// `unify_into` supplies the bulk (equality ⟹ subtype: same-constructor members,
+/// variable binding, ground equality). On top of it sit the two top-level subtypings
+/// that invariance leaves above the constructor level — `literal <: base` and
+/// `variant <: enum` (`is_literal_subtype`) — and the cases `unify_into` cannot cheaply
+/// decide — a concrete type implementing an interface, two distinct interfaces, an
+/// opaque `$rust_type` (`involves_interface_or_rust_type`) — which are treated
+/// conservatively as a *possible* overlap (`Yes`), never a wrong `No`. All of these arms
+/// only fire when `unify_into` already returned `No` without binding anything, so they
+/// leave `bindings` untouched. Registry-precise interface membership is a later
+/// refinement.
+fn cover(
+    member: &Ty,
+    candidate: &Ty,
+    vars: &[Name],
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    bindings: &mut TypeBindings,
+) -> Overlap {
+    match unify_into(member, candidate, vars, aliases, bindings) {
+        Overlap::No
+            if is_literal_subtype(member, candidate)
+                || involves_interface_or_rust_type(member, candidate) =>
+        {
+            Overlap::Yes
+        }
+        decided => decided,
+    }
+}
+
+/// Whether `member` is a top-level subtype of `candidate` by the only subtypings
+/// invariance leaves above the constructor level: a literal is a subtype of its base
+/// primitive (`1 <: int`), and an enum variant is a subtype of its enum
+/// (`Color.Red <: Color`). Directional — `int` is *not* a subtype of `1`.
+fn is_literal_subtype(member: &Ty, candidate: &Ty) -> bool {
+    match (member, candidate) {
+        (Ty::Literal(Literal::Int(_), _, _), Ty::Int { .. })
+        | (Ty::Literal(Literal::Bigint(_), _, _), Ty::Bigint { .. })
+        | (Ty::Literal(Literal::Float(_), _, _), Ty::Float { .. })
+        | (Ty::Literal(Literal::String(_), _, _), Ty::String { .. })
+        | (Ty::Literal(Literal::Bool(_), _, _), Ty::Bool { .. }) => true,
+        (Ty::EnumVariant(variant_enum, _, _), Ty::Enum(base_enum, _)) => variant_enum == base_enum,
+        _ => false,
+    }
+}
+
+/// True if either type is an interface-existential or an opaque `$rust_type` — the
+/// members whose disjointness `unify_into` (structural equality) cannot decide, so the
+/// covering oracle treats them conservatively.
+fn involves_interface_or_rust_type(a: &Ty, b: &Ty) -> bool {
+    [a, b]
+        .into_iter()
+        .any(|t| matches!(t, Ty::Interface(..) | Ty::RustType { .. }))
+}
+
+/// Solve the covering obligations jointly: is there one substitution under which every
+/// `(member, candidates)` obligation holds — `member` a subtype of some candidate? A
+/// candidate may cover several members (covering is many-to-one), and obligations may
+/// carry different candidate sets, so this serves both the one-directional case (a bare
+/// var absorbs one side) and the mutual case (no bare var).
+///
+/// Picks the most-constrained obligation first (MRV): a single viable candidate is
+/// forced (unit propagation), none fails fast (`No`), otherwise it backtracks over the
+/// candidates. `budget` caps the number of `cover` trials; exhausting it yields
+/// `Overlap::Unknown` — the NP-hard ceiling — so easy cases (e.g. linear members)
+/// decide exactly while pathological ones degrade to "simplify the type".
+fn cover_search(
+    obligations: &[(Ty, Vec<Ty>)],
+    vars: &[Name],
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    bindings: &mut TypeBindings,
+    budget: &mut usize,
+) -> Overlap {
+    if obligations.is_empty() {
+        return Overlap::Yes;
+    }
+
+    // Choose the obligation with the fewest viable candidates; fail fast on a member
+    // that nothing can cover.
+    let mut chosen: Option<(usize, Vec<usize>)> = None;
+    for (oi, (member, candidates)) in obligations.iter().enumerate() {
+        let mut viable: Vec<usize> = Vec::new();
+        for (ci, candidate) in candidates.iter().enumerate() {
+            if *budget == 0 {
+                return Overlap::Unknown;
+            }
+            *budget -= 1;
+            let mut trial = bindings.clone();
+            if cover(member, candidate, vars, aliases, &mut trial) != Overlap::No {
+                viable.push(ci);
+            }
+        }
+        if viable.is_empty() {
+            return Overlap::No;
+        }
+        let improves = match &chosen {
+            None => true,
+            Some((_, best)) => viable.len() < best.len(),
+        };
+        if improves {
+            let forced = viable.len() == 1;
+            chosen = Some((oi, viable));
+            if forced {
+                break; // can't be more constrained than a single candidate
+            }
+        }
+    }
+
+    let (oi, viable) =
+        chosen.unwrap_or_else(|| unreachable!("non-empty obligations always yield a choice"));
+    let (member, candidates) = &obligations[oi];
+    let rest: Vec<(Ty, Vec<Ty>)> = obligations
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| *i != oi)
+        .map(|(_, o)| o.clone())
+        .collect();
+
+    let mut result = Overlap::No;
+    for ci in viable {
+        let mut trial = bindings.clone();
+        // `ci` was viable, so this is `Yes`/`Unknown`, never `No`.
+        let here = cover(member, &candidates[ci], vars, aliases, &mut trial);
+        match here.and(cover_search(&rest, vars, aliases, &mut trial, budget)) {
+            Overlap::Yes => {
+                *bindings = trial;
+                return Overlap::Yes;
+            }
+            Overlap::Unknown => result = Overlap::Unknown,
+            Overlap::No => {}
+        }
+    }
+    result
 }
 
 /// Resolve a type through the current bindings: while it is a bound unification
@@ -2025,20 +2341,20 @@ fn bind_unify_var(
     vars: &[Name],
     aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
     bindings: &mut TypeBindings,
-) -> Option<()> {
+) -> Overlap {
     if let Ty::TypeVar(tn, _) = t
         && tn == n
     {
-        return Some(());
+        return Overlap::Yes;
     }
     if let Some(existing) = bindings.get(n).cloned() {
         return unify_into(&existing, t, vars, aliases, bindings);
     }
     if occurs_in(n, t, vars, bindings) {
-        return None;
+        return Overlap::No;
     }
     bindings.insert(n.clone(), t.clone());
-    Some(())
+    Overlap::Yes
 }
 
 /// Occurs check: does unification variable `n` appear anywhere in `t` (chasing
@@ -2385,6 +2701,14 @@ mod tests {
 
     fn type_var(name: &str) -> Ty {
         Ty::TypeVar(Name::new(name), TyAttr::default())
+    }
+
+    fn int_literal(n: i64) -> Ty {
+        Ty::Literal(
+            Literal::Int(n),
+            crate::ty::Freshness::Regular,
+            TyAttr::default(),
+        )
     }
 
     fn associated_projection(base: Ty, interface: Ty, member: &str) -> Ty {
@@ -2767,5 +3091,287 @@ mod tests {
                 )
                 .is_some()
         );
+    }
+
+    #[test]
+    fn union_overlap_both_bare_vars_is_yes() {
+        // Each bare variable can absorb the other side, so a common instance
+        // always exists.
+        let vars = vec![Name::new("T"), Name::new("V")];
+        let aliases = std::collections::HashMap::default();
+        let mut bindings = TypeBindings::default();
+        let xs = vec![int(), type_var("T")];
+        let ys = vec![string(), type_var("V")];
+        assert_eq!(
+            unify_union_members(&xs, &ys, &vars, &aliases, &mut bindings),
+            Overlap::Yes
+        );
+    }
+
+    #[test]
+    fn union_overlap_variable_absorbs_extra_members_is_yes() {
+        // `{int, T}` vs `{int, string, Foo}`: instantiating `T = string | Foo`
+        // makes them the same union — a *provable* overlap, not indeterminate.
+        let vars = vec![Name::new("T")];
+        let aliases = std::collections::HashMap::default();
+        let mut bindings = TypeBindings::default();
+        let xs = vec![int(), type_var("T")];
+        let ys = vec![int(), string(), class(&[], "Foo", vec![])];
+        assert_eq!(
+            unify_union_members(&xs, &ys, &vars, &aliases, &mut bindings),
+            Overlap::Yes
+        );
+    }
+
+    #[test]
+    fn union_overlap_unmatchable_rigid_member_is_no() {
+        // `{int, T}` vs `{string, Foo}`: `int` matches no member on the right and
+        // `T` cannot make it appear there, so there is no common instance.
+        let vars = vec![Name::new("T")];
+        let aliases = std::collections::HashMap::default();
+        let mut bindings = TypeBindings::default();
+        let xs = vec![int(), type_var("T")];
+        let ys = vec![string(), class(&[], "Foo", vec![])];
+        assert_eq!(
+            unify_union_members(&xs, &ys, &vars, &aliases, &mut bindings),
+            Overlap::No
+        );
+    }
+
+    #[test]
+    fn union_overlap_shared_rigid_members_extracted_is_yes() {
+        // `{A1, A2, T}` vs `{A1, ..., A9}`: A1 and A2 each have a unique candidate,
+        // so unit propagation peels them with no search and `T` absorbs the rest —
+        // a proven overlap even though the candidate set is large.
+        let vars = vec![Name::new("T")];
+        let aliases = std::collections::HashMap::default();
+        let mut bindings = TypeBindings::default();
+        let xs = vec![
+            class(&[], "A1", vec![]),
+            class(&[], "A2", vec![]),
+            type_var("T"),
+        ];
+        let ys: Vec<Ty> = (1..=9)
+            .map(|i| class(&[], &format!("A{i}"), vec![]))
+            .collect();
+        assert_eq!(
+            unify_union_members(&xs, &ys, &vars, &aliases, &mut bindings),
+            Overlap::Yes
+        );
+    }
+
+    #[test]
+    fn union_overlap_linear_large_residual_is_yes() {
+        // `{List<T>, List<U>, V}` vs `{List<A1>, ..., List<A9>}`: `T` and `U` are
+        // independent (each in one member), so covering is many-to-one and a witness
+        // exists (e.g. `T=U=A1`, with `V` absorbing the rest) — a *provable* overlap,
+        // not an NP-hard cap. The search finds it in a few steps.
+        let vars = vec![Name::new("T"), Name::new("U"), Name::new("V")];
+        let aliases = std::collections::HashMap::default();
+        let mut bindings = TypeBindings::default();
+        let list = |inner: Ty| Ty::List(Box::new(inner), TyAttr::default());
+        let xs = vec![list(type_var("T")), list(type_var("U")), type_var("V")];
+        let ys: Vec<Ty> = (1..=9)
+            .map(|i| list(class(&[], &format!("A{i}"), vec![])))
+            .collect();
+        assert_eq!(
+            unify_union_members(&xs, &ys, &vars, &aliases, &mut bindings),
+            Overlap::Yes
+        );
+    }
+
+    #[test]
+    fn union_overlap_collapsing_members_is_yes() {
+        // `{List<T>, List<U>, List<W>}` vs `{List<A1>, List<A2>}` (no bare var):
+        // idempotency lets two members collapse, so `T=A1, U=A2, W=A1` makes the unions
+        // equal. An injective matcher (the old model) wrongly rejected this; covering
+        // (many-to-one, mutual) accepts it.
+        let vars = vec![Name::new("T"), Name::new("U"), Name::new("W")];
+        let aliases = std::collections::HashMap::default();
+        let mut bindings = TypeBindings::default();
+        let list = |inner: Ty| Ty::List(Box::new(inner), TyAttr::default());
+        let xs = vec![
+            list(type_var("T")),
+            list(type_var("U")),
+            list(type_var("W")),
+        ];
+        let ys = vec![
+            list(class(&[], "A1", vec![])),
+            list(class(&[], "A2", vec![])),
+        ];
+        assert_eq!(
+            unify_union_members(&xs, &ys, &vars, &aliases, &mut bindings),
+            Overlap::Yes
+        );
+    }
+
+    #[test]
+    fn union_overlap_oversized_search_is_unknown() {
+        // Unknown via the *breadth* of the candidate set (contrast the pigeonhole test,
+        // which is Unknown via search *depth*): `{Pair<T,A1>, Pair<T,A2>}` share `T`, and
+        // the candidates pair `A1`/`A2` with disjoint left classes so no single `T`
+        // works — but just scanning the huge candidate list exhausts the step budget
+        // before the search can prove it ⇒ Unknown.
+        let vars = vec![Name::new("T")];
+        let aliases = std::collections::HashMap::default();
+        let mut bindings = TypeBindings::default();
+        let pair = |a: Ty, b: Ty| class(&[], "Pair", vec![a, b]);
+        let a1 = || class(&[], "A1", vec![]);
+        let a2 = || class(&[], "A2", vec![]);
+        let xs = vec![pair(type_var("T"), a1()), pair(type_var("T"), a2())];
+        let mut ys: Vec<Ty> = Vec::new();
+        for i in 0..2050 {
+            ys.push(pair(class(&[], &format!("L{i}"), vec![]), a1()));
+            ys.push(pair(class(&[], &format!("R{i}"), vec![]), a2()));
+        }
+        assert_eq!(
+            unify_union_members(&xs, &ys, &vars, &aliases, &mut bindings),
+            Overlap::Unknown
+        );
+    }
+
+    #[test]
+    fn union_overlap_literal_covered_by_base_is_yes() {
+        // `{1, T}` vs `{int, string}`: the literal `1` is a *subtype* of `int`, so it is
+        // covered (covering uses subtype, not equality), and `T` absorbs the rest.
+        let vars = vec![Name::new("T")];
+        let aliases = std::collections::HashMap::default();
+        let mut bindings = TypeBindings::default();
+        let xs = vec![int_literal(1), type_var("T")];
+        let ys = vec![int(), string()];
+        assert_eq!(
+            unify_union_members(&xs, &ys, &vars, &aliases, &mut bindings),
+            Overlap::Yes
+        );
+    }
+
+    #[test]
+    fn union_overlap_base_not_covered_by_literal_is_no() {
+        // `{int, T}` vs `{1, string}`: subtyping is directional — `int` is *not* a
+        // subtype of the literal `1`, and `T` is on the left, so nothing covers `int`.
+        let vars = vec![Name::new("T")];
+        let aliases = std::collections::HashMap::default();
+        let mut bindings = TypeBindings::default();
+        let xs = vec![int(), type_var("T")];
+        let ys = vec![int_literal(1), string()];
+        assert_eq!(
+            unify_union_members(&xs, &ys, &vars, &aliases, &mut bindings),
+            Overlap::No
+        );
+    }
+
+    // Probe helper for the pigeonhole experiments below.
+    fn pigeonhole_overlap(holes: usize, pigeons: usize) -> Overlap {
+        let vars: Vec<Name> = (0..holes).map(|i| Name::new(format!("T{i}"))).collect();
+        let aliases = std::collections::HashMap::default();
+        let mut bindings = TypeBindings::default();
+        let pair = |a: Ty, b: Ty| class(&[], "Pair", vec![a, b]);
+        let xs: Vec<Ty> = (0..holes)
+            .map(|i| {
+                let t = type_var(&format!("T{i}"));
+                pair(t.clone(), t)
+            })
+            .collect();
+        let ys: Vec<Ty> = (0..pigeons)
+            .map(|i| {
+                let a = class(&[], &format!("A{i}"), vec![]);
+                pair(a.clone(), a)
+            })
+            .collect();
+        unify_union_members(&xs, &ys, &vars, &aliases, &mut bindings)
+    }
+
+    #[test]
+    fn union_overlap_small_pigeonhole_is_decided() {
+        // 4 distinct variables (holes) cannot realize 5 distinct ground members
+        // (pigeons), so the unions are disjoint — and at this size the search proves it
+        // within budget, returning a definite `No` (contrast with the next test).
+        assert_eq!(pigeonhole_overlap(4, 5), Overlap::No);
+    }
+
+    #[test]
+    fn union_overlap_pigeonhole_is_unknown() {
+        // The NP-hard core in miniature: 5 distinct variables (holes) cannot realize 6
+        // distinct ground members (pigeons), so the unions are *provably disjoint* — but
+        // ruling out every one of the ~5! arrangements overruns the step budget, so the
+        // solver conservatively returns `Unknown` ("simplify your type"). An 11-member
+        // union that is exponential to decide — the search's *depth*, not breadth.
+        assert_eq!(pigeonhole_overlap(5, 6), Overlap::Unknown);
+    }
+
+    /// 3-SAT → union ACI-matching (adapted from the ACI paper's Lemma 5). Each SAT
+    /// variable `i` is a type var `Vi` pinned to `Pos`/`Neg`; clause `j` over vars
+    /// `(p,q,r)` with polarities is the member `Cl<Cj, Vp, Vq, Vr>`, whose candidates are
+    /// the (≤7) ground `Pos`/`Neg` combinations that satisfy it; a bare var absorbs the
+    /// candidate pool. The unions overlap iff the formula is satisfiable.
+    /// `clauses[j] = [(var, positive?); 3]`.
+    fn three_sat_overlap(num_vars: usize, clauses: &[[(usize, bool); 3]]) -> Overlap {
+        let aliases = std::collections::HashMap::default();
+        let mut bindings = TypeBindings::default();
+        let v = |i: usize| type_var(&format!("V{i}"));
+        let val = |b: bool| class(&[], if b { "Pos" } else { "Neg" }, vec![]);
+        let mut xs: Vec<Ty> = Vec::new();
+        let mut ys: Vec<Ty> = Vec::new();
+        for (j, clause) in clauses.iter().enumerate() {
+            let tag = class(&[], &format!("C{j}"), vec![]);
+            xs.push(class(
+                &[],
+                "Cl",
+                vec![tag.clone(), v(clause[0].0), v(clause[1].0), v(clause[2].0)],
+            ));
+            for sp in [true, false] {
+                for sq in [true, false] {
+                    for sr in [true, false] {
+                        let satisfied =
+                            (sp == clause[0].1) || (sq == clause[1].1) || (sr == clause[2].1);
+                        if satisfied {
+                            ys.push(class(
+                                &[],
+                                "Cl",
+                                vec![tag.clone(), val(sp), val(sq), val(sr)],
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+        xs.push(type_var("ABSORB"));
+        let mut vars: Vec<Name> = (0..num_vars).map(|i| Name::new(format!("V{i}"))).collect();
+        vars.push(Name::new("ABSORB"));
+        unify_union_members(&xs, &ys, &vars, &aliases, &mut bindings)
+    }
+
+    // All 2^n exclusion clauses over the first `n` vars ⇒ unsatisfiable.
+    fn unsat_exclusion_clauses(n: usize) -> Vec<[(usize, bool); 3]> {
+        assert!(n >= 3);
+        let mut clauses = Vec::new();
+        for mask in 0..(1usize << n) {
+            // Exclude assignment `mask`; use the first 3 vars' bits as the 3 literals.
+            let lit = |i: usize| (i, (mask >> i) & 1 == 0);
+            clauses.push([lit(0), lit(1), lit(2)]);
+        }
+        clauses
+    }
+
+    #[test]
+    fn union_overlap_three_sat_satisfiable_is_yes() {
+        // 3-SAT reduces to coherence (the ACI-unification paper's Lemma 5, adapted to
+        // unions): two `implement` blocks overlap iff the encoded formula is satisfiable.
+        // `(x ∨ y ∨ z)` is satisfiable, so the blocks overlap (`Yes`) — the witness is
+        // any non-all-false assignment.
+        assert_eq!(
+            three_sat_overlap(3, &[[(0, true), (1, true), (2, true)]]),
+            Overlap::Yes,
+        );
+    }
+
+    #[test]
+    fn union_overlap_three_sat_unsatisfiable_is_no() {
+        // The same reduction on an unsatisfiable formula (all 8 assignments of x,y,z
+        // excluded) ⇒ the blocks are disjoint (`No`). At three shared variables the
+        // search decides it within budget; larger spread instances are what make the
+        // problem exponential.
+        let clauses = unsat_exclusion_clauses(3);
+        assert_eq!(three_sat_overlap(3, &clauses), Overlap::No);
     }
 }
