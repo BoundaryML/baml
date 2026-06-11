@@ -6,7 +6,7 @@ import {
   useConvex,
   useMutation,
 } from 'convex/react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { api } from '@/convex/_generated/api';
 
@@ -17,11 +17,13 @@ type Persist = (args: Submission) => Promise<unknown>;
 type Verify = (password: string) => Promise<boolean>;
 
 // One field per "slide". Asked one at a time; you can step back to edit.
+// `hint` shows a small note under the field (e.g. why we ask for an address).
 const FIELDS: {
   key: keyof Submission;
   label: string;
   placeholder: string;
   type: string;
+  hint?: string;
 }[] = [
   { key: 'discord', label: 'Discord', placeholder: 'username', type: 'text' },
   {
@@ -33,10 +35,131 @@ const FIELDS: {
   {
     key: 'address',
     label: 'Address',
-    placeholder: 'Mailing address',
+    placeholder: 'Start typing your address…',
     type: 'text',
+    hint: 'so we can ship you merch! 🐑',
   },
 ];
+
+// Compose a single-line address from Photon's structured properties.
+function formatAddress(p: Record<string, string | undefined>): string {
+  const street = [p.housenumber, p.street].filter(Boolean).join(' ') || p.name;
+  const region = [p.state, p.postcode].filter(Boolean).join(' ');
+  return [street, p.city, region, p.country].filter(Boolean).join(', ');
+}
+
+// Address auto-finisher backed by Photon (komoot) — a free, keyless geocoder
+// with permissive CORS. Type a few characters, pick a full address from the
+// list. If the request fails (offline / rate-limited), it degrades to a plain
+// text input so the form is never blocked.
+function AddressField({
+  value,
+  onChange,
+  label,
+  placeholder,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  label: string;
+  placeholder: string;
+}) {
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [open, setOpen] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const pickedRef = useRef(false);
+
+  useEffect(
+    () => () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      abortRef.current?.abort();
+    },
+    [],
+  );
+
+  function query(q: string) {
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    fetch(
+      `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=5&lang=en`,
+      { signal: ctrl.signal },
+    )
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        const lines: string[] = (data?.features ?? [])
+          .map((f: { properties: Record<string, string> }) =>
+            formatAddress(f.properties),
+          )
+          .filter(Boolean);
+        setSuggestions([...new Set(lines)].slice(0, 5));
+        setOpen(true);
+      })
+      .catch(() => {
+        /* aborted or offline — leave it as a plain text input */
+      });
+  }
+
+  function handleChange(next: string) {
+    onChange(next);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    // Don't re-query the value we just filled in from a picked suggestion.
+    if (pickedRef.current) {
+      pickedRef.current = false;
+      return;
+    }
+    if (next.trim().length < 3) {
+      setSuggestions([]);
+      setOpen(false);
+      return;
+    }
+    timerRef.current = setTimeout(() => query(next.trim()), 220);
+  }
+
+  function pick(suggestion: string) {
+    pickedRef.current = true;
+    onChange(suggestion);
+    setSuggestions([]);
+    setOpen(false);
+  }
+
+  return (
+    <label className="sc-label sc-slide">
+      {label}
+      <div className="sc-ac">
+        <input
+          // biome-ignore lint/a11y/noAutofocus: matches the other wizard slides
+          autoFocus
+          autoComplete="off"
+          className="sc-input"
+          onBlur={() => setTimeout(() => setOpen(false), 120)}
+          onChange={(e) => handleChange(e.target.value)}
+          onFocus={() => suggestions.length > 0 && setOpen(true)}
+          placeholder={placeholder}
+          type="text"
+          value={value}
+        />
+        {open && suggestions.length > 0 && (
+          <ul className="sc-ac-list">
+            {suggestions.map((s) => (
+              <li key={s}>
+                <button
+                  className="sc-ac-item"
+                  onClick={() => pick(s)}
+                  // mousedown fires before input blur — keep the pick from being lost
+                  onMouseDown={(e) => e.preventDefault()}
+                  type="button"
+                >
+                  {s}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </label>
+  );
+}
 
 // Provider wrapper: builds the Convex client from the public deployment URL.
 // If the URL isn't configured yet, the form still renders and "submits" — it
@@ -208,17 +331,33 @@ function Council({
       <h1 className="sc-title">Join the Sheep Council</h1>
 
       {/* one field per slide; `key` re-runs the slide animation + autofocus */}
-      <label className="sc-label sc-slide" key={field.key}>
-        {field.label}
-        <input
-          autoFocus
-          className="sc-input"
-          onChange={set(field.key)}
+      {field.key === 'address' ? (
+        <AddressField
+          key={field.key}
+          label={field.label}
+          onChange={(v) => setForm((f) => ({ ...f, address: v }))}
           placeholder={field.placeholder}
-          type={field.type}
-          value={form[field.key]}
+          value={form.address}
         />
-      </label>
+      ) : (
+        <label className="sc-label sc-slide" key={field.key}>
+          {field.label}
+          <input
+            autoFocus
+            className="sc-input"
+            onChange={set(field.key)}
+            placeholder={field.placeholder}
+            type={field.type}
+            value={form[field.key]}
+          />
+        </label>
+      )}
+
+      {field.hint && (
+        <p className="sc-hint sc-slide" key={`${field.key}-hint`}>
+          {field.hint}
+        </p>
+      )}
 
       {submitError && (
         <p className="sc-error">
