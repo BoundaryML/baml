@@ -50,13 +50,7 @@ async fn racing_array_push_does_not_crash() {
         OptLevel::One,
     );
     let engine = Arc::new(
-        BexEngine::new(
-            program,
-            Arc::new(sys_ops::SysOps::native()),
-            None,
-            Vec::new(),
-        )
-        .expect("engine"),
+        BexEngine::new(program, Arc::new(sys_ops::SysOps::native()), Vec::new()).expect("engine"),
     );
 
     let result = engine
@@ -117,13 +111,7 @@ async fn racing_array_push_pop_does_not_crash() {
         OptLevel::One,
     );
     let engine = Arc::new(
-        BexEngine::new(
-            program,
-            Arc::new(sys_ops::SysOps::native()),
-            None,
-            Vec::new(),
-        )
-        .expect("engine"),
+        BexEngine::new(program, Arc::new(sys_ops::SysOps::native()), Vec::new()).expect("engine"),
     );
 
     let result = engine
@@ -190,13 +178,7 @@ async fn racing_array_index_read_vs_grow_does_not_crash() {
         OptLevel::One,
     );
     let engine = Arc::new(
-        BexEngine::new(
-            program,
-            Arc::new(sys_ops::SysOps::native()),
-            None,
-            Vec::new(),
-        )
-        .expect("engine"),
+        BexEngine::new(program, Arc::new(sys_ops::SysOps::native()), Vec::new()).expect("engine"),
     );
 
     let result = engine
@@ -255,13 +237,7 @@ async fn racing_map_set_delete_does_not_crash() {
         OptLevel::One,
     );
     let engine = Arc::new(
-        BexEngine::new(
-            program,
-            Arc::new(sys_ops::SysOps::native()),
-            None,
-            Vec::new(),
-        )
-        .expect("engine"),
+        BexEngine::new(program, Arc::new(sys_ops::SysOps::native()), Vec::new()).expect("engine"),
     );
 
     let result = engine
@@ -315,13 +291,7 @@ async fn racing_uint8array_push_does_not_crash() {
         OptLevel::One,
     );
     let engine = Arc::new(
-        BexEngine::new(
-            program,
-            Arc::new(sys_ops::SysOps::native()),
-            None,
-            Vec::new(),
-        )
-        .expect("engine"),
+        BexEngine::new(program, Arc::new(sys_ops::SysOps::native()), Vec::new()).expect("engine"),
     );
 
     let result = engine
@@ -377,13 +347,7 @@ async fn racing_uint8array_push_pop_does_not_crash() {
         OptLevel::One,
     );
     let engine = Arc::new(
-        BexEngine::new(
-            program,
-            Arc::new(sys_ops::SysOps::native()),
-            None,
-            Vec::new(),
-        )
-        .expect("engine"),
+        BexEngine::new(program, Arc::new(sys_ops::SysOps::native()), Vec::new()).expect("engine"),
     );
 
     let result = engine
@@ -444,13 +408,7 @@ async fn racing_uint8array_index_read_vs_grow_does_not_crash() {
         OptLevel::One,
     );
     let engine = Arc::new(
-        BexEngine::new(
-            program,
-            Arc::new(sys_ops::SysOps::native()),
-            None,
-            Vec::new(),
-        )
-        .expect("engine"),
+        BexEngine::new(program, Arc::new(sys_ops::SysOps::native()), Vec::new()).expect("engine"),
     );
 
     let result = engine
@@ -506,13 +464,7 @@ async fn racing_uint8array_sort_vs_grow_does_not_crash() {
         OptLevel::One,
     );
     let engine = Arc::new(
-        BexEngine::new(
-            program,
-            Arc::new(sys_ops::SysOps::native()),
-            None,
-            Vec::new(),
-        )
-        .expect("engine"),
+        BexEngine::new(program, Arc::new(sys_ops::SysOps::native()), Vec::new()).expect("engine"),
     );
 
     let result = engine
@@ -564,13 +516,7 @@ async fn racing_captured_local_increment_does_not_crash() {
         OptLevel::One,
     );
     let engine = Arc::new(
-        BexEngine::new(
-            program,
-            Arc::new(sys_ops::SysOps::native()),
-            None,
-            Vec::new(),
-        )
-        .expect("engine"),
+        BexEngine::new(program, Arc::new(sys_ops::SysOps::native()), Vec::new()).expect("engine"),
     );
 
     let result = engine
@@ -621,13 +567,7 @@ async fn racing_class_field_increment_does_not_crash() {
         OptLevel::One,
     );
     let engine = Arc::new(
-        BexEngine::new(
-            program,
-            Arc::new(sys_ops::SysOps::native()),
-            None,
-            Vec::new(),
-        )
-        .expect("engine"),
+        BexEngine::new(program, Arc::new(sys_ops::SysOps::native()), Vec::new()).expect("engine"),
     );
 
     let result = engine

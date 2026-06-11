@@ -553,24 +553,6 @@ pub enum Instruction {
     /// simply has to clean up the call stack and continue execution.
     Return,
 
-    /// Notifies about entering or exiting a block.
-    ///
-    /// Format: `NOTIFY_BLOCK block_index` where `block_index` is the index
-    /// into the current function's `block_notifications` array.
-    NotifyBlock(usize),
-
-    /// Enter a visualization node.
-    ///
-    /// Format: `VIZ_ENTER i` where `i` is the index into the current
-    /// function's `viz_nodes` array.
-    VizEnter(usize),
-
-    /// Exit a visualization node.
-    ///
-    /// Format: `VIZ_EXIT i` where `i` is the index into the current
-    /// function's `viz_nodes` array.
-    VizExit(usize),
-
     /// Jump through a table based on integer discriminant.
     ///
     /// Stack: `[discriminant: Int]` -> `[]` (jumps)
@@ -909,9 +891,6 @@ pub enum OpCode {
     Unwatch,
     Notify,
     Call,
-    NotifyBlock,
-    VizEnter,
-    VizExit,
     IsType,
     DenseTag,
     LoadType,
@@ -1051,9 +1030,6 @@ impl OpCode {
             | Self::Watch
             | Self::Unwatch
             | Self::Notify
-            | Self::NotifyBlock
-            | Self::VizEnter
-            | Self::VizExit
             | Self::IsType
             | Self::DenseTag
             | Self::LoadType
@@ -1188,9 +1164,6 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::Unwatch as u8 => Ok(Self::Unwatch),
             x if x == Self::Notify as u8 => Ok(Self::Notify),
             x if x == Self::Call as u8 => Ok(Self::Call),
-            x if x == Self::NotifyBlock as u8 => Ok(Self::NotifyBlock),
-            x if x == Self::VizEnter as u8 => Ok(Self::VizEnter),
-            x if x == Self::VizExit as u8 => Ok(Self::VizExit),
             x if x == Self::IsType as u8 => Ok(Self::IsType),
             x if x == Self::DenseTag as u8 => Ok(Self::DenseTag),
             x if x == Self::LoadType as u8 => Ok(Self::LoadType),
@@ -1317,9 +1290,6 @@ impl std::fmt::Display for OpCode {
             Self::Unwatch => "UNWATCH",
             Self::Notify => "NOTIFY",
             Self::Call => "CALL",
-            Self::NotifyBlock => "NOTIFY_BLOCK",
-            Self::VizEnter => "VIZ_ENTER",
-            Self::VizExit => "VIZ_EXIT",
             Self::IsType => "IS_TYPE",
             Self::DenseTag => "DENSE_TAG",
             Self::LoadType => "LOAD_TYPE",
@@ -1374,86 +1344,6 @@ pub fn read_i8(code: &[u8], pc: &mut usize) -> i8 {
     let val = code[*pc] as i8;
     *pc += 1;
     val
-}
-
-/// Block notification metadata stored in the Function struct.
-/// The `function_name` field is populated at runtime from the Function containing this notification.
-
-#[derive(Clone, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
-pub struct BlockNotification {
-    pub function_name: String, // Populated at runtime from Function::name
-    pub block_name: String,
-    pub level: usize,
-    pub block_type: BlockNotificationType,
-    pub is_enter: bool,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
-pub enum BlockNotificationType {
-    Statement,
-    If,
-    While,
-    For,
-    Function,
-}
-
-/// Visualization node metadata stored in the Function struct.
-/// Used for control flow visualization (branches, loops, scopes).
-#[derive(Clone, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
-pub struct VizNodeMeta {
-    /// Unique node ID within this function.
-    pub node_id: u32,
-    /// Encoded log filter key for this node.
-    pub log_filter_key: String,
-    /// Parent node's log filter key (None for root).
-    pub parent_log_filter_key: Option<String>,
-    /// Type of this visualization node.
-    pub node_type: VizNodeType,
-    /// Human-readable label for this node.
-    pub label: String,
-    /// Header level (only for `HeaderContextEnter`).
-    pub header_level: Option<u8>,
-}
-
-/// Type of visualization node.
-#[derive(Clone, Copy, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
-pub enum VizNodeType {
-    /// Root of a function's control flow.
-    FunctionRoot,
-    /// Header context from `//# header` annotation.
-    HeaderContextEnter,
-    /// Group of branches (if-else chain).
-    BranchGroup,
-    /// Single branch arm (if/else if/else).
-    BranchArm,
-    /// Loop construct (while/for).
-    Loop,
-    /// Other block scope.
-    OtherScope,
-}
-
-/// Delta type for viz execution events.
-#[derive(Clone, Copy, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
-pub enum VizExecDelta {
-    /// Entering a visualization node.
-    Enter,
-    /// Exiting a visualization node.
-    Exit,
-}
-
-/// Visualization execution event emitted when entering/exiting a viz node.
-#[derive(Clone, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
-pub struct VizExecEvent {
-    /// Enter or exit.
-    pub delta: VizExecDelta,
-    /// Node ID within the function.
-    pub node_id: u32,
-    /// Type of the node.
-    pub node_type: VizNodeType,
-    /// Human-readable label.
-    pub label: String,
-    /// Header level (for `HeaderContextEnter`).
-    pub header_level: Option<u8>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
@@ -1604,12 +1494,7 @@ impl std::fmt::Display for Instruction {
             Instruction::AllocMap(n) => write!(f, "ALLOC_MAP {n}"),
             Instruction::Watch(i) => write!(f, "WATCH {i}"),
             Instruction::Unwatch(i) => write!(f, "UNWATCH {i}"),
-            Instruction::NotifyBlock(block_index) => {
-                write!(f, "NOTIFY_BLOCK {block_index}")
-            }
             Instruction::Notify(i) => write!(f, "NOTIFY {i}"),
-            Instruction::VizEnter(i) => write!(f, "VIZ_ENTER {i}"),
-            Instruction::VizExit(i) => write!(f, "VIZ_EXIT {i}"),
             Instruction::JumpTable(table_idx) => {
                 write!(f, "JUMP_TABLE {table_idx}")
             }
@@ -2084,9 +1969,6 @@ impl Bytecode {
                 | Instruction::Watch(v)
                 | Instruction::Unwatch(v)
                 | Instruction::Notify(v)
-                | Instruction::NotifyBlock(v)
-                | Instruction::VizEnter(v)
-                | Instruction::VizExit(v)
                 | Instruction::IsType(v)
                 | Instruction::DenseTag(v)
                 | Instruction::LoadType(v)
@@ -2397,9 +2279,6 @@ impl Bytecode {
             Instruction::Unwatch(_) => OpCode::Unwatch,
             Instruction::Notify(_) => OpCode::Notify,
             Instruction::Call { .. } => OpCode::Call,
-            Instruction::NotifyBlock(_) => OpCode::NotifyBlock,
-            Instruction::VizEnter(_) => OpCode::VizEnter,
-            Instruction::VizExit(_) => OpCode::VizExit,
             Instruction::IsType(_) => OpCode::IsType,
             Instruction::DenseTag(_) => OpCode::DenseTag,
             Instruction::LoadType(_) => OpCode::LoadType,

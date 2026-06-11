@@ -128,7 +128,6 @@ impl PackArgs {
         let engine = BexEngine::new(
             program.clone(),
             Arc::new(sys_native::SysOps::native()),
-            None,
             vec![],
         )
         .map_err(|e| anyhow!("Failed to initialize engine for resolution: {e:?}"))?;
@@ -602,13 +601,8 @@ mod tests {
 
     fn engine_from_source(source: &str) -> BexEngine {
         let snapshot = baml_tests::engine::compile_source(source);
-        BexEngine::new(
-            snapshot,
-            Arc::new(sys_native::SysOps::native()),
-            None,
-            Vec::new(),
-        )
-        .expect("BexEngine::new should succeed")
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("BexEngine::new should succeed")
     }
 
     /// Build an engine from a multi-file project so we can exercise
@@ -616,13 +610,8 @@ mod tests {
     /// `engine_from_source` can't express folder-based namespaces.
     fn engine_from_files(files: &[(&str, &str)]) -> BexEngine {
         let snapshot = baml_project::testing::compile_multi_file(files);
-        BexEngine::new(
-            snapshot,
-            Arc::new(sys_native::SysOps::native()),
-            None,
-            Vec::new(),
-        )
-        .expect("BexEngine::new should succeed")
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("BexEngine::new should succeed")
     }
 
     fn pack_args() -> PackArgs {

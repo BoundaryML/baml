@@ -248,13 +248,8 @@ mod tests {
     fn engine(source: &str) -> Arc<BexEngine> {
         let snapshot = baml_tests::engine::compile_source(source);
         Arc::new(
-            BexEngine::new(
-                snapshot,
-                Arc::new(sys_native::SysOps::native()),
-                None,
-                Vec::new(),
-            )
-            .expect("BexEngine::new should succeed"),
+            BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+                .expect("BexEngine::new should succeed"),
         )
     }
 

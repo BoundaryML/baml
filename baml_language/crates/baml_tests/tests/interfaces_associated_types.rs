@@ -140,13 +140,7 @@ async fn run_multi_file_no_args(files: &[(&str, &str)], entry_suffix: &str) -> B
         })
         .unwrap_or_else(|| panic!("function ending with `{entry_suffix}` not found"));
     let engine = Arc::new(
-        BexEngine::new(
-            program,
-            Arc::new(sys_ops::SysOps::native()),
-            None,
-            Vec::new(),
-        )
-        .expect("engine"),
+        BexEngine::new(program, Arc::new(sys_ops::SysOps::native()), Vec::new()).expect("engine"),
     );
     engine
         .call_function_bound_args(

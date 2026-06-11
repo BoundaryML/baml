@@ -19,9 +19,8 @@ use bex_vm_types::{
     BinOp as VmBinOp, Bytecode, CmpOp, ConstValue, Function, FunctionKind, FunctionOrigin,
     GlobalIndex, Instruction, Object, ObjectIndex, ObjectPool, UnaryOp as VmUnaryOp,
     bytecode::{
-        BlockNotification, BlockNotificationType, ClassInitPlan, DebugLocalScope, FieldCopy,
-        FieldCopySet, InstructionMeta, JumpTableData, LineTableEntry, MatchHashEntry,
-        MatchHashTable, OperandMeta,
+        ClassInitPlan, DebugLocalScope, FieldCopy, FieldCopySet, InstructionMeta, JumpTableData,
+        LineTableEntry, MatchHashEntry, MatchHashTable, OperandMeta,
     },
 };
 
@@ -328,9 +327,6 @@ struct StackifyCodegen<'ctx, 'obj> {
     /// We only emit Watch once per watched local (at initialization).
     watched_locals_initialized: HashSet<Local>,
 
-    /// Block notifications to be attached to the compiled function.
-    block_notifications: Vec<BlockNotification>,
-
     /// MIR local types for field name resolution (debug info).
     local_types: HashMap<Local, Ty>,
 
@@ -412,7 +408,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             next_block: None,
             current_block_start: 0,
             watched_locals_initialized: HashSet::new(),
-            block_notifications: Vec::new(),
             local_types: HashMap::new(),
             slot_names: Vec::new(),
             lambda_object_indices: ctx.lambda_object_indices.to_vec(),
@@ -954,19 +949,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         // 4. Build exception table from MIR catch regions
         self.build_exception_table(mir);
 
-        // 5. Convert MIR VizNodes to VM VizNodeMeta
-        let viz_nodes = mir
-            .viz_nodes
-            .iter()
-            .map(|node| bex_vm_types::VizNodeMeta {
-                node_id: node.node_id,
-                log_filter_key: node.log_filter_key.clone(),
-                parent_log_filter_key: node.parent_log_filter_key.clone(),
-                node_type: Self::convert_viz_node_type(node.node_type),
-                label: node.label.clone(),
-                header_level: node.header_level,
-            })
-            .collect();
         let debug_locals = Self::build_debug_locals(mir, &self.local_slots);
 
         // 5. Build the Function
@@ -982,8 +964,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             local_names: self.slot_names,
             debug_locals,
             span: Span::fake(),
-            block_notifications: self.block_notifications,
-            viz_nodes,
             return_type: baml_type::Ty::Null {
                 attr: baml_type::TyAttr::default(),
             },
@@ -999,25 +979,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             throws_type: None,
             origin: FunctionOrigin::Internal,
             body_meta: None,
-            trace: false,
-        }
-    }
-
-    /// Convert MIR `VizNodeType` to VM `VizNodeType`.
-    fn convert_viz_node_type(
-        mir_type: baml_compiler2_mir::VizNodeType,
-    ) -> bex_vm_types::VizNodeType {
-        match mir_type {
-            baml_compiler2_mir::VizNodeType::FunctionRoot => {
-                bex_vm_types::VizNodeType::FunctionRoot
-            }
-            baml_compiler2_mir::VizNodeType::HeaderContextEnter => {
-                bex_vm_types::VizNodeType::HeaderContextEnter
-            }
-            baml_compiler2_mir::VizNodeType::BranchGroup => bex_vm_types::VizNodeType::BranchGroup,
-            baml_compiler2_mir::VizNodeType::BranchArm => bex_vm_types::VizNodeType::BranchArm,
-            baml_compiler2_mir::VizNodeType::Loop => bex_vm_types::VizNodeType::Loop,
-            baml_compiler2_mir::VizNodeType::OtherScope => bex_vm_types::VizNodeType::OtherScope,
         }
     }
 
@@ -1401,17 +1362,8 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 let inst = self.emit(Instruction::Unwatch(slot));
                 self.set_var_operand(inst, slot);
             }
-            StatementKind::NotifyBlock { name, level } => {
-                // Add block notification to the function's metadata
-                let block_index = self.block_notifications.len();
-                self.block_notifications.push(BlockNotification {
-                    function_name: String::new(), // Filled in by VM at runtime
-                    block_name: name.to_string(),
-                    level: *level,
-                    block_type: BlockNotificationType::Statement,
-                    is_enter: true,
-                });
-                self.emit(Instruction::NotifyBlock(block_index));
+            StatementKind::NotifyBlock { name: _, level: _ } => {
+                // Block/viz observability is not emitted to bytecode.
             }
             StatementKind::WatchOptions { local, filter } => {
                 let channel_name = self.body.local(*local).name.as_deref();
@@ -1428,11 +1380,11 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 let inst = self.emit(Instruction::Notify(slot));
                 self.set_var_operand(inst, slot);
             }
-            StatementKind::VizEnter(node_idx) => {
-                self.emit(Instruction::VizEnter(*node_idx));
+            StatementKind::VizEnter(_node_idx) => {
+                // Viz observability is not emitted to bytecode.
             }
-            StatementKind::VizExit(node_idx) => {
-                self.emit(Instruction::VizExit(*node_idx));
+            StatementKind::VizExit(_node_idx) => {
+                // Viz observability is not emitted to bytecode.
             }
             StatementKind::FreshCell(local) => {
                 if self.captured_locals.contains(local) {
@@ -1448,15 +1400,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             }
             StatementKind::Intrinsic { op, args } => {
                 match op {
-                    IntrinsicOp::SendEvent => {
-                        // Same bytecode as the old baml.events.send string-match arm:
-                        // push args (event_name, data), then SendEvent.
-                        unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
-                        self.emit(Instruction::SendEvent);
-                        // The engine pushes `null` after resuming from SendEvent.
-                        // Since this is a statement (not an rvalue), discard it.
-                        self.emit(Instruction::Pop(1));
-                    }
                     IntrinsicOp::Log(level) => {
                         // Emit the reserved "$baml_log" event with payload
                         // { level: "<level>", data: <user_arg> }, where
