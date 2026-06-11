@@ -6,7 +6,7 @@ use num_bigint::BigInt;
 
 use super::{BamlClassArray, Continuation, NativeCallResult, PackageBamlImpl, make_to_json_callee};
 use crate::{
-    BexVm,
+    BexVm, VmPanic,
     errors::{VmBamlError, VmInternalError, VmRustFnError},
 };
 
@@ -780,6 +780,39 @@ impl BamlClassArray for PackageBamlImpl {
     #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
     fn at(array: &[Value], index: i64) -> Option<Value> {
         array.get(index as usize).copied()
+    }
+
+    fn new(size: i64, default: &Value) -> Result<Vec<Value>, VmRustFnError> {
+        let size = usize::try_from(size).map_err(|_| VmBamlError::InvalidArgument {
+            message: format!("array constructor size ({size}) is negative"),
+        })?;
+        let mut array = Vec::new();
+        array.try_reserve(size).map_err(|_| VmPanic::AllocFailure {
+            message: format!("Allocation of {size} elements for new array failed"),
+        })?;
+        array.resize(size, *default);
+        Ok(array)
+    }
+
+    #[allow(clippy::unused_unit)]
+    fn set(array: &mut Vec<Value>, index: i64, value: &Value) -> Result<(), VmRustFnError> {
+        let len = array.len();
+        let Ok(index_usize) = usize::try_from(index) else {
+            return Err(VmBamlError::InvalidArgument {
+                message: format!("array.set: index ({index}) is negative"),
+            }
+            .into());
+        };
+        if index_usize >= len {
+            return Err(VmBamlError::InvalidArgument {
+                message: format!(
+                    "array.set: index ({index_usize}) is outside the array length ({len})"
+                ),
+            }
+            .into());
+        }
+        array[index_usize] = *value;
+        Ok(())
     }
 
     fn concat(array: &[Value], other: &[Value]) -> Vec<Value> {

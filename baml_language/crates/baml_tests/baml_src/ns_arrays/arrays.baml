@@ -41,6 +41,49 @@ test "array_push" {
     assert.is_true(baml.deep_equals(a, expected))
 }
 
+test "array_constructor_fills_fixed_size" {
+    let a = int[](size = 3, default = 7);
+    let expected = [7, 7, 7];
+    assert.is_true(baml.deep_equals(a, expected))
+}
+
+test "array_set_replaces_existing_index" {
+    let a = int[](3, 0);
+    a.set(1, 42);
+    let expected = [0, 42, 0];
+    assert.is_true(baml.deep_equals(a, expected));
+    assert.equal(a.at(1), 42)
+}
+
+test "array_set_negative_index_throws" {
+    {
+        let a = [1, 2, 3];
+        a.set(-1, 99);
+        baml.sys.panic("expected set to throw")
+    } catch (e) {
+        baml.errors.InvalidArgument => null
+    }
+}
+
+test "array_set_index_past_length_throws" {
+    {
+        let a = [1, 2, 3];
+        a.set(3, 99);
+        baml.sys.panic("expected set to throw")
+    } catch (e) {
+        baml.errors.InvalidArgument => null
+    }
+}
+
+test "array_constructor_negative_size_throws" {
+    {
+        let _ = int[](-1, 0);
+        baml.sys.panic("expected constructor to throw")
+    } catch (e) {
+        baml.errors.InvalidArgument => null
+    }
+}
+
 // ─── sort ────────────────────────────────────────────────────────────────────
 
 test "array_sort_ints_in_place" {

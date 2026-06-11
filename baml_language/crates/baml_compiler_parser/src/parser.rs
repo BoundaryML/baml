@@ -5104,6 +5104,21 @@ impl<'a> Parser<'a> {
                 self.wrap_events_in_node(lhs_start, SyntaxKind::CALL_EXPR);
                 self.parse_call_args();
                 self.finish_node();
+            } else if op == TokenKind::LBracket
+                && self.peek(1).map(|t| t.kind) == Some(TokenKind::RBracket)
+                && self.peek(2).map(|t| t.kind) == Some(TokenKind::LParen)
+            {
+                // Fixed-size array constructor shorthand: `T[](size, default)`.
+                //
+                // This must be recognized before regular indexing so the empty
+                // `[]` suffix is treated as part of the type constructor rather
+                // than as an index expression with a missing index.
+                let lhs_start = self.find_previous_expr_start_after(expr_start);
+                self.wrap_events_in_node(lhs_start, SyntaxKind::ARRAY_CONSTRUCTOR_EXPR);
+                self.bump(); // [
+                self.expect(TokenKind::RBracket);
+                self.parse_call_args();
+                self.finish_node();
             } else if op == TokenKind::LBracket {
                 // Index expression
                 let lhs_start = self.find_previous_expr_start_after(expr_start);
