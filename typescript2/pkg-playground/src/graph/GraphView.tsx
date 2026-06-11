@@ -400,6 +400,7 @@ function GraphViewInner({
         elevateEdgesOnSelect={false}
         panOnDrag={[0, 1, 2]}
         panOnScroll
+        panActivationKeyCode={null}
         fitView
         fitViewOptions={{ minZoom: 0.3, maxZoom: 0.85, padding: 0.2 }}
         proOptions={{ hideAttribution: true }}

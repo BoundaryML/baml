@@ -521,7 +521,7 @@ export function Article() {
         <Sub title="The packed binary is 87% smaller than Bun’s, and starts ~30% faster">
           <p>
             {
-              'Here’s a comparison of BAML vs Bun in creating a compiled binary — the same hello world, measured back-to-back on an idle machine (median of 20 runs). The binary size is just 7.9 MB:'
+              'Here’s a comparison of BAML vs Bun in creating a compiled binary. The binary size is just 7.9 MB:'
             }
           </p>
           <PackChart />
