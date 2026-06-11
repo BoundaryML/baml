@@ -24,11 +24,10 @@
 **/*.node
 **/*.abi3.so
 
-# Entire trees the website build never reads (old codebases, other products).
-# baml_language stays: vercel-build.sh compiles bridge_wasm from it on cache
-# miss and generates pkg-proto from its bridge_ctypes/types.
-/engine
-/typescript
+# Entire trees the website build never reads (other products).
+# Keep /engine and /typescript: this root ignore file is shared by legacy
+# Vercel projects, and the old promptfiddle build compiles engine WASM from
+# typescript/apps/fiddle-web-app/vercel-build.sh.
 /jetbrains
 /languages
 /integ-tests
