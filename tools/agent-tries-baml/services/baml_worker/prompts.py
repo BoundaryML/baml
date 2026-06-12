@@ -3,7 +3,9 @@ trophy itself (one verbose `trophy.json`), self-reporting every bit of friction
 it hit while it still has full first-hand context. No separate reviewer.
 
 Two headers share the same trophy spec:
-  * WORKER_SYSTEM_PROMPT      — warm start: prebuilt `baml` on PATH, SKILL.md provided.
+  * WORKER_SYSTEM_PROMPT      — warm start: prebuilt `baml` on PATH, skills installed
+                                via `baml agent install` (or an injected SKILL.md for
+                                skill-arena member runs).
   * COLD_START_SYSTEM_PROMPT  — cold start: no baml, no skill; install from quickstart.
 """
 
@@ -14,11 +16,14 @@ import os
 # Where a cold-start agent is pointed to install BAML from scratch.
 QUICKSTART_URL = os.environ.get("QUICKSTART_URL", "https://new.boundaryml.com/quickstart")
 
-# Warm start: the canary/nightly baml binary is already on PATH and a skill guide
-# is injected. This is the default mode.
-_WARM_HEADER = """You are an engineer writing BAML to complete the task below. If a BAML \
-skill guide is provided as SKILL.md in the working directory, read it first. The `baml` CLI is on \
-PATH (the canary build); use it to compile, run, format, and test your work.
+# Warm start: the canary/nightly baml binary is already on PATH and the official
+# BAML skills were installed into the project via `baml agent install` (arena
+# member runs get an injected SKILL.md instead). This is the default mode.
+_WARM_HEADER = """You are an engineer writing BAML to complete the task below. The official \
+BAML agent skills are installed in this project (under .claude/skills/, via `baml agent install`); \
+read the relevant ones before you start. If a SKILL.md is provided in the working directory \
+instead, read that first. The `baml` CLI is on PATH (the canary build); use it to compile, run, \
+format, and test your work.
 """
 
 # Cold start: nothing is installed and no skill guide is provided. The agent must
@@ -74,7 +79,7 @@ final result works. Succeeding does NOT mean `issues` is empty; most real runs h
 reporting.
 
 issue kinds:
-- "skill": the BAML SKILL.md / docs are wrong, missing, or unclear.
+- "skill": the BAML skill docs (installed skills / SKILL.md) are wrong, missing, or unclear.
 - "language": the BAML compiler / CLI / language itself has a bug or limitation.
 - If fixing the language would obviate the skill change, it is a language issue.
 

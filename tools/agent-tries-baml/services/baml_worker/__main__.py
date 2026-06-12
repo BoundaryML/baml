@@ -1,5 +1,7 @@
 """BAML worker processor: claim a task, run the agent (with the latest nightly
-baml on PATH and the BAML skill injected). The agent assembles the whole trophy
+baml on PATH and the official BAML skills installed via `baml agent install`;
+skill-arena members instead get their branch's SKILL.md injected). The agent
+assembles the whole trophy
 itself as one verbose `trophy.json` (report + issues + suggestions); the worker
 verifies its repros, creates the trophy, and finishes the task. One agent per DB,
 no reviewer.
@@ -28,10 +30,11 @@ from bench_core.proxy_client import ProxyClient
 from bench_core.schemas import CheckBamlRequest, RunAgentRequest
 
 from .prompts import COLD_START_SYSTEM_PROMPT, WORKER_SYSTEM_PROMPT
+from .skill_repo import concat_skill_dir, resolve_skill_dir
 
 log = logging.getLogger("baml_worker")
 
-CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-6")
+CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "claude-opus-4-8")
 CLAUDE_MAX_TURNS = int(os.environ.get("CLAUDE_MAX_TURNS", "40"))
 AGENT_TIMEOUT_SECS = int(os.environ.get("WORKER_AGENT_TIMEOUT_SECS", "3600"))
 # How long a run waits for its pinned nightly to be built+uploaded before
@@ -52,6 +55,9 @@ _NON_PROJECT_FILES = {"SKILL.md", "trophy.json", "reports.md", "open_issues.json
 
 _SKILL_CACHE: Optional[str] = None
 _SKILL_LOADED = False
+# Per-branch skill cache for skill-arena member runs (keyed by skillRef), so a
+# branch's SKILL.md is concatenated once per worker process.
+_REF_SKILL_CACHE: dict[str, Optional[str]] = {}
 
 
 def _project_files(post_files: dict[str, str]) -> dict[str, str]:
@@ -76,11 +82,13 @@ def _project_files(post_files: dict[str, str]) -> dict[str, str]:
 
 
 def _load_skill() -> Optional[str]:
-    """Load and cache the BAML skill text injected into the agent's workspace.
+    """Load and cache the static baked-in BAML skill text.
 
-    Reads every SKILL.md under BAML_SKILL_DIR (preferred, concatenated) or the
-    single BAML_SKILL_PATH file, caching the result so the disk read happens once
-    per process.
+    Only used as the fallback for skill-arena member runs whose branch fails to
+    resolve; normal warm runs get their skills from `baml agent install` on the
+    proxy instead. Reads every SKILL.md under BAML_SKILL_DIR (preferred,
+    concatenated) or the single BAML_SKILL_PATH file, caching the result so the
+    disk read happens once per process.
 
     Returns:
         The combined skill markdown, or None when no skill source is configured.
@@ -90,14 +98,35 @@ def _load_skill() -> Optional[str]:
         return _SKILL_CACHE
     _SKILL_LOADED = True
     if BAML_SKILL_DIR and Path(BAML_SKILL_DIR).is_dir():
-        parts = []
-        for skill_md in sorted(Path(BAML_SKILL_DIR).rglob("SKILL.md")):
-            rel = skill_md.parent.name
-            parts.append(f"# BAML skill: {rel}\n\n{skill_md.read_text()}")
-        _SKILL_CACHE = "\n\n---\n\n".join(parts) or None
+        _SKILL_CACHE = concat_skill_dir(Path(BAML_SKILL_DIR))
     elif BAML_SKILL_PATH and Path(BAML_SKILL_PATH).exists():
         _SKILL_CACHE = Path(BAML_SKILL_PATH).read_text()
     return _SKILL_CACHE
+
+
+async def _load_skill_for_ref(ref: str) -> Optional[str]:
+    """Load the BAML skill from a specific baml-skill branch (skill-arena member).
+
+    Resolves the branch checkout (cached) and concatenates its ``SKILL.md`` files,
+    caching the result per ref. On any resolution failure the run is not hard-failed:
+    it falls back to the static baked-in skill so the variant still runs (the failure
+    is logged and will show in the comparison).
+
+    Args:
+        ref: The baml-skill git branch this variant should use.
+
+    Returns:
+        The branch's combined skill markdown, the static skill on failure, or None.
+    """
+    if ref in _REF_SKILL_CACHE:
+        return _REF_SKILL_CACHE[ref]
+    try:
+        skill = concat_skill_dir(await resolve_skill_dir(ref))
+    except Exception:  # noqa: BLE001
+        log.exception("failed to resolve skill branch %r; falling back to static skill", ref)
+        skill = _load_skill()
+    _REF_SKILL_CACHE[ref] = skill
+    return skill
 
 
 def _derive_outcome(agent_status: Optional[str], task_completed: Any) -> str:
@@ -299,8 +328,9 @@ class BamlWorker(Processor):
 
         # Mode branch: cold start withholds baml + the skill (the agent installs
         # baml itself and onboards from the quickstart); warm/pinned runs resolve
-        # a sha and inject the skill as usual.
+        # a sha and get the official skills via `baml agent install` on the proxy.
         files: dict[str, str] = {}
+        install_skill = False
         if cold:
             baml_version = None
             system_prompt = COLD_START_SYSTEM_PROMPT
@@ -309,9 +339,23 @@ class BamlWorker(Processor):
             # Poll for the pinned/latest nightly and block until it's built.
             baml_version = await self._resolve_baml_version(item)
             system_prompt = WORKER_SYSTEM_PROMPT
-            skill = _load_skill()
-            if skill:
-                files["SKILL.md"] = skill
+            # A skill-arena member run (skillRef set) onboards from that specific
+            # baml-skill branch, which `baml agent install` can't fetch (it always
+            # pulls main) — so arena runs keep the SKILL.md injection. A normal
+            # warm run installs the official skills via `baml agent install`.
+            skill_ref = item.get("skillRef")
+            if skill_ref:
+                skill = await _load_skill_for_ref(skill_ref)
+                if skill:
+                    files["SKILL.md"] = skill
+                    # Arena member: snapshot the exact skill text this variant
+                    # onboarded from, so the cohort page can show it. Best-effort.
+                    try:
+                        await self.service.put_skill(task_id, skill)
+                    except Exception:  # noqa: BLE001
+                        log.warning("skill snapshot upload failed (ignored)", exc_info=True)
+            else:
+                install_skill = True
             # Record the baml version so the in-flight task page shows which baml
             # this run is using.
             if baml_version:
@@ -327,12 +371,17 @@ class BamlWorker(Processor):
             files=files,
             prices=prices,
             baml_version=baml_version,
+            install_skill=install_skill,
             post_file_patterns=POST_FILE_PATTERNS,
             invocation_timeout_secs=AGENT_TIMEOUT_SECS,
         )
         log.info("running task %s (baml=%s, channel=%s, cold=%s, pin=%s)",
                  task_id, baml_version, channel, cold, pin or None)
         result = await self.proxy.run_agent(req)
+        if install_skill and result.skill_installed is False:
+            # The run still happened, but without the skills a warm run promises —
+            # flag it so the trophy's friction isn't misread as a skill gap.
+            log.warning("task %s ran without skills (baml agent install failed)", task_id)
 
         # Stash the full transcript as a blob (the trophy links it). put_transcript
         # creates the pointer *after* this task was claimed, so use its returned id
@@ -401,6 +450,10 @@ class BamlWorker(Processor):
             if mined and not what_failed:
                 what_failed = [m["title"] for m in mined]
 
+        # A cohort member's trophy is HELD at "cohort_member" (not "queued"), so
+        # BamlDedup skips it: the variant trophies are inputs to the CohortCompare
+        # agent, and only its synthesized cohort trophy enters dedup.
+        cohort_id = item.get("cohortId")
         trophy = {
             "taskId": task_id,
             "outcome": outcome,
@@ -416,13 +469,16 @@ class BamlWorker(Processor):
             "findings": findings,
             "filesCreated": files_created,
             "suggestions": analysis.get("suggestions") or [],
-            "status": "queued",
+            "cohortId": cohort_id,
+            "status": "cohort_member" if cohort_id else "queued",
         }
         trophy_id = await self.service.create("trophies", trophy)
         await self.service.transition(self.table, task_id, "done")
-        log.info("task %s -> trophy (outcome=%s, %d findings, agent status=%s)",
-                 task_id, outcome, len(findings), result.status)
+        log.info("task %s -> trophy (outcome=%s, %d findings, agent status=%s, cohort=%s)",
+                 task_id, outcome, len(findings), result.status, cohort_id)
 
+        # Member runs stay quiet on Slack (no slackChannel anyway); the cohort posts
+        # the single comparison. A normal run notifies as usual.
         await self._notify(item, outcome, summary, metrics, findings, trophy_id)
 
     async def _verify_repros(self, findings: list[dict], baml_version: Optional[str],
@@ -487,7 +543,7 @@ class BamlWorker(Processor):
         Returns:
             The parsed trophy dict, or an empty dict when none can be recovered.
         """
-        raw = result.post_files.get("trophy.json")
+        raw = (result.post_files or {}).get("trophy.json")
         if raw:
             try:
                 return json.loads(raw)

@@ -13,9 +13,11 @@ primary_region = 'sjc'
   INFISICAL_PATH       = '/'
   SERVICE_URL       = 'http://bench3-api.internal:8080'
   CLAUDE_PROXY_URLS = 'http://bench3-claude-proxy.internal:9090'
-  CLAUDE_MODEL      = 'claude-sonnet-4-6'
+  CLAUDE_MODEL      = 'claude-opus-4-8'
   CLAUDE_MAX_TURNS  = '100'
   BAML_SKILL_DIR    = '/baml-skill'
+  # skill-arena: member runs clone a specific branch of this repo at run time.
+  ATB_SKILL_REPO_URL = 'https://github.com/BoundaryML/baml-skill.git'
   UI_BASE_URL       = 'https://bench3-ui.fly.dev'
   # secrets: SERVICE_TOKEN, CLAUDE_PROXY_TOKEN, (optional SLACK_BOT_TOKEN)
 
