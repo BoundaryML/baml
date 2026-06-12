@@ -1,6 +1,5 @@
 ---
 source: crates/baml_cli/src/describe_command_tests.rs
-assertion_line: 354
 expression: output
 ---
 class            Bigint                           <builtin>/baml/bigint.baml:26
@@ -12,7 +11,7 @@ function         _float_total_cmp                 <builtin>/baml/comparable.baml
 function         _is_primitive_array              <builtin>/baml/comparable.baml:151
 function         _rust_sort                       <builtin>/baml/comparable.baml:172
 class            Array                            <builtin>/baml/containers.baml:2
-class            Map                              <builtin>/baml/containers.baml:475
+class            Map                              <builtin>/baml/containers.baml:457
 function         deep_copy                        <builtin>/baml/core.baml:3
 function         deep_equals                      <builtin>/baml/core.baml:9
 class            Float                            <builtin>/baml/float.baml:2
@@ -125,16 +124,16 @@ interface        iter.Iterable                    <builtin>/baml/ns_iter/iter.ba
 interface        iter.Iterator                    <builtin>/baml/ns_iter/iter.baml:10
 function         iter.flatten                     <builtin>/baml/ns_iter/iter.baml:129
 class            iter.ArrayIterator               <builtin>/baml/ns_iter/iter.baml:133
-class            iter.Range                       <builtin>/baml/ns_iter/iter.baml:164
-class            iter.Repeat                      <builtin>/baml/ns_iter/iter.baml:196
-class            iter.Map                         <builtin>/baml/ns_iter/iter.baml:228
-class            iter.Filter                      <builtin>/baml/ns_iter/iter.baml:252
-class            iter.FilterMap                   <builtin>/baml/ns_iter/iter.baml:283
-class            iter.FlatMap                     <builtin>/baml/ns_iter/iter.baml:315
-class            iter.Flatten                     <builtin>/baml/ns_iter/iter.baml:356
-class            iter.Peekable                    <builtin>/baml/ns_iter/iter.baml:396
-class            iter.StepBy                      <builtin>/baml/ns_iter/iter.baml:434
-class            iter.Chain                       <builtin>/baml/ns_iter/iter.baml:466
+class            iter.Range                       <builtin>/baml/ns_iter/iter.baml:168
+class            iter.Repeat                      <builtin>/baml/ns_iter/iter.baml:200
+class            iter.Map                         <builtin>/baml/ns_iter/iter.baml:232
+class            iter.Filter                      <builtin>/baml/ns_iter/iter.baml:256
+class            iter.FilterMap                   <builtin>/baml/ns_iter/iter.baml:287
+class            iter.FlatMap                     <builtin>/baml/ns_iter/iter.baml:319
+class            iter.Flatten                     <builtin>/baml/ns_iter/iter.baml:360
+class            iter.Peekable                    <builtin>/baml/ns_iter/iter.baml:400
+class            iter.StepBy                      <builtin>/baml/ns_iter/iter.baml:438
+class            iter.Chain                       <builtin>/baml/ns_iter/iter.baml:470
 type             json.json                        <builtin>/baml/ns_json/json.baml:2
 class            json.JsonParseError              <builtin>/baml/ns_json/json.baml:5
 class            json.JsonDecodeError             <builtin>/baml/ns_json/json.baml:9
