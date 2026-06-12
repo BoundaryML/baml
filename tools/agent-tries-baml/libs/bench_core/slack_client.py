@@ -1,7 +1,8 @@
 """Minimal Slack helpers (hand-rolled REST, ported from slack-bot).
 
 post_message for threaded acks/replies and the @cursor fix ping;
-verify_signature for the ingress gateway.
+verify_signature for the ingress gateway; fetch_thread/users_info for
+the @bammy router's thread-context reading and promo audit trail.
 """
 
 from __future__ import annotations
@@ -47,16 +48,129 @@ async def post_message(
         payload["thread_ts"] = thread_ts
     if blocks:
         payload["blocks"] = blocks
-    async with httpx.AsyncClient(timeout=20.0) as c:
-        r = await c.post(
-            f"{SLACK_API}/chat.postMessage",
-            json=payload,
-            headers={"Authorization": f"Bearer {token}"},
-        )
-        data = r.json()
-        if not data.get("ok"):
-            return None
-        return data.get("ts")
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as c:
+            r = await c.post(
+                f"{SLACK_API}/chat.postMessage",
+                json=payload,
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            data = r.json()
+    except (httpx.HTTPError, ValueError):  # network failure or non-JSON outage page
+        return None
+    if not data.get("ok"):
+        return None
+    return data.get("ts")
+
+
+async def fetch_thread(
+    token: str, channel: str, thread_ts: str, *, limit: int = 30
+) -> list[dict[str, Any]]:
+    """Fetch the messages of a Slack thread via conversations.replies.
+
+    Used by the @bammy router so a mid-thread mention can read what was said
+    before the mention. Requires the *:history scope matching the channel type.
+
+    Args:
+        token: Slack bot token used for bearer auth.
+        channel: Channel id the thread lives in.
+        thread_ts: ts of the thread's parent message.
+        limit: Maximum number of messages to fetch (oldest-first).
+
+    Returns:
+        The thread's message objects oldest-first (parent included), or an
+        empty list on missing config or failure.
+    """
+    if not token or not channel or not thread_ts:
+        return []
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as c:
+            r = await c.get(
+                f"{SLACK_API}/conversations.replies",
+                params={"channel": channel, "ts": thread_ts, "limit": limit},
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            data = r.json()
+    except (httpx.HTTPError, ValueError):
+        return []
+    if not data.get("ok"):
+        return []
+    return data.get("messages") or []
+
+
+async def users_info(token: str, user_id: str) -> Optional[dict[str, Any]]:
+    """Fetch a Slack user's profile via users.info.
+
+    Args:
+        token: Slack bot token used for bearer auth.
+        user_id: Slack user id (U...).
+
+    Returns:
+        The user object, or None on missing config or failure.
+    """
+    if not token or not user_id:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as c:
+            r = await c.get(
+                f"{SLACK_API}/users.info",
+                params={"user": user_id},
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            data = r.json()
+    except (httpx.HTTPError, ValueError):
+        return None
+    if not data.get("ok"):
+        return None
+    return data.get("user")
+
+
+def display_name(user: Optional[dict[str, Any]]) -> str:
+    """Best display name for a Slack user object (profile display name,
+    then real name, then the raw user id), mirroring the t-shirts bot.
+
+    Args:
+        user: A users.info user object, or None.
+
+    Returns:
+        A non-empty human-readable name, or "" when user is None.
+    """
+    if not user:
+        return ""
+    profile = user.get("profile") or {}
+    return (
+        profile.get("display_name")
+        or profile.get("real_name")
+        or user.get("real_name")
+        or user.get("name")
+        or user.get("id")
+        or ""
+    )
+
+
+def render_thread(messages: list[dict[str, Any]], *, names: Optional[dict[str, str]] = None) -> str:
+    """Render thread messages as "name: text" lines for prompt context.
+
+    Args:
+        messages: Message objects from fetch_thread (oldest-first).
+        names: Optional user-id -> display-name map; unmapped ids render raw.
+
+    Returns:
+        One line per non-empty message; bot messages are tagged "[bot]".
+    """
+    names = names or {}
+    lines: list[str] = []
+    for m in messages:
+        text = (m.get("text") or "").strip()
+        if not text:
+            continue
+        if m.get("bot_id") and not m.get("user"):
+            who = "[bot]"
+        else:
+            uid = m.get("user") or "unknown"
+            who = names.get(uid, uid)
+        lines.append(f"{who}: {text}")
+    return "\n".join(lines)
 
 
 def verify_signature(

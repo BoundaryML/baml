@@ -19,6 +19,11 @@ NOTION_API = os.environ.get("NOTION_API_BASE", "https://api.notion.com/v1")
 NOTION_VERSION = os.environ.get("NOTION_VERSION", "2022-06-28")
 PROP_TITLE = os.environ.get("NOTION_PROP_TITLE", "Name")
 PROP_STATUS = os.environ.get("NOTION_PROP_STATUS", "Status")
+# Select property carrying the issue kind (skill | language). Set automatically on
+# create/update so a combined board view can filter by kind even though skill and
+# language issues route to separate databases. The property must exist on the board
+# (a select with skill/language options); rename via NOTION_PROP_KIND if needed.
+PROP_KIND = os.environ.get("NOTION_PROP_KIND", "Kind")
 
 
 class NotionClient:
@@ -77,10 +82,33 @@ class NotionClient:
             children += markdown_to_blocks("## Evidence\n" + "\n".join(items))
         return children
 
+    @staticmethod
+    def _issue_properties(title: str, status_name: str,
+                          kind: Optional[str]) -> dict[str, Any]:
+        """Build the Notion page properties for an issue (title, status, kind).
+
+        Args:
+            title: Page title; truncated to 200 characters.
+            status_name: Value for the Status select property.
+            kind: Optional issue kind (``skill``/``language``) set as the Kind
+                select; omitted when None so a board without the property still works.
+
+        Returns:
+            The ``properties`` dict for a create/update payload.
+        """
+        props: dict[str, Any] = {
+            PROP_TITLE: {"title": [{"text": {"content": title[:200]}}]},
+            PROP_STATUS: {"status": {"name": status_name}},
+        }
+        if kind:
+            props[PROP_KIND] = {"select": {"name": kind}}
+        return props
+
     async def create_issue_page(
         self, database_id: str, title: str, status_name: str, body: str,
         evidence_links: list[str], suggestion: Optional[str] = None,
         category: Optional[str] = None, repro: Optional[str] = None,
+        kind: Optional[str] = None,
     ) -> str:
         """Create a structured Notion issue page from Markdown.
 
@@ -108,10 +136,7 @@ class NotionClient:
         children = self._issue_children(body, evidence_links, suggestion, category, repro)
         payload = {
             "parent": {"database_id": database_id},
-            "properties": {
-                PROP_TITLE: {"title": [{"text": {"content": title[:200]}}]},
-                PROP_STATUS: {"status": {"name": status_name}},
-            },
+            "properties": self._issue_properties(title, status_name, kind),
             "children": children[:100],
         }
         async with httpx.AsyncClient(timeout=30.0) as c:
@@ -173,6 +198,7 @@ class NotionClient:
         self, page_id: str, title: str, status_name: str, body: str,
         evidence_links: list[str], suggestion: Optional[str] = None,
         category: Optional[str] = None, repro: Optional[str] = None,
+        kind: Optional[str] = None,
     ) -> None:
         """Re-render an existing issue page in place: title, status, and body.
 
@@ -193,10 +219,7 @@ class NotionClient:
         Raises:
             httpx.HTTPStatusError: If Notion returns a non-2xx response.
         """
-        payload = {"properties": {
-            PROP_TITLE: {"title": [{"text": {"content": title[:200]}}]},
-            PROP_STATUS: {"status": {"name": status_name}},
-        }}
+        payload = {"properties": self._issue_properties(title, status_name, kind)}
         async with httpx.AsyncClient(timeout=30.0) as c:
             r = await c.patch(f"{NOTION_API}/pages/{page_id}", json=payload, headers=self._headers)
             r.raise_for_status()
@@ -252,6 +275,24 @@ class NotionClient:
         prop = (page.get("properties") or {}).get(PROP_STATUS) or {}
         status = prop.get("status") or {}
         return status.get("name")
+
+    async def add_comment(self, page_id: str, text: str) -> None:
+        """Add a plain-text comment to a page.
+
+        Args:
+            page_id: Id of the page to comment on.
+            text: The comment body (plain text, truncated to Notion's limit).
+
+        Raises:
+            httpx.HTTPStatusError: If Notion returns a non-2xx response.
+        """
+        body = {
+            "parent": {"page_id": page_id},
+            "rich_text": [{"text": {"content": text[:1900]}}],
+        }
+        async with httpx.AsyncClient(timeout=30.0) as c:
+            r = await c.post(f"{NOTION_API}/comments", json=body, headers=self._headers)
+            r.raise_for_status()
 
     async def get_comments(self, page_id: str) -> list[dict[str, Any]]:
         """Fetch all comments on a page, following pagination.

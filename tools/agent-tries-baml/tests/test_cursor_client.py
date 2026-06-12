@@ -68,3 +68,47 @@ async def test_launch_agent_non_409_error_still_raises():
             "key", "fix it", "https://github.com/o/r", "canary",
             agent_id="notion-fixer-issue1",
         )
+
+
+@respx.mock
+async def test_pr_for_agent_resolves_pr_from_latest_run():
+    """pr_for_agent reads the agent's latest run and returns the branch's PR url."""
+    respx.get(f"{AGENTS_URL}/a1").mock(
+        return_value=httpx.Response(200, json={"status": "RUNNING", "latestRunId": "r1"})
+    )
+    respx.get(f"{AGENTS_URL}/a1/runs/r1").mock(
+        return_value=httpx.Response(200, json={"status": "FINISHED", "git": {"branches": [
+            {"repoUrl": "https://github.com/o/r", "branch": "cursor/fix",
+             "prUrl": "https://github.com/o/r/pull/7"}]}})
+    )
+    pr = await cursor_client.pr_for_agent("key", "a1")
+    assert pr["prUrl"] == "https://github.com/o/r/pull/7"
+    assert pr["branch"] == "cursor/fix"
+    assert pr["runStatus"] == "FINISHED"
+    assert pr["agentStatus"] == "RUNNING"
+
+
+@respx.mock
+async def test_pr_for_agent_no_pr_yet_surfaces_status():
+    """With no PR pushed, pr_for_agent still returns the run/agent status (prUrl None)."""
+    respx.get(f"{AGENTS_URL}/a2").mock(
+        return_value=httpx.Response(200, json={"status": "FINISHED", "latestRunId": "r2"})
+    )
+    respx.get(f"{AGENTS_URL}/a2/runs/r2").mock(
+        return_value=httpx.Response(200, json={"status": "FINISHED", "git": {"branches": []}})
+    )
+    pr = await cursor_client.pr_for_agent("key", "a2")
+    assert pr["prUrl"] is None
+    assert pr["runStatus"] == "FINISHED"
+
+
+@respx.mock
+async def test_add_followup_posts_a_new_run():
+    """add_followup POSTs the instruction to /v1/agents/{id}/runs."""
+    route = respx.post(f"{AGENTS_URL}/a1/runs").mock(
+        return_value=httpx.Response(200, json={"id": "r9", "status": "CREATING"})
+    )
+    out = await cursor_client.add_followup("key", "a1", "fix the failing test")
+    assert out == {"id": "r9", "status": "CREATING"}
+    sent = json.loads(route.calls.last.request.content)
+    assert sent["prompt"]["text"] == "fix the failing test"
