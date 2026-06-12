@@ -18,7 +18,7 @@ only Convex client. Solid arrows are calls through the API; dashed flows
 *Event sources feed `ingress`/`cron`, which create tasks through the API. The API
 is the sole Convex gateway; `baml-worker` and `baml-dedup` run agents through
 `claude-proxy` (which reaches Anthropic and caches the baml binary per sha);
-`baml-builder` pulls baml alpha releases from GitHub; `notion-fixer` syncs issues
+`baml-builder` pulls baml alpha releases from GitHub; `bug-verify` re-checks open issues against each new nightly (stamping brokeIn/fixedIn, closing fixed ones, and updating their Notion pages); `notion-fixer` syncs issues
 to Notion and Slack; a read-only Next.js UI reads through the API. Convex holds
 the `tasks`, `trophies`, `issues`, and `bamlBuilds` queues with their lifecycles.*
 

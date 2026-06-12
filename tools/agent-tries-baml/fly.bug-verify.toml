@@ -1,0 +1,26 @@
+app            = 'bench3-bug-recheck'
+primary_region = 'sjc'
+
+# Re-checks reported bugs against the latest nightly: stamps
+# verifiedAt/brokeIn, closes fixed issues with fixedIn, and updates their
+# Notion pages. Singleton poller; no queue claims.
+[build]
+  dockerfile = 'docker/Dockerfile.python'
+
+[processes]
+  app = 'python -m services.bug_verify'
+
+[env]
+  INFISICAL_PROJECT_ID = 'bdd280e2-259c-4750-9b16-a8597a67214c'
+  INFISICAL_ENV        = 'prod'
+  INFISICAL_PATH       = '/'
+  SERVICE_URL       = 'http://bench3-api.internal:8080'
+  CLAUDE_PROXY_URLS = 'http://bench3-claude-proxy.internal:9090'
+  BUG_VERIFY_MODEL  = 'claude-sonnet-4-6'
+  BUG_VERIFY_BATCH  = '6'
+  BUG_VERIFY_POLL_SECS = '900'
+  # secrets: SERVICE_TOKEN, CLAUDE_PROXY_TOKEN, NOTION_TOKEN
+
+[[vm]]
+  size   = 'shared-cpu-1x'
+  memory = '512mb'
