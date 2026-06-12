@@ -1,7 +1,8 @@
 import Link from 'next/link';
 
 const LINKS: Array<[string, string]> = [
-  ['/', 'dashboard'],
+  ['/', 'agents'],
+  ['/pipeline', 'pipeline'],
   ['/#runs', 'runs'],
   ['/cohorts', 'arenas'],
   ['/#issues', 'issues'],

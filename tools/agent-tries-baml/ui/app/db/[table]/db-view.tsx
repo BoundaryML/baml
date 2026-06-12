@@ -36,8 +36,11 @@ const pill = (v: string) => <StatPill tone={TONE[v] ?? 'default'}>{v}</StatPill>
 const STAGE_ORDER = [
   'approved',
   'to cursor',
+  'pr prep',
+  'ready to merge',
   'redraft',
   'not started',
+  'needs human',
   'fixed',
   'failed',
   'closed',
@@ -46,8 +49,11 @@ const STAGE_ORDER = [
 const STAGE_TONE: Record<string, StatPillTone> = {
   approved: 'success',
   'to cursor': 'link',
+  'pr prep': 'link',
+  'ready to merge': 'success',
   redraft: 'mute',
   'not started': 'mute',
+  'needs human': 'destructive',
   fixed: 'success',
   failed: 'destructive',
   closed: 'mute',
@@ -56,32 +62,41 @@ const STAGE_TONE: Record<string, StatPillTone> = {
 const STAGE_BLURB: Record<string, string> = {
   approved: 'you approved — dispatching a Cursor fix',
   'to cursor': 'a Cursor agent is working the fix',
+  'pr prep': 'PR open — watching CI + CodeRabbit, auto-fixing on red',
+  'ready to merge': 'green & CodeRabbit-clear — a human merges',
   redraft: 'sent back — baml-redraft is rewriting from your comments',
   'not started': 'boarded, awaiting review',
+  'needs human': 'auto-fix gave up — needs a look',
   failed: 'dispatch failed',
 };
 
 /**
- * Map an issue to its lifecycle stage, mirroring the Notion board columns:
- * a dispatched issue (fixSlackTs set) is "to cursor", otherwise derived from status.
+ * Map an issue to its lifecycle stage, mirroring the Notion board columns.
  * @param i - the issue
  * @returns the stage label
  */
 function issueStage(i: Issue): string {
-  if (i.fixSlackTs) return 'to cursor';
   switch (i.status) {
     case 'redraft':
     case 'redrafting':
       return 'redraft';
     case 'approved':
+    case 'dispatching':
       return 'approved';
     case 'fixing':
+    case 'tocursor':
       return 'to cursor';
+    case 'prprep':
+      return 'pr prep';
+    case 'pr_ready':
+      return 'ready to merge';
+    case 'needs_human':
+      return 'needs human';
     case 'open':
     case 'confirmed':
       return 'not started';
     default:
-      return i.status; // failed, closed, rejected, …
+      return i.status; // closed, rejected, …
   }
 }
 
@@ -91,16 +106,35 @@ function issueStage(i: Issue): string {
  */
 function reportsCell(i: Issue) {
   const ev = (i.evidence ?? []).filter((e) => e.trophyId);
-  if (ev.length === 0) return <span className="text-muted-foreground">—</span>;
-  return ev.map((e, idx) => (
-    <Link
-      key={idx}
-      href={`/runs/${e.trophyId}${e.call_index != null ? `?call=${e.call_index}` : ''}`}
+  const pr = i.prUrl ? (
+    <a
+      key="pr"
+      href={i.prUrl}
+      target="_blank"
+      rel="noreferrer"
       className="mr-2"
+      title={i.checkState ? `CI ${i.checkState}` : undefined}
     >
-      report{e.call_index != null ? `·c${e.call_index}` : ''}
-    </Link>
-  ));
+      PR{i.prNumber ? ` #${i.prNumber}` : ''} ↗
+      {i.fixAttempts ? ` (${i.fixAttempts} fix${i.fixAttempts > 1 ? 'es' : ''})` : ''}
+    </a>
+  ) : null;
+  if (ev.length === 0 && !pr)
+    return <span className="text-muted-foreground">—</span>;
+  return (
+    <>
+      {pr}
+      {ev.map((e, idx) => (
+        <Link
+          key={idx}
+          href={`/runs/${e.trophyId}${e.call_index != null ? `?call=${e.call_index}` : ''}`}
+          className="mr-2"
+        >
+          report{e.call_index != null ? `·c${e.call_index}` : ''}
+        </Link>
+      ))}
+    </>
+  );
 }
 
 /**

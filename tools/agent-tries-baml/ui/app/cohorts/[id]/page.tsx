@@ -144,6 +144,32 @@ export default async function CohortPage({
         </DataTable>
       )}
 
+      {variants.some((v) => v.skillText) ? (
+        <section className="mt-7">
+          <h2 className="mb-3 text-2xl font-bold">Skills</h2>
+          <p className="mb-3 text-[13px] text-muted-foreground">
+            The exact skill text each variant onboarded from (snapshotted by the
+            worker at run time).
+          </p>
+          {variants
+            .filter((v) => v.skillText)
+            .map((v) => (
+              <details key={v.taskId} className="mb-2 border border-border">
+                <summary className="cursor-pointer px-3 py-2 font-mono text-[12.5px]">
+                  {v.skillRef ?? 'static skill'}{' '}
+                  <span className="text-muted-foreground">
+                    · {(v.skillText as string).split('\n').length} lines ·{' '}
+                    {Math.round((v.skillText as string).length / 1024)} KB
+                  </span>
+                </summary>
+                <pre className="max-h-[480px] overflow-auto border-t border-border bg-muted px-3 py-2 font-mono text-[11.5px] leading-[1.45] whitespace-pre-wrap">
+                  {v.skillText}
+                </pre>
+              </details>
+            ))}
+        </section>
+      ) : null}
+
       {report?.summary ? (
         <section className="md-body mt-7">
           <p>{report.summary}</p>

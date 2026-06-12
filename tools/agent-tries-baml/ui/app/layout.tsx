@@ -5,9 +5,9 @@ import { SiteNav } from "@/components/site-nav";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "agent-tries-baml",
+  title: "agents.boundaryml.com",
   description:
-    "Cross-language perf and Claude Code agent metrics for BAML, captured on the Fly cloud worker.",
+    "Live roster of every agent running in the BAML monolith: bench workers, changelog generation, cursor fix dispatches, and the runs/issues pipeline.",
 };
 
 /**

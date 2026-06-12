@@ -106,6 +106,12 @@ export type Issue = {
   notionSyncStatus?: 'dirty' | 'syncing' | 'synced';
   notionPageId?: string | null;
   fixSlackTs?: string | null; // set to the Cursor agent ref once dispatched
+  // cursor-tracker PR phase (tocursor -> prprep -> pr_ready)
+  prUrl?: string | null;
+  prNumber?: number | null;
+  fixAttempts?: number | null;
+  checkState?: string | null; // pending | passing | failing
+  coderabbitState?: string | null; // none | blocking | clear
   firstSeenAt: number;
   lastSeenAt: number;
 };
@@ -287,6 +293,37 @@ export type TaskRow = {
   slackUser?: string | null;
 };
 
+/** A worker presence row (heartbeated by every long-lived processor). */
+export type Worker = {
+  _id: string;
+  workerId: string;
+  role: string;
+  status: 'idle' | 'busy' | string;
+  currentItemId?: string | null;
+  lastHeartbeat: number;
+};
+
+/** A roster row: a presence record joined to whatever it's working on. */
+export type WorkerRow = Worker & {
+  label?: string | null; // human label of currentItemId (prompt, title, sha)
+  href?: string | null; // dashboard link for currentItemId
+  sinceMs?: number | null; // how long the current item has been claimed
+  inferred?: boolean; // derived from a live claim, no presence heartbeat yet
+};
+
+/** A changelog entry row (the absorbed baml-changelog2 data). */
+export type ChangelogEntry = {
+  _id: string;
+  version: string;
+  channel: string;
+  date?: string | null;
+  title?: string | null;
+  status: string; // queued | generating | done | failed
+  createdAt: number;
+  updatedAt?: number;
+  claimedAt?: number | null;
+};
+
 /** The full live-polled snapshot driving the graph, db tables, and live dashboard. */
 export type LiveState = {
   configured: boolean;
@@ -304,11 +341,15 @@ export type LiveState = {
   builds: Build[];
   tasks: TaskRow[];
   cohorts: Cohort[];
+  workers: WorkerRow[];
+  changelog: ChangelogEntry[];
   agents: {
     activeTasks: number;
     workers: number;
     dedupers: number;
     fixers: number;
+    online: number; // presence rows with a fresh heartbeat
+    busy: number; // presence rows currently claiming an item
   };
   totals: {
     tasks: number;
@@ -361,22 +402,31 @@ export async function loadState(): Promise<LiveState> {
     builds: [],
     tasks: [],
     cohorts: [],
-    agents: { activeTasks: 0, workers: 0, dedupers: 0, fixers: 0 },
+    workers: [],
+    changelog: [],
+    agents: { activeTasks: 0, workers: 0, dedupers: 0, fixers: 0, online: 0, busy: 0 },
     totals: { tasks: 0, trophies: 0, openIssues: 0, costUsd: 0 },
   };
   if (!BASE) return empty;
-  const [trophies, tasks, issues, builds, cohorts] = await Promise.all([
-    get<Trophy[]>('/trophies?limit=60'),
-    get<TaskRow[]>('/tasks?limit=200'),
-    get<Issue[]>('/issues?limit=100'),
-    get<Build[]>('/bamlBuilds?limit=20'),
-    get<Cohort[]>('/cohorts?limit=60'),
-  ]);
+  const [trophies, tasks, issues, builds, cohorts, workers, changelog] =
+    await Promise.all([
+      get<Trophy[]>('/trophies?limit=60'),
+      get<TaskRow[]>('/tasks?limit=200'),
+      get<Issue[]>('/issues?limit=100'),
+      get<Build[]>('/bamlBuilds?limit=20'),
+      get<Cohort[]>('/cohorts?limit=60'),
+      // Null-tolerated: these endpoints may not exist until the monolith
+      // backend pieces are deployed; the UI sections just render empty.
+      get<Worker[]>('/workers?limit=100'),
+      get<ChangelogEntry[]>('/changelogEntries?limit=30'),
+    ]);
   const T = tasks ?? [],
     TR = trophies ?? [],
     IS = issues ?? [],
     BD = builds ?? [],
-    CO = cohorts ?? [];
+    CO = cohorts ?? [],
+    WK = workers ?? [],
+    CL = changelog ?? [];
   const now = Date.now();
   const taskById = new Map(T.map((t) => [t._id, t]));
   const reportByTask = new Map(TR.map((tr) => [tr.taskId, tr._id]));
@@ -435,6 +485,86 @@ export async function loadState(): Promise<LiveState> {
     }
   }
 
+  // ---- agents roster: presence rows joined to whatever they're working on ----
+  const itemRef = (id?: string | null): { label: string; href: string } | null => {
+    if (!id) return null;
+    const task = taskById.get(id);
+    if (task) {
+      const rid = reportByTask.get(id);
+      return {
+        label: (task.prompt ?? '').slice(0, 80),
+        href: rid ? `/runs/${rid}` : `/tasks/${id}`,
+      };
+    }
+    const trophy = TR.find((t) => t._id === id);
+    if (trophy) {
+      return {
+        label: (taskById.get(trophy.taskId)?.prompt ?? 'dedup batch').slice(0, 80),
+        href: `/runs/${id}`,
+      };
+    }
+    const issue = IS.find((i) => i._id === id);
+    if (issue) return { label: issue.title.slice(0, 80), href: `/issues/${id}` };
+    const cohort = CO.find((c) => c._id === id);
+    if (cohort) return { label: (cohort.prompt ?? 'skill arena').slice(0, 80), href: `/cohorts/${id}` };
+    const build = BD.find((b) => b._id === id);
+    if (build) return { label: `baml ${String(build.sha).slice(0, 8)}`, href: `/db/bamlBuilds` };
+    const entry = CL.find((e) => e._id === id);
+    if (entry) return { label: `changelog ${entry.version}`, href: `/changelog` };
+    return null;
+  };
+  const claimSince = (id?: string | null): number | null => {
+    if (!id) return null;
+    const pools: Array<Array<{ _id: string; claimedAt?: number | null }>> = [
+      T as any, TR as any, IS as any, BD as any, CO as any, CL as any,
+    ];
+    for (const pool of pools) {
+      const row = pool.find((r) => r._id === id);
+      if (row?.claimedAt) return now - row.claimedAt;
+    }
+    return null;
+  };
+  const workerRows: WorkerRow[] = WK.map((w) => {
+    const ref = itemRef(w.currentItemId);
+    return {
+      ...w,
+      label: ref?.label ?? null,
+      href: ref?.href ?? null,
+      sinceMs: claimSince(w.currentItemId),
+    };
+  });
+  // Workers implied by live claims but absent from the presence table render
+  // as "(inferred)" rows, so the roster works before heartbeats roll out.
+  const presenceIds = new Set(WK.map((w) => w.workerId));
+  for (const f of inflight) {
+    if (!f.claimedBy || presenceIds.has(f.claimedBy)) continue;
+    presenceIds.add(f.claimedBy);
+    const ref = itemRef(f.id);
+    workerRows.push({
+      _id: `inferred-${f.claimedBy}`,
+      workerId: f.claimedBy,
+      role: f.claimedBy.split('-')[0] ?? f.stage,
+      status: 'busy',
+      currentItemId: f.id,
+      lastHeartbeat: now,
+      label: ref?.label ?? f.label,
+      href: ref?.href ?? null,
+      sinceMs: f.sinceMs,
+      inferred: true,
+    });
+  }
+  workerRows.sort(
+    (a, b) =>
+      (b.status === 'busy' ? 1 : 0) - (a.status === 'busy' ? 1 : 0) ||
+      a.role.localeCompare(b.role) ||
+      b.lastHeartbeat - a.lastHeartbeat,
+  );
+  const FRESH_MS = 3 * 60 * 1000;
+  const online = workerRows.filter((w) => now - w.lastHeartbeat < FRESH_MS).length;
+  const busy = workerRows.filter(
+    (w) => w.status === 'busy' && now - w.lastHeartbeat < FRESH_MS,
+  ).length;
+
   const openIssues = IS.filter((i) => OPEN_ISSUE_STATUSES.has(i.status));
   // The /db/issues view shows every issue with its status (incl. closed /
   // rejected); open ones first, then most-recently-seen. `openIssues` still
@@ -455,6 +585,8 @@ export async function loadState(): Promise<LiveState> {
     workers: byStage('worker'),
     dedupers: byStage('dedup'),
     fixers: byStage('notion-sync'),
+    online,
+    busy,
   };
   return {
     configured: true,
@@ -475,6 +607,8 @@ export async function loadState(): Promise<LiveState> {
       reportId: reportByTask.get(t._id) ?? null,
     })),
     cohorts: CO,
+    workers: workerRows,
+    changelog: CL,
     agents,
     totals: {
       tasks: T.length,
@@ -621,6 +755,8 @@ export type CohortVariant = {
   turns: number | null;
   costUsd: number | null;
   findings: number;
+  /** The exact skill text this variant onboarded from (worker snapshot), when stored. */
+  skillText: string | null;
 };
 
 /** A cohort-detail bundle: the cohort, its per-branch variants, and the comparison report. */
@@ -652,6 +788,7 @@ export async function loadCohort(id: string): Promise<CohortDetail | null> {
       // The member's own held trophy (never the cohort report, which is anchored
       // to a representative member id).
       const tr = (trophies ?? []).find((t) => !t.isCohortReport) ?? null;
+      const skillId = (m as Task & { skillStorageId?: string | null }).skillStorageId;
       return {
         skillRef: m.skillRef ?? null,
         taskId: m._id,
@@ -661,6 +798,7 @@ export async function loadCohort(id: string): Promise<CohortDetail | null> {
         turns: tr?.metrics?.turns ?? null,
         costUsd: tr?.metrics?.estimated_cost_usd ?? null,
         findings: (tr?.findings ?? []).length,
+        skillText: skillId ? await getText(`/transcripts/${skillId}`) : null,
       };
     }),
   );
