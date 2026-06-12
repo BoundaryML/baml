@@ -137,3 +137,31 @@ fn driver_non_reflexive_nan() {
     // same-pointer shortcut, because equality is not reflexive).
     assert!(!run_bool(PRELUDE, "user.eq_nan_self"));
 }
+
+// Regression: `bool`'s `Compare` must be reflexive at the equal-operand boundary.
+// The stdlib once overrode `ge(self, _) = self` / `le(self, _) = !self`, so
+// `false >= false` and `true <= true` wrongly returned `false`. Dropping those
+// overrides lets `bool` inherit the `Compare` defaults (`ge = !lt`, `le = lt || eq`),
+// which are reflexive. Dispatched through a `bool`-typed method call, so it exercises
+// the inherited default bodies via the real VM.
+#[test]
+fn bool_compare_is_reflexive() {
+    const SRC: &str = r#"
+        function ge_b(a: bool, b: bool) -> bool { a.ge(b) }
+        function le_b(a: bool, b: bool) -> bool { a.le(b) }
+        function ge_false_false() -> bool { ge_b(false, false) }
+        function le_true_true() -> bool { le_b(true, true) }
+        function ge_true_false() -> bool { ge_b(true, false) }
+        function ge_false_true() -> bool { ge_b(false, true) }
+        function le_false_true() -> bool { le_b(false, true) }
+        function le_true_false() -> bool { le_b(true, false) }
+    "#;
+    // Reflexive (the bug): `x >= x` and `x <= x` are always true.
+    assert!(run_bool(SRC, "user.ge_false_false"));
+    assert!(run_bool(SRC, "user.le_true_true"));
+    // The strict directions stay correct.
+    assert!(run_bool(SRC, "user.ge_true_false")); // true >= false
+    assert!(!run_bool(SRC, "user.ge_false_true")); // false < true ⇒ !(false >= true)
+    assert!(run_bool(SRC, "user.le_false_true")); // false <= true
+    assert!(!run_bool(SRC, "user.le_true_false")); // true > false ⇒ !(true <= false)
+}

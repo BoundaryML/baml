@@ -350,7 +350,16 @@ fn build_interface_impls(
     for pkg_impls in interface_impls.values_mut() {
         pkg_impls.sort_by_cached_key(|tn, _| tn_sort_key(tn));
         for rules in pkg_impls.values_mut() {
-            rules.sort_by_cached_key(|rule| rule.for_ty_pattern.to_string());
+            // Primary key is the rendered pattern; its `Display` drops module paths,
+            // so two distinct same-short-name for-types tie. `{:?}` carries the
+            // module-qualified identity and breaks the tie deterministically (rather
+            // than falling back to unordered-map insertion order).
+            rules.sort_by_cached_key(|rule| {
+                (
+                    rule.for_ty_pattern.to_string(),
+                    format!("{:?}", rule.for_ty_pattern),
+                )
+            });
         }
     }
     interface_impls

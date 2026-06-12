@@ -96,12 +96,8 @@ implement Compare for bool {
     function gt(self, other: Self) -> bool throws never {
         self && !other
     }
-    function ge(self, other: Self) -> bool throws never {
-        self
-    }
-    function le(self, other: Self) -> bool throws never {
-        !self
-    }
+    // `ge`/`le` inherit the `Compare` defaults (`ge = !lt`, `le = lt || eq`), which are
+    // reflexive: `ge(x, x) = !lt(x, x) = true`, `le(x, x) = lt(x, x) || eq(x, x) = true`.
 }
 
 implement Equals for null {

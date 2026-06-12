@@ -14928,7 +14928,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // non-object primitive (int/float/bigint/bool/null) has no object
                 // representation and aborts at runtime. So `string + int` must be
                 // a type error here rather than inferring `string` and crashing
-                // the VM (F4), while `string + uint8array` stays valid.
+                // the VM, while `string + uint8array` stays valid.
                 if matches!(op, baml_compiler2_ast::BinaryOp::Add)
                     && !Self::is_non_object_primitive(lhs)
                     && !Self::is_non_object_primitive(rhs)

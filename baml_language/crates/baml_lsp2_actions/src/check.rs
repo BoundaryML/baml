@@ -615,8 +615,8 @@ fn check_interfaces<'db>(
         // distinguishes them so the user knows whether it's a proven conflict or a
         // type too complex to analyze.
         let message: &str = if violation.indeterminate {
-            "cannot prove these interface implementations are disjoint; rejected \
-             because an overlap cannot be ruled out"
+            "these interface implementations are too complex to prove disjoint; \
+             simplify the types involved so coherence can be decided"
         } else {
             "overlapping interface implementations for the same receiver/interface"
         };

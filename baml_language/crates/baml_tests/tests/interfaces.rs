@@ -7740,6 +7740,309 @@ fn nested_union_in_generic_arg_disjoint_is_ok() {
     );
 }
 
+// Idempotent collapse: `Box<T[] | U[] | W[]>` and `Box<Foo[] | Bar[]>` coincide at
+// `T=Foo, U=Bar, W=Foo` (the third member collapses onto the first). The covering
+// solver catches this; an injective matcher (the old model) wrongly accepted both.
+#[test]
+fn union_collapse_overlaps_e0132() {
+    assert_compile_error_code(
+        r#"
+        interface Marker {}
+        class Box<X> { v: X }
+        class Foo { x: int }
+        class Bar { y: int }
+        implements<T, U, W> Marker for Box<T[] | U[] | W[]> {}
+        implements Marker for Box<Foo[] | Bar[]> {}
+        "#,
+        "E0132",
+    );
+}
+
+// `int` and the literal `1` are distinct types (generics are invariant), so `Box<int>`
+// and `Box<1>` are disjoint — no coherence conflict.
+#[test]
+fn box_int_vs_box_literal_is_disjoint() {
+    assert_no_compile_errors(
+        r#"
+        interface Marker {}
+        class Box<X> { v: X }
+        implements Marker for Box<int> {}
+        implements Marker for Box<1> {}
+        "#,
+    );
+}
+
+// A finite literal union is a strict subset of its base under invariance: `1 | 2` is not
+// `int`, so `Box<1 | 2>` and `Box<int>` are disjoint.
+#[test]
+fn literal_union_subset_of_base_is_disjoint() {
+    assert_no_compile_errors(
+        r#"
+        interface Marker {}
+        class Box<X> { v: X }
+        implements Marker for Box<1 | 2> {}
+        implements Marker for Box<int> {}
+        "#,
+    );
+}
+
+// A complete finite base folds back to the base: `true | false` is `bool`, so these two
+// blocks are the *same* type and conflict.
+#[test]
+fn complete_bool_union_folds_and_overlaps_e0132() {
+    assert_compile_error_code(
+        r#"
+        interface Marker {}
+        class Box<X> { v: X }
+        implements Marker for Box<true | false> {}
+        implements Marker for Box<bool> {}
+        "#,
+        "E0132",
+    );
+}
+
+// All of an enum's variants fold back to the enum: `Cmp.Less | Cmp.Equal | Cmp.More` is
+// `Cmp`, so `Box<…>` and `Box<Cmp>` conflict. (Soundness, not just precision: without
+// folding the two would be wrongly accepted as disjoint.)
+#[test]
+fn complete_enum_union_folds_and_overlaps_e0132() {
+    assert_compile_error_code(
+        r#"
+        interface Marker {}
+        class Box<X> { v: X }
+        enum Cmp { Less Equal More }
+        implements Marker for Box<Cmp.Less | Cmp.Equal | Cmp.More> {}
+        implements Marker for Box<Cmp> {}
+        "#,
+        "E0132",
+    );
+}
+
+// A coupled union too large for the overlap search to resolve within its budget yields
+// the *indeterminate* rejection (a pigeonhole: five variables cannot realize six
+// distinct members, but proving it is NP-hard). The impls are still rejected, with the
+// "too complex — simplify" message rather than a definite-overlap one.
+#[test]
+fn intractable_union_overlap_asks_to_simplify() {
+    assert_compile_error_contains(
+        r#"
+        interface Marker {}
+        class Box<X> { v: X }
+        class Pair<A, B> { f: A s: B }
+        class A0 { x: int } class A1 { x: int } class A2 { x: int }
+        class A3 { x: int } class A4 { x: int } class A5 { x: int }
+        implements<T0, T1, T2, T3, T4> Marker for Box<
+            Pair<T0, T0> | Pair<T1, T1> | Pair<T2, T2> | Pair<T3, T3> | Pair<T4, T4>
+        > {}
+        implements Marker for Box<
+            Pair<A0, A0> | Pair<A1, A1> | Pair<A2, A2> | Pair<A3, A3> | Pair<A4, A4> | Pair<A5, A5>
+        > {}
+        "#,
+        "simplify",
+    );
+}
+
+// `Box<C | T>` and `Box<C>` overlap at `T = C` (idempotency collapses `C | C` to `C`),
+// the union-vs-non-union analogue of the collapse the `(Union, Union)` path already
+// rejects. Before routing the non-union operand through covering, this was a wrong
+// `No` — two conflicting impls silently accepted.
+#[test]
+fn union_member_vs_single_collapse_overlaps_e0132() {
+    assert_compile_error_code(
+        r#"
+        interface Marker {}
+        class Box<X> { v: X }
+        class C {}
+        implements<T> Marker for Box<C | T> {}
+        implements Marker for Box<C> {}
+        "#,
+        "E0132",
+    );
+}
+
+// `Box<D | T>` and `Box<C>` (with `C ≠ D`) are disjoint: the union always contains `D`,
+// which no `T` removes, so it can never equal `C`. Covering keeps this precise (no error),
+// not a conservative over-reject.
+#[test]
+fn union_member_vs_unrelated_single_is_disjoint() {
+    assert_no_compile_errors(
+        r#"
+        interface Marker {}
+        class Box<X> { v: X }
+        class C {}
+        class D {}
+        implements<T> Marker for Box<D | T> {}
+        implements Marker for Box<C> {}
+        "#,
+    );
+}
+
+// A blanket `Box<T>` overlaps `Box<unknown>` at `T = unknown` (the inhabited top type).
+// The old solver lumped `unknown` in with the error sentinel and wrongly accepted both.
+#[test]
+fn box_unknown_vs_blanket_overlaps_e0132() {
+    assert_compile_error_code(
+        r#"
+        interface Marker {}
+        class Box<X> { v: X }
+        implements<T> Marker for Box<T> {}
+        implements Marker for Box<unknown> {}
+        "#,
+        "E0132",
+    );
+}
+
+// `Box<unknown>` and `Box<int>` are disjoint: under invariance `unknown` is a distinct
+// atomic type (only an `unknown` value inhabits `Box<unknown>`), matching the runtime
+// resolver. So implementing for both is allowed.
+#[test]
+fn box_unknown_vs_box_int_is_disjoint() {
+    assert_no_compile_errors(
+        r#"
+        interface Marker {}
+        class Box<X> { v: X }
+        implements Marker for Box<unknown> {}
+        implements Marker for Box<int> {}
+        "#,
+    );
+}
+
+// `Box<T[] | R>` (with `T extends HasName`) and `Box<Cat[] | Dog[]>` overlap at the
+// common instance `Box<Cat[] | Dog[]>` via `T = Dog` (which satisfies the bound) and
+// `R = Cat[]`. The bound check must not disprove this against the *other* cover witness
+// (`T = Cat`, which fails the bound) — the verdict must not depend on union member order.
+#[test]
+fn bounded_union_member_overlaps_concrete_union_e0132() {
+    assert_compile_error_code(
+        r#"
+        interface HasName {}
+        interface Marker {}
+        class Box<X> { v: X }
+        class Cat {}
+        class Dog {}
+        implements HasName for Dog {}
+        implements<T extends HasName, R> Marker for Box<T[] | R> {}
+        implements Marker for Box<Cat[] | Dog[]> {}
+        "#,
+        "E0132",
+    );
+}
+
+// The same overlap, with the concrete union's members in the opposite order — the
+// bound-satisfying witness (`Dog`) now comes first. Both orders must report the overlap.
+#[test]
+fn bounded_union_member_overlaps_concrete_union_reversed_e0132() {
+    assert_compile_error_code(
+        r#"
+        interface HasName {}
+        interface Marker {}
+        class Box<X> { v: X }
+        class Cat {}
+        class Dog {}
+        implements HasName for Dog {}
+        implements<T extends HasName, R> Marker for Box<T[] | R> {}
+        implements Marker for Box<Dog[] | Cat[]> {}
+        "#,
+        "E0132",
+    );
+}
+
+// A top-level type-alias for-type must not evade coherence. Before the valid-subject
+// gate expanded aliases, `impl I for C` + `impl I for AliasC` (`type AliasC = C`)
+// slipped past both E0132 and E0114, leaving two impls for the same concrete type.
+#[test]
+fn alias_for_type_overlaps_concrete_e0132() {
+    assert_compile_error_code(
+        r#"
+        interface Marker {}
+        class C {}
+        type AliasC = C
+        implement Marker for C {}
+        implement Marker for AliasC {}
+        "#,
+        "E0132",
+    );
+}
+
+#[test]
+fn alias_of_alias_for_type_overlaps_e0132() {
+    assert_compile_error_code(
+        r#"
+        interface Marker {}
+        class C {}
+        type A = C
+        type B = A
+        implement Marker for C {}
+        implement Marker for B {}
+        "#,
+        "E0132",
+    );
+}
+
+#[test]
+fn two_distinct_aliases_of_same_class_overlap_e0132() {
+    assert_compile_error_code(
+        r#"
+        interface Marker {}
+        class C {}
+        type A = C
+        type B = C
+        implement Marker for A {}
+        implement Marker for B {}
+        "#,
+        "E0132",
+    );
+}
+
+// The alias must not defeat an otherwise-working blanket-vs-concrete overlap; this
+// needs `unify_into` to see through the alias for the variable-binding structural
+// match, not only the exact-equality fast path.
+#[test]
+fn alias_for_type_overlaps_blanket_e0132() {
+    assert_compile_error_code(
+        r#"
+        interface Marker {}
+        class Box<X> { v: X }
+        type BI = Box<int>
+        implements<T> Marker for Box<T> {}
+        implement Marker for BI {}
+        "#,
+        "E0132",
+    );
+}
+
+// Control: aliases to DIFFERENT concrete types are genuinely disjoint — no error
+// (the alias expansion must not over-merge them).
+#[test]
+fn aliases_to_distinct_classes_are_disjoint() {
+    assert_no_compile_errors(
+        r#"
+        interface Marker {}
+        class C {}
+        class D {}
+        type AliasC = C
+        type AliasD = D
+        implement Marker for AliasC {}
+        implement Marker for AliasD {}
+        "#,
+    );
+}
+
+// A `Future` for-type is not implementable: its value/error args can't be carried by
+// the runtime impl registry's `TyTemplate`, so a generic `Future<T>` would bake an
+// undispatchable rule. Removed from the implementable whitelist so it errors (E0138)
+// rather than silently vanishing.
+#[test]
+fn future_for_type_is_rejected_e0138() {
+    assert_compile_error_code(
+        r#"
+        interface Marker {}
+        implement Marker for baml.future.Future<int, string> {}
+        "#,
+        "E0138",
+    );
+}
+
 #[test]
 fn unified_rule_namespaced_classes_with_same_short_name_do_not_cross_match() {
     let files = &[

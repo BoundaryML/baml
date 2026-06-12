@@ -3289,16 +3289,6 @@ function baml.ops.gt(self: unknown, other: unknown) -> bool throws never {
     self && Not other : bool
   }
 }
-function baml.ops.ge(self: unknown, other: unknown) -> bool throws never {
-  { : bool
-    self : bool
-  }
-}
-function baml.ops.le(self: unknown, other: unknown) -> bool throws never {
-  { : bool
-    Not self : bool
-  }
-}
 function baml.ops.eq(self: unknown, other: unknown) -> bool throws never {
   { : true
     true : true

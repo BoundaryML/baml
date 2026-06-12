@@ -110,10 +110,11 @@ fn candidate_rules<'a>(
 //    *generic* interface at two args (`Slot<L>` + `Slot<R>`) resolves to the first
 //    match. The front-end is supposed to force an explicit upcast
 //    (`(pair as Slot<L>).get()`) so this never arises; if it doesn't, thread the
-//    requested args like `type_implements` does (see F2).
-//  - "Coherence ⇒ at most one applicable rule" holds only per-file today; a
-//    cross-file / cross-package overlap reaches here as multiple candidates and
-//    the first by sort order wins arbitrarily. Needs whole-program coherence (F5).
+//    requested args the way `type_implements` does.
+//  - It returns the first rule by sort order when several apply. Compile-time
+//    coherence (per-package plus the dependency closure) rejects overlapping impls,
+//    so this is unreachable for statically-known packages; a mutable dynamically-
+//    loaded package could still introduce an overlap the orphan rule can't rule out.
 #[expect(
     dead_code,
     reason = "the broad `==` operator dispatch (the only caller) is reintroduced \
@@ -292,13 +293,21 @@ fn match_template(
         },
         TyTemplate::Interface(name, args, assoc) => match concrete {
             RuntimeTy::Interface(cname, cargs, cassoc, _) => {
+                // Each pattern binding must match a same-named concrete binding, found
+                // order-insensitively; extra concrete bindings don't constrain. This
+                // mirrors the compiler's associated-binding unification (`unify_into`'s
+                // `Interface` arm), rather than a positional, length-locked `zip` that
+                // would diverge if the two declaration orders ever differed. (A top-level
+                // interface for-type is rejected by `is_valid_impl_subject`; this is only
+                // reached for a nested interface argument.)
                 name == cname
                     && all_match(args, cargs, bindings)
-                    && assoc.len() == cassoc.len()
-                    && assoc
-                        .iter()
-                        .zip(cassoc)
-                        .all(|((an, at), (cn, ct))| an == cn && match_template(at, ct, bindings))
+                    && assoc.iter().all(|(an, at)| {
+                        cassoc
+                            .iter()
+                            .find(|(cn, _)| cn == an)
+                            .is_some_and(|(_, ct)| match_template(at, ct, bindings))
+                    })
             }
             _ => false,
         },
@@ -668,5 +677,28 @@ fn is_stream_companion(ty: &RuntimeTy) -> bool {
     match ty {
         RuntimeTy::Class(tn, ..) | RuntimeTy::Enum(tn, ..) => tn.name().ends_with("$stream"),
         _ => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use baml_type::{Freshness, Literal, TyAttr};
+
+    use super::*;
+
+    // Pins matcher invariance: a `Concrete` literal pattern matches only that exact
+    // literal type, never its base primitive. The compiler applies `1 <: int` only at
+    // the *top* of an overlap check (`cover`); under a constructor (`Box<1>` vs
+    // `Box<int>`) both sides stay invariant, and this runtime matcher agrees — so a
+    // `Box<1>` value does not dispatch an `implement … for Box<int>`. (Reached via
+    // reflection today; this pins the behavior before the `==` dispatch wires the
+    // resolver, where the literal-/attr-sensitivity would otherwise be untested.)
+    #[test]
+    fn concrete_literal_pattern_matches_only_the_literal() {
+        let one = RuntimeTy::Literal(Literal::Int(1), Freshness::Regular, TyAttr::default());
+        let pattern = TyTemplate::Concrete(one.clone());
+        let mut binds: Vec<Option<RuntimeTy>> = Vec::new();
+        assert!(match_template(&pattern, &one, &mut binds));
+        assert!(!match_template(&pattern, &RuntimeTy::int(), &mut binds));
     }
 }

@@ -17430,11 +17430,6 @@ function baml.net._timeout_nanos(timeout: baml.time.Duration | null) -> bigint {
 function baml.ops.Compare$for$bigint.lt(self: bigint, other: bigint) -> bool {
 }
 
-function baml.ops.Compare$for$bool.ge(self: bool, other: bool) -> bool {
-    load_var self
-    return
-}
-
 function baml.ops.Compare$for$bool.gt(self: bool, other: bool) -> bool {
     load_var self
     jump_if_false L0
@@ -17443,12 +17438,6 @@ function baml.ops.Compare$for$bool.gt(self: bool, other: bool) -> bool {
     unary_op !
 
   L0:
-    return
-}
-
-function baml.ops.Compare$for$bool.le(self: bool, other: bool) -> bool {
-    load_var self
-    unary_op !
     return
 }
 
@@ -17583,7 +17572,7 @@ function baml.ops.Compare.gt(self: baml.ops.Compare, other: Self) -> bool {
 
   L4:
     load_var2 1 2
-    call baml.ops.Compare$for$bool.le
+    call baml.ops.Compare.le
     jump L8
 
   L5:

@@ -942,6 +942,18 @@ pub fn tir2_to_template(
             Box::new(tir2_to_template(k, resolved, generic_params)),
             Box::new(tir2_to_template(v, resolved, generic_params)),
         ),
+        // Everything else flattens to a `Concrete` template via `resolved.convert`, which
+        // lowers faithfully (never a `TypeArgRef`), so a type var in its args is carried
+        // through as a bare `RuntimeTy::TypeVar` — which `match_template`'s exact `Concrete`
+        // comparison never matches against a real value's concrete type. Arg-less for-types
+        // (`Type`/`Resource`/`PromptAst`/primitives/enums) are exact. `Future` carries
+        // `value`/`error` args, so a *top-level* `Future` for-type is now rejected by
+        // `is_valid_impl_subject` (a generic `Future<T>` would otherwise bake an
+        // undispatchable rule). A *nested* generic `Future` — e.g.
+        // `implement<T> I for Box<Future<T>>` — still carries a bare `T` here, an exotic
+        // residual; `Class`/`List`/`Map`/`Union`/`Interface` avoid it by recursing through
+        // `tir2_to_template` (which emits a `TypeArgRef`). Add a `TyTemplate::Future` to
+        // close the nested case.
         other => TyTemplate::Concrete(resolved.convert(other)),
     }
 }

@@ -1708,7 +1708,14 @@ pub fn package_coherence_diagnostics<'db>(
     db: &'db dyn crate::Db,
     pkg_id: PackageId<'db>,
 ) -> Vec<CoherenceViolation> {
-    let own_rules = &package_implements_registry(db, pkg_id).interface_impl_rules;
+    let mut own_rules: Vec<&InterfaceImplRule> = package_implements_registry(db, pkg_id)
+        .interface_impl_rules
+        .iter()
+        .collect();
+    // Sort by source position so the "first implementation is here" attribution tracks
+    // the textually-earlier impl rather than registry (hash) iteration order, and stays
+    // stable when an unrelated item is added to the package.
+    own_rules.sort_by_key(|r| r.source_span.map(|s| u32::from(s.range.start())));
     let deps = baml_compiler2_hir::package::package_dependency_closure(db, pkg_id);
 
     // Type aliases (own package plus dependency exports) so alias-referencing
@@ -1771,6 +1778,25 @@ pub fn package_coherence_diagnostics<'db>(
     violations
 }
 
+/// Resolve a chain of top-level type aliases to the underlying type via `aliases`,
+/// bounded against alias cycles (those are a separate diagnostic). Only the *head* is
+/// resolved — aliases nested under a constructor are handled by `is_same_normalized_type`.
+/// Mirrors `expand_type_alias` in the diagnostics layer so the coherence valid-subject
+/// gate sees through the same aliases the E0138 concreteness gate does.
+fn expand_alias_head(ty: &Ty, aliases: &std::collections::HashMap<QualifiedTypeName, Ty>) -> Ty {
+    let mut current = ty.clone();
+    for _ in 0..64 {
+        let Ty::TypeAlias(qtn, _) = &current else {
+            break;
+        };
+        match aliases.get(qtn) {
+            Some(next) => current = next.clone(),
+            None => break,
+        }
+    }
+    current
+}
+
 /// True iff two impls of the *same* interface conflict (overlap with no
 /// specialization to rescue them). Distinct interfaces never conflict, and two
 /// in-body blocks of the same class for the same interface are a duplicate
@@ -1794,8 +1820,15 @@ fn impls_conflict<'db>(
     // An impl whose for-target is not a valid implementor (rejected by the E0138
     // concreteness gate — union, interface, literal, enum variant, or an error
     // type) must not contribute a coherence overlap, or it would stack a spurious
-    // E0132 on top of that rejection.
-    if !a.for_ty_pattern.is_valid_impl_subject() || !b.for_ty_pattern.is_valid_impl_subject() {
+    // E0132 on top of that rejection. The gate is applied to the *alias-expanded*
+    // for-type: a bare `type AliasC = C` for-type lowers to `Ty::TypeAlias` (not itself
+    // a valid subject), but E0138 expands it and accepts it, so coherence must expand it
+    // too — otherwise `impl I for C` + `impl I for AliasC` would slip past both gates,
+    // leaving two impls for the same concrete type. (Aliases *under* a constructor are
+    // resolved later by `is_same_normalized_type`; only the head matters here.)
+    if !expand_alias_head(&a.for_ty_pattern, aliases).is_valid_impl_subject()
+        || !expand_alias_head(&b.for_ty_pattern, aliases).is_valid_impl_subject()
+    {
         return Overlap::No;
     }
     if same_in_body_origin(a, b)
@@ -1865,8 +1898,10 @@ fn impls_overlap<'db>(
     // carries a bound the common instance provably violates (a ground subject that
     // does not satisfy its bound). That conclusion holds even if `result` is
     // `Unknown`, so it can override to `No`.
-    if !bounds_hold_at_common_instance(db, pkg_id, a, 'a', &vars, &bindings)
-        || !bounds_hold_at_common_instance(db, pkg_id, b, 'b', &vars, &bindings)
+    let a_subject: Vec<&Ty> = std::iter::once(&a_for).chain(a_args.iter()).collect();
+    let b_subject: Vec<&Ty> = std::iter::once(&b_for).chain(b_args.iter()).collect();
+    if !bounds_hold_at_common_instance(db, pkg_id, a, 'a', &vars, &bindings, &a_subject)
+        || !bounds_hold_at_common_instance(db, pkg_id, b, 'b', &vars, &bindings, &b_subject)
     {
         return Overlap::No;
     }
@@ -1875,9 +1910,15 @@ fn impls_overlap<'db>(
 
 /// Whether every bound of `rule` could hold at the common instance the unifier
 /// produced. Returns `false` as soon as a bound whose subject the unifier pinned
-/// to a *ground* type is provably unsatisfiable — which makes the two impls
+/// to a *forced* ground type is provably unsatisfiable — which makes the two impls
 /// disjoint. A bound whose subject is still a variable is undecidable in an open
 /// world and is assumed satisfiable.
+///
+/// The disproof is only sound when the binding is *principal* (forced by structural
+/// unification). A param that appears inside a union in this impl's `subject` (the
+/// for-type and interface args) is instead bound by `cover_search` to *one* of several
+/// possible witnesses, so disproving its bound against that single witness would
+/// unsoundly reject an overlap that a different witness satisfies — those are skipped.
 fn bounds_hold_at_common_instance<'db>(
     db: &'db dyn crate::Db,
     pkg_id: PackageId<'db>,
@@ -1885,6 +1926,7 @@ fn bounds_hold_at_common_instance<'db>(
     prefix: char,
     vars: &[Name],
     bindings: &TypeBindings,
+    subject: &[&Ty],
 ) -> bool {
     for i in 0..rule.generic_params.len() {
         let Some(Some(bound)) = rule.generic_param_bounds.get(i) else {
@@ -1893,11 +1935,12 @@ fn bounds_hold_at_common_instance<'db>(
         let Some(bound_qtn) = interface_qtn(bound) else {
             continue;
         };
-        let subject = chase_var(
-            &Ty::TypeVar(renamed_var(prefix, i), TyAttr::default()),
-            vars,
-            bindings,
-        );
+        let var_i = renamed_var(prefix, i);
+        // Non-principal (union-cover) binding ⇒ the witness is arbitrary; don't disprove.
+        if subject.iter().any(|t| var_under_union(&var_i, t)) {
+            continue;
+        }
+        let subject = chase_var(&Ty::TypeVar(var_i, TyAttr::default()), vars, bindings);
         if contains_bound_typevar(&subject, vars) {
             continue;
         }
@@ -1906,6 +1949,79 @@ fn bounds_hold_at_common_instance<'db>(
         }
     }
     true
+}
+
+/// Whether `name` occurs anywhere *inside a union* within `ty`. A bounded param that
+/// does is bound by `cover_search` to one of several possible witnesses, so its
+/// `chase_var` representative is non-principal — see `bounds_hold_at_common_instance`.
+fn var_under_union(name: &Name, ty: &Ty) -> bool {
+    fn occurs(name: &Name, ty: &Ty, in_union: bool) -> bool {
+        match ty {
+            Ty::TypeVar(n, _) => in_union && n == name,
+            Ty::Union(members, _) => members.iter().any(|m| occurs(name, m, true)),
+            Ty::Class(_, args, _) => args.iter().any(|a| occurs(name, a, in_union)),
+            Ty::Interface(_, args, assoc, _) => {
+                args.iter().any(|a| occurs(name, a, in_union))
+                    || assoc.iter().any(|(_, t)| occurs(name, t, in_union))
+            }
+            Ty::List(inner, _) | Ty::EvolvingList(inner, _) | Ty::WatchAccessor(inner, _) => {
+                occurs(name, inner, in_union)
+            }
+            Ty::Map {
+                key: k, value: v, ..
+            }
+            | Ty::EvolvingMap(k, v, _)
+            | Ty::Future(k, v, _) => occurs(name, k, in_union) || occurs(name, v, in_union),
+            Ty::AssociatedTypeProjection {
+                base, interface, ..
+            } => {
+                occurs(name, base, in_union)
+                    || interface
+                        .as_ref()
+                        .is_some_and(|i| occurs(name, i, in_union))
+            }
+            Ty::Function {
+                generic_param_bounds,
+                params,
+                ret,
+                throws,
+                ..
+            } => {
+                generic_param_bounds
+                    .iter()
+                    .any(|b| b.as_ref().is_some_and(|b| occurs(name, b, in_union)))
+                    || params
+                        .iter()
+                        .any(|FunctionParamTy { ty, .. }| occurs(name, ty, in_union))
+                    || occurs(name, ret, in_union)
+                    || occurs(name, throws, in_union)
+            }
+            // Leaf types hold no nested type, so no variable occurs in them. Listed
+            // explicitly (no total wildcard) so a new `Ty` variant must be classified.
+            Ty::Int { .. }
+            | Ty::Bigint { .. }
+            | Ty::Float { .. }
+            | Ty::String { .. }
+            | Ty::Bool { .. }
+            | Ty::Null { .. }
+            | Ty::Uint8Array { .. }
+            | Ty::Media(..)
+            | Ty::Literal(..)
+            | Ty::Enum(..)
+            | Ty::EnumVariant(..)
+            | Ty::RustType { .. }
+            | Ty::Type { .. }
+            | Ty::Resource { .. }
+            | Ty::PromptAst { .. }
+            | Ty::Void { .. }
+            | Ty::TypeAlias(..)
+            | Ty::BuiltinUnknown { .. }
+            | Ty::Never { .. }
+            | Ty::Unknown { .. }
+            | Ty::Error { .. } => false,
+        }
+    }
+    occurs(name, ty, false)
 }
 
 /// Fresh unification-variable name for the `idx`-th generic param of the impl
@@ -2037,6 +2153,11 @@ fn normalize_union(members: Vec<Ty>, attr: TyAttr, enum_variants: EnumVariants) 
 
     fold_finite_bases(&mut flat, enum_variants);
 
+    // Canonical member order: overlap decisions are order-insensitive (they go through
+    // `is_same_normalized_type` / set-covering), but a deterministic order keeps `nf`'s
+    // output stable across runs, avoiding spurious Salsa-cache churn.
+    flat.sort();
+
     match flat.len() {
         0 => Ty::Never { attr },
         1 => flat
@@ -2161,13 +2282,21 @@ fn unify_into(
 ) -> Overlap {
     let x = chase_var(x, vars, bindings);
     let y = chase_var(y, vars, bindings);
+    // Resolve a type alias to its definition before matching so the structural arms and
+    // variable binding see through it — e.g. blanket `Box<T>` vs `Box<int>` spelled via
+    // `type BI = Box<int>` must unify `T = int`. (`is_same_normalized_type` below also
+    // resolves aliases, but only for the exact-equality fast path; the var-binding
+    // structural match needs the alias gone too, or it falls to the disjoint arm.)
+    let x = expand_alias_head(&x, aliases);
+    let y = expand_alias_head(&y, aliases);
 
-    // Error-recovery types never unify: an unresolved for-type or arg already has
+    // The error sentinel never unifies: an unresolved for-type or arg already has
     // its own diagnostic, so treating it as a common instance would stack a
-    // spurious overlap.
-    if matches!(x, Ty::Unknown { .. } | Ty::BuiltinUnknown { .. })
-        || matches!(y, Ty::Unknown { .. } | Ty::BuiltinUnknown { .. })
-    {
+    // spurious overlap. The *inhabited* top type `unknown` (`BuiltinUnknown`) is
+    // deliberately not bailed here: it binds an opposing variable (below), and is
+    // otherwise a distinct atomic type compared by equality — `Box<unknown>` is
+    // disjoint from `Box<int>`, exactly how the runtime resolver matches it.
+    if matches!(x, Ty::Unknown { .. }) || matches!(y, Ty::Unknown { .. }) {
         return Overlap::No;
     }
 
@@ -2222,26 +2351,68 @@ fn unify_into(
             unify_into(xv, yv, vars, aliases, bindings)
                 .and(unify_into(xe, ye, vars, aliases, bindings))
         }
+        // Unions compare by covering on their member sets (ACI), so a non-union
+        // operand is treated as the singleton union `{S}` and routed through the same
+        // covering. That decides a variable- or literal-bearing union opposite a single
+        // type precisely: `1 | T` vs `int` overlaps at `T = int` (`1 <: int` collapses),
+        // `true | T` vs `bool` at `T = false`, and `C | T` vs `C` at `T = C`
+        // (idempotency), while `D | T` vs `C` (with `C ≠ D`) stays disjoint. Routing
+        // *every* union here — not only `Union` vs `Union` — is what stops a var-bearing
+        // union opposite a single type from being wrongly judged disjoint by the
+        // wildcard arm below. (The finite-base residual `true | T` / `Cmp.Less | T` is
+        // covered precisely via `cover`'s `literal <: base` / `variant <: enum` oracle.)
         (Ty::Union(xm, _), Ty::Union(ym, _)) => {
             unify_union_members(xm, ym, vars, aliases, bindings)
         }
-        // A union with a bare variable opposite a finite base (`bool` or an enum) could
-        // be completed to it by the variable (`true | T ≡ bool` at `T = false`;
-        // `Cmp.Less | T ≡ Cmp` at `T = Cmp.Equal | Cmp.More`). The ground all-variants
-        // case is folded to the base by `nf`, so this is the var-bearing residual —
-        // conservatively a possible overlap. (A precise answer would expand the base to
-        // its variants and cover, which needs the registry threaded into the unifier.)
-        (Ty::Union(members, _), Ty::Bool { .. } | Ty::Enum(..))
-        | (Ty::Bool { .. } | Ty::Enum(..), Ty::Union(members, _))
-            if members.iter().any(|m| is_bare_var(m, vars)) =>
-        {
-            Overlap::Yes
+        (Ty::Union(xm, _), _) => {
+            unify_union_members(xm, std::slice::from_ref(&y), vars, aliases, bindings)
         }
-        // No structural arm: equal subjects already unified above (the normalizer); any
-        // remaining pair is distinct types. A literal and its base are *distinct* types
-        // here — `unify_into` decides equality, so `int ≢ 1`; the `literal <: base`
-        // subtyping is `cover`'s job (the covering oracle), not equality's.
-        _ => Overlap::No,
+        (_, Ty::Union(ym, _)) => {
+            unify_union_members(std::slice::from_ref(&x), ym, vars, aliases, bindings)
+        }
+        // Everything else is disjoint under equality: equal subjects already unified
+        // above (the normalizer), unions are handled above, and any remaining pair is
+        // distinct types. A literal and its base are *distinct* here — `unify_into`
+        // decides equality, so `int ≢ 1`; the `literal <: base` subtyping is `cover`'s
+        // job (the covering oracle), not equality's. A same-constructor pair whose guard
+        // failed (different name/arity) or whose other side isn't that constructor lands
+        // here too. Every variant is named (no total wildcard) so a new `Ty` must be
+        // classified here rather than silently treated as disjoint.
+        (
+            Ty::Class(..)
+            | Ty::Interface(..)
+            | Ty::List(..)
+            | Ty::EvolvingList(..)
+            | Ty::Map { .. }
+            | Ty::EvolvingMap(..)
+            | Ty::Future(..)
+            | Ty::Int { .. }
+            | Ty::Bigint { .. }
+            | Ty::Float { .. }
+            | Ty::String { .. }
+            | Ty::Bool { .. }
+            | Ty::Null { .. }
+            | Ty::Uint8Array { .. }
+            | Ty::Media(..)
+            | Ty::Literal(..)
+            | Ty::Enum(..)
+            | Ty::EnumVariant(..)
+            | Ty::Function { .. }
+            | Ty::RustType { .. }
+            | Ty::Type { .. }
+            | Ty::Resource { .. }
+            | Ty::PromptAst { .. }
+            | Ty::Void { .. }
+            | Ty::WatchAccessor(..)
+            | Ty::TypeAlias(..)
+            | Ty::TypeVar(..)
+            | Ty::AssociatedTypeProjection { .. }
+            | Ty::BuiltinUnknown { .. }
+            | Ty::Never { .. }
+            | Ty::Unknown { .. }
+            | Ty::Error { .. },
+            _,
+        ) => Overlap::No,
     }
 }
 
@@ -2618,13 +2789,61 @@ fn occurs_in(n: &Name, t: &Ty, vars: &[Name], bindings: &TypeBindings) -> bool {
             args.iter().any(|a| occurs_in(n, a, vars, bindings))
                 || assoc.iter().any(|(_, ty)| occurs_in(n, ty, vars, bindings))
         }
-        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => occurs_in(n, inner, vars, bindings),
+        Ty::List(inner, _) | Ty::EvolvingList(inner, _) | Ty::WatchAccessor(inner, _) => {
+            occurs_in(n, inner, vars, bindings)
+        }
         Ty::Map {
             key: k, value: v, ..
         }
         | Ty::EvolvingMap(k, v, _)
         | Ty::Future(k, v, _) => occurs_in(n, k, vars, bindings) || occurs_in(n, v, vars, bindings),
-        _ => false,
+        Ty::AssociatedTypeProjection {
+            base, interface, ..
+        } => {
+            occurs_in(n, base, vars, bindings)
+                || interface
+                    .as_ref()
+                    .is_some_and(|i| occurs_in(n, i, vars, bindings))
+        }
+        Ty::Function {
+            generic_param_bounds,
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            generic_param_bounds
+                .iter()
+                .any(|b| b.as_ref().is_some_and(|b| occurs_in(n, b, vars, bindings)))
+                || params
+                    .iter()
+                    .any(|FunctionParamTy { ty, .. }| occurs_in(n, ty, vars, bindings))
+                || occurs_in(n, ret, vars, bindings)
+                || occurs_in(n, throws, vars, bindings)
+        }
+        // Leaf types hold no nested type, so a variable cannot occur in them. Listed
+        // explicitly (no total wildcard) so a new `Ty` variant must be classified here.
+        Ty::Int { .. }
+        | Ty::Bigint { .. }
+        | Ty::Float { .. }
+        | Ty::String { .. }
+        | Ty::Bool { .. }
+        | Ty::Null { .. }
+        | Ty::Uint8Array { .. }
+        | Ty::Media(..)
+        | Ty::Literal(..)
+        | Ty::Enum(..)
+        | Ty::EnumVariant(..)
+        | Ty::RustType { .. }
+        | Ty::Type { .. }
+        | Ty::Resource { .. }
+        | Ty::PromptAst { .. }
+        | Ty::Void { .. }
+        | Ty::TypeAlias(..)
+        | Ty::BuiltinUnknown { .. }
+        | Ty::Never { .. }
+        | Ty::Unknown { .. }
+        | Ty::Error { .. } => false,
     }
 }
 
@@ -3634,12 +3853,18 @@ mod tests {
 
     #[test]
     fn nf_keeps_partial_enum() {
-        // Two of `Cmp`'s three variants — not a complete base, so not folded.
+        // Two of `Cmp`'s three variants — not a complete base, so not folded to `Cmp`.
+        // `nf` canonicalizes member order, so the result lists the variants sorted
+        // (`Equal` before `Less`), independent of the input order.
         let partial = union(vec![
             enum_variant("Cmp", "Less"),
             enum_variant("Cmp", "Equal"),
         ]);
-        assert_eq!(nf(&partial, &stub_enum_variants), partial);
+        let canonical = union(vec![
+            enum_variant("Cmp", "Equal"),
+            enum_variant("Cmp", "Less"),
+        ]);
+        assert_eq!(nf(&partial, &stub_enum_variants), canonical);
     }
 
     #[test]
@@ -3685,6 +3910,86 @@ mod tests {
         ]);
         assert_eq!(
             unify_into(&u, &enum_ty("Cmp"), &[], &aliases, &mut bindings),
+            Overlap::No
+        );
+    }
+
+    #[test]
+    fn union_with_var_vs_single_class_overlaps_via_collapse() {
+        // `C | T` opposite the single type `C`: at `T = C` idempotency collapses the
+        // union to `C`, so they share the instance `C`. This is the union-vs-non-union
+        // analogue of `union_overlap_collapsing_members_is_yes`; routing the non-union
+        // operand through covering (as the singleton `{C}`) is what catches it.
+        let vars = vec![Name::new("T")];
+        let aliases = std::collections::HashMap::default();
+        let mut bindings = TypeBindings::default();
+        let c = || class(&[], "C", vec![]);
+        let u = union(vec![c(), type_var("T")]);
+        assert_eq!(
+            unify_into(&u, &c(), &vars, &aliases, &mut bindings),
+            Overlap::Yes
+        );
+    }
+
+    #[test]
+    fn union_with_literal_and_var_vs_base_overlaps_via_collapse() {
+        // `1 | T` opposite `int`: at `T = int` the literal `1 <: int` collapses, so the
+        // union equals `int` — decided precisely by `cover`'s `literal <: base` oracle.
+        let vars = vec![Name::new("T")];
+        let aliases = std::collections::HashMap::default();
+        let mut bindings = TypeBindings::default();
+        let u = union(vec![int_literal(1), type_var("T")]);
+        assert_eq!(
+            unify_into(&u, &int(), &vars, &aliases, &mut bindings),
+            Overlap::Yes
+        );
+    }
+
+    #[test]
+    fn union_with_var_vs_unrelated_single_is_disjoint() {
+        // `D | T` opposite `C` (`C ≠ D`): the union always contains `D`, which no
+        // instantiation of `T` removes, so it can never equal `C`. Routing through
+        // covering keeps this precise (`No`), not a conservative over-reject.
+        let vars = vec![Name::new("T")];
+        let aliases = std::collections::HashMap::default();
+        let mut bindings = TypeBindings::default();
+        let u = union(vec![class(&[], "D", vec![]), type_var("T")]);
+        let c = class(&[], "C", vec![]);
+        assert_eq!(
+            unify_into(&u, &c, &vars, &aliases, &mut bindings),
+            Overlap::No
+        );
+    }
+
+    #[test]
+    fn variable_binds_to_builtin_unknown() {
+        // `unknown` is the inhabited top type, so a unification variable binds to it: a
+        // blanket `Box<T>` overlaps `Box<unknown>` at `T = unknown`. The old bail that
+        // lumped `BuiltinUnknown` in with the error sentinel wrongly rejected this.
+        let vars = vec![Name::new("T")];
+        let aliases = std::collections::HashMap::default();
+        let mut bindings = TypeBindings::default();
+        assert_eq!(
+            unify_into(
+                &type_var("T"),
+                &builtin_unknown(),
+                &vars,
+                &aliases,
+                &mut bindings
+            ),
+            Overlap::Yes
+        );
+    }
+
+    #[test]
+    fn builtin_unknown_is_disjoint_from_distinct_concrete() {
+        // `unknown` is a distinct atomic type under invariance, compared by equality:
+        // `Box<unknown>` and `Box<int>` do not overlap, matching how the runtime
+        // resolver matches `unknown` (only an `unknown` value inhabits `Box<unknown>`).
+        let aliases = std::collections::HashMap::default();
+        let mut bindings = TypeBindings::default();
+        assert_eq!(
+            unify_into(&builtin_unknown(), &int(), &[], &aliases, &mut bindings),
             Overlap::No
         );
     }

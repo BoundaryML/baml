@@ -19158,12 +19158,6 @@ fn baml.ops.Equals$for$T[].eq(self: T[], other: Self) -> bool {
     }
 }
 
-fn baml.ops.Equals$for$int.eq = builtin(vm)
-
-fn baml.ops.Equals$for$bool.eq = builtin(vm)
-
-fn baml.ops.Equals$for$uint8array.eq = builtin(vm)
-
 fn baml.ops.Equals$for$float.eq = builtin(vm)
 
 fn baml.ops.Equals$for$string.eq = builtin(vm)
@@ -19183,9 +19177,13 @@ fn baml.ops.Equals$for$map<K, V>.eq(self: map<K, V>, other: Self) -> bool {
     }
 }
 
-fn baml.ops.equals = builtin(vm)
+fn baml.ops.Equals$for$int.eq = builtin(vm)
 
-fn baml.ops.Compare$for$float.ge = builtin(vm)
+fn baml.ops.Equals$for$bool.eq = builtin(vm)
+
+fn baml.ops.Equals$for$uint8array.eq = builtin(vm)
+
+fn baml.ops.equals = builtin(vm)
 
 fn baml.ops.Compare.ge(self: baml.ops.Compare, other: Self) -> bool {
     // Locals:
@@ -19258,23 +19256,11 @@ fn baml.ops.Compare.ge(self: baml.ops.Compare, other: Self) -> bool {
     }
 }
 
+fn baml.ops.Compare$for$float.ge = builtin(vm)
+
 fn baml.ops.Compare$for$string.ge = builtin(vm)
 
-fn baml.ops.Compare$for$bool.ge(self: bool, other: Self) -> bool {
-    // Locals:
-    let _0: bool // _0 // return
-    let _1: bool // self // param
-    let _2: Self // other // param
-
-    bb0: {
-        _0 = copy _1;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
+fn baml.ops.Compare$for$float.gt = builtin(vm)
 
 fn baml.ops.Compare$for$bool.gt(self: bool, other: Self) -> bool {
     // Locals:
@@ -19295,8 +19281,6 @@ fn baml.ops.Compare$for$bool.gt(self: bool, other: Self) -> bool {
         return;
     }
 }
-
-fn baml.ops.Compare$for$float.gt = builtin(vm)
 
 fn baml.ops.Compare.gt(self: baml.ops.Compare, other: Self) -> bool {
     // Locals:
@@ -19344,7 +19328,7 @@ fn baml.ops.Compare.gt(self: baml.ops.Compare, other: Self) -> bool {
     }
 
     bb7: {
-        _3 = call const fn baml.ops.Compare$for$bool.le(copy _1, copy _2) -> [bb11];
+        _3 = call const fn baml.ops.Compare.le(copy _1, copy _2) -> [bb11];
     }
 
     bb8: {
@@ -19372,6 +19356,8 @@ fn baml.ops.Compare.gt(self: baml.ops.Compare, other: Self) -> bool {
 fn baml.ops.Compare$for$string.gt = builtin(vm)
 
 fn baml.ops.Compare$for$float.le = builtin(vm)
+
+fn baml.ops.Compare$for$string.le = builtin(vm)
 
 fn baml.ops.Compare.le(self: baml.ops.Compare, other: Self) -> bool {
     // Locals:
@@ -19497,24 +19483,6 @@ fn baml.ops.Compare.le(self: baml.ops.Compare, other: Self) -> bool {
     }
 }
 
-fn baml.ops.Compare$for$string.le = builtin(vm)
-
-fn baml.ops.Compare$for$bool.le(self: bool, other: Self) -> bool {
-    // Locals:
-    let _0: bool // _0 // return
-    let _1: bool // self // param
-    let _2: Self // other // param
-
-    bb0: {
-        _0 = !copy _1;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn baml.ops.Compare$for$int.lt = builtin(vm)
 
 fn baml.ops.Compare$for$bool.lt(self: bool, other: Self) -> bool {
@@ -19539,27 +19507,11 @@ fn baml.ops.Compare$for$bool.lt(self: bool, other: Self) -> bool {
     }
 }
 
-fn baml.ops.Compare$for$float.lt = builtin(vm)
-
 fn baml.ops.Compare$for$bigint.lt = builtin(vm)
 
 fn baml.ops.Compare$for$string.lt = builtin(vm)
 
-fn baml.ops.Equals$for$null.neq(self: null, other: Self) -> bool {
-    // Locals:
-    let _0: bool // _0 // return
-    let _1: null // self // param
-    let _2: Self // other // param
-
-    bb0: {
-        _0 = const false;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
+fn baml.ops.Compare$for$float.lt = builtin(vm)
 
 fn baml.ops.Equals.neq(self: baml.ops.Equals, other: Self) -> bool {
     // Locals:
@@ -19674,6 +19626,22 @@ fn baml.ops.Equals.neq(self: baml.ops.Equals, other: Self) -> bool {
     }
 
     bb20: {
+        return;
+    }
+}
+
+fn baml.ops.Equals$for$null.neq(self: null, other: Self) -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: null // self // param
+    let _2: Self // other // param
+
+    bb0: {
+        _0 = const false;
+        goto -> bb1;
+    }
+
+    bb1: {
         return;
     }
 }

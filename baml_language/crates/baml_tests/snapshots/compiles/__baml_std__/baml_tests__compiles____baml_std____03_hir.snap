@@ -1585,36 +1585,30 @@ function baml.ops.eq(self: ?, other: Self) -> bool  [expr] {
 }
 function baml.ops.eq(self: ?, other: Self) -> bool  [builtin]
 function baml.ops.eq(self: ?, other: Self) -> bool  [builtin]
-function baml.ops.eq(self: ?, other: Self) -> bool  [builtin]
-function baml.ops.eq(self: ?, other: Self) -> bool  [builtin]
-function baml.ops.eq(self: ?, other: Self) -> bool  [builtin]
 function baml.ops.eq(self: ?, other: Self) -> bool  [expr] {
   {  } baml.ops.equals(self, other)
 }
+function baml.ops.eq(self: ?, other: Self) -> bool  [builtin]
+function baml.ops.eq(self: ?, other: Self) -> bool  [builtin]
+function baml.ops.eq(self: ?, other: Self) -> bool  [builtin]
 function baml.ops.equals(a: unknown, b: unknown) -> bool  [builtin]
-function baml.ops.ge(self: ?, other: Self) -> bool  [builtin]
 function baml.ops.ge(self: ?, other: Self) -> bool  [expr] {
   {  } Not self.lt(other)
 }
 function baml.ops.ge(self: ?, other: Self) -> bool  [builtin]
-function baml.ops.ge(self: ?, other: Self) -> bool  [expr] {
-  {  } self
-}
+function baml.ops.ge(self: ?, other: Self) -> bool  [builtin]
+function baml.ops.gt(self: ?, other: Self) -> bool  [builtin]
 function baml.ops.gt(self: ?, other: Self) -> bool  [expr] {
   {  } self And Not other
 }
-function baml.ops.gt(self: ?, other: Self) -> bool  [builtin]
 function baml.ops.gt(self: ?, other: Self) -> bool  [expr] {
   {  } Not self.le(other)
 }
 function baml.ops.gt(self: ?, other: Self) -> bool  [builtin]
 function baml.ops.le(self: ?, other: Self) -> bool  [builtin]
-function baml.ops.le(self: ?, other: Self) -> bool  [expr] {
-  {  } self.lt(other) Or self.eq(other)
-}
 function baml.ops.le(self: ?, other: Self) -> bool  [builtin]
 function baml.ops.le(self: ?, other: Self) -> bool  [expr] {
-  {  } Not self
+  {  } self.lt(other) Or self.eq(other)
 }
 function baml.ops.lt(self: ?, other: Self) -> bool  [builtin]
 function baml.ops.lt(self: ?, other: Self) -> bool  [expr] {
@@ -1624,10 +1618,10 @@ function baml.ops.lt(self: ?, other: Self) -> bool  [builtin]
 function baml.ops.lt(self: ?, other: Self) -> bool  [builtin]
 function baml.ops.lt(self: ?, other: Self) -> bool  [builtin]
 function baml.ops.neq(self: ?, other: Self) -> bool  [expr] {
-  {  } false
+  {  } Not self.eq(other)
 }
 function baml.ops.neq(self: ?, other: Self) -> bool  [expr] {
-  {  } Not self.eq(other)
+  {  } false
 }
 
 --- <builtin>/baml/ns_panics/panics.baml ---

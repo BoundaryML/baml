@@ -427,12 +427,17 @@ impl Ty {
     ///
     /// Valid: concrete user-facing types with a single runtime representation that
     /// dispatch can key on — the primitives, `Media`, classes, enums, the
-    /// containers `T[]` / `map<K, V>`, the builtin handles `Future` / `Type` /
-    /// `Resource` / `PromptAst`, and a blanket type parameter or its
-    /// associated-type projection (both stand for a concrete type at use sites).
-    /// `Never` is vacuously allowed (it has no values).
+    /// containers `T[]` / `map<K, V>`, the builtin handles `Type` / `Resource` /
+    /// `PromptAst`, and a blanket type parameter or its associated-type projection
+    /// (both stand for a concrete type at use sites). `Never` is vacuously allowed
+    /// (it has no values).
     ///
     /// Rejected:
+    ///   - `Future` — the runtime impl registry's `TyTemplate` has no constructor for
+    ///     it, so its `value`/`error` args can't carry a `TypeArgRef`: a generic
+    ///     `Future<T>` for-type would bake a `Concrete` rule carrying an unbindable bare
+    ///     `T` that never matches a real `Future<int>`. Rejected outright rather than
+    ///     silently mis-dispatching; revisit if a `TyTemplate::Future` is ever added.
     ///   - `Literal` / `EnumVariant` — singleton subtypes whose values dispatch
     ///     through their base (`int`, `Color`), so they have no implementor of
     ///     their own;
@@ -461,7 +466,6 @@ impl Ty {
             | Ty::Enum(..)
             | Ty::List(..)
             | Ty::Map { .. }
-            | Ty::Future(..)
             | Ty::Type { .. }
             | Ty::Resource { .. }
             | Ty::PromptAst { .. }
@@ -472,6 +476,7 @@ impl Ty {
             | Ty::EnumVariant(..)
             | Ty::Interface(..)
             | Ty::Union(..)
+            | Ty::Future(..)
             | Ty::Function { .. }
             | Ty::RustType { .. }
             | Ty::WatchAccessor(..)
@@ -1367,7 +1372,6 @@ mod tests {
                 value: boxed(ty_int()),
                 attr: TyAttr::default(),
             },
-            Ty::Future(boxed(ty_int()), boxed(Ty::null()), TyAttr::default()),
             Ty::Type {
                 attr: TyAttr::default(),
             },
@@ -1394,6 +1398,9 @@ mod tests {
             Ty::EnumVariant(qtn("Color"), Name::new("Red"), TyAttr::default()),
             Ty::Interface(qtn("I"), vec![], vec![], TyAttr::default()),
             Ty::union([ty_int(), ty_string()]),
+            // `Future` has type args `TyTemplate` can't carry — rejected so a generic
+            // `Future<T>` for-type errors rather than baking an undispatchable rule.
+            Ty::Future(boxed(ty_int()), boxed(Ty::null()), TyAttr::default()),
             Ty::Function {
                 generic_params: vec![],
                 generic_param_bounds: vec![],

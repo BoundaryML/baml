@@ -5,8 +5,10 @@
 //! These mirror BAML's `==` / `<` / `>` / `<=` / `>=` operators (which the
 //! compiler usually special-cases to direct comparison bytecode). They exist
 //! so primitives and containers satisfy interface bounds (`T extends Compare`)
-//! and so a comparison reached via dynamic dispatch produces the *same* result
-//! the specialized bytecode would.
+//! and so a comparison of *those* reached via dynamic dispatch produces the
+//! *same* result the specialized bytecode would. (The broad `==` driver
+//! [`EqualsDriver`] compares a class structurally even when it implements a
+//! custom `Equals`; honoring a user `Equals.eq` is a follow-up — see its docs.)
 //!
 //! Floats compare by IEEE rules (so `NaN != NaN`), matching the `==` operator
 //! and deliberately *unlike* `baml.deep_equals`, whose NaN-equal convention is
@@ -189,6 +191,26 @@ fn lock_pair_ordered<'g, T>(
     }
 }
 
+/// Follow a chain of `Cell` indirections to the underlying non-cell value, returning
+/// `None` on a cell cycle. Operands shouldn't reach the driver as raw cells — the
+/// compiler loads them before dispatch — but resolving iteratively (rather than
+/// recursing once per indirection) keeps the driver total against a pathological cycle.
+fn resolve_cells(vm: &BexVm, mut v: Value) -> Option<Value> {
+    let mut seen: Option<HashSet<HeapPtr>> = None;
+    loop {
+        let ValueKind::Object(ptr) = v.kind() else {
+            return Some(v);
+        };
+        let Object::Cell(cell) = vm.get_object(ptr) else {
+            return Some(v);
+        };
+        if !seen.get_or_insert_with(HashSet::new).insert(ptr) {
+            return None;
+        }
+        v = cell.load();
+    }
+}
+
 /// Worklist driver for the broad `==` operator (`baml.ops.equals`).
 ///
 /// Holds an explicit stack of pending pairs instead of recursing in Rust, so
@@ -238,6 +260,11 @@ impl EqualsDriver {
     /// value pushes its children onto the stack. Operands of different concrete
     /// kinds are never equal.
     fn compare_one(&mut self, vm: &BexVm, a: Value, b: Value) -> Cmp {
+        // Resolve any `Cell` indirection up front (bounded against cell cycles) so the
+        // arms below — and `compare_objects` — never see a raw cell. `None` is a cycle.
+        let (Some(a), Some(b)) = (resolve_cells(vm, a), resolve_cells(vm, b)) else {
+            return Cmp::NotEqual;
+        };
         match (a.kind(), b.kind()) {
             (ValueKind::Null, ValueKind::Null) | (ValueKind::OmittedArg, ValueKind::OmittedArg) => {
                 Cmp::Continue
@@ -257,18 +284,6 @@ impl EqualsDriver {
                 }
                 self.compare_objects(vm, pa, pb)
             }
-            (ValueKind::Object(a), _) => {
-                let Object::Cell(a) = vm.get_object(a) else {
-                    return Cmp::NotEqual;
-                };
-                self.compare_one(vm, a.load(), b)
-            }
-            (_, ValueKind::Object(pb)) => {
-                let Object::Cell(b) = vm.get_object(pb) else {
-                    return Cmp::NotEqual;
-                };
-                self.compare_one(vm, a, b.load())
-            }
             _ => Cmp::NotEqual,
         }
     }
@@ -279,24 +294,10 @@ impl EqualsDriver {
     #[expect(clippy::float_cmp)] // IEEE float equality on purpose (matches `float.eq`).
     fn compare_objects(&mut self, vm: &BexVm, pa: HeapPtr, pb: HeapPtr) -> Cmp {
         match (vm.get_object(pa), vm.get_object(pb)) {
-            (Object::Cell(x), Object::Cell(y)) => {
-                self.stack.push((x.value.load(), y.value.load()));
-                Cmp::Continue
-            }
-            (Object::Cell(x), _) => {
-                let Some(x) = x.value.load().as_object_ptr() else {
-                    // rhs is a non-cell object so if lhs is not then they are not equal.
-                    return Cmp::NotEqual;
-                };
-                self.compare_objects(vm, x, pb)
-            }
-            (_, Object::Cell(y)) => {
-                let Some(y) = y.value.load().as_object_ptr() else {
-                    // lhs is a non-cell object so if rhs is not then they are not equal.
-                    return Cmp::NotEqual;
-                };
-                self.compare_objects(vm, pa, y)
-            }
+            // Cells are resolved to their underlying value in `compare_one` before any
+            // object pair reaches here, so a cell can't occur; treat it as unequal rather
+            // than recursing (which a cell cycle could otherwise do without bound).
+            (Object::Cell(_), _) | (_, Object::Cell(_)) => Cmp::NotEqual,
 
             (Object::Float(x), Object::Float(y)) => step(x == y),
             (Object::Float(_), _) => Cmp::NotEqual,
@@ -308,7 +309,13 @@ impl EqualsDriver {
             // Same byte array: trivially equal (bytes are reflexive — no NaN).
             (Object::Uint8Array(_), Object::Uint8Array(_)) if pa == pb => Cmp::Continue,
             (Object::Uint8Array(x), Object::Uint8Array(y)) => {
-                step(x.lock().as_slice() == y.lock().as_slice())
+                // Acquire both byte-array locks in canonical (address) order, like the
+                // Array/Map arms — holding both in source order risks an AB-BA deadlock
+                // with a concurrent fiber comparing the same pair in the opposite order
+                // (the non-reentrant spin-lock spins forever). The same-pointer case is
+                // handled above, so `lock_pair_ordered`'s `pa != pb` precondition holds.
+                let (xs, ys) = lock_pair_ordered(pa, x, pb, y);
+                step(xs.as_slice() == ys.as_slice())
             }
             (Object::Uint8Array(_), _) => Cmp::NotEqual,
 
