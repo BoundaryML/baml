@@ -29,7 +29,8 @@ services:
     environment:
       PORT: 8080
       CONVEX_URL: http://convex:3210
-      CONVEX_ADMIN_KEY: ${CONVEX_ADMIN_KEY:-}
+      # gateway_from_env reads the Infisical-prefixed name; map the .env name onto it.
+      ATB_CONVEX_ADMIN_KEY: ${CONVEX_ADMIN_KEY:-}
       SERVICE_TOKEN: ${SERVICE_TOKEN:-devservicetoken}
       BLOB_DIR: /data/blobs
       BAML_REPO_SLUG: ${BAML_REPO_SLUG:-BoundaryML/baml}

@@ -140,7 +140,7 @@ def gateway_from_env():
 
     With ``CONVEX_BACKEND=memory`` returns an in-process MemoryGateway (no Convex
     deployment, no Docker) — for local dev and fast tests. Otherwise (the default)
-    returns a ConvexGateway from CONVEX_URL, CONVEX_ADMIN_KEY, and
+    returns a ConvexGateway from CONVEX_URL, ATB_CONVEX_ADMIN_KEY, and
     CONVEX_POLL_INTERVAL_SECS.
 
     Returns:
