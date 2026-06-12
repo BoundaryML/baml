@@ -261,6 +261,11 @@ fn finalize_dispatch(
         output_format,
     ));
 
+    // Drain the profiling rings to .bamlprof before exit (no-op when
+    // BAML_PROFILE is off). NB: `baml.sys.exit()` paths bypass this — same
+    // caveat as the legacy event sink.
+    bex_events::prof::flush_and_join(std::time::Duration::from_secs(10));
+
     match result {
         Ok(DispatchResult::Ok) => ExitCode::SUCCESS,
         Ok(DispatchResult::TargetError) => ExitCode::FAILURE,

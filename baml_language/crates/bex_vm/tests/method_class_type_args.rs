@@ -61,6 +61,7 @@ fn inject_function(
         throws_type: None,
         origin: FunctionOrigin::UserDefined,
         body_meta: None,
+        function_id: 0,
     };
     let fn_obj_idx = program.add_object(Object::Function(Box::new(func)));
     let global_slot = program.globals.len();

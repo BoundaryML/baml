@@ -320,6 +320,16 @@ pub enum TirTypeError {
     /// under the concrete type args, e.g. `Getter<L>`+`Getter<R>` at
     /// `Pair<int, int>`). Coercing to that interface is ambiguous.
     AmbiguousInterfaceInstantiation { class_name: Name, interface: Ty },
+    /// `$id` cannot be the target of a compound assignment (`$id += ...`):
+    /// the runtime ID can only be replaced wholesale with an override from
+    /// `baml.id.new()` via `$id = ...`.
+    RuntimeIdCompoundAssignment,
+    /// Member access on `$id` (e.g. `$id.len()`). `$id` reads as a plain
+    /// string value but is not a binding; bind it to a local first.
+    RuntimeIdMemberAccess { member: Name },
+    /// `$id` used as a call-site argument label (`foo($id = x)`). Overrides
+    /// are set inside the callee body with `$id = ...`, not by the caller.
+    RuntimeIdCallSiteArgument,
 }
 
 impl fmt::Display for TirTypeError {
@@ -795,6 +805,21 @@ impl fmt::Display for TirTypeError {
                  this instantiation (distinct generic blocks collapse to the same type); the \
                  projection is ambiguous",
                 interface.render_user_facing()
+            ),
+            TirTypeError::RuntimeIdCompoundAssignment => write!(
+                f,
+                "`$id` cannot be the target of a compound assignment; use `$id = ...` with an \
+                 override from `baml.id.new()`"
+            ),
+            TirTypeError::RuntimeIdMemberAccess { member } => write!(
+                f,
+                "`$id` is a value, not a binding; bind it to a local before accessing `.{member}` \
+                 (e.g. `let id = $id; id.{member}`)"
+            ),
+            TirTypeError::RuntimeIdCallSiteArgument => write!(
+                f,
+                "`$id` cannot be set at the call site; assign `$id = ...` inside the function \
+                 body instead"
             ),
         }
     }

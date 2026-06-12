@@ -6392,6 +6392,11 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::TypeDoesNotImplementInterface { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::BlanketBoundNotSatisfied { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::AmbiguousInterfaceInstantiation { .. } => DiagnosticId::OverlappingImplements,
+        // `$id` special-form misuse: an invalid assignment/access shape, not
+        // a name-resolution failure.
+        TirTypeError::RuntimeIdCompoundAssignment
+        | TirTypeError::RuntimeIdMemberAccess { .. }
+        | TirTypeError::RuntimeIdCallSiteArgument => DiagnosticId::TypeMismatch,
     }
 }
 

@@ -979,6 +979,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             throws_type: None,
             origin: FunctionOrigin::Internal,
             body_meta: None,
+            function_id: 0, // assigned at engine init (interim provider)
         }
     }
 

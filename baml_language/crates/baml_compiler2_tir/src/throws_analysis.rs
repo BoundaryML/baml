@@ -22,6 +22,19 @@ pub(crate) trait ThrowsAnalysisContext {
 
     fn named_callee_summary(&self, callee_expr_id: ExprId, body: &ExprBody)
     -> Option<BTreeSet<Ty>>;
+
+    /// Throw summary of the implicit `baml.id.set` call that the `$id = e`
+    /// special form lowers to (MIR `lower_set_runtime_id`). Without this,
+    /// `$id = e` would silently bypass the throws contract that a direct
+    /// `baml.id.set(e)` call is held to.
+    fn runtime_id_set_throws(&self) -> Option<BTreeSet<Ty>>;
+}
+
+/// True when `expr` is the bare `$id` special form used as an assignment
+/// target — the shape that lowers to an implicit `baml.id.set` call.
+fn is_runtime_id_path(expr_id: ExprId, body: &ExprBody) -> bool {
+    matches!(&body.exprs[expr_id], Expr::Path(segments)
+        if segments.len() == 1 && segments[0].as_str() == "$id")
 }
 
 pub(crate) fn expr_to_path_segments(expr_id: ExprId, body: &ExprBody) -> Option<Vec<Name>> {
@@ -149,6 +162,19 @@ fn collect_from_stmt<C: ThrowsAnalysisContext>(
         Stmt::Assign { target, value } | Stmt::AssignOp { target, value, .. } => {
             collect_from_expr(context, *target, body, out);
             collect_from_expr(context, *value, body, out);
+            // `$id = e` is an implicit `baml.id.set(e)` call; its declared
+            // throws escape exactly as a direct call's would. Mirror the
+            // unaccounted-callee convention: no summary -> Unknown.
+            if is_runtime_id_path(*target, body) {
+                match context.runtime_id_set_throws() {
+                    Some(summary) => out.extend(summary),
+                    None => {
+                        out.insert(Ty::Unknown {
+                            attr: TyAttr::default(),
+                        });
+                    }
+                }
+            }
         }
         Stmt::Throw { value } => {
             collect_from_expr(context, *value, body, out);

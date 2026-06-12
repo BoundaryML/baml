@@ -247,6 +247,12 @@ impl ThrowsAnalysisContext for CallableThrowsAnalysis<'_, '_> {
         )?;
         lookup_named_throw_summary(self.db, self.pkg_id, &key)
     }
+
+    fn runtime_id_set_throws(&self) -> Option<BTreeSet<Ty>> {
+        // Namespace-relative key within the `baml` package — see the
+        // builder impl.
+        lookup_named_throw_summary(self.db, self.pkg_id, &Name::new("id.set"))
+    }
 }
 
 fn callee_uses_method_call_convention(

@@ -114,6 +114,11 @@ pub enum LoweringDiagnostic {
     /// binding name.
     ReservedConstBindingName { span: TextRange },
 
+    /// `$id` is the runtime-identity special form (reads lower to
+    /// `baml.id.current()`, writes to `baml.id.set(...)`); a binding named
+    /// `$id` would be silently dead, so it is rejected.
+    ReservedRuntimeIdBindingName { span: TextRange },
+
     /// Top-level `implements I for T` where `T` does not match any class in the file.
     UnresolvedImplementsForTarget {
         interface_name: String,
@@ -305,6 +310,13 @@ impl LoweringDiagnostic {
                 "`const` is reserved and cannot be used as a binding name".to_string(),
                 *span,
                 "`const` is reserved here",
+            ),
+            LoweringDiagnostic::ReservedRuntimeIdBindingName { span } => (
+                DiagnosticId::InvalidSyntax,
+                Severity::Error,
+                "`$id` is the runtime identity and cannot be used as a binding name".to_string(),
+                *span,
+                "`$id` is reserved here",
             ),
             LoweringDiagnostic::UnresolvedImplementsForTarget {
                 interface_name,
