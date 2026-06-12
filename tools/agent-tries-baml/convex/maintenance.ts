@@ -9,10 +9,17 @@ const MAX_ATTEMPTS = 4;
 const RULES: Array<[string, string, string, string, string]> = [
   ["tasks", "status", "running", "queued", "by_lease"],
   ["trophies", "status", "deduping", "queued", "by_lease"],
-  ["issues", "status", "fixing", "approved", "by_lease"],
+  // FixDispatch claims approved -> dispatching, then transitions to tocursor on a
+  // successful launch (releasing the claim). A crashed dispatch is requeued to
+  // approved. tocursor/prprep are owned by the tracker sweep (no claim/lease).
+  ["issues", "status", "dispatching", "approved", "by_lease"],
   ["issues", "status", "redrafting", "redraft", "by_lease"],
   ["issues", "notionSyncStatus", "syncing", "dirty", "by_notion_sync"],
   ["bamlBuilds", "status", "building", "queued", "by_lease"],
+  // A crashed CohortCompare requeues its cohort for another compare attempt
+  // (the pending -> queued fan-in is owned by the Python reconciler, not the reaper).
+  ["cohorts", "status", "comparing", "queued", "by_lease"],
+  ["changelogEntries", "status", "generating", "queued", "by_lease"],
 ];
 
 async function reapImpl(ctx: MutationCtx): Promise<number> {
@@ -59,3 +66,26 @@ export const reap = internalMutation({ args: {}, handler: (ctx) => reapImpl(ctx)
  * @returns The number of rows reaped across all rules.
  */
 export const reapNow = mutation({ args: {}, handler: (ctx) => reapImpl(ctx) });
+
+/**
+ * Cron entry point that deletes worker presence rows whose heartbeat is
+ * older than 10 minutes, so dead machines age out of the dashboard roster.
+ * Scheduled by convex/crons.ts.
+ *
+ * @returns The number of presence rows deleted.
+ */
+export const sweepStaleWorkers = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const cutoff = Date.now() - 10 * 60 * 1000;
+    const rows = await ctx.db.query("workers" as any).take(500);
+    let removed = 0;
+    for (const row of rows as any[]) {
+      if ((row.lastHeartbeat ?? 0) < cutoff) {
+        await ctx.db.delete(row._id);
+        removed++;
+      }
+    }
+    return removed;
+  },
+});

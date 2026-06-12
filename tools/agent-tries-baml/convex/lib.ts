@@ -9,7 +9,15 @@
 
 import { QueryCtx, MutationCtx } from "./_generated/server";
 
-type Table = "tasks" | "trophies" | "issues" | "bamlBuilds" | "workers";
+type Table =
+  | "tasks"
+  | "trophies"
+  | "issues"
+  | "bamlBuilds"
+  | "cohorts"
+  | "workers"
+  | "changelogEntries"
+  | "promoCodes";
 
 // ---------- queries ----------
 

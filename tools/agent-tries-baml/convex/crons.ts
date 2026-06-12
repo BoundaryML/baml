@@ -13,4 +13,7 @@ const crons = cronJobs();
 // Requeue work stranded by crashed processors.
 crons.interval("reap stale leases", { minutes: 2 }, internal.maintenance.reap);
 
+// Age dead machines out of the presence roster (UI greys them long before).
+crons.interval("sweep stale workers", { minutes: 10 }, internal.maintenance.sweepStaleWorkers);
+
 export default crons;
