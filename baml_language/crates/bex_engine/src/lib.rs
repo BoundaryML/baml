@@ -193,13 +193,13 @@ impl Drop for SpawnProfCloser {
                 status: FunctionEndStatus::Cancelled,
                 thread_id,
                 call_id: self.entry_call_id,
-                ts_ns: bex_events::prof::clock::now_ns(),
+                ts_ticks: bex_events::prof::clock::now_ticks(),
             });
         }
         self.engine.prof_emit(&RawRecord::EndThread {
             status: ThreadEndStatus::Cancelled,
             thread_id,
-            ts_ns: bex_events::prof::clock::now_ns(),
+            ts_ticks: bex_events::prof::clock::now_ticks(),
         });
     }
 }
@@ -1482,7 +1482,7 @@ impl BexEngine {
                 status,
                 thread_id: BexThreadId(vm.prof_thread_id),
                 call_id: BexCallId(call_id),
-                ts_ns: bex_events::prof::clock::now_ns(),
+                ts_ticks: bex_events::prof::clock::now_ticks(),
             });
         }
     }
@@ -1512,7 +1512,7 @@ impl BexEngine {
                 status,
                 thread_id,
                 call_id: BexCallId(call_id),
-                ts_ns: bex_events::prof::clock::now_ns(),
+                ts_ticks: bex_events::prof::clock::now_ticks(),
             });
         }
         for call_id in vm.prof_open_call_ids() {
@@ -1520,7 +1520,7 @@ impl BexEngine {
                 status,
                 thread_id,
                 call_id: BexCallId(call_id),
-                ts_ns: bex_events::prof::clock::now_ns(),
+                ts_ticks: bex_events::prof::clock::now_ticks(),
             });
         }
     }
@@ -2012,7 +2012,7 @@ impl BexEngine {
                 thread_id: BexThreadId(thread.vm.prof_thread_id),
                 parent_thread_id: BexThreadId(0), // engine-root thread
                 parent_call_id: BexCallId(0),
-                ts_ns: bex_events::prof::clock::now_ns(),
+                ts_ticks: bex_events::prof::clock::now_ticks(),
                 name: b"",
             });
         }
@@ -3129,7 +3129,7 @@ impl BexEngine {
             self.prof_emit(&bex_events::prof::record::RawRecord::EndThread {
                 status,
                 thread_id: BexThreadId(prof_thread_id),
-                ts_ns: bex_events::prof::clock::now_ns(),
+                ts_ticks: bex_events::prof::clock::now_ticks(),
             });
         }
         result
@@ -3621,7 +3621,7 @@ impl BexEngine {
                             thread_id: BexThreadId(child_prof_thread_id),
                             parent_thread_id: BexThreadId(thread.vm.prof_thread_id),
                             parent_call_id: BexCallId(thread.vm.current_call_id()),
-                            ts_ns: bex_events::prof::clock::now_ns(),
+                            ts_ticks: bex_events::prof::clock::now_ticks(),
                             name: bex_events::prof::record::capped_name_bytes(name),
                         });
                     }

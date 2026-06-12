@@ -93,7 +93,7 @@ pub struct FunctionMetaEntry {
     pub kind: String,
 }
 
-// wasm32: profiling is forced off (no consumer thread, no TSC clock); the
+// wasm32: profiling is forced off (no consumer thread, no tick clock); the
 // producer-facing surface compiles to no-ops so dual-target callers don't
 // need their own cfgs.
 #[cfg(target_arch = "wasm32")]

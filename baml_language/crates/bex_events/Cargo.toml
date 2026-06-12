@@ -29,12 +29,10 @@ uuid = { workspace = true }
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 uuid = { workspace = true, features = [ "js" ] }
 
-# The profiling clock (prof::clock) needs a TSC-calibrated time source; wasm32
-# compiles a stub instead (profiling is forced off there — plan §2.2). miri
-# also gets the stub: minstant's `#[ctor]` probes the TSC with `_rdtsc`, which
-# miri cannot execute, and it runs before any test gets to opt out.
-[target.'cfg(not(any(target_arch = "wasm32", miri)))'.dependencies]
-minstant = { workspace = true }
+# The profiling clock (prof::clock) reads raw hardware ticks in-tree (rdtsc /
+# CNTVCT_EL0 / Instant fallback) — no external time-source dependency, and
+# crucially no pre-main ctor. wasm32 compiles a stub (profiling is forced off
+# there — plan §2.2); miri gets the stub too: it cannot execute `rdtsc`/`mrs`.
 
 # The .bamlprof consumer (thread + file writer + protobuf transcode) is
 # native-only; wasm32 has no consumer thread (profiling forced off there).

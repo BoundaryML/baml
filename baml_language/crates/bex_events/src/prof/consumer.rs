@@ -37,7 +37,8 @@ use std::{
 };
 
 use crate::prof::{
-    EngineProfileMetadata, clock,
+    EngineProfileMetadata,
+    clock::{self, TickConverter},
     config::ProfConfig,
     file::{ProfileWriter, build_header},
     pb,
@@ -81,6 +82,28 @@ pub(crate) struct ConsumerEnv {
     pub(crate) ctx: &'static RingCtx,
     pub(crate) dir: PathBuf,
     pub(crate) wake_interval: Duration,
+    pub(crate) clock: ClockMode,
+}
+
+/// How the consumer obtains its tick→ns converter.
+pub(crate) enum ClockMode {
+    /// Build from the process clock (production). For the x86 TSC this
+    /// takes the ~2 ms coarse two-point estimate — on the consumer thread,
+    /// never on a producer.
+    Detect,
+    /// Use the given converter as-is (tests: identity keeps synthetic tick
+    /// values byte-stable through the roundtrip).
+    #[cfg_attr(not(test), allow(dead_code))]
+    Fixed(TickConverter),
+}
+
+impl ClockMode {
+    fn build(&self) -> TickConverter {
+        match self {
+            ClockMode::Detect => TickConverter::from_clock(),
+            ClockMode::Fixed(conv) => conv.clone(),
+        }
+    }
 }
 
 static CONTROL_TX: OnceLock<mpsc::Sender<ControlMsg>> = OnceLock::new();
@@ -96,6 +119,7 @@ pub(crate) fn ensure_started() {
             ctx: crate::prof::registry::global_ctx(),
             dir: cfg.profile_dir.clone(),
             wake_interval: cfg.wake_interval,
+            clock: ClockMode::Detect,
         };
         std::thread::Builder::new()
             .name("bex-prof-consumer".into())
@@ -145,7 +169,7 @@ pub fn engine_closed(engine_id: u64) {
 /// The consumer loop: §3.4 sweep + §3.6 wake protocol + control messages.
 pub(crate) fn consumer_main(control: &mpsc::Receiver<ControlMsg>, env: &ConsumerEnv) {
     env.ctx.wake().register_consumer();
-    let mut state = ConsumerState::new(env.dir.clone());
+    let mut state = ConsumerState::new(env.dir.clone(), env.clock.build());
     loop {
         while let Ok(msg) = control.try_recv() {
             match msg {
@@ -195,6 +219,8 @@ pub(crate) fn consumer_main(control: &mpsc::Receiver<ControlMsg>, env: &Consumer
 
 struct ConsumerState {
     dir: PathBuf,
+    /// Tick→ns conversion for every disk timestamp (events + heartbeats).
+    conv: TickConverter,
     /// `None` = opening or writing failed permanently (already reported).
     writers: HashMap<u64, Option<ProfileWriter>>,
     /// Engines whose files were closed (8 bytes per engine, forever): a
@@ -209,9 +235,10 @@ struct ConsumerState {
 }
 
 impl ConsumerState {
-    fn new(dir: PathBuf) -> ConsumerState {
+    fn new(dir: PathBuf, conv: TickConverter) -> ConsumerState {
         ConsumerState {
             dir,
+            conv,
             writers: HashMap::new(),
             closed_engines: std::collections::HashSet::new(),
             closed_reported: std::collections::HashSet::new(),
@@ -242,6 +269,10 @@ impl ConsumerState {
             }
             return;
         }
+        // Cloned out of `self` so the converter can be read while the
+        // writer (a `&mut self` borrow) is held; one clone per drained
+        // range, not per record.
+        let conv = self.conv.clone();
         let Some(writer) = self.writer_for(engine_id) else {
             return;
         };
@@ -249,7 +280,7 @@ impl ConsumerState {
         for rec in record::iter(bytes) {
             match rec {
                 Ok(raw) => {
-                    let event = to_disk_event(&raw);
+                    let event = to_disk_event(&raw, &conv);
                     io_result = writer.write_event(&event);
                     if io_result.is_err() {
                         break;
@@ -288,6 +319,7 @@ impl ConsumerState {
                     engine_id,
                     self.started_at_epoch_ns,
                     meta.as_ref(),
+                    &self.conv,
                 );
                 match ProfileWriter::create(
                     &self.dir,
@@ -326,7 +358,10 @@ impl ConsumerState {
             return;
         }
         self.last_heartbeat = Instant::now();
-        let ts = clock::now_ns();
+        // Heartbeat cadence is the designated ≥1 s refinement slot for the
+        // x86 TSC rate (no-op for exact-rate sources / once refined).
+        self.conv.maybe_refine();
+        let ts = self.conv.to_ns(clock::now_ticks());
         let event = pb::DiskEventV1 {
             event: Some(pb::disk_event_v1::Event::Heartbeat(pb::Heartbeat {
                 timestamp_ns: ts,
@@ -393,9 +428,10 @@ impl ConsumerState {
     }
 }
 
-/// Transcoding is a pure encoding change — content identical to the ring
-/// record, with the `0 = none` conventions becoming `Option`s (v2 §4).
-fn to_disk_event(raw: &RawRecord<'_>) -> pb::DiskEventV1 {
+/// Transcoding converts raw ticks to nanoseconds (`conv`); everything else
+/// is a pure encoding change — content identical to the ring record, with
+/// the `0 = none` conventions becoming `Option`s (v2 §4).
+fn to_disk_event(raw: &RawRecord<'_>, conv: &TickConverter) -> pb::DiskEventV1 {
     use pb::disk_event_v1::Event;
     let event = match *raw {
         RawRecord::CallFunction {
@@ -404,19 +440,19 @@ fn to_disk_event(raw: &RawRecord<'_>) -> pb::DiskEventV1 {
             call_id,
             parent_call_id,
             function_id,
-            ts_ns,
+            ts_ticks,
         } => Event::CallFunction(pb::CallFunction {
             thread_id: thread_id.0,
             call_id: call_id.0,
             parent_call_id: (parent_call_id.0 != 0).then_some(parent_call_id.0),
             function_id: function_id.0,
-            timestamp_ns: ts_ns,
+            timestamp_ns: conv.to_ns(ts_ticks),
         }),
         RawRecord::EndFunction {
             status,
             thread_id,
             call_id,
-            ts_ns,
+            ts_ticks,
         } => Event::EndFunction(pb::EndFunction {
             thread_id: thread_id.0,
             call_id: call_id.0,
@@ -426,26 +462,26 @@ fn to_disk_event(raw: &RawRecord<'_>) -> pb::DiskEventV1 {
                 FunctionEndStatus::Cancelled => pb::FunctionEndStatus::Cancelled,
                 FunctionEndStatus::Exited => pb::FunctionEndStatus::Exited,
             } as i32,
-            timestamp_ns: ts_ns,
+            timestamp_ns: conv.to_ns(ts_ticks),
         }),
         RawRecord::StartThread {
             flags: _,
             thread_id,
             parent_thread_id,
             parent_call_id,
-            ts_ns,
+            ts_ticks,
             name,
         } => Event::StartThread(pb::StartThread {
             thread_id: thread_id.0,
             parent_thread_id: (parent_thread_id.0 != 0).then_some(parent_thread_id.0),
             parent_call_id: (parent_call_id.0 != 0).then_some(parent_call_id.0),
             name: (!name.is_empty()).then(|| String::from_utf8_lossy(name).into_owned()),
-            timestamp_ns: ts_ns,
+            timestamp_ns: conv.to_ns(ts_ticks),
         }),
         RawRecord::EndThread {
             status,
             thread_id,
-            ts_ns,
+            ts_ticks,
         } => Event::EndThread(pb::EndThread {
             thread_id: thread_id.0,
             status: match status {
@@ -453,18 +489,18 @@ fn to_disk_event(raw: &RawRecord<'_>) -> pb::DiskEventV1 {
                 ThreadEndStatus::Cancelled => pb::ThreadEndStatus::Cancelled,
                 ThreadEndStatus::Errored => pb::ThreadEndStatus::Errored,
             } as i32,
-            timestamp_ns: ts_ns,
+            timestamp_ns: conv.to_ns(ts_ticks),
         }),
         RawRecord::SetFunctionId {
             thread_id,
             call_id,
             id,
-            ts_ns,
+            ts_ticks,
         } => Event::SetFunctionId(pb::SetFunctionId {
             thread_id: thread_id.0,
             call_id: call_id.0,
             id: id.to_vec(),
-            timestamp_ns: ts_ns,
+            timestamp_ns: conv.to_ns(ts_ticks),
         }),
     };
     pb::DiskEventV1 { event: Some(event) }
@@ -532,6 +568,7 @@ mod tests {
             ctx,
             dir: dir.clone(),
             wake_interval: Duration::from_millis(1),
+            clock: ClockMode::Fixed(TickConverter::identity()),
         };
         std::thread::Builder::new()
             .name("test-prof-consumer".into())
@@ -606,7 +643,7 @@ mod tests {
                 thread_id: BexThreadId(1),
                 parent_thread_id: BexThreadId(0),
                 parent_call_id: BexCallId(0),
-                ts_ns: 1,
+                ts_ticks: 1,
                 name: b"worker",
             });
             for seq in 1..=PAIRS {
@@ -616,27 +653,27 @@ mod tests {
                     call_id: BexCallId(seq),
                     parent_call_id: BexCallId(seq - 1),
                     function_id: FunctionId(7),
-                    ts_ns: seq * 2,
+                    ts_ticks: seq * 2,
                 });
             }
             push(RawRecord::SetFunctionId {
                 thread_id: BexThreadId(1),
                 call_id: BexCallId(PAIRS),
                 id: [0xAB; 16],
-                ts_ns: PAIRS * 2 + 1,
+                ts_ticks: PAIRS * 2 + 1,
             });
             for seq in (1..=PAIRS).rev() {
                 push(RawRecord::EndFunction {
                     status: FunctionEndStatus::Ok,
                     thread_id: BexThreadId(1),
                     call_id: BexCallId(seq),
-                    ts_ns: 10_000 + seq,
+                    ts_ticks: 10_000 + seq,
                 });
             }
             push(RawRecord::EndThread {
                 status: ThreadEndStatus::Completed,
                 thread_id: BexThreadId(1),
-                ts_ns: 99_999,
+                ts_ticks: 99_999,
             });
         })
         .join()
@@ -695,10 +732,13 @@ mod tests {
             thread_id: BexThreadId(9),
             parent_thread_id: BexThreadId(0),
             parent_call_id: BexCallId(0),
-            ts_ns: 5,
+            ts_ticks: 5,
             name: b"",
         };
-        match to_disk_event(&raw).event.unwrap() {
+        match to_disk_event(&raw, &TickConverter::identity())
+            .event
+            .unwrap()
+        {
             Event::StartThread(st) => {
                 assert_eq!(st.parent_thread_id, None);
                 assert_eq!(st.parent_call_id, None);
@@ -712,9 +752,12 @@ mod tests {
             call_id: BexCallId(1),
             parent_call_id: BexCallId(0),
             function_id: FunctionId(0),
-            ts_ns: 5,
+            ts_ticks: 5,
         };
-        match to_disk_event(&raw).event.unwrap() {
+        match to_disk_event(&raw, &TickConverter::identity())
+            .event
+            .unwrap()
+        {
             Event::CallFunction(cf) => assert_eq!(cf.parent_call_id, None),
             other => panic!("wrong variant {other:?}"),
         }
@@ -722,9 +765,12 @@ mod tests {
             status: FunctionEndStatus::Errored,
             thread_id: BexThreadId(9),
             call_id: BexCallId(1),
-            ts_ns: 5,
+            ts_ticks: 5,
         };
-        match to_disk_event(&raw).event.unwrap() {
+        match to_disk_event(&raw, &TickConverter::identity())
+            .event
+            .unwrap()
+        {
             Event::EndFunction(ef) => {
                 assert_eq!(ef.status, pb::FunctionEndStatus::Errored as i32);
             }
@@ -757,19 +803,20 @@ mod tests {
                 call_id: BexCallId(seq),
                 parent_call_id: BexCallId(seq.saturating_sub(1)),
                 function_id: FunctionId(1),
-                ts_ns: seq,
+                ts_ticks: seq,
             }
             .encode(&mut buf);
             // SAFETY: claiming thread, alive throughout.
             unsafe { handle.push(&buf[..len]) };
         }
 
-        let mut state = ConsumerState::new(dir.clone());
+        let mut state = ConsumerState::new(dir.clone(), TickConverter::identity());
         let env = ConsumerEnv {
             registry,
             ctx,
             dir: dir.clone(),
             wake_interval: Duration::from_millis(1),
+            clock: ClockMode::Fixed(TickConverter::identity()),
         };
         let start = Instant::now();
         while state.sweep_once(&env) {}
@@ -808,6 +855,7 @@ mod tests {
             ctx,
             dir: dir.clone(),
             wake_interval: Duration::from_millis(1),
+            clock: ClockMode::Fixed(TickConverter::identity()),
         };
         std::thread::Builder::new()
             .name("soak-prof-consumer".into())
@@ -826,7 +874,7 @@ mod tests {
                         call_id: BexCallId(seq + 1),
                         parent_call_id: BexCallId(seq),
                         function_id: FunctionId(1),
-                        ts_ns: round * per_round + seq,
+                        ts_ticks: round * per_round + seq,
                     }
                     .encode(&mut buf);
                     // SAFETY: claiming thread, alive for the whole closure.

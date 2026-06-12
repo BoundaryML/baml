@@ -219,6 +219,10 @@ mod global {
                 return unsafe { RingHandle::new(ring) };
             }
             let cfg = ProfConfig::global();
+            // Pin the clock anchor (source detection + zero point — cheap,
+            // no calibration). Belt-and-braces: now_ticks() also forces it,
+            // which is the real every-stamp-postdates-the-anchor invariant.
+            crate::prof::clock::init();
             // The consumer drains every registered ring; it must exist
             // before the first event can pile up. No-op when profiling is
             // off (tests drive private registries as their own consumers).
