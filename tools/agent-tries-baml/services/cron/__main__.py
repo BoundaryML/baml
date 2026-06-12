@@ -16,9 +16,21 @@ import time
 
 from bench_core.service_client import ServiceClient
 
+from .reconcile import reconcile_cohorts_once
+
 log = logging.getLogger("cron")
 
 INTERVAL = int(os.environ.get("CRON_INTERVAL_SECS", "86400"))
+# The cohort fan-in barrier runs on its own fast cadence (independent of the daily
+# task cycle): it flips skill-arena cohorts pending -> queued once their member runs
+# are all terminal, so a finished arena is compared within ~this many seconds.
+COHORT_RECONCILE_SECS = int(os.environ.get("COHORT_RECONCILE_SECS", "30"))
+# Changelog poller (the absorbed baml-changelog2 cron): every cycle, list the
+# repo's releases and enqueue a queued changelogEntries row for any version we
+# don't have yet. Disabled by default so it can't race the old cron until the
+# Phase 2 cutover flips it on.
+CHANGELOG_POLL_ENABLED = os.environ.get("CHANGELOG_POLL_ENABLED", "0") == "1"
+CHANGELOG_POLL_SECS = int(os.environ.get("CHANGELOG_POLL_SECS", "600"))
 # Channel where cron run results are posted (the worker acks + posts the trophy
 # there, since cron tasks have no originating thread).
 SLACK_RESULTS_CHANNEL = os.environ.get("SLACK_RESULTS_CHANNEL", "")
@@ -121,17 +133,80 @@ async def _cycle(service: ServiceClient) -> None:
         log.info("enqueued cron hard task %s", tid)
 
 
-async def _amain() -> None:
-    """Run the cron loop: one cycle on start, then every ``INTERVAL`` seconds.
+async def _daily_loop(service: ServiceClient) -> None:
+    """Run the daily cycle: one on start, then every ``INTERVAL`` seconds."""
+    while True:
+        await _cycle(service)
+        await asyncio.sleep(INTERVAL)
 
-    Builds the shared ServiceClient and closes it on exit.
+
+async def _reconcile_loop(service: ServiceClient) -> None:
+    """Sweep the cohort fan-in barrier every ``COHORT_RECONCILE_SECS`` seconds.
+
+    Best-effort: a transient sweep failure is logged and retried on the next tick
+    rather than killing the loop.
+
+    Args:
+        service: The ServiceClient used to read cohorts and flip ready ones.
+    """
+    while True:
+        try:
+            await reconcile_cohorts_once(service)
+        except Exception:  # noqa: BLE001
+            log.exception("cohort reconcile sweep failed")
+        await asyncio.sleep(COHORT_RECONCILE_SECS)
+
+
+async def _changelog_poll_once(service: ServiceClient) -> None:
+    """Enqueue changelog generation for any release tag without an entry.
+
+    Thin wrapper over bench_core.changelog_sync (shared with the on-demand
+    ``POST /entries/update`` ingress endpoint); the changelog worker does the
+    generation, idempotency is by version.
+
+    Args:
+        service: The ServiceClient used to list entries and create rows.
+    """
+    from bench_core.changelog_sync import sync_missing_entries
+
+    enqueued = await sync_missing_entries(service)
+    for e in enqueued:
+        log.info("changelog poll: enqueued %s (%s) -> %s", e["version"], e["channel"], e["id"])
+    if not enqueued:
+        log.info("changelog poll: up to date")
+
+
+async def _changelog_poll_loop(service: ServiceClient) -> None:
+    """Poll GitHub for new releases every ``CHANGELOG_POLL_SECS`` seconds.
+
+    Best-effort: a failed cycle (GitHub rate limit, transient network) is
+    logged and retried on the next tick.
+
+    Args:
+        service: The ServiceClient used by each poll cycle.
+    """
+    while True:
+        try:
+            await _changelog_poll_once(service)
+        except Exception:  # noqa: BLE001
+            log.exception("changelog poll cycle failed")
+        await asyncio.sleep(CHANGELOG_POLL_SECS)
+
+
+async def _amain() -> None:
+    """Run the cron service: the daily task cycle, the cohort reconcile sweep,
+    and (when enabled) the changelog release poller.
+
+    Builds the shared ServiceClient, runs the loops concurrently, and closes the
+    client on exit.
     """
     logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
     service = ServiceClient(os.environ["SERVICE_URL"], os.environ.get("ATB_SERVICE_TOKEN", ""))
+    loops = [_daily_loop(service), _reconcile_loop(service)]
+    if CHANGELOG_POLL_ENABLED:
+        loops.append(_changelog_poll_loop(service))
     try:
-        while True:
-            await _cycle(service)
-            await asyncio.sleep(INTERVAL)
+        await asyncio.gather(*loops)
     finally:
         await service.aclose()
 
