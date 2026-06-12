@@ -1106,10 +1106,15 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// `infer_scope_types`.
     ///
     /// A capture only reaches here once name resolution has bound it (an
-    /// unresolved capture is a diagnostic, never an entry in `captures`), so a
-    /// valid program always yields a type. A missing type is a compiler-invariant
-    /// violation, not user error — panic rather than leak an `Unknown` to the
-    /// runtime lowering boundary.
+    /// unresolved capture is a diagnostic, never an entry in `captures`). In the
+    /// common case the owner scope's inference is complete and yields the real
+    /// type — the de-erasure win this resolution exists for. During a Salsa
+    /// cycle through the owner scope, or while its inference is still partial,
+    /// `infer_scope_types` has no entry yet; that transient recovery state falls
+    /// back to `Unknown` rather than panicking. This matches the pre-resolution
+    /// behavior (captures were seeded `Unknown` universally) and is safe: the
+    /// owner's *converged* inference — which the runtime-lowering boundary
+    /// actually consumes — sees the real type.
     fn resolve_capture_type(
         &self,
         binding_id: baml_compiler2_hir::semantic_index::BindingId,
@@ -1131,8 +1136,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                 .and_then(|bindings| bindings.bindings.get(idx as usize))
                 .and_then(|binding| inference.binding_type(binding.pattern).cloned()),
         };
-        let resolved = resolved.unwrap_or_else(|| {
-            unreachable!("captured binding {binding_id:?} has no inferred type")
+        let resolved = resolved.unwrap_or(Ty::Unknown {
+            attr: TyAttr::default(),
         });
         // A captured binding is no longer open, so freeze evolving empties just
         // like an ordinary local reference does.

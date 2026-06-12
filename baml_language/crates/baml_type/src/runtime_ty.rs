@@ -745,7 +745,7 @@ fn from_vec(tys: &[RuntimeTy]) -> Vec<Ty> {
 
 // ── Ty → RuntimeTy erasure ───────────────────────────────────────────────────
 // The erasing counterpart of `RuntimeTy::try_from`: where `try_from` *rejects*
-// compiler-only variants, `convert_tir2_ty` *erases* them and additionally
+// compiler-only variants, `convert_tir_ty_for_runtime` *erases* them and additionally
 // expands non-recursive type aliases inline. This is the single boundary the
 // compiler crosses to hand a `Ty` to the runtime.
 

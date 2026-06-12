@@ -245,6 +245,13 @@ fn view_return_type(ty: &BamlType, needs_heap: &mut bool) -> TokenStream {
             *needs_heap = true;
             quote! { Result<std::sync::Arc<dyn std::any::Any + Send + Sync>, AccessError> }
         }
+        // The `type` metatype's owned representation is `RuntimeTy` (see the
+        // owned-field mapping), so the accessor must return it too — not the
+        // generic `BexExternalValue` fallback, which would not type-check.
+        BamlType::Named(name) if name == "type" => {
+            *needs_heap = true;
+            quote! { Result<baml_type::RuntimeTy, AccessError> }
+        }
         _ => {
             *needs_heap = true;
             quote! { Result<BexExternalValue, AccessError> }
@@ -262,6 +269,9 @@ fn view_accessor_body(field_name: &str, ty: &BamlType) -> TokenStream {
         BamlType::Bigint => quote! { self.cls.field(#field_lit)?.as_bigint(heap, permit) },
         BamlType::String => quote! { self.cls.field(#field_lit)?.as_string(heap, permit) },
         BamlType::RustType => quote! { self.cls.field(#field_lit)?.as_rust_data(heap, permit) },
+        BamlType::Named(name) if name == "type" => {
+            quote! { self.cls.field(#field_lit)?.as_baml_type_owned(heap, permit) }
+        }
         _ => quote! { self.cls.field(#field_lit)?.as_owned_but_very_slow(heap, permit) },
     }
 }
@@ -382,6 +392,19 @@ fn external_to_typed_expr(
                 BexExternalValue::Uint8Array(v) => Ok(v),
                 other => Err(AccessError::TypeMismatch {
                     expected: "uint8array",
+                    actual: other.type_name().to_string(),
+                }),
+            }
+        },
+        // The `type` metatype's owned representation is `RuntimeTy`; unwrap it
+        // from the external `Type` ADT rather than passing the raw
+        // `BexExternalValue` through (which would not type-check against the
+        // `RuntimeTy` owned field).
+        BamlType::Named(name) if name == "type" => quote! {
+            match #val_expr {
+                BexExternalValue::Adt(bex_external_types::BexExternalAdt::Type(v)) => Ok(v),
+                other => Err(AccessError::TypeMismatch {
+                    expected: "type",
                     actual: other.type_name().to_string(),
                 }),
             }
@@ -976,14 +999,16 @@ fn compute_non_defaultable_classes(
         .map(|cd| (cd, format!("{}.{}", cd.namespace_prefix, cd.name)))
         .collect();
 
-    // Seed: classes with direct $rust_type fields — insert both name forms.
+    // Seed: classes with a direct non-`Default` field — insert both name forms.
+    // `$rust_type` (`Arc<dyn Any>`) and the `type` metatype (`RuntimeTy`) are
+    // both non-`Default`. (Container forms like `list<type>`/`type?` stay
+    // defaultable — `Vec`/`Option` are `Default` — so only direct fields seed.)
     let mut non_defaultable: std::collections::HashSet<String> = std::collections::HashSet::new();
     for (cd, full_name) in &all_classes {
-        if cd
-            .fields
-            .iter()
-            .any(|f| matches!(f.field_type, BamlType::RustType))
-        {
+        if cd.fields.iter().any(|f| {
+            matches!(f.field_type, BamlType::RustType)
+                || matches!(&f.field_type, BamlType::Named(name) if name == "type")
+        }) {
             non_defaultable.insert(full_name.clone());
             non_defaultable.insert(cd.name.clone());
         }

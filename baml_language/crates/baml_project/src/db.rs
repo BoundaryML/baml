@@ -381,6 +381,33 @@ impl ProjectDatabase {
     pub fn get_bytecode(
         &self,
     ) -> Result<bex_vm_types::Program, baml_compiler2_emit::LoweringError> {
+        // Bytecode generation lowers types through the runtime-conversion
+        // boundary (`ResolvedAliases::convert`), which deliberately panics on
+        // inference-only `Unknown`/`Error` types. Those are legitimate
+        // error-recovery types in a program that does not type-check, so do not
+        // attempt codegen on an error-bearing project: surface the failure as a
+        // recoverable `LoweringError`. The diagnostics themselves are reported
+        // through the normal check path. (CLI commands gate before calling
+        // `generate_project_bytecode` directly; this protects the in-process /
+        // runtime-eval callers that go through `get_bytecode`.) The error filter
+        // matches `testing::assert_no_diagnostic_errors` — user-file errors only.
+        let user_file_ids: std::collections::HashSet<_> = self
+            .get_source_files()
+            .iter()
+            .map(|f| f.file_id(self))
+            .collect();
+        let error_count = crate::check::collect_compiler2_diagnostics(self)
+            .iter()
+            .filter(|d| matches!(d.severity, baml_compiler_diagnostics::Severity::Error))
+            .filter(|d| {
+                d.primary_span()
+                    .map(|span| user_file_ids.contains(&span.file_id))
+                    .unwrap_or(false)
+            })
+            .count();
+        if error_count > 0 {
+            return Err(baml_compiler2_emit::LoweringError::ProjectHasErrors { error_count });
+        }
         let opts = baml_compiler2_emit::CompileOptions {
             emit_test_cases: false,
         };

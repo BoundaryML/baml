@@ -128,12 +128,14 @@ fn value_satisfies_ty(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
         // reinterpret a host's returned tag.
         RuntimeTy::Int { .. } => matches!(value, BexExternalValue::Int(_)),
         RuntimeTy::Float { .. } => matches!(value, BexExternalValue::Float(_)),
+        RuntimeTy::Bigint { .. } => matches!(value, BexExternalValue::Bigint(_)),
         RuntimeTy::String { .. } => matches!(value, BexExternalValue::String(_)),
         RuntimeTy::Uint8Array { .. } => matches!(value, BexExternalValue::Uint8Array(_)),
 
         RuntimeTy::Literal(lit, _, _) => match (lit, value) {
             (Literal::Bool(b), BexExternalValue::Bool(v)) => b == v,
             (Literal::Int(i), BexExternalValue::Int(v)) => i == v,
+            (Literal::Bigint(b), BexExternalValue::Bigint(v)) => b == v,
             (Literal::String(s), BexExternalValue::String(v)) => s == v,
             // `Literal::Float` stores the literal as a string for precision;
             // match by tag (any float), mirroring

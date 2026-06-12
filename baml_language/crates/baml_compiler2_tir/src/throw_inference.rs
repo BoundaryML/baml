@@ -5,10 +5,10 @@
 //! firewalls: their declared set becomes caller-visible, replacing body-derived
 //! facts for propagation.
 
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
 use baml_base::Name;
-use baml_compiler2_ast::{Expr, ExprBody, Literal};
+use baml_compiler2_ast::{AstSourceMap, Expr, ExprBody, Literal};
 use baml_compiler2_hir::{
     contributions::Definition,
     package::{PackageId, PackageItems, package_dependencies},
@@ -123,7 +123,7 @@ pub fn function_throw_sets<'db>(
                     &func_data.generic_params,
                     &func_data.params,
                 );
-                collect_direct_throws(db, pkg_items, &func_ns, expr_body, &param_types)
+                collect_direct_throws(db, pkg_items, &func_ns, *func_loc, expr_body, &param_types)
             } else {
                 BTreeSet::new()
             };
@@ -184,7 +184,14 @@ pub fn function_throw_sets<'db>(
                         &method_data.generic_params,
                         &method_data.params,
                     );
-                    collect_direct_throws(db, pkg_items, &method_ns, expr_body, &param_types)
+                    collect_direct_throws(
+                        db,
+                        pkg_items,
+                        &method_ns,
+                        func_loc,
+                        expr_body,
+                        &param_types,
+                    )
                 } else {
                     BTreeSet::new()
                 };
@@ -288,15 +295,23 @@ pub fn collect_direct_throws<'db>(
     db: &'db dyn crate::Db,
     pkg_items: &PackageItems<'db>,
     ns_context: &[Name],
+    func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
     body: &ExprBody,
     param_types: &[(Name, Ty)],
 ) -> BTreeSet<ThrowFact> {
     let mut facts = BTreeSet::new();
-    let catch_bindings = collect_catch_binding_names(body);
+    let catch_arm_bodies = collect_catch_arm_bodies(body);
+    // Rethrow detection is scoped by source span (a `throw e` rethrows only
+    // inside the `catch (e)` arm that binds it), so fetch the span-bearing
+    // source map — but only when the body actually has a `catch`. A `catch`-free
+    // body needs no spans and stays insensitive to whitespace-only edits.
+    let source_map = (!catch_arm_bodies.is_empty())
+        .then(|| baml_compiler2_ppir::function_body_source_map(db, func_loc))
+        .flatten();
 
     for (_, expr) in body.exprs.iter() {
         if let Expr::Throw { value } = expr
-            && !is_catch_binding_rethrow(*value, body, &catch_bindings)
+            && !is_catch_rethrow(*value, body, source_map.as_ref(), &catch_arm_bodies)
         {
             facts.insert(throw_fact_from_expr(
                 db,
@@ -310,7 +325,7 @@ pub fn collect_direct_throws<'db>(
     }
     for (_, stmt) in body.stmts.iter() {
         if let baml_compiler2_ast::Stmt::Throw { value } = stmt
-            && !is_catch_binding_rethrow(*value, body, &catch_bindings)
+            && !is_catch_rethrow(*value, body, source_map.as_ref(), &catch_arm_bodies)
         {
             facts.insert(throw_fact_from_expr(
                 db,
@@ -356,24 +371,35 @@ fn lower_param_types<'db>(
         .collect()
 }
 
-/// Whether `value` is a bare reference to a catch-bound variable, i.e. the
-/// operand of a *rethrow* such as `catch (e) { _ => throw e }`.
+/// Whether `value` is the operand of a *rethrow* — a `throw e` whose `e` names
+/// a `catch` clause binding in scope, as in `catch (e) { _ => throw e }`.
 ///
-/// A rethrow re-raises a value already accounted for by the caught expression's
-/// own throw set — its callees' throws and any direct throws are collected
-/// independently — so it contributes no new fact. Resolving the operand as a
-/// type path would instead treat a value binding as a type and yield
-/// `Ty::Unknown`, which has no runtime representation, so rethrows are skipped.
-fn is_catch_binding_rethrow(
+/// A rethrow re-raises a value already accounted for (the caught expression's
+/// throws are collected independently), so it contributes no new fact; the bare
+/// binding can't be resolved to a nameable type anyway. The check is scoped by
+/// span containment: `throw e` is a rethrow only when it lies *inside* a
+/// `catch (e)` arm body. That is what distinguishes it from `throw e` where `e`
+/// is a same-named parameter or local *outside* the catch — which is a real
+/// throw of `e`, and treating it as a rethrow would drop its type from the set.
+fn is_catch_rethrow(
     value: baml_compiler2_ast::ExprId,
     body: &ExprBody,
-    catch_bindings: &HashSet<&str>,
+    source_map: Option<&AstSourceMap>,
+    catch_arm_bodies: &[(&str, baml_compiler2_ast::ExprId)],
 ) -> bool {
-    matches!(
-        &body.exprs[value],
-        Expr::Path(segments)
-            if segments.len() == 1 && catch_bindings.contains(segments[0].as_str())
-    )
+    let Some(source_map) = source_map else {
+        return false;
+    };
+    let Expr::Path(segments) = &body.exprs[value] else {
+        return false;
+    };
+    let [name] = segments.as_slice() else {
+        return false;
+    };
+    let value_span = source_map.expr_span(value);
+    catch_arm_bodies.iter().any(|(binding, arm_body)| {
+        *binding == name.as_str() && source_map.expr_span(*arm_body).contains_range(value_span)
+    })
 }
 
 pub fn collect_call_targets(body: &ExprBody) -> BTreeSet<Name> {
@@ -399,7 +425,7 @@ fn throw_fact_from_expr<'db>(
     expr_id: baml_compiler2_ast::ExprId,
     body: &ExprBody,
 ) -> Ty {
-    match &body.exprs[expr_id] {
+    let fact = match &body.exprs[expr_id] {
         Expr::Literal(Literal::String(_)) => Ty::String {
             attr: TyAttr::default(),
         },
@@ -437,6 +463,22 @@ fn throw_fact_from_expr<'db>(
         _ => Ty::Unknown {
             attr: TyAttr::default(),
         },
+    };
+    // This lightweight, cycle-avoiding pass can't statically name every thrown
+    // value: a call/binary/array/conditional result, or an unresolved path,
+    // falls through to `Ty::Unknown`. `Unknown` is an inference-only sentinel
+    // with no runtime representation — emitting it as a throws fact would trip
+    // the `RuntimeTy` conversion boundary at codegen. Over-approximate to the
+    // top type `unknown` (`BuiltinUnknown`) instead: it is sound (a `catch` must
+    // handle the top type) and has a runtime representation. TIR's full
+    // inference types these precisely for diagnostics; this set only feeds
+    // runtime throws metadata, where a conservative bound is correct.
+    if matches!(fact, Ty::Unknown { .. }) {
+        Ty::BuiltinUnknown {
+            attr: TyAttr::default(),
+        }
+    } else {
+        fact
     }
 }
 
@@ -532,18 +574,22 @@ fn lookup_type_in_scope<'db>(
     })
 }
 
-fn collect_catch_binding_names(body: &ExprBody) -> HashSet<&str> {
-    let mut names = HashSet::new();
+/// Collect, for each `catch` clause binding, the `(binding-name, arm-body-expr)`
+/// pairs whose arm-body span scopes the rethrows of that binding.
+fn collect_catch_arm_bodies(body: &ExprBody) -> Vec<(&str, baml_compiler2_ast::ExprId)> {
+    let mut arms = Vec::new();
     for (_, expr) in body.exprs.iter() {
         if let Expr::Catch { clauses, .. } = expr {
             for clause in clauses {
                 if let Some(name) = body.patterns[clause.binding].binding_name(&body.patterns) {
-                    names.insert(name.as_str());
+                    for &arm_id in &clause.arms {
+                        arms.push((name.as_str(), body.catch_arms[arm_id].body));
+                    }
                 }
             }
         }
     }
-    names
+    arms
 }
 
 fn expr_to_path(expr_id: baml_compiler2_ast::ExprId, body: &ExprBody) -> Option<Vec<Name>> {

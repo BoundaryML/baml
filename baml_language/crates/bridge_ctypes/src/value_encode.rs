@@ -401,21 +401,30 @@ fn ty_to_field_type(ty: &RuntimeTy) -> BamlTy {
             unreachable!("runtime-only opaque type should not reach FFI type encoding")
         }
         RuntimeTy::Uint8Array { .. } => Some(FieldType::Uint8arrayType(BamlTyUint8Array {})),
-        // BuiltinUnknown is used for dynamic types (e.g., map values, array elements)
-        // when the element type isn't known at compile time.
-        RuntimeTy::BuiltinUnknown { .. } => Some(FieldType::UnknownType(BamlTyUnknown {})),
+        // Dynamic / no-statically-known-shape positions all encode as the
+        // `UnknownType`; the concrete value crossing the boundary still carries
+        // its own runtime tag.
+        //   - `BuiltinUnknown`: an unannotated element type (map value, array
+        //     element) not known at compile time.
+        //   - `TypeVar` / `AssociatedTypeProjection`: a generic position the
+        //     compiler now keeps faithfully. The pre-de-erasure lowering erased
+        //     these to `BuiltinUnknown`, so encoding them as `UnknownType` here
+        //     preserves the original FFI behavior.
+        //   - `Never`: the uninhabited bottom (e.g. an empty `never[]`'s element
+        //     type). No value can inhabit it, so the encoding is a placeholder.
+        RuntimeTy::BuiltinUnknown { .. }
+        | RuntimeTy::TypeVar(..)
+        | RuntimeTy::AssociatedTypeProjection { .. }
+        | RuntimeTy::Never { .. } => Some(FieldType::UnknownType(BamlTyUnknown {})),
         RuntimeTy::Bigint { .. } => Some(FieldType::BigintType(BamlTyBigint {})),
         RuntimeTy::TypeAlias(_, _)
         | RuntimeTy::Future(..)
         | RuntimeTy::Function { .. }
         | RuntimeTy::Void { .. }
         | RuntimeTy::WatchAccessor(_, _)
-        | RuntimeTy::TypeVar(..)
-        | RuntimeTy::AssociatedTypeProjection { .. }
-        | RuntimeTy::Never { .. }
         | RuntimeTy::RustType { .. }
         | RuntimeTy::Type { .. } => {
-            unreachable!("non-data type should not reach FFI: {ty:?}")
+            unreachable!("non-data type should not reach FFI type encoding")
         }
     };
 

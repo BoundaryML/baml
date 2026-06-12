@@ -4723,3 +4723,29 @@ async fn reflection_does_not_wildcard_missing_associated_type_bindings() {
     );
     assert_eq!(output.result.unwrap(), BexExternalValue::Int(0));
 }
+
+/// An interface default method whose generic bound references an associated
+/// type via `Self` (`U extends Self.Item`) must keep that bound in the emitted
+/// metadata. The bound is lowered with the same `Self`/associated-type bindings
+/// as the signature, so `Self.Item` resolves to a projection instead of erasing
+/// `Self` to `Ty::Unknown` and being silently dropped.
+#[test]
+fn interface_default_method_self_referencing_bound_is_emitted() {
+    let (display_type_params, _, _) = compiled_function_display_metadata(
+        r#"
+        interface Container {
+            type Item
+            function first(self) -> Self.Item
+            function pick<U extends Self.Item>(self, candidate: U) -> U {
+                return candidate
+            }
+        }
+        "#,
+        "Container.pick",
+    );
+    assert!(
+        display_type_params.iter().any(|p| p.contains("Item")),
+        "interface default-method bound `U extends Self.Item` was dropped from \
+         emitted metadata: {display_type_params:?}"
+    );
+}

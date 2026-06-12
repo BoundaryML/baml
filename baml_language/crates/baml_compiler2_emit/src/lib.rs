@@ -145,12 +145,22 @@ pub struct CompileOptions {
 pub enum LoweringError {
     /// A stub — no errors expected from Phase 1 stub.
     Internal(String),
+    /// The project has unresolved compile errors, so bytecode generation was
+    /// not attempted. Lowering an error-bearing program would feed
+    /// inference-only `Unknown`/`Error` types through the runtime-conversion
+    /// boundary, which rejects them. Callers should surface the diagnostics to
+    /// the user instead of treating this as a compiler fault.
+    ProjectHasErrors { error_count: usize },
 }
 
 impl std::fmt::Display for LoweringError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Internal(msg) => write!(f, "internal lowering error: {msg}"),
+            Self::ProjectHasErrors { error_count } => write!(
+                f,
+                "cannot generate bytecode: project has {error_count} unresolved compile error(s)"
+            ),
         }
     }
 }
@@ -924,7 +934,7 @@ pub fn generate_project_bytecode_with_opt(
     // --- Pass 7.5: Recursive type alias definitions (ctx.output_format bridge) ---
     // Mirrors the legacy pipeline: only recursive aliases are stored in
     // `Program.recursive_type_alias_defs`; non-recursive aliases are expanded inline
-    // by `convert_tir2_ty`. This is required for correct output_format rendering at runtime.
+    // by `convert_tir_ty_for_runtime`. This is required for correct output_format rendering at runtime.
     for cache in alias_caches.values() {
         for (qtn, tir_ty) in &cache.aliases {
             if cache.recursive.contains(qtn) {
@@ -1242,7 +1252,7 @@ fn type_expr_for_name_with_generic_args(name: Name, generic_params: &[Name]) -> 
 /// Extract runtime and display signature metadata from an `item_tree` Function.
 ///
 /// Type resolution delegates to TIR's `lower_type_expr` (single source of truth)
-/// then converts via MIR's `convert_tir2_ty` to produce runtime `baml_type::RuntimeTy`.
+/// then converts via MIR's `convert_tir_ty_for_runtime` to produce runtime `baml_type::RuntimeTy`.
 /// The display fields keep generic type variables and unresolved projections
 /// intact for self-documenting surfaces like `baml run --list`.
 fn compute_function_metadata_from_item_tree(
@@ -1426,14 +1436,39 @@ fn compute_function_metadata_from_item_tree(
             .filter_map(|(idx, name)| {
                 let bound_te = scoped_generic_bound_exprs.get(idx)?.as_ref()?;
                 let mut diags = Vec::new();
-                let bound_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
-                    db,
-                    bound_te,
-                    pkg_items,
-                    &pkg_info.namespace_path,
-                    &enclosing_generics,
-                    &mut diags,
-                );
+                // Lower bounds with the same `Self`/associated-type bindings as
+                // the signature (mirroring `lower_tir_type`) so an interface
+                // default-method bound like `U extends Self.Item` resolves to a
+                // projection instead of erasing `Self` to `Ty::Unknown` — which
+                // the `diags.is_empty()` gate below would then silently drop from
+                // the emitted metadata.
+                let bound_ty = if enclosing_interface.is_some() {
+                    baml_compiler2_tir::generics::lower_type_expr_with_generics(
+                        db,
+                        bound_te,
+                        pkg_items,
+                        &pkg_info.namespace_path,
+                        &interface_signature_bindings,
+                        &mut diags,
+                    )
+                } else {
+                    let resolved_te = if let Some(replacement) = &self_replacement {
+                        baml_compiler2_tir::lower_type_expr::substitute_self_in(
+                            bound_te,
+                            replacement,
+                        )
+                    } else {
+                        bound_te.clone()
+                    };
+                    baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+                        db,
+                        &resolved_te,
+                        pkg_items,
+                        &pkg_info.namespace_path,
+                        &enclosing_generics,
+                        &mut diags,
+                    )
+                };
                 diags.is_empty().then(|| (name.clone(), bound_ty))
             })
             .collect();

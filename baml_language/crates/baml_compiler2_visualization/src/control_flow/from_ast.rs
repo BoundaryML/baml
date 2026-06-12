@@ -1156,7 +1156,24 @@ fn render_expr_compact_ast(body: &ast::ExprBody, id: ast::ExprId) -> String {
             }
             out
         }
-        ast::Expr::Object { type_name, .. } => format!("{type_name} {{ ... }}"),
+        ast::Expr::Object {
+            type_name,
+            type_args,
+            ..
+        } => {
+            // Include generic args so different instantiations (`Box<int>` vs
+            // `Box<string>`) get distinct labels.
+            if type_args.is_empty() {
+                format!("{type_name} {{ ... }}")
+            } else {
+                let args = type_args
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("{type_name}<{args}> {{ ... }}")
+            }
+        }
         ast::Expr::Array { elements } => {
             if elements.is_empty() {
                 "[]".to_string()

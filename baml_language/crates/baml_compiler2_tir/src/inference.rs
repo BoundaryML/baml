@@ -307,10 +307,24 @@ pub fn interface_self_projection_bindings(
     for assoc in &iface_data.associated_types {
         bindings.insert(assoc.name.clone(), projection(assoc.name.clone()));
     }
-    for name in inherited_interface_associated_type_names(db, iface_loc, pkg_items, ns_context) {
-        bindings
-            .entry(name.clone())
-            .or_insert_with(|| projection(name));
+    // Inherited associated types are bound as `Self.<name>` only when the name
+    // is unambiguous. A name inherited from more than one `requires` interface
+    // is excluded from the interface's type-level params (see
+    // `interface_type_level_params_and_bounds`, which applies the same
+    // `count == 1` filter) and must be disambiguated explicitly; binding it to a
+    // single `Self.<name>` projection here would silently resolve an ambiguous
+    // reference and diverge from body inference.
+    let inherited = inherited_interface_associated_type_names(db, iface_loc, pkg_items, ns_context);
+    let mut counts: FxHashMap<Name, usize> = FxHashMap::default();
+    for name in &inherited {
+        *counts.entry(name.clone()).or_default() += 1;
+    }
+    for name in inherited {
+        if counts.get(&name).copied().unwrap_or_default() == 1 {
+            bindings
+                .entry(name.clone())
+                .or_insert_with(|| projection(name));
+        }
     }
     bindings
 }

@@ -57,8 +57,9 @@ use baml_compiler2_tir::ty::{
 
 /// Build the [`ResolvedAliases`] type-alias environment for a package,
 /// including dependency packages. The pure erasure that consumes it lives in
-/// `baml_type` ([`ResolvedAliases::convert`] / [`convert_tir2_ty`]); only this
-/// db-querying constructor stays compiler-side.
+/// `baml_type` ([`ResolvedAliases::convert`]), wrapped compiler-side by
+/// `convert_tir_ty_for_runtime`; only this db-querying constructor stays
+/// compiler-side.
 pub fn resolved_aliases_for_package(
     db: &dyn crate::Db,
     pkg_id: baml_compiler2_hir::package::PackageId,
@@ -782,7 +783,7 @@ fn contains_assoc_projection(ty: &Tir2Ty) -> bool {
 /// Convert an already-resolved `baml_type::RuntimeTy` back to a `TyTemplate`.
 ///
 /// This is needed for `IsType` pattern-matching where the pattern type comes
-/// through `convert_tir2_ty` (so `TypeVars` are already erased), but we still
+/// through `convert_tir_ty_for_runtime` (so `TypeVars` are already erased), but we still
 /// need a `TyTemplate` to carry class-level type args for the VM to compare
 /// against `Instance::class_type_args`.
 ///
@@ -1661,7 +1662,7 @@ struct LoweringContext<'db> {
     /// named classes, while dispatch can use primitive type tags directly.
     interface_type_implementors: &'db InterfaceTypeImplementors,
 
-    // Pre-computed type alias data for inline expansion in convert_tir2_ty.
+    // Pre-computed type alias data for inline expansion in convert_tir_ty_for_runtime.
     // Borrowed from `package_lowering_data` (shared across every function in
     // the package) rather than cloned per context.
     resolved_aliases: &'db ResolvedAliases,
@@ -4728,7 +4729,7 @@ impl LoweringContext<'_> {
         // Allocate the future temp. Phase C uses a defaulted `Null` type
         // for the future local; the TIR-tracked value/error types flow
         // through to runtime via the surrounding context. A follow-up
-        // can plumb `Tir2Ty::Future` directly through `convert_tir2_ty`
+        // can plumb `Tir2Ty::Future` directly through `convert_tir_ty_for_runtime`
         // here once we read it from `self.expr_types`.
         let future_local = self.builder.temp(RuntimeTy::Null {
             attr: TyAttr::default(),
@@ -12829,7 +12830,7 @@ impl LoweringContext<'_> {
                 // type test here is at best a tautology and at worst a
                 // miscompile: a rigid generic (e.g. the `E` of a combinator's
                 // `catch (e) { let e => … }`) erases to `RuntimeTy::Void` in
-                // `convert_tir2_ty`, making the test constant-false and the
+                // `convert_tir_ty_for_runtime`, making the test constant-false and the
                 // catch arm silently rethrow. (Panic fall-through for catch
                 // arms is handled separately by `ThrowIfPanic`.)
                 self.builder.goto(success);
@@ -12917,7 +12918,7 @@ impl LoweringContext<'_> {
                     }
                     // A class pattern type still carrying the enclosing
                     // function's TypeVars (e.g. `let e: AllFailed<E>` inside
-                    // `any<T, E>`) must NOT go through `convert_tir2_ty` —
+                    // `any<T, E>`) must NOT go through `convert_tir_ty_for_runtime` —
                     // that erases TypeVar → Void and the test becomes
                     // constant-false. Build a template instead so the args
                     // lower to `TypeArgRef` resolved against the frame.

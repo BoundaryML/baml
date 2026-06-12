@@ -802,21 +802,60 @@ pub(crate) fn peel_function_ty(ty: &RuntimeTy) -> Option<&RuntimeTy> {
 /// its returned value validated, so binding one is rejected.
 fn ret_ty_has_unvalidatable_position(ty: &RuntimeTy) -> bool {
     match ty {
-        // `Void`/`BuiltinUnknown` accept anything; a free `TypeVar` or a
-        // projection off one is a faithful (un-erased) generic position whose
-        // instantiation the host's opaque value cannot be validated against —
-        // both are unvalidatable, so binding such a callable is rejected.
+        // Unvalidatable: the host's opaque returned value cannot be checked
+        // against these declared types (the host-return validator has no
+        // positive discriminator for them), so a host could inject a value that
+        // violates the declared type. Reject binding such a callable.
+        //   - `Void`/`BuiltinUnknown`: accept-anything tops.
+        //   - `TypeVar`/`AssociatedTypeProjection`: faithful (un-erased) generic
+        //     positions whose instantiation can't be validated.
+        //   - `Interface`: implementation can't be checked at the FFI boundary.
+        //   - `EnumVariant`: a single variant can't be checked (the validator
+        //     only checks enum identity).
+        //   - `Future`: the host cannot produce a VM future, and nothing
+        //     validates one.
         RuntimeTy::Void { .. }
         | RuntimeTy::BuiltinUnknown { .. }
         | RuntimeTy::TypeVar(..)
-        | RuntimeTy::AssociatedTypeProjection { .. } => true,
+        | RuntimeTy::AssociatedTypeProjection { .. }
+        | RuntimeTy::Interface(..)
+        | RuntimeTy::EnumVariant(..)
+        | RuntimeTy::Future(..) => true,
+
+        // Container positions are validated structurally; recurse so a nested
+        // unvalidatable position (`(T)[]`, `Box<T>`, `int | T`) is caught too.
         RuntimeTy::List(elem, _) => ret_ty_has_unvalidatable_position(elem),
         RuntimeTy::Map { value, .. } => ret_ty_has_unvalidatable_position(value),
         RuntimeTy::Union(members, _) => members.iter().any(ret_ty_has_unvalidatable_position),
         RuntimeTy::Class(_, generic_args, _) => {
             generic_args.iter().any(ret_ty_has_unvalidatable_position)
         }
-        _ => false,
+
+        // Directly validated by the host-return validator.
+        RuntimeTy::Null { .. }
+        | RuntimeTy::Bool { .. }
+        | RuntimeTy::Int { .. }
+        | RuntimeTy::Float { .. }
+        | RuntimeTy::Bigint { .. }
+        | RuntimeTy::String { .. }
+        | RuntimeTy::Uint8Array { .. }
+        | RuntimeTy::Literal(..)
+        | RuntimeTy::Enum(..)
+        | RuntimeTy::Media(..)
+        | RuntimeTy::Function { .. } => false,
+
+        // Opaque runtime handles: the declared type is itself opaque, so the
+        // host's value has no concrete contract to violate. (Most cannot be a
+        // host-callable return type in practice; an unexpanded `TypeAlias` here
+        // would be a prior-stage bug, and `-> never` is a callable that only
+        // ever throws.)
+        RuntimeTy::RustType { .. }
+        | RuntimeTy::Type { .. }
+        | RuntimeTy::Resource { .. }
+        | RuntimeTy::PromptAst { .. }
+        | RuntimeTy::WatchAccessor(..)
+        | RuntimeTy::TypeAlias(..)
+        | RuntimeTy::Never { .. } => false,
     }
 }
 
