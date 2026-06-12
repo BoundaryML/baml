@@ -8,9 +8,10 @@
 //! anchor capture is two clock reads plus (on x86) a `cpuid` probe.
 //!
 //! The consumer owns conversion via [`TickConverter`]: exact rational rates
-//! where the platform provides them (`CNTFRQ_EL0`, `mach_timebase_info`),
-//! and a two-point calibration refined across its own wake cadence for the
-//! x86 TSC. Disk timestamps (`timestamp_ns`) therefore stay nanoseconds —
+//! where the platform states them (`CNTFRQ_EL0` for the aarch64 generic
+//! timer), and a two-point calibration refined across its own wake cadence
+//! for the x86 TSC. Disk timestamps (`timestamp_ns`) therefore stay
+//! nanoseconds —
 //! readers rebase to wall time as
 //! `wall(event) = started_at_epoch_ns + timestamp_ns`, unchanged.
 //!
@@ -47,7 +48,7 @@ pub enum ClockKind {
 pub struct ClockMeta {
     pub kind: ClockKind,
     /// Exact ns-per-tick as a `(numer, denom)` rational, when the platform
-    /// states it (`CNTFRQ_EL0`, `mach_timebase_info`, ns-backed fallback).
+    /// states it (`CNTFRQ_EL0` on aarch64, ns-backed `Instant` fallback).
     /// `None` means the rate must be measured — x86 TSC, where the consumer
     /// calibrates against the OS clock.
     pub ns_per_tick: Option<(u64, u64)>,
@@ -144,49 +145,31 @@ mod imp {
 
     /// Exact ns-per-tick for the aarch64 generic timer, or `None` if it
     /// cannot be determined (falls back to `Instant`).
+    ///
+    /// The rate must describe the counter we actually stamp with —
+    /// `CNTVCT_EL0` — so we read its architectural frequency from
+    /// `CNTFRQ_EL0` on every OS, macOS included. We deliberately do **not**
+    /// use `mach_timebase_info`: that states the rate of `mach_absolute_time`,
+    /// which is only incidentally equal to the `CNTVCT_EL0` rate on M1–M3
+    /// (both 24 MHz). On M4/M5 `CNTVCT_EL0` runs at 1 GHz while
+    /// `mach_absolute_time` stays at 24 MHz, so applying the mach rational
+    /// (125/3) to raw `CNTVCT_EL0` reads inflates every timestamp ~41.7×.
     #[cfg(target_arch = "aarch64")]
     fn cntvct_ns_per_tick() -> Option<(u64, u64)> {
-        #[cfg(target_os = "macos")]
-        {
-            // mach_absolute_time ticks at the generic-timer rate on Apple
-            // Silicon; mach_timebase_info states ns = ticks * numer / denom
-            // exactly (125/3 on M1–M3, 1/1 on ~1 GHz timebases).
-            #[repr(C)]
-            struct MachTimebaseInfo {
-                numer: u32,
-                denom: u32,
-            }
-            unsafe extern "C" {
-                fn mach_timebase_info(info: *mut MachTimebaseInfo) -> libc_int;
-            }
-            #[allow(non_camel_case_types)]
-            type libc_int = i32;
-            let mut info = MachTimebaseInfo { numer: 0, denom: 0 };
-            // SAFETY: out-pointer to a properly sized struct; the call has
-            // no other preconditions.
-            let rc = unsafe { mach_timebase_info(&raw mut info) };
-            if rc == 0 && info.numer != 0 && info.denom != 0 {
-                return Some((u64::from(info.numer), u64::from(info.denom)));
-            }
-            None
+        // CNTFRQ_EL0 states the CNTVCT_EL0 frequency in Hz.
+        let freq: u64;
+        // SAFETY: EL0-readable system register; no memory or flags.
+        unsafe {
+            core::arch::asm!(
+                "mrs {f}, cntfrq_el0",
+                f = out(reg) freq,
+                options(nomem, nostack, preserves_flags)
+            );
         }
-        #[cfg(not(target_os = "macos"))]
-        {
-            // CNTFRQ_EL0 states the counter frequency in Hz.
-            let freq: u64;
-            // SAFETY: EL0-readable system register; no memory or flags.
-            unsafe {
-                core::arch::asm!(
-                    "mrs {f}, cntfrq_el0",
-                    f = out(reg) freq,
-                    options(nomem, nostack, preserves_flags)
-                );
-            }
-            if freq == 0 {
-                return None;
-            }
-            Some((1_000_000_000, freq))
+        if freq == 0 {
+            return None;
         }
+        Some((1_000_000_000, freq))
     }
 
     #[cfg(target_arch = "aarch64")]
