@@ -24,7 +24,7 @@
 //! module is a stub: profiling is forced off there, and the concurrency
 //! tests stamp their own tick values.
 
-// Raw counter reads (`rdtsc`, `mrs`) and one mach FFI call.
+// Raw counter reads (`rdtsc`, `mrs`).
 #![allow(unsafe_code)]
 
 pub use imp::{base_ticks, init, meta, now_ticks, started_at_epoch_ns};
