@@ -108,6 +108,119 @@ def _language_workspace_note() -> str:
     ])
 
 
+def _language_verification() -> str:
+    """Return the pre-PR check that mirrors the compiler repo's CI gates.
+
+    Draft PRs from earlier runs failed CI for two recurring, avoidable reasons,
+    both of which "the tests pass" alone does not catch:
+
+    1. **Stale insta snapshots.** Adding a builtin/operator changes captured
+       output (e.g. ``baml describe`` listings, bytecode display), so committed
+       ``.snap`` files must be regenerated and committed — otherwise the snapshot
+       suite fails on every platform.
+    2. **Clippy under ``-D warnings``.** The "Pre-commit Checks" job runs clippy
+       with warnings denied, so any non-idiomatic lint (e.g.
+       ``while_let_on_iterator``) fails CI even when all tests pass.
+
+    This block names both gates and the exact commands so the agent clears them
+    locally before opening the draft.
+
+    Returns:
+        A multi-line "Before opening the PR" checklist for language fixes.
+    """
+    return "\n".join([
+        "## Before opening the PR — these are the CI gates you MUST clear locally",
+        "Run everything below from inside `baml_language/`. \"Tests pass\" is not "
+        "enough on its own — past PRs were rejected by CI for the two reasons below "
+        "even though the feature worked. Do NOT create the draft until all three pass.",
+        "",
+        "1. **Full test suite.** Run the whole suite, not just the test for your "
+        "change (`cargo test` across the workspace; see "
+        "`baml_language/TEST_INSTRUCTIONS.md`). A new builtin/operator can break a "
+        "snapshot test in a different crate (e.g. `baml describe` listings or "
+        "bytecode display), so a narrow run will miss it.",
+        "2. **Snapshot tests (insta).** If any snapshot test fails, it is because "
+        "your change altered captured output. Inspect each diff, confirm the new "
+        "output is correct, then regenerate and COMMIT the updated snapshots: "
+        "`cargo insta accept --all` (and `UPDATE_EXPECT=1 cargo test --package "
+        "lsp_actions_tests` for inline expectations). Never leave a `.snap` stale "
+        "or delete a failing snapshot test to make it pass.",
+        "3. **Lint + format (the \"Pre-commit Checks\" job).** Run `cargo fmt --all` "
+        "and `cargo clippy --all-targets -- -D warnings`, and fix every warning. "
+        "Clippy runs with warnings DENIED in CI, so a single lint fails the build. "
+        "Fix lints idiomatically (e.g. use a `for` loop instead of "
+        "`while let Some(..) = iter.next()`); do not silence them with `#[allow(...)]`.",
+    ])
+
+
+def _coderabbit_review(base_branch: str) -> str:
+    """Return the step telling the agent to self-review with the CodeRabbit CLI.
+
+    Run after the build/test/lint gates and before the PR is opened: an automated
+    CodeRabbit pass over the agent's own diff catches correctness and quality
+    issues that a human reviewer would otherwise bounce the PR on. The CLI auths
+    non-interactively from ``CODERABBIT_API_KEY`` (provisioned to the Cursor cloud
+    agent via the team Secrets store) and reviews the committed diff against the
+    repo's base branch.
+
+    Args:
+        base_branch: The branch the agent's work is diffed against (the repo's
+            starting ref, e.g. ``canary`` for language or ``main`` for skill).
+
+    Returns:
+        A multi-line "Self-review with CodeRabbit" instruction block.
+    """
+    return "\n".join([
+        "## Self-review with CodeRabbit before opening the PR",
+        "Once the change builds and the checks above pass, review your own diff "
+        "with the CodeRabbit CLI and fix what it surfaces — this is a required step.",
+        "",
+        "1. Install the CLI (skip if `coderabbit` is already on PATH): "
+        "`curl -fsSL https://cli.coderabbit.ai/install.sh | sh`",
+        "2. Authenticate non-interactively — your environment provides the key as "
+        "`CODERABBIT_API_KEY`: `coderabbit auth login --api-key \"$CODERABBIT_API_KEY\"`",
+        "3. Commit your work, then review the diff against the base branch: "
+        f"`coderabbit review --plain --base {base_branch}`",
+        "4. Read every finding. Fix the substantive ones (bugs, correctness, missing "
+        "edge cases, security) and re-run the review until it comes back clean. Use "
+        "judgment on pure style nits, but do not ignore real issues.",
+        "",
+        "In the PR's Verification section, note that you ran CodeRabbit and what you "
+        "changed in response. If `CODERABBIT_API_KEY` is missing or the CLI cannot "
+        "authenticate, say so explicitly in the PR description and proceed — do not "
+        "block on it.",
+    ])
+
+
+def _reproduce_first() -> str:
+    """Return the directive to reproduce and confirm the issue before fixing it.
+
+    Earlier runs sometimes "fixed" things that weren't actually broken or
+    misread the report. Forcing the agent to reproduce the failure first anchors
+    the fix to the real behavior, and the captured reproduction is reused as the
+    Verification baseline in the PR write-up.
+
+    Returns:
+        A multi-line "reproduce and confirm" instruction block.
+    """
+    return "\n".join([
+        "## First: reproduce and confirm the issue",
+        "Before changing any code, reproduce the reported problem yourself and "
+        "confirm you observe the exact failure described above:",
+        "",
+        "- Run the reproduction above (or, if none is given, construct the smallest "
+        "case that should trigger it) and capture its real output.",
+        "- Confirm the actual behavior matches the report — the same error, panic, "
+        "or wrong output. Only start fixing once you have reproduced it.",
+        "- If you CANNOT reproduce it (it already works, or the report is "
+        "inaccurate), do NOT invent a fix. Stop and open the PR describing exactly "
+        "what you ran, what you observed, and that the issue does not reproduce.",
+        "",
+        "Keep this reproduction — you will re-run it in the Verification step to "
+        "prove the fix actually resolves it.",
+    ])
+
+
 def cursor_prompt(issue: dict[str, Any]) -> str:
     """Build the instruction text for a Cursor cloud agent.
 
@@ -140,12 +253,23 @@ def cursor_prompt(issue: dict[str, Any]) -> str:
         parts += ["", "## Reproduction (the failing case)", issue["repro"]]
     if issue.get("suggestion"):
         parts += ["", "## Suggested fix", issue["suggestion"]]
-    parts += [
-        "",
-        "## Before opening the PR",
-        "Run the full test suite and make sure all tests pass. Do not create the PR "
-        "draft until every test passes.",
-    ]
+    # Always prove the bug exists before touching code (and capture the baseline
+    # for the Verification section).
+    parts += ["", _reproduce_first()]
+    if issue.get("kind") != "skill":
+        # Language fixes go through the compiler repo's CI (tests + insta
+        # snapshots + clippy -D warnings); spell out each gate explicitly.
+        parts += ["", _language_verification()]
+    else:
+        parts += [
+            "",
+            "## Before opening the PR",
+            "Run the full test suite and make sure all tests pass. Do not create the PR "
+            "draft until every test passes.",
+        ]
+    # Final gate for every kind: an automated CodeRabbit pass over the agent's own
+    # diff, against the same base branch the agent started from.
+    parts += ["", _coderabbit_review(branch_for(issue.get("kind", "")))]
     parts += ["", "---", _pr_instructions()]
     return "\n".join(p for p in parts if p is not None)
 

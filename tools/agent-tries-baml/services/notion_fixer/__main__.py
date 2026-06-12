@@ -21,6 +21,7 @@ from bench_core.processor import Processor
 from bench_core.service_client import ServiceClient
 
 from . import fixer
+from .tracker import CursorTracker
 
 log = logging.getLogger("notion_fixer")
 
@@ -41,6 +42,11 @@ CURSOR_MODEL = os.environ.get("CURSOR_MODEL") or None
 STATUS_CONFIRMED = os.environ.get("NOTION_STATUS_CONFIRMED", "not started")
 STATUS_APPROVED = os.environ.get("NOTION_STATUS_APPROVED", "approved")
 STATUS_FIXING = os.environ.get("NOTION_STATUS_FIXING", "to cursor")
+# Cursor-tracker-driven board labels (PR phase).
+STATUS_PRPREP = os.environ.get("NOTION_STATUS_PRPREP", "pr prep")
+STATUS_PR_READY = os.environ.get("NOTION_STATUS_PR_READY", "ready to merge")
+STATUS_NEEDS_HUMAN = os.environ.get("NOTION_STATUS_NEEDS_HUMAN", "needs human")
+STATUS_MERGED = os.environ.get("NOTION_STATUS_MERGED", "merged")
 
 
 class NotionPush(Processor):
@@ -110,13 +116,13 @@ class NotionPush(Processor):
                 page_id, issue["title"], self._map_status(issue.get("status", "open")),
                 issue.get("description", ""), links,
                 suggestion=issue.get("suggestion"), category=issue.get("category"),
-                repro=issue.get("repro"),
+                repro=issue.get("repro"), kind=issue.get("kind"),
             )
         else:
             page_id = await self.notion.create_issue_page(
                 db_id, issue["title"], STATUS_CONFIRMED, issue.get("description", ""), links,
                 suggestion=issue.get("suggestion"), category=issue.get("category"),
-                repro=issue.get("repro"),
+                repro=issue.get("repro"), kind=issue.get("kind"),
             )
         await self.service.update(self.table, issue_id,
                                   {"notionPageId": page_id, "notionSyncStatus": "synced"})
@@ -149,7 +155,11 @@ class NotionPush(Processor):
             for any unrecognized status.
         """
         return {"open": STATUS_CONFIRMED, "confirmed": STATUS_CONFIRMED,
-                "approved": STATUS_APPROVED, "fixing": STATUS_FIXING}.get(status, STATUS_CONFIRMED)
+                "approved": STATUS_APPROVED, "dispatching": STATUS_APPROVED,
+                "fixing": STATUS_FIXING, "tocursor": STATUS_FIXING,
+                "prprep": STATUS_PRPREP, "pr_ready": STATUS_PR_READY,
+                "needs_human": STATUS_NEEDS_HUMAN, "closed": STATUS_MERGED,
+                }.get(status, STATUS_CONFIRMED)
 
 
 class FixDispatch(Processor):
@@ -166,7 +176,7 @@ class FixDispatch(Processor):
     claim_field = "status"
     claim_index = "by_status_created"
     claim_value = "approved"
-    claim_into = "fixing"
+    claim_into = "dispatching"  # transient; -> tocursor on a successful launch
     lease_ms = 5 * 60 * 1000
 
     def __init__(self, service):
@@ -181,66 +191,108 @@ class FixDispatch(Processor):
     async def process(self, issue: dict[str, Any]) -> None:
         """Dispatch a fix for one claimed approved issue.
 
-        Idempotent: an issue that already carries ``fixSlackTs`` is skipped, and
-        the launch uses a stable ``agentId`` derived from the issue id so a
-        re-dispatch after a crash (before ``fixSlackTs`` was persisted) returns
-        409 and is treated as already launched rather than spawning a duplicate.
-        A no-op (logs a warning) when no Cursor API key is configured. Otherwise
-        launches a Cursor cloud agent, records its reference, posts a
-        (non-triggering) Slack note linking the agent, and flips the Notion page
-        to fixing.
+        Idempotent without blocking re-dispatch: an issue carrying a real
+        ``fixSlackTs`` ref is skipped, but a fresh random ``agentId`` is minted per
+        dispatch and persisted as a ``pending:`` marker before launch, so a
+        crash-retry resumes the same id (Cursor 409, no duplicate) while a reset
+        issue (``fixSlackTs`` cleared) launches a genuinely new agent. A no-op
+        (logs a warning) when no Cursor API key is configured. Otherwise launches a
+        Cursor cloud agent, records its reference, posts a (non-triggering) Slack
+        note linking the agent, and flips the Notion page to fixing.
 
         Args:
             issue: The claimed issue document.
         """
         issue_id = issue["_id"]
-        if issue.get("fixSlackTs"):
-            log.info("issue %s already dispatched (ref=%s)", issue_id, issue["fixSlackTs"])
+        existing = issue.get("fixSlackTs") or ""
+        # A real dispatch ref (anything but a "pending:" marker) means this issue was
+        # already handed to Cursor. Don't re-launch; just ensure it lands in tocursor
+        # (a crash may have flipped us back to approved before that transition
+        # persisted) so the tracker picks it up, and stop.
+        if existing and not existing.startswith("pending:"):
+            log.info("issue %s already dispatched (ref=%s); ensuring tocursor", issue_id, existing)
+            await self.service.transition(
+                self.table, issue_id, "tocursor",
+                patch={"cursorAgentId": existing, "fixAttempts": issue.get("fixAttempts") or 0},
+            )
             return
         if not CURSOR_API_KEY:
             log.warning("no CURSOR_API_KEY configured; cannot dispatch issue %s", issue_id)
             return
         repo = fixer.repo_url(issue["kind"])
-        # Launch a Cursor cloud agent directly (the real automated path). Cursor
-        # requires the agent id to be `bc-<uuid>`, so derive a stable uuid from the
-        # issue id: a re-dispatch after a crash (before fixSlackTs was persisted)
-        # reuses the same id, so Cursor returns 409 and launch_agent reports it as
-        # already launched instead of spawning a duplicate agent/PR.
-        agent_id = f"bc-{uuid.uuid5(uuid.NAMESPACE_URL, issue_id)}"
-        result = await cursor_client.launch_agent(
-            CURSOR_API_KEY, fixer.cursor_prompt(issue), repo, fixer.branch_for(issue["kind"]),
-            agent_id=agent_id, auto_create_pr=True, model=CURSOR_MODEL,
-        )
+        branch = fixer.branch_for(issue["kind"])
+        # The Cursor agent id (`bc-<uuid>`) must be STABLE within one dispatch but
+        # FRESH across intentional re-dispatches:
+        #   * stable so a crash-retry (launch succeeded, fixSlackTs not yet persisted)
+        #     reuses the same id and Cursor returns 409 instead of spawning a
+        #     duplicate agent/PR;
+        #   * fresh so re-approving a reset issue (its fixSlackTs cleared) launches a
+        #     NEW agent rather than 409-colliding with the prior, already-used id.
+        # Both hold by minting a random id and persisting it as a `pending:` marker
+        # BEFORE launching: a retry resumes from the marker, while a reset clears
+        # fixSlackTs entirely so the next dispatch mints a new id. (A deterministic
+        # id derived from issue_id can never be reused, which silently blocked every
+        # legitimate re-dispatch.)
+        if existing.startswith("pending:"):
+            agent_id = existing[len("pending:"):]
+        else:
+            agent_id = f"bc-{uuid.uuid4()}"
+            await self.service.update(self.table, issue_id, {"fixSlackTs": f"pending:{agent_id}"})
+        try:
+            result = await cursor_client.launch_agent(
+                CURSOR_API_KEY, fixer.cursor_prompt(issue), repo, branch,
+                agent_id=agent_id, auto_create_pr=True, model=CURSOR_MODEL,
+            )
+        except Exception:
+            # Launch failed (e.g. Cursor billing 400). Clear the pending marker so the
+            # issue isn't left looking dispatched and a later retry mints a clean id.
+            await self.service.update(self.table, issue_id, {"fixSlackTs": ""})
+            raise
         agent = result.get("agent") or result  # response may nest under "agent"
         ref = agent.get("id") or agent_id
         url = agent.get("url")
-        # Persist the dispatch reference for BOTH a fresh launch and a 409
-        # already-launched result, so the guard above short-circuits next time.
-        await self.service.update(self.table, issue_id, {"fixSlackTs": ref})
         # Visibility note in Slack (a bot post; not a trigger) with the agent link.
-        # Skipped on an idempotent re-dispatch to avoid a duplicate note.
+        # Skipped on an idempotent re-dispatch to avoid a duplicate note. Its ts
+        # becomes the root of the per-issue fix thread: the cursor-tracker posts every
+        # later update (PR up, fixing errors, ready to merge, …) as a threaded reply.
+        thread_ts: Optional[str] = None
         if not result.get("alreadyLaunched") and SLACK_FIX_CHANNEL and SLACK_BOT_TOKEN:
             link = f"<{url}|view agent>  ·  " if url else ""
-            await slack_client.post_message(
+            thread_ts = await slack_client.post_message(
                 SLACK_BOT_TOKEN, SLACK_FIX_CHANNEL,
                 f"Started Cursor agent for *{issue['title']}*\n"
-                f"{link}{repo} @ {fixer.CURSOR_BRANCH}",
+                f"{link}{repo} @ {branch}",
             )
+        # Persist the dispatch reference for BOTH a fresh launch and a 409
+        # already-launched result, so the guard above short-circuits next time, then
+        # move out of the transient `dispatching` state into `tocursor` (releasing the
+        # claim so the reaper won't requeue a working fix), recording the thread root.
+        # The cursor-tracker owns the issue from here, polling this agent for its PR.
+        await self.service.update(self.table, issue_id, {"fixSlackTs": ref})
+        await self.service.transition(
+            self.table, issue_id, "tocursor",
+            patch={"cursorAgentId": ref, "fixAttempts": 0, "fixThreadTs": thread_ts},
+        )
         log.info("launched cursor agent %s (%s) for issue %s", ref, url, issue_id)
         if self.notion and issue.get("notionPageId"):
             await self.notion.set_status(issue["notionPageId"], STATUS_FIXING)
 
 
 async def _amain() -> None:
-    """Run the NotionPush and FixDispatch claim loops together until cancelled.
+    """Run the NotionPush + FixDispatch claim loops and the CursorTracker sweep.
 
-    Builds the shared ServiceClient, runs both processors concurrently, and closes
-    the client on exit.
+    Builds the shared ServiceClient, runs all three concurrently (the two claim loops
+    plus the tracker that follows dispatched fix agents through to a mergeable PR),
+    and closes the client on exit.
     """
     logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
     service = ServiceClient(os.environ["SERVICE_URL"], os.environ.get("ATB_SERVICE_TOKEN", ""))
     try:
-        await asyncio.gather(NotionPush(service).run(), FixDispatch(service).run())
+        await asyncio.gather(
+            NotionPush(service).run(),
+            FixDispatch(service).run(),
+            CursorTracker(service).run(),
+        )
     finally:
         await service.aclose()
 

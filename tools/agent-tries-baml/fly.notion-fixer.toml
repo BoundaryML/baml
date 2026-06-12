@@ -16,8 +16,19 @@ primary_region = 'sjc'
   NOTION_STATUS_CONFIRMED = 'not started'
   NOTION_STATUS_APPROVED  = 'approved'
   NOTION_STATUS_FIXING    = 'to cursor'
+  NOTION_STATUS_PRPREP    = 'pr prep'
+  NOTION_STATUS_PR_READY  = 'ready to merge'
+  NOTION_STATUS_NEEDS_HUMAN = 'needs human'
+  NOTION_STATUS_MERGED    = 'merged'
+  NOTION_PROP_KIND        = 'Kind'
+  # cursor-tracker: follow dispatched fix agents through CI + CodeRabbit to a
+  # mergeable PR (auto-dispatch fixes on red, up to the cap). ATB_GITHUB_TOKEN is
+  # already injected from Infisical (used by the builder); GITHUB_API_BASE defaults.
+  CURSOR_TRACK_SECS   = '60'
+  CURSOR_REFIX_MODE   = 'new_agent'
+  CURSOR_MAX_FIX_ATTEMPTS = '3'
   # secrets: SERVICE_TOKEN, NOTION_TOKEN, NOTION_SKILL_DB_ID, NOTION_LANG_DB_ID,
-  #          SLACK_BOT_TOKEN, SLACK_FIX_CHANNEL, CURSOR_SLACK_USER_ID
+  #          SLACK_BOT_TOKEN, SLACK_FIX_CHANNEL, CURSOR_API_KEY, GITHUB_TOKEN
 
 [[vm]]
   size   = 'shared-cpu-1x'
