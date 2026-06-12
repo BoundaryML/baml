@@ -44,7 +44,9 @@ async def sync_missing_entries(
         lambda: changelog_github.recent_release_tags(channels, limit)
     )
     rows = await service.list("changelogEntries", limit=1000)
-    known = {r.get("version") for r in rows}
+    # Filter out version-less rows: a stray None in the set would match a tag
+    # normalize() cannot parse and silently skip enqueueing that release.
+    known = {r["version"] for r in rows if r.get("version")}
     enqueued: list[dict[str, Any]] = []
     for tag in reversed(tags):  # oldest-first
         version = changelog_github.normalize(tag)
