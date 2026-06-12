@@ -4,16 +4,16 @@
 /// `self` orders before `other`, zero preserves relative order, positive
 /// means `self` orders after `other`.
 ///
-/// `CmpError` is the error a single comparison may throw. A total order that
-/// never fails binds `type CmpError = never`; a fallible comparator binds
-/// `type CmpError = MyError` and the error propagates to whoever compares (or
+/// `CompareError` is the error a single comparison may throw. A total order that
+/// never fails binds `type CompareError = never`; a fallible comparator binds
+/// `type CompareError = MyError` and the error propagates to whoever compares (or
 /// sorts) the values.
 ///
 /// ```
 /// class Resume {
 ///   name string
 ///   implements Comparable {
-///     type CmpError = never
+///     type CompareError = never
 ///     function compare(self, other: Self) -> int throws never {
 ///       self.name.compare(other.name)
 ///     }
@@ -21,33 +21,33 @@
 /// }
 /// ```
 ///
-/// Note: `CmpError` is intentionally *not* defaulted. A defaulted associated
+/// Note: `CompareError` is intentionally *not* defaulted. A defaulted associated
 /// type would be injected into a bare `T extends Comparable` bound as the
 /// concrete default, which then rejects any implementor that overrides it —
 /// so `MyError[].sort()` (a fallible comparator) would stop compiling. Leaving
-/// it undefaulted keeps the `Comparable` bound permissive over `CmpError`.
+/// it undefaulted keeps the `Comparable` bound permissive over `CompareError`.
 interface Comparable {
-  type CmpError
+  type CompareError
 
-  function compare(self, other: Self) -> int throws CmpError
+  function compare(self, other: Self) -> int throws CompareError
 }
 
 implements Comparable for int {
-  type CmpError = never
+  type CompareError = never
   function compare(self, other: Self) -> int throws never {
     if (self < other) { -1 } else if (self > other) { 1 } else { 0 }
   }
 }
 
 implements Comparable for bigint {
-  type CmpError = never
+  type CompareError = never
   function compare(self, other: Self) -> int throws never {
     if (self < other) { -1 } else if (self > other) { 1 } else { 0 }
   }
 }
 
 implements Comparable for string {
-  type CmpError = never
+  type CompareError = never
   function compare(self, other: Self) -> int throws never {
     if (self < other) { -1 } else if (self > other) { 1 } else { 0 }
   }
@@ -56,7 +56,7 @@ implements Comparable for string {
 /// Sorting for collections whose elements have a natural order.
 ///
 /// Implemented for `T[]` whenever `T implements Comparable`. `SortError` is
-/// the element's `CmpError`: sorting a primitive array (`int[]`, `bigint[]`,
+/// the element's `CompareError`: sorting a primitive array (`int[]`, `bigint[]`,
 /// `string[]`, `float[]`) can never fail, and sorting a user type with a
 /// fallible comparator propagates that comparator's error.
 interface Sortable {
@@ -66,7 +66,7 @@ interface Sortable {
 }
 
 implements<T extends Comparable> Sortable for T[] {
-  type SortError = T.CmpError
+  type SortError = T.CompareError
 
   /// Sorts this array in place by the elements' natural order
   /// (`Comparable.compare`), then returns `self`. The sort is stable. If a
@@ -87,11 +87,11 @@ implements<T extends Comparable> Sortable for T[] {
   /// (stdlib) package can only see `Comparable` impls visible here — not
   /// downstream user classes. `_compare_shim` resolves `compare` on the
   /// element's runtime class instead.
-  function sort(self) -> Self throws T.CmpError {
+  function sort(self) -> Self throws T.CompareError {
     if (root._is_primitive_array(self)) {
       root._rust_sort(self)
     } else {
-      self.sort_by((a: T, b: T) -> int throws T.CmpError { root._compare_shim(a, b) })
+      self.sort_by((a: T, b: T) -> int throws T.CompareError { root._compare_shim(a, b) })
     }
   }
 }
@@ -109,7 +109,7 @@ implements<T extends Comparable> Sortable for T[] {
 /// concrete type is statically known.
 //baml:mut_vm
 //baml:may_yield
-function _compare_shim<T extends Comparable>(a: T, b: T) -> int throws T.CmpError {
+function _compare_shim<T extends Comparable>(a: T, b: T) -> int throws T.CompareError {
   $rust_function
 }
 
@@ -121,7 +121,7 @@ function _compare_shim<T extends Comparable>(a: T, b: T) -> int throws T.CmpErro
 // NaN and of zero participate in the order), matching the comparator the
 // native `_rust_sort` fast path uses for the float domain.
 implements Comparable for float {
-  type CmpError = never
+  type CompareError = never
 
   function compare(self, other: Self) -> int throws never {
     root._float_total_cmp(self, other)

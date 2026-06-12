@@ -83,8 +83,8 @@ function baml.sort(self: unknown) -> unknown throws unknown {
       }
     else
       { : T[]
-        self.sort_by<T, E>((a: T, b: T) -> int throws T.CmpError { ... }) : T[]
-          (a: T, b: T) -> int throws T.CmpError { ... } : (a: T, b: T) -> int throws T.CmpError
+        self.sort_by<T, E>((a: T, b: T) -> int throws T.CompareError { ... }) : T[]
+          (a: T, b: T) -> int throws T.CompareError { ... } : (a: T, b: T) -> int throws T.CompareError
             {
               root._compare_shim(a, b)
             }
@@ -127,7 +127,7 @@ function baml.Array.filter_map<U, E>(self: baml.Array, fn: (unknown) -> U | null
     out : U[]
   }
 }
-function baml.Array.sort_by_key<U, E>(self: baml.Array, key: (unknown) -> U throws E) -> unknown[] throws E | U.CmpError {
+function baml.Array.sort_by_key<U, E>(self: baml.Array, key: (unknown) -> U throws E) -> unknown[] throws E | U.CompareError {
   { : never
     let n = self.length<T>() : int
     if (n <= 1 : bool) : void
@@ -147,8 +147,8 @@ function baml.Array.sort_by_key<U, E>(self: baml.Array, key: (unknown) -> U thro
         order.push(p) : int
         p Add= 1 : int
       }
-    order.sort_by<E>((i: int, j: int) -> int throws U.CmpError { ... }) : int[]
-      (i: int, j: int) -> int throws U.CmpError { ... } : (i: int, j: int) -> int throws U.CmpError
+    order.sort_by<E>((i: int, j: int) -> int throws U.CompareError { ... }) : int[]
+      (i: int, j: int) -> int throws U.CompareError { ... } : (i: int, j: int) -> int throws U.CompareError
         {
           match (keys.at(i)) { null => 0, ki: U => match (keys.at(j)) { null => 0, kj: U => ki.compare(kj) } }
         }

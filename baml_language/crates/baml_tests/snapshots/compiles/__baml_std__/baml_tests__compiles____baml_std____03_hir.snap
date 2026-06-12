@@ -48,7 +48,7 @@ function baml.compare(self: ?, other: Self) -> int  [expr] {
   {  } if (self Lt other) {  } Neg 1 else if (self Gt other) {  } 1 else {  } 0
 }
 function baml.sort(self: ?) -> Self  [expr] {
-  {  } if (root._is_primitive_array(self)) {  } root._rust_sort(self) else {  } self.sort_by((a: T, b: T) -> int throws T.CmpError { {  } root._compare_shim(a, b) })
+  {  } if (root._is_primitive_array(self)) {  } root._rust_sort(self) else {  } self.sort_by((a: T, b: T) -> int throws T.CompareError { {  } root._compare_shim(a, b) })
 }
 
 --- <builtin>/baml/containers.baml ---
@@ -103,7 +103,7 @@ function baml.slice(self: ?, start: int, end: int) -> T[]  [builtin]
 function baml.some(self: ?, predicate: (T) -> bool throws E) -> bool  [builtin]
 function baml.sort_by(self: ?, compare: (T, T) -> int throws E) -> T[]  [builtin]
 function baml.sort_by_key(self: ?, key: (T) -> U throws E) -> T[]  [expr] {
-  { let n = self.length(); if (n Le 1) { return self }; let items = self.slice(0, n); let keys: U[] = []; for x in items { keys.push(key(x)) }; let order: int[] = []; let p = 0; while p Lt n { order.push(p); p Add= 1 }; order.sort_by((i: int, j: int) -> int throws U.CmpError { {  } match (keys.at(i)) { null => 0, ki: U => match (keys.at(j)) { null => 0, kj: U => ki.compare(kj) } } }); let sorted: T[] = []; for i in order {  } match (items.at(i)) { null => {  }, item: T => { sorted.push(item) } }; self.clear(); for s in sorted { self.push(s) }; return self }
+  { let n = self.length(); if (n Le 1) { return self }; let items = self.slice(0, n); let keys: U[] = []; for x in items { keys.push(key(x)) }; let order: int[] = []; let p = 0; while p Lt n { order.push(p); p Add= 1 }; order.sort_by((i: int, j: int) -> int throws U.CompareError { {  } match (keys.at(i)) { null => 0, ki: U => match (keys.at(j)) { null => 0, kj: U => ki.compare(kj) } } }); let sorted: T[] = []; for i in order {  } match (items.at(i)) { null => {  }, item: T => { sorted.push(item) } }; self.clear(); for s in sorted { self.push(s) }; return self }
 }
 function baml.splice(self: ?, start: int, count: int, replace: T[]) -> null  [builtin]
 function baml.to_json(self: ?) -> baml.json.json  [builtin]

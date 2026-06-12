@@ -3,7 +3,7 @@
 //
 // Phase 2 of thoughts/sam-projects/array-sort/01b-option-5-tdd-plan.md
 // (float semantics updated by the 02 follow-up): builtin impls for
-// int/float/bigint/string, `type CmpError = never` for all four — float
+// int/float/bigint/string, `type CompareError = never` for all four — float
 // orders by IEEE 754 totalOrder (`f64::total_cmp`), so NaN has a defined
 // position and `compare` never throws.
 
@@ -74,13 +74,13 @@ test "comparable_float_nan_total_order" {
 // functions. Workaround used throughout: construct instances at the call
 // boundary (inline arguments), never via test-block `let`.
 
-// Total-order user type: binds `type CmpError = never` and writes the
+// Total-order user type: binds `type CompareError = never` and writes the
 // matching `throws never` (an omitted `throws` is inferred, not `never`, and
 // fails conformance E0120).
 class ComparableScore {
     points int
     implements baml.Comparable {
-        type CmpError = never
+        type CompareError = never
         function compare(self, other: Self) -> int throws never {
             self.points.compare(other.points)
         }
@@ -93,23 +93,23 @@ test "comparable_user_class_default_cmperror_is_never" {
     assert.is_true(ComparableScore { points: 1 }.compare(ComparableScore { points: 1 }) == 0)
 }
 
-// Fallible comparator: binds `type CmpError = ComparableCmpError` and throws.
-class ComparableCmpError {
+// Fallible comparator: binds `type CompareError = ComparableCompareError` and throws.
+class ComparableCompareError {
     message string
 }
 
 class ComparableFlaky {
     value int?
     implements baml.Comparable {
-        type CmpError = ComparableCmpError
+        type CompareError = ComparableCompareError
 
-        function compare(self, other: Self) -> int throws ComparableCmpError {
+        function compare(self, other: Self) -> int throws ComparableCompareError {
             if let a: int = self.value {
                 if let b: int = other.value {
                     return a.compare(b)
                 }
             }
-            throw ComparableCmpError { message: "cannot compare null" }
+            throw ComparableCompareError { message: "cannot compare null" }
         }
     }
 }
@@ -119,7 +119,7 @@ class ComparableFlaky {
 // compared inline (a catch result stored in a test-block `let` stays boxed).
 test "comparable_user_class_fallible_happy_path" {
     assert.is_true((ComparableFlaky { value: 1 }.compare(ComparableFlaky { value: 2 }) catch (e) {
-        ComparableCmpError => 99
+        ComparableCompareError => 99
     }) < 0)
 }
 
@@ -128,7 +128,7 @@ test "comparable_user_class_custom_cmperror_propagates" {
         let v = ComparableFlaky { value: 1 }.compare(ComparableFlaky { value: null });
         "no throw"
     } catch (e) {
-        ComparableCmpError => e.message
+        ComparableCompareError => e.message
     };
     assert.is_true(msg.matches("cannot compare null"))
 }
@@ -215,13 +215,13 @@ test "sort_floats_nan_sorts_last" {
     }
 }
 
-// User class with an infallible (`never`) CmpError sorts by its compare —
+// User class with an infallible (`never`) CompareError sorts by its compare —
 // stably, in place, returning self.
 class SortableItem {
     rank int
     label string
     implements baml.Comparable {
-        type CmpError = never
+        type CompareError = never
         function compare(self, other: Self) -> int throws never {
             self.rank.compare(other.rank)
         }
@@ -262,9 +262,9 @@ test "sort_user_class_is_stable" {
     assert.is_true(baml.deep_equals(labels, expected))
 }
 
-// Fallible comparator (CmpError = ComparableCmpError): the call site must
+// Fallible comparator (CompareError = ComparableCompareError): the call site must
 // handle it, and a throw mid-sort leaves the array in pre-sort state.
-function sort_flaky(xs: ComparableFlaky[]) -> ComparableFlaky[] throws ComparableCmpError {
+function sort_flaky(xs: ComparableFlaky[]) -> ComparableFlaky[] throws ComparableCompareError {
     xs.sort()
 }
 
@@ -278,7 +278,7 @@ test "sort_fallible_comparator_throw_rolls_back" {
         sort_flaky(xs);
         "no throw"
     } catch (e) {
-        ComparableCmpError => e.message
+        ComparableCompareError => e.message
     };
     assert.is_true(msg.matches("cannot compare null"));
     // rollback: original order intact
@@ -302,7 +302,7 @@ test "sort_fallible_comparator_happy_path" {
         sort_flaky(xs);
         false
     } catch (e) {
-        ComparableCmpError => true
+        ComparableCompareError => true
     }) == false);
     let vals = xs.map((x: ComparableFlaky) -> int {
         if let v: int = x.value { v } else { -1 }
@@ -312,11 +312,11 @@ test "sort_fallible_comparator_happy_path" {
 }
 
 // Generic propagation: a function over `U extends Comparable` may call
-// `xs.sort()`, propagating `U.CmpError` symbolically; the test routes
+// `xs.sort()`, propagating `U.CompareError` symbolically; the test routes
 // through it to pin the runtime instantiation too. The array is built in a
 // wrapper *function* — a test-block local passed to a generic function
 // arrives boxed (the VM quirk above) and the native sort rejects the box.
-function sort_generic<U extends baml.Comparable>(xs: U[]) -> U[] throws U.CmpError {
+function sort_generic<U extends baml.Comparable>(xs: U[]) -> U[] throws U.CompareError {
     xs.sort()
 }
 
@@ -343,7 +343,7 @@ class OutOfBodyScore {
 }
 
 implements baml.Comparable for OutOfBodyScore {
-    type CmpError = never
+    type CompareError = never
     function compare(self, other: Self) -> int throws never {
         self.points.compare(other.points)
     }
