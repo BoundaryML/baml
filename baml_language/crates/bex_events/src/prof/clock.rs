@@ -111,7 +111,7 @@ mod imp {
     fn detect() -> (Source, Option<(u64, u64)>) {
         #[cfg(target_arch = "x86_64")]
         {
-            if has_invariant_tsc() {
+            if tsc_is_trustworthy() {
                 return (Source::Tsc, None);
             }
         }
@@ -124,10 +124,37 @@ mod imp {
         (Source::Instant, Some((1, 1)))
     }
 
-    /// Invariant-TSC probe: CPUID.80000007H:EDX[8]. Constant-rate,
-    /// never-stopping, cross-core-synchronized TSC is the property the
-    /// per-thread sort contract needs (one logical thread's records are
-    /// stamped from several OS threads).
+    /// Whether the TSC is safe to use for cross-thread-comparable stamps
+    /// (one logical thread's records are stamped from several OS threads,
+    /// so the per-thread sort contract needs cross-core comparability).
+    ///
+    /// CPUID.80000007H:EDX[8] only guarantees constant-rate / never-stop —
+    /// NOT cross-core/cross-socket synchronization. On Linux we therefore
+    /// also defer to the kernel, which measures TSC sync across CPUs at
+    /// boot and only offers `tsc` as a clocksource when it holds (the same
+    /// check minstant used). Elsewhere the CPUID bit is the best signal
+    /// available; modern single-socket parts ship synchronized.
+    #[cfg(target_arch = "x86_64")]
+    fn tsc_is_trustworthy() -> bool {
+        if !has_invariant_tsc() {
+            return false;
+        }
+        #[cfg(target_os = "linux")]
+        {
+            std::fs::read_to_string(
+                "/sys/devices/system/clocksource/clocksource0/available_clocksource",
+            )
+            .map(|s| s.contains("tsc"))
+            .unwrap_or(false)
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            true
+        }
+    }
+
+    /// Invariant-TSC probe: CPUID.80000007H:EDX[8] (constant rate, does not
+    /// stop in deep C-states).
     #[cfg(target_arch = "x86_64")]
     // `__cpuid` is an unsafe fn on the pinned stable toolchain but safe on
     // newer ones — keep the block, silence the newer toolchains' lint.

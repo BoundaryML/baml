@@ -34,7 +34,9 @@ fn main() {
     println!("prof_clock bench ({} iterations per row)", 20_000_000);
     measure("prof::clock::now_ticks", bex_events::prof::clock::now_ticks);
     let conv = bex_events::prof::clock::TickConverter::from_clock();
-    measure("TickConverter::to_ns(now_ticks)", || {
+    // End-to-end read+convert; the delta vs the now_ticks row is the
+    // consumer-side conversion cost in isolation.
+    measure("now_ticks + TickConverter::to_ns", || {
         conv.to_ns(bex_events::prof::clock::now_ticks())
     });
     measure("std::time::Instant::now", || {
