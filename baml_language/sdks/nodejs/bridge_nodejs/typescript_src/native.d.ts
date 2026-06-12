@@ -204,7 +204,7 @@ export declare function cancelFunctionCall(callId: string): boolean
  */
 export declare function completeHostCall(callId: number, isError: number, content: Buffer): void
 
-/** Flush all buffered trace events to the JSONL file (if BAML_TRACE_FILE is set). */
+/** No-op: tracing has been removed. Kept as a live symbol for ABI stability. */
 export declare function flushEvents(): void
 
 /**

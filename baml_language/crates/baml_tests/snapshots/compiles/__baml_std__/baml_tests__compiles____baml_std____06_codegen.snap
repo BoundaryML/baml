@@ -5497,6 +5497,15 @@ function baml.http.fetch_sse(request: baml.http.Request) -> baml.http.SseStream 
 function baml.http.send(request: baml.http.Request) -> baml.http.Response {
 }
 
+function baml.id.current() -> string {
+}
+
+function baml.id.new() -> string {
+}
+
+function baml.id.set(id: string) -> string {
+}
+
 function baml.io.eprint(s: string) -> null {
 }
 

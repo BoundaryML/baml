@@ -457,6 +457,16 @@ pub struct Function {
 
     /// LLM-specific metadata (prompt template, client name). `None` for non-LLM functions.
     pub body_meta: Option<FunctionMeta>,
+
+    /// Per-run profiling id (`0` = unassigned), written into the BEX event
+    /// stream's `CallFunction` records and resolved through the per-run
+    /// function table in the `.bamlprof` header. Assigned by the engine's
+    /// interim provider at construction (plan §2.6); the M0 id table moves
+    /// assignment to compile time. `#[borsh(skip)]` keeps it out of the pack
+    /// envelope — it is runtime-only state, and skipping it leaves the wire
+    /// format unchanged.
+    #[borsh(skip)]
+    pub function_id: u32,
 }
 
 impl std::fmt::Display for Function {

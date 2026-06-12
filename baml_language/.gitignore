@@ -17,3 +17,6 @@ rpi/
 
 # Local scratch projects / fuzz repros (not part of the build)
 workflow_scratch_files/
+
+# .bamlprof artifacts (profiling is default-on; BAML_PROFILE=0 opts out)
+**/.baml/profiles/

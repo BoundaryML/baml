@@ -139,6 +139,9 @@ clap = { version = "4.4.6", features = [ "cargo", "derive" ] }
 console = "0.16"
 console_error_panic_hook = "0.1"
 crossbeam-channel = { version = "0.5" }
+# `CachePadded` for the profiling ring's cache-line-aligned field groups
+# (bex_events::prof, plan D3).
+crossbeam-utils = { version = "0.8" }
 crossterm = "0.28"
 ctrlc = "3.4"
 derive_more = { version = "2.1.1", features = [ "from" ] }
@@ -162,8 +165,14 @@ libc = "0.2.169"
 libsui = { version = "0.14" }
 log = "0.4.20"
 logos = { version = "0.15" }
+# Concurrency model checker for the profiling ring (bex_events::prof). Only a
+# dependency when building with `RUSTFLAGS="--cfg baml_loom"` (see the
+# `[target.'cfg(baml_loom)'.dependencies]` section of bex_events).
+loom = { version = "0.7" }
 lsp-server = "0.7.6"
 lsp-types = "0.95.0"
+# Calibrated-TSC clock for profiling timestamps (bex_events::prof::clock).
+minstant = { version = "0.1" }
 notify = "7.0"
 once_cell = "1.19"
 ouroboros = "0.18.5"
@@ -261,6 +270,8 @@ unreachable_pub = "warn"
 unexpected_cfgs = { level = "warn", check-cfg = [
   "cfg(fuzzing)",
   "cfg(codspeed)",
+  # Loom model-checked builds of bex_events::prof (RUSTFLAGS="--cfg baml_loom").
+  "cfg(baml_loom)",
 ] }
 
 [workspace.lints.clippy]
