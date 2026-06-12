@@ -28,35 +28,13 @@ export NODE_OPTIONS="${NODE_OPTIONS:-} --max-old-space-size=6144"
 # Vercel runs this from typescript2/app-website/ (the project Root Directory).
 cd "${VERCEL_BUILD_SCRIPT_DIR}/.."
 
-wasm_dir="../pkg-playground/wasm"
 proto_dir="../pkg-proto/src/generated"
-wasm_files=(
-  "${wasm_dir}/package.json"
-  "${wasm_dir}/bridge_wasm.js"
-  "${wasm_dir}/bridge_wasm.d.ts"
-  "${wasm_dir}/bridge_wasm_bg.wasm"
-  "${wasm_dir}/bridge_wasm_bg.wasm.d.ts"
-)
-wasm_cache_dir=".next/cache/bridge_wasm"
 proto_cache_dir=".next/cache/pkg_proto_generated"
-wasm_cache_key="$(
-  { git -C ../.. ls-files -s baml_language typescript2/package.json typescript2/pnpm-lock.yaml 2>/dev/null || true; } \
-    | cksum \
-    | awk '{print $1 "-" $2}'
-)"
 proto_cache_key="$(
   { git -C ../.. ls-files -s baml_language/crates/bridge_ctypes/types typescript2/pkg-proto 2>/dev/null || true; } \
     | cksum \
     | awk '{print $1 "-" $2}'
 )"
-
-check_wasm_exists() {
-  for wasm_file in "${wasm_files[@]}"; do
-    if [[ ! -s "$wasm_file" ]]; then
-      return 1
-    fi
-  done
-}
 
 # Must match the modules pkg-proto/src/index.ts imports (the protos moved
 # from package `baml.cffi.v1` to `baml_core.cffi.v1`; checking stale paths
@@ -67,110 +45,39 @@ check_proto_exists() {
     [[ -s "${proto_dir}/baml_core/cffi/v1/baml_outbound.ts" ]]
 }
 
-# bridge_wasm source of truth, in order:
-#   1. Files already present (CLI deploys upload the locally built wasm).
-#   2. The published prebuilt artifact pinned in pkg-playground/wasm.version
-#      (written by `pnpm prep:wasm-publish`, published as
-#      @boundaryml/bridge-wasm). Authoritative for git deploys — checked
-#      BEFORE the .next/cache restore, whose key degenerates to a constant
-#      when .git is unavailable and can resurrect a stale artifact.
-#   3. The Vercel build cache.
-#   4. Compile from source with rustup/wasm-pack (slow fallback).
-wasm_pin_file="../pkg-playground/wasm.version"
-if ! check_wasm_exists && [[ -s "$wasm_pin_file" ]]; then
-  wasm_pin="$(tr -d '[:space:]' < "$wasm_pin_file")"
-  echo "==> [0/6] Restore bridge_wasm from npm (@boundaryml/bridge-wasm@${wasm_pin})"
-  wasm_tgz_dir="$(mktemp -d)"
-  if (cd "$wasm_tgz_dir" && npm pack "@boundaryml/bridge-wasm@${wasm_pin}" >/dev/null 2>&1); then
-    mkdir -p "$wasm_dir"
-    tar -xzf "$wasm_tgz_dir"/*.tgz --strip-components=1 -C "$wasm_dir"
-  else
-    echo "==> @boundaryml/bridge-wasm@${wasm_pin} not fetchable; trying cache/source"
-  fi
-  rm -rf "$wasm_tgz_dir"
-fi
-
-if ! check_wasm_exists &&
-  [[ -f "${wasm_cache_dir}/.cache-key" ]] &&
-  [[ "$(cat "${wasm_cache_dir}/.cache-key")" == "$wasm_cache_key" ]] &&
-  [[ -s "${wasm_cache_dir}/bridge_wasm_bg.wasm" ]]; then
-  echo "==> [0/6] Restore bridge_wasm from Vercel build cache"
-  mkdir -p "$wasm_dir"
-  cp -R "${wasm_cache_dir}/." "$wasm_dir/"
-fi
-
 if ! check_proto_exists &&
   [[ -f "${proto_cache_dir}/.cache-key" ]] &&
   [[ "$(cat "${proto_cache_dir}/.cache-key")" == "$proto_cache_key" ]] &&
   [[ -s "${proto_cache_dir}/baml_core/cffi/v1/baml_events.ts" ]]; then
-  echo "==> [0/6] Restore pkg-proto generated files from Vercel build cache"
+  echo "==> [0/5] Restore pkg-proto generated files from Vercel build cache"
   mkdir -p "$proto_dir"
   cp -R "${proto_cache_dir}/." "$proto_dir/"
 fi
 
-if check_wasm_exists; then
-  wasm_exists=true
-else
-  wasm_exists=false
-fi
+echo "==> [1/5] Install bridge_wasm from npm"
+bash scripts/restore-bridge-wasm-from-npm.sh
 
-if [[ "$wasm_exists" == "true" ]]; then
-  echo "==> [1/6] bridge_wasm already exists; skipping rustup/wasm-pack install"
-else
-  echo "==> [1/6] Install rustup (no default toolchain — rust-toolchain.toml pins 1.93.0)"
-  if ! command -v cargo >/dev/null 2>&1; then
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
-      sh -s -- -y --default-toolchain none --profile minimal --no-modify-path
-  fi
-  if [[ -f "$HOME/.cargo/env" ]]; then
-    . "$HOME/.cargo/env"
-  fi
-  if ! command -v cargo >/dev/null 2>&1; then
-    echo "cargo is not available after rustup install" >&2
-    exit 1
-  fi
-
-  echo "==> [2/6] Install wasm-pack (prebuilt binary, faster than cargo install)"
-  if ! command -v wasm-pack >/dev/null 2>&1; then
-    curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-  fi
-fi
-
-echo "==> [3/6] Ensure pnpm is on PATH"
+echo "==> [2/5] Ensure pnpm is on PATH"
 if ! command -v pnpm >/dev/null 2>&1; then
   corepack enable pnpm || npm install -g pnpm
 fi
 
 if check_proto_exists; then
-  echo "==> [3/6] pkg-proto generated files already exist; skipping generation"
+  echo "==> [3/5] pkg-proto generated files already exist; skipping generation"
 else
-  echo "==> [3/6] Generate pkg-proto files"
+  echo "==> [3/5] Generate pkg-proto files"
   ( cd ../ && pnpm --filter @b/pkg-proto generate )
 fi
 
 if check_proto_exists; then
-  echo "==> [3/6] Save pkg-proto generated files to Vercel build cache"
+  echo "==> [3/5] Save pkg-proto generated files to Vercel build cache"
   mkdir -p "$proto_cache_dir"
   cp -R "${proto_dir}/." "$proto_cache_dir/"
   printf '%s\n' "$proto_cache_key" > "${proto_cache_dir}/.cache-key"
 fi
 
-if [[ "$wasm_exists" == "true" ]]; then
-  echo "==> [4/6] Build bridge_wasm skipped"
-else
-  echo "==> [4/6] Build bridge_wasm (rustup auto-installs the pinned toolchain on first cargo invocation)"
-  ( cd ../ && pnpm build:wasm )
-fi
-
-if check_wasm_exists; then
-  echo "==> [4/6] Save bridge_wasm to Vercel build cache"
-  mkdir -p "$wasm_cache_dir"
-  cp -R "${wasm_dir}/." "$wasm_cache_dir/"
-  printf '%s\n' "$wasm_cache_key" > "${wasm_cache_dir}/.cache-key"
-fi
-
-echo "==> [5/6] Install JS deps from the monorepo root (workspace:* + link: deps need workspace context)"
+echo "==> [4/5] Install JS deps from the monorepo root (workspace:* + link: deps need workspace context)"
 ( cd ../ && pnpm install --frozen-lockfile --prod=false )
 
-echo "==> [6/6] Build Next site"
+echo "==> [5/5] Build Next site"
 pnpm build
