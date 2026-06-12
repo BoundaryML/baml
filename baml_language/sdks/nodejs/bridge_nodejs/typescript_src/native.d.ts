@@ -235,18 +235,32 @@ export interface HandleKey {
 }
 
 /**
- * Mint a fresh host-value key, drawing from the shared callable+error
+ * Mint a fresh host-value key, drawing from the shared callable+opaque
  * counter so the engine sees one globally-unique keyspace. Returned to
- * TS by `registerHostError` (the TS-side function in
- * `host_error_registry.ts`).
+ * TS by `registerHostOpaque` (the TS-side function in
+ * `host_value_registry.ts`).
  *
- * Exposed to JS as `mintHostErrorKey() -> HandleKey`. The TS-side error
- * registry calls this once per `registerHostError(err)` before inserting
- * the error into its `Map<bigint, unknown>`.
+ * Exposed to JS as `mintHostValueKey() -> HandleKey`. The TS-side host-value
+ * registry calls this once per `registerHostOpaque(value)` before inserting
+ * the value into its `Map<bigint, unknown>`.
  */
-export declare function mintHostErrorKey(): HandleKey
+export declare function mintHostValueKey(): HandleKey
 
 export declare function newFunctionCall(): string
+
+/**
+ * Register a JS dispatch wrapper in the host-value table and return its key.
+ *
+ * Exposed to JS as `registerHostCallable(fn) -> HandleKey`. Called from
+ * the inbound encoder in `typescript_src/proto.ts` whenever a JS callable
+ * appears as a kwarg — the encoder constructs the dispatch wrapper around
+ * the user's function before calling this.
+ *
+ * The `Function` is converted into a `ThreadsafeFunction` so it can outlive
+ * the napi call scope and be invoked from any thread (the engine's tokio
+ * runtime calls into this entry point from a worker thread).
+ */
+export declare function registerHostCallable(callable: (callId: number, argsBytes: Buffer) => void): HandleKey
 
 /**
  * Install the TS-side release callback. First-call-wins; subsequent
@@ -271,24 +285,10 @@ export declare function newFunctionCall(): string
  * host callback awaiting completion *must* keep the loop alive so the
  * JS callback can actually run.
  *
- * Exposed to JS as `registerErrorReleaseCallback(cb)`. Must be called
+ * Exposed to JS as `registerHostValueReleaseCallback(cb)`. Must be called
  * exactly once at SDK module init, before any host call is dispatched.
  */
-export declare function registerErrorReleaseCallback(callback: (key: HandleKey) => void): void
-
-/**
- * Register a JS dispatch wrapper in the host-value table and return its key.
- *
- * Exposed to JS as `registerHostCallable(fn) -> HandleKey`. Called from
- * the inbound encoder in `typescript_src/proto.ts` whenever a JS callable
- * appears as a kwarg — the encoder constructs the dispatch wrapper around
- * the user's function before calling this.
- *
- * The `Function` is converted into a `ThreadsafeFunction` so it can outlive
- * the napi call scope and be invoked from any thread (the engine's tokio
- * runtime calls into this entry point from a worker thread).
- */
-export declare function registerHostCallable(callable: (callId: number, argsBytes: Buffer) => void): HandleKey
+export declare function registerHostValueReleaseCallback(callback: (key: HandleKey) => void): void
 
 /**
  * Release a host callable the inbound encoder registered but never handed to

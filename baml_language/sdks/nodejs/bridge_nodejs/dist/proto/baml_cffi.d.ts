@@ -32,7 +32,7 @@ export namespace baml_core {
                 ADT_TYPE = 13,
                 ADT_TAGGED_HEAP_HANDLE = 14,
                 HOST_VALUE_CALLABLE = 15,
-                HOST_VALUE_ERROR = 16
+                HOST_VALUE_OPAQUE = 16
             }
 
             /** Properties of a BamlHandle. */

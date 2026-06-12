@@ -59,7 +59,7 @@ export const baml_core = $root.baml_core = (() => {
              * @property {number} ADT_TYPE=13 ADT_TYPE value
              * @property {number} ADT_TAGGED_HEAP_HANDLE=14 ADT_TAGGED_HEAP_HANDLE value
              * @property {number} HOST_VALUE_CALLABLE=15 HOST_VALUE_CALLABLE value
-             * @property {number} HOST_VALUE_ERROR=16 HOST_VALUE_ERROR value
+             * @property {number} HOST_VALUE_OPAQUE=16 HOST_VALUE_OPAQUE value
              */
             v1.BamlHandleType = (function() {
                 const valuesById = {}, values = Object.create(valuesById);
@@ -77,7 +77,7 @@ export const baml_core = $root.baml_core = (() => {
                 values[valuesById[13] = "ADT_TYPE"] = 13;
                 values[valuesById[14] = "ADT_TAGGED_HEAP_HANDLE"] = 14;
                 values[valuesById[15] = "HOST_VALUE_CALLABLE"] = 15;
-                values[valuesById[16] = "HOST_VALUE_ERROR"] = 16;
+                values[valuesById[16] = "HOST_VALUE_OPAQUE"] = 16;
                 return values;
             })();
 
@@ -358,7 +358,7 @@ export const baml_core = $root.baml_core = (() => {
                     case 15:
                         message.handleType = 15;
                         break;
-                    case "HOST_VALUE_ERROR":
+                    case "HOST_VALUE_OPAQUE":
                     case 16:
                         message.handleType = 16;
                         break;
@@ -4923,7 +4923,7 @@ export const baml_core = $root.baml_core = (() => {
                     case 15:
                         message.handleType = 15;
                         break;
-                    case "HOST_VALUE_ERROR":
+                    case "HOST_VALUE_OPAQUE":
                     case 16:
                         message.handleType = 16;
                         break;

@@ -187,18 +187,18 @@ fn drop_registry_entry(host_value_key: u64) {
     drop(popped);
 }
 
-/// Drop the JS dispatch wrapper / error-map entry associated with
+/// Drop the JS dispatch wrapper / host-value-map entry associated with
 /// `host_value_key`.
 ///
 /// Fires when the last Rust clone of the corresponding `HostValueArc` is
 /// dropped — see `bex_external_types::host_value::host_release_dispatch`.
-/// We don't track *which* kind (callable vs error) the key referred to:
+/// We don't track *which* kind (callable vs opaque) the key referred to:
 /// every release attempts both the Rust-side callable drop and the
-/// TS-side error-map delete. Whichever one of the two registries actually
+/// TS-side host-value-map delete. Whichever one of the two registries actually
 /// held the entry cleans it up; the other is a benign no-op.
 pub extern "C" fn host_release_callback(host_value_key: u64) {
     drop_registry_entry(host_value_key);
-    if let Some(tsfn) = ERROR_RELEASE_CALLBACK.get() {
+    if let Some(tsfn) = HOST_VALUE_RELEASE_CALLBACK.get() {
         // Fire-and-forget: the TS callback removes the map entry on the
         // libuv loop. `QueueFull` would mean an enormous backlog of
         // releases — log it (so it's visible in stress tests) and move
@@ -210,7 +210,7 @@ pub extern "C" fn host_release_callback(host_value_key: u64) {
         );
         if status != Status::Ok {
             log::warn!(
-                "host_release_callback: error-release tsfn returned {status:?} \
+                "host_release_callback: host-value-release tsfn returned {status:?} \
                  for key {host_value_key}; TS-side map entry will leak until next GC",
             );
         }
@@ -218,52 +218,59 @@ pub extern "C" fn host_release_callback(host_value_key: u64) {
 }
 
 // ============================================================================
-// Host-error registry — JS-side storage with Rust-driven release
+// Host-value registry — JS-side storage with Rust-driven release
 // ============================================================================
 //
-// A native JS exception raised inside a user callback round-trips back to
-// the same Node process as the *same* `Error` object (mirrors the Python
-// bridge's `register_host_error` / `lookup_host_value` pair). The TS bridge
-// owns the storage (a `Map<bigint, unknown>` of JS error values) because
-// napi-rs has no zero-overhead persistent reference type for arbitrary JS
-// values; Rust owns the key minting (so callable + error keys share a
-// single globally-unique counter and never collide) and the release
+// An arbitrary host JS value (e.g. a native exception raised inside a user
+// callback) round-trips back to the same Node process as the *same* object
+// (mirrors the Python bridge's `register_host_opaque` / `lookup_host_value`
+// pair). The TS bridge owns the storage (a `Map<bigint, unknown>` of JS
+// values) because napi-rs has no zero-overhead persistent reference type for
+// arbitrary JS values; Rust owns the key minting (so callable + opaque keys
+// share a single globally-unique counter and never collide) and the release
 // signal (the engine's `host_release_dispatch::fire(key)` fires Rust's
 // `host_release_callback`, which notifies TS to remove its map entry).
 //
 // Release is a fire-and-forget tsfn call on the libuv loop — TS removes the
 // entry once napi schedules the callback. A lookup that races a release
 // returns the (about-to-be-released) reference, which only delays GC of
-// that exception by one tick; no correctness issue. The TS map never
-// silently leaks: every key minted via `mint_host_error_key` corresponds
+// that value by one tick; no correctness issue. The TS map never
+// silently leaks: every key minted via `mint_host_value_key` corresponds
 // to an `Arc<HostValueArc>` on the engine side whose `Drop` is guaranteed
 // to fire the release callback.
 
 /// Threadsafe handle to the TS-installed release callback. Set once at
-/// module load via [`register_error_release_callback`].
-type ErrorReleaseTsfn =
-    ThreadsafeFunction<HandleKey, (), HandleKey, Status, false, true, ERROR_RELEASE_QUEUE_SIZE>;
+/// module load via [`register_host_value_release_callback`].
+type HostValueReleaseTsfn = ThreadsafeFunction<
+    HandleKey,
+    (),
+    HandleKey,
+    Status,
+    false,
+    true,
+    HOST_VALUE_RELEASE_QUEUE_SIZE,
+>;
 
-/// Upper bound on queued, not-yet-delivered error-release notifications.
+/// Upper bound on queued, not-yet-delivered host-value-release notifications.
 /// Generous because each notification is tiny (one `HandleKey`) and bursts
 /// can happen during engine GC sweeps. `Status::QueueFull` from
 /// `tsfn.call` is logged but not otherwise surfaced — the TS map entry
 /// stays until the process exits, but the engine's `HostValueArc` has
 /// already dropped so there's no further engine state to clean up.
-const ERROR_RELEASE_QUEUE_SIZE: usize = 4096;
+const HOST_VALUE_RELEASE_QUEUE_SIZE: usize = 4096;
 
-static ERROR_RELEASE_CALLBACK: OnceLock<Arc<ErrorReleaseTsfn>> = OnceLock::new();
+static HOST_VALUE_RELEASE_CALLBACK: OnceLock<Arc<HostValueReleaseTsfn>> = OnceLock::new();
 
-/// Mint a fresh host-value key, drawing from the shared callable+error
+/// Mint a fresh host-value key, drawing from the shared callable+opaque
 /// counter so the engine sees one globally-unique keyspace. Returned to
-/// TS by `registerHostError` (the TS-side function in
-/// `host_error_registry.ts`).
+/// TS by `registerHostOpaque` (the TS-side function in
+/// `host_value_registry.ts`).
 ///
-/// Exposed to JS as `mintHostErrorKey() -> HandleKey`. The TS-side error
-/// registry calls this once per `registerHostError(err)` before inserting
-/// the error into its `Map<bigint, unknown>`.
-#[napi(js_name = "mintHostErrorKey")]
-pub fn mint_host_error_key() -> HandleKey {
+/// Exposed to JS as `mintHostValueKey() -> HandleKey`. The TS-side host-value
+/// registry calls this once per `registerHostOpaque(value)` before inserting
+/// the value into its `Map<bigint, unknown>`.
+#[napi(js_name = "mintHostValueKey")]
+pub fn mint_host_value_key() -> HandleKey {
     HandleKey::from_u64(next_key())
 }
 
@@ -289,19 +296,21 @@ pub fn mint_host_error_key() -> HandleKey {
 /// host callback awaiting completion *must* keep the loop alive so the
 /// JS callback can actually run.
 ///
-/// Exposed to JS as `registerErrorReleaseCallback(cb)`. Must be called
+/// Exposed to JS as `registerHostValueReleaseCallback(cb)`. Must be called
 /// exactly once at SDK module init, before any host call is dispatched.
 #[napi(ts_args_type = "callback: (key: HandleKey) => void")]
-pub fn register_error_release_callback(callback: Function<'_, HandleKey, ()>) -> napi::Result<()> {
-    let tsfn: ErrorReleaseTsfn = callback
+pub fn register_host_value_release_callback(
+    callback: Function<'_, HandleKey, ()>,
+) -> napi::Result<()> {
+    let tsfn: HostValueReleaseTsfn = callback
         .build_threadsafe_function()
         .callee_handled::<false>()
         .weak::<true>()
-        .max_queue_size::<ERROR_RELEASE_QUEUE_SIZE>()
+        .max_queue_size::<HOST_VALUE_RELEASE_QUEUE_SIZE>()
         .build()?;
     // First-call-wins; ignore the `Err(_)` from `set` on later calls
     // (caller is responsible for not re-registering).
-    let _ = ERROR_RELEASE_CALLBACK.set(Arc::new(tsfn));
+    let _ = HOST_VALUE_RELEASE_CALLBACK.set(Arc::new(tsfn));
     Ok(())
 }
 
