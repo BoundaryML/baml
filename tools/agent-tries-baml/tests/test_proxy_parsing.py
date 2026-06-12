@@ -70,3 +70,51 @@ def test_validate_relative_path_rejects_traversal():
     with pytest.raises(ValueError):
         runner.validate_relative_path("/abs")
     runner.validate_relative_path("baml_src/foo.baml")  # ok
+
+
+def test_install_skills_runs_baml_agent_install(tmp_path):
+    """_install_skills runs `baml agent install --dir .` with the cached baml on PATH.
+
+    Verifies the happy path (a stub baml that records its argv and exits 0 yields
+    True), the failure path (exit 1 yields False), and the no-binary path (None
+    baml_dir yields False without running anything) — all without failing the run.
+    """
+    import asyncio
+    import os
+    import stat
+
+    from services.claude_proxy.app import _install_skills
+
+    staging = tmp_path / "staging"
+    staging.mkdir()
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    argv_log = tmp_path / "argv.log"
+    baml = bin_dir / "baml"
+    baml.write_text(f'#!/bin/sh\necho "$@" >> {argv_log}\nexit 0\n')
+    baml.chmod(baml.stat().st_mode | stat.S_IXUSR)
+
+    assert asyncio.run(_install_skills(staging, bin_dir, "cell-1")) is True
+    assert argv_log.read_text().strip() == "agent install --dir ."
+
+    baml.write_text("#!/bin/sh\nexit 1\n")
+    assert asyncio.run(_install_skills(staging, bin_dir, "cell-1")) is False
+
+    assert asyncio.run(_install_skills(staging, None, "cell-1")) is False
+    assert not (staging / "anything").exists()
+
+
+def test_collect_post_files_excludes_agent_config_trees(tmp_path):
+    """collect_post_files skips .claude/ and .agents/ (installed skills, not artifacts).
+
+    Verifies an installed skill's SKILL.md is not collected even though its
+    basename matches a `*.md` pattern, while project files still are.
+    """
+    (tmp_path / ".claude" / "skills" / "baml-core").mkdir(parents=True)
+    (tmp_path / ".claude" / "skills" / "baml-core" / "SKILL.md").write_text("skill")
+    (tmp_path / ".agents" / "skills" / "baml-core").mkdir(parents=True)
+    (tmp_path / ".agents" / "skills" / "baml-core" / "SKILL.md").write_text("skill")
+    (tmp_path / "notes.md").write_text("notes")
+
+    out = runner.collect_post_files(tmp_path, ["*.md"], 1024, 4096)
+    assert out == {"notes.md": "notes"}

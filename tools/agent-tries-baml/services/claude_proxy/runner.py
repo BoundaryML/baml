@@ -156,6 +156,10 @@ async def spawn_claude(
     env = os.environ.copy()
     if anthropic_api_key:
         env["ANTHROPIC_API_KEY"] = anthropic_api_key
+    else:
+        # OAuth mode: an inherited key (e.g. Infisical-injected) would silently
+        # shadow the CLI's persisted subscription login — scrub it.
+        env.pop("ANTHROPIC_API_KEY", None)
     # Warm baml on PATH so the agent's `baml ...` calls hit the built sha.
     if baml_bin_dir is not None:
         env["PATH"] = f"{baml_bin_dir}:{env.get('PATH', '')}"
@@ -324,7 +328,10 @@ def collect_post_files(
 
     Walks the staging tree, including files whose relative path or name matches
     any pattern, skipping ones over the per-file cap and stopping once the total
-    byte budget would be exceeded.
+    byte budget would be exceeded. The .claude/ and .agents/ trees are excluded:
+    they hold installed agent config (e.g. the skills `baml agent install`
+    writes), not artifacts the agent authored, and their SKILL.md files would
+    otherwise burn the byte budget before real artifacts are collected.
 
     Args:
         staging: The staging directory to walk.
@@ -346,6 +353,8 @@ def collect_post_files(
         try:
             rel = str(abs_path.relative_to(staging))
         except ValueError:
+            continue
+        if rel.startswith((".claude/", ".agents/")):
             continue
         if not any(fnmatch.fnmatch(rel, pat) or fnmatch.fnmatch(abs_path.name, pat)
                    for pat in patterns):

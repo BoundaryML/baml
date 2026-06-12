@@ -1,8 +1,9 @@
 """claude-proxy - HTTP wrapper around the Claude Code CLI.
 
 Single endpoint /run-agent: stage files, ensure the requested baml sha is
-cached locally (pulled once from the service), spawn claude with that baml
-on PATH, parse the session, return transcript + metrics + post_files.
+cached locally (pulled once from the service), optionally `baml agent install`
+the official skills into the workspace, spawn claude with that baml on PATH,
+parse the session, return transcript + metrics + post_files.
 """
 
 from __future__ import annotations
@@ -36,10 +37,29 @@ STAGING_ROOT = Path(os.environ.get("STAGING_ROOT", "/tmp/staging"))
 BAML_CACHE_DIR = Path(os.environ.get("BAML_CACHE_DIR", "/var/baml-cache"))
 CLAUDE_BIN = os.environ.get("CLAUDE_BIN", "claude")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+# Auth mode for the spawned Claude Code CLI:
+#   oauth   - never inject ANTHROPIC_API_KEY; the CLI uses the subscription
+#             login persisted on the claude_state volume (~/.claude).
+#   api-key - always inject ANTHROPIC_API_KEY (metered API billing).
+#   auto    - oauth when a persisted login exists on the volume, else api-key.
+CLAUDE_AUTH_MODE = os.environ.get("CLAUDE_AUTH_MODE", "auto").lower()
+# The Claude Code CLI stores its OAuth state here after a one-time
+# `fly ssh console -C "claude /login"` (the volume mount preserves it).
+OAUTH_CREDENTIALS_PATH = Path(
+    os.environ.get("CLAUDE_OAUTH_CREDENTIALS", str(Path.home() / ".claude" / ".credentials.json"))
+)
 DEFAULT_TIMEOUT = int(os.environ.get("CLAUDE_INVOCATION_TIMEOUT_SECS", "1800"))
+# Bound on the pre-run `baml agent install` (fetches the skill archive over the
+# network), so a wedged fetch can't eat into the agent's wall clock.
+SKILL_INSTALL_TIMEOUT_SECS = int(os.environ.get("SKILL_INSTALL_TIMEOUT_SECS", "120"))
 SERVICE_URL = os.environ.get("SERVICE_URL", "")
 SERVICE_TOKEN = os.environ.get("ATB_SERVICE_TOKEN", "")
-ALLOWED_MODELS = {"claude-sonnet-4-6", "claude-haiku-4-5", "claude-opus-4-7"}
+ALLOWED_MODELS = {
+    "claude-sonnet-4-6",
+    "claude-haiku-4-5",
+    "claude-opus-4-7",
+    "claude-opus-4-8",
+}
 
 _baml_locks: dict[str, asyncio.Lock] = {}
 
@@ -79,9 +99,32 @@ def _safe_staging(prefix: str, raw: str, field: str) -> Path:
     return p
 
 
+def _auth_mode() -> str:
+    """Resolve the effective auth mode for spawned CLI runs.
+
+    Returns:
+        "oauth" when runs should use the volume-persisted subscription login
+        (no key injected), "api-key" when ANTHROPIC_API_KEY is injected, or
+        "none" when neither source is available (runs will fail fast).
+    """
+    has_oauth = OAUTH_CREDENTIALS_PATH.exists()
+    if CLAUDE_AUTH_MODE == "oauth":
+        return "oauth" if has_oauth else "none"
+    if CLAUDE_AUTH_MODE == "api-key":
+        return "api-key" if ANTHROPIC_API_KEY else "none"
+    # auto: prefer the subscription login when present, else the API key
+    if has_oauth:
+        return "oauth"
+    return "api-key" if ANTHROPIC_API_KEY else "none"
+
+
 def _get_api_key() -> str:
-    """Return the Anthropic API key."""
-    return ANTHROPIC_API_KEY
+    """Return the API key to inject into a run, or "" for OAuth mode.
+
+    An empty return makes the runner scrub ANTHROPIC_API_KEY from the spawned
+    CLI's environment so it falls back to the persisted subscription login.
+    """
+    return ANTHROPIC_API_KEY if _auth_mode() == "api-key" else ""
 
 
 def _require_bearer(authorization: str) -> None:
@@ -147,17 +190,54 @@ async def _ensure_baml(sha: Optional[str]) -> Optional[Path]:
     return bin_dir
 
 
+async def _install_skills(staging: Path, baml_dir: Optional[Path], cell_id: str) -> bool:
+    """Install the official BAML agent skills into the staging dir.
+
+    Runs `baml agent install --dir .` with the version-cached baml on PATH, so
+    the agent finds the skills at .claude/skills/baml-* exactly as a real user
+    would after running the command. Degrades to False (run proceeds without
+    skills) rather than failing the run, mirroring how a missing baml binary is
+    handled.
+
+    Args:
+        staging: The staging directory the skills are installed into.
+        baml_dir: Directory containing the cached `baml` binary, or None when
+            the binary is unavailable (install is skipped).
+        cell_id: The run's cell id, for log attribution.
+
+    Returns:
+        True when the install completed cleanly, else False.
+    """
+    if baml_dir is None:
+        log.warning("install_skill requested for %s but no baml binary; skipping", cell_id)
+        return False
+    stdout, stderr, exit_code, timed_out = await runner.run_command(
+        cwd=staging,
+        command="baml agent install --dir .",
+        baml_bin_dir=baml_dir,
+        timeout_secs=SKILL_INSTALL_TIMEOUT_SECS,
+    )
+    if exit_code != 0:
+        log.warning(
+            "baml agent install failed for %s (exit=%d, timed_out=%s): %s",
+            cell_id, exit_code, timed_out, (stderr or stdout)[-500:],
+        )
+        return False
+    return True
+
+
 app = FastAPI(title="agent-tries-baml-claude-proxy")
 
 
 @app.get("/healthz")
-async def healthz() -> str:
-    """Liveness probe that always reports the service is up.
+async def healthz() -> dict[str, str]:
+    """Liveness probe that also reports the effective CLI auth mode.
 
     Returns:
-        The literal string "ok".
+        A dict with "status": "ok" and "auth": oauth | api-key | none, so the
+        billing path is observable without shelling into the machine.
     """
-    return "ok"
+    return {"status": "ok", "auth": _auth_mode()}
 
 
 @app.post("/run-agent")
@@ -190,6 +270,8 @@ async def run_agent(req: RunAgentRequest, authorization: str = Header(default=""
     try:
         runner.materialize_files(staging, req.files)
         baml_dir = await _ensure_baml(req.baml_version)
+        if req.install_skill:
+            out.skill_installed = await _install_skills(staging, baml_dir, req.cell_id)
 
         stdout, stderr, exit_code = await runner.spawn_claude(
             claude_bin=CLAUDE_BIN,
