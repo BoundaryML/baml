@@ -14,6 +14,10 @@ primary_region = 'sjc'
   INFISICAL_PATH       = '/'
   PORT        = '8081'
   SERVICE_URL = 'http://bench3-api.internal:8080'
+  # @bammy's intent classifier runs through claude-proxy (token via Infisical).
+  CLAUDE_PROXY_URLS = 'http://bench3-claude-proxy.internal:9090'
+  # Default baml-skill branches for a `[skill arena]` with no inline list.
+  ATB_ARENA_BRANCHES = 'main'
   # Webhook routing labels — must match notion-fixer's. Read case-insensitively.
   NOTION_STATUS_APPROVED = 'approved'
   NOTION_STATUS_REDRAFT  = 'redraft'

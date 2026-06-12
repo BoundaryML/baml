@@ -1,10 +1,13 @@
 """Ingress gateway - the single public entry for all external events.
 
 Every handler calls the service API (never Convex directly):
-  /slack/events  -> create a task (source=slack)
+  /slack/events  -> the @bammy router (bench tasks, changelog edits, promo
+                    codes, feedback — see services/ingress/bammy.py)
   /notion/webhook -> read the page status and route the issue to approved (fix)
                      or redraft (human-feedback redraft loop)
   /bug           -> create a task (source=bug_report)
+  /entries       -> public changelog JSON (consumed by the website build)
+  /feedback      -> public, rate-limited feedback intake (`baml feedback` CLI)
 """
 
 from __future__ import annotations
@@ -14,6 +17,7 @@ import hmac
 import logging
 import os
 import re
+import time
 from collections import OrderedDict
 from typing import Any, Optional
 
@@ -22,6 +26,11 @@ from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request, Re
 from bench_core import slack_client
 from bench_core.notion_client import NotionClient
 from bench_core.service_client import ServiceClient
+
+from . import bammy
+from .handlers import feedback as feedback_handler
+from .handlers.bench import _create_cohort  # noqa: F401  (re-exported for tests/compat)
+from .handlers.bench import _parse_branches, _parse_run_directives
 
 # Use uvicorn's own logger so these lines actually reach stdout / Fly logs -
 # uvicorn only configures its `uvicorn.*` loggers, so a bare getLogger("ingress")
@@ -50,47 +59,49 @@ _seen: "OrderedDict[str, bool]" = OrderedDict()
 _SEEN_CAP = 1024
 
 _MENTION = re.compile(r"^\s*<@[^>]+>\s*")
-# Per-run mode directives, matched anywhere in the message and stripped from the
-# prompt: `[baml=N]` pins the Nth-newest ready build (newest=1); `[canary]`/
-# `[nightly]` select the channel (default nightly); `[coldstart]` (alias `[cold]`)
-# runs with no prebuilt baml so the agent installs it itself.
-_DIRECTIVE_BAML = re.compile(r"\[\s*baml\s*=\s*([^\]]+?)\s*\]", re.IGNORECASE)
-_DIRECTIVE_COLD = re.compile(r"\[\s*cold(?:start)?\s*\]", re.IGNORECASE)
-_DIRECTIVE_CHANNEL = re.compile(r"\[\s*(canary|nightly)\s*\]", re.IGNORECASE)
+
+# --- /feedback rate limiting (in-process; fine for a single Fly machine) ---
+# The endpoint is public (a token shipped in a public CLI is not a secret), so
+# spend is bounded instead: a small per-IP token bucket plus a global daily cap.
+_FEEDBACK_BUCKET_CAP = float(os.environ.get("FEEDBACK_BURST", "3"))
+_FEEDBACK_PER_HOUR = float(os.environ.get("FEEDBACK_PER_HOUR", "5"))
+_FEEDBACK_DAILY_CAP = int(os.environ.get("FEEDBACK_DAILY_CAP", "100"))
+# Body cap covers the team's opt-in context payload (transcript + files);
+# the message itself stays capped at 8000 chars, and the context pieces get
+# their own caps below so one report can't blow the blob volume.
+_FEEDBACK_MAX_BYTES = 4 * 1024 * 1024
+_FEEDBACK_MAX_TRANSCRIPT_CHARS = 2 * 1024 * 1024
+_FEEDBACK_MAX_FILE_CHARS = 256 * 1024
+_FEEDBACK_MAX_TOTAL_FILE_CHARS = 1024 * 1024
+_fb_buckets: dict[str, tuple[float, float]] = {}  # ip -> (tokens, last_refill)
+_fb_day: list[Any] = [0, 0]  # [yyyymmdd, count]
 
 
-def _parse_run_directives(text: str) -> tuple[str, dict[str, Any]]:
-    """Extract per-run mode directives from a prompt and strip them out.
-
-    Recognizes ``[baml=N]`` (a build selector, kept as a raw string the worker
-    resolves at run time), ``[canary]``/``[nightly]`` (channel, default nightly),
-    and ``[coldstart]``/``[cold]`` (cold-start mode). Cold start takes precedence
-    over a pin — both withhold the channel's latest binary — so a pin alongside
-    cold start is ignored (the channel is still recorded but unused for cold runs).
+def _feedback_allowed(ip: str) -> bool:
+    """Consume one feedback token for an IP; False when rate-limited.
 
     Args:
-        text: The user's message (bot mention already stripped).
+        ip: Client IP (Fly-Client-IP header, or the socket peer).
 
     Returns:
-        A tuple of (cleaned_prompt, options) where options may contain
-        ``coldStart: True``, ``bamlPin: "<selector>"``, and/or
-        ``bamlChannel: "nightly"|"canary"``.
+        True when the request may proceed.
     """
-    opts: dict[str, Any] = {}
-    cold = bool(_DIRECTIVE_COLD.search(text))
-    m = _DIRECTIVE_BAML.search(text)
-    ch = _DIRECTIVE_CHANNEL.search(text)
-    cleaned = _DIRECTIVE_CHANNEL.sub("", _DIRECTIVE_COLD.sub("", _DIRECTIVE_BAML.sub("", text)))
-    cleaned = re.sub(r"\s+", " ", cleaned).strip()
-    if ch:
-        opts["bamlChannel"] = ch.group(1).lower()
-    if cold:
-        opts["coldStart"] = True
-        if m:
-            log.info("ingress: both coldstart and baml pin given; cold start wins")
-    elif m:
-        opts["bamlPin"] = m.group(1).strip()
-    return cleaned, opts
+    now = time.time()
+    today = int(time.strftime("%Y%m%d"))
+    if _fb_day[0] != today:
+        _fb_day[0], _fb_day[1] = today, 0
+    if _fb_day[1] >= _FEEDBACK_DAILY_CAP:
+        return False
+    tokens, last = _fb_buckets.get(ip, (_FEEDBACK_BUCKET_CAP, now))
+    tokens = min(_FEEDBACK_BUCKET_CAP, tokens + (now - last) * _FEEDBACK_PER_HOUR / 3600.0)
+    if tokens < 1.0:
+        _fb_buckets[ip] = (tokens, now)
+        return False
+    _fb_buckets[ip] = (tokens - 1.0, now)
+    _fb_day[1] += 1
+    if len(_fb_buckets) > 4096:  # bound memory under address churn
+        _fb_buckets.clear()
+    return True
 
 
 def _is_duplicate(event_id: Optional[str]) -> bool:
@@ -126,31 +137,19 @@ async def healthz() -> str:
     return "ok"
 
 
-async def _create_slack_task(event: dict[str, Any], text: str, eid: Optional[str]) -> None:
-    """Create a Slack-sourced task off the request path.
+async def _route_mention(event: dict[str, Any], text: str, eid: Optional[str]) -> None:
+    """Route an app_mention through @bammy, reading _service at call time.
 
-    Runs after we have already ACKed Slack, so a slow Convex write can never push
-    us past Slack's 3s deadline. Failures are logged, not raised (the ACK is gone).
+    A thin indirection so tests that monkeypatch ``ing._service`` keep
+    working — the live (or faked) client is resolved when the background
+    task runs, not when the module is imported.
 
     Args:
-        event: The Slack event object (channel, ts, thread_ts, user).
-        text: The user's prompt, with a leading bot mention already stripped.
+        event: The Slack event object.
+        text: The mention text with the leading bot mention stripped.
         eid: The Slack event id, for log correlation.
     """
-    try:
-        prompt, opts = _parse_run_directives(text)
-        tid = await _service.create("tasks", {
-            "source": "slack",
-            "prompt": prompt,
-            "slackChannel": event.get("channel"),
-            "slackThreadTs": event.get("thread_ts") or event.get("ts"),
-            "slackUser": event.get("user"),
-            "status": "queued",
-            **opts,
-        })
-        log.info("slack: created task %s event_id=%s opts=%s text=%r", tid, eid, opts, prompt[:80])
-    except Exception:  # noqa: BLE001
-        log.exception("slack: failed to create task for event_id=%s", eid)
+    await bammy.route_mention(_service, event, text, eid)
 
 
 @app.post("/slack/events")
@@ -203,8 +202,8 @@ async def slack_events(request: Request,
     if etype == "app_mention":
         text = _MENTION.sub("", event.get("text", "")).strip()
         if text:
-            background_tasks.add_task(_create_slack_task, dict(event), text, eid)
-            log.info("slack: queued task create event_id=%s text=%r", eid, text[:80])
+            background_tasks.add_task(_route_mention, dict(event), text, eid)
+            log.info("slack: queued bammy route event_id=%s text=%r", eid, text[:80])
         else:
             log.warning("slack: app_mention with empty text after strip; raw=%r event_id=%s",
                         (event.get("text") or "")[:120], eid)
@@ -368,9 +367,253 @@ async def bug_trigger(payload: dict) -> dict[str, str]:
         opts["coldStart"] = True
     elif payload.get("bamlPin"):
         opts["bamlPin"] = str(payload["bamlPin"])
+    # A skill-arena bug fans out a cohort. Branches come from the inline directive
+    # or an explicit payload `arenaBranches` (string or list).
+    branches = opts.pop("arenaBranches", None)
+    if payload.get("arenaBranches"):
+        raw = payload["arenaBranches"]
+        branches = _parse_branches(",".join(raw) if isinstance(raw, list) else str(raw))
+    if branches:
+        cid = await _create_cohort(_service, prompt, branches, opts, source="bug_report")
+        return {"cohortId": cid}
     tid = await _service.create("tasks", {
         "source": "bug_report", "prompt": prompt,
         "notionProposerPageId": payload.get("notionPageId"), "status": "queued",
         **opts,
     })
     return {"id": tid}
+
+
+# --------------------------------------------------------------------------- #
+# Changelog (public read for the website + token-gated ops writes)
+# --------------------------------------------------------------------------- #
+
+_ENTRY_FIELDS = ("version", "date", "title", "body", "authors", "channel")
+
+
+@app.get("/entries")
+async def list_entries() -> dict[str, list[dict[str, Any]]]:
+    """Serve the published changelog as JSON (the website build's contract).
+
+    Shape matches the old baml-changelog2 service: ``{"entries": [...]}`` with
+    one object per published (status=done) entry, newest-first by date.
+
+    Returns:
+        The published entries with version/date/title/body/authors/channel.
+    """
+    rows = await _service.list(
+        "changelogEntries", field="status", value="done",
+        index="by_status_created", limit=1000,
+    )
+    rows.sort(key=lambda r: (r.get("date") or "", r.get("createdAt") or 0), reverse=True)
+    entries = [
+        {k: e.get(k) for k in _ENTRY_FIELDS}
+        for e in rows
+    ]
+    return {"entries": entries}
+
+
+def _require_service_token(authorization: str) -> None:
+    """Enforce the shared service token on ops endpoints.
+
+    Args:
+        authorization: The request's Authorization header value.
+
+    Raises:
+        HTTPException: 401 when a token is configured and does not match.
+    """
+    if not SERVICE_TOKEN:
+        return  # dev mode
+    if not hmac.compare_digest(authorization or "", f"Bearer {SERVICE_TOKEN}"):
+        raise HTTPException(401, "unauthorized")
+
+
+@app.post("/entries/update")
+async def update_entries(authorization: str = Header(default="")) -> dict[str, Any]:
+    """Sync the changelog now: enqueue entries for any missed releases.
+
+    The same sweep the cron poller runs every CHANGELOG_POLL_SECS — exposed
+    on demand for when the cron missed a release or was down. Idempotent:
+    releases that already have an entry row (any status) are skipped.
+
+    Args:
+        authorization: Bearer token, checked against ATB_SERVICE_TOKEN.
+
+    Returns:
+        ``{"enqueued": [{version, tag, channel, id}, ...]}`` — empty when the
+        changelog is already up to date.
+
+    Raises:
+        HTTPException: 401 on auth, 502 when the GitHub listing fails.
+    """
+    _require_service_token(authorization)
+    from bench_core import changelog_github
+    from bench_core.changelog_sync import sync_missing_entries
+
+    try:
+        enqueued = await sync_missing_entries(_service)
+    except changelog_github.GitHubError as e:
+        raise HTTPException(502, f"github: {e}")
+    log.info("entries/update: enqueued %d release(s)", len(enqueued))
+    return {"enqueued": enqueued}
+
+
+@app.post("/entries")
+async def create_entry(payload: dict,
+                       authorization: str = Header(default="")) -> dict[str, str]:
+    """Enqueue changelog generation for a release tag (ops parity endpoint).
+
+    Args:
+        payload: Requires ``release`` (a GitHub tag); optional ``from_release``
+            overrides the predecessor used for the diff.
+        authorization: Bearer token, checked against ATB_SERVICE_TOKEN.
+
+    Returns:
+        A dict with the entry row id under ``id``.
+
+    Raises:
+        HTTPException: 400 on a missing/unrecognized release tag, 401 on auth,
+            409 when generation is already in flight for the version.
+    """
+    _require_service_token(authorization)
+    from bench_core import changelog_github
+
+    tag = (payload.get("release") or "").strip()
+    if not tag:
+        raise HTTPException(400, "release required")
+    channel = changelog_github.channel_of(tag)
+    if channel is None:
+        raise HTTPException(400, f"unrecognized release tag: {tag}")
+    version = changelog_github.normalize(tag)
+
+    existing = await _service.list(
+        "changelogEntries", field="version", value=version, index="by_version", limit=1
+    )
+    if existing:
+        row = existing[0]
+        if row.get("status") in ("queued", "generating"):
+            raise HTTPException(409, f"generation already in flight for {version}")
+        await _service.update("changelogEntries", row["_id"], {
+            "tag": tag, "fromRelease": payload.get("from_release"),
+            "reviseMode": "regenerate", "reviseGuidance": None,
+        })
+        await _service.transition("changelogEntries", row["_id"], "queued")
+        return {"id": row["_id"]}
+    eid = await _service.create("changelogEntries", {
+        "version": version, "tag": tag, "channel": channel,
+        "fromRelease": payload.get("from_release"), "status": "queued",
+    })
+    return {"id": eid}
+
+
+@app.post("/entries/{version}/revise")
+async def revise_entry(version: str, payload: dict,
+                       authorization: str = Header(default="")) -> dict[str, str]:
+    """Requeue an existing entry with revise guidance (ops parity endpoint).
+
+    Args:
+        version: The stored (normalized) version to revise.
+        payload: Requires ``guidance`` free text.
+        authorization: Bearer token, checked against ATB_SERVICE_TOKEN.
+
+    Returns:
+        A dict with the entry row id under ``id``.
+
+    Raises:
+        HTTPException: 400 on missing guidance, 401 on auth, 404 when the
+            version has no entry, 409 when an edit is already in flight.
+    """
+    _require_service_token(authorization)
+    guidance = (payload.get("guidance") or "").strip()
+    if not guidance:
+        raise HTTPException(400, "guidance required")
+    rows = await _service.list(
+        "changelogEntries", field="version", value=version, index="by_version", limit=1
+    )
+    if not rows:
+        raise HTTPException(404, f"no entry for {version}")
+    row = rows[0]
+    if row.get("status") in ("queued", "generating"):
+        raise HTTPException(409, f"generation already in flight for {version}")
+    await _service.update("changelogEntries", row["_id"], {
+        "reviseMode": "revise", "reviseGuidance": guidance,
+    })
+    await _service.transition("changelogEntries", row["_id"], "queued")
+    return {"id": row["_id"]}
+
+
+# --------------------------------------------------------------------------- #
+# Feedback (public, rate-limited; the `baml feedback` CLI posts here)
+# --------------------------------------------------------------------------- #
+
+
+@app.post("/feedback")
+async def feedback(request: Request) -> dict[str, str]:
+    """Accept one piece of free-text feedback and queue it into the pipeline.
+
+    Creates a done task + queued trophy (source=feedback) so dedup triages it
+    onto the issue board. Public but rate-limited per client IP and per day.
+
+    Args:
+        request: The inbound request; JSON body with ``message`` (1..8000
+            chars) plus optional ``bamlVersion``/``os``/``arch``/``source``.
+
+    Returns:
+        A dict with the created ``taskId`` and ``trophyId``.
+
+    Raises:
+        HTTPException: 400 on a missing/oversized message or unparsable body,
+            413 on an oversized body, 429 when rate-limited.
+    """
+    raw = await request.body()
+    if len(raw) > _FEEDBACK_MAX_BYTES:
+        raise HTTPException(413, "feedback too large")
+    ip = request.headers.get("Fly-Client-IP") or (request.client.host if request.client else "?")
+    if not _feedback_allowed(ip):
+        raise HTTPException(429, "rate limited; try again later")
+    import json
+    try:
+        payload = json.loads(raw or b"{}")
+    except json.JSONDecodeError:
+        raise HTTPException(400, "invalid JSON body")
+    message = (payload.get("message") or "").strip() if isinstance(payload, dict) else ""
+    if not message or len(message) > 8000:
+        raise HTTPException(400, "message required (1..8000 chars)")
+
+    # Optional context (team opt-in via BAML_FEEDBACK_INCLUDE_CONTEXT in the
+    # CLI): the session transcript and the project's files. Oversized pieces
+    # are trimmed, never rejected — a fat transcript shouldn't lose the report.
+    transcript = payload.get("transcript")
+    if transcript is not None and not isinstance(transcript, str):
+        raise HTTPException(400, "transcript must be a string")
+    if transcript and len(transcript) > _FEEDBACK_MAX_TRANSCRIPT_CHARS:
+        # Keep the tail: the end of a session is where the problem usually is.
+        transcript = transcript[-_FEEDBACK_MAX_TRANSCRIPT_CHARS:]
+    files_created = payload.get("filesCreated")
+    if files_created is not None:
+        if not isinstance(files_created, dict) or not all(
+            isinstance(k, str) and isinstance(v, str) for k, v in files_created.items()
+        ):
+            raise HTTPException(400, "filesCreated must be a {path: content} object")
+        trimmed: dict[str, str] = {}
+        total = 0
+        for path, content in files_created.items():
+            content = content[:_FEEDBACK_MAX_FILE_CHARS]
+            if total + len(content) > _FEEDBACK_MAX_TOTAL_FILE_CHARS:
+                break
+            trimmed[path] = content
+            total += len(content)
+        files_created = trimmed or None
+
+    ids = await feedback_handler.create_feedback(
+        _service, message,
+        baml_version=payload.get("bamlVersion"),
+        os_name=payload.get("os"),
+        arch=payload.get("arch"),
+        origin=str(payload.get("source") or "cli"),
+        transcript=transcript or None,
+        files_created=files_created,
+    )
+    log.info("feedback: accepted from %s -> trophy %s (transcript=%s files=%d)",
+             ip, ids["trophyId"], bool(transcript), len(files_created or {}))
+    return ids

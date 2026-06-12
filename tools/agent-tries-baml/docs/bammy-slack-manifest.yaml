@@ -1,0 +1,53 @@
+# @bammy = the existing "bamlbench" Slack app, renamed. No new app needed:
+# its request URL already points at bench3-ingress and its signing secret /
+# bot token are already live in Infisical (ATB_SLACK_*), so there is no
+# token flip and no redeploy.
+#
+# One-time checklist at https://api.slack.com/apps (the bamlbench app):
+#   1. Basic Information -> App Name -> "bammy"; App Home -> bot display
+#      name -> "bammy".
+#   2. OAuth & Permissions -> Bot Token Scopes -> ADD (current scopes are
+#      app_mentions:read, chat:write, incoming-webhook, canvases:read/write):
+#        - channels:history   # conversations.replies in public channels
+#        - groups:history     # ... private channels
+#        - im:history         # ... DMs
+#        - mpim:history       # ... group DMs
+#        - users:read         # display names (promo audit, thread rendering)
+#      then "Reinstall to Workspace". The xoxb token normally survives a
+#      scope reinstall; if Slack does rotate it, update ATB_SLACK_BOT_TOKEN
+#      in Infisical (project bdd280e2-..., env prod) and restart
+#      bench3-{ingress,baml-worker,cohort-compare,notion-fixer,changelog-worker}.
+#
+# Until the *:history scopes land, everything still works — mid-thread
+# mentions just route without the prior-message context (the fetch fails
+# soft), and promo replies show the raw user id instead of a display name.
+#
+# Reference: the full desired app state, for comparison against the
+# dashboard after the rename.
+
+display_information:
+  name: bammy
+  description: BAML's monolith agent — bench runs, changelog edits, t-shirt codes, feedback.
+  background_color: "#1a1815"
+features:
+  bot_user:
+    display_name: bammy
+    always_online: true
+oauth_config:
+  scopes:
+    bot:
+      - app_mentions:read
+      - chat:write
+      - channels:history
+      - groups:history
+      - im:history
+      - mpim:history
+      - users:read
+settings:
+  event_subscriptions:
+    request_url: https://bench3-ingress.fly.dev/slack/events
+    bot_events:
+      - app_mention
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false
