@@ -6,9 +6,15 @@ cargo build -p bridge_ctypes
 #   -> target/.../build/bridge_ctypes-*/out/baml_core.cffi.v1.rs
 #   -> sdks/python/src/baml_core/cffi/v1/*_pb2.py(i)
 
-# Node / TypeScript (protobufjs)
-cd sdks/nodejs/bridge_nodejs && pnpm build:debug    # or: pnpm build:proto
+# Node / TypeScript (protobufjs + napi loader)
+cd sdks/nodejs/bridge_nodejs && pnpm build:debug
 #   -> sdks/nodejs/bridge_nodejs/typescript_src/proto/baml_cffi.{js,d.ts}
+#   -> sdks/nodejs/bridge_nodejs/dist/native.js
+#
+# scripts/baml-language-version bump/set/sync install the pinned Node bridge
+# dependencies and run this automatically after version bumps because napi
+# stamps package.json's version into dist/native.js. build:proto alone is only
+# sufficient for proto schema-only changes.
 
 # TypeScript (ts-proto / buf) — typescript2/pkg-proto consumer
 cd typescript2/pkg-proto && pnpm generate
