@@ -15,8 +15,13 @@ primary_region = 'sjc'
   INFISICAL_PATH       = '/'
   SERVICE_URL       = 'http://bench3-api.internal:8080'
   CRON_INTERVAL_SECS = '86400'
+  COHORT_RECONCILE_SECS = '30'
   SLACK_RESULTS_CHANNEL = 'C0B36EDQEN6'
-  # secrets: SERVICE_TOKEN
+  # Changelog release poller (absorbed baml-changelog2-cron, which is now
+  # stopped — keep exactly one of the two enabled).
+  CHANGELOG_POLL_ENABLED = '1'
+  CHANGELOG_POLL_SECS    = '600'
+  # secrets: SERVICE_TOKEN, GITHUB_TOKEN
 
 [[vm]]
   size   = 'shared-cpu-1x'
