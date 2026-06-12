@@ -218,7 +218,10 @@ def make_router(table: str, convex: ConvexGateway) -> APIRouter:
         Returns:
             A dict with the blob storage id under ``storageId``.
         """
-        text = (await request.body()).decode()
+        try:
+            text = (await request.body()).decode()
+        except UnicodeDecodeError as e:
+            raise HTTPException(400, f"transcript body must be UTF-8 text: {e}")
         storage_id = blobs.put_text(table, item_id, text)
         await convex.mutation(
             f"{table}:update", {"id": item_id, "patch": {"transcriptStorageId": storage_id}}

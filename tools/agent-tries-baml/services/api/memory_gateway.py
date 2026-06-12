@@ -177,6 +177,41 @@ class MemoryGateway:
         Raises:
             ValueError: For an unknown mutation verb.
         """
+        # Custom named mutations (not the generic queue verbs) get explicit
+        # stand-ins mirroring their convex/*.ts implementations.
+        if name == "promoCodes:claimNext":
+            rows = [r for r in self._tbl("promoCodes").values() if r.get("status") == "unused"]
+            if not rows:
+                return None
+            doc = min(rows, key=lambda r: r.get("position", 0))
+            now = self._now()
+            doc["status"] = "used"
+            doc["claimedBy"] = args["claimedBy"]
+            doc["claimedByUserId"] = args["claimedByUserId"]
+            if args.get("notes") is not None:
+                doc["notes"] = args["notes"]
+            doc["claimedAt"] = now
+            doc["updatedAt"] = now
+            return doc["code"]
+        if name == "workers:upsert":
+            now = self._now()
+            existing = next(
+                (r for r in self._tbl("workers").values() if r.get("workerId") == args["workerId"]),
+                None,
+            )
+            fields = {
+                "role": args["role"],
+                "status": args["status"],
+                "lastHeartbeat": now,
+            }
+            if args["status"] == "busy" and args.get("currentItemId") is not None:
+                fields["currentItemId"] = args["currentItemId"]
+            if existing is not None:
+                if args["status"] != "busy":
+                    existing.pop("currentItemId", None)
+                existing.update(fields)
+                return existing["_id"]
+            return self._create("workers", {"workerId": args["workerId"], **fields})
         table, verb = name.split(":", 1)
         if verb == "create":
             return self._create(table, args["doc"])
@@ -210,6 +245,13 @@ class MemoryGateway:
         Raises:
             ValueError: For an unknown query verb.
         """
+        # workers:list filters by role (not the generic field/value contract).
+        if name == "workers:list":
+            rows = list(self._tbl("workers").values())
+            if args.get("role"):
+                rows = [r for r in rows if r.get("role") == args["role"]]
+            rows.sort(key=lambda r: r["_creationTime"], reverse=True)
+            return [copy.deepcopy(r) for r in rows[: args.get("limit", 100)]]
         table, verb = name.split(":", 1)
         if verb == "get":
             return self._get(table, args["id"])

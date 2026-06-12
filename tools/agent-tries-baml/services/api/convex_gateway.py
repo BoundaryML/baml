@@ -40,6 +40,10 @@ class ConvexGateway:
             headers["Authorization"] = f"Convex {admin_key}"
         self._client = httpx.AsyncClient(timeout=30.0, headers=headers)
 
+    async def aclose(self) -> None:
+        """Close the underlying HTTP client and release its connections."""
+        await self._client.aclose()
+
     async def _run(self, kind: str, name: str, args: dict[str, Any]) -> Any:
         """Invoke a Convex function over the HTTP API and return its value.
 
@@ -124,6 +128,8 @@ class ConvexGateway:
                 if count != last:
                     last = count
                     yield count
+            except asyncio.CancelledError:
+                raise  # shutdown must propagate, not wait out the poll loop
             except Exception:  # noqa: BLE001
                 log.debug("count poll failed for %s", name, exc_info=True)
             await asyncio.sleep(self._poll)
@@ -145,8 +151,16 @@ def gateway_from_env():
         return MemoryGateway(
             poll_interval=float(os.environ.get("CONVEX_POLL_INTERVAL_SECS", "0.1")),
         )
+    url = os.environ["CONVEX_URL"]
+    admin_key = os.environ.get("ATB_CONVEX_ADMIN_KEY")
+    # Convex cloud rejects a self-hosted admin key outright (MalformedAccessToken)
+    # and our functions are public there, so the header is only attached for
+    # self-hosted deployments. (To lock cloud down later: convert the table
+    # functions to internal* and pass a real deploy key here instead.)
+    if ".convex.cloud" in url:
+        admin_key = None
     return ConvexGateway(
-        url=os.environ["CONVEX_URL"],
-        admin_key=os.environ.get("ATB_CONVEX_ADMIN_KEY"),
+        url=url,
+        admin_key=admin_key,
         poll_interval=float(os.environ.get("CONVEX_POLL_INTERVAL_SECS", "2.0")),
     )

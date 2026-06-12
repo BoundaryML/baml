@@ -10,16 +10,19 @@ from __future__ import annotations
 import hmac
 import os
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Response
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
 
 from .convex_gateway import gateway_from_env
 from . import blobs
 from .routers.table import make_router
 from .routers.baml_builds import make_baml_router
 from .routers.ingest import make_ingest_router
+from .routers.promo import make_promo_router
+from .routers.workers import make_workers_router
+from .routers.wasm import make_wasm_public_router, make_wasm_upload_router
 
 SERVICE_TOKEN = os.environ.get("ATB_SERVICE_TOKEN", "")
-TABLES = ["tasks", "trophies", "issues", "bamlBuilds"]
+TABLES = ["tasks", "trophies", "issues", "bamlBuilds", "cohorts", "changelogEntries"]
 
 
 async def require_bearer(authorization: str = Header(default="")) -> None:
@@ -51,7 +54,7 @@ def create_app() -> FastAPI:
         The fully configured FastAPI app.
     """
     convex = gateway_from_env()
-    app = FastAPI(title="agent-tries-baml-api")
+    app = FastAPI(title="agent-tries-baml-api", on_shutdown=[convex.aclose])
     auth = [Depends(require_bearer)]
 
     @app.get("/healthz")
@@ -67,6 +70,33 @@ def create_app() -> FastAPI:
         app.include_router(make_router(table, convex), dependencies=auth)
     app.include_router(make_baml_router(convex), dependencies=auth)
     app.include_router(make_ingest_router(convex), dependencies=auth)
+    app.include_router(make_promo_router(convex), dependencies=auth)
+    app.include_router(make_workers_router(convex), dependencies=auth)
+    # The wasm download is public (consumed by the website's Vercel build);
+    # only the upload requires the service token.
+    app.include_router(make_wasm_public_router())
+    app.include_router(make_wasm_upload_router(), dependencies=auth)
+
+    @app.post("/tasks/{task_id}/skill", dependencies=auth)
+    async def put_skill(task_id: str, request: Request) -> dict[str, str]:
+        """Store the skill text a run onboarded from and record its pointer.
+
+        Args:
+            task_id: The member task the skill snapshot belongs to.
+            request: Request whose raw body is the combined skill markdown.
+
+        Returns:
+            A dict with the blob storage id under ``storageId``.
+        """
+        try:
+            text = (await request.body()).decode()
+        except UnicodeDecodeError as e:
+            raise HTTPException(400, f"skill body must be UTF-8 text: {e}")
+        storage_id = blobs.put_text("skills", task_id, text)
+        await convex.mutation(
+            "tasks:update", {"id": task_id, "patch": {"skillStorageId": storage_id}}
+        )
+        return {"storageId": storage_id}
 
     @app.get("/transcripts/{storage_id:path}", dependencies=auth)
     async def get_transcript(storage_id: str) -> Response:

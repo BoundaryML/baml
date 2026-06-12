@@ -15,11 +15,13 @@ primary_region = 'sjc'
   INFISICAL_PATH       = '/'
   PORT           = '8080'
   HOST           = '::'
-  CONVEX_URL     = 'http://bench3-convex.flycast:3210'
+  # Convex cloud (team boundary / project agent-tries-baml / prod). The old
+  # self-hosted backend was bench3-convex.flycast:3210; rollback = revert this.
+  CONVEX_URL     = 'https://charming-terrier-498.convex.cloud'
   BLOB_DIR       = '/data/blobs'
   BAML_REPO_SLUG = 'BoundaryML/baml'
   BAML_REF       = 'canary'
-  # secrets: SERVICE_TOKEN, CONVEX_ADMIN_KEY, GITHUB_TOKEN
+  # secrets: SERVICE_TOKEN, GITHUB_TOKEN (ATB_CONVEX_ADMIN_KEY is ignored on cloud)
 
 [http_service]
   internal_port        = 8080
