@@ -13,6 +13,16 @@ from fastapi import FastAPI
 
 app = FastAPI()
 
+# Every /run-agent request, keyed by cell_id, so tests can assert on the request
+# contract the worker sends (e.g. install_skill vs an injected SKILL.md).
+_run_agent_requests: dict[str, dict] = {}
+
+
+@app.get("/run-agent-requests")
+async def run_agent_requests() -> dict[str, dict]:
+    """Expose recorded /run-agent requests for test assertions, keyed by cell_id."""
+    return _run_agent_requests
+
 
 @app.post("/check-baml")
 async def check_baml(req: dict):
@@ -43,6 +53,30 @@ async def run_agent(req: dict):
         A canned AgentResult dict with ``post_files`` for the caller to parse.
     """
     cell = req.get("cell_id", "")
+    _run_agent_requests[cell] = req
+    if cell.startswith("cohort-compare-"):
+        # arena compare: return a canned comparison naming a winning branch and a
+        # synthesized skill finding (so the cohort trophy flows into dedup).
+        comparison = {
+            "report_md": "## Skill arena\nBranch `exp-a` handled the task best: its skill "
+                         "documented enum value aliasing, which the others lacked.",
+            "summary": "exp-a won — its skill explained enum aliasing, avoiding the dead-end.",
+            "what_went_well": ["exp-a's skill covered enum aliasing"],
+            "what_failed": ["main's skill omitted enum aliasing"],
+            "findings": [
+                {"kind": "skill", "title": "skill should cover enum value aliasing",
+                 "description": "The winning branch documented `@alias` on enum values; "
+                                "fold that into the canonical skill.",
+                 "call_index": None,
+                 "suggestion": "Add an enum-alias example to the skill."},
+            ],
+            "suggestions": [
+                {"target": "skill", "suggestion": "document enum aliasing",
+                 "rationale": "variants that lacked it hit friction"},
+            ],
+        }
+        return {"cell_id": cell, "status": "ok", "exit_code": 0, "transcript": "",
+                "post_files": {"comparison.json": json.dumps(comparison)}}
     if cell.startswith("baml-dedup-"):
         import re
         reports = (req.get("files") or {}).get("reports.md", "")
@@ -89,6 +123,20 @@ async def run_agent(req: dict):
             "wall_clock_ms": 4200, "estimated_cost_usd": 0.01,
             "turn_log": turn_log,
             "post_files": {"x.baml": "function F(){}", "trophy.json": json.dumps(trophy)}}
+
+
+@app.get("/v1/agents/{agent_id}")
+async def get_agent(agent_id: str):
+    """Stub Cursor's GET agent: a finished agent with one run."""
+    return {"id": agent_id, "status": "FINISHED", "latestRunId": f"run-{agent_id}"}
+
+
+@app.get("/v1/agents/{agent_id}/runs/{run_id}")
+async def get_run(agent_id: str, run_id: str):
+    """Stub Cursor's GET run: a finished run that pushed a branch with a PR."""
+    return {"id": run_id, "status": "FINISHED", "git": {"branches": [
+        {"repoUrl": "https://github.com/boundaryml/baml", "branch": "cursor/fix-1",
+         "prUrl": "https://github.com/boundaryml/baml/pull/4242"}]}}
 
 
 @app.post("/v1/agents")

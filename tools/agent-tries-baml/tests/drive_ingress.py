@@ -47,6 +47,18 @@ async def main() -> None:
         AssertionError: If any endpoint or dispatch step produces an unexpected result.
     """
     service = ServiceClient(os.environ["SERVICE_URL"], os.environ.get("SERVICE_TOKEN", ""))
+    try:
+        await _drive(service)
+    finally:
+        await service.aclose()
+
+
+async def _drive(service: ServiceClient) -> None:
+    """Run the assertion sequence against a live service + ingress.
+
+    Args:
+        service: The ServiceClient (closed by main regardless of outcome).
+    """
     async with httpx.AsyncClient(timeout=20.0) as http:
         # /bug
         r = await http.post(f"{INGRESS}/bug", json={"prompt": "fix the parser"})
@@ -97,7 +109,6 @@ async def main() -> None:
         assert iss.get("fixSlackTs") == "agent-test-1", iss.get("fixSlackTs")
         print("fix-dispatch OK -> issue fixing, cursor agent launched (repo=baml-skill for kind=skill)")
         print("INGRESS_OK")
-    await service.aclose()
 
 
 if __name__ == "__main__":

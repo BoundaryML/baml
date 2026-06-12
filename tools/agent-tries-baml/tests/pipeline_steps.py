@@ -102,6 +102,109 @@ async def run_dedup_assert_issue(service) -> dict[str, Any]:
     return iss
 
 
+ARENA_BRANCHES = ["main", "exp-a", "exp-b"]
+
+
+async def create_cohort_with_members(
+    service, prompt: str = WORKER_PROMPT, branches: Optional[list[str]] = None,
+) -> tuple[str, list[str]]:
+    """Create a pending cohort plus one queued member task per branch.
+
+    Member tasks carry ``cohortId`` but no ``skillRef`` so the worker uses the
+    static skill path (branch resolution is exercised separately in
+    ``test_skill_repo`` to keep this network-free). Mirrors what ingress fans out.
+
+    Args:
+        service: The ServiceClient bound to the running api.
+        prompt: The shared task prompt for every variant.
+        branches: The skill branches the cohort records (defaults to ARENA_BRANCHES).
+
+    Returns:
+        A ``(cohort_id, member_task_ids)`` tuple.
+    """
+    refs = branches or ARENA_BRANCHES
+    cohort_id = await service.create("cohorts", {
+        "prompt": prompt, "skillRefs": refs, "memberTaskIds": [],
+        "source": "bug_report", "status": "pending",
+    })
+    member_ids: list[str] = []
+    for _ in refs:
+        tid = await service.create("tasks", {
+            "source": "bug_report", "prompt": prompt, "status": "queued",
+            "cohortId": cohort_id,
+        })
+        member_ids.append(tid)
+    await service.update("cohorts", cohort_id, {"memberTaskIds": member_ids})
+    return cohort_id, member_ids
+
+
+async def run_cohort_members(service, member_ids: list[str]) -> None:
+    """Drain BamlWorker and assert each member task produced a HELD cohort trophy.
+
+    Args:
+        service: The ServiceClient bound to the running api.
+        member_ids: The cohort's member task ids.
+    """
+    from services.baml_worker.__main__ import BamlWorker
+
+    await BamlWorker(service)._drain()
+    for tid in member_ids:
+        t = await service.get("tasks", tid)
+        assert t["status"] == "done", f"member {tid} status {t['status']}"
+        trs = await service.list("trophies", field="taskId", value=tid, index="by_task")
+        assert trs, f"no trophy for member {tid}"
+        assert trs[0]["status"] == "cohort_member", trs[0]["status"]
+        assert trs[0].get("cohortId"), "member trophy missing cohortId"
+
+
+async def reconcile_cohort_assert_queued(service, cohort_id: str) -> None:
+    """Run the fan-in reconciler once and assert the cohort flips pending -> queued.
+
+    Args:
+        service: The ServiceClient bound to the running api.
+        cohort_id: The cohort to reconcile.
+    """
+    from services.cron.reconcile import reconcile_cohorts_once
+
+    await reconcile_cohorts_once(service)
+    c = await service.get("cohorts", cohort_id)
+    assert c["status"] == "queued", f"cohort status {c['status']}"
+
+
+async def run_cohort_compare_assert_trophy(
+    service, cohort_id: str, member_ids: list[str],
+) -> dict[str, Any]:
+    """Drain CohortCompare and assert the cohort trophy + released members.
+
+    Args:
+        service: The ServiceClient bound to the running api.
+        cohort_id: The queued cohort to compare.
+        member_ids: The cohort's member task ids (their held trophies are released).
+
+    Returns:
+        The created cohort-report trophy document.
+    """
+    from services.cohort_compare.__main__ import CohortCompare
+
+    await CohortCompare(service)._drain()
+    c = await service.get("cohorts", cohort_id)
+    assert c["status"] == "done", f"cohort status {c['status']}"
+    report_id = c.get("reportTrophyId")
+    assert report_id, "cohort has no reportTrophyId"
+    rep = await service.get("trophies", report_id)
+    assert rep["isCohortReport"] is True
+    assert rep["status"] == "queued", rep["status"]  # enters dedup
+    assert rep["cohortId"] == cohort_id
+    assert rep.get("findings"), "cohort trophy should carry synthesized findings"
+    # the held member trophies are released to done
+    for tid in member_ids:
+        trs = await service.list("trophies", field="taskId", value=tid, index="by_task")
+        member_trs = [t for t in trs if not t.get("isCohortReport")]
+        assert member_trs and member_trs[0]["status"] == "done", \
+            f"member {tid} trophy not released: {[t['status'] for t in member_trs]}"
+    return rep
+
+
 async def run_notion_push_assert_synced(service, issue_id: str) -> dict[str, Any]:
     """Drain NotionPush once (no-creds path) and assert the issue syncs + confirms.
 
@@ -245,6 +348,33 @@ async def run_fixdispatch_assert_launch(service, issue_id: str,
 
     await FixDispatch(service)._drain()
     iss = await service.get("issues", issue_id)
-    assert iss["status"] == "fixing", iss["status"]
+    # FixDispatch claims approved->dispatching, launches the agent, then transitions
+    # to tocursor (the cursor-tracker owns it from there).
+    assert iss["status"] == "tocursor", iss["status"]
     assert iss.get("fixSlackTs") == expected_ref, iss.get("fixSlackTs")
+    assert iss.get("cursorAgentId") == expected_ref, iss.get("cursorAgentId")
+    return iss
+
+
+async def run_tracker_assert_prprep(service, issue_id: str) -> dict[str, Any]:
+    """Run the cursor-tracker once and assert the tocursor issue advances to prprep.
+
+    The fake proxy's Cursor agent/run stubs report a PR, so the tracker records it
+    and transitions the issue to ``prprep``.
+
+    Args:
+        service: The ServiceClient bound to the running api.
+        issue_id: The tocursor issue to track.
+
+    Returns:
+        The issue document after tracking.
+    """
+    from services.notion_fixer.tracker import CursorTracker
+
+    issue = await service.get("issues", issue_id)
+    await CursorTracker(service)._track_one(issue)
+    iss = await service.get("issues", issue_id)
+    assert iss["status"] == "prprep", iss["status"]
+    assert iss.get("prUrl"), "tracker should record the PR url"
+    assert iss.get("prNumber") == 4242, iss.get("prNumber")
     return iss

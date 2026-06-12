@@ -140,7 +140,16 @@ def bench_stack():
     proxy_port, api_port, ingress_port = _free_port(), _free_port(), _free_port()
     # Backend-specific env for the api: in-memory by default, real Convex
     # (CONVEX_URL + admin key) when BAML_BENCH_REAL_CONVEX=1.
-    api_env = {"SERVICE_TOKEN": "devservicetoken", "BLOB_DIR": str(ROOT / ".pytest-blobs")}
+    # Point the api's baml-release resolver at the fake proxy (which has no GitHub
+    # routes -> 404), so /baml/update fails fast and the worker falls back to a None
+    # baml version instead of reaching real GitHub and polling a never-built sha.
+    # Keeps the integration tier offline and deterministic regardless of GitHub
+    # reachability or rate-limiting.
+    api_env = {
+        "SERVICE_TOKEN": "devservicetoken",
+        "BLOB_DIR": str(ROOT / ".pytest-blobs"),
+        "GITHUB_API_BASE": f"http://localhost:{proxy_port}",
+    }
     try:
         if real_convex:
             if not _docker_ready():
@@ -202,6 +211,10 @@ def bench_stack():
             # stays unprefixed (it's config, not a secret) and points at fake_proxy.
             "ATB_CURSOR_API_KEY": "devcursorkey",
             "CURSOR_API_BASE": f"http://localhost:{proxy_port}",
+            # Bound the worker's build-poll so a stray resolved sha can never make a
+            # run wait the full 5-minute default for a build that never happens.
+            "BAML_BUILD_WAIT_SECS": "2",
+            "BAML_BUILD_POLL_SECS": "0.2",
         })
         yield {"api": f"http://localhost:{api_port}",
                "ingress": f"http://localhost:{ingress_port}",
