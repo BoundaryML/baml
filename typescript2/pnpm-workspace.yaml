@@ -2,8 +2,13 @@ packages:
   - "pkg-*"
   - "app-*"
 
-# pnpm 11 promotes un-approved postinstall builds to errors. Approve the
-# transitive build-script dependencies the lockfile currently pulls in.
+# pnpm 11 promotes un-approved postinstall builds to errors
+# (ERR_PNPM_IGNORED_BUILDS; strict-dep-builds is the v11 default). `allowBuilds`
+# is a name->bool map: true = may run its build script, false = explicitly denied.
+# It is the pnpm 11 replacement for v10's `onlyBuiltDependencies` /
+# `ignoredBuiltDependencies`, which v11 no longer reads. Every transitive
+# build-script dependency must be listed, or its build is "undecided" and the
+# install fails. To add one: `pnpm approve-builds` (interactive) or add it here.
 allowBuilds:
   '@bufbuild/buf': true
   '@mongodb-js/zstd': true
@@ -19,9 +24,8 @@ allowBuilds:
   core-js: false
   esbuild: true
   msw: true
-  # native build needs system liblzma headers, which CI/Vercel images lack.
-  # Was `pnpm.neverBuiltDependencies` in package.json before pnpm 11 stopped
-  # reading that field; just-bash (app-promptfiddle) works without it.
+  # native build needs system liblzma headers, which CI/Vercel images lack;
+  # just-bash (app-promptfiddle) works without it.
   node-liblzma: false
   # selects/downloads prebuilt libvips; Next image optimization needs it
   sharp: true
