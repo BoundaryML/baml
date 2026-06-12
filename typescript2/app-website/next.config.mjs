@@ -18,14 +18,32 @@ const nextConfig = {
   // monorepo, which 500s force-dynamic routes; rather than chase those files,
   // pages that would be force-dynamic (e.g. /changelog) are kept STATIC and
   // fetch their data client-side through an edge rewrite (see rewrites()).
-  outputFileTracingRoot: __dirname,
-  // The /api/og link-preview renderer reads brand fonts + the lamb mark from
-  // components/og via fs; force-include them so NFT ships them to Vercel.
-  outputFileTracingIncludes: {
-    '/api/og': ['./components/og/**'],
-  },
   reactStrictMode: true,
   typescript: { ignoreBuildErrors: true },
+  // The CLI deploy uploads from the monorepo root (baml/), one level above
+  // the pnpm workspace. Without an explicit tracing root, next's file
+  // tracing and Vercel's function packaging disagree about the base path
+  // and the function bundles lose next's runtime files (every lambda then
+  // dies with MODULE_NOT_FOUND on next/dist internals).
+  outputFileTracingRoot: fileURLToPath(new URL('../../', import.meta.url)),
+  // Vercel's function tracing misses next's compiled source-map module
+  // (loaded at runtime when enablePrerenderSourceMaps is on), which crashed
+  // every serverless function with MODULE_NOT_FOUND on next/dist/compiled/
+  // source-map. Force-include it in every function bundle.
+  outputFileTracingIncludes: {
+    // /api/og reads brand fonts + the lamb mark from components/og via fs.
+    '/api/og': ['./components/og/**'],
+    // next's error-reporting path requires these compiled modules
+    // dynamically; nft cannot see dynamic requires, so include them.
+    '/**': [
+      '../node_modules/.pnpm/next@*/node_modules/next/dist/compiled/source-map/**',
+      '../node_modules/.pnpm/next@*/node_modules/next/dist/compiled/stacktrace-parser/**',
+      '../node_modules/.pnpm/next@*/node_modules/next/dist/compiled/babel/code-frame.js',
+      '../node_modules/.pnpm/next@*/node_modules/next/dist/compiled/babel/package.json',
+      '../node_modules/.pnpm/next@*/node_modules/next/dist/compiled/ws/**',
+      '../node_modules/.pnpm/next@*/node_modules/next/dist/compiled/babel-code-frame/**',
+    ],
+  },
   poweredByHeader: false,
   async redirects() {
     return [
@@ -119,7 +137,11 @@ const nextConfig = {
     devtoolSegmentExplorer: true,
     // Enable new caching and pre-rendering behavior
 
-    enablePrerenderSourceMaps: true,
+    // Disabled: with this on, the deployed Next server runtime requires
+    // next/dist/compiled/source-map dynamically, which Vercel's function
+    // tracing does not bundle; every serverless function then crashes with
+    // MODULE_NOT_FOUND (incl. /api/og). Re-enable only with a verified fix.
+    enablePrerenderSourceMaps: false,
     // Enable support for `global-not-found`, which allows you to more easily define a global 404 page.
     globalNotFound: true,
     scrollRestoration: true,
