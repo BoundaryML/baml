@@ -38,7 +38,8 @@ impl std::fmt::Display for UnsupportedNamingConvention {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "sdkgen_python_pydantic2 only supports naming_convention = PreserveCase (got {})",
+            "generator python/pydantic requires setting naming_convention \"preserve-case\" \
+             (got \"{}\")",
             self.naming_convention
         )
     }
@@ -657,7 +658,8 @@ mod tests {
         assert_eq!(err.naming_convention, NamingConvention::Language);
         assert_eq!(
             err.to_string(),
-            "sdkgen_python_pydantic2 only supports naming_convention = PreserveCase (got language)"
+            "generator python/pydantic requires setting naming_convention \"preserve-case\" \
+             (got \"language\")"
         );
     }
 

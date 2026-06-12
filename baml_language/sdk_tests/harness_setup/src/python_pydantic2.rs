@@ -122,9 +122,11 @@ fn codegen_fixture(
             &baml_bytecode,
             NamingConvention::PreserveCase,
         )
-    }));
+    }))
+    .map_err(|_| "sdkgen_python_pydantic2::to_source_code panicked".to_string())
+    .and_then(|result| result.map_err(|e| e.to_string()));
     match codegen_result {
-        Ok(Ok(output)) => {
+        Ok(output) => {
             for (rel, content) in output {
                 let path = baml_sdk.join(&rel);
                 if let Some(parent) = path.parent() {
@@ -146,15 +148,8 @@ fn codegen_fixture(
                 }
             }
         }
-        Ok(Err(e)) => {
-            diagnostics.record("codegen", fixture, e.to_string());
-        }
-        Err(_) => {
-            diagnostics.record(
-                "codegen",
-                fixture,
-                "sdkgen_python_pydantic2::to_source_code panicked",
-            );
+        Err(e) => {
+            diagnostics.record("codegen", fixture, e);
         }
     }
 

@@ -239,17 +239,11 @@ fn discover_generators(
                 file_id,
                 &mut diags,
             );
-            let naming_convention_expected = match output_type {
-                Some(OutputType::PythonPydantic | OutputType::PythonPydanticV1) => {
-                    r#""preserve-case""#
-                }
-                Some(OutputType::TypescriptNode) | None => r#""preserve-case" or "language""#,
-            };
             let naming_convention = parse_required_property::<NamingConvention>(
                 *id,
                 generator_item,
                 "naming_convention",
-                naming_convention_expected,
+                r#""preserve-case""#,
                 &source_map,
                 file_id,
                 &mut diags,
@@ -303,16 +297,16 @@ fn validate_target_naming_convention(
     file_id: baml_db::FileId,
     diags: &mut Vec<Diagnostic>,
 ) -> bool {
-    match (output_type, naming_convention) {
-        (OutputType::PythonPydantic | OutputType::PythonPydanticV1, NamingConvention::Language) => {
+    match naming_convention {
+        NamingConvention::Language => {
             let item_range =
                 generator_config_item_span(id, generator, "naming_convention", source_map);
             diags.push(
                 Diagnostic::error(
                     DiagnosticId::InvalidGeneratorPropertyValue,
                     format!(
-                        "invalid value `language` for `naming_convention` on generator `{}` \
-                         with output_type `{output_type}` (expected \"preserve-case\")",
+                        "generator `{}` with output_type `{output_type}` requires \
+                         `naming_convention \"preserve-case\"` (got `language`)",
                         generator.name
                     ),
                 )
@@ -327,7 +321,7 @@ fn validate_target_naming_convention(
             );
             false
         }
-        _ => true,
+        NamingConvention::PreserveCase => true,
     }
 }
 

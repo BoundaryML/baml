@@ -239,7 +239,6 @@ fn generate_python_pydantic_language_naming_convention_returns_diagnostic() {
         r#"generator target {
   output_type "python/pydantic"
   output_dir "../"
-  default_client_mode "sync"
   naming_convention "language"
 }
 
@@ -262,12 +261,61 @@ function main() -> string {
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("invalid value `language` for `naming_convention`"),
+        stderr.contains(
+            "output_type `python/pydantic` requires `naming_convention \"preserve-case\"`"
+        ),
         "Expected structured invalid-value diagnostic, got: {stderr}",
     );
     assert!(
-        stderr.contains("expected \"preserve-case\""),
-        "Expected diagnostic to list only the supported value, got: {stderr}",
+        stderr.contains("(got `language`)"),
+        "Expected diagnostic to mention the unsupported value, got: {stderr}",
+    );
+    assert!(
+        !stderr.contains("panicked at"),
+        "Diagnostic path should not panic, got: {stderr}",
+    );
+}
+
+#[test]
+fn generate_typescript_node_language_naming_convention_returns_diagnostic() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(
+        tmp.path(),
+        r#"generator target {
+  output_type "typescript/node"
+  output_dir "../"
+  naming_convention "language"
+}
+
+function main() -> string {
+  "hello"
+}
+"#,
+    );
+
+    let output = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
+
+    assert!(
+        !output.status.success(),
+        "Expected non-zero exit code for unsupported typescript/node naming_convention, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert_eq!(output.status.code(), Some(4));
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains(
+            "output_type `typescript/node` requires `naming_convention \"preserve-case\"`"
+        ),
+        "Expected structured invalid-value diagnostic, got: {stderr}",
+    );
+    assert!(
+        stderr.contains("(got `language`)"),
+        "Expected diagnostic to mention the unsupported value, got: {stderr}",
     );
     assert!(
         !stderr.contains("panicked at"),
@@ -313,6 +361,47 @@ function main() -> string {
     assert!(
         !stderr.contains("\"language\""),
         "python/pydantic guidance should not advertise unsupported `language`, got: {stderr}",
+    );
+}
+
+#[test]
+fn generate_typescript_node_missing_naming_convention_lists_supported_value() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(
+        tmp.path(),
+        r#"generator target {
+  output_type "typescript/node"
+  output_dir "../"
+}
+
+function main() -> string {
+  "hello"
+}
+"#,
+    );
+
+    let output = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
+
+    assert!(
+        !output.status.success(),
+        "Expected non-zero exit code for missing naming_convention, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert_eq!(output.status.code(), Some(4));
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr
+            .contains("missing required property `naming_convention` (expected \"preserve-case\")"),
+        "Expected typescript/node naming_convention guidance, got: {stderr}",
+    );
+    assert!(
+        !stderr.contains("\"language\""),
+        "typescript/node guidance should not advertise unsupported `language`, got: {stderr}",
     );
 }
 
