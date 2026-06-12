@@ -25,7 +25,7 @@ class RunAgentRequest(BaseModel):
     """Request to spawn a claude agent against a cell on the version-cached baml CLI."""
 
     cell_id: str
-    model: str = "claude-sonnet-4-6"
+    model: str = "claude-opus-4-8"
     max_turns: int = 40
     prompt: str
     system_prompt: Optional[str] = None
@@ -33,6 +33,10 @@ class RunAgentRequest(BaseModel):
     prices: Optional[Prices] = None
     # sha of the baml CLI the proxy should place on PATH (version-cache).
     baml_version: Optional[str] = None
+    # Run `baml agent install` in the staging dir before spawning the agent, so
+    # the run onboards from the official installed skills (.claude/skills/baml-*)
+    # exactly like a real user. Requires baml_version to resolve to a binary.
+    install_skill: bool = False
     post_file_patterns: list[str] = Field(default_factory=list)
     max_file_bytes: int = 256 * 1024
     max_total_file_bytes: int = 4 * 1024 * 1024
@@ -84,6 +88,8 @@ class AgentResult(BaseModel):
     turn_log: Optional[list[Any]] = None
     post_files: dict[str, str] = Field(default_factory=dict)
     host_metadata: Optional[dict[str, Any]] = None
+    # Outcome of the pre-run `baml agent install` (None when not requested).
+    skill_installed: Optional[bool] = None
 
 
 # ---------- trophy metric bag (ported from suite_b_results) ----------

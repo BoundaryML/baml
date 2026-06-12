@@ -33,6 +33,7 @@ class Processor:
     lease_ms: int = 30 * 60 * 1000  # 30 min
     heartbeat_secs: float = 60.0
     poll_backstop_secs: float = 30.0
+    presence_secs: float = 15.0    # interval for the dashboard presence beat
     batch: bool = False            # if True, process() is called once per wake, drains itself
 
     def __init__(self, service: ServiceClient):
@@ -43,6 +44,10 @@ class Processor:
         """
         self.service = service
         self.id = f"{self.role}-{socket.gethostname()}-{os.getpid()}-{uuid.uuid4().hex[:6]}"
+        # Presence state mirrored to the workers table for the dashboard
+        # roster. Presence must never break work: every write is best-effort.
+        self._presence_status = "idle"
+        self._presence_item: Optional[str] = None
 
     # --- subclass implements this ---
     async def process(self, item: dict[str, Any]) -> None:
@@ -97,6 +102,7 @@ class Processor:
         """
         item_id = item["_id"]
         hb = asyncio.create_task(self._heartbeat(item_id))
+        await self._set_presence("busy", item_id)
         try:
             await self.process(item)
         except Exception as e:  # noqa: BLE001
@@ -112,6 +118,7 @@ class Processor:
                 log.exception("failed to mark %s/%s failed", self.table, item_id)
         finally:
             hb.cancel()
+            await self._set_presence("idle", None)
 
     async def _heartbeat(self, item_id: str) -> None:
         """Periodically extend the item's lease until the task is cancelled.
@@ -131,6 +138,35 @@ class Processor:
                     log.warning("heartbeat error for %s/%s", self.table, item_id)
         except asyncio.CancelledError:
             pass
+
+    async def _set_presence(self, status: str, item_id: Optional[str]) -> None:
+        """Record this worker's presence (idle/busy) — best-effort only.
+
+        Args:
+            status: "idle" or "busy".
+            item_id: The claimed row id when busy, else None.
+        """
+        self._presence_status = status
+        self._presence_item = item_id
+        try:
+            await self.service.worker_heartbeat(self.id, self.role, status, item_id)
+        except Exception:  # noqa: BLE001
+            log.debug("presence write failed (ignored)", exc_info=True)
+
+    async def _presence_beat(self) -> None:
+        """Periodically re-assert presence so the roster survives sweeps.
+
+        Runs forever on presence_secs; failures are swallowed — presence is
+        observability, never load-bearing for queue correctness.
+        """
+        while True:
+            try:
+                await self.service.worker_heartbeat(
+                    self.id, self.role, self._presence_status, self._presence_item
+                )
+            except Exception:  # noqa: BLE001
+                log.debug("presence beat failed (ignored)", exc_info=True)
+            await asyncio.sleep(self.presence_secs)
 
     async def _poll_backstop(self) -> None:
         """Periodically drain the queue to backstop dropped SSE wake-ups.
@@ -154,6 +190,7 @@ class Processor:
         """
         log.info("%s starting: table=%s value=%s", self.id, self.table, self.claim_value)
         backstop = asyncio.create_task(self._poll_backstop())
+        presence = asyncio.create_task(self._presence_beat())
         try:
             try:
                 await self._drain()  # catch up on anything already queued
@@ -173,13 +210,14 @@ class Processor:
                     await asyncio.sleep(5)
         finally:
             backstop.cancel()
+            presence.cancel()
 
 
 def run_processor(proc_factory) -> None:
     """Run a processor to completion from a synchronous entry point.
 
     Configures logging, builds a ServiceClient from the SERVICE_URL and
-    SERVICE_TOKEN env vars, runs the processor's loop inside asyncio.run, and
+    ATB_SERVICE_TOKEN env vars, runs the processor's loop inside asyncio.run, and
     closes the client on exit.
 
     Args:

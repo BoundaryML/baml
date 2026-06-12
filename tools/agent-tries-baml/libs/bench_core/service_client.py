@@ -223,6 +223,55 @@ class ServiceClient:
         r = await self._client.post(f"/{table}/{id}/heartbeat", json={"leaseMs": lease_ms})
         r.raise_for_status()
 
+    # ---------- presence ----------
+
+    async def worker_heartbeat(
+        self,
+        worker_id: str,
+        role: str,
+        status: str,
+        current_item_id: Optional[str] = None,
+    ) -> None:
+        """Upsert this worker's presence row for the dashboard roster.
+
+        Args:
+            worker_id: Stable processor identity (role-host-pid-hex).
+            role: Processor role (baml_worker, changelog_worker, ...).
+            status: "idle" or "busy".
+            current_item_id: The row being processed, when busy.
+
+        Raises:
+            httpx.HTTPStatusError: If the service returns a non-2xx response.
+        """
+        body: dict[str, Any] = {"workerId": worker_id, "role": role, "status": status}
+        if current_item_id is not None:
+            body["currentItemId"] = current_item_id
+        r = await self._client.post("/workers/heartbeat", json=body)
+        r.raise_for_status()
+
+    # ---------- promo codes ----------
+
+    async def promo_claim(
+        self, claimed_by: str, claimed_by_user_id: str, notes: Optional[str] = None
+    ) -> Optional[str]:
+        """Atomically claim the next unused promo code.
+
+        Args:
+            claimed_by: Display name of the requesting Slack user.
+            claimed_by_user_id: Slack user id of the requester.
+            notes: Free-text audit note (the mention text).
+
+        Returns:
+            The claimed code, or None when inventory is exhausted.
+
+        Raises:
+            httpx.HTTPStatusError: If the service returns a non-2xx response.
+        """
+        body = {"claimedBy": claimed_by, "claimedByUserId": claimed_by_user_id, "notes": notes}
+        r = await self._client.post("/promo/claim", json=body)
+        r.raise_for_status()
+        return r.json().get("code")
+
     # ---------- SSE wake stream ----------
 
     async def events(
@@ -298,6 +347,25 @@ class ServiceClient:
         r = await self._client.get(f"/transcripts/{storage_id}", timeout=120.0)
         r.raise_for_status()
         return r.text
+
+    async def put_skill(self, task_id: str, text: str) -> str:
+        """Upload the skill text a run onboarded from (arena snapshot).
+
+        Args:
+            task_id: The member task the snapshot belongs to.
+            text: The combined skill markdown the agent was given.
+
+        Returns:
+            The storage id assigned to the uploaded blob.
+
+        Raises:
+            httpx.HTTPStatusError: If the service returns a non-2xx response.
+        """
+        r = await self._client.post(
+            f"/tasks/{task_id}/skill", content=text.encode(), timeout=60.0
+        )
+        r.raise_for_status()
+        return r.json()["storageId"]
 
     # ---------- baml version ----------
 

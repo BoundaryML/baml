@@ -29,14 +29,14 @@ class ProxyClient:
         Raises:
             ValueError: If no non-empty proxy URL is provided.
         """
-        self.urls = [u.rstrip("/") for u in urls if u.strip()]
+        self.urls = [u.strip().rstrip("/") for u in urls if u.strip()]
         if not self.urls:
             raise ValueError("no valid proxy URLs provided for ProxyClient")
         self._headers = {"Authorization": f"Bearer {token}"} if token else {}
 
     @classmethod
     def from_env(cls) -> "ProxyClient":
-        """Build a client from the CLAUDE_PROXY_URLS and CLAUDE_PROXY_TOKEN env vars.
+        """Build a client from the CLAUDE_PROXY_URLS and ATB_CLAUDE_PROXY_TOKEN env vars.
 
         Returns:
             A ProxyClient configured from the comma-separated URL list (default
