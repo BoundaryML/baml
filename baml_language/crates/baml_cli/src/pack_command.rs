@@ -492,9 +492,25 @@ fn read_host_binary(target_triple: &str, reporter: &Reporter) -> Result<Vec<u8>>
         .ok_or_else(|| anyhow!("Cannot determine directory of current executable"))?;
     let host_name = host_binary_name(target_triple);
     let host_path = dir.join(&host_name);
-    if target_triple == release_host_target_triple()? && host_path.exists() {
+    let is_native = target_triple == release_host_target_triple()?;
+    if is_native && host_path.exists() {
         return std::fs::read(&host_path)
             .with_context(|| format!("Failed to read {}", host_path.display()));
+    }
+
+    // A workspace-built host sits next to the CLI but we're skipping it
+    // because the requested `--target` isn't this machine's platform, so we
+    // download a release host for that target instead. Surface it: a dev who
+    // expected their local host embedded would otherwise silently get
+    // released bytes — exactly the kind of skip that hides host-side bugs
+    // from local testing. (No local host => nothing skipped; stay quiet, the
+    // "Downloading" line below already explains the fetch.)
+    if !is_native && host_path.exists() {
+        reporter.warning(format_args!(
+            "ignoring local `{}` (built for this machine) — packing for `{target_triple}` \
+             downloads a matching release host instead.",
+            host_path.display()
+        ));
     }
 
     // Cargo emits `Downloading <crate>` when it has to fetch a missing
@@ -570,8 +586,10 @@ fn write_executable(
     target_triple: &str,
 ) -> Result<()> {
     if target_triple.contains("linux") {
-        libsui::Elf::new(host_bytes)
-            .append(PACK_SECTION_NAME, data, writer)
+        // Not `libsui::Elf::append`: it places the embedded note at a virtual
+        // address that can overlap the host's `.bss`, corrupting the envelope
+        // (and the host's BSS globals) at startup. See `pack_elf`.
+        crate::pack_elf::append_note(host_bytes, PACK_SECTION_NAME, data, writer)
             .context("Failed to write ELF binary")?;
     } else if target_triple.contains("windows") {
         libsui::PortableExecutable::from(host_bytes)
