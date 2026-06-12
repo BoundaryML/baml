@@ -171,8 +171,6 @@ logos = { version = "0.15" }
 loom = { version = "0.7" }
 lsp-server = "0.7.6"
 lsp-types = "0.95.0"
-# Calibrated-TSC clock for profiling timestamps (bex_events::prof::clock).
-minstant = { version = "0.1" }
 notify = "7.0"
 # Pinned to the exact version libsui depends on so `baml pack`'s ELF note
 # writer (crates/baml_cli/src/pack_elf.rs) and libsui's reader share one

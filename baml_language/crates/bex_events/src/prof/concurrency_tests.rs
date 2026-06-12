@@ -575,7 +575,7 @@ mod stress {
                             call_id: BexCallId(seq),
                             parent_call_id: BexCallId(seq.saturating_sub(1)),
                             function_id: FunctionId(u32::try_from(engine).unwrap()),
-                            ts_ns: seq,
+                            ts_ticks: seq,
                         }
                         .encode(&mut buf);
                         // SAFETY: the claiming thread is alive for the whole call (no TLS

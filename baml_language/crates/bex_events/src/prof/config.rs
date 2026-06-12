@@ -49,7 +49,7 @@ pub const DEFAULT_WAKE_INTERVAL: Duration = Duration::from_millis(50);
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProfConfig {
     /// Master switch ([`ENV_PROFILE`]); default-on (follow-up 16). Always
-    /// `false` on wasm32: there is no consumer thread or TSC clock there
+    /// `false` on wasm32: there is no consumer thread or tick clock there
     /// (cooperative drain is a designed but deferred follow-up).
     pub enabled: bool,
     /// Ring segment size in bytes ([`ENV_SEG_BYTES`]).
@@ -104,7 +104,7 @@ impl ProfConfig {
                 v == "1" || v.eq_ignore_ascii_case("true")
             })
             .unwrap_or(defaults.enabled);
-        // No consumer thread and no TSC clock on wasm32; the switch is forced
+        // No consumer thread and no tick clock on wasm32; the switch is forced
         // off regardless of the environment (plan §2.2).
         let enabled = enabled && cfg!(not(target_arch = "wasm32"));
 

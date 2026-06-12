@@ -2981,7 +2981,7 @@ impl BexVm {
                 call_id: BexCallId(call_id),
                 parent_call_id: BexCallId(parent_call_id),
                 function_id: ProfFunctionId(function_id),
-                ts_ns: bex_events::prof::clock::now_ns(),
+                ts_ticks: bex_events::prof::clock::now_ticks(),
             });
         }
         (call_id, parent_call_id)
@@ -3013,7 +3013,7 @@ impl BexVm {
                 status,
                 thread_id: BexThreadId(self.prof_thread_id),
                 call_id: BexCallId(call_id),
-                ts_ns: bex_events::prof::clock::now_ns(),
+                ts_ticks: bex_events::prof::clock::now_ticks(),
             });
         }
     }
@@ -3089,7 +3089,7 @@ impl BexVm {
                 call_id: BexCallId(call_id),
                 parent_call_id: BexCallId(parent_call_id),
                 function_id: ProfFunctionId(function_id),
-                ts_ns: bex_events::prof::clock::now_ns(),
+                ts_ticks: bex_events::prof::clock::now_ticks(),
             });
             self.pending_sysop_call_id = Some(call_id);
         }
@@ -3104,7 +3104,7 @@ impl BexVm {
                 thread_id: BexThreadId(self.prof_thread_id),
                 call_id: BexCallId(call_id),
                 id,
-                ts_ns: bex_events::prof::clock::now_ns(),
+                ts_ticks: bex_events::prof::clock::now_ticks(),
             });
         }
     }
@@ -3113,13 +3113,13 @@ impl BexVm {
     /// completed inline (`Done`/`Error`) — `YieldToCall` natives are
     /// continuation-based and stay transparent in the event stream (their
     /// callback calls attribute to the bytecode caller); tracking them
-    /// through the CPS frames is a follow-up. `ts_start` is captured before
+    /// through the CPS frames is a follow-up. `start_ticks` is captured before
     /// the native ran, so the pair still spans its real duration.
     #[inline]
     fn prof_emit_native_pair(
         &mut self,
         function_id: u32,
-        ts_start: u64,
+        start_ticks: u64,
         status: bex_events::prof::record::FunctionEndStatus,
     ) {
         // Mint before the ring gate: call ids are `$id` semantics and must
@@ -3137,14 +3137,14 @@ impl BexVm {
             call_id: BexCallId(call_id),
             parent_call_id: BexCallId(parent_call_id),
             function_id: ProfFunctionId(function_id),
-            ts_ns: ts_start,
+            ts_ticks: start_ticks,
         }
         .encode_to(&mut buf);
         let end_len = bex_events::prof::record::RawRecord::EndFunction {
             status,
             thread_id: BexThreadId(self.prof_thread_id),
             call_id: BexCallId(call_id),
-            ts_ns: bex_events::prof::clock::now_ns(),
+            ts_ticks: bex_events::prof::clock::now_ticks(),
         }
         .encode_to(&mut buf[call_len..]);
         // SAFETY: same D5a contract as prof_push_record.
@@ -3420,8 +3420,8 @@ impl BexVm {
                 // completes inline (Done/Error) — YieldToCall natives are
                 // continuation-based and stay transparent (see
                 // prof_emit_native_pair).
-                let native_ts_start = if self.prof_ring.is_some() {
-                    bex_events::prof::clock::now_ns()
+                let native_ticks_start = if self.prof_ring.is_some() {
+                    bex_events::prof::clock::now_ticks()
                 } else {
                     0
                 };
@@ -3435,7 +3435,7 @@ impl BexVm {
                     NativeCallResult::Done(v) => {
                         self.prof_emit_native_pair(
                             callee_function_id,
-                            native_ts_start,
+                            native_ticks_start,
                             bex_events::prof::record::FunctionEndStatus::Ok,
                         );
                         self.stack.push(v);
@@ -3444,7 +3444,7 @@ impl BexVm {
                         // Status by error class: baml.sys.exit's own pair
                         // closes Exited, a cancel panic Cancelled (§7 1–3).
                         let status = self.prof_native_error_status(&e);
-                        self.prof_emit_native_pair(callee_function_id, native_ts_start, status);
+                        self.prof_emit_native_pair(callee_function_id, native_ticks_start, status);
                         return Err(self.native_error_to_vm_error(e));
                     }
                     NativeCallResult::YieldToCall {

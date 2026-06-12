@@ -4,9 +4,10 @@
 // length-delimited DiskEventV1 messages. One file per engine per process:
 // <process_id>-<started_at>-<engine>.bamlprof under the profiles directory.
 //
-// Content mirrors the raw ring records exactly (transcoding is a pure
-// encoding change, no enrichment); `0 = none` ring conventions become
-// optional fields here.
+// Content mirrors the raw ring records (no enrichment), with one
+// transformation: ring records carry raw clock ticks, and the consumer
+// converts them to nanoseconds at transcode — `timestamp_ns` fields here are
+// always nanoseconds. `0 = none` ring conventions become optional fields.
 //
 // Ordering: events appear in per-ring drain order, and one logical thread's
 // events can arrive via several rings (tasks migrate OS threads), so FILE
@@ -133,6 +134,42 @@ message EventFileHeaderV1 {
   // Per-run runtime metadata, not stable across recompiles; the FQN is the
   // cross-run key.
   FunctionMetadataTable function_table = 5;
+  // Diagnostics about the tick source behind event timestamps. Purely
+  // informational: ring records carry raw ticks, but the consumer converts
+  // to nanoseconds before writing, so `timestamp_ns` fields are always ns
+  // and nothing needs these to interpret them.
+  ClockKind clock_kind = 6;
+  // ns-per-tick rational (numer/denom) in effect when this header was
+  // written. For CLOCK_KIND_TSC this is the estimate at header time; the
+  // rate is refined ~1 s into the run (see ClockQuality).
+  uint64 tick_ns_numer = 7;
+  uint64 tick_ns_denom = 8;
+  ClockQuality clock_quality = 9;
+}
+
+// Which hardware source produced event timestamps (header diagnostics).
+enum ClockKind {
+  CLOCK_KIND_UNSPECIFIED = 0;
+  // x86_64 invariant TSC (rdtsc), consumer-calibrated rate.
+  CLOCK_KIND_TSC = 1;
+  // aarch64 generic timer (CNTVCT_EL0), exact architectural rate.
+  CLOCK_KIND_CNTVCT = 2;
+  // Monotonic OS-clock fallback; ticks are nanoseconds.
+  CLOCK_KIND_INSTANT = 3;
+  // Test/stub builds.
+  CLOCK_KIND_STUB = 4;
+}
+
+// How trustworthy the tick->ns rate was at header-write time.
+enum ClockQuality {
+  CLOCK_QUALITY_UNSPECIFIED = 0;
+  // Platform-stated exact rational (CNTVCT, INSTANT, STUB).
+  CLOCK_QUALITY_EXACT = 1;
+  // TSC rate refined over a >=1 s window.
+  CLOCK_QUALITY_CALIBRATED = 2;
+  // TSC rate from the initial ~2 ms estimate only (~0.1% rate error,
+  // affecting at most the first ~1 s of events).
+  CLOCK_QUALITY_COARSE = 3;
 }
 
 message FunctionMetadataTable {

@@ -89,12 +89,28 @@ pub(crate) fn build_header(
     engine_id: u64,
     started_at_epoch_ns: u128,
     meta: Option<&crate::prof::EngineProfileMetadata>,
+    clock: &crate::prof::clock::TickConverter,
 ) -> pb::EventFileHeaderV1 {
+    use crate::prof::clock::{ClockKind, ClockQuality};
+    let (tick_ns_numer, tick_ns_denom) = clock.rate();
     pb::EventFileHeaderV1 {
         process_id: process_id.to_vec(),
         engine_id,
         program_id: meta.map(|m| m.program_id.clone()).unwrap_or_default(),
         started_at_epoch_ns: started_at_epoch_ns.to_le_bytes().to_vec(),
+        clock_kind: match clock.kind() {
+            ClockKind::Tsc => pb::ClockKind::Tsc,
+            ClockKind::Cntvct => pb::ClockKind::Cntvct,
+            ClockKind::Instant => pb::ClockKind::Instant,
+            ClockKind::Stub => pb::ClockKind::Stub,
+        } as i32,
+        tick_ns_numer,
+        tick_ns_denom,
+        clock_quality: match clock.quality() {
+            ClockQuality::Exact => pb::ClockQuality::Exact,
+            ClockQuality::Calibrated => pb::ClockQuality::Calibrated,
+            ClockQuality::Coarse => pb::ClockQuality::Coarse,
+        } as i32,
         function_table: Some(pb::FunctionMetadataTable {
             functions: meta
                 .map(|m| {
