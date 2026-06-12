@@ -61,8 +61,8 @@ pub fn inbound_to_external(
                 let host_value_kind =
                     if handle.handle_type == BamlHandleType::HostValueCallable as i32 {
                         Some(bex_project::HostValueKind::Callable)
-                    } else if handle.handle_type == BamlHandleType::HostValueError as i32 {
-                        Some(bex_project::HostValueKind::Error)
+                    } else if handle.handle_type == BamlHandleType::HostValueOpaque as i32 {
+                        Some(bex_project::HostValueKind::Opaque)
                     } else {
                         None
                     };
@@ -226,11 +226,11 @@ mod tests {
     }
 
     #[test]
-    fn decode_inbound_host_value_error() {
+    fn decode_inbound_host_value_opaque() {
         let table = CffiHandleTable::new();
         let handle = BamlHandle {
             key: 777,
-            handle_type: BamlHandleType::HostValueError as i32,
+            handle_type: BamlHandleType::HostValueOpaque as i32,
         };
         let inbound = InboundValue {
             value: Some(InboundValueVariant::Handle(handle)),
@@ -239,14 +239,14 @@ mod tests {
         match result {
             BexExternalValue::HostValue(arc) => {
                 assert_eq!(arc.key, 777);
-                assert_eq!(arc.kind, bex_project::HostValueKind::Error);
+                assert_eq!(arc.kind, bex_project::HostValueKind::Opaque);
             }
             other => panic!("unexpected variant: {other:?}"),
         }
-        // Like callables, opaque error handles bypass the HANDLE_TABLE.
+        // Like callables, opaque handles bypass the HANDLE_TABLE.
         assert!(
             table.resolve(777).is_none(),
-            "HOST_VALUE_ERROR must not touch HANDLE_TABLE"
+            "HOST_VALUE_OPAQUE must not touch HANDLE_TABLE"
         );
     }
 

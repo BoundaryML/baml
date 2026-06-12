@@ -290,12 +290,12 @@ fn complete_with_test_error(call_id: u32, class_name: &str, message: &str) {
     );
     fields.insert("traceback".to_string(), BexExternalValue::Null);
     // The class's `_handle $rust_type` slot is required by the engine's
-    // structural check. Use a synthetic `HostValue(kind=Error)` handle
+    // structural check. Use a synthetic `HostValue(kind=Opaque)` handle
     // so the BAML→host decoder has *something* to round-trip — the
     // test doesn't rehydrate, so the key value is arbitrary.
     fields.insert(
         "_handle".to_string(),
-        BexExternalValue::HostValue(HostValueArc::new(next_host_key(), HostValueKind::Error)),
+        BexExternalValue::HostValue(HostValueArc::new(next_host_key(), HostValueKind::Opaque)),
     );
     sys_native::host_dispatch::complete_with_throw(
         call_id,

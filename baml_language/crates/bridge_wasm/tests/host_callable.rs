@@ -372,7 +372,7 @@ fn make_dispatch_error() -> js_sys::Function {
                 value: Some(InboundValue {
                     value: Some(InboundVariant::Handle(BamlHandle {
                         key: UNRESOLVED_HOST_ERROR_KEY,
-                        handle_type: BamlHandleType::HostValueError as i32,
+                        handle_type: BamlHandleType::HostValueOpaque as i32,
                     })),
                 }),
             };

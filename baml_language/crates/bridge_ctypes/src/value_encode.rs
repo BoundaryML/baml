@@ -146,7 +146,7 @@ pub fn external_to_outbound(
             use crate::baml_core::cffi::BamlHandleType;
             let ht = match arc.kind {
                 bex_project::HostValueKind::Callable => BamlHandleType::HostValueCallable as i32,
-                bex_project::HostValueKind::Error => BamlHandleType::HostValueError as i32,
+                bex_project::HostValueKind::Opaque => BamlHandleType::HostValueOpaque as i32,
             };
             Some(BamlValueVariant::HandleValue(BamlOutboundHandle {
                 key: arc.key,
@@ -499,8 +499,8 @@ mod tests {
     }
 
     #[test]
-    fn encode_outbound_host_value_error() {
-        let arc = HostValueArc::new(42, HostValueKind::Error);
+    fn encode_outbound_host_value_opaque() {
+        let arc = HostValueArc::new(42, HostValueKind::Opaque);
         let value = BexExternalValue::HostValue(arc);
         let options = CffiHandleTableOptions::for_in_process();
         let encoded = external_to_outbound(&value, &options).expect("encode succeeds");
@@ -509,11 +509,11 @@ mod tests {
             other => panic!("unexpected: {other:?}"),
         };
         assert_eq!(handle.key, 42);
-        assert_eq!(handle.handle_type, BamlHandleType::HostValueError as i32);
-        // Like callables, opaque error handles bypass the HANDLE_TABLE.
+        assert_eq!(handle.handle_type, BamlHandleType::HostValueOpaque as i32);
+        // Like callables, opaque handles bypass the HANDLE_TABLE.
         assert!(
             options.table.resolve(42).is_none(),
-            "HOST_VALUE_ERROR must not be inserted into HANDLE_TABLE"
+            "HOST_VALUE_OPAQUE must not be inserted into HANDLE_TABLE"
         );
     }
 }
