@@ -11,9 +11,9 @@ The system is three things:
   `baml-dedup`, `notion-fixer`, `baml-builder`), the public `ingress` gateway,
   a `cron` driver, the `claude-proxy` agent runner, and a central `api` that is
   the only process allowed to talk to Convex.
-- **Self-hosted Convex** - the database and queue substrate. Five tables
-  (`tasks`, `trophies`, `issues`, `bamlBuilds`, `workers`) plus `taskEvents`,
-  each a *claimable queue* drained by exactly one worker at a time.
+- **Self-hosted Convex** - the database and queue substrate. Six tables
+  (`tasks`, `trophies`, `issues`, `bamlBuilds`, `cohorts`, `workers`) plus
+  `taskEvents`, each a *claimable queue* drained by exactly one worker at a time.
 - **Next.js dashboard** (`ui`) - a read-only view of the pipeline that reads
   through the `api`.
 
@@ -33,18 +33,32 @@ binary registry fresh. The API is the only Convex client; agents reach Anthropic
 only through `claude-proxy`; the Next.js UI reads pipeline state through the API.
 See [`docs/architecture.md`](docs/architecture.md) for the full walkthrough.
 
+### Skill arena
+
+`@bot [skill arena] <task>` (optionally `[skill arena: branch-a, branch-b, …]`)
+runs the same task once per **baml-skill branch** — a *cohort* of variant runs.
+Each variant worker pulls its branch's `SKILL.md` and produces a **held** trophy
+(not deduped). Once every member is terminal, the cohort reconciler (in `cron`)
+flips it `queued`, and `cohort-compare` reads the variant runs, decides which
+skill version served the task best, and emits a single comparison **cohort
+trophy** — which re-enters `dedup → issues → Notion` like any other trophy, so a
+winning variant's advantage becomes an actionable skill improvement. Branches
+default to `ATB_ARENA_BRANCHES`. Deduped `issues` also carry a `Kind`
+(`skill`/`language`) property on their Notion page.
+
 ## Components
 
 | Component | Role |
 |---|---|
 | `api` | The only Convex client. Central CRUD + queue verbs (claim / transition / heartbeat) + per-table SSE wake streams; stores transcript and baml-binary blobs on its own volume. |
-| `claude-proxy` | Wraps `claude -p`; spawns the agent, parses the session into tokens/cost/turns, and caches a `baml` binary per sha on `PATH`. |
-| `baml-worker` | Claims `tasks`; runs the agent (BAML skill injected, canary `baml` on `PATH`); the agent self-reports the whole verbose trophy; the worker verifies repros and creates the `trophy`. |
+| `claude-proxy` | Wraps `claude -p`; spawns the agent, parses the session into tokens/cost/turns, caches a `baml` binary per sha on `PATH`, and pre-installs the official skills via `baml agent install` on warm runs. |
+| `baml-worker` | Claims `tasks`; runs the agent (official BAML skills installed via `baml agent install`, canary `baml` on `PATH`); the agent self-reports the whole verbose trophy; the worker verifies repros and creates the `trophy`. |
 | `baml-dedup` | Claims `trophies`; authoritative skill/language classifier + cross-run merge; promotes findings/suggestions into `issues`; carries each cited finding's verified repro onto the issue. |
+| `cohort-compare` | Claims ready `cohorts` (skill-arena groups); compares the variant runs (one per baml-skill branch) and emits a single comparison "cohort trophy" that re-enters dedup like any other trophy. |
 | `baml-redraft` | Claims `issues` with `status=redraft`; pulls the reviewer's Notion comments as feedback, runs an agent to rewrite the issue, and re-boards it (`confirmed`) for another review pass. |
 | `notion-fixer` | Two processors over `issues`: pushes confirmed issues to Notion as structured pages incl. a repro code block (`notionSyncStatus` queue) and dispatches `@cursor` fixes on approval (`status` queue). |
 | `ingress` | Public webhooks: `/slack/events`, `/notion/webhook`, `/bug`. Creates `tasks`; reads a page's Notion status to route issues to `approved` (fix) or `redraft`. |
-| `cron` | Daily driver: refreshes baml (`POST /baml/update`) then enqueues benchmark `tasks`. |
+| `cron` | Daily driver: refreshes baml (`POST /baml/update`) then enqueues benchmark `tasks`. Also runs the fast cohort fan-in reconciler that flips a skill-arena `cohort` `pending → queued` once its member runs are all terminal. |
 | `baml-builder` | Claims `bamlBuilds`; downloads the prebuilt alpha-channel `baml` release binary for the sha and uploads it to the registry. |
 | `ui` | Next.js dashboard; reads pipeline state through the `api`. |
 | `convex` | Self-hosted Convex backend: schema, the generic claimable-queue library, per-table function modules, and the lease-reaper cron. |
