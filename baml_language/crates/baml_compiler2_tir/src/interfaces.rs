@@ -1835,8 +1835,9 @@ fn impls_overlap<'db>(
     b: &InterfaceImplRule,
     aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
 ) -> Overlap {
-    let (a_for, a_args) = renamed_subject(a, 'a');
-    let (b_for, b_args) = renamed_subject(b, 'b');
+    let enum_variants = |qtn: &QualifiedTypeName| enum_variant_names(db, qtn);
+    let (a_for, a_args) = renamed_subject(a, 'a', &enum_variants);
+    let (b_for, b_args) = renamed_subject(b, 'b', &enum_variants);
     if a_args.len() != b_args.len() {
         return Overlap::No;
     }
@@ -1915,10 +1916,204 @@ fn renamed_var(prefix: char, idx: usize) -> Name {
     Name::new(format!("«{prefix}{idx}»"))
 }
 
-/// The impl's subject — for-type and interface args — with its generic params
-/// renamed to side-`prefix` unification variables. Associated bindings are
+/// Looks up an enum's full set of variant names (`None` if it can't be resolved).
+type EnumVariants<'a> = &'a dyn Fn(&QualifiedTypeName) -> Option<Vec<Name>>;
+
+/// Normalize an impl subject toward the union canonical form the covering solver assumes
+/// (the db-aware part of CNF), recursing into every argument. For unions this flattens
+/// nested unions, drops `never`, absorbs `unknown`, deduplicates, drops members subsumed
+/// by a co-member (`1 | int → int`, `Color.Red | Color → Color`), and folds a *complete*
+/// finite base back to its base (`true | false → bool`; all of an enum's variants → the
+/// enum, via `enum_variants`). A var-bearing union opposite a finite base — which cannot
+/// be folded away — is handled conservatively in `unify_into`.
+fn nf(ty: &Ty, enum_variants: EnumVariants) -> Ty {
+    match ty {
+        Ty::Union(members, attr) => normalize_union(
+            members.iter().map(|m| nf(m, enum_variants)).collect(),
+            attr.clone(),
+            enum_variants,
+        ),
+        Ty::List(inner, attr) => Ty::List(Box::new(nf(inner, enum_variants)), attr.clone()),
+        Ty::EvolvingList(inner, attr) => {
+            Ty::EvolvingList(Box::new(nf(inner, enum_variants)), attr.clone())
+        }
+        Ty::Map { key, value, attr } => Ty::Map {
+            key: Box::new(nf(key, enum_variants)),
+            value: Box::new(nf(value, enum_variants)),
+            attr: attr.clone(),
+        },
+        Ty::EvolvingMap(k, v, attr) => Ty::EvolvingMap(
+            Box::new(nf(k, enum_variants)),
+            Box::new(nf(v, enum_variants)),
+            attr.clone(),
+        ),
+        Ty::Future(value, error, attr) => Ty::Future(
+            Box::new(nf(value, enum_variants)),
+            Box::new(nf(error, enum_variants)),
+            attr.clone(),
+        ),
+        Ty::Class(name, args, attr) => Ty::Class(
+            name.clone(),
+            args.iter().map(|a| nf(a, enum_variants)).collect(),
+            attr.clone(),
+        ),
+        Ty::Interface(name, args, bindings, attr) => Ty::Interface(
+            name.clone(),
+            args.iter().map(|a| nf(a, enum_variants)).collect(),
+            bindings
+                .iter()
+                .map(|(n, t)| (n.clone(), nf(t, enum_variants)))
+                .collect(),
+            attr.clone(),
+        ),
+        Ty::AssociatedTypeProjection {
+            base,
+            interface,
+            member,
+            attr,
+        } => Ty::AssociatedTypeProjection {
+            base: Box::new(nf(base, enum_variants)),
+            interface: interface.as_ref().map(|i| Box::new(nf(i, enum_variants))),
+            member: member.clone(),
+            attr: attr.clone(),
+        },
+        Ty::Function {
+            generic_params,
+            generic_param_bounds,
+            params,
+            ret,
+            throws,
+            attr,
+        } => Ty::Function {
+            generic_params: generic_params.clone(),
+            generic_param_bounds: generic_param_bounds
+                .iter()
+                .map(|b| b.as_ref().map(|t| nf(t, enum_variants)))
+                .collect(),
+            params: params
+                .iter()
+                .map(|p| FunctionParamTy {
+                    name: p.name.clone(),
+                    ty: nf(&p.ty, enum_variants),
+                    mode: p.mode,
+                })
+                .collect(),
+            ret: Box::new(nf(ret, enum_variants)),
+            throws: Box::new(nf(throws, enum_variants)),
+            attr: attr.clone(),
+        },
+        _ => ty.clone(),
+    }
+}
+
+/// The union laws of [`nf`]. `members` are already individually normalized.
+fn normalize_union(members: Vec<Ty>, attr: TyAttr, enum_variants: EnumVariants) -> Ty {
+    // Flatten, drop `never`, absorb `unknown`, deduplicate.
+    let mut flat: Vec<Ty> = Vec::new();
+    for member in members {
+        match member {
+            Ty::Never { .. } => {}
+            Ty::BuiltinUnknown { .. } => return Ty::BuiltinUnknown { attr },
+            Ty::Union(inner, _) => {
+                for inner_member in inner {
+                    match inner_member {
+                        Ty::Never { .. } => {}
+                        Ty::BuiltinUnknown { .. } => return Ty::BuiltinUnknown { attr },
+                        other if !flat.contains(&other) => flat.push(other),
+                        _ => {}
+                    }
+                }
+            }
+            other if !flat.contains(&other) => flat.push(other),
+            _ => {}
+        }
+    }
+
+    // Drop members subsumed by a co-member (`literal <: base`, `variant <: enum`).
+    flat = (0..flat.len())
+        .filter(|&i| !(0..flat.len()).any(|j| i != j && is_literal_subtype(&flat[i], &flat[j])))
+        .map(|i| flat[i].clone())
+        .collect();
+
+    fold_finite_bases(&mut flat, enum_variants);
+
+    match flat.len() {
+        0 => Ty::Never { attr },
+        1 => flat
+            .pop()
+            .unwrap_or_else(|| unreachable!("a length-1 vec has an element")),
+        _ => Ty::Union(flat, attr),
+    }
+}
+
+/// Fold complete finite bases in a flattened, deduplicated member list: `true | false`
+/// becomes `bool`, and an enum all of whose variants are present becomes the enum.
+fn fold_finite_bases(flat: &mut Vec<Ty>, enum_variants: EnumVariants) {
+    let has_bool_literal = |value: bool| {
+        flat.iter()
+            .any(|m| matches!(m, Ty::Literal(Literal::Bool(v), _, _) if *v == value))
+    };
+    if has_bool_literal(true) && has_bool_literal(false) {
+        flat.retain(|m| !matches!(m, Ty::Literal(Literal::Bool(_), _, _)));
+        flat.push(Ty::Bool {
+            attr: TyAttr::default(),
+        });
+    }
+
+    // Each enum that has a variant member: fold if *all* its variants are present.
+    let mut enums: Vec<QualifiedTypeName> = Vec::new();
+    for member in flat.iter() {
+        if let Ty::EnumVariant(enum_name, _, _) = member
+            && !enums.contains(enum_name)
+        {
+            enums.push(enum_name.clone());
+        }
+    }
+    for enum_name in enums {
+        let Some(all_variants) = enum_variants(&enum_name) else {
+            continue;
+        };
+        if all_variants.is_empty() {
+            continue;
+        }
+        let present: std::collections::HashSet<&Name> = flat
+            .iter()
+            .filter_map(|m| match m {
+                Ty::EnumVariant(en, v, _) if *en == enum_name => Some(v),
+                _ => None,
+            })
+            .collect();
+        if all_variants.iter().all(|v| present.contains(v)) {
+            flat.retain(|m| !matches!(m, Ty::EnumVariant(en, _, _) if *en == enum_name));
+            flat.push(Ty::Enum(enum_name.clone(), TyAttr::default()));
+        }
+    }
+}
+
+/// Resolve an enum's full set of variant names, or `None` if it can't be resolved. Used
+/// by `nf` to fold a complete variant union (`Cmp.Less | Cmp.Equal | Cmp.More`) back to
+/// its enum (`Cmp`).
+fn enum_variant_names(db: &dyn crate::Db, enum_qtn: &QualifiedTypeName) -> Option<Vec<Name>> {
+    let package_id = PackageId::new(db, enum_qtn.package().clone());
+    let items = baml_compiler2_hir::package::package_items(db, package_id);
+    let Some(Definition::Enum(enum_loc)) = items.lookup_type(enum_qtn.namespace(), enum_qtn.name())
+    else {
+        return None;
+    };
+    let file = enum_loc.file(db);
+    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
+    let enum_data = &item_tree[enum_loc.id(db)];
+    Some(enum_data.variants.iter().map(|v| v.name.clone()).collect())
+}
+
+/// The impl's subject — for-type and interface args — normalized (CNF) with its generic
+/// params renamed to side-`prefix` unification variables. Associated bindings are
 /// dropped (interface outputs, not part of overlap).
-fn renamed_subject(rule: &InterfaceImplRule, prefix: char) -> (Ty, Vec<Ty>) {
+fn renamed_subject(
+    rule: &InterfaceImplRule,
+    prefix: char,
+    enum_variants: EnumVariants,
+) -> (Ty, Vec<Ty>) {
     let rename: TypeBindings = rule
         .generic_params
         .iter()
@@ -1930,11 +2125,14 @@ fn renamed_subject(rule: &InterfaceImplRule, prefix: char) -> (Ty, Vec<Ty>) {
             )
         })
         .collect();
-    let for_ty = generics::substitute_ty(&rule.for_ty_pattern, &rename);
+    let for_ty = nf(
+        &generics::substitute_ty(&rule.for_ty_pattern, &rename),
+        enum_variants,
+    );
     let args = match &rule.interface_ty {
         Ty::Interface(_, args, _, _) => args
             .iter()
-            .map(|arg| generics::substitute_ty(arg, &rename))
+            .map(|arg| nf(&generics::substitute_ty(arg, &rename), enum_variants))
             .collect(),
         _ => Vec::new(),
     };
@@ -2026,6 +2224,18 @@ fn unify_into(
         }
         (Ty::Union(xm, _), Ty::Union(ym, _)) => {
             unify_union_members(xm, ym, vars, aliases, bindings)
+        }
+        // A union with a bare variable opposite a finite base (`bool` or an enum) could
+        // be completed to it by the variable (`true | T ≡ bool` at `T = false`;
+        // `Cmp.Less | T ≡ Cmp` at `T = Cmp.Equal | Cmp.More`). The ground all-variants
+        // case is folded to the base by `nf`, so this is the var-bearing residual —
+        // conservatively a possible overlap. (A precise answer would expand the base to
+        // its variants and cover, which needs the registry threaded into the unifier.)
+        (Ty::Union(members, _), Ty::Bool { .. } | Ty::Enum(..))
+        | (Ty::Bool { .. } | Ty::Enum(..), Ty::Union(members, _))
+            if members.iter().any(|m| is_bare_var(m, vars)) =>
+        {
+            Overlap::Yes
         }
         // No structural arm: equal subjects already unified above (the normalizer); any
         // remaining pair is distinct types. A literal and its base are *distinct* types
@@ -2748,6 +2958,44 @@ mod tests {
         )
     }
 
+    fn bool_literal(b: bool) -> Ty {
+        Ty::Literal(
+            Literal::Bool(b),
+            crate::ty::Freshness::Regular,
+            TyAttr::default(),
+        )
+    }
+
+    fn union(members: Vec<Ty>) -> Ty {
+        Ty::Union(members, TyAttr::default())
+    }
+
+    fn bool_ty() -> Ty {
+        Ty::Bool {
+            attr: TyAttr::default(),
+        }
+    }
+
+    fn builtin_unknown() -> Ty {
+        Ty::BuiltinUnknown {
+            attr: TyAttr::default(),
+        }
+    }
+
+    fn enum_ty(name: &str) -> Ty {
+        Ty::Enum(qtn(&[], name), TyAttr::default())
+    }
+
+    fn enum_variant(enum_name: &str, variant: &str) -> Ty {
+        Ty::EnumVariant(qtn(&[], enum_name), Name::new(variant), TyAttr::default())
+    }
+
+    /// Stub enum schema for `nf` tests: `Cmp` has variants `Less`, `Equal`, `More`.
+    fn stub_enum_variants(qtn: &QualifiedTypeName) -> Option<Vec<Name>> {
+        (qtn.name().as_str() == "Cmp")
+            .then(|| vec![Name::new("Less"), Name::new("Equal"), Name::new("More")])
+    }
+
     fn associated_projection(base: Ty, interface: Ty, member: &str) -> Ty {
         Ty::AssociatedTypeProjection {
             base: Box::new(base),
@@ -3348,6 +3596,97 @@ mod tests {
         let a = class(&[], "A", vec![]);
         let b = interface("I", vec![]);
         assert_eq!(cover(&a, &b, &[], &aliases, &mut bindings), Overlap::Yes);
+    }
+
+    #[test]
+    fn nf_drops_never_and_collapses() {
+        assert_eq!(nf(&union(vec![int(), never()]), &stub_enum_variants), int());
+    }
+
+    #[test]
+    fn nf_subsumes_literal_by_base() {
+        assert_eq!(
+            nf(&union(vec![int_literal(1), int()]), &stub_enum_variants),
+            int()
+        );
+    }
+
+    #[test]
+    fn nf_folds_complete_bool() {
+        assert_eq!(
+            nf(
+                &union(vec![bool_literal(true), bool_literal(false)]),
+                &stub_enum_variants
+            ),
+            bool_ty()
+        );
+    }
+
+    #[test]
+    fn nf_folds_complete_enum() {
+        let all = union(vec![
+            enum_variant("Cmp", "Less"),
+            enum_variant("Cmp", "Equal"),
+            enum_variant("Cmp", "More"),
+        ]);
+        assert_eq!(nf(&all, &stub_enum_variants), enum_ty("Cmp"));
+    }
+
+    #[test]
+    fn nf_keeps_partial_enum() {
+        // Two of `Cmp`'s three variants — not a complete base, so not folded.
+        let partial = union(vec![
+            enum_variant("Cmp", "Less"),
+            enum_variant("Cmp", "Equal"),
+        ]);
+        assert_eq!(nf(&partial, &stub_enum_variants), partial);
+    }
+
+    #[test]
+    fn nf_absorbs_unknown() {
+        assert_eq!(
+            nf(&union(vec![int(), builtin_unknown()]), &stub_enum_variants),
+            builtin_unknown()
+        );
+    }
+
+    #[test]
+    fn nf_recurses_into_arguments() {
+        let wrapped = class(&[], "Wrap", vec![union(vec![int(), never()])]);
+        assert_eq!(
+            nf(&wrapped, &stub_enum_variants),
+            class(&[], "Wrap", vec![int()])
+        );
+    }
+
+    #[test]
+    fn union_with_var_conservatively_overlaps_enum() {
+        // `Cmp.Less | T` opposite `Cmp`: the var could complete the enum
+        // (`T = Cmp.Equal | Cmp.More`), so it is conservatively a possible overlap.
+        let vars = vec![Name::new("T")];
+        let aliases = std::collections::HashMap::default();
+        let mut bindings = TypeBindings::default();
+        let u = union(vec![enum_variant("Cmp", "Less"), type_var("T")]);
+        assert_eq!(
+            unify_into(&u, &enum_ty("Cmp"), &vars, &aliases, &mut bindings),
+            Overlap::Yes
+        );
+    }
+
+    #[test]
+    fn ground_partial_enum_union_is_disjoint_from_enum() {
+        // No bare variable to complete the enum, and the partial variant set is a strict
+        // subset of `Cmp`, so the two are disjoint.
+        let aliases = std::collections::HashMap::default();
+        let mut bindings = TypeBindings::default();
+        let u = union(vec![
+            enum_variant("Cmp", "Less"),
+            enum_variant("Cmp", "Equal"),
+        ]);
+        assert_eq!(
+            unify_into(&u, &enum_ty("Cmp"), &[], &aliases, &mut bindings),
+            Overlap::No
+        );
     }
 
     // Probe helper for the pigeonhole experiments below.
