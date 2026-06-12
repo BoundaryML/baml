@@ -125,12 +125,7 @@ export function Navbar() {
           <Link className="nav-link" href="/changelog">
             Changelog
           </Link>
-          <Link
-            className="nav-link"
-            href="https://bench3-ui.fly.dev/"
-            rel="noopener noreferrer"
-            target="_blank"
-          >
+          <Link className="nav-link" href="/atb">
             agent tries baml
           </Link>
         </div>
@@ -185,7 +180,7 @@ export function Navbar() {
           </Link>
           <Link
             className="nav-mobile-link"
-            href="https://bench3-ui.fly.dev/"
+            href="/atb"
             onClick={() => setOpen(false)}
             rel="noopener noreferrer"
             target="_blank"
