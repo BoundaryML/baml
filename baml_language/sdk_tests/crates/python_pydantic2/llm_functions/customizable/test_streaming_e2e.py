@@ -1,24 +1,19 @@
-"""End-to-end streaming smoke against OpenAI for the
-`baml.llm.Stream` → `BamlStream(BamlPyHandle)` rewrite (21a, 21b).
+"""End-to-end streaming smokes against OpenAI for *string-typed* `T`.
 
-Returns `string` (so the synthesized `$stream` companion is
-`Stream<string, null | string>` — the only streaming shape the BAML
-engine accepts today; class-typed `T` hits `Non-parsable type: Void`
-at `StreamCache.new`, tracked as a separate engine task in 21b §"Engine
-constraint").
-
-This is the red baseline for phase 0 of the plan. It exercises the
-`Stream<T, S>` API today (four-field Pydantic shell route) so the
-failure mode is captured in commit history; once phases 1-5 land, the
-same module flips green without further edits.
+`StreamE2EExtract(text) -> string`, so the synthesized `$stream`
+companion is `Stream<null | string, string>`. The host-side stream
+object is `BamlStream` (a `BamlPyHandle` wrapper); `next()`/`final()`
+round-trip through `baml.llm.Stream.next` / `.final` on the bridge.
+Class-typed `T` (multi-field classes) is covered by
+`test_streaming_class_e2e.py`.
 
 Skipped unless OPENAI_API_KEY is set. Run via:
 
-    infisical run -- cargo test -p sdk_test_llm_functions pytest
+    infisical run -- cargo nextest run -p sdk_test_python_pydantic2 llm_functions::pytest
 
 The 100-input parametrize case is gated behind the BAML_STREAM_E2E_FULL
 env var (≈5min wall clock, ≈$0.50/run against gpt-4o-mini), so default
-CI runs the two single-shot smokes and the async smoke only.
+CI runs only the four single-shot smokes below.
 """
 import os
 import pytest
@@ -83,9 +78,9 @@ def test_stream_next_reaches_finished():
     """`next()` drives the stream to completion via the bridge path.
 
     Calling `stream.next()` repeatedly must terminate with a
-    `StreamFinished` instance — proving the lifted `Adt(Stream(handle))`
-    round-trips through `bex.call_function("baml.llm.Stream.next", ...)`
-    without crashing or leaking handles.
+    `StreamFinished` instance — proving the stream handle round-trips
+    through `bex.call_function("baml.llm.Stream.next", ...)` without
+    crashing or leaking handles.
 
     Note: with `S = null | string`, the SAP partial parser typically
     returns `StreamNoYield` for plain-text content until the stream is
@@ -143,12 +138,9 @@ def test_stream_collect_in_baml():
     user class with concrete field types.
 
     Where this differs from the host-driven tests: the `S |
-    StreamFinished` union never crosses the FFI boundary. Only the
-    aggregate (concrete types, no `Ty::TypeVar`) does. If the
-    aggregate decodes cleanly while the host-driven tests still error
-    on `find_matching_member`, the failure is conclusively in
-    `tir2_to_template`'s handling of `Stream.next`'s declared return
-    type, not in the bridge / SSE / parser path.
+    StreamFinished` union never crosses the FFI boundary — only the
+    aggregate with its concrete field types does. Useful for bisecting
+    engine-side vs bridge-side streaming failures.
     """
     from baml_sdk.lorem import StreamE2ECollect, StreamE2ECollectResult
 

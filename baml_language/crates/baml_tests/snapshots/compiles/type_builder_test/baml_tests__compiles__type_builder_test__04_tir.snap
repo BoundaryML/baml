@@ -14,9 +14,6 @@ function user.Fn$build_request(client: baml.llm.Client = ...) -> baml.http.Reque
 function user.Fn$build_request_stream(client: baml.llm.Client = ...) -> baml.http.Request throws never {
   baml.llm.build_request_stream(client, "Fn", map {  }) : baml.http.Request
 }
-function user.Fn$parse(json: string, client: baml.llm.Client = ...) -> string throws never {
-  baml.llm.parse<TFinal>("Fn", json) : string
-}
 class user.TopLevelClass {
   a: string
 }
@@ -31,7 +28,10 @@ function user.Fn$stream(client: baml.llm.Client = ...) -> baml.llm.Stream<string
   baml.llm.stream_llm_function(client, "Fn", map {  }) : baml.llm.Stream<string | null, string>
 }
 function user.Fn$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = ...) -> baml.llm.Stream<string | null, string> throws never {
-  client.__make_stream(sse, "Fn") : baml.llm.Stream<string | null, string>
+  client.__make_stream(sse) : baml.llm.Stream<string | null, string>
+}
+function user.Fn$parse(json: string, client: baml.llm.Client = ...) -> string throws never {
+  baml.llm.parse<TFinal>(json) : string
 }
 class user.TopLevelClass$stream {
   a: string | null

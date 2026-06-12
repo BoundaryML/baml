@@ -19,9 +19,6 @@ function user.ClassifySentiment$build_request(text: string, client: baml.llm.Cli
 function user.ClassifySentiment$build_request_stream(text: string, client: baml.llm.Client = GPT4o) -> baml.http.Request  [expr] {
   baml.llm.build_request_stream(client, "ClassifySentiment", map { "text": text })
 }
-function user.ClassifySentiment$parse(json: string, client: baml.llm.Client = GPT4o) -> user.Sentiment  [expr] {
-  baml.llm.parse("ClassifySentiment", json)
-}
 function user.ClassifySentiment$render_prompt(text: string, client: baml.llm.Client = GPT4o) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "ClassifySentiment", map { "text": text })
 }
@@ -33,9 +30,6 @@ function user.ClassifySentiment2$build_request(text: string, client: baml.llm.Cl
 }
 function user.ClassifySentiment2$build_request_stream(text: string, client: baml.llm.Client = GPT4o) -> baml.http.Request  [expr] {
   baml.llm.build_request_stream(client, "ClassifySentiment2", map { "text": text })
-}
-function user.ClassifySentiment2$parse(json: string, client: baml.llm.Client = GPT4o) -> string  [expr] {
-  baml.llm.parse("ClassifySentiment2", json)
 }
 function user.ClassifySentiment2$render_prompt(text: string, client: baml.llm.Client = GPT4o) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "ClassifySentiment2", map { "text": text })
@@ -54,9 +48,6 @@ function user.GenerateTests$build_request(count: int, topic: string, client: bam
 }
 function user.GenerateTests$build_request_stream(count: int, topic: string, client: baml.llm.Client = GPT4o) -> baml.http.Request  [expr] {
   baml.llm.build_request_stream(client, "GenerateTests", map { "count": count, "topic": topic })
-}
-function user.GenerateTests$parse(json: string, client: baml.llm.Client = GPT4o) -> string[]  [expr] {
-  baml.llm.parse("GenerateTests", json)
 }
 function user.GenerateTests$render_prompt(count: int, topic: string, client: baml.llm.Client = GPT4o) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "GenerateTests", map { "count": count, "topic": topic })

@@ -22,7 +22,9 @@
 
 use std::sync::Arc;
 
-pub use baml_project::testing::{OptLevel, compile_source, compile_source_with_opt};
+pub use baml_project::testing::{
+    OptLevel, compile_multi_file, compile_source, compile_source_with_opt,
+};
 use bex_engine::{BexCallArg, BexEngine, BexExternalValue, FunctionCallContextBuilder};
 use bex_vm::debug::{BytecodeFormat, display_program};
 use bex_vm_types::{Function, FunctionOrigin, Object, Program};

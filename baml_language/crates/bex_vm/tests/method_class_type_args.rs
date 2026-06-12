@@ -49,9 +49,6 @@ fn inject_function(
         debug_locals: vec![],
         span: baml_type::Span::fake(),
         return_type: Ty::int(),
-        stream_return_type: Ty::Null {
-            attr: TyAttr::default(),
-        },
         param_names: vec![],
         param_types: vec![],
         param_has_default: vec![false; arity],

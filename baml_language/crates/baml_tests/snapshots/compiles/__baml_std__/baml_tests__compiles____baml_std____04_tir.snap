@@ -2455,11 +2455,9 @@ function baml.llm.build_request_stream(client: baml.llm.Client, function_name: s
     primitive_client.build_request_stream(specialized_prompt, return_type) : baml.http.Request
   }
 }
-function baml.llm.parse<TStream, TFinal>(function_name: string, json: string) -> TFinal throws never {
+function baml.llm.parse<TStream, TFinal>(json: string) -> TFinal throws never {
   { : TFinal
-    let return_type = get_return_type(function_name) : type
-    let stream_return_type = get_stream_return_type(function_name) : type
-    let cache = StreamCache.new(return_type, stream_return_type) : baml.llm.StreamCache<TStream, TFinal>
+    let cache: StreamCache<TStream, TFinal> = StreamCache.new(reflect.type_of<TStream>(), reflect.type_of<TFinal>()) : baml.llm.StreamCache<TStream, TFinal>
     __sap_parse_final<TFinal>(json, cache) : TFinal
   }
 }
@@ -2676,7 +2674,7 @@ function baml.llm.Client.execute_once_stream<TStream, TFinal>(self: baml.llm.Cli
           let specialized = primitive.specialize_prompt(prompt) : baml.llm.PromptAst
           let http_request = primitive.build_request_stream(specialized, return_type) : baml.http.Request
           let sse = root.http.fetch_sse(http_request) : baml.http.SseStream
-          let stream: Stream<TStream, TFinal> = self.__make_stream(sse, context.function_name) : baml.llm.Stream<TStream, TFinal>
+          let stream: Stream<TStream, TFinal> = self.__make_stream(sse) : baml.llm.Stream<TStream, TFinal>
           return stream : baml.llm.Stream<TStream, TFinal>
         }
       ClientType.Fallback =>
@@ -2707,13 +2705,11 @@ function baml.llm.Client.execute_once_stream<TStream, TFinal>(self: baml.llm.Cli
         }
   }
 }
-function baml.llm.Client.__make_stream<TStream, TFinal>(self: baml.llm.Client, sse: baml.http.SseStream, function_name: string) -> baml.llm.Stream<TStream, TFinal> throws never {
+function baml.llm.Client.__make_stream<TStream, TFinal>(self: baml.llm.Client, sse: baml.http.SseStream) -> baml.llm.Stream<TStream, TFinal> throws never {
   { : baml.llm.Stream<TStream, TFinal>
     let primitive = self.to_primitive_client() : baml.llm.PrimitiveClient
-    let return_type = get_return_type(function_name) : type
-    let stream_return_type = get_stream_return_type(function_name) : type
     let acc = primitive.new_stream_accumulator() : baml.llm.StreamAccumulator
-    let cache: StreamCache<TStream, TFinal> = StreamCache.new(return_type, stream_return_type) : baml.llm.StreamCache<TStream, TFinal>
+    let cache: StreamCache<TStream, TFinal> = StreamCache.new(reflect.type_of<TStream>(), reflect.type_of<TFinal>()) : baml.llm.StreamCache<TStream, TFinal>
     Stream { _client: primitive, _acc: acc, _sse: sse, _cache: cache } : baml.llm.Stream<TStream, TFinal>
   }
 }

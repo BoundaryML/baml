@@ -100,9 +100,8 @@ function type_reflection.GetBar$parse(json: string, client: baml.llm.Client) -> 
     store_var client
 
   L0:
-    load_type unknown
+    load_type type_reflection.Bar$stream | null
     load_type type_reflection.Bar
-    load_const "GetBar"
     load_var json
     call baml.llm.parse
     return
@@ -120,7 +119,6 @@ function type_reflection.GetBar$parse_stream(sse: baml.http.SseStream, client: b
     load_type type_reflection.Bar$stream | null
     load_type type_reflection.Bar
     load_var2 2 1
-    load_const "GetBar"
     call baml.llm.Client.__make_stream
     return
 }
@@ -217,9 +215,8 @@ function type_reflection.GetFoo$parse(json: string, client: baml.llm.Client) -> 
     store_var client
 
   L0:
-    load_type unknown
+    load_type type_reflection.Foo$stream | null
     load_type type_reflection.Foo
-    load_const "GetFoo"
     load_var json
     call baml.llm.parse
     return
@@ -237,7 +234,6 @@ function type_reflection.GetFoo$parse_stream(sse: baml.http.SseStream, client: b
     load_type type_reflection.Foo$stream | null
     load_type type_reflection.Foo
     load_var2 2 1
-    load_const "GetFoo"
     call baml.llm.Client.__make_stream
     return
 }

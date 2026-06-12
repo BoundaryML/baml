@@ -419,11 +419,6 @@ pub struct Function {
     /// Return type of the function.
     pub return_type: Ty,
 
-    /// Stream-expanded return type (e.g. `null | MyClass$stream` for a function
-    /// returning `MyClass`). Only meaningful for LLM functions; set to `Null` for
-    /// non-LLM functions. See `PpirExpansionItems::stream_return_types`.
-    pub stream_return_type: Ty,
-
     /// Parameter names in declaration order.
     pub param_names: Vec<String>,
 

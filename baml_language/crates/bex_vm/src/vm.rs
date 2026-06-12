@@ -331,9 +331,6 @@ mod tests {
             debug_locals: Vec::new(),
             span: baml_type::Span::fake(),
             return_type: int_ty(),
-            stream_return_type: Ty::Null {
-                attr: TyAttr::default(),
-            },
             param_names: Vec::new(),
             param_types: Vec::new(),
             param_has_default: Vec::new(),
@@ -1679,9 +1676,6 @@ impl BexVm {
             debug_locals: Vec::new(),
             span: baml_type::Span::fake(),
             return_type,
-            stream_return_type: baml_type::Ty::Null {
-                attr: baml_type::TyAttr::default(),
-            },
             param_names: Vec::new(),
             param_types: Vec::new(),
             param_has_default: Vec::new(),

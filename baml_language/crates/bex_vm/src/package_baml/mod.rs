@@ -322,7 +322,6 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                 debug_locals: function.debug_locals,
                 span: function.span,
                 return_type: function.return_type,
-                stream_return_type: function.stream_return_type,
                 param_names: function.param_names,
                 param_types: function.param_types,
                 param_has_default: function.param_has_default,

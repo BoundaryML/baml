@@ -91,9 +91,8 @@ function user.ClassifySentiment$parse(json: string, client: baml.llm.Client) -> 
     store_var client
 
   L0:
-    load_type unknown
+    load_type Sentiment$stream | null
     load_type Sentiment
-    load_const "ClassifySentiment"
     load_var json
     call baml.llm.parse
     return
@@ -111,7 +110,6 @@ function user.ClassifySentiment$parse_stream(sse: baml.http.SseStream, client: b
     load_type Sentiment$stream | null
     load_type Sentiment
     load_var2 2 1
-    load_const "ClassifySentiment"
     call baml.llm.Client.__make_stream
     return
 }
@@ -218,9 +216,8 @@ function user.ClassifySentiment2$parse(json: string, client: baml.llm.Client) ->
     store_var client
 
   L0:
-    load_type unknown
+    load_type string | null
     load_type string
-    load_const "ClassifySentiment2"
     load_var json
     call baml.llm.parse
     return
@@ -238,7 +235,6 @@ function user.ClassifySentiment2$parse_stream(sse: baml.http.SseStream, client: 
     load_type string | null
     load_type string
     load_var2 2 1
-    load_const "ClassifySentiment2"
     call baml.llm.Client.__make_stream
     return
 }
@@ -403,9 +399,8 @@ function user.GenerateTests$parse(json: string, client: baml.llm.Client) -> stri
     store_var client
 
   L0:
-    load_type unknown
     load_type string[]
-    load_const "GenerateTests"
+    load_type string[]
     load_var json
     call baml.llm.parse
     return
@@ -423,7 +418,6 @@ function user.GenerateTests$parse_stream(sse: baml.http.SseStream, client: baml.
     load_type string[]
     load_type string[]
     load_var2 2 1
-    load_const "GenerateTests"
     call baml.llm.Client.__make_stream
     return
 }

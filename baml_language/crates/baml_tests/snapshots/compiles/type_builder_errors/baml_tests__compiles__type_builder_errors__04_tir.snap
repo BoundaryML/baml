@@ -14,9 +14,6 @@ function user.TypeBuilderFn$build_request(from_text: string, client: baml.llm.Cl
 function user.TypeBuilderFn$build_request_stream(from_text: string, client: baml.llm.Client = ...) -> baml.http.Request throws never {
   baml.llm.build_request_stream(client, "TypeBuilderFn", map { "from_text": from_text }) : baml.http.Request
 }
-function user.TypeBuilderFn$parse(json: string, client: baml.llm.Client = ...) -> user.Resume throws never {
-  baml.llm.parse<TFinal>("TypeBuilderFn", json) : user.Resume
-}
 class user.Resume {
   name: string
 }
@@ -30,7 +27,10 @@ function user.TypeBuilderFn$stream(from_text: string, client: baml.llm.Client = 
   baml.llm.stream_llm_function(client, "TypeBuilderFn", map { "from_text": from_text }) : baml.llm.Stream<user.Resume$stream | null, user.Resume>
 }
 function user.TypeBuilderFn$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = ...) -> baml.llm.Stream<user.Resume$stream | null, user.Resume> throws never {
-  client.__make_stream(sse, "TypeBuilderFn") : baml.llm.Stream<user.Resume$stream | null, user.Resume>
+  client.__make_stream(sse) : baml.llm.Stream<user.Resume$stream | null, user.Resume>
+}
+function user.TypeBuilderFn$parse(json: string, client: baml.llm.Client = ...) -> user.Resume throws never {
+  baml.llm.parse<TFinal>(json) : user.Resume
 }
 class user.Resume$stream {
   name: string | null

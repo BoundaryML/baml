@@ -798,18 +798,21 @@ pub fn synthesize_llm_builtin_call(
     (body, source_map)
 }
 
-/// Synthesize a `baml.llm.parse("FunctionName", json)` call.
+/// Synthesize a `baml.llm.parse<STREAM_EXPANDED, ORIGINAL>(json)` call.
 ///
 /// Unlike `synthesize_llm_builtin_call`, there is no client argument and
-/// the second argument is a single `json` identifier (a path expression)
-/// rather than a map of parent params.
+/// the only argument is a single `json` identifier (a path expression)
+/// rather than a map of parent params. The explicit type args carry the
+/// stream-expanded and original return types so the stdlib `parse` can
+/// reify them via `reflect.type_of` instead of a name-keyed registry
+/// lookup (same threading as `call_llm_function<T>`).
 pub(crate) fn synthesize_llm_parse_call(
-    function_name: &str,
+    type_args: Vec<crate::ast::TypeExpr>,
     span: text_size::TextRange,
 ) -> (crate::ast::ExprBody, crate::ast::AstSourceMap) {
     use la_arena::Arena;
 
-    use crate::ast::{AstSourceMap, Expr, ExprBody, Literal};
+    use crate::ast::{AstSourceMap, Expr, ExprBody};
 
     let mut exprs = Arena::new();
     let mut expr_spans = Arena::new();
@@ -820,13 +823,10 @@ pub(crate) fn synthesize_llm_parse_call(
         id
     };
 
-    // 1. Function name literal: "FunctionName"
-    let fn_name_expr = alloc(Expr::Literal(Literal::String(function_name.to_string())));
-
-    // 2. `json` parameter reference
+    // 1. `json` parameter reference
     let json_expr = alloc(Expr::Path(vec![Name::new("json")]));
 
-    // 3. Callee: baml.llm.parse
+    // 2. Callee: baml.llm.parse
     let callee = alloc(Expr::Path(vec![
         Name::new("baml"),
         Name::new("llm"),
@@ -835,11 +835,8 @@ pub(crate) fn synthesize_llm_parse_call(
 
     let call = alloc(Expr::Call {
         callee,
-        type_args: vec![],
-        args: vec![
-            CallArg::positional(fn_name_expr),
-            CallArg::positional(json_expr),
-        ],
+        type_args,
+        args: vec![CallArg::positional(json_expr)],
     });
 
     let body = ExprBody {
@@ -867,11 +864,14 @@ pub(crate) fn synthesize_llm_parse_call(
     (body, source_map)
 }
 
-/// Synthesize a `CLIENT.__make_stream(sse, "FunctionName")` method call.
+/// Synthesize a `CLIENT.__make_stream<STREAM_EXPANDED, ORIGINAL>(sse)` method call.
 ///
 /// Used by the PPIR to generate `$parse_stream` companion function bodies.
+/// The explicit type args carry the stream-expanded and original return
+/// types into `__make_stream`'s frame, where `reflect.type_of` reifies them
+/// for `StreamCache.new`.
 pub fn synthesize_llm_make_stream_call(
-    function_name: &str,
+    type_args: Vec<crate::ast::TypeExpr>,
     client_name: &str,
     span: text_size::TextRange,
 ) -> (crate::ast::ExprBody, crate::ast::AstSourceMap) {
@@ -891,10 +891,7 @@ pub fn synthesize_llm_make_stream_call(
     // 1. `sse` parameter reference
     let sse_expr = alloc(Expr::Path(vec![Name::new("sse")]));
 
-    // 2. Function name literal: "FunctionName"
-    let fn_name_expr = alloc(Expr::Literal(Literal::String(function_name.to_string())));
-
-    // 3. Client argument (same logic as synthesize_llm_builtin_call)
+    // 2. Client argument (same logic as synthesize_llm_builtin_call)
     let client_arg = if client_name.contains('/') {
         let name_lit = alloc(Expr::Literal(Literal::String(client_name.to_string())));
         let ct_path = alloc(Expr::Path(vec![
@@ -925,7 +922,7 @@ pub fn synthesize_llm_make_stream_call(
         alloc(Expr::Path(vec![Name::new(client_name)]))
     };
 
-    // 4. Callee: CLIENT.__make_stream (method call on the client)
+    // 3. Callee: CLIENT.__make_stream (method call on the client)
     let callee = alloc(Expr::MemberAccess {
         base: client_arg,
         member: Name::new("__make_stream"),
@@ -933,11 +930,8 @@ pub fn synthesize_llm_make_stream_call(
 
     let call = alloc(Expr::Call {
         callee,
-        type_args: vec![],
-        args: vec![
-            CallArg::positional(sse_expr),
-            CallArg::positional(fn_name_expr),
-        ],
+        type_args,
+        args: vec![CallArg::positional(sse_expr)],
     });
 
     let body = ExprBody {

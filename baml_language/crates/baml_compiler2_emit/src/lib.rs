@@ -611,9 +611,6 @@ pub fn generate_project_bytecode_with_opt(
                         return_type: baml_type::Ty::Null {
                             attr: baml_type::TyAttr::default(),
                         },
-                        stream_return_type: baml_type::Ty::Null {
-                            attr: baml_type::TyAttr::default(),
-                        },
                         param_names: Vec::new(),
                         param_types: Vec::new(),
                         param_has_default: Vec::new(),
@@ -637,9 +634,6 @@ pub fn generate_project_bytecode_with_opt(
                     debug_locals: Vec::new(),
                     span: Span::fake(),
                     return_type: baml_type::Ty::Null {
-                        attr: baml_type::TyAttr::default(),
-                    },
-                    stream_return_type: baml_type::Ty::Null {
                         attr: baml_type::TyAttr::default(),
                     },
                     param_names: Vec::new(),
@@ -681,16 +675,6 @@ pub fn generate_project_bytecode_with_opt(
             if let Some(baml_compiler2_ast::DeclarativeMeta::Llm(llm_meta)) =
                 &func_data.declarative_meta
             {
-                // Look up the PPIR's pre-computed stream-expanded return type.
-                let expansion = baml_compiler2_ppir::ppir_expansion_items(db, *file);
-                for (name, stream_te) in expansion.stream_return_types(db) {
-                    if *name == fq_name {
-                        compiled_fn.stream_return_type =
-                            compute_stream_return_type(db, *file, stream_te, cache_pass4);
-                        break;
-                    }
-                }
-
                 if let (Some(client), Some(prompt)) = (&llm_meta.client, &llm_meta.prompt) {
                     compiled_fn.body_meta = Some(FunctionMeta::Llm {
                         prompt_template: prompt.text.clone(),
@@ -875,9 +859,6 @@ pub fn generate_project_bytecode_with_opt(
                 debug_locals: Vec::new(),
                 span: Span::fake(),
                 return_type: baml_type::Ty::Null {
-                    attr: baml_type::TyAttr::default(),
-                },
-                stream_return_type: baml_type::Ty::Null {
                     attr: baml_type::TyAttr::default(),
                 },
                 param_names: vec!["registry".to_string()],
@@ -1478,45 +1459,6 @@ fn compute_function_metadata_from_item_tree(
     }
 }
 
-/// Lower a PPIR-computed stream-expanded `TypeExpr` to `baml_type::Ty`.
-///
-/// Reuses the same TIR lowering + MIR conversion pipeline as
-/// `compute_function_metadata_from_item_tree`.
-fn compute_stream_return_type(
-    db: &dyn baml_compiler2_mir::Db,
-    file: baml_base::SourceFile,
-    type_expr: &baml_compiler2_ast::TypeExpr,
-    cache: &ResolvedAliases,
-) -> baml_type::Ty {
-    use baml_compiler2_hir::{file_package::file_package, package::PackageId};
-
-    let pkg_info = file_package(db, file);
-    let pkg_id = PackageId::new(db, pkg_info.package.clone());
-    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
-
-    let mut diags = Vec::new();
-    let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr(
-        db,
-        type_expr,
-        pkg_items,
-        &pkg_info.namespace_path,
-        &mut diags,
-    );
-    // Diagnostics are intentionally discarded here — same as
-    // compute_function_metadata_from_item_tree. Type errors in stream-expanded
-    // types are reported upstream by TIR's infer_scope_types via
-    // builder.report_at_span().
-    let generic_param_bounds = HashMap::new();
-    let resolved_tir_ty =
-        baml_compiler2_tir::associated_projection::AssociatedProjectionResolver::new(
-            db,
-            &cache.aliases,
-            &generic_param_bounds,
-        )
-        .resolve_deep(&tir_ty);
-    baml_compiler2_mir::convert_tir2_ty(&resolved_tir_ty, cache)
-}
-
 /// Build a table of byte offsets where each line starts in the source text.
 ///
 /// Returns `[0, offset_of_line_2, offset_of_line_3, ...]`.
@@ -2065,9 +2007,6 @@ fn compile_init_function<'db>(
                     return_type: baml_type::Ty::Null {
                         attr: baml_type::TyAttr::default(),
                     },
-                    stream_return_type: baml_type::Ty::Null {
-                        attr: baml_type::TyAttr::default(),
-                    },
                     param_names: Vec::new(),
                     param_types: Vec::new(),
                     param_has_default: Vec::new(),
@@ -2138,9 +2077,6 @@ fn compile_init_function<'db>(
         debug_locals: Vec::new(),
         span: baml_base::Span::fake(),
         return_type: baml_type::Ty::Null {
-            attr: baml_type::TyAttr::default(),
-        },
-        stream_return_type: baml_type::Ty::Null {
             attr: baml_type::TyAttr::default(),
         },
         param_names: Vec::new(),
