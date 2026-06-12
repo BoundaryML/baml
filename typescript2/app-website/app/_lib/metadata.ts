@@ -5,10 +5,14 @@ import type { Metadata } from 'next';
 // pointing at the shared `/api/og` renderer so each page gets a branded
 // "cream + purple rail" preview image with its own headline and kicker.
 
+// Resolve the public base URL from the deployment's own production domain
+// (e.g. new.boundaryml.com) rather than hardcoding a host — otherwise og:image
+// and canonical URLs point at a different site than the one being served.
 const SITE_URL =
-  process.env.VERCEL_ENV === 'production'
-    ? 'https://boundaryml.com'
-    : (process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000');
+  process.env.NEXT_PUBLIC_BASE_URL ??
+  (process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : 'http://localhost:3000');
 
 export const TWITTER_HANDLE = '@boundaryml';
 

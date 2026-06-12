@@ -35,7 +35,11 @@ export async function generateMetadata({ params }: BlogPostPageProps) {
     };
   }
 
-  const baseUrl = process.env.SITE_URL || 'https://boundaryml.com';
+  const baseUrl =
+    process.env.NEXT_PUBLIC_BASE_URL ??
+    (process.env.VERCEL_PROJECT_PRODUCTION_URL
+      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+      : 'http://localhost:3000');
   const postUrl = `${baseUrl}/blog/${post.slug}`;
 
   // Enhanced title with site branding

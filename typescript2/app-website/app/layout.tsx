@@ -57,11 +57,7 @@ export const metadata: Metadata = {
   icons: {
     icon: '/favico.ico',
   },
-  metadataBase: new URL(
-    process.env.VERCEL_ENV === 'production'
-      ? 'https://boundaryml.com'
-      : 'http://localhost:3000',
-  ),
+  metadataBase: new URL(baseUrl),
   openGraph: {
     description: homeDescription,
     images: [
@@ -76,7 +72,7 @@ export const metadata: Metadata = {
     siteName: 'BAML',
     title: 'BAML — First-class LLM functions',
     type: 'website',
-    url: 'https://boundaryml.com',
+    url: baseUrl,
   },
   title: {
     default: 'BAML — First-class LLM functions',
