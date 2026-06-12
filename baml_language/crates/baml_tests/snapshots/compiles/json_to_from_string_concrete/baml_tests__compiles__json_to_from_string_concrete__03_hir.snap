@@ -16,5 +16,5 @@ function user.serialize_user(u: user.User) -> string  [expr] {
   {  } baml.json.to_string(u)
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": self.name.to_json(), "age": self.age.to_json() }
+  map { "name": baml.json.to_json(self.name), "age": baml.json.to_json(self.age) }
 }

@@ -426,31 +426,31 @@ function baml.csv.to_json(self: ?) -> baml.json.json  [expr] {
   baml.json.parse(baml.json.to_string(self))
 }
 function baml.csv.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "delimiter": self.delimiter?.to_json(), "quote": self.quote?.to_json(), "quote_style": self.quote_style?.to_json(), "escape": self.escape?.to_json(), "terminator": self.terminator?.to_json(), "write_header": self.write_header?.to_json(), "headers": self.headers?.to_json(), "null_value": self.null_value?.to_json(), "bom": self.bom?.to_json(), "sanitize_formulas": self.sanitize_formulas?.to_json() }
+  map { "delimiter": baml.json.to_json(self.delimiter), "quote": baml.json.to_json(self.quote), "quote_style": baml.json.to_json(self.quote_style), "escape": baml.json.to_json(self.escape), "terminator": baml.json.to_json(self.terminator), "write_header": baml.json.to_json(self.write_header), "headers": baml.json.to_json(self.headers), "null_value": baml.json.to_json(self.null_value), "bom": baml.json.to_json(self.bom), "sanitize_formulas": baml.json.to_json(self.sanitize_formulas) }
 }
 function baml.csv.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "reader": self.reader.to_json() }
-}
-function baml.csv.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "reader": baml.json.to_json(self.reader) }
 }
 function baml.csv.to_json(self: ?) -> baml.json.json  [expr] {
   baml.json.parse(baml.json.to_string(self))
 }
 function baml.csv.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "byte": self.byte.to_json(), "line": self.line.to_json(), "record": self.record.to_json() }
+  baml.json.parse(baml.json.to_string(self))
+}
+function baml.csv.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "byte": baml.json.to_json(self.byte), "line": baml.json.to_json(self.line), "record": baml.json.to_json(self.record) }
 }
 function baml.csv.to_json(self: ?) -> baml.json.json  [expr] {
   baml.json.parse(baml.json.to_string(self))
 }
 function baml.csv.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "kind": self.kind.to_json(), "message": self.message.to_json(), "line": self.line?.to_json(), "record": self.record?.to_json(), "field": self.field?.to_json(), "column": self.column?.to_json(), "expected": self.expected?.to_json(), "found": self.found?.to_json() }
+  map { "kind": baml.json.to_json(self.kind), "message": baml.json.to_json(self.message), "line": baml.json.to_json(self.line), "record": baml.json.to_json(self.record), "field": baml.json.to_json(self.field), "column": baml.json.to_json(self.column), "expected": baml.json.to_json(self.expected), "found": baml.json.to_json(self.found) }
 }
 function baml.csv.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "names": self.names?.to_json() }
+  map { "names": baml.json.to_json(self.names) }
 }
 function baml.csv.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "error": self.error.to_json() }
+  map { "error": baml.json.to_json(self.error) }
 }
 function baml.csv.to_map(self: ?) -> map<string, string>  [builtin]
 function baml.csv.to_markdown(rows: T[], max_rows: int = 100) -> string  [expr] {
@@ -569,43 +569,43 @@ function baml.errors.from_json(j: baml.json.json) -> baml.errors.LlmClient  [exp
   baml.errors.LlmClient { message: baml.json.from_json(baml.json.field(j, "message")) }
 }
 function baml.errors.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  map { "message": baml.json.to_json(self.message) }
 }
 function baml.errors.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  map { "message": baml.json.to_json(self.message) }
 }
 function baml.errors.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  map { "message": baml.json.to_json(self.message) }
 }
 function baml.errors.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json(), "duration_ms": self.duration_ms?.to_json() }
+  map { "message": baml.json.to_json(self.message), "duration_ms": baml.json.to_json(self.duration_ms) }
 }
 function baml.errors.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  map { "message": baml.json.to_json(self.message) }
 }
 function baml.errors.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  map { "message": baml.json.to_json(self.message) }
 }
 function baml.errors.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  map { "message": baml.json.to_json(self.message) }
 }
 function baml.errors.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  map { "message": baml.json.to_json(self.message) }
 }
 function baml.errors.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  map { "message": baml.json.to_json(self.message) }
 }
 function baml.errors.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  map { "message": baml.json.to_json(self.message) }
 }
 function baml.errors.to_json(self: ?) -> baml.json.json  [expr] {
   baml.json.parse(baml.json.to_string(self))
 }
 function baml.errors.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  map { "message": baml.json.to_json(self.message) }
 }
 function baml.errors.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  map { "message": baml.json.to_json(self.message) }
 }
 
 --- <builtin>/baml/ns_errors/stack_trace.baml ---
@@ -624,10 +624,10 @@ function baml.errors.from_json(j: baml.json.json) -> baml.errors.StackTrace  [ex
   baml.errors.StackTrace { frames: baml.json.from_json(baml.json.field(j, "frames")) }
 }
 function baml.errors.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "frames": self.frames.to_json() }
+  map { "frames": baml.json.to_json(self.frames) }
 }
 function baml.errors.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "file": self.file.to_json(), "line": self.line.to_json(), "function_name": self.function_name.to_json() }
+  map { "file": baml.json.to_json(self.file), "line": baml.json.to_json(self.line), "function_name": baml.json.to_json(self.function_name) }
 }
 function baml.errors.to_string(self: ?) -> string  [builtin]
 
@@ -672,10 +672,10 @@ function baml.fs.to_json(self: ?) -> baml.json.json  [expr] {
   baml.json.parse(baml.json.to_string(self))
 }
 function baml.fs.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": self.name.to_json(), "is_dir": self.is_dir.to_json(), "is_file": self.is_file.to_json(), "is_symlink": self.is_symlink.to_json() }
+  map { "name": baml.json.to_json(self.name), "is_dir": baml.json.to_json(self.is_dir), "is_file": baml.json.to_json(self.is_file), "is_symlink": baml.json.to_json(self.is_symlink) }
 }
 function baml.fs.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "recursive": self.recursive.to_json() }
+  map { "recursive": baml.json.to_json(self.recursive) }
 }
 function baml.fs.write(self: ?, data: string) -> int  [builtin]
 function baml.fs.write(path: string, content: string) -> int  [builtin]
@@ -718,7 +718,7 @@ function baml.future.to_json(self: ?) -> baml.json.json  [expr] {
   map {  }
 }
 function baml.future.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "errors": self.errors.to_json() }
+  map { "errors": baml.json.to_json(self.errors) }
 }
 
 --- captures ---
@@ -753,7 +753,7 @@ function baml.glob.to_json(self: ?) -> baml.json.json  [expr] {
   baml.json.parse(baml.json.to_string(self))
 }
 function baml.glob.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "cwd": self.cwd?.to_json(), "dot": self.dot?.to_json(), "absolute": self.absolute?.to_json(), "follow_symlinks": self.follow_symlinks?.to_json(), "throw_error_on_br...": self.throw_error_on_broken_symlink?.to_json(), "only_files": self.only_files?.to_json() }
+  map { "cwd": baml.json.to_json(self.cwd), "dot": baml.json.to_json(self.dot), "absolute": baml.json.to_json(self.absolute), "follow_symlinks": baml.json.to_json(self.follow_symlinks), "throw_error_on_br...": baml.json.to_json(self.throw_error_on_broken_symlink), "only_files": baml.json.to_json(self.only_files) }
 }
 
 --- <builtin>/baml/ns_host/host.baml ---
@@ -805,7 +805,7 @@ function baml.http.ok(self: ?) -> bool  [expr] {
 function baml.http.send(request: baml.http.Request) -> baml.http.Response  [builtin]
 function baml.http.text(self: ?) -> string  [builtin]
 function baml.http.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "method": self.method.to_json(), "url": self.url.to_json(), "headers": self.headers.to_json(), "body": self.body.to_json() }
+  map { "method": baml.json.to_json(self.method), "url": baml.json.to_json(self.url), "headers": baml.json.to_json(self.headers), "body": baml.json.to_json(self.body) }
 }
 function baml.http.to_json(self: ?) -> baml.json.json  [expr] {
   baml.json.parse(baml.json.to_string(self))
@@ -1074,28 +1074,28 @@ function baml.iter.step_by(self: ?, n: int) -> Iterator<Item = Item, Error = Err
   {  } baml.iter.StepBy { source: self, n: n, first: true }
 }
 function baml.iter.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "first": self.first.to_json(), "other": self.other.to_json(), "first_done": self.first_done.to_json() }
+  map { "first": baml.json.to_json(self.first), "other": baml.json.to_json(self.other), "first_done": baml.json.to_json(self.first_done) }
 }
 function baml.iter.to_json(self: ?) -> baml.json.json  [expr] {
   baml.json.parse(baml.json.to_string(self))
 }
 function baml.iter.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "source": self.source.to_json(), "n": self.n.to_json(), "first": self.first.to_json() }
+  map { "source": baml.json.to_json(self.source), "n": baml.json.to_json(self.n), "first": baml.json.to_json(self.first) }
 }
 function baml.iter.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "value": baml.json.to_json(self.value), "count": self.count.to_json() }
+  map { "value": baml.json.to_json(self.value), "count": baml.json.to_json(self.count) }
 }
 function baml.iter.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "source": self.source.to_json(), "buffer": baml.json.to_json(self.buffer), "has_buffer": self.has_buffer.to_json() }
+  map { "source": baml.json.to_json(self.source), "buffer": baml.json.to_json(self.buffer), "has_buffer": baml.json.to_json(self.has_buffer) }
 }
 function baml.iter.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "i": self.i.to_json(), "max": self.max.to_json(), "step": self.step.to_json() }
+  map { "i": baml.json.to_json(self.i), "max": baml.json.to_json(self.max), "step": baml.json.to_json(self.step) }
 }
 function baml.iter.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "source": self.source.to_json(), "inner": self.inner.to_json() }
+  map { "source": baml.json.to_json(self.source), "inner": baml.json.to_json(self.inner) }
 }
 function baml.iter.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "arr": self.arr.to_json(), "idx": self.idx.to_json() }
+  map { "arr": baml.json.to_json(self.arr), "idx": baml.json.to_json(self.idx) }
 }
 function baml.iter.to_json(self: ?) -> baml.json.json  [expr] {
   baml.json.parse(baml.json.to_string(self))
@@ -1146,14 +1146,14 @@ function baml.json.serialize(v: T) -> string  [expr] {
 function baml.json.stringify(j: baml.json.json) -> string  [builtin]
 function baml.json.stringify_pretty(j: baml.json.json) -> string  [builtin]
 function baml.json.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  map { "message": baml.json.to_json(self.message) }
 }
 function baml.json.to_json(v: T) -> baml.json.json  [builtin]
 function baml.json.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json(), "path": self.path.to_json() }
+  map { "message": baml.json.to_json(self.message), "path": baml.json.to_json(self.path) }
 }
 function baml.json.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json(), "path": self.path.to_json(), "reason": self.reason.to_json() }
+  map { "message": baml.json.to_json(self.message), "path": baml.json.to_json(self.path), "reason": baml.json.to_json(self.reason) }
 }
 function baml.json.to_string(v: T) -> string  [builtin]
 
@@ -1207,10 +1207,10 @@ function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
   baml.json.parse(baml.json.to_string(self))
 }
 function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "primitive_client": self.primitive_client.to_json(), "delay_ms": self.delay_ms.to_json() }
+  map { "primitive_client": baml.json.to_json(self.primitive_client), "delay_ms": baml.json.to_json(self.delay_ms) }
 }
 function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "rr_client_names": self.rr_client_names.to_json() }
+  map { "rr_client_names": baml.json.to_json(self.rr_client_names) }
 }
 
 --- <builtin>/baml/ns_llm/llm_types.baml ---
@@ -1391,7 +1391,7 @@ function baml.llm.parse(self: ?, http_response_body: string) -> T  [builtin]
 function baml.llm.render_prompt(self: ?, template: string, args: map<string, unknown>, return_type: type) -> baml.llm.PromptAst  [builtin]
 function baml.llm.specialize_prompt(self: ?, prompt: baml.llm.PromptAst) -> baml.llm.PromptAst  [builtin]
 function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "_client": self._client.to_json(), "_acc": self._acc.to_json(), "_sse": self._sse.to_json(), "_cache": self._cache.to_json() }
+  map { "_client": baml.json.to_json(self._client), "_acc": baml.json.to_json(self._acc), "_sse": baml.json.to_json(self._sse), "_cache": baml.json.to_json(self._cache) }
 }
 function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
   baml.json.parse(baml.json.to_string(self))
@@ -1400,34 +1400,34 @@ function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
   baml.json.parse(baml.json.to_string(self))
 }
 function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "image": self.image?.to_json(), "audio": self.audio?.to_json(), "video": self.video?.to_json(), "pdf": self.pdf?.to_json() }
+  map { "image": baml.json.to_json(self.image), "audio": baml.json.to_json(self.audio), "video": baml.json.to_json(self.video), "pdf": baml.json.to_json(self.pdf) }
 }
 function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
   baml.json.parse(baml.json.to_string(self))
 }
 function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": self.name.to_json(), "client_type": self.client_type.to_json(), "sub_clients": self.sub_clients.to_json(), "retry": self.retry?.to_json(), "counter": self.counter.to_json() }
+  map { "name": baml.json.to_json(self.name), "client_type": baml.json.to_json(self.client_type), "sub_clients": baml.json.to_json(self.sub_clients), "retry": baml.json.to_json(self.retry), "counter": baml.json.to_json(self.counter) }
 }
 function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "region": self.region?.to_json(), "endpoint_url": self.endpoint_url?.to_json(), "access_key_id": self.access_key_id?.to_json(), "secret_access_key": self.secret_access_key?.to_json(), "session_token": self.session_token?.to_json(), "profile": self.profile?.to_json(), "stop_sequences": self.stop_sequences?.to_json(), "max_tokens": self.max_tokens?.to_json(), "temperature": self.temperature?.to_json(), "top_p": self.top_p?.to_json() }
+  map { "region": baml.json.to_json(self.region), "endpoint_url": baml.json.to_json(self.endpoint_url), "access_key_id": baml.json.to_json(self.access_key_id), "secret_access_key": baml.json.to_json(self.secret_access_key), "session_token": baml.json.to_json(self.session_token), "profile": baml.json.to_json(self.profile), "stop_sequences": baml.json.to_json(self.stop_sequences), "max_tokens": baml.json.to_json(self.max_tokens), "temperature": baml.json.to_json(self.temperature), "top_p": baml.json.to_json(self.top_p) }
 }
 function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "max_retries": self.max_retries.to_json(), "initial_delay_ms": self.initial_delay_ms.to_json(), "multiplier": self.multiplier.to_json(), "max_delay_ms": self.max_delay_ms.to_json() }
+  map { "max_retries": baml.json.to_json(self.max_retries), "initial_delay_ms": baml.json.to_json(self.initial_delay_ms), "multiplier": baml.json.to_json(self.multiplier), "max_delay_ms": baml.json.to_json(self.max_delay_ms) }
 }
 function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "credentials": self.credentials?.to_json(), "credentials_content": self.credentials_content?.to_json(), "location": self.location?.to_json(), "project_id": self.project_id?.to_json() }
+  map { "credentials": baml.json.to_json(self.credentials), "credentials_content": baml.json.to_json(self.credentials_content), "location": baml.json.to_json(self.location), "project_id": baml.json.to_json(self.project_id) }
 }
 function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
   baml.json.parse(baml.json.to_string(self))
 }
 function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "max_tokens": self.max_tokens?.to_json() }
+  map { "max_tokens": baml.json.to_json(self.max_tokens) }
 }
 function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": self.name.to_json(), "provider": self.provider.to_json(), "options": self.options.to_json() }
+  map { "name": baml.json.to_json(self.name), "provider": baml.json.to_json(self.provider), "options": baml.json.to_json(self.options) }
 }
 function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "resource_name": self.resource_name?.to_json(), "deployment_id": self.deployment_id?.to_json(), "api_version": self.api_version.to_json(), "max_tokens": self.max_tokens?.to_json() }
+  map { "resource_name": baml.json.to_json(self.resource_name), "deployment_id": baml.json.to_json(self.deployment_id), "api_version": baml.json.to_json(self.api_version), "max_tokens": baml.json.to_json(self.max_tokens) }
 }
 function baml.llm.to_primitive_client(self: ?) -> baml.llm.PrimitiveClient  [expr] {
   {  } if (self.name.includes("/")) {  } from_shorthand(self.name) else {  } self.get_constructor()()
@@ -1535,7 +1535,7 @@ function baml.net.to_json(self: ?) -> baml.json.json  [expr] {
   baml.json.parse(baml.json.to_string(self))
 }
 function baml.net.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "data": self.data.to_json(), "addr": self.addr.to_json() }
+  map { "data": baml.json.to_json(self.data), "addr": baml.json.to_json(self.addr) }
 }
 function baml.net.to_json(self: ?) -> baml.json.json  [expr] {
   baml.json.parse(baml.json.to_string(self))
@@ -1643,49 +1643,49 @@ function baml.panics.from_json(j: baml.json.json) -> baml.panics.UserPanic  [exp
   baml.panics.UserPanic { message: baml.json.from_json(baml.json.field(j, "message")) }
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  map { "message": baml.json.to_json(self.message) }
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "resource": self.resource.to_json(), "message": self.message.to_json() }
+  map { "resource": baml.json.to_json(self.resource), "message": baml.json.to_json(self.message) }
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json(), "class_name": self.class_name?.to_json(), "language": self.language?.to_json() }
+  map { "message": baml.json.to_json(self.message), "class_name": baml.json.to_json(self.class_name), "language": baml.json.to_json(self.language) }
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "index": self.index.to_json(), "length": self.length.to_json() }
+  map { "index": baml.json.to_json(self.index), "length": baml.json.to_json(self.length) }
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  map { "message": baml.json.to_json(self.message) }
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  map { "message": baml.json.to_json(self.message) }
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  map { "message": baml.json.to_json(self.message) }
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  map { "message": baml.json.to_json(self.message) }
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "dividend": self.dividend.to_json() }
+  map { "dividend": baml.json.to_json(self.dividend) }
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "key": self.key.to_json() }
+  map { "key": baml.json.to_json(self.key) }
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  map { "message": baml.json.to_json(self.message) }
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "code": self.code.to_json() }
+  map { "code": baml.json.to_json(self.code) }
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  map { "message": baml.json.to_json(self.message) }
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "field_index": self.field_index.to_json(), "field_count": self.field_count.to_json() }
+  map { "field_index": baml.json.to_json(self.field_index), "field_count": baml.json.to_json(self.field_count) }
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  map { "message": baml.json.to_json(self.message) }
 }
 
 --- <builtin>/baml/ns_spawn/spawn.baml ---
@@ -1785,10 +1785,10 @@ function baml.sys.panic(message: string) -> never  [builtin]
 function baml.sys.shell(command: string, options: baml.sys.ProcessOptions?) -> baml.sys.ShellOutput  [builtin]
 function baml.sys.sleep(ms: int) -> null  [builtin]
 function baml.sys.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "stdout": self.stdout.to_json(), "stderr": self.stderr.to_json(), "exit_code": self.exit_code.to_json() }
+  map { "stdout": baml.json.to_json(self.stdout), "stderr": baml.json.to_json(self.stderr), "exit_code": baml.json.to_json(self.exit_code) }
 }
 function baml.sys.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "cwd": self.cwd?.to_json(), "env": self.env?.to_json(), "timeout_ms": self.timeout_ms?.to_json(), "stdin": self.stdin?.to_json() }
+  map { "cwd": baml.json.to_json(self.cwd), "env": baml.json.to_json(self.env), "timeout_ms": baml.json.to_json(self.timeout_ms), "stdin": baml.json.to_json(self.stdin) }
 }
 
 --- <builtin>/baml/ns_time/duration.baml ---
@@ -1823,7 +1823,7 @@ function baml.time.to_hours(self: ?) -> bigint  [expr] {
   {  } self._nanoseconds Div 3600000000000
 }
 function baml.time.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "_nanoseconds": self._nanoseconds.to_json() }
+  map { "_nanoseconds": baml.json.to_json(self._nanoseconds) }
 }
 function baml.time.to_microseconds(self: ?) -> bigint  [expr] {
   {  } self._nanoseconds Div 1000
@@ -2025,13 +2025,13 @@ function baml.time.to_duration(self: ?) -> Duration  [expr] {
   {  } Duration { _nanoseconds: 0n Add self._nanoseconds }
 }
 function baml.time.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "timezone": self.timezone.to_json() }
+  map { "timezone": baml.json.to_json(self.timezone) }
 }
 function baml.time.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  map { "message": baml.json.to_json(self.message) }
 }
 function baml.time.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "_nanoseconds": self._nanoseconds.to_json() }
+  map { "_nanoseconds": baml.json.to_json(self._nanoseconds) }
 }
 function baml.time.utc() -> baml.time.TimeZoneOffset  [expr] {
   {  } baml.time.TimeZoneOffset { _nanoseconds: 0 }
@@ -2131,7 +2131,7 @@ function baml.toml.item_to_json(item: baml.toml.Item) -> baml.json.json  [expr] 
 }
 function baml.toml.parse(s: string) -> baml.toml.Table  [builtin]
 function baml.toml.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  map { "message": baml.json.to_json(self.message) }
 }
 function baml.toml.to_json(self: ?) -> baml.json.json  [expr] {
   {  } self.items.to_json() catch (_) { root.json.JsonParseError { message: message } => throw root.json.JsonSerializationError { message: message, path: "" } }
@@ -2152,7 +2152,7 @@ function baml.yaml.from_json(j: baml.json.json) -> baml.yaml.YamlParseError  [ex
 }
 function baml.yaml.parse(s: string) -> baml.json.json  [builtin]
 function baml.yaml.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  map { "message": baml.json.to_json(self.message) }
 }
 
 --- <builtin>/baml/null.baml ---

@@ -13,7 +13,7 @@ function user.from_json(j: baml.json.json) -> user.Config  [expr] {
   user.Config { key: baml.json.from_json(baml.json.field(j, "key")), model: baml.json.from_json(baml.json.field(j, "model")) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "key": self.key.to_json(), "model": self.model.to_json() }
+  map { "key": baml.json.to_json(self.key), "model": baml.json.to_json(self.model) }
 }
 class user.llm.Response {
   text: string
@@ -26,5 +26,5 @@ function user.llm.from_json(j: baml.json.json) -> user.llm.Response  [expr] {
   user.llm.Response { text: baml.json.from_json(baml.json.field(j, "text")), model: baml.json.from_json(baml.json.field(j, "model")) }
 }
 function user.llm.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "text": self.text.to_json(), "model": self.model.to_json() }
+  map { "text": baml.json.to_json(self.text), "model": baml.json.to_json(self.model) }
 }

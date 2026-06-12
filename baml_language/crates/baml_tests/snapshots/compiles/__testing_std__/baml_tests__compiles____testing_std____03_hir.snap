@@ -91,19 +91,19 @@ function testing.to_json(self: ?) -> baml.json.json  [expr] {
   {  } baml.json.parse(baml.json.to_string(self))
 }
 function testing.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "type": self.type.to_json(), "name": self.name.to_json() }
+  map { "type": baml.json.to_json(self.type), "name": baml.json.to_json(self.name) }
 }
 function testing.to_json(self: ?) -> baml.json.json  [expr] {
   {  } baml.json.parse(baml.json.to_string(self))
 }
 function testing.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": self.name.to_json(), "items": self.items.to_json(), "loadingTimeMs": self.loadingTimeMs.to_json() }
+  map { "name": baml.json.to_json(self.name), "items": baml.json.to_json(self.items), "loadingTimeMs": baml.json.to_json(self.loadingTimeMs) }
 }
 function testing.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "prefix": self.prefix.to_json(), "tests": self.tests.to_json(), "testsets": self.testsets.to_json() }
+  map { "prefix": baml.json.to_json(self.prefix), "tests": baml.json.to_json(self.tests), "testsets": baml.json.to_json(self.testsets) }
 }
 function testing.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "collector": self.collector.to_json(), "expansions": self.expansions.to_json(), "loading_time_ms": self.loading_time_ms.to_json() }
+  map { "collector": baml.json.to_json(self.collector), "expansions": baml.json.to_json(self.expansions), "loading_time_ms": baml.json.to_json(self.loading_time_ms) }
 }
 
 --- captures ---
@@ -143,11 +143,11 @@ function testing.from_json(j: baml.json.json) -> testing.TestSetReport  [expr] {
   testing.TestSetReport { outcome: baml.json.from_json(baml.json.field(j, "outcome")), passed: baml.json.from_json(baml.json.field(j, "passed")), failed: baml.json.from_json(baml.json.field(j, "failed")), total: baml.json.from_json(baml.json.field(j, "total")), results: baml.json.from_json(baml.json.field(j, "results")) }
 }
 function testing.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "outcome": self.outcome.to_json(), "runs": self.runs.to_json() }
+  map { "outcome": baml.json.to_json(self.outcome), "runs": baml.json.to_json(self.runs) }
 }
 function testing.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "outcome": self.outcome.to_json(), "duration_ms": self.duration_ms.to_json() }
+  map { "outcome": baml.json.to_json(self.outcome), "duration_ms": baml.json.to_json(self.duration_ms) }
 }
 function testing.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "outcome": self.outcome.to_json(), "passed": self.passed.to_json(), "failed": self.failed.to_json(), "total": self.total.to_json(), "results": self.results.to_json() }
+  map { "outcome": baml.json.to_json(self.outcome), "passed": baml.json.to_json(self.passed), "failed": baml.json.to_json(self.failed), "total": baml.json.to_json(self.total), "results": baml.json.to_json(self.results) }
 }

@@ -8,7 +8,7 @@ fn user.sum_array(arr: int[]) -> int {
     let _1: int[] // arr // param
     let _2: int // sum [captured]
     let _3: (() -> void throws never)[] // total
-    let _4: baml.iter.Iterator<Item = int, Error = void>
+    let _4: baml.iter.Iterator<Item = int, Error = never>
     let _5: type
     let _6: unknown
     let _7: bool
@@ -44,7 +44,7 @@ fn user.sum_array(arr: int[]) -> int {
     let _37: void
     let _38: () -> void throws never
     let _39: (() -> void throws never)[]
-    let _40: baml.iter.Iterator<Item = () -> void throws never, Error = void>
+    let _40: baml.iter.Iterator<Item = () -> void throws never, Error = never>
     let _41: type
     let _42: unknown
     let _43: bool
@@ -91,7 +91,7 @@ fn user.sum_array(arr: int[]) -> int {
     }
 
     bb2: {
-        _7 = is_type(copy _4, baml.iter.Flatten<_, int, void, void>);
+        _7 = is_type(copy _4, baml.iter.Flatten<_, int, never, never>);
         branch copy _7 -> [bb24, bb3];
     }
 
@@ -106,12 +106,12 @@ fn user.sum_array(arr: int[]) -> int {
     }
 
     bb5: {
-        _12 = is_type(copy _4, baml.iter.StepBy<int, void>);
+        _12 = is_type(copy _4, baml.iter.StepBy<int, never>);
         branch copy _12 -> [bb21, bb6];
     }
 
     bb6: {
-        _15 = is_type(copy _4, baml.iter.Chain<int, void, void>);
+        _15 = is_type(copy _4, baml.iter.Chain<int, never, never>);
         branch copy _15 -> [bb20, bb7];
     }
 
@@ -121,27 +121,27 @@ fn user.sum_array(arr: int[]) -> int {
     }
 
     bb8: {
-        _21 = is_type(copy _4, baml.iter.Map<_, int, void, void>);
+        _21 = is_type(copy _4, baml.iter.Map<_, int, never, never>);
         branch copy _21 -> [bb18, bb9];
     }
 
     bb9: {
-        _23 = is_type(copy _4, baml.iter.Filter<int, void, void>);
+        _23 = is_type(copy _4, baml.iter.Filter<int, never, never>);
         branch copy _23 -> [bb17, bb10];
     }
 
     bb10: {
-        _27 = is_type(copy _4, baml.iter.FilterMap<_, int, void, void>);
+        _27 = is_type(copy _4, baml.iter.FilterMap<_, int, never, never>);
         branch copy _27 -> [bb16, bb11];
     }
 
     bb11: {
-        _29 = is_type(copy _4, baml.iter.FlatMap<_, int, void, void, void>);
+        _29 = is_type(copy _4, baml.iter.FlatMap<_, int, never, never, never>);
         branch copy _29 -> [bb15, bb12];
     }
 
     bb12: {
-        _31 = is_type(copy _4, baml.iter.Peekable<int, void>);
+        _31 = is_type(copy _4, baml.iter.Peekable<int, never>);
         branch copy _31 -> [bb14, bb13];
     }
 
@@ -151,7 +151,7 @@ fn user.sum_array(arr: int[]) -> int {
 
     bb14: {
         _32 = load_type(int);
-        _33 = load_type(void);
+        _33 = load_type(never);
         _6 = call const fn baml.iter.Peekable.Iterator.next<copy _32, copy _33>(copy _4) -> [bb25];
     }
 
@@ -167,8 +167,8 @@ fn user.sum_array(arr: int[]) -> int {
 
     bb17: {
         _24 = load_type(int);
-        _25 = load_type(void);
-        _26 = load_type(void);
+        _25 = load_type(never);
+        _26 = load_type(never);
         _6 = call const fn baml.iter.Filter.Iterator.next<copy _24, copy _25, copy _26>(copy _4) -> [bb25];
     }
 
@@ -184,14 +184,14 @@ fn user.sum_array(arr: int[]) -> int {
 
     bb20: {
         _16 = load_type(int);
-        _17 = load_type(void);
-        _18 = load_type(void);
+        _17 = load_type(never);
+        _18 = load_type(never);
         _6 = call const fn baml.iter.Chain.Iterator.next<copy _16, copy _17, copy _18>(copy _4) -> [bb25];
     }
 
     bb21: {
         _13 = load_type(int);
-        _14 = load_type(void);
+        _14 = load_type(never);
         _6 = call const fn baml.iter.StepBy.Iterator.next<copy _13, copy _14>(copy _4) -> [bb25];
     }
 
@@ -233,7 +233,7 @@ fn user.sum_array(arr: int[]) -> int {
     }
 
     bb29: {
-        _43 = is_type(copy _40, baml.iter.Flatten<_, () -> void throws never, void, void>);
+        _43 = is_type(copy _40, baml.iter.Flatten<_, () -> void throws never, never, never>);
         branch copy _43 -> [bb49, bb30];
     }
 
@@ -243,12 +243,12 @@ fn user.sum_array(arr: int[]) -> int {
     }
 
     bb31: {
-        _47 = is_type(copy _40, baml.iter.StepBy<() -> void throws never, void>);
+        _47 = is_type(copy _40, baml.iter.StepBy<() -> void throws never, never>);
         branch copy _47 -> [bb47, bb32];
     }
 
     bb32: {
-        _50 = is_type(copy _40, baml.iter.Chain<() -> void throws never, void, void>);
+        _50 = is_type(copy _40, baml.iter.Chain<() -> void throws never, never, never>);
         branch copy _50 -> [bb46, bb33];
     }
 
@@ -258,27 +258,27 @@ fn user.sum_array(arr: int[]) -> int {
     }
 
     bb34: {
-        _56 = is_type(copy _40, baml.iter.Map<_, () -> void throws never, void, void>);
+        _56 = is_type(copy _40, baml.iter.Map<_, () -> void throws never, never, never>);
         branch copy _56 -> [bb44, bb35];
     }
 
     bb35: {
-        _58 = is_type(copy _40, baml.iter.Filter<() -> void throws never, void, void>);
+        _58 = is_type(copy _40, baml.iter.Filter<() -> void throws never, never, never>);
         branch copy _58 -> [bb43, bb36];
     }
 
     bb36: {
-        _62 = is_type(copy _40, baml.iter.FilterMap<_, () -> void throws never, void, void>);
+        _62 = is_type(copy _40, baml.iter.FilterMap<_, () -> void throws never, never, never>);
         branch copy _62 -> [bb42, bb37];
     }
 
     bb37: {
-        _64 = is_type(copy _40, baml.iter.FlatMap<_, () -> void throws never, void, void, void>);
+        _64 = is_type(copy _40, baml.iter.FlatMap<_, () -> void throws never, never, never, never>);
         branch copy _64 -> [bb41, bb38];
     }
 
     bb38: {
-        _66 = is_type(copy _40, baml.iter.Peekable<() -> void throws never, void>);
+        _66 = is_type(copy _40, baml.iter.Peekable<() -> void throws never, never>);
         branch copy _66 -> [bb40, bb39];
     }
 
@@ -288,7 +288,7 @@ fn user.sum_array(arr: int[]) -> int {
 
     bb40: {
         _67 = load_type(() -> void throws never);
-        _68 = load_type(void);
+        _68 = load_type(never);
         _42 = call const fn baml.iter.Peekable.Iterator.next<copy _67, copy _68>(copy _40) -> [bb50];
     }
 
@@ -304,8 +304,8 @@ fn user.sum_array(arr: int[]) -> int {
 
     bb43: {
         _59 = load_type(() -> void throws never);
-        _60 = load_type(void);
-        _61 = load_type(void);
+        _60 = load_type(never);
+        _61 = load_type(never);
         _42 = call const fn baml.iter.Filter.Iterator.next<copy _59, copy _60, copy _61>(copy _40) -> [bb50];
     }
 
@@ -321,14 +321,14 @@ fn user.sum_array(arr: int[]) -> int {
 
     bb46: {
         _51 = load_type(() -> void throws never);
-        _52 = load_type(void);
-        _53 = load_type(void);
+        _52 = load_type(never);
+        _53 = load_type(never);
         _42 = call const fn baml.iter.Chain.Iterator.next<copy _51, copy _52, copy _53>(copy _40) -> [bb50];
     }
 
     bb47: {
         _48 = load_type(() -> void throws never);
-        _49 = load_type(void);
+        _49 = load_type(never);
         _42 = call const fn baml.iter.StepBy.Iterator.next<copy _48, copy _49>(copy _40) -> [bb50];
     }
 

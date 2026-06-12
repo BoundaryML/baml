@@ -95,11 +95,13 @@ fn user.MetaField.to_json(self: MetaField) -> baml.json.json {
     let _2: baml.json.json
     let _3: type
     let _4: MetaField
+    let _5: type
 
     bb0: {
         _4 = copy _1;
         _3 = copy _4.0;
-        _2 = call const fn baml.TypeValue.to_json(copy _3) -> [bb1];
+        _5 = load_type(type);
+        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
     }
 
     bb1: {
@@ -119,24 +121,28 @@ fn user.RiskFactor.to_json(self: RiskFactor) -> baml.json.json {
     let _2: baml.json.json
     let _3: string
     let _4: RiskFactor
-    let _5: baml.json.json
-    let _6: float
-    let _7: RiskFactor
+    let _5: type
+    let _6: baml.json.json
+    let _7: float
+    let _8: RiskFactor
+    let _9: type
 
     bb0: {
         _4 = copy _1;
         _3 = copy _4.0;
-        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
+        _5 = load_type(string);
+        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
     }
 
     bb1: {
-        _7 = copy _1;
-        _6 = copy _7.1;
-        _5 = call const fn baml.Float.to_json(copy _6) -> [bb2];
+        _8 = copy _1;
+        _7 = copy _8.1;
+        _9 = load_type(float);
+        _6 = call const fn baml.json.to_json<copy _9>(copy _7) -> [bb2];
     }
 
     bb2: {
-        _0 = { const "type": copy _2, const "severity": copy _5 };
+        _0 = { const "type": copy _2, const "severity": copy _6 };
         goto -> bb3;
     }
 

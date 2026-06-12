@@ -201,17 +201,15 @@ fn user.Wrapper.to_json(self: Wrapper) -> baml.json.json {
     let _0: baml.json.json // _0 // return
     let _1: Wrapper // self // param
     let _2: baml.json.json
-    let _3: ((baml.Null) -> baml.json.json throws never) | ((baml.Bool) -> baml.json.json throws never) | ((baml.Int) -> baml.json.json throws never) | ((baml.Float) -> baml.json.json throws never) | ((baml.String) -> baml.json.json throws never) | ((baml.json.json[]) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError) | ((map<string, baml.json.json>) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError)
-    let _4: baml.json.json
-    let _5: Wrapper
-    let _6: string
+    let _3: baml.json.json
+    let _4: Wrapper
+    let _5: type
 
     bb0: {
-        _5 = copy _1;
-        _4 = copy _5.0;
-        _6 = const "to_json";
-        _3 = copy _4[_6];
-        _2 = call copy _3() -> [bb1];
+        _4 = copy _1;
+        _3 = copy _4.0;
+        _5 = load_type(baml.json.json);
+        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
     }
 
     bb1: {

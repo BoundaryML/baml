@@ -45,11 +45,11 @@ fn user.User.from_json(j: baml.json.json) -> User {
     }
 }
 
-fn user.Container.from_json(j: baml.json.json) -> Container<void> {
+fn user.Container.from_json(j: baml.json.json) -> Container<T> {
     // Locals:
-    let _0: Container<void> // _0 // return
+    let _0: Container<T> // _0 // return
     let _1: baml.json.json // j // param
-    let _2: unknown
+    let _2: T
     let _3: baml.json.json
     let _4: type
 
@@ -77,8 +77,8 @@ fn user.Container.to_json(self: Container) -> baml.json.json {
     let _0: baml.json.json // _0 // return
     let _1: Container // self // param
     let _2: baml.json.json
-    let _3: unknown
-    let _4: Container<unknown>
+    let _3: T
+    let _4: Container<T>
     let _5: type
 
     bb0: {
@@ -105,11 +105,13 @@ fn user.User.to_json(self: User) -> baml.json.json {
     let _2: baml.json.json
     let _3: string
     let _4: User
+    let _5: type
 
     bb0: {
         _4 = copy _1;
         _3 = copy _4.0;
-        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
+        _5 = load_type(string);
+        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
     }
 
     bb1: {

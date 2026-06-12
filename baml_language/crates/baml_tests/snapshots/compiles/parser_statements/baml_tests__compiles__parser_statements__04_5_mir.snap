@@ -353,11 +353,13 @@ fn user.EdgeFoo.to_json(self: EdgeFoo) -> baml.json.json {
     let _2: baml.json.json
     let _3: int
     let _4: EdgeFoo
+    let _5: type
 
     bb0: {
         _4 = copy _1;
         _3 = copy _4.0;
-        _2 = call const fn baml.Int.to_json(copy _3) -> [bb1];
+        _5 = load_type(int);
+        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
     }
 
     bb1: {
@@ -602,7 +604,7 @@ fn user.iterator_style_for_loop() -> int {
     let _0: int // _0 // return
     let _1: int // result
     let _2: int[]
-    let _3: baml.iter.Iterator<Item = int, Error = void>
+    let _3: baml.iter.Iterator<Item = int, Error = never>
     let _4: type
     let _5: unknown
     let _6: bool
@@ -649,7 +651,7 @@ fn user.iterator_style_for_loop() -> int {
     }
 
     bb2: {
-        _6 = is_type(copy _3, baml.iter.Flatten<_, int, void, void>);
+        _6 = is_type(copy _3, baml.iter.Flatten<_, int, never, never>);
         branch copy _6 -> [bb24, bb3];
     }
 
@@ -664,12 +666,12 @@ fn user.iterator_style_for_loop() -> int {
     }
 
     bb5: {
-        _11 = is_type(copy _3, baml.iter.StepBy<int, void>);
+        _11 = is_type(copy _3, baml.iter.StepBy<int, never>);
         branch copy _11 -> [bb21, bb6];
     }
 
     bb6: {
-        _14 = is_type(copy _3, baml.iter.Chain<int, void, void>);
+        _14 = is_type(copy _3, baml.iter.Chain<int, never, never>);
         branch copy _14 -> [bb20, bb7];
     }
 
@@ -679,27 +681,27 @@ fn user.iterator_style_for_loop() -> int {
     }
 
     bb8: {
-        _20 = is_type(copy _3, baml.iter.Map<_, int, void, void>);
+        _20 = is_type(copy _3, baml.iter.Map<_, int, never, never>);
         branch copy _20 -> [bb18, bb9];
     }
 
     bb9: {
-        _22 = is_type(copy _3, baml.iter.Filter<int, void, void>);
+        _22 = is_type(copy _3, baml.iter.Filter<int, never, never>);
         branch copy _22 -> [bb17, bb10];
     }
 
     bb10: {
-        _26 = is_type(copy _3, baml.iter.FilterMap<_, int, void, void>);
+        _26 = is_type(copy _3, baml.iter.FilterMap<_, int, never, never>);
         branch copy _26 -> [bb16, bb11];
     }
 
     bb11: {
-        _28 = is_type(copy _3, baml.iter.FlatMap<_, int, void, void, void>);
+        _28 = is_type(copy _3, baml.iter.FlatMap<_, int, never, never, never>);
         branch copy _28 -> [bb15, bb12];
     }
 
     bb12: {
-        _30 = is_type(copy _3, baml.iter.Peekable<int, void>);
+        _30 = is_type(copy _3, baml.iter.Peekable<int, never>);
         branch copy _30 -> [bb14, bb13];
     }
 
@@ -709,7 +711,7 @@ fn user.iterator_style_for_loop() -> int {
 
     bb14: {
         _31 = load_type(int);
-        _32 = load_type(void);
+        _32 = load_type(never);
         _5 = call const fn baml.iter.Peekable.Iterator.next<copy _31, copy _32>(copy _3) -> [bb25];
     }
 
@@ -725,8 +727,8 @@ fn user.iterator_style_for_loop() -> int {
 
     bb17: {
         _23 = load_type(int);
-        _24 = load_type(void);
-        _25 = load_type(void);
+        _24 = load_type(never);
+        _25 = load_type(never);
         _5 = call const fn baml.iter.Filter.Iterator.next<copy _23, copy _24, copy _25>(copy _3) -> [bb25];
     }
 
@@ -742,14 +744,14 @@ fn user.iterator_style_for_loop() -> int {
 
     bb20: {
         _15 = load_type(int);
-        _16 = load_type(void);
-        _17 = load_type(void);
+        _16 = load_type(never);
+        _17 = load_type(never);
         _5 = call const fn baml.iter.Chain.Iterator.next<copy _15, copy _16, copy _17>(copy _3) -> [bb25];
     }
 
     bb21: {
         _12 = load_type(int);
-        _13 = load_type(void);
+        _13 = load_type(never);
         _5 = call const fn baml.iter.StepBy.Iterator.next<copy _12, copy _13>(copy _3) -> [bb25];
     }
 
@@ -796,7 +798,7 @@ fn user.nested_for_loop() -> int {
     let _0: int // _0 // return
     let _1: int // result
     let _2: int[]
-    let _3: baml.iter.Iterator<Item = int, Error = void>
+    let _3: baml.iter.Iterator<Item = int, Error = never>
     let _4: type
     let _5: unknown
     let _6: bool
@@ -830,7 +832,7 @@ fn user.nested_for_loop() -> int {
     let _34: int
     let _35: int // i
     let _36: int[]
-    let _37: baml.iter.Iterator<Item = int, Error = void>
+    let _37: baml.iter.Iterator<Item = int, Error = never>
     let _38: type
     let _39: unknown
     let _40: bool
@@ -879,7 +881,7 @@ fn user.nested_for_loop() -> int {
     }
 
     bb2: {
-        _6 = is_type(copy _3, baml.iter.Flatten<_, int, void, void>);
+        _6 = is_type(copy _3, baml.iter.Flatten<_, int, never, never>);
         branch copy _6 -> [bb24, bb3];
     }
 
@@ -894,12 +896,12 @@ fn user.nested_for_loop() -> int {
     }
 
     bb5: {
-        _11 = is_type(copy _3, baml.iter.StepBy<int, void>);
+        _11 = is_type(copy _3, baml.iter.StepBy<int, never>);
         branch copy _11 -> [bb21, bb6];
     }
 
     bb6: {
-        _14 = is_type(copy _3, baml.iter.Chain<int, void, void>);
+        _14 = is_type(copy _3, baml.iter.Chain<int, never, never>);
         branch copy _14 -> [bb20, bb7];
     }
 
@@ -909,27 +911,27 @@ fn user.nested_for_loop() -> int {
     }
 
     bb8: {
-        _20 = is_type(copy _3, baml.iter.Map<_, int, void, void>);
+        _20 = is_type(copy _3, baml.iter.Map<_, int, never, never>);
         branch copy _20 -> [bb18, bb9];
     }
 
     bb9: {
-        _22 = is_type(copy _3, baml.iter.Filter<int, void, void>);
+        _22 = is_type(copy _3, baml.iter.Filter<int, never, never>);
         branch copy _22 -> [bb17, bb10];
     }
 
     bb10: {
-        _26 = is_type(copy _3, baml.iter.FilterMap<_, int, void, void>);
+        _26 = is_type(copy _3, baml.iter.FilterMap<_, int, never, never>);
         branch copy _26 -> [bb16, bb11];
     }
 
     bb11: {
-        _28 = is_type(copy _3, baml.iter.FlatMap<_, int, void, void, void>);
+        _28 = is_type(copy _3, baml.iter.FlatMap<_, int, never, never, never>);
         branch copy _28 -> [bb15, bb12];
     }
 
     bb12: {
-        _30 = is_type(copy _3, baml.iter.Peekable<int, void>);
+        _30 = is_type(copy _3, baml.iter.Peekable<int, never>);
         branch copy _30 -> [bb14, bb13];
     }
 
@@ -939,7 +941,7 @@ fn user.nested_for_loop() -> int {
 
     bb14: {
         _31 = load_type(int);
-        _32 = load_type(void);
+        _32 = load_type(never);
         _5 = call const fn baml.iter.Peekable.Iterator.next<copy _31, copy _32>(copy _3) -> [bb25];
     }
 
@@ -955,8 +957,8 @@ fn user.nested_for_loop() -> int {
 
     bb17: {
         _23 = load_type(int);
-        _24 = load_type(void);
-        _25 = load_type(void);
+        _24 = load_type(never);
+        _25 = load_type(never);
         _5 = call const fn baml.iter.Filter.Iterator.next<copy _23, copy _24, copy _25>(copy _3) -> [bb25];
     }
 
@@ -972,14 +974,14 @@ fn user.nested_for_loop() -> int {
 
     bb20: {
         _15 = load_type(int);
-        _16 = load_type(void);
-        _17 = load_type(void);
+        _16 = load_type(never);
+        _17 = load_type(never);
         _5 = call const fn baml.iter.Chain.Iterator.next<copy _15, copy _16, copy _17>(copy _3) -> [bb25];
     }
 
     bb21: {
         _12 = load_type(int);
-        _13 = load_type(void);
+        _13 = load_type(never);
         _5 = call const fn baml.iter.StepBy.Iterator.next<copy _12, copy _13>(copy _3) -> [bb25];
     }
 
@@ -1016,7 +1018,7 @@ fn user.nested_for_loop() -> int {
     }
 
     bb28: {
-        _40 = is_type(copy _37, baml.iter.Flatten<_, int, void, void>);
+        _40 = is_type(copy _37, baml.iter.Flatten<_, int, never, never>);
         branch copy _40 -> [bb50, bb29];
     }
 
@@ -1031,12 +1033,12 @@ fn user.nested_for_loop() -> int {
     }
 
     bb31: {
-        _45 = is_type(copy _37, baml.iter.StepBy<int, void>);
+        _45 = is_type(copy _37, baml.iter.StepBy<int, never>);
         branch copy _45 -> [bb47, bb32];
     }
 
     bb32: {
-        _48 = is_type(copy _37, baml.iter.Chain<int, void, void>);
+        _48 = is_type(copy _37, baml.iter.Chain<int, never, never>);
         branch copy _48 -> [bb46, bb33];
     }
 
@@ -1046,27 +1048,27 @@ fn user.nested_for_loop() -> int {
     }
 
     bb34: {
-        _54 = is_type(copy _37, baml.iter.Map<_, int, void, void>);
+        _54 = is_type(copy _37, baml.iter.Map<_, int, never, never>);
         branch copy _54 -> [bb44, bb35];
     }
 
     bb35: {
-        _56 = is_type(copy _37, baml.iter.Filter<int, void, void>);
+        _56 = is_type(copy _37, baml.iter.Filter<int, never, never>);
         branch copy _56 -> [bb43, bb36];
     }
 
     bb36: {
-        _60 = is_type(copy _37, baml.iter.FilterMap<_, int, void, void>);
+        _60 = is_type(copy _37, baml.iter.FilterMap<_, int, never, never>);
         branch copy _60 -> [bb42, bb37];
     }
 
     bb37: {
-        _62 = is_type(copy _37, baml.iter.FlatMap<_, int, void, void, void>);
+        _62 = is_type(copy _37, baml.iter.FlatMap<_, int, never, never, never>);
         branch copy _62 -> [bb41, bb38];
     }
 
     bb38: {
-        _64 = is_type(copy _37, baml.iter.Peekable<int, void>);
+        _64 = is_type(copy _37, baml.iter.Peekable<int, never>);
         branch copy _64 -> [bb40, bb39];
     }
 
@@ -1076,7 +1078,7 @@ fn user.nested_for_loop() -> int {
 
     bb40: {
         _65 = load_type(int);
-        _66 = load_type(void);
+        _66 = load_type(never);
         _39 = call const fn baml.iter.Peekable.Iterator.next<copy _65, copy _66>(copy _37) -> [bb51];
     }
 
@@ -1092,8 +1094,8 @@ fn user.nested_for_loop() -> int {
 
     bb43: {
         _57 = load_type(int);
-        _58 = load_type(void);
-        _59 = load_type(void);
+        _58 = load_type(never);
+        _59 = load_type(never);
         _39 = call const fn baml.iter.Filter.Iterator.next<copy _57, copy _58, copy _59>(copy _37) -> [bb51];
     }
 
@@ -1109,14 +1111,14 @@ fn user.nested_for_loop() -> int {
 
     bb46: {
         _49 = load_type(int);
-        _50 = load_type(void);
-        _51 = load_type(void);
+        _50 = load_type(never);
+        _51 = load_type(never);
         _39 = call const fn baml.iter.Chain.Iterator.next<copy _49, copy _50, copy _51>(copy _37) -> [bb51];
     }
 
     bb47: {
         _46 = load_type(int);
-        _47 = load_type(void);
+        _47 = load_type(never);
         _39 = call const fn baml.iter.StepBy.Iterator.next<copy _46, copy _47>(copy _37) -> [bb51];
     }
 
@@ -1263,24 +1265,28 @@ fn user.Point.to_json(self: Point) -> baml.json.json {
     let _2: baml.json.json
     let _3: int
     let _4: Point
-    let _5: baml.json.json
-    let _6: int
-    let _7: Point
+    let _5: type
+    let _6: baml.json.json
+    let _7: int
+    let _8: Point
+    let _9: type
 
     bb0: {
         _4 = copy _1;
         _3 = copy _4.0;
-        _2 = call const fn baml.Int.to_json(copy _3) -> [bb1];
+        _5 = load_type(int);
+        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
     }
 
     bb1: {
-        _7 = copy _1;
-        _6 = copy _7.1;
-        _5 = call const fn baml.Int.to_json(copy _6) -> [bb2];
+        _8 = copy _1;
+        _7 = copy _8.1;
+        _9 = load_type(int);
+        _6 = call const fn baml.json.to_json<copy _9>(copy _7) -> [bb2];
     }
 
     bb2: {
-        _0 = { const "x": copy _2, const "y": copy _5 };
+        _0 = { const "x": copy _2, const "y": copy _6 };
         goto -> bb3;
     }
 

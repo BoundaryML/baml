@@ -25,7 +25,7 @@ function user.test_nested_generic_chain(box: user.Box<user.Box<user.User>>) -> s
   {  } box.value.value.name
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": self.name.to_json(), "age": self.age.to_json() }
+  map { "name": baml.json.to_json(self.name), "age": baml.json.to_json(self.age) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "value": baml.json.to_json(self.value) }

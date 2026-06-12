@@ -562,19 +562,22 @@ impl BexEngine {
                     });
                 }
                 // `throws` is the callable's declared error contract `E`
-                // (`call_host_value<T, E>`). An omitted throws on the
-                // parameter is a synthesized generic effect param. By MIR
-                // lowering ([baml_compiler2_mir::lower::convert_tir2_ty]
-                // around the unbounded-TypeVar arm), such a generic erases
-                // to `RuntimeTy::Void` at runtime — but `Void` is also a valid
-                // declared type (a bare `-> void` throws contract, however
-                // unusual). To keep the FFI boundary's intent explicit and
-                // forward-compatible with a future FFI mechanism that
-                // supplies a real host-reported error type, normalize the
-                // erased-generic shape to `BuiltinUnknown` here. Concrete
-                // throws (e.g. `throws ParseError`) pass through unchanged.
+                // (`call_host_value<T, E>`). When the parameter pins no
+                // concrete error type the throws lowers to a bottom/unit
+                // shape: an omitted `throws` becomes `Never` (the function-type
+                // lowering's default) and a bare `-> void` throws becomes
+                // `Void`. Neither names an error the host is obligated to
+                // honor — and the host is foreign code that may surface a
+                // native exception regardless (materialized as
+                // `baml.errors.HostCallable`). Normalize both to
+                // `BuiltinUnknown` so such a throw is accepted opaquely and an
+                // in-BAML `catch` can match it, rather than being rejected as a
+                // `HostContractViolation`. Concrete throws (e.g.
+                // `throws ParseError`) pass through unchanged and stay enforced.
                 let normalized_throws = match throws {
-                    RuntimeTy::Void { attr } => RuntimeTy::BuiltinUnknown { attr },
+                    RuntimeTy::Void { attr } | RuntimeTy::Never { attr } => {
+                        RuntimeTy::BuiltinUnknown { attr }
+                    }
                     other => other,
                 };
                 let host_closure = bex_vm_types::HostClosure {
@@ -799,7 +802,14 @@ pub(crate) fn peel_function_ty(ty: &RuntimeTy) -> Option<&RuntimeTy> {
 /// its returned value validated, so binding one is rejected.
 fn ret_ty_has_unvalidatable_position(ty: &RuntimeTy) -> bool {
     match ty {
-        RuntimeTy::Void { .. } | RuntimeTy::BuiltinUnknown { .. } => true,
+        // `Void`/`BuiltinUnknown` accept anything; a free `TypeVar` or a
+        // projection off one is a faithful (un-erased) generic position whose
+        // instantiation the host's opaque value cannot be validated against —
+        // both are unvalidatable, so binding such a callable is rejected.
+        RuntimeTy::Void { .. }
+        | RuntimeTy::BuiltinUnknown { .. }
+        | RuntimeTy::TypeVar(..)
+        | RuntimeTy::AssociatedTypeProjection { .. } => true,
         RuntimeTy::List(elem, _) => ret_ty_has_unvalidatable_position(elem),
         RuntimeTy::Map { value, .. } => ret_ty_has_unvalidatable_position(value),
         RuntimeTy::Union(members, _) => members.iter().any(ret_ty_has_unvalidatable_position),

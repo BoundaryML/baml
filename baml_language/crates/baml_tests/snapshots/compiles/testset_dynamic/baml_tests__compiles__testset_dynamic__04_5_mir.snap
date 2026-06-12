@@ -38,7 +38,7 @@ fn .<lambda($init_test_main, 0)>(testset: testing.TestCollector) -> null {
     let _1: testing.TestCollector // testset // param
     let _2: string[] // cases
     let _3: string[]
-    let _4: baml.iter.Iterator<Item = string, Error = void>
+    let _4: baml.iter.Iterator<Item = string, Error = never>
     let _5: type
     let _6: unknown
     let _7: bool
@@ -85,7 +85,7 @@ fn .<lambda($init_test_main, 0)>(testset: testing.TestCollector) -> null {
     }
 
     bb2: {
-        _7 = is_type(copy _4, baml.iter.Flatten<_, string, void, void>);
+        _7 = is_type(copy _4, baml.iter.Flatten<_, string, never, never>);
         branch copy _7 -> [bb22, bb3];
     }
 
@@ -95,12 +95,12 @@ fn .<lambda($init_test_main, 0)>(testset: testing.TestCollector) -> null {
     }
 
     bb4: {
-        _11 = is_type(copy _4, baml.iter.StepBy<string, void>);
+        _11 = is_type(copy _4, baml.iter.StepBy<string, never>);
         branch copy _11 -> [bb20, bb5];
     }
 
     bb5: {
-        _14 = is_type(copy _4, baml.iter.Chain<string, void, void>);
+        _14 = is_type(copy _4, baml.iter.Chain<string, never, never>);
         branch copy _14 -> [bb19, bb6];
     }
 
@@ -110,27 +110,27 @@ fn .<lambda($init_test_main, 0)>(testset: testing.TestCollector) -> null {
     }
 
     bb7: {
-        _20 = is_type(copy _4, baml.iter.Map<_, string, void, void>);
+        _20 = is_type(copy _4, baml.iter.Map<_, string, never, never>);
         branch copy _20 -> [bb17, bb8];
     }
 
     bb8: {
-        _22 = is_type(copy _4, baml.iter.Filter<string, void, void>);
+        _22 = is_type(copy _4, baml.iter.Filter<string, never, never>);
         branch copy _22 -> [bb16, bb9];
     }
 
     bb9: {
-        _26 = is_type(copy _4, baml.iter.FilterMap<_, string, void, void>);
+        _26 = is_type(copy _4, baml.iter.FilterMap<_, string, never, never>);
         branch copy _26 -> [bb15, bb10];
     }
 
     bb10: {
-        _28 = is_type(copy _4, baml.iter.FlatMap<_, string, void, void, void>);
+        _28 = is_type(copy _4, baml.iter.FlatMap<_, string, never, never, never>);
         branch copy _28 -> [bb14, bb11];
     }
 
     bb11: {
-        _30 = is_type(copy _4, baml.iter.Peekable<string, void>);
+        _30 = is_type(copy _4, baml.iter.Peekable<string, never>);
         branch copy _30 -> [bb13, bb12];
     }
 
@@ -140,7 +140,7 @@ fn .<lambda($init_test_main, 0)>(testset: testing.TestCollector) -> null {
 
     bb13: {
         _31 = load_type(string);
-        _32 = load_type(void);
+        _32 = load_type(never);
         _6 = call const fn baml.iter.Peekable.Iterator.next<copy _31, copy _32>(copy _4) -> [bb23];
     }
 
@@ -156,8 +156,8 @@ fn .<lambda($init_test_main, 0)>(testset: testing.TestCollector) -> null {
 
     bb16: {
         _23 = load_type(string);
-        _24 = load_type(void);
-        _25 = load_type(void);
+        _24 = load_type(never);
+        _25 = load_type(never);
         _6 = call const fn baml.iter.Filter.Iterator.next<copy _23, copy _24, copy _25>(copy _4) -> [bb23];
     }
 
@@ -173,14 +173,14 @@ fn .<lambda($init_test_main, 0)>(testset: testing.TestCollector) -> null {
 
     bb19: {
         _15 = load_type(string);
-        _16 = load_type(void);
-        _17 = load_type(void);
+        _16 = load_type(never);
+        _17 = load_type(never);
         _6 = call const fn baml.iter.Chain.Iterator.next<copy _15, copy _16, copy _17>(copy _4) -> [bb23];
     }
 
     bb20: {
         _12 = load_type(string);
-        _13 = load_type(void);
+        _13 = load_type(never);
         _6 = call const fn baml.iter.StepBy.Iterator.next<copy _12, copy _13>(copy _4) -> [bb23];
     }
 

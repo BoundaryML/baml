@@ -682,7 +682,7 @@ function f(u: MaybeUser) -> string? {
       name: string
     }
     function user.User.to_json(self: user.User) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      map { "name": self.name.to_json() } : map<string, baml.json.json>
+      map { "name": baml.json.to_json(self.name) } : map<string, baml.json.json>
     }
     function user.User.from_json(j: baml.json.json) -> user.User throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       User { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.User

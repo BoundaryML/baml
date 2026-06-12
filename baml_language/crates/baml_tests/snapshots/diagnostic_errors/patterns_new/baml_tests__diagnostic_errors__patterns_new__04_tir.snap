@@ -51,7 +51,7 @@ class user.Team {
   scores: int[]
 }
 function user.Team.to_json(self: user.Team) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "scores": self.scores.to_json() } : map<string, baml.json.json>
+  map { "scores": baml.json.to_json(self.scores) } : map<string, baml.json.json>
 }
 function user.Team.from_json(j: baml.json.json) -> user.Team throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Team { scores: baml.json.from_json<int[]>(baml.json.field(j, "scores")) } : user.Team
@@ -106,7 +106,7 @@ class user.Bag {
   contents: int
 }
 function user.Bag.to_json(self: user.Bag) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "contents": self.contents.to_json() } : map<string, baml.json.json>
+  map { "contents": baml.json.to_json(self.contents) } : map<string, baml.json.json>
 }
 function user.Bag.from_json(j: baml.json.json) -> user.Bag throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Bag { contents: baml.json.from_json<int>(baml.json.field(j, "contents")) } : user.Bag
@@ -125,7 +125,7 @@ class user.Mixed {
   value: int | float | bool
 }
 function user.Mixed.to_json(self: user.Mixed) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "value": self.value.to_json() } : map<string, baml.json.json>
+  map { "value": baml.json.to_json(self.value) } : map<string, baml.json.json>
 }
 function user.Mixed.from_json(j: baml.json.json) -> user.Mixed throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Mixed { value: baml.json.from_json<int | float | bool>(baml.json.field(j, "value")) } : user.Mixed
@@ -145,7 +145,7 @@ class user.Pair {
   payload: int | string
 }
 function user.Pair.to_json(self: user.Pair) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "kind": self.kind.to_json(), "payload": self.payload.to_json() } : map<string, baml.json.json>
+  map { "kind": baml.json.to_json(self.kind), "payload": baml.json.to_json(self.payload) } : map<string, baml.json.json>
 }
 function user.Pair.from_json(j: baml.json.json) -> user.Pair throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Pair { kind: baml.json.from_json<int | bool>(baml.json.field(j, "kind")), payload: baml.json.from_json<int | string>(baml.json.field(j, "payload")) } : user.Pair
@@ -196,7 +196,7 @@ class user.Flagged {
   note: string
 }
 function user.Flagged.to_json(self: user.Flagged) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "flag": self.flag.to_json(), "note": self.note.to_json() } : map<string, baml.json.json>
+  map { "flag": baml.json.to_json(self.flag), "note": baml.json.to_json(self.note) } : map<string, baml.json.json>
 }
 function user.Flagged.from_json(j: baml.json.json) -> user.Flagged throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Flagged { flag: baml.json.from_json<bool>(baml.json.field(j, "flag")), note: baml.json.from_json<string>(baml.json.field(j, "note")) } : user.Flagged
@@ -216,7 +216,7 @@ class user.Box2 {
   second: int[] | null
 }
 function user.Box2.to_json(self: user.Box2) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "first": self.first.to_json(), "second": self.second?.to_json() } : map<string, baml.json.json | null>
+  map { "first": baml.json.to_json(self.first), "second": baml.json.to_json(self.second) } : map<string, baml.json.json>
 }
 function user.Box2.from_json(j: baml.json.json) -> user.Box2 throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Box2 { first: baml.json.from_json<bool>(baml.json.field(j, "first")), second: baml.json.from_json<int[]?>(baml.json.field(j, "second")) } : user.Box2
@@ -246,7 +246,7 @@ class user.IntPair {
   b: int
 }
 function user.IntPair.to_json(self: user.IntPair) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "a": self.a.to_json(), "b": self.b.to_json() } : map<string, baml.json.json>
+  map { "a": baml.json.to_json(self.a), "b": baml.json.to_json(self.b) } : map<string, baml.json.json>
 }
 function user.IntPair.from_json(j: baml.json.json) -> user.IntPair throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   IntPair { a: baml.json.from_json<int>(baml.json.field(j, "a")), b: baml.json.from_json<int>(baml.json.field(j, "b")) } : user.IntPair

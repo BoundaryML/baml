@@ -367,9 +367,10 @@ function user.SearchService.from_json(j: baml.json.json) -> SearchService {
 }
 
 function user.SearchService.to_json(self: SearchService) -> baml.json.json {
+    load_type string
     load_var self
     load_field .base
-    call baml.String.to_json
+    call baml.json.to_json
     load_const "base"
     alloc_map 1
     return

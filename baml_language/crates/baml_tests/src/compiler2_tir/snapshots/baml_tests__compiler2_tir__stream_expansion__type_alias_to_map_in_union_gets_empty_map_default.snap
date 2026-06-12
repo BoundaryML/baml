@@ -7,7 +7,7 @@ class user.WithMapAlias {
   settings: user.Config | int
 }
 function user.WithMapAlias.to_json(self: user.WithMapAlias) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "settings": self.settings.to_json() } : map<string, baml.json.json>
+  map { "settings": baml.json.to_json(self.settings) } : map<string, baml.json.json>
 }
 function user.WithMapAlias.from_json(j: baml.json.json) -> user.WithMapAlias throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   WithMapAlias { settings: baml.json.from_json<Config | int>(baml.json.field(j, "settings")) } : user.WithMapAlias

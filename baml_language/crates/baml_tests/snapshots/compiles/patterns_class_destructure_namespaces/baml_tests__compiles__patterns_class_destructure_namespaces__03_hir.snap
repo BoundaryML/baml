@@ -70,8 +70,8 @@ function user.llm.openai.to_json(self: ?) -> baml.json.json  [expr] {
   map { "value": baml.json.to_json(self.value) }
 }
 function user.llm.openai.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "text": self.text.to_json(), "score": self.score.to_json() }
+  map { "text": baml.json.to_json(self.text), "score": baml.json.to_json(self.score) }
 }
 function user.llm.openai.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "inner": self.inner.to_json() }
+  map { "inner": baml.json.to_json(self.inner) }
 }

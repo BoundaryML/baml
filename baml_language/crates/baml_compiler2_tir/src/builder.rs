@@ -4644,6 +4644,13 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let first = values.next().expect("non-empty checked above");
                 values.fold(first, |acc, v| crate::generics::union_ty(&acc, &v))
             }
+            // A `never`-typed operand never yields a value to await: it
+            // diverges (`await (throw e)`, `await (return x)`) or is a
+            // malformed/error-recovery expression. `never` is the bottom type
+            // and is assignable to any `Future<_, _>`, so `await never : never`
+            // — the await is unreachable. Yield `never` rather than reporting a
+            // spurious "expected Future" mismatch on already-unreachable code.
+            Ty::Never { .. } => fut_ty,
             Ty::Unknown { .. } | Ty::Error { .. } => fut_ty,
             other => {
                 // `await` requires a Future operand. Emit a
@@ -4925,7 +4932,17 @@ impl<'db> TypeInferenceBuilder<'db> {
                                 continue;
                             }
                             let field_ty = self.infer_expr(*field_expr, body).widen_fresh();
-                            crate::generics::infer_bindings(declared_ty, &field_ty, &mut bindings);
+                            // Allow typevar actuals so a field that carries an
+                            // enclosing generic (e.g. a `body: () -> T throws E`
+                            // field whose value is `() -> int throws E`) binds the
+                            // class param to that faithful typevar instead of
+                            // leaving it unbound — which would erase to `Unknown`
+                            // and trip the runtime boundary.
+                            crate::generics::infer_bindings_allow_typevars(
+                                declared_ty,
+                                &field_ty,
+                                &mut bindings,
+                            );
                         }
                         let inferred_type_args: Vec<Ty> = class_data
                             .generic_params

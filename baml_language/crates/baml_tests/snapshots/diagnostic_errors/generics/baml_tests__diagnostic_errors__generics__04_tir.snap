@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 40476
 ---
 === TIR2 ===
 class user.Box {
@@ -114,7 +113,7 @@ function user.Holder.get_data(self: user.Holder) -> unknown throws never {
   !! 2283..2371: type mismatch: expected T, got string
 }
 function user.Holder.to_json(self: user.Holder) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "data": self.data.to_json() } : map<string, baml.json.json>
+  map { "data": baml.json.to_json(self.data) } : map<string, baml.json.json>
 }
 function user.Holder.from_json(j: baml.json.json) -> user.Holder<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Holder { data: baml.json.from_json<string>(baml.json.field(j, "data")) } : user.Holder<T>
@@ -164,7 +163,7 @@ class user.Plain {
   name: string
 }
 function user.Plain.to_json(self: user.Plain) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "name": self.name.to_json() } : map<string, baml.json.json>
+  map { "name": baml.json.to_json(self.name) } : map<string, baml.json.json>
 }
 function user.Plain.from_json(j: baml.json.json) -> user.Plain throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Plain { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.Plain
@@ -185,7 +184,7 @@ function user.Container.unwrap(self: user.Container) -> unknown throws never {
   }
 }
 function user.Container.to_json(self: user.Container) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "inner": self.inner.to_json() } : map<string, baml.json.json>
+  map { "inner": baml.json.to_json(self.inner) } : map<string, baml.json.json>
 }
 function user.Container.from_json(j: baml.json.json) -> user.Container<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Container { inner: baml.json.from_json<Box<T>>(baml.json.field(j, "inner")) } : user.Container<T>
@@ -255,7 +254,7 @@ function user.Stack.peek(self: user.Stack) -> unknown throws never {
   }
 }
 function user.Stack.to_json(self: user.Stack) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "items": self.items.to_json() } : map<string, baml.json.json>
+  map { "items": baml.json.to_json(self.items) } : map<string, baml.json.json>
 }
 function user.Stack.from_json(j: baml.json.json) -> user.Stack<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Stack { items: baml.json.from_json<T[]>(baml.json.field(j, "items")) } : user.Stack<T>
@@ -328,7 +327,7 @@ class user.Todo {
   userId: int
 }
 function user.Todo.to_json(self: user.Todo) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "id": self.id.to_json(), "title": self.title.to_json(), "completed": self.completed.to_json(), "userId": self.userId.to_json() } : map<string, baml.json.json>
+  map { "id": baml.json.to_json(self.id), "title": baml.json.to_json(self.title), "completed": baml.json.to_json(self.completed), "userId": baml.json.to_json(self.userId) } : map<string, baml.json.json>
 }
 function user.Todo.from_json(j: baml.json.json) -> user.Todo throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Todo { id: baml.json.from_json<int>(baml.json.field(j, "id")), title: baml.json.from_json<string>(baml.json.field(j, "title")), completed: baml.json.from_json<bool>(baml.json.field(j, "completed")), userId: baml.json.from_json<int>(baml.json.field(j, "userId")) } : user.Todo
