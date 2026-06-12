@@ -742,6 +742,7 @@ dependencies = [
  "indicatif",
  "insta",
  "libsui",
+ "object 0.36.3",
  "regex",
  "reqwest",
  "sdkgen_python_pydantic2",
