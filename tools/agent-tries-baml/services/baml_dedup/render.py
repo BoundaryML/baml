@@ -71,7 +71,7 @@ def render_open_issues_json(issues: list[dict[str, Any]]) -> str:
         The pretty-printed JSON array as a string.
     """
     arr = [
-        {"id": i["_id"], "kind": i["kind"], "title": i["title"], "description": i["description"]}
+        {"id": i.get("_id"), "kind": i.get("kind"), "title": i.get("title", ""), "description": i.get("description", "")}
         for i in issues
     ]
     return json.dumps(arr, indent=2)
