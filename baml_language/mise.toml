@@ -60,6 +60,11 @@ run = "cargo run -p cargo-size-gate -- size-gate bake --branch canary"
 description = "Record a new size baseline by building locally (bootstrap a brand-new platform)"
 run = "cargo run -p cargo-size-gate -- size-gate record"
 
+[tasks.gen-workflows]
+description = "Generate .github/workflows YAML from crates/tools_xtask"
+run = "cargo run -p cargo-xtask -- workflows"
+sources = ["crates/tools_xtask/**/*.rs"]
+
 [tasks.insta-update]
 description = "Run all snapshot tests with INSTA_UPDATE=always"
 env = { INSTA_UPDATE = "always" }
