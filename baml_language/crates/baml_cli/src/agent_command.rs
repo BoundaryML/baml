@@ -410,11 +410,19 @@ fn normalize_skill_references(mut content: String, skill_names: &[String]) -> St
 fn split_frontmatter(content: &str) -> Result<(&str, &str)> {
     let rest = content
         .strip_prefix("---\n")
+        .or_else(|| content.strip_prefix("---\r\n"))
         .ok_or_else(|| anyhow!("SKILL.md is missing opening frontmatter marker"))?;
-    let Some((frontmatter, body)) = rest.split_once("\n---\n") else {
+    let Some((closing_start, closing_marker)) = ["\n---\n", "\r\n---\r\n"]
+        .into_iter()
+        .filter_map(|marker| rest.find(marker).map(|index| (index, marker)))
+        .min_by_key(|(index, _)| *index)
+    else {
         anyhow::bail!("SKILL.md is missing closing frontmatter marker");
     };
-    Ok((frontmatter, body))
+    Ok((
+        &rest[..closing_start],
+        &rest[closing_start + closing_marker.len()..],
+    ))
 }
 
 fn validate_skill_name(content: &str, expected_name: &str) -> Result<()> {
@@ -661,6 +669,17 @@ mod tests {
             err.contains("frontmatter name must be `baml-core`"),
             "{err}"
         );
+    }
+
+    #[test]
+    fn direct_layout_accepts_crlf_frontmatter_delimiters() {
+        let content = "---\r\nname: baml-core\r\ndescription: test\r\n---\r\n# Core\r\n";
+        let archive = make_archive(&[("skills/baml-core/SKILL.md", content)]);
+
+        let skills = skills_from_archive(&archive).unwrap();
+
+        assert_eq!(skills.len(), 1);
+        assert_eq!(skills[0].name, "baml-core");
     }
 
     #[test]

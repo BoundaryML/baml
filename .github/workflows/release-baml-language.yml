@@ -422,6 +422,7 @@ jobs:
       - build-wrapper
       - build-python-sdk
       - build-nodejs-sdk
+      - build-agent-skills
     steps:
       - run: echo "all release build jobs completed"
 

@@ -10,18 +10,31 @@ USAGE
 source_dir=""
 version=""
 out_dir=""
+tar_list=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --source)
+      if [[ -z "${2:-}" ]]; then
+        usage
+        exit 2
+      fi
       source_dir="${2:-}"
       shift 2
       ;;
     --version)
+      if [[ -z "${2:-}" ]]; then
+        usage
+        exit 2
+      fi
       version="${2:-}"
       shift 2
       ;;
     --out-dir)
+      if [[ -z "${2:-}" ]]; then
+        usage
+        exit 2
+      fi
       out_dir="${2:-}"
       shift 2
       ;;
@@ -50,6 +63,9 @@ mkdir -p "$out_dir"
 staging="$(mktemp -d "${TMPDIR:-/tmp}/baml-agent-skills.XXXXXX")"
 cleanup() {
   rm -rf "$staging"
+  if [[ -n "${tar_list:-}" ]]; then
+    rm -f "$tar_list"
+  fi
 }
 trap cleanup EXIT
 
@@ -141,7 +157,43 @@ fi
 archive_name="baml-agent-skills-$version.tar.gz"
 archive="$out_dir/$archive_name"
 
-COPYFILE_DISABLE=1 tar -C "$staging" -czf "$archive" skills
+find "$staging" -type d -exec chmod 755 {} +
+find "$staging" -type f -exec chmod 644 {} +
+find "$staging" -exec touch -t 197001010000.00 {} +
+export COPYFILE_DISABLE=1
+export GZIP=-n
+
+tar_help="$(tar --help 2>/dev/null || true)"
+if grep -q -- '--sort' <<< "$tar_help"; then
+  tar_flags=(
+    --sort=name
+    --mtime=1970-01-01
+    --numeric-owner
+    --owner=0
+    --group=0
+  )
+  if grep -q -- '--no-acls' <<< "$tar_help"; then
+    tar_flags+=(--no-acls)
+  fi
+  if grep -q -- '--no-xattrs' <<< "$tar_help"; then
+    tar_flags+=(--no-xattrs)
+  fi
+  tar -C "$staging" "${tar_flags[@]}" -czf "$archive" skills
+else
+  tar_list="$(mktemp "${TMPDIR:-/tmp}/baml-agent-skills-list.XXXXXX")"
+  (
+    cd "$staging"
+    find skills -print | LC_ALL=C sort > "$tar_list"
+    tar --no-recursion \
+      --uid 0 \
+      --gid 0 \
+      --uname root \
+      --gname root \
+      --format ustar \
+      -T "$tar_list" \
+      -czf "$archive"
+  )
+fi
 
 if command -v sha256sum >/dev/null 2>&1; then
   (cd "$out_dir" && sha256sum "$archive_name" > "$archive_name.sha256")
