@@ -124,11 +124,11 @@ class Array<T> {
   /// key — or comparing two keys — throws, `self` is left in its pre-sort
   /// state.
   ///
-  /// The key type must be `Comparable`; `U.CmpError` (the key's comparison
+  /// The key type must be `Comparable`; `U.CompareError` (the key's comparison
   /// error) propagates to the caller alongside the key callback's own `E`. For
   /// `int`/`bigint`/`string` keys that is `never`, so the only error is `E`.
   //baml:mut_self
-  function sort_by_key<U extends Comparable, E>(self, key: (T) -> U throws E) -> T[] throws E | U.CmpError {
+  function sort_by_key<U extends Comparable, E>(self, key: (T) -> U throws E) -> T[] throws E | U.CompareError {
     let n = self.length();
     if (n <= 1) { return self; }
     let items = self.slice(0, n);
@@ -140,7 +140,7 @@ class Array<T> {
     let order: int[] = [];
     let p = 0;
     while (p < n) { order.push(p); p += 1; }
-    order.sort_by((i: int, j: int) -> int throws U.CmpError {
+    order.sort_by((i: int, j: int) -> int throws U.CompareError {
       match (keys.at(i)) {
         null => 0
         let ki: U => match (keys.at(j)) {

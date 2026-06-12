@@ -346,7 +346,7 @@ impl<'a, 'db, B: TypeVarBounds + ?Sized> AssociatedProjectionResolver<'a, 'db, B
             }),
             // Primitive / non-class concrete base types (`int`, `string`, …)
             // can carry out-of-body `implements I for int` blocks, so a
-            // projection like `int.CmpError` must resolve through those rules.
+            // projection like `int.CompareError` must resolve through those rules.
             // Classes have an in-body path above; this mirrors it for the
             // builtin types stdlib interfaces are implemented on.
             other if crate::interfaces::implementation_key_for_ty(other).is_some() => {
