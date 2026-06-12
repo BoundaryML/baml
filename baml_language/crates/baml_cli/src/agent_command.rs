@@ -10,34 +10,12 @@ use std::{
 use anyhow::{Context, Result, anyhow};
 use clap::Args;
 
-use crate::ExitCode;
+use crate::{ExitCode, commands::release_version};
 
-const SKILL_SOURCE_URL: &str =
+const LATEST_SKILL_SOURCE_URL: &str =
     "https://codeload.github.com/BoundaryML/baml-skill/tar.gz/refs/heads/main";
 const HTTP_TIMEOUT: Duration = Duration::from_secs(60);
-
-const SKILLS: &[SkillSpec] = &[
-    SkillSpec {
-        direct_name: "baml-core",
-        legacy_name: "core",
-    },
-    SkillSpec {
-        direct_name: "baml-llm-functions",
-        legacy_name: "llm-functions",
-    },
-    SkillSpec {
-        direct_name: "baml-pipelines",
-        legacy_name: "pipelines",
-    },
-    SkillSpec {
-        direct_name: "baml-testing",
-        legacy_name: "testing",
-    },
-    SkillSpec {
-        direct_name: "baml-bridges",
-        legacy_name: "bridges",
-    },
-];
+const AGENT_SKILLS_ARTIFACT_PREFIX: &str = "baml-agent-skills";
 
 #[derive(Args, Clone, Debug)]
 pub(crate) struct AgentArgs {
@@ -59,17 +37,28 @@ pub(crate) struct AgentInstallArgs {
     /// then the git root, then the current directory.
     #[arg(long, value_name = "PATH")]
     pub dir: Option<PathBuf>,
-}
 
-#[derive(Clone, Copy)]
-struct SkillSpec {
-    direct_name: &'static str,
-    legacy_name: &'static str,
+    /// Install the latest skills from BoundaryML/baml-skill main instead of the
+    /// version pinned to this BAML CLI.
+    #[arg(long, conflicts_with = "from")]
+    pub latest: bool,
+
+    /// Install skills from a tar.gz archive URL, local archive path, or local
+    /// directory. Intended for testing and emergency hotfixes.
+    #[arg(long, value_name = "URL_OR_PATH", conflicts_with = "latest")]
+    pub from: Option<String>,
 }
 
 #[derive(Debug)]
 struct Skill {
-    name: &'static str,
+    name: String,
+    content: String,
+}
+
+#[derive(Debug)]
+struct RawSkill {
+    name: String,
+    legacy_name: String,
     content: String,
 }
 
@@ -87,15 +76,93 @@ impl AgentInstallArgs {
             Some(dir) => explicit_install_root(dir)?,
             None => detect_install_root()?,
         };
-        let archive = fetch_latest_skill_archive()?;
-        let skills = skills_from_archive(&archive)?;
+        let skills = self.load_skills()?;
         install_skills(&root, &skills)?;
         print_success(&root)?;
         Ok(ExitCode::Success)
     }
 }
 
-fn fetch_latest_skill_archive() -> Result<Vec<u8>> {
+impl AgentInstallArgs {
+    fn load_skills(&self) -> Result<Vec<Skill>> {
+        if self.latest {
+            let archive = fetch_archive_url(LATEST_SKILL_SOURCE_URL)?;
+            return skills_from_archive(&archive);
+        }
+
+        if let Some(source) = &self.from {
+            return skills_from_source(source);
+        }
+
+        let archive = fetch_versioned_skill_archive()?;
+        skills_from_archive(&archive)
+    }
+}
+
+fn fetch_versioned_skill_archive() -> Result<Vec<u8>> {
+    let version = agent_skills_release_version();
+    let url = versioned_skill_archive_url(&version);
+    let archive = fetch_archive_url(&url)?;
+    let checksum_url = format!("{url}.sha256");
+    let checksum = fetch_archive_url(&checksum_url)?;
+    let checksum_text =
+        std::str::from_utf8(&checksum).context("BAML agent skills checksum was not valid UTF-8")?;
+    baml_release::verify_release_archive_checksum_text(&archive, &url, checksum_text)
+        .context("verifying agent skills archive checksum failed")?;
+    Ok(archive)
+}
+
+fn agent_skills_release_version() -> String {
+    std::env::var("BAML_AGENT_SKILLS_RELEASE_VERSION")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .unwrap_or_else(|| release_version().to_string())
+}
+
+fn versioned_skill_archive_url(version: &str) -> String {
+    let base_url = std::env::var("BAML_AGENT_SKILLS_RELEASE_BASE_URL").ok();
+    let repo = std::env::var("BAML_AGENT_SKILLS_RELEASE_REPO").ok();
+    versioned_skill_archive_url_with_env(version, base_url.as_deref(), repo.as_deref())
+}
+
+fn versioned_skill_archive_url_with_env(
+    version: &str,
+    base_url: Option<&str>,
+    repo: Option<&str>,
+) -> String {
+    let filename = versioned_skill_archive_filename(version);
+    if let Some(base_url) = base_url {
+        let base = base_url.trim_end_matches('/');
+        return format!("{base}/{filename}");
+    }
+
+    let repo = repo
+        .filter(|value| !value.trim().is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(baml_release::release_repo);
+    format!("https://github.com/{repo}/releases/download/baml-language-{version}/{filename}")
+}
+
+fn versioned_skill_archive_filename(version: &str) -> String {
+    format!("{AGENT_SKILLS_ARTIFACT_PREFIX}-{version}.tar.gz")
+}
+
+fn skills_from_source(source: &str) -> Result<Vec<Skill>> {
+    if source.starts_with("https://") || source.starts_with("http://") {
+        let archive = fetch_archive_url(source)?;
+        return skills_from_archive(&archive);
+    }
+
+    let path = Path::new(source);
+    if path.is_dir() {
+        return skills_from_directory(path);
+    }
+
+    let archive = fs::read(path).with_context(|| format!("failed to read {}", path.display()))?;
+    skills_from_archive(&archive)
+}
+
+fn fetch_archive_url(url: &str) -> Result<Vec<u8>> {
     let client = reqwest::blocking::Client::builder()
         .connect_timeout(Duration::from_secs(10))
         .timeout(HTTP_TIMEOUT)
@@ -104,12 +171,12 @@ fn fetch_latest_skill_archive() -> Result<Vec<u8>> {
         .context("failed to build HTTP client")?;
 
     let response = client
-        .get(SKILL_SOURCE_URL)
+        .get(url)
         .send()
-        .with_context(|| format!("failed to fetch {SKILL_SOURCE_URL}"))?;
+        .with_context(|| format!("failed to fetch {url}"))?;
     if !response.status().is_success() {
         anyhow::bail!(
-            "failed to fetch BAML agent skills from {SKILL_SOURCE_URL}: HTTP {}",
+            "failed to fetch BAML agent skills from {url}: HTTP {}",
             response.status()
         );
     }
@@ -158,7 +225,7 @@ fn detect_install_root() -> Result<PathBuf> {
 fn skills_from_archive(archive: &[u8]) -> Result<Vec<Skill>> {
     let decoder = flate2::read::GzDecoder::new(Cursor::new(archive));
     let mut archive = tar::Archive::new(decoder);
-    let mut found = BTreeMap::<&'static str, String>::new();
+    let mut files = BTreeMap::<String, String>::new();
 
     for entry in archive.entries().context("failed to read skill archive")? {
         let mut entry = entry.context("failed to read skill archive entry")?;
@@ -170,38 +237,120 @@ fn skills_from_archive(archive: &[u8]) -> Result<Vec<Skill>> {
             .context("failed to read skill archive entry path")?
             .into_owned();
         let parts = normalized_components(&path)?;
-        let Some(spec) = skill_spec_for_archive_path(&parts) else {
+        if !archive_entry_might_be_agent_skill_file(&parts) {
             continue;
-        };
-
+        }
         let mut content = String::new();
         entry
             .read_to_string(&mut content)
             .with_context(|| format!("failed to read {}", path.display()))?;
-
-        let normalized = if archive_path_is_direct_skill(&parts, spec.direct_name) {
-            validate_skill_name(&content, spec.direct_name)?;
-            normalize_direct_skill_references(content, spec)
-        } else {
-            normalize_legacy_skill_content(&content, spec)?
-        };
-        found.insert(spec.direct_name, normalized);
+        files.insert(parts.join("/"), content);
     }
 
-    let mut skills = Vec::new();
-    for spec in SKILLS {
-        let Some(content) = found.remove(spec.direct_name) else {
-            anyhow::bail!(
-                "BAML agent skills archive is missing skills/{}/SKILL.md",
-                spec.direct_name
+    skills_from_files(&files)
+}
+
+fn archive_entry_might_be_agent_skill_file(parts: &[String]) -> bool {
+    matches!(parts.last().map(String::as_str), Some("SKILL.md"))
+}
+
+fn skills_from_directory(root: &Path) -> Result<Vec<Skill>> {
+    let mut files = BTreeMap::<String, String>::new();
+    collect_skill_files_from_directory(root, root, &mut files)?;
+    skills_from_files(&files)
+}
+
+fn collect_skill_files_from_directory(
+    root: &Path,
+    dir: &Path,
+    files: &mut BTreeMap<String, String>,
+) -> Result<()> {
+    for entry in fs::read_dir(dir).with_context(|| format!("failed to read {}", dir.display()))? {
+        let entry = entry.with_context(|| format!("failed to read {}", dir.display()))?;
+        let path = entry.path();
+        let file_type = entry
+            .file_type()
+            .with_context(|| format!("failed to inspect {}", path.display()))?;
+        if file_type.is_dir() {
+            collect_skill_files_from_directory(root, &path, files)?;
+        } else if file_type.is_file() {
+            let relative = path
+                .strip_prefix(root)
+                .with_context(|| format!("failed to relativize {}", path.display()))?;
+            let parts = normalized_components(relative)?;
+            if parts.last().map(String::as_str) == Some("SKILL.md") {
+                let content = fs::read_to_string(&path)
+                    .with_context(|| format!("failed to read {}", path.display()))?;
+                files.insert(parts.join("/"), content);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn skills_from_files(files: &BTreeMap<String, String>) -> Result<Vec<Skill>> {
+    let raw = raw_skills_from_discovered_files(files)?;
+    normalize_raw_skills(raw)
+}
+
+fn raw_skills_from_discovered_files(files: &BTreeMap<String, String>) -> Result<Vec<RawSkill>> {
+    let mut raw = BTreeMap::<String, RawSkill>::new();
+
+    for (path, content) in files {
+        let parts = path_components(path);
+        if let Some(name) = direct_skill_name_from_parts(&parts) {
+            validate_skill_install_name(name)?;
+            validate_skill_name(content, name)?;
+            raw.insert(
+                name.to_string(),
+                RawSkill {
+                    name: name.to_string(),
+                    legacy_name: legacy_name_for_direct_skill(name)?,
+                    content: content.clone(),
+                },
             );
-        };
-        skills.push(Skill {
-            name: spec.direct_name,
-            content,
-        });
+        } else if let Some(legacy_name) = legacy_plugin_skill_name_from_parts(&parts) {
+            let name = format!("baml-{legacy_name}");
+            validate_skill_install_name(&name)?;
+            raw.insert(
+                name.clone(),
+                RawSkill {
+                    name: name.clone(),
+                    legacy_name: legacy_name.to_string(),
+                    content: rewrite_frontmatter_name(content, &name)?,
+                },
+            );
+        }
     }
-    Ok(skills)
+
+    if raw.is_empty() {
+        anyhow::bail!(
+            "BAML agent skills archive does not contain any skills. Expected skills/baml-*/SKILL.md or plugins/baml/skills/*/SKILL.md"
+        );
+    }
+
+    Ok(raw.into_values().collect())
+}
+
+fn normalize_raw_skills(raw: Vec<RawSkill>) -> Result<Vec<Skill>> {
+    let mut legacy_to_direct = BTreeMap::new();
+    for skill in &raw {
+        if legacy_to_direct
+            .insert(skill.legacy_name.clone(), skill.name.clone())
+            .is_some()
+        {
+            anyhow::bail!("duplicate BAML agent skill {}", skill.legacy_name);
+        }
+    }
+
+    Ok(raw
+        .into_iter()
+        .map(|skill| Skill {
+            name: skill.name,
+            content: normalize_skill_references(skill.content, &legacy_to_direct),
+        })
+        .collect())
 }
 
 fn normalized_components(path: &Path) -> Result<Vec<String>> {
@@ -218,43 +367,39 @@ fn normalized_components(path: &Path) -> Result<Vec<String>> {
     Ok(parts)
 }
 
-fn skill_spec_for_archive_path(parts: &[String]) -> Option<SkillSpec> {
-    for spec in SKILLS {
-        if archive_path_is_direct_skill(parts, spec.direct_name)
-            || archive_path_is_legacy_plugin_skill(parts, spec.legacy_name)
-        {
-            return Some(*spec);
-        }
-    }
-    None
+fn path_components(path: &str) -> Vec<&str> {
+    path.split('/').filter(|part| !part.is_empty()).collect()
 }
 
-fn archive_path_is_direct_skill(parts: &[String], skill_name: &str) -> bool {
-    parts.len() >= 3
+fn direct_skill_name_from_parts<'a>(parts: &'a [&str]) -> Option<&'a str> {
+    (parts.len() >= 3
         && parts[parts.len() - 3] == "skills"
-        && parts[parts.len() - 2] == skill_name
-        && parts[parts.len() - 1] == "SKILL.md"
+        && parts[parts.len() - 2].starts_with("baml-")
+        && parts[parts.len() - 1] == "SKILL.md")
+        .then_some(parts[parts.len() - 2])
 }
 
-fn archive_path_is_legacy_plugin_skill(parts: &[String], skill_name: &str) -> bool {
-    parts.len() >= 5
+fn legacy_plugin_skill_name_from_parts<'a>(parts: &'a [&str]) -> Option<&'a str> {
+    (parts.len() >= 5
         && parts[parts.len() - 5] == "plugins"
         && parts[parts.len() - 4] == "baml"
         && parts[parts.len() - 3] == "skills"
-        && parts[parts.len() - 2] == skill_name
-        && parts[parts.len() - 1] == "SKILL.md"
+        && parts[parts.len() - 1] == "SKILL.md")
+        .then_some(parts[parts.len() - 2])
 }
 
-fn normalize_legacy_skill_content(content: &str, spec: SkillSpec) -> Result<String> {
+fn rewrite_frontmatter_name(content: &str, name: &str) -> Result<String> {
     let (frontmatter, body) = split_frontmatter(content)?;
-    let frontmatter = replace_frontmatter_name(frontmatter, spec.direct_name)?;
-    let content = format!("---\n{frontmatter}---\n{body}");
-    Ok(normalize_direct_skill_references(content, spec))
+    let frontmatter = replace_frontmatter_name(frontmatter, name)?;
+    Ok(format!("---\n{frontmatter}---\n{body}"))
 }
 
-fn normalize_direct_skill_references(mut content: String, _spec: SkillSpec) -> String {
-    for skill in SKILLS {
-        content = content.replace(&format!("baml:{}", skill.legacy_name), skill.direct_name);
+fn normalize_skill_references(
+    mut content: String,
+    legacy_to_direct: &BTreeMap<String, String>,
+) -> String {
+    for (legacy_name, direct_name) in legacy_to_direct {
+        content = content.replace(&format!("baml:{legacy_name}"), direct_name);
     }
     content = content.replace("baml:*", "baml-*");
     content
@@ -278,6 +423,23 @@ fn validate_skill_name(content: &str, expected_name: &str) -> Result<()> {
         anyhow::bail!("SKILL.md frontmatter name must be `{expected_name}`, got `{got}`");
     }
     Ok(())
+}
+
+fn validate_skill_install_name(name: &str) -> Result<()> {
+    if !name.starts_with("baml-")
+        || name.len() <= "baml-".len()
+        || !name
+            .chars()
+            .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-')
+    {
+        anyhow::bail!("BAML agent skill name must look like `baml-name`, got `{name}`");
+    }
+    Ok(())
+}
+
+fn legacy_name_for_direct_skill(name: &str) -> Result<String> {
+    validate_skill_install_name(name)?;
+    Ok(name.trim_start_matches("baml-").to_string())
 }
 
 fn frontmatter_name(frontmatter: &str) -> Option<String> {
@@ -328,7 +490,7 @@ fn install_skills_to(root: &Path, relative_skills_dir: PathBuf, skills: &[Skill]
 
     let result = (|| -> Result<()> {
         for skill in skills {
-            let skill_dir = tmp_dir.join(skill.name);
+            let skill_dir = tmp_dir.join(&skill.name);
             fs::create_dir_all(&skill_dir)
                 .with_context(|| format!("failed to create {}", skill_dir.display()))?;
             write_atomic(&skill_dir.join("SKILL.md"), &skill.content)?;
@@ -351,9 +513,9 @@ fn install_skills_to(root: &Path, relative_skills_dir: PathBuf, skills: &[Skill]
 }
 
 fn replace_skill_dir(skills_dir: &Path, tmp_dir: &Path, skill: &Skill) -> Result<()> {
-    let final_dir = skills_dir.join(skill.name);
-    let next_dir = tmp_dir.join(skill.name);
-    let backup_dir = unique_backup_dir(skills_dir, skill.name)?;
+    let final_dir = skills_dir.join(&skill.name);
+    let next_dir = tmp_dir.join(&skill.name);
+    let backup_dir = unique_backup_dir(skills_dir, &skill.name)?;
     let mut has_backup = false;
 
     if final_dir.exists() {
@@ -425,7 +587,7 @@ fn write_atomic(path: &Path, content: &str) -> Result<()> {
 fn print_success(root: &Path) -> Result<()> {
     writeln!(
         std::io::stdout(),
-        "Installed latest BAML agent skills in {}\n\nClaude Code:\n  .claude/skills/baml-*/SKILL.md\n\nCodex / OpenCode:\n  .agents/skills/baml-*/SKILL.md\n\nRestart any already-running agent session to pick them up.",
+        "Installed BAML agent skills in {}\n\nClaude Code:\n  .claude/skills/baml-*/SKILL.md\n\nCodex / OpenCode:\n  .agents/skills/baml-*/SKILL.md\n\nRestart any already-running agent session to pick them up.",
         root.display()
     )?;
     Ok(())
@@ -441,20 +603,17 @@ mod tests {
     fn direct_archive_layout_is_loaded() {
         let content = skill("baml-core");
         let archive = make_archive(&[("skills/baml-core/SKILL.md", content.as_str())]);
-        let err = skills_from_archive(&archive).unwrap_err().to_string();
-        assert!(err.contains("baml-llm-functions"), "{err}");
+        let skills = skills_from_archive(&archive).unwrap();
+
+        assert_eq!(skills.len(), 1);
+        assert_eq!(skills[0].name, "baml-core");
     }
 
     #[test]
     fn legacy_plugin_layout_is_normalized() {
-        let entries = SKILLS
-            .iter()
-            .map(|spec| {
-                (
-                    format!("plugins/baml/skills/{}/SKILL.md", spec.legacy_name),
-                    skill(spec.legacy_name),
-                )
-            })
+        let entries = ["core", "bridges", "serving", "testing"]
+            .into_iter()
+            .map(|name| (format!("plugins/baml/skills/{name}/SKILL.md"), skill(name)))
             .collect::<Vec<_>>();
         let entries = entries
             .iter()
@@ -463,30 +622,48 @@ mod tests {
         let archive = make_archive(&entries);
 
         let skills = skills_from_archive(&archive).unwrap();
+        assert_eq!(
+            skills
+                .iter()
+                .map(|skill| skill.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["baml-bridges", "baml-core", "baml-serving", "baml-testing"]
+        );
         let core = skills
             .iter()
             .find(|skill| skill.name == "baml-core")
             .unwrap();
         assert!(core.content.contains("name: baml-core"));
         assert!(!core.content.contains("baml:testing"));
+        assert!(core.content.contains("baml-testing"));
+    }
+
+    #[test]
+    fn direct_layout_installs_all_baml_skills() {
+        let core = skill("baml-core");
+        let serving = skill("baml-serving");
+        let ignored = skill("baml-ignored");
+        let archive = make_archive(&[
+            ("skills/baml-core/SKILL.md", core.as_str()),
+            ("skills/baml-serving/SKILL.md", serving.as_str()),
+            ("skills/baml-ignored/SKILL.md", ignored.as_str()),
+        ]);
+
+        let skills = skills_from_archive(&archive).unwrap();
+
+        assert_eq!(
+            skills
+                .iter()
+                .map(|skill| skill.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["baml-core", "baml-ignored", "baml-serving"]
+        );
     }
 
     #[test]
     fn direct_layout_requires_matching_frontmatter_name() {
-        let entries = SKILLS
-            .iter()
-            .map(|spec| {
-                (
-                    format!("skills/{}/SKILL.md", spec.direct_name),
-                    skill(spec.legacy_name),
-                )
-            })
-            .collect::<Vec<_>>();
-        let entries = entries
-            .iter()
-            .map(|(path, content)| (path.as_str(), content.as_str()))
-            .collect::<Vec<_>>();
-        let archive = make_archive(&entries);
+        let content = skill("core");
+        let archive = make_archive(&[("skills/baml-core/SKILL.md", content.as_str())]);
 
         let err = skills_from_archive(&archive).unwrap_err().to_string();
         assert!(
@@ -506,11 +683,11 @@ mod tests {
         fs::create_dir_all(unrelated.parent().unwrap()).unwrap();
         fs::write(&unrelated, "keep").unwrap();
 
-        let skills = SKILLS
-            .iter()
-            .map(|spec| Skill {
-                name: spec.direct_name,
-                content: skill(spec.direct_name),
+        let skills = ["baml-core", "baml-serving"]
+            .into_iter()
+            .map(|name| Skill {
+                name: name.to_string(),
+                content: skill(name),
             })
             .collect::<Vec<_>>();
 
@@ -522,7 +699,7 @@ mod tests {
                 .contains("name: baml-core")
         );
         assert_eq!(fs::read_to_string(unrelated).unwrap(), "keep");
-        assert!(root.join(".claude/skills/baml-bridges/SKILL.md").is_file());
+        assert!(root.join(".claude/skills/baml-serving/SKILL.md").is_file());
         assert!(
             fs::read_dir(root.join(".agents/skills"))
                 .unwrap()
@@ -531,6 +708,14 @@ mod tests {
                     .file_name()
                     .to_string_lossy()
                     .starts_with(".baml-agent-install-backup-"))
+        );
+    }
+
+    #[test]
+    fn versioned_archive_url_uses_cli_release_tag() {
+        assert_eq!(
+            versioned_skill_archive_url_with_env("1.2.3-nightly.20260612.a", None, None),
+            "https://github.com/BoundaryML/baml/releases/download/baml-language-1.2.3-nightly.20260612.a/baml-agent-skills-1.2.3-nightly.20260612.a.tar.gz"
         );
     }
 

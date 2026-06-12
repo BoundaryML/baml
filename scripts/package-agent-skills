@@ -1,0 +1,149 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat >&2 <<'EOF'
+Usage: scripts/package-agent-skills --source DIR --version VERSION --out-dir DIR
+
+Packages BAML agent skills into the release artifact consumed by:
+
+  baml agent install
+
+The script accepts either of these source layouts:
+
+  skills/baml-*/SKILL.md
+  plugins/baml/skills/*/SKILL.md
+
+It writes:
+
+  baml-agent-skills-VERSION.tar.gz
+  baml-agent-skills-VERSION.tar.gz.sha256
+EOF
+}
+
+source_dir=
+version=
+out_dir=
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --source)
+      source_dir="${2:-}"
+      shift 2
+      ;;
+    --version)
+      version="${2:-}"
+      shift 2
+      ;;
+    --out-dir)
+      out_dir="${2:-}"
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "unknown argument: $1" >&2
+      usage
+      exit 2
+      ;;
+  esac
+done
+
+if [[ -z "$source_dir" || -z "$version" || -z "$out_dir" ]]; then
+  usage
+  exit 2
+fi
+
+if [[ ! -d "$source_dir" ]]; then
+  echo "source directory does not exist: $source_dir" >&2
+  exit 1
+fi
+
+mkdir -p "$out_dir"
+tmp_dir="$(mktemp -d)"
+cleanup() {
+  rm -rf "$tmp_dir"
+}
+trap cleanup EXIT
+
+staging="$tmp_dir/staging"
+mkdir -p "$staging/skills"
+
+skill_names_file="$tmp_dir/skill-names"
+: > "$skill_names_file"
+
+copy_skill() {
+  local src="$1"
+  local skill_name="$2"
+
+  if [[ ! "$skill_name" =~ ^baml-[a-z0-9-]+$ ]]; then
+    echo "invalid skill name: $skill_name" >&2
+    exit 1
+  fi
+
+  local dest_dir="$staging/skills/$skill_name"
+  local dest="$dest_dir/SKILL.md"
+  mkdir -p "$dest_dir"
+
+  awk -v name="$skill_name" '
+    BEGIN { in_frontmatter = 0; replaced = 0 }
+    NR == 1 && $0 == "---" { in_frontmatter = 1; print; next }
+    in_frontmatter && $0 == "---" {
+      if (!replaced) {
+        print "SKILL.md frontmatter is missing name:" > "/dev/stderr"
+        exit 2
+      }
+      in_frontmatter = 0
+      print
+      next
+    }
+    in_frontmatter && $0 ~ /^[[:space:]]*name:[[:space:]]*/ {
+      print "name: " name
+      replaced = 1
+      next
+    }
+    { print }
+    END {
+      if (!replaced) {
+        print "SKILL.md frontmatter is missing name:" > "/dev/stderr"
+        exit 2
+      }
+    }
+  ' "$src" > "$dest"
+
+  printf '%s\n' "$skill_name" >> "$skill_names_file"
+}
+
+if [[ -d "$source_dir/skills" ]]; then
+  while IFS= read -r skill_file; do
+    skill_name="$(basename "$(dirname "$skill_file")")"
+    copy_skill "$skill_file" "$skill_name"
+  done < <(find "$source_dir/skills" -mindepth 2 -maxdepth 2 -type f -name SKILL.md | sort)
+fi
+
+if [[ -d "$source_dir/plugins/baml/skills" ]]; then
+  while IFS= read -r skill_file; do
+    legacy_name="$(basename "$(dirname "$skill_file")")"
+    copy_skill "$skill_file" "baml-$legacy_name"
+  done < <(find "$source_dir/plugins/baml/skills" -mindepth 2 -maxdepth 2 -type f -name SKILL.md | sort)
+fi
+
+sort -u "$skill_names_file" -o "$skill_names_file"
+
+if [[ ! -s "$skill_names_file" ]]; then
+  echo "no BAML agent skills found in $source_dir" >&2
+  exit 1
+fi
+
+artifact_name="baml-agent-skills-$version.tar.gz"
+artifact_path="$out_dir/$artifact_name"
+
+COPYFILE_DISABLE=1 tar -C "$staging" -czf "$artifact_path" .
+(
+  cd "$out_dir"
+  shasum -a 256 "$artifact_name" > "$artifact_name.sha256"
+)
+
+echo "$artifact_path"
