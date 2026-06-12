@@ -70,6 +70,22 @@ class Array<T> {
     $rust_function
   }
 
+  /// Returns a new array containing the non-null results of `fn` applied to
+  /// every element. The function is called once per element, left-to-right.
+  /// Does not mutate `self`. For a lazy version, use `iter().filter_map(fn)`.
+  function filter_map<U, E>(self, fn: (T) -> U? throws E) -> U[] throws E {
+    let out: U[] = [];
+    for (let x in self.slice(0, self.length())) {
+      match (fn(x)) {
+        null => {},
+        let y: U => {
+          out.push(y);
+        },
+      }
+    }
+    out
+  }
+
   /// Returns a new array with the elements in reverse order. Does not mutate `self`.
   function reverse(self) -> T[] throws never {
     $rust_function

@@ -63,6 +63,9 @@ function baml.concat(self: ?, other: T[]) -> T[]  [builtin]
 function baml.delete(self: ?, key: K) -> V?  [builtin]
 function baml.every(self: ?, predicate: (T) -> bool throws E) -> bool  [builtin]
 function baml.filter(self: ?, predicate: (T) -> bool throws E) -> T[]  [builtin]
+function baml.filter_map(self: ?, fn: (T) -> U? throws E) -> U[]  [expr] {
+  { let out: U[] = []; for x in self.slice(0, self.length()) {  } match (fn(x)) { null => {  }, y: U => { out.push(y) } } } out
+}
 function baml.find(self: ?, predicate: (T) -> bool throws E) -> T?  [builtin]
 function baml.find_index(self: ?, predicate: (T) -> bool throws E) -> int?  [builtin]
 function baml.find_last(self: ?, predicate: (T) -> bool throws E) -> T?  [builtin]
@@ -1042,7 +1045,7 @@ function baml.iter.next(self: ?) -> R | baml.iter.Done  [expr] {
   { while true {  } match (self.inner) { cur: Iterator<Item = R, Error = E3> => {  } match (cur.next()) { baml.iter.Done => { self.inner = baml.iter.Done {  } }, y: R => { return y } }, baml.iter.Done => {  } match (self.source.next()) { baml.iter.Done => { return baml.iter.Done {  } }, x: I => { let it = x.iter(); self.inner = it } } } } baml.iter.Done {  }
 }
 function baml.iter.next(self: ?) -> T | baml.iter.Done  [expr] {
-  {  } match (self.arr.at(self.idx)) { null => baml.iter.Done {  }, item: T => { self.idx Add= 1 } item }
+  { if (self.idx Ge self.arr.length()) { return baml.iter.Done {  } }; let item = self.arr.at(self.idx); self.idx Add= 1 } match (item) { value: T => value }
 }
 function baml.iter.next(self: ?) -> R | baml.iter.Done  [expr] {
   { while true {  } match (self.inner) { cur: Iterator<Item = R, Error = E3> => {  } match (cur.next()) { baml.iter.Done => { self.inner = baml.iter.Done {  } }, y: R => { return y } }, baml.iter.Done => {  } match (self.source.next()) { baml.iter.Done => { return baml.iter.Done {  } }, x: T => { let it = self.func(x).iter(); self.inner = it } } } } baml.iter.Done {  }
