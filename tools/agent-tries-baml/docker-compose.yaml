@@ -86,6 +86,8 @@ services:
       CLAUDE_MODEL: ${CLAUDE_MODEL:-claude-sonnet-4-6}
       CLAUDE_MAX_TURNS: ${CLAUDE_MAX_TURNS:-40}
       BAML_SKILL_DIR: /baml-skill
+      # skill-arena: member runs clone a specific branch of this repo at run time.
+      ATB_SKILL_REPO_URL: ${ATB_SKILL_REPO_URL:-https://github.com/BoundaryML/baml-skill.git}
       SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
     volumes:
       # live baml skill mounted read-only; baml-worker concatenates */SKILL.md
@@ -105,6 +107,21 @@ services:
       BAML_DEDUP_MODEL: ${BAML_DEDUP_MODEL:-claude-sonnet-4-6}
     depends_on: [api, claude-proxy]
 
+  cohort-compare:
+    build: { context: ., dockerfile: docker/Dockerfile.python }
+    image: agent-tries-baml-python:dev
+    restart: unless-stopped
+    command: ["python", "-m", "services.cohort_compare"]
+    environment:
+      SERVICE_URL: http://api:8080
+      SERVICE_TOKEN: ${SERVICE_TOKEN:-devservicetoken}
+      CLAUDE_PROXY_URLS: http://claude-proxy:9090
+      CLAUDE_PROXY_TOKEN: ${CLAUDE_PROXY_TOKEN:-devproxytoken}
+      ARENA_MODEL: ${ARENA_MODEL:-claude-sonnet-4-6}
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
+      UI_BASE_URL: ${UI_BASE_URL:-http://localhost:3000}
+    depends_on: [api, claude-proxy]
+
   baml-redraft:
     build: { context: ., dockerfile: docker/Dockerfile.python }
     image: agent-tries-baml-python:dev
@@ -119,6 +136,20 @@ services:
       NOTION_TOKEN: ${NOTION_TOKEN:-}
     depends_on: [api, claude-proxy]
 
+  bug-verify:
+    build: { context: ., dockerfile: docker/Dockerfile.python }
+    image: agent-tries-baml-python:dev
+    restart: unless-stopped
+    command: ["python", "-m", "services.bug_verify"]
+    environment:
+      SERVICE_URL: http://api:8080
+      ATB_SERVICE_TOKEN: ${SERVICE_TOKEN:-devservicetoken}
+      CLAUDE_PROXY_URLS: http://claude-proxy:9090
+      ATB_CLAUDE_PROXY_TOKEN: ${CLAUDE_PROXY_TOKEN:-devproxytoken}
+      ATB_NOTION_TOKEN: ${NOTION_TOKEN:-}
+      BUG_VERIFY_MODEL: ${BUG_VERIFY_MODEL:-claude-sonnet-4-6}
+    depends_on: [api, claude-proxy]
+
   notion-fixer:
     build: { context: ., dockerfile: docker/Dockerfile.python }
     image: agent-tries-baml-python:dev
@@ -130,14 +161,24 @@ services:
       NOTION_TOKEN: ${NOTION_TOKEN:-}
       NOTION_SKILL_DB_ID: ${NOTION_SKILL_DB_ID:-}
       NOTION_LANG_DB_ID: ${NOTION_LANG_DB_ID:-}
+      NOTION_PROP_KIND: ${NOTION_PROP_KIND:-Kind}
       NOTION_STATUS_CONFIRMED: ${NOTION_STATUS_CONFIRMED:-not started}
       NOTION_STATUS_APPROVED: ${NOTION_STATUS_APPROVED:-approved}
       NOTION_STATUS_FIXING: ${NOTION_STATUS_FIXING:-to cursor}
+      NOTION_STATUS_PRPREP: ${NOTION_STATUS_PRPREP:-pr prep}
+      NOTION_STATUS_PR_READY: ${NOTION_STATUS_PR_READY:-ready to merge}
+      NOTION_STATUS_NEEDS_HUMAN: ${NOTION_STATUS_NEEDS_HUMAN:-needs human}
+      NOTION_STATUS_MERGED: ${NOTION_STATUS_MERGED:-merged}
       SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
       SLACK_FIX_CHANNEL: ${SLACK_FIX_CHANNEL:-}
       CURSOR_API_KEY: ${CURSOR_API_KEY:-}
       CURSOR_MODEL: ${CURSOR_MODEL:-}
       CURSOR_BRANCH: ${CURSOR_BRANCH:-canary}
+      # cursor-tracker: follow dispatched fix agents through CI + CodeRabbit.
+      ATB_GITHUB_TOKEN: ${ATB_GITHUB_TOKEN:-${GITHUB_TOKEN:-}}
+      CURSOR_TRACK_SECS: ${CURSOR_TRACK_SECS:-60}
+      CURSOR_REFIX_MODE: ${CURSOR_REFIX_MODE:-new_agent}
+      CURSOR_MAX_FIX_ATTEMPTS: ${CURSOR_MAX_FIX_ATTEMPTS:-3}
       UI_BASE_URL: ${UI_BASE_URL:-http://localhost:3000}
     depends_on: [api]
 
@@ -152,6 +193,9 @@ services:
       SERVICE_TOKEN: ${SERVICE_TOKEN:-devservicetoken}
       SLACK_SIGNING_SECRET: ${SLACK_SIGNING_SECRET:-}
       SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
+      CLAUDE_PROXY_URLS: http://claude-proxy:9090
+      CLAUDE_PROXY_TOKEN: ${CLAUDE_PROXY_TOKEN:-devproxytoken}
+      ATB_ARENA_BRANCHES: ${ATB_ARENA_BRANCHES:-main}
       NOTION_VERIFICATION_TOKEN: ${NOTION_VERIFICATION_TOKEN:-}
       NOTION_TOKEN: ${NOTION_TOKEN:-}
       NOTION_STATUS_APPROVED: ${NOTION_STATUS_APPROVED:-approved}
@@ -169,7 +213,25 @@ services:
       SERVICE_URL: http://api:8080
       SERVICE_TOKEN: ${SERVICE_TOKEN:-devservicetoken}
       CRON_INTERVAL_SECS: ${CRON_INTERVAL_SECS:-86400}
+      COHORT_RECONCILE_SECS: ${COHORT_RECONCILE_SECS:-30}
+      CHANGELOG_POLL_ENABLED: ${CHANGELOG_POLL_ENABLED:-0}
+      CHANGELOG_POLL_SECS: ${CHANGELOG_POLL_SECS:-600}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
     depends_on: [api]
+
+  changelog-worker:
+    build: { context: ., dockerfile: docker/Dockerfile.python }
+    image: agent-tries-baml-python:dev
+    restart: unless-stopped
+    command: ["python", "-m", "services.changelog_worker"]
+    environment:
+      SERVICE_URL: http://api:8080
+      SERVICE_TOKEN: ${SERVICE_TOKEN:-devservicetoken}
+      CLAUDE_PROXY_URLS: http://claude-proxy:9090
+      CLAUDE_PROXY_TOKEN: ${CLAUDE_PROXY_TOKEN:-devproxytoken}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      CHANGELOG_MODEL: ${CHANGELOG_MODEL:-claude-opus-4-8}
+    depends_on: [api, claude-proxy]
 
 volumes:
   convex_data:
