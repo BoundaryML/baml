@@ -3,8 +3,8 @@
 //!
 //! This pins the native implementations and their generated glue, independent
 //! of the language-level dispatch surface. Container (`T[]` / `map`) equality is
-//! now BAML that delegates to `baml.ops.equals`, so it is covered end-to-end by
-//! `comparison_driver.rs` rather than here.
+//! now BAML that delegates to `baml.ops.equals_equals`, so it is covered end-to-end
+//! by `comparison_driver.rs` rather than here.
 
 use std::sync::{Arc, atomic::AtomicBool};
 

@@ -17713,7 +17713,7 @@ function baml.ops.Compare.le(self: baml.ops.Compare, other: Self) -> bool {
 
 function baml.ops.Equals$for$T[].eq(self: T[], other: T[]) -> bool {
     load_var2 1 2
-    call baml.ops.equals
+    call baml.ops.equals_equals
     return
 }
 
@@ -17731,7 +17731,7 @@ function baml.ops.Equals$for$int.eq(self: int, other: int) -> bool {
 
 function baml.ops.Equals$for$map<K, V>.eq(self: map<K, V>, other: map<K, V>) -> bool {
     load_var2 1 2
-    call baml.ops.equals
+    call baml.ops.equals_equals
     return
 }
 
@@ -17857,7 +17857,7 @@ function baml.ops.Equals.neq(self: baml.ops.Equals, other: Self) -> bool {
     unreachable
 }
 
-function baml.ops.equals(a: unknown, b: unknown) -> bool {
+function baml.ops.equals_equals(a: unknown, b: unknown) -> bool {
 }
 
 function baml.panics.AllocFailure.from_json(j: baml.json.json) -> baml.panics.AllocFailure {

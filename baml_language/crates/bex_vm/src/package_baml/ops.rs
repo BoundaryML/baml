@@ -7,19 +7,24 @@
 //! so primitives and containers satisfy interface bounds (`T extends Compare`)
 //! and so a comparison of *those* reached via dynamic dispatch produces the
 //! *same* result the specialized bytecode would. (The broad `==` driver
-//! [`EqualsDriver`] compares a class structurally even when it implements a
-//! custom `Equals`; honoring a user `Equals.eq` is a follow-up — see its docs.)
+//! [`EqualsDriver`] dispatches a class's or enum's custom `Equals.eq` when it has
+//! one, falling back to structural / variant-identity comparison otherwise.)
 //!
 //! Floats compare by IEEE rules (so `NaN != NaN`), matching the `==` operator
 //! and deliberately *unlike* `baml.deep_equals`, whose NaN-equal convention is
 //! a test-helper nicety rather than the language's equality.
 
-use std::{collections::HashSet, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
+use baml_type::{Name, RuntimeTy, TyAttr, TypeName};
 use bex_str::BexStr;
 use bex_vm_types::{
     HeapPtr, ValueKind,
-    types::{LockedContainer, LockedReadGuard, Object, Value},
+    errors::VmInternalError,
+    types::{LockedContainer, LockedReadGuard, Object, Type, Value},
 };
 use num_bigint::BigInt;
 
@@ -27,7 +32,8 @@ use super::{
     BamlClassOpsCompare_for_bigint, BamlClassOpsCompare_for_float, BamlClassOpsCompare_for_int,
     BamlClassOpsCompare_for_string, BamlClassOpsEquals_for_bigint, BamlClassOpsEquals_for_bool,
     BamlClassOpsEquals_for_float, BamlClassOpsEquals_for_int, BamlClassOpsEquals_for_string,
-    BamlClassOpsEquals_for_uint8array, BamlNamespaceOps, NativeCallResult, PackageBamlImpl,
+    BamlClassOpsEquals_for_uint8array, BamlNamespaceOps, Continuation, NativeCallResult,
+    PackageBamlImpl, resolve,
 };
 use crate::BexVm;
 
@@ -143,12 +149,12 @@ impl BamlClassOpsEquals_for_uint8array for PackageBamlImpl {
 // ── containers ─────────────────────────────────────────────────────────────
 //
 // `T[]` and `map<K, V>` implement `Equals` via BAML bodies that call
-// `baml.ops.equals` (see `comparison.baml`); there are no native `eq` impls to
-// write here — the `EqualsDriver` below handles arrays/maps structurally.
+// `baml.ops.equals_equals` (see `comparison.baml`); there are no native `eq` impls
+// to write here — the `EqualsDriver` below handles arrays/maps structurally.
 
 impl BamlNamespaceOps for PackageBamlImpl {
-    // The broad `==` operator (`baml.ops.equals`, may-yield). See `EqualsDriver`.
-    fn equals(vm: &mut BexVm, a: &Value, b: &Value) -> NativeCallResult {
+    // The broad `==` operator (`baml.ops.equals_equals`, may-yield). See `EqualsDriver`.
+    fn equals_equals(vm: &mut BexVm, a: &Value, b: &Value) -> NativeCallResult {
         EqualsDriver::new(*a, *b).drive(vm)
     }
 }
@@ -159,6 +165,14 @@ enum Cmp {
     Continue,
     /// Operands are unequal; short-circuit the whole comparison to `false`.
     NotEqual,
+    /// The pair's class implements a custom `Equals`; suspend the walk and call its
+    /// `eq(self, other)`. The bytecode result (a `bool`) decides this pair, then the
+    /// walk resumes over the remaining stack.
+    Yield {
+        callee: HeapPtr,
+        args: Vec<Value>,
+        type_args: Vec<RuntimeTy>,
+    },
 }
 
 const fn step(equal: bool) -> Cmp {
@@ -211,11 +225,11 @@ fn resolve_cells(vm: &BexVm, mut v: Value) -> Option<Value> {
     }
 }
 
-/// Worklist driver for the broad `==` operator (`baml.ops.equals`).
+/// Worklist driver for the broad `==` operator (`baml.ops.equals_equals`).
 ///
-/// Holds an explicit stack of pending pairs instead of recursing in Rust, so
-/// that dispatching to a user class's bytecode `Equals.eq` (a follow-up) can
-/// suspend and resume the walk across the VM's `YieldToCall` trampoline.
+/// Holds an explicit stack of pending pairs instead of recursing in Rust, so that
+/// dispatching to a user class's bytecode `Equals.eq` can suspend and resume the walk
+/// across the VM's `YieldToCall` trampoline (`EqualsDriver` is itself the [`Continuation`]).
 ///
 /// Equality is **not reflexive** — `NaN != NaN`, so a value containing a `NaN`
 /// (or any non-reflexive element) is not equal to itself. There is therefore no
@@ -224,14 +238,11 @@ fn resolve_cells(vm: &BexVm, mut v: Value) -> Option<Value> {
 /// is assumed equal so traversal terminates, while every reachable element is
 /// still compared on its first visit (so a `NaN` anywhere still forces `false`).
 ///
-/// Semantics (the broad `==`): operands of different concrete runtime kinds are
-/// never equal; primitives/strings/bigints/uint8arrays compare by value (floats
-/// by IEEE, so `NaN != NaN`); enums by identity; arrays/maps/class-instances
-/// recurse structurally.
-///
-/// NOTE: a class operand is compared structurally here even if it implements a
-/// custom `Equals`; honoring a user `Equals.eq` for class operands (via
-/// `YieldToCall`) is a follow-up increment that adds a `Cmp::Yield` arm.
+/// Semantics (the broad `==`): operands of different concrete runtime kinds are never
+/// equal; primitives/strings/bigints/uint8arrays compare by value (floats by IEEE, so
+/// `NaN != NaN`); enums by identity; two same-class instances dispatch to the class's
+/// custom `Equals.eq` if it has one, else compare structurally (field by field); arrays
+/// and maps recurse structurally.
 struct EqualsDriver {
     stack: Vec<(Value, Value)>,
     visited: HashSet<(HeapPtr, HeapPtr)>,
@@ -245,12 +256,26 @@ impl EqualsDriver {
         }
     }
 
-    /// Drain the worklist to a boolean result. (A follow-up adds a `YieldToCall`
-    /// arm that boxes `self` into a `Continuation` to call a user `Equals.eq`.)
+    /// Drain the worklist: `Done(true)` if the stack empties with everything equal,
+    /// `Done(false)` on the first unequal pair, or a `YieldToCall` (with `self` as the
+    /// continuation) when a pair needs a user `Equals.eq` — resumed by [`Continuation::call`].
     fn drive(mut self, vm: &BexVm) -> NativeCallResult {
         while let Some((a, b)) = self.stack.pop() {
-            if let Cmp::NotEqual = self.compare_one(vm, a, b) {
-                return NativeCallResult::Done(Value::bool(false));
+            match self.compare_one(vm, a, b) {
+                Cmp::Continue => {}
+                Cmp::NotEqual => return NativeCallResult::Done(Value::bool(false)),
+                Cmp::Yield {
+                    callee,
+                    args,
+                    type_args,
+                } => {
+                    return NativeCallResult::YieldToCall {
+                        callee,
+                        args,
+                        type_args,
+                        continuation: Box::new(self),
+                    };
+                }
             }
         }
         NativeCallResult::Done(Value::bool(true))
@@ -356,11 +381,49 @@ impl EqualsDriver {
             }
             (Object::Map(_), _) => Cmp::NotEqual,
 
-            (Object::Variant(x), Object::Variant(y)) => step(x.enm == y.enm && x.index == y.index),
+            (Object::Variant(x), Object::Variant(y)) => {
+                // Different enum types ⇒ never equal (`eq` needs the same `Self`).
+                if x.enm != y.enm {
+                    return Cmp::NotEqual;
+                }
+                // Dispatch to the enum's custom `Equals.eq` if it has one (`baml.ops.Equals`
+                // applies to enums too), else compare by variant identity.
+                if let Some((callee, type_args)) =
+                    value_concrete_ty(vm, pa).and_then(|ty| resolve_equals_eq(vm, &ty))
+                {
+                    return Cmp::Yield {
+                        callee,
+                        args: vec![Value::object(pa), Value::object(pb)],
+                        type_args,
+                    };
+                }
+                step(x.index == y.index)
+            }
             (Object::Variant(_), _) => Cmp::NotEqual,
             (Object::Instance(x), Object::Instance(y)) => {
-                if x.class != y.class || x.fields.len() != y.fields.len() {
+                // Different concrete type (class or generic instantiation) ⇒ never equal.
+                // `Equals.eq(self, other: Self)` requires the same `Self`, so differing
+                // `class_type_args` (`Box<int>` vs `Box<string>`) is unequal up front.
+                // Compared with `ty_args_equivalent`, not `==`, so union args match
+                // order-insensitively (`Box<int | string>` is the same `Self` as
+                // `Box<string | int>`) — the same notion of "same instantiation" the
+                // resolver and reflection use.
+                if x.class != y.class
+                    || !resolve::ty_args_equivalent(&x.class_type_args, &y.class_type_args)
+                    || x.fields.len() != y.fields.len()
+                {
                     return Cmp::NotEqual;
+                }
+                // Same concrete type: dispatch to the class's custom `Equals.eq` if it has
+                // one, else compare structurally (field by field).
+                if let Some((callee, type_args)) =
+                    value_concrete_ty(vm, pa).and_then(|ty| resolve_equals_eq(vm, &ty))
+                {
+                    return Cmp::Yield {
+                        callee,
+                        args: vec![Value::object(pa), Value::object(pb)],
+                        type_args,
+                    };
                 }
                 for (fx, fy) in x.fields.iter().zip(y.fields.iter()) {
                     self.stack.push((fx.load(), fy.load()));
@@ -414,4 +477,96 @@ impl EqualsDriver {
             ) => Cmp::NotEqual,
         }
     }
+}
+
+impl Continuation for EqualsDriver {
+    /// Resume after a user `Equals.eq` returns: `false` → the whole comparison is
+    /// `false`; `true` → that pair is equal, keep draining the remaining stack.
+    fn call(self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
+        match value.as_bool() {
+            Some(true) => (*self).drive(vm),
+            Some(false) => NativeCallResult::Done(Value::bool(false)),
+            // `eq` is typed `-> bool throws never`, so a non-bool return is a compiler/VM
+            // invariant break, not a possible runtime value — surface it as an internal
+            // engine error rather than silently treating it as "unequal".
+            None => NativeCallResult::from(VmInternalError::TypeError {
+                expected: Type::Bool,
+                got: vm.type_of(&value),
+            }),
+        }
+    }
+
+    fn gc_roots(&self) -> Vec<HeapPtr> {
+        let mut roots = Vec::new();
+        for (a, b) in &self.stack {
+            roots.extend(a.as_object_ptr());
+            roots.extend(b.as_object_ptr());
+        }
+        for (pa, pb) in &self.visited {
+            roots.push(*pa);
+            roots.push(*pb);
+        }
+        roots
+    }
+
+    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+        let fwd = |p: HeapPtr| forwarding.get(&p).copied().unwrap_or(p);
+        for (a, b) in &mut self.stack {
+            if let Some(p) = a.as_object_ptr() {
+                *a = Value::object(fwd(p));
+            }
+            if let Some(p) = b.as_object_ptr() {
+                *b = Value::object(fwd(p));
+            }
+        }
+        // Re-key the cycle set on the forwarded pointers, preserving the `(min, max)`
+        // ordering the insert side uses so a re-encountered pair still matches.
+        self.visited = self
+            .visited
+            .iter()
+            .map(|&(pa, pb)| {
+                let (na, nb) = (fwd(pa), fwd(pb));
+                if na < nb { (na, nb) } else { (nb, na) }
+            })
+            .collect();
+    }
+}
+
+/// The concrete runtime `RuntimeTy` of the class instance or enum value at `ptr` — `Class` with
+/// its `class_type_args` (so a generic instance resolves at the right args), or `Enum`.
+/// `None` for any other object kind (only instances/enums implement `Equals`).
+fn value_concrete_ty(vm: &BexVm, ptr: HeapPtr) -> Option<RuntimeTy> {
+    match vm.get_object(ptr) {
+        Object::Instance(inst) => {
+            let (class_ptr, type_args) = (inst.class, inst.class_type_args.clone());
+            match vm.get_object(class_ptr) {
+                Object::Class(class) => {
+                    Some(RuntimeTy::Class(class.name.clone(), type_args, TyAttr::default()))
+                }
+                _ => None,
+            }
+        }
+        Object::Variant(v) => match vm.get_object(v.enm) {
+            Object::Enum(e) => Some(RuntimeTy::Enum(e.name.clone(), TyAttr::default())),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// Resolve `<concrete> as Equals>::eq` to its callee plus the impl's bound type args, or
+/// `None` when the type has no `Equals` impl (→ the structural/identity fallback). The
+/// concrete type carries any `class_type_args`, so a generic/blanket impl
+/// (`implement<T> Equals for Box<T>`) resolves at the right `T`.
+fn resolve_equals_eq(vm: &BexVm, concrete: &RuntimeTy) -> Option<(HeapPtr, Vec<RuntimeTy>)> {
+    resolve::resolve_interface_method(vm, concrete, &equals_qtn(), "eq")
+}
+
+/// The `baml.ops.Equals` interface name.
+fn equals_qtn() -> TypeName {
+    TypeName::new(
+        Name::new("baml"),
+        vec![Name::new("ops")],
+        Name::new("Equals"),
+    )
 }

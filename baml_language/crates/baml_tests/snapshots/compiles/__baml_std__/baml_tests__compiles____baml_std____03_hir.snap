@@ -1581,17 +1581,17 @@ function baml.ops.eq(self: ?, other: Self) -> bool  [expr] {
   {  } true
 }
 function baml.ops.eq(self: ?, other: Self) -> bool  [expr] {
-  {  } baml.ops.equals(self, other)
+  {  } baml.ops.equals_equals(self, other)
 }
 function baml.ops.eq(self: ?, other: Self) -> bool  [builtin]
 function baml.ops.eq(self: ?, other: Self) -> bool  [builtin]
 function baml.ops.eq(self: ?, other: Self) -> bool  [expr] {
-  {  } baml.ops.equals(self, other)
+  {  } baml.ops.equals_equals(self, other)
 }
 function baml.ops.eq(self: ?, other: Self) -> bool  [builtin]
 function baml.ops.eq(self: ?, other: Self) -> bool  [builtin]
 function baml.ops.eq(self: ?, other: Self) -> bool  [builtin]
-function baml.ops.equals(a: unknown, b: unknown) -> bool  [builtin]
+function baml.ops.equals_equals(a: unknown, b: unknown) -> bool  [builtin]
 function baml.ops.ge(self: ?, other: Self) -> bool  [expr] {
   {  } Not self.lt(other)
 }

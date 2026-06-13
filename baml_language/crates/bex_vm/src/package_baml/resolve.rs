@@ -105,21 +105,17 @@ fn candidate_rules<'a>(
 /// `rule.methods` already includes the interface's inherited default methods (the
 /// bake merges them, override winning), so a plain lookup resolves both.
 //
-// BUG (fix when the `==`/`Compare` dispatch wires this — its only caller):
+// Wired by the broad `==` driver (`EqualsDriver` dispatches a class's `Equals.eq`).
+// Caveats that only bite if this is extended to *generic* interfaces (`Equals`/`Compare`
+// are non-generic, so neither applies to them today):
 //  - It ignores the requested interface instantiation, so a type implementing one
-//    *generic* interface at two args (`Slot<L>` + `Slot<R>`) resolves to the first
-//    match. The front-end is supposed to force an explicit upcast
-//    (`(pair as Slot<L>).get()`) so this never arises; if it doesn't, thread the
-//    requested args the way `type_implements` does.
-//  - It returns the first rule by sort order when several apply. Compile-time
-//    coherence (per-package plus the dependency closure) rejects overlapping impls,
-//    so this is unreachable for statically-known packages; a mutable dynamically-
-//    loaded package could still introduce an overlap the orphan rule can't rule out.
-#[expect(
-    dead_code,
-    reason = "the broad `==` operator dispatch (the only caller) is reintroduced \
-              separately; reflection exercises the matching helpers below"
-)]
+//    generic interface at two args (`Slot<L>` + `Slot<R>`) would resolve to the first
+//    match; a generic-interface caller must thread the requested args the way
+//    `type_implements` does.
+//  - It returns the first rule by sort order when several apply. Compile-time coherence
+//    (per-package plus the dependency closure) rejects overlapping impls, so this is
+//    unreachable for statically-known packages; a mutable dynamically-loaded package
+//    could still introduce an overlap the orphan rule can't rule out.
 pub(super) fn resolve_interface_method(
     vm: &BexVm,
     concrete_ty: &RuntimeTy,

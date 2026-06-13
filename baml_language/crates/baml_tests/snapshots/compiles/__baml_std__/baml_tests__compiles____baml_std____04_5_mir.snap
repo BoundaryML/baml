@@ -19150,7 +19150,7 @@ fn baml.ops.Equals$for$T[].eq(self: T[], other: Self) -> bool {
     let _2: Self // other // param
 
     bb0: {
-        _0 = call const fn baml.ops.equals(copy _1, copy _2) -> [bb1];
+        _0 = call const fn baml.ops.equals_equals(copy _1, copy _2) -> [bb1];
     }
 
     bb1: {
@@ -19169,7 +19169,7 @@ fn baml.ops.Equals$for$map<K, V>.eq(self: map<K, V>, other: Self) -> bool {
     let _2: Self // other // param
 
     bb0: {
-        _0 = call const fn baml.ops.equals(copy _1, copy _2) -> [bb1];
+        _0 = call const fn baml.ops.equals_equals(copy _1, copy _2) -> [bb1];
     }
 
     bb1: {
@@ -19183,7 +19183,7 @@ fn baml.ops.Equals$for$bool.eq = builtin(vm)
 
 fn baml.ops.Equals$for$uint8array.eq = builtin(vm)
 
-fn baml.ops.equals = builtin(vm)
+fn baml.ops.equals_equals = builtin(vm)
 
 fn baml.ops.Compare.ge(self: baml.ops.Compare, other: Self) -> bool {
     // Locals:

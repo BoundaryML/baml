@@ -1,13 +1,14 @@
-//! End-to-end tests for the broad `==` driver `baml.ops.equals` (the may-yield
+//! End-to-end tests for the broad `==` driver `baml.ops.equals_equals` (the may-yield
 //! `$rust_function` worklist in `package_baml::ops`).
 //!
-//! These call `baml.ops.equals(a, b)` directly from BAML and run the program,
+//! These call `baml.ops.equals_equals(a, b)` directly from BAML and run the program,
 //! so they exercise the driver through the real VM (entry point + trampoline),
-//! independent of the operator-lowering work. They cover the cases the driver
-//! handles today: the concrete-type gate, primitives, enum identity, structural
-//! classes, nested containers, and **non-reflexivity** (a value containing NaN
-//! is not equal to itself). Dispatch to a user class's custom `Equals` is a
-//! separate increment.
+//! independent of the operator-lowering work. They cover the concrete-type gate,
+//! primitives, enum identity, structural classes, nested containers,
+//! **non-reflexivity** (a value containing NaN is not equal to itself), and
+//! dispatch to a user class's custom `Equals.eq` (resolved against the baked impl
+//! registry and called via `YieldToCall`), including generic classes and the
+//! structural fallback when a class has no `Equals` impl.
 
 use std::sync::{Arc, atomic::AtomicBool};
 
@@ -45,50 +46,50 @@ function mk_line(ax: int, ay: int, bx: int, by: int) -> Line {
     Line { start: mk_point(ax, ay), end: mk_point(bx, by) }
 }
 
-function eq_int_same() -> bool { baml.ops.equals(1, 1) }
-function eq_int_diff() -> bool { baml.ops.equals(1, 2) }
-function eq_string_same() -> bool { baml.ops.equals("hi", "hi") }
-function eq_string_diff() -> bool { baml.ops.equals("hi", "ho") }
-function eq_bool() -> bool { baml.ops.equals(true, true) }
+function eq_int_same() -> bool { baml.ops.equals_equals(1, 1) }
+function eq_int_diff() -> bool { baml.ops.equals_equals(1, 2) }
+function eq_string_same() -> bool { baml.ops.equals_equals("hi", "hi") }
+function eq_string_diff() -> bool { baml.ops.equals_equals("hi", "ho") }
+function eq_bool() -> bool { baml.ops.equals_equals(true, true) }
 
 // Concrete-type gate: different runtime types are never equal (never an error).
-function eq_cross_type() -> bool { baml.ops.equals(1, "1") }
-function eq_arr_vs_scalar() -> bool { baml.ops.equals([1], 1) }
+function eq_cross_type() -> bool { baml.ops.equals_equals(1, "1") }
+function eq_arr_vs_scalar() -> bool { baml.ops.equals_equals([1], 1) }
 
 // Enum identity.
-function eq_enum_same() -> bool { baml.ops.equals(Color.Red, Color.Red) }
-function eq_enum_diff() -> bool { baml.ops.equals(Color.Red, Color.Green) }
+function eq_enum_same() -> bool { baml.ops.equals_equals(Color.Red, Color.Red) }
+function eq_enum_diff() -> bool { baml.ops.equals_equals(Color.Red, Color.Green) }
 
 // Structural classes (distinct instances, equal fields → equal).
-function eq_class_same() -> bool { baml.ops.equals(mk_point(1, 2), mk_point(1, 2)) }
-function eq_class_diff() -> bool { baml.ops.equals(mk_point(1, 2), mk_point(1, 3)) }
-function eq_class_nested() -> bool { baml.ops.equals(mk_line(0, 0, 1, 1), mk_line(0, 0, 1, 1)) }
-function eq_class_nested_diff() -> bool { baml.ops.equals(mk_line(0, 0, 1, 1), mk_line(0, 0, 9, 1)) }
+function eq_class_same() -> bool { baml.ops.equals_equals(mk_point(1, 2), mk_point(1, 2)) }
+function eq_class_diff() -> bool { baml.ops.equals_equals(mk_point(1, 2), mk_point(1, 3)) }
+function eq_class_nested() -> bool { baml.ops.equals_equals(mk_line(0, 0, 1, 1), mk_line(0, 0, 1, 1)) }
+function eq_class_nested_diff() -> bool { baml.ops.equals_equals(mk_line(0, 0, 1, 1), mk_line(0, 0, 9, 1)) }
 
 // Containers recurse structurally.
-function eq_arr_same() -> bool { baml.ops.equals([1, 2, 3], [1, 2, 3]) }
-function eq_arr_diff() -> bool { baml.ops.equals([1, 2, 3], [1, 2, 4]) }
-function eq_arr_len() -> bool { baml.ops.equals([1, 2], [1, 2, 3]) }
-function eq_arr_nested() -> bool { baml.ops.equals([[1], [2]], [[1], [2]]) }
-function eq_arr_of_class() -> bool { baml.ops.equals([mk_point(1, 2)], [mk_point(1, 2)]) }
+function eq_arr_same() -> bool { baml.ops.equals_equals([1, 2, 3], [1, 2, 3]) }
+function eq_arr_diff() -> bool { baml.ops.equals_equals([1, 2, 3], [1, 2, 4]) }
+function eq_arr_len() -> bool { baml.ops.equals_equals([1, 2], [1, 2, 3]) }
+function eq_arr_nested() -> bool { baml.ops.equals_equals([[1], [2]], [[1], [2]]) }
+function eq_arr_of_class() -> bool { baml.ops.equals_equals([mk_point(1, 2)], [mk_point(1, 2)]) }
 function eq_map_same() -> bool {
     let a = { "a": 1, "b": 2 };
     let b = { "b": 2, "a": 1 };
-    baml.ops.equals(a, b)
+    baml.ops.equals_equals(a, b)
 }
 function eq_map_diff() -> bool {
     let a = { "a": 1 };
     let b = { "a": 2 };
-    baml.ops.equals(a, b)
+    baml.ops.equals_equals(a, b)
 }
 
 // Non-reflexivity: NaN != NaN, so a value containing NaN is not equal even to
 // itself (the SAME object). `eq_float_same` is the reflexive sanity check.
-function eq_float_same() -> bool { baml.ops.equals([1.5], [1.5]) }
-function eq_nan_pair() -> bool { baml.ops.equals([float.nan()], [float.nan()]) }
+function eq_float_same() -> bool { baml.ops.equals_equals([1.5], [1.5]) }
+function eq_nan_pair() -> bool { baml.ops.equals_equals([float.nan()], [float.nan()]) }
 function eq_nan_self() -> bool {
     let arr = [float.nan()];
-    baml.ops.equals(arr, arr)
+    baml.ops.equals_equals(arr, arr)
 }
 "#;
 
@@ -164,4 +165,120 @@ fn bool_compare_is_reflexive() {
     assert!(!run_bool(SRC, "user.ge_false_true")); // false < true ⇒ !(false >= true)
     assert!(run_bool(SRC, "user.le_false_true")); // false <= true
     assert!(!run_bool(SRC, "user.le_true_false")); // true > false ⇒ !(true <= false)
+}
+
+// Custom `Equals`: the driver dispatches a class's user-defined `eq`, not structural
+// comparison. `Tag.eq` compares only `id` (ignoring `note`), so equal-id/different-note
+// is `true` (structural would be `false`) — proving the dispatch goes through `eq`.
+#[test]
+fn driver_dispatches_custom_class_equals() {
+    const SRC: &str = r#"
+        class Tag { id: int  note: string }
+        implement baml.ops.Equals for Tag {
+            function eq(self, other: Self) -> bool throws never { self.id == other.id }
+        }
+        function mk(id: int, note: string) -> Tag { Tag { id: id, note: note } }
+        function eq_same_id_diff_note() -> bool { baml.ops.equals_equals(mk(1, "a"), mk(1, "b")) }
+        function eq_diff_id() -> bool { baml.ops.equals_equals(mk(1, "a"), mk(2, "a")) }
+        function eq_same() -> bool { baml.ops.equals_equals(mk(7, "x"), mk(7, "x")) }
+    "#;
+    // Custom `eq` ignores `note`, so equal `id` ⇒ equal even with different notes.
+    assert!(run_bool(SRC, "user.eq_same_id_diff_note"));
+    assert!(run_bool(SRC, "user.eq_same"));
+    // Different `id` ⇒ the custom `eq` returns false.
+    assert!(!run_bool(SRC, "user.eq_diff_id"));
+}
+
+// A class WITHOUT a custom `Equals` still compares structurally (the fallback when the
+// resolver finds no impl) — and a custom-`Equals` class nested as a field of a plain
+// class is reached through structural recursion (a nested yield).
+#[test]
+fn driver_custom_equals_nested_in_structural_class() {
+    const SRC: &str = r#"
+        class Tag { id: int  note: string }
+        implement baml.ops.Equals for Tag {
+            function eq(self, other: Self) -> bool throws never { self.id == other.id }
+        }
+        class Wrapper { tag: Tag  label: string }
+        function mk(id: int, note: string, label: string) -> Wrapper {
+            Wrapper { tag: Tag { id: id, note: note }, label: label }
+        }
+        // Wrapper has no custom Equals → structural: compares `tag` (via Tag.eq, which
+        // ignores note) and `label`.
+        function eq_nested_tag_custom() -> bool { baml.ops.equals_equals(mk(1, "a", "L"), mk(1, "b", "L")) }
+        function eq_nested_label_differs() -> bool { baml.ops.equals_equals(mk(1, "a", "L"), mk(1, "a", "M")) }
+    "#;
+    // tag equal via custom eq (note ignored), label equal ⇒ Wrapper equal.
+    assert!(run_bool(SRC, "user.eq_nested_tag_custom"));
+    // label differs ⇒ Wrapper structurally unequal even though tags are eq.
+    assert!(!run_bool(SRC, "user.eq_nested_label_differs"));
+}
+
+// Generic class with a blanket `Equals`: the driver resolves the impl at the instance's
+// `class_type_args` (so `Box<int>`'s `eq` runs with `T = int`), and the custom `eq` body
+// itself recurses into `baml.ops.equals_equals` (a nested yield through the trampoline).
+#[test]
+fn driver_dispatches_generic_class_equals() {
+    const SRC: &str = r#"
+        class Box<T> { v: T }
+        implement<T> baml.ops.Equals for Box<T> {
+            function eq(self, other: Self) -> bool throws never {
+                baml.ops.equals_equals(self.v, other.v)
+            }
+        }
+        function mk_int(v: int) -> Box<int> { Box<int> { v: v } }
+        function eq_box_int_same() -> bool { baml.ops.equals_equals(mk_int(5), mk_int(5)) }
+        function eq_box_int_diff() -> bool { baml.ops.equals_equals(mk_int(5), mk_int(6)) }
+    "#;
+    assert!(run_bool(SRC, "user.eq_box_int_same"));
+    assert!(!run_bool(SRC, "user.eq_box_int_diff"));
+}
+
+// Different concrete generic instantiations are never equal: `Box<int>` and `Box<string>`
+// are distinct `Self`, so the driver rejects the pair before dispatching `eq` (the
+// `class_type_args` gate), never running `eq` with mismatched operand types.
+#[test]
+fn driver_distinct_generic_instantiations_are_unequal() {
+    const SRC: &str = r#"
+        class Box<T> { v: T }
+        implement<T> baml.ops.Equals for Box<T> {
+            function eq(self, other: Self) -> bool throws never {
+                baml.ops.equals_equals(self.v, other.v)
+            }
+        }
+        function mk_int() -> Box<int> { Box<int> { v: 1 } }
+        function mk_str() -> Box<string> { Box<string> { v: "1" } }
+        function eq_int_vs_str() -> bool { baml.ops.equals_equals(mk_int(), mk_str()) }
+    "#;
+    assert!(!run_bool(SRC, "user.eq_int_vs_str"));
+}
+
+// Custom `Equals` on an enum: `baml.ops.equals_equals` dispatches the enum's `eq` rather than
+// comparing variant identity. `E.eq` is total-true, so two *different* variants compare
+// equal — which identity never would — proving the dispatch reaches the enum's `eq`.
+#[test]
+fn driver_dispatches_custom_enum_equals() {
+    const SRC: &str = r#"
+        enum E { A B C }
+        implement baml.ops.Equals for E {
+            function eq(self, other: Self) -> bool throws never { true }
+        }
+        function eq_diff_variants() -> bool { baml.ops.equals_equals(E.A, E.B) }
+    "#;
+    assert!(run_bool(SRC, "user.eq_diff_variants"));
+}
+
+// Union type args are order-insensitive: `Box<int | string>` and `Box<string | int>` are
+// the same `Self`, so two such instances with equal contents compare equal — the driver
+// compares `class_type_args` semantically (`ty_args_equivalent`), not structurally, the
+// same notion of "same instantiation" the resolver and reflection use.
+#[test]
+fn driver_union_type_args_order_insensitive() {
+    const SRC: &str = r#"
+        class Box<T> { v: T }
+        function mk_a() -> Box<int | string> { Box<int | string> { v: 1 } }
+        function mk_b() -> Box<string | int> { Box<string | int> { v: 1 } }
+        function eq_reordered_union() -> bool { baml.ops.equals_equals(mk_a(), mk_b()) }
+    "#;
+    assert!(run_bool(SRC, "user.eq_reordered_union"));
 }
