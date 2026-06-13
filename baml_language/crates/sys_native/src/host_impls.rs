@@ -34,7 +34,7 @@
 
 use std::sync::Arc;
 
-use baml_type::Ty;
+use baml_type::RuntimeTy;
 use bex_external_types::validate_host_return;
 use bex_heap::BexHeap;
 use bridge_ctypes::{CffiHandleTableOptions, external_to_outbound};
@@ -53,7 +53,7 @@ impl io::IoNamespaceHost for NativeSysOps {
         _call_id: CallId,
         handle: BexExternalValue,
         args: Vec<BexExternalValue>,
-        type_arg_0: Ty,
+        type_arg_0: RuntimeTy,
         // `type_arg_1` is the declared throws contract `E`. The contract
         // check itself lives engine-side (in `BexEngine::materialize_host_throw`)
         // because it needs heap access to convert the thrown
@@ -61,7 +61,7 @@ impl io::IoNamespaceHost for NativeSysOps {
         // `HostContractViolation` panic on mismatch. This impl just
         // forwards the throw via `OpError.host_thrown` (set by
         // `host_dispatch::complete_with_throw` on the bridge side).
-        _type_arg_1: Ty,
+        _type_arg_1: RuntimeTy,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
         // Extract the HostValueArc from the incoming handle and confirm
@@ -101,7 +101,7 @@ impl io::IoNamespaceHost for NativeSysOps {
         // proto message, so the list value is the canonical container.
         let options = CffiHandleTableOptions::for_wire();
         let arg_values = BexExternalValue::Array {
-            element_type: Ty::unknown(),
+            element_type: RuntimeTy::unknown(),
             items: args,
         };
         let encoded: Vec<u8> = match external_to_outbound(&arg_values, &options) {
@@ -237,7 +237,10 @@ impl io::IoNamespaceHost for NativeSysOps {
 /// recursion, enum identity, and class-name identity. Class *field types* are
 /// validated engine-side at the result-push site, where the resolved class
 /// schema is available.
-fn validate_return_value(value: &BexExternalValue, expected: &Ty) -> Result<(), VmRustFnError> {
+fn validate_return_value(
+    value: &BexExternalValue,
+    expected: &RuntimeTy,
+) -> Result<(), VmRustFnError> {
     validate_host_return(value, expected).map_err(|err| {
         VmPanic::HostContractViolation {
             message: format!(
@@ -252,7 +255,7 @@ fn validate_return_value(value: &BexExternalValue, expected: &Ty) -> Result<(), 
 
 #[cfg(test)]
 mod tests {
-    use baml_type::{Ty, TyAttr};
+    use baml_type::{RuntimeTy, TyAttr};
     use sys_ops::io::{BexExternalValue, CallId, IoNamespaceHost as _, SysOpContext, SysOpOutput};
     use sys_types::{OpError, SysOp, SysOpResult, VmBamlError, VmRustFnError};
 
@@ -263,8 +266,8 @@ mod tests {
         BexHeap::new(vec![])
     }
 
-    fn int_ty() -> Ty {
-        Ty::Int {
+    fn int_ty() -> RuntimeTy {
+        RuntimeTy::Int {
             attr: TyAttr::default(),
         }
     }
@@ -284,7 +287,7 @@ mod tests {
             BexExternalValue::String("not a host value".to_string().into()),
             vec![],
             int_ty(),
-            Ty::unknown(),
+            RuntimeTy::unknown(),
             &ctx,
         );
         let result = match output {
@@ -448,7 +451,7 @@ mod tests {
     fn validate_return_value_unknown_accepts_anything() {
         validate_return_value(
             &BexExternalValue::String("anything".to_string().into()),
-            &Ty::unknown(),
+            &RuntimeTy::unknown(),
         )
         .expect("`unknown` return type should accept any value");
     }
@@ -460,9 +463,9 @@ mod tests {
     // -------------------------------------------------------------------------
     #[test]
     fn validate_return_value_int_does_not_satisfy_float() {
-        validate_return_value(&BexExternalValue::Int(3), &Ty::float())
+        validate_return_value(&BexExternalValue::Int(3), &RuntimeTy::float())
             .expect_err("an Int value must not satisfy a declared `float` return type");
-        validate_return_value(&BexExternalValue::Float(3.0), &Ty::float())
+        validate_return_value(&BexExternalValue::Float(3.0), &RuntimeTy::float())
             .expect("a Float value satisfies a declared `float` return type");
     }
 }

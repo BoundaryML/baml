@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 
-use bex_project::{BexExternalValue, Ty};
+use bex_project::{BexExternalValue, RuntimeTy};
 use indexmap::IndexMap;
 
 use crate::{
@@ -86,16 +86,16 @@ pub fn inbound_to_external(
 }
 
 /// Build the default "any scalar" union type for untyped inbound values.
-fn default_scalar_union_ty() -> Ty {
+fn default_scalar_union_ty() -> RuntimeTy {
     let d = baml_type::TyAttr::default();
-    Ty::Union(
+    RuntimeTy::Union(
         vec![
-            Ty::Int { attr: d.clone() },
-            Ty::Float { attr: d.clone() },
-            Ty::String { attr: d.clone() },
-            Ty::Bool { attr: d.clone() },
-            Ty::Uint8Array { attr: d.clone() },
-            Ty::Null { attr: d.clone() },
+            RuntimeTy::Int { attr: d.clone() },
+            RuntimeTy::Float { attr: d.clone() },
+            RuntimeTy::String { attr: d.clone() },
+            RuntimeTy::Bool { attr: d.clone() },
+            RuntimeTy::Uint8Array { attr: d.clone() },
+            RuntimeTy::Null { attr: d.clone() },
         ],
         d,
     )
@@ -131,7 +131,7 @@ fn convert_map(
         entries.insert(key, value);
     }
     Ok(BexExternalValue::Map {
-        key_type: Ty::String {
+        key_type: RuntimeTy::String {
             attr: baml_type::TyAttr::default(),
         },
         value_type: default_scalar_union_ty(),

@@ -573,7 +573,7 @@ fn vm_metadata_resolves_self_associated_type_return_in_implements_method() {
 }
 
 #[test]
-fn vm_metadata_erases_unresolved_generic_associated_projection_to_unknown_not_void() {
+fn vm_metadata_preserves_unresolved_generic_associated_projection_symbolically() {
     let (params, return_type) = compiled_function_metadata(
         r#"
         interface BoxLike {
@@ -588,8 +588,12 @@ fn vm_metadata_erases_unresolved_generic_associated_projection_to_unknown_not_vo
         "read_item",
     );
 
-    assert_eq!(params, vec!["unknown"]);
-    assert_eq!(return_type, "unknown");
+    // `T` and the projection `T.Item` cannot be resolved statically here, but
+    // they are *not* erased: `RuntimeTy` carries the type variable and the
+    // symbolic projection so the runtime can resolve them from the receiver's
+    // actual type.
+    assert_eq!(params, vec!["T"]);
+    assert_eq!(return_type, "T.Item");
 }
 
 #[test]
@@ -4718,4 +4722,30 @@ async fn reflection_does_not_wildcard_missing_associated_type_bindings() {
         "#
     );
     assert_eq!(output.result.unwrap(), BexExternalValue::Int(0));
+}
+
+/// An interface default method whose generic bound references an associated
+/// type via `Self` (`U extends Self.Item`) must keep that bound in the emitted
+/// metadata. The bound is lowered with the same `Self`/associated-type bindings
+/// as the signature, so `Self.Item` resolves to a projection instead of erasing
+/// `Self` to `Ty::Unknown` and being silently dropped.
+#[test]
+fn interface_default_method_self_referencing_bound_is_emitted() {
+    let (display_type_params, _, _) = compiled_function_display_metadata(
+        r#"
+        interface Container {
+            type Item
+            function first(self) -> Self.Item
+            function pick<U extends Self.Item>(self, candidate: U) -> U {
+                return candidate
+            }
+        }
+        "#,
+        "Container.pick",
+    );
+    assert!(
+        display_type_params.iter().any(|p| p.contains("Item")),
+        "interface default-method bound `U extends Self.Item` was dropped from \
+         emitted metadata: {display_type_params:?}"
+    );
 }

@@ -956,8 +956,8 @@ impl LoweringContext {
                         // Assignment operators are not valid in expression context.
                         // They are handled as statements by try_lower_assignment().
                         // If we see them here, the user wrote something like `(x = 5)`
-                        // which is not a valid expression — emit Missing instead of
-                        // silently defaulting to BinaryOp::Add.
+                        // which is not a valid expression — report it and lower to
+                        // Missing instead of silently defaulting to BinaryOp::Add.
                         SyntaxKind::EQUALS
                         | SyntaxKind::PLUS_EQUALS
                         | SyntaxKind::MINUS_EQUALS
@@ -969,6 +969,10 @@ impl LoweringContext {
                         | SyntaxKind::CARET_EQUALS
                         | SyntaxKind::LESS_LESS_EQUALS
                         | SyntaxKind::GREATER_GREATER_EQUALS => {
+                            self.diags
+                                .push(LoweringDiagnostic::AssignmentInExpressionPosition {
+                                    span: node.text_range(),
+                                });
                             return self.alloc_expr(Expr::Missing, node.text_range());
                         }
                         _ => {}
@@ -2803,7 +2807,6 @@ impl LoweringContext {
         let mut fields = Vec::new();
         let mut spreads = Vec::new();
         let mut position = 0;
-        let mut type_name = None;
         let mut type_args: Vec<TypeExpr> = vec![];
         let mut type_path_segments: Vec<Name> = vec![];
 
@@ -2828,9 +2831,10 @@ impl LoweringContext {
                 }
             }
         }
-        if !type_path_segments.is_empty() {
-            type_name = Some(TypePath::new(type_path_segments));
-        }
+        debug_assert!(!type_path_segments.is_empty());
+        // The parser only emits an object literal when a type name precedes the
+        // brace, so the segments are always present.
+        let type_name = TypePath::new(type_path_segments);
 
         // Object fields are child nodes after L_BRACE
         // They come as key-value pairs: WORD COLON expr or SPREAD expr

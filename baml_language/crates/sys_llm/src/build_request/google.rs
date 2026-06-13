@@ -660,8 +660,8 @@ mod tests {
                 request_body: IndexMap::from([(
                     "generationConfig".to_string(),
                     BexExternalValue::Map {
-                        key_type: baml_type::Ty::string(),
-                        value_type: baml_type::Ty::unknown(),
+                        key_type: baml_type::RuntimeTy::string(),
+                        value_type: baml_type::RuntimeTy::unknown(),
                         entries: IndexMap::from([
                             ("temperature".to_string(), BexExternalValue::Float(0.7)),
                             ("maxOutputTokens".to_string(), BexExternalValue::Int(1024)),

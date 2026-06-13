@@ -61,16 +61,18 @@ function user.IndexUser.from_json(j: baml.json.json) -> IndexUser {
 }
 
 function user.IndexUser.to_json(self: IndexUser) -> baml.json.json {
-    load_var self
-    load_field .name
-    call baml.String.to_json
-    load_var self
-    load_field .age
-    call baml.Int.to_json
     load_type string
     load_var self
+    load_field .name
+    call baml.json.to_json
+    load_type int
+    load_var self
+    load_field .age
+    call baml.json.to_json
+    load_type string[]
+    load_var self
     load_field .tags
-    call baml.Array.to_json
+    call baml.json.to_json
     load_const "name"
     load_const "age"
     load_const "tags"
@@ -98,12 +100,14 @@ function user.Profile.from_json(j: baml.json.json) -> Profile {
 }
 
 function user.Profile.to_json(self: Profile) -> baml.json.json {
+    load_type string
     load_var self
     load_field .bio
-    call baml.String.to_json
+    call baml.json.to_json
+    load_type Settings
     load_var self
     load_field .settings
-    call user.Settings.to_json
+    call baml.json.to_json
     load_const "bio"
     load_const "settings"
     alloc_map 2
@@ -123,9 +127,10 @@ function user.Settings.from_json(j: baml.json.json) -> Settings {
 }
 
 function user.Settings.to_json(self: Settings) -> baml.json.json {
+    load_type string
     load_var self
     load_field .theme
-    call baml.String.to_json
+    call baml.json.to_json
     load_const "theme"
     alloc_map 1
     return
@@ -174,16 +179,18 @@ function user.User.from_json(j: baml.json.json) -> User {
 }
 
 function user.User.to_json(self: User) -> baml.json.json {
-    load_var self
-    load_field .name
-    call baml.String.to_json
-    load_var self
-    load_field .profile
-    call user.Profile.to_json
     load_type string
     load_var self
+    load_field .name
+    call baml.json.to_json
+    load_type Profile
+    load_var self
+    load_field .profile
+    call baml.json.to_json
+    load_type string[]
+    load_var self
     load_field .tags
-    call baml.Array.to_json
+    call baml.json.to_json
     load_const "name"
     load_const "profile"
     load_const "tags"

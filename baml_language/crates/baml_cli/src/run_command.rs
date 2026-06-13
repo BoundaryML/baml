@@ -886,7 +886,7 @@ impl RunArgs {
         let engine = Arc::new(engine);
         let return_type = engine
             .function_return_type("baml_run_expr_main__")
-            .unwrap_or(bex_engine::Ty::Null {
+            .unwrap_or(bex_engine::RuntimeTy::Null {
                 attr: baml_type::TyAttr::default(),
             });
         let output_format = self.output_format;
@@ -900,7 +900,7 @@ impl RunArgs {
                     true,
                 )
                 .await?;
-            if !matches!(return_type, bex_engine::Ty::Void { .. }) {
+            if !matches!(return_type, bex_engine::RuntimeTy::Void { .. }) {
                 if let Err(e) =
                     baml_exec::write_output(&engine, value, &return_type, output_format).await
                 {
@@ -1588,7 +1588,7 @@ fn load_expression_source(source: &str) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
-    use bex_engine::Ty;
+    use bex_engine::RuntimeTy;
 
     use super::*;
 
@@ -1596,23 +1596,23 @@ mod tests {
         val.to_string()
     }
 
-    fn ty_string() -> Ty {
-        Ty::String {
+    fn ty_string() -> RuntimeTy {
+        RuntimeTy::String {
             attr: Default::default(),
         }
     }
-    fn ty_int() -> Ty {
-        Ty::Int {
+    fn ty_int() -> RuntimeTy {
+        RuntimeTy::Int {
             attr: Default::default(),
         }
     }
-    fn ty_float() -> Ty {
-        Ty::Float {
+    fn ty_float() -> RuntimeTy {
+        RuntimeTy::Float {
             attr: Default::default(),
         }
     }
-    fn ty_bool() -> Ty {
-        Ty::Bool {
+    fn ty_bool() -> RuntimeTy {
+        RuntimeTy::Bool {
             attr: Default::default(),
         }
     }

@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 29714
 ---
 function user.MetaField.from_json(j: baml.json.json) -> MetaField {
     load_var j
@@ -15,9 +14,10 @@ function user.MetaField.from_json(j: baml.json.json) -> MetaField {
 }
 
 function user.MetaField.to_json(self: MetaField) -> baml.json.json {
+    load_type type
     load_var self
     load_field .type
-    call baml.TypeValue.to_json
+    call baml.json.to_json
     load_const "type"
     alloc_map 1
     return
@@ -43,12 +43,14 @@ function user.RiskFactor.from_json(j: baml.json.json) -> RiskFactor {
 }
 
 function user.RiskFactor.to_json(self: RiskFactor) -> baml.json.json {
+    load_type string
     load_var self
     load_field .type
-    call baml.String.to_json
+    call baml.json.to_json
+    load_type float
     load_var self
     load_field .severity
-    call baml.Float.to_json
+    call baml.json.to_json
     load_const "type"
     load_const "severity"
     alloc_map 2

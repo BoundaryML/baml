@@ -15,7 +15,7 @@ fn user.MyClient$new() -> null {
     let _8: null[]
     let _9: map<string, string | string[] | int>
     let _10: string[]
-    let _11: void[]
+    let _11: never[]
 
     bb0: {
         _2 = {  };

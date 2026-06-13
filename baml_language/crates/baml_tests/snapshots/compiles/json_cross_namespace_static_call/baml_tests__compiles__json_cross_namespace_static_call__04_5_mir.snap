@@ -34,11 +34,11 @@ fn user.decode_root(j: baml.json.json) -> pkg.inner.Box<int> {
     }
 }
 
-fn user.pkg.inner.Box.from_json(j: baml.json.json) -> pkg.inner.Box<void> {
+fn user.pkg.inner.Box.from_json(j: baml.json.json) -> pkg.inner.Box<T> {
     // Locals:
-    let _0: pkg.inner.Box<void> // _0 // return
+    let _0: pkg.inner.Box<T> // _0 // return
     let _1: baml.json.json // j // param
-    let _2: unknown
+    let _2: T
     let _3: baml.json.json
     let _4: type
 
@@ -61,11 +61,11 @@ fn user.pkg.inner.Box.from_json(j: baml.json.json) -> pkg.inner.Box<void> {
     }
 }
 
-fn user.pkg.inner.AutoBox.from_json(j: baml.json.json) -> pkg.inner.AutoBox<void> {
+fn user.pkg.inner.AutoBox.from_json(j: baml.json.json) -> pkg.inner.AutoBox<T> {
     // Locals:
-    let _0: pkg.inner.AutoBox<void> // _0 // return
+    let _0: pkg.inner.AutoBox<T> // _0 // return
     let _1: baml.json.json // j // param
-    let _2: unknown
+    let _2: T
     let _3: baml.json.json
     let _4: type
 
@@ -93,8 +93,8 @@ fn user.pkg.inner.AutoBox.to_json(self: pkg.inner.AutoBox) -> baml.json.json {
     let _0: baml.json.json // _0 // return
     let _1: pkg.inner.AutoBox // self // param
     let _2: baml.json.json
-    let _3: unknown
-    let _4: pkg.inner.AutoBox<unknown>
+    let _3: T
+    let _4: pkg.inner.AutoBox<T>
     let _5: type
 
     bb0: {
@@ -119,8 +119,8 @@ fn user.pkg.inner.Box.to_json(self: pkg.inner.Box) -> baml.json.json {
     let _0: baml.json.json // _0 // return
     let _1: pkg.inner.Box // self // param
     let _2: baml.json.json
-    let _3: unknown
-    let _4: pkg.inner.Box<unknown>
+    let _3: T
+    let _4: pkg.inner.Box<T>
     let _5: type
 
     bb0: {

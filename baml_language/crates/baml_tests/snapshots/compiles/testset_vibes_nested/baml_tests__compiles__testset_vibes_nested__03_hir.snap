@@ -56,7 +56,7 @@ function user.from_json(j: baml.json.json) -> user.Sentiment  [expr] {
   user.Sentiment { feeling: baml.json.from_json(baml.json.field(j, "feeling")), confidence: baml.json.from_json(baml.json.field(j, "confidence")), reasoning: baml.json.from_json(baml.json.field(j, "reasoning")) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "feeling": self.feeling.to_json(), "confidence": self.confidence.to_json(), "reasoning": self.reasoning.to_json() }
+  map { "feeling": baml.json.to_json(self.feeling), "confidence": baml.json.to_json(self.confidence), "reasoning": baml.json.to_json(self.reasoning) }
 }
 
 --- captures ---

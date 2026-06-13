@@ -1,7 +1,7 @@
 //! `BexExternalValue` -> `BamlOutboundValue` conversion.
 
 use baml_type::{Literal, Name};
-use bex_project::{BexExternalAdt, BexExternalValue, Ty};
+use bex_project::{BexExternalAdt, BexExternalValue, RuntimeTy};
 
 use crate::{
     baml_core::cffi::{
@@ -193,19 +193,19 @@ fn empty_ty_name() -> BamlTyName {
     }
 }
 
-/// Project a `Ty` to its `BamlTyName` wire shape.
+/// Project a `RuntimeTy` to its `BamlTyName` wire shape.
 ///
-/// Canonically called with `Ty::Class(tn, args, _)` from `TaggedHeapHandle.ty`,
+/// Canonically called with `RuntimeTy::Class(tn, args, _)` from `TaggedHeapHandle.ty`,
 /// where the class FQN becomes `BamlTyName.name` and each `arg` becomes a
 /// positional `BamlTyGenericArg`. Interface associated type bindings are encoded
 /// as named generic args so the wire shape can preserve that metadata too.
-fn ty_to_baml_ty_name(ty: &Ty) -> BamlTyName {
+fn ty_to_baml_ty_name(ty: &RuntimeTy) -> BamlTyName {
     match ty {
-        Ty::Class(tn, args, _) => BamlTyName {
+        RuntimeTy::Class(tn, args, _) => BamlTyName {
             name: tn.display_name().to_string(),
             generic_args: ty_args_to_baml_generic_args(args, &[]),
         },
-        Ty::Interface(tn, args, associated_bindings, _) => BamlTyName {
+        RuntimeTy::Interface(tn, args, associated_bindings, _) => BamlTyName {
             name: tn.display_name().to_string(),
             generic_args: ty_args_to_baml_generic_args(args, associated_bindings),
         },
@@ -217,8 +217,8 @@ fn ty_to_baml_ty_name(ty: &Ty) -> BamlTyName {
 }
 
 fn ty_args_to_baml_generic_args(
-    args: &[Ty],
-    associated_bindings: &[(Name, Ty)],
+    args: &[RuntimeTy],
+    associated_bindings: &[(Name, RuntimeTy)],
 ) -> Vec<BamlTyGenericArg> {
     args.iter()
         .map(|arg| BamlTyGenericArg {
@@ -356,26 +356,26 @@ fn bex_prompt_ast_simple_to_proto_prompt_ast_simple(
     }
 }
 
-fn ty_to_field_type(ty: &Ty) -> BamlTy {
+fn ty_to_field_type(ty: &RuntimeTy) -> BamlTy {
     let field_type = match ty {
-        Ty::Null { .. } => Some(FieldType::NullType(BamlTyNull {})),
-        Ty::Int { .. } => Some(FieldType::IntType(BamlTyInt {})),
-        Ty::Float { .. } => Some(FieldType::FloatType(BamlTyFloat {})),
-        Ty::Bool { .. } => Some(FieldType::BoolType(BamlTyBool {})),
-        Ty::String { .. } => Some(FieldType::StringType(BamlTyString {})),
-        Ty::List(inner, _) => Some(FieldType::ListType(Box::new(BamlTyList {
+        RuntimeTy::Null { .. } => Some(FieldType::NullType(BamlTyNull {})),
+        RuntimeTy::Int { .. } => Some(FieldType::IntType(BamlTyInt {})),
+        RuntimeTy::Float { .. } => Some(FieldType::FloatType(BamlTyFloat {})),
+        RuntimeTy::Bool { .. } => Some(FieldType::BoolType(BamlTyBool {})),
+        RuntimeTy::String { .. } => Some(FieldType::StringType(BamlTyString {})),
+        RuntimeTy::List(inner, _) => Some(FieldType::ListType(Box::new(BamlTyList {
             item_type: Some(Box::new(ty_to_field_type(inner))),
         }))),
-        Ty::Map { key, value, .. } => Some(FieldType::MapType(Box::new(BamlTyMap {
+        RuntimeTy::Map { key, value, .. } => Some(FieldType::MapType(Box::new(BamlTyMap {
             key_type: Some(Box::new(ty_to_field_type(key))),
             value_type: Some(Box::new(ty_to_field_type(value))),
         }))),
-        Ty::Class(..) | Ty::Interface(..) => {
+        RuntimeTy::Class(..) | RuntimeTy::Interface(..) => {
             Some(FieldType::ClassType(crate::baml_core::cffi::BamlTyClass {
                 name: Some(ty_to_baml_ty_name(ty)),
             }))
         }
-        Ty::EnumVariant(tn, ..) | Ty::Enum(tn, _) => {
+        RuntimeTy::EnumVariant(tn, ..) | RuntimeTy::Enum(tn, _) => {
             Some(FieldType::EnumType(crate::baml_core::cffi::BamlTyEnum {
                 name: tn.display_name().to_string(),
             }))
@@ -383,41 +383,48 @@ fn ty_to_field_type(ty: &Ty) -> BamlTy {
         // A nullable union (`T | null`) preserves the old `Optional` wire format:
         // detect it before the general union case and encode it as an
         // `OptionalType` wrapping the non-null part.
-        Ty::Union(members, _) if members.iter().any(baml_type::Ty::is_null) => {
+        RuntimeTy::Union(members, _) if members.iter().any(baml_type::RuntimeTy::is_null) => {
             Some(FieldType::OptionalType(Box::new(BamlTyOptional {
                 value: Some(Box::new(ty_to_field_type(&ty.strip_null()))),
             })))
         }
-        Ty::Union(_, _) => Some(FieldType::UnionVariantType(BamlTyUnionVariant {
+        RuntimeTy::Union(_, _) => Some(FieldType::UnionVariantType(BamlTyUnionVariant {
             name: None,
         })),
-        Ty::Media(kind, _) => Some(FieldType::MediaType(BamlTyMedia {
+        RuntimeTy::Media(kind, _) => Some(FieldType::MediaType(BamlTyMedia {
             media: media_kind_to_proto_enum(*kind).into(),
         })),
-        Ty::Literal(lit, _, _) => Some(FieldType::LiteralType(literal_to_field_type_literal(lit))),
-        Ty::Resource { .. } | Ty::PromptAst { .. } => {
+        RuntimeTy::Literal(lit, _, _) => {
+            Some(FieldType::LiteralType(literal_to_field_type_literal(lit)))
+        }
+        RuntimeTy::Resource { .. } | RuntimeTy::PromptAst { .. } => {
             unreachable!("runtime-only opaque type should not reach FFI type encoding")
         }
-        Ty::Uint8Array { .. } => Some(FieldType::Uint8arrayType(BamlTyUint8Array {})),
-        // BuiltinUnknown is used for dynamic types (e.g., map values, array elements)
-        // when the element type isn't known at compile time.
-        Ty::BuiltinUnknown { .. } => Some(FieldType::UnknownType(BamlTyUnknown {})),
-        Ty::Bigint { .. } => Some(FieldType::BigintType(BamlTyBigint {})),
-        Ty::TypeAlias(_, _)
-        | Ty::Future(..)
-        | Ty::Function { .. }
-        | Ty::Void { .. }
-        | Ty::WatchAccessor(_, _)
-        | Ty::TypeVar(..)
-        | Ty::AssociatedTypeProjection { .. }
-        | Ty::Never { .. }
-        | Ty::Unknown { .. }
-        | Ty::Error { .. }
-        | Ty::EvolvingList(..)
-        | Ty::EvolvingMap(..)
-        | Ty::RustType { .. }
-        | Ty::Type { .. } => {
-            unreachable!("compiler-only variant should not reach FFI: {ty:?}")
+        RuntimeTy::Uint8Array { .. } => Some(FieldType::Uint8arrayType(BamlTyUint8Array {})),
+        // Dynamic / no-statically-known-shape positions all encode as the
+        // `UnknownType`; the concrete value crossing the boundary still carries
+        // its own runtime tag.
+        //   - `BuiltinUnknown`: an unannotated element type (map value, array
+        //     element) not known at compile time.
+        //   - `TypeVar` / `AssociatedTypeProjection`: a generic position the
+        //     compiler now keeps faithfully. The pre-de-erasure lowering erased
+        //     these to `BuiltinUnknown`, so encoding them as `UnknownType` here
+        //     preserves the original FFI behavior.
+        //   - `Never`: the uninhabited bottom (e.g. an empty `never[]`'s element
+        //     type). No value can inhabit it, so the encoding is a placeholder.
+        RuntimeTy::BuiltinUnknown { .. }
+        | RuntimeTy::TypeVar(..)
+        | RuntimeTy::AssociatedTypeProjection { .. }
+        | RuntimeTy::Never { .. } => Some(FieldType::UnknownType(BamlTyUnknown {})),
+        RuntimeTy::Bigint { .. } => Some(FieldType::BigintType(BamlTyBigint {})),
+        RuntimeTy::TypeAlias(_, _)
+        | RuntimeTy::Future(..)
+        | RuntimeTy::Function { .. }
+        | RuntimeTy::Void { .. }
+        | RuntimeTy::WatchAccessor(_, _)
+        | RuntimeTy::RustType { .. }
+        | RuntimeTy::Type { .. } => {
+            unreachable!("non-data type should not reach FFI type encoding")
         }
     };
 

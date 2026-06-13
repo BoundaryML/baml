@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 23364
 ---
 === HIR2 ===
 type user.MetaAlias = type
@@ -24,10 +23,10 @@ function user.from_json(j: baml.json.json) -> user.MetaField  [expr] {
   user.MetaField { type: baml.json.from_json(baml.json.field(j, "type")) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "type": self.type.to_json() }
+  map { "type": baml.json.to_json(self.type) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "type": self.type.to_json(), "severity": self.severity.to_json() }
+  map { "type": baml.json.to_json(self.type), "severity": baml.json.to_json(self.severity) }
 }
 function user.test_let_binding(function_name: string) -> string  [expr] {
   { let t: type = baml.llm.get_return_type(function_name); return "ok" }

@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use baml_compiler2_mir::{
     BinOp, Constant, Local, MirFunctionBody, Operand, Place, Rvalue, StatementKind, Terminator,
 };
-use baml_type::{Literal, Ty};
+use baml_type::{Literal, RuntimeTy};
 
 use crate::{
     analysis::{LocalClassification, LocalDefUse, StatementRef, UseLocation},
@@ -1068,10 +1068,12 @@ fn numeric_place_kind(body: &MirFunctionBody, place: &Place) -> Option<NumericKi
     }
 }
 
-fn numeric_ty_kind(ty: &Ty) -> Option<NumericKind> {
+fn numeric_ty_kind(ty: &RuntimeTy) -> Option<NumericKind> {
     match ty {
-        Ty::Int { .. } | Ty::Literal(Literal::Int(_), _, _) => Some(NumericKind::Int),
-        Ty::Float { .. } | Ty::Literal(Literal::Float(_), _, _) => Some(NumericKind::Float),
+        RuntimeTy::Int { .. } | RuntimeTy::Literal(Literal::Int(_), _, _) => Some(NumericKind::Int),
+        RuntimeTy::Float { .. } | RuntimeTy::Literal(Literal::Float(_), _, _) => {
+            Some(NumericKind::Float)
+        }
         _ => None,
     }
 }
@@ -1398,19 +1400,19 @@ mod tests {
 
     use super::*;
 
-    fn int_ty() -> Ty {
-        Ty::Int {
+    fn int_ty() -> RuntimeTy {
+        RuntimeTy::Int {
             attr: TyAttr::default(),
         }
     }
 
-    fn float_ty() -> Ty {
-        Ty::Float {
+    fn float_ty() -> RuntimeTy {
+        RuntimeTy::Float {
             attr: TyAttr::default(),
         }
     }
 
-    fn local_decl(ty: Ty) -> LocalDecl {
+    fn local_decl(ty: RuntimeTy) -> LocalDecl {
         LocalDecl {
             name: None,
             ty,
@@ -1421,7 +1423,7 @@ mod tests {
         }
     }
 
-    fn body_with_locals(local_tys: Vec<Ty>) -> MirFunctionBody {
+    fn body_with_locals(local_tys: Vec<RuntimeTy>) -> MirFunctionBody {
         MirFunctionBody {
             blocks: vec![BasicBlock {
                 id: baml_compiler2_mir::BlockId(0),

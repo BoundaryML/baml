@@ -912,7 +912,7 @@ function arrays.sort_floats(xs: float[]) -> float[] {
     return
 }
 
-function arrays.sort_generic(xs: unknown[]) -> unknown[] {
+function arrays.sort_generic(xs: U[]) -> U[] {
     load_type unknown
     load_var xs
     call baml.Sortable$for$T[].sort

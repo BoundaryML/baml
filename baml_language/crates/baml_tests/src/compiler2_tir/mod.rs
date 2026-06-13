@@ -261,10 +261,7 @@ pub(crate) mod support {
             Expr::Object {
                 type_name, fields, ..
             } => {
-                let tn = type_name
-                    .as_ref()
-                    .map(ToString::to_string)
-                    .unwrap_or_else(|| "_".to_string());
+                let tn = type_name.to_string();
                 let field_strs: Vec<String> = fields
                     .iter()
                     .map(|(name, val)| format!("{name}: {}", expr_desc(*val, body)))
@@ -1677,10 +1674,7 @@ pub(crate) mod support {
                 Expr::Object {
                     type_name, fields, ..
                 } => {
-                    let tn = type_name
-                        .as_ref()
-                        .map(|n| qualify_type_name(n, prefix, local_type_names))
-                        .unwrap_or_else(|| "_".into());
+                    let tn = qualify_type_name(type_name, prefix, local_type_names);
                     let field_strs: Vec<String> = fields
                         .iter()
                         .map(|(name, val)| {

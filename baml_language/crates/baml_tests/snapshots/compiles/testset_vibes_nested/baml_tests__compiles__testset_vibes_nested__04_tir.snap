@@ -11,7 +11,7 @@ class user.Sentiment {
   reasoning: string
 }
 function user.Sentiment.to_json(self: user.Sentiment) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "feeling": self.feeling.to_json(), "confidence": self.confidence.to_json(), "reasoning": self.reasoning.to_json() } : map<string, baml.json.json>
+  map { "feeling": baml.json.to_json(self.feeling), "confidence": baml.json.to_json(self.confidence), "reasoning": baml.json.to_json(self.reasoning) } : map<string, baml.json.json>
 }
 function user.Sentiment.from_json(j: baml.json.json) -> user.Sentiment throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Sentiment { feeling: baml.json.from_json<string>(baml.json.field(j, "feeling")), confidence: baml.json.from_json<float>(baml.json.field(j, "confidence")), reasoning: baml.json.from_json<string>(baml.json.field(j, "reasoning")) } : user.Sentiment

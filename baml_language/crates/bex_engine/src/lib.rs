@@ -94,7 +94,7 @@ pub use bex_events::{
         BexCallId, BexThreadId, CallRef, EngineId, FunctionId, ProcessEuid, ProgramId, ThreadRef,
     },
 };
-pub use bex_external_types::{BexExternalValue, Ty, TypeName, UnionMetadata};
+pub use bex_external_types::{BexExternalValue, RuntimeTy, TypeName, UnionMetadata};
 use bex_heap::BexHeap;
 // Re-export GcStats for users of the engine
 pub use bex_heap::GcStats;
@@ -215,9 +215,9 @@ pub struct UserFunctionInfo {
     pub display_name: String,
     pub origin: FunctionOrigin,
     pub param_names: Vec<String>,
-    pub param_types: Vec<Ty>,
+    pub param_types: Vec<RuntimeTy>,
     pub param_has_default: Vec<bool>,
-    pub return_type: Ty,
+    pub return_type: RuntimeTy,
     pub display_type_params: Vec<String>,
     pub display_param_types: Vec<String>,
     pub display_return_type: String,
@@ -696,8 +696,8 @@ fn _default_round_robin_start() -> usize {
     }
 }
 
-/// Extract an owned `Ty` from a `SysOp::BamlHostCallHostValue` type-arg operand
-/// (an `Object::Type(Box<Ty>)`).
+/// Extract an owned `RuntimeTy` from a `SysOp::BamlHostCallHostValue` type-arg operand
+/// (an `Object::Type(Box<RuntimeTy>)`).
 ///
 /// The VM packs the sys-op args as `[handle, args_array, ret_ty, throws_ty]`
 /// (see `bex_vm::vm`'s `CallIndirect`-`HostClosure` path): `ret_ty` is
@@ -712,7 +712,7 @@ fn host_call_type_arg(
     ty_arg: Option<Value>,
     slot_index: usize,
     slot_name: &'static str,
-) -> Result<baml_type::Ty, bex_vm::errors::VmInternalError> {
+) -> Result<baml_type::RuntimeTy, bex_vm::errors::VmInternalError> {
     let bad_slot = || bex_vm::errors::VmInternalError::BridgeFailure {
         message: format!(
             "call_host_value: missing or non-Type {slot_name} (sysop arg slot \
@@ -728,7 +728,7 @@ fn host_call_type_arg(
     // This MUST be read while the heap permit is held (i.e. *before* the sys-op
     // await releases it): the engine-local `args` Vec is not a GC root, so after
     // the await a moving GC may relocate/collect this `Object::Type` and the raw
-    // pointer would dangle. The caller clones the `Ty` out before awaiting.
+    // pointer would dangle. The caller clones the `RuntimeTy` out before awaiting.
     match unsafe { ptr.get() } {
         Object::Type(ty) => Ok((**ty).clone()),
         _ => Err(bad_slot()),
@@ -785,7 +785,7 @@ struct SpawnParamsData {
 ///
 /// The check reads the value's runtime BAML type via
 /// [`value_runtime_baml_ty`] and tests `value_ty ⊑ contract` via
-/// [`Ty::is_subtype_of`] — `BuiltinUnknown` accepts everything (the
+/// [`RuntimeTy::is_subtype_of`] — `BuiltinUnknown` accepts everything (the
 /// "throws unknown" fallback for undeclared host contracts); concrete
 /// classes reject anything not in their subtype lattice.
 ///
@@ -797,25 +797,25 @@ struct SpawnParamsData {
 fn enforce_host_throw_contract(
     thread: &mut ActiveHeapPermit<BexThread>,
     value: Value,
-    contract: &Ty,
+    contract: &RuntimeTy,
 ) -> Value {
     // `BuiltinUnknown` is the top type — short-circuit before any heap
     // walking.
-    if matches!(contract, Ty::BuiltinUnknown { .. }) {
+    if matches!(contract, RuntimeTy::BuiltinUnknown { .. }) {
         return value;
     }
     let runtime_ty = value_runtime_baml_ty(value, thread.proof());
     // Panics propagate as panics regardless of `E` — they're an
     // engine-level failure mode, not something the user's callable opts
     // into via `throws`.
-    if let Some(Ty::Class(name, _, _)) = runtime_ty.as_ref()
+    if let Some(RuntimeTy::Class(name, _, _)) = runtime_ty.as_ref()
         && name.is_panic_type()
     {
         return value;
     }
     let on_contract = runtime_ty
         .as_ref()
-        .is_some_and(|rt: &Ty| rt.is_subtype_of(contract));
+        .is_some_and(|rt: &RuntimeTy| rt.is_subtype_of(contract));
     if on_contract {
         return value;
     }
@@ -847,18 +847,18 @@ fn enforce_host_throw_contract(
 ///
 /// `_proof` ensures the caller holds an active heap permit so the
 /// `HeapPtr` derefs in this function are sound.
-fn value_runtime_baml_ty(value: Value, _proof: bex_heap::PermitProof<'_>) -> Option<Ty> {
+fn value_runtime_baml_ty(value: Value, _proof: bex_heap::PermitProof<'_>) -> Option<RuntimeTy> {
     use baml_type::TyAttr;
     use bex_vm_types::ValueKind;
     match value.kind() {
         ValueKind::OmittedArg => None,
-        ValueKind::Null => Some(Ty::Null {
+        ValueKind::Null => Some(RuntimeTy::Null {
             attr: TyAttr::default(),
         }),
-        ValueKind::Int(_) => Some(Ty::Int {
+        ValueKind::Int(_) => Some(RuntimeTy::Int {
             attr: TyAttr::default(),
         }),
-        ValueKind::Bool(_) => Some(Ty::Bool {
+        ValueKind::Bool(_) => Some(RuntimeTy::Bool {
             attr: TyAttr::default(),
         }),
         ValueKind::Object(ptr) => {
@@ -872,16 +872,16 @@ fn value_runtime_baml_ty(value: Value, _proof: bex_heap::PermitProof<'_>) -> Opt
                     let Object::Class(class) = class_obj else {
                         return None;
                     };
-                    Some(Ty::Class(
+                    Some(RuntimeTy::Class(
                         class.name.clone(),
                         instance.class_type_args.clone(),
                         TyAttr::default(),
                     ))
                 }
-                Object::String(_) => Some(Ty::String {
+                Object::String(_) => Some(RuntimeTy::String {
                     attr: TyAttr::default(),
                 }),
-                Object::Float(_) => Some(Ty::Float {
+                Object::Float(_) => Some(RuntimeTy::Float {
                     attr: TyAttr::default(),
                 }),
                 Object::Variant(variant) => {
@@ -891,7 +891,7 @@ fn value_runtime_baml_ty(value: Value, _proof: bex_heap::PermitProof<'_>) -> Opt
                     let Object::Enum(enum_def) = enum_obj else {
                         return None;
                     };
-                    Some(Ty::Enum(enum_def.name.clone(), TyAttr::default()))
+                    Some(RuntimeTy::Enum(enum_def.name.clone(), TyAttr::default()))
                 }
                 // Other Object shapes (HostClosure, FunctionRef, Array,
                 // Map, etc.) are not meaningful in a thrown position;
@@ -1861,7 +1861,7 @@ impl BexEngine {
         self.validate_bound_args(function_name, &args)?;
         let return_type = self
             .function_return_type(function_name)
-            .unwrap_or(Ty::Null {
+            .unwrap_or(RuntimeTy::Null {
                 attr: baml_type::TyAttr::default(),
             });
         let throws_type = self.function_throws_type(function_name);
@@ -1872,7 +1872,7 @@ impl BexEngine {
         // `Map`/`Instance`/`Variant` values. Idempotent for already-matching
         // values, so callers that already coerced (e.g. `BexProject::Bex`
         // kwargs entry) aren't double-charged.
-        let param_types: Vec<Ty> = self
+        let param_types: Vec<RuntimeTy> = self
             .function_params(function_name)?
             .into_iter()
             .map(|(_, ty, _)| ty.clone())
@@ -1894,11 +1894,11 @@ impl BexEngine {
         let mut thread = self.new_root_thread(cancel.clone()).await;
 
         // Snapshot the declared parameter types so we can thread the
-        // expected `Ty` into per-arg conversion. Binding a `HostValue` to an
+        // expected `RuntimeTy` into per-arg conversion. Binding a `HostValue` to an
         // `Object::HostClosure` needs it: the closure carries the declared
-        // `Ty::Function`'s arity and return type, extracted from the parameter
+        // `RuntimeTy::Function`'s arity and return type, extracted from the parameter
         // type.
-        let param_types: Vec<Ty> = self
+        let param_types: Vec<RuntimeTy> = self
             .function_params(function_name)?
             .into_iter()
             .map(|(_, ty, _)| ty.clone())
@@ -1987,9 +1987,9 @@ impl BexEngine {
         mut thread: ActiveHeapPermit<BexThread>,
         entry_ptr: HeapPtr,
         vm_args: Vec<Value>,
-        type_args: Vec<Ty>,
-        return_type: Ty,
-        throws_type: Option<Ty>,
+        type_args: Vec<RuntimeTy>,
+        return_type: RuntimeTy,
+        throws_type: Option<RuntimeTy>,
         call_id: CallId,
         cancel: CancellationToken,
         copy_objects: bool,
@@ -2279,7 +2279,7 @@ impl BexEngine {
     }
 
     /// Get the return type for a function by dereferencing its heap object.
-    pub fn function_return_type(&self, name: &str) -> Option<Ty> {
+    pub fn function_return_type(&self, name: &str) -> Option<RuntimeTy> {
         let resolved = self.resolve_function_name(name)?;
         let (ptr, _kind) = self.resolved_function_names.get(resolved)?;
         // SAFETY: ptr is from resolved_function_names, a compile-time object
@@ -2291,7 +2291,7 @@ impl BexEngine {
     }
 
     /// Get the inferred throws type for a function by dereferencing its heap object.
-    fn function_throws_type(&self, name: &str) -> Option<Ty> {
+    fn function_throws_type(&self, name: &str) -> Option<RuntimeTy> {
         let resolved = self.resolve_function_name(name)?;
         let (ptr, _kind) = self.resolved_function_names.get(resolved)?;
         // SAFETY: ptr is from resolved_function_names, a compile-time object
@@ -2304,7 +2304,7 @@ impl BexEngine {
 
     /// All class field schemas known to the engine, keyed by `TypeName`.
     ///
-    /// Used by callers that walk a `Ty` tree and need to resolve nested
+    /// Used by callers that walk a `RuntimeTy` tree and need to resolve nested
     /// class field types — e.g. the CLI parsing `--json-args` for a function
     /// whose parameter is a class with `map<…>` or class-typed fields.
     pub fn class_definitions(&self) -> &indexmap::IndexMap<TypeName, ClassDefinition> {
@@ -2317,7 +2317,10 @@ impl BexEngine {
     }
 
     /// Get parameter names and types for a function by dereferencing its heap object.
-    pub fn function_params(&self, name: &str) -> Result<Vec<(&str, &Ty, bool)>, EngineError> {
+    pub fn function_params(
+        &self,
+        name: &str,
+    ) -> Result<Vec<(&str, &RuntimeTy, bool)>, EngineError> {
         let resolved = self
             .resolve_function_name(name)
             .ok_or(EngineError::FunctionNotFound {
@@ -2633,7 +2636,7 @@ impl BexEngine {
         _call_id: CallId,
         value: Value,
         trace: Vec<bex_vm::StackFrame>,
-        throws_type: Option<&Ty>,
+        throws_type: Option<&RuntimeTy>,
     ) -> Result<ThreadOutcome, EngineError> {
         if let Some(future_id) = thread.vm_thread_settles_future() {
             let is_cancel_panic =
@@ -2710,8 +2713,8 @@ impl BexEngine {
         thread: &mut ActiveHeapPermit<BexThread>,
         call_id: CallId,
         op_err: OpError,
-        throws_type: Option<&Ty>,
-        host_callable_throws_contract: Option<&Ty>,
+        throws_type: Option<&RuntimeTy>,
+        host_callable_throws_contract: Option<&RuntimeTy>,
     ) -> Result<Option<ThreadOutcome>, EngineError> {
         let materialized = match op_err.payload {
             sys_types::OpErrorPayload::HostThrown(thrown) => {
@@ -2970,7 +2973,7 @@ impl BexEngine {
         // Return type / throws type are approximated; the future's value is
         // converted on the awaiter side.
         let engine = self;
-        let return_type = Ty::Null {
+        let return_type = RuntimeTy::Null {
             attr: baml_type::TyAttr::default(),
         };
         let task = async move {
@@ -3082,8 +3085,8 @@ impl BexEngine {
     /// plan §1).
     async fn run_thread_event_loop(
         self: &Arc<Self>,
-        return_type: Ty,
-        throws_type: Option<Ty>,
+        return_type: RuntimeTy,
+        throws_type: Option<RuntimeTy>,
         thread: ActiveHeapPermit<BexThread>,
         call_id: CallId,
         cancel: &CancellationToken,
@@ -3152,8 +3155,8 @@ impl BexEngine {
     #[allow(clippy::too_many_arguments)]
     async fn run_thread_event_loop_inner(
         self: &Arc<Self>,
-        return_type: Ty,
-        throws_type: Option<Ty>,
+        return_type: RuntimeTy,
+        throws_type: Option<RuntimeTy>,
         mut thread: ActiveHeapPermit<BexThread>,
         call_id: CallId,
         cancel: &CancellationToken,
@@ -3332,21 +3335,21 @@ impl BexEngine {
 
                     // Capture the host-call type args (`type_arg_0`/`args[2]`
                     // = return type `T`; `type_arg_1`/`args[3]` = throws
-                    // contract `E`) as OWNED `Ty` values now, while the heap
+                    // contract `E`) as OWNED `RuntimeTy` values now, while the heap
                     // permit is still held and the packed `Object::Type`
                     // pointers are live. The async wait below releases the
                     // permit, and a moving GC can then relocate/collect the
                     // object; the engine-local `args` Vec is not a GC root
                     // and is never forwarded, so re-reading the raw pointer
                     // post-await would be a use-after-free. Cloning the
-                    // `Ty`s here sidesteps that.
+                    // `RuntimeTy`s here sidesteps that.
                     //
                     // `host_throws_ty` drives the throws-contract check at
                     // the host-throw injection site below: a host throw
                     // that doesn't match `E` becomes a
                     // `baml.panics.HostContractViolation` panic instead of
                     // a catchable throw.
-                    let host_ret_ty: Option<baml_type::Ty> =
+                    let host_ret_ty: Option<baml_type::RuntimeTy> =
                         if operation == SysOp::BamlHostCallHostValue {
                             Some(
                                 host_call_type_arg(args.get(2).copied(), 2, "ret_ty")
@@ -3355,7 +3358,7 @@ impl BexEngine {
                         } else {
                             None
                         };
-                    let host_throws_ty: Option<baml_type::Ty> =
+                    let host_throws_ty: Option<baml_type::RuntimeTy> =
                         if operation == SysOp::BamlHostCallHostValue {
                             Some(
                                 host_call_type_arg(args.get(3).copied(), 3, "throws_ty")

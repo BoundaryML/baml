@@ -154,11 +154,13 @@ fn user.TopLevelClass.to_json(self: TopLevelClass) -> baml.json.json {
     let _2: baml.json.json
     let _3: string
     let _4: TopLevelClass
+    let _5: type
 
     bb0: {
         _4 = copy _1;
         _3 = copy _4.0;
-        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
+        _5 = load_type(string);
+        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
     }
 
     bb1: {

@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
-assertion_line: 140
 ---
 function watch.$init_test_ns_watch_watch(registry: testing.TestCollector) -> null {
     load_var registry
@@ -396,7 +395,7 @@ function watch.watch_break_unwatches_fn() -> int {
     is_type baml.iter.Peekable<...>
     pop_jump_if_false L26
     load_type int
-    load_type void
+    load_type never
     load_var _3
     call baml.iter.Peekable.Iterator.next
     store_var _5
@@ -418,8 +417,8 @@ function watch.watch_break_unwatches_fn() -> int {
 
   L13:
     load_type int
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _3
     call baml.iter.Filter.Iterator.next
     store_var _5
@@ -441,8 +440,8 @@ function watch.watch_break_unwatches_fn() -> int {
 
   L16:
     load_type int
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _3
     call baml.iter.Chain.Iterator.next
     store_var _5
@@ -450,7 +449,7 @@ function watch.watch_break_unwatches_fn() -> int {
 
   L17:
     load_type int
-    load_type void
+    load_type never
     load_var _3
     call baml.iter.StepBy.Iterator.next
     store_var _5
@@ -682,7 +681,7 @@ function watch.watch_continue_unwatches_fn() -> int {
     is_type baml.iter.Peekable<...>
     pop_jump_if_false L26
     load_type int
-    load_type void
+    load_type never
     load_var _3
     call baml.iter.Peekable.Iterator.next
     store_var _5
@@ -704,8 +703,8 @@ function watch.watch_continue_unwatches_fn() -> int {
 
   L13:
     load_type int
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _3
     call baml.iter.Filter.Iterator.next
     store_var _5
@@ -727,8 +726,8 @@ function watch.watch_continue_unwatches_fn() -> int {
 
   L16:
     load_type int
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _3
     call baml.iter.Chain.Iterator.next
     store_var _5
@@ -736,7 +735,7 @@ function watch.watch_continue_unwatches_fn() -> int {
 
   L17:
     load_type int
-    load_type void
+    load_type never
     load_var _3
     call baml.iter.StepBy.Iterator.next
     store_var _5
@@ -968,7 +967,7 @@ function watch.watch_for_throw_fails() -> int {
     is_type baml.iter.Peekable<...>
     pop_jump_if_false L26
     load_type int
-    load_type void
+    load_type never
     load_var _2
     call baml.iter.Peekable.Iterator.next
     store_var _4
@@ -990,8 +989,8 @@ function watch.watch_for_throw_fails() -> int {
 
   L13:
     load_type int
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _2
     call baml.iter.Filter.Iterator.next
     store_var _4
@@ -1013,8 +1012,8 @@ function watch.watch_for_throw_fails() -> int {
 
   L16:
     load_type int
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _2
     call baml.iter.Chain.Iterator.next
     store_var _4
@@ -1022,7 +1021,7 @@ function watch.watch_for_throw_fails() -> int {
 
   L17:
     load_type int
-    load_type void
+    load_type never
     load_var _2
     call baml.iter.StepBy.Iterator.next
     store_var _4

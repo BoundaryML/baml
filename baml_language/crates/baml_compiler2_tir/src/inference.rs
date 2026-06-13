@@ -104,7 +104,7 @@ impl GenericEnv {
     }
 }
 
-fn inference_owner_scope(
+pub(crate) fn inference_owner_scope(
     index: &baml_compiler2_hir::semantic_index::FileSemanticIndex<'_>,
     mut scope_id: FileScopeId,
 ) -> FileScopeId {
@@ -270,6 +270,65 @@ fn type_bindings_for_params(params: &[Name]) -> FxHashMap<Name, Ty> {
         .collect()
 }
 
+/// Signature-scope type bindings for a method declared directly inside an
+/// interface (a default method or a required-method stub). `Self` is the rigid
+/// type variable bound by the interface, and each associated type — the
+/// interface's own plus those inherited through `requires` — maps to the
+/// projection `Self.<name>`.
+///
+/// This mirrors the bindings [`infer_scope_types`] installs for the method
+/// *body*, so a signature and its body resolve `Item`/`Error`/`Self`
+/// identically. Lowering a signature with these bindings (via
+/// [`crate::generics::lower_type_expr_with_generics`]) keeps associated-type
+/// references as faithful `Self.<name>` projections instead of letting a bare
+/// [`crate::lower_type_expr::lower_type_expr_in_ns`] erase them to `Ty::Unknown`
+/// — which would otherwise reach the runtime lowering boundary and panic.
+///
+/// Callers merge these over the method's in-scope generic parameters (each
+/// mapped to its own `TypeVar`); the keys here (`Self` and the associated-type
+/// names) take precedence.
+pub fn interface_self_projection_bindings(
+    db: &dyn crate::Db,
+    iface_loc: InterfaceLoc<'_>,
+    iface_data: &baml_compiler2_hir::item_tree::Interface,
+    pkg_items: &PackageItems<'_>,
+    ns_context: &[Name],
+) -> FxHashMap<Name, Ty> {
+    let self_var = || Ty::TypeVar(Name::new("Self"), TyAttr::default());
+    let projection = |member: Name| Ty::AssociatedTypeProjection {
+        base: Box::new(self_var()),
+        interface: None,
+        member,
+        attr: TyAttr::default(),
+    };
+
+    let mut bindings = FxHashMap::default();
+    bindings.insert(Name::new("Self"), self_var());
+    for assoc in &iface_data.associated_types {
+        bindings.insert(assoc.name.clone(), projection(assoc.name.clone()));
+    }
+    // Inherited associated types are bound as `Self.<name>` only when the name
+    // is unambiguous. A name inherited from more than one `requires` interface
+    // is excluded from the interface's type-level params (see
+    // `interface_type_level_params_and_bounds`, which applies the same
+    // `count == 1` filter) and must be disambiguated explicitly; binding it to a
+    // single `Self.<name>` projection here would silently resolve an ambiguous
+    // reference and diverge from body inference.
+    let inherited = inherited_interface_associated_type_names(db, iface_loc, pkg_items, ns_context);
+    let mut counts: FxHashMap<Name, usize> = FxHashMap::default();
+    for name in &inherited {
+        *counts.entry(name.clone()).or_default() += 1;
+    }
+    for name in inherited {
+        if counts.get(&name).copied().unwrap_or_default() == 1 {
+            bindings
+                .entry(name.clone())
+                .or_insert_with(|| projection(name));
+        }
+    }
+    bindings
+}
+
 fn install_generic_param_bounds(
     db: &dyn crate::Db,
     builder: &mut TypeInferenceBuilder<'_>,
@@ -355,6 +414,19 @@ fn prepend_parent_type_generics(
     Some(type_name)
 }
 
+/// The `implements … for …` block whose method list contains `func_data`, if
+/// any. A method is identified by its source span (unique per declaration).
+fn enclosing_impl_for_func<'a>(
+    item_tree: &'a baml_compiler2_hir::item_tree::ItemTree,
+    func_data: &baml_compiler2_hir::item_tree::Function,
+) -> Option<&'a baml_compiler2_hir::item_tree::ImplementsFor> {
+    item_tree.implements_for.iter().find(|imp| {
+        imp.methods
+            .iter()
+            .any(|&mid| item_tree[mid].span == func_data.span)
+    })
+}
+
 fn generic_env_for_function_data(
     ctx: GenericLookupContext<'_, '_>,
     function_scope: &baml_compiler2_hir::scope::Scope,
@@ -362,7 +434,16 @@ fn generic_env_for_function_data(
 ) -> GenericEnv {
     let mut env = GenericEnv::from_params(func_data.generic_params.clone());
     env.add_bounds_for_declared_params(&func_data.generic_params, &func_data.generic_param_bounds);
-    prepend_parent_type_generics(ctx, &mut env, function_scope.parent);
+    // A method in a generic `implements<T …> Iface for Target` block sees the
+    // block's type params (e.g. `T` in `implements<T extends Comparable>
+    // Sortable for T[]`), which live on the impl block rather than a parent
+    // scope. Mirror the `ScopeKind::Function` arm: impl generics take the place
+    // of parent-type generics so a nested lambda body can resolve them too.
+    if let Some(imp) = enclosing_impl_for_func(ctx.item_tree, func_data) {
+        env.prepend_declared(&imp.generic_params, &imp.generic_param_bounds);
+    } else {
+        prepend_parent_type_generics(ctx, &mut env, function_scope.parent);
+    }
     env
 }
 
@@ -1036,20 +1117,7 @@ pub fn infer_scope_types<'db>(
     let res_ctx = crate::package_interface::package_resolution_context(db, pkg_id);
     let pkg_items = &res_ctx.own_items;
 
-    let mut aliases = collect_type_aliases(db, pkg_items);
-    // Also collect type aliases from dependency packages so that e.g.
-    // `testing.TestRunner` can be resolved during subtype checking.
-    for (_dep_name, dep_iface) in &res_ctx.dep_interfaces {
-        for types_in_ns in dep_iface.types.values() {
-            for exported in types_in_ns.values() {
-                if let crate::package_interface::ExportedType::TypeAlias { qtn, resolved } =
-                    exported
-                {
-                    aliases.insert(qtn.clone(), resolved.clone());
-                }
-            }
-        }
-    }
+    let aliases = package_alias_map(db, res_ctx);
     let context = InferContext::new(db, scope_id);
     let mut builder = TypeInferenceBuilder::new(context, res_ctx, pkg_id, scope_id, aliases);
 
@@ -2122,6 +2190,47 @@ pub fn collect_type_aliases<'db>(
         }
     }
     aliases
+}
+
+/// Build the type-alias map visible from a package: its own aliases plus those
+/// re-exported by its dependencies. Shared by per-scope inference and throws
+/// analysis so both expand the same aliases (e.g. `testing.TestSetBody`).
+pub(crate) fn package_alias_map<'db>(
+    db: &'db dyn crate::Db,
+    res_ctx: &crate::package_interface::PackageResolutionContext<'db>,
+) -> HashMap<crate::ty::QualifiedTypeName, Ty> {
+    let mut aliases = collect_type_aliases(db, &res_ctx.own_items);
+    for (_dep_name, dep_iface) in &res_ctx.dep_interfaces {
+        for types_in_ns in dep_iface.types.values() {
+            for exported in types_in_ns.values() {
+                if let crate::package_interface::ExportedType::TypeAlias { qtn, resolved } =
+                    exported
+                {
+                    aliases.insert(qtn.clone(), resolved.clone());
+                }
+            }
+        }
+    }
+    aliases
+}
+
+/// Follow a chain of `Ty::TypeAlias` to the first non-alias type it resolves to,
+/// leaving any other type untouched. The depth bound guards against cyclic
+/// aliases (which are a separate diagnostic).
+pub(crate) fn expand_alias_chains(
+    mut ty: Ty,
+    aliases: &HashMap<crate::ty::QualifiedTypeName, Ty>,
+) -> Ty {
+    for _ in 0..64 {
+        match &ty {
+            Ty::TypeAlias(qtn, _) => match aliases.get(qtn) {
+                Some(expanded) => ty = expanded.clone(),
+                None => break,
+            },
+            _ => break,
+        }
+    }
+    ty
 }
 
 /// Detect invalid (unguarded) type alias cycles in a package.

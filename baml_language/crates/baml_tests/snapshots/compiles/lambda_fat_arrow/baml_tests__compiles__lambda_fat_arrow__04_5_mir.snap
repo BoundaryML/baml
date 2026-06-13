@@ -38,8 +38,8 @@ fn .<lambda(test_annotated, 0)>(x: int) -> null {
 fn user.test_generic() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: (unknown) -> unknown throws never // identity
-    let _2: (unknown) -> unknown throws never
+    let _1: (T) -> T throws never // identity
+    let _2: (T) -> T throws never
     let _3: type
 
     bb0: {
@@ -55,10 +55,10 @@ fn user.test_generic() -> int {
 }
 
 // lambda[0]
-fn .<lambda(test_generic, 0)>(x: unknown) -> null {
+fn .<lambda(test_generic, 0)>(x: T) -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: unknown // x // param
+    let _1: T // x // param
 
     bb0: {
         _0 = copy _1;

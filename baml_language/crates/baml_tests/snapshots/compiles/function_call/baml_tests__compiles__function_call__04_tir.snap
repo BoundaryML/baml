@@ -34,7 +34,7 @@ function user.Baz.Greeting(self: user.Baz) -> string throws never {
   }
 }
 function user.Baz.to_json(self: user.Baz) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "name": self.name.to_json() } : map<string, baml.json.json>
+  map { "name": baml.json.to_json(self.name) } : map<string, baml.json.json>
 }
 function user.Baz.from_json(j: baml.json.json) -> user.Baz throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Baz { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.Baz

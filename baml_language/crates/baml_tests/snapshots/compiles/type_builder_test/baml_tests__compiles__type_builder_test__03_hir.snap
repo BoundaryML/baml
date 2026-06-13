@@ -22,5 +22,5 @@ function user.from_json(j: baml.json.json) -> user.TopLevelClass  [expr] {
   user.TopLevelClass { a: baml.json.from_json(baml.json.field(j, "a")) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "a": self.a.to_json() }
+  map { "a": baml.json.to_json(self.a) }
 }

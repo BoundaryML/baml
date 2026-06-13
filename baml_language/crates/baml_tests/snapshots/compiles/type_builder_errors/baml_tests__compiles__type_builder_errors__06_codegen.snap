@@ -14,9 +14,10 @@ function user.Resume.from_json(j: baml.json.json) -> Resume {
 }
 
 function user.Resume.to_json(self: Resume) -> baml.json.json {
+    load_type string
     load_var self
     load_field .name
-    call baml.String.to_json
+    call baml.json.to_json
     load_const "name"
     alloc_map 1
     return

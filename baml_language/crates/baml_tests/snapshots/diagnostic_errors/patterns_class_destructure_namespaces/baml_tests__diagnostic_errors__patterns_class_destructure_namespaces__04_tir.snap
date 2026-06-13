@@ -62,7 +62,7 @@ class user.llm.openai.Response {
   score: int
 }
 function user.llm.openai.Response.to_json(self: user.llm.openai.Response) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "score": self.score.to_json() } : map<string, baml.json.json>
+  map { "score": baml.json.to_json(self.score) } : map<string, baml.json.json>
 }
 function user.llm.openai.Response.from_json(j: baml.json.json) -> user.llm.openai.Response throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Response { score: baml.json.from_json<int>(baml.json.field(j, "score")) } : user.llm.openai.Response

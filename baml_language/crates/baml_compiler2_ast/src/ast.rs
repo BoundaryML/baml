@@ -754,7 +754,11 @@ pub enum Expr {
         args: Vec<CallArg>,
     },
     Object {
-        type_name: Option<TypePath>,
+        /// The constructed type's name. Always present: the parser only emits an
+        /// object literal when a type name precedes the brace
+        /// (`looks_like_object_constructor`), so a name-less `{ .. }` is a map or
+        /// block, never an object literal.
+        type_name: TypePath,
         /// Explicit generic type args from syntax like `Foo<int> { ... }`.
         /// Empty when no `<...>` was written (e.g. bare `Foo { ... }`).
         type_args: Vec<TypeExpr>,

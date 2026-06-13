@@ -652,7 +652,7 @@ pub struct SysOpContext<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static
     /// Recursive type alias definitions for output format rendering.
     /// Only recursive aliases are stored (non-recursive ones are expanded inline).
     /// Maps alias name → target type.
-    pub type_alias_definitions: Arc<indexmap::IndexMap<baml_type::TypeName, baml_type::Ty>>,
+    pub type_alias_definitions: Arc<indexmap::IndexMap<baml_type::TypeName, baml_type::RuntimeTy>>,
 
     /// Can be used to spawn new VMs.
     pub spawner: Arc<dyn VmSpawner<E>>,
@@ -705,7 +705,7 @@ pub struct EngineSysOpContext {
     /// Recursive type alias definitions for output format rendering.
     /// Only recursive aliases are stored (non-recursive ones are expanded inline).
     /// Maps alias name → target type.
-    pub type_alias_definitions: Arc<indexmap::IndexMap<baml_type::TypeName, baml_type::Ty>>,
+    pub type_alias_definitions: Arc<indexmap::IndexMap<baml_type::TypeName, baml_type::RuntimeTy>>,
 
     /// Typed async IO interface, built from the `SysOps` table at engine init.
     pub runtime_io: Arc<dyn runtime_io::RuntimeIo>,
@@ -721,7 +721,7 @@ pub struct LlmFunctionInfo {
     /// The client name (e.g., `"MyClient"`) declared in the function.
     pub client_name: String,
     /// The expected return type, used for response parsing.
-    pub return_type: baml_type::Ty,
+    pub return_type: baml_type::RuntimeTy,
 }
 
 /// Pre-extracted class definition for output format rendering.
@@ -737,7 +737,7 @@ pub struct ClassDefinition {
 #[derive(Clone, Debug)]
 pub struct ClassFieldDefinition {
     pub name: String,
-    pub field_type: baml_type::Ty,
+    pub field_type: baml_type::RuntimeTy,
     pub description: Option<String>,
     pub alias: Option<String>,
     pub skip: bool,
@@ -801,7 +801,7 @@ impl SysOpContext {
             ),
             type_alias_definitions: Arc::new(indexmap::IndexMap::<
                 baml_type::TypeName,
-                baml_type::Ty,
+                baml_type::RuntimeTy,
             >::new()),
             spawner: Arc::new(NeverSpawner),
             runtime_io: Arc::new(runtime_io::NoopRuntimeIo),

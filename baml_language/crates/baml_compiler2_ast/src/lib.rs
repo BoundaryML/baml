@@ -1672,8 +1672,8 @@ retry_policy MyRetry {
         };
 
         assert_eq!(
-            type_name.as_ref().map(ToString::to_string).as_deref(),
-            Some("baml.llm.RetryPolicy"),
+            type_name.to_string(),
+            "baml.llm.RetryPolicy",
             "expected type_name to be baml.llm.RetryPolicy"
         );
 

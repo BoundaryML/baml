@@ -399,10 +399,10 @@ impl BexHeap {
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
             // `HostClosure` carries only an `Arc<HostValueArc>` (Rust-side
-            // stub, not a heap object) and a `Box<Ty>` (no `HeapPtr`s).
+            // stub, not a heap object) and a `Box<RuntimeTy>` (no `HeapPtr`s).
             Object::HostClosure(_) => {}
             // `GenericFunction` references its base function by `GlobalIndex`
-            // (not a `HeapPtr`) and holds only inline `Ty`s — nothing to trace.
+            // (not a `HeapPtr`) and holds only inline `RuntimeTy`s — nothing to trace.
             Object::String(_)
             | Object::Bigint(_)
             | Object::Uint8Array(_)
@@ -1133,10 +1133,10 @@ mod tests {
             name: baml_type::TypeName::local(baml_type::Name::new("C")),
             fields: vec![bex_vm_types::ClassField {
                 name: "x".to_string(),
-                field_type: baml_type::Ty::Int {
+                field_type: baml_type::RuntimeTy::Int {
                     attr: baml_type::TyAttr::default(),
                 },
-                field_template: baml_type::TyTemplate::Concrete(baml_type::Ty::Int {
+                field_template: baml_type::TyTemplate::Concrete(baml_type::RuntimeTy::Int {
                     attr: baml_type::TyAttr::default(),
                 }),
                 description: None,
@@ -2065,7 +2065,7 @@ mod tests {
     fn test_gc_leaf_type_preserved() {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
-        let ptr = tlab.alloc(Object::Type(Box::new(baml_type::Ty::Int {
+        let ptr = tlab.alloc(Object::Type(Box::new(baml_type::RuntimeTy::Int {
             attr: baml_type::TyAttr::default(),
         })));
 
@@ -2073,7 +2073,7 @@ mod tests {
         let Object::Type(ty) = (unsafe { new_roots[0].get() }) else {
             panic!("not type")
         };
-        assert!(matches!(**ty, baml_type::Ty::Int { .. }));
+        assert!(matches!(**ty, baml_type::RuntimeTy::Int { .. }));
     }
 
     #[test]

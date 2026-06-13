@@ -81,7 +81,7 @@ function user.SearchService.Docs(self: user.SearchService, query: string, filter
   }
 }
 function user.SearchService.to_json(self: user.SearchService) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "base": self.base.to_json() } : map<string, baml.json.json>
+  map { "base": baml.json.to_json(self.base) } : map<string, baml.json.json>
 }
 function user.SearchService.from_json(j: baml.json.json) -> user.SearchService throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   SearchService { base: baml.json.from_json<string>(baml.json.field(j, "base")) } : user.SearchService

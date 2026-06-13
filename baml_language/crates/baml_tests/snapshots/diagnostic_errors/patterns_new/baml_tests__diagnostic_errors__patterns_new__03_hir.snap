@@ -130,23 +130,23 @@ function user.slice_repeated_suffix_unreachable(xs: bool[]) -> int  [expr] {
   {  } match (xs) { [.., true] => 1, [.., true] => 2, _ => 3 }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "contents": self.contents.to_json() }
+  map { "contents": baml.json.to_json(self.contents) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "flag": self.flag.to_json(), "note": self.note.to_json() }
+  map { "flag": baml.json.to_json(self.flag), "note": baml.json.to_json(self.note) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "scores": self.scores.to_json() }
+  map { "scores": baml.json.to_json(self.scores) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "kind": self.kind.to_json(), "payload": self.payload.to_json() }
+  map { "kind": baml.json.to_json(self.kind), "payload": baml.json.to_json(self.payload) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "a": self.a.to_json(), "b": self.b.to_json() }
+  map { "a": baml.json.to_json(self.a), "b": baml.json.to_json(self.b) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "value": self.value.to_json() }
+  map { "value": baml.json.to_json(self.value) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "first": self.first.to_json(), "second": self.second?.to_json() }
+  map { "first": baml.json.to_json(self.first), "second": baml.json.to_json(self.second) }
 }

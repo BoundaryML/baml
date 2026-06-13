@@ -219,7 +219,7 @@ fn match_expr() {
     let file = db.add_file(
         "test.baml",
         r#"function f(x: int) -> string {
-            return match x {
+            return match (x) {
                 1 => "one",
                 2 => "two",
                 _ => "other",

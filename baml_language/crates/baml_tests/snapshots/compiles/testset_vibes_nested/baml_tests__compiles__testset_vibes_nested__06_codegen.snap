@@ -489,15 +489,18 @@ function user.Sentiment.from_json(j: baml.json.json) -> Sentiment {
 }
 
 function user.Sentiment.to_json(self: Sentiment) -> baml.json.json {
+    load_type string
     load_var self
     load_field .feeling
-    call baml.String.to_json
+    call baml.json.to_json
+    load_type float
     load_var self
     load_field .confidence
-    call baml.Float.to_json
+    call baml.json.to_json
+    load_type string
     load_var self
     load_field .reasoning
-    call baml.String.to_json
+    call baml.json.to_json
     load_const "feeling"
     load_const "confidence"
     load_const "reasoning"

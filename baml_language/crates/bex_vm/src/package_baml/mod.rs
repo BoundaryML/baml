@@ -82,7 +82,7 @@ pub enum NativeCallResult {
     YieldToCall {
         callee: HeapPtr,
         args: Vec<Value>,
-        type_args: Vec<baml_type::Ty>,
+        type_args: Vec<baml_type::RuntimeTy>,
         continuation: Box<dyn Continuation>,
     },
 }

@@ -6,7 +6,7 @@ class user.Wrapper {
   data: baml.json.json
 }
 function user.Wrapper.to_json(self: user.Wrapper) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "data": self.data.to_json() } : map<string, baml.json.json>
+  map { "data": baml.json.to_json(self.data) } : map<string, baml.json.json>
 }
 function user.Wrapper.from_json(j: baml.json.json) -> user.Wrapper throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Wrapper { data: baml.json.from_json<baml.json.json>(baml.json.field(j, "data")) } : user.Wrapper

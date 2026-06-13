@@ -119,6 +119,12 @@ pub enum LoweringDiagnostic {
     /// `$id` would be silently dead, so it is rejected.
     ReservedRuntimeIdBindingName { span: TextRange },
 
+    /// An assignment operator (`=`, `+=`, …) appeared in expression position,
+    /// e.g. `(x = 5)`. Assignment is statement-only in BAML, so the expression
+    /// has no value; without this diagnostic it would lower to a `Missing` that
+    /// only fails at runtime.
+    AssignmentInExpressionPosition { span: TextRange },
+
     /// Top-level `implements I for T` where `T` does not match any class in the file.
     UnresolvedImplementsForTarget {
         interface_name: String,
@@ -317,6 +323,14 @@ impl LoweringDiagnostic {
                 "`$id` is the runtime identity and cannot be used as a binding name".to_string(),
                 *span,
                 "`$id` is reserved here",
+            ),
+            LoweringDiagnostic::AssignmentInExpressionPosition { span } => (
+                DiagnosticId::InvalidSyntax,
+                Severity::Error,
+                "assignment is not allowed in expression position; assignment is a statement"
+                    .to_string(),
+                *span,
+                "assignment not allowed here",
             ),
             LoweringDiagnostic::UnresolvedImplementsForTarget {
                 interface_name,

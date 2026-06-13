@@ -508,6 +508,43 @@ pub fn lower_type_expr_in_ns(
                     None
                 }
             });
+            // `$stream` companion fallback. PPIR synthesizes a `<T>$stream`
+            // class/alias for every class and alias, but those synthetics live
+            // only in the per-file item tree — not in the cross-file
+            // `package_items` resolution index — so a written `T$stream`
+            // reference (e.g. in a function signature) would otherwise erase to
+            // `Ty::Unknown`. Resolve the base type; the `Definition::Class` /
+            // `TypeAlias` arms below re-qualify it under the original `$stream`
+            // name (via `short`), producing the companion's `Class`/`TypeAlias`
+            // type. `$` is reserved for synthetics, so this never shadows a
+            // user-declared name.
+            let resolved = resolved.or_else(|| {
+                let base = item.as_str().strip_suffix("$stream")?;
+                let base_name = baml_base::Name::new(base);
+                let base_def = if !ns_context.is_empty() {
+                    let ns: Vec<baml_base::Name> =
+                        ns_context.iter().chain(seg_ns.iter()).cloned().collect();
+                    package_items.lookup_type(&ns, &base_name)
+                } else {
+                    package_items.lookup_type(seg_ns, &base_name)
+                }
+                .or_else(|| {
+                    if segments.len() >= 2 {
+                        if segments[0].as_str() == "root" {
+                            package_items.lookup_type(&segments[1..segments.len() - 1], &base_name)
+                        } else {
+                            let pkg_id = PackageId::new(db, segments[0].clone());
+                            let pkg = baml_compiler2_ppir::package_items(db, pkg_id);
+                            pkg.lookup_type(&segments[1..segments.len() - 1], &base_name)
+                        }
+                    } else {
+                        None
+                    }
+                })?;
+                // Only classes and aliases get a `$stream` companion.
+                matches!(base_def, Definition::Class(_) | Definition::TypeAlias(_))
+                    .then_some(base_def)
+            });
 
             if let Some(def) = resolved {
                 let short = segments.last().expect("non-empty path");

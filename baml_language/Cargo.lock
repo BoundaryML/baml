@@ -798,6 +798,7 @@ dependencies = [
  "bex_vm_types",
  "indexmap",
  "log",
+ "rustc-hash 2.1.2",
  "salsa",
 ]
 

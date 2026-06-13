@@ -352,7 +352,7 @@ fn user.OpenAIImageResponses$new() -> null {
     let _3: map<string, string>
     let _4: map<string, string>
     let _5: map<string, unknown>
-    let _6: void[]
+    let _6: never[]
 
     bb0: {
         _2 = call const fn baml.env.get_or_panic(const "OPENAI_API_KEY") -> [bb1];

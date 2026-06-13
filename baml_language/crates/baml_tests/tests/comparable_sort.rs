@@ -994,7 +994,7 @@ async fn phase5_class_with_comparable_sort_compiles_and_runs() {
 // *BAML-level* `is` either. `x is int` on a `T`-typed value compiles, but TIR
 // records the pattern type as the intersection of `T` and `int` — `Never` —
 // and MIR lowers a `Never` pattern type to a constant-false test
-// (`lower_pattern_test` → `convert_tir2_ty`), so the test never fires at
+// (`lower_pattern_test` → `convert_tir_ty_for_runtime`), so the test never fires at
 // runtime (pinned below).
 //
 // The dispatch therefore uses a single native boolean,
