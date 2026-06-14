@@ -300,6 +300,9 @@ impl EqualsDriver {
                 // No same-pointer (`pa == pb`) shortcut: equality is not
                 // reflexive (a `NaN` inside `a` makes `a != a`), so we must
                 // still compare the contents. `visited` only breaks cycles.
+                // Order-normalized key: a pair reached as both `(p, q)` and `(q, p)` is
+                // compared once — sound because `==` / `Equals.eq` are symmetric by
+                // contract (a non-symmetric user `eq` would observe only the first result).
                 let key = if pa < pb { (pa, pb) } else { (pb, pa) };
                 if !self.visited.insert(key) {
                     // Already comparing this exact pair higher on the walk (a
@@ -309,7 +312,18 @@ impl EqualsDriver {
                 }
                 self.compare_objects(vm, pa, pb)
             }
-            _ => Cmp::NotEqual,
+            // Mismatched value kinds are never equal. Every kind is listed explicitly
+            // (no total `_` wildcard), so a new `ValueKind` fails to compile here and must
+            // be classified rather than silently defaulting to `NotEqual` even against
+            // itself.
+            (
+                ValueKind::Null
+                | ValueKind::OmittedArg
+                | ValueKind::Int(_)
+                | ValueKind::Bool(_)
+                | ValueKind::Object(_),
+                _,
+            ) => Cmp::NotEqual,
         }
     }
 
@@ -450,7 +464,12 @@ impl EqualsDriver {
             (Object::Collector(x), Object::Collector(y)) => step(Arc::ptr_eq(&x.0, &y.0)),
             (Object::Collector(_), _) => Cmp::NotEqual,
 
-            (Object::Type(x), Object::Type(y)) => step(x == y),
+            // Two `type` values are equal when they denote the same type. Use the
+            // resolver's semantic equivalence, not derived `==`: union member order is
+            // non-canonical at runtime, so `type_of<int | string>` and
+            // `type_of<string | int>` are the same type and must compare equal (matching
+            // the interface resolver and `type.to_string()`'s stable-identity claim).
+            (Object::Type(x), Object::Type(y)) => step(resolve::ty_equivalent(x, y)),
             (Object::Type(_), _) => Cmp::NotEqual,
 
             // `Sentinel` (heap_debug builds only) is an internal freed/uninit
@@ -540,9 +559,11 @@ fn value_concrete_ty(vm: &BexVm, ptr: HeapPtr) -> Option<RuntimeTy> {
         Object::Instance(inst) => {
             let (class_ptr, type_args) = (inst.class, inst.class_type_args.clone());
             match vm.get_object(class_ptr) {
-                Object::Class(class) => {
-                    Some(RuntimeTy::Class(class.name.clone(), type_args, TyAttr::default()))
-                }
+                Object::Class(class) => Some(RuntimeTy::Class(
+                    class.name.clone(),
+                    type_args,
+                    TyAttr::default(),
+                )),
                 _ => None,
             }
         }

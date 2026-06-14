@@ -113,11 +113,12 @@ fn ty_name_args_and_assoc(vm: &BexVm, value: Value) -> Option<InterfaceImplement
     }
 }
 
-/// BEP-044 wf3 #G19: a synthetic `TypeName` for a primitive type so an
-/// out-of-body `implements I for int` is visible to reflection
-/// (`reflect.type_of<int>().implements(...)` / `I.implementors()`). Must match
-/// the naming used by `baml_compiler2_emit`'s Pass 7.6 when it bakes the
-/// implementor table.
+/// BEP-044 wf3 #G19: a synthetic `TypeName` for a primitive type, so reflection on a
+/// primitive type value (`reflect.type_of<int>()`) has a name to key by, the way
+/// non-primitive types carry their own `TypeName`. Impl *matching* for primitives is
+/// structural — the registry bakes their for-types as `Concrete(RuntimeTy::Int { .. })`
+/// etc. (`baml_compiler2_mir`'s `tir2_to_template`), matched by `resolve::match_template`
+/// — so this is a reflection key, never compared against a baked pattern.
 fn primitive_type_name(ty: &baml_type::RuntimeTy) -> Option<baml_type::TypeName> {
     let name = match ty {
         baml_type::RuntimeTy::Int { .. } => "int",

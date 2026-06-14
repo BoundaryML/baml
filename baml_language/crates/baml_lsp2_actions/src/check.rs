@@ -607,9 +607,17 @@ fn check_interfaces<'db>(
     // file (its conflicting partner may be in another file or a dependency).
     let pkg_id = baml_compiler2_hir::package::PackageId::new(db, current_package.clone());
     for violation in baml_compiler2_tir::interfaces::package_coherence_diagnostics(db, pkg_id) {
-        if violation.primary.file_id != file_id {
+        // Anchor the error on whichever conflicting impl lives in *this* file, pointing
+        // at its partner. A cross-file pair is reported once per file (each anchored on
+        // its own impl), so neither offending file is left unmarked — checking only the
+        // `primary` side left the file holding the `secondary` impl looking clean.
+        let (primary, secondary) = if violation.primary.file_id == file_id {
+            (violation.primary, violation.secondary)
+        } else if violation.secondary.file_id == file_id {
+            (violation.secondary, violation.primary)
+        } else {
             continue;
-        }
+        };
         // A definite overlap and an undecidable one are both rejected (overlap
         // can't be ruled out, and the resolver assumes ≤1 impl), but the message
         // distinguishes them so the user knows whether it's a proven conflict or a
@@ -622,8 +630,8 @@ fn check_interfaces<'db>(
         };
         diagnostics.push(
             Diagnostic::error(DiagnosticId::OverlappingImplements, message)
-                .with_primary_span(violation.primary)
-                .with_secondary(violation.secondary, "first implementation is here")
+                .with_primary_span(primary)
+                .with_secondary(secondary, "conflicting implementation is here")
                 .with_phase(DiagnosticPhase::Type),
         );
     }
@@ -4384,6 +4392,24 @@ fn validate_implements_for<'db>(
             &generic_param_names,
             &mut iface_lower_errs,
         );
+        // Surface errors lowering the interface target (unknown type, wrong generic
+        // arity, …) and stop — exactly as the for-target does above. Otherwise an
+        // out-of-body `implement BadIface<a, b> for Bar` would silently swallow these
+        // and run the orphan check on a degraded `iface_ty` (the in-body path reports
+        // them, so this kept the two paths inconsistent).
+        if !iface_lower_errs.is_empty() {
+            for error in iface_lower_errs {
+                diagnostics.push(
+                    Diagnostic::error(tir_type_error_to_diagnostic_id(&error), error.to_string())
+                        .with_primary_span(Span {
+                            file_id,
+                            range: imp.interface_target.span,
+                        })
+                        .with_phase(DiagnosticPhase::Type),
+                );
+            }
+            return;
+        }
         let iface_args: Vec<Ty> = match expand_type_alias(&iface_ty, aliases) {
             Ty::Interface(_, args, _, _) => {
                 args.iter().map(|a| expand_type_alias(a, aliases)).collect()

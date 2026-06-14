@@ -13,7 +13,7 @@
 
 use std::borrow::Cow;
 
-use baml_type::{Literal, Name, RuntimeTy, TyAttr, TyTemplate, TypeName};
+use baml_type::{Literal, MediaKind, Name, RuntimeTy, TyAttr, TyTemplate, TypeName};
 use bex_vm_types::{
     HeapPtr,
     types::{Object, RuntimeImplRule},
@@ -126,7 +126,18 @@ pub(super) fn resolve_interface_method(
         let Some(type_args) = rule_applies(vm, rule, concrete_ty, &mut Vec::new()) else {
             continue;
         };
-        let callee = vm.find_function_by_name(rule.methods.get(method)?)?;
+        // A matching rule should carry every interface method (defaults are merged in at
+        // bake time), so this lookup normally succeeds. If a method or its handle is
+        // somehow absent, skip to the next candidate instead of abandoning the whole
+        // search — coherence gives ≤1 applicable rule today, so this is defensive, but it
+        // keeps the documented "first applicable rule" contract honest rather than turning
+        // one missing handle into a global `None`.
+        let Some(fqn) = rule.methods.get(method) else {
+            continue;
+        };
+        let Some(callee) = vm.find_function_by_name(fqn) else {
+            continue;
+        };
         return Some((callee, type_args));
     }
     None
@@ -289,20 +300,23 @@ fn match_template(
         },
         TyTemplate::Interface(name, args, assoc) => match concrete {
             RuntimeTy::Interface(cname, cargs, cassoc, _) => {
-                // Each pattern binding must match a same-named concrete binding, found
-                // order-insensitively; extra concrete bindings don't constrain. This
-                // mirrors the compiler's associated-binding unification (`unify_into`'s
-                // `Interface` arm), rather than a positional, length-locked `zip` that
-                // would diverge if the two declaration orders ever differed. (A top-level
-                // interface for-type is rejected by `is_valid_impl_subject`; this is only
-                // reached for a nested interface argument.)
+                // Each *concrete* binding must match a same-named pattern binding, found
+                // order-insensitively; extra pattern bindings don't constrain. This
+                // direction mirrors the compiler's selection matcher
+                // (`match_ty_pattern_into`'s `Interface` arm, which iterates the concrete
+                // bindings and requires each in the pattern) so runtime dispatch never
+                // selects an impl compile-time selection would reject. A positional,
+                // length-locked `zip` would instead diverge if the two declaration orders
+                // differed. (A top-level interface for-type is rejected by
+                // `is_valid_impl_subject`; this is only reached for a nested interface
+                // argument, where the binding sets coincide in well-formed code.)
                 name == cname
                     && all_match(args, cargs, bindings)
-                    && assoc.iter().all(|(an, at)| {
-                        cassoc
+                    && cassoc.iter().all(|(cn, ct)| {
+                        assoc
                             .iter()
-                            .find(|(cn, _)| cn == an)
-                            .is_some_and(|(_, ct)| match_template(at, ct, bindings))
+                            .find(|(an, _)| an == cn)
+                            .is_some_and(|(_, at)| match_template(at, ct, bindings))
                     })
             }
             _ => false,
@@ -411,7 +425,14 @@ pub(super) fn ty_args_equivalent(a: &[RuntimeTy], b: &[RuntimeTy]) -> bool {
     a.len() == b.len() && a.iter().zip(b.iter()).all(|(x, y)| ty_equivalent(x, y))
 }
 
-fn ty_equivalent(a: &RuntimeTy, b: &RuntimeTy) -> bool {
+/// Whether two runtime types are equivalent up to union-member order at *every* nesting
+/// level (`int | string` ≡ `string | int`). Union order is non-canonical at the runtime
+/// boundary — neither lowering nor `dedup_and_collapse` sorts members — so any equality
+/// over runtime types must be order-insensitive, and a union can hide under any
+/// constructor. Every variant that carries a nested type recurses here; bare leaves
+/// (primitives, enums, opaque handles, sentinels) and mismatched-constructor pairs fall
+/// to structural `==`, which is exact for them.
+pub(super) fn ty_equivalent(a: &RuntimeTy, b: &RuntimeTy) -> bool {
     match (a, b) {
         // Order-insensitive comparison of union members via a one-to-one matching:
         // each `a` member must pair with a *distinct* equivalent `b` member. A
@@ -454,7 +475,73 @@ fn ty_equivalent(a: &RuntimeTy, b: &RuntimeTy) -> bool {
                 key: bk, value: bv, ..
             },
         ) => ty_equivalent(ak, bk) && ty_equivalent(av, bv),
+        // The remaining nested-type-bearing constructors, so a union buried in a future,
+        // watch accessor, function signature, or associated projection is still compared
+        // order-insensitively rather than falling to the order-sensitive `==` below.
+        (RuntimeTy::Future(av, ae, _), RuntimeTy::Future(bv, be, _)) => {
+            ty_equivalent(av, bv) && ty_equivalent(ae, be)
+        }
+        (RuntimeTy::WatchAccessor(ai, _), RuntimeTy::WatchAccessor(bi, _)) => ty_equivalent(ai, bi),
+        (
+            RuntimeTy::AssociatedTypeProjection {
+                base: abase,
+                interface: aiface,
+                member: amember,
+                ..
+            },
+            RuntimeTy::AssociatedTypeProjection {
+                base: bbase,
+                interface: biface,
+                member: bmember,
+                ..
+            },
+        ) => {
+            amember == bmember
+                && ty_equivalent(abase, bbase)
+                && opt_ty_equivalent(aiface.as_deref(), biface.as_deref())
+        }
+        (
+            RuntimeTy::Function {
+                generic_params: ag,
+                generic_param_bounds: agb,
+                params: ap,
+                ret: aret,
+                throws: athrows,
+                ..
+            },
+            RuntimeTy::Function {
+                generic_params: bg,
+                generic_param_bounds: bgb,
+                params: bp,
+                ret: bret,
+                throws: bthrows,
+                ..
+            },
+        ) => {
+            ag == bg
+                && agb.len() == bgb.len()
+                && agb
+                    .iter()
+                    .zip(bgb)
+                    .all(|(x, y)| opt_ty_equivalent(x.as_ref(), y.as_ref()))
+                && ap.len() == bp.len()
+                && ap.iter().zip(bp).all(|(x, y)| {
+                    x.name == y.name && x.mode == y.mode && ty_equivalent(&x.ty, &y.ty)
+                })
+                && ty_equivalent(aret, bret)
+                && ty_equivalent(athrows, bthrows)
+        }
         _ => a == b,
+    }
+}
+
+/// [`ty_equivalent`] lifted over optional types: `None`s match, a `Some`/`None` mismatch
+/// does not, and two `Some`s compare their inner types.
+fn opt_ty_equivalent(a: Option<&RuntimeTy>, b: Option<&RuntimeTy>) -> bool {
+    match (a, b) {
+        (Some(x), Some(y)) => ty_equivalent(x, y),
+        (None, None) => true,
+        (Some(_), None) | (None, Some(_)) => false,
     }
 }
 
@@ -633,8 +720,13 @@ fn concrete_types(vm: &BexVm) -> Vec<RuntimeTy> {
             _ => None,
         })
         .collect();
-    // Primitives have no owning object, so they aren't in `resolved_class_names`;
-    // a blanket bound like `T extends Compare` admits them, so add the fixed set.
+    // Primitives and the other arg-less builtin value types have no owning object, so
+    // they aren't in `resolved_class_names`; a blanket `for T` (or one whose bound they
+    // satisfy) admits them, so add the fixed set. This mirrors `Ty::is_valid_impl_subject`'s
+    // arg-less accepted variants — keeping reflection's blanket-implementor enumeration
+    // from silently dropping, e.g., `uint8array` (which has a builtin `Equals` impl).
+    // Parameterized subjects (`List`/`Map`) and non-value types are intentionally omitted:
+    // their instantiations can't be enumerated.
     types.extend([
         RuntimeTy::Int {
             attr: TyAttr::default(),
@@ -654,7 +746,30 @@ fn concrete_types(vm: &BexVm) -> Vec<RuntimeTy> {
         RuntimeTy::Null {
             attr: TyAttr::default(),
         },
+        RuntimeTy::Uint8Array {
+            attr: TyAttr::default(),
+        },
+        RuntimeTy::Type {
+            attr: TyAttr::default(),
+        },
+        RuntimeTy::Resource {
+            attr: TyAttr::default(),
+        },
+        RuntimeTy::PromptAst {
+            attr: TyAttr::default(),
+        },
     ]);
+    // `Media` carries a kind, so a media value's concrete type pins one — enumerate each.
+    types.extend(
+        [
+            MediaKind::Image,
+            MediaKind::Audio,
+            MediaKind::Video,
+            MediaKind::Pdf,
+            MediaKind::Generic,
+        ]
+        .map(|kind| RuntimeTy::Media(kind, TyAttr::default())),
+    );
     types
 }
 
@@ -696,5 +811,30 @@ mod tests {
         let mut binds: Vec<Option<RuntimeTy>> = Vec::new();
         assert!(match_template(&pattern, &one, &mut binds));
         assert!(!match_template(&pattern, &RuntimeTy::int(), &mut binds));
+    }
+
+    #[test]
+    fn ty_equivalent_order_insensitive_under_non_container_constructors() {
+        // A union nested inside a `Future` (a non-container constructor) must still be
+        // compared as an unordered set: `Future<int | string>` and `Future<string | int>`
+        // are the same type. Regression for the old `_ => a == b` fallback that compared
+        // such nested unions order-sensitively (only `Class`/`List`/`Map`/`Interface`
+        // recursed). Built with explicit member order so the two genuinely differ.
+        let attr = || TyAttr::default();
+        let never = || RuntimeTy::Never { attr: attr() };
+        let str_ty = || RuntimeTy::String { attr: attr() };
+        let int_string = RuntimeTy::Union(vec![RuntimeTy::int(), str_ty()], attr());
+        let string_int = RuntimeTy::Union(vec![str_ty(), RuntimeTy::int()], attr());
+
+        let a = RuntimeTy::Future(Box::new(int_string), Box::new(never()), attr());
+        let b = RuntimeTy::Future(Box::new(string_int), Box::new(never()), attr());
+        assert!(
+            ty_equivalent(&a, &b),
+            "Future<int | string> ≡ Future<string | int>"
+        );
+
+        // A genuinely different value type is still distinguished.
+        let c = RuntimeTy::Future(Box::new(RuntimeTy::int()), Box::new(never()), attr());
+        assert!(!ty_equivalent(&a, &c));
     }
 }

@@ -1663,6 +1663,20 @@ impl Overlap {
 /// budget is reached only by large, deeply-coupled variable-bearing unions.
 const MAX_OVERLAP_SEARCH_STEPS: usize = 4096;
 
+/// Recursion-depth cap for `unify_into` and the covering search it drives. Two
+/// *distinct* recursive type aliases as impl subjects (`type R = Box<R>` /
+/// `type S = Box<S>`, or a recursive union arg like `type U = int | Box<U>`)
+/// expand head-first forever — `Box<R>` vs `Box<S>` is never `is_same_normalized_type`
+/// (the Mu binders carry the distinct alias names), so the structural arm keeps
+/// descending. Unlike a cycle that *repeats* a goal, this *grows* without repeating, so
+/// a visited-set can't catch it; a fixed depth backstop (rustc's `recursion_limit`
+/// approach, also used by the runtime resolver's `MAX_OBLIGATION_DEPTH`) does. Realistic
+/// type nesting is shallow (single digits), so only pathological recursive aliases reach
+/// this — at which point unification fails closed to `Overlap::Unknown` (→ "too complex
+/// to prove disjoint; simplify"), which is sound: the pair is rejected rather than
+/// crashing, and such aliases genuinely *do* overlap anyway.
+const MAX_UNIFY_DEPTH: usize = 256;
+
 /// Map an overlap result to a reportable violation: `None` = disjoint (no
 /// diagnostic); `Some(indeterminate)` = report it, where `indeterminate` is
 /// `true` for the conservative "couldn't prove disjoint" case.
@@ -1712,10 +1726,20 @@ pub fn package_coherence_diagnostics<'db>(
         .interface_impl_rules
         .iter()
         .collect();
-    // Sort by source position so the "first implementation is here" attribution tracks
-    // the textually-earlier impl rather than registry (hash) iteration order, and stays
-    // stable when an unrelated item is added to the package.
-    own_rules.sort_by_key(|r| r.source_span.map(|s| u32::from(s.range.start())));
+    // Sort by source position so the overlap attribution tracks a stable textual order
+    // rather than registry (hash) iteration order, and stays stable when an unrelated
+    // item is added. Key on `(file_id, start, end)`: a package spans multiple files, and
+    // keying on the start offset alone makes two impls at the same offset in *different*
+    // files tie and fall back to hash order (nondeterministic across runs).
+    own_rules.sort_by_key(|r| {
+        r.source_span.map(|s| {
+            (
+                s.file_id.as_u32(),
+                u32::from(s.range.start()),
+                u32::from(s.range.end()),
+            )
+        })
+    });
     let deps = baml_compiler2_hir::package::package_dependency_closure(db, pkg_id);
 
     // Type aliases (own package plus dependency exports) so alias-referencing
@@ -2273,6 +2297,9 @@ fn renamed_subject(
 /// fall through to `No`: anything equal already unified above via the normalizer, so the
 /// rest are disjoint — conservative, losing precision only for var-bearing
 /// function-typed args (never impl subjects today), treated as disjoint.
+/// Public entry: unify two types starting at depth 0. Delegates to the recursive
+/// worker [`unify_into_at`]; this wrapper keeps the (many) call sites and tests
+/// depth-agnostic.
 fn unify_into(
     x: &Ty,
     y: &Ty,
@@ -2280,6 +2307,24 @@ fn unify_into(
     aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
     bindings: &mut TypeBindings,
 ) -> Overlap {
+    unify_into_at(x, y, vars, aliases, bindings, 0)
+}
+
+/// Recursive unification worker. `depth` accumulates across the whole mutually-recursive
+/// cycle (structural args *and* the covering search), so a non-terminating recursive-alias
+/// expansion is caught by the [`MAX_UNIFY_DEPTH`] backstop rather than overflowing the
+/// stack.
+fn unify_into_at(
+    x: &Ty,
+    y: &Ty,
+    vars: &[Name],
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    bindings: &mut TypeBindings,
+    depth: usize,
+) -> Overlap {
+    if depth >= MAX_UNIFY_DEPTH {
+        return Overlap::Unknown;
+    }
     let x = chase_var(x, vars, bindings);
     let y = chase_var(y, vars, bindings);
     // Resolve a type alias to its definition before matching so the structural arms and
@@ -2303,12 +2348,12 @@ fn unify_into(
     if let Ty::TypeVar(n, _) = &x
         && vars.contains(n)
     {
-        return bind_unify_var(n, &y, vars, aliases, bindings);
+        return bind_unify_var(n, &y, vars, aliases, bindings, depth + 1);
     }
     if let Ty::TypeVar(n, _) = &y
         && vars.contains(n)
     {
-        return bind_unify_var(n, &x, vars, aliases, bindings);
+        return bind_unify_var(n, &x, vars, aliases, bindings, depth + 1);
     }
 
     // Structurally-equal (or alias-equal) subjects unify with no new bindings;
@@ -2319,7 +2364,7 @@ fn unify_into(
 
     match (&x, &y) {
         (Ty::Class(xq, xa, _), Ty::Class(yq, ya, _)) if xq == yq && xa.len() == ya.len() => {
-            unify_all(xa, ya, vars, aliases, bindings)
+            unify_all(xa, ya, vars, aliases, bindings, depth + 1)
         }
         (Ty::Interface(xq, xa, xb, _), Ty::Interface(yq, ya, yb, _))
             if xq == yq && xa.len() == ya.len() =>
@@ -2329,11 +2374,17 @@ fn unify_into(
             // types, because coherence gives each concrete type a single `impl I`, hence
             // one `Item`. (Distinct from the *impl's own* interface, where the bindings
             // are outputs and dropped by `renamed_subject`.)
-            unify_all(xa, ya, vars, aliases, bindings)
-                .and(unify_associated_bindings(xb, yb, vars, aliases, bindings))
+            unify_all(xa, ya, vars, aliases, bindings, depth + 1).and(unify_associated_bindings(
+                xb,
+                yb,
+                vars,
+                aliases,
+                bindings,
+                depth + 1,
+            ))
         }
         (Ty::List(xi, _), Ty::List(yi, _)) | (Ty::EvolvingList(xi, _), Ty::EvolvingList(yi, _)) => {
-            unify_into(xi, yi, vars, aliases, bindings)
+            unify_into_at(xi, yi, vars, aliases, bindings, depth + 1)
         }
         (
             Ty::Map {
@@ -2343,14 +2394,24 @@ fn unify_into(
                 key: yk, value: yv, ..
             },
         )
-        | (Ty::EvolvingMap(xk, xv, _), Ty::EvolvingMap(yk, yv, _)) => {
-            unify_into(xk, yk, vars, aliases, bindings)
-                .and(unify_into(xv, yv, vars, aliases, bindings))
-        }
-        (Ty::Future(xv, xe, _), Ty::Future(yv, ye, _)) => {
-            unify_into(xv, yv, vars, aliases, bindings)
-                .and(unify_into(xe, ye, vars, aliases, bindings))
-        }
+        | (Ty::EvolvingMap(xk, xv, _), Ty::EvolvingMap(yk, yv, _)) => unify_into_at(
+            xk,
+            yk,
+            vars,
+            aliases,
+            bindings,
+            depth + 1,
+        )
+        .and(unify_into_at(xv, yv, vars, aliases, bindings, depth + 1)),
+        (Ty::Future(xv, xe, _), Ty::Future(yv, ye, _)) => unify_into_at(
+            xv,
+            yv,
+            vars,
+            aliases,
+            bindings,
+            depth + 1,
+        )
+        .and(unify_into_at(xe, ye, vars, aliases, bindings, depth + 1)),
         // Unions compare by covering on their member sets (ACI), so a non-union
         // operand is treated as the singleton union `{S}` and routed through the same
         // covering. That decides a variable- or literal-bearing union opposite a single
@@ -2362,14 +2423,24 @@ fn unify_into(
         // wildcard arm below. (The finite-base residual `true | T` / `Cmp.Less | T` is
         // covered precisely via `cover`'s `literal <: base` / `variant <: enum` oracle.)
         (Ty::Union(xm, _), Ty::Union(ym, _)) => {
-            unify_union_members(xm, ym, vars, aliases, bindings)
+            unify_union_members_at(xm, ym, vars, aliases, bindings, depth + 1)
         }
-        (Ty::Union(xm, _), _) => {
-            unify_union_members(xm, std::slice::from_ref(&y), vars, aliases, bindings)
-        }
-        (_, Ty::Union(ym, _)) => {
-            unify_union_members(std::slice::from_ref(&x), ym, vars, aliases, bindings)
-        }
+        (Ty::Union(xm, _), _) => unify_union_members_at(
+            xm,
+            std::slice::from_ref(&y),
+            vars,
+            aliases,
+            bindings,
+            depth + 1,
+        ),
+        (_, Ty::Union(ym, _)) => unify_union_members_at(
+            std::slice::from_ref(&x),
+            ym,
+            vars,
+            aliases,
+            bindings,
+            depth + 1,
+        ),
         // Everything else is disjoint under equality: equal subjects already unified
         // above (the normalizer), unions are handled above, and any remaining pair is
         // distinct types. A literal and its base are *distinct* here — `unify_into`
@@ -2425,11 +2496,12 @@ fn unify_all(
     vars: &[Name],
     aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
     bindings: &mut TypeBindings,
+    depth: usize,
 ) -> Overlap {
     debug_assert_eq!(xs.len(), ys.len());
     let mut result = Overlap::Yes;
     for (x, y) in xs.iter().zip(ys.iter()) {
-        match unify_into(x, y, vars, aliases, bindings) {
+        match unify_into_at(x, y, vars, aliases, bindings, depth) {
             Overlap::No => return Overlap::No,
             Overlap::Unknown => result = Overlap::Unknown,
             Overlap::Yes => {}
@@ -2448,11 +2520,12 @@ fn unify_associated_bindings(
     vars: &[Name],
     aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
     bindings: &mut TypeBindings,
+    depth: usize,
 ) -> Overlap {
     let mut result = Overlap::Yes;
     for (name, xty) in xb {
         if let Some((_, yty)) = yb.iter().find(|(n, _)| n == name) {
-            match unify_into(xty, yty, vars, aliases, bindings) {
+            match unify_into_at(xty, yty, vars, aliases, bindings, depth) {
                 Overlap::No => return Overlap::No,
                 Overlap::Unknown => result = Overlap::Unknown,
                 Overlap::Yes => {}
@@ -2487,12 +2560,13 @@ fn unify_associated_bindings(
 /// side is immediately `Yes`, as each absorbs the other); otherwise the covering
 /// obligations — one-directional when a bare variable absorbs one side, mutual when
 /// neither does — are solved jointly by `cover_search`.
-fn unify_union_members(
+fn unify_union_members_at(
     xs: &[Ty],
     ys: &[Ty],
     vars: &[Name],
     aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
     bindings: &mut TypeBindings,
+    depth: usize,
 ) -> Overlap {
     // No variable on either side: overlap is exact set equality (any size).
     if let Some(result) = try_union_set_equality(xs, ys, vars, aliases) {
@@ -2539,7 +2613,19 @@ fn unify_union_members(
     }
 
     let mut budget = MAX_OVERLAP_SEARCH_STEPS;
-    cover_search(&obligations, vars, aliases, bindings, &mut budget)
+    cover_search(&obligations, vars, aliases, bindings, &mut budget, depth)
+}
+
+/// Test-only entry to [`unify_union_members_at`] starting at depth 0.
+#[cfg(test)]
+fn unify_union_members(
+    xs: &[Ty],
+    ys: &[Ty],
+    vars: &[Name],
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    bindings: &mut TypeBindings,
+) -> Overlap {
+    unify_union_members_at(xs, ys, vars, aliases, bindings, 0)
 }
 
 /// Special case: with no variable on either side, overlap is exact set equality —
@@ -2605,14 +2691,15 @@ fn unions_set_equal(
 /// a *possible* overlap (`Yes`), never a wrong `No`. All of these arms only fire when
 /// `unify_into` already returned `No` without binding anything, so they leave `bindings`
 /// untouched. Registry-precise `C implements I` / `I requires J` is a later refinement.
-fn cover(
+fn cover_at(
     member: &Ty,
     candidate: &Ty,
     vars: &[Name],
     aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
     bindings: &mut TypeBindings,
+    depth: usize,
 ) -> Overlap {
-    match unify_into(member, candidate, vars, aliases, bindings) {
+    match unify_into_at(member, candidate, vars, aliases, bindings, depth) {
         Overlap::No
             if is_literal_subtype(member, candidate)
                 || needs_conservative_membership(member, candidate) =>
@@ -2621,6 +2708,18 @@ fn cover(
         }
         decided => decided,
     }
+}
+
+/// Test-only entry to [`cover_at`] starting at depth 0.
+#[cfg(test)]
+fn cover(
+    member: &Ty,
+    candidate: &Ty,
+    vars: &[Name],
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    bindings: &mut TypeBindings,
+) -> Overlap {
+    cover_at(member, candidate, vars, aliases, bindings, 0)
 }
 
 /// Whether `member` is a top-level subtype of `candidate` by the only subtypings
@@ -2672,6 +2771,7 @@ fn cover_search(
     aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
     bindings: &mut TypeBindings,
     budget: &mut usize,
+    depth: usize,
 ) -> Overlap {
     if obligations.is_empty() {
         return Overlap::Yes;
@@ -2688,7 +2788,7 @@ fn cover_search(
             }
             *budget -= 1;
             let mut trial = bindings.clone();
-            if cover(member, candidate, vars, aliases, &mut trial) != Overlap::No {
+            if cover_at(member, candidate, vars, aliases, &mut trial, depth) != Overlap::No {
                 viable.push(ci);
             }
         }
@@ -2722,8 +2822,10 @@ fn cover_search(
     for ci in viable {
         let mut trial = bindings.clone();
         // `ci` was viable, so this is `Yes`/`Unknown`, never `No`.
-        let here = cover(member, &candidates[ci], vars, aliases, &mut trial);
-        match here.and(cover_search(&rest, vars, aliases, &mut trial, budget)) {
+        let here = cover_at(member, &candidates[ci], vars, aliases, &mut trial, depth);
+        match here.and(cover_search(
+            &rest, vars, aliases, &mut trial, budget, depth,
+        )) {
             Overlap::Yes => {
                 *bindings = trial;
                 return Overlap::Yes;
@@ -2759,6 +2861,7 @@ fn bind_unify_var(
     vars: &[Name],
     aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
     bindings: &mut TypeBindings,
+    depth: usize,
 ) -> Overlap {
     if let Ty::TypeVar(tn, _) = t
         && tn == n
@@ -2766,7 +2869,7 @@ fn bind_unify_var(
         return Overlap::Yes;
     }
     if let Some(existing) = bindings.get(n).cloned() {
-        return unify_into(&existing, t, vars, aliases, bindings);
+        return unify_into_at(&existing, t, vars, aliases, bindings, depth);
     }
     if occurs_in(n, t, vars, bindings) {
         return Overlap::No;
@@ -3792,6 +3895,47 @@ mod tests {
             Overlap::Yes
         );
         assert_eq!(bindings.get(&Name::new("T")), Some(&int()));
+    }
+
+    #[test]
+    fn distinct_recursive_alias_subjects_terminate_not_overflow() {
+        // Two *distinct* recursive aliases as impl subjects — `type R = Box<R>` and
+        // `type S = Box<S>` — expand head-first forever: `Box<R>` and `Box<S>` never
+        // normalize equal (their Mu binders carry the distinct alias names), so the
+        // structural `Class` arm keeps descending on the args. The depth backstop must
+        // catch this and fail closed to `Overlap::Unknown` ("too complex to prove
+        // disjoint"), rather than overflowing the stack — which is sound: the pair is
+        // rejected, and these aliases in fact denote the same type.
+        let r = qtn(&[], "R");
+        let s = qtn(&[], "S");
+        let mut aliases = std::collections::HashMap::default();
+        aliases.insert(
+            r.clone(),
+            class(
+                &[],
+                "Box",
+                vec![Ty::TypeAlias(r.clone(), TyAttr::default())],
+            ),
+        );
+        aliases.insert(
+            s.clone(),
+            class(
+                &[],
+                "Box",
+                vec![Ty::TypeAlias(s.clone(), TyAttr::default())],
+            ),
+        );
+        let mut bindings = TypeBindings::default();
+        assert_eq!(
+            unify_into(
+                &Ty::TypeAlias(r, TyAttr::default()),
+                &Ty::TypeAlias(s, TyAttr::default()),
+                &[],
+                &aliases,
+                &mut bindings,
+            ),
+            Overlap::Unknown,
+        );
     }
 
     #[test]

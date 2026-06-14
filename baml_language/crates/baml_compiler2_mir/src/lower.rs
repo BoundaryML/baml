@@ -1211,7 +1211,7 @@ use rustc_hash::FxHashMap;
 type ClassFieldIndices = IndexMap<TypeName, IndexMap<String, usize>>;
 type ClassFieldTypes = IndexMap<TypeName, IndexMap<String, RuntimeTy>>;
 type EnumVariantIndices = IndexMap<QualifiedTypeName, IndexMap<String, usize>>;
-type InterfaceImplementors = IndexMap<TypeName, Vec<TypeName>>;
+type ImplementorsByInterface = IndexMap<TypeName, Vec<TypeName>>;
 type InterfaceTypeView = (TypeName, Vec<Tir2Ty>, Vec<(Name, Tir2Ty)>);
 #[derive(Clone, PartialEq, Eq)]
 struct InterfaceTypeImplementor {
@@ -1343,7 +1343,7 @@ fn interface_type_name_from_loc<'db>(
 }
 
 fn push_unique_interface_implementor(
-    interface_implementors: &mut InterfaceImplementors,
+    interface_implementors: &mut ImplementorsByInterface,
     iface_tn: TypeName,
     class_tn: &TypeName,
 ) {
@@ -1360,7 +1360,7 @@ fn register_class_for_interface_closure<'db>(
     pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
     namespace_path: &[Name],
     class_tn: &TypeName,
-    interface_implementors: &mut InterfaceImplementors,
+    interface_implementors: &mut ImplementorsByInterface,
 ) {
     for (iface_loc, _iface_args, _iface_assoc) in
         baml_compiler2_tir::interfaces::interface_closure_locs_with_args_and_assoc(
@@ -1382,7 +1382,7 @@ struct PackagePopulation<'a> {
     class_fields: &'a mut ClassFieldIndices,
     class_field_types: &'a mut ClassFieldTypes,
     enum_variants: &'a mut EnumVariantIndices,
-    interface_implementors: &'a mut InterfaceImplementors,
+    interface_implementors: &'a mut ImplementorsByInterface,
     interface_type_implementors: &'a mut InterfaceTypeImplementors,
 }
 
@@ -1402,7 +1402,7 @@ struct PackageLoweringData {
     class_fields: ClassFieldIndices,
     class_field_types: ClassFieldTypes,
     enum_variants: EnumVariantIndices,
-    interface_implementors: InterfaceImplementors,
+    interface_implementors: ImplementorsByInterface,
     interface_type_implementors: InterfaceTypeImplementors,
     resolved_aliases: ResolvedAliases,
 }
@@ -1445,7 +1445,7 @@ fn package_lowering_data<'db>(
     let mut class_fields = ClassFieldIndices::default();
     let mut class_field_types = ClassFieldTypes::default();
     let mut enum_variants = EnumVariantIndices::default();
-    let mut interface_implementors = InterfaceImplementors::default();
+    let mut interface_implementors = ImplementorsByInterface::default();
     let mut interface_type_implementors = InterfaceTypeImplementors::default();
     {
         let mut population = PackagePopulation {
@@ -1667,7 +1667,7 @@ struct LoweringContext<'db> {
     /// (directly or transitively through interface `requires`). Lets the field-access
     /// and method-call lowering paths emit a type-tag switch over the
     /// implementor set when the static receiver type is an interface.
-    interface_implementors: &'db InterfaceImplementors,
+    interface_implementors: &'db ImplementorsByInterface,
     /// BEP-044: non-class concrete implementors, such as
     /// `implements Debuggable for int`. These are kept separate from
     /// `interface_implementors` because reflection/runtime metadata stores
