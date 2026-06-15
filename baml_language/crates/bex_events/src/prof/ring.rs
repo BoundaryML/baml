@@ -303,11 +303,12 @@ impl Ring {
 
     /// Reserve `len` bytes in the ring and let the producer serialize a record
     /// *directly into them* via `write`, avoiding the encode-to-stack-buffer +
-    /// copy-into-ring double write that [`push`] pays. `write` must initialize
-    /// all `len` bytes (they are committed immediately after it returns).
+    /// copy-into-ring double write that [`Self::push`] pays. `write` must
+    /// initialize all `len` bytes (they are committed immediately after it
+    /// returns).
     ///
     /// # Safety
-    /// Same contract as [`push`]: this OS thread is the ring's live producer
+    /// Same contract as [`Self::push`]: this OS thread is the ring's live producer
     /// (D5a refresh), and exec does not cross an `.await` (plan §6 inv. 4).
     #[inline]
     pub unsafe fn push_with(&self, len: usize, write: impl FnOnce(&mut [u8])) {
