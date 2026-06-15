@@ -333,10 +333,28 @@ impl MirBuilder {
         target: BlockId,
         unwind: Option<BlockId>,
     ) {
-        debug_assert!(
-            matches!(destination, Place::Local(_)),
-            "Call destination must be a local place"
-        );
+        // The Call ABI writes its result only into a local slot. When the
+        // destination is a projection — a captured variable (`Place::Capture`),
+        // field, or index, e.g. `r = a.area()` where `r` is captured by a
+        // closure — call into a temp local and copy it into the real
+        // destination on the return edge. (The unwind edge skips the copy: a
+        // throwing call produces no result.)
+        if !matches!(destination, Place::Local(_)) {
+            let tmp = self.temp(RuntimeTy::unknown());
+            let copy_block = self.create_block();
+            self.set_terminator(Terminator::Call {
+                callee,
+                args,
+                ntypeargs,
+                destination: Place::Local(tmp),
+                target: copy_block,
+                unwind,
+            });
+            self.set_current_block(copy_block);
+            self.assign(destination, Rvalue::Use(Operand::Copy(Place::Local(tmp))));
+            self.goto(target);
+            return;
+        }
         self.set_terminator(Terminator::Call {
             callee,
             args,

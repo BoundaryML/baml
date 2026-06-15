@@ -3182,6 +3182,31 @@ impl<'db> LoweringContext<'db> {
             .and_then(|captures| captures.get(&binding_id).copied())
     }
 
+    /// The receiver root of a method-call path, as a single local. A direct
+    /// local is returned as-is; a variable captured by an enclosing closure is
+    /// copied out of its capture slot into a temp so dynamic interface dispatch
+    /// can switch on it. Without this, an interface method call on a *captured*
+    /// interface-typed receiver (e.g. `a.area()` inside a `scope` body where
+    /// `a: Shape`) skipped the dispatch switch and fell through to the dynamic-
+    /// map member fallback, failing at runtime with "expected Map, got
+    /// Instance". The temp's declared type is irrelevant to the switch (which
+    /// inspects the runtime object), so `BuiltinUnknown` suffices. Returns
+    /// `None` if `name` is neither a local nor a capture.
+    fn method_receiver_root_local(&mut self, expr_id: AstExprId, name: &Name) -> Option<Local> {
+        if let Some(&local) = self.locals.get(name) {
+            return Some(local);
+        }
+        let cap_idx = self.capture_index_for_name_at(expr_id, name)?;
+        let tmp = self.builder.temp(RuntimeTy::BuiltinUnknown {
+            attr: TyAttr::default(),
+        });
+        self.builder.assign(
+            Place::local(tmp),
+            Rvalue::Use(Operand::Copy(Place::Capture(cap_idx))),
+        );
+        Some(tmp)
+    }
+
     /// Emit `unwatch` ops for every watched local at index `[watched_depth..]`
     /// of `watched_locals_stack`, in reverse declaration order.
     ///
@@ -6077,7 +6102,7 @@ impl LoweringContext<'_> {
             // The segment just before the method name may be a real field
             // access (`r.a.b.c.d.e.speak()`) whose static type is an interface.
             if segments.len() >= 2
-                && let Some(&recv_root_local) = self.locals.get(&segments[0])
+                && let Some(recv_root_local) = self.method_receiver_root_local(callee, &segments[0])
             {
                 let method_name = segments.last().unwrap().clone();
                 let prefix_idx = segments.len() - 2;
