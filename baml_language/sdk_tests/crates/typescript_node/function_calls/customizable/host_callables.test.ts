@@ -1,8 +1,13 @@
 import "./baml_sdk/index.js";
+import { BamlError } from "@boundaryml/baml-core-node";
 import { describe, expect, it } from "vitest";
+import { AccessError } from "./baml_sdk/baml/errors/index.js";
 import {
   Person,
   call_int_callback_async,
+  call_optional_callback_omitted_async,
+  call_optional_callback_supplied_async,
+  call_optional_int_callback_supplied_async,
   call_repeatedly_async,
   call_with_callback,
   call_with_callback_async,
@@ -151,5 +156,69 @@ describe("function_calls — generated SDK sync guard for host callables", () =>
     expect(() => call_with_callback((x: number) => `got ${x}`, 5)).toThrow(
       /host callable/i,
     );
+  });
+});
+
+// Optional args × host callables (the combination): a host callable whose
+// own type carries an optional parameter (`(x: int, y?: int) -> ...`).
+// Optional args (optional_args.test.ts) and host callables (above) were each
+// covered alone but never together. Defaults aren't allowed inside a callable
+// type — only the `?` optional marker — so the host's own default is the only
+// possible source of a value when BAML omits the arg.
+describe("function_calls — optional-arg host callables (the combination)", () => {
+  // NOTE: a named/optional callable type (`(x: int, y?: int) -> T`) codegens
+  // to the loose `(...args: unknown[]) => T` signature in TS — unlike an
+  // unnamed positional type (`(int) -> string`), which yields a precise
+  // `(arg0: number) => string`. The callbacks below take `...args: unknown[]`
+  // to match that generated contract.
+  it("passes a supplied optional arg through positionally", async () => {
+    // BAML resolves `callback(x, y = 9)` into the callable's positional arg
+    // list, so the host receives both values positionally — overriding its
+    // own default.
+    const seen: unknown[][] = [];
+    const cb = (...args: unknown[]) => {
+      seen.push(args);
+      const [x, y] = args;
+      return `${x}:${y}`;
+    };
+
+    await expect(call_optional_callback_supplied_async(cb, 5)).resolves.toBe(
+      "5:9",
+    );
+    expect(seen).toEqual([[5, 9]]);
+  });
+
+  it("round-trips a supplied optional arg with an int return", async () => {
+    const cb = (...args: unknown[]) =>
+      (args[0] as number) * 10 + (args[1] as number);
+
+    await expect(
+      call_optional_int_callback_supplied_async(cb, 5),
+    ).resolves.toBe(150);
+  });
+
+  it("rejects an omitted optional arg with an AccessError before dispatch", async () => {
+    // Unlike a BAML→BAML call — where the engine resolves an omitted optional
+    // natively — the omitted-arg sentinel cannot cross the host serialization
+    // boundary, so the engine raises `baml.errors.AccessError` *before* the
+    // callback ever runs. Pins the current limitation: a host callable's
+    // optional arg cannot be omitted at the call site.
+    const invoked: unknown[][] = [];
+    const cb = (...args: unknown[]) => {
+      invoked.push(args);
+      const [x, y] = args;
+      return `${x}:${y}`;
+    };
+
+    let caught: unknown;
+    try {
+      await call_optional_callback_omitted_async(cb, 5);
+      expect.unreachable("expected an AccessError to be thrown");
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(BamlError);
+    expect((caught as BamlError).value).toBeInstanceOf(AccessError);
+    expect(invoked).toEqual([]); // the engine fails before dispatching
   });
 });
