@@ -194,10 +194,18 @@ impl RawRecord<'_> {
         self.encode_to(buf)
     }
 
-    /// [`RawRecord::encode`] over a plain slice, for producers that size
-    /// their stack buffer to the record they emit ([`Self::encoded_len`])
-    /// instead of zeroing [`MAX_RECORD_LEN`] bytes on a hot path.
-    /// Panics (slice indexing) if `buf` is shorter than the encoded record.
+    /// Encodes into the front of `buf`, returning the encoded length, for
+    /// producers that write straight into a ring slot sized to the record
+    /// ([`Self::encoded_len`]) instead of zeroing [`MAX_RECORD_LEN`] bytes on a
+    /// hot path.
+    ///
+    /// # Safety / precondition
+    /// `buf.len()` MUST be at least [`Self::encoded_len`]. The fixed integer
+    /// fields are written via unchecked unaligned stores (debug-asserted, not
+    /// release-checked), so an undersized `buf` is undefined behavior in
+    /// release builds — not a panic. Every caller satisfies this:
+    /// [`Self::encode`] uses a [`MAX_RECORD_LEN`] buffer and `Ring::push_with`
+    /// reserves exactly `encoded_len()`.
     #[inline]
     pub fn encode_to(&self, buf: &mut [u8]) -> usize {
         let mut w = Writer { buf, pos: 0 };

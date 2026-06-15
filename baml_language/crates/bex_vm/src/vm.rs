@@ -2940,11 +2940,11 @@ impl BexVm {
         self.call_id_counter
     }
 
-    /// Encodes and pushes one profiling record into the per-resume ring
-    /// snapshot. No-op when profiling is off. The buffer is sized by
-    /// `SET_FUNCTION_ID_LEN` (41 B — the largest fixed record the VM emits:
-    /// `CallFunction` 38, `EndFunction` 26, `SetFunctionId` 41) — the 292-byte
-    /// `MAX_RECORD_LEN` zeroing is measurable at per-call rates.
+    /// Encodes one profiling record directly into a reserved slot of the
+    /// supplied per-resume ring snapshot. Callers do the profiling-off gate
+    /// (they pass the already-unwrapped `&Ring`); the slot is sized from
+    /// [`bex_events::prof::record::RawRecord::encoded_len`] and initialized in
+    /// place by `encode_to` — no intermediate stack buffer, no zeroing.
     #[inline]
     fn prof_push_record(
         ring: &bex_events::prof::Ring,
