@@ -773,19 +773,19 @@ function fs.fs_read_dir_returns_entries_fn() -> bool {
     call baml.deep_equals
     store_var count_ok
     load_type baml.fs.DirEntry
-    load_type void
+    load_type never
     load_var entries
     make_closure .<lambda(fs_read_dir_returns_entries_fn, 0)>, 0
     call baml.Array.some
     store_var has_a
     load_type baml.fs.DirEntry
-    load_type void
+    load_type never
     load_var entries
     make_closure .<lambda(fs_read_dir_returns_entries_fn, 1)>, 0
     call baml.Array.some
     store_var has_b
     load_type baml.fs.DirEntry
-    load_type void
+    load_type never
     load_var entries
     make_closure .<lambda(fs_read_dir_returns_entries_fn, 2)>, 0
     call baml.Array.some
@@ -837,13 +837,13 @@ function fs.fs_read_dir_type_flags_fn() -> bool {
     sys_op baml.fs.remove
     pop 1
     load_type baml.fs.DirEntry
-    load_type void
+    load_type never
     load_var entries
     make_closure .<lambda(fs_read_dir_type_flags_fn, 0)>, 0
     call baml.Array.some
     store_var file_ok
     load_type baml.fs.DirEntry
-    load_type void
+    load_type never
     load_var entries
     make_closure .<lambda(fs_read_dir_type_flags_fn, 1)>, 0
     call baml.Array.some

@@ -122,12 +122,6 @@ function assignments.$init_test_ns_assignments_assignments(registry: testing.Tes
     load_const null
     call testing.TestCollector.register_test
     pop 1
-    load_var registry
-    load_const "parenthesized_assignment_in_expr_position_is_bug"
-    make_closure .<lambda($init_test_ns_assignments_assignments, 20)>, 0
-    load_const null
-    call testing.TestCollector.register_test
-    pop 1
     load_const null
     return
 }
@@ -250,16 +244,6 @@ function assignments.nested_field_simple() -> int {
     load_field .inner
     load_field .value
     return
-}
-
-function assignments.paren_assign_must_error() -> null {
-    load_const "parse error"
-    call baml.sys.panic
-    pop 1
-    jump L0
-
-  L0:
-    unreachable
 }
 
 function assignments.throws_fail() -> int {

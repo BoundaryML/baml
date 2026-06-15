@@ -14,9 +14,10 @@ function user.Resume.from_json(j: baml.json.json) -> Resume {
 }
 
 function user.Resume.to_json(self: Resume) -> baml.json.json {
+    load_type string
     load_var self
     load_field .name
-    call baml.String.to_json
+    call baml.json.to_json
     load_const "name"
     alloc_map 1
     return
@@ -110,9 +111,8 @@ function user.TypeBuilderFn$parse(json: string, client: baml.llm.Client) -> Resu
     store_var client
 
   L0:
-    load_type unknown
+    load_type Resume$stream | null
     load_type Resume
-    load_const "TypeBuilderFn"
     load_var json
     call baml.llm.parse
     return
@@ -136,7 +136,6 @@ function user.TypeBuilderFn$parse_stream(sse: baml.http.SseStream, client: baml.
     load_type Resume$stream | null
     load_type Resume
     load_var2 2 1
-    load_const "TypeBuilderFn"
     call baml.llm.Client.__make_stream
     return
 }

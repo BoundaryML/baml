@@ -208,7 +208,7 @@ fn owned_rust_type(
             } else {
                 match name.as_str() {
                     "unknown" => quote! { BexExternalValue },
-                    "type" => quote! { baml_type::Ty },
+                    "type" => quote! { baml_type::RuntimeTy },
                     "function" => quote! { BexExternalValue },
                     _ => quote! { BexExternalValue },
                 }
@@ -245,6 +245,13 @@ fn view_return_type(ty: &BamlType, needs_heap: &mut bool) -> TokenStream {
             *needs_heap = true;
             quote! { Result<std::sync::Arc<dyn std::any::Any + Send + Sync>, AccessError> }
         }
+        // The `type` metatype's owned representation is `RuntimeTy` (see the
+        // owned-field mapping), so the accessor must return it too — not the
+        // generic `BexExternalValue` fallback, which would not type-check.
+        BamlType::Named(name) if name == "type" => {
+            *needs_heap = true;
+            quote! { Result<baml_type::RuntimeTy, AccessError> }
+        }
         _ => {
             *needs_heap = true;
             quote! { Result<BexExternalValue, AccessError> }
@@ -262,6 +269,9 @@ fn view_accessor_body(field_name: &str, ty: &BamlType) -> TokenStream {
         BamlType::Bigint => quote! { self.cls.field(#field_lit)?.as_bigint(heap, permit) },
         BamlType::String => quote! { self.cls.field(#field_lit)?.as_string(heap, permit) },
         BamlType::RustType => quote! { self.cls.field(#field_lit)?.as_rust_data(heap, permit) },
+        BamlType::Named(name) if name == "type" => {
+            quote! { self.cls.field(#field_lit)?.as_baml_type_owned(heap, permit) }
+        }
         _ => quote! { self.cls.field(#field_lit)?.as_owned_but_very_slow(heap, permit) },
     }
 }
@@ -386,6 +396,19 @@ fn external_to_typed_expr(
                 }),
             }
         },
+        // The `type` metatype's owned representation is `RuntimeTy`; unwrap it
+        // from the external `Type` ADT rather than passing the raw
+        // `BexExternalValue` through (which would not type-check against the
+        // `RuntimeTy` owned field).
+        BamlType::Named(name) if name == "type" => quote! {
+            match #val_expr {
+                BexExternalValue::Adt(bex_external_types::BexExternalAdt::Type(v)) => Ok(v),
+                other => Err(AccessError::TypeMismatch {
+                    expected: "type",
+                    actual: other.type_name().to_string(),
+                }),
+            }
+        },
         _ => quote! { Ok(#val_expr) },
     }
 }
@@ -441,7 +464,7 @@ fn owned_to_external_expr(
             let inner_conv = owned_to_external_expr(&quote! { __v }, inner, class_ns_map);
             quote! {
                 BexExternalValue::Array {
-                    element_type: baml_type::Ty::unknown(),
+                    element_type: baml_type::RuntimeTy::unknown(),
                     items: #field_expr.into_iter().map(|__v| #inner_conv).collect(),
                 }
             }
@@ -450,8 +473,8 @@ fn owned_to_external_expr(
             let v_conv = owned_to_external_expr(&quote! { __v }, v, class_ns_map);
             quote! {
                 BexExternalValue::Map {
-                    key_type: baml_type::Ty::string(),
-                    value_type: baml_type::Ty::unknown(),
+                    key_type: baml_type::RuntimeTy::string(),
+                    value_type: baml_type::RuntimeTy::unknown(),
                     entries: #field_expr.into_iter().map(|(__k, __v)| (__k, #v_conv)).collect(),
                 }
             }
@@ -502,7 +525,7 @@ fn clean_rust_type(
                 quote! { #owned::#ns_ident::#name_ident }
             } else {
                 match name.as_str() {
-                    "type" => quote! { baml_type::Ty },
+                    "type" => quote! { baml_type::RuntimeTy },
                     "unknown" => quote! { BexExternalValue },
                     "function" => quote! { BexExternalValue },
                     _ => quote! { BexExternalValue },
@@ -976,14 +999,16 @@ fn compute_non_defaultable_classes(
         .map(|cd| (cd, format!("{}.{}", cd.namespace_prefix, cd.name)))
         .collect();
 
-    // Seed: classes with direct $rust_type fields — insert both name forms.
+    // Seed: classes with a direct non-`Default` field — insert both name forms.
+    // `$rust_type` (`Arc<dyn Any>`) and the `type` metatype (`RuntimeTy`) are
+    // both non-`Default`. (Container forms like `list<type>`/`type?` stay
+    // defaultable — `Vec`/`Option` are `Default` — so only direct fields seed.)
     let mut non_defaultable: std::collections::HashSet<String> = std::collections::HashSet::new();
     for (cd, full_name) in &all_classes {
-        if cd
-            .fields
-            .iter()
-            .any(|f| matches!(f.field_type, BamlType::RustType))
-        {
+        if cd.fields.iter().any(|f| {
+            matches!(f.field_type, BamlType::RustType)
+                || matches!(&f.field_type, BamlType::Named(name) if name == "type")
+        }) {
             non_defaultable.insert(full_name.clone());
             non_defaultable.insert(cd.name.clone());
         }
@@ -1241,7 +1266,7 @@ fn emit_one_class_trait(
             let type_arg_params: Vec<TokenStream> = (0..fn_type_arg_count)
                 .map(|i| {
                     let p_ident = format_ident!("type_arg_{}", i);
-                    quote! { #p_ident: baml_type::Ty }
+                    quote! { #p_ident: baml_type::RuntimeTy }
                 })
                 .collect();
 
@@ -1372,7 +1397,7 @@ fn emit_glue_method(
         })
         .collect();
 
-    // Extract synthetic type-arg slots as baml_type::Ty.
+    // Extract synthetic type-arg slots as baml_type::RuntimeTy.
     let type_arg_extractions: Vec<TokenStream> = type_arg_idents
         .iter()
         .enumerate()
@@ -1517,7 +1542,7 @@ fn emit_one_namespace_trait(
                 .enumerate()
                 .map(|(i, _)| {
                     let p_ident = format_ident!("type_arg_{}", i);
-                    quote! { #p_ident: baml_type::Ty }
+                    quote! { #p_ident: baml_type::RuntimeTy }
                 })
                 .collect();
 
@@ -1638,7 +1663,7 @@ fn emit_into_result_call(
                     #call_expr
                         .into_result_mapped(SysOp::#variant_ident, |v| {
                             BexExternalValue::Array {
-                                element_type: baml_type::Ty::unknown(),
+                                element_type: baml_type::RuntimeTy::unknown(),
                                 items: v.into_iter()
                                     .map(|item| <#owned::#ns_ident::#name_ident as AsBexExternalValue>::into_bex_external_value(item))
                                     .collect(),

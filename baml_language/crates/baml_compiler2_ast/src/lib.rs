@@ -19,6 +19,7 @@ pub(crate) mod lower_type_expr;
 pub mod lowering_diagnostic;
 
 pub use ast::*;
+pub use companions::llm_parse as llm_parse_companion;
 pub use disambiguate::is_field_attr;
 pub use docstring::extract_docstring;
 pub use lower_cst::{
@@ -1671,8 +1672,8 @@ retry_policy MyRetry {
         };
 
         assert_eq!(
-            type_name.as_ref().map(ToString::to_string).as_deref(),
-            Some("baml.llm.RetryPolicy"),
+            type_name.to_string(),
+            "baml.llm.RetryPolicy",
             "expected type_name to be baml.llm.RetryPolicy"
         );
 

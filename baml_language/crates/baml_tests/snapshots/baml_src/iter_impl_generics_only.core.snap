@@ -1,12 +1,12 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
 ---
-function iter_impl_generics_only.core.ArrayIterator$stream.Iterable<T, never>.iter(self: iter_impl_generics_only.core.ArrayIterator$stream<unknown>) -> iter_impl_generics_only.core.Iterator<unknown, void> {
+function iter_impl_generics_only.core.ArrayIterator$stream.Iterable<T, never>.iter(self: iter_impl_generics_only.core.ArrayIterator$stream<T>) -> iter_impl_generics_only.core.Iterator<T, never> {
     load_var self
     return
 }
 
-function iter_impl_generics_only.core.ArrayIterator$stream.Iterator<T, never>.next(self: iter_impl_generics_only.core.ArrayIterator$stream<unknown>) -> unknown | iter_impl_generics_only.core.Done {
+function iter_impl_generics_only.core.ArrayIterator$stream.Iterator<T, never>.next(self: iter_impl_generics_only.core.ArrayIterator$stream<T>) -> T | iter_impl_generics_only.core.Done {
     load_type #0
     load_var self
     load_field .0
@@ -37,12 +37,12 @@ function iter_impl_generics_only.core.ArrayIterator$stream.Iterator<T, never>.ne
     return
 }
 
-function iter_impl_generics_only.core.ArrayIterator.Iterable<T, never>.iter(self: iter_impl_generics_only.core.ArrayIterator<unknown>) -> iter_impl_generics_only.core.Iterator<unknown, void> {
+function iter_impl_generics_only.core.ArrayIterator.Iterable<T, never>.iter(self: iter_impl_generics_only.core.ArrayIterator<T>) -> iter_impl_generics_only.core.Iterator<T, never> {
     load_var self
     return
 }
 
-function iter_impl_generics_only.core.ArrayIterator.Iterator<T, never>.next(self: iter_impl_generics_only.core.ArrayIterator<unknown>) -> unknown | iter_impl_generics_only.core.Done {
+function iter_impl_generics_only.core.ArrayIterator.Iterator<T, never>.next(self: iter_impl_generics_only.core.ArrayIterator<T>) -> T | iter_impl_generics_only.core.Done {
     load_type #0
     load_var self
     load_field .0
@@ -73,7 +73,7 @@ function iter_impl_generics_only.core.ArrayIterator.Iterator<T, never>.next(self
     return
 }
 
-function iter_impl_generics_only.core.ArrayIterator.new(arr: unknown[]) -> iter_impl_generics_only.core.ArrayIterator<unknown> {
+function iter_impl_generics_only.core.ArrayIterator.new(arr: T[]) -> iter_impl_generics_only.core.ArrayIterator<T> {
     load_type #0
     load_var arr
     load_const 0
@@ -86,12 +86,12 @@ function iter_impl_generics_only.core.ArrayIterator.new(arr: unknown[]) -> iter_
     return
 }
 
-function iter_impl_generics_only.core.Chain$stream.Iterable<T, E>.iter(self: iter_impl_generics_only.core.Chain$stream<unknown, unknown>) -> iter_impl_generics_only.core.Iterator<unknown, unknown> {
+function iter_impl_generics_only.core.Chain$stream.Iterable<T, E>.iter(self: iter_impl_generics_only.core.Chain$stream<T, E>) -> iter_impl_generics_only.core.Iterator<T, E> {
     load_var self
     return
 }
 
-function iter_impl_generics_only.core.Chain$stream.Iterator<T, E>.next(self: iter_impl_generics_only.core.Chain$stream<unknown, unknown>) -> unknown | iter_impl_generics_only.core.Done {
+function iter_impl_generics_only.core.Chain$stream.Iterator<T, E>.next(self: iter_impl_generics_only.core.Chain$stream<T, E>) -> T | iter_impl_generics_only.core.Done {
     load_var self
     load_field .2
     unary_op !
@@ -392,12 +392,12 @@ function iter_impl_generics_only.core.Chain$stream.Iterator<T, E>.next(self: ite
     unreachable
 }
 
-function iter_impl_generics_only.core.Chain.Iterable<T, E>.iter(self: iter_impl_generics_only.core.Chain<unknown, unknown>) -> iter_impl_generics_only.core.Iterator<unknown, unknown> {
+function iter_impl_generics_only.core.Chain.Iterable<T, E>.iter(self: iter_impl_generics_only.core.Chain<T, E>) -> iter_impl_generics_only.core.Iterator<T, E> {
     load_var self
     return
 }
 
-function iter_impl_generics_only.core.Chain.Iterator<T, E>.next(self: iter_impl_generics_only.core.Chain<unknown, unknown>) -> unknown | iter_impl_generics_only.core.Done {
+function iter_impl_generics_only.core.Chain.Iterator<T, E>.next(self: iter_impl_generics_only.core.Chain<T, E>) -> T | iter_impl_generics_only.core.Done {
     load_var self
     load_field .2
     unary_op !
@@ -698,12 +698,12 @@ function iter_impl_generics_only.core.Chain.Iterator<T, E>.next(self: iter_impl_
     unreachable
 }
 
-function iter_impl_generics_only.core.Filter$stream.Iterable<T, E | E2>.iter(self: iter_impl_generics_only.core.Filter$stream<unknown, unknown, unknown>) -> iter_impl_generics_only.core.Iterator<unknown, unknown | unknown> {
+function iter_impl_generics_only.core.Filter$stream.Iterable<T, E | E2>.iter(self: iter_impl_generics_only.core.Filter$stream<T, E, E2>) -> iter_impl_generics_only.core.Iterator<T, E | E2> {
     load_var self
     return
 }
 
-function iter_impl_generics_only.core.Filter$stream.Iterator<T, E | E2>.next(self: iter_impl_generics_only.core.Filter$stream<unknown, unknown, unknown>) -> unknown | iter_impl_generics_only.core.Done {
+function iter_impl_generics_only.core.Filter$stream.Iterator<T, E | E2>.next(self: iter_impl_generics_only.core.Filter$stream<T, E, E2>) -> T | iter_impl_generics_only.core.Done {
   L0:
     load_const true
     pop_jump_if_false L1
@@ -882,12 +882,12 @@ function iter_impl_generics_only.core.Filter$stream.Iterator<T, E | E2>.next(sel
     unreachable
 }
 
-function iter_impl_generics_only.core.Filter.Iterable<T, E | E2>.iter(self: iter_impl_generics_only.core.Filter<unknown, unknown, unknown>) -> iter_impl_generics_only.core.Iterator<unknown, unknown | unknown> {
+function iter_impl_generics_only.core.Filter.Iterable<T, E | E2>.iter(self: iter_impl_generics_only.core.Filter<T, E, E2>) -> iter_impl_generics_only.core.Iterator<T, E | E2> {
     load_var self
     return
 }
 
-function iter_impl_generics_only.core.Filter.Iterator<T, E | E2>.next(self: iter_impl_generics_only.core.Filter<unknown, unknown, unknown>) -> unknown | iter_impl_generics_only.core.Done {
+function iter_impl_generics_only.core.Filter.Iterator<T, E | E2>.next(self: iter_impl_generics_only.core.Filter<T, E, E2>) -> T | iter_impl_generics_only.core.Done {
   L0:
     load_const true
     pop_jump_if_false L1
@@ -1066,12 +1066,12 @@ function iter_impl_generics_only.core.Filter.Iterator<T, E | E2>.next(self: iter
     unreachable
 }
 
-function iter_impl_generics_only.core.FilterMap$stream.Iterable<R, E | E2>.iter(self: iter_impl_generics_only.core.FilterMap$stream<unknown, unknown, unknown, unknown>) -> iter_impl_generics_only.core.Iterator<unknown, unknown | unknown> {
+function iter_impl_generics_only.core.FilterMap$stream.Iterable<R, E | E2>.iter(self: iter_impl_generics_only.core.FilterMap$stream<T, R, E, E2>) -> iter_impl_generics_only.core.Iterator<R, E | E2> {
     load_var self
     return
 }
 
-function iter_impl_generics_only.core.FilterMap$stream.Iterator<R, E | E2>.next(self: iter_impl_generics_only.core.FilterMap$stream<unknown, unknown, unknown, unknown>) -> unknown | iter_impl_generics_only.core.Done {
+function iter_impl_generics_only.core.FilterMap$stream.Iterator<R, E | E2>.next(self: iter_impl_generics_only.core.FilterMap$stream<T, R, E, E2>) -> R | iter_impl_generics_only.core.Done {
   L0:
     load_const true
     pop_jump_if_false L1
@@ -1255,12 +1255,12 @@ function iter_impl_generics_only.core.FilterMap$stream.Iterator<R, E | E2>.next(
     unreachable
 }
 
-function iter_impl_generics_only.core.FilterMap.Iterable<R, E | E2>.iter(self: iter_impl_generics_only.core.FilterMap<unknown, unknown, unknown, unknown>) -> iter_impl_generics_only.core.Iterator<unknown, unknown | unknown> {
+function iter_impl_generics_only.core.FilterMap.Iterable<R, E | E2>.iter(self: iter_impl_generics_only.core.FilterMap<T, R, E, E2>) -> iter_impl_generics_only.core.Iterator<R, E | E2> {
     load_var self
     return
 }
 
-function iter_impl_generics_only.core.FilterMap.Iterator<R, E | E2>.next(self: iter_impl_generics_only.core.FilterMap<unknown, unknown, unknown, unknown>) -> unknown | iter_impl_generics_only.core.Done {
+function iter_impl_generics_only.core.FilterMap.Iterator<R, E | E2>.next(self: iter_impl_generics_only.core.FilterMap<T, R, E, E2>) -> R | iter_impl_generics_only.core.Done {
   L0:
     load_const true
     pop_jump_if_false L1
@@ -1444,12 +1444,12 @@ function iter_impl_generics_only.core.FilterMap.Iterator<R, E | E2>.next(self: i
     unreachable
 }
 
-function iter_impl_generics_only.core.FlatMap$stream.Iterable<R, E | E2 | E3>.iter(self: iter_impl_generics_only.core.FlatMap$stream<unknown, unknown, unknown, unknown, unknown>) -> iter_impl_generics_only.core.Iterator<unknown, unknown | unknown | unknown> {
+function iter_impl_generics_only.core.FlatMap$stream.Iterable<R, E | E2 | E3>.iter(self: iter_impl_generics_only.core.FlatMap$stream<T, R, E, E2, E3>) -> iter_impl_generics_only.core.Iterator<R, E | E2 | E3> {
     load_var self
     return
 }
 
-function iter_impl_generics_only.core.FlatMap$stream.Iterator<R, E | E2 | E3>.next(self: iter_impl_generics_only.core.FlatMap$stream<unknown, unknown, unknown, unknown, unknown>) -> unknown | iter_impl_generics_only.core.Done {
+function iter_impl_generics_only.core.FlatMap$stream.Iterator<R, E | E2 | E3>.next(self: iter_impl_generics_only.core.FlatMap$stream<T, R, E, E2, E3>) -> R | iter_impl_generics_only.core.Done {
   L0:
     load_const true
     pop_jump_if_false L1
@@ -2126,12 +2126,12 @@ function iter_impl_generics_only.core.FlatMap$stream.Iterator<R, E | E2 | E3>.ne
     unreachable
 }
 
-function iter_impl_generics_only.core.FlatMap.Iterable<R, E | E2 | E3>.iter(self: iter_impl_generics_only.core.FlatMap<unknown, unknown, unknown, unknown, unknown>) -> iter_impl_generics_only.core.Iterator<unknown, unknown | unknown | unknown> {
+function iter_impl_generics_only.core.FlatMap.Iterable<R, E | E2 | E3>.iter(self: iter_impl_generics_only.core.FlatMap<T, R, E, E2, E3>) -> iter_impl_generics_only.core.Iterator<R, E | E2 | E3> {
     load_var self
     return
 }
 
-function iter_impl_generics_only.core.FlatMap.Iterator<R, E | E2 | E3>.next(self: iter_impl_generics_only.core.FlatMap<unknown, unknown, unknown, unknown, unknown>) -> unknown | iter_impl_generics_only.core.Done {
+function iter_impl_generics_only.core.FlatMap.Iterator<R, E | E2 | E3>.next(self: iter_impl_generics_only.core.FlatMap<T, R, E, E2, E3>) -> R | iter_impl_generics_only.core.Done {
   L0:
     load_const true
     pop_jump_if_false L1
@@ -2808,12 +2808,12 @@ function iter_impl_generics_only.core.FlatMap.Iterator<R, E | E2 | E3>.next(self
     unreachable
 }
 
-function iter_impl_generics_only.core.Flatten$stream.Iterable<R, E | E3>.iter(self: iter_impl_generics_only.core.Flatten$stream<unknown, unknown, unknown>) -> iter_impl_generics_only.core.Iterator<unknown, unknown | unknown> {
+function iter_impl_generics_only.core.Flatten$stream.Iterable<R, E | E3>.iter(self: iter_impl_generics_only.core.Flatten$stream<R, E, E3>) -> iter_impl_generics_only.core.Iterator<R, E | E3> {
     load_var self
     return
 }
 
-function iter_impl_generics_only.core.Flatten$stream.Iterator<R, E | E3>.next(self: iter_impl_generics_only.core.Flatten$stream<unknown, unknown, unknown>) -> unknown | iter_impl_generics_only.core.Done {
+function iter_impl_generics_only.core.Flatten$stream.Iterator<R, E | E3>.next(self: iter_impl_generics_only.core.Flatten$stream<R, E, E3>) -> R | iter_impl_generics_only.core.Done {
   L0:
     load_const true
     pop_jump_if_false L1
@@ -3475,12 +3475,12 @@ function iter_impl_generics_only.core.Flatten$stream.Iterator<R, E | E3>.next(se
     unreachable
 }
 
-function iter_impl_generics_only.core.Flatten.Iterable<R, E | E3>.iter(self: iter_impl_generics_only.core.Flatten<unknown, unknown, unknown>) -> iter_impl_generics_only.core.Iterator<unknown, unknown | unknown> {
+function iter_impl_generics_only.core.Flatten.Iterable<R, E | E3>.iter(self: iter_impl_generics_only.core.Flatten<R, E, E3>) -> iter_impl_generics_only.core.Iterator<R, E | E3> {
     load_var self
     return
 }
 
-function iter_impl_generics_only.core.Flatten.Iterator<R, E | E3>.next(self: iter_impl_generics_only.core.Flatten<unknown, unknown, unknown>) -> unknown | iter_impl_generics_only.core.Done {
+function iter_impl_generics_only.core.Flatten.Iterator<R, E | E3>.next(self: iter_impl_generics_only.core.Flatten<R, E, E3>) -> R | iter_impl_generics_only.core.Done {
   L0:
     load_const true
     pop_jump_if_false L1
@@ -4142,14 +4142,7 @@ function iter_impl_generics_only.core.Flatten.Iterator<R, E | E3>.next(self: ite
     unreachable
 }
 
-function iter_impl_generics_only.core.Iterable<T, never>$for$T[].iter(self: unknown[]) -> iter_impl_generics_only.core.Iterator<unknown, void> {
-    load_type #0
-    load_var self
-    call user.iter_impl_generics_only.core.ArrayIterator.new
-    return
-}
-
-function iter_impl_generics_only.core.Iterator.chain(self: iter_impl_generics_only.core.Iterator<unknown, unknown>, other: iter_impl_generics_only.core.Iterator<unknown, unknown>) -> iter_impl_generics_only.core.Iterator<unknown, unknown> {
+function iter_impl_generics_only.core.Iterator.chain(self: iter_impl_generics_only.core.Iterator<T, E>, other: iter_impl_generics_only.core.Iterator<T, E>) -> iter_impl_generics_only.core.Iterator<T, E> {
     load_var2 1 2
     load_const false
     load_type #0
@@ -4158,7 +4151,7 @@ function iter_impl_generics_only.core.Iterator.chain(self: iter_impl_generics_on
     return
 }
 
-function iter_impl_generics_only.core.Iterator.collect(self: iter_impl_generics_only.core.Iterator<unknown, unknown>) -> unknown[] {
+function iter_impl_generics_only.core.Iterator.collect(self: iter_impl_generics_only.core.Iterator<T, E>) -> T[] {
     alloc_array 0
     store_var r
 
@@ -4325,7 +4318,7 @@ function iter_impl_generics_only.core.Iterator.collect(self: iter_impl_generics_
     unreachable
 }
 
-function iter_impl_generics_only.core.Iterator.count(self: iter_impl_generics_only.core.Iterator<unknown, unknown>) -> int {
+function iter_impl_generics_only.core.Iterator.count(self: iter_impl_generics_only.core.Iterator<T, E>) -> int {
     load_const 0
     store_var n
 
@@ -4481,7 +4474,7 @@ function iter_impl_generics_only.core.Iterator.count(self: iter_impl_generics_on
     unreachable
 }
 
-function iter_impl_generics_only.core.Iterator.every(self: iter_impl_generics_only.core.Iterator<unknown, unknown>, predicate: (unknown) -> bool throws unknown) -> bool {
+function iter_impl_generics_only.core.Iterator.every(self: iter_impl_generics_only.core.Iterator<T, E>, predicate: (T) -> bool throws E2) -> bool {
   L0:
     load_const true
     pop_jump_if_false L23
@@ -4649,7 +4642,7 @@ function iter_impl_generics_only.core.Iterator.every(self: iter_impl_generics_on
     unreachable
 }
 
-function iter_impl_generics_only.core.Iterator.filter(self: iter_impl_generics_only.core.Iterator<unknown, unknown>, predicate: (unknown) -> bool throws unknown) -> iter_impl_generics_only.core.Iterator<unknown, unknown | unknown> {
+function iter_impl_generics_only.core.Iterator.filter(self: iter_impl_generics_only.core.Iterator<T, E>, predicate: (T) -> bool throws E2) -> iter_impl_generics_only.core.Iterator<T, E | E2> {
     load_var2 1 2
     load_type #0
     load_type #1
@@ -4658,7 +4651,7 @@ function iter_impl_generics_only.core.Iterator.filter(self: iter_impl_generics_o
     return
 }
 
-function iter_impl_generics_only.core.Iterator.filter_map(self: iter_impl_generics_only.core.Iterator<unknown, unknown>, fn: (unknown) -> unknown | null throws unknown) -> iter_impl_generics_only.core.Iterator<unknown, unknown | unknown> {
+function iter_impl_generics_only.core.Iterator.filter_map(self: iter_impl_generics_only.core.Iterator<T, E>, fn: (T) -> R | null throws E2) -> iter_impl_generics_only.core.Iterator<R, E | E2> {
     load_var2 1 2
     load_type #0
     load_type #2
@@ -4668,7 +4661,7 @@ function iter_impl_generics_only.core.Iterator.filter_map(self: iter_impl_generi
     return
 }
 
-function iter_impl_generics_only.core.Iterator.find(self: iter_impl_generics_only.core.Iterator<unknown, unknown>, predicate: (unknown) -> bool throws unknown) -> unknown | null {
+function iter_impl_generics_only.core.Iterator.find(self: iter_impl_generics_only.core.Iterator<T, E>, predicate: (T) -> bool throws E2) -> T | null {
   L0:
     load_const true
     pop_jump_if_false L23
@@ -4837,7 +4830,7 @@ function iter_impl_generics_only.core.Iterator.find(self: iter_impl_generics_onl
     unreachable
 }
 
-function iter_impl_generics_only.core.Iterator.flat_map(self: iter_impl_generics_only.core.Iterator<unknown, unknown>, fn: (unknown) -> iter_impl_generics_only.core.Iterable<unknown, unknown> throws unknown) -> iter_impl_generics_only.core.Iterator<unknown, unknown | unknown | unknown> {
+function iter_impl_generics_only.core.Iterator.flat_map(self: iter_impl_generics_only.core.Iterator<T, E>, fn: (T) -> iter_impl_generics_only.core.Iterable<R, E3> throws E2) -> iter_impl_generics_only.core.Iterator<R, E | E2 | E3> {
     load_var2 1 2
     alloc_instance user.iter_impl_generics_only.core.Done
     load_type #0
@@ -4849,7 +4842,7 @@ function iter_impl_generics_only.core.Iterator.flat_map(self: iter_impl_generics
     return
 }
 
-function iter_impl_generics_only.core.Iterator.map(self: iter_impl_generics_only.core.Iterator<unknown, unknown>, fn: (unknown) -> unknown throws unknown) -> iter_impl_generics_only.core.Iterator<unknown, unknown | unknown> {
+function iter_impl_generics_only.core.Iterator.map(self: iter_impl_generics_only.core.Iterator<T, E>, fn: (T) -> R throws E2) -> iter_impl_generics_only.core.Iterator<R, E | E2> {
     load_var2 1 2
     load_type #0
     load_type #2
@@ -4859,7 +4852,7 @@ function iter_impl_generics_only.core.Iterator.map(self: iter_impl_generics_only
     return
 }
 
-function iter_impl_generics_only.core.Iterator.peekable(self: iter_impl_generics_only.core.Iterator<unknown, unknown>) -> iter_impl_generics_only.core.Peekable<unknown, unknown> {
+function iter_impl_generics_only.core.Iterator.peekable(self: iter_impl_generics_only.core.Iterator<T, E>) -> iter_impl_generics_only.core.Peekable<T, E> {
     load_var self
     alloc_instance user.iter_impl_generics_only.core.Done
     load_const false
@@ -4869,7 +4862,7 @@ function iter_impl_generics_only.core.Iterator.peekable(self: iter_impl_generics
     return
 }
 
-function iter_impl_generics_only.core.Iterator.reduce(self: iter_impl_generics_only.core.Iterator<unknown, unknown>, fn: (unknown, unknown) -> unknown throws unknown, initial: unknown) -> unknown {
+function iter_impl_generics_only.core.Iterator.reduce(self: iter_impl_generics_only.core.Iterator<T, E>, fn: (A, T) -> A throws E2, initial: A) -> A {
     load_var initial
     store_var acc
 
@@ -5037,7 +5030,7 @@ function iter_impl_generics_only.core.Iterator.reduce(self: iter_impl_generics_o
     unreachable
 }
 
-function iter_impl_generics_only.core.Iterator.some(self: iter_impl_generics_only.core.Iterator<unknown, unknown>, predicate: (unknown) -> bool throws unknown) -> bool {
+function iter_impl_generics_only.core.Iterator.some(self: iter_impl_generics_only.core.Iterator<T, E>, predicate: (T) -> bool throws E2) -> bool {
   L0:
     load_const true
     pop_jump_if_false L23
@@ -5204,7 +5197,7 @@ function iter_impl_generics_only.core.Iterator.some(self: iter_impl_generics_onl
     unreachable
 }
 
-function iter_impl_generics_only.core.Iterator.step_by(self: iter_impl_generics_only.core.Iterator<unknown, unknown>, n: int) -> iter_impl_generics_only.core.Iterator<unknown, unknown> {
+function iter_impl_generics_only.core.Iterator.step_by(self: iter_impl_generics_only.core.Iterator<T, E>, n: int) -> iter_impl_generics_only.core.Iterator<T, E> {
     load_var2 1 2
     load_const true
     load_type #0
@@ -5213,182 +5206,12 @@ function iter_impl_generics_only.core.Iterator.step_by(self: iter_impl_generics_
     return
 }
 
-function iter_impl_generics_only.core.Map$stream.Iterable<R, E | E2>.iter(self: iter_impl_generics_only.core.Map$stream<unknown, unknown, unknown, unknown>) -> iter_impl_generics_only.core.Iterator<unknown, unknown | unknown> {
+function iter_impl_generics_only.core.Map$stream.Iterable<R, E | E2>.iter(self: iter_impl_generics_only.core.Map$stream<T, R, E, E2>) -> iter_impl_generics_only.core.Iterator<R, E | E2> {
     load_var self
     return
 }
 
-function iter_impl_generics_only.core.Map$stream.Iterator<R, E | E2>.next(self: iter_impl_generics_only.core.Map$stream<unknown, unknown, unknown, unknown>) -> unknown | iter_impl_generics_only.core.Done {
-    load_var self
-    load_field .0
-    store_var_load_var _3
-    is_type iter_impl_generics_only.core.Flatten<...>
-    pop_jump_if_false L0
-    jump L19
-
-  L0:
-    load_var _3
-    is_type iter_impl_generics_only.core.StepBy<...>
-    pop_jump_if_false L1
-    jump L18
-
-  L1:
-    load_var _3
-    is_type iter_impl_generics_only.core.Repeat<...>
-    pop_jump_if_false L2
-    jump L17
-
-  L2:
-    load_var _3
-    is_type iter_impl_generics_only.core.FlatMap<...>
-    pop_jump_if_false L3
-    jump L16
-
-  L3:
-    load_var _3
-    is_type iter_impl_generics_only.core.FilterMap<...>
-    pop_jump_if_false L4
-    jump L15
-
-  L4:
-    load_var _3
-    is_type iter_impl_generics_only.core.Range
-    pop_jump_if_false L5
-    jump L14
-
-  L5:
-    load_var _3
-    is_type iter_impl_generics_only.core.ArrayIterator<...>
-    pop_jump_if_false L6
-    jump L13
-
-  L6:
-    load_var _3
-    is_type iter_impl_generics_only.core.Map<...>
-    pop_jump_if_false L7
-    jump L12
-
-  L7:
-    load_var _3
-    is_type iter_impl_generics_only.core.Chain<...>
-    pop_jump_if_false L8
-    jump L11
-
-  L8:
-    load_var _3
-    is_type iter_impl_generics_only.core.Filter<...>
-    pop_jump_if_false L9
-    jump L10
-
-  L9:
-    load_var _3
-    is_type iter_impl_generics_only.core.Peekable<...>
-    pop_jump_if_false L24
-    load_type #0
-    load_type #2
-    load_var _3
-    call user.iter_impl_generics_only.core.Peekable.Iterator<T, E>.next
-    store_var _2
-    jump L20
-
-  L10:
-    load_var _3
-    make_bound_method user.iter_impl_generics_only.core.Filter.Iterator<T, E | E2>.next
-    call_indirect
-    store_var _2
-    jump L20
-
-  L11:
-    load_type #0
-    load_type #2
-    load_var _3
-    call user.iter_impl_generics_only.core.Chain.Iterator<T, E>.next
-    store_var _2
-    jump L20
-
-  L12:
-    load_var _3
-    make_bound_method user.iter_impl_generics_only.core.Map.Iterator<R, E | E2>.next
-    call_indirect
-    store_var _2
-    jump L20
-
-  L13:
-    load_type #0
-    load_var _3
-    call user.iter_impl_generics_only.core.ArrayIterator.Iterator<T, never>.next
-    store_var _2
-    jump L20
-
-  L14:
-    load_var _3
-    call user.iter_impl_generics_only.core.Range.Iterator<int, never>.next
-    store_var _2
-    jump L20
-
-  L15:
-    load_var _3
-    make_bound_method user.iter_impl_generics_only.core.FilterMap.Iterator<R, E | E2>.next
-    call_indirect
-    store_var _2
-    jump L20
-
-  L16:
-    load_var _3
-    make_bound_method user.iter_impl_generics_only.core.FlatMap.Iterator<R, E | E2 | E3>.next
-    call_indirect
-    store_var _2
-    jump L20
-
-  L17:
-    load_type #0
-    load_var _3
-    call user.iter_impl_generics_only.core.Repeat.Iterator<T, never>.next
-    store_var _2
-    jump L20
-
-  L18:
-    load_type #0
-    load_type #2
-    load_var _3
-    call user.iter_impl_generics_only.core.StepBy.Iterator<T, E>.next
-    store_var _2
-    jump L20
-
-  L19:
-    load_var _3
-    make_bound_method user.iter_impl_generics_only.core.Flatten.Iterator<R, E | E3>.next
-    call_indirect
-    store_var _2
-
-  L20:
-    load_var _2
-    is_type iter_impl_generics_only.core.Done
-    pop_jump_if_false L21
-    jump L22
-
-  L21:
-    load_var2 2 1
-    load_field .1
-    call_indirect
-    jump L23
-
-  L22:
-    alloc_instance user.iter_impl_generics_only.core.Done
-
-  L23:
-    return
-
-  L24:
-    unreachable
-}
-
-function iter_impl_generics_only.core.Map.Iterable<R, E | E2>.iter(self: iter_impl_generics_only.core.Map<unknown, unknown, unknown, unknown>) -> iter_impl_generics_only.core.Iterator<unknown, unknown | unknown> {
-    load_var self
-    return
-}
-
-function iter_impl_generics_only.core.Map.Iterator<R, E | E2>.next(self: iter_impl_generics_only.core.Map<unknown, unknown, unknown, unknown>) -> unknown | iter_impl_generics_only.core.Done {
+function iter_impl_generics_only.core.Map$stream.Iterator<R, E | E2>.next(self: iter_impl_generics_only.core.Map$stream<T, R, E, E2>) -> R | iter_impl_generics_only.core.Done {
     load_var self
     load_field .0
     store_var_load_var _3
@@ -5553,25 +5376,195 @@ function iter_impl_generics_only.core.Map.Iterator<R, E | E2>.next(self: iter_im
     unreachable
 }
 
-function iter_impl_generics_only.core.OutOfBodyBox.new(value: unknown) -> iter_impl_generics_only.core.OutOfBodyBox<unknown> {
+function iter_impl_generics_only.core.Map.Iterable<R, E | E2>.iter(self: iter_impl_generics_only.core.Map<T, R, E, E2>) -> iter_impl_generics_only.core.Iterator<R, E | E2> {
+    load_var self
+    return
+}
+
+function iter_impl_generics_only.core.Map.Iterator<R, E | E2>.next(self: iter_impl_generics_only.core.Map<T, R, E, E2>) -> R | iter_impl_generics_only.core.Done {
+    load_var self
+    load_field .0
+    store_var_load_var _3
+    is_type iter_impl_generics_only.core.Flatten<...>
+    pop_jump_if_false L0
+    jump L19
+
+  L0:
+    load_var _3
+    is_type iter_impl_generics_only.core.StepBy<...>
+    pop_jump_if_false L1
+    jump L18
+
+  L1:
+    load_var _3
+    is_type iter_impl_generics_only.core.Repeat<...>
+    pop_jump_if_false L2
+    jump L17
+
+  L2:
+    load_var _3
+    is_type iter_impl_generics_only.core.FlatMap<...>
+    pop_jump_if_false L3
+    jump L16
+
+  L3:
+    load_var _3
+    is_type iter_impl_generics_only.core.FilterMap<...>
+    pop_jump_if_false L4
+    jump L15
+
+  L4:
+    load_var _3
+    is_type iter_impl_generics_only.core.Range
+    pop_jump_if_false L5
+    jump L14
+
+  L5:
+    load_var _3
+    is_type iter_impl_generics_only.core.ArrayIterator<...>
+    pop_jump_if_false L6
+    jump L13
+
+  L6:
+    load_var _3
+    is_type iter_impl_generics_only.core.Map<...>
+    pop_jump_if_false L7
+    jump L12
+
+  L7:
+    load_var _3
+    is_type iter_impl_generics_only.core.Chain<...>
+    pop_jump_if_false L8
+    jump L11
+
+  L8:
+    load_var _3
+    is_type iter_impl_generics_only.core.Filter<...>
+    pop_jump_if_false L9
+    jump L10
+
+  L9:
+    load_var _3
+    is_type iter_impl_generics_only.core.Peekable<...>
+    pop_jump_if_false L24
+    load_type #0
+    load_type #2
+    load_var _3
+    call user.iter_impl_generics_only.core.Peekable.Iterator<T, E>.next
+    store_var _2
+    jump L20
+
+  L10:
+    load_var _3
+    make_bound_method user.iter_impl_generics_only.core.Filter.Iterator<T, E | E2>.next
+    call_indirect
+    store_var _2
+    jump L20
+
+  L11:
+    load_type #0
+    load_type #2
+    load_var _3
+    call user.iter_impl_generics_only.core.Chain.Iterator<T, E>.next
+    store_var _2
+    jump L20
+
+  L12:
+    load_var _3
+    make_bound_method user.iter_impl_generics_only.core.Map.Iterator<R, E | E2>.next
+    call_indirect
+    store_var _2
+    jump L20
+
+  L13:
+    load_type #0
+    load_var _3
+    call user.iter_impl_generics_only.core.ArrayIterator.Iterator<T, never>.next
+    store_var _2
+    jump L20
+
+  L14:
+    load_var _3
+    call user.iter_impl_generics_only.core.Range.Iterator<int, never>.next
+    store_var _2
+    jump L20
+
+  L15:
+    load_var _3
+    make_bound_method user.iter_impl_generics_only.core.FilterMap.Iterator<R, E | E2>.next
+    call_indirect
+    store_var _2
+    jump L20
+
+  L16:
+    load_var _3
+    make_bound_method user.iter_impl_generics_only.core.FlatMap.Iterator<R, E | E2 | E3>.next
+    call_indirect
+    store_var _2
+    jump L20
+
+  L17:
+    load_type #0
+    load_var _3
+    call user.iter_impl_generics_only.core.Repeat.Iterator<T, never>.next
+    store_var _2
+    jump L20
+
+  L18:
+    load_type #0
+    load_type #2
+    load_var _3
+    call user.iter_impl_generics_only.core.StepBy.Iterator<T, E>.next
+    store_var _2
+    jump L20
+
+  L19:
+    load_var _3
+    make_bound_method user.iter_impl_generics_only.core.Flatten.Iterator<R, E | E3>.next
+    call_indirect
+    store_var _2
+
+  L20:
+    load_var _2
+    is_type iter_impl_generics_only.core.Done
+    pop_jump_if_false L21
+    jump L22
+
+  L21:
+    load_var2 2 1
+    load_field .1
+    call_indirect
+    jump L23
+
+  L22:
+    alloc_instance user.iter_impl_generics_only.core.Done
+
+  L23:
+    return
+
+  L24:
+    unreachable
+}
+
+function iter_impl_generics_only.core.OutOfBodyBox.new(value: T) -> iter_impl_generics_only.core.OutOfBodyBox<T> {
     load_var value
     load_type #0
     init_instance<1> user.iter_impl_generics_only.core.OutOfBodyBox .value
     return
 }
 
-function iter_impl_generics_only.core.OutOfBodyValue<T>$for$OutOfBodyBox<T>.get(self: iter_impl_generics_only.core.OutOfBodyBox<unknown>) -> unknown {
+function iter_impl_generics_only.core.OutOfBodyValue<T>$for$OutOfBodyBox<T>.get(self: iter_impl_generics_only.core.OutOfBodyBox<T>) -> T {
     load_var self
     load_field .value
     return
 }
 
-function iter_impl_generics_only.core.Peekable$stream.Iterable<T, E>.iter(self: iter_impl_generics_only.core.Peekable$stream<unknown, unknown>) -> iter_impl_generics_only.core.Iterator<unknown, unknown> {
+function iter_impl_generics_only.core.Peekable$stream.Iterable<T, E>.iter(self: iter_impl_generics_only.core.Peekable$stream<T, E>) -> iter_impl_generics_only.core.Iterator<T, E> {
     load_var self
     return
 }
 
-function iter_impl_generics_only.core.Peekable$stream.Iterator<T, E>.next(self: iter_impl_generics_only.core.Peekable$stream<unknown, unknown>) -> unknown | iter_impl_generics_only.core.Done {
+function iter_impl_generics_only.core.Peekable$stream.Iterator<T, E>.next(self: iter_impl_generics_only.core.Peekable$stream<T, E>) -> T | iter_impl_generics_only.core.Done {
     load_var self
     load_field .2
     pop_jump_if_false L0
@@ -5729,12 +5722,12 @@ function iter_impl_generics_only.core.Peekable$stream.Iterator<T, E>.next(self: 
     unreachable
 }
 
-function iter_impl_generics_only.core.Peekable.Iterable<T, E>.iter(self: iter_impl_generics_only.core.Peekable<unknown, unknown>) -> iter_impl_generics_only.core.Iterator<unknown, unknown> {
+function iter_impl_generics_only.core.Peekable.Iterable<T, E>.iter(self: iter_impl_generics_only.core.Peekable<T, E>) -> iter_impl_generics_only.core.Iterator<T, E> {
     load_var self
     return
 }
 
-function iter_impl_generics_only.core.Peekable.Iterator<T, E>.next(self: iter_impl_generics_only.core.Peekable<unknown, unknown>) -> unknown | iter_impl_generics_only.core.Done {
+function iter_impl_generics_only.core.Peekable.Iterator<T, E>.next(self: iter_impl_generics_only.core.Peekable<T, E>) -> T | iter_impl_generics_only.core.Done {
     load_var self
     load_field .2
     pop_jump_if_false L0
@@ -5892,7 +5885,7 @@ function iter_impl_generics_only.core.Peekable.Iterator<T, E>.next(self: iter_im
     unreachable
 }
 
-function iter_impl_generics_only.core.Peekable.peek(self: iter_impl_generics_only.core.Peekable<unknown, unknown>) -> unknown | iter_impl_generics_only.core.Done {
+function iter_impl_generics_only.core.Peekable.peek(self: iter_impl_generics_only.core.Peekable<T, E>) -> T | iter_impl_generics_only.core.Done {
     load_var self
     load_field .has_buffer
     pop_jump_if_false L0
@@ -6061,7 +6054,7 @@ function iter_impl_generics_only.core.Peekable.peek(self: iter_impl_generics_onl
     unreachable
 }
 
-function iter_impl_generics_only.core.Range$stream.Iterable<int, never>.iter(self: iter_impl_generics_only.core.Range$stream) -> iter_impl_generics_only.core.Iterator<int, void> {
+function iter_impl_generics_only.core.Range$stream.Iterable<int, never>.iter(self: iter_impl_generics_only.core.Range$stream) -> iter_impl_generics_only.core.Iterator<int, never> {
     load_var self
     return
 }
@@ -6096,7 +6089,7 @@ function iter_impl_generics_only.core.Range$stream.Iterator<int, never>.next(sel
     return
 }
 
-function iter_impl_generics_only.core.Range.Iterable<int, never>.iter(self: iter_impl_generics_only.core.Range) -> iter_impl_generics_only.core.Iterator<int, void> {
+function iter_impl_generics_only.core.Range.Iterable<int, never>.iter(self: iter_impl_generics_only.core.Range) -> iter_impl_generics_only.core.Iterator<int, never> {
     load_var self
     return
 }
@@ -6146,12 +6139,12 @@ function iter_impl_generics_only.core.Range.new(min: int, max: int, step: int) -
     return
 }
 
-function iter_impl_generics_only.core.Repeat$stream.Iterable<T, never>.iter(self: iter_impl_generics_only.core.Repeat$stream<unknown>) -> iter_impl_generics_only.core.Iterator<unknown, void> {
+function iter_impl_generics_only.core.Repeat$stream.Iterable<T, never>.iter(self: iter_impl_generics_only.core.Repeat$stream<T>) -> iter_impl_generics_only.core.Iterator<T, never> {
     load_var self
     return
 }
 
-function iter_impl_generics_only.core.Repeat$stream.Iterator<T, never>.next(self: iter_impl_generics_only.core.Repeat$stream<unknown>) -> unknown | iter_impl_generics_only.core.Done {
+function iter_impl_generics_only.core.Repeat$stream.Iterator<T, never>.next(self: iter_impl_generics_only.core.Repeat$stream<T>) -> T | iter_impl_generics_only.core.Done {
     load_var self
     load_field .1
     load_const 0
@@ -6190,12 +6183,12 @@ function iter_impl_generics_only.core.Repeat$stream.Iterator<T, never>.next(self
     return
 }
 
-function iter_impl_generics_only.core.Repeat.Iterable<T, never>.iter(self: iter_impl_generics_only.core.Repeat<unknown>) -> iter_impl_generics_only.core.Iterator<unknown, void> {
+function iter_impl_generics_only.core.Repeat.Iterable<T, never>.iter(self: iter_impl_generics_only.core.Repeat<T>) -> iter_impl_generics_only.core.Iterator<T, never> {
     load_var self
     return
 }
 
-function iter_impl_generics_only.core.Repeat.Iterator<T, never>.next(self: iter_impl_generics_only.core.Repeat<unknown>) -> unknown | iter_impl_generics_only.core.Done {
+function iter_impl_generics_only.core.Repeat.Iterator<T, never>.next(self: iter_impl_generics_only.core.Repeat<T>) -> T | iter_impl_generics_only.core.Done {
     load_var self
     load_field .1
     load_const 0
@@ -6234,7 +6227,7 @@ function iter_impl_generics_only.core.Repeat.Iterator<T, never>.next(self: iter_
     return
 }
 
-function iter_impl_generics_only.core.Repeat.new(value: unknown, count: int) -> iter_impl_generics_only.core.Repeat<unknown> {
+function iter_impl_generics_only.core.Repeat.new(value: T, count: int) -> iter_impl_generics_only.core.Repeat<T> {
     load_var count
     load_const <omitted>
     cmp_op ==
@@ -6250,12 +6243,12 @@ function iter_impl_generics_only.core.Repeat.new(value: unknown, count: int) -> 
     return
 }
 
-function iter_impl_generics_only.core.StepBy$stream.Iterable<T, E>.iter(self: iter_impl_generics_only.core.StepBy$stream<unknown, unknown>) -> iter_impl_generics_only.core.Iterator<unknown, unknown> {
+function iter_impl_generics_only.core.StepBy$stream.Iterable<T, E>.iter(self: iter_impl_generics_only.core.StepBy$stream<T, E>) -> iter_impl_generics_only.core.Iterator<T, E> {
     load_var self
     return
 }
 
-function iter_impl_generics_only.core.StepBy$stream.Iterator<T, E>.next(self: iter_impl_generics_only.core.StepBy$stream<unknown, unknown>) -> unknown | iter_impl_generics_only.core.Done {
+function iter_impl_generics_only.core.StepBy$stream.Iterator<T, E>.next(self: iter_impl_generics_only.core.StepBy$stream<T, E>) -> T | iter_impl_generics_only.core.Done {
     load_var self
     load_field .2
     pop_jump_if_false L0
@@ -6697,12 +6690,12 @@ function iter_impl_generics_only.core.StepBy$stream.Iterator<T, E>.next(self: it
     unreachable
 }
 
-function iter_impl_generics_only.core.StepBy.Iterable<T, E>.iter(self: iter_impl_generics_only.core.StepBy<unknown, unknown>) -> iter_impl_generics_only.core.Iterator<unknown, unknown> {
+function iter_impl_generics_only.core.StepBy.Iterable<T, E>.iter(self: iter_impl_generics_only.core.StepBy<T, E>) -> iter_impl_generics_only.core.Iterator<T, E> {
     load_var self
     return
 }
 
-function iter_impl_generics_only.core.StepBy.Iterator<T, E>.next(self: iter_impl_generics_only.core.StepBy<unknown, unknown>) -> unknown | iter_impl_generics_only.core.Done {
+function iter_impl_generics_only.core.StepBy.Iterator<T, E>.next(self: iter_impl_generics_only.core.StepBy<T, E>) -> T | iter_impl_generics_only.core.Done {
     load_var self
     load_field .2
     pop_jump_if_false L0
@@ -7144,7 +7137,7 @@ function iter_impl_generics_only.core.StepBy.Iterator<T, E>.next(self: iter_impl
     unreachable
 }
 
-function iter_impl_generics_only.core.flatten(src: iter_impl_generics_only.core.Iterator<iter_impl_generics_only.core.Iterable<unknown, unknown>, unknown>) -> iter_impl_generics_only.core.Iterator<unknown, unknown | unknown> {
+function iter_impl_generics_only.core.flatten(src: iter_impl_generics_only.core.Iterator<iter_impl_generics_only.core.Iterable<R, E3>, E>) -> iter_impl_generics_only.core.Iterator<R, E | E3> {
     load_var src
     alloc_instance user.iter_impl_generics_only.core.Done
     load_type #0

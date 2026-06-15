@@ -14,9 +14,10 @@ function user.AppError.from_json(j: baml.json.json) -> AppError {
 }
 
 function user.AppError.to_json(self: AppError) -> baml.json.json {
+    load_type int
     load_var self
     load_field .code
-    call baml.Int.to_json
+    call baml.json.to_json
     load_const "code"
     alloc_map 1
     return
@@ -35,10 +36,10 @@ function user.PatternBucket.from_json(j: baml.json.json) -> PatternBucket {
 }
 
 function user.PatternBucket.to_json(self: PatternBucket) -> baml.json.json {
-    load_type int
+    load_type int[]
     load_var self
     load_field .values
-    call baml.Array.to_json
+    call baml.json.to_json
     load_const "values"
     alloc_map 1
     return
@@ -57,10 +58,10 @@ function user.PatternMatrix.from_json(j: baml.json.json) -> PatternMatrix {
 }
 
 function user.PatternMatrix.to_json(self: PatternMatrix) -> baml.json.json {
-    load_type int[]
+    load_type int[][]
     load_var self
     load_field .rows
-    call baml.Array.to_json
+    call baml.json.to_json
     load_const "rows"
     alloc_map 1
     return
@@ -364,7 +365,7 @@ function user.for_let_ascription(items: int[]) -> int {
     is_type baml.iter.Peekable<...>
     pop_jump_if_false L24
     load_type int
-    load_type void
+    load_type never
     load_var _3
     call baml.iter.Peekable.Iterator.next
     store_var _5
@@ -386,8 +387,8 @@ function user.for_let_ascription(items: int[]) -> int {
 
   L13:
     load_type int
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _3
     call baml.iter.Filter.Iterator.next
     store_var _5
@@ -409,8 +410,8 @@ function user.for_let_ascription(items: int[]) -> int {
 
   L16:
     load_type int
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _3
     call baml.iter.Chain.Iterator.next
     store_var _5
@@ -418,7 +419,7 @@ function user.for_let_ascription(items: int[]) -> int {
 
   L17:
     load_type int
-    load_type void
+    load_type never
     load_var _3
     call baml.iter.StepBy.Iterator.next
     store_var _5
@@ -533,7 +534,7 @@ function user.for_let_fn_narrow(items: ((int) -> int throws never)[]) -> int {
     is_type baml.iter.Peekable<...>
     pop_jump_if_false L22
     load_type (int) -> int throws never
-    load_type void
+    load_type never
     load_var _3
     call baml.iter.Peekable.Iterator.next
     store_var _5
@@ -555,8 +556,8 @@ function user.for_let_fn_narrow(items: ((int) -> int throws never)[]) -> int {
 
   L12:
     load_type (int) -> int throws never
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _3
     call baml.iter.Filter.Iterator.next
     store_var _5
@@ -578,8 +579,8 @@ function user.for_let_fn_narrow(items: ((int) -> int throws never)[]) -> int {
 
   L15:
     load_type (int) -> int throws never
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _3
     call baml.iter.Chain.Iterator.next
     store_var _5
@@ -587,7 +588,7 @@ function user.for_let_fn_narrow(items: ((int) -> int throws never)[]) -> int {
 
   L16:
     load_type (int) -> int throws never
-    load_type void
+    load_type never
     load_var _3
     call baml.iter.StepBy.Iterator.next
     store_var _5
@@ -702,7 +703,7 @@ function user.for_let_with_narrow(items: int[]) -> int {
     is_type baml.iter.Peekable<...>
     pop_jump_if_false L24
     load_type int
-    load_type void
+    load_type never
     load_var _3
     call baml.iter.Peekable.Iterator.next
     store_var _5
@@ -724,8 +725,8 @@ function user.for_let_with_narrow(items: int[]) -> int {
 
   L13:
     load_type int
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _3
     call baml.iter.Filter.Iterator.next
     store_var _5
@@ -747,8 +748,8 @@ function user.for_let_with_narrow(items: int[]) -> int {
 
   L16:
     load_type int
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _3
     call baml.iter.Chain.Iterator.next
     store_var _5
@@ -756,7 +757,7 @@ function user.for_let_with_narrow(items: int[]) -> int {
 
   L17:
     load_type int
-    load_type void
+    load_type never
     load_var _3
     call baml.iter.StepBy.Iterator.next
     store_var _5
@@ -935,9 +936,9 @@ function user.unwrap_curried(f: ((int) -> ((int) -> ((int) -> int throws never) 
     return
 }
 
-function user.unwrap_typed(cb: ((int) -> unknown throws never) | ((string) -> unknown throws never)) -> unknown {
+function user.unwrap_typed(cb: ((int) -> T throws never) | ((string) -> T throws never)) -> T {
     load_var cb
-    is_type (int) -> unknown throws never
+    is_type (int) -> T throws never
     pop_jump_if_false L0
     jump L1
 

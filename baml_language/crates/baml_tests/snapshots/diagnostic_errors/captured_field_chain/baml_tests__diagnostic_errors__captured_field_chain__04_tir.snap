@@ -6,7 +6,7 @@ class user.Inner {
   value: int
 }
 function user.Inner.to_json(self: user.Inner) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "value": self.value.to_json() } : map<string, baml.json.json>
+  map { "value": baml.json.to_json(self.value) } : map<string, baml.json.json>
 }
 function user.Inner.from_json(j: baml.json.json) -> user.Inner throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Inner { value: baml.json.from_json<int>(baml.json.field(j, "value")) } : user.Inner
@@ -16,7 +16,7 @@ class user.Outer {
   name: string
 }
 function user.Outer.to_json(self: user.Outer) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "inner": self.inner.to_json(), "name": self.name.to_json() } : map<string, baml.json.json>
+  map { "inner": baml.json.to_json(self.inner), "name": baml.json.to_json(self.name) } : map<string, baml.json.json>
 }
 function user.Outer.from_json(j: baml.json.json) -> user.Outer throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Outer { inner: baml.json.from_json<Inner>(baml.json.field(j, "inner")), name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.Outer

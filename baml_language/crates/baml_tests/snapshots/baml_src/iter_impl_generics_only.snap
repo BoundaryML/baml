@@ -138,7 +138,7 @@ function iter_impl_generics_only.iter_array_iter() -> int[] {
     load_const 2
     load_const 3
     alloc_array 3
-    call user.iter_impl_generics_only.core.Iterable<T, never>$for$T[].iter
+    call user.iter_impl_generics_only.core.ArrayIterator.new
     store_var _1
     load_var _1
     is_type iter_impl_generics_only.core.Flatten<...>
@@ -204,77 +204,77 @@ function iter_impl_generics_only.iter_array_iter() -> int[] {
     is_type iter_impl_generics_only.core.Peekable<...>
     pop_jump_if_false L21
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L10:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L11:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L12:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L13:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L14:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L15:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L16:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L17:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L18:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L19:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
 
@@ -362,7 +362,7 @@ function iter_impl_generics_only.iter_chain() -> int[] {
     is_type iter_impl_generics_only.core.Peekable<...>
     pop_jump_if_false L42
     load_type int
-    load_type void
+    load_type never
     load_var2 1 3
     call user.iter_impl_generics_only.core.Iterator.chain
     store_var _7
@@ -370,7 +370,7 @@ function iter_impl_generics_only.iter_chain() -> int[] {
 
   L10:
     load_type int
-    load_type void
+    load_type never
     load_var2 1 3
     call user.iter_impl_generics_only.core.Iterator.chain
     store_var _7
@@ -378,7 +378,7 @@ function iter_impl_generics_only.iter_chain() -> int[] {
 
   L11:
     load_type int
-    load_type void
+    load_type never
     load_var2 1 3
     call user.iter_impl_generics_only.core.Iterator.chain
     store_var _7
@@ -386,7 +386,7 @@ function iter_impl_generics_only.iter_chain() -> int[] {
 
   L12:
     load_type int
-    load_type void
+    load_type never
     load_var2 1 3
     call user.iter_impl_generics_only.core.Iterator.chain
     store_var _7
@@ -394,7 +394,7 @@ function iter_impl_generics_only.iter_chain() -> int[] {
 
   L13:
     load_type int
-    load_type void
+    load_type never
     load_var2 1 3
     call user.iter_impl_generics_only.core.Iterator.chain
     store_var _7
@@ -402,7 +402,7 @@ function iter_impl_generics_only.iter_chain() -> int[] {
 
   L14:
     load_type int
-    load_type void
+    load_type never
     load_var2 1 3
     call user.iter_impl_generics_only.core.Iterator.chain
     store_var _7
@@ -410,7 +410,7 @@ function iter_impl_generics_only.iter_chain() -> int[] {
 
   L15:
     load_type int
-    load_type void
+    load_type never
     load_var2 1 3
     call user.iter_impl_generics_only.core.Iterator.chain
     store_var _7
@@ -418,7 +418,7 @@ function iter_impl_generics_only.iter_chain() -> int[] {
 
   L16:
     load_type int
-    load_type void
+    load_type never
     load_var2 1 3
     call user.iter_impl_generics_only.core.Iterator.chain
     store_var _7
@@ -426,7 +426,7 @@ function iter_impl_generics_only.iter_chain() -> int[] {
 
   L17:
     load_type int
-    load_type void
+    load_type never
     load_var2 1 3
     call user.iter_impl_generics_only.core.Iterator.chain
     store_var _7
@@ -434,7 +434,7 @@ function iter_impl_generics_only.iter_chain() -> int[] {
 
   L18:
     load_type int
-    load_type void
+    load_type never
     load_var2 1 3
     call user.iter_impl_generics_only.core.Iterator.chain
     store_var _7
@@ -442,7 +442,7 @@ function iter_impl_generics_only.iter_chain() -> int[] {
 
   L19:
     load_type int
-    load_type void
+    load_type never
     load_var2 1 3
     call user.iter_impl_generics_only.core.Iterator.chain
     store_var _7
@@ -512,77 +512,77 @@ function iter_impl_generics_only.iter_chain() -> int[] {
     is_type iter_impl_generics_only.core.Peekable<...>
     pop_jump_if_false L42
     load_type int
-    load_type void
+    load_type never
     load_var _7
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L31:
     load_type int
-    load_type void
+    load_type never
     load_var _7
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L32:
     load_type int
-    load_type void
+    load_type never
     load_var _7
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L33:
     load_type int
-    load_type void
+    load_type never
     load_var _7
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L34:
     load_type int
-    load_type void
+    load_type never
     load_var _7
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L35:
     load_type int
-    load_type void
+    load_type never
     load_var _7
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L36:
     load_type int
-    load_type void
+    load_type never
     load_var _7
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L37:
     load_type int
-    load_type void
+    load_type never
     load_var _7
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L38:
     load_type int
-    load_type void
+    load_type never
     load_var _7
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L39:
     load_type int
-    load_type void
+    load_type never
     load_var _7
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L40:
     load_type int
-    load_type void
+    load_type never
     load_var _7
     call user.iter_impl_generics_only.core.Iterator.collect
 
@@ -665,77 +665,77 @@ function iter_impl_generics_only.iter_collect() -> int[] {
     is_type iter_impl_generics_only.core.Peekable<...>
     pop_jump_if_false L21
     load_type int
-    load_type void
+    load_type never
     load_var it
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L10:
     load_type int
-    load_type void
+    load_type never
     load_var it
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L11:
     load_type int
-    load_type void
+    load_type never
     load_var it
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L12:
     load_type int
-    load_type void
+    load_type never
     load_var it
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L13:
     load_type int
-    load_type void
+    load_type never
     load_var it
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L14:
     load_type int
-    load_type void
+    load_type never
     load_var it
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L15:
     load_type int
-    load_type void
+    load_type never
     load_var it
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L16:
     load_type int
-    load_type void
+    load_type never
     load_var it
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L17:
     load_type int
-    load_type void
+    load_type never
     load_var it
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L18:
     load_type int
-    load_type void
+    load_type never
     load_var it
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L19:
     load_type int
-    load_type void
+    load_type never
     load_var it
     call user.iter_impl_generics_only.core.Iterator.collect
 
@@ -818,77 +818,77 @@ function iter_impl_generics_only.iter_count() -> int {
     is_type iter_impl_generics_only.core.Peekable<...>
     pop_jump_if_false L21
     load_type int
-    load_type void
+    load_type never
     load_var it
     call user.iter_impl_generics_only.core.Iterator.count
     jump L20
 
   L10:
     load_type int
-    load_type void
+    load_type never
     load_var it
     call user.iter_impl_generics_only.core.Iterator.count
     jump L20
 
   L11:
     load_type int
-    load_type void
+    load_type never
     load_var it
     call user.iter_impl_generics_only.core.Iterator.count
     jump L20
 
   L12:
     load_type int
-    load_type void
+    load_type never
     load_var it
     call user.iter_impl_generics_only.core.Iterator.count
     jump L20
 
   L13:
     load_type int
-    load_type void
+    load_type never
     load_var it
     call user.iter_impl_generics_only.core.Iterator.count
     jump L20
 
   L14:
     load_type int
-    load_type void
+    load_type never
     load_var it
     call user.iter_impl_generics_only.core.Iterator.count
     jump L20
 
   L15:
     load_type int
-    load_type void
+    load_type never
     load_var it
     call user.iter_impl_generics_only.core.Iterator.count
     jump L20
 
   L16:
     load_type int
-    load_type void
+    load_type never
     load_var it
     call user.iter_impl_generics_only.core.Iterator.count
     jump L20
 
   L17:
     load_type int
-    load_type void
+    load_type never
     load_var it
     call user.iter_impl_generics_only.core.Iterator.count
     jump L20
 
   L18:
     load_type int
-    load_type void
+    load_type never
     load_var it
     call user.iter_impl_generics_only.core.Iterator.count
     jump L20
 
   L19:
     load_type int
-    load_type void
+    load_type never
     load_var it
     call user.iter_impl_generics_only.core.Iterator.count
 
@@ -911,8 +911,8 @@ function iter_impl_generics_only.iter_explicit_map_coerces_to_iterator() -> int[
     make_closure .<lambda(iter_explicit_map_coerces_to_iterator, 0)>, 0
     load_type int
     load_type int
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     init_instance<4> user.iter_impl_generics_only.core.Map .iter, .func
     store_var_load_var mapped
     is_type iter_impl_generics_only.core.Flatten<...>
@@ -978,77 +978,77 @@ function iter_impl_generics_only.iter_explicit_map_coerces_to_iterator() -> int[
     is_type iter_impl_generics_only.core.Peekable<...>
     pop_jump_if_false L21
     load_type int
-    load_type void
+    load_type never
     load_var mapped
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L10:
     load_type int
-    load_type void
+    load_type never
     load_var mapped
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L11:
     load_type int
-    load_type void
+    load_type never
     load_var mapped
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L12:
     load_type int
-    load_type void
+    load_type never
     load_var mapped
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L13:
     load_type int
-    load_type void
+    load_type never
     load_var mapped
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L14:
     load_type int
-    load_type void
+    load_type never
     load_var mapped
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L15:
     load_type int
-    load_type void
+    load_type never
     load_var mapped
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L16:
     load_type int
-    load_type void
+    load_type never
     load_var mapped
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L17:
     load_type int
-    load_type void
+    load_type never
     load_var mapped
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L18:
     load_type int
-    load_type void
+    load_type never
     load_var mapped
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L19:
     load_type int
-    load_type void
+    load_type never
     load_var mapped
     call user.iter_impl_generics_only.core.Iterator.collect
 
@@ -1070,7 +1070,7 @@ function iter_impl_generics_only.iter_filter() -> int[] {
     store_var it
     make_closure .<lambda(iter_filter, 0)>, 0
     store_var _5
-    load_type void
+    load_type never
     store_var _6
     load_var it
     is_type iter_impl_generics_only.core.Flatten<...>
@@ -1136,7 +1136,7 @@ function iter_impl_generics_only.iter_filter() -> int[] {
     is_type iter_impl_generics_only.core.Peekable<...>
     pop_jump_if_false L42
     load_type int
-    load_type void
+    load_type never
     load_var2 4 1
     load_var _5
     call user.iter_impl_generics_only.core.Iterator.filter
@@ -1145,7 +1145,7 @@ function iter_impl_generics_only.iter_filter() -> int[] {
 
   L10:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 1
     load_var _5
     call user.iter_impl_generics_only.core.Iterator.filter
@@ -1154,7 +1154,7 @@ function iter_impl_generics_only.iter_filter() -> int[] {
 
   L11:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 1
     load_var _5
     call user.iter_impl_generics_only.core.Iterator.filter
@@ -1163,7 +1163,7 @@ function iter_impl_generics_only.iter_filter() -> int[] {
 
   L12:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 1
     load_var _5
     call user.iter_impl_generics_only.core.Iterator.filter
@@ -1172,7 +1172,7 @@ function iter_impl_generics_only.iter_filter() -> int[] {
 
   L13:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 1
     load_var _5
     call user.iter_impl_generics_only.core.Iterator.filter
@@ -1181,7 +1181,7 @@ function iter_impl_generics_only.iter_filter() -> int[] {
 
   L14:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 1
     load_var _5
     call user.iter_impl_generics_only.core.Iterator.filter
@@ -1190,7 +1190,7 @@ function iter_impl_generics_only.iter_filter() -> int[] {
 
   L15:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 1
     load_var _5
     call user.iter_impl_generics_only.core.Iterator.filter
@@ -1199,7 +1199,7 @@ function iter_impl_generics_only.iter_filter() -> int[] {
 
   L16:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 1
     load_var _5
     call user.iter_impl_generics_only.core.Iterator.filter
@@ -1208,7 +1208,7 @@ function iter_impl_generics_only.iter_filter() -> int[] {
 
   L17:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 1
     load_var _5
     call user.iter_impl_generics_only.core.Iterator.filter
@@ -1217,7 +1217,7 @@ function iter_impl_generics_only.iter_filter() -> int[] {
 
   L18:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 1
     load_var _5
     call user.iter_impl_generics_only.core.Iterator.filter
@@ -1226,7 +1226,7 @@ function iter_impl_generics_only.iter_filter() -> int[] {
 
   L19:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 1
     load_var _5
     call user.iter_impl_generics_only.core.Iterator.filter
@@ -1297,77 +1297,77 @@ function iter_impl_generics_only.iter_filter() -> int[] {
     is_type iter_impl_generics_only.core.Peekable<...>
     pop_jump_if_false L42
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L31:
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L32:
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L33:
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L34:
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L35:
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L36:
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L37:
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L38:
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L39:
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L40:
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call user.iter_impl_generics_only.core.Iterator.collect
 
@@ -1389,7 +1389,7 @@ function iter_impl_generics_only.iter_filter_implicit_source() -> int[] {
     store_var _2
     make_closure .<lambda(iter_filter_implicit_source, 0)>, 0
     store_var _5
-    load_type void
+    load_type never
     store_var _6
     load_var _2
     is_type iter_impl_generics_only.core.Flatten<...>
@@ -1455,7 +1455,7 @@ function iter_impl_generics_only.iter_filter_implicit_source() -> int[] {
     is_type iter_impl_generics_only.core.Peekable<...>
     pop_jump_if_false L42
     load_type int
-    load_type void
+    load_type never
     load_var2 4 2
     load_var _5
     call user.iter_impl_generics_only.core.Iterator.filter
@@ -1464,7 +1464,7 @@ function iter_impl_generics_only.iter_filter_implicit_source() -> int[] {
 
   L10:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 2
     load_var _5
     call user.iter_impl_generics_only.core.Iterator.filter
@@ -1473,7 +1473,7 @@ function iter_impl_generics_only.iter_filter_implicit_source() -> int[] {
 
   L11:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 2
     load_var _5
     call user.iter_impl_generics_only.core.Iterator.filter
@@ -1482,7 +1482,7 @@ function iter_impl_generics_only.iter_filter_implicit_source() -> int[] {
 
   L12:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 2
     load_var _5
     call user.iter_impl_generics_only.core.Iterator.filter
@@ -1491,7 +1491,7 @@ function iter_impl_generics_only.iter_filter_implicit_source() -> int[] {
 
   L13:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 2
     load_var _5
     call user.iter_impl_generics_only.core.Iterator.filter
@@ -1500,7 +1500,7 @@ function iter_impl_generics_only.iter_filter_implicit_source() -> int[] {
 
   L14:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 2
     load_var _5
     call user.iter_impl_generics_only.core.Iterator.filter
@@ -1509,7 +1509,7 @@ function iter_impl_generics_only.iter_filter_implicit_source() -> int[] {
 
   L15:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 2
     load_var _5
     call user.iter_impl_generics_only.core.Iterator.filter
@@ -1518,7 +1518,7 @@ function iter_impl_generics_only.iter_filter_implicit_source() -> int[] {
 
   L16:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 2
     load_var _5
     call user.iter_impl_generics_only.core.Iterator.filter
@@ -1527,7 +1527,7 @@ function iter_impl_generics_only.iter_filter_implicit_source() -> int[] {
 
   L17:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 2
     load_var _5
     call user.iter_impl_generics_only.core.Iterator.filter
@@ -1536,7 +1536,7 @@ function iter_impl_generics_only.iter_filter_implicit_source() -> int[] {
 
   L18:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 2
     load_var _5
     call user.iter_impl_generics_only.core.Iterator.filter
@@ -1545,7 +1545,7 @@ function iter_impl_generics_only.iter_filter_implicit_source() -> int[] {
 
   L19:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 2
     load_var _5
     call user.iter_impl_generics_only.core.Iterator.filter
@@ -1616,77 +1616,77 @@ function iter_impl_generics_only.iter_filter_implicit_source() -> int[] {
     is_type iter_impl_generics_only.core.Peekable<...>
     pop_jump_if_false L42
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L31:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L32:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L33:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L34:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L35:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L36:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L37:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L38:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L39:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L40:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
 
@@ -1710,7 +1710,7 @@ function iter_impl_generics_only.iter_filter_map() -> int[] {
     store_var _5
     load_type int
     store_var _6
-    load_type void
+    load_type never
     store_var _7
     load_var it
     is_type iter_impl_generics_only.core.Flatten<...>
@@ -1776,7 +1776,7 @@ function iter_impl_generics_only.iter_filter_map() -> int[] {
     is_type iter_impl_generics_only.core.Peekable<...>
     pop_jump_if_false L42
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 1 3
     call user.iter_impl_generics_only.core.Iterator.filter_map
@@ -1785,7 +1785,7 @@ function iter_impl_generics_only.iter_filter_map() -> int[] {
 
   L10:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 1 3
     call user.iter_impl_generics_only.core.Iterator.filter_map
@@ -1794,7 +1794,7 @@ function iter_impl_generics_only.iter_filter_map() -> int[] {
 
   L11:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 1 3
     call user.iter_impl_generics_only.core.Iterator.filter_map
@@ -1803,7 +1803,7 @@ function iter_impl_generics_only.iter_filter_map() -> int[] {
 
   L12:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 1 3
     call user.iter_impl_generics_only.core.Iterator.filter_map
@@ -1812,7 +1812,7 @@ function iter_impl_generics_only.iter_filter_map() -> int[] {
 
   L13:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 1 3
     call user.iter_impl_generics_only.core.Iterator.filter_map
@@ -1821,7 +1821,7 @@ function iter_impl_generics_only.iter_filter_map() -> int[] {
 
   L14:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 1 3
     call user.iter_impl_generics_only.core.Iterator.filter_map
@@ -1830,7 +1830,7 @@ function iter_impl_generics_only.iter_filter_map() -> int[] {
 
   L15:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 1 3
     call user.iter_impl_generics_only.core.Iterator.filter_map
@@ -1839,7 +1839,7 @@ function iter_impl_generics_only.iter_filter_map() -> int[] {
 
   L16:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 1 3
     call user.iter_impl_generics_only.core.Iterator.filter_map
@@ -1848,7 +1848,7 @@ function iter_impl_generics_only.iter_filter_map() -> int[] {
 
   L17:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 1 3
     call user.iter_impl_generics_only.core.Iterator.filter_map
@@ -1857,7 +1857,7 @@ function iter_impl_generics_only.iter_filter_map() -> int[] {
 
   L18:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 1 3
     call user.iter_impl_generics_only.core.Iterator.filter_map
@@ -1866,7 +1866,7 @@ function iter_impl_generics_only.iter_filter_map() -> int[] {
 
   L19:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 1 3
     call user.iter_impl_generics_only.core.Iterator.filter_map
@@ -1937,77 +1937,77 @@ function iter_impl_generics_only.iter_filter_map() -> int[] {
     is_type iter_impl_generics_only.core.Peekable<...>
     pop_jump_if_false L42
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L31:
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L32:
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L33:
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L34:
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L35:
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L36:
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L37:
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L38:
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L39:
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L40:
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call user.iter_impl_generics_only.core.Iterator.collect
 
@@ -2031,7 +2031,7 @@ function iter_impl_generics_only.iter_filter_map_implicit_source() -> int[] {
     store_var _5
     load_type int
     store_var _6
-    load_type void
+    load_type never
     store_var _7
     load_var _2
     is_type iter_impl_generics_only.core.Flatten<...>
@@ -2097,7 +2097,7 @@ function iter_impl_generics_only.iter_filter_map_implicit_source() -> int[] {
     is_type iter_impl_generics_only.core.Peekable<...>
     pop_jump_if_false L42
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 2 3
     call user.iter_impl_generics_only.core.Iterator.filter_map
@@ -2106,7 +2106,7 @@ function iter_impl_generics_only.iter_filter_map_implicit_source() -> int[] {
 
   L10:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 2 3
     call user.iter_impl_generics_only.core.Iterator.filter_map
@@ -2115,7 +2115,7 @@ function iter_impl_generics_only.iter_filter_map_implicit_source() -> int[] {
 
   L11:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 2 3
     call user.iter_impl_generics_only.core.Iterator.filter_map
@@ -2124,7 +2124,7 @@ function iter_impl_generics_only.iter_filter_map_implicit_source() -> int[] {
 
   L12:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 2 3
     call user.iter_impl_generics_only.core.Iterator.filter_map
@@ -2133,7 +2133,7 @@ function iter_impl_generics_only.iter_filter_map_implicit_source() -> int[] {
 
   L13:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 2 3
     call user.iter_impl_generics_only.core.Iterator.filter_map
@@ -2142,7 +2142,7 @@ function iter_impl_generics_only.iter_filter_map_implicit_source() -> int[] {
 
   L14:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 2 3
     call user.iter_impl_generics_only.core.Iterator.filter_map
@@ -2151,7 +2151,7 @@ function iter_impl_generics_only.iter_filter_map_implicit_source() -> int[] {
 
   L15:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 2 3
     call user.iter_impl_generics_only.core.Iterator.filter_map
@@ -2160,7 +2160,7 @@ function iter_impl_generics_only.iter_filter_map_implicit_source() -> int[] {
 
   L16:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 2 3
     call user.iter_impl_generics_only.core.Iterator.filter_map
@@ -2169,7 +2169,7 @@ function iter_impl_generics_only.iter_filter_map_implicit_source() -> int[] {
 
   L17:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 2 3
     call user.iter_impl_generics_only.core.Iterator.filter_map
@@ -2178,7 +2178,7 @@ function iter_impl_generics_only.iter_filter_map_implicit_source() -> int[] {
 
   L18:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 2 3
     call user.iter_impl_generics_only.core.Iterator.filter_map
@@ -2187,7 +2187,7 @@ function iter_impl_generics_only.iter_filter_map_implicit_source() -> int[] {
 
   L19:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 2 3
     call user.iter_impl_generics_only.core.Iterator.filter_map
@@ -2258,77 +2258,77 @@ function iter_impl_generics_only.iter_filter_map_implicit_source() -> int[] {
     is_type iter_impl_generics_only.core.Peekable<...>
     pop_jump_if_false L42
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L31:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L32:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L33:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L34:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L35:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L36:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L37:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L38:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L39:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L40:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
 
@@ -2350,9 +2350,9 @@ function iter_impl_generics_only.iter_flat_map() -> int[] {
     store_var _5
     load_type int
     store_var _6
-    load_type void
+    load_type never
     store_var _7
-    load_type void
+    load_type never
     store_var _8
     load_var it
     is_type iter_impl_generics_only.core.Flatten<...>
@@ -2418,7 +2418,7 @@ function iter_impl_generics_only.iter_flat_map() -> int[] {
     is_type iter_impl_generics_only.core.Peekable<...>
     pop_jump_if_false L42
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 6 1
     load_var _5
@@ -2428,7 +2428,7 @@ function iter_impl_generics_only.iter_flat_map() -> int[] {
 
   L10:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 6 1
     load_var _5
@@ -2438,7 +2438,7 @@ function iter_impl_generics_only.iter_flat_map() -> int[] {
 
   L11:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 6 1
     load_var _5
@@ -2448,7 +2448,7 @@ function iter_impl_generics_only.iter_flat_map() -> int[] {
 
   L12:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 6 1
     load_var _5
@@ -2458,7 +2458,7 @@ function iter_impl_generics_only.iter_flat_map() -> int[] {
 
   L13:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 6 1
     load_var _5
@@ -2468,7 +2468,7 @@ function iter_impl_generics_only.iter_flat_map() -> int[] {
 
   L14:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 6 1
     load_var _5
@@ -2478,7 +2478,7 @@ function iter_impl_generics_only.iter_flat_map() -> int[] {
 
   L15:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 6 1
     load_var _5
@@ -2488,7 +2488,7 @@ function iter_impl_generics_only.iter_flat_map() -> int[] {
 
   L16:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 6 1
     load_var _5
@@ -2498,7 +2498,7 @@ function iter_impl_generics_only.iter_flat_map() -> int[] {
 
   L17:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 6 1
     load_var _5
@@ -2508,7 +2508,7 @@ function iter_impl_generics_only.iter_flat_map() -> int[] {
 
   L18:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 6 1
     load_var _5
@@ -2518,7 +2518,7 @@ function iter_impl_generics_only.iter_flat_map() -> int[] {
 
   L19:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 6 1
     load_var _5
@@ -2590,77 +2590,77 @@ function iter_impl_generics_only.iter_flat_map() -> int[] {
     is_type iter_impl_generics_only.core.Peekable<...>
     pop_jump_if_false L42
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L31:
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L32:
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L33:
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L34:
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L35:
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L36:
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L37:
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L38:
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L39:
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L40:
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call user.iter_impl_generics_only.core.Iterator.collect
 
@@ -2682,9 +2682,9 @@ function iter_impl_generics_only.iter_flat_map_implicit_source() -> int[] {
     store_var _5
     load_type int
     store_var _6
-    load_type void
+    load_type never
     store_var _7
-    load_type void
+    load_type never
     store_var _8
     load_var _2
     is_type iter_impl_generics_only.core.Flatten<...>
@@ -2750,7 +2750,7 @@ function iter_impl_generics_only.iter_flat_map_implicit_source() -> int[] {
     is_type iter_impl_generics_only.core.Peekable<...>
     pop_jump_if_false L42
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 6 2
     load_var _5
@@ -2760,7 +2760,7 @@ function iter_impl_generics_only.iter_flat_map_implicit_source() -> int[] {
 
   L10:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 6 2
     load_var _5
@@ -2770,7 +2770,7 @@ function iter_impl_generics_only.iter_flat_map_implicit_source() -> int[] {
 
   L11:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 6 2
     load_var _5
@@ -2780,7 +2780,7 @@ function iter_impl_generics_only.iter_flat_map_implicit_source() -> int[] {
 
   L12:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 6 2
     load_var _5
@@ -2790,7 +2790,7 @@ function iter_impl_generics_only.iter_flat_map_implicit_source() -> int[] {
 
   L13:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 6 2
     load_var _5
@@ -2800,7 +2800,7 @@ function iter_impl_generics_only.iter_flat_map_implicit_source() -> int[] {
 
   L14:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 6 2
     load_var _5
@@ -2810,7 +2810,7 @@ function iter_impl_generics_only.iter_flat_map_implicit_source() -> int[] {
 
   L15:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 6 2
     load_var _5
@@ -2820,7 +2820,7 @@ function iter_impl_generics_only.iter_flat_map_implicit_source() -> int[] {
 
   L16:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 6 2
     load_var _5
@@ -2830,7 +2830,7 @@ function iter_impl_generics_only.iter_flat_map_implicit_source() -> int[] {
 
   L17:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 6 2
     load_var _5
@@ -2840,7 +2840,7 @@ function iter_impl_generics_only.iter_flat_map_implicit_source() -> int[] {
 
   L18:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 6 2
     load_var _5
@@ -2850,7 +2850,7 @@ function iter_impl_generics_only.iter_flat_map_implicit_source() -> int[] {
 
   L19:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 6 2
     load_var _5
@@ -2922,77 +2922,77 @@ function iter_impl_generics_only.iter_flat_map_implicit_source() -> int[] {
     is_type iter_impl_generics_only.core.Peekable<...>
     pop_jump_if_false L42
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L31:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L32:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L33:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L34:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L35:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L36:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L37:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L38:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L39:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L40:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
 
@@ -3016,14 +3016,14 @@ function iter_impl_generics_only.iter_flatten() -> int[] {
     alloc_array 2
     call user.iter_impl_generics_only.core.ArrayIterator.new
     store_var _5
-    load_type iter_impl_generics_only.core.Iterable<int, void>
+    load_type iter_impl_generics_only.core.Iterable<int, never>
     load_var2 1 2
     alloc_array 2
     call user.iter_impl_generics_only.core.ArrayIterator.new
     store_var outer
     load_type int
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var outer
     call user.iter_impl_generics_only.core.flatten
     store_var _11
@@ -3091,77 +3091,77 @@ function iter_impl_generics_only.iter_flatten() -> int[] {
     is_type iter_impl_generics_only.core.Peekable<...>
     pop_jump_if_false L21
     load_type int
-    load_type void
+    load_type never
     load_var _11
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L10:
     load_type int
-    load_type void
+    load_type never
     load_var _11
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L11:
     load_type int
-    load_type void
+    load_type never
     load_var _11
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L12:
     load_type int
-    load_type void
+    load_type never
     load_var _11
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L13:
     load_type int
-    load_type void
+    load_type never
     load_var _11
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L14:
     load_type int
-    load_type void
+    load_type never
     load_var _11
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L15:
     load_type int
-    load_type void
+    load_type never
     load_var _11
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L16:
     load_type int
-    load_type void
+    load_type never
     load_var _11
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L17:
     load_type int
-    load_type void
+    load_type never
     load_var _11
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L18:
     load_type int
-    load_type void
+    load_type never
     load_var _11
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L19:
     load_type int
-    load_type void
+    load_type never
     load_var _11
     call user.iter_impl_generics_only.core.Iterator.collect
 
@@ -3184,7 +3184,7 @@ function iter_impl_generics_only.iter_map() -> int[] {
     store_var _5
     load_type int
     store_var _6
-    load_type void
+    load_type never
     store_var _7
     load_var it
     is_type iter_impl_generics_only.core.Flatten<...>
@@ -3250,7 +3250,7 @@ function iter_impl_generics_only.iter_map() -> int[] {
     is_type iter_impl_generics_only.core.Peekable<...>
     pop_jump_if_false L42
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 1 3
     call user.iter_impl_generics_only.core.Iterator.map
@@ -3259,7 +3259,7 @@ function iter_impl_generics_only.iter_map() -> int[] {
 
   L10:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 1 3
     call user.iter_impl_generics_only.core.Iterator.map
@@ -3268,7 +3268,7 @@ function iter_impl_generics_only.iter_map() -> int[] {
 
   L11:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 1 3
     call user.iter_impl_generics_only.core.Iterator.map
@@ -3277,7 +3277,7 @@ function iter_impl_generics_only.iter_map() -> int[] {
 
   L12:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 1 3
     call user.iter_impl_generics_only.core.Iterator.map
@@ -3286,7 +3286,7 @@ function iter_impl_generics_only.iter_map() -> int[] {
 
   L13:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 1 3
     call user.iter_impl_generics_only.core.Iterator.map
@@ -3295,7 +3295,7 @@ function iter_impl_generics_only.iter_map() -> int[] {
 
   L14:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 1 3
     call user.iter_impl_generics_only.core.Iterator.map
@@ -3304,7 +3304,7 @@ function iter_impl_generics_only.iter_map() -> int[] {
 
   L15:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 1 3
     call user.iter_impl_generics_only.core.Iterator.map
@@ -3313,7 +3313,7 @@ function iter_impl_generics_only.iter_map() -> int[] {
 
   L16:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 1 3
     call user.iter_impl_generics_only.core.Iterator.map
@@ -3322,7 +3322,7 @@ function iter_impl_generics_only.iter_map() -> int[] {
 
   L17:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 1 3
     call user.iter_impl_generics_only.core.Iterator.map
@@ -3331,7 +3331,7 @@ function iter_impl_generics_only.iter_map() -> int[] {
 
   L18:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 1 3
     call user.iter_impl_generics_only.core.Iterator.map
@@ -3340,7 +3340,7 @@ function iter_impl_generics_only.iter_map() -> int[] {
 
   L19:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 1 3
     call user.iter_impl_generics_only.core.Iterator.map
@@ -3411,77 +3411,77 @@ function iter_impl_generics_only.iter_map() -> int[] {
     is_type iter_impl_generics_only.core.Peekable<...>
     pop_jump_if_false L42
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L31:
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L32:
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L33:
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L34:
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L35:
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L36:
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L37:
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L38:
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L39:
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L40:
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call user.iter_impl_generics_only.core.Iterator.collect
 
@@ -3504,7 +3504,7 @@ function iter_impl_generics_only.iter_map_implicit_source() -> int[] {
     store_var _5
     load_type int
     store_var _6
-    load_type void
+    load_type never
     store_var _7
     load_var _2
     is_type iter_impl_generics_only.core.Flatten<...>
@@ -3570,7 +3570,7 @@ function iter_impl_generics_only.iter_map_implicit_source() -> int[] {
     is_type iter_impl_generics_only.core.Peekable<...>
     pop_jump_if_false L42
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 2 3
     call user.iter_impl_generics_only.core.Iterator.map
@@ -3579,7 +3579,7 @@ function iter_impl_generics_only.iter_map_implicit_source() -> int[] {
 
   L10:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 2 3
     call user.iter_impl_generics_only.core.Iterator.map
@@ -3588,7 +3588,7 @@ function iter_impl_generics_only.iter_map_implicit_source() -> int[] {
 
   L11:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 2 3
     call user.iter_impl_generics_only.core.Iterator.map
@@ -3597,7 +3597,7 @@ function iter_impl_generics_only.iter_map_implicit_source() -> int[] {
 
   L12:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 2 3
     call user.iter_impl_generics_only.core.Iterator.map
@@ -3606,7 +3606,7 @@ function iter_impl_generics_only.iter_map_implicit_source() -> int[] {
 
   L13:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 2 3
     call user.iter_impl_generics_only.core.Iterator.map
@@ -3615,7 +3615,7 @@ function iter_impl_generics_only.iter_map_implicit_source() -> int[] {
 
   L14:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 2 3
     call user.iter_impl_generics_only.core.Iterator.map
@@ -3624,7 +3624,7 @@ function iter_impl_generics_only.iter_map_implicit_source() -> int[] {
 
   L15:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 2 3
     call user.iter_impl_generics_only.core.Iterator.map
@@ -3633,7 +3633,7 @@ function iter_impl_generics_only.iter_map_implicit_source() -> int[] {
 
   L16:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 2 3
     call user.iter_impl_generics_only.core.Iterator.map
@@ -3642,7 +3642,7 @@ function iter_impl_generics_only.iter_map_implicit_source() -> int[] {
 
   L17:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 2 3
     call user.iter_impl_generics_only.core.Iterator.map
@@ -3651,7 +3651,7 @@ function iter_impl_generics_only.iter_map_implicit_source() -> int[] {
 
   L18:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 2 3
     call user.iter_impl_generics_only.core.Iterator.map
@@ -3660,7 +3660,7 @@ function iter_impl_generics_only.iter_map_implicit_source() -> int[] {
 
   L19:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 5
     load_var2 2 3
     call user.iter_impl_generics_only.core.Iterator.map
@@ -3731,77 +3731,77 @@ function iter_impl_generics_only.iter_map_implicit_source() -> int[] {
     is_type iter_impl_generics_only.core.Peekable<...>
     pop_jump_if_false L42
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L31:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L32:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L33:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L34:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L35:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L36:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L37:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L38:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L39:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L40:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
 
@@ -3883,7 +3883,7 @@ function iter_impl_generics_only.iter_peekable() -> int[] {
     is_type iter_impl_generics_only.core.Peekable<...>
     pop_jump_if_false L72
     load_type int
-    load_type void
+    load_type never
     load_var _2
     call user.iter_impl_generics_only.core.Iterator.peekable
     store_var p
@@ -3891,7 +3891,7 @@ function iter_impl_generics_only.iter_peekable() -> int[] {
 
   L10:
     load_type int
-    load_type void
+    load_type never
     load_var _2
     call user.iter_impl_generics_only.core.Iterator.peekable
     store_var p
@@ -3899,7 +3899,7 @@ function iter_impl_generics_only.iter_peekable() -> int[] {
 
   L11:
     load_type int
-    load_type void
+    load_type never
     load_var _2
     call user.iter_impl_generics_only.core.Iterator.peekable
     store_var p
@@ -3907,7 +3907,7 @@ function iter_impl_generics_only.iter_peekable() -> int[] {
 
   L12:
     load_type int
-    load_type void
+    load_type never
     load_var _2
     call user.iter_impl_generics_only.core.Iterator.peekable
     store_var p
@@ -3915,7 +3915,7 @@ function iter_impl_generics_only.iter_peekable() -> int[] {
 
   L13:
     load_type int
-    load_type void
+    load_type never
     load_var _2
     call user.iter_impl_generics_only.core.Iterator.peekable
     store_var p
@@ -3923,7 +3923,7 @@ function iter_impl_generics_only.iter_peekable() -> int[] {
 
   L14:
     load_type int
-    load_type void
+    load_type never
     load_var _2
     call user.iter_impl_generics_only.core.Iterator.peekable
     store_var p
@@ -3931,7 +3931,7 @@ function iter_impl_generics_only.iter_peekable() -> int[] {
 
   L15:
     load_type int
-    load_type void
+    load_type never
     load_var _2
     call user.iter_impl_generics_only.core.Iterator.peekable
     store_var p
@@ -3939,7 +3939,7 @@ function iter_impl_generics_only.iter_peekable() -> int[] {
 
   L16:
     load_type int
-    load_type void
+    load_type never
     load_var _2
     call user.iter_impl_generics_only.core.Iterator.peekable
     store_var p
@@ -3947,7 +3947,7 @@ function iter_impl_generics_only.iter_peekable() -> int[] {
 
   L17:
     load_type int
-    load_type void
+    load_type never
     load_var _2
     call user.iter_impl_generics_only.core.Iterator.peekable
     store_var p
@@ -3955,7 +3955,7 @@ function iter_impl_generics_only.iter_peekable() -> int[] {
 
   L18:
     load_type int
-    load_type void
+    load_type never
     load_var _2
     call user.iter_impl_generics_only.core.Iterator.peekable
     store_var p
@@ -3963,7 +3963,7 @@ function iter_impl_generics_only.iter_peekable() -> int[] {
 
   L19:
     load_type int
-    load_type void
+    load_type never
     load_var _2
     call user.iter_impl_generics_only.core.Iterator.peekable
     store_var p
@@ -3972,7 +3972,7 @@ function iter_impl_generics_only.iter_peekable() -> int[] {
     alloc_array 0
     store_var out
     load_type int
-    load_type void
+    load_type never
     load_var p
     call user.iter_impl_generics_only.core.Peekable.peek
     store_var _40
@@ -4051,7 +4051,7 @@ function iter_impl_generics_only.iter_peekable() -> int[] {
     is_type iter_impl_generics_only.core.Peekable<...>
     pop_jump_if_false L72
     load_type int
-    load_type void
+    load_type never
     load_var p
     call user.iter_impl_generics_only.core.Peekable.Iterator<T, E>.next
     store_var _47
@@ -4059,8 +4059,8 @@ function iter_impl_generics_only.iter_peekable() -> int[] {
 
   L33:
     load_type int
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var p
     call user.iter_impl_generics_only.core.Filter.Iterator<T, E | E2>.next
     store_var _47
@@ -4068,7 +4068,7 @@ function iter_impl_generics_only.iter_peekable() -> int[] {
 
   L34:
     load_type int
-    load_type void
+    load_type never
     load_var p
     call user.iter_impl_generics_only.core.Chain.Iterator<T, E>.next
     store_var _47
@@ -4117,7 +4117,7 @@ function iter_impl_generics_only.iter_peekable() -> int[] {
 
   L41:
     load_type int
-    load_type void
+    load_type never
     load_var p
     call user.iter_impl_generics_only.core.StepBy.Iterator<T, E>.next
     store_var _47
@@ -4125,8 +4125,8 @@ function iter_impl_generics_only.iter_peekable() -> int[] {
 
   L42:
     load_type int
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var p
     call user.iter_impl_generics_only.core.Flatten.Iterator<R, E | E3>.next
     store_var _47
@@ -4207,7 +4207,7 @@ function iter_impl_generics_only.iter_peekable() -> int[] {
     is_type iter_impl_generics_only.core.Peekable<...>
     pop_jump_if_false L72
     load_type int
-    load_type void
+    load_type never
     load_var p
     call user.iter_impl_generics_only.core.Peekable.Iterator<T, E>.next
     store_var _80
@@ -4215,8 +4215,8 @@ function iter_impl_generics_only.iter_peekable() -> int[] {
 
   L56:
     load_type int
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var p
     call user.iter_impl_generics_only.core.Filter.Iterator<T, E | E2>.next
     store_var _80
@@ -4224,7 +4224,7 @@ function iter_impl_generics_only.iter_peekable() -> int[] {
 
   L57:
     load_type int
-    load_type void
+    load_type never
     load_var p
     call user.iter_impl_generics_only.core.Chain.Iterator<T, E>.next
     store_var _80
@@ -4273,7 +4273,7 @@ function iter_impl_generics_only.iter_peekable() -> int[] {
 
   L64:
     load_type int
-    load_type void
+    load_type never
     load_var p
     call user.iter_impl_generics_only.core.StepBy.Iterator<T, E>.next
     store_var _80
@@ -4281,8 +4281,8 @@ function iter_impl_generics_only.iter_peekable() -> int[] {
 
   L65:
     load_type int
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var p
     call user.iter_impl_generics_only.core.Flatten.Iterator<R, E | E3>.next
     store_var _80
@@ -4300,7 +4300,7 @@ function iter_impl_generics_only.iter_peekable() -> int[] {
 
   L68:
     load_type int
-    load_type void
+    load_type never
     load_var p
     call user.iter_impl_generics_only.core.Peekable.peek
     store_var _113
@@ -4399,77 +4399,77 @@ function iter_impl_generics_only.iter_range() -> int[] {
     is_type iter_impl_generics_only.core.Peekable<...>
     pop_jump_if_false L21
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L10:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L11:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L12:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L13:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L14:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L15:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L16:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L17:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L18:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L19:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
 
@@ -4493,7 +4493,7 @@ function iter_impl_generics_only.iter_reduce() -> int {
     store_var _4
     load_type int
     store_var _6
-    load_type void
+    load_type never
     store_var _7
     load_var it
     is_type iter_impl_generics_only.core.Flatten<...>
@@ -4559,7 +4559,7 @@ function iter_impl_generics_only.iter_reduce() -> int {
     is_type iter_impl_generics_only.core.Peekable<...>
     pop_jump_if_false L21
     load_type int
-    load_type void
+    load_type never
     load_var2 3 4
     load_var2 1 2
     load_const 0
@@ -4568,7 +4568,7 @@ function iter_impl_generics_only.iter_reduce() -> int {
 
   L10:
     load_type int
-    load_type void
+    load_type never
     load_var2 3 4
     load_var2 1 2
     load_const 0
@@ -4577,7 +4577,7 @@ function iter_impl_generics_only.iter_reduce() -> int {
 
   L11:
     load_type int
-    load_type void
+    load_type never
     load_var2 3 4
     load_var2 1 2
     load_const 0
@@ -4586,7 +4586,7 @@ function iter_impl_generics_only.iter_reduce() -> int {
 
   L12:
     load_type int
-    load_type void
+    load_type never
     load_var2 3 4
     load_var2 1 2
     load_const 0
@@ -4595,7 +4595,7 @@ function iter_impl_generics_only.iter_reduce() -> int {
 
   L13:
     load_type int
-    load_type void
+    load_type never
     load_var2 3 4
     load_var2 1 2
     load_const 0
@@ -4604,7 +4604,7 @@ function iter_impl_generics_only.iter_reduce() -> int {
 
   L14:
     load_type int
-    load_type void
+    load_type never
     load_var2 3 4
     load_var2 1 2
     load_const 0
@@ -4613,7 +4613,7 @@ function iter_impl_generics_only.iter_reduce() -> int {
 
   L15:
     load_type int
-    load_type void
+    load_type never
     load_var2 3 4
     load_var2 1 2
     load_const 0
@@ -4622,7 +4622,7 @@ function iter_impl_generics_only.iter_reduce() -> int {
 
   L16:
     load_type int
-    load_type void
+    load_type never
     load_var2 3 4
     load_var2 1 2
     load_const 0
@@ -4631,7 +4631,7 @@ function iter_impl_generics_only.iter_reduce() -> int {
 
   L17:
     load_type int
-    load_type void
+    load_type never
     load_var2 3 4
     load_var2 1 2
     load_const 0
@@ -4640,7 +4640,7 @@ function iter_impl_generics_only.iter_reduce() -> int {
 
   L18:
     load_type int
-    load_type void
+    load_type never
     load_var2 3 4
     load_var2 1 2
     load_const 0
@@ -4649,7 +4649,7 @@ function iter_impl_generics_only.iter_reduce() -> int {
 
   L19:
     load_type int
-    load_type void
+    load_type never
     load_var2 3 4
     load_var2 1 2
     load_const 0
@@ -4731,77 +4731,77 @@ function iter_impl_generics_only.iter_repeat() -> int[] {
     is_type iter_impl_generics_only.core.Peekable<...>
     pop_jump_if_false L21
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L10:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L11:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L12:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L13:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L14:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L15:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L16:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L17:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L18:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L20
 
   L19:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
 
@@ -4822,7 +4822,7 @@ function iter_impl_generics_only.iter_some_every_find() -> bool {
     store_var _2
     make_closure .<lambda(iter_some_every_find, 0)>, 0
     store_var _5
-    load_type void
+    load_type never
     store_var _6
     load_var _2
     is_type iter_impl_generics_only.core.Flatten<...>
@@ -4888,7 +4888,7 @@ function iter_impl_generics_only.iter_some_every_find() -> bool {
     is_type iter_impl_generics_only.core.Peekable<...>
     pop_jump_if_false L65
     load_type int
-    load_type void
+    load_type never
     load_var2 4 2
     load_var _5
     call user.iter_impl_generics_only.core.Iterator.some
@@ -4897,7 +4897,7 @@ function iter_impl_generics_only.iter_some_every_find() -> bool {
 
   L10:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 2
     load_var _5
     call user.iter_impl_generics_only.core.Iterator.some
@@ -4906,7 +4906,7 @@ function iter_impl_generics_only.iter_some_every_find() -> bool {
 
   L11:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 2
     load_var _5
     call user.iter_impl_generics_only.core.Iterator.some
@@ -4915,7 +4915,7 @@ function iter_impl_generics_only.iter_some_every_find() -> bool {
 
   L12:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 2
     load_var _5
     call user.iter_impl_generics_only.core.Iterator.some
@@ -4924,7 +4924,7 @@ function iter_impl_generics_only.iter_some_every_find() -> bool {
 
   L13:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 2
     load_var _5
     call user.iter_impl_generics_only.core.Iterator.some
@@ -4933,7 +4933,7 @@ function iter_impl_generics_only.iter_some_every_find() -> bool {
 
   L14:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 2
     load_var _5
     call user.iter_impl_generics_only.core.Iterator.some
@@ -4942,7 +4942,7 @@ function iter_impl_generics_only.iter_some_every_find() -> bool {
 
   L15:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 2
     load_var _5
     call user.iter_impl_generics_only.core.Iterator.some
@@ -4951,7 +4951,7 @@ function iter_impl_generics_only.iter_some_every_find() -> bool {
 
   L16:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 2
     load_var _5
     call user.iter_impl_generics_only.core.Iterator.some
@@ -4960,7 +4960,7 @@ function iter_impl_generics_only.iter_some_every_find() -> bool {
 
   L17:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 2
     load_var _5
     call user.iter_impl_generics_only.core.Iterator.some
@@ -4969,7 +4969,7 @@ function iter_impl_generics_only.iter_some_every_find() -> bool {
 
   L18:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 2
     load_var _5
     call user.iter_impl_generics_only.core.Iterator.some
@@ -4978,7 +4978,7 @@ function iter_impl_generics_only.iter_some_every_find() -> bool {
 
   L19:
     load_type int
-    load_type void
+    load_type never
     load_var2 4 2
     load_var _5
     call user.iter_impl_generics_only.core.Iterator.some
@@ -4994,7 +4994,7 @@ function iter_impl_generics_only.iter_some_every_find() -> bool {
     store_var _41
     make_closure .<lambda(iter_some_every_find, 1)>, 0
     store_var _44
-    load_type void
+    load_type never
     store_var _45
     load_var _41
     is_type iter_impl_generics_only.core.Flatten<...>
@@ -5060,7 +5060,7 @@ function iter_impl_generics_only.iter_some_every_find() -> bool {
     is_type iter_impl_generics_only.core.Peekable<...>
     pop_jump_if_false L65
     load_type int
-    load_type void
+    load_type never
     load_var2 8 6
     load_var _44
     call user.iter_impl_generics_only.core.Iterator.every
@@ -5069,7 +5069,7 @@ function iter_impl_generics_only.iter_some_every_find() -> bool {
 
   L31:
     load_type int
-    load_type void
+    load_type never
     load_var2 8 6
     load_var _44
     call user.iter_impl_generics_only.core.Iterator.every
@@ -5078,7 +5078,7 @@ function iter_impl_generics_only.iter_some_every_find() -> bool {
 
   L32:
     load_type int
-    load_type void
+    load_type never
     load_var2 8 6
     load_var _44
     call user.iter_impl_generics_only.core.Iterator.every
@@ -5087,7 +5087,7 @@ function iter_impl_generics_only.iter_some_every_find() -> bool {
 
   L33:
     load_type int
-    load_type void
+    load_type never
     load_var2 8 6
     load_var _44
     call user.iter_impl_generics_only.core.Iterator.every
@@ -5096,7 +5096,7 @@ function iter_impl_generics_only.iter_some_every_find() -> bool {
 
   L34:
     load_type int
-    load_type void
+    load_type never
     load_var2 8 6
     load_var _44
     call user.iter_impl_generics_only.core.Iterator.every
@@ -5105,7 +5105,7 @@ function iter_impl_generics_only.iter_some_every_find() -> bool {
 
   L35:
     load_type int
-    load_type void
+    load_type never
     load_var2 8 6
     load_var _44
     call user.iter_impl_generics_only.core.Iterator.every
@@ -5114,7 +5114,7 @@ function iter_impl_generics_only.iter_some_every_find() -> bool {
 
   L36:
     load_type int
-    load_type void
+    load_type never
     load_var2 8 6
     load_var _44
     call user.iter_impl_generics_only.core.Iterator.every
@@ -5123,7 +5123,7 @@ function iter_impl_generics_only.iter_some_every_find() -> bool {
 
   L37:
     load_type int
-    load_type void
+    load_type never
     load_var2 8 6
     load_var _44
     call user.iter_impl_generics_only.core.Iterator.every
@@ -5132,7 +5132,7 @@ function iter_impl_generics_only.iter_some_every_find() -> bool {
 
   L38:
     load_type int
-    load_type void
+    load_type never
     load_var2 8 6
     load_var _44
     call user.iter_impl_generics_only.core.Iterator.every
@@ -5141,7 +5141,7 @@ function iter_impl_generics_only.iter_some_every_find() -> bool {
 
   L39:
     load_type int
-    load_type void
+    load_type never
     load_var2 8 6
     load_var _44
     call user.iter_impl_generics_only.core.Iterator.every
@@ -5150,7 +5150,7 @@ function iter_impl_generics_only.iter_some_every_find() -> bool {
 
   L40:
     load_type int
-    load_type void
+    load_type never
     load_var2 8 6
     load_var _44
     call user.iter_impl_generics_only.core.Iterator.every
@@ -5167,7 +5167,7 @@ function iter_impl_generics_only.iter_some_every_find() -> bool {
     store_var _80
     make_closure .<lambda(iter_some_every_find, 2)>, 0
     store_var _83
-    load_type void
+    load_type never
     store_var _84
     load_var _80
     is_type iter_impl_generics_only.core.Flatten<...>
@@ -5233,7 +5233,7 @@ function iter_impl_generics_only.iter_some_every_find() -> bool {
     is_type iter_impl_generics_only.core.Peekable<...>
     pop_jump_if_false L65
     load_type int
-    load_type void
+    load_type never
     load_var2 12 10
     load_var _83
     call user.iter_impl_generics_only.core.Iterator.find
@@ -5242,7 +5242,7 @@ function iter_impl_generics_only.iter_some_every_find() -> bool {
 
   L52:
     load_type int
-    load_type void
+    load_type never
     load_var2 12 10
     load_var _83
     call user.iter_impl_generics_only.core.Iterator.find
@@ -5251,7 +5251,7 @@ function iter_impl_generics_only.iter_some_every_find() -> bool {
 
   L53:
     load_type int
-    load_type void
+    load_type never
     load_var2 12 10
     load_var _83
     call user.iter_impl_generics_only.core.Iterator.find
@@ -5260,7 +5260,7 @@ function iter_impl_generics_only.iter_some_every_find() -> bool {
 
   L54:
     load_type int
-    load_type void
+    load_type never
     load_var2 12 10
     load_var _83
     call user.iter_impl_generics_only.core.Iterator.find
@@ -5269,7 +5269,7 @@ function iter_impl_generics_only.iter_some_every_find() -> bool {
 
   L55:
     load_type int
-    load_type void
+    load_type never
     load_var2 12 10
     load_var _83
     call user.iter_impl_generics_only.core.Iterator.find
@@ -5278,7 +5278,7 @@ function iter_impl_generics_only.iter_some_every_find() -> bool {
 
   L56:
     load_type int
-    load_type void
+    load_type never
     load_var2 12 10
     load_var _83
     call user.iter_impl_generics_only.core.Iterator.find
@@ -5287,7 +5287,7 @@ function iter_impl_generics_only.iter_some_every_find() -> bool {
 
   L57:
     load_type int
-    load_type void
+    load_type never
     load_var2 12 10
     load_var _83
     call user.iter_impl_generics_only.core.Iterator.find
@@ -5296,7 +5296,7 @@ function iter_impl_generics_only.iter_some_every_find() -> bool {
 
   L58:
     load_type int
-    load_type void
+    load_type never
     load_var2 12 10
     load_var _83
     call user.iter_impl_generics_only.core.Iterator.find
@@ -5305,7 +5305,7 @@ function iter_impl_generics_only.iter_some_every_find() -> bool {
 
   L59:
     load_type int
-    load_type void
+    load_type never
     load_var2 12 10
     load_var _83
     call user.iter_impl_generics_only.core.Iterator.find
@@ -5314,7 +5314,7 @@ function iter_impl_generics_only.iter_some_every_find() -> bool {
 
   L60:
     load_type int
-    load_type void
+    load_type never
     load_var2 12 10
     load_var _83
     call user.iter_impl_generics_only.core.Iterator.find
@@ -5323,7 +5323,7 @@ function iter_impl_generics_only.iter_some_every_find() -> bool {
 
   L61:
     load_type int
-    load_type void
+    load_type never
     load_var2 12 10
     load_var _83
     call user.iter_impl_generics_only.core.Iterator.find
@@ -5419,7 +5419,7 @@ function iter_impl_generics_only.iter_step_by() -> int[] {
     is_type iter_impl_generics_only.core.Peekable<...>
     pop_jump_if_false L42
     load_type int
-    load_type void
+    load_type never
     load_var _2
     load_const 2
     call user.iter_impl_generics_only.core.Iterator.step_by
@@ -5428,7 +5428,7 @@ function iter_impl_generics_only.iter_step_by() -> int[] {
 
   L10:
     load_type int
-    load_type void
+    load_type never
     load_var _2
     load_const 2
     call user.iter_impl_generics_only.core.Iterator.step_by
@@ -5437,7 +5437,7 @@ function iter_impl_generics_only.iter_step_by() -> int[] {
 
   L11:
     load_type int
-    load_type void
+    load_type never
     load_var _2
     load_const 2
     call user.iter_impl_generics_only.core.Iterator.step_by
@@ -5446,7 +5446,7 @@ function iter_impl_generics_only.iter_step_by() -> int[] {
 
   L12:
     load_type int
-    load_type void
+    load_type never
     load_var _2
     load_const 2
     call user.iter_impl_generics_only.core.Iterator.step_by
@@ -5455,7 +5455,7 @@ function iter_impl_generics_only.iter_step_by() -> int[] {
 
   L13:
     load_type int
-    load_type void
+    load_type never
     load_var _2
     load_const 2
     call user.iter_impl_generics_only.core.Iterator.step_by
@@ -5464,7 +5464,7 @@ function iter_impl_generics_only.iter_step_by() -> int[] {
 
   L14:
     load_type int
-    load_type void
+    load_type never
     load_var _2
     load_const 2
     call user.iter_impl_generics_only.core.Iterator.step_by
@@ -5473,7 +5473,7 @@ function iter_impl_generics_only.iter_step_by() -> int[] {
 
   L15:
     load_type int
-    load_type void
+    load_type never
     load_var _2
     load_const 2
     call user.iter_impl_generics_only.core.Iterator.step_by
@@ -5482,7 +5482,7 @@ function iter_impl_generics_only.iter_step_by() -> int[] {
 
   L16:
     load_type int
-    load_type void
+    load_type never
     load_var _2
     load_const 2
     call user.iter_impl_generics_only.core.Iterator.step_by
@@ -5491,7 +5491,7 @@ function iter_impl_generics_only.iter_step_by() -> int[] {
 
   L17:
     load_type int
-    load_type void
+    load_type never
     load_var _2
     load_const 2
     call user.iter_impl_generics_only.core.Iterator.step_by
@@ -5500,7 +5500,7 @@ function iter_impl_generics_only.iter_step_by() -> int[] {
 
   L18:
     load_type int
-    load_type void
+    load_type never
     load_var _2
     load_const 2
     call user.iter_impl_generics_only.core.Iterator.step_by
@@ -5509,7 +5509,7 @@ function iter_impl_generics_only.iter_step_by() -> int[] {
 
   L19:
     load_type int
-    load_type void
+    load_type never
     load_var _2
     load_const 2
     call user.iter_impl_generics_only.core.Iterator.step_by
@@ -5580,77 +5580,77 @@ function iter_impl_generics_only.iter_step_by() -> int[] {
     is_type iter_impl_generics_only.core.Peekable<...>
     pop_jump_if_false L42
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L31:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L32:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L33:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L34:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L35:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L36:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L37:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L38:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L39:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
     jump L41
 
   L40:
     load_type int
-    load_type void
+    load_type never
     load_var _1
     call user.iter_impl_generics_only.core.Iterator.collect
 

@@ -8,7 +8,7 @@ class user.Education {
   year: int
 }
 function user.Education.to_json(self: user.Education) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "school": self.school.to_json(), "degree": self.degree.to_json(), "year": self.year.to_json() } : map<string, baml.json.json>
+  map { "school": baml.json.to_json(self.school), "degree": baml.json.to_json(self.degree), "year": baml.json.to_json(self.year) } : map<string, baml.json.json>
 }
 function user.Education.from_json(j: baml.json.json) -> user.Education throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Education { school: baml.json.from_json<string>(baml.json.field(j, "school")), degree: baml.json.from_json<Degree>(baml.json.field(j, "degree")), year: baml.json.from_json<int>(baml.json.field(j, "year")) } : user.Education
@@ -28,7 +28,7 @@ class user.Resume {
   aliases: user.EducationList
 }
 function user.Resume.to_json(self: user.Resume) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "name": self.name.to_json(), "education": self.education.to_json(), "highest_degree": self.highest_degree.to_json(), "aliases": self.aliases.to_json() } : map<string, baml.json.json>
+  map { "name": baml.json.to_json(self.name), "education": baml.json.to_json(self.education), "highest_degree": baml.json.to_json(self.highest_degree), "aliases": baml.json.to_json(self.aliases) } : map<string, baml.json.json>
 }
 function user.Resume.from_json(j: baml.json.json) -> user.Resume throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Resume { name: baml.json.from_json<string>(baml.json.field(j, "name")), education: baml.json.from_json<Education[]>(baml.json.field(j, "education")), highest_degree: baml.json.from_json<Degree>(baml.json.field(j, "highest_degree")), aliases: baml.json.from_json<EducationList>(baml.json.field(j, "aliases")) } : user.Resume

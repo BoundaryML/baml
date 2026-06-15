@@ -101,14 +101,14 @@ function testing.RunReport.from_json(j: baml.json.json) -> testing.RunReport {
 }
 
 function testing.RunReport.to_json(self: testing.RunReport) -> baml.json.json {
+    load_type "pass" | "fail" | "error"
     load_var self
     load_field .outcome
-    load_const "to_json"
-    load_map_element
-    call_indirect
+    call baml.json.to_json
+    load_type int
     load_var self
     load_field .duration_ms
-    call baml.Int.to_json
+    call baml.json.to_json
     load_const "outcome"
     load_const "duration_ms"
     alloc_map 2
@@ -135,12 +135,14 @@ function testing.SerializedTest.from_json(j: baml.json.json) -> testing.Serializ
 }
 
 function testing.SerializedTest.to_json(self: testing.SerializedTest) -> baml.json.json {
+    load_type string
     load_var self
     load_field .type
-    call baml.String.to_json
+    call baml.json.to_json
+    load_type string
     load_var self
     load_field .name
-    call baml.String.to_json
+    call baml.json.to_json
     load_const "type"
     load_const "name"
     alloc_map 2
@@ -174,16 +176,18 @@ function testing.SerializedTestSet.from_json(j: baml.json.json) -> testing.Seria
 }
 
 function testing.SerializedTestSet.to_json(self: testing.SerializedTestSet) -> baml.json.json {
+    load_type string
     load_var self
     load_field .name
-    call baml.String.to_json
-    load_type testing.SerializedTest | testing.SerializedTestSet
+    call baml.json.to_json
+    load_type testing.SerializedTest | testing.SerializedTestSet[]
     load_var self
     load_field .items
-    call baml.Array.to_json
+    call baml.json.to_json
+    load_type int
     load_var self
     load_field .loadingTimeMs
-    call baml.Int.to_json
+    call baml.json.to_json
     load_const "name"
     load_const "items"
     load_const "loadingTimeMs"
@@ -259,7 +263,7 @@ function testing.TestCollector.find_testset(self: testing.TestCollector, name: s
     is_type baml.iter.Peekable<...>
     pop_jump_if_false L22
     load_type testing.TestSetRegistration
-    load_type void
+    load_type never
     load_var _4
     call baml.iter.Peekable.Iterator.next
     store_var _6
@@ -281,8 +285,8 @@ function testing.TestCollector.find_testset(self: testing.TestCollector, name: s
 
   L12:
     load_type testing.TestSetRegistration
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _4
     call baml.iter.Filter.Iterator.next
     store_var _6
@@ -304,8 +308,8 @@ function testing.TestCollector.find_testset(self: testing.TestCollector, name: s
 
   L15:
     load_type testing.TestSetRegistration
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _4
     call baml.iter.Chain.Iterator.next
     store_var _6
@@ -313,7 +317,7 @@ function testing.TestCollector.find_testset(self: testing.TestCollector, name: s
 
   L16:
     load_type testing.TestSetRegistration
-    load_type void
+    load_type never
     load_var _4
     call baml.iter.StepBy.Iterator.next
     store_var _6
@@ -488,7 +492,7 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
     is_type baml.iter.Peekable<...>
     pop_jump_if_false L30
     load_type testing.TestRegistration
-    load_type void
+    load_type never
     load_var _14
     call baml.iter.Peekable.Iterator.next
     store_var _16
@@ -510,8 +514,8 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
 
   L15:
     load_type testing.TestRegistration
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _14
     call baml.iter.Filter.Iterator.next
     store_var _16
@@ -533,8 +537,8 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
 
   L18:
     load_type testing.TestRegistration
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _14
     call baml.iter.Chain.Iterator.next
     store_var _16
@@ -542,7 +546,7 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
 
   L19:
     load_type testing.TestRegistration
-    load_type void
+    load_type never
     load_var _14
     call baml.iter.StepBy.Iterator.next
     store_var _16
@@ -730,7 +734,7 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
     is_type baml.iter.Peekable<...>
     pop_jump_if_false L30
     load_type testing.TestSetRegistration
-    load_type void
+    load_type never
     load_var _14
     call baml.iter.Peekable.Iterator.next
     store_var _16
@@ -752,8 +756,8 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
 
   L15:
     load_type testing.TestSetRegistration
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _14
     call baml.iter.Filter.Iterator.next
     store_var _16
@@ -775,8 +779,8 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
 
   L18:
     load_type testing.TestSetRegistration
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _14
     call baml.iter.Chain.Iterator.next
     store_var _16
@@ -784,7 +788,7 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
 
   L19:
     load_type testing.TestSetRegistration
-    load_type void
+    load_type never
     load_var _14
     call baml.iter.StepBy.Iterator.next
     store_var _16
@@ -877,17 +881,18 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
 }
 
 function testing.TestCollector.to_json(self: testing.TestCollector) -> baml.json.json {
+    load_type string
     load_var self
     load_field .prefix
-    call baml.String.to_json
-    load_type testing.TestRegistration
+    call baml.json.to_json
+    load_type testing.TestRegistration[]
     load_var self
     load_field .tests
-    call baml.Array.to_json
-    load_type testing.TestSetRegistration
+    call baml.json.to_json
+    load_type testing.TestSetRegistration[]
     load_var self
     load_field .testsets
-    call baml.Array.to_json
+    call baml.json.to_json
     load_const "prefix"
     load_const "tests"
     load_const "testsets"
@@ -998,7 +1003,7 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
     is_type baml.iter.Peekable<...>
     pop_jump_if_false L45
     load_type testing.TestSetRegistration
-    load_type void
+    load_type never
     load_var _4
     call baml.iter.Peekable.Iterator.next
     store_var _6
@@ -1020,8 +1025,8 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
 
   L12:
     load_type testing.TestSetRegistration
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _4
     call baml.iter.Filter.Iterator.next
     store_var _6
@@ -1043,8 +1048,8 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
 
   L15:
     load_type testing.TestSetRegistration
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _4
     call baml.iter.Chain.Iterator.next
     store_var _6
@@ -1052,7 +1057,7 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
 
   L16:
     load_type testing.TestSetRegistration
-    load_type void
+    load_type never
     load_var _4
     call baml.iter.StepBy.Iterator.next
     store_var _6
@@ -1183,7 +1188,7 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
     is_type baml.iter.Peekable<...>
     pop_jump_if_false L45
     load_type string
-    load_type void
+    load_type never
     load_var _61
     call baml.iter.Peekable.Iterator.next
     store_var _63
@@ -1205,8 +1210,8 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
 
   L34:
     load_type string
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _61
     call baml.iter.Filter.Iterator.next
     store_var _63
@@ -1228,8 +1233,8 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
 
   L37:
     load_type string
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _61
     call baml.iter.Chain.Iterator.next
     store_var _63
@@ -1237,7 +1242,7 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
 
   L38:
     load_type string
-    load_type void
+    load_type never
     load_var _61
     call baml.iter.StepBy.Iterator.next
     store_var _63
@@ -1394,7 +1399,7 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
     is_type baml.iter.Peekable<...>
     pop_jump_if_false L45
     load_type testing.TestRegistration
-    load_type void
+    load_type never
     load_var _4
     call baml.iter.Peekable.Iterator.next
     store_var _6
@@ -1416,8 +1421,8 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
 
   L12:
     load_type testing.TestRegistration
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _4
     call baml.iter.Filter.Iterator.next
     store_var _6
@@ -1439,8 +1444,8 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
 
   L15:
     load_type testing.TestRegistration
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _4
     call baml.iter.Chain.Iterator.next
     store_var _6
@@ -1448,7 +1453,7 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
 
   L16:
     load_type testing.TestRegistration
-    load_type void
+    load_type never
     load_var _4
     call baml.iter.StepBy.Iterator.next
     store_var _6
@@ -1558,7 +1563,7 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
     is_type baml.iter.Peekable<...>
     pop_jump_if_false L45
     load_type string
-    load_type void
+    load_type never
     load_var _44
     call baml.iter.Peekable.Iterator.next
     store_var _46
@@ -1580,8 +1585,8 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
 
   L34:
     load_type string
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _44
     call baml.iter.Filter.Iterator.next
     store_var _46
@@ -1603,8 +1608,8 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
 
   L37:
     load_type string
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _44
     call baml.iter.Chain.Iterator.next
     store_var _46
@@ -1612,7 +1617,7 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
 
   L38:
     load_type string
-    load_type void
+    load_type never
     load_var _44
     call baml.iter.StepBy.Iterator.next
     store_var _46
@@ -1737,7 +1742,7 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
     is_type baml.iter.Peekable<...>
     pop_jump_if_false L46
     load_type testing.TestRegistration
-    load_type void
+    load_type never
     load_var _4
     call baml.iter.Peekable.Iterator.next
     store_var _6
@@ -1759,8 +1764,8 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
 
   L12:
     load_type testing.TestRegistration
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _4
     call baml.iter.Filter.Iterator.next
     store_var _6
@@ -1782,8 +1787,8 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
 
   L15:
     load_type testing.TestRegistration
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _4
     call baml.iter.Chain.Iterator.next
     store_var _6
@@ -1791,7 +1796,7 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
 
   L16:
     load_type testing.TestRegistration
-    load_type void
+    load_type never
     load_var _4
     call baml.iter.StepBy.Iterator.next
     store_var _6
@@ -1895,7 +1900,7 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
     is_type baml.iter.Peekable<...>
     pop_jump_if_false L46
     load_type testing.TestSetRegistration
-    load_type void
+    load_type never
     load_var _40
     call baml.iter.Peekable.Iterator.next
     store_var _42
@@ -1917,8 +1922,8 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
 
   L34:
     load_type testing.TestSetRegistration
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _40
     call baml.iter.Filter.Iterator.next
     store_var _42
@@ -1940,8 +1945,8 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
 
   L37:
     load_type testing.TestSetRegistration
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _40
     call baml.iter.Chain.Iterator.next
     store_var _42
@@ -1949,7 +1954,7 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
 
   L38:
     load_type testing.TestSetRegistration
-    load_type void
+    load_type never
     load_var _40
     call baml.iter.StepBy.Iterator.next
     store_var _42
@@ -2026,17 +2031,18 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
 }
 
 function testing.TestRegistry.to_json(self: testing.TestRegistry) -> baml.json.json {
+    load_type testing.TestCollector
     load_var self
     load_field .collector
-    call testing.TestCollector.to_json
-    load_type string
-    load_type testing.TestRegistry
+    call baml.json.to_json
+    load_type map<string, testing.TestRegistry>
     load_var self
     load_field .expansions
-    call baml.Map.to_json
+    call baml.json.to_json
+    load_type int
     load_var self
     load_field .loading_time_ms
-    call baml.Int.to_json
+    call baml.json.to_json
     load_const "collector"
     load_const "expansions"
     load_const "loading_time_ms"
@@ -2064,15 +2070,14 @@ function testing.TestReport.from_json(j: baml.json.json) -> testing.TestReport {
 }
 
 function testing.TestReport.to_json(self: testing.TestReport) -> baml.json.json {
+    load_type "pass" | "fail" | "error"
     load_var self
     load_field .outcome
-    load_const "to_json"
-    load_map_element
-    call_indirect
-    load_type testing.RunReport
+    call baml.json.to_json
+    load_type testing.RunReport[]
     load_var self
     load_field .runs
-    call baml.Array.to_json
+    call baml.json.to_json
     load_const "outcome"
     load_const "runs"
     alloc_map 2
@@ -2154,24 +2159,26 @@ function testing.TestSetReport.from_json(j: baml.json.json) -> testing.TestSetRe
 }
 
 function testing.TestSetReport.to_json(self: testing.TestSetReport) -> baml.json.json {
+    load_type "pass" | "fail" | "error"
     load_var self
     load_field .outcome
-    load_const "to_json"
-    load_map_element
-    call_indirect
+    call baml.json.to_json
+    load_type int
     load_var self
     load_field .passed
-    call baml.Int.to_json
+    call baml.json.to_json
+    load_type int
     load_var self
     load_field .failed
-    call baml.Int.to_json
+    call baml.json.to_json
+    load_type int
     load_var self
     load_field .total
-    call baml.Int.to_json
-    load_type testing.TestReport | testing.TestSetReport
+    call baml.json.to_json
+    load_type testing.TestReport | testing.TestSetReport[]
     load_var self
     load_field .results
-    call baml.Array.to_json
+    call baml.json.to_json
     load_const "outcome"
     load_const "passed"
     load_const "failed"
@@ -2249,12 +2256,14 @@ function user.ErrorInfo.from_json(j: baml.json.json) -> ErrorInfo {
 }
 
 function user.ErrorInfo.to_json(self: ErrorInfo) -> baml.json.json {
+    load_type int
     load_var self
     load_field .code
-    call baml.Int.to_json
+    call baml.json.to_json
+    load_type string
     load_var self
     load_field .message
-    call baml.String.to_json
+    call baml.json.to_json
     load_const "code"
     load_const "message"
     alloc_map 2
@@ -2288,17 +2297,18 @@ function user.Report.from_json(j: baml.json.json) -> Report {
 }
 
 function user.Report.to_json(self: Report) -> baml.json.json {
-    load_var self
-    load_field .score
-    call baml.Int.to_json
-    load_var self
-    load_field .label
-    call baml.String.to_json
-    load_type string
     load_type int
     load_var self
+    load_field .score
+    call baml.json.to_json
+    load_type string
+    load_var self
+    load_field .label
+    call baml.json.to_json
+    load_type map<string, int>
+    load_var self
     load_field .breakdown
-    call baml.Map.to_json
+    call baml.json.to_json
     load_const "score"
     load_const "label"
     load_const "breakdown"
@@ -2355,17 +2365,18 @@ function user.User.promote(self: User, bonus: int) -> Report {
 }
 
 function user.User.to_json(self: User) -> baml.json.json {
+    load_type string
     load_var self
     load_field .name
-    call baml.String.to_json
+    call baml.json.to_json
+    load_type int
     load_var self
     load_field .age
-    call baml.Int.to_json
+    call baml.json.to_json
+    load_type Role
     load_var self
     load_field .role
-    load_const "to_json"
-    load_map_element
-    call_indirect
+    call baml.json.to_json
     load_const "name"
     load_const "age"
     load_const "role"

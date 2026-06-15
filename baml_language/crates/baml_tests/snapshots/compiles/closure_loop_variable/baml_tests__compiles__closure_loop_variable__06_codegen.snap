@@ -82,7 +82,7 @@ function user.sum_array(arr: int[]) -> int {
     is_type baml.iter.Peekable<...>
     pop_jump_if_false L46
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call baml.iter.Peekable.Iterator.next
     store_var _6
@@ -104,8 +104,8 @@ function user.sum_array(arr: int[]) -> int {
 
   L13:
     load_type int
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _4
     call baml.iter.Filter.Iterator.next
     store_var _6
@@ -127,8 +127,8 @@ function user.sum_array(arr: int[]) -> int {
 
   L16:
     load_type int
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _4
     call baml.iter.Chain.Iterator.next
     store_var _6
@@ -136,7 +136,7 @@ function user.sum_array(arr: int[]) -> int {
 
   L17:
     load_type int
-    load_type void
+    load_type never
     load_var _4
     call baml.iter.StepBy.Iterator.next
     store_var _6
@@ -245,7 +245,7 @@ function user.sum_array(arr: int[]) -> int {
     is_type baml.iter.Peekable<...>
     pop_jump_if_false L46
     load_type () -> void throws never
-    load_type void
+    load_type never
     load_var _40
     call baml.iter.Peekable.Iterator.next
     store_var _42
@@ -267,8 +267,8 @@ function user.sum_array(arr: int[]) -> int {
 
   L36:
     load_type () -> void throws never
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _40
     call baml.iter.Filter.Iterator.next
     store_var _42
@@ -290,8 +290,8 @@ function user.sum_array(arr: int[]) -> int {
 
   L39:
     load_type () -> void throws never
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _40
     call baml.iter.Chain.Iterator.next
     store_var _42
@@ -299,7 +299,7 @@ function user.sum_array(arr: int[]) -> int {
 
   L40:
     load_type () -> void throws never
-    load_type void
+    load_type never
     load_var _40
     call baml.iter.StepBy.Iterator.next
     store_var _42

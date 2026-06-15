@@ -46,5 +46,5 @@ function user.from_json(j: baml.json.json) -> user.BuildError  [expr] {
   user.BuildError { reason: baml.json.from_json(baml.json.field(j, "reason")) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "reason": self.reason.to_json() }
+  map { "reason": baml.json.to_json(self.reason) }
 }

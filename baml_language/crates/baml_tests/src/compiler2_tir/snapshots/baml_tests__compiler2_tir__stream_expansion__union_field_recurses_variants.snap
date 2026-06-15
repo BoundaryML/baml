@@ -6,7 +6,7 @@ class user.Inner {
   value: string
 }
 function user.Inner.to_json(self: user.Inner) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "value": self.value.to_json() } : map<string, baml.json.json>
+  map { "value": baml.json.to_json(self.value) } : map<string, baml.json.json>
 }
 function user.Inner.from_json(j: baml.json.json) -> user.Inner throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Inner { value: baml.json.from_json<string>(baml.json.field(j, "value")) } : user.Inner
@@ -17,7 +17,7 @@ class user.WithUnions {
   mixed: int | user.Inner
 }
 function user.WithUnions.to_json(self: user.WithUnions) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "simple": self.simple.to_json(), "with_class": self.with_class.to_json(), "mixed": self.mixed.to_json() } : map<string, baml.json.json>
+  map { "simple": baml.json.to_json(self.simple), "with_class": baml.json.to_json(self.with_class), "mixed": baml.json.to_json(self.mixed) } : map<string, baml.json.json>
 }
 function user.WithUnions.from_json(j: baml.json.json) -> user.WithUnions throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   WithUnions { simple: baml.json.from_json<int | string>(baml.json.field(j, "simple")), with_class: baml.json.from_json<Inner | string>(baml.json.field(j, "with_class")), mixed: baml.json.from_json<int | Inner>(baml.json.field(j, "mixed")) } : user.WithUnions

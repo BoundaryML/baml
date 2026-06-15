@@ -6,7 +6,7 @@ class user.WithEnum {
   status: user.Status
 }
 function user.WithEnum.to_json(self: user.WithEnum) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "status": self.status.to_json() } : map<string, baml.json.json>
+  map { "status": baml.json.to_json(self.status) } : map<string, baml.json.json>
 }
 function user.WithEnum.from_json(j: baml.json.json) -> user.WithEnum throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   WithEnum { status: baml.json.from_json<Status>(baml.json.field(j, "status")) } : user.WithEnum

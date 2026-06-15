@@ -1,0 +1,202 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat >&2 <<'USAGE'
+Usage: scripts/package-agent-skills --source DIR --version VERSION --out-dir DIR
+USAGE
+}
+
+source_dir=""
+version=""
+out_dir=""
+tar_list=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --source)
+      if [[ -z "${2:-}" ]]; then
+        usage
+        exit 2
+      fi
+      source_dir="${2:-}"
+      shift 2
+      ;;
+    --version)
+      if [[ -z "${2:-}" ]]; then
+        usage
+        exit 2
+      fi
+      version="${2:-}"
+      shift 2
+      ;;
+    --out-dir)
+      if [[ -z "${2:-}" ]]; then
+        usage
+        exit 2
+      fi
+      out_dir="${2:-}"
+      shift 2
+      ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    *)
+      usage
+      exit 2
+      ;;
+  esac
+done
+
+if [[ -z "$source_dir" || -z "$version" || -z "$out_dir" ]]; then
+  usage
+  exit 2
+fi
+
+if [[ ! -d "$source_dir" ]]; then
+  echo "source directory does not exist: $source_dir" >&2
+  exit 1
+fi
+
+mkdir -p "$out_dir"
+staging="$(mktemp -d "${TMPDIR:-/tmp}/baml-agent-skills.XXXXXX")"
+cleanup() {
+  rm -rf "$staging"
+  if [[ -n "${tar_list:-}" ]]; then
+    rm -f "$tar_list"
+  fi
+}
+trap cleanup EXIT
+
+rewrite_skill() {
+  local input="$1"
+  local output="$2"
+  local name="$3"
+  local tmp
+  tmp="$(mktemp "${TMPDIR:-/tmp}/baml-agent-skill.XXXXXX")"
+  awk -v name="$name" '
+    BEGIN {
+      in_frontmatter = 0
+      saw_open = 0
+      replaced = 0
+    }
+    NR == 1 && $0 == "---" {
+      print
+      in_frontmatter = 1
+      saw_open = 1
+      next
+    }
+    saw_open && in_frontmatter && $0 == "---" {
+      if (!replaced) {
+        exit 42
+      }
+      print
+      in_frontmatter = 0
+      next
+    }
+    saw_open && in_frontmatter && $0 ~ /^[[:space:]]*name:[[:space:]]*/ {
+      print "name: " name
+      replaced = 1
+      next
+    }
+    {
+      print
+    }
+    END {
+      if (!saw_open || !replaced) {
+        exit 42
+      }
+    }
+  ' "$input" > "$tmp" || {
+    rm -f "$tmp"
+    echo "failed to rewrite frontmatter name in $input" >&2
+    exit 1
+  }
+  mv "$tmp" "$output"
+}
+
+stage_skill() {
+  local input="$1"
+  local name="$2"
+  local dest_dir="$staging/skills/$name"
+  local dest="$dest_dir/SKILL.md"
+
+  if [[ -e "$dest" ]]; then
+    echo "duplicate skill after normalization: $name" >&2
+    exit 1
+  fi
+
+  mkdir -p "$dest_dir"
+  rewrite_skill "$input" "$dest" "$name"
+}
+
+count=0
+
+if [[ -d "$source_dir/skills" ]]; then
+  while IFS= read -r -d '' skill_file; do
+    skill_dir="$(basename "$(dirname "$skill_file")")"
+    stage_skill "$skill_file" "$skill_dir"
+    count=$((count + 1))
+  done < <(find "$source_dir/skills" -mindepth 2 -maxdepth 2 -type f -path '*/baml-*/SKILL.md' -print0 | sort -z)
+fi
+
+if [[ -d "$source_dir/plugins/baml/skills" ]]; then
+  while IFS= read -r -d '' skill_file; do
+    legacy_name="$(basename "$(dirname "$skill_file")")"
+    stage_skill "$skill_file" "baml-$legacy_name"
+    count=$((count + 1))
+  done < <(find "$source_dir/plugins/baml/skills" -mindepth 2 -maxdepth 2 -type f -name 'SKILL.md' -print0 | sort -z)
+fi
+
+if [[ "$count" -eq 0 ]]; then
+  echo "no BAML agent skills found in $source_dir" >&2
+  exit 1
+fi
+
+archive_name="baml-agent-skills-$version.tar.gz"
+archive="$out_dir/$archive_name"
+
+find "$staging" -type d -exec chmod 755 {} +
+find "$staging" -type f -exec chmod 644 {} +
+find "$staging" -exec touch -t 197001010000.00 {} +
+export COPYFILE_DISABLE=1
+export GZIP=-n
+
+tar_help="$(tar --help 2>/dev/null || true)"
+if grep -q -- '--sort' <<< "$tar_help"; then
+  tar_flags=(
+    --sort=name
+    --mtime=1970-01-01
+    --numeric-owner
+    --owner=0
+    --group=0
+  )
+  if grep -q -- '--no-acls' <<< "$tar_help"; then
+    tar_flags+=(--no-acls)
+  fi
+  if grep -q -- '--no-xattrs' <<< "$tar_help"; then
+    tar_flags+=(--no-xattrs)
+  fi
+  tar -C "$staging" "${tar_flags[@]}" -czf "$archive" skills
+else
+  tar_list="$(mktemp "${TMPDIR:-/tmp}/baml-agent-skills-list.XXXXXX")"
+  (
+    cd "$staging"
+    find skills -print | LC_ALL=C sort > "$tar_list"
+    tar --no-recursion \
+      --uid 0 \
+      --gid 0 \
+      --uname root \
+      --gname root \
+      --format ustar \
+      -T "$tar_list" \
+      -czf "$archive"
+  )
+fi
+
+if command -v sha256sum >/dev/null 2>&1; then
+  (cd "$out_dir" && sha256sum "$archive_name" > "$archive_name.sha256")
+else
+  (cd "$out_dir" && shasum -a 256 "$archive_name" > "$archive_name.sha256")
+fi

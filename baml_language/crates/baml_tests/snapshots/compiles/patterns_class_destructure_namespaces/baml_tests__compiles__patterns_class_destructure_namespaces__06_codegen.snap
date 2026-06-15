@@ -179,7 +179,7 @@ function user.TypePatternQualifiedMatch() -> int {
     return
 }
 
-function user.llm.openai.Box.from_json(j: baml.json.json) -> llm.openai.Box<unknown> {
+function user.llm.openai.Box.from_json(j: baml.json.json) -> llm.openai.Box<T> {
     load_var j
     load_const "value"
     call baml.json.field
@@ -192,7 +192,7 @@ function user.llm.openai.Box.from_json(j: baml.json.json) -> llm.openai.Box<unkn
     return
 }
 
-function user.llm.openai.Box.to_json(self: llm.openai.Box<unknown>) -> baml.json.json {
+function user.llm.openai.Box.to_json(self: llm.openai.Box<T>) -> baml.json.json {
     load_type #0
     load_var self
     load_field .value
@@ -208,7 +208,7 @@ function user.llm.openai.DestructureBareInNamespace(response: llm.openai.Respons
     return
 }
 
-function user.llm.openai.Outer.from_json(j: baml.json.json) -> llm.openai.Outer<unknown> {
+function user.llm.openai.Outer.from_json(j: baml.json.json) -> llm.openai.Outer<T> {
     load_var j
     load_const "inner"
     call baml.json.field
@@ -221,11 +221,11 @@ function user.llm.openai.Outer.from_json(j: baml.json.json) -> llm.openai.Outer<
     return
 }
 
-function user.llm.openai.Outer.to_json(self: llm.openai.Outer<unknown>) -> baml.json.json {
-    load_type #0
+function user.llm.openai.Outer.to_json(self: llm.openai.Outer<T>) -> baml.json.json {
+    load_type llm.openai.Box<#0>
     load_var self
     load_field .inner
-    call user.llm.openai.Box.to_json
+    call baml.json.to_json
     load_const "inner"
     alloc_map 1
     return
@@ -251,12 +251,14 @@ function user.llm.openai.Response.from_json(j: baml.json.json) -> llm.openai.Res
 }
 
 function user.llm.openai.Response.to_json(self: llm.openai.Response) -> baml.json.json {
+    load_type string
     load_var self
     load_field .text
-    call baml.String.to_json
+    call baml.json.to_json
+    load_type int
     load_var self
     load_field .score
-    call baml.Int.to_json
+    call baml.json.to_json
     load_const "text"
     load_const "score"
     alloc_map 2

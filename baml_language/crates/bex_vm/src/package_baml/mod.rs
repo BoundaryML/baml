@@ -24,6 +24,7 @@ pub(crate) mod bigint;
 mod csv;
 mod float;
 mod future;
+mod id;
 mod int;
 pub mod json;
 mod map;
@@ -81,7 +82,7 @@ pub enum NativeCallResult {
     YieldToCall {
         callee: HeapPtr,
         args: Vec<Value>,
-        type_args: Vec<baml_type::Ty>,
+        type_args: Vec<baml_type::RuntimeTy>,
         continuation: Box<dyn Continuation>,
     },
 }
@@ -321,7 +322,6 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                 debug_locals: function.debug_locals,
                 span: function.span,
                 return_type: function.return_type,
-                stream_return_type: function.stream_return_type,
                 param_names: function.param_names,
                 param_types: function.param_types,
                 param_has_default: function.param_has_default,
@@ -331,6 +331,7 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                 throws_type: function.throws_type,
                 origin: function.origin,
                 body_meta: function.body_meta,
+                function_id: 0, // synthetic; not in the profiling function table
             }))
         }
         other => other,

@@ -2164,12 +2164,22 @@ mod tests {
                 .as_ref()
                 .is_some_and(|r| r.receiver_type.is_mut());
 
-            // Build the expected full signature to avoid false matches when
-            // multiple classes have a method with the same name but different
-            // VmUsage (e.g. uint8array.to_string vs errors.StackTrace.to_string).
+            // Build the expected full signature — params AND return type —
+            // to avoid false matches when multiple classes have a method
+            // with the same name but different VmUsage (e.g.
+            // uint8array.to_string vs errors.StackTrace.to_string). The
+            // return type matters for zero-param methods, where the params
+            // alone cannot disambiguate (e.g. spawn.CancelToken.new(vm,) vs
+            // baml.id.new()).
             let params = clean_param_list(b);
-            let has_mut_vm = output.contains(&format!("fn {name}(vm: &mut BexVm, {params})"));
-            let has_ref_vm = output.contains(&format!("fn {name}(vm: &BexVm, {params})"));
+            let ret = if b.may_yield {
+                "NativeCallResult".to_string()
+            } else {
+                clean_return_type(b)
+            };
+            let has_mut_vm =
+                output.contains(&format!("fn {name}(vm: &mut BexVm, {params}) -> {ret};"));
+            let has_ref_vm = output.contains(&format!("fn {name}(vm: &BexVm, {params}) -> {ret};"));
 
             if has_mut_receiver && b.may_yield {
                 assert!(

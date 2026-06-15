@@ -7,7 +7,7 @@ class user.Address {
   zip: string | null
 }
 function user.Address.to_json(self: user.Address) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "street": self.street.to_json(), "zip": self.zip?.to_json() } : map<string, baml.json.json | null>
+  map { "street": baml.json.to_json(self.street), "zip": baml.json.to_json(self.zip) } : map<string, baml.json.json>
 }
 function user.Address.from_json(j: baml.json.json) -> user.Address throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Address { street: baml.json.from_json<string>(baml.json.field(j, "street")), zip: baml.json.from_json<string?>(baml.json.field(j, "zip")) } : user.Address
@@ -19,7 +19,7 @@ class user.Profile {
   settings: map<string, string> | null
 }
 function user.Profile.to_json(self: user.Profile) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "name": self.name.to_json(), "address": self.address?.to_json(), "scores": self.scores?.to_json(), "settings": self.settings?.to_json() } : map<string, baml.json.json | null>
+  map { "name": baml.json.to_json(self.name), "address": baml.json.to_json(self.address), "scores": baml.json.to_json(self.scores), "settings": baml.json.to_json(self.settings) } : map<string, baml.json.json>
 }
 function user.Profile.from_json(j: baml.json.json) -> user.Profile throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Profile { name: baml.json.from_json<string>(baml.json.field(j, "name")), address: baml.json.from_json<Address?>(baml.json.field(j, "address")), scores: baml.json.from_json<int[]?>(baml.json.field(j, "scores")), settings: baml.json.from_json<map<string, string>?>(baml.json.field(j, "settings")) } : user.Profile
@@ -29,7 +29,7 @@ class user.User {
   profile: user.Profile | null
 }
 function user.User.to_json(self: user.User) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "id": self.id.to_json(), "profile": self.profile?.to_json() } : map<string, baml.json.json | null>
+  map { "id": baml.json.to_json(self.id), "profile": baml.json.to_json(self.profile) } : map<string, baml.json.json>
 }
 function user.User.from_json(j: baml.json.json) -> user.User throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   User { id: baml.json.from_json<int>(baml.json.field(j, "id")), profile: baml.json.from_json<Profile?>(baml.json.field(j, "profile")) } : user.User
@@ -41,7 +41,7 @@ class user.Node {
   labels: map<string, user.Node> | null
 }
 function user.Node.to_json(self: user.Node) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "value": self.value.to_json(), "next": self.next?.to_json(), "children": self.children?.to_json(), "labels": self.labels?.to_json() } : map<string, baml.json.json | null>
+  map { "value": baml.json.to_json(self.value), "next": baml.json.to_json(self.next), "children": baml.json.to_json(self.children), "labels": baml.json.to_json(self.labels) } : map<string, baml.json.json>
 }
 function user.Node.from_json(j: baml.json.json) -> user.Node throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Node { value: baml.json.from_json<int>(baml.json.field(j, "value")), next: baml.json.from_json<Node?>(baml.json.field(j, "next")), children: baml.json.from_json<Node[]?>(baml.json.field(j, "children")), labels: baml.json.from_json<map<string, Node>?>(baml.json.field(j, "labels")) } : user.Node
@@ -62,11 +62,12 @@ function user.OptionalChaining(user: user.User | null, nonNullUser: user.User, n
     user?.profile?.address?.street = "123 Main St" : "123 Main St"
     user?.profile.name = "updated2" : "updated2"
     user?.id Add= 1 : int
-    let a11 = <missing> : unknown
-    return a2 ?? "default" : string
+    let a11 = <missing> : never
+    return a2 ?? "default" : unknown
   }
   !! 1727..1748: did you mean `user?.profile?.name`? `user?.profile.name` does not handle the case when `user?.profile` is null
   !! 2014..2029: did you mean `nonNullUser.id`? `nonNullUser?.id` is unnecessary, because `nonNullUser` cannot be null
+  ?? 2393..2542: unreachable code: 1 statement(s) after diverging statement
 }
 function user.OptionalIndex(node: user.Node | null, items: int[] | null, lookup: map<string, int> | null, nonNullItems: int[]) -> int throws never {
   { : never
@@ -88,13 +89,14 @@ function user.OptionalIndex(node: user.Node | null, items: int[] | null, lookup:
     node?.labels?.["main"].value = 50 : 50
     items?.[0] Add= 10 : int
     lookup?.["total"] Add= 5 : int
-    let b13 = <missing> : unknown
-    return b1 ?? 0 : int
+    let b13 = <missing> : never
+    return b1 ?? 0 : unknown
   }
   !! 3611..3634: did you mean `items?.[0]?.to_string`? `items?.[0].to_string` does not handle the case when `items?.[0]` is null
   !! 3625..3634: type `int` has no member `to_string`
   !! 3611..3636: `unknown | null` is not a function — it cannot be called
   !! 3926..3943: did you mean `nonNullItems[0]`? `nonNullItems?.[0]` is unnecessary, because `nonNullItems` cannot be null
+  ?? 4309..4390: unreachable code: 1 statement(s) after diverging statement
 }
 function user.OptionalCall(callback: (int) -> string | null throws never, nonNullCb: (int) -> string throws never, name: string | null) -> string throws never {
   { : never
@@ -138,17 +140,18 @@ function user.Combined(user: user.User | null, node: user.Node | null, items: in
     let e3 = user?.profile?.name ?? node?.labels?.["name"]?.value.to_string() ?? "fallback" : string
     node?.children?.[0].next?.value = user?.id ?? 0 : int
     node?.value Add= items?.[0] ?? 1 : int
-    let e4 = <missing> : unknown
-    let e5 = node?.children?.[user?.profile?.scores?.[0] ?? 0].value : int | null
-    let e6 = node?.labels?.["first"]?.children?.[0].value : int | null
-    node?.labels?.["counter"].value = items?.[0] ?? 0 + 1 : int
-    node?.labels?.["counter"].value Add= items?.[0] ?? 0 : int
-    node?.children?.[node?.value ?? 0]?.next?.value = node?.value ?? 0 : int
-    return e3 : string
+    let e4 = <missing> : never
+    let e5 = node?.children?.[user?.profile?.scores?.[0] ?? 0].value : unknown
+    let e6 = node?.labels?.["first"]?.children?.[0].value : unknown
+    node?.labels?.["counter"].value = items?.[0] ?? 0 + 1 : unknown
+    node?.labels?.["counter"].value Add= items?.[0] ?? 0 : unknown
+    node?.children?.[node?.value ?? 0]?.next?.value = node?.value ?? 0 : unknown
+    return e3 : unknown
   }
   !! 8142..8151: type `int` has no member `to_string`
   !! 8111..8153: `unknown | null` is not a function — it cannot be called
   !! 8080..8175: did you mean `user?.profile?.name ?? node?.labels?.["name"]?.value.to_string()`? `user?.profile?.name ?? node?.labels?.["name"]?.value.to_string() ?? "fallback"` is unnecessary, because `user?.profile?.name ?? node?.labels?.["name"]?.value.to_string()` cannot be null
+  ?? 8369..8478: unreachable code: 6 statement(s) after diverging statement
 }
 class user.Address$stream {
   street: string | null

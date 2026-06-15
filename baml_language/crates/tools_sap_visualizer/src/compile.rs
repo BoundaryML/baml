@@ -17,13 +17,13 @@ const PARSE_CLASS: &str = "__SapParseTarget";
 /// The synthetic field name within the class.
 const PARSE_FIELD: &str = "value";
 
-/// Self-referential struct that owns the `TypeCtx` and the `baml_type::Ty`
+/// Self-referential struct that owns the `TypeCtx` and the `baml_type::RuntimeTy`
 /// for the parse target, and borrows `TypeRefDb` + `AnnotatedTy` from them.
 #[self_referencing]
 pub struct CompiledSapModel {
     type_ctx: sap_model::TypeCtx,
-    /// The `baml_type::Ty` extracted from the synthetic class field.
-    parse_ty: baml_type::Ty,
+    /// The `baml_type::RuntimeTy` extracted from the synthetic class field.
+    parse_ty: baml_type::RuntimeTy,
     #[borrows(type_ctx)]
     #[covariant]
     pub db: TypeRefDb<'this, TypeName>,
@@ -80,7 +80,7 @@ pub fn compile_baml_to_sap(baml_source: &str, type_expr: &str) -> Result<Compile
     // This mirrors `BexEngine::extract_class_definitions` / `extract_enum_definitions`.
     let mut class_defs: IndexMap<TypeName, sys_types::ClassDefinition> = IndexMap::new();
     let mut enum_defs: IndexMap<TypeName, sys_types::EnumDefinition> = IndexMap::new();
-    let mut parse_field_ty: Option<baml_type::Ty> = None;
+    let mut parse_field_ty: Option<baml_type::RuntimeTy> = None;
 
     for obj in &program.objects {
         match obj {
@@ -162,7 +162,7 @@ pub fn compile_baml_to_sap(baml_source: &str, type_expr: &str) -> Result<Compile
                 .build_db()
                 .map_err(|e| format!("SAP type conversion error: {e}"))
         },
-        ty_builder: |type_ctx: &sap_model::TypeCtx, parse_ty: &baml_type::Ty| {
+        ty_builder: |type_ctx: &sap_model::TypeCtx, parse_ty: &baml_type::RuntimeTy| {
             type_ctx
                 .convert_ty(parse_ty)
                 .map_err(|e| format!("Failed to convert parse type: {e}"))

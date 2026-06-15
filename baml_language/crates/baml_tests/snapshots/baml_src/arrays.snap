@@ -776,7 +776,7 @@ function arrays.ComparableFlaky$stream.baml.Comparable.compare(self: arrays.Comp
 
   L0:
     load_const "cannot compare null"
-    init_instance user.arrays.ComparableCmpError .message
+    init_instance user.arrays.ComparableCompareError .message
     throw
 
   L1:
@@ -800,7 +800,7 @@ function arrays.ComparableFlaky.baml.Comparable.compare(self: arrays.ComparableF
 
   L0:
     load_const "cannot compare null"
-    init_instance user.arrays.ComparableCmpError .message
+    init_instance user.arrays.ComparableCompareError .message
     throw
 
   L1:
@@ -912,7 +912,7 @@ function arrays.sort_floats(xs: float[]) -> float[] {
     return
 }
 
-function arrays.sort_generic(xs: unknown[]) -> unknown[] {
+function arrays.sort_generic(xs: U[]) -> U[] {
     load_type unknown
     load_var xs
     call baml.Sortable$for$T[].sort

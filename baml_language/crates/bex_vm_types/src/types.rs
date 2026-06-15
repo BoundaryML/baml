@@ -18,7 +18,7 @@ use std::{
     },
 };
 
-use baml_type::Ty;
+use baml_type::RuntimeTy;
 use borsh::{BorshDeserialize, BorshSerialize};
 use indexmap::IndexMap;
 pub use tokio_util::sync::CancellationToken;
@@ -41,10 +41,10 @@ pub mod type_tags {
     pub use baml_type::typetag::*;
 }
 
-pub type InterfaceAssociatedBindings = Vec<(baml_type::Name, baml_type::Ty)>;
+pub type InterfaceAssociatedBindings = Vec<(baml_type::Name, baml_type::RuntimeTy)>;
 pub type InterfaceImplementorEntry = (
     baml_type::TypeName,
-    Vec<baml_type::Ty>,
+    Vec<baml_type::RuntimeTy>,
     InterfaceAssociatedBindings,
 );
 pub type InterfaceImplementors = IndexMap<baml_type::TypeName, Vec<InterfaceImplementorEntry>>;
@@ -100,8 +100,8 @@ pub struct Program {
 
     /// Recursive type alias definitions for output format rendering.
     /// Only recursive aliases are stored (non-recursive ones are expanded inline).
-    /// Keyed by [`baml_type::TypeName`] for consistent identity with `Ty::TypeAlias`.
-    pub recursive_type_alias_defs: IndexMap<baml_type::TypeName, Ty>,
+    /// Keyed by [`baml_type::TypeName`] for consistent identity with `RuntimeTy::TypeAlias`.
+    pub recursive_type_alias_defs: IndexMap<baml_type::TypeName, RuntimeTy>,
 
     /// Per-program interface implementation registry (BEP-044).
     ///
@@ -417,18 +417,13 @@ pub struct Function {
     pub span: baml_base::Span,
 
     /// Return type of the function.
-    pub return_type: Ty,
-
-    /// Stream-expanded return type (e.g. `null | MyClass$stream` for a function
-    /// returning `MyClass`). Only meaningful for LLM functions; set to `Null` for
-    /// non-LLM functions. See `PpirExpansionItems::stream_return_types`.
-    pub stream_return_type: Ty,
+    pub return_type: RuntimeTy,
 
     /// Parameter names in declaration order.
     pub param_names: Vec<String>,
 
     /// Parameter types in declaration order.
-    pub param_types: Vec<Ty>,
+    pub param_types: Vec<RuntimeTy>,
 
     /// Whether each parameter has a BAML default expression.
     pub param_has_default: Vec<bool>,
@@ -450,13 +445,23 @@ pub struct Function {
     /// Inferred throws type — the union of all types this function (and its callees)
     /// may throw. `None` if the function never throws. Used by the engine to convert
     /// uncaught throw values to `BexExternalValue`.
-    pub throws_type: Option<Ty>,
+    pub throws_type: Option<RuntimeTy>,
 
     /// Provenance of this function in the compiler/runtime pipeline.
     pub origin: FunctionOrigin,
 
     /// LLM-specific metadata (prompt template, client name). `None` for non-LLM functions.
     pub body_meta: Option<FunctionMeta>,
+
+    /// Per-run profiling id (`0` = unassigned), written into the BEX event
+    /// stream's `CallFunction` records and resolved through the per-run
+    /// function table in the `.bamlprof` header. Assigned by the engine's
+    /// interim provider at construction (plan §2.6); the M0 id table moves
+    /// assignment to compile time. `#[borsh(skip)]` keeps it out of the pack
+    /// envelope — it is runtime-only state, and skipping it leaves the wire
+    /// format unchanged.
+    #[borsh(skip)]
+    pub function_id: u32,
 }
 
 impl std::fmt::Display for Function {
@@ -492,13 +497,13 @@ impl Function {
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct ClassField {
     pub name: String,
-    /// Resolved field type with `TypeVar`s erased to `Ty::BuiltinUnknown`.
+    /// Resolved field type with `TypeVar`s erased to `RuntimeTy::BuiltinUnknown`.
     ///
     /// Used by paths that don't care about parametric class type-args
     /// (codegen, `sys_ops` walking, output-format rendering).  For typed
     /// runtime walking against an `Instance::class_type_args` binding, use
     /// `field_template` and call `substitute` on it instead.
-    pub field_type: Ty,
+    pub field_type: RuntimeTy,
     /// Field-type template with `TypeArgRef(N)` leaves for class-level
     /// generic params (`N` indexes into `Instance::class_type_args`).
     ///
@@ -549,7 +554,7 @@ pub struct Instance {
     /// Resolved class-level type args at construction time.  Empty when the
     /// class is non-generic.  De Bruijn-ordered to match
     /// `enclosing_generic_params()`: index 0 = first class param, etc.
-    pub class_type_args: Vec<baml_type::Ty>,
+    pub class_type_args: Vec<baml_type::RuntimeTy>,
 
     /// Fields are accessed by index. No string lookups. Each slot is atomic so
     /// racing field reads/writes across `spawn` fibers cannot become a Rust
@@ -558,7 +563,11 @@ pub struct Instance {
 }
 
 impl Instance {
-    pub fn new(class: HeapPtr, class_type_args: Vec<baml_type::Ty>, fields: Vec<Value>) -> Self {
+    pub fn new(
+        class: HeapPtr,
+        class_type_args: Vec<baml_type::RuntimeTy>,
+        fields: Vec<Value>,
+    ) -> Self {
         Self {
             class,
             class_type_args,
@@ -1238,12 +1247,12 @@ pub enum TestArgValue {
     Bool(bool),
     String(String),
     Array {
-        element_type: Ty,
+        element_type: RuntimeTy,
         items: Vec<TestArgValue>,
     },
     Map {
-        key_type: Ty,
-        value_type: Ty,
+        key_type: RuntimeTy,
+        value_type: RuntimeTy,
         entries: IndexMap<String, TestArgValue>,
     },
 }
@@ -1646,7 +1655,7 @@ pub enum Object {
     /// A host-language callable bound to a BAML function type.
     ///
     /// Created at the FFI boundary when a `HostValue` is passed for a
-    /// `Ty::Function` parameter. Calling it (`CallIndirect`) dispatches
+    /// `RuntimeTy::Function` parameter. Calling it (`CallIndirect`) dispatches
     /// `SysOp::BamlHostCallHostValue`, which fires the bridge's
     /// `HostDispatchFn` and awaits the host's response.
     HostClosure(HostClosure),
@@ -1702,8 +1711,8 @@ pub enum Object {
     /// Collector object (opaque handle to `bex_events::Collector`).
     Collector(CollectorRef),
 
-    /// A type descriptor value — wraps a `baml_type::Ty`.
-    Type(Box<baml_type::Ty>),
+    /// A type descriptor value — wraps a `baml_type::RuntimeTy`.
+    Type(Box<baml_type::RuntimeTy>),
 
     #[cfg(feature = "heap_debug")]
     Sentinel(SentinelKind),
@@ -1745,7 +1754,7 @@ enum ObjectWire {
     Float(f64),
     Future(Future),
     UnscheduledFuture(UnscheduledFuture),
-    Type(Box<baml_type::Ty>),
+    Type(Box<baml_type::RuntimeTy>),
 }
 
 impl BorshSerialize for Object {
@@ -1850,7 +1859,7 @@ pub struct Closure {
     /// before the cell captures.  These become `frame.type_args` when the
     /// closure is invoked, so that `LoadType(TypeArgRef(N))` inside the
     /// closure body resolves correctly.
-    pub captured_type_args: Box<[baml_type::Ty]>,
+    pub captured_type_args: Box<[baml_type::RuntimeTy]>,
 }
 
 /// A method bound to a specific receiver instance.
@@ -1878,17 +1887,17 @@ pub struct GenericFunction {
     /// via the global table, mirroring `MakeBoundMethod`).
     pub function: crate::GlobalIndex,
     /// Concrete type arguments to seed into `frame.type_args` when called.
-    pub type_args: Box<[baml_type::Ty]>,
+    pub type_args: Box<[baml_type::RuntimeTy]>,
 }
 
 /// A host-language callable bound to a BAML function type.
 ///
 /// Created at the FFI boundary when a `HostValue` is passed for a
-/// `Ty::Function` parameter. Calling it (`CallIndirect`) dispatches
+/// `RuntimeTy::Function` parameter. Calling it (`CallIndirect`) dispatches
 /// `SysOp::BamlHostCallHostValue`, which fires the bridge's
 /// `HostDispatchFn` and awaits the host's response.
 ///
-/// `Box<Ty>` keeps the `Object` enum within its `<= 80`-byte budget
+/// `Box<RuntimeTy>` keeps the `Object` enum within its `<= 80`-byte budget
 /// (see the `size_of::<Object>()` assertion below).
 #[derive(Clone, Debug)]
 pub struct HostClosure {
@@ -1899,17 +1908,17 @@ pub struct HostClosure {
     /// The declared return type of the host-callable, threaded through
     /// `SysOp::BamlHostCallHostValue` as `type_arg_0` so the sysop impl
     /// can validate the host's returned value against the BAML signature.
-    pub ret_ty: Box<baml_type::Ty>,
+    pub ret_ty: Box<baml_type::RuntimeTy>,
     /// The declared error/throws contract of the host-callable (`E` in
     /// `call_host_value<T, E>`), threaded through
     /// `SysOp::BamlHostCallHostValue` as `type_arg_1`. A host throw is
     /// checked against this contract. The FFI entry boundary (see
     /// `bex_engine::conversion`'s `HostValue` arm) normalizes an
-    /// unbounded/undeclared generic throws to `Ty::BuiltinUnknown`, which
+    /// unbounded/undeclared generic throws to `RuntimeTy::BuiltinUnknown`, which
     /// accepts any thrown value — the "unknown" fallback. Concrete throws
     /// (e.g. `throws ParseError`) pass through unchanged so the contract
     /// check can reject off-type throws as `HostContractViolation`.
-    pub throws_ty: Box<baml_type::Ty>,
+    pub throws_ty: Box<baml_type::RuntimeTy>,
     /// Number of value arguments the host callable expects.
     ///
     /// `CallIndirect` reads this to drain the right number of operand slots

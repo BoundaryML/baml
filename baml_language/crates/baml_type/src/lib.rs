@@ -261,7 +261,7 @@ pub enum Ty {
     },
 
     // --- TIR-only: present during type checking, erased at the runtime
-    // boundary (`convert_tir2_ty`). Excluded from `ConcreteTy`; only the ones
+    // boundary (`convert_tir_ty_for_runtime`). Excluded from `ConcreteTy`; only the ones
     // that can legitimately nest in a runtime type carry `RuntimeTy`.
     /// Error-recovery sentinel: the type is structurally unknown (e.g. an
     /// unresolved name). Distinct from `BuiltinUnknown` (a well-formed top type).

@@ -97,7 +97,7 @@ impl BamlPyHandle {
 
 impl Drop for BamlPyHandle {
     fn drop(&mut self) {
-        // Host-owned handles (`HostValueCallable`, `HostValueError`) are
+        // Host-owned handles (`HostValueCallable`, `HostValueOpaque`) are
         // *not* tracked in `HANDLE_TABLE` — their lifetime is managed
         // per-bridge via the host-value registry (see
         // [`crate::host_value::lookup_host_value`]). Releasing them here
@@ -111,7 +111,7 @@ impl Drop for BamlPyHandle {
         use bridge_ctypes::baml_core::cffi::BamlHandleType;
         let ht_i32 = i32::try_from(self.handle_type).unwrap_or(-1);
         let is_host_value = ht_i32 == BamlHandleType::HostValueCallable as i32
-            || ht_i32 == BamlHandleType::HostValueError as i32;
+            || ht_i32 == BamlHandleType::HostValueOpaque as i32;
         if !is_host_value {
             let _ = unsafe { baml_handle_release(self.handle_key) };
         }

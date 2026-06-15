@@ -39,7 +39,7 @@ function user.test_inferred_return() -> int {
 function user.test_map_inferred() -> int[] {
     load_type int
     load_type int
-    load_type void
+    load_type never
     load_const 1
     load_const 2
     load_const 3

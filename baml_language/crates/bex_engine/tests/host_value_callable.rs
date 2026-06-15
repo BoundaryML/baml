@@ -290,12 +290,12 @@ fn complete_with_test_error(call_id: u32, class_name: &str, message: &str) {
     );
     fields.insert("traceback".to_string(), BexExternalValue::Null);
     // The class's `_handle $rust_type` slot is required by the engine's
-    // structural check. Use a synthetic `HostValue(kind=Error)` handle
+    // structural check. Use a synthetic `HostValue(kind=Opaque)` handle
     // so the BAML→host decoder has *something* to round-trip — the
     // test doesn't rehydrate, so the key value is arbitrary.
     fields.insert(
         "_handle".to_string(),
-        BexExternalValue::HostValue(HostValueArc::new(next_host_key(), HostValueKind::Error)),
+        BexExternalValue::HostValue(HostValueArc::new(next_host_key(), HostValueKind::Opaque)),
     );
     sys_native::host_dispatch::complete_with_throw(
         call_id,
@@ -413,7 +413,7 @@ async fn host_callable_invoked_from_native_map_continuation() {
     );
 
     let xs = BexExternalValue::Array {
-        element_type: baml_type::Ty::int(),
+        element_type: baml_type::RuntimeTy::int(),
         items: vec![
             BexExternalValue::Int(1),
             BexExternalValue::Int(2),
@@ -468,7 +468,7 @@ async fn host_callable_invoked_from_native_map_continuation() {
 //   * `args[1]` (args array) — asserted to decode to exactly the user args, in
 //     order: `[Int(7), Int(8)]`. If `args[1]` carried the ret_ty `Object::Type`
 //     instead, the glue's `BexExternalValue::Array` extraction would fail.
-//   * `args[2]` (ret_ty) — proven to carry the declared return `Ty` (`int`):
+//   * `args[2]` (ret_ty) — proven to carry the declared return `RuntimeTy` (`int`):
 //     the host returns the sum (an `Int`), which only passes return-type
 //     validation if `type_arg_0` decoded to `int`. If `args[2]` carried the
 //     args array instead, `as_baml_type_owned` would fail and the call would
@@ -980,7 +980,7 @@ async fn host_callable_off_contract_throw_panics_as_host_contract_violation() {
 // ============================================================================
 // Undeclared callback ⇒ `throws unknown` contract accepts a native throw as
 //         opaque. The FFI entry boundary normalizes the synthesized effect
-//         param (post-MIR `Ty::Void`) to `Ty::BuiltinUnknown` so the contract
+//         param (post-MIR `RuntimeTy::Void`) to `RuntimeTy::BuiltinUnknown` so the contract
 //         check at `materialize_host_throw` treats any thrown value as
 //         on-contract — including the opaque `baml.errors.HostCallable`
 //         Instance the bridge synthesizes for a native host exception. The
@@ -991,7 +991,7 @@ async fn host_callable_off_contract_throw_panics_as_host_contract_violation() {
 //         This pins the "throws unknown" fallback: a host-provided callable
 //         whose error contract is undeclared must NOT be admitted by a
 //         concrete-throws check (that's the off-contract case above) and
-//         must NOT be rejected by an over-strict `Ty::Void` validator (the
+//         must NOT be rejected by an over-strict `RuntimeTy::Void` validator (the
 //         pre-D1 erasure path). Both failure modes are guarded against.
 // ============================================================================
 
@@ -1304,7 +1304,7 @@ async fn host_callable_returning_a_callable_is_rejected() {
 // ============================================================================
 // A moving GC during the host-call await must not invalidate return-type
 //         validation. The engine captures the declared return type as an owned
-//         `Ty` before the await; if it instead re-read the raw `args[2]` heap
+//         `RuntimeTy` before the await; if it instead re-read the raw `args[2]` heap
 //         pointer afterward, a GC during the await could relocate/collect that
 //         `Object::Type` (the engine-local `args` Vec is not a GC root and is
 //         never forwarded), so schema validation would read a dangling pointer
@@ -1375,7 +1375,7 @@ async fn host_call_ret_ty_survives_gc_during_await() {
 
     let result = call.await.expect("join call task");
     // Wrong-return-type after a GC-relocated retty must still be caught by
-    // the pre-captured owned `Ty`; the visible effect is the same as any
+    // the pre-captured owned `RuntimeTy`; the visible effect is the same as any
     // other wrong-return-type violation — `HostContractViolation` panic.
     assert_host_contract_violation_panic(&result);
 
@@ -1434,7 +1434,7 @@ async fn host_callable_throw_in_spawn_settles_child_does_not_hang() {
 
 // ============================================================================
 // A host callable bound to a generic function-typed parameter is rejected at
-//         call setup. A generic parameter's type variables erase to `Ty::Void`
+//         call setup. A generic parameter's type variables erase to `RuntimeTy::Void`
 //         at runtime, which the return validator treats as "accept anything" —
 //         so the host could return a value of any type into a position BAML
 //         treats as the instantiated type. Rather than admit that unvalidatable
@@ -1467,7 +1467,7 @@ async fn host_callable_with_generic_return_is_rejected() {
                 BexExternalValue::Int(1),
             ],
             FunctionCallContextBuilder::new(sys_types::CallId::next())
-                .with_type_args(vec![baml_type::Ty::int()])
+                .with_type_args(vec![baml_type::RuntimeTy::int()])
                 .build(),
             true,
         )

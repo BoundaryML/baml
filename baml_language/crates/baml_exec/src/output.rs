@@ -11,7 +11,7 @@
 use std::sync::Arc;
 
 use anyhow::{Result, anyhow};
-use bex_engine::{BexEngine, BexExternalValue, CallId, FunctionCallContextBuilder, Ty};
+use bex_engine::{BexEngine, BexExternalValue, CallId, FunctionCallContextBuilder, RuntimeTy};
 
 /// Serialization format for a target's return value.
 #[derive(
@@ -33,7 +33,7 @@ pub enum OutputFormat {
 pub async fn write_output(
     engine: &Arc<BexEngine>,
     value: BexExternalValue,
-    return_type: &Ty,
+    return_type: &RuntimeTy,
     format: OutputFormat,
 ) -> Result<()> {
     match format {
@@ -67,7 +67,7 @@ pub async fn write_output(
 async fn serialize_via_baml_json(
     engine: &Arc<BexEngine>,
     value: BexExternalValue,
-    return_type: &Ty,
+    return_type: &RuntimeTy,
 ) -> Result<String> {
     let result = engine
         .call_function(

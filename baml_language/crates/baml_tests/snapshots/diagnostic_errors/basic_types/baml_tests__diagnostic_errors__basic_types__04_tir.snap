@@ -12,7 +12,7 @@ class user.FieldAttributes {
   multiple: string | null @description("Multiple attributes") @alias("multiple_alias")
 }
 function user.FieldAttributes.to_json(self: user.FieldAttributes) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "money": self.money.to_json(), "currency": self.currency.to_json(), "name": self.name.to_json(), "summary": self.summary.to_json(), "details": self.details?.to_json(), "state": self.state.to_json(), "multiple": self.multiple?.to_json() } : map<string, baml.json.json | null>
+  map { "money": baml.json.to_json(self.money), "currency": baml.json.to_json(self.currency), "name": baml.json.to_json(self.name), "summary": baml.json.to_json(self.summary), "details": baml.json.to_json(self.details), "state": baml.json.to_json(self.state), "multiple": baml.json.to_json(self.multiple) } : map<string, baml.json.json>
 }
 function user.FieldAttributes.from_json(j: baml.json.json) -> user.FieldAttributes throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   FieldAttributes { money: baml.json.from_json<int>(baml.json.field(j, "money")), currency: baml.json.from_json<string>(baml.json.field(j, "currency")), name: baml.json.from_json<string>(baml.json.field(j, "name")), summary: baml.json.from_json<string>(baml.json.field(j, "summary")), details: baml.json.from_json<string?>(baml.json.field(j, "details")), state: baml.json.from_json<string>(baml.json.field(j, "state")), multiple: baml.json.from_json<string?>(baml.json.field(j, "multiple")) } : user.FieldAttributes
@@ -21,7 +21,7 @@ class user.ClassAttributes {
   name: string
 }
 function user.ClassAttributes.to_json(self: user.ClassAttributes) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "name": self.name.to_json() } : map<string, baml.json.json>
+  map { "name": baml.json.to_json(self.name) } : map<string, baml.json.json>
 }
 function user.ClassAttributes.from_json(j: baml.json.json) -> user.ClassAttributes throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   ClassAttributes { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.ClassAttributes
@@ -50,9 +50,6 @@ function user.GetUser$build_request(id: int, client: baml.llm.Client = ...) -> b
 function user.GetUser$build_request_stream(id: int, client: baml.llm.Client = ...) -> baml.http.Request throws never {
   baml.llm.build_request_stream(client, "GetUser", map { "id": id }) : baml.http.Request
 }
-function user.GetUser$parse(json: string, client: baml.llm.Client = ...) -> user.User throws never {
-  baml.llm.parse<TFinal>("GetUser", json) : user.User
-}
 function user.GetStatus(client: baml.llm.Client = GPT4) -> user.Status throws never {
   baml.llm.call_llm_function<T>(client, "GetStatus", map {  }) : user.Status
   !! 127..173: unresolved name: GPT4
@@ -67,10 +64,6 @@ function user.GetStatus$build_request(client: baml.llm.Client = GPT4) -> baml.ht
 }
 function user.GetStatus$build_request_stream(client: baml.llm.Client = GPT4) -> baml.http.Request throws never {
   baml.llm.build_request_stream(client, "GetStatus", map {  }) : baml.http.Request
-  !! 95..173: unresolved name: GPT4
-}
-function user.GetStatus$parse(json: string, client: baml.llm.Client = GPT4) -> user.Status throws never {
-  baml.llm.parse<TFinal>("GetStatus", json) : user.Status
   !! 95..173: unresolved name: GPT4
 }
 function user.GetMixedList(client: baml.llm.Client = GPT4) -> (int | string)[] throws never {
@@ -89,10 +82,6 @@ function user.GetMixedList$build_request_stream(client: baml.llm.Client = GPT4) 
   baml.llm.build_request_stream(client, "GetMixedList", map {  }) : baml.http.Request
   !! 173..308: unresolved name: GPT4
 }
-function user.GetMixedList$parse(json: string, client: baml.llm.Client = GPT4) -> (int | string)[] throws never {
-  baml.llm.parse<TFinal>("GetMixedList", json) : (int | string)[]
-  !! 173..308: unresolved name: GPT4
-}
 function user.GetMixedMap(client: baml.llm.Client = GPT4) -> map<string, int | string> throws never {
   baml.llm.call_llm_function<T>(client, "GetMixedMap", map {  }) : map<string, int | string>
   !! 361..410: unresolved name: GPT4
@@ -109,22 +98,25 @@ function user.GetMixedMap$build_request_stream(client: baml.llm.Client = GPT4) -
   baml.llm.build_request_stream(client, "GetMixedMap", map {  }) : baml.http.Request
   !! 308..410: unresolved name: GPT4
 }
-function user.GetMixedMap$parse(json: string, client: baml.llm.Client = GPT4) -> map<string, int | string> throws never {
-  baml.llm.parse<TFinal>("GetMixedMap", json) : map<string, int | string>
-  !! 308..410: unresolved name: GPT4
-}
 function user.GetUser$stream(id: int, client: baml.llm.Client = ...) -> baml.llm.Stream<user.User$stream | null, user.User> throws never {
   baml.llm.stream_llm_function(client, "GetUser", map { "id": id }) : baml.llm.Stream<user.User$stream | null, user.User>
 }
 function user.GetUser$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = ...) -> baml.llm.Stream<user.User$stream | null, user.User> throws never {
-  client.__make_stream(sse, "GetUser") : baml.llm.Stream<user.User$stream | null, user.User>
+  client.__make_stream(sse) : baml.llm.Stream<user.User$stream | null, user.User>
+}
+function user.GetUser$parse(json: string, client: baml.llm.Client = ...) -> user.User throws never {
+  baml.llm.parse<TFinal>(json) : user.User
 }
 function user.GetStatus$stream(client: baml.llm.Client = GPT4) -> baml.llm.Stream<user.Status | null, user.Status> throws never {
   baml.llm.stream_llm_function(client, "GetStatus", map {  }) : baml.llm.Stream<user.Status | null, user.Status>
   !! 95..173: unresolved name: GPT4
 }
 function user.GetStatus$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = GPT4) -> baml.llm.Stream<user.Status | null, user.Status> throws never {
-  client.__make_stream(sse, "GetStatus") : baml.llm.Stream<user.Status | null, user.Status>
+  client.__make_stream(sse) : baml.llm.Stream<user.Status | null, user.Status>
+  !! 95..173: unresolved name: GPT4
+}
+function user.GetStatus$parse(json: string, client: baml.llm.Client = GPT4) -> user.Status throws never {
+  baml.llm.parse<TFinal>(json) : user.Status
   !! 95..173: unresolved name: GPT4
 }
 function user.GetMixedList$stream(client: baml.llm.Client = GPT4) -> baml.llm.Stream<(int | string)[], (int | string)[]> throws never {
@@ -132,7 +124,11 @@ function user.GetMixedList$stream(client: baml.llm.Client = GPT4) -> baml.llm.St
   !! 173..308: unresolved name: GPT4
 }
 function user.GetMixedList$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = GPT4) -> baml.llm.Stream<(int | string)[], (int | string)[]> throws never {
-  client.__make_stream(sse, "GetMixedList") : baml.llm.Stream<(int | string)[], (int | string)[]>
+  client.__make_stream(sse) : baml.llm.Stream<(int | string)[], (int | string)[]>
+  !! 173..308: unresolved name: GPT4
+}
+function user.GetMixedList$parse(json: string, client: baml.llm.Client = GPT4) -> (int | string)[] throws never {
+  baml.llm.parse<TFinal>(json) : (int | string)[]
   !! 173..308: unresolved name: GPT4
 }
 function user.GetMixedMap$stream(client: baml.llm.Client = GPT4) -> baml.llm.Stream<map<string, int | string>, map<string, int | string>> throws never {
@@ -140,7 +136,11 @@ function user.GetMixedMap$stream(client: baml.llm.Client = GPT4) -> baml.llm.Str
   !! 308..410: unresolved name: GPT4
 }
 function user.GetMixedMap$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = GPT4) -> baml.llm.Stream<map<string, int | string>, map<string, int | string>> throws never {
-  client.__make_stream(sse, "GetMixedMap") : baml.llm.Stream<map<string, int | string>, map<string, int | string>>
+  client.__make_stream(sse) : baml.llm.Stream<map<string, int | string>, map<string, int | string>>
+  !! 308..410: unresolved name: GPT4
+}
+function user.GetMixedMap$parse(json: string, client: baml.llm.Client = GPT4) -> map<string, int | string> throws never {
+  baml.llm.parse<TFinal>(json) : map<string, int | string>
   !! 308..410: unresolved name: GPT4
 }
 class user.User {
@@ -149,7 +149,7 @@ class user.User {
   email: string
 }
 function user.User.to_json(self: user.User) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "id": self.id.to_json(), "name": self.name.to_json(), "email": self.email.to_json() } : map<string, baml.json.json>
+  map { "id": baml.json.to_json(self.id), "name": baml.json.to_json(self.name), "email": baml.json.to_json(self.email) } : map<string, baml.json.json>
 }
 function user.User.from_json(j: baml.json.json) -> user.User throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   User { id: baml.json.from_json<int>(baml.json.field(j, "id")), name: baml.json.from_json<string>(baml.json.field(j, "name")), email: baml.json.from_json<string>(baml.json.field(j, "email")) } : user.User

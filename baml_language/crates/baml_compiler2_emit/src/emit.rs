@@ -14,7 +14,7 @@ use baml_compiler2_mir::{
     BasicBlock, BinOp, BlockId, Constant, IndexKind, IntrinsicOp, Local, LogLevel, MirFunctionBody,
     Operand, Place, Rvalue, StatementKind, Terminator, UnaryOp,
 };
-use baml_type::{Ty, TyTemplate, TypeName};
+use baml_type::{RuntimeTy, TyTemplate, TypeName};
 use bex_vm_types::{
     BinOp as VmBinOp, Bytecode, CmpOp, ConstValue, Function, FunctionKind, FunctionOrigin,
     GlobalIndex, Instruction, Object, ObjectIndex, ObjectPool, UnaryOp as VmUnaryOp,
@@ -26,7 +26,7 @@ use bex_vm_types::{
 
 /// Coarse arithmetic-type classification used by [`try_specialize_binary_op`].
 ///
-/// Collapses `Ty::Int { .. }` / `Ty::Literal(Int(_))` (and similar) into a
+/// Collapses `RuntimeTy::Int { .. }` / `RuntimeTy::Literal(Int(_))` (and similar) into a
 /// single tag so specialization works regardless of whether TIR preserved a
 /// literal type after constant-folding.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -328,7 +328,7 @@ struct StackifyCodegen<'ctx, 'obj> {
     watched_locals_initialized: HashSet<Local>,
 
     /// MIR local types for field name resolution (debug info).
-    local_types: HashMap<Local, Ty>,
+    local_types: HashMap<Local, RuntimeTy>,
 
     /// Slot index → variable name mapping for debug metadata.
     slot_names: Vec<String>,
@@ -344,7 +344,7 @@ struct StackifyCodegen<'ctx, 'obj> {
 
     /// Compile-time types for this function's closure captures, indexed by
     /// `Place::Capture`.
-    capture_types: Vec<Ty>,
+    capture_types: Vec<RuntimeTy>,
 
     /// Set of locals that are captured by child lambdas and need cell wrapping.
     /// Derived from `LocalDecl.is_captured` during `compile()`.
@@ -443,14 +443,14 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     }
 
     /// Resolve the type of a MIR Place by walking from the root local through projections.
-    fn resolve_place_type(&self, place: &Place) -> Option<Ty> {
+    fn resolve_place_type(&self, place: &Place) -> Option<RuntimeTy> {
         match place {
             Place::Local(local) => self.local_types.get(local).cloned(),
             Place::Capture(idx) => self.capture_types.get(*idx).cloned(),
             Place::Field { base, field } => {
                 let base_ty = self.resolve_place_type(base)?;
                 match &base_ty {
-                    Ty::Class(type_name, _, _) => {
+                    RuntimeTy::Class(type_name, _, _) => {
                         let obj_idx = self.class_object_index_for_type_name(type_name)?;
                         match self.objects.get(obj_idx)? {
                             Object::Class(class) => {
@@ -465,8 +465,8 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Place::Index { base, .. } => {
                 let base_ty = self.resolve_place_type(base)?;
                 match base_ty {
-                    Ty::List(inner, _) => Some(*inner),
-                    Ty::Map { value, .. } => Some(*value),
+                    RuntimeTy::List(inner, _) => Some(*inner),
+                    RuntimeTy::Map { value, .. } => Some(*value),
                     _ => None,
                 }
             }
@@ -474,15 +474,15 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     }
 
     /// Resolve the compile-time type of an operand, if known.
-    fn resolve_operand_type(&self, operand: &Operand) -> Option<Ty> {
+    fn resolve_operand_type(&self, operand: &Operand) -> Option<RuntimeTy> {
         match operand {
             Operand::Constant(c) => match c {
-                Constant::Int(_) => Some(Ty::int()),
-                Constant::Bigint(_) => Some(Ty::bigint()),
-                Constant::Float(_) => Some(Ty::float()),
-                Constant::String(_) => Some(Ty::string()),
-                Constant::Bool(_) => Some(Ty::bool()),
-                Constant::Null => Some(Ty::null()),
+                Constant::Int(_) => Some(RuntimeTy::int()),
+                Constant::Bigint(_) => Some(RuntimeTy::bigint()),
+                Constant::Float(_) => Some(RuntimeTy::float()),
+                Constant::String(_) => Some(RuntimeTy::string()),
+                Constant::Bool(_) => Some(RuntimeTy::bool()),
+                Constant::Null => Some(RuntimeTy::null()),
                 Constant::OmittedArg => None,
                 _ => None,
             },
@@ -493,18 +493,18 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     /// Classify a type for binary-op specialization. Returns `None` if the
     /// type isn't one of the primitive numeric forms we can specialize on.
     ///
-    /// Both `Ty::Int { .. }` and `Ty::Literal(Literal::Int(_), _)` map to
+    /// Both `RuntimeTy::Int { .. }` and `RuntimeTy::Literal(Literal::Int(_), _)` map to
     /// `Int`, and similarly for `Float`/`Bigint`. This lets us specialize
     /// expressions like `(-1n) & 255n` where the lhs operand carries a
-    /// `Ty::Literal(Bigint(-1))` after constant-folding in TIR.
-    fn classify_arith_ty(ty: &Ty) -> Option<ArithTyClass> {
+    /// `RuntimeTy::Literal(Bigint(-1))` after constant-folding in TIR.
+    fn classify_arith_ty(ty: &RuntimeTy) -> Option<ArithTyClass> {
         match ty {
-            Ty::Int { .. } => Some(ArithTyClass::Int),
-            Ty::Float { .. } => Some(ArithTyClass::Float),
-            Ty::Bigint { .. } => Some(ArithTyClass::Bigint),
-            Ty::Literal(baml_type::Literal::Int(_), _, _) => Some(ArithTyClass::Int),
-            Ty::Literal(baml_type::Literal::Float(_), _, _) => Some(ArithTyClass::Float),
-            Ty::Literal(baml_type::Literal::Bigint(_), _, _) => Some(ArithTyClass::Bigint),
+            RuntimeTy::Int { .. } => Some(ArithTyClass::Int),
+            RuntimeTy::Float { .. } => Some(ArithTyClass::Float),
+            RuntimeTy::Bigint { .. } => Some(ArithTyClass::Bigint),
+            RuntimeTy::Literal(baml_type::Literal::Int(_), _, _) => Some(ArithTyClass::Int),
+            RuntimeTy::Literal(baml_type::Literal::Float(_), _, _) => Some(ArithTyClass::Float),
+            RuntimeTy::Literal(baml_type::Literal::Bigint(_), _, _) => Some(ArithTyClass::Bigint),
             _ => None,
         }
     }
@@ -964,10 +964,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             local_names: self.slot_names,
             debug_locals,
             span: Span::fake(),
-            return_type: baml_type::Ty::Null {
-                attr: baml_type::TyAttr::default(),
-            },
-            stream_return_type: baml_type::Ty::Null {
+            return_type: baml_type::RuntimeTy::Null {
                 attr: baml_type::TyAttr::default(),
             },
             param_names: Vec::new(),
@@ -979,6 +976,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             throws_type: None,
             origin: FunctionOrigin::Internal,
             body_meta: None,
+            function_id: 0, // assigned at engine init (interim provider)
         }
     }
 
@@ -3060,7 +3058,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
     }
 
     fn is_type(&mut self, ty_template: &TyTemplate) -> Result<(), Self::Error> {
-        // Helper: emit IsType for a concrete Ty leaf.
+        // Helper: emit IsType for a concrete RuntimeTy leaf.
         match ty_template {
             // ── Class check ──────────────────────────────────────────────────
             TyTemplate::Class(tn, type_args_templates) => {
@@ -3086,8 +3084,8 @@ impl PullSink for StackifyCodegen<'_, '_> {
             TyTemplate::Concrete(ty) => {
                 // ── Class (concrete) ─────────────────────────────────────────
                 let maybe_class = match ty {
-                    Ty::Class(tn, ty_args, _) => Some((tn, Some(ty_args.as_slice()))),
-                    Ty::TypeAlias(tn, _) => Some((tn, None)),
+                    RuntimeTy::Class(tn, ty_args, _) => Some((tn, Some(ty_args.as_slice()))),
+                    RuntimeTy::TypeAlias(tn, _) => Some((tn, None)),
                     _ => None,
                 };
                 if let Some((tn, ty_args_opt)) = maybe_class {
@@ -3134,18 +3132,18 @@ impl PullSink for StackifyCodegen<'_, '_> {
 
                 // ── Primitive type tags ───────────────────────────────────────
                 let type_tag = match ty {
-                    Ty::Int { .. } => Some(baml_type::typetag::INT),
-                    Ty::Bigint { .. } => Some(baml_type::typetag::BIGINT),
-                    Ty::String { .. } => Some(baml_type::typetag::STRING),
-                    Ty::Bool { .. } => Some(baml_type::typetag::BOOL),
-                    Ty::Null { .. } => Some(baml_type::typetag::NULL),
-                    Ty::Float { .. } => Some(baml_type::typetag::FLOAT),
-                    Ty::Enum(..) => Some(baml_type::typetag::ENUM),
-                    Ty::List(..) => Some(baml_type::typetag::LIST),
-                    Ty::Map { .. } => Some(baml_type::typetag::MAP),
-                    Ty::Function { .. } => Some(baml_type::typetag::FUNCTION),
-                    Ty::Uint8Array { .. } => Some(baml_type::typetag::UINT8ARRAY),
-                    Ty::Literal(lit, _, _) => Some(match lit {
+                    RuntimeTy::Int { .. } => Some(baml_type::typetag::INT),
+                    RuntimeTy::Bigint { .. } => Some(baml_type::typetag::BIGINT),
+                    RuntimeTy::String { .. } => Some(baml_type::typetag::STRING),
+                    RuntimeTy::Bool { .. } => Some(baml_type::typetag::BOOL),
+                    RuntimeTy::Null { .. } => Some(baml_type::typetag::NULL),
+                    RuntimeTy::Float { .. } => Some(baml_type::typetag::FLOAT),
+                    RuntimeTy::Enum(..) => Some(baml_type::typetag::ENUM),
+                    RuntimeTy::List(..) => Some(baml_type::typetag::LIST),
+                    RuntimeTy::Map { .. } => Some(baml_type::typetag::MAP),
+                    RuntimeTy::Function { .. } => Some(baml_type::typetag::FUNCTION),
+                    RuntimeTy::Uint8Array { .. } => Some(baml_type::typetag::UINT8ARRAY),
+                    RuntimeTy::Literal(lit, _, _) => Some(match lit {
                         baml_base::Literal::Int(_) => baml_type::typetag::INT,
                         baml_base::Literal::Bigint(_) => baml_type::typetag::BIGINT,
                         baml_base::Literal::Float(_) => baml_type::typetag::FLOAT,
@@ -3241,7 +3239,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
 
     fn resolve_field_name(&self, base: &Place, field_idx: usize) -> String {
         let class_name = match self.resolve_place_type(base) {
-            Some(Ty::Class(tn, _, _)) => tn.display_name().to_string(),
+            Some(RuntimeTy::Class(tn, _, _)) => tn.display_name().to_string(),
             _ => return format!("{field_idx}"),
         };
         self.lookup_class_field_name(&class_name, field_idx)
@@ -3348,13 +3346,13 @@ mod tests {
         BasicBlock, BlockId, Constant, Local, LocalDecl, MirFunctionBody, Operand, Place, Rvalue,
         Statement, StatementKind, Terminator,
     };
-    use baml_type::Ty;
+    use baml_type::RuntimeTy;
     use bex_vm_types::{Instruction, ObjectPool};
 
     use super::compile_mir_function;
     use crate::{MirCodegenContext, analysis::OptLevel};
 
-    fn local(ty: Ty) -> LocalDecl {
+    fn local(ty: RuntimeTy) -> LocalDecl {
         LocalDecl {
             name: None,
             ty,
@@ -3393,7 +3391,7 @@ mod tests {
         let body = MirFunctionBody {
             blocks: vec![entry, then_block, unreachable_else, return_block],
             entry: BlockId(0),
-            locals: vec![local(Ty::int()), local(Ty::bool())],
+            locals: vec![local(RuntimeTy::int()), local(RuntimeTy::bool())],
             catch_regions: Vec::new(),
             viz_nodes: Vec::new(),
         };

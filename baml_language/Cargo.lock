@@ -742,6 +742,7 @@ dependencies = [
  "indicatif",
  "insta",
  "libsui",
+ "object 0.36.3",
  "regex",
  "reqwest",
  "sdkgen_python_pydantic2",
@@ -797,6 +798,7 @@ dependencies = [
  "bex_vm_types",
  "indexmap",
  "log",
+ "rustc-hash 2.1.2",
  "salsa",
 ]
 
@@ -1045,6 +1047,7 @@ version = "0.0.0-beta"
 dependencies = [
  "baml_exec",
  "bex_engine",
+ "bex_events",
  "borsh",
  "libsui",
  "sys_native",
@@ -1192,6 +1195,7 @@ dependencies = [
  "baml_builtins2",
  "baml_project",
  "baml_type",
+ "bex_events",
  "bex_external_types",
  "bex_heap",
  "bex_resource_types",
@@ -1221,7 +1225,16 @@ dependencies = [
 name = "bex_events"
 version = "0.0.0-beta"
 dependencies = [
+ "base64",
  "bex_external_types",
+ "bex_vm_types",
+ "crossbeam-utils",
+ "loom",
+ "prost",
+ "prost-build",
+ "protoc-bin-vendored",
+ "smallvec",
+ "sys_types",
  "uuid",
 ]
 
@@ -1337,6 +1350,7 @@ dependencies = [
  "baml_project",
  "baml_type",
  "base64",
+ "bex_events",
  "bex_heap",
  "bex_str",
  "bex_vm_types",
@@ -3036,6 +3050,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "generator"
+version = "0.8.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b3b854b0e584ead1a33f18b2fcad7cf7be18b3875c78816b753639aa501513ae"
+dependencies = [
+ "cc",
+ "cfg-if",
+ "libc",
+ "log",
+ "rustversion",
+ "windows-link 0.2.1",
+ "windows-result 0.4.1",
+]
+
+[[package]]
 name = "generic-array"
 version = "0.14.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4247,6 +4276,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "605d9697bcd5ef3a42d38efc51541aa3d6a4a25f7ab6d1ed0da5ac632a26b470"
 dependencies = [
  "logos-codegen",
+]
+
+[[package]]
+name = "loom"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "419e0dc8046cb947daa77eb95ae174acfbddb7673b4151f56d1eed8e93fbfaca"
+dependencies = [
+ "cfg-if",
+ "generator",
+ "scoped-tls",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -7643,6 +7685,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "db97caf9d906fbde555dd62fa95ddba9eecfd14cb388e4f491a66d74cd5fb79a"
 dependencies = [
  "once_cell",
+ "valuable",
+]
+
+[[package]]
+name = "tracing-log"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee855f1f400bd0e5c02d150ae5de3840039a3f54b025156404e34c23c03f47c3"
+dependencies = [
+ "log",
+ "once_cell",
+ "tracing-core",
 ]
 
 [[package]]
@@ -7652,12 +7706,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb7f578e5945fb242538965c2d0b04418d38ec25c79d160cd279bf0731c8d319"
 dependencies = [
  "matchers",
+ "nu-ansi-term",
  "once_cell",
  "regex-automata",
  "sharded-slab",
+ "smallvec",
  "thread_local",
  "tracing",
  "tracing-core",
+ "tracing-log",
 ]
 
 [[package]]
@@ -7930,6 +7987,12 @@ dependencies = [
  "serde_core",
  "wasm-bindgen",
 ]
+
+[[package]]
+name = "valuable"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba73ea9cf16a25df0c8caa16c51acb937d5712a8429db78a3ee29d5dcacd3a65"
 
 [[package]]
 name = "vcpkg"

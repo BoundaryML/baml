@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 19699
 ---
 === MIR2 ===
 fn user.RootAliasParam(cfg: Config) -> string {
@@ -473,24 +472,28 @@ fn user.Config.to_json(self: Config) -> baml.json.json {
     let _2: baml.json.json
     let _3: string
     let _4: Config
-    let _5: baml.json.json
-    let _6: string
-    let _7: Config
+    let _5: type
+    let _6: baml.json.json
+    let _7: string
+    let _8: Config
+    let _9: type
 
     bb0: {
         _4 = copy _1;
         _3 = copy _4.0;
-        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
+        _5 = load_type(string);
+        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
     }
 
     bb1: {
-        _7 = copy _1;
-        _6 = copy _7.1;
-        _5 = call const fn baml.String.to_json(copy _6) -> [bb2];
+        _8 = copy _1;
+        _7 = copy _8.1;
+        _9 = load_type(string);
+        _6 = call const fn baml.json.to_json<copy _9>(copy _7) -> [bb2];
     }
 
     bb2: {
-        _0 = { const "key": copy _2, const "env": copy _5 };
+        _0 = { const "key": copy _2, const "env": copy _6 };
         goto -> bb3;
     }
 
@@ -506,24 +509,28 @@ fn user.RootWithCrossNsAlias.to_json(self: RootWithCrossNsAlias) -> baml.json.js
     let _2: baml.json.json
     let _3: llm.Response
     let _4: RootWithCrossNsAlias
-    let _5: baml.json.json
-    let _6: Config
-    let _7: RootWithCrossNsAlias
+    let _5: type
+    let _6: baml.json.json
+    let _7: Config
+    let _8: RootWithCrossNsAlias
+    let _9: type
 
     bb0: {
         _4 = copy _1;
         _3 = copy _4.0;
-        _2 = call const fn user.llm.Response.to_json(copy _3) -> [bb1];
+        _5 = load_type(llm.Response);
+        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
     }
 
     bb1: {
-        _7 = copy _1;
-        _6 = copy _7.1;
-        _5 = call const fn user.Config.to_json(copy _6) -> [bb2];
+        _8 = copy _1;
+        _7 = copy _8.1;
+        _9 = load_type(Config);
+        _6 = call const fn baml.json.to_json<copy _9>(copy _7) -> [bb2];
     }
 
     bb2: {
-        _0 = { const "llm_alias": copy _2, const "own_alias": copy _5 };
+        _0 = { const "llm_alias": copy _2, const "own_alias": copy _6 };
         goto -> bb3;
     }
 
@@ -539,24 +546,28 @@ fn user.Error.to_json(self: Error) -> baml.json.json {
     let _2: baml.json.json
     let _3: int
     let _4: Error
-    let _5: baml.json.json
-    let _6: string
-    let _7: Error
+    let _5: type
+    let _6: baml.json.json
+    let _7: string
+    let _8: Error
+    let _9: type
 
     bb0: {
         _4 = copy _1;
         _3 = copy _4.0;
-        _2 = call const fn baml.Int.to_json(copy _3) -> [bb1];
+        _5 = load_type(int);
+        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
     }
 
     bb1: {
-        _7 = copy _1;
-        _6 = copy _7.1;
-        _5 = call const fn baml.String.to_json(copy _6) -> [bb2];
+        _8 = copy _1;
+        _7 = copy _8.1;
+        _9 = load_type(string);
+        _6 = call const fn baml.json.to_json<copy _9>(copy _7) -> [bb2];
     }
 
     bb2: {
-        _0 = { const "code": copy _2, const "message": copy _5 };
+        _0 = { const "code": copy _2, const "message": copy _6 };
         goto -> bb3;
     }
 
@@ -572,73 +583,83 @@ fn user.RootWithCrossNsFields.to_json(self: RootWithCrossNsFields) -> baml.json.
     let _2: baml.json.json
     let _3: Config
     let _4: RootWithCrossNsFields
-    let _5: baml.json.json
-    let _6: llm.Config
-    let _7: RootWithCrossNsFields
-    let _8: baml.json.json
-    let _9: auth.Config
-    let _10: RootWithCrossNsFields
-    let _11: baml.json.json
-    let _12: llm.Response
-    let _13: RootWithCrossNsFields
+    let _5: type
+    let _6: baml.json.json
+    let _7: llm.Config
+    let _8: RootWithCrossNsFields
+    let _9: type
+    let _10: baml.json.json
+    let _11: auth.Config
+    let _12: RootWithCrossNsFields
+    let _13: type
     let _14: baml.json.json
-    let _15: llm.openai.Client
+    let _15: llm.Response
     let _16: RootWithCrossNsFields
-    let _17: baml.json.json
-    let _18: (Status) -> baml.json.json throws never
-    let _19: Status
+    let _17: type
+    let _18: baml.json.json
+    let _19: llm.openai.Client
     let _20: RootWithCrossNsFields
-    let _21: string
+    let _21: type
     let _22: baml.json.json
-    let _23: Config
+    let _23: Status
     let _24: RootWithCrossNsFields
+    let _25: type
+    let _26: baml.json.json
+    let _27: Config
+    let _28: RootWithCrossNsFields
+    let _29: type
 
     bb0: {
         _4 = copy _1;
         _3 = copy _4.0;
-        _2 = call const fn user.Config.to_json(copy _3) -> [bb1];
+        _5 = load_type(Config);
+        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
     }
 
     bb1: {
-        _7 = copy _1;
-        _6 = copy _7.1;
-        _5 = call const fn user.llm.Config.to_json(copy _6) -> [bb2];
+        _8 = copy _1;
+        _7 = copy _8.1;
+        _9 = load_type(llm.Config);
+        _6 = call const fn baml.json.to_json<copy _9>(copy _7) -> [bb2];
     }
 
     bb2: {
-        _10 = copy _1;
-        _9 = copy _10.2;
-        _8 = call const fn user.auth.Config.to_json(copy _9) -> [bb3];
+        _12 = copy _1;
+        _11 = copy _12.2;
+        _13 = load_type(auth.Config);
+        _10 = call const fn baml.json.to_json<copy _13>(copy _11) -> [bb3];
     }
 
     bb3: {
-        _13 = copy _1;
-        _12 = copy _13.3;
-        _11 = call const fn user.llm.Response.to_json(copy _12) -> [bb4];
+        _16 = copy _1;
+        _15 = copy _16.3;
+        _17 = load_type(llm.Response);
+        _14 = call const fn baml.json.to_json<copy _17>(copy _15) -> [bb4];
     }
 
     bb4: {
-        _16 = copy _1;
-        _15 = copy _16.4;
-        _14 = call const fn user.llm.openai.Client.to_json(copy _15) -> [bb5];
+        _20 = copy _1;
+        _19 = copy _20.4;
+        _21 = load_type(llm.openai.Client);
+        _18 = call const fn baml.json.to_json<copy _21>(copy _19) -> [bb5];
     }
 
     bb5: {
-        _20 = copy _1;
-        _19 = copy _20.5;
-        _21 = const "to_json";
-        _18 = copy _19[_21];
-        _17 = call copy _18() -> [bb6];
+        _24 = copy _1;
+        _23 = copy _24.5;
+        _25 = load_type(Status);
+        _22 = call const fn baml.json.to_json<copy _25>(copy _23) -> [bb6];
     }
 
     bb6: {
-        _24 = copy _1;
-        _23 = copy _24.6;
-        _22 = call const fn user.Config.to_json(copy _23) -> [bb7];
+        _28 = copy _1;
+        _27 = copy _28.6;
+        _29 = load_type(Config);
+        _26 = call const fn baml.json.to_json<copy _29>(copy _27) -> [bb7];
     }
 
     bb7: {
-        _0 = { const "own_config": copy _2, const "llm_config": copy _5, const "auth_config": copy _8, const "llm_response": copy _11, const "nested_client": copy _14, const "own_status": copy _17, const "own_alias": copy _22 };
+        _0 = { const "own_config": copy _2, const "llm_config": copy _6, const "auth_config": copy _10, const "llm_response": copy _14, const "nested_client": copy _18, const "own_status": copy _22, const "own_alias": copy _26 };
         goto -> bb8;
     }
 
@@ -1145,24 +1166,28 @@ fn user.auth.Config.to_json(self: auth.Config) -> baml.json.json {
     let _2: baml.json.json
     let _3: string
     let _4: auth.Config
-    let _5: baml.json.json
-    let _6: string
-    let _7: auth.Config
+    let _5: type
+    let _6: baml.json.json
+    let _7: string
+    let _8: auth.Config
+    let _9: type
 
     bb0: {
         _4 = copy _1;
         _3 = copy _4.0;
-        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
+        _5 = load_type(string);
+        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
     }
 
     bb1: {
-        _7 = copy _1;
-        _6 = copy _7.1;
-        _5 = call const fn baml.String.to_json(copy _6) -> [bb2];
+        _8 = copy _1;
+        _7 = copy _8.1;
+        _9 = load_type(string);
+        _6 = call const fn baml.json.to_json<copy _9>(copy _7) -> [bb2];
     }
 
     bb2: {
-        _0 = { const "provider": copy _2, const "secret": copy _5 };
+        _0 = { const "provider": copy _2, const "secret": copy _6 };
         goto -> bb3;
     }
 
@@ -1178,24 +1203,28 @@ fn user.auth.Error.to_json(self: auth.Error) -> baml.json.json {
     let _2: baml.json.json
     let _3: string
     let _4: auth.Error
-    let _5: baml.json.json
-    let _6: bool
-    let _7: auth.Error
+    let _5: type
+    let _6: baml.json.json
+    let _7: bool
+    let _8: auth.Error
+    let _9: type
 
     bb0: {
         _4 = copy _1;
         _3 = copy _4.0;
-        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
+        _5 = load_type(string);
+        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
     }
 
     bb1: {
-        _7 = copy _1;
-        _6 = copy _7.1;
-        _5 = call const fn baml.Bool.to_json(copy _6) -> [bb2];
+        _8 = copy _1;
+        _7 = copy _8.1;
+        _9 = load_type(bool);
+        _6 = call const fn baml.json.to_json<copy _9>(copy _7) -> [bb2];
     }
 
     bb2: {
-        _0 = { const "realm": copy _2, const "expired": copy _5 };
+        _0 = { const "realm": copy _2, const "expired": copy _6 };
         goto -> bb3;
     }
 
@@ -1211,28 +1240,28 @@ fn user.auth.Token.to_json(self: auth.Token) -> baml.json.json {
     let _2: baml.json.json
     let _3: string
     let _4: auth.Token
-    let _5: baml.json.json
-    let _6: (auth.Role) -> baml.json.json throws never
+    let _5: type
+    let _6: baml.json.json
     let _7: auth.Role
     let _8: auth.Token
-    let _9: string
+    let _9: type
 
     bb0: {
         _4 = copy _1;
         _3 = copy _4.0;
-        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
+        _5 = load_type(string);
+        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
     }
 
     bb1: {
         _8 = copy _1;
         _7 = copy _8.1;
-        _9 = const "to_json";
-        _6 = copy _7[_9];
-        _5 = call copy _6() -> [bb2];
+        _9 = load_type(auth.Role);
+        _6 = call const fn baml.json.to_json<copy _9>(copy _7) -> [bb2];
     }
 
     bb2: {
-        _0 = { const "value": copy _2, const "role": copy _5 };
+        _0 = { const "value": copy _2, const "role": copy _6 };
         goto -> bb3;
     }
 
@@ -1902,24 +1931,28 @@ fn user.llm.Error.to_json(self: llm.Error) -> baml.json.json {
     let _2: baml.json.json
     let _3: string
     let _4: llm.Error
-    let _5: baml.json.json
-    let _6: bool
-    let _7: llm.Error
+    let _5: type
+    let _6: baml.json.json
+    let _7: bool
+    let _8: llm.Error
+    let _9: type
 
     bb0: {
         _4 = copy _1;
         _3 = copy _4.0;
-        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
+        _5 = load_type(string);
+        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
     }
 
     bb1: {
-        _7 = copy _1;
-        _6 = copy _7.1;
-        _5 = call const fn baml.Bool.to_json(copy _6) -> [bb2];
+        _8 = copy _1;
+        _7 = copy _8.1;
+        _9 = load_type(bool);
+        _6 = call const fn baml.json.to_json<copy _9>(copy _7) -> [bb2];
     }
 
     bb2: {
-        _0 = { const "reason": copy _2, const "retryable": copy _5 };
+        _0 = { const "reason": copy _2, const "retryable": copy _6 };
         goto -> bb3;
     }
 
@@ -1935,24 +1968,28 @@ fn user.llm.LlmWithRootAlias.to_json(self: llm.LlmWithRootAlias) -> baml.json.js
     let _2: baml.json.json
     let _3: Config
     let _4: llm.LlmWithRootAlias
-    let _5: baml.json.json
-    let _6: llm.Response
-    let _7: llm.LlmWithRootAlias
+    let _5: type
+    let _6: baml.json.json
+    let _7: llm.Response
+    let _8: llm.LlmWithRootAlias
+    let _9: type
 
     bb0: {
         _4 = copy _1;
         _3 = copy _4.0;
-        _2 = call const fn user.Config.to_json(copy _3) -> [bb1];
+        _5 = load_type(Config);
+        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
     }
 
     bb1: {
-        _7 = copy _1;
-        _6 = copy _7.1;
-        _5 = call const fn user.llm.Response.to_json(copy _6) -> [bb2];
+        _8 = copy _1;
+        _7 = copy _8.1;
+        _9 = load_type(llm.Response);
+        _6 = call const fn baml.json.to_json<copy _9>(copy _7) -> [bb2];
     }
 
     bb2: {
-        _0 = { const "root_alias": copy _2, const "own_alias": copy _5 };
+        _0 = { const "root_alias": copy _2, const "own_alias": copy _6 };
         goto -> bb3;
     }
 
@@ -1968,24 +2005,28 @@ fn user.llm.Config.to_json(self: llm.Config) -> baml.json.json {
     let _2: baml.json.json
     let _3: string
     let _4: llm.Config
-    let _5: baml.json.json
-    let _6: float
-    let _7: llm.Config
+    let _5: type
+    let _6: baml.json.json
+    let _7: float
+    let _8: llm.Config
+    let _9: type
 
     bb0: {
         _4 = copy _1;
         _3 = copy _4.0;
-        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
+        _5 = load_type(string);
+        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
     }
 
     bb1: {
-        _7 = copy _1;
-        _6 = copy _7.1;
-        _5 = call const fn baml.Float.to_json(copy _6) -> [bb2];
+        _8 = copy _1;
+        _7 = copy _8.1;
+        _9 = load_type(float);
+        _6 = call const fn baml.json.to_json<copy _9>(copy _7) -> [bb2];
     }
 
     bb2: {
-        _0 = { const "model": copy _2, const "temperature": copy _5 };
+        _0 = { const "model": copy _2, const "temperature": copy _6 };
         goto -> bb3;
     }
 
@@ -2001,91 +2042,105 @@ fn user.llm.LlmWithCrossNsFields.to_json(self: llm.LlmWithCrossNsFields) -> baml
     let _2: baml.json.json
     let _3: llm.Config
     let _4: llm.LlmWithCrossNsFields
-    let _5: baml.json.json
-    let _6: llm.Response
-    let _7: llm.LlmWithCrossNsFields
-    let _8: baml.json.json
-    let _9: Config
-    let _10: llm.LlmWithCrossNsFields
-    let _11: baml.json.json
-    let _12: Error
-    let _13: llm.LlmWithCrossNsFields
+    let _5: type
+    let _6: baml.json.json
+    let _7: llm.Response
+    let _8: llm.LlmWithCrossNsFields
+    let _9: type
+    let _10: baml.json.json
+    let _11: Config
+    let _12: llm.LlmWithCrossNsFields
+    let _13: type
     let _14: baml.json.json
-    let _15: auth.Config
+    let _15: Error
     let _16: llm.LlmWithCrossNsFields
-    let _17: baml.json.json
-    let _18: llm.openai.Client
-    let _19: llm.LlmWithCrossNsFields
-    let _20: baml.json.json
-    let _21: (llm.Status) -> baml.json.json throws never
-    let _22: llm.Status
-    let _23: llm.LlmWithCrossNsFields
-    let _24: string
-    let _25: baml.json.json
-    let _26: llm.Config
-    let _27: llm.LlmWithCrossNsFields
-    let _28: baml.json.json
-    let _29: Config
-    let _30: llm.LlmWithCrossNsFields
+    let _17: type
+    let _18: baml.json.json
+    let _19: auth.Config
+    let _20: llm.LlmWithCrossNsFields
+    let _21: type
+    let _22: baml.json.json
+    let _23: llm.openai.Client
+    let _24: llm.LlmWithCrossNsFields
+    let _25: type
+    let _26: baml.json.json
+    let _27: llm.Status
+    let _28: llm.LlmWithCrossNsFields
+    let _29: type
+    let _30: baml.json.json
+    let _31: llm.Config
+    let _32: llm.LlmWithCrossNsFields
+    let _33: type
+    let _34: baml.json.json
+    let _35: Config
+    let _36: llm.LlmWithCrossNsFields
+    let _37: type
 
     bb0: {
         _4 = copy _1;
         _3 = copy _4.0;
-        _2 = call const fn user.llm.Config.to_json(copy _3) -> [bb1];
+        _5 = load_type(llm.Config);
+        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
     }
 
     bb1: {
-        _7 = copy _1;
-        _6 = copy _7.1;
-        _5 = call const fn user.llm.Response.to_json(copy _6) -> [bb2];
+        _8 = copy _1;
+        _7 = copy _8.1;
+        _9 = load_type(llm.Response);
+        _6 = call const fn baml.json.to_json<copy _9>(copy _7) -> [bb2];
     }
 
     bb2: {
-        _10 = copy _1;
-        _9 = copy _10.2;
-        _8 = call const fn user.Config.to_json(copy _9) -> [bb3];
+        _12 = copy _1;
+        _11 = copy _12.2;
+        _13 = load_type(Config);
+        _10 = call const fn baml.json.to_json<copy _13>(copy _11) -> [bb3];
     }
 
     bb3: {
-        _13 = copy _1;
-        _12 = copy _13.3;
-        _11 = call const fn user.Error.to_json(copy _12) -> [bb4];
+        _16 = copy _1;
+        _15 = copy _16.3;
+        _17 = load_type(Error);
+        _14 = call const fn baml.json.to_json<copy _17>(copy _15) -> [bb4];
     }
 
     bb4: {
-        _16 = copy _1;
-        _15 = copy _16.4;
-        _14 = call const fn user.auth.Config.to_json(copy _15) -> [bb5];
+        _20 = copy _1;
+        _19 = copy _20.4;
+        _21 = load_type(auth.Config);
+        _18 = call const fn baml.json.to_json<copy _21>(copy _19) -> [bb5];
     }
 
     bb5: {
-        _19 = copy _1;
-        _18 = copy _19.5;
-        _17 = call const fn user.llm.openai.Client.to_json(copy _18) -> [bb6];
+        _24 = copy _1;
+        _23 = copy _24.5;
+        _25 = load_type(llm.openai.Client);
+        _22 = call const fn baml.json.to_json<copy _25>(copy _23) -> [bb6];
     }
 
     bb6: {
-        _23 = copy _1;
-        _22 = copy _23.6;
-        _24 = const "to_json";
-        _21 = copy _22[_24];
-        _20 = call copy _21() -> [bb7];
+        _28 = copy _1;
+        _27 = copy _28.6;
+        _29 = load_type(llm.Status);
+        _26 = call const fn baml.json.to_json<copy _29>(copy _27) -> [bb7];
     }
 
     bb7: {
-        _27 = copy _1;
-        _26 = copy _27.7;
-        _25 = call const fn user.llm.Config.to_json(copy _26) -> [bb8];
+        _32 = copy _1;
+        _31 = copy _32.7;
+        _33 = load_type(llm.Config);
+        _30 = call const fn baml.json.to_json<copy _33>(copy _31) -> [bb8];
     }
 
     bb8: {
-        _30 = copy _1;
-        _29 = copy _30.8;
-        _28 = call const fn user.Config.to_json(copy _29) -> [bb9];
+        _36 = copy _1;
+        _35 = copy _36.8;
+        _37 = load_type(Config);
+        _34 = call const fn baml.json.to_json<copy _37>(copy _35) -> [bb9];
     }
 
     bb9: {
-        _0 = { const "own_config": copy _2, const "own_response": copy _5, const "root_config": copy _8, const "root_error": copy _11, const "auth_config": copy _14, const "nested_client": copy _17, const "own_status": copy _20, const "own_alias": copy _25, const "root_alias": copy _28 };
+        _0 = { const "own_config": copy _2, const "own_response": copy _6, const "root_config": copy _10, const "root_error": copy _14, const "auth_config": copy _18, const "nested_client": copy _22, const "own_status": copy _26, const "own_alias": copy _30, const "root_alias": copy _34 };
         goto -> bb10;
     }
 
@@ -2101,24 +2156,28 @@ fn user.llm.Response.to_json(self: llm.Response) -> baml.json.json {
     let _2: baml.json.json
     let _3: string
     let _4: llm.Response
-    let _5: baml.json.json
-    let _6: int
-    let _7: llm.Response
+    let _5: type
+    let _6: baml.json.json
+    let _7: int
+    let _8: llm.Response
+    let _9: type
 
     bb0: {
         _4 = copy _1;
         _3 = copy _4.0;
-        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
+        _5 = load_type(string);
+        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
     }
 
     bb1: {
-        _7 = copy _1;
-        _6 = copy _7.1;
-        _5 = call const fn baml.Int.to_json(copy _6) -> [bb2];
+        _8 = copy _1;
+        _7 = copy _8.1;
+        _9 = load_type(int);
+        _6 = call const fn baml.json.to_json<copy _9>(copy _7) -> [bb2];
     }
 
     bb2: {
-        _0 = { const "text": copy _2, const "tokens": copy _5 };
+        _0 = { const "text": copy _2, const "tokens": copy _6 };
         goto -> bb3;
     }
 
@@ -2600,24 +2659,28 @@ fn user.llm.openai.Client.to_json(self: llm.openai.Client) -> baml.json.json {
     let _2: baml.json.json
     let _3: string
     let _4: llm.openai.Client
-    let _5: baml.json.json
-    let _6: string
-    let _7: llm.openai.Client
+    let _5: type
+    let _6: baml.json.json
+    let _7: string
+    let _8: llm.openai.Client
+    let _9: type
 
     bb0: {
         _4 = copy _1;
         _3 = copy _4.0;
-        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
+        _5 = load_type(string);
+        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
     }
 
     bb1: {
-        _7 = copy _1;
-        _6 = copy _7.1;
-        _5 = call const fn baml.String.to_json(copy _6) -> [bb2];
+        _8 = copy _1;
+        _7 = copy _8.1;
+        _9 = load_type(string);
+        _6 = call const fn baml.json.to_json<copy _9>(copy _7) -> [bb2];
     }
 
     bb2: {
-        _0 = { const "api_key": copy _2, const "org_id": copy _5 };
+        _0 = { const "api_key": copy _2, const "org_id": copy _6 };
         goto -> bb3;
     }
 
@@ -2633,24 +2696,28 @@ fn user.llm.openai.Error.to_json(self: llm.openai.Error) -> baml.json.json {
     let _2: baml.json.json
     let _3: int
     let _4: llm.openai.Error
-    let _5: baml.json.json
-    let _6: string
-    let _7: llm.openai.Error
+    let _5: type
+    let _6: baml.json.json
+    let _7: string
+    let _8: llm.openai.Error
+    let _9: type
 
     bb0: {
         _4 = copy _1;
         _3 = copy _4.0;
-        _2 = call const fn baml.Int.to_json(copy _3) -> [bb1];
+        _5 = load_type(int);
+        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
     }
 
     bb1: {
-        _7 = copy _1;
-        _6 = copy _7.1;
-        _5 = call const fn baml.String.to_json(copy _6) -> [bb2];
+        _8 = copy _1;
+        _7 = copy _8.1;
+        _9 = load_type(string);
+        _6 = call const fn baml.json.to_json<copy _9>(copy _7) -> [bb2];
     }
 
     bb2: {
-        _0 = { const "status_code": copy _2, const "body": copy _5 };
+        _0 = { const "status_code": copy _2, const "body": copy _6 };
         goto -> bb3;
     }
 

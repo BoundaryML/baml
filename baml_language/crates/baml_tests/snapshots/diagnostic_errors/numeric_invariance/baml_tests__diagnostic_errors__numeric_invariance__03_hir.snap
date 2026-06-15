@@ -60,5 +60,5 @@ function user.from_json(j: baml.json.json) -> user.BigintHolder  [expr] {
   user.BigintHolder { count: baml.json.from_json(baml.json.field(j, "count")) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "count": self.count.to_json() }
+  map { "count": baml.json.to_json(self.count) }
 }

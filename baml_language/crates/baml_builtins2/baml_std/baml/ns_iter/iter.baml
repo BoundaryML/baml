@@ -135,7 +135,7 @@ class ArrayIterator<T> {
   idx: int
 
   function new(arr: T[]) -> ArrayIterator<T> throws never {
-    ArrayIterator<T> { arr: arr.slice(0, arr.length()), idx: 0 }
+    ArrayIterator<T> { arr: arr, idx: 0 }
   }
 
   implements Iterable {
@@ -150,12 +150,16 @@ class ArrayIterator<T> {
     type Error = never
 
     function next(self) -> T | Done throws never {
-      match (self.arr.at(self.idx)) {
-        null => Done {},
-        let item: T => {
-          self.idx += 1;
-          item
-        },
+      // Bounds-check by index, not by matching `at()` against null: when T is
+      // itself nullable, a stored null element must be yielded, not treated as
+      // the end of iteration.
+      if (self.idx >= self.arr.length()) {
+        return Done {};
+      }
+      let item = self.arr.at(self.idx);
+      self.idx += 1;
+      match (item) {
+        let value: T => value,
       }
     }
   }

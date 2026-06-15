@@ -108,7 +108,7 @@ test "array_sort_floats" {
 //   • `(int | string)[].sort()` — rollback now pinned via `sort_by`
 //     (`array_sort_by_callback_throws`)
 // 02-PLAN cutover (reverses the 01b NaN decision): `float` now binds
-// `type CmpError = never` and orders by `f64::total_cmp`, so `float[].sort()`
+// `type CompareError = never` and orders by `f64::total_cmp`, so `float[].sort()`
 // no longer rejects NaN — NaN sorts deterministically after +inf.
 test "array_sort_nan_sorts_last" {
     let xs = [1.0, float.nan()];

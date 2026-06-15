@@ -324,7 +324,7 @@ function json_auto_derive.BZeroFrom.from_json(j: baml.json.json) -> json_auto_de
     return
 }
 
-function json_auto_derive.G.f(self: json_auto_derive.G<unknown>) -> baml.json.json[] {
+function json_auto_derive.G.f(self: json_auto_derive.G<T>) -> baml.json.json[] {
     load_type #0
     load_type baml.json.json
     load_type baml.json.JsonParseError | baml.json.JsonSerializationError

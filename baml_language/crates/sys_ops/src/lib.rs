@@ -168,7 +168,7 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
         client: io::owned::llm::PrimitiveClient,
         template: String,
         args: indexmap::IndexMap<String, BexExternalValue>,
-        return_type: baml_type::Ty,
+        return_type: baml_type::RuntimeTy,
         ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::llm::PromptAst> {
         let old_client = match convert_io_primitive_client(&client) {
@@ -180,8 +180,8 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
             }
         };
         let args_ext = BexExternalValue::Map {
-            key_type: baml_type::Ty::string(),
-            value_type: baml_type::Ty::unknown(),
+            key_type: baml_type::RuntimeTy::string(),
+            value_type: baml_type::RuntimeTy::unknown(),
             entries: args,
         };
         SysOpOutput::Ready(
@@ -227,7 +227,7 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
         _call_id: CallId,
         client: io::owned::llm::PrimitiveClient,
         prompt: io::owned::llm::PromptAst,
-        return_type: baml_type::Ty,
+        return_type: baml_type::RuntimeTy,
         ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
         let old_client = match convert_io_primitive_client(&client) {
@@ -267,7 +267,7 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
         _call_id: CallId,
         client: io::owned::llm::PrimitiveClient,
         response: String,
-        type_arg_0: baml_type::Ty,
+        type_arg_0: baml_type::RuntimeTy,
         ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
         let old_client = match convert_io_primitive_client(&client) {
@@ -291,7 +291,7 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
         _call_id: CallId,
         client: io::owned::llm::PrimitiveClient,
         prompt: io::owned::llm::PromptAst,
-        return_type: baml_type::Ty,
+        return_type: baml_type::RuntimeTy,
         ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
         let old_client = match convert_io_primitive_client(&client) {
@@ -564,13 +564,15 @@ impl<T> io::IoClassLlmStreamAccumulator for T {
 }
 
 /// Blanket impl — `StreamCache.new()` creates a SAP cache from a type descriptor.
+/// Parameter order follows the BAML decl (`new(streaming, target)` — stream
+/// type first, mirroring `StreamCache<TStream, TFinal>`).
 impl<T> io::IoClassLlmStreamCache for T {
     fn new(
         &self,
         _heap: &std::sync::Arc<BexHeap>,
         _call_id: CallId,
-        target: baml_type::Ty,
-        stream_target: baml_type::Ty,
+        stream_target: baml_type::RuntimeTy,
+        target: baml_type::RuntimeTy,
         ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::llm::StreamCache> {
         let compiled =
@@ -621,26 +623,12 @@ impl<T> io::IoNamespaceLlm for T {
         _call_id: CallId,
         function_name: String,
         ctx: &SysOpContext,
-    ) -> SysOpOutput<baml_type::Ty> {
+    ) -> SysOpOutput<baml_type::RuntimeTy> {
         let outcome = lookup_llm_function(&function_name, &ctx.llm_functions);
         let sys_types::ResolveOutcome::Found(_, info) = outcome else {
             return SysOpOutput::err(llm_function_lookup_error(&function_name, &outcome));
         };
         SysOpOutput::ok(info.return_type.clone())
-    }
-
-    fn get_stream_return_type(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        function_name: String,
-        ctx: &SysOpContext,
-    ) -> SysOpOutput<baml_type::Ty> {
-        let outcome = lookup_llm_function(&function_name, &ctx.llm_functions);
-        let sys_types::ResolveOutcome::Found(_, info) = outcome else {
-            return SysOpOutput::err(llm_function_lookup_error(&function_name, &outcome));
-        };
-        SysOpOutput::ok(info.stream_return_type.clone())
     }
 
     fn from_shorthand(
@@ -685,8 +673,8 @@ impl<T> io::IoNamespaceLlm for T {
         _call_id: CallId,
         json: String,
         cache: io::owned::llm::StreamCache,
-        _type_arg_0: baml_type::Ty,
-        _type_arg_1: baml_type::Ty,
+        _type_arg_0: baml_type::RuntimeTy,
+        _type_arg_1: baml_type::RuntimeTy,
         ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
         let Ok(sap) = cache._data.downcast::<::sys_llm::SapStreamCache>() else {
@@ -705,8 +693,8 @@ impl<T> io::IoNamespaceLlm for T {
         _call_id: CallId,
         json: String,
         cache: io::owned::llm::StreamCache,
-        _type_arg_0: baml_type::Ty,
-        _type_arg_1: baml_type::Ty,
+        _type_arg_0: baml_type::RuntimeTy,
+        _type_arg_1: baml_type::RuntimeTy,
         ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
         let Ok(sap) = cache._data.downcast::<::sys_llm::SapStreamCache>() else {
@@ -1442,8 +1430,8 @@ impl io::IoNamespaceHost for DefaultIoOps {
         _call_id: CallId,
         _handle: BexExternalValue,
         _args: Vec<BexExternalValue>,
-        _type_arg_0: baml_type::Ty,
-        _type_arg_1: baml_type::Ty,
+        _type_arg_0: baml_type::RuntimeTy,
+        _type_arg_1: baml_type::RuntimeTy,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
         SysOpOutput::err(VmBamlError::Unsupported {

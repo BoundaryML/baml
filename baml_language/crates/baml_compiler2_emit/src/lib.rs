@@ -27,7 +27,7 @@ use baml_compiler2_mir::{
 // Use the PPIR item tree (which includes synthetic *$stream items) rather than
 // the bare HIR item tree, to stay consistent with TIR's LocalItemId indices.
 use baml_compiler2_ppir::file_item_tree;
-use baml_type::{Ty, TyAttr};
+use baml_type::{RuntimeTy, TyAttr};
 use bex_vm_types::{
     Bytecode, Class, ClassField, ConstValue, Enum, EnumVariant, Function, FunctionKind,
     FunctionMeta, FunctionOrigin, Instruction, Object, ObjectIndex, ObjectPool, Program,
@@ -43,7 +43,7 @@ fn build_alias_caches(
         let pkg_info = file_package(db, *file);
         caches.entry(pkg_info.package.clone()).or_insert_with(|| {
             let pkg_id = PackageId::new(db, pkg_info.package.clone());
-            ResolvedAliases::for_package(db, pkg_id)
+            baml_compiler2_mir::resolved_aliases_for_package(db, pkg_id)
         });
     }
     caches
@@ -126,7 +126,7 @@ pub(crate) struct MirCodegenContext<'ctx, 'obj> {
     /// Lambda debug names, parallel to `lambda_object_indices`.
     pub lambda_names: &'ctx [String],
     /// Compile-time types for captures in the function currently being emitted.
-    pub capture_types: &'ctx [Ty],
+    pub capture_types: &'ctx [RuntimeTy],
     /// Capture slots whose cells may be touched by spawned code.
     pub spawn_capture_indices: &'ctx HashSet<usize>,
 }
@@ -145,12 +145,22 @@ pub struct CompileOptions {
 pub enum LoweringError {
     /// A stub — no errors expected from Phase 1 stub.
     Internal(String),
+    /// The project has unresolved compile errors, so bytecode generation was
+    /// not attempted. Lowering an error-bearing program would feed
+    /// inference-only `Unknown`/`Error` types through the runtime-conversion
+    /// boundary, which rejects them. Callers should surface the diagnostics to
+    /// the user instead of treating this as a compiler fault.
+    ProjectHasErrors { error_count: usize },
 }
 
 impl std::fmt::Display for LoweringError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Internal(msg) => write!(f, "internal lowering error: {msg}"),
+            Self::ProjectHasErrors { error_count } => write!(
+                f,
+                "cannot generate bytecode: project has {error_count} unresolved compile error(s)"
+            ),
         }
     }
 }
@@ -406,7 +416,7 @@ pub fn generate_project_bytecode_with_opt(
                         (resolved_ty, template)
                     }
                     None => {
-                        let null_ty = baml_type::Ty::Null {
+                        let null_ty = baml_type::RuntimeTy::Null {
                             attr: baml_type::TyAttr::default(),
                         };
                         (null_ty.clone(), baml_type::TyTemplate::Concrete(null_ty))
@@ -608,10 +618,7 @@ pub fn generate_project_bytecode_with_opt(
                         local_names: Vec::new(),
                         debug_locals: Vec::new(),
                         span: Span::fake(),
-                        return_type: baml_type::Ty::Null {
-                            attr: baml_type::TyAttr::default(),
-                        },
-                        stream_return_type: baml_type::Ty::Null {
+                        return_type: baml_type::RuntimeTy::Null {
                             attr: baml_type::TyAttr::default(),
                         },
                         param_names: Vec::new(),
@@ -623,6 +630,7 @@ pub fn generate_project_bytecode_with_opt(
                         throws_type: None,
                         origin: FunctionOrigin::Builtin,
                         body_meta: None,
+                        function_id: 0, // assigned at engine init (interim provider)
                     }
                 }
                 MirFunctionKind::Builtin(BuiltinKind::Vm) => Function {
@@ -635,10 +643,7 @@ pub fn generate_project_bytecode_with_opt(
                     local_names: Vec::new(),
                     debug_locals: Vec::new(),
                     span: Span::fake(),
-                    return_type: baml_type::Ty::Null {
-                        attr: baml_type::TyAttr::default(),
-                    },
-                    stream_return_type: baml_type::Ty::Null {
+                    return_type: baml_type::RuntimeTy::Null {
                         attr: baml_type::TyAttr::default(),
                     },
                     param_names: Vec::new(),
@@ -650,6 +655,7 @@ pub fn generate_project_bytecode_with_opt(
                     throws_type: None,
                     origin: FunctionOrigin::Builtin,
                     body_meta: None,
+                    function_id: 0, // assigned at engine init (interim provider)
                 },
             };
 
@@ -679,16 +685,6 @@ pub fn generate_project_bytecode_with_opt(
             if let Some(baml_compiler2_ast::DeclarativeMeta::Llm(llm_meta)) =
                 &func_data.declarative_meta
             {
-                // Look up the PPIR's pre-computed stream-expanded return type.
-                let expansion = baml_compiler2_ppir::ppir_expansion_items(db, *file);
-                for (name, stream_te) in expansion.stream_return_types(db) {
-                    if *name == fq_name {
-                        compiled_fn.stream_return_type =
-                            compute_stream_return_type(db, *file, stream_te, cache_pass4);
-                        break;
-                    }
-                }
-
                 if let (Some(client), Some(prompt)) = (&llm_meta.client, &llm_meta.prompt) {
                     compiled_fn.body_meta = Some(FunctionMeta::Llm {
                         prompt_template: prompt.text.clone(),
@@ -872,14 +868,11 @@ pub fn generate_project_bytecode_with_opt(
                 local_names: vec![String::new(), "registry".to_string()],
                 debug_locals: Vec::new(),
                 span: Span::fake(),
-                return_type: baml_type::Ty::Null {
-                    attr: baml_type::TyAttr::default(),
-                },
-                stream_return_type: baml_type::Ty::Null {
+                return_type: baml_type::RuntimeTy::Null {
                     attr: baml_type::TyAttr::default(),
                 },
                 param_names: vec!["registry".to_string()],
-                param_types: vec![baml_type::Ty::unknown()], // type not needed for chainer dispatch
+                param_types: vec![baml_type::RuntimeTy::unknown()], // type not needed for chainer dispatch
                 param_has_default: vec![false],
                 display_type_params: Vec::new(),
                 display_param_types: vec!["unknown".to_string()],
@@ -887,6 +880,7 @@ pub fn generate_project_bytecode_with_opt(
                 throws_type: None,
                 origin: FunctionOrigin::Internal,
                 body_meta: None,
+                function_id: 0, // assigned at engine init (interim provider)
             };
 
             let chainer_name = if pkg_name.as_str() == "user" {
@@ -940,7 +934,7 @@ pub fn generate_project_bytecode_with_opt(
     // --- Pass 7.5: Recursive type alias definitions (ctx.output_format bridge) ---
     // Mirrors the legacy pipeline: only recursive aliases are stored in
     // `Program.recursive_type_alias_defs`; non-recursive aliases are expanded inline
-    // by `convert_tir2_ty`. This is required for correct output_format rendering at runtime.
+    // by `convert_tir_ty_for_runtime`. This is required for correct output_format rendering at runtime.
     for cache in alias_caches.values() {
         for (qtn, tir_ty) in &cache.aliases {
             if cache.recursive.contains(qtn) {
@@ -977,7 +971,7 @@ pub fn generate_project_bytecode_with_opt(
         let mut seen_pairs: HashSet<(
             String,
             String,
-            Vec<baml_type::Ty>,
+            Vec<baml_type::RuntimeTy>,
             InterfaceAssociatedBindings,
         )> = HashSet::new();
         for (pkg_name, cache) in &alias_caches {
@@ -987,8 +981,8 @@ pub fn generate_project_bytecode_with_opt(
                 |iface_qtn: &baml_compiler2_tir::ty::QualifiedTypeName,
                  class_name: baml_type::TypeName,
                  dedup_key: String,
-                 iface_args: Vec<baml_type::Ty>,
-                 iface_assoc: Vec<(Name, baml_type::Ty)>| {
+                 iface_args: Vec<baml_type::RuntimeTy>,
+                 iface_assoc: Vec<(Name, baml_type::RuntimeTy)>| {
                     let iface_name = iface_qtn.clone();
                     if seen_pairs.insert((
                         iface_qtn.to_string(),
@@ -1014,16 +1008,13 @@ pub fn generate_project_bytecode_with_opt(
                 else {
                     continue;
                 };
-                let converted_iface_args: Vec<baml_type::Ty> = iface_type_args
-                    .iter()
-                    .map(|a| baml_compiler2_mir::convert_tir2_ty(a, cache))
-                    .collect();
-                let converted_iface_assoc: Vec<(Name, baml_type::Ty)> = iface_associated_bindings
-                    .iter()
-                    .map(|(name, ty)| {
-                        (name.clone(), baml_compiler2_mir::convert_tir2_ty(ty, cache))
-                    })
-                    .collect();
+                let converted_iface_args: Vec<baml_type::RuntimeTy> =
+                    iface_type_args.iter().map(|a| cache.convert(a)).collect();
+                let converted_iface_assoc: Vec<(Name, baml_type::RuntimeTy)> =
+                    iface_associated_bindings
+                        .iter()
+                        .map(|(name, ty)| (name.clone(), cache.convert(ty)))
+                        .collect();
                 match &rule.for_ty_pattern {
                     baml_compiler2_tir::ty::Ty::Class(class_qtn, _, _) => {
                         let iface_args = if iface_type_args.iter().any(contains_tir_type_var) {
@@ -1176,7 +1167,7 @@ fn convert_test_arg_value(
         Hir2Arg::Array(items) => {
             // Use Null element type as placeholder — full type inference not run yet
             bex_vm_types::TestArgValue::Array {
-                element_type: baml_type::Ty::Null {
+                element_type: baml_type::RuntimeTy::Null {
                     attr: baml_type::TyAttr::default(),
                 },
                 items: items.iter().map(convert_test_arg_value).collect(),
@@ -1188,10 +1179,10 @@ fn convert_test_arg_value(
                 .map(|(k, v)| (k.clone(), convert_test_arg_value(v)))
                 .collect();
             bex_vm_types::TestArgValue::Map {
-                key_type: baml_type::Ty::String {
+                key_type: baml_type::RuntimeTy::String {
                     attr: baml_type::TyAttr::default(),
                 },
-                value_type: baml_type::Ty::Null {
+                value_type: baml_type::RuntimeTy::Null {
                     attr: baml_type::TyAttr::default(),
                 },
                 entries: converted,
@@ -1208,7 +1199,7 @@ fn compute_throws_type(
     file: baml_base::SourceFile,
     func_name: &baml_base::Name,
     cache: &ResolvedAliases,
-) -> Option<baml_type::Ty> {
+) -> Option<baml_type::RuntimeTy> {
     let pkg_info = file_package(db, file);
     let pkg_id = PackageId::new(db, pkg_info.package);
     let throw_sets = baml_compiler2_tir::throw_inference::function_throw_sets(db, pkg_id);
@@ -1221,12 +1212,13 @@ fn compute_throws_type(
         return None;
     }
 
-    let converted: Vec<baml_type::Ty> = facts.iter().map(|tir_ty| cache.convert(tir_ty)).collect();
+    let converted: Vec<baml_type::RuntimeTy> =
+        facts.iter().map(|tir_ty| cache.convert(tir_ty)).collect();
 
     if converted.len() == 1 {
         Some(converted.into_iter().next().unwrap())
     } else {
-        Some(baml_type::Ty::Union(
+        Some(baml_type::RuntimeTy::Union(
             converted,
             baml_type::TyAttr::default(),
         ))
@@ -1236,9 +1228,9 @@ fn compute_throws_type(
 #[derive(Debug, Clone)]
 struct FunctionSignatureMetadata {
     param_names: Vec<String>,
-    param_types: Vec<baml_type::Ty>,
+    param_types: Vec<baml_type::RuntimeTy>,
     param_has_default: Vec<bool>,
-    return_type: baml_type::Ty,
+    return_type: baml_type::RuntimeTy,
     display_type_params: Vec<String>,
     display_param_types: Vec<String>,
     display_return_type: String,
@@ -1260,7 +1252,7 @@ fn type_expr_for_name_with_generic_args(name: Name, generic_params: &[Name]) -> 
 /// Extract runtime and display signature metadata from an `item_tree` Function.
 ///
 /// Type resolution delegates to TIR's `lower_type_expr` (single source of truth)
-/// then converts via MIR's `convert_tir2_ty` to produce runtime `baml_type::Ty`.
+/// then converts via MIR's `convert_tir_ty_for_runtime` to produce runtime `baml_type::RuntimeTy`.
 /// The display fields keep generic type variables and unresolved projections
 /// intact for self-documenting surfaces like `baml run --list`.
 fn compute_function_metadata_from_item_tree(
@@ -1285,7 +1277,7 @@ fn compute_function_metadata_from_item_tree(
     let pkg_info = file_package(db, file);
     let pkg_id = PackageId::new(db, pkg_info.package);
     let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
-    let null_ty = || baml_type::Ty::Null {
+    let null_ty = || baml_type::RuntimeTy::Null {
         attr: baml_type::TyAttr::default(),
     };
 
@@ -1351,8 +1343,70 @@ fn compute_function_metadata_from_item_tree(
     };
     let enclosing_generics = scoped_generic_param_names.clone();
 
+    // A method declared inside an interface resolves its associated types
+    // (`Item`/`Error`) and `Self` against the rigid `Self` type variable, the
+    // same way the method body does (`infer_scope_types`). Build those bindings
+    // once so the signature keeps associated-type references as faithful
+    // `Self.<name>` projections; a bare `lower_type_expr_in_ns` would erase each
+    // one to `Ty::Unknown`, which then trips the runtime lowering boundary.
+    // Empty for non-interface methods (the `self_replacement` path below
+    // handles class/impl receivers).
+    let interface_signature_bindings: rustc_hash::FxHashMap<Name, baml_compiler2_tir::ty::Ty> =
+        match enclosing_interface.and_then(|iface_data| {
+            item_tree
+                .interfaces
+                .iter()
+                .find(|(_, data)| data.default_methods.contains(&func_id))
+                .map(|(iface_id, _)| {
+                    (
+                        baml_compiler2_hir::loc::InterfaceLoc::new(db, file, *iface_id),
+                        iface_data,
+                    )
+                })
+        }) {
+            Some((iface_loc, iface_data)) => {
+                let mut bindings: rustc_hash::FxHashMap<Name, baml_compiler2_tir::ty::Ty> =
+                    enclosing_generics
+                        .iter()
+                        .map(|p| {
+                            (
+                                p.clone(),
+                                baml_compiler2_tir::ty::Ty::TypeVar(
+                                    p.clone(),
+                                    baml_type::TyAttr::default(),
+                                ),
+                            )
+                        })
+                        .collect();
+                bindings.extend(
+                    baml_compiler2_tir::inference::interface_self_projection_bindings(
+                        db,
+                        iface_loc,
+                        iface_data,
+                        pkg_items,
+                        &pkg_info.namespace_path,
+                    ),
+                );
+                bindings
+            }
+            None => rustc_hash::FxHashMap::default(),
+        };
+
     let lower_tir_type = |te: &TypeExpr| -> baml_compiler2_tir::ty::Ty {
         let mut diags = Vec::new();
+        if enclosing_interface.is_some() {
+            // Interface method: lower with the `Self`/associated-type bindings so
+            // `Item`/`Error`/`Self` resolve to projections and type variables
+            // rather than `Ty::Unknown`.
+            return baml_compiler2_tir::generics::lower_type_expr_with_generics(
+                db,
+                te,
+                pkg_items,
+                &pkg_info.namespace_path,
+                &interface_signature_bindings,
+                &mut diags,
+            );
+        }
         // Use `lower_type_expr_in_ns` so unqualified references (e.g. `MyLorem`
         // in a function signature under `ns_lorem/`) resolve against the
         // defining file's namespace before falling back to the package root.
@@ -1382,14 +1436,39 @@ fn compute_function_metadata_from_item_tree(
             .filter_map(|(idx, name)| {
                 let bound_te = scoped_generic_bound_exprs.get(idx)?.as_ref()?;
                 let mut diags = Vec::new();
-                let bound_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
-                    db,
-                    bound_te,
-                    pkg_items,
-                    &pkg_info.namespace_path,
-                    &enclosing_generics,
-                    &mut diags,
-                );
+                // Lower bounds with the same `Self`/associated-type bindings as
+                // the signature (mirroring `lower_tir_type`) so an interface
+                // default-method bound like `U extends Self.Item` resolves to a
+                // projection instead of erasing `Self` to `Ty::Unknown` — which
+                // the `diags.is_empty()` gate below would then silently drop from
+                // the emitted metadata.
+                let bound_ty = if enclosing_interface.is_some() {
+                    baml_compiler2_tir::generics::lower_type_expr_with_generics(
+                        db,
+                        bound_te,
+                        pkg_items,
+                        &pkg_info.namespace_path,
+                        &interface_signature_bindings,
+                        &mut diags,
+                    )
+                } else {
+                    let resolved_te = if let Some(replacement) = &self_replacement {
+                        baml_compiler2_tir::lower_type_expr::substitute_self_in(
+                            bound_te,
+                            replacement,
+                        )
+                    } else {
+                        bound_te.clone()
+                    };
+                    baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+                        db,
+                        &resolved_te,
+                        pkg_items,
+                        &pkg_info.namespace_path,
+                        &enclosing_generics,
+                        &mut diags,
+                    )
+                };
                 diags.is_empty().then(|| (name.clone(), bound_ty))
             })
             .collect();
@@ -1414,11 +1493,13 @@ fn compute_function_metadata_from_item_tree(
         .resolve_deep(&tir_ty)
     };
 
-    let runtime_from_display_tir = |tir_ty: &baml_compiler2_tir::ty::Ty| -> baml_type::Ty {
-        let runtime_ty = baml_compiler2_tir::generics::erase_typevars_matching(tir_ty, &|name| {
-            generic_param_bounds.contains_key(name)
-        });
-        cache.convert(&runtime_ty)
+    let runtime_from_display_tir = |tir_ty: &baml_compiler2_tir::ty::Ty| -> baml_type::RuntimeTy {
+        // `resolve_display_tir` already resolved associated projections against
+        // statically-known bounds. Convert what remains faithfully — type
+        // variables and symbolic projections are carried by `RuntimeTy` so the
+        // runtime can resolve them; erasing them to `unknown` would discard the
+        // information needed to do that.
+        cache.convert(tir_ty)
     };
 
     let display_type_params: Vec<String> = scoped_generic_param_names
@@ -1473,45 +1554,6 @@ fn compute_function_metadata_from_item_tree(
         display_param_types,
         display_return_type,
     }
-}
-
-/// Lower a PPIR-computed stream-expanded `TypeExpr` to `baml_type::Ty`.
-///
-/// Reuses the same TIR lowering + MIR conversion pipeline as
-/// `compute_function_metadata_from_item_tree`.
-fn compute_stream_return_type(
-    db: &dyn baml_compiler2_mir::Db,
-    file: baml_base::SourceFile,
-    type_expr: &baml_compiler2_ast::TypeExpr,
-    cache: &ResolvedAliases,
-) -> baml_type::Ty {
-    use baml_compiler2_hir::{file_package::file_package, package::PackageId};
-
-    let pkg_info = file_package(db, file);
-    let pkg_id = PackageId::new(db, pkg_info.package.clone());
-    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
-
-    let mut diags = Vec::new();
-    let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr(
-        db,
-        type_expr,
-        pkg_items,
-        &pkg_info.namespace_path,
-        &mut diags,
-    );
-    // Diagnostics are intentionally discarded here — same as
-    // compute_function_metadata_from_item_tree. Type errors in stream-expanded
-    // types are reported upstream by TIR's infer_scope_types via
-    // builder.report_at_span().
-    let generic_param_bounds = HashMap::new();
-    let resolved_tir_ty =
-        baml_compiler2_tir::associated_projection::AssociatedProjectionResolver::new(
-            db,
-            &cache.aliases,
-            &generic_param_bounds,
-        )
-        .resolve_deep(&tir_ty);
-    baml_compiler2_mir::convert_tir2_ty(&resolved_tir_ty, cache)
 }
 
 /// Build a table of byte offsets where each line starts in the source text.
@@ -1657,12 +1699,12 @@ fn topological_sort_lets<'db>(
 
 #[derive(Clone, Default)]
 struct LambdaCaptureInfo {
-    capture_types: Vec<Ty>,
+    capture_types: Vec<RuntimeTy>,
     spawn_capture_indices: HashSet<usize>,
 }
 
-fn unknown_capture_ty() -> Ty {
-    Ty::BuiltinUnknown {
+fn unknown_capture_ty() -> RuntimeTy {
+    RuntimeTy::BuiltinUnknown {
         attr: TyAttr::default(),
     }
 }
@@ -1682,17 +1724,17 @@ fn local_def_rvalue(body: &MirFunctionBody, local: Local) -> Option<&Rvalue> {
 
 fn resolve_capture_operand_type(
     body: &MirFunctionBody,
-    parent_capture_types: &[Ty],
+    parent_capture_types: &[RuntimeTy],
     operand: &Operand,
-) -> Option<Ty> {
+) -> Option<RuntimeTy> {
     match operand {
         Operand::Constant(c) => match c {
-            baml_compiler2_mir::Constant::Int(_) => Some(Ty::int()),
-            baml_compiler2_mir::Constant::Bigint(_) => Some(Ty::bigint()),
-            baml_compiler2_mir::Constant::Float(_) => Some(Ty::float()),
-            baml_compiler2_mir::Constant::String(_) => Some(Ty::string()),
-            baml_compiler2_mir::Constant::Bool(_) => Some(Ty::bool()),
-            baml_compiler2_mir::Constant::Null => Some(Ty::null()),
+            baml_compiler2_mir::Constant::Int(_) => Some(RuntimeTy::int()),
+            baml_compiler2_mir::Constant::Bigint(_) => Some(RuntimeTy::bigint()),
+            baml_compiler2_mir::Constant::Float(_) => Some(RuntimeTy::float()),
+            baml_compiler2_mir::Constant::String(_) => Some(RuntimeTy::string()),
+            baml_compiler2_mir::Constant::Bool(_) => Some(RuntimeTy::bool()),
+            baml_compiler2_mir::Constant::Null => Some(RuntimeTy::null()),
             _ => None,
         },
         Operand::Copy(place) | Operand::Move(place) => {
@@ -1703,9 +1745,9 @@ fn resolve_capture_operand_type(
 
 fn resolve_capture_place_type(
     body: &MirFunctionBody,
-    parent_capture_types: &[Ty],
+    parent_capture_types: &[RuntimeTy],
     place: &Place,
-) -> Option<Ty> {
+) -> Option<RuntimeTy> {
     match place {
         Place::Local(local) => body.locals.get(local.0).map(|decl| decl.ty.clone()),
         Place::Capture(idx) => parent_capture_types.get(*idx).cloned(),
@@ -1813,7 +1855,7 @@ fn mark_spawned_closure_operand(
 fn collect_lambda_capture_infos(
     body: &MirFunctionBody,
     lambda_count: usize,
-    parent_capture_types: &[Ty],
+    parent_capture_types: &[RuntimeTy],
     parent_spawn_capture_indices: &HashSet<usize>,
 ) -> Vec<LambdaCaptureInfo> {
     let mut infos = vec![LambdaCaptureInfo::default(); lambda_count];
@@ -1884,7 +1926,7 @@ fn collect_lambda_capture_infos(
 fn compile_lambdas_flat(
     lambdas: &[baml_compiler2_mir::MirFunction],
     parent_body: Option<&MirFunctionBody>,
-    parent_capture_types: &[Ty],
+    parent_capture_types: &[RuntimeTy],
     parent_spawn_capture_indices: &HashSet<usize>,
     line_starts: &[u32],
     source_file: &str,
@@ -2059,10 +2101,7 @@ fn compile_init_function<'db>(
                     local_names: Vec::new(),
                     debug_locals: Vec::new(),
                     span: baml_base::Span::fake(),
-                    return_type: baml_type::Ty::Null {
-                        attr: baml_type::TyAttr::default(),
-                    },
-                    stream_return_type: baml_type::Ty::Null {
+                    return_type: baml_type::RuntimeTy::Null {
                         attr: baml_type::TyAttr::default(),
                     },
                     param_names: Vec::new(),
@@ -2074,6 +2113,7 @@ fn compile_init_function<'db>(
                     throws_type: None,
                     origin: FunctionOrigin::Internal,
                     body_meta: None,
+                    function_id: 0, // assigned at engine init (interim provider)
                 }
             }
         };
@@ -2133,10 +2173,7 @@ fn compile_init_function<'db>(
         local_names: Vec::new(),
         debug_locals: Vec::new(),
         span: baml_base::Span::fake(),
-        return_type: baml_type::Ty::Null {
-            attr: baml_type::TyAttr::default(),
-        },
-        stream_return_type: baml_type::Ty::Null {
+        return_type: baml_type::RuntimeTy::Null {
             attr: baml_type::TyAttr::default(),
         },
         param_names: Vec::new(),
@@ -2148,6 +2185,7 @@ fn compile_init_function<'db>(
         throws_type: None,
         origin: FunctionOrigin::Internal,
         body_meta: None,
+        function_id: 0, // assigned at engine init (interim provider)
     })
 }
 

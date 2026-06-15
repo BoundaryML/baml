@@ -19,9 +19,9 @@ import {
 import { BamlStream } from './stream.js';
 import { BamlAbortError, BamlCancelledError, BamlError, BamlPanic } from './errors.js';
 import {
-    registerHostError,
-    tryRehydrateFromHandle,
-} from './host_error_registry.js';
+    registerHostOpaque,
+    tryRehydrateHostValueByKey,
+} from './host_value_registry.js';
 import { BamlTypeMap, getTypeMap } from './typemap.js';
 
 const CallFunctionArgs = baml_core.cffi.v1.CallFunctionArgs;
@@ -516,7 +516,7 @@ export function decodeCallResult(data: Buffer | Uint8Array): unknown {
             const { value, className, message } = decodeThrown(result.error?.value);
             const trace = result.error?.trace ?? [];
             // Same-host rehydration: a `baml.errors.HostCallable` carrying a
-            // `_handle` that still resolves in this process's host-error
+            // `_handle` that still resolves in this process's host-value
             // registry re-throws the *original* JS error object the bridge
             // registered on the inbound throw — preserving `raised === caught`
             // identity. Foreign runtimes (a different Node process, the
@@ -524,7 +524,7 @@ export function decodeCallResult(data: Buffer | Uint8Array): unknown {
             // metadata-bearing `BamlError(HostCallable)` wrapper below.
             if (className === 'baml.errors.HostCallable' && value !== null && typeof value === 'object') {
                 const handle = (value as Record<string, unknown>)._handle;
-                const original = tryRehydrateFromHandle(handle);
+                const original = tryRehydrateHostValueByKey(handle);
                 if (original !== undefined) {
                     throw original;
                 }
@@ -696,7 +696,7 @@ function buildHostCallableInbound(
         value: InboundValue.create({
             handle: {
                 key: handleKey,
-                handleType: BamlHandleType.HOST_VALUE_ERROR,
+                handleType: BamlHandleType.HOST_VALUE_OPAQUE,
             },
         }),
     });
@@ -719,7 +719,7 @@ function buildHostCallableInbound(
 
 // Sentinel `_handle` key used by paths that have *no* JS error object to
 // register (the `completeHostCallLastResort` fallback below). Real host
-// throws register the JS error via `registerHostError` and emit its
+// throws register the JS error via `registerHostOpaque` and emit its
 // minted key; engine-internal synthetic faults use this sentinel. The
 // engine's structural check accepts either; same-host decoders that look
 // up `{low:0,high:0}` find nothing and fall through to the
@@ -798,14 +798,14 @@ function sendHostCallableError(callId: number, err: unknown): void {
         // throw when given a hostile input (e.g. a Proxy whose `constructor`,
         // `name`, or `message` getters throw — see the
         // `host-callable always completes on abnormal paths` jest suite).
-        // In that case `registerHostError` is never reached, control jumps
+        // In that case `registerHostOpaque` is never reached, control jumps
         // to the outer `catch (innerErr)` → `completeHostCallLastResort`,
         // and the user sees a metadata-only `HostCallable` instead of the
         // original Proxy. Identity loss here is the right trade — the
         // alternative is hanging the call.
         //
         // Registration-leak edge case (rare, bounded): if encoding succeeds
-        // through `registerHostError` but `buildHostCallableInbound` or
+        // through `registerHostOpaque` but `buildHostCallableInbound` or
         // `InboundValue.encode` fails after, the TS map entry stays alive
         // with no corresponding engine-side `HostValueArc` to release it,
         // so it lives until process exit. Both downstream calls are deeply
@@ -813,7 +813,7 @@ function sendHostCallableError(callId: number, err: unknown): void {
         // and don't depend on `err`'s shape, so this is effectively
         // unreachable outside protobufjs / native-binding corruption.
         const { className, message, stack } = describeError(err);
-        const handleKey = registerHostError(err);
+        const handleKey = registerHostOpaque(err);
         const inbound = buildHostCallableInbound(className, message, stack, handleKey);
         const bytes = Buffer.from(InboundValue.encode(inbound).finish());
         completeHostCall(callId, 1, bytes);

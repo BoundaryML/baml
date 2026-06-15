@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 16143
 ---
 function user.Config.from_json(j: baml.json.json) -> Config {
     load_var j
@@ -22,12 +21,14 @@ function user.Config.from_json(j: baml.json.json) -> Config {
 }
 
 function user.Config.to_json(self: Config) -> baml.json.json {
+    load_type string
     load_var self
     load_field .key
-    call baml.String.to_json
+    call baml.json.to_json
+    load_type string
     load_var self
     load_field .model
-    call baml.String.to_json
+    call baml.json.to_json
     load_const "key"
     load_const "model"
     alloc_map 2
@@ -70,12 +71,14 @@ function user.llm.Response.from_json(j: baml.json.json) -> llm.Response {
 }
 
 function user.llm.Response.to_json(self: llm.Response) -> baml.json.json {
+    load_type string
     load_var self
     load_field .text
-    call baml.String.to_json
+    call baml.json.to_json
+    load_type string
     load_var self
     load_field .model
-    call baml.String.to_json
+    call baml.json.to_json
     load_const "text"
     load_const "model"
     alloc_map 2

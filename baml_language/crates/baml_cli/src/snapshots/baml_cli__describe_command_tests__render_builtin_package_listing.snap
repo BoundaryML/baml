@@ -1,6 +1,5 @@
 ---
 source: crates/baml_cli/src/describe_command_tests.rs
-assertion_line: 354
 expression: output
 ---
 class            Bigint                           <builtin>/baml/bigint.baml:26
@@ -12,7 +11,7 @@ function         _float_total_cmp                 <builtin>/baml/comparable.baml
 function         _is_primitive_array              <builtin>/baml/comparable.baml:151
 function         _rust_sort                       <builtin>/baml/comparable.baml:172
 class            Array                            <builtin>/baml/containers.baml:2
-class            Map                              <builtin>/baml/containers.baml:475
+class            Map                              <builtin>/baml/containers.baml:457
 function         deep_copy                        <builtin>/baml/core.baml:3
 function         deep_equals                      <builtin>/baml/core.baml:9
 class            Float                            <builtin>/baml/float.baml:2
@@ -112,6 +111,9 @@ function         http.send                        <builtin>/baml/ns_http/http.ba
 function         http.fetch_sse                   <builtin>/baml/ns_http/http.baml:78
 class            http.Server                      <builtin>/baml/ns_http/server.baml:10
 class            http.TlsConfig                   <builtin>/baml/ns_http/server.baml:110
+function         id.current                       <builtin>/baml/ns_id/id.baml:6
+function         id.new                           <builtin>/baml/ns_id/id.baml:13
+function         id.set                           <builtin>/baml/ns_id/id.baml:25
 function         io.input                         <builtin>/baml/ns_io/io.baml:2
 function         io.print                         <builtin>/baml/ns_io/io.baml:8
 function         io.println                       <builtin>/baml/ns_io/io.baml:13
@@ -122,16 +124,16 @@ interface        iter.Iterable                    <builtin>/baml/ns_iter/iter.ba
 interface        iter.Iterator                    <builtin>/baml/ns_iter/iter.baml:10
 function         iter.flatten                     <builtin>/baml/ns_iter/iter.baml:129
 class            iter.ArrayIterator               <builtin>/baml/ns_iter/iter.baml:133
-class            iter.Range                       <builtin>/baml/ns_iter/iter.baml:164
-class            iter.Repeat                      <builtin>/baml/ns_iter/iter.baml:196
-class            iter.Map                         <builtin>/baml/ns_iter/iter.baml:228
-class            iter.Filter                      <builtin>/baml/ns_iter/iter.baml:252
-class            iter.FilterMap                   <builtin>/baml/ns_iter/iter.baml:283
-class            iter.FlatMap                     <builtin>/baml/ns_iter/iter.baml:315
-class            iter.Flatten                     <builtin>/baml/ns_iter/iter.baml:356
-class            iter.Peekable                    <builtin>/baml/ns_iter/iter.baml:396
-class            iter.StepBy                      <builtin>/baml/ns_iter/iter.baml:434
-class            iter.Chain                       <builtin>/baml/ns_iter/iter.baml:466
+class            iter.Range                       <builtin>/baml/ns_iter/iter.baml:168
+class            iter.Repeat                      <builtin>/baml/ns_iter/iter.baml:200
+class            iter.Map                         <builtin>/baml/ns_iter/iter.baml:232
+class            iter.Filter                      <builtin>/baml/ns_iter/iter.baml:256
+class            iter.FilterMap                   <builtin>/baml/ns_iter/iter.baml:287
+class            iter.FlatMap                     <builtin>/baml/ns_iter/iter.baml:319
+class            iter.Flatten                     <builtin>/baml/ns_iter/iter.baml:360
+class            iter.Peekable                    <builtin>/baml/ns_iter/iter.baml:400
+class            iter.StepBy                      <builtin>/baml/ns_iter/iter.baml:438
+class            iter.Chain                       <builtin>/baml/ns_iter/iter.baml:470
 type             json.json                        <builtin>/baml/ns_json/json.baml:2
 class            json.JsonParseError              <builtin>/baml/ns_json/json.baml:5
 class            json.JsonDecodeError             <builtin>/baml/ns_json/json.baml:9
@@ -152,29 +154,28 @@ class            llm.PlannerState                 <builtin>/baml/ns_llm/llm.baml
 function         llm.render_prompt                <builtin>/baml/ns_llm/llm.baml:34
 function         llm.build_request                <builtin>/baml/ns_llm/llm.baml:43
 function         llm.build_request_stream         <builtin>/baml/ns_llm/llm.baml:51
-function         llm.parse                        <builtin>/baml/ns_llm/llm.baml:63
-function         llm.call_llm_function            <builtin>/baml/ns_llm/llm.baml:73
-function         llm.stream_llm_function          <builtin>/baml/ns_llm/llm.baml:91
+function         llm.parse                        <builtin>/baml/ns_llm/llm.baml:64
+function         llm.call_llm_function            <builtin>/baml/ns_llm/llm.baml:72
+function         llm.stream_llm_function          <builtin>/baml/ns_llm/llm.baml:90
 class            llm.PromptAst                    <builtin>/baml/ns_llm/llm_types.baml:1
 enum             llm.ClientType                   <builtin>/baml/ns_llm/llm_types.baml:6
 class            llm.RetryPolicy                  <builtin>/baml/ns_llm/llm_types.baml:13
 class            llm.Client                       <builtin>/baml/ns_llm/llm_types.baml:22
-class            llm.MediaUrlHandler              <builtin>/baml/ns_llm/llm_types.baml:360
-class            llm.PrimitiveClientOptions       <builtin>/baml/ns_llm/llm_types.baml:367
-class            llm.AzureOpenAiOptions           <builtin>/baml/ns_llm/llm_types.baml:389
-class            llm.AnthropicOptions             <builtin>/baml/ns_llm/llm_types.baml:398
-class            llm.VertexAiOptions              <builtin>/baml/ns_llm/llm_types.baml:404
-class            llm.BedrockOptions               <builtin>/baml/ns_llm/llm_types.baml:413
-class            llm.StreamAccumulator            <builtin>/baml/ns_llm/llm_types.baml:426
-class            llm.StreamCache                  <builtin>/baml/ns_llm/llm_types.baml:462
-class            llm.Stream                       <builtin>/baml/ns_llm/llm_types.baml:478
-class            llm.PrimitiveClient              <builtin>/baml/ns_llm/llm_types.baml:543
-function         llm.from_shorthand               <builtin>/baml/ns_llm/llm_types.baml:605
-function         llm.get_jinja_template           <builtin>/baml/ns_llm/llm_types.baml:611
-function         llm.get_return_type              <builtin>/baml/ns_llm/llm_types.baml:615
-function         llm.get_stream_return_type       <builtin>/baml/ns_llm/llm_types.baml:624
-function         llm.__sap_parse_final            <builtin>/baml/ns_llm/llm_types.baml:629
-function         llm.__sap_parse_partial          <builtin>/baml/ns_llm/llm_types.baml:634
+class            llm.MediaUrlHandler              <builtin>/baml/ns_llm/llm_types.baml:358
+class            llm.PrimitiveClientOptions       <builtin>/baml/ns_llm/llm_types.baml:365
+class            llm.AzureOpenAiOptions           <builtin>/baml/ns_llm/llm_types.baml:387
+class            llm.AnthropicOptions             <builtin>/baml/ns_llm/llm_types.baml:396
+class            llm.VertexAiOptions              <builtin>/baml/ns_llm/llm_types.baml:402
+class            llm.BedrockOptions               <builtin>/baml/ns_llm/llm_types.baml:411
+class            llm.StreamAccumulator            <builtin>/baml/ns_llm/llm_types.baml:424
+class            llm.StreamCache                  <builtin>/baml/ns_llm/llm_types.baml:460
+class            llm.Stream                       <builtin>/baml/ns_llm/llm_types.baml:476
+class            llm.PrimitiveClient              <builtin>/baml/ns_llm/llm_types.baml:541
+function         llm.from_shorthand               <builtin>/baml/ns_llm/llm_types.baml:603
+function         llm.get_jinja_template           <builtin>/baml/ns_llm/llm_types.baml:609
+function         llm.get_return_type              <builtin>/baml/ns_llm/llm_types.baml:613
+function         llm.__sap_parse_final            <builtin>/baml/ns_llm/llm_types.baml:618
+function         llm.__sap_parse_partial          <builtin>/baml/ns_llm/llm_types.baml:623
 function         math.trunc                       <builtin>/baml/ns_math/math.baml:2
 class            media.Pdf                        <builtin>/baml/ns_media/media.baml:2
 class            media.Audio                      <builtin>/baml/ns_media/media.baml:53

@@ -222,7 +222,7 @@ impl Tlab {
 
     /// Allocate a type descriptor object on the heap.
     #[inline]
-    pub fn alloc_type(&mut self, ty: baml_type::Ty) -> HeapPtr {
+    pub fn alloc_type(&mut self, ty: baml_type::RuntimeTy) -> HeapPtr {
         self.alloc(Object::Type(Box::new(ty)))
     }
 
@@ -363,7 +363,7 @@ pub trait TlabHolder {
         self.tlab_mut().alloc_collector(collector)
     }
 
-    fn alloc_type(&mut self, ty: baml_type::Ty) -> HeapPtr {
+    fn alloc_type(&mut self, ty: baml_type::RuntimeTy) -> HeapPtr {
         self.tlab_mut().alloc_type(ty)
     }
 
@@ -565,10 +565,10 @@ mod tests {
             fields: vec![
                 bex_vm_types::ClassField {
                     name: "x".to_string(),
-                    field_type: baml_type::Ty::Int {
+                    field_type: baml_type::RuntimeTy::Int {
                         attr: baml_type::TyAttr::default(),
                     },
-                    field_template: baml_type::TyTemplate::Concrete(baml_type::Ty::Int {
+                    field_template: baml_type::TyTemplate::Concrete(baml_type::RuntimeTy::Int {
                         attr: baml_type::TyAttr::default(),
                     }),
                     description: None,
@@ -577,10 +577,10 @@ mod tests {
                 },
                 bex_vm_types::ClassField {
                     name: "y".to_string(),
-                    field_type: baml_type::Ty::Int {
+                    field_type: baml_type::RuntimeTy::Int {
                         attr: baml_type::TyAttr::default(),
                     },
-                    field_template: baml_type::TyTemplate::Concrete(baml_type::Ty::Int {
+                    field_template: baml_type::TyTemplate::Concrete(baml_type::RuntimeTy::Int {
                         attr: baml_type::TyAttr::default(),
                     }),
                     description: None,

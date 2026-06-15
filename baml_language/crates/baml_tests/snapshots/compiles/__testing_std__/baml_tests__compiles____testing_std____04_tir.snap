@@ -127,7 +127,7 @@ function testing.TestCollector.find_testset(self: testing.TestCollector, name: s
   }
 }
 function testing.TestCollector.to_json(self: testing.TestCollector) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "prefix": self.prefix.to_json(), "tests": self.tests.to_json(), "testsets": self.testsets.to_json() } : map<string, baml.json.json>
+  map { "prefix": baml.json.to_json(self.prefix), "tests": baml.json.to_json(self.tests), "testsets": baml.json.to_json(self.testsets) } : map<string, baml.json.json>
 }
 function testing.TestCollector.from_json(j: baml.json.json) -> testing.TestCollector throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   TestCollector { prefix: baml.json.from_json<string>(baml.json.field(j, "prefix")), tests: baml.json.from_json<TestRegistration[]>(baml.json.field(j, "tests")), testsets: baml.json.from_json<TestSetRegistration[]>(baml.json.field(j, "testsets")) } : testing.TestCollector
@@ -142,7 +142,7 @@ class testing.SerializedTest {
   name: string
 }
 function testing.SerializedTest.to_json(self: testing.SerializedTest) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "type": self.type.to_json(), "name": self.name.to_json() } : map<string, baml.json.json>
+  map { "type": baml.json.to_json(self.type), "name": baml.json.to_json(self.name) } : map<string, baml.json.json>
 }
 function testing.SerializedTest.from_json(j: baml.json.json) -> testing.SerializedTest throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   SerializedTest { type: baml.json.from_json<string>(baml.json.field(j, "type")), name: baml.json.from_json<string>(baml.json.field(j, "name")) } : testing.SerializedTest
@@ -153,7 +153,7 @@ class testing.SerializedTestSet {
   loadingTimeMs: int
 }
 function testing.SerializedTestSet.to_json(self: testing.SerializedTestSet) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "name": self.name.to_json(), "items": self.items.to_json(), "loadingTimeMs": self.loadingTimeMs.to_json() } : map<string, baml.json.json>
+  map { "name": baml.json.to_json(self.name), "items": baml.json.to_json(self.items), "loadingTimeMs": baml.json.to_json(self.loadingTimeMs) } : map<string, baml.json.json>
 }
 function testing.SerializedTestSet.from_json(j: baml.json.json) -> testing.SerializedTestSet throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   SerializedTestSet { name: baml.json.from_json<string>(baml.json.field(j, "name")), items: baml.json.from_json<SerializedTestDef[]>(baml.json.field(j, "items")), loadingTimeMs: baml.json.from_json<int>(baml.json.field(j, "loadingTimeMs")) } : testing.SerializedTestSet
@@ -239,7 +239,7 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
   }
 }
 function testing.TestRegistry.to_json(self: testing.TestRegistry) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "collector": self.collector.to_json(), "expansions": self.expansions.to_json(), "loading_time_ms": self.loading_time_ms.to_json() } : map<string, baml.json.json>
+  map { "collector": baml.json.to_json(self.collector), "expansions": baml.json.to_json(self.expansions), "loading_time_ms": baml.json.to_json(self.loading_time_ms) } : map<string, baml.json.json>
 }
 function testing.TestRegistry.from_json(j: baml.json.json) -> testing.TestRegistry throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   TestRegistry { collector: baml.json.from_json<TestCollector>(baml.json.field(j, "collector")), expansions: baml.json.from_json<map<string, TestRegistry>>(baml.json.field(j, "expansions")), loading_time_ms: baml.json.from_json<int>(baml.json.field(j, "loading_time_ms")) } : testing.TestRegistry
@@ -316,7 +316,7 @@ class testing.RunReport {
   duration_ms: int
 }
 function testing.RunReport.to_json(self: testing.RunReport) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "outcome": self.outcome.to_json(), "duration_ms": self.duration_ms.to_json() } : map<string, baml.json.json>
+  map { "outcome": baml.json.to_json(self.outcome), "duration_ms": baml.json.to_json(self.duration_ms) } : map<string, baml.json.json>
 }
 function testing.RunReport.from_json(j: baml.json.json) -> testing.RunReport throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   RunReport { outcome: baml.json.from_json<Outcome>(baml.json.field(j, "outcome")), duration_ms: baml.json.from_json<int>(baml.json.field(j, "duration_ms")) } : testing.RunReport
@@ -326,7 +326,7 @@ class testing.TestReport {
   runs: testing.RunReport[]
 }
 function testing.TestReport.to_json(self: testing.TestReport) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "outcome": self.outcome.to_json(), "runs": self.runs.to_json() } : map<string, baml.json.json>
+  map { "outcome": baml.json.to_json(self.outcome), "runs": baml.json.to_json(self.runs) } : map<string, baml.json.json>
 }
 function testing.TestReport.from_json(j: baml.json.json) -> testing.TestReport throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   TestReport { outcome: baml.json.from_json<Outcome>(baml.json.field(j, "outcome")), runs: baml.json.from_json<RunReport[]>(baml.json.field(j, "runs")) } : testing.TestReport
@@ -339,7 +339,7 @@ class testing.TestSetReport {
   results: testing.ChildReport[]
 }
 function testing.TestSetReport.to_json(self: testing.TestSetReport) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "outcome": self.outcome.to_json(), "passed": self.passed.to_json(), "failed": self.failed.to_json(), "total": self.total.to_json(), "results": self.results.to_json() } : map<string, baml.json.json>
+  map { "outcome": baml.json.to_json(self.outcome), "passed": baml.json.to_json(self.passed), "failed": baml.json.to_json(self.failed), "total": baml.json.to_json(self.total), "results": baml.json.to_json(self.results) } : map<string, baml.json.json>
 }
 function testing.TestSetReport.from_json(j: baml.json.json) -> testing.TestSetReport throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   TestSetReport { outcome: baml.json.from_json<Outcome>(baml.json.field(j, "outcome")), passed: baml.json.from_json<int>(baml.json.field(j, "passed")), failed: baml.json.from_json<int>(baml.json.field(j, "failed")), total: baml.json.from_json<int>(baml.json.field(j, "total")), results: baml.json.from_json<ChildReport[]>(baml.json.field(j, "results")) } : testing.TestSetReport

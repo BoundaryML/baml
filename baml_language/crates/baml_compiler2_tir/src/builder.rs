@@ -388,6 +388,14 @@ impl ThrowsAnalysisContext for BuilderThrowsAnalysis<'_, '_> {
         let target = self.builder.call_target_name(callee_expr_id, body)?;
         self.builder.lookup_named_throw_summary(&target)
     }
+
+    fn runtime_id_set_throws(&self) -> Option<BTreeSet<Ty>> {
+        // Throw-set keys are namespace-relative within their package: the
+        // builtin lives in package `baml`, namespace `id`, so its key is
+        // `id.set` (own-package lookup covers compiling the std lib itself).
+        self.builder
+            .lookup_named_throw_summary(&Name::new("id.set"))
+    }
 }
 
 /// How the receiver of an interface-member resolution pins `Self`.
@@ -1076,17 +1084,68 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// binding; the actual capture's type is resolved by the parent scope.
     ///
     /// Exists so all `self.locals` writes are named.
-    fn seed_capture_unknown(&mut self, name: Name) {
+    fn seed_capture(&mut self, name: Name, ty: Ty) {
         self.locals.insert(
             name,
             LocalBinding {
-                current_ty: Ty::Unknown {
-                    attr: TyAttr::default(),
-                },
+                current_ty: ty,
                 declared_ty: None,
                 pattern: None,
             },
         );
+    }
+
+    /// Resolve the real type of a captured binding when it is not visible in
+    /// `locals` (a grandparent capture seen while inferring a lambda body
+    /// without its outer scopes in scope).
+    ///
+    /// The capture's `BindingId` names the scope that declares it, but that
+    /// scope may not be independently inferred (catch clause/arm, block). Its
+    /// type is recorded by the nearest enclosing inferred scope (function /
+    /// lambda / let), so resolve there — mirroring the lambda capture-seeding in
+    /// `infer_scope_types`.
+    ///
+    /// A capture only reaches here once name resolution has bound it (an
+    /// unresolved capture is a diagnostic, never an entry in `captures`). In the
+    /// common case the owner scope's inference is complete and yields the real
+    /// type — the de-erasure win this resolution exists for. During a Salsa
+    /// cycle through the owner scope, or while its inference is still partial,
+    /// `infer_scope_types` has no entry yet; that transient recovery state falls
+    /// back to `Unknown` rather than panicking. This matches the pre-resolution
+    /// behavior (captures were seeded `Unknown` universally) and is safe: the
+    /// owner's *converged* inference — which the runtime-lowering boundary
+    /// actually consumes — sees the real type.
+    fn resolve_capture_type(
+        &self,
+        binding_id: baml_compiler2_hir::semantic_index::BindingId,
+    ) -> Ty {
+        use baml_compiler2_hir::semantic_index::BindingKind;
+        let db = self.context.db();
+        let file = self.context.scope().file(db);
+        let index = baml_compiler2_ppir::file_semantic_index(db, file);
+        let scope_idx = binding_id.scope.index() as usize;
+
+        let inference_fsi = crate::inference::inference_owner_scope(index, binding_id.scope);
+        let inference_scope_id = index.scope_ids[inference_fsi.index() as usize];
+        let inference = crate::inference::infer_scope_types(db, inference_scope_id);
+        let resolved = match binding_id.kind {
+            BindingKind::Parameter(idx) => inference.param_type(idx).cloned(),
+            BindingKind::Local(idx) => index
+                .scope_bindings
+                .get(scope_idx)
+                .and_then(|bindings| bindings.bindings.get(idx as usize))
+                .and_then(|binding| inference.binding_type(binding.pattern).cloned()),
+        };
+        let resolved = resolved.unwrap_or(Ty::Unknown {
+            attr: TyAttr::default(),
+        });
+        // A captured binding is no longer open, so freeze evolving empties just
+        // like an ordinary local reference does.
+        match resolved {
+            Ty::EvolvingList(inner, attr) => Ty::List(inner, attr),
+            Ty::EvolvingMap(key, value, attr) => Ty::Map { key, value, attr },
+            other => other,
+        }
     }
 
     fn sync_let_binding_type(&mut self, name: &Name, ty: Ty) {
@@ -1101,17 +1160,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     fn expand_alias_chains(&self, ty: Ty) -> Ty {
-        let mut ty = ty;
-        for _ in 0..64 {
-            match &ty {
-                Ty::TypeAlias(qtn, _) => match self.aliases.get(qtn) {
-                    Some(expanded) => ty = expanded.clone(),
-                    None => break,
-                },
-                _ => break,
-            }
-        }
-        ty
+        crate::inference::expand_alias_chains(ty, &self.aliases)
     }
 
     /// Pattern-matrix-internal normalization of a scrutinee type.
@@ -2004,9 +2053,16 @@ impl<'db> TypeInferenceBuilder<'db> {
             if let Some(label) = label {
                 saw_named = true;
                 let Some(param_index) = name_to_index.get(label).copied() else {
+                    // `foo($id = x)` deserves a targeted message: overrides
+                    // are set inside the callee, not at the call site (the
+                    // call-site form is not part of the language surface).
                     self.context.report_simple(
-                        TirTypeError::UnknownNamedArgument {
-                            name: label.clone(),
+                        if label.as_str() == "$id" {
+                            TirTypeError::RuntimeIdCallSiteArgument
+                        } else {
+                            TirTypeError::UnknownNamedArgument {
+                                name: label.clone(),
+                            }
                         },
                         arg_expr,
                     );
@@ -4006,7 +4062,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 fields,
                 spreads,
                 ..
-            } if Self::is_map_object_literal(type_name.as_ref(), obj_type_args, spreads) => {
+            } if Self::is_map_object_literal(type_name, obj_type_args, spreads) => {
                 self.infer_map_object_expr(body, fields)
             }
             Expr::Object {
@@ -4014,7 +4070,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 type_args: obj_type_args,
                 fields,
                 ..
-            } => self.infer_object_expr(expr_id, body, type_name.as_ref(), obj_type_args, fields),
+            } => self.infer_object_expr(expr_id, body, type_name, obj_type_args, fields),
             Expr::Index { base, index } => self.infer_index_expr(expr_id, body, *base, *index),
             Expr::OptionalIndex { base, index } => {
                 self.infer_optional_index_expr(expr_id, body, *base, *index)
@@ -4048,7 +4104,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                 body: spawn_body,
             } => self.infer_spawn_expr(body, *name, with_exprs, *spawn_body),
             Expr::Await { future } => self.infer_await_expr(body, *future),
-            Expr::Missing => Ty::Unknown {
+            // A `Missing` node is an unparseable expression: MIR lowers it to a
+            // `panic` and the runtime never produces a value, so it diverges.
+            // `Never` (bottom) models that precisely — and, unlike the
+            // error-recovery `Unknown`, has a faithful runtime representation,
+            // so it doesn't trip the runtime lowering boundary.
+            Expr::Missing => Ty::Never {
                 attr: TyAttr::default(),
             },
         };
@@ -4234,6 +4295,21 @@ impl<'db> TypeInferenceBuilder<'db> {
         base: ExprId,
         member: &Name,
     ) -> Ty {
+        // Member access rooted at `$id` gets the same targeted diagnostic as
+        // the plain-path form (`infer_path`'s multi-segment branch); without
+        // this, the generic machinery suggests rewriting `$id?.m` to `$id.m`
+        // — which is itself rejected.
+        if Self::is_runtime_id_path(body, base) {
+            self.context.report_simple(
+                TirTypeError::RuntimeIdMemberAccess {
+                    member: member.clone(),
+                },
+                expr_id,
+            );
+            return Ty::Unknown {
+                attr: TyAttr::default(),
+            };
+        }
         // Optional chaining: a?.b — if a is null, short-circuits to null.
         // Type: if a: T?, resolve member on T, wrap result in Optional.
         let base_ty = self.infer_expr(base, body);
@@ -4573,6 +4649,13 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let first = values.next().expect("non-empty checked above");
                 values.fold(first, |acc, v| crate::generics::union_ty(&acc, &v))
             }
+            // A `never`-typed operand never yields a value to await: it
+            // diverges (`await (throw e)`, `await (return x)`) or is a
+            // malformed/error-recovery expression. `never` is the bottom type
+            // and is assignable to any `Future<_, _>`, so `await never : never`
+            // — the await is unreachable. Yield `never` rather than reporting a
+            // spurious "expected Future" mismatch on already-unreachable code.
+            Ty::Never { .. } => fut_ty,
             Ty::Unknown { .. } | Ty::Error { .. } => fut_ty,
             other => {
                 // `await` requires a Future operand. Emit a
@@ -4712,34 +4795,51 @@ impl<'db> TypeInferenceBuilder<'db> {
         ty
     }
 
+    /// `map {}` parses as an object literal named by the reserved `map` keyword
+    /// (the keyword form lets an *empty* map be written where a bare `{}` would
+    /// read as an empty block). Non-empty maps parse as `Expr::Map`, so an
+    /// object literal named `map` is recognized here and routed to map — not
+    /// class — inference rather than a construction of a non-existent class.
     fn is_map_object_literal(
-        type_name: Option<&baml_base::core_types::TypePath>,
+        type_name: &baml_base::core_types::TypePath,
         obj_type_args: &[TypeExpr],
         spreads: &[ast::SpreadField],
     ) -> bool {
         obj_type_args.is_empty()
             && spreads.is_empty()
-            && matches!(
-                type_name.map(baml_base::TypePath::segments),
-                Some([name]) if name.as_str() == "map"
-            )
+            && matches!(type_name.segments(), [name] if name.as_str() == "map")
+    }
+
+    /// The type of an empty map literal: an `EvolvingMap` over `never`. An empty
+    /// map has no entries to fix its key/value types, so — like the empty array
+    /// `[]` — it evolves to fit its use (annotation or later mutation) rather
+    /// than committing to the unsound `map<never, never>`: generics are
+    /// invariant, so `map<never, never>` is a subtype of no other map type.
+    fn empty_evolving_map() -> Ty {
+        Ty::EvolvingMap(
+            Box::new(Ty::Never {
+                attr: TyAttr::default(),
+            }),
+            Box::new(Ty::Never {
+                attr: TyAttr::default(),
+            }),
+            TyAttr::default(),
+        )
     }
 
     fn infer_map_object_expr(&mut self, body: &ExprBody, fields: &[(Name, ExprId)]) -> Ty {
-        let key_ty = if fields.is_empty() {
-            Ty::Never {
-                attr: TyAttr::default(),
-            }
-        } else {
-            Ty::string()
-        };
+        // An empty map literal evolves to fit its use rather than committing to
+        // the unsound `map<never, never>` (see `empty_evolving_map`).
+        if fields.is_empty() {
+            return Self::empty_evolving_map();
+        }
         let val_types: Vec<Ty> = fields
             .iter()
             .map(|(_, value)| self.infer_expr(*value, body))
             .collect();
         let val_ty = Self::join_all(&val_types).widen_fresh();
         Ty::Map {
-            key: Box::new(key_ty),
+            key: Box::new(Ty::string()),
             value: Box::new(val_ty),
             attr: TyAttr::default(),
         }
@@ -4799,15 +4899,19 @@ impl<'db> TypeInferenceBuilder<'db> {
         &mut self,
         expr_id: ExprId,
         body: &ExprBody,
-        type_name: Option<&baml_base::core_types::TypePath>,
+        type_name: &baml_base::core_types::TypePath,
         obj_type_args: &[TypeExpr],
         fields: &[(Name, ExprId)],
     ) -> Ty {
-        let ty = type_name
-            .map(|path| self.lower_object_type_name(expr_id, path, obj_type_args))
-            .unwrap_or(Ty::Unknown {
-                attr: TyAttr::default(),
-            });
+        // Class-instance literals only: map literals (`map { .. }`) are routed
+        // to `infer_map_object_expr` by the `is_map_object_literal` guard in the
+        // `Expr::Object` arm before reaching here. The parser only emits an
+        // object literal when a type name precedes the brace, so the name is
+        // always present, and `lower_object_type_name` surfaces any
+        // type-resolution diagnostics (undefined class, wrong arg count, …) as
+        // user-visible compiler errors rather than a silently-discarded
+        // `Unknown` that later erases to `Void` or trips the runtime boundary.
+        let ty = self.lower_object_type_name(expr_id, type_name, obj_type_args);
         let ty = match ty {
             Ty::Class(class_name, type_args, attr) => {
                 if type_args.is_empty()
@@ -4833,7 +4937,17 @@ impl<'db> TypeInferenceBuilder<'db> {
                                 continue;
                             }
                             let field_ty = self.infer_expr(*field_expr, body).widen_fresh();
-                            crate::generics::infer_bindings(declared_ty, &field_ty, &mut bindings);
+                            // Allow typevar actuals so a field that carries an
+                            // enclosing generic (e.g. a `body: () -> T throws E`
+                            // field whose value is `() -> int throws E`) binds the
+                            // class param to that faithful typevar instead of
+                            // leaving it unbound — which would erase to `Unknown`
+                            // and trip the runtime boundary.
+                            crate::generics::infer_bindings_allow_typevars(
+                                declared_ty,
+                                &field_ty,
+                                &mut bindings,
+                            );
                         }
                         let inferred_type_args: Vec<Ty> = class_data
                             .generic_params
@@ -4920,16 +5034,17 @@ impl<'db> TypeInferenceBuilder<'db> {
         expr_id: ExprId,
         body: &ExprBody,
         expected: &Ty,
-        type_name: Option<&baml_base::core_types::TypePath>,
+        type_name: &baml_base::core_types::TypePath,
         obj_type_args: &[TypeExpr],
     ) -> Option<Ty> {
         // BEP-044 wf3 #G15: when the literal explicitly names a concrete
         // class that differs from the expected class, it must be a subtype.
         // Keep this out of `check_expr` proper so its temporary lowering
         // state doesn't bloat every recursive checking frame in debug builds.
-        let (Ty::Class(expected_qtn, _, _), Some(path)) = (expected, type_name) else {
+        let Ty::Class(expected_qtn, _, _) = expected else {
             return None;
         };
+        let path = type_name;
 
         let lit_ty = self.lower_object_type_name(expr_id, path, obj_type_args);
         if let Ty::Class(lit_qtn, _, _) = &lit_ty
@@ -4961,9 +5076,13 @@ impl<'db> TypeInferenceBuilder<'db> {
         body: &ExprBody,
         expected: &Ty,
         fields: &[(Name, ExprId)],
-        type_name: Option<&baml_base::core_types::TypePath>,
+        type_name: &baml_base::core_types::TypePath,
         obj_type_args: &[TypeExpr],
     ) -> Ty {
+        // Class-instance literals only: map literals (`map { .. }`) are routed
+        // to `check_map_object_expr` by the `is_map_object_literal` guard in the
+        // `Expr::Object` arm of `check_expr` before reaching here — including the
+        // empty `map {}`, which bidirectionally adopts the expected map type.
         if let Some(inferred) = self.check_object_literal_declared_class_mismatch(
             expr_id,
             body,
@@ -5552,7 +5671,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 type_args,
                 spreads,
                 ..
-            } if Self::is_map_object_literal(type_name.as_ref(), type_args, spreads) => {
+            } if Self::is_map_object_literal(type_name, type_args, spreads) => {
                 self.check_map_object_expr(expr_id, body, expected, fields)
             }
             Expr::Object {
@@ -5560,14 +5679,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 type_name,
                 type_args,
                 ..
-            } => self.check_object_expr(
-                expr_id,
-                body,
-                expected,
-                fields,
-                type_name.as_ref(),
-                type_args,
-            ),
+            } => self.check_object_expr(expr_id, body, expected, fields, type_name, type_args),
             Expr::Map { entries } => {
                 let kv = match expected {
                     Ty::Map {
@@ -5996,7 +6108,17 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // variable's *declared* type, not its potentially-narrowed type.
                 // Narrowing may have refined x: int? → null inside an if-branch,
                 // but assignment should still accept any value assignable to int?.
-                let declared_ty = self.get_declared_type(*target, body);
+                //
+                // `$id = e` is a special form (MIR lowers it to `baml.id.set(e)`,
+                // see lower.rs); `$id` is not a local, so type-check the RHS
+                // against the builtin's `string` parameter here.
+                let declared_ty = if Self::is_runtime_id_path(body, *target) {
+                    Some(Ty::String {
+                        attr: TyAttr::default(),
+                    })
+                } else {
+                    self.get_declared_type(*target, body)
+                };
                 let value_ty = self.infer_expr(*value, body);
                 if let Some(ref decl_ty) = declared_ty {
                     if !matches!(decl_ty, Ty::Unknown { .. } | Ty::Error { .. })
@@ -6014,9 +6136,10 @@ impl<'db> TypeInferenceBuilder<'db> {
                     } else {
                         self.record_function_coercion_if_needed(*value, &value_ty, decl_ty);
                     }
-                    // Update the local to the assigned value's type (invalidates narrowing)
+                    // Update the local to the assigned value's type (invalidates
+                    // narrowing). `$id` is not a local — don't create one.
                     if let Expr::Path(segments) = &body.exprs[*target] {
-                        if segments.len() == 1 {
+                        if segments.len() == 1 && segments[0].as_str() != "$id" {
                             self.assign_local(segments[0].clone(), value_ty);
                         }
                     }
@@ -6030,6 +6153,17 @@ impl<'db> TypeInferenceBuilder<'db> {
                 false
             }
             Stmt::AssignOp { target, op, value } => {
+                // `$id OP= e` can never be meaningful: `baml.id.set` only
+                // accepts fresh overrides from `baml.id.new()`, so a derived
+                // value (e.g. `$id + "-suffix"`) is always rejected at
+                // runtime. Fail at compile time instead of silently no-oping
+                // (MIR's lvalue lowering has no `$id` write target).
+                if Self::is_runtime_id_path(body, *target) {
+                    self.context
+                        .report_simple(TirTypeError::RuntimeIdCompoundAssignment, *target);
+                    self.infer_expr(*value, body);
+                    return false;
+                }
                 let target_has_optional = Self::expr_contains_optional(*target, body);
                 if target_has_optional {
                     self.in_optional_chain += 1;
@@ -6228,6 +6362,14 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
         }
         None
+    }
+
+    /// True when `expr` is the bare `$id` special form (the runtime-identity
+    /// read/write target — see the `$id` stub in `infer_path` and the MIR
+    /// lowering in lower.rs).
+    fn is_runtime_id_path(body: &ExprBody, expr: ExprId) -> bool {
+        matches!(&body.exprs[expr], Expr::Path(segments)
+            if segments.len() == 1 && segments[0].as_str() == "$id")
     }
 
     fn report_refutable_pattern_in_irrefutable_context(
@@ -6573,8 +6715,14 @@ impl<'db> TypeInferenceBuilder<'db> {
         for clause in clauses {
             // Compute the clause-level binding type from the current residual throw set.
             // This is the type of the error variable (e.g. `e` in `catch (e)`).
+            //
+            // An empty residual means the base throws nothing the type system
+            // tracks, so the binding can never be assigned a (user-thrown) value:
+            // its type is the bottom type `Never`, not the error-recovery
+            // `Unknown`. Any runtime panic a `let`-binding arm catches is folded
+            // in per-arm via `ty_panic_subset` below.
             let clause_binding_ty = if residual.is_empty() {
-                Ty::Unknown {
+                Ty::Never {
                     attr: TyAttr::default(),
                 }
             } else {
@@ -7453,6 +7601,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         } else {
             callee_ty.clone()
         };
+        // Resolve a function-type alias callee to its underlying `Ty::Function`
+        // so its `throws` is read rather than dropped to `None`.
+        let typed_callee = self.expand_alias_chains(typed_callee);
 
         // When the callee has a union type (e.g., a method called on a union-typed
         // field like `(string | int | MyClass).to_json()`), every member of the union
@@ -7743,6 +7894,19 @@ impl<'db> TypeInferenceBuilder<'db> {
             Stmt::Assign { target, value } | Stmt::AssignOp { target, value, .. } => {
                 self.collect_throw_facts_from_expr(*target, body, out);
                 self.collect_throw_facts_from_expr(*value, body, out);
+                // `$id = e` is an implicit `baml.id.set(e)` call (MIR
+                // `lower_set_runtime_id`); its declared throws escape here
+                // exactly as a direct call's would.
+                if Self::is_runtime_id_path(body, *target) {
+                    match self.lookup_named_throw_summary(&Name::new("id.set")) {
+                        Some(summary) => out.extend(summary),
+                        None => {
+                            out.insert(Ty::Unknown {
+                                attr: TyAttr::default(),
+                            });
+                        }
+                    }
+                }
             }
             Stmt::Throw { value } => {
                 self.collect_throw_facts_from_expr(*value, body, out);
@@ -7889,6 +8053,15 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
         if segments.len() == 1 {
             let name = &segments[0];
+            // `$id` is the runtime-identity special form: it types as
+            // `string` here, and MIR lowers the read to `baml.id.current()`
+            // (lower.rs `lower_path`) and `$id = e` to `baml.id.set(e)`
+            // (lower.rs `AstStmt::Assign`). Keep the three sites in sync.
+            if name.as_str() == "$id" {
+                return Ty::String {
+                    attr: TyAttr::default(),
+                };
+            }
             let ty = self.infer_single_name(name);
             // Record free-function resolution so that explicit type-arg binding
             // (`resolve_explicit_type_args`) can later retrieve the `FunctionLoc`
@@ -7923,6 +8096,20 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             ty
         } else if segments.len() >= 2 {
+            // Member access rooted at `$id` (`$id.len()`): `$id` is a value,
+            // not a binding, and the member machinery below would report a
+            // misleading "unresolved name: $id". Give the targeted fix.
+            if segments[0].as_str() == "$id" {
+                self.context.report_simple(
+                    TirTypeError::RuntimeIdMemberAccess {
+                        member: segments[1].clone(),
+                    },
+                    expr_id,
+                );
+                return Ty::Unknown {
+                    attr: TyAttr::default(),
+                };
+            }
             // Dispatch based on whether the root segment is a known local variable.
             // We check self.locals directly rather than going through the HIR
             // path_resolution_query, because ExprIds are per-function-body arenas
@@ -8484,6 +8671,44 @@ impl<'db> TypeInferenceBuilder<'db> {
                         ),
                         throws: Box::new(crate::callable::callable_throws(db, func_loc).clone()),
                         attr: TyAttr::default(),
+                    }
+                }
+                // A top-level `let` value reference — including the synthetic
+                // binding that a `client<llm> ...` declaration lowers to — has
+                // the type of its inferred initializer. Resolve it through the
+                // let's own scope inference so the reference doesn't fall through
+                // to `Ty::Unknown` (which would trip the runtime lowering
+                // boundary when the value is used, e.g. a client passed to
+                // `stream_llm_function`).
+                Definition::Let(let_loc) => {
+                    let db = self.context.db();
+                    let file = let_loc.file(db);
+                    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
+                    let let_data = &item_tree[let_loc.id(db)];
+                    let index = baml_compiler2_ppir::file_semantic_index(db, file);
+                    let fsi = index.scope_at_offset(let_data.span.start(), Some(&let_data.name));
+                    let scope_id = index.scope_ids[fsi.index() as usize];
+                    let inference = crate::inference::infer_scope_types(db, scope_id);
+                    let body = baml_compiler2_hir::body::let_body(db, let_loc);
+                    if let baml_compiler2_hir::body::LetBody::Expr(expr_body) = body.as_ref()
+                        && let Some(root) = expr_body.root_expr
+                        && let Some(ty) = inference.expression_type(root)
+                    {
+                        // Freeze evolving empties the same way a local reference
+                        // does — a referenced binding is no longer open.
+                        match ty {
+                            Ty::EvolvingList(inner, attr) => Ty::List(inner.clone(), attr.clone()),
+                            Ty::EvolvingMap(k, v, attr) => Ty::Map {
+                                key: k.clone(),
+                                value: v.clone(),
+                                attr: attr.clone(),
+                            },
+                            other => other.clone(),
+                        }
+                    } else {
+                        Ty::Unknown {
+                            attr: TyAttr::default(),
+                        }
                     }
                 }
                 _ => Ty::Unknown {
@@ -15264,12 +15489,16 @@ impl<'db> TypeInferenceBuilder<'db> {
             // always should be, but be defensive).
             let found_fsi = index.lambda_scope_for(func_def.span);
             if let Some(fsi) = found_fsi {
-                for (capture_name, _def_site) in
-                    &index.scope_bindings[fsi.index() as usize].captures
-                {
-                    if !self.locals.contains_key(capture_name) {
-                        self.seed_capture_unknown(capture_name.clone());
-                    }
+                let captures_to_seed: Vec<(Name, baml_compiler2_hir::semantic_index::BindingId)> =
+                    index.scope_bindings[fsi.index() as usize]
+                        .captures
+                        .iter()
+                        .filter(|(name, _)| !self.locals.contains_key(name))
+                        .map(|(name, binding_id)| (name.clone(), *binding_id))
+                        .collect();
+                for (capture_name, binding_id) in captures_to_seed {
+                    let ty = self.resolve_capture_type(binding_id);
+                    self.seed_capture(capture_name, ty);
                 }
             }
             found_fsi

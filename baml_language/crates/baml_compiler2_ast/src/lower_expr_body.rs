@@ -956,8 +956,8 @@ impl LoweringContext {
                         // Assignment operators are not valid in expression context.
                         // They are handled as statements by try_lower_assignment().
                         // If we see them here, the user wrote something like `(x = 5)`
-                        // which is not a valid expression — emit Missing instead of
-                        // silently defaulting to BinaryOp::Add.
+                        // which is not a valid expression — report it and lower to
+                        // Missing instead of silently defaulting to BinaryOp::Add.
                         SyntaxKind::EQUALS
                         | SyntaxKind::PLUS_EQUALS
                         | SyntaxKind::MINUS_EQUALS
@@ -969,6 +969,10 @@ impl LoweringContext {
                         | SyntaxKind::CARET_EQUALS
                         | SyntaxKind::LESS_LESS_EQUALS
                         | SyntaxKind::GREATER_GREATER_EQUALS => {
+                            self.diags
+                                .push(LoweringDiagnostic::AssignmentInExpressionPosition {
+                                    span: node.text_range(),
+                                });
                             return self.alloc_expr(Expr::Missing, node.text_range());
                         }
                         _ => {}
@@ -1644,6 +1648,14 @@ impl LoweringContext {
                     span: token.text_range(),
                 });
         }
+        if let Some(token) = &name_token
+            && token.text() == "$id"
+        {
+            self.diags
+                .push(LoweringDiagnostic::ReservedRuntimeIdBindingName {
+                    span: token.text_range(),
+                });
+        }
 
         let name = name_token.map(|t| Name::new(t.text()));
 
@@ -1819,6 +1831,15 @@ impl LoweringContext {
             None => {
                 // Shorthand `{ f }` → bind to a local of the same name. `_`
                 // canonicalises to `Wildcard`, same rule as elsewhere.
+                // A shorthand binding named `$id` would be silently dead
+                // (reads hit the runtime-identity special form first) —
+                // reject it like every other `$id` binding site.
+                if field_name.as_str() == "$id" {
+                    self.diags
+                        .push(LoweringDiagnostic::ReservedRuntimeIdBindingName {
+                            span: field_span,
+                        });
+                }
                 let synth = if field_name.as_str() == "_" {
                     Pattern::Wildcard
                 } else {
@@ -2396,7 +2417,13 @@ impl LoweringContext {
             return self.alloc_expr(Expr::Missing, node.text_range());
         }
 
-        // Check if single segment is a literal keyword
+        // Check if single segment is a literal keyword.
+        //
+        // Note `$id` is deliberately NOT desugared here: a lone `$id` reaches
+        // the AST as a bare WORD token (the parser only builds PATH_EXPR for
+        // dotted paths), so the special form is owned downstream — TIR types
+        // the read as `string` (builder.rs `infer_path`) and MIR lowers reads
+        // to `baml.id.current()` / writes to `baml.id.set(...)` (lower.rs).
         if segments.len() == 1 {
             match segments[0].0.as_str() {
                 "true" => {
@@ -2780,7 +2807,6 @@ impl LoweringContext {
         let mut fields = Vec::new();
         let mut spreads = Vec::new();
         let mut position = 0;
-        let mut type_name = None;
         let mut type_args: Vec<TypeExpr> = vec![];
         let mut type_path_segments: Vec<Name> = vec![];
 
@@ -2805,9 +2831,10 @@ impl LoweringContext {
                 }
             }
         }
-        if !type_path_segments.is_empty() {
-            type_name = Some(TypePath::new(type_path_segments));
-        }
+        debug_assert!(!type_path_segments.is_empty());
+        // The parser only emits an object literal when a type name precedes the
+        // brace, so the segments are always present.
+        let type_name = TypePath::new(type_path_segments);
 
         // Object fields are child nodes after L_BRACE
         // They come as key-value pairs: WORD COLON expr or SPREAD expr

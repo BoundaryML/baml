@@ -431,7 +431,7 @@ fn spike_1c_interface_typed_values_cannot_call_two_self_method() {
 
 #[test]
 fn phase2_user_class_missing_cmperror_binding_is_error() {
-    // `Comparable.CmpError` is undefaulted, so omitting `type CmpError` is a
+    // `Comparable.CompareError` is undefaulted, so omitting `type CompareError` is a
     // compile error — the binding is mandatory (E0001), distinct from the
     // method's `throws` (E0120).
     assert_compile_error_contains(
@@ -447,7 +447,7 @@ fn phase2_user_class_missing_cmperror_binding_is_error() {
             }
         }
         "#,
-        "CmpError",
+        "CompareError",
     );
 }
 
@@ -458,7 +458,7 @@ async fn phase2_user_class_compare_direct_call_in_main() {
         class Score {
             points: int
             implements baml.Comparable {
-                type CmpError = never
+                type CompareError = never
                 function compare(self, other: Self) -> int throws never {
                     if (self.points < other.points) { -1 }
                     else if (self.points > other.points) { 1 }
@@ -484,7 +484,7 @@ async fn phase2_user_class_compare_with_explicit_binding_in_main() {
         class Score {
             points: int
             implements baml.Comparable {
-                type CmpError = never
+                type CompareError = never
                 function compare(self, other: Self) -> int throws never {
                     if (self.points < other.points) { -1 }
                     else if (self.points > other.points) { 1 }
@@ -510,7 +510,7 @@ async fn phase2_user_class_compare_direct_call_mir_optimized() {
         class Score {
             points: int
             implements baml.Comparable {
-                type CmpError = never
+                type CompareError = never
                 function compare(self, other: Self) -> int throws never {
                     if (self.points < other.points) { -1 }
                     else if (self.points > other.points) { 1 }
@@ -538,7 +538,7 @@ async fn phase2_user_class_compare_direct_call_mir_optimized() {
 //
 // FINDING — a *defaulted* associated error breaks the fallible case: see
 // `phase3_defaulted_assoc_error_over_constrains_bound` below. That is why the
-// stdlib `Comparable.CmpError` is intentionally undefaulted.
+// stdlib `Comparable.CompareError` is intentionally undefaulted.
 
 const PHASE3_SCAFFOLD: &str = r#"
     interface Cmp2 {
@@ -662,7 +662,7 @@ fn phase3_out_of_body_impl_on_builtin_with_error_throws_it() {
     ));
 }
 
-// FINDING (documents *why* the stdlib `Comparable.CmpError` is undefaulted):
+// FINDING (documents *why* the stdlib `Comparable.CompareError` is undefaulted):
 // when the interface associated type has a default, a bare `T extends Cmp`
 // bound is silently constrained to that default, so an implementor that
 // overrides it (a fallible comparator) is rejected by the blanket impl —
@@ -733,7 +733,7 @@ async fn phase3_runtime_sort_ints() {
 async fn phase3_runtime_generic_compare_on_primitive() {
     let output = baml_test!(
         r#"
-        function cmp<T extends baml.Comparable>(a: T, b: T) -> int throws T.CmpError {
+        function cmp<T extends baml.Comparable>(a: T, b: T) -> int throws T.CompareError {
             return a.compare(b)
         }
         function main() -> int throws never {
@@ -753,13 +753,13 @@ async fn phase3_runtime_generic_compare_on_user_class() {
         class Score {
             points: int
             implements baml.Comparable {
-                type CmpError = never
+                type CompareError = never
                 function compare(self, other: Self) -> int throws never {
                     return self.points.compare(other.points)
                 }
             }
         }
-        function cmp<T extends baml.Comparable>(a: T, b: T) -> int throws T.CmpError {
+        function cmp<T extends baml.Comparable>(a: T, b: T) -> int throws T.CompareError {
             return a.compare(b)
         }
         function main() -> int throws never {
@@ -777,7 +777,7 @@ async fn phase3_runtime_sort_user_class() {
         class Score {
             points: int
             implements baml.Comparable {
-                type CmpError = never
+                type CompareError = never
                 function compare(self, other: Self) -> int throws never {
                     return self.points.compare(other.points)
                 }
@@ -799,8 +799,8 @@ async fn phase3_runtime_sort_user_class() {
 async fn phase3_runtime_generic_fn_sort_by_compare_ints() {
     let output = baml_test!(
         r#"
-        function gsort<T extends baml.Comparable>(xs: T[]) -> T[] throws T.CmpError {
-            return xs.sort_by((a: T, b: T) -> int throws T.CmpError { a.compare(b) })
+        function gsort<T extends baml.Comparable>(xs: T[]) -> T[] throws T.CompareError {
+            return xs.sort_by((a: T, b: T) -> int throws T.CompareError { a.compare(b) })
         }
         function main() -> int throws never {
             let xs = [3, 1, 2]
@@ -823,14 +823,14 @@ async fn phase3_runtime_user_generic_sort_by_compare_user_class() {
         class Score {
             points: int
             implements baml.Comparable {
-                type CmpError = never
+                type CompareError = never
                 function compare(self, other: Self) -> int throws never {
                     return self.points.compare(other.points)
                 }
             }
         }
-        function gsort<T extends baml.Comparable>(xs: T[]) -> T[] throws T.CmpError {
-            return xs.sort_by((a: T, b: T) -> int throws T.CmpError { a.compare(b) })
+        function gsort<T extends baml.Comparable>(xs: T[]) -> T[] throws T.CompareError {
+            return xs.sort_by((a: T, b: T) -> int throws T.CompareError { a.compare(b) })
         }
         function main() -> int throws never {
             let xs = [Score { points: 3 }, Score { points: 1 }, Score { points: 2 }]
@@ -872,9 +872,9 @@ async fn phase3_runtime_sort_param_receiver_in_function() {
 
 #[test]
 fn phase5_union_int_float_sort_is_compile_error() {
-    // A union element can't implement `Comparable`, so `T.CmpError` stays
+    // A union element can't implement `Comparable`, so `T.CompareError` stays
     // un-normalizable and surfaces as an unhandled-throws error naming the
-    // union (`int | float.CmpError`).
+    // union (`int | float.CompareError`).
     assert_compile_error_contains(
         r#"
         function f() -> null throws never {
@@ -906,7 +906,7 @@ fn phase5_optional_element_sort_is_compile_error() {
 fn phase5_sort_by_key_nullable_key_is_compile_error() {
     // `sort_by_key` now requires `U extends Comparable` (it orders by the key's
     // natural order). A nullable key (`int?` = a union) cannot implement
-    // `Comparable`, so `U.CmpError` stays un-normalizable (named after the
+    // `Comparable`, so `U.CompareError` stays un-normalizable (named after the
     // union key type) — replacing the old runtime `InvalidArgument` rejection.
     assert_compile_error_contains(
         r#"
@@ -961,7 +961,7 @@ async fn phase5_class_with_comparable_sort_compiles_and_runs() {
         class Resume {
             rank: int
             implements baml.Comparable {
-                type CmpError = never
+                type CompareError = never
                 function compare(self, other: Self) -> int throws never {
                     return self.rank.compare(other.rank)
                 }
@@ -994,7 +994,7 @@ async fn phase5_class_with_comparable_sort_compiles_and_runs() {
 // *BAML-level* `is` either. `x is int` on a `T`-typed value compiles, but TIR
 // records the pattern type as the intersection of `T` and `int` — `Never` —
 // and MIR lowers a `Never` pattern type to a constant-false test
-// (`lower_pattern_test` → `convert_tir2_ty`), so the test never fires at
+// (`lower_pattern_test` → `convert_tir_ty_for_runtime`), so the test never fires at
 // runtime (pinned below).
 //
 // The dispatch therefore uses a single native boolean,
@@ -1016,11 +1016,11 @@ fn match_dispatch_array_type_arms_do_not_discriminate() {
     // unreachable (one LIST tag, no element type at runtime).
     assert_compile_error_contains(
         r#"
-        function fast_g<T extends baml.Comparable>(xs: T[]) -> T[] throws T.CmpError {
+        function fast_g<T extends baml.Comparable>(xs: T[]) -> T[] throws T.CompareError {
             return xs
         }
 
-        function dispatch_f<T extends baml.Comparable>(xs: T[]) -> T[] throws T.CmpError {
+        function dispatch_f<T extends baml.Comparable>(xs: T[]) -> T[] throws T.CompareError {
             match (xs) {
                 int[] => fast_g(xs),
                 bigint[] => fast_g(xs),
@@ -1059,15 +1059,15 @@ const ELEMENT_DISPATCH_SCAFFOLD: &str = r#"
         return xs.length() == 0
     }
 
-    function fast_g<T extends baml.Comparable>(xs: T[]) -> T[] throws T.CmpError {
+    function fast_g<T extends baml.Comparable>(xs: T[]) -> T[] throws T.CompareError {
         return xs
     }
 
-    function slow_g<T extends baml.Comparable>(xs: T[]) -> T[] throws T.CmpError {
+    function slow_g<T extends baml.Comparable>(xs: T[]) -> T[] throws T.CompareError {
         return xs
     }
 
-    function dispatch_f<T extends baml.Comparable>(xs: T[]) -> T[] throws T.CmpError {
+    function dispatch_f<T extends baml.Comparable>(xs: T[]) -> T[] throws T.CompareError {
         if (is_fast(xs)) {
             fast_g(xs)
         } else {
@@ -1079,7 +1079,7 @@ const ELEMENT_DISPATCH_SCAFFOLD: &str = r#"
 #[test]
 fn element_is_dispatch_compiles() {
     // The fallback shape: a boolean guard routing between two generic callees
-    // instantiated at the *symbolic* `T` (return `T[]`, throws `T.CmpError`)
+    // instantiated at the *symbolic* `T` (return `T[]`, throws `T.CompareError`)
     // with no refinement anywhere.
     assert_zero_compile_errors(ELEMENT_DISPATCH_SCAFFOLD);
 }
@@ -1098,7 +1098,7 @@ fn element_is_dispatch_int_callsite_normalizes_to_never() {
 
 #[test]
 fn element_is_dispatch_float_callsite_normalizes_to_never() {
-    // Relies on the 02-plan float decision: `float.CmpError = never`
+    // Relies on the 02-plan float decision: `float.CompareError = never`
     // (total_cmp ordering), so a `float[]` call site needs no handling.
     assert_zero_compile_errors(&format!(
         r#"
@@ -1122,7 +1122,7 @@ fn element_is_dispatch_user_error_callsite_requires_handling() {
             class DispatchErr {{
                 v: int
                 implements baml.Comparable {{
-                    type CmpError = DispatchBoom
+                    type CompareError = DispatchBoom
                     function compare(self, other: Self) -> int throws DispatchBoom {{ return 0 }}
                 }}
             }}
@@ -1149,7 +1149,7 @@ async fn element_is_dispatch_runtime_both_branches() {
         class RouteItem {{
             rank int
             implements baml.Comparable {{
-                type CmpError = never
+                type CompareError = never
                 function compare(self, other: Self) -> int throws never {{
                     self.rank.compare(other.rank)
                 }}
@@ -1230,16 +1230,16 @@ async fn parity_fast_path_matches_comparator_path() {
         class ParityItem {
             rank int
             implements baml.Comparable {
-                type CmpError = never
+                type CompareError = never
                 function compare(self, other: Self) -> int throws never {
                     self.rank.compare(other.rank)
                 }
             }
         }
 
-        function check<T extends baml.Comparable>(xs: T[], ys: T[]) -> bool throws T.CmpError {
+        function check<T extends baml.Comparable>(xs: T[], ys: T[]) -> bool throws T.CompareError {
             xs.sort();
-            ys.sort_by((a: T, b: T) -> int throws T.CmpError { a.compare(b) });
+            ys.sort_by((a: T, b: T) -> int throws T.CompareError { a.compare(b) });
             return baml.deep_equals(xs, ys)
         }
 
@@ -1296,7 +1296,7 @@ async fn sort_user_class_with_out_of_body_comparable_impl() {
         }
 
         implements baml.Comparable for Score {
-            type CmpError = never
+                    type CompareError = never
             function compare(self, other: Self) -> int throws never {
                 self.points.compare(other.points)
             }
@@ -1323,7 +1323,7 @@ async fn user_class_still_sorts_through_comparator_path() {
             rank int
             tag string
             implements baml.Comparable {
-                type CmpError = never
+                type CompareError = never
                 function compare(self, other: Self) -> int throws never {
                     self.rank.compare(other.rank)
                 }

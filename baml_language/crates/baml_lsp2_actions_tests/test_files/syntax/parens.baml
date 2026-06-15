@@ -614,6 +614,42 @@ function foo() -> int {
 //     │
 //     │ Note: Error code: E0010
 // ────╯
+// error: assignment is not allowed in expression position; assignment is a statement
+//     ╭─[ parens.baml:35:11 ]
+//     │
+//  35 │    for (;;i += x) {}
+//     │           ───┬──
+//     │              ╰──── assignment not allowed here
+//     │
+//     │ Note: Error code: E0010
+// ────╯
+// error: assignment is not allowed in expression position; assignment is a statement
+//     ╭─[ parens.baml:37:11 ]
+//     │
+//  37 │    for (;;i += x {}
+//     │           ────┬────
+//     │               ╰────── assignment not allowed here
+//     │
+//     │ Note: Error code: E0010
+// ────╯
+// error: assignment is not allowed in expression position; assignment is a statement
+//     ╭─[ parens.baml:45:11 ]
+//     │
+//  45 │    for (;;i = x) {}
+//     │           ──┬──
+//     │             ╰──── assignment not allowed here
+//     │
+//     │ Note: Error code: E0010
+// ────╯
+// error: assignment is not allowed in expression position; assignment is a statement
+//     ╭─[ parens.baml:47:11 ]
+//     │
+//  47 │    for (;;i = x {}
+//     │           ────┬───
+//     │               ╰───── assignment not allowed here
+//     │
+//     │ Note: Error code: E0010
+// ────╯
 // error: unresolved name: i
 //     ╭─[ parens.baml:39:10 ]
 //     │

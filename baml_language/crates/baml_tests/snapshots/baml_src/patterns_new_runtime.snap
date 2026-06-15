@@ -864,7 +864,7 @@ function patterns_new_runtime.from_array_boxes(boxes: patterns_new_runtime.BoxT<
     is_type baml.iter.Peekable<...>
     pop_jump_if_false L22
     load_type patterns_new_runtime.BoxT<int>
-    load_type void
+    load_type never
     load_var _3
     call baml.iter.Peekable.Iterator.next
     store_var _5
@@ -886,8 +886,8 @@ function patterns_new_runtime.from_array_boxes(boxes: patterns_new_runtime.BoxT<
 
   L12:
     load_type patterns_new_runtime.BoxT<int>
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _3
     call baml.iter.Filter.Iterator.next
     store_var _5
@@ -909,8 +909,8 @@ function patterns_new_runtime.from_array_boxes(boxes: patterns_new_runtime.BoxT<
 
   L15:
     load_type patterns_new_runtime.BoxT<int>
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _3
     call baml.iter.Chain.Iterator.next
     store_var _5
@@ -918,7 +918,7 @@ function patterns_new_runtime.from_array_boxes(boxes: patterns_new_runtime.BoxT<
 
   L16:
     load_type patterns_new_runtime.BoxT<int>
-    load_type void
+    load_type never
     load_var _3
     call baml.iter.StepBy.Iterator.next
     store_var _5
@@ -3173,7 +3173,7 @@ function patterns_new_runtime.test_for_class_binds_inner_zip() -> int {
     is_type baml.iter.Peekable<...>
     pop_jump_if_false L22
     load_type patterns_new_runtime.UserCoord
-    load_type void
+    load_type never
     load_var _13
     call baml.iter.Peekable.Iterator.next
     store_var _15
@@ -3195,8 +3195,8 @@ function patterns_new_runtime.test_for_class_binds_inner_zip() -> int {
 
   L12:
     load_type patterns_new_runtime.UserCoord
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _13
     call baml.iter.Filter.Iterator.next
     store_var _15
@@ -3218,8 +3218,8 @@ function patterns_new_runtime.test_for_class_binds_inner_zip() -> int {
 
   L15:
     load_type patterns_new_runtime.UserCoord
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _13
     call baml.iter.Chain.Iterator.next
     store_var _15
@@ -3227,7 +3227,7 @@ function patterns_new_runtime.test_for_class_binds_inner_zip() -> int {
 
   L16:
     load_type patterns_new_runtime.UserCoord
-    load_type void
+    load_type never
     load_var _13
     call baml.iter.StepBy.Iterator.next
     store_var _15
@@ -3351,7 +3351,7 @@ function patterns_new_runtime.test_for_deep_class_capture_fresh() -> int {
     is_type baml.iter.Peekable<...>
     pop_jump_if_false L22
     load_type patterns_new_runtime.UserCoord
-    load_type void
+    load_type never
     load_var _13
     call baml.iter.Peekable.Iterator.next
     store_var _15
@@ -3373,8 +3373,8 @@ function patterns_new_runtime.test_for_deep_class_capture_fresh() -> int {
 
   L12:
     load_type patterns_new_runtime.UserCoord
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _13
     call baml.iter.Filter.Iterator.next
     store_var _15
@@ -3396,8 +3396,8 @@ function patterns_new_runtime.test_for_deep_class_capture_fresh() -> int {
 
   L15:
     load_type patterns_new_runtime.UserCoord
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _13
     call baml.iter.Chain.Iterator.next
     store_var _15
@@ -3405,7 +3405,7 @@ function patterns_new_runtime.test_for_deep_class_capture_fresh() -> int {
 
   L16:
     load_type patterns_new_runtime.UserCoord
-    load_type void
+    load_type never
     load_var _13
     call baml.iter.StepBy.Iterator.next
     store_var _15
@@ -3555,7 +3555,7 @@ function patterns_new_runtime.test_for_deep_class_sums() -> int {
     is_type baml.iter.Peekable<...>
     pop_jump_if_false L22
     load_type patterns_new_runtime.UserCoord
-    load_type void
+    load_type never
     load_var _13
     call baml.iter.Peekable.Iterator.next
     store_var _15
@@ -3577,8 +3577,8 @@ function patterns_new_runtime.test_for_deep_class_sums() -> int {
 
   L12:
     load_type patterns_new_runtime.UserCoord
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _13
     call baml.iter.Filter.Iterator.next
     store_var _15
@@ -3600,8 +3600,8 @@ function patterns_new_runtime.test_for_deep_class_sums() -> int {
 
   L15:
     load_type patterns_new_runtime.UserCoord
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _13
     call baml.iter.Chain.Iterator.next
     store_var _15
@@ -3609,7 +3609,7 @@ function patterns_new_runtime.test_for_deep_class_sums() -> int {
 
   L16:
     load_type patterns_new_runtime.UserCoord
-    load_type void
+    load_type never
     load_var _13
     call baml.iter.StepBy.Iterator.next
     store_var _15
@@ -3727,7 +3727,7 @@ function patterns_new_runtime.test_for_inside_class_destruct() -> int {
     is_type baml.iter.Peekable<...>
     pop_jump_if_false L22
     load_type patterns_new_runtime.Team1
-    load_type void
+    load_type never
     load_var _10
     call baml.iter.Peekable.Iterator.next
     store_var _12
@@ -3749,8 +3749,8 @@ function patterns_new_runtime.test_for_inside_class_destruct() -> int {
 
   L12:
     load_type patterns_new_runtime.Team1
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _10
     call baml.iter.Filter.Iterator.next
     store_var _12
@@ -3772,8 +3772,8 @@ function patterns_new_runtime.test_for_inside_class_destruct() -> int {
 
   L15:
     load_type patterns_new_runtime.Team1
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _10
     call baml.iter.Chain.Iterator.next
     store_var _12
@@ -3781,7 +3781,7 @@ function patterns_new_runtime.test_for_inside_class_destruct() -> int {
 
   L16:
     load_type patterns_new_runtime.Team1
-    load_type void
+    load_type never
     load_var _10
     call baml.iter.StepBy.Iterator.next
     store_var _12
@@ -3903,7 +3903,7 @@ function patterns_new_runtime.test_for_let_chain_alias_capture() -> int {
     is_type baml.iter.Peekable<...>
     pop_jump_if_false L24
     load_type int
-    load_type void
+    load_type never
     load_var _3
     call baml.iter.Peekable.Iterator.next
     store_var _5
@@ -3925,8 +3925,8 @@ function patterns_new_runtime.test_for_let_chain_alias_capture() -> int {
 
   L13:
     load_type int
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _3
     call baml.iter.Filter.Iterator.next
     store_var _5
@@ -3948,8 +3948,8 @@ function patterns_new_runtime.test_for_let_chain_alias_capture() -> int {
 
   L16:
     load_type int
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _3
     call baml.iter.Chain.Iterator.next
     store_var _5
@@ -3957,7 +3957,7 @@ function patterns_new_runtime.test_for_let_chain_alias_capture() -> int {
 
   L17:
     load_type int
-    load_type void
+    load_type never
     load_var _3
     call baml.iter.StepBy.Iterator.next
     store_var _5
@@ -4111,7 +4111,7 @@ function patterns_new_runtime.test_for_let_chain_of_bindings() -> int {
     is_type baml.iter.Peekable<...>
     pop_jump_if_false L24
     load_type int
-    load_type void
+    load_type never
     load_var _3
     call baml.iter.Peekable.Iterator.next
     store_var _5
@@ -4133,8 +4133,8 @@ function patterns_new_runtime.test_for_let_chain_of_bindings() -> int {
 
   L13:
     load_type int
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _3
     call baml.iter.Filter.Iterator.next
     store_var _5
@@ -4156,8 +4156,8 @@ function patterns_new_runtime.test_for_let_chain_of_bindings() -> int {
 
   L16:
     load_type int
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _3
     call baml.iter.Chain.Iterator.next
     store_var _5
@@ -4165,7 +4165,7 @@ function patterns_new_runtime.test_for_let_chain_of_bindings() -> int {
 
   L17:
     load_type int
-    load_type void
+    load_type never
     load_var _3
     call baml.iter.StepBy.Iterator.next
     store_var _5
@@ -4288,7 +4288,7 @@ function patterns_new_runtime.test_for_let_chain_trailing_type() -> int {
     is_type baml.iter.Peekable<...>
     pop_jump_if_false L22
     load_type int[]
-    load_type void
+    load_type never
     load_var _5
     call baml.iter.Peekable.Iterator.next
     store_var _7
@@ -4310,8 +4310,8 @@ function patterns_new_runtime.test_for_let_chain_trailing_type() -> int {
 
   L12:
     load_type int[]
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _5
     call baml.iter.Filter.Iterator.next
     store_var _7
@@ -4333,8 +4333,8 @@ function patterns_new_runtime.test_for_let_chain_trailing_type() -> int {
 
   L15:
     load_type int[]
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _5
     call baml.iter.Chain.Iterator.next
     store_var _7
@@ -4342,7 +4342,7 @@ function patterns_new_runtime.test_for_let_chain_trailing_type() -> int {
 
   L16:
     load_type int[]
-    load_type void
+    load_type never
     load_var _5
     call baml.iter.StepBy.Iterator.next
     store_var _7
@@ -4474,7 +4474,7 @@ function patterns_new_runtime.test_for_let_or_same_binding() -> int {
     is_type baml.iter.Peekable<...>
     pop_jump_if_false L24
     load_type int
-    load_type void
+    load_type never
     load_var _3
     call baml.iter.Peekable.Iterator.next
     store_var _5
@@ -4496,8 +4496,8 @@ function patterns_new_runtime.test_for_let_or_same_binding() -> int {
 
   L13:
     load_type int
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _3
     call baml.iter.Filter.Iterator.next
     store_var _5
@@ -4519,8 +4519,8 @@ function patterns_new_runtime.test_for_let_or_same_binding() -> int {
 
   L16:
     load_type int
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _3
     call baml.iter.Chain.Iterator.next
     store_var _5
@@ -4528,7 +4528,7 @@ function patterns_new_runtime.test_for_let_or_same_binding() -> int {
 
   L17:
     load_type int
-    load_type void
+    load_type never
     load_var _3
     call baml.iter.StepBy.Iterator.next
     store_var _5
@@ -4651,7 +4651,7 @@ function patterns_new_runtime.test_for_let_or_six_bindings() -> int {
     is_type baml.iter.Peekable<...>
     pop_jump_if_false L24
     load_type int
-    load_type void
+    load_type never
     load_var _3
     call baml.iter.Peekable.Iterator.next
     store_var _5
@@ -4673,8 +4673,8 @@ function patterns_new_runtime.test_for_let_or_six_bindings() -> int {
 
   L13:
     load_type int
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _3
     call baml.iter.Filter.Iterator.next
     store_var _5
@@ -4696,8 +4696,8 @@ function patterns_new_runtime.test_for_let_or_six_bindings() -> int {
 
   L16:
     load_type int
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _3
     call baml.iter.Chain.Iterator.next
     store_var _5
@@ -4705,7 +4705,7 @@ function patterns_new_runtime.test_for_let_or_six_bindings() -> int {
 
   L17:
     load_type int
-    load_type void
+    load_type never
     load_var _3
     call baml.iter.StepBy.Iterator.next
     store_var _5
@@ -4755,7 +4755,7 @@ function patterns_new_runtime.test_for_let_or_six_bindings() -> int {
 function patterns_new_runtime.test_for_nested_rest_irrefutable() -> int {
     load_const 0
     store_var total
-    load_type int[] | void[]
+    load_type int[] | never[]
     load_const 1
     alloc_array 1
     load_const 2
@@ -4824,8 +4824,8 @@ function patterns_new_runtime.test_for_nested_rest_irrefutable() -> int {
     load_var _6
     is_type baml.iter.Peekable<...>
     pop_jump_if_false L22
-    load_type int[] | void[]
-    load_type void
+    load_type int[] | never[]
+    load_type never
     load_var _6
     call baml.iter.Peekable.Iterator.next
     jump L19
@@ -4843,9 +4843,9 @@ function patterns_new_runtime.test_for_nested_rest_irrefutable() -> int {
     jump L19
 
   L12:
-    load_type int[] | void[]
-    load_type void
-    load_type void
+    load_type int[] | never[]
+    load_type never
+    load_type never
     load_var _6
     call baml.iter.Filter.Iterator.next
     jump L19
@@ -4857,28 +4857,28 @@ function patterns_new_runtime.test_for_nested_rest_irrefutable() -> int {
     jump L19
 
   L14:
-    load_type int[] | void[]
+    load_type int[] | never[]
     load_var _6
     call baml.iter.Repeat.Iterator.next
     jump L19
 
   L15:
-    load_type int[] | void[]
-    load_type void
-    load_type void
+    load_type int[] | never[]
+    load_type never
+    load_type never
     load_var _6
     call baml.iter.Chain.Iterator.next
     jump L19
 
   L16:
-    load_type int[] | void[]
-    load_type void
+    load_type int[] | never[]
+    load_type never
     load_var _6
     call baml.iter.StepBy.Iterator.next
     jump L19
 
   L17:
-    load_type int[] | void[]
+    load_type int[] | never[]
     load_var _6
     call baml.iter.ArrayIterator.Iterator.next
     jump L19
@@ -4987,7 +4987,7 @@ function patterns_new_runtime.test_for_rest_capture_fresh_cell() -> int {
     is_type baml.iter.Peekable<...>
     pop_jump_if_false L22
     load_type int[]
-    load_type void
+    load_type never
     load_var _7
     call baml.iter.Peekable.Iterator.next
     store_var _9
@@ -5009,8 +5009,8 @@ function patterns_new_runtime.test_for_rest_capture_fresh_cell() -> int {
 
   L12:
     load_type int[]
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _7
     call baml.iter.Filter.Iterator.next
     store_var _9
@@ -5032,8 +5032,8 @@ function patterns_new_runtime.test_for_rest_capture_fresh_cell() -> int {
 
   L15:
     load_type int[]
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _7
     call baml.iter.Chain.Iterator.next
     store_var _9
@@ -5041,7 +5041,7 @@ function patterns_new_runtime.test_for_rest_capture_fresh_cell() -> int {
 
   L16:
     load_type int[]
-    load_type void
+    load_type never
     load_var _7
     call baml.iter.StepBy.Iterator.next
     store_var _9
@@ -5183,7 +5183,7 @@ function patterns_new_runtime.test_for_rest_sums_rows() -> int {
     is_type baml.iter.Peekable<...>
     pop_jump_if_false L22
     load_type int[]
-    load_type void
+    load_type never
     load_var _7
     call baml.iter.Peekable.Iterator.next
     store_var _9
@@ -5205,8 +5205,8 @@ function patterns_new_runtime.test_for_rest_sums_rows() -> int {
 
   L12:
     load_type int[]
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _7
     call baml.iter.Filter.Iterator.next
     store_var _9
@@ -5228,8 +5228,8 @@ function patterns_new_runtime.test_for_rest_sums_rows() -> int {
 
   L15:
     load_type int[]
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _7
     call baml.iter.Chain.Iterator.next
     store_var _9
@@ -5237,7 +5237,7 @@ function patterns_new_runtime.test_for_rest_sums_rows() -> int {
 
   L16:
     load_type int[]
-    load_type void
+    load_type never
     load_var _7
     call baml.iter.StepBy.Iterator.next
     store_var _9
@@ -5352,7 +5352,7 @@ function patterns_new_runtime.test_for_rest_wildcard_irrefutable() -> int {
     is_type baml.iter.Peekable<...>
     pop_jump_if_false L22
     load_type int[]
-    load_type void
+    load_type never
     load_var _7
     call baml.iter.Peekable.Iterator.next
     jump L19
@@ -5371,8 +5371,8 @@ function patterns_new_runtime.test_for_rest_wildcard_irrefutable() -> int {
 
   L12:
     load_type int[]
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _7
     call baml.iter.Filter.Iterator.next
     jump L19
@@ -5391,15 +5391,15 @@ function patterns_new_runtime.test_for_rest_wildcard_irrefutable() -> int {
 
   L15:
     load_type int[]
-    load_type void
-    load_type void
+    load_type never
+    load_type never
     load_var _7
     call baml.iter.Chain.Iterator.next
     jump L19
 
   L16:
     load_type int[]
-    load_type void
+    load_type never
     load_var _7
     call baml.iter.StepBy.Iterator.next
     jump L19

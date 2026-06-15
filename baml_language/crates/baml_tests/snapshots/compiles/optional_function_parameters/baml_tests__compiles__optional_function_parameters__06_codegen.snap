@@ -129,9 +129,8 @@ function user.AskDocs$parse(json: string, client: baml.llm.Client) -> string {
     store_var client
 
   L0:
-    load_type unknown
+    load_type string | null
     load_type string
-    load_const "AskDocs"
     load_var json
     call baml.llm.parse
     return
@@ -149,7 +148,6 @@ function user.AskDocs$parse_stream(sse: baml.http.SseStream, client: baml.llm.Cl
     load_type string | null
     load_type string
     load_var2 2 1
-    load_const "AskDocs"
     call baml.llm.Client.__make_stream
     return
 }
@@ -369,9 +367,10 @@ function user.SearchService.from_json(j: baml.json.json) -> SearchService {
 }
 
 function user.SearchService.to_json(self: SearchService) -> baml.json.json {
+    load_type string
     load_var self
     load_field .base
-    call baml.String.to_json
+    call baml.json.to_json
     load_const "base"
     alloc_map 1
     return
