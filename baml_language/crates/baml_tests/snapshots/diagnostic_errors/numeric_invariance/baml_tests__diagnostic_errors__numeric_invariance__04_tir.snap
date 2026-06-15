@@ -83,19 +83,18 @@ function user.OptionalIntLtInt(x: int | null, y: int) -> bool throws never {
   { : bool
     x < y : bool
   }
-  !! 2393..2398: operator `Lt` cannot be applied to `int | null` and `int`
+  !! 2393..2398: cannot order `int | null` and `int` with `Lt`: ordering requires both operands to have the same type
 }
 function user.OptionalFloatEqBigint(x: float | null, y: bigint) -> bool throws never {
   { : bool
     x == y : bool
   }
-  !! 2614..2620: operator `Eq` cannot be applied to `float | null` and `bigint`
 }
 function user.OptionalFloatLtBigint(x: float | null, y: bigint) -> bool throws never {
   { : bool
     x < y : bool
   }
-  !! 2821..2826: operator `Lt` cannot be applied to `float | null` and `bigint`
+  !! 2821..2826: cannot order `float | null` and `bigint` with `Lt`: ordering requires both operands to have the same type
 }
 class user.BigintHolder {
   count: bigint

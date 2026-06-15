@@ -1981,8 +1981,8 @@ function baml.iter.ArrayIterator$stream.next(self: baml.iter.ArrayIterator$strea
       value: T =>
         value : T
   }
-  !! 4259..4288: operator `Ge` cannot be applied to `int | null` and `int`
-  !! 4259..4288: operator `Ge` cannot be applied to `int | null` and `int`
+  !! 4259..4288: cannot order `int | null` and `int` with `Ge`: ordering requires both operands to have the same type
+  !! 4259..4288: cannot order `int | null` and `int` with `Ge`: ordering requires both operands to have the same type
   !! 4353..4361: type mismatch: expected int, got int | null
   !! 4363..4378: operator `Add` cannot be applied to `int | null` and `1`
 }
@@ -2010,7 +2010,7 @@ function baml.iter.Range$stream.next(self: baml.iter.Range$stream) -> int | baml
         Done {  } : baml.iter.Done
       }
   }
-  !! 4916..4933: operator `Lt` cannot be applied to `int | null` and `int | null`
+  !! 4916..4933: `int | null` does not implement `Compare`, so it cannot be ordered with `Lt`
   !! 4962..4977: operator `Add` cannot be applied to `int | null` and `int | null`
   !! 5000..5003: type mismatch: expected int | baml.iter.Done, got int | null
 }
@@ -2041,9 +2041,9 @@ function baml.iter.Repeat$stream.next(self: baml.iter.Repeat$stream) -> unknown 
           Done {  } : baml.iter.Done
         }
   }
-  !! 5500..5514: operator `Lt` cannot be applied to `int | null` and `0`
+  !! 5500..5514: cannot order `int | null` and `0` with `Lt`: ordering requires both operands to have the same type
   !! 5517..5536: type mismatch: expected T | baml.iter.Done, got T | null
-  !! 5554..5568: operator `Gt` cannot be applied to `int | null` and `0`
+  !! 5554..5568: cannot order `int | null` and `0` with `Gt`: ordering requires both operands to have the same type
   !! 5571..5590: operator `Sub` cannot be applied to `int | null` and `1`
   !! 5596..5615: type mismatch: expected T | baml.iter.Done, got T | null
 }

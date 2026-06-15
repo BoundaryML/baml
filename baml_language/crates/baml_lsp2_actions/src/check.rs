@@ -6247,6 +6247,8 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::NotIterable { .. } => DiagnosticId::NotCallable,
         TirTypeError::NotIndexable { .. } => DiagnosticId::NotIndexable,
         TirTypeError::InvalidBinaryOp { .. } => DiagnosticId::InvalidOperator,
+        TirTypeError::OrderingDifferentTypes { .. }
+        | TirTypeError::OrderingRequiresCompare { .. } => DiagnosticId::InvalidOperator,
         TirTypeError::InvalidUnaryOp { .. } => DiagnosticId::InvalidOperator,
         TirTypeError::UnresolvedType { .. } => DiagnosticId::UnknownType,
         TirTypeError::ArgumentCountMismatch { .. }

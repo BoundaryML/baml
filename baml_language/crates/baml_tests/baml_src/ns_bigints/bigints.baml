@@ -109,10 +109,6 @@ test "test_bigint_generic_cmp_eq_int_false" {
     assert.is_true((bigint_pick() == 3) == false)
 }
 
-test "test_bigint_generic_cmp_ordering" {
-    assert.is_true(bigint_pick() < 5)
-}
-
 function bigint_pick_a() -> int | bigint { 7n }
 function bigint_pick_b() -> int | bigint { 7n }
 
@@ -574,9 +570,9 @@ test "test_bigint_int_mixed_shr" {
     assert.is_true((16n >> 2) == 4n)
 }
 
-test "test_bigint_int_mixed_comparison_gt" {
-    assert.is_true(5n > 3)
-}
+// Ordering across distinct concrete types (`bigint` vs `int`) is a compile error:
+// the two are atomic, with no common type implementing `Compare`. Convert explicitly
+// to compare. (Cross-type ordering errors are pinned in the diagnostic-error tests.)
 
 test "test_bigint_int_mixed_comparison_eq" {
     assert.is_true(5 == 5n)

@@ -611,28 +611,79 @@ fn invalid_binary_op_bigint_plus_float() {
 fn invalid_binary_op_float_lt_bigint() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "function f() -> bool { return 1.5 < 100n; }");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> bool throws never {
       { : never
         return 1.5 < 100n : bool
       }
-      !! 30..40: operator `Lt` cannot be applied to `1.5` and `100n`
+      !! 30..40: cannot order `1.5` and `100n` with `Lt`: ordering requires both operands to have the same type
     }
     ");
 }
 
 #[test]
-fn invalid_binary_op_bigint_eq_float() {
+fn bigint_eq_float_permitted() {
+    // `==` is valid for any operand pair, so `bigint == float` type-checks to `bool` with
+    // no diagnostic. The always-false lint (a warning on provably-disjoint operands) lands
+    // with `==` lowering in Phase 3B, where it matches the concrete-equality runtime.
     let mut db = make_db();
     let file = db.add_file("test.baml", "function f() -> bool { return 100n == 1.5; }");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> bool throws never {
       { : never
         return 100n == 1.5 : bool
       }
-      !! 30..41: operator `Eq` cannot be applied to `100n` and `1.5`
     }
     ");
+}
+
+#[test]
+fn ordering_unrelated_classes_is_error() {
+    // `<` `>` `<=` `>=` are exact-type; two different classes can't be ordered.
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        "class Dog { name string }\nclass Cat { name string }\n\
+         function f(a: Dog, b: Cat) -> bool { return a < b; }",
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("cannot order `Dog` and `Cat`"),
+        "expected OrderingDifferentTypes, got:\n{tir}"
+    );
+}
+
+#[test]
+fn ordering_subtype_related_is_error() {
+    // Exact-type: even though `int <: int?`, ordering requires the *same* type — only
+    // `==` may span a subtype relationship.
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        "function f(a: int, b: int?) -> bool { return a < b; }",
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("ordering requires both operands to have the same type"),
+        "expected OrderingDifferentTypes, got:\n{tir}"
+    );
+}
+
+#[test]
+fn ordering_non_compare_class_is_error() {
+    // A common type is found (both `Widget`), but `Widget` does not implement `Compare`,
+    // so it has no ordering.
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        "class Widget { id int }\n\
+         function f(a: Widget, b: Widget) -> bool { return a < b; }",
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("`Widget` does not implement `Compare`"),
+        "expected OrderingRequiresCompare, got:\n{tir}"
+    );
 }
 
 #[test]
