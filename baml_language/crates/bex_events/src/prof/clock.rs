@@ -79,8 +79,23 @@ mod imp {
         meta: ClockMeta,
     }
 
+    static ANCHOR: OnceLock<Anchor> = OnceLock::new();
+
+    /// The process clock anchor. Fast path is a single `OnceLock::get`
+    /// (Acquire load + branch) that inlines into `now_ticks` — and thus
+    /// into the VM's call hot path — so the raw counter read can pipeline
+    /// with the surrounding encode/push work rather than hiding behind a
+    /// cross-crate call. The one-time init is `#[cold]` and out-of-line.
+    #[inline]
     fn anchor() -> &'static Anchor {
-        static ANCHOR: OnceLock<Anchor> = OnceLock::new();
+        match ANCHOR.get() {
+            Some(a) => a,
+            None => anchor_init(),
+        }
+    }
+
+    #[cold]
+    fn anchor_init() -> &'static Anchor {
         ANCHOR.get_or_init(|| {
             let (source, ns_per_tick) = detect();
             let kind = match source {
@@ -335,6 +350,14 @@ pub struct TickConverter {
     seg_base_ns: u64,
     /// ns-per-tick as (numer, denom).
     rate: (u64, u64),
+    /// Fixed-point reciprocal of `rate` for the hot path: `numer << SCALE_SHIFT
+    /// / denom`, so `to_ns` is a `dt * scale >> SCALE_SHIFT` multiply-shift
+    /// instead of a per-record u128 divide (~20-40 non-pipelined cycles). Kept
+    /// in sync with `rate` at every install site. Exact for rate (1,1)
+    /// (scale = `2^SCALE_SHIFT` → ns == dt); ≤1 ns rounding for measured TSC
+    /// rates, which is below tracing-timestamp resolution and preserves
+    /// monotonicity.
+    scale: u128,
     /// Previous segment `(base_ticks, base_ns, rate)`, kept after a
     /// refinement so pre-switch ticks still convert on their original line.
     prev: Option<(u64, u64, (u64, u64))>,
@@ -342,6 +365,19 @@ pub struct TickConverter {
     /// First calibration sample (x86 TSC only): adjacent OS-clock + tick
     /// reads taken at converter construction.
     sample0: Option<(std::time::Instant, u64)>,
+}
+
+/// Fixed-point precision of [`TickConverter::scale`]. 2^48 keeps the rounding
+/// error below 1 ns for any realistic `dt` (ticks since the segment base) while
+/// leaving headroom against u128 overflow in `dt * scale`.
+#[cfg(not(target_arch = "wasm32"))]
+const SCALE_SHIFT: u32 = 48;
+
+/// `numer << SCALE_SHIFT / denom` — the reciprocal computed once per rate
+/// install (the only divide), consumed branchlessly per record.
+#[cfg(not(target_arch = "wasm32"))]
+fn scale_of(rate: (u64, u64)) -> u128 {
+    (u128::from(rate.0) << SCALE_SHIFT) / u128::from(rate.1.max(1))
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -353,6 +389,7 @@ impl TickConverter {
             seg_base_ticks: 0,
             seg_base_ns: 0,
             rate: (1, 1),
+            scale: scale_of((1, 1)),
             prev: None,
             refined: true,
             sample0: None,
@@ -371,6 +408,7 @@ impl TickConverter {
                 seg_base_ticks: base_ticks(),
                 seg_base_ns: 0,
                 rate,
+                scale: scale_of(rate),
                 prev: None,
                 refined: true,
                 sample0: None,
@@ -391,6 +429,7 @@ impl TickConverter {
                     seg_base_ticks: base_ticks(),
                     seg_base_ns: 0,
                     rate,
+                    scale: scale_of(rate),
                     prev: None,
                     refined: false,
                     sample0: Some(sample0),
@@ -414,7 +453,8 @@ impl TickConverter {
             }
         }
         let dt = u128::from(ticks.saturating_sub(self.seg_base_ticks));
-        self.seg_base_ns + (dt * u128::from(self.rate.0) / u128::from(self.rate.1)) as u64
+        // Hot path: multiply-shift by the precomputed reciprocal, no divide.
+        self.seg_base_ns + ((dt * self.scale) >> SCALE_SHIFT) as u64
     }
 
     /// Refine the x86 TSC rate once the window since `sample0` spans ≥1 s.
@@ -445,6 +485,7 @@ impl TickConverter {
         self.seg_base_ticks = now_t;
         self.seg_base_ns = switch_ns;
         self.rate = new_rate;
+        self.scale = scale_of(new_rate);
         self.refined = true;
     }
 
@@ -558,6 +599,36 @@ mod tests {
     }
 
     #[test]
+    fn reciprocal_matches_exact_divide() {
+        // The fixed-point reciprocal (multiply-shift) must track the exact
+        // dt*numer/denom divide within 1 ns across a range of ticks, for
+        // representative non-unit rates (CNTVCT 24 MHz = 125/3; a fast TSC
+        // ~3.2 GHz ≈ 5/16). Catches a gross reciprocal/SCALE_SHIFT bug that
+        // the identity-rate (1/1) test cannot.
+        for &(numer, denom) in &[(125u64, 3u64), (5, 16), (1_000_000_000, 24_000_000)] {
+            let conv = TickConverter {
+                kind: ClockKind::Cntvct,
+                seg_base_ticks: 0,
+                seg_base_ns: 0,
+                rate: (numer, denom),
+                scale: scale_of((numer, denom)),
+                prev: None,
+                refined: true,
+                sample0: None,
+            };
+            for dt in [0u64, 1, 3, 7, 1_000, 1_000_003, 50_000_000] {
+                let exact = u64::try_from(u128::from(dt) * u128::from(numer) / u128::from(denom))
+                    .expect("test dt*rate fits u64");
+                let approx = conv.to_ns(dt);
+                assert!(
+                    approx.abs_diff(exact) <= 1,
+                    "rate {numer}/{denom} dt {dt}: reciprocal {approx} vs exact {exact}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn refinement_keeps_monotonicity() {
         // A deliberately-wrong coarse rate, then a refine: converted values
         // sampled across the boundary must never step backwards, and ticks
@@ -567,6 +638,7 @@ mod tests {
             seg_base_ticks: 0,
             seg_base_ns: 0,
             rate: (3, 1), // 3 ns/tick, deliberately ~3x off
+            scale: scale_of((3, 1)),
             prev: None,
             refined: false,
             sample0: Some((std::time::Instant::now(), now_ticks())),

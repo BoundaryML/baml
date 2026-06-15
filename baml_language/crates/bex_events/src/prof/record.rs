@@ -194,10 +194,18 @@ impl RawRecord<'_> {
         self.encode_to(buf)
     }
 
-    /// [`RawRecord::encode`] over a plain slice, for producers that size
-    /// their stack buffer to the record they emit ([`Self::encoded_len`])
-    /// instead of zeroing [`MAX_RECORD_LEN`] bytes on a hot path.
-    /// Panics (slice indexing) if `buf` is shorter than the encoded record.
+    /// Encodes into the front of `buf`, returning the encoded length, for
+    /// producers that write straight into a ring slot sized to the record
+    /// ([`Self::encoded_len`]) instead of zeroing [`MAX_RECORD_LEN`] bytes on a
+    /// hot path.
+    ///
+    /// # Safety / precondition
+    /// `buf.len()` MUST be at least [`Self::encoded_len`]. The fixed integer
+    /// fields are written via unchecked unaligned stores (debug-asserted, not
+    /// release-checked), so an undersized `buf` is undefined behavior in
+    /// release builds — not a panic. Every caller satisfies this:
+    /// [`Self::encode`] uses a [`MAX_RECORD_LEN`] buffer and `Ring::push_with`
+    /// reserves exactly `encoded_len()`.
     #[inline]
     pub fn encode_to(&self, buf: &mut [u8]) -> usize {
         let mut w = Writer { buf, pos: 0 };
@@ -395,17 +403,59 @@ impl Writer<'_> {
 
     #[inline]
     fn u16(&mut self, v: u16) {
-        self.bytes(&v.to_le_bytes());
+        debug_assert!(self.pos + 2 <= self.buf.len());
+        // SAFETY: callers size `buf` >= `encoded_len()` (producer reserves
+        // exactly that via `Ring::push_with`), so `pos + 2` is in bounds.
+        #[expect(
+            unsafe_code,
+            reason = "in-bounds unaligned store; avoids non-inlined copy"
+        )]
+        unsafe {
+            self.buf
+                .as_mut_ptr()
+                .add(self.pos)
+                .cast::<u16>()
+                .write_unaligned(v.to_le());
+        }
+        self.pos += 2;
     }
 
     #[inline]
     fn u32(&mut self, v: u32) {
-        self.bytes(&v.to_le_bytes());
+        debug_assert!(self.pos + 4 <= self.buf.len());
+        // SAFETY: see `u16`.
+        #[expect(
+            unsafe_code,
+            reason = "in-bounds unaligned store; avoids non-inlined copy"
+        )]
+        unsafe {
+            self.buf
+                .as_mut_ptr()
+                .add(self.pos)
+                .cast::<u32>()
+                .write_unaligned(v.to_le());
+        }
+        self.pos += 4;
     }
 
     #[inline]
     fn u64(&mut self, v: u64) {
-        self.bytes(&v.to_le_bytes());
+        debug_assert!(self.pos + 8 <= self.buf.len());
+        // SAFETY: see `u16`. A direct unaligned store lowers to one `mov` at
+        // `opt-level="s"`; routing through `copy_from_slice`/`copy_nonoverlapping`
+        // emitted a non-inlined call there (~5-8 ns/pair on the hot records).
+        #[expect(
+            unsafe_code,
+            reason = "in-bounds unaligned store; avoids non-inlined copy"
+        )]
+        unsafe {
+            self.buf
+                .as_mut_ptr()
+                .add(self.pos)
+                .cast::<u64>()
+                .write_unaligned(v.to_le());
+        }
+        self.pos += 8;
     }
 
     #[inline]

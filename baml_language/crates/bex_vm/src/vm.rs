@@ -2940,25 +2940,31 @@ impl BexVm {
         self.call_id_counter
     }
 
-    /// Encodes and pushes one profiling record into the per-resume ring
-    /// snapshot. No-op when profiling is off. The buffer is sized by
-    /// `SET_FUNCTION_ID_LEN` (41 B — the largest fixed record the VM emits:
-    /// `CallFunction` 38, `EndFunction` 26, `SetFunctionId` 41) — the 292-byte
-    /// `MAX_RECORD_LEN` zeroing is measurable at per-call rates.
+    /// Encodes one profiling record directly into a reserved slot of the
+    /// supplied per-resume ring snapshot. Callers do the profiling-off gate
+    /// (they pass the already-unwrapped `&Ring`); the slot is sized from
+    /// [`bex_events::prof::record::RawRecord::encoded_len`] and initialized in
+    /// place by `encode_to` — no intermediate stack buffer, no zeroing.
     #[inline]
-    fn prof_push_record(&self, rec: &bex_events::prof::record::RawRecord<'_>) {
-        if let Some(ring) = self.prof_ring {
-            let mut buf = [0u8; bex_events::prof::record::SET_FUNCTION_ID_LEN];
-            let len = rec.encode_to(&mut buf);
-            // SAFETY: the engine refreshed `prof_ring` from this OS thread's
-            // TLS at the top of the current exec resume (D5a), and exec
-            // never crosses an `.await`, so this thread is still the ring's
-            // live claimant. If exec ever yields mid-step, this model must
-            // be revisited (plan §6, invariant 4).
-            #[expect(unsafe_code, reason = "ring push contract upheld by D5a refresh")]
-            unsafe {
-                ring.push(&buf[..len]);
-            }
+    fn prof_push_record(
+        ring: &bex_events::prof::Ring,
+        rec: &bex_events::prof::record::RawRecord<'_>,
+    ) {
+        // Encode straight into the ring slot: no intermediate stack buffer,
+        // no 41-byte zeroing, and one copy instead of two (encode→buf→ring).
+        let len = rec.encoded_len();
+        // SAFETY: the engine refreshed `prof_ring` from this OS thread's TLS
+        // at the top of the current exec resume (D5a), and exec never crosses
+        // an `.await`, so this thread is still the ring's live claimant. If
+        // exec ever yields mid-step, this model must be revisited (plan §6,
+        // invariant 4). Callers hold the `Some(ring)` so the off-check is not
+        // repeated here. `encode_to` writes exactly `encoded_len` bytes,
+        // initializing the whole slot before commit.
+        #[expect(unsafe_code, reason = "ring push contract upheld by D5a refresh")]
+        unsafe {
+            ring.push_with(len, |slot| {
+                rec.encode_to(slot);
+            });
         }
     }
 
@@ -2970,15 +2976,18 @@ impl BexVm {
         let parent_call_id = self.current_call_id;
         let call_id = self.mint_call_id();
         self.current_call_id = call_id;
-        if self.prof_ring.is_some() {
-            self.prof_push_record(&bex_events::prof::record::RawRecord::CallFunction {
-                flags: 0,
-                thread_id: BexThreadId(self.prof_thread_id),
-                call_id: BexCallId(call_id),
-                parent_call_id: BexCallId(parent_call_id),
-                function_id: ProfFunctionId(function_id),
-                ts_ticks: bex_events::prof::clock::now_ticks(),
-            });
+        if let Some(ring) = self.prof_ring {
+            Self::prof_push_record(
+                ring,
+                &bex_events::prof::record::RawRecord::CallFunction {
+                    flags: 0,
+                    thread_id: BexThreadId(self.prof_thread_id),
+                    call_id: BexCallId(call_id),
+                    parent_call_id: BexCallId(parent_call_id),
+                    function_id: ProfFunctionId(function_id),
+                    ts_ticks: bex_events::prof::clock::now_ticks(),
+                },
+            );
         }
         (call_id, parent_call_id)
     }
@@ -3004,13 +3013,16 @@ impl BexVm {
         {
             self.id_overrides.pop();
         }
-        if self.prof_ring.is_some() {
-            self.prof_push_record(&bex_events::prof::record::RawRecord::EndFunction {
-                status,
-                thread_id: BexThreadId(self.prof_thread_id),
-                call_id: BexCallId(call_id),
-                ts_ticks: bex_events::prof::clock::now_ticks(),
-            });
+        if let Some(ring) = self.prof_ring {
+            Self::prof_push_record(
+                ring,
+                &bex_events::prof::record::RawRecord::EndFunction {
+                    status,
+                    thread_id: BexThreadId(self.prof_thread_id),
+                    call_id: BexCallId(call_id),
+                    ts_ticks: bex_events::prof::clock::now_ticks(),
+                },
+            );
         }
     }
 
@@ -3078,15 +3090,18 @@ impl BexVm {
     fn prof_enter_sysop(&mut self, function_id: u32) {
         let parent_call_id = self.current_call_id;
         let call_id = self.mint_call_id();
-        if self.prof_ring.is_some() {
-            self.prof_push_record(&bex_events::prof::record::RawRecord::CallFunction {
-                flags: 0,
-                thread_id: BexThreadId(self.prof_thread_id),
-                call_id: BexCallId(call_id),
-                parent_call_id: BexCallId(parent_call_id),
-                function_id: ProfFunctionId(function_id),
-                ts_ticks: bex_events::prof::clock::now_ticks(),
-            });
+        if let Some(ring) = self.prof_ring {
+            Self::prof_push_record(
+                ring,
+                &bex_events::prof::record::RawRecord::CallFunction {
+                    flags: 0,
+                    thread_id: BexThreadId(self.prof_thread_id),
+                    call_id: BexCallId(call_id),
+                    parent_call_id: BexCallId(parent_call_id),
+                    function_id: ProfFunctionId(function_id),
+                    ts_ticks: bex_events::prof::clock::now_ticks(),
+                },
+            );
             self.pending_sysop_call_id = Some(call_id);
         }
     }
@@ -3095,13 +3110,16 @@ impl BexVm {
     /// stream (tag 0x05). Gated on the ring like every emission; the
     /// override semantics themselves work with profiling off.
     pub(crate) fn prof_push_set_function_id(&mut self, call_id: u64, id: [u8; 16]) {
-        if self.prof_ring.is_some() {
-            self.prof_push_record(&bex_events::prof::record::RawRecord::SetFunctionId {
-                thread_id: BexThreadId(self.prof_thread_id),
-                call_id: BexCallId(call_id),
-                id,
-                ts_ticks: bex_events::prof::clock::now_ticks(),
-            });
+        if let Some(ring) = self.prof_ring {
+            Self::prof_push_record(
+                ring,
+                &bex_events::prof::record::RawRecord::SetFunctionId {
+                    thread_id: BexThreadId(self.prof_thread_id),
+                    call_id: BexCallId(call_id),
+                    id,
+                    ts_ticks: bex_events::prof::clock::now_ticks(),
+                },
+            );
         }
     }
 
