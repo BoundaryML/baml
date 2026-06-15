@@ -10,6 +10,7 @@ use clap::Args;
 
 use crate::project_load::load_project_or_default;
 
+/// Parsed documentation entry for a BAML keyword topic.
 #[derive(serde::Deserialize)]
 struct BamlKeywordDoc {
     summary: String,
@@ -19,6 +20,7 @@ struct BamlKeywordDoc {
     details: Option<String>,
 }
 
+/// Parsed documentation entry for a TypeScript/JavaScript keyword topic.
 #[derive(serde::Deserialize)]
 struct TsKeywordDoc {
     message: String,
@@ -255,6 +257,7 @@ fn resolve_unqualified_builtin_member<'db>(
 }
 
 impl DescribeArgs {
+    /// Run the describe command and return the CLI exit code.
     pub fn run(&self) -> Result<crate::ExitCode> {
         // Introspection never requires a `baml.toml`: with no project, we
         // fall back to a stdlib-only "default state" so `baml describe

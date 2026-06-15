@@ -865,6 +865,40 @@ fn describe_builtin_method_drill_in_via_class_name() {
     }
 }
 
+/// User-defined class methods still resolve before the stdlib fallback, even
+/// when the class name matches a builtin class such as `Array`.
+#[test]
+fn describe_user_defined_class_method_takes_precedence_over_builtin_fallback() {
+    let db = make_db(&[(
+        "shadow_builtin.baml",
+        r#"
+/// A user-defined class that intentionally shares a builtin class name.
+class Array {
+    value string
+
+    /// Return a user-defined reduction marker.
+    function reduce(self) -> string {
+        "user reduce"
+    }
+}
+"#,
+    )]);
+
+    let output = describe_via_dispatch(&db, "Array.reduce");
+    assert!(
+        output.contains("function reduce(self) -> string"),
+        "expected user-defined method signature:\n{output}",
+    );
+    assert!(
+        output.contains("\"user reduce\""),
+        "user-defined method body should be rendered:\n{output}",
+    );
+    assert!(
+        !output.contains("reducer: (A, T) -> A throws E"),
+        "builtin `Array.reduce` must not shadow the user-defined class method:\n{output}",
+    );
+}
+
 // ── definition_line_range tests ──────────────────────────────────────────────
 
 #[test]
