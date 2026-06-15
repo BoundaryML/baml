@@ -195,6 +195,30 @@ pub fn definitely_equal<C: TypeContext>(a: &Ty, b: &Ty, ctx: &C) -> bool {
     a.is_unoverridable_singleton() && a == NormalTy::canonical(b, ctx)
 }
 
+/// The statically-known result of a broad `==` between operands of types `a` and
+/// `b`, or `None` if it depends on the runtime values.
+///
+/// Combines [`definitely_disjoint`] and [`definitely_equal`] into one pass — it
+/// canonicalizes each operand once rather than twice:
+/// - `Some(false)` — the types are provably disjoint, so `==` is always `false`.
+/// - `Some(true)` — both operands are the same unoverridable singleton, so `==`
+///   is always `true`.
+/// - `None` — the result is not statically determined.
+///
+/// See those two functions for the exact rules and their dynamic-package
+/// soundness.
+pub fn constant_equality<C: TypeContext>(a: &Ty, b: &Ty, ctx: &C) -> Option<bool> {
+    let a = NormalTy::canonical(a, ctx);
+    let b = NormalTy::canonical(b, ctx);
+    if a.is_disjoint_from(&b) {
+        Some(false)
+    } else if a.is_unoverridable_singleton() && a == b {
+        Some(true)
+    } else {
+        None
+    }
+}
+
 impl NormalTy {
     /// Normalize and canonicalize a [`Ty`] in one step (the shared entry point).
     fn canonical<C: TypeContext>(ty: &Ty, ctx: &C) -> NormalTy {

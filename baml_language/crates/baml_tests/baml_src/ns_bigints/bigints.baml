@@ -101,8 +101,10 @@ test "test_bigint_generic_method_class_type_arg" {
 
 function bigint_pick() -> int | bigint { 2n }
 
-test "test_bigint_generic_cmp_eq_int_true" {
-    assert.is_true(bigint_pick() == 2)
+test "test_bigint_generic_cmp_eq_bigint_true" {
+    // `bigint_pick()` is `int | bigint` but returns the bigint `2n`; comparing to
+    // a matching `bigint` literal is `true` (same concrete type and value).
+    assert.is_true(bigint_pick() == 2n)
 }
 
 test "test_bigint_generic_cmp_eq_int_false" {
@@ -575,7 +577,9 @@ test "test_bigint_int_mixed_shr" {
 // to compare. (Cross-type ordering errors are pinned in the diagnostic-error tests.)
 
 test "test_bigint_int_mixed_comparison_eq" {
-    assert.is_true(5 == 5n)
+    // `int` and `bigint` are distinct concrete types, so `==` is always false
+    // (and the compiler warns it is provably disjoint) — no implicit coercion.
+    assert.is_true((5 == 5n) == false)
 }
 
 // ─── AllocFailure / NegativeBitShift guards ───────────────────────────────────

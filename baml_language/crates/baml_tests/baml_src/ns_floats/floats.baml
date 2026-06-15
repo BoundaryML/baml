@@ -779,7 +779,9 @@ test "float_random_distinct_values" {
 // Constant-folded path (both operands literals — folded by the compiler)
 
 test "float_eq_float_eq_int_literal_fold" {
-    assert.is_true(3.0 == 3)
+    // `float` and `int` are distinct concrete types, so `==` is always false
+    // (no implicit coercion); the compiler also warns it is provably disjoint.
+    assert.is_true((3.0 == 3) == false)
 }
 
 test "float_eq_float_neq_int_distinct_fold" {
@@ -795,11 +797,11 @@ test "float_eq_fold_ordinary_unequal_false" {
 }
 
 test "float_eq_int_eq_float_literal_fold" {
-    assert.is_true(2 == 2.0)
+    assert.is_true((2 == 2.0) == false)
 }
 
 test "float_eq_large_integer_valued_fold" {
-    assert.is_true(1000000.0 == 1000000)
+    assert.is_true((1000000.0 == 1000000) == false)
 }
 
 test "float_eq_neg_zero_lit_equals_neg_zero_lit_fold" {
@@ -816,8 +818,10 @@ test "float_eq_null_eq_float_symmetric_false" {
     assert.is_true((null == 2.0) == false)
 }
 
-test "float_eq_two_pow_53_exact" {
-    assert.is_true(9007199254740992.0 == 9007199254740992)
+test "float_eq_two_pow_53_cross_type_false" {
+    // Even where the int is exactly representable as a float, the two are
+    // distinct concrete types, so `==` is false (and provably disjoint).
+    assert.is_true((9007199254740992.0 == 9007199254740992) == false)
 }
 
 // Runtime VM path (≥1 non-literal operand forces the float-eq opcode)
@@ -951,7 +955,7 @@ test "float_eq_pos_inf_ne_neg_inf" {
 }
 
 test "float_eq_runtime_float_eq_int" {
-    assert.is_true(float.parse("2") == 2)
+    assert.is_true((float.parse("2") == 2) == false)
 }
 
 test "float_eq_runtime_float_neq_int_distinct" {
@@ -959,7 +963,7 @@ test "float_eq_runtime_float_neq_int_distinct" {
 }
 
 test "float_eq_runtime_int_eq_float" {
-    assert.is_true(5 == float.parse("5.0"))
+    assert.is_true((5 == float.parse("5.0")) == false)
 }
 
 test "float_eq_runtime_int_neq_float_distinct" {

@@ -14813,16 +14813,42 @@ impl<'db> TypeInferenceBuilder<'db> {
         let lhs = &expanded_lhs;
         let rhs = &expanded_rhs;
         match op {
-            // Equality (`==`, `!=`): permissive — valid for *any* pair of operands and
-            // the result is always `bool`. This allows `x == null` (the canonical null
-            // check), nullable equality, and erased comparisons (`unknown`, unions,
-            // interfaces). The always-false lint (warn when the operand types are
-            // provably disjoint, e.g. `string == int`) lands with `==` lowering in
-            // Phase 3B, so the warning matches the concrete-equality runtime rather than
-            // today's coercing `exec_cmpop`.
-            BinaryOp::Eq | BinaryOp::Ne => Ty::Bool {
-                attr: TyAttr::default(),
-            },
+            // Equality (`==`, `!=`): valid for *any* pair of operands, result `bool`.
+            // This allows `x == null` (the canonical null check), nullable equality, and
+            // erased comparisons (`unknown`, unions, interfaces). It only *warns* when
+            // the operand types are provably disjoint — no value of one can equal a value
+            // of the other — so the comparison is a constant; the `equals_equals`
+            // lowering makes the runtime (concrete-type equality) agree.
+            BinaryOp::Eq | BinaryOp::Ne => {
+                // When the operand types are provably disjoint (no shared value) or
+                // provably the same single value, `==` is a constant — fold the result
+                // to a `bool` literal so the static type agrees with the
+                // `equals_equals` runtime. Disjoint operands (`Some(false)`) also warn
+                // (the comparison is pointless); a provably-equal pair does not.
+                match baml_type::normalize::constant_equality(lhs, rhs, &NormalizeCtx(self)) {
+                    Some(eq) => {
+                        if !eq {
+                            self.context.report_warning_simple(
+                                TirTypeError::ComparisonAlwaysDisjoint {
+                                    op,
+                                    lhs: lhs.clone(),
+                                    rhs: rhs.clone(),
+                                },
+                                at,
+                            );
+                        }
+                        let value = if matches!(op, BinaryOp::Eq) { eq } else { !eq };
+                        Ty::Literal(
+                            crate::ty::LiteralValue::Bool(value),
+                            crate::ty::Freshness::Fresh,
+                            TyAttr::default(),
+                        )
+                    }
+                    None => Ty::Bool {
+                        attr: TyAttr::default(),
+                    },
+                }
+            }
 
             // Ordering (`<`, `<=`, `>`, `>=`): exact-type — both operands must have the
             // *same* type (subtyping is not enough; only `==` spans types/subtypes), and

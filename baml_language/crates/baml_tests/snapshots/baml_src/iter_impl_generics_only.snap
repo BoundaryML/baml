@@ -5340,7 +5340,7 @@ function iter_impl_generics_only.iter_some_every_find() -> bool {
     pop 1
     load_var found
     load_const 2
-    cmp_op ==
+    call baml.ops.equals_equals
 
   L64:
     return

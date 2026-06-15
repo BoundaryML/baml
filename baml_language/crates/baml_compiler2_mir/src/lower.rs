@@ -5493,6 +5493,19 @@ impl LoweringContext<'_> {
             }
         }
 
+        // `==`/`!=`: the `baml.ops.equals_equals` driver is the always-correct
+        // general case — it compares the operands' concrete runtime types and
+        // dispatches a custom `Equals` when present. The specialized comparison
+        // opcode is only an equivalent optimization when both operands are the
+        // *same* primitive (value comparison == the native `Equals`), so keep it
+        // there and route everything else through the driver.
+        if matches!(op, AstBinaryOp::Eq | AstBinaryOp::Ne)
+            && !self.equality_uses_primitive_opcode(lhs, rhs)
+        {
+            self.lower_equality_via_driver(op, lhs, rhs, dest);
+            return;
+        }
+
         // Mixed `int OP bigint` (or `bigint OP int`) operators resolve the
         // `int` operand to a small local `BigInt` in the VM (the specialized
         // `*Bigint`/`CmpBigint` opcodes accept a lone `int` operand), without
@@ -5513,6 +5526,76 @@ impl LoweringContext<'_> {
         } else {
             // Fallback — shouldn't happen for well-typed code
             self.emit_panic_call("unsupported binary op", expr_id);
+        }
+    }
+
+    /// Whether both operands of an `==`/`!=` are the *same* primitive type, so
+    /// the specialized comparison opcode is equivalent to the `equals_equals`
+    /// driver (value comparison matches the unoverridable native `Equals`).
+    /// Literals widen to their base primitive; everything else (mixed primitives,
+    /// `uint8array`, enums, classes, containers, unions, interfaces, `unknown`)
+    /// goes through the driver.
+    fn equality_uses_primitive_opcode(&self, lhs: AstExprId, rhs: AstExprId) -> bool {
+        fn prim_class(ty: &RuntimeTy) -> Option<u8> {
+            use baml_base::Literal;
+            Some(match ty {
+                RuntimeTy::Int { .. } | RuntimeTy::Literal(Literal::Int(_), _, _) => 0,
+                RuntimeTy::Bigint { .. } | RuntimeTy::Literal(Literal::Bigint(_), _, _) => 1,
+                RuntimeTy::Float { .. } | RuntimeTy::Literal(Literal::Float(_), _, _) => 2,
+                RuntimeTy::String { .. } | RuntimeTy::Literal(Literal::String(_), _, _) => 3,
+                RuntimeTy::Bool { .. } | RuntimeTy::Literal(Literal::Bool(_), _, _) => 4,
+                RuntimeTy::Null { .. } => 5,
+                _ => return None,
+            })
+        }
+        let l = prim_class(&self.expr_ty(lhs));
+        l.is_some() && l == prim_class(&self.expr_ty(rhs))
+    }
+
+    /// Lower `==`/`!=` through the `baml.ops.equals_equals` driver — the general
+    /// case (concrete-type comparison + custom `Equals` dispatch). The driver may
+    /// yield (it can call a user `eq`), so the call splits the block. `!=` negates
+    /// the `==` result.
+    fn lower_equality_via_driver(
+        &mut self,
+        op: AstBinaryOp,
+        lhs: AstExprId,
+        rhs: AstExprId,
+        dest: Place,
+    ) {
+        let lhs_op = self.lower_to_operand(lhs);
+        let rhs_op = self.lower_to_operand(rhs);
+        let callee = Operand::Constant(Constant::Function(ItemRef::Free {
+            package: Name::new("baml"),
+            namespace: vec![Name::new("ops")],
+            name: Name::new("equals_equals"),
+        }));
+        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
+        // For `!=`, capture the `==` result in a temp and negate it into `dest`.
+        let eq_dest = if matches!(op, AstBinaryOp::Ne) {
+            Place::local(self.builder.temp(RuntimeTy::Bool {
+                attr: TyAttr::default(),
+            }))
+        } else {
+            dest.clone()
+        };
+        let resume = self.builder.create_block();
+        self.builder.call(
+            callee,
+            vec![lhs_op, rhs_op],
+            eq_dest.clone(),
+            resume,
+            unwind,
+        );
+        self.builder.set_current_block(resume);
+        if matches!(op, AstBinaryOp::Ne) {
+            self.builder.assign(
+                dest,
+                Rvalue::UnaryOp {
+                    op: crate::UnaryOp::Not,
+                    operand: Operand::Copy(eq_dest),
+                },
+            );
         }
     }
 

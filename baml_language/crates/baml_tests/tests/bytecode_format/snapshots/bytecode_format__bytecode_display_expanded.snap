@@ -19,17 +19,18 @@ function assert.contains(haystack: string, needle: string) -> null {
 
 function assert.equal(actual: unknown, expected: unknown) -> null {
   23   0   load_var2 1 2          
-       1   cmp_op !=              
-       2   pop_jump_if_false +2   (to 4)
-       3   jump +3                (to 6)
+       1   call 863 ntypeargs=0   (baml.ops.equals_equals)
+       2   unary_op !             
+       3   pop_jump_if_false +2   (to 5)
+       4   jump +3                (to 7)
 
-  26   4   load_const 0           (null)
+  26   5   load_const 0           (null)
 
-  23   5   jump +3                (to 8)
+  23   6   jump +3                (to 9)
 
-  24   6   load_const 1           ("assertion failed: expected equal values")
-       7   call 318 ntypeargs=0   (baml.sys.panic)
-       8   return                 
+  24   7   load_const 1           ("assertion failed: expected equal values")
+       8   call 318 ntypeargs=0   (baml.sys.panic)
+       9   return                 
 }
 
 function assert.is_true(condition: bool) -> null {
@@ -50,7 +51,7 @@ function assert.is_true(condition: bool) -> null {
 function assert.not_null(value: unknown | null) -> null {
   14   0   load_var 1             (value)
        1   load_const 0           (null)
-       2   cmp_op ==              
+       2   call 863 ntypeargs=0   (baml.ops.equals_equals)
        3   pop_jump_if_false +2   (to 5)
        4   jump +3                (to 7)
 

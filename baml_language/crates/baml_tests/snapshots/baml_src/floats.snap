@@ -909,7 +909,7 @@ function floats.$init_test_ns_floats_floats(registry: testing.TestCollector) -> 
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "float_eq_two_pow_53_exact"
+    load_const "float_eq_two_pow_53_cross_type_false"
     make_closure .<lambda($init_test_ns_floats_floats, 151)>, 0
     load_const null
     call testing.TestCollector.register_test

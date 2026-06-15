@@ -86,9 +86,10 @@ function user.OptionalIntLtInt(x: int | null, y: int) -> bool throws never {
   !! 2393..2398: cannot order `int | null` and `int` with `Lt`: ordering requires both operands to have the same type
 }
 function user.OptionalFloatEqBigint(x: float | null, y: bigint) -> bool throws never {
-  { : bool
-    x == y : bool
+  { : false
+    x == y : false
   }
+  ?? 2614..2620: `float | null` and `bigint` share no value, so this comparison is always false
 }
 function user.OptionalFloatLtBigint(x: float | null, y: bigint) -> bool throws never {
   { : bool

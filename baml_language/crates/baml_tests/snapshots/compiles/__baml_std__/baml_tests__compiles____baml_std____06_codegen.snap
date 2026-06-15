@@ -19180,7 +19180,7 @@ function baml.time.PlainDateTime.to_zoned(self: baml.time.PlainDateTime, timezon
   L1:
     load_var disambiguation
     load_const "reject"
-    cmp_op ==
+    call baml.ops.equals_equals
     pop_jump_if_false L2
     jump L6
 
@@ -19248,7 +19248,7 @@ function baml.time.PlainDateTime.to_zoned(self: baml.time.PlainDateTime, timezon
 
   L8:
     load_var2 5 6
-    cmp_op ==
+    call baml.ops.equals_equals
     pop_jump_if_false L9
     jump L10
 

@@ -22195,119 +22195,125 @@ fn baml.time.PlainDateTime.to_zoned(self: baml.time.PlainDateTime, timezone: bam
 
     bb2: {
         _5 = is_type(copy _2, baml.time.TimeZoneOffset);
-        branch copy _5 -> [bb21, bb3];
+        branch copy _5 -> [bb23, bb3];
     }
 
     bb3: {
-        _10 = copy _3 == const "reject";
-        branch copy _10 -> [bb10, bb4];
+        _10 = call const fn baml.ops.equals_equals(copy _3, const "reject") -> [bb4];
     }
 
     bb4: {
-        _30 = copy _1.0;
-        _29 = sys_op const fn baml.time._tz_to_instant(copy _2, copy _30, copy _3) -> bb5;
+        branch copy _10 -> [bb11, bb5];
     }
 
     bb5: {
-        _31 = copy _29 == const null;
-        branch copy _31 -> [bb9, bb6];
+        _30 = copy _1.0;
+        _29 = sys_op const fn baml.time._tz_to_instant(copy _2, copy _30, copy _3) -> bb6;
     }
 
     bb6: {
+        _31 = copy _29 == const null;
+        branch copy _31 -> [bb10, bb7];
+    }
+
+    bb7: {
         _33 = copy _29;
         _35 = copy _33;
         _34 = copy _35;
         _36 = copy _35 == const null;
-        branch copy _36 -> [bb7, bb8];
-    }
-
-    bb7: {
-        _34 = const 0n;
-        goto -> bb8;
+        branch copy _36 -> [bb8, bb9];
     }
 
     bb8: {
-        _0 = baml.time.ZonedDateTime { copy _34, const null, copy _2 };
-        goto -> bb22;
+        _34 = const 0n;
+        goto -> bb9;
     }
 
     bb9: {
+        _0 = baml.time.ZonedDateTime { copy _34, const null, copy _2 };
+        goto -> bb24;
+    }
+
+    bb10: {
         _32 = baml.time.UnknownTimezoneError { copy _2 };
         throw copy _32;
     }
 
-    bb10: {
-        _12 = copy _1.0;
-        _11 = sys_op const fn baml.time._tz_to_instant(copy _2, copy _12, const "earlier") -> bb11;
-    }
-
     bb11: {
-        _13 = copy _11 == const null;
-        branch copy _13 -> [bb20, bb12];
+        _12 = copy _1.0;
+        _11 = sys_op const fn baml.time._tz_to_instant(copy _2, copy _12, const "earlier") -> bb12;
     }
 
     bb12: {
-        _15 = copy _11;
-        _17 = copy _1.0;
-        _16 = sys_op const fn baml.time._tz_to_instant(copy _2, copy _17, const "later") -> bb13;
+        _13 = copy _11 == const null;
+        branch copy _13 -> [bb22, bb13];
     }
 
     bb13: {
-        _18 = copy _16 == const null;
-        branch copy _18 -> [bb19, bb14];
+        _15 = copy _11;
+        _17 = copy _1.0;
+        _16 = sys_op const fn baml.time._tz_to_instant(copy _2, copy _17, const "later") -> bb14;
     }
 
     bb14: {
-        _20 = copy _16;
-        _22 = copy _15;
-        _23 = copy _20;
-        _21 = copy _22 == copy _23;
-        branch copy _21 -> [bb16, bb15];
+        _18 = copy _16 == const null;
+        branch copy _18 -> [bb21, bb15];
     }
 
     bb15: {
+        _20 = copy _16;
+        _22 = copy _15;
+        _23 = copy _20;
+        _21 = call const fn baml.ops.equals_equals(copy _22, copy _23) -> [bb16];
+    }
+
+    bb16: {
+        branch copy _21 -> [bb18, bb17];
+    }
+
+    bb17: {
         _28 = const "wall-clock time is ambiguous or skipped in timezone " + copy _2;
         _27 = baml.time.AmbiguousTimeError { copy _28 };
         throw copy _27;
     }
 
-    bb16: {
+    bb18: {
         _25 = copy _15;
         _24 = copy _25;
         _26 = copy _25 == const null;
-        branch copy _26 -> [bb17, bb18];
-    }
-
-    bb17: {
-        _24 = const 0n;
-        goto -> bb18;
-    }
-
-    bb18: {
-        _0 = baml.time.ZonedDateTime { copy _24, const null, copy _2 };
-        goto -> bb22;
+        branch copy _26 -> [bb19, bb20];
     }
 
     bb19: {
+        _24 = const 0n;
+        goto -> bb20;
+    }
+
+    bb20: {
+        _0 = baml.time.ZonedDateTime { copy _24, const null, copy _2 };
+        goto -> bb24;
+    }
+
+    bb21: {
         _19 = baml.time.UnknownTimezoneError { copy _2 };
         throw copy _19;
     }
 
-    bb20: {
+    bb22: {
         _14 = baml.time.UnknownTimezoneError { copy _2 };
         throw copy _14;
     }
 
-    bb21: {
+    bb23: {
         _7 = copy _1.0;
         _8 = copy _2.0;
         _6 = copy _7 - copy _8;
         _9 = copy _2.0;
         _0 = baml.time.ZonedDateTime { copy _6, copy _9, const null };
-        goto -> bb22;
+        goto -> bb24;
     }
 
-    bb22: {
+    bb24: {
         return;
     }
 }

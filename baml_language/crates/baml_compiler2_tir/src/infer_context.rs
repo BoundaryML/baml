@@ -80,6 +80,15 @@ pub enum TirTypeError {
         op: baml_compiler2_ast::BinaryOp,
         ty: Ty,
     },
+    /// An equality (`==` / `!=`) whose operand types are provably disjoint — no
+    /// value of one can ever equal a value of the other — so the result is a
+    /// constant (`==` always `false`, `!=` always `true`). A warning, not an
+    /// error: the comparison is valid, just pointless.
+    ComparisonAlwaysDisjoint {
+        op: baml_compiler2_ast::BinaryOp,
+        lhs: Ty,
+        rhs: Ty,
+    },
     /// Invalid operand type for a unary operator (e.g. `-"hello"`).
     InvalidUnaryOp {
         op: baml_compiler2_ast::UnaryOp,
@@ -430,6 +439,19 @@ impl fmt::Display for TirTypeError {
                     f,
                     "`{}` does not implement `Compare`, so it cannot be ordered with `{op:?}`",
                     ty.render_user_facing()
+                )
+            }
+            TirTypeError::ComparisonAlwaysDisjoint { op, lhs, rhs } => {
+                let always = if matches!(op, baml_compiler2_ast::BinaryOp::Ne) {
+                    "true"
+                } else {
+                    "false"
+                };
+                write!(
+                    f,
+                    "`{}` and `{}` share no value, so this comparison is always {always}",
+                    lhs.render_user_facing(),
+                    rhs.render_user_facing()
                 )
             }
             TirTypeError::InvalidUnaryOp { op, operand } => {

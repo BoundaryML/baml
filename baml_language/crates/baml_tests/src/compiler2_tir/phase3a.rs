@@ -687,6 +687,23 @@ fn ordering_non_compare_class_is_error() {
 }
 
 #[test]
+fn equality_disjoint_types_warns_always_false() {
+    // `==` is valid for any pair, but provably-disjoint operands (here `int` vs
+    // `string` — distinct concrete types) make it always false, so it warns
+    // (`ComparisonAlwaysDisjoint`) rather than erroring.
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        "function f(a: int, b: string) -> bool { return a == b; }",
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("share no value, so this comparison is always false"),
+        "expected ComparisonAlwaysDisjoint warning, got:\n{tir}"
+    );
+}
+
+#[test]
 fn aliased_float_plus_bigint_is_rejected() {
     // Aliases on either side must still trip the float×bigint reject —
     // `infer_binary_op` peels them at entry before classifying.
