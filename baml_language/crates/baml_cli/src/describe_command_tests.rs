@@ -834,6 +834,37 @@ fn describe_builtin_method_drill_in_via_alias() {
     );
 }
 
+/// Drilling into builtin methods by their class name (`Array.reduce`,
+/// `String.split`, `Map.get`) resolves the unqualified class against the stdlib.
+#[test]
+fn describe_builtin_method_drill_in_via_class_name() {
+    let db = simple_project();
+
+    let cases = [
+        (
+            "Array.reduce",
+            "function reduce(self, reducer: (A, T) -> A throws E, initial: A) -> A throws E",
+        ),
+        (
+            "String.split",
+            "function split(self, delimiter: string) -> string[]",
+        ),
+        ("Map.get", "function get(self, key: K) -> V | null"),
+    ];
+
+    for (name, expected_signature) in cases {
+        let output = describe_via_dispatch(&db, name);
+        assert!(
+            output.contains(expected_signature),
+            "expected resolved builtin method signature for `{name}`:\n{output}",
+        );
+        assert!(
+            !output.starts_with("NOT FOUND") && !output.starts_with("NO DESCRIPTION"),
+            "`{name}` should resolve via the unqualified builtin class name:\n{output}",
+        );
+    }
+}
+
 // ── definition_line_range tests ──────────────────────────────────────────────
 
 #[test]
