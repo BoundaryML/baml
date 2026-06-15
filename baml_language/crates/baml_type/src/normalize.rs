@@ -109,8 +109,19 @@ pub trait TypeContext {
 /// flatten/sort/dedup, `never` removal, `unknown` absorption, literal-into-base
 /// and enum-completeness collapse, interface absorption, alias expansion) so
 /// that distinct spellings of the same type converge.
+///
+/// # Attributes are erased
+///
+/// The returned `Ty` carries `TyAttr::default()` on every node — SAP/streaming
+/// annotations (`@stream.done`, `sap_in_progress`, …) are dropped, because they
+/// are parsing metadata, not part of the set of values a type denotes (and so
+/// must not affect [`equivalent`]/[`is_subtype`]). This makes the output a
+/// canonical form for type *identity* (equality, display, debugging) — **not** an
+/// attribute-preserving rewrite. Do not feed it into a position where SAP
+/// annotations must survive (an LLM function's return type, a generated stream
+/// companion); derive the canonical type from the original `Ty` there instead.
 pub fn normalize<C: TypeContext>(ty: &Ty, ctx: &C) -> Ty {
-    canonical(ty, ctx).into_ty()
+    NormalTy::canonical(ty, ctx).into_ty()
 }
 
 /// Whether `a` and `b` denote the same type under the current context.
@@ -119,20 +130,304 @@ pub fn normalize<C: TypeContext>(ty: &Ty, ctx: &C) -> Ty {
 /// must denote *the same* type (e.g. exact-type operator operands, interface
 /// field implementations), not merely compatible ones.
 pub fn equivalent<C: TypeContext>(a: &Ty, b: &Ty, ctx: &C) -> bool {
-    canonical(a, ctx) == canonical(b, ctx)
+    NormalTy::canonical(a, ctx) == NormalTy::canonical(b, ctx)
 }
 
 /// Whether every value of `sub` is also a value of `sup` under the current
 /// context (the subset relation).
 pub fn is_subtype<C: TypeContext>(sub: &Ty, sup: &Ty, ctx: &C) -> bool {
-    let sub = canonical(sub, ctx);
-    let sup = canonical(sup, ctx);
+    let sub = NormalTy::canonical(sub, ctx);
+    let sup = NormalTy::canonical(sup, ctx);
     sub.is_subtype_of(&sup, ctx, &mut HashSet::new())
 }
 
-/// Normalize and canonicalize in one step (the shared entry point).
-fn canonical<C: TypeContext>(ty: &Ty, ctx: &C) -> NormalTy {
-    NormalTy::from_ty(ty, ctx, &mut HashSet::new()).canonicalize(ctx)
+/// Whether no value of type `a` can ever be `==`-equal to a value of type `b` —
+/// so a broad `==` between operands of these types is always `false`.
+///
+/// Sound and conservative: `true` only when *certain*, so it is a safe basis for
+/// folding `==`/`!=` to a constant and for an "always false" diagnostic. It also
+/// stays correct under additive dynamic-package mutation — it never relies on the
+/// *absence* of an `Equals` (a custom one could be added later), only on facts
+/// that hold regardless of any `Equals` implementation.
+///
+/// What it proves disjoint:
+/// - **Different concrete categories** — `int`/`bigint`, `int`/`string`,
+///   `list<_>`/`map<_,_>`, a class vs a list, etc.
+/// - **Distinct instantiations of an invariant generic** — `Box<int>` vs
+///   `Box<string>`, `list<int>` vs `list<string>`, `map<string,int>` vs
+///   `map<string,bool>`. Generic constructors (classes, lists, maps, futures)
+///   are invariant and their type arguments are real instance data, so two
+///   instantiations sharing no equal-everywhere argument list are disjoint.
+/// - **Distinct primitive literals** — `1` vs `2`, `1` vs `1n` (their built-in
+///   reflexive equality is unoverridable). Floats are excluded (`NaN` /
+///   decimal-representation aliasing).
+///
+/// (`unknown` is the determined top type, so `Box<unknown>` *is* disjoint from
+/// `Box<int>` — distinct invariant instantiations — even though a bare `unknown`
+/// operand overlaps everything.)
+///
+/// What it conservatively leaves overlapping (returns `false`):
+/// - **Same enum** (`E.A` vs `E.B`, `E.A` vs `E`): a value's `eq` dispatches on
+///   the enum, and a custom `Equals` on `E` could equate distinct variants.
+/// - **An instantiation with a not-yet-resolved argument** (`Box<T>` for a
+///   generic `T`, or an error sentinel): it could still resolve to match.
+/// - Functions (not invariant — contravariant/covariant), watch accessors
+///   (identity), interfaces, bare type variables, and a bare `unknown`.
+pub fn definitely_disjoint<C: TypeContext>(a: &Ty, b: &Ty, ctx: &C) -> bool {
+    NormalTy::canonical(a, ctx).is_disjoint_from(&NormalTy::canonical(b, ctx))
+}
+
+/// Whether a broad `==` between operands of types `a` and `b` is always `true`.
+///
+/// Holds only when both operands are pinned to the *same* single value whose
+/// equality is the built-in, reflexive one that can never be replaced: the
+/// operands are equivalent and that type is a non-float primitive literal
+/// (`int`/`bigint`/`string`/`bool`) or `null`.
+///
+/// Deliberately excluded:
+/// - **Enum-variant and class singletons.** A user type's `Equals` can be added
+///   later by additively mutating its (dynamic) package, so the absence of an
+///   `Equals` today is not a stable basis for baking in a constant — the
+///   built-in reflexive equality is guaranteed only for types whose `Equals` the
+///   orphan rule forbids overriding (primitives, `null`).
+pub fn definitely_equal<C: TypeContext>(a: &Ty, b: &Ty, ctx: &C) -> bool {
+    let a = NormalTy::canonical(a, ctx);
+    a.is_unoverridable_singleton() && a == NormalTy::canonical(b, ctx)
+}
+
+impl NormalTy {
+    /// Normalize and canonicalize a [`Ty`] in one step (the shared entry point).
+    fn canonical<C: TypeContext>(ty: &Ty, ctx: &C) -> NormalTy {
+        NormalTy::from_ty(ty, ctx, &mut HashSet::new()).canonicalize(ctx)
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CONCRETE-TYPE DISJOINTNESS
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Top-level concrete category of a ground-headed type, used only for the
+/// cross-category check (a value of one category is never a value of another).
+/// Same-category pairs are decided by the structural arms of
+/// [`NormalTy::is_disjoint_from`], not by this.
+#[derive(PartialEq, Eq)]
+enum Category {
+    Int,
+    Bigint,
+    Float,
+    String,
+    Bool,
+    Null,
+    Uint8Array,
+    Media(MediaKind),
+    Void,
+    RustType,
+    Type,
+    Resource,
+    PromptAst,
+    Class,
+    List,
+    Map,
+    Enum,
+    Function,
+    Future,
+    WatchAccessor,
+}
+
+impl NormalTy {
+    /// Top-level concrete category of this type, or `None` for a non-ground head
+    /// (union, interface, hole, type variable, …) for which no disjointness is
+    /// provable.
+    fn head_category(&self) -> Option<Category> {
+        Some(match self {
+            NormalTy::Int | NormalTy::Literal(Literal::Int(_)) => Category::Int,
+            NormalTy::Bigint | NormalTy::Literal(Literal::Bigint(_)) => Category::Bigint,
+            NormalTy::Float | NormalTy::Literal(Literal::Float(_)) => Category::Float,
+            NormalTy::String | NormalTy::Literal(Literal::String(_)) => Category::String,
+            NormalTy::Bool | NormalTy::Literal(Literal::Bool(_)) => Category::Bool,
+            NormalTy::Null => Category::Null,
+            NormalTy::Uint8Array => Category::Uint8Array,
+            NormalTy::Media(kind) => Category::Media(*kind),
+            NormalTy::Void => Category::Void,
+            NormalTy::RustType => Category::RustType,
+            NormalTy::Type => Category::Type,
+            NormalTy::Resource => Category::Resource,
+            NormalTy::PromptAst => Category::PromptAst,
+            NormalTy::Class(..) => Category::Class,
+            NormalTy::List(_) => Category::List,
+            NormalTy::Map { .. } => Category::Map,
+            NormalTy::Enum(_) | NormalTy::EnumVariant(..) => Category::Enum,
+            NormalTy::Function { .. } => Category::Function,
+            NormalTy::Future(..) => Category::Future,
+            NormalTy::WatchAccessor(_) => Category::WatchAccessor,
+            // Not a ground concrete head — nothing provable.
+            NormalTy::Interface(..)
+            | NormalTy::Union(_)
+            | NormalTy::AssociatedTypeProjection { .. }
+            | NormalTy::Mu { .. }
+            | NormalTy::RecVar(_)
+            | NormalTy::TypeVar(_)
+            | NormalTy::OpaqueAlias(_)
+            | NormalTy::Never
+            | NormalTy::BuiltinUnknown
+            | NormalTy::Unknown
+            | NormalTy::Error => return None,
+        })
+    }
+
+    /// Whether this type is *determined* — every position is a fixed type rather
+    /// than a placeholder that could still resolve to something else. Only ground
+    /// arguments make two generic instantiations *provably* distinct.
+    ///
+    /// The non-ground cases are the error-recovery sentinels (`Unknown`, `Error`)
+    /// and the not-yet-resolved variables (a generic `TypeVar`, an unresolved
+    /// `AssociatedTypeProjection`, an `OpaqueAlias`) — each could later stand for
+    /// the same type as the other side. The `unknown` top type (`BuiltinUnknown`)
+    /// is *not* one of these: it is user-written and fully determined, so
+    /// `Box<unknown>` is a distinct invariant instantiation from `Box<int>`.
+    fn is_ground(&self) -> bool {
+        match self {
+            NormalTy::Unknown
+            | NormalTy::Error
+            | NormalTy::TypeVar(_)
+            | NormalTy::AssociatedTypeProjection { .. }
+            | NormalTy::OpaqueAlias(_) => false,
+            NormalTy::Int
+            | NormalTy::Bigint
+            | NormalTy::Float
+            | NormalTy::String
+            | NormalTy::Bool
+            | NormalTy::Null
+            | NormalTy::Uint8Array
+            | NormalTy::Media(_)
+            | NormalTy::Void
+            | NormalTy::RustType
+            | NormalTy::Type
+            | NormalTy::Resource
+            | NormalTy::PromptAst
+            | NormalTy::Literal(_)
+            | NormalTy::Enum(_)
+            | NormalTy::EnumVariant(..)
+            // The `unknown` top type is a determined, user-written type.
+            | NormalTy::BuiltinUnknown
+            // `never` is a determined (empty) type, not an inference hole.
+            | NormalTy::Never
+            // A μ-bound recursion variable refers to its enclosing (ground) μ-type.
+            | NormalTy::RecVar(_) => true,
+            NormalTy::List(inner)
+            | NormalTy::WatchAccessor(inner)
+            | NormalTy::Mu { body: inner, .. } => inner.is_ground(),
+            NormalTy::Map { key, value } | NormalTy::Future(key, value) => {
+                key.is_ground() && value.is_ground()
+            }
+            NormalTy::Union(members) => members.iter().all(NormalTy::is_ground),
+            NormalTy::Class(_, args) | NormalTy::Interface(_, args, _) => {
+                args.iter().all(NormalTy::is_ground)
+            }
+            NormalTy::Function {
+                params,
+                ret,
+                throws,
+            } => {
+                params.iter().all(|p| p.ty.is_ground()) && ret.is_ground() && throws.is_ground()
+            }
+        }
+    }
+
+    /// Whether `self` and `other`, used as invariant generic arguments, make
+    /// their instantiations disjoint: both are fully ground and not the same
+    /// realized type. A hole leaves it unprovable (it could realize to match).
+    fn arg_forces_disjoint(&self, other: &NormalTy) -> bool {
+        self.is_ground() && other.is_ground() && self != other
+    }
+
+    /// Whether no value of `self` can ever be `==`-equal to a value of `other`
+    /// (the structural core of [`definitely_disjoint`]).
+    fn is_disjoint_from(&self, other: &NormalTy) -> bool {
+        match (self, other) {
+            // A union is disjoint from `rhs` iff every member is.
+            (NormalTy::Union(members), rhs) => members.iter().all(|m| m.is_disjoint_from(rhs)),
+            (lhs, NormalTy::Union(members)) => members.iter().all(|m| lhs.is_disjoint_from(m)),
+
+            // Generic constructors are invariant and their type arguments are real
+            // instance data, so two instantiations are disjoint as soon as one
+            // argument pair is provably a different realized type. A different
+            // class name is disjoint outright (nominal).
+            (NormalTy::Class(c, xa), NormalTy::Class(d, xb)) => {
+                c != d
+                    || xa.len() != xb.len()
+                    || xa.iter().zip(xb).any(|(x, y)| x.arg_forces_disjoint(y))
+            }
+            (NormalTy::List(a), NormalTy::List(b)) => a.arg_forces_disjoint(b),
+            (NormalTy::Map { key: k1, value: v1 }, NormalTy::Map { key: k2, value: v2 }) => {
+                k1.arg_forces_disjoint(k2) || v1.arg_forces_disjoint(v2)
+            }
+            (NormalTy::Future(v1, e1), NormalTy::Future(v2, e2)) => {
+                v1.arg_forces_disjoint(v2) || e1.arg_forces_disjoint(e2)
+            }
+
+            // Functions are *not* invariant (contravariant args, covariant
+            // return/throws), and watch accessors compare by identity — neither is
+            // provably disjoint from another of its kind here.
+            (NormalTy::Function { .. }, NormalTy::Function { .. })
+            | (NormalTy::WatchAccessor(_), NormalTy::WatchAccessor(_)) => false,
+
+            // A value's `eq` dispatches on its enum, so only *different* enums are
+            // disjoint — a custom (or later-added) `Equals` on one enum could
+            // equate distinct variants of it.
+            (NormalTy::Enum(e), NormalTy::Enum(f))
+            | (NormalTy::EnumVariant(e, _), NormalTy::EnumVariant(f, _))
+            | (NormalTy::EnumVariant(e, _), NormalTy::Enum(f))
+            | (NormalTy::Enum(f), NormalTy::EnumVariant(e, _)) => e != f,
+
+            // Primitive literals: distinct values can never be equal under their
+            // unoverridable built-in equality (floats excluded — `NaN` and decimal
+            // aliasing such as `1.0`/`1.00`).
+            (NormalTy::Literal(x), NormalTy::Literal(y)) => {
+                !matches!(x, Literal::Float(_)) && !matches!(y, Literal::Float(_)) && x != y
+            }
+            (NormalTy::Literal(lit), rhs) | (rhs, NormalTy::Literal(lit)) => {
+                match rhs.head_category() {
+                    Some(cat) => cat != Category::of_literal(lit),
+                    None => false,
+                }
+            }
+
+            // Otherwise: disjoint iff both are ground concrete heads of different
+            // categories (`int` vs `string`, `list` vs `map`, a class vs an enum).
+            _ => match (self.head_category(), other.head_category()) {
+                (Some(x), Some(y)) => x != y,
+                _ => false,
+            },
+        }
+    }
+
+    /// Whether this type pins its operand to a single value whose equality is the
+    /// built-in reflexive one that the orphan rule forbids overriding — so two
+    /// operands of this (same) type are unconditionally equal. Primitives' and
+    /// `null`'s `Equals` can never be replaced; floats are excluded for
+    /// `NaN`-safety.
+    fn is_unoverridable_singleton(&self) -> bool {
+        matches!(
+            self,
+            NormalTy::Null
+                | NormalTy::Literal(
+                    Literal::Int(_) | Literal::Bigint(_) | Literal::String(_) | Literal::Bool(_)
+                )
+        )
+    }
+}
+
+impl Category {
+    fn of_literal(lit: &Literal) -> Category {
+        match lit {
+            Literal::Int(_) => Category::Int,
+            Literal::Bigint(_) => Category::Bigint,
+            Literal::Float(_) => Category::Float,
+            Literal::String(_) => Category::String,
+            Literal::Bool(_) => Category::Bool,
+        }
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -491,13 +786,32 @@ impl NormalTy {
             }
             NormalTy::Union(members) => {
                 let members = members.into_iter().map(|m| m.canonicalize(ctx)).collect();
-                canonicalize_union(members, ctx)
+                Self::canonicalize_union(members, ctx)
             }
             leaf => leaf,
         }
     }
 
     // ── subtyping ──────────────────────────────────────────────────────────
+
+    /// Invariant-position compatibility for a generic type argument: the two
+    /// types must be mutual subtypes (i.e. equivalent). Generic constructors —
+    /// classes, lists, maps, futures, interface-existentials — are invariant in
+    /// BAML (type arguments are real instance data), so `T<A>` relates to `T<B>`
+    /// only when every `A`/`B` pair is compatible here.
+    ///
+    /// Error-recovery sentinels (`Unknown`, `Error`) satisfy this either way via
+    /// [`Self::is_subtype_of`]'s bidirectional escape, so a hole argument still
+    /// matches anything. The `unknown` top type does *not* — it is a real,
+    /// distinct argument (`Box<unknown>` is not `Box<int>`).
+    fn invariant_compatible<C: TypeContext>(
+        &self,
+        other: &NormalTy,
+        ctx: &C,
+        assumptions: &mut HashSet<(NormalTy, NormalTy)>,
+    ) -> bool {
+        self.is_subtype_of(other, ctx, assumptions) && other.is_subtype_of(self, ctx, assumptions)
+    }
 
     /// Equirecursive subtyping with co-inductive assumptions. Operands must
     /// already be canonical.
@@ -542,10 +856,11 @@ impl NormalTy {
         let result = match (self, sup) {
             // μ-unfolding (equirecursive).
             (NormalTy::Mu { var, body }, _) => {
-                substitute(body, var, self).is_subtype_of(sup, ctx, assumptions)
+                body.substitute(var, self)
+                    .is_subtype_of(sup, ctx, assumptions)
             }
             (_, NormalTy::Mu { var, body }) => {
-                self.is_subtype_of(&substitute(body, var, sup), ctx, assumptions)
+                self.is_subtype_of(&body.substitute(var, sup), ctx, assumptions)
             }
 
             // Union decomposition. `Union <: T` must precede `T <: Union` so a
@@ -559,9 +874,9 @@ impl NormalTy {
 
             // A type variable is a subtype of `sup` if its bound is. (Same-var
             // reflexivity and `T <: T | U` are handled by the rules above.)
-            (NormalTy::TypeVar(name), _) => ctx
-                .type_var_bound(name)
-                .is_some_and(|bound| canonical(&bound, ctx).is_subtype_of(sup, ctx, assumptions)),
+            (NormalTy::TypeVar(name), _) => ctx.type_var_bound(name).is_some_and(|bound| {
+                NormalTy::canonical(&bound, ctx).is_subtype_of(sup, ctx, assumptions)
+            }),
 
             // Concrete (or any non-interface) type implementing an interface.
             (sub, NormalTy::Interface(..)) if !matches!(sub, NormalTy::Interface(..)) => {
@@ -572,37 +887,34 @@ impl NormalTy {
                 ctx.interface_requires(&self.clone().into_ty(), &sup.clone().into_ty())
             }
 
-            // Same-class generic arguments are invariant. A "hole" (an inference
-            // placeholder) on either side matches anything; otherwise the
-            // arguments must be mutual subtypes (the definition of invariant
-            // compatibility, of which structural equality is the special case).
+            // Generic arguments are invariant — for classes, lists, and maps
+            // alike. This is load-bearing for soundness: with covariant elements
+            // `list<Dog> <: list<Animal>` would hold, and mutating through the
+            // `Animal` view could store a non-`Dog` (TYPE_SYSTEM.md §Variance). A
+            // "hole" (inference placeholder) matches anything; otherwise the
+            // arguments must be mutual subtypes (of which structural equality is
+            // the special case). An empty `[]`/`{}` is given a concrete element
+            // type at its inference site, so it needs no widening here.
             (NormalTy::Class(q1, a1), NormalTy::Class(q2, a2))
                 if q1 == q2 && a1.len() == a2.len() =>
             {
-                a1.iter().zip(a2.iter()).all(|(a, b)| {
-                    is_hole(a)
-                        || is_hole(b)
-                        || (a.is_subtype_of(b, ctx, assumptions)
-                            && b.is_subtype_of(a, ctx, assumptions))
-                })
+                a1.iter()
+                    .zip(a2.iter())
+                    .all(|(a, b)| a.invariant_compatible(b, ctx, assumptions))
             }
-
-            // List/Map are invariant structurally (no element coercion); `never`
-            // and literal-key widening flow through the recursive checks.
-            (NormalTy::List(a), NormalTy::List(b)) => a.is_subtype_of(b, ctx, assumptions),
+            (NormalTy::List(a), NormalTy::List(b)) => a.invariant_compatible(b, ctx, assumptions),
             (NormalTy::Map { key: k1, value: v1 }, NormalTy::Map { key: k2, value: v2 }) => {
-                k1.is_subtype_of(k2, ctx, assumptions) && v1.is_subtype_of(v2, ctx, assumptions)
+                k1.invariant_compatible(k2, ctx, assumptions)
+                    && v1.invariant_compatible(v2, ctx, assumptions)
             }
 
             // Future/WatchAccessor are invariant containers.
             (NormalTy::Future(v1, e1), NormalTy::Future(v2, e2)) => {
-                v1.is_subtype_of(v2, ctx, assumptions)
-                    && v2.is_subtype_of(v1, ctx, assumptions)
-                    && e1.is_subtype_of(e2, ctx, assumptions)
-                    && e2.is_subtype_of(e1, ctx, assumptions)
+                v1.invariant_compatible(v2, ctx, assumptions)
+                    && e1.invariant_compatible(e2, ctx, assumptions)
             }
             (NormalTy::WatchAccessor(a), NormalTy::WatchAccessor(b)) => {
-                a.is_subtype_of(b, ctx, assumptions) && b.is_subtype_of(a, ctx, assumptions)
+                a.invariant_compatible(b, ctx, assumptions)
             }
 
             // Literal types are subtypes of their (same-representation) base only.
@@ -630,7 +942,7 @@ impl NormalTy {
             ) => {
                 r1.is_subtype_of(r2, ctx, assumptions)
                     && t1.is_subtype_of(t2, ctx, assumptions)
-                    && params_subtype(p1, p2, ctx, assumptions)
+                    && NormalParam::list_subtype(p1, p2, ctx, assumptions)
             }
 
             _ => false,
@@ -662,10 +974,10 @@ impl NormalTy {
             NormalTy::Unknown => Ty::Unknown { attr },
             NormalTy::Error => Ty::Error { attr },
             NormalTy::Literal(lit) => Ty::Literal(lit, crate::Freshness::Regular, attr),
-            NormalTy::Class(qn, args) => Ty::Class(qn, into_tys(args), attr),
+            NormalTy::Class(qn, args) => Ty::Class(qn, Self::into_tys(args), attr),
             NormalTy::Interface(qn, args, bindings) => Ty::Interface(
                 qn,
-                into_tys(args),
+                Self::into_tys(args),
                 bindings
                     .into_iter()
                     .map(|(name, ty)| (name, ty.into_ty()))
@@ -680,7 +992,7 @@ impl NormalTy {
                 value: Box::new(value.into_ty()),
                 attr,
             },
-            NormalTy::Union(members) => Ty::Union(into_tys(members), attr),
+            NormalTy::Union(members) => Ty::Union(Self::into_tys(members), attr),
             NormalTy::Function {
                 params,
                 ret,
@@ -722,241 +1034,246 @@ impl NormalTy {
     }
 }
 
-fn into_tys(tys: Vec<NormalTy>) -> Vec<Ty> {
-    tys.into_iter().map(NormalTy::into_ty).collect()
-}
+impl NormalTy {
+    fn into_tys(tys: Vec<NormalTy>) -> Vec<Ty> {
+        tys.into_iter().map(NormalTy::into_ty).collect()
+    }
 
-/// Inference placeholders that match any type in invariant positions.
-fn is_hole(ty: &NormalTy) -> bool {
-    matches!(ty, NormalTy::Unknown | NormalTy::BuiltinUnknown)
-}
-
-/// Error-recovery sentinels excluded from union absorption (they would otherwise
-/// swallow real members during error recovery and fabricate equivalences).
-fn is_sentinel(ty: &NormalTy) -> bool {
-    matches!(ty, NormalTy::Unknown | NormalTy::Error)
+    /// An error-recovery sentinel, excluded from union absorption (it would
+    /// otherwise swallow real members during error recovery and fabricate
+    /// equivalences).
+    fn is_sentinel(&self) -> bool {
+        matches!(self, NormalTy::Unknown | NormalTy::Error)
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
 // UNION CANONICALIZATION
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// Reduce a union of already-canonical members to canonical form: flatten,
-/// remove `never`, absorb under `unknown`, collapse complete enums, absorb
-/// subtype-members, then sort/dedup and unwrap singletons.
-fn canonicalize_union<C: TypeContext>(members: Vec<NormalTy>, ctx: &C) -> NormalTy {
-    // Flatten one level (members are canonical, but a μ-unfold or alias could
-    // surface a nested union) and drop `never`.
-    let mut flat: Vec<NormalTy> = Vec::new();
-    for m in members {
-        match m {
-            NormalTy::Union(inner) => flat.extend(inner),
-            NormalTy::Never => {}
-            other => flat.push(other),
+impl NormalTy {
+    /// Reduce a union of already-canonical members to canonical form: flatten,
+    /// remove `never`, absorb under `unknown`, collapse complete enums, absorb
+    /// subtype-members, then sort/dedup and unwrap singletons.
+    fn canonicalize_union<C: TypeContext>(members: Vec<NormalTy>, ctx: &C) -> NormalTy {
+        // Flatten one level (members are canonical, but a μ-unfold or alias could
+        // surface a nested union) and drop `never`.
+        let mut flat: Vec<NormalTy> = Vec::new();
+        for m in members {
+            match m {
+                NormalTy::Union(inner) => flat.extend(inner),
+                NormalTy::Never => {}
+                other => flat.push(other),
+            }
+        }
+
+        // `unknown` (top) absorbs everything.
+        if flat.iter().any(|m| matches!(m, NormalTy::BuiltinUnknown)) {
+            return NormalTy::BuiltinUnknown;
+        }
+
+        flat.sort();
+        flat.dedup();
+
+        Self::collapse_complete_enums(&mut flat, ctx);
+        let mut flat = Self::absorb_subtypes(&flat, ctx);
+
+        flat.sort();
+        flat.dedup();
+        match flat.len() {
+            0 => NormalTy::Never,
+            1 => flat.pop().unwrap_or_else(|| unreachable!("len checked")),
+            _ => NormalTy::Union(flat),
         }
     }
 
-    // `unknown` (top) absorbs everything.
-    if flat.iter().any(|m| matches!(m, NormalTy::BuiltinUnknown)) {
-        return NormalTy::BuiltinUnknown;
-    }
-
-    flat.sort();
-    flat.dedup();
-
-    collapse_complete_enums(&mut flat, ctx);
-    let mut flat = absorb_subtypes(&flat, ctx);
-
-    flat.sort();
-    flat.dedup();
-    match flat.len() {
-        0 => NormalTy::Never,
-        1 => flat.pop().unwrap_or_else(|| unreachable!("len checked")),
-        _ => NormalTy::Union(flat),
-    }
-}
-
-/// Replace a complete set of an enum's variants with the enum itself
-/// (`E.A | E.B | … == E`). A bare `Enum(E)` already present absorbs its variants
-/// via the subtype pass, so this only handles the all-variants-no-enum case.
-fn collapse_complete_enums<C: TypeContext>(members: &mut Vec<NormalTy>, ctx: &C) {
-    // Distinct enums that have at least one variant present.
-    let mut enums: Vec<QualifiedTypeName> = members
-        .iter()
-        .filter_map(|m| match m {
-            NormalTy::EnumVariant(e, _) => Some(e.clone()),
-            _ => None,
-        })
-        .collect();
-    enums.sort();
-    enums.dedup();
-
-    for e in enums {
-        let Some(all) = ctx.enum_variants(&e) else {
-            continue; // unknown enum → no collapse (fail-safe)
-        };
-        let present: HashSet<&Name> = members
+    /// Replace a complete set of an enum's variants with the enum itself
+    /// (`E.A | E.B | … == E`). A bare `Enum(E)` already present absorbs its
+    /// variants via the subtype pass, so this only handles the
+    /// all-variants-no-enum case.
+    fn collapse_complete_enums<C: TypeContext>(members: &mut Vec<NormalTy>, ctx: &C) {
+        // Distinct enums that have at least one variant present.
+        let mut enums: Vec<QualifiedTypeName> = members
             .iter()
             .filter_map(|m| match m {
-                NormalTy::EnumVariant(en, v) if *en == e => Some(v),
+                NormalTy::EnumVariant(e, _) => Some(e.clone()),
                 _ => None,
             })
             .collect();
-        if !all.is_empty() && all.iter().all(|v| present.contains(v)) {
-            members.retain(|m| !matches!(m, NormalTy::EnumVariant(en, _) if *en == e));
-            members.push(NormalTy::Enum(e));
-        }
-    }
-}
+        enums.sort();
+        enums.dedup();
 
-/// Remove any member subsumed by another (`X | Y == Y` when `X <: Y`). Covers
-/// literal-into-base, variant-into-enum, `C | I == I`, `A | B == B`, and
-/// `T | I == I`. Error-recovery sentinels never absorb or are absorbed.
-fn absorb_subtypes<C: TypeContext>(members: &[NormalTy], ctx: &C) -> Vec<NormalTy> {
-    let n = members.len();
-    let mut keep = vec![true; n];
-    for i in 0..n {
-        if is_sentinel(&members[i]) {
-            continue;
-        }
-        for j in 0..n {
-            if i == j || !keep[j] || is_sentinel(&members[j]) {
-                continue;
-            }
-            if !members[i].is_subtype_of(&members[j], ctx, &mut HashSet::new()) {
-                continue;
-            }
-            // `members[i] <: members[j]`. Drop `i`, unless they are mutual
-            // subtypes (equivalent but not structurally equal — e.g. cyclic
-            // `requires`); then keep the lower index deterministically.
-            let mutual = members[j].is_subtype_of(&members[i], ctx, &mut HashSet::new());
-            if !mutual || j < i {
-                keep[i] = false;
-                break;
+        for e in enums {
+            let Some(all) = ctx.enum_variants(&e) else {
+                continue; // unknown enum → no collapse (fail-safe)
+            };
+            let present: HashSet<&Name> = members
+                .iter()
+                .filter_map(|m| match m {
+                    NormalTy::EnumVariant(en, v) if *en == e => Some(v),
+                    _ => None,
+                })
+                .collect();
+            if !all.is_empty() && all.iter().all(|v| present.contains(v)) {
+                members.retain(|m| !matches!(m, NormalTy::EnumVariant(en, _) if *en == e));
+                members.push(NormalTy::Enum(e));
             }
         }
     }
-    (0..n)
-        .filter(|&i| keep[i])
-        .map(|i| members[i].clone())
-        .collect()
+
+    /// Remove any member subsumed by another (`X | Y == Y` when `X <: Y`). Covers
+    /// literal-into-base, variant-into-enum, `C | I == I`, `A | B == B`, and
+    /// `T | I == I`. Error-recovery sentinels never absorb or are absorbed.
+    fn absorb_subtypes<C: TypeContext>(members: &[NormalTy], ctx: &C) -> Vec<NormalTy> {
+        let n = members.len();
+        let mut keep = vec![true; n];
+        for i in 0..n {
+            if members[i].is_sentinel() {
+                continue;
+            }
+            for j in 0..n {
+                if i == j || !keep[j] || members[j].is_sentinel() {
+                    continue;
+                }
+                if !members[i].is_subtype_of(&members[j], ctx, &mut HashSet::new()) {
+                    continue;
+                }
+                // `members[i] <: members[j]`. Drop `i`, unless they are mutual
+                // subtypes (equivalent but not structurally equal — e.g. cyclic
+                // `requires`); then keep the lower index deterministically.
+                let mutual = members[j].is_subtype_of(&members[i], ctx, &mut HashSet::new());
+                if !mutual || j < i {
+                    keep[i] = false;
+                    break;
+                }
+            }
+        }
+        (0..n)
+            .filter(|&i| keep[i])
+            .map(|i| members[i].clone())
+            .collect()
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
 // SUBSTITUTION (μ-unfolding) & FUNCTION PARAMETERS
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// Substitute recursion variable `var` with `replacement` (one μ-unfold step).
-fn substitute(ty: &NormalTy, var: &QualifiedTypeName, replacement: &NormalTy) -> NormalTy {
-    match ty {
-        NormalTy::RecVar(v) if v == var => replacement.clone(),
-        NormalTy::Class(qn, args) => NormalTy::Class(
-            qn.clone(),
-            args.iter()
-                .map(|a| substitute(a, var, replacement))
-                .collect(),
-        ),
-        NormalTy::Interface(qn, args, bindings) => NormalTy::Interface(
-            qn.clone(),
-            args.iter()
-                .map(|a| substitute(a, var, replacement))
-                .collect(),
-            bindings
-                .iter()
-                .map(|(n, t)| (n.clone(), substitute(t, var, replacement)))
-                .collect(),
-        ),
-        NormalTy::List(inner) => NormalTy::List(Box::new(substitute(inner, var, replacement))),
-        NormalTy::WatchAccessor(inner) => {
-            NormalTy::WatchAccessor(Box::new(substitute(inner, var, replacement)))
+impl NormalTy {
+    /// Substitute recursion variable `var` with `replacement` (one μ-unfold step).
+    fn substitute(&self, var: &QualifiedTypeName, replacement: &NormalTy) -> NormalTy {
+        match self {
+            NormalTy::RecVar(v) if v == var => replacement.clone(),
+            NormalTy::Class(qn, args) => NormalTy::Class(
+                qn.clone(),
+                args.iter()
+                    .map(|a| a.substitute(var, replacement))
+                    .collect(),
+            ),
+            NormalTy::Interface(qn, args, bindings) => NormalTy::Interface(
+                qn.clone(),
+                args.iter()
+                    .map(|a| a.substitute(var, replacement))
+                    .collect(),
+                bindings
+                    .iter()
+                    .map(|(n, t)| (n.clone(), t.substitute(var, replacement)))
+                    .collect(),
+            ),
+            NormalTy::List(inner) => NormalTy::List(Box::new(inner.substitute(var, replacement))),
+            NormalTy::WatchAccessor(inner) => {
+                NormalTy::WatchAccessor(Box::new(inner.substitute(var, replacement)))
+            }
+            NormalTy::Map { key, value } => NormalTy::Map {
+                key: Box::new(key.substitute(var, replacement)),
+                value: Box::new(value.substitute(var, replacement)),
+            },
+            NormalTy::Union(members) => NormalTy::Union(
+                members
+                    .iter()
+                    .map(|m| m.substitute(var, replacement))
+                    .collect(),
+            ),
+            NormalTy::Function {
+                params,
+                ret,
+                throws,
+            } => NormalTy::Function {
+                params: params
+                    .iter()
+                    .map(|p| NormalParam {
+                        name: p.name.clone(),
+                        ty: p.ty.substitute(var, replacement),
+                        mode: p.mode,
+                    })
+                    .collect(),
+                ret: Box::new(ret.substitute(var, replacement)),
+                throws: Box::new(throws.substitute(var, replacement)),
+            },
+            NormalTy::Future(value, error) => NormalTy::Future(
+                Box::new(value.substitute(var, replacement)),
+                Box::new(error.substitute(var, replacement)),
+            ),
+            NormalTy::AssociatedTypeProjection {
+                base,
+                interface,
+                member,
+            } => NormalTy::AssociatedTypeProjection {
+                base: Box::new(base.substitute(var, replacement)),
+                interface: interface
+                    .as_ref()
+                    .map(|i| Box::new(i.substitute(var, replacement))),
+                member: member.clone(),
+            },
+            // A nested μ binding the same name shadows it; do not substitute inside.
+            NormalTy::Mu { var: v, body } if v != var => NormalTy::Mu {
+                var: v.clone(),
+                body: Box::new(body.substitute(var, replacement)),
+            },
+            _ => self.clone(),
         }
-        NormalTy::Map { key, value } => NormalTy::Map {
-            key: Box::new(substitute(key, var, replacement)),
-            value: Box::new(substitute(value, var, replacement)),
-        },
-        NormalTy::Union(members) => NormalTy::Union(
-            members
-                .iter()
-                .map(|m| substitute(m, var, replacement))
-                .collect(),
-        ),
-        NormalTy::Function {
-            params,
-            ret,
-            throws,
-        } => NormalTy::Function {
-            params: params
-                .iter()
-                .map(|p| NormalParam {
-                    name: p.name.clone(),
-                    ty: substitute(&p.ty, var, replacement),
-                    mode: p.mode,
-                })
-                .collect(),
-            ret: Box::new(substitute(ret, var, replacement)),
-            throws: Box::new(substitute(throws, var, replacement)),
-        },
-        NormalTy::Future(value, error) => NormalTy::Future(
-            Box::new(substitute(value, var, replacement)),
-            Box::new(substitute(error, var, replacement)),
-        ),
-        NormalTy::AssociatedTypeProjection {
-            base,
-            interface,
-            member,
-        } => NormalTy::AssociatedTypeProjection {
-            base: Box::new(substitute(base, var, replacement)),
-            interface: interface
-                .as_ref()
-                .map(|i| Box::new(substitute(i, var, replacement))),
-            member: member.clone(),
-        },
-        // A nested μ binding the same name shadows it; do not substitute inside.
-        NormalTy::Mu { var: v, body } if v != var => NormalTy::Mu {
-            var: v.clone(),
-            body: Box::new(substitute(body, var, replacement)),
-        },
-        _ => ty.clone(),
     }
 }
 
-/// Function parameter-list subtyping (contravariant): required params positional
-/// and matched in order, optional params matched by name.
-fn params_subtype<C: TypeContext>(
-    sub: &[NormalParam],
-    sup: &[NormalParam],
-    ctx: &C,
-    assumptions: &mut HashSet<(NormalTy, NormalTy)>,
-) -> bool {
-    let sub_required: Vec<&NormalParam> = sub.iter().filter(|p| is_required(p)).collect();
-    let sup_required: Vec<&NormalParam> = sup.iter().filter(|p| is_required(p)).collect();
-    if sub_required.len() != sup_required.len() {
-        return false;
+impl NormalParam {
+    fn is_required(&self) -> bool {
+        matches!(self.mode, FunctionParamMode::Required)
     }
-    for (sub, sup) in sub_required.iter().zip(sup_required.iter()) {
-        if !sup.ty.is_subtype_of(&sub.ty, ctx, assumptions) {
-            return false;
-        }
-    }
-    for sup in sup.iter().filter(|p| !is_required(p)) {
-        let Some(name) = &sup.name else {
-            return false;
-        };
-        let Some(sub) = sub
-            .iter()
-            .find(|p| !is_required(p) && p.name.as_ref() == Some(name))
-        else {
-            return false;
-        };
-        if !sup.ty.is_subtype_of(&sub.ty, ctx, assumptions) {
-            return false;
-        }
-    }
-    true
-}
 
-fn is_required(p: &NormalParam) -> bool {
-    matches!(p.mode, FunctionParamMode::Required)
+    /// Function parameter-list subtyping (contravariant): required params
+    /// positional and matched in order, optional params matched by name.
+    fn list_subtype<C: TypeContext>(
+        sub: &[NormalParam],
+        sup: &[NormalParam],
+        ctx: &C,
+        assumptions: &mut HashSet<(NormalTy, NormalTy)>,
+    ) -> bool {
+        let sub_required: Vec<&NormalParam> = sub.iter().filter(|p| p.is_required()).collect();
+        let sup_required: Vec<&NormalParam> = sup.iter().filter(|p| p.is_required()).collect();
+        if sub_required.len() != sup_required.len() {
+            return false;
+        }
+        for (sub, sup) in sub_required.iter().zip(sup_required.iter()) {
+            if !sup.ty.is_subtype_of(&sub.ty, ctx, assumptions) {
+                return false;
+            }
+        }
+        for sup in sup.iter().filter(|p| !p.is_required()) {
+            let Some(name) = &sup.name else {
+                return false;
+            };
+            let Some(sub) = sub
+                .iter()
+                .find(|p| !p.is_required() && p.name.as_ref() == Some(name))
+            else {
+                return false;
+            };
+            if !sup.ty.is_subtype_of(&sub.ty, ctx, assumptions) {
+                return false;
+            }
+        }
+        true
+    }
 }
 
 #[cfg(test)]

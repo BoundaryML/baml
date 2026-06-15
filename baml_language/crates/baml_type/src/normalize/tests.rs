@@ -410,3 +410,260 @@ fn catch_result_union_equals_base() {
         &ctx
     ));
 }
+
+// ── concrete-type disjointness (`==` always-false fold) ──────────────────--
+
+fn bigint() -> Ty {
+    Ty::Bigint {
+        attr: TyAttr::default(),
+    }
+}
+
+#[test]
+fn disjoint_distinct_primitives() {
+    let ctx = Ctx::default();
+    // `5 == 5n`: an int literal and bigint never share a concrete type.
+    assert!(definitely_disjoint(&lit_int(5), &bigint(), &ctx));
+    assert!(definitely_disjoint(&Ty::int(), &bigint(), &ctx));
+    assert!(definitely_disjoint(&Ty::int(), &Ty::string(), &ctx));
+    assert!(definitely_disjoint(&lit_int(1), &Ty::string(), &ctx));
+    // Distinct primitive literals are disjoint (unoverridable built-in equality).
+    assert!(definitely_disjoint(&lit_int(1), &lit_int(2), &ctx));
+    assert!(definitely_disjoint(&lit_str("a"), &lit_str("b"), &ctx));
+    // Same family (incl. literal inside its base, equal literals) → not disjoint.
+    assert!(!definitely_disjoint(&Ty::int(), &Ty::int(), &ctx));
+    assert!(!definitely_disjoint(&lit_int(1), &Ty::int(), &ctx));
+    assert!(!definitely_disjoint(&lit_int(1), &lit_int(1), &ctx));
+    // Floats are excluded from literal disjointness (NaN / decimal aliasing),
+    // but still disjoint across categories.
+    assert!(!definitely_disjoint(
+        &lit_float("1.5"),
+        &lit_float("2.5"),
+        &ctx
+    ));
+    assert!(definitely_disjoint(&lit_float("1.5"), &Ty::string(), &ctx));
+}
+
+#[test]
+fn disjoint_invariant_generic_classes() {
+    let ctx = Ctx::default();
+    // Invariant: distinct instantiations are distinct runtime types.
+    assert!(definitely_disjoint(
+        &class1("Box", Ty::int()),
+        &class1("Box", Ty::string()),
+        &ctx
+    ));
+    assert!(!definitely_disjoint(
+        &class1("Box", Ty::int()),
+        &class1("Box", Ty::int()),
+        &ctx
+    ));
+    // `unknown` is the determined top type, so `Box<unknown>` is a distinct
+    // invariant instantiation from `Box<int>` → disjoint.
+    let unknown = Ty::BuiltinUnknown {
+        attr: TyAttr::default(),
+    };
+    assert!(definitely_disjoint(
+        &class1("Box", unknown),
+        &class1("Box", Ty::int()),
+        &ctx
+    ));
+    // A not-yet-resolved generic argument could realize to match → not provable.
+    assert!(!definitely_disjoint(
+        &class1("Box", typevar("T")),
+        &class1("Box", Ty::int()),
+        &ctx
+    ));
+}
+
+fn map_ty(key: Ty, value: Ty) -> Ty {
+    Ty::Map {
+        key: Box::new(key),
+        value: Box::new(value),
+        attr: TyAttr::default(),
+    }
+}
+
+#[test]
+fn disjoint_containers_are_invariant() {
+    let ctx = Ctx::default();
+    // Different constructors / categories → disjoint.
+    assert!(definitely_disjoint(&Ty::list(Ty::int()), &Ty::int(), &ctx));
+    assert!(definitely_disjoint(
+        &Ty::list(Ty::int()),
+        &map_ty(Ty::string(), Ty::int()),
+        &ctx
+    ));
+    assert!(definitely_disjoint(
+        &Ty::list(Ty::int()),
+        &class("Dog"),
+        &ctx
+    ));
+    // Invariant: distinct element/value instantiations are disjoint (type args
+    // are real instance data — there is no empty-container overlap).
+    assert!(definitely_disjoint(
+        &Ty::list(Ty::int()),
+        &Ty::list(Ty::string()),
+        &ctx
+    ));
+    assert!(definitely_disjoint(
+        &map_ty(Ty::string(), Ty::int()),
+        &map_ty(Ty::string(), Ty::bool()),
+        &ctx
+    ));
+    // Same instantiation → not disjoint.
+    assert!(!definitely_disjoint(
+        &Ty::list(Ty::int()),
+        &Ty::list(Ty::int()),
+        &ctx
+    ));
+    // `unknown` element is determined → `list<unknown>` is disjoint from `list<int>`.
+    let list_unknown = Ty::list(Ty::BuiltinUnknown {
+        attr: TyAttr::default(),
+    });
+    assert!(definitely_disjoint(
+        &list_unknown,
+        &Ty::list(Ty::int()),
+        &ctx
+    ));
+    // A not-yet-resolved generic element → not provably disjoint.
+    assert!(!definitely_disjoint(
+        &Ty::list(typevar("T")),
+        &Ty::list(Ty::int()),
+        &ctx
+    ));
+}
+
+#[test]
+fn disjoint_distinct_classes_and_enums() {
+    let ctx = Ctx::default();
+    assert!(definitely_disjoint(&class("Dog"), &class("Cat"), &ctx));
+    assert!(!definitely_disjoint(&class("Dog"), &class("Dog"), &ctx));
+    assert!(definitely_disjoint(&class("Dog"), &Ty::int(), &ctx));
+    assert!(definitely_disjoint(&enum_ty("Foo"), &enum_ty("Bar"), &ctx));
+    assert!(!definitely_disjoint(&enum_ty("Foo"), &enum_ty("Foo"), &ctx));
+}
+
+#[test]
+fn same_enum_variants_are_not_disjoint() {
+    // `E.A` vs `E.B` share concrete enum `E`, so the result depends on `E`'s
+    // equality (a custom `Equals` could make them equal) — decided at runtime,
+    // never folded.
+    let ctx = Ctx::default();
+    assert!(!definitely_disjoint(
+        &variant("Foo", "A"),
+        &variant("Foo", "B"),
+        &ctx
+    ));
+    assert!(!definitely_disjoint(
+        &variant("Foo", "A"),
+        &enum_ty("Foo"),
+        &ctx
+    ));
+    // Variants of *different* enums are disjoint.
+    assert!(definitely_disjoint(
+        &variant("Foo", "A"),
+        &variant("Bar", "X"),
+        &ctx
+    ));
+}
+
+#[test]
+fn non_ground_types_are_never_disjoint() {
+    let ctx = Ctx::default();
+    let unknown = Ty::BuiltinUnknown {
+        attr: TyAttr::default(),
+    };
+    assert!(!definitely_disjoint(&Ty::int(), &unknown, &ctx));
+    assert!(!definitely_disjoint(&Ty::int(), &typevar("T"), &ctx));
+    assert!(!definitely_disjoint(&Ty::int(), &iface("Animal"), &ctx));
+    // A concrete vs an interface it might implement: not provably disjoint.
+    assert!(!definitely_disjoint(&class("Dog"), &iface("Animal"), &ctx));
+}
+
+#[test]
+fn disjoint_unions_require_all_cross_pairs() {
+    let ctx = Ctx::default();
+    let int_or_string = union(vec![Ty::int(), Ty::string()]);
+    assert!(definitely_disjoint(&int_or_string, &Ty::bool(), &ctx));
+    assert!(!definitely_disjoint(&int_or_string, &Ty::int(), &ctx));
+    assert!(definitely_disjoint(
+        &int_or_string,
+        &union(vec![Ty::bool(), bigint()]),
+        &ctx
+    ));
+    assert!(!definitely_disjoint(
+        &int_or_string,
+        &union(vec![Ty::string(), Ty::bool()]),
+        &ctx
+    ));
+}
+
+#[test]
+fn disjoint_null() {
+    let ctx = Ctx::default();
+    let null = Ty::Null {
+        attr: TyAttr::default(),
+    };
+    assert!(definitely_disjoint(&null, &Ty::int(), &ctx));
+    assert!(!definitely_disjoint(&null, &null, &ctx));
+}
+
+// ── always-equal fold (`==` provably true) ───────────────────────────────--
+
+fn lit_str(s: &str) -> Ty {
+    Ty::Literal(
+        Literal::String(s.to_string()),
+        Freshness::Regular,
+        TyAttr::default(),
+    )
+}
+fn lit_bool(b: bool) -> Ty {
+    Ty::Literal(Literal::Bool(b), Freshness::Regular, TyAttr::default())
+}
+fn lit_float(s: &str) -> Ty {
+    Ty::Literal(
+        Literal::Float(s.to_string()),
+        Freshness::Regular,
+        TyAttr::default(),
+    )
+}
+
+#[test]
+fn equal_same_primitive_literals_and_null() {
+    let ctx = Ctx::default();
+    let null = Ty::Null {
+        attr: TyAttr::default(),
+    };
+    assert!(definitely_equal(&lit_int(1), &lit_int(1), &ctx));
+    assert!(definitely_equal(&lit_str("a"), &lit_str("a"), &ctx));
+    assert!(definitely_equal(&lit_bool(true), &lit_bool(true), &ctx));
+    assert!(definitely_equal(&null, &null, &ctx));
+    // Different values of the same primitive are not always-equal.
+    assert!(!definitely_equal(&lit_int(1), &lit_int(2), &ctx));
+    assert!(!definitely_equal(&lit_bool(true), &lit_bool(false), &ctx));
+}
+
+#[test]
+fn equal_requires_singleton_with_unoverridable_eq() {
+    let ctx = Ctx::default();
+    // Base primitives are not singletons — `int == int` is not always true.
+    assert!(!definitely_equal(&Ty::int(), &Ty::int(), &ctx));
+    // A literal vs its base is not always-equal (the base value may differ).
+    assert!(!definitely_equal(&lit_int(1), &Ty::int(), &ctx));
+    // Float literals are excluded (NaN-safety), even when identical.
+    assert!(!definitely_equal(
+        &lit_float("1.5"),
+        &lit_float("1.5"),
+        &ctx
+    ));
+    // Enum-variant singletons are excluded: a dynamic package could add an
+    // `Equals` to the enum after compilation.
+    assert!(!definitely_equal(
+        &variant("Foo", "A"),
+        &variant("Foo", "A"),
+        &ctx
+    ));
+    // Class singletons (and distinct values generally) are not folded.
+    assert!(!definitely_equal(&class("Dog"), &class("Dog"), &ctx));
+}
