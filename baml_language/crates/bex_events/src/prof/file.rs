@@ -6,7 +6,7 @@
 
 use std::{
     fs::{self, File},
-    io::{self, BufWriter, Read, Write},
+    io::{self, Read, Write},
     path::{Path, PathBuf},
 };
 
@@ -16,7 +16,7 @@ use crate::prof::pb;
 
 /// A single engine's open profile file.
 pub(crate) struct ProfileWriter {
-    writer: BufWriter<File>,
+    file: File,
     path: PathBuf,
     /// Reused length-delimited encode buffer. One allocation that grows to
     /// the largest message, then stays — avoids a `Vec` allocation (and the
@@ -46,7 +46,7 @@ impl ProfileWriter {
         let path = dir.join(name);
         let file = File::create(&path)?;
         let mut writer = ProfileWriter {
-            writer: BufWriter::new(file),
+            file,
             path,
             scratch: Vec::new(),
         };
@@ -54,7 +54,11 @@ impl ProfileWriter {
         Ok(writer)
     }
 
-    /// Writes one length-delimited event.
+    /// Appends one length-delimited event to the in-flight range buffer
+    /// (`scratch`). The consumer accumulates a whole drained range with
+    /// repeated `encode_event`, then issues a single [`flush_buffered`] — one
+    /// `write` per ~256 KiB drained segment instead of one per event. There is
+    /// no userspace `BufWriter`: the range buffer *is* the buffer.
     ///
     /// The two hot records — `CallFunction`/`EndFunction`, the per-call pair
     /// that is essentially all of the event volume — are serialized by a
@@ -76,46 +80,52 @@ impl ProfileWriter {
     /// differential test `hand_encoder_matches_prost` pins byte-for-byte
     /// equality with prost over a range of inputs, covering even a field
     /// renumber. Every other (cold) record stays on prost.
-    pub(crate) fn write_event(&mut self, event: &pb::DiskEventV1) -> io::Result<()> {
+    pub(crate) fn encode_event(&mut self, event: &pb::DiskEventV1) {
         use pb::disk_event_v1::Event;
-        self.scratch.clear();
         match &event.event {
             Some(Event::CallFunction(cf)) => encode_call_function_event(&mut self.scratch, cf),
             Some(Event::EndFunction(ef)) => encode_end_function_event(&mut self.scratch, ef),
             // Cold/rare records (StartThread, SetFunctionId, EndThread,
-            // Heartbeat, and any future variant) go through prost.
+            // Heartbeat, and any future variant) go through prost. Encoding
+            // into a growable `Vec` cannot run out of capacity.
             _ => {
                 event
                     .encode_length_delimited(&mut self.scratch)
-                    .map_err(io::Error::other)?;
+                    .expect("protobuf encode into a Vec never runs out of capacity");
             }
         }
-        self.writer.write_all(&self.scratch)
+    }
+
+    /// Write the accumulated range buffer to the file in one syscall and reset
+    /// it. No-op when nothing is buffered.
+    pub(crate) fn flush_buffered(&mut self) -> io::Result<()> {
+        if !self.scratch.is_empty() {
+            self.file.write_all(&self.scratch)?;
+            self.scratch.clear();
+        }
+        Ok(())
     }
 
     fn write_message(&mut self, msg: &impl Message) -> io::Result<()> {
-        // Reuse `scratch` across events: `encode_length_delimited` writes its
-        // own varint length prefix and grows the buffer as needed, so after
-        // the first few events the capacity is stable and no allocation
-        // happens. (`encode_length_delimited` already computes the length
-        // internally, so a `with_capacity(encoded_len())` would only add a
-        // redundant encode walk.)
+        // One-shot header write at file creation: encode + a single write.
         self.scratch.clear();
         msg.encode_length_delimited(&mut self.scratch)
             .map_err(io::Error::other)?;
-        self.writer.write_all(&self.scratch)
+        self.file.write_all(&self.scratch)?;
+        self.scratch.clear();
+        Ok(())
     }
 
+    /// Flush buffered range bytes to the OS (no `fsync`). The cadence flush.
     pub(crate) fn flush(&mut self) -> io::Result<()> {
-        self.writer.flush()
+        self.flush_buffered()
     }
 
     /// Flush + `fsync`: survives power loss, not just process exit. Used for
-    /// explicit flush requests and engine closes; the cadence flushes stay
-    /// cheap.
+    /// explicit flush requests and engine closes.
     pub(crate) fn sync(&mut self) -> io::Result<()> {
-        self.writer.flush()?;
-        self.writer.get_ref().sync_all()
+        self.flush_buffered()?;
+        self.file.sync_all()
     }
 
     pub(crate) fn path(&self) -> &Path {

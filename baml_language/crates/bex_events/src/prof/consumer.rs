@@ -271,36 +271,43 @@ impl ConsumerState {
         }
         // Cloned out of `self` so the converter can be read while the
         // writer (a `&mut self` borrow) is held; one clone per drained
-        // range, not per record.
+        // range, not per record. `already_reported` is likewise snapshotted
+        // so the writer borrow below covers no other `self` access.
         let conv = self.conv.clone();
+        let already_reported = self.corrupt_reported;
         let Some(writer) = self.writer_for(engine_id) else {
             return;
         };
-        let mut io_result = Ok(());
+        // Accumulate the whole drained range into the writer's buffer, then
+        // issue ONE write for the range (vs one per event).
+        let mut corrupt = None;
         for rec in record::iter(bytes) {
             match rec {
                 Ok(raw) => {
                     let event = to_disk_event(&raw, &conv);
-                    io_result = writer.write_event(&event);
-                    if io_result.is_err() {
-                        break;
-                    }
+                    writer.encode_event(&event);
                 }
+                // A committed range that fails to decode is a producer bug:
+                // the framing is unrecoverable past this point, so drop the
+                // rest of the range. The already-encoded prefix is still
+                // flushed below.
                 Err(err) => {
-                    // A committed range that fails to decode is a producer
-                    // bug — report once, drop the rest of the range (the
-                    // framing is unrecoverable past this point).
-                    if !self.corrupt_reported {
-                        self.corrupt_reported = true;
-                        report(format_args!(
-                            "corrupt profiling record in committed range (engine {engine_id}): {err:?}"
-                        ));
-                    }
+                    corrupt = Some(err);
                     break;
                 }
             }
         }
-        if let Err(err) = io_result {
+        let flush = writer.flush_buffered();
+        // The writer borrow ends above; `self` field access is safe again.
+        if let Some(err) = corrupt
+            && !already_reported
+        {
+            self.corrupt_reported = true;
+            report(format_args!(
+                "corrupt profiling record in committed range (engine {engine_id}): {err:?}"
+            ));
+        }
+        if let Err(err) = flush {
             self.fail_writer(engine_id, &err);
         }
     }
@@ -369,10 +376,11 @@ impl ConsumerState {
         };
         let mut failed = Vec::new();
         for (&engine_id, slot) in &mut self.writers {
-            if let Some(writer) = slot
-                && writer.write_event(&event).is_err()
-            {
-                failed.push(engine_id);
+            if let Some(writer) = slot {
+                writer.encode_event(&event);
+                if writer.flush_buffered().is_err() {
+                    failed.push(engine_id);
+                }
             }
         }
         for engine_id in failed {
