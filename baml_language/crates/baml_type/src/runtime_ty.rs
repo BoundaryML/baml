@@ -1,17 +1,11 @@
-//! Deep runtime-facing subset of [`Ty`].
+//! Inherent impls and conversions for [`RuntimeTy`], the deep runtime-facing
+//! subset of [`Ty`].
 //!
-//! [`RuntimeTy`] is a hand-written deep mirror of [`Ty`] that contains only the
-//! variants which can legitimately exist outside the compiler. Its nested
-//! positions hold `RuntimeTy` (not `Ty`), so a `RuntimeTy` value is statically
-//! guaranteed to be free of compiler-only variants all the way down.
-//!
-//! [`ConcreteTy`] and [`RealizedTy`] are `subenum`-generated subsets *of*
-//! `RuntimeTy`, giving the taxonomy `ConcreteTy ⊆ RealizedTy ⊆ RuntimeTy`:
-//! - **ConcreteTy** — types with concrete memory layouts and method
-//!   implementations.
-//! - **RealizedTy** — realized types (excludes type aliases and unrealized type
-//!   args).
-//! - **RuntimeTy** — every type that can exist outside the compiler.
+//! [`RuntimeTy`] (and [`ConcreteTy`]) are *defined* in [`crate::family`] by the
+//! `ty_family!` macro; this module holds their hand-written behaviour. A
+//! `RuntimeTy` contains only the variants that can legitimately exist outside
+//! the compiler, and its nested positions hold `RuntimeTy` (not `Ty`), so a
+//! value is statically free of compiler-only variants all the way down.
 //!
 //! Conversions:
 //! - [`RuntimeTy::try_from`] (`&Ty`/`Ty`) is fallible: it rejects the four
@@ -21,150 +15,9 @@
 
 use std::collections::{HashMap, HashSet};
 
-use borsh::{BorshDeserialize, BorshSerialize};
-use subenum::subenum;
-
 use crate::{
-    Freshness, FunctionParamMode, Literal, MediaKind, Name, QualifiedTypeName, Ty, TyAttr, TypeName,
+    Freshness, Name, QualifiedTypeName, RuntimeFunctionParamTy, RuntimeTy, Ty, TyAttr, TypeName,
 };
-
-/// A single parameter of a [`RuntimeTy::Function`] — the runtime mirror of
-/// [`crate::FunctionParamTy`], holding a [`RuntimeTy`] instead of a [`Ty`].
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, BorshSerialize, BorshDeserialize)]
-pub struct RuntimeFunctionParamTy {
-    pub name: Option<Name>,
-    pub ty: RuntimeTy,
-    pub mode: FunctionParamMode,
-}
-
-impl RuntimeFunctionParamTy {
-    pub fn required(name: Option<Name>, ty: RuntimeTy) -> Self {
-        Self {
-            name,
-            ty,
-            mode: FunctionParamMode::Required,
-        }
-    }
-
-    pub fn optional(name: Option<Name>, ty: RuntimeTy) -> Self {
-        Self {
-            name,
-            ty,
-            mode: FunctionParamMode::Optional,
-        }
-    }
-
-    pub fn is_required(&self) -> bool {
-        matches!(self.mode, FunctionParamMode::Required)
-    }
-
-    pub fn is_optional(&self) -> bool {
-        matches!(self.mode, FunctionParamMode::Optional)
-    }
-}
-
-/// Deep runtime-facing subset of [`Ty`]. See the module docs for the taxonomy
-/// and conversion contract.
-#[subenum(
-    ConcreteTy(
-        doc = "Concrete types that have concrete memory layouts and method implementations."
-    ),
-    RealizedTy(doc = "Realized types (excludes type aliases and unrealized type args)")
-)]
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, BorshSerialize, BorshDeserialize)]
-pub enum RuntimeTy {
-    #[subenum(ConcreteTy, RealizedTy)]
-    Int { attr: TyAttr },
-    #[subenum(ConcreteTy, RealizedTy)]
-    Bigint { attr: TyAttr },
-    #[subenum(ConcreteTy, RealizedTy)]
-    Float { attr: TyAttr },
-    #[subenum(ConcreteTy, RealizedTy)]
-    String { attr: TyAttr },
-    #[subenum(ConcreteTy, RealizedTy)]
-    Bool { attr: TyAttr },
-    #[subenum(ConcreteTy, RealizedTy)]
-    Null { attr: TyAttr },
-    #[subenum(ConcreteTy, RealizedTy)]
-    Uint8Array { attr: TyAttr },
-    #[subenum(ConcreteTy, RealizedTy)]
-    Media(MediaKind, TyAttr),
-    /// A literal type — a single value (`1`, `"hi"`, `true`) as a type.
-    #[subenum(RealizedTy)]
-    Literal(Literal, Freshness, TyAttr),
-    #[subenum(ConcreteTy, RealizedTy)]
-    Class(TypeName, Vec<RuntimeTy>, TyAttr),
-    #[subenum(RealizedTy)]
-    Interface(TypeName, Vec<RuntimeTy>, Vec<(Name, RuntimeTy)>, TyAttr),
-    #[subenum(ConcreteTy, RealizedTy)]
-    Enum(TypeName, TyAttr),
-    /// A specific enum variant — `Status.HttpError`.
-    #[subenum(RealizedTy)]
-    EnumVariant(TypeName, Name, TyAttr),
-    #[subenum(ConcreteTy, RealizedTy)]
-    List(Box<RuntimeTy>, TyAttr),
-    #[subenum(ConcreteTy, RealizedTy)]
-    Map {
-        key: Box<RuntimeTy>,
-        value: Box<RuntimeTy>,
-        attr: TyAttr,
-    },
-    #[subenum(RealizedTy)]
-    Union(Vec<RuntimeTy>, TyAttr),
-
-    /// Function/arrow type: `<G…>(T1, T2, ...) -> R throws E`.
-    #[subenum(ConcreteTy, RealizedTy)]
-    Function {
-        generic_params: Vec<Name>,
-        generic_param_bounds: Vec<Option<RuntimeTy>>,
-        params: Vec<RuntimeFunctionParamTy>,
-        ret: Box<RuntimeTy>,
-        throws: Box<RuntimeTy>,
-        attr: TyAttr,
-    },
-    /// A future handle — the result of `schedule_future` or `spawn` before
-    /// `await`. Carries both the resolved value type and the error type.
-    #[subenum(ConcreteTy, RealizedTy)]
-    Future(Box<RuntimeTy>, Box<RuntimeTy>, TyAttr),
-    /// Opaque Rust-managed state (`$rust_type` fields in builtin class stubs).
-    #[subenum(ConcreteTy, RealizedTy)]
-    RustType { attr: TyAttr },
-    /// The `type` metatype keyword — a runtime value that wraps a `Ty`.
-    #[subenum(ConcreteTy, RealizedTy)]
-    Type { attr: TyAttr },
-    /// Opaque resource handle — file, socket, or HTTP response body.
-    #[subenum(ConcreteTy, RealizedTy)]
-    Resource { attr: TyAttr },
-    /// Opaque structured prompt tree for LLM calls.
-    #[subenum(ConcreteTy, RealizedTy)]
-    PromptAst { attr: TyAttr },
-
-    /// Void type — the type of effectful expressions (was VIR `Unit`).
-    #[subenum(RealizedTy)]
-    Void { attr: TyAttr },
-    /// Watch accessor type: represents `x.$watch` on a watched variable.
-    #[subenum(RealizedTy)]
-    WatchAccessor(Box<RuntimeTy>, TyAttr),
-
-    /// Only recursive aliases survive lower_ty; non-recursive are expanded.
-    TypeAlias(TypeName, TyAttr),
-    /// A type variable (generic parameter) — e.g. `T` in `Array<T>`.
-    TypeVar(Name, TyAttr),
-    /// Associated type projection, e.g. `P.Output` or `(T as Iterator).Item`.
-    AssociatedTypeProjection {
-        base: Box<RuntimeTy>,
-        interface: Option<Box<RuntimeTy>>,
-        member: Name,
-        attr: TyAttr,
-    },
-
-    /// The top type — may have any concrete value.
-    #[subenum(RealizedTy)]
-    BuiltinUnknown { attr: TyAttr },
-    /// The bottom type — an expression that never produces a value.
-    #[subenum(RealizedTy)]
-    Never { attr: TyAttr },
-}
 
 impl RuntimeTy {
     // --- TyAttr accessor ---
@@ -943,20 +796,6 @@ fn lower_vec(tys: &[Ty], resolved: &ResolvedAliases) -> Result<Vec<RuntimeTy>, N
     tys.iter().map(|t| lower_to_runtime(t, resolved)).collect()
 }
 
-// ── Subset-hierarchy upcast ──────────────────────────────────────────────────
-// `subenum` generates `From<ConcreteTy> for RuntimeTy`, `From<RealizedTy> for
-// RuntimeTy`, and each subset's `TryFrom<RuntimeTy>`, but not the child→child
-// cast. `ConcreteTy ⊆ RealizedTy` is guaranteed by the membership tags, so this
-// upcast is infallible: round through `RuntimeTy`; the `TryFrom` cannot fail for
-// a value already in the subset.
-impl From<ConcreteTy> for RealizedTy {
-    fn from(value: ConcreteTy) -> Self {
-        RuntimeTy::from(value)
-            .try_into()
-            .unwrap_or_else(|_| unreachable!("every ConcreteTy is a RealizedTy"))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1110,12 +949,5 @@ mod tests {
                 variant: "EvolvingMap"
             })
         );
-    }
-
-    #[test]
-    fn concrete_upcasts_to_realized() {
-        let concrete = ConcreteTy::Int { attr: def() };
-        let realized: RealizedTy = concrete.into();
-        assert_eq!(realized, RealizedTy::Int { attr: def() });
     }
 }
