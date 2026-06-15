@@ -256,6 +256,64 @@ fn render_describe_enum() {
 }
 
 #[test]
+fn render_describe_interface() {
+    let db = make_db(&[(
+        "interfaces.baml",
+        r#"
+interface Named {
+    name: string
+    function label(self) -> string
+}
+
+class Person {
+    name: string
+    implements Named {
+        function label(self) -> string {
+            return self.name
+        }
+    }
+}
+"#,
+    )]);
+    let files = baml_compiler2_hir::compiler2_all_files(&db);
+    let descs = baml_lsp2_actions::describe(&db, &files, "Named");
+    assert_eq!(descs.len(), 1);
+    let output = capture_description(&db, &descs[0], 30);
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_describe_class_shows_associated_type_bindings() {
+    let db = make_db(&[(
+        "interfaces.baml",
+        r#"
+interface Decoder<Input> {
+    type Output
+    function decode(self, raw: Input) -> Self.Output
+}
+
+class IntDecoder {
+    implements Decoder<string> {
+        type Output = int
+        function decode(self, raw: string) -> Self.Output {
+            return 1
+        }
+    }
+}
+"#,
+    )]);
+    let files = baml_compiler2_hir::compiler2_all_files(&db);
+    let descs = baml_lsp2_actions::describe(&db, &files, "IntDecoder");
+    assert_eq!(descs.len(), 1);
+    let output = capture_description(&db, &descs[0], 30);
+    assert!(
+        output.contains("type Output = int"),
+        "expected class describe to include associated type bindings, got:\n{output}"
+    );
+    insta::assert_snapshot!(output);
+}
+
+#[test]
 fn render_describe_function_with_docstring() {
     let db = simple_project();
     let files = baml_compiler2_hir::compiler2_all_files(&db);
@@ -373,6 +431,13 @@ fn render_describe_builtin_deep_copy() {
     let descs = baml_lsp2_actions::describe(&db, &files, "deep_copy");
     assert_eq!(descs.len(), 1);
     let output = capture_description(&db, &descs[0], 30);
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_describe_log_info_builtin() {
+    let db = simple_project();
+    let output = describe_via_dispatch(&db, "log.info");
     insta::assert_snapshot!(output);
 }
 
@@ -790,12 +855,12 @@ fn definition_line_range_comment_only_span_does_not_reverse() {
 
 // ── Truncation / budget tests ────────────────────────────────────────────────
 
-/// Methods are always discoverable. They are rendered after the body and
-/// bypass the body budget entirely, so even at budget 5 every method of
-/// `String` (40+) is still present, and the `methods:`/`static_methods:`
-/// sections are byte-identical regardless of budget.
+/// The soft budget bounds the whole rendering, not just the body: method
+/// sections are truncated to fit, with an explicit elision marker, while
+/// their headers stay visible so the symbol's surface remains discoverable.
+/// A generous budget still renders every method in full.
 #[test]
-fn render_describe_methods_never_truncated() {
+fn render_describe_methods_respect_budget() {
     let db = simple_project();
     let files = baml_compiler2_hir::compiler2_all_files(&db);
     let descs = baml_lsp2_actions::describe(&db, &files, "String");
@@ -806,9 +871,8 @@ fn render_describe_methods_never_truncated() {
 
     for needle in [
         "methods:",
-        "function to_json(self) -> json",
         "static_methods:",
-        "function from_code_points(unicode: int[]) -> string",
+        "more lines (re-run with a higher --budget)",
     ] {
         assert!(
             tight.contains(needle),
@@ -816,14 +880,44 @@ fn render_describe_methods_never_truncated() {
         );
     }
 
-    // The method sections are unaffected by the budget (only the body block is).
-    let methods_onward = |s: &str| s[s.find("\nmethods:").expect("methods section")..].to_string();
-    assert_eq!(methods_onward(&tight), methods_onward(&full));
+    // Tight output is meaningfully bounded: the budget is soft, but elided
+    // method lists must not blow past it by more than the fixed per-section
+    // overhead (headers + markers).
+    let tight_lines = tight.lines().count();
+    let full_lines = full.lines().count();
+    assert!(
+        tight_lines < full_lines / 2 && tight_lines <= 5 + 20,
+        "budget 5 should bound output well below the full {full_lines} lines, got {tight_lines}:\n{tight}"
+    );
+
+    // A generous budget renders every method, with no elision marker.
+    for needle in [
+        "function to_json(self) -> json",
+        "static_methods:",
+        "function from_code_points(unicode: int[]) -> string",
+    ] {
+        assert!(
+            full.contains(needle),
+            "`{needle}` missing from describe output under budget 1000:\n{full}"
+        );
+    }
+    assert!(
+        !full.contains("re-run with a higher --budget"),
+        "no elision marker expected at budget 1000:\n{full}"
+    );
+    assert!(
+        !tight.contains("function to_json(self) -> json"),
+        "late methods should be elided under budget 5:\n{tight}"
+    );
+    assert!(
+        full.contains("function to_json(self) -> json")
+            && full.contains("function from_code_points(unicode: int[]) -> string"),
+        "generous budgets should still show full method details:\n{full}"
+    );
 }
 
-/// A class with a fields-only body (no docstring) renders identically at a tight
-/// budget and a generous one — the body fits any reasonable budget. This is the
-/// spec's `baml describe User --budget 5` guarantee.
+/// A class with a fields-only body (no docstring) still fits that body under a
+/// tight budget, while later method sections use elision markers as needed.
 #[test]
 fn render_describe_fields_only_body_fits_tight_budget() {
     let db = methods_project();
@@ -837,7 +931,29 @@ fn render_describe_fields_only_body_fits_tight_budget() {
         !tight.contains("[INFO] Showing"),
         "fields-only body must not truncate at budget 5:\n{tight}"
     );
-    assert_eq!(tight, full);
+    // The header + body block is identical at both budgets; only the trailing
+    // list sections (methods here) give way under the tight budget.
+    let body_part = |s: &str| s[..s.find("\nmethods:").expect("methods section")].to_string();
+    assert_eq!(body_part(&tight), body_part(&full));
+    assert!(
+        tight.contains("more lines (re-run with a higher --budget)"),
+        "methods exceeding the tight budget must be elided with a marker:\n{tight}"
+    );
+    for needle in ["class User {", "    name: string,", "    age: int,", "}"] {
+        assert!(
+            tight.contains(needle),
+            "`{needle}` missing from fields-only body under budget 5:\n{tight}"
+        );
+    }
+    assert!(
+        tight.contains("methods:\n  … 2 more lines"),
+        "methods should be summarized after the tight body budget is spent:\n{tight}"
+    );
+    assert!(
+        full.contains("function Greet(self) -> string")
+            && full.contains("function IsAdult(self) -> bool"),
+        "generous budgets should still show full methods:\n{full}"
+    );
 }
 
 /// Full budget shows no truncation hint.
@@ -889,8 +1005,116 @@ fn render_keyword_spawn() {
 }
 
 #[test]
-fn render_keyword_ts_interface() {
+fn render_keyword_interface() {
     let output = capture_keyword("interface");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_interfaces() {
+    let output = capture_keyword("interfaces");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_implements() {
+    let output = capture_keyword("implements");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_method() {
+    let output = capture_keyword("method");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_field() {
+    let output = capture_keyword("field");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_blanket() {
+    let output = capture_keyword("blanket");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_check() {
+    let output = capture_keyword("check");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_impl() {
+    let output = capture_keyword("impl");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_requires() {
+    let output = capture_keyword("requires");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_associated() {
+    let output = capture_keyword("associated");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_type() {
+    let output = capture_keyword("type");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_types() {
+    let output = capture_keyword("types");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_generic() {
+    let output = capture_keyword("generic");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_generics() {
+    let output = capture_keyword("generics");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_bounds() {
+    let output = capture_keyword("bounds");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_extends() {
+    let output = capture_keyword("extends");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_as() {
+    let output = capture_keyword("as");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_projection() {
+    let output = capture_keyword("projection");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_self() {
+    let output = capture_keyword("self");
     insta::assert_snapshot!(output);
 }
 
@@ -900,11 +1124,34 @@ fn render_keyword_ts_instanceof() {
     insta::assert_snapshot!(output);
 }
 
+#[test]
+fn render_keyword_ts_new() {
+    let output = capture_keyword("new");
+    insta::assert_snapshot!(output);
+}
+
 /// Keywords via dispatch should resolve to `ResolvedTarget::Keyword`.
 #[test]
 fn dispatch_keyword_class() {
     let db = simple_project();
     let output = describe_via_dispatch(&db, "class");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn dispatch_keyword_method_prefers_topic_over_builtin_member() {
+    let db = simple_project();
+    let output = describe_via_dispatch(&db, "method");
+    assert!(
+        output.contains("Declares a function member"),
+        "`method` should resolve to the keyword topic, got:\n{output}"
+    );
+}
+
+#[test]
+fn dispatch_keyword_interfaces() {
+    let db = simple_project();
+    let output = describe_via_dispatch(&db, "interfaces");
     insta::assert_snapshot!(output);
 }
 

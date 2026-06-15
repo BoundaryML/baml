@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 16641
 ---
 function user.AppConfig.from_json(j: baml.json.json) -> AppConfig {
     load_var j
@@ -15,9 +14,10 @@ function user.AppConfig.from_json(j: baml.json.json) -> AppConfig {
 }
 
 function user.AppConfig.to_json(self: AppConfig) -> baml.json.json {
+    load_type string
     load_var self
     load_field .api_key
-    call baml.String.to_json
+    call baml.json.to_json
     load_const "api_key"
     alloc_map 1
     return
@@ -50,12 +50,14 @@ function user.llm.openai.OpenAIResponse.from_json(j: baml.json.json) -> llm.open
 }
 
 function user.llm.openai.OpenAIResponse.to_json(self: llm.openai.OpenAIResponse) -> baml.json.json {
+    load_type string
     load_var self
     load_field .text
-    call baml.String.to_json
+    call baml.json.to_json
+    load_type string
     load_var self
     load_field .model
-    call baml.String.to_json
+    call baml.json.to_json
     load_const "text"
     load_const "model"
     alloc_map 2

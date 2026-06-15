@@ -1,5 +1,5 @@
 /// Type simplification for SAP attributes.
-/// Type simplification converts `baml_type::Ty` to another `baml_type::Ty`, for the purpose of cleaning the type to make it easier for SAP to process. It
+/// Type simplification converts `baml_type::RuntimeTy` to another `baml_type::RuntimeTy`, for the purpose of cleaning the type to make it easier for SAP to process. It
 ///
 /// - Inlines type aliases where possible
 /// - Moves the `null` type in a Union to the last-variant position
@@ -299,23 +299,27 @@
 /// candidates with different scoring behavior.
 use std::collections::{HashMap, HashSet};
 
-use crate::{Literal, Ty, TyAttr, TyAttrValue, TypeName};
+use crate::{Literal, RuntimeTy, TyAttr, TyAttrValue, TypeName};
 
 /// Simplify a type for SAP processing.
 ///
 /// - `aliases`: map from alias name to its definition.
-/// - `recursive_aliases`: aliases that are recursive (left as `Ty::TypeAlias`).
+/// - `recursive_aliases`: aliases that are recursive (left as `RuntimeTy::TypeAlias`).
 pub fn simplify(
-    ty: Ty,
-    aliases: &HashMap<TypeName, Ty>,
+    ty: RuntimeTy,
+    aliases: &HashMap<TypeName, RuntimeTy>,
     recursive_aliases: &HashSet<TypeName>,
-) -> Ty {
+) -> RuntimeTy {
     simplify_impl(ty, aliases, recursive_aliases)
 }
 
-fn simplify_impl(ty: Ty, aliases: &HashMap<TypeName, Ty>, recursive: &HashSet<TypeName>) -> Ty {
+fn simplify_impl(
+    ty: RuntimeTy,
+    aliases: &HashMap<TypeName, RuntimeTy>,
+    recursive: &HashSet<TypeName>,
+) -> RuntimeTy {
     match ty {
-        Ty::TypeAlias(ref name, ref outer_attr) => {
+        RuntimeTy::TypeAlias(ref name, ref outer_attr) => {
             if recursive.contains(name) {
                 // Recursive alias: keep as TypeAlias, don't inline.
                 ty
@@ -330,13 +334,13 @@ fn simplify_impl(ty: Ty, aliases: &HashMap<TypeName, Ty>, recursive: &HashSet<Ty
             }
         }
 
-        Ty::Union(variants, attr) => simplify_union(variants, attr, aliases, recursive),
+        RuntimeTy::Union(variants, attr) => simplify_union(variants, attr, aliases, recursive),
 
         // Recurse into compound types.
-        Ty::List(inner, attr) => {
-            Ty::List(Box::new(simplify_impl(*inner, aliases, recursive)), attr)
+        RuntimeTy::List(inner, attr) => {
+            RuntimeTy::List(Box::new(simplify_impl(*inner, aliases, recursive)), attr)
         }
-        Ty::Map { key, value, attr } => Ty::Map {
+        RuntimeTy::Map { key, value, attr } => RuntimeTy::Map {
             key: Box::new(simplify_impl(*key, aliases, recursive)),
             value: Box::new(simplify_impl(*value, aliases, recursive)),
             attr,
@@ -352,13 +356,13 @@ fn simplify_impl(ty: Ty, aliases: &HashMap<TypeName, Ty>, recursive: &HashSet<Ty
 // ---------------------------------------------------------------------------
 
 fn simplify_union(
-    variants: Vec<Ty>,
+    variants: Vec<RuntimeTy>,
     attr: TyAttr,
-    aliases: &HashMap<TypeName, Ty>,
+    aliases: &HashMap<TypeName, RuntimeTy>,
     recursive: &HashSet<TypeName>,
-) -> Ty {
+) -> RuntimeTy {
     // 1. Simplify each variant recursively.
-    let variants: Vec<Ty> = variants
+    let variants: Vec<RuntimeTy> = variants
         .into_iter()
         .map(|v| simplify_impl(v, aliases, recursive))
         .collect();
@@ -383,7 +387,7 @@ fn simplify_union(
         let merged = merge_attr_nested(v.attr(), &attr);
         v.with_attr(merged)
     } else {
-        Ty::Union(variants, attr)
+        RuntimeTy::Union(variants, attr)
     }
 }
 
@@ -407,7 +411,7 @@ fn merge_attr_nested(inner: &TyAttr, outer: &TyAttr) -> TyAttr {
 /// Distribute union-level attrs into each variant.
 ///
 /// SAP flags are or'd into each variant and preserved at the union level.
-fn distribute_attrs(variants: Vec<Ty>, union_attr: TyAttr) -> (Vec<Ty>, TyAttr) {
+fn distribute_attrs(variants: Vec<RuntimeTy>, union_attr: TyAttr) -> (Vec<RuntimeTy>, TyAttr) {
     let distributed = variants
         .into_iter()
         .map(|v| {
@@ -423,11 +427,11 @@ fn distribute_attrs(variants: Vec<Ty>, union_attr: TyAttr) -> (Vec<Ty>, TyAttr) 
 ///
 /// When an inner union is flattened, its union-level attr is merged (nesting
 /// semantics) into each of its variants.
-fn flatten_union(variants: Vec<Ty>) -> Vec<Ty> {
+fn flatten_union(variants: Vec<RuntimeTy>) -> Vec<RuntimeTy> {
     let mut out = Vec::new();
     for v in variants {
         match v {
-            Ty::Union(inner_variants, inner_attr) => {
+            RuntimeTy::Union(inner_variants, inner_attr) => {
                 for iv in inner_variants {
                     let merged = merge_attr_nested(iv.attr(), &inner_attr);
                     out.push(iv.with_attr(merged));
@@ -443,8 +447,8 @@ fn flatten_union(variants: Vec<Ty>) -> Vec<Ty> {
 ///
 /// If variant A is a subtype of variant B (considering attrs), A is dropped
 /// and B is kept.
-fn dedup_variants(variants: Vec<Ty>) -> Vec<Ty> {
-    let mut result: Vec<Ty> = Vec::new();
+fn dedup_variants(variants: Vec<RuntimeTy>) -> Vec<RuntimeTy> {
+    let mut result: Vec<RuntimeTy> = Vec::new();
     for candidate in variants {
         if result
             .iter()
@@ -461,11 +465,11 @@ fn dedup_variants(variants: Vec<Ty>) -> Vec<Ty> {
 }
 
 /// Push `null` variants to the end.
-fn null_to_end(variants: Vec<Ty>) -> Vec<Ty> {
+fn null_to_end(variants: Vec<RuntimeTy>) -> Vec<RuntimeTy> {
     let mut non_null = Vec::new();
     let mut nulls = Vec::new();
     for v in variants {
-        if matches!(v, Ty::Null { .. }) {
+        if matches!(v, RuntimeTy::Null { .. }) {
             nulls.push(v);
         } else {
             non_null.push(v);
@@ -488,8 +492,8 @@ fn null_to_end(variants: Vec<Ty>) -> Vec<Ty> {
 ///
 /// The one exception is `int → bigint`, which is permitted because it is
 /// lossless (any `int` fits in `bigint`). See the inline comment on the
-/// `Ty::Int → Ty::Bigint` arm of [`is_sap_structural_subtype`].
-fn is_subtype_with_attrs(sub: &Ty, sup: &Ty) -> bool {
+/// `RuntimeTy::Int → RuntimeTy::Bigint` arm of [`is_sap_structural_subtype`].
+fn is_subtype_with_attrs(sub: &RuntimeTy, sup: &RuntimeTy) -> bool {
     is_sap_structural_subtype(sub, sup) && attr_is_subtype(sub.attr(), sup.attr())
 }
 
@@ -497,7 +501,7 @@ fn is_subtype_with_attrs(sub: &Ty, sup: &Ty) -> bool {
 ///
 /// Returns `true` when `sub` and `sup` are the same type (ignoring attrs),
 /// or when `sub` is a literal whose base primitive matches `sup`.
-fn is_sap_structural_subtype(sub: &Ty, sup: &Ty) -> bool {
+fn is_sap_structural_subtype(sub: &RuntimeTy, sup: &RuntimeTy) -> bool {
     let sub_s = sub.clone().with_attr(TyAttr::default());
     let sup_s = sup.clone().with_attr(TyAttr::default());
 
@@ -507,16 +511,16 @@ fn is_sap_structural_subtype(sub: &Ty, sup: &Ty) -> bool {
 
     matches!(
         (&sub_s, &sup_s),
-        (Ty::Literal(Literal::Int(_), _), Ty::Int { .. })
-            | (Ty::Literal(Literal::Int(_), _), Ty::Bigint { .. })
-            | (Ty::Literal(Literal::Bigint(_), _), Ty::Bigint { .. })
-            | (Ty::Literal(Literal::Float(_), _), Ty::Float { .. })
-            | (Ty::Literal(Literal::String(_), _), Ty::String { .. })
-            | (Ty::Literal(Literal::Bool(_), _), Ty::Bool { .. })
+        (RuntimeTy::Literal(Literal::Int(_), _, _), RuntimeTy::Int { .. })
+            | (RuntimeTy::Literal(Literal::Int(_), _, _), RuntimeTy::Bigint { .. })
+            | (RuntimeTy::Literal(Literal::Bigint(_), _, _), RuntimeTy::Bigint { .. })
+            | (RuntimeTy::Literal(Literal::Float(_), _, _), RuntimeTy::Float { .. })
+            | (RuntimeTy::Literal(Literal::String(_), _, _), RuntimeTy::String { .. })
+            | (RuntimeTy::Literal(Literal::Bool(_), _, _), RuntimeTy::Bool { .. })
             // The one cross-type widening allowed by SAP: `int → bigint`
             // is lossless, unlike `int → float` which loses precision past
             // 2^53.
-            | (Ty::Int { .. }, Ty::Bigint { .. })
+            | (RuntimeTy::Int { .. }, RuntimeTy::Bigint { .. })
     )
 }
 

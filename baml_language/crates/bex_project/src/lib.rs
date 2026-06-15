@@ -15,10 +15,9 @@ pub use bex_engine::{
     CANCELLED_PANIC_CLASS, EngineError, FunctionCallContext, FunctionCallContextBuilder,
     is_cancelled_engine_error,
 };
-pub use bex_events::EventSink;
 pub use bex_external_types::{
     BexExternalAdt, BexExternalValue, Handle, HostReleaseFn, HostReturnTypeError, HostValueArc,
-    HostValueKind, MediaKind, Ty, TyAttr, host_release_dispatch, try_convert_rust_data,
+    HostValueKind, MediaKind, RuntimeTy, TyAttr, host_release_dispatch, try_convert_rust_data,
     validate_host_return,
 };
 pub use sys_ops::SysOps;
@@ -78,9 +77,8 @@ pub fn new(
     root_path: vfs::VfsPath,
     sys_ops: SysOps,
     files: std::collections::HashMap<crate::fs::FsPath, String>,
-    event_sink: Option<std::sync::Arc<dyn EventSink>>,
 ) -> Result<Arc<impl Bex>, RuntimeError> {
-    let project = project::BexProject::new(&root_path, Arc::new(sys_ops), event_sink);
+    let project = project::BexProject::new(&root_path, Arc::new(sys_ops));
     project.update_all_sources(&files);
     let engine = project.take()?;
     Ok(engine)
@@ -94,16 +92,12 @@ pub fn new(
 /// This is the blessed seam for running pre-packed bytecode: bridge crates call
 /// it instead of reaching into `bex_engine` / `bex_vm_types` themselves.
 #[allow(clippy::needless_pass_by_value)]
-pub fn new_from_bytecode(
-    bytecode: &[u8],
-    sys_ops: SysOps,
-    event_sink: Option<Arc<dyn EventSink>>,
-) -> Result<Arc<dyn Bex>, RuntimeError> {
+pub fn new_from_bytecode(bytecode: &[u8], sys_ops: SysOps) -> Result<Arc<dyn Bex>, RuntimeError> {
     let program: bex_vm_types::Program =
         borsh::from_slice(bytecode).map_err(|e| RuntimeError::Compilation {
             message: format!("Failed to deserialize BAML bytecode: {e}"),
         })?;
-    let engine = bex_engine::BexEngine::new(program, Arc::new(sys_ops), event_sink, Vec::new())?;
+    let engine = bex_engine::BexEngine::new(program, Arc::new(sys_ops), Vec::new())?;
     Ok(Arc::new(engine))
 }
 

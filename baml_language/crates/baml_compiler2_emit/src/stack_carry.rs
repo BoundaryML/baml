@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use baml_compiler2_mir::{
     BinOp, Constant, Local, MirFunctionBody, Operand, Place, Rvalue, StatementKind, Terminator,
 };
-use baml_type::{Literal, Ty};
+use baml_type::{Literal, RuntimeTy};
 
 use crate::{
     analysis::{LocalClassification, LocalDefUse, StatementRef, UseLocation},
@@ -207,6 +207,11 @@ fn is_stack_carry_use_safe(
                     }
                     *target
                 }
+                // `AwaitAny` intentionally omitted: its result is never stack-
+                // carried (it falls through to `return false` here), because
+                // the opcode rewinds + re-executes across the engine suspend
+                // and a carried result does not survive that. See the matching
+                // note in `analysis.rs` (call-result-immediate checks).
                 _ => return false,
             }
         }
@@ -309,6 +314,7 @@ fn is_stack_carry_use_safe(
             Terminator::Call { target, .. }
             | Terminator::SysOp { target, .. }
             | Terminator::Await { target, .. }
+            | Terminator::AwaitAny { target, .. }
                 if kind == StackCarryKind::AggregateOperand =>
             {
                 if !simulate_terminator_stack(term, &mut sim, local, body, classifications, def_use)
@@ -581,6 +587,7 @@ fn simulate_terminator_stack(
         Terminator::Spawn {
             closure,
             name,
+            config,
             future,
             ..
         } => {
@@ -596,7 +603,14 @@ fn simulate_terminator_stack(
             if pull_semantics::walk_operand_pull(&mut sink, name).is_err() {
                 return false;
             }
-            if !sim.pop_n(2) {
+            // Config operand is pushed last (null when there is no `with`
+            // clause). Mirror `emit`: always push three, pop three.
+            let null_config = Operand::Constant(Constant::Null);
+            let config_op = config.as_deref().unwrap_or(&null_config);
+            if pull_semantics::walk_operand_pull(&mut sink, config_op).is_err() {
+                return false;
+            }
+            if !sim.pop_n(3) {
                 return false;
             }
             sim.push();
@@ -614,6 +628,28 @@ fn simulate_terminator_stack(
                 def_use,
             };
             if pull_semantics::walk_await_future(&mut sink, future).is_err() {
+                return false;
+            }
+            if !sim.pop_n(1) {
+                return false;
+            }
+            sim.push();
+            simulate_store_place_stack(destination, sim, classifications)
+        }
+        Terminator::AwaitAny {
+            futures,
+            destination,
+            ..
+        } => {
+            let mut sink = StackCarryPullSink {
+                sim,
+                carried_local,
+                classifications,
+                def_use,
+            };
+            // Push the array operand, then AWAIT_ANY pops it (1) and pushes
+            // the winning index (1).
+            if pull_semantics::walk_operand_pull(&mut sink, futures).is_err() {
                 return false;
             }
             if !sim.pop_n(1) {
@@ -1032,10 +1068,12 @@ fn numeric_place_kind(body: &MirFunctionBody, place: &Place) -> Option<NumericKi
     }
 }
 
-fn numeric_ty_kind(ty: &Ty) -> Option<NumericKind> {
+fn numeric_ty_kind(ty: &RuntimeTy) -> Option<NumericKind> {
     match ty {
-        Ty::Int { .. } | Ty::Literal(Literal::Int(_), _) => Some(NumericKind::Int),
-        Ty::Float { .. } | Ty::Literal(Literal::Float(_), _) => Some(NumericKind::Float),
+        RuntimeTy::Int { .. } | RuntimeTy::Literal(Literal::Int(_), _, _) => Some(NumericKind::Int),
+        RuntimeTy::Float { .. } | RuntimeTy::Literal(Literal::Float(_), _, _) => {
+            Some(NumericKind::Float)
+        }
         _ => None,
     }
 }
@@ -1362,19 +1400,19 @@ mod tests {
 
     use super::*;
 
-    fn int_ty() -> Ty {
-        Ty::Int {
+    fn int_ty() -> RuntimeTy {
+        RuntimeTy::Int {
             attr: TyAttr::default(),
         }
     }
 
-    fn float_ty() -> Ty {
-        Ty::Float {
+    fn float_ty() -> RuntimeTy {
+        RuntimeTy::Float {
             attr: TyAttr::default(),
         }
     }
 
-    fn local_decl(ty: Ty) -> LocalDecl {
+    fn local_decl(ty: RuntimeTy) -> LocalDecl {
         LocalDecl {
             name: None,
             ty,
@@ -1385,7 +1423,7 @@ mod tests {
         }
     }
 
-    fn body_with_locals(local_tys: Vec<Ty>) -> MirFunctionBody {
+    fn body_with_locals(local_tys: Vec<RuntimeTy>) -> MirFunctionBody {
         MirFunctionBody {
             blocks: vec![BasicBlock {
                 id: baml_compiler2_mir::BlockId(0),

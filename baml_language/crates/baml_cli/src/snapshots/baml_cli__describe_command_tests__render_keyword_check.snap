@@ -1,0 +1,12 @@
+---
+source: crates/baml_cli/src/describe_command_tests.rs
+expression: output
+---
+check — Explains how to ask the CLI to validate a project.
+
+Syntax:
+  baml run --from .
+  baml run --from . --list
+  baml fmt --from .
+
+There is no standalone `baml check` command in this CLI. Commands such as `baml run`, `baml run --list`, and `baml fmt` load and check the project before doing their main work. Use `baml run --list` when you want a quick compile-and-signature view without running a specific function.

@@ -29,14 +29,6 @@ exclude = [
   # unsupported features through resolver feature unification.
   "forks/aws-config-systest",
   "forks/google-cloud-auth-systest",
-  # Generated Python rig-test outputs do not contain Cargo manifests, but the
-  # workspace member glob above would otherwise make cargo metadata fail.
-  "rig_tests/crates/python_empty",
-  "rig_tests/crates/python_literal_types",
-  "rig_tests/crates/python_map_types",
-  "rig_tests/crates/python_mixed_complex_types",
-  "rig_tests/crates/python_semantic_streaming",
-  "rig_tests/crates/python_union_types_extended",
 ]
 resolver = "2"
 
@@ -56,15 +48,10 @@ version = "0.0.0-beta"
 [workspace.dependencies]
 #  Internal dependencies (baml_*)
 bex_str = { path = "crates/bex_str" }
-ahash = "0.8"
 baml_base = { path = "crates/baml_base" }
 baml_type = { path = "crates/baml_type" }
-baml_builtins = { path = "crates/baml_builtins" }
-baml_builtins_codegen = { path = "crates/baml_builtins_codegen" }
 baml_builtins2 = { path = "crates/baml_builtins2" }
 baml_builtins2_codegen = { path = "crates/baml_builtins2_codegen" }
-baml_builtins_macros = { path = "crates/baml_builtins_macros" }
-sdkgen_go = { path = "sdks/go/sdkgen_go" }
 sdkgen_typescript_node = { path = "sdks/nodejs/sdkgen_typescript_node" }
 sdkgen_python_pydantic2 = { path = "sdks/python/rust/sdkgen_python_pydantic2" }
 baml_codegen_types = { path = "crates/baml_codegen_types" }
@@ -92,12 +79,10 @@ baml_db = { path = "crates/baml_db" }
 baml_fmt = { path = "crates/baml_fmt" }
 baml_lsp2_actions = { path = "crates/baml_lsp2_actions" }
 baml_lsp_server = { path = "crates/baml_lsp_server", default-features = false }
-baml_lsp_types = { path = "crates/baml_lsp_types" }
 baml_project = { path = "crates/baml_project" }
 baml_release = { path = "crates/baml_release" }
 baml_tests = { path = "crates/baml_tests" }
 baml_version = { path = "crates/baml_version" }
-tools_onionskin = { path = "crates/tools_onionskin" }
 bex_vm = { path = "crates/bex_vm" }
 bex_vm_types = { path = "crates/bex_vm_types" }
 bex_external_types = { path = "crates/bex_external_types" }
@@ -105,12 +90,8 @@ bex_heap = { path = "crates/bex_heap" }
 bex_sap = { path = "crates/bex_sap" }
 bridge_ctypes = { path = "crates/bridge_ctypes", default-features = false }
 bridge_cffi = { path = "crates/bridge_cffi", default-features = false }
-bridge_python = { path = "sdks/python/rust/bridge_python" }
-bridge_wasm = { path = "crates/bridge_wasm" }
 baml_exec = { path = "crates/baml_exec" }
-baml_pack_host = { path = "crates/baml_pack_host" }
 bex_events = { path = "crates/bex_events" }
-bex_events_native = { path = "crates/bex_events_native" }
 bex_resource_types = { path = "crates/bex_resource_types" }
 darwin-kperf = "0.1.0"
 darwin-kperf-events = "0.1.0"
@@ -154,12 +135,13 @@ axum = { version = "0.8.4", default-features = false, features = [ "http1", "mat
 borsh = { version = "1.5", features = [ "derive", "indexmap" ] }
 bytes = "1"
 cargo_metadata = { version = "0.23.1" }
-cbindgen = "0.28.0"
 clap = { version = "4.4.6", features = [ "cargo", "derive" ] }
-clap-cargo = "0.14.1"
 console = "0.16"
 console_error_panic_hook = "0.1"
 crossbeam-channel = { version = "0.5" }
+# `CachePadded` for the profiling ring's cache-line-aligned field groups
+# (bex_events::prof, plan D3).
+crossbeam-utils = { version = "0.8" }
 crossterm = "0.28"
 ctrlc = "3.4"
 derive_more = { version = "2.1.1", features = [ "from" ] }
@@ -167,10 +149,12 @@ divan = { package = "codspeed-divan-compat", version = "*" }
 eframe = "0.33.3"
 flate2 = { version = "1" }
 futures = { version = "0.3.30", features = [ "executor" ] }
-futures-timer = { version = "3.0.3", features = [ "wasm-bindgen" ] }
 graphviz-rust = { version = "0.9" }
 hex = "0.4"
 hmac = "0.12"
+http-body-util = "0.1"
+hyper = { version = "1", features = [ "server", "http1", "http2" ] }
+hyper-util = { version = "0.1", features = [ "server", "server-auto", "tokio" ] }
 indexmap = { version = "2.13", features = [ "serde" ] }
 indicatif = "0.18"
 infer = "0.16.0"
@@ -181,9 +165,17 @@ libc = "0.2.169"
 libsui = { version = "0.14" }
 log = "0.4.20"
 logos = { version = "0.15" }
+# Concurrency model checker for the profiling ring (bex_events::prof). Only a
+# dependency when building with `RUSTFLAGS="--cfg baml_loom"` (see the
+# `[target.'cfg(baml_loom)'.dependencies]` section of bex_events).
+loom = { version = "0.7" }
 lsp-server = "0.7.6"
 lsp-types = "0.95.0"
 notify = "7.0"
+# Pinned to the exact version libsui depends on so `baml pack`'s ELF note
+# writer (crates/baml_cli/src/pack_elf.rs) and libsui's reader share one
+# `object` build. See pack_elf.rs for why we don't use `libsui::Elf::append`.
+object = { version = "=0.36.3", default-features = false, features = [ "build", "read_core", "elf", "std" ] }
 once_cell = "1.19"
 ouroboros = "0.18.5"
 parking_lot = { version = "0.12" }
@@ -205,6 +197,7 @@ reqwest = { version = "0.13.1", default-features = false, features = [
 ] }
 rowan = { version = "0.16" }
 rustls = { version = "0.23.37", default-features = false }
+rustls-pemfile = "2"
 rustc-hash = { version = "2.1" }
 salsa = { version = "0.26", default-features = false, features = [
   "compact_str",
@@ -215,12 +208,15 @@ salsa = { version = "0.26", default-features = false, features = [
 serde = { version = "1.0.197", features = [ "derive" ] }
 serde-wasm-bindgen = "0.6"
 serde_json = { version = "1.0.113", features = [ "arbitrary_precision", "preserve_order" ] }
-serde_yaml = "0.9"
+# The maintained fork of the archived serde_yaml, published by the YAML org;
+# package-renamed so `use serde_yaml::` imports stay unchanged.
+serde_yaml = { package = "yaml_serde", version = "0.10" }
 sha1 = "0.10"
 similar = { version = "2.4.0", features = [ "inline" ] }
 smallvec = { version = "1.15", features = [ "const_generics" ] }
 smol_str = { version = "0.3", features = [ "serde", "borsh" ] }
 strsim = { version = "0.11.1" }
+subenum = { version = "1.2.0" }
 syn = { version = "2", features = [ "full" ] }
 tar = "0.4"
 zip = { version = "2", default-features = false, features = [ "deflate" ] }
@@ -232,11 +228,11 @@ thiserror = { version = "2.0.0" }
 toml = { version = "0.8" }
 toml_edit = { version = "0.22" }
 tokio = { version = "1.36" }
+tokio-rustls = { version = "0.26", default-features = false, features = [ "logging", "tls12" ] }
 tokio-tungstenite = { version = "0.29.0" }
 tokio-util = { version = "0.7" }
 tower-http = { version = "0.6.6", features = [ "fs" ] }
 tracing = { version = "0.1.40" }
-tracing-log = "0.2.0"
 tracing-subscriber = { version = "0.3.18", default-features = false, features = [
   "env-filter",
   "fmt",
@@ -276,6 +272,8 @@ unreachable_pub = "warn"
 unexpected_cfgs = { level = "warn", check-cfg = [
   "cfg(fuzzing)",
   "cfg(codspeed)",
+  # Loom model-checked builds of bex_events::prof (RUSTFLAGS="--cfg baml_loom").
+  "cfg(baml_loom)",
 ] }
 
 [workspace.lints.clippy]

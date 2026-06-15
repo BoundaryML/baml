@@ -8,7 +8,7 @@ function MayFailIntOrString(x: int) -> string {
     }
 }
 
-// catch_all with only string arm — int is unhandled → E0094
+// catch_all with only string arm — int is unhandled → E0062
 function PartialCatchAll(x: int) -> string {
   MayFailIntOrString(x) catch_all (e) {
     string => "caught string"
@@ -17,4 +17,14 @@ function PartialCatchAll(x: int) -> string {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// error: non-exhaustive catch_all on type int | string; missing: int
+//     ╭─[ catch_catch_all_exhaustive.baml:13:1 ]
+//     │
+//  13 │ ╭─▶   MayFailIntOrString(x) catch_all (e) {
+//     ┆ ┆
+//  15 │ ├─▶   }
+//     │ │
+//     │ ╰───────── non-exhaustive catch_all on type int | string; missing: int
+//     │
+//     │     Note: Error code: E0062
+// ────╯

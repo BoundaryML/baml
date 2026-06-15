@@ -62,6 +62,34 @@ function serializeValue(val: unknown): InboundValue {
     if (isBamlSerializable(val)) {
       return val.toBaml();
     }
+    // Honour a `$baml: { type: 'ClassName' }` (or `'Namespace::ClassName'`)
+    // marker so JSON shaped like `decodeCallResult` output round-trips back as
+    // a `classValue`. Without this, every plain object would serialize as a
+    // map, making typed function calls (e.g. `(inv: Invoice)`) fail with
+    // "expected instance, got map" inside the runtime.
+    const bamlMarker = (val as Record<string, unknown>)['$baml'];
+    if (
+      bamlMarker &&
+      typeof bamlMarker === 'object' &&
+      typeof (bamlMarker as Record<string, unknown>).type === 'string'
+    ) {
+      const typeStr = (bamlMarker as { type: string }).type;
+      const sepIdx = typeStr.lastIndexOf('::');
+      const className =
+        sepIdx >= 0 ? typeStr.slice(sepIdx + 2) : typeStr;
+      const fields: InboundMapEntry[] = Object.entries(val)
+        .filter(([k]) => k !== '$baml')
+        .map(([k, v]) => ({
+          key: { $case: 'stringKey' as const, stringKey: k },
+          value: serializeValue(v),
+        }));
+      return {
+        value: {
+          $case: 'classValue',
+          classValue: { name: className, fields },
+        },
+      };
+    }
     // Plain object → map with string keys
     const entries: InboundMapEntry[] = Object.entries(val).map(
       ([k, v]) => ({
@@ -80,6 +108,7 @@ function serializeValue(val: unknown): InboundValue {
 
 export function encodeCallArgs(
   kwargs: Record<string, unknown>,
+  callId: number,
 ): Uint8Array {
   const entries: InboundMapEntry[] = Object.entries(kwargs).map(
     ([k, v]) => ({
@@ -90,6 +119,7 @@ export function encodeCallArgs(
 
   const args: CallFunctionArgsType = {
     kwargs: entries,
+    callId,
   };
 
   return CallFunctionArgs.encode(args).finish();

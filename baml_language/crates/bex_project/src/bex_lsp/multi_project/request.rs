@@ -194,13 +194,29 @@ impl BexLspRequest for BexMulitProject {
                             super::commands::OpenBamlPanel {
                                 project_path: Some(root_path.as_str().to_string()),
                                 function_name: Some(action.name),
+                                test_name: None,
+                                testset_name: None,
+                                title: None,
                             }
                             .to_lsp_command()
                         }
                         baml_lsp2_actions::FileActionKind::RunTest => {
                             super::commands::OpenBamlPanel {
                                 project_path: Some(root_path.as_str().to_string()),
-                                function_name: Some(action.name),
+                                function_name: None,
+                                test_name: Some(action.name),
+                                testset_name: None,
+                                title: Some("▶ Run test".to_string()),
+                            }
+                            .to_lsp_command()
+                        }
+                        baml_lsp2_actions::FileActionKind::RunTestSet => {
+                            super::commands::OpenBamlPanel {
+                                project_path: Some(root_path.as_str().to_string()),
+                                function_name: None,
+                                test_name: None,
+                                testset_name: Some(action.name),
+                                title: Some("▶ Run testset".to_string()),
                             }
                             .to_lsp_command()
                         }
@@ -387,6 +403,9 @@ impl BexLspRequest for BexMulitProject {
                             super::commands::OpenBamlPanel {
                                 project_path: Some(root_path.as_str().to_string()),
                                 function_name,
+                                test_name: None,
+                                testset_name: None,
+                                title: None,
                             }
                             .to_lsp_code_action()
                         }
@@ -420,6 +439,9 @@ impl BexLspRequest for BexMulitProject {
                 let commands::OpenBamlPanel {
                     project_path,
                     function_name,
+                    test_name,
+                    testset_name,
+                    ..
                 } = serde_json::from_value(args).map_err(|e| {
                     LspError::InvalidCommandArguments {
                         command: params.command.clone(),
@@ -451,6 +473,8 @@ impl BexLspRequest for BexMulitProject {
                     crate::bex_lsp::PlaygroundNotification::OpenPlayground {
                         project: project_path.as_str().to_string(),
                         function_name,
+                        test_name,
+                        testset_name,
                     },
                 );
 

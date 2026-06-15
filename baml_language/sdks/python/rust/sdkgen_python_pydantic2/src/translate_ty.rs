@@ -194,6 +194,7 @@ fn render_name_ref(name: &Name, ctx: &TranslateCtx) -> String {
 #[cfg(test)]
 mod tests {
     use baml_base::Name as BaseName;
+    use pretty_assertions::assert_eq;
 
     use super::*;
 

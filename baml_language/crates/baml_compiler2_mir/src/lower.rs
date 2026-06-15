@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use baml_base::{Name, TypePath};
-use baml_type::{MediaKind, Ty, TyAttr, TyTemplate, TypeName};
+use baml_type::{ResolvedAliases, RuntimeTy, TyAttr, TyTemplate, TypeName};
 use indexmap::IndexMap;
 
 use crate::{
@@ -49,65 +49,33 @@ struct CatchContext {
     error_local: Local,
 }
 
-// ─── Type conversion: TIR Ty → baml_type::Ty ────────────────────────────────
+// ─── Type conversion: TIR RuntimeTy → baml_type::RuntimeTy ────────────────────────────────
 
-use baml_compiler2_tir::ty::{FunctionParamMode, PrimitiveType, QualifiedTypeName, Ty as Tir2Ty};
+use baml_compiler2_tir::ty::{
+    FunctionParamMode, FunctionParamTy as Tir2FunctionParamTy, QualifiedTypeName, Ty as Tir2Ty,
+};
 
-pub fn qtn_to_type_name(qtn: &QualifiedTypeName) -> TypeName {
-    let module_path = std::iter::once(qtn.package().clone())
-        .chain(qtn.namespace().iter().cloned())
-        .collect::<Vec<_>>();
-    // For user-defined types (the local package), display with only the local
-    // namespace path so snapshots show `Point` rather than `user.Point`.
-    // For builtin types (package = "baml", etc.), keep the full FQ path.
-    let display_name = if qtn.is_local() {
-        let parts: Vec<_> = qtn
-            .namespace()
-            .iter()
-            .map(std::string::ToString::to_string)
-            .chain(std::iter::once(qtn.name().to_string()))
-            .collect();
-        smol_str::SmolStr::new(parts.join("."))
-    } else {
-        smol_str::SmolStr::new(qtn.to_string())
-    };
-    TypeName {
-        name: qtn.name().clone(),
-        module_path,
-        display_name,
+/// Build the [`ResolvedAliases`] type-alias environment for a package,
+/// including dependency packages. The pure erasure that consumes it lives in
+/// `baml_type` ([`ResolvedAliases::convert`]), wrapped compiler-side by
+/// `convert_tir_ty_for_runtime`; only this db-querying constructor stays
+/// compiler-side.
+pub fn resolved_aliases_for_package(
+    db: &dyn crate::Db,
+    pkg_id: baml_compiler2_hir::package::PackageId,
+) -> ResolvedAliases {
+    use baml_compiler2_hir::package::{package_dependencies, package_items};
+
+    let pkg_items = package_items(db, pkg_id);
+    let mut aliases = baml_compiler2_tir::inference::collect_type_aliases(db, pkg_items);
+    for &dep_id in package_dependencies(db, pkg_id) {
+        let dep_items = package_items(db, dep_id);
+        aliases.extend(baml_compiler2_tir::inference::collect_type_aliases(
+            db, dep_items,
+        ));
     }
-}
-
-/// Pre-computed type alias data for inline expansion in `convert_tir2_ty`.
-///
-/// Bundles the alias map and recursion info that are always passed together.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct ResolvedAliases {
-    pub aliases: HashMap<QualifiedTypeName, Tir2Ty>,
-    pub recursive: HashSet<QualifiedTypeName>,
-}
-
-impl ResolvedAliases {
-    /// Build resolved aliases for a package, including dependency packages.
-    pub fn for_package(db: &dyn crate::Db, pkg_id: baml_compiler2_hir::package::PackageId) -> Self {
-        use baml_compiler2_hir::package::{package_dependencies, package_items};
-
-        let pkg_items = package_items(db, pkg_id);
-        let mut aliases = baml_compiler2_tir::inference::collect_type_aliases(db, pkg_items);
-        for &dep_id in package_dependencies(db, pkg_id) {
-            let dep_items = package_items(db, dep_id);
-            aliases.extend(baml_compiler2_tir::inference::collect_type_aliases(
-                db, dep_items,
-            ));
-        }
-        let recursive = baml_compiler2_tir::normalize::find_recursive_aliases(&aliases);
-        Self { aliases, recursive }
-    }
-
-    /// Convert a TIR type to `baml_type::Ty` using the cached alias data.
-    pub fn convert(&self, ty: &Tir2Ty) -> Ty {
-        convert_tir2_ty(ty, self)
-    }
+    let recursive = baml_compiler2_tir::normalize::find_recursive_aliases(&aliases);
+    ResolvedAliases { aliases, recursive }
 }
 
 fn interface_tir_type_args_match_preserving_typevars(
@@ -130,6 +98,267 @@ fn interface_tir_type_args_match_preserving_typevars(
                         impl_arg, iface_arg, aliases,
                     )
             })
+}
+
+fn tir_type_satisfies_dispatch_request(
+    actual: &Tir2Ty,
+    requested: &Tir2Ty,
+    aliases: &HashMap<QualifiedTypeName, Tir2Ty>,
+) -> bool {
+    if baml_compiler2_tir::normalize::is_same_normalized_type(actual, requested, aliases) {
+        return true;
+    }
+
+    match (actual, requested) {
+        (_, Tir2Ty::TypeVar(_, _) | Tir2Ty::AssociatedTypeProjection { .. }) => true,
+        (Tir2Ty::List(actual, _), Tir2Ty::List(requested, _))
+        | (Tir2Ty::EvolvingList(actual, _), Tir2Ty::EvolvingList(requested, _)) => {
+            tir_type_satisfies_dispatch_request(actual, requested, aliases)
+        }
+        (
+            Tir2Ty::Map {
+                key: actual_key,
+                value: actual_value,
+                ..
+            },
+            Tir2Ty::Map {
+                key: requested_key,
+                value: requested_value,
+                ..
+            },
+        )
+        | (
+            Tir2Ty::EvolvingMap(actual_key, actual_value, _),
+            Tir2Ty::EvolvingMap(requested_key, requested_value, _),
+        ) => {
+            tir_type_satisfies_dispatch_request(actual_key, requested_key, aliases)
+                && tir_type_satisfies_dispatch_request(actual_value, requested_value, aliases)
+        }
+        (
+            Tir2Ty::Future(actual_value, actual_error, _),
+            Tir2Ty::Future(requested_value, requested_error, _),
+        ) => {
+            tir_type_satisfies_dispatch_request(actual_value, requested_value, aliases)
+                && tir_type_satisfies_dispatch_request(actual_error, requested_error, aliases)
+        }
+        (Tir2Ty::Union(actual, _), Tir2Ty::Union(requested, _))
+            if actual.len() == requested.len() =>
+        {
+            actual
+                .iter()
+                .zip(requested.iter())
+                .all(|(actual, requested)| {
+                    tir_type_satisfies_dispatch_request(actual, requested, aliases)
+                })
+        }
+        (
+            Tir2Ty::Class(actual_qtn, actual_args, _),
+            Tir2Ty::Class(requested_qtn, requested_args, _),
+        ) if actual_qtn == requested_qtn && actual_args.len() == requested_args.len() => {
+            actual_args
+                .iter()
+                .zip(requested_args.iter())
+                .all(|(actual, requested)| {
+                    tir_type_satisfies_dispatch_request(actual, requested, aliases)
+                })
+        }
+        (
+            Tir2Ty::Interface(actual_qtn, actual_args, actual_assoc, _),
+            Tir2Ty::Interface(requested_qtn, requested_args, requested_assoc, _),
+        ) if actual_qtn == requested_qtn && actual_args.len() == requested_args.len() => {
+            actual_args
+                .iter()
+                .zip(requested_args.iter())
+                .all(|(actual, requested)| {
+                    tir_type_satisfies_dispatch_request(actual, requested, aliases)
+                })
+                && requested_assoc
+                    .iter()
+                    .all(|(requested_name, requested_ty)| {
+                        actual_assoc
+                            .iter()
+                            .find(|(actual_name, _)| actual_name == requested_name)
+                            .is_some_and(|(_, actual_ty)| {
+                                tir_type_satisfies_dispatch_request(
+                                    actual_ty,
+                                    requested_ty,
+                                    aliases,
+                                )
+                            })
+                    })
+        }
+        (
+            Tir2Ty::Function {
+                params: actual_params,
+                ret: actual_ret,
+                throws: actual_throws,
+                ..
+            },
+            Tir2Ty::Function {
+                params: requested_params,
+                ret: requested_ret,
+                throws: requested_throws,
+                ..
+            },
+        ) if actual_params.len() == requested_params.len()
+            && actual_params
+                .iter()
+                .zip(requested_params.iter())
+                .all(|(actual, requested)| actual.mode == requested.mode) =>
+        {
+            actual_params
+                .iter()
+                .zip(requested_params.iter())
+                .all(|(actual, requested)| {
+                    tir_type_satisfies_dispatch_request(&actual.ty, &requested.ty, aliases)
+                })
+                && tir_type_satisfies_dispatch_request(actual_ret, requested_ret, aliases)
+                && tir_type_satisfies_dispatch_request(actual_throws, requested_throws, aliases)
+        }
+        _ => false,
+    }
+}
+
+fn rewrite_dispatch_request_ty(actual: &Tir2Ty, requested: &Tir2Ty) -> Tir2Ty {
+    match (actual, requested) {
+        (_, Tir2Ty::TypeVar(_, _) | Tir2Ty::AssociatedTypeProjection { .. }) => actual.clone(),
+        (Tir2Ty::List(actual, _), Tir2Ty::List(requested, attr)) => Tir2Ty::List(
+            Box::new(rewrite_dispatch_request_ty(actual, requested)),
+            attr.clone(),
+        ),
+        (Tir2Ty::EvolvingList(actual, _), Tir2Ty::EvolvingList(requested, attr)) => {
+            Tir2Ty::EvolvingList(
+                Box::new(rewrite_dispatch_request_ty(actual, requested)),
+                attr.clone(),
+            )
+        }
+        (
+            Tir2Ty::Map {
+                key: actual_key,
+                value: actual_value,
+                ..
+            },
+            Tir2Ty::Map {
+                key: requested_key,
+                value: requested_value,
+                attr,
+            },
+        ) => Tir2Ty::Map {
+            key: Box::new(rewrite_dispatch_request_ty(actual_key, requested_key)),
+            value: Box::new(rewrite_dispatch_request_ty(actual_value, requested_value)),
+            attr: attr.clone(),
+        },
+        (
+            Tir2Ty::EvolvingMap(actual_key, actual_value, _),
+            Tir2Ty::EvolvingMap(requested_key, requested_value, attr),
+        ) => Tir2Ty::EvolvingMap(
+            Box::new(rewrite_dispatch_request_ty(actual_key, requested_key)),
+            Box::new(rewrite_dispatch_request_ty(actual_value, requested_value)),
+            attr.clone(),
+        ),
+        (
+            Tir2Ty::Future(actual_value, actual_error, _),
+            Tir2Ty::Future(requested_value, requested_error, attr),
+        ) => Tir2Ty::Future(
+            Box::new(rewrite_dispatch_request_ty(actual_value, requested_value)),
+            Box::new(rewrite_dispatch_request_ty(actual_error, requested_error)),
+            attr.clone(),
+        ),
+        (Tir2Ty::Union(actual, _), Tir2Ty::Union(requested, attr))
+            if actual.len() == requested.len() =>
+        {
+            Tir2Ty::Union(
+                actual
+                    .iter()
+                    .zip(requested.iter())
+                    .map(|(actual, requested)| rewrite_dispatch_request_ty(actual, requested))
+                    .collect(),
+                attr.clone(),
+            )
+        }
+        (
+            Tir2Ty::Class(actual_qtn, actual_args, _),
+            Tir2Ty::Class(requested_qtn, requested_args, attr),
+        ) if actual_qtn == requested_qtn && actual_args.len() == requested_args.len() => {
+            Tir2Ty::Class(
+                requested_qtn.clone(),
+                actual_args
+                    .iter()
+                    .zip(requested_args.iter())
+                    .map(|(actual, requested)| rewrite_dispatch_request_ty(actual, requested))
+                    .collect(),
+                attr.clone(),
+            )
+        }
+        (
+            Tir2Ty::Interface(actual_qtn, actual_args, actual_assoc, _),
+            Tir2Ty::Interface(requested_qtn, requested_args, requested_assoc, attr),
+        ) if actual_qtn == requested_qtn && actual_args.len() == requested_args.len() => {
+            Tir2Ty::Interface(
+                requested_qtn.clone(),
+                actual_args
+                    .iter()
+                    .zip(requested_args.iter())
+                    .map(|(actual, requested)| rewrite_dispatch_request_ty(actual, requested))
+                    .collect(),
+                requested_assoc
+                    .iter()
+                    .map(|(requested_name, requested_ty)| {
+                        let rewritten = actual_assoc
+                            .iter()
+                            .find(|(actual_name, _)| actual_name == requested_name)
+                            .map_or_else(
+                                || requested_ty.clone(),
+                                |(_, actual_ty)| {
+                                    rewrite_dispatch_request_ty(actual_ty, requested_ty)
+                                },
+                            );
+                        (requested_name.clone(), rewritten)
+                    })
+                    .collect(),
+                attr.clone(),
+            )
+        }
+        (
+            Tir2Ty::Function {
+                params: actual_params,
+                ret: actual_ret,
+                throws: actual_throws,
+                ..
+            },
+            Tir2Ty::Function {
+                generic_params,
+                generic_param_bounds,
+                params: requested_params,
+                ret: requested_ret,
+                throws: requested_throws,
+                attr,
+            },
+        ) if actual_params.len() == requested_params.len()
+            && actual_params
+                .iter()
+                .zip(requested_params.iter())
+                .all(|(actual, requested)| actual.mode == requested.mode) =>
+        {
+            Tir2Ty::Function {
+                generic_params: generic_params.clone(),
+                generic_param_bounds: generic_param_bounds.clone(),
+                params: actual_params
+                    .iter()
+                    .zip(requested_params.iter())
+                    .map(|(actual, requested)| Tir2FunctionParamTy {
+                        name: requested.name.clone(),
+                        ty: rewrite_dispatch_request_ty(&actual.ty, &requested.ty),
+                        mode: requested.mode,
+                    })
+                    .collect(),
+                ret: Box::new(rewrite_dispatch_request_ty(actual_ret, requested_ret)),
+                throws: Box::new(rewrite_dispatch_request_ty(actual_throws, requested_throws)),
+                attr: attr.clone(),
+            }
+        }
+        _ => requested.clone(),
+    }
 }
 
 fn bind_interface_class_type_arg(
@@ -155,25 +384,63 @@ fn infer_interface_class_bindings(
     class_params: &[Name],
     aliases: &HashMap<QualifiedTypeName, Tir2Ty>,
     bindings: &mut FxHashMap<Name, Tir2Ty>,
+    // Associated-type bindings tolerate an unpinnable typevar union
+    // (`Error = E | E2` vs a normalized request) by leaving the params
+    // unpinned; positional interface args must keep strict pairwise
+    // decomposition, where pinning is what discriminates between blocks.
+    assoc_union_wildcard: bool,
 ) -> bool {
     match (formal, actual) {
-        (Tir2Ty::TypeVar(name, _), _) if class_params.contains(name) => {
+        // A dispatch request like `Iterator<Item = Self.Item, Error = Self.Error>`
+        // inside an interface default method is receiver-relative evidence, not
+        // a concrete type to compare against every implementor. The runtime
+        // class guard chooses the implementor; concrete associated bindings
+        // such as `Error = never` are valid for that implementor.
+        (_, Tir2Ty::AssociatedTypeProjection { .. }) => true,
+        // The requested arg is an open type-var from the dispatch site, not
+        // necessarily the candidate class's parameter even if it has the same
+        // spelling (`T`, `E`, ...). If the formal side was not a bindable
+        // candidate parameter, treat it as a wildcard; this lets
+        // `Iterator<R, E | E2>` satisfy an open `Iterator<T, E>` request.
+        (Tir2Ty::TypeVar(name, _), Tir2Ty::TypeVar(_, _)) if !class_params.contains(name) => true,
+        (Tir2Ty::TypeVar(name, _), _) => {
             bind_interface_class_type_arg(name, actual, bindings, aliases)
         }
-        // The *requested* arg is an opaque type-var (an enclosing generic
-        // function's param, not a class param): it can't constrain a class
-        // type-arg, so it matches without binding — leaving that class position
-        // a wildcard for the runtime guard.
-        (_, Tir2Ty::TypeVar(name, _)) if !class_params.contains(name) => true,
+        (_, Tir2Ty::TypeVar(_, _)) => true,
         (Tir2Ty::List(f, _), Tir2Ty::List(a, _))
         | (Tir2Ty::EvolvingList(f, _), Tir2Ty::EvolvingList(a, _))
-        | (Tir2Ty::Future(f, _, _), Tir2Ty::Future(a, _, _)) => {
-            infer_interface_class_bindings(f, a, class_params, aliases, bindings)
-        }
-        (Tir2Ty::Map(fk, fv, _), Tir2Ty::Map(ak, av, _))
+        | (Tir2Ty::Future(f, _, _), Tir2Ty::Future(a, _, _)) => infer_interface_class_bindings(
+            f,
+            a,
+            class_params,
+            aliases,
+            bindings,
+            assoc_union_wildcard,
+        ),
+        (
+            Tir2Ty::Map {
+                key: fk, value: fv, ..
+            },
+            Tir2Ty::Map {
+                key: ak, value: av, ..
+            },
+        )
         | (Tir2Ty::EvolvingMap(fk, fv, _), Tir2Ty::EvolvingMap(ak, av, _)) => {
-            infer_interface_class_bindings(fk, ak, class_params, aliases, bindings)
-                && infer_interface_class_bindings(fv, av, class_params, aliases, bindings)
+            infer_interface_class_bindings(
+                fk,
+                ak,
+                class_params,
+                aliases,
+                bindings,
+                assoc_union_wildcard,
+            ) && infer_interface_class_bindings(
+                fv,
+                av,
+                class_params,
+                aliases,
+                bindings,
+                assoc_union_wildcard,
+            )
         }
         (
             Tir2Ty::Function {
@@ -198,47 +465,143 @@ fn infer_interface_class_bindings(
                             class_params,
                             aliases,
                             bindings,
+                            assoc_union_wildcard,
                         )
                 })
-                && infer_interface_class_bindings(fr, ar, class_params, aliases, bindings)
-                && infer_interface_class_bindings(fth, ath, class_params, aliases, bindings)
+                && infer_interface_class_bindings(
+                    fr,
+                    ar,
+                    class_params,
+                    aliases,
+                    bindings,
+                    assoc_union_wildcard,
+                )
+                && infer_interface_class_bindings(
+                    fth,
+                    ath,
+                    class_params,
+                    aliases,
+                    bindings,
+                    assoc_union_wildcard,
+                )
         }
         (Tir2Ty::Class(fqtn, fargs, _), Tir2Ty::Class(aqtn, aargs, _))
             if fqtn == aqtn && fargs.len() == aargs.len() =>
         {
-            fargs
-                .iter()
-                .zip(aargs.iter())
-                .all(|(f, a)| infer_interface_class_bindings(f, a, class_params, aliases, bindings))
+            fargs.iter().zip(aargs.iter()).all(|(f, a)| {
+                infer_interface_class_bindings(
+                    f,
+                    a,
+                    class_params,
+                    aliases,
+                    bindings,
+                    assoc_union_wildcard,
+                )
+            })
         }
         (
             Tir2Ty::Interface(fqtn, fargs, f_assoc, _),
             Tir2Ty::Interface(aqtn, aargs, a_assoc, _),
         ) if fqtn == aqtn && fargs.len() == aargs.len() => {
-            fargs
-                .iter()
-                .zip(aargs.iter())
-                .all(|(f, a)| infer_interface_class_bindings(f, a, class_params, aliases, bindings))
-                && a_assoc.iter().all(|(name, actual_ty)| {
-                    f_assoc
-                        .iter()
-                        .find(|(formal_name, _)| formal_name == name)
-                        .is_some_and(|(_, formal_ty)| {
-                            infer_interface_class_bindings(
-                                formal_ty,
-                                actual_ty,
-                                class_params,
-                                aliases,
-                                bindings,
-                            )
+            fargs.iter().zip(aargs.iter()).all(|(f, a)| {
+                infer_interface_class_bindings(
+                    f,
+                    a,
+                    class_params,
+                    aliases,
+                    bindings,
+                    assoc_union_wildcard,
+                )
+            }) && a_assoc.iter().all(|(name, actual_ty)| {
+                f_assoc
+                    .iter()
+                    .find(|(formal_name, _)| formal_name == name)
+                    .is_some_and(|(_, formal_ty)| {
+                        infer_interface_class_bindings(
+                            formal_ty,
+                            actual_ty,
+                            class_params,
+                            aliases,
+                            bindings,
+                            assoc_union_wildcard,
+                        )
+                    })
+            })
+        }
+        (Tir2Ty::Union(fparts, _), actual @ Tir2Ty::Never { .. }) => fparts.iter().all(|f| {
+            infer_interface_class_bindings(
+                f,
+                actual,
+                class_params,
+                aliases,
+                bindings,
+                assoc_union_wildcard,
+            )
+        }),
+        (Tir2Ty::Union(fparts, _), Tir2Ty::Union(aparts, _)) => {
+            let is_class_param =
+                |ty: &Tir2Ty| matches!(ty, Tir2Ty::TypeVar(name, _) if class_params.contains(name));
+            // For ASSOCIATED-type bindings, pairwise decomposition is only
+            // trustworthy when it cannot mis-pin: with two or more class-param
+            // members (`E | E2`), the assignment of requested members to
+            // params is not unique — the requested union is already normalized
+            // (deduped, `never` dropped), so e.g. `E | E2` vs `A | B` may
+            // really be `E = A | B, E2 = never` at runtime. POSITIONAL args
+            // keep the strict pairwise zip: their pinning is what
+            // discriminates between same-class implements blocks, and the
+            // guard post-check re-validates them.
+            if fparts.len() == aparts.len()
+                && (!assoc_union_wildcard
+                    || fparts.iter().filter(|f| is_class_param(f)).count() <= 1)
+            {
+                let mut trial = bindings.clone();
+                if fparts.iter().zip(aparts.iter()).all(|(f, a)| {
+                    infer_interface_class_bindings(
+                        f,
+                        a,
+                        class_params,
+                        aliases,
+                        &mut trial,
+                        assoc_union_wildcard,
+                    )
+                }) {
+                    *bindings = trial;
+                    return true;
+                }
+            }
+            // Wildcard fallback (assoc bindings only): leave class-param
+            // members unpinned — the guard keeps `None` for them and the
+            // callee frame seeds from the matched runtime instance's
+            // `class_type_args` (its TRUE args, not the guard's) — while
+            // every concrete formal member must still be present in the
+            // request.
+            //
+            // Unpinned assoc bindings are safe because dispatch never relies
+            // on them for correctness:
+            // 1. every arm first checks the receiver's concrete class
+            //    identity (`InterfaceDispatchGuard::Class { impl_tn, .. }`),
+            //    so an unpinned binding can never capture another class's
+            //    instance;
+            // 2. two arms for the SAME class can only coexist when their
+            //    positional interface args differ — blocks differing only in
+            //    assoc bindings are rejected at HIR (E0114; pinned by
+            //    `duplicate_implements_differing_only_in_assoc_bindings_is_compile_error`)
+            //    — and positional args keep strict pairwise pinning above
+            //    precisely so they stay discriminating;
+            // 3. a receiver whose runtime bindings don't satisfy the request
+            //    cannot reach the switch in a well-typed program (the
+            //    receiver's static type IS the requested view); guards
+            //    discriminate among candidates, they are not a soundness
+            //    barrier — a request that omits type args entirely already
+            //    produces `InterfaceClassGuard::Any`.
+            assoc_union_wildcard
+                && fparts.iter().any(&is_class_param)
+                && fparts.iter().all(|f| {
+                    is_class_param(f)
+                        || aparts.iter().any(|a| {
+                            baml_compiler2_tir::normalize::is_same_normalized_type(f, a, aliases)
                         })
                 })
-        }
-        (Tir2Ty::Union(fparts, _), Tir2Ty::Union(aparts, _)) if fparts.len() == aparts.len() => {
-            fparts
-                .iter()
-                .zip(aparts.iter())
-                .all(|(f, a)| infer_interface_class_bindings(f, a, class_params, aliases, bindings))
         }
         _ => baml_compiler2_tir::normalize::is_same_normalized_type(formal, actual, aliases),
     }
@@ -272,6 +635,7 @@ fn interface_class_guard_for_args(
                 class_params,
                 aliases,
                 &mut bindings,
+                false,
             ) {
                 return None;
             }
@@ -287,6 +651,7 @@ fn interface_class_guard_for_args(
             class_params,
             aliases,
             &mut bindings,
+            true,
         ) {
             return None;
         }
@@ -317,10 +682,16 @@ fn interface_class_guard_for_args(
         let (_, impl_ty) = substituted_assoc
             .iter()
             .find(|(impl_name, _)| impl_name == requested_name)?;
-        if matches!(requested_ty, Tir2Ty::TypeVar(name, _) if !class_params.contains(name)) {
+        // A substituted binding still containing class params is a deliberate
+        // wildcard (unpinnable typevar union): the runtime class guard plus
+        // instance-seeded frame args carry the discrimination instead. This
+        // skip is only reachable after `infer_interface_class_bindings` has
+        // structurally vetted the same (formal, requested) pairs above — it
+        // never admits a pair that binding inference rejected.
+        if baml_compiler2_tir::generics::contains_typevar(impl_ty) {
             continue;
         }
-        if !baml_compiler2_tir::normalize::is_same_normalized_type(impl_ty, requested_ty, aliases) {
+        if !tir_type_satisfies_dispatch_request(impl_ty, requested_ty, aliases) {
             return None;
         }
     }
@@ -355,7 +726,12 @@ fn interface_class_guard_for_args(
 /// non-generic implementor needs nothing.
 fn class_owned_frame_seed(guard: &InterfaceClassGuard, impl_is_generic: bool) -> CalleeFrameSeed {
     match guard {
-        InterfaceClassGuard::Exact(args) if args.iter().all(Option::is_some) => {
+        InterfaceClassGuard::Exact(args)
+            if args.iter().all(|arg| {
+                arg.as_ref()
+                    .is_some_and(|ty| !contains_assoc_projection(ty))
+            }) =>
+        {
             CalleeFrameSeed::Static(
                 args.iter()
                     .map(|a| a.clone().expect("all entries are Some"))
@@ -367,179 +743,52 @@ fn class_owned_frame_seed(guard: &InterfaceClassGuard, impl_is_generic: bool) ->
     }
 }
 
-pub fn convert_tir2_ty(ty: &Tir2Ty, resolved: &ResolvedAliases) -> Ty {
-    let attr = ty.attr().clone();
+fn contains_assoc_projection(ty: &Tir2Ty) -> bool {
     match ty {
-        // Primitives
-        Tir2Ty::Primitive(PrimitiveType::Int, attr) => Ty::Int { attr: attr.clone() },
-        Tir2Ty::Primitive(PrimitiveType::Bigint, attr) => Ty::Bigint { attr: attr.clone() },
-        Tir2Ty::Primitive(PrimitiveType::Float, attr) => Ty::Float { attr: attr.clone() },
-        Tir2Ty::Primitive(PrimitiveType::String, attr) => Ty::String { attr: attr.clone() },
-        Tir2Ty::Primitive(PrimitiveType::Bool, attr) => Ty::Bool { attr: attr.clone() },
-        Tir2Ty::Primitive(PrimitiveType::Null, attr) => Ty::Null { attr: attr.clone() },
-        Tir2Ty::Primitive(PrimitiveType::Uint8Array, attr) => Ty::Uint8Array { attr: attr.clone() },
-        Tir2Ty::Primitive(PrimitiveType::Image, attr) => Ty::Media(MediaKind::Image, attr.clone()),
-        Tir2Ty::Primitive(PrimitiveType::Audio, attr) => Ty::Media(MediaKind::Audio, attr.clone()),
-        Tir2Ty::Primitive(PrimitiveType::Video, attr) => Ty::Media(MediaKind::Video, attr.clone()),
-        Tir2Ty::Primitive(PrimitiveType::Pdf, attr) => Ty::Media(MediaKind::Pdf, attr.clone()),
-
-        // Named types
-        Tir2Ty::Class(qtn, type_args, attr) => {
-            let resolved_args: Vec<Ty> = type_args
-                .iter()
-                .map(|a| convert_tir2_ty(a, resolved))
-                .collect();
-            Ty::Class(qtn_to_type_name(qtn), resolved_args, attr.clone())
+        Tir2Ty::AssociatedTypeProjection { .. } => true,
+        Tir2Ty::List(inner, _) | Tir2Ty::EvolvingList(inner, _) => contains_assoc_projection(inner),
+        Tir2Ty::Future(value, err, _) => {
+            contains_assoc_projection(value) || contains_assoc_projection(err)
         }
-        Tir2Ty::Interface(qtn, type_args, associated_bindings, attr) => {
-            let resolved_args: Vec<Ty> = type_args
-                .iter()
-                .map(|a| convert_tir2_ty(a, resolved))
-                .collect();
-            let resolved_bindings = associated_bindings
-                .iter()
-                .map(|(name, ty)| (name.clone(), convert_tir2_ty(ty, resolved)))
-                .collect();
-            Ty::Interface(
-                qtn_to_type_name(qtn),
-                resolved_args,
-                resolved_bindings,
-                attr.clone(),
-            )
+        Tir2Ty::Map {
+            key: k, value: v, ..
         }
-        Tir2Ty::Enum(qtn, attr) => Ty::Enum(qtn_to_type_name(qtn), attr.clone()),
-        Tir2Ty::TypeAlias(qtn, attr) => {
-            if resolved.recursive.contains(qtn) {
-                // Keep recursive aliases opaque — they need runtime resolution
-                Ty::TypeAlias(qtn_to_type_name(qtn), attr.clone())
-            } else if let Some(target) = resolved.aliases.get(qtn) {
-                // Expand non-recursive aliases inline
-                convert_tir2_ty(target, resolved)
-            } else {
-                // Unknown alias (e.g. from another package) — keep opaque
-                Ty::TypeAlias(qtn_to_type_name(qtn), attr.clone())
-            }
+        | Tir2Ty::EvolvingMap(k, v, _) => {
+            contains_assoc_projection(k) || contains_assoc_projection(v)
         }
-
-        // EnumVariant → preserve variant-level type info
-        Tir2Ty::EnumVariant(qtn, variant, attr) => {
-            Ty::EnumVariant(qtn_to_type_name(qtn), variant.clone(), attr.clone())
+        Tir2Ty::Union(parts, _) => parts.iter().any(contains_assoc_projection),
+        Tir2Ty::Class(_, args, _) => args.iter().any(contains_assoc_projection),
+        Tir2Ty::Interface(_, args, assoc, _) => {
+            args.iter().any(contains_assoc_projection)
+                || assoc.iter().any(|(_, ty)| contains_assoc_projection(ty))
         }
-
-        // Containers
-        Tir2Ty::List(inner, attr) => {
-            Ty::List(Box::new(convert_tir2_ty(inner, resolved)), attr.clone())
-        }
-        Tir2Ty::Map(k, v, attr) => Ty::Map {
-            key: Box::new(convert_tir2_ty(k, resolved)),
-            value: Box::new(convert_tir2_ty(v, resolved)),
-            attr: attr.clone(),
-        },
-        Tir2Ty::Union(members, attr) => Ty::Union(
-            members
-                .iter()
-                .map(|m| convert_tir2_ty(m, resolved))
-                .collect(),
-            attr.clone(),
-        ),
-        Tir2Ty::Literal(lit, _freshness, attr) => Ty::Literal(lit.clone(), attr.clone()),
-
-        // Evolving containers → freeze to regular containers
-        Tir2Ty::EvolvingList(inner, attr) => {
-            Ty::List(Box::new(convert_tir2_ty(inner, resolved)), attr.clone())
-        }
-        Tir2Ty::EvolvingMap(k, v, attr) => Ty::Map {
-            key: Box::new(convert_tir2_ty(k, resolved)),
-            value: Box::new(convert_tir2_ty(v, resolved)),
-            attr: attr.clone(),
-        },
-
-        // Functions — drop param names
         Tir2Ty::Function {
-            generic_params: _,
-            generic_param_bounds: _,
             params,
             ret,
             throws,
-            attr,
-        } => Ty::Function {
-            params: params
+            ..
+        } => {
+            params
                 .iter()
-                .map(|param| convert_tir2_ty(&param.ty, resolved))
-                .collect(),
-            ret: Box::new(convert_tir2_ty(ret, resolved)),
-            throws: Box::new(convert_tir2_ty(throws, resolved)),
-            attr: attr.clone(),
-        },
-
-        // Bottom / sentinel types
-        Tir2Ty::Never { attr } => Ty::Void { attr: attr.clone() },
-        Tir2Ty::Void { attr } => Ty::Void { attr: attr.clone() },
-        Tir2Ty::BuiltinUnknown { attr } => Ty::BuiltinUnknown { attr: attr.clone() },
-        Tir2Ty::RustType { attr } => {
-            // RustType is an opaque sentinel — map to Opaque with a synthetic name
-            Ty::Opaque(
-                TypeName {
-                    name: Name::new("RustType"),
-                    module_path: vec![Name::new("baml"), Name::new("rust")],
-                    display_name: Name::new("RustType"),
-                },
-                attr.clone(),
-            )
+                .any(|param| contains_assoc_projection(&param.ty))
+                || contains_assoc_projection(ret)
+                || contains_assoc_projection(throws)
         }
-        Tir2Ty::Type { attr } => {
-            // The `type` metatype maps to the same opaque representation as v1.
-            // See Ty::type_type() in baml_type/src/lib.rs.
-            Ty::Opaque(
-                TypeName {
-                    name: Name::new("Type"),
-                    module_path: vec![Name::new("baml"), Name::new("reflect")],
-                    display_name: Name::new("type"),
-                },
-                attr.clone(),
-            )
-        }
-        Tir2Ty::Unknown { attr } => Ty::Void { attr: attr.clone() }, // error recovery
-        Tir2Ty::Error { attr } => Ty::Void { attr: attr.clone() },   // error recovery
-        Tir2Ty::AssociatedTypeProjection { attr, .. } => Ty::Void { attr: attr.clone() },
-        // Demonstration-only hardcode for `baml.llm.Stream<TStream, TFinal>`'s
-        // typevars (see thoughts/sam-projects/bridge-python/21d…).
-        // The two stdlib names lower to `Ty::BuiltinUnknown` so the
-        // host-driven streaming smokes can prove the rest of the streaming
-        // wiring is intact, without yet solving general generics-through-FFI.
-        // `BuiltinUnknown` is the engine's "any value matches" sentinel at
-        // the FFI boundary (see `value_matches_type` in
-        // `bex_engine/src/conversion.rs`), so a `string` return for
-        // `Stream.next() -> TStream | StreamFinished` decodes as the
-        // `TStream` arm of the union.
-        // Every other TypeVar still falls through to the defensive Ty::Void.
-        Tir2Ty::TypeVar(name, _) if name.as_str() == "TStream" || name.as_str() == "TFinal" => {
-            Ty::BuiltinUnknown { attr }
-        }
-        // TypeVar should never reach MIR — it is erased to Unknown before VIR.
-        // Map defensively to Void as error recovery.
-        Tir2Ty::TypeVar(..) => Ty::Void { attr },
-        // BEP-034: future types pass through unchanged with both
-        // value and error type parameters mapped.
-        Tir2Ty::Future(value, error, attr) => Ty::Future(
-            Box::new(convert_tir2_ty(value, resolved)),
-            Box::new(convert_tir2_ty(error, resolved)),
-            attr.clone(),
-        ),
+        _ => false,
     }
 }
 
-// ─── Ty → TyTemplate conversion for already-resolved Ty values ──────────────
+// ─── RuntimeTy → TyTemplate conversion for already-resolved RuntimeTy values ──────────────
 
-/// Convert an already-resolved `baml_type::Ty` back to a `TyTemplate`.
+/// Convert an already-resolved `baml_type::RuntimeTy` back to a `TyTemplate`.
 ///
 /// This is needed for `IsType` pattern-matching where the pattern type comes
-/// through `convert_tir2_ty` (so `TypeVars` are already erased), but we still
+/// through `convert_tir_ty_for_runtime` (so `TypeVars` are already erased), but we still
 /// need a `TyTemplate` to carry class-level type args for the VM to compare
 /// against `Instance::class_type_args`.
 ///
-/// For all leaf types that aren't `Ty::Class`, the result is
-/// `TyTemplate::Concrete(ty)`.  For `Ty::Class(tn, args, _)` we produce
+/// For all leaf types that aren't `RuntimeTy::Class`, the result is
+/// `TyTemplate::Concrete(ty)`.  For `RuntimeTy::Class(tn, args, _)` we produce
 /// `TyTemplate::Class(tn, args.map(Concrete))` so the VM can compare the
 /// resolved args against the instance's `class_type_args`.
 ///
@@ -588,7 +837,14 @@ fn type_satisfies_bound(
             type_satisfies_bound(db, na, nb, aliases, default_pkg, depth - 1)
         })
     } else {
-        baml_compiler2_tir::normalize::is_same_normalized_type(actual, bound, aliases)
+        let resolver = baml_compiler2_tir::associated_projection::AssociatedProjectionResolver::new(
+            db,
+            aliases,
+            &(),
+        );
+        let resolved_actual = resolver.resolve_deep(actual);
+        let resolved_bound = resolver.resolve_deep(bound);
+        resolver.types_equivalent(&resolved_actual, &resolved_bound)
     }
 }
 
@@ -598,11 +854,18 @@ pub fn tir2_to_template(
     generic_params: &[baml_base::Name],
 ) -> TyTemplate {
     match ty {
+        Tir2Ty::AssociatedTypeProjection { member, .. } => generic_params
+            .iter()
+            .position(|p| p == member)
+            .map(|n| {
+                TyTemplate::TypeArgRef(u32::try_from(n).expect("generic param index fits in u32"))
+            })
+            .unwrap_or_else(|| TyTemplate::Concrete(resolved.convert(ty))),
         Tir2Ty::TypeVar(name, _) => {
             if let Some(n) = generic_params.iter().position(|p| p == name) {
                 TyTemplate::TypeArgRef(u32::try_from(n).expect("generic param index fits in u32"))
             } else {
-                TyTemplate::Concrete(Ty::Void {
+                TyTemplate::Concrete(RuntimeTy::Void {
                     attr: baml_type::TyAttr::default(),
                 })
             }
@@ -610,7 +873,9 @@ pub fn tir2_to_template(
         Tir2Ty::List(inner, _) => {
             TyTemplate::Array(Box::new(tir2_to_template(inner, resolved, generic_params)))
         }
-        Tir2Ty::Map(k, v, _) => TyTemplate::Map(
+        Tir2Ty::Map {
+            key: k, value: v, ..
+        } => TyTemplate::Map(
             Box::new(tir2_to_template(k, resolved, generic_params)),
             Box::new(tir2_to_template(v, resolved, generic_params)),
         ),
@@ -629,17 +894,11 @@ pub fn tir2_to_template(
                     .iter()
                     .map(|a| tir2_to_template(a, resolved, generic_params))
                     .collect();
-                TyTemplate::Class(qtn_to_type_name(qtn), template_args)
+                TyTemplate::Class(qtn.clone(), template_args)
             } else {
-                let resolved_args: Vec<Ty> = type_args
-                    .iter()
-                    .map(|a| convert_tir2_ty(a, resolved))
-                    .collect();
-                TyTemplate::Concrete(Ty::Class(
-                    qtn_to_type_name(qtn),
-                    resolved_args,
-                    attr.clone(),
-                ))
+                let resolved_args: Vec<RuntimeTy> =
+                    type_args.iter().map(|a| resolved.convert(a)).collect();
+                TyTemplate::Concrete(RuntimeTy::Class(qtn.clone(), resolved_args, attr.clone()))
             }
         }
         Tir2Ty::Interface(qtn, type_args, associated_bindings, attr) => {
@@ -660,18 +919,16 @@ pub fn tir2_to_template(
                         (name.clone(), tir2_to_template(ty, resolved, generic_params))
                     })
                     .collect();
-                TyTemplate::Interface(qtn_to_type_name(qtn), template_args, template_bindings)
+                TyTemplate::Interface(qtn.clone(), template_args, template_bindings)
             } else {
-                let resolved_args: Vec<Ty> = type_args
-                    .iter()
-                    .map(|a| convert_tir2_ty(a, resolved))
-                    .collect();
+                let resolved_args: Vec<RuntimeTy> =
+                    type_args.iter().map(|a| resolved.convert(a)).collect();
                 let resolved_bindings = associated_bindings
                     .iter()
-                    .map(|(name, ty)| (name.clone(), convert_tir2_ty(ty, resolved)))
+                    .map(|(name, ty)| (name.clone(), resolved.convert(ty)))
                     .collect();
-                TyTemplate::Concrete(Ty::Interface(
-                    qtn_to_type_name(qtn),
+                TyTemplate::Concrete(RuntimeTy::Interface(
+                    qtn.clone(),
                     resolved_args,
                     resolved_bindings,
                     attr.clone(),
@@ -685,13 +942,72 @@ pub fn tir2_to_template(
             Box::new(tir2_to_template(k, resolved, generic_params)),
             Box::new(tir2_to_template(v, resolved, generic_params)),
         ),
-        other => TyTemplate::Concrete(convert_tir2_ty(other, resolved)),
+        other => TyTemplate::Concrete(resolved.convert(other)),
     }
 }
 
-pub(crate) fn ty_to_template_from_resolved_ty(ty: &Ty) -> TyTemplate {
+fn tir2_to_dispatch_guard_template(
+    ty: &Tir2Ty,
+    resolved: &ResolvedAliases,
+    generic_params: &[baml_base::Name],
+) -> TyTemplate {
     match ty {
-        Ty::Class(tn, args, _) if !args.is_empty() => {
+        Tir2Ty::AssociatedTypeProjection { .. } => TyTemplate::Wildcard,
+        Tir2Ty::TypeVar(name, _) => generic_params
+            .iter()
+            .position(|p| p == name)
+            .map(|n| {
+                TyTemplate::TypeArgRefOrWildcard(
+                    u32::try_from(n).expect("generic param index fits in u32"),
+                )
+            })
+            .unwrap_or(TyTemplate::Wildcard),
+        Tir2Ty::List(inner, _) | Tir2Ty::EvolvingList(inner, _) => TyTemplate::Array(Box::new(
+            tir2_to_dispatch_guard_template(inner, resolved, generic_params),
+        )),
+        Tir2Ty::Map {
+            key: k, value: v, ..
+        }
+        | Tir2Ty::EvolvingMap(k, v, _) => TyTemplate::Map(
+            Box::new(tir2_to_dispatch_guard_template(k, resolved, generic_params)),
+            Box::new(tir2_to_dispatch_guard_template(v, resolved, generic_params)),
+        ),
+        Tir2Ty::Union(parts, _) => TyTemplate::Union(
+            parts
+                .iter()
+                .map(|p| tir2_to_dispatch_guard_template(p, resolved, generic_params))
+                .collect(),
+        ),
+        Tir2Ty::Class(qtn, type_args, _) => TyTemplate::Class(
+            qtn.clone(),
+            type_args
+                .iter()
+                .map(|arg| tir2_to_dispatch_guard_template(arg, resolved, generic_params))
+                .collect(),
+        ),
+        Tir2Ty::Interface(qtn, type_args, assoc, _) => TyTemplate::Interface(
+            qtn.clone(),
+            type_args
+                .iter()
+                .map(|arg| tir2_to_dispatch_guard_template(arg, resolved, generic_params))
+                .collect(),
+            assoc
+                .iter()
+                .map(|(name, ty)| {
+                    (
+                        name.clone(),
+                        tir2_to_dispatch_guard_template(ty, resolved, generic_params),
+                    )
+                })
+                .collect(),
+        ),
+        other => tir2_to_template(other, resolved, generic_params),
+    }
+}
+
+pub(crate) fn ty_to_template_from_resolved_ty(ty: &RuntimeTy) -> TyTemplate {
+    match ty {
+        RuntimeTy::Class(tn, args, _) if !args.is_empty() => {
             // Parametric class: produce TyTemplate::Class with Concrete leaves.
             // This allows the VM to check `expected_args == inst.class_type_args`.
             TyTemplate::Class(
@@ -896,13 +1212,13 @@ use baml_compiler2_tir::{
 use rustc_hash::FxHashMap;
 
 type ClassFieldIndices = IndexMap<TypeName, IndexMap<String, usize>>;
-type ClassFieldTypes = IndexMap<TypeName, IndexMap<String, Ty>>;
+type ClassFieldTypes = IndexMap<TypeName, IndexMap<String, RuntimeTy>>;
 type EnumVariantIndices = IndexMap<QualifiedTypeName, IndexMap<String, usize>>;
 type InterfaceImplementors = IndexMap<TypeName, Vec<TypeName>>;
 type InterfaceTypeView = (TypeName, Vec<Tir2Ty>, Vec<(Name, Tir2Ty)>);
 #[derive(Clone, PartialEq, Eq)]
 struct InterfaceTypeImplementor {
-    runtime_ty: Ty,
+    runtime_ty: RuntimeTy,
     tir_ty: Tir2Ty,
     iface_args: Vec<Tir2Ty>,
     iface_assoc: Vec<(Name, Tir2Ty)>,
@@ -1006,23 +1322,13 @@ fn class_type_name_from_qtn(db: &dyn crate::Db, class_qtn: &QualifiedTypeName) -
     let class_pkg_id = baml_compiler2_hir::package::PackageId::new(db, class_qtn.package().clone());
     let class_pkg_items = baml_compiler2_hir::package::package_items(db, class_pkg_id);
     let class_ns: Vec<Name> = class_qtn.namespace().clone();
-    let Some(baml_compiler2_hir::contributions::Definition::Class(class_loc)) =
+    let Some(baml_compiler2_hir::contributions::Definition::Class(_)) =
         class_pkg_items.lookup_type(&class_ns, class_qtn.name())
     else {
         return None;
     };
 
-    let class_file = class_loc.file(db);
-    let class_tree = baml_compiler2_ppir::file_item_tree(db, class_file);
-    let class_data = &class_tree[class_loc.id(db)];
-    let class_pkg_info = baml_compiler2_hir::file_package::file_package(db, class_file);
-    let mut module_path: Vec<Name> = vec![class_pkg_info.package.clone()];
-    module_path.extend(class_pkg_info.namespace_path.iter().cloned());
-    Some(TypeName {
-        name: class_data.name.clone(),
-        module_path,
-        display_name: class_data.name.clone(),
-    })
+    Some(class_qtn.clone())
 }
 
 fn interface_type_name_from_loc<'db>(
@@ -1031,14 +1337,12 @@ fn interface_type_name_from_loc<'db>(
 ) -> Option<TypeName> {
     let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
     let iface_data = iface_tree.interfaces.get(&iface_loc.id(db))?;
-    let iface_pkg = baml_compiler2_hir::file_package::file_package(db, iface_loc.file(db));
-    let mut module_path: Vec<Name> = vec![iface_pkg.package.clone()];
-    module_path.extend(iface_pkg.namespace_path.iter().cloned());
-    Some(TypeName {
-        name: iface_data.name.clone(),
-        module_path,
-        display_name: iface_data.name.clone(),
-    })
+    let qtn = baml_compiler2_tir::lower_type_expr::qualify_def(
+        db,
+        Definition::Interface(iface_loc),
+        &iface_data.name,
+    );
+    Some(qtn)
 }
 
 fn push_unique_interface_implementor(
@@ -1139,7 +1443,7 @@ fn package_lowering_data<'db>(
 ) -> PackageLoweringData {
     use baml_compiler2_hir::package::{package_dependencies, package_items};
 
-    let resolved_aliases = ResolvedAliases::for_package(db, pkg_id);
+    let resolved_aliases = resolved_aliases_for_package(db, pkg_id);
 
     let mut class_fields = ClassFieldIndices::default();
     let mut class_field_types = ClassFieldTypes::default();
@@ -1194,11 +1498,20 @@ fn package_lowering_data<'db>(
 struct InterfaceDispatchCall<'a> {
     expr_id: AstExprId,
     recv_local: Local,
+    recv_tir_ty: Option<&'a Tir2Ty>,
     iface_tn: &'a TypeName,
     iface_type_args: &'a [Tir2Ty],
     iface_assoc: &'a [(Name, Tir2Ty)],
     method: &'a Name,
     args: &'a [AstExprId],
+}
+
+#[derive(Clone, Copy)]
+struct InterfaceDefaultCallContext<'a> {
+    iface_tn: &'a TypeName,
+    iface_type_args: &'a [Tir2Ty],
+    iface_assoc: &'a [(Name, Tir2Ty)],
+    method: &'a Name,
 }
 
 #[derive(Clone)]
@@ -1224,7 +1537,7 @@ enum InterfaceDispatchGuard {
         impl_tn: TypeName,
         guard: InterfaceClassGuard,
     },
-    Type(Ty),
+    Type(RuntimeTy),
 }
 
 #[derive(Clone)]
@@ -1241,7 +1554,7 @@ struct InterfaceMethodCandidate {
 enum CalleeFrameSeed {
     /// Bind the receiver into a `BoundMethod` so the VM seeds `frame.type_args`
     /// from the runtime instance's `class_type_args` (class-param order), then
-    /// the explicit call-site args. Used for a class-owned method on a generic
+    /// the method call's own type args. Used for a class-owned method on a generic
     /// class whose class params are *not* fully pinned by the interface request
     /// (`Any`/partial guard) — the static guard can't name the args, but the
     /// matched instance always carries them.
@@ -1304,12 +1617,24 @@ struct LoweringContext<'db> {
         FxHashMap<ExprMetadataKey, Vec<baml_compiler2_tir::inference::MemberResolution<'db>>>,
     // Full-arity argument binding plans from TIR.
     call_plans: FxHashMap<ExprMetadataKey, baml_compiler2_tir::inference::CallPlan>,
+    /// TIR-recorded generic instantiation per call whose callee declares type
+    /// params (declared De Bruijn order). Lowered to `LoadType` operands when
+    /// the call site writes no explicit `<...>`, so inferred-generic calls
+    /// populate the callee's `frame.type_args` just like explicit ones.
     // Function-value adapters from TIR checked coercions.
     function_coercions: FxHashMap<ExprMetadataKey, baml_compiler2_tir::inference::FunctionCoercion>,
     // Function generic bounds, lowered in TIR space. MIR uses these to keep
     // bounded type variables ABI-erased while still lowering bound-member
     // access through the interface dispatch machinery.
     generic_param_bounds: FxHashMap<Name, Tir2Ty>,
+
+    // TIR types of the in-scope lambda parameters, by name. TIR does not record
+    // `path_segment_types` for a lambda-parameter receiver (`(a: T) -> a.m()`),
+    // so interface dispatch on such a receiver falls back to this map to learn
+    // its static type — e.g. a bounded type variable whose `extends` bound
+    // names the dispatching interface (`a.compare(b)` where `T extends
+    // Comparable`). Saved/restored across nested lambdas.
+    lambda_param_tir_types: FxHashMap<Name, Tir2Ty>,
 
     // The FileScopeId of the expression body currently being lowered.
     // Updated when descending into lambda bodies (Phase 3+).
@@ -1322,6 +1647,7 @@ struct LoweringContext<'db> {
     source_map: Option<AstSourceMap>,
     file: baml_base::SourceFile,
     func_loc: Option<FunctionLoc<'db>>,
+    source_param_scope: Option<FileScopeId>,
     /// Raw function name from the item tree (e.g. `"Foo$render_prompt"`).
     /// Used to disambiguate companion scopes that share the same span.
     scope_func_name: Option<Name>,
@@ -1351,7 +1677,7 @@ struct LoweringContext<'db> {
     /// named classes, while dispatch can use primitive type tags directly.
     interface_type_implementors: &'db InterfaceTypeImplementors,
 
-    // Pre-computed type alias data for inline expansion in convert_tir2_ty.
+    // Pre-computed type alias data for inline expansion in convert_tir_ty_for_runtime.
     // Borrowed from `package_lowering_data` (shared across every function in
     // the package) rather than cloned per context.
     resolved_aliases: &'db ResolvedAliases,
@@ -1400,6 +1726,386 @@ struct LoweringContext<'db> {
 
 #[allow(clippy::elidable_lifetime_names)]
 impl<'db> LoweringContext<'db> {
+    fn baml_iter_qtn(name: &str) -> QualifiedTypeName {
+        QualifiedTypeName::new(Name::new("baml"), vec![Name::new("iter")], Name::new(name))
+    }
+
+    fn baml_iter_type_name(name: &str) -> TypeName {
+        Self::baml_iter_qtn(name)
+    }
+
+    fn baml_iter_done_ty() -> RuntimeTy {
+        RuntimeTy::Class(Self::baml_iter_type_name("Done"), vec![], TyAttr::default())
+    }
+
+    fn associated_binding_ty(bindings: &[(Name, Tir2Ty)], name: &str) -> Option<Tir2Ty> {
+        bindings
+            .iter()
+            .find(|(binding_name, _)| binding_name.as_str() == name)
+            .map(|(_, ty)| ty.clone())
+    }
+
+    fn substitute_class_params_in_interface_view(
+        view: InterfaceTypeView,
+        class_params: &[Name],
+        class_args: &[Tir2Ty],
+    ) -> InterfaceTypeView {
+        if class_params.is_empty() {
+            return view;
+        }
+        let mut bindings = FxHashMap::default();
+        for (param, arg) in class_params.iter().zip(class_args.iter()) {
+            bindings.insert(param.clone(), arg.clone());
+        }
+        for param in class_params {
+            bindings
+                .entry(param.clone())
+                .or_insert_with(|| Tir2Ty::TypeVar(param.clone(), TyAttr::default()));
+        }
+
+        let (tn, args, assoc) = view;
+        let args = args
+            .into_iter()
+            .map(|ty| baml_compiler2_tir::generics::substitute_ty(&ty, &bindings))
+            .collect();
+        let assoc = assoc
+            .into_iter()
+            .map(|(name, ty)| {
+                (
+                    name,
+                    baml_compiler2_tir::generics::substitute_ty(&ty, &bindings),
+                )
+            })
+            .collect();
+        (tn, args, assoc)
+    }
+
+    fn interface_view_for_class_tir_ty(
+        &self,
+        class_qtn: &QualifiedTypeName,
+        class_args: &[Tir2Ty],
+        target_tn: &TypeName,
+    ) -> Option<InterfaceTypeView> {
+        let class_tn = class_qtn.clone();
+        let class_loc = self.resolve_class_loc_by_type_name(&class_tn)?;
+        let class_tree = file_item_tree(self.db, class_loc.file(self.db));
+        let class_data = &class_tree[class_loc.id(self.db)];
+
+        for impl_block in &class_data.implements {
+            let view = self.resolve_implements_target_view(
+                &impl_block.target,
+                &impl_block.associated_type_bindings,
+                class_loc,
+            )?;
+            let views = self.interface_closure_type_name_views(&view.0, &view.1, &view.2)?;
+            for candidate in views {
+                if candidate.0 == *target_tn {
+                    return Some(Self::substitute_class_params_in_interface_view(
+                        candidate,
+                        &class_data.generic_params,
+                        class_args,
+                    ));
+                }
+            }
+        }
+        None
+    }
+
+    fn interface_view_from_registry(
+        &self,
+        actual_ty: &Tir2Ty,
+        target_tn: &TypeName,
+    ) -> Option<InterfaceTypeView> {
+        let target_qtn = Self::baml_iter_qtn(target_tn.name().as_str());
+        for pkg_id in self.registry_package_ids_for_interface_lookup(actual_ty, &target_qtn) {
+            let default_pkg = pkg_id.name(self.db).clone();
+            let registry =
+                baml_compiler2_tir::interfaces::package_implements_registry(self.db, pkg_id);
+            for rule in &registry.interface_impl_rules {
+                let Some(bindings) = baml_compiler2_tir::interfaces::match_ty_pattern(
+                    &rule.for_ty_pattern,
+                    actual_ty,
+                    &rule.generic_params,
+                    &self.resolved_aliases.aliases,
+                ) else {
+                    continue;
+                };
+                let iface_ty =
+                    baml_compiler2_tir::generics::substitute_ty(&rule.interface_ty, &bindings);
+                if !registry.type_implements_interface_via_rule(
+                    actual_ty,
+                    &iface_ty,
+                    &self.resolved_aliases.aliases,
+                    |actual, bound| {
+                        type_satisfies_bound(
+                            self.db,
+                            actual,
+                            bound,
+                            &self.resolved_aliases.aliases,
+                            &default_pkg,
+                            BLANKET_BOUND_DEPTH,
+                        )
+                    },
+                ) {
+                    continue;
+                }
+                let Tir2Ty::Interface(iface_qtn, iface_args, iface_assoc, _) = iface_ty else {
+                    continue;
+                };
+                let iface_tn = iface_qtn.clone();
+                let Some(views) =
+                    self.interface_closure_type_name_views(&iface_tn, &iface_args, &iface_assoc)
+                else {
+                    continue;
+                };
+                if let Some(view) = views.into_iter().find(|(tn, _, _)| tn == target_tn) {
+                    return Some(view);
+                }
+            }
+        }
+        None
+    }
+
+    fn registry_package_ids_for_interface_lookup(
+        &self,
+        actual_ty: &Tir2Ty,
+        target_qtn: &QualifiedTypeName,
+    ) -> Vec<PackageId<'_>> {
+        let mut names = Vec::new();
+        let mut seen = HashSet::new();
+        let mut push_name = |name: Name| {
+            if seen.insert(name.clone()) {
+                names.push(name);
+            }
+        };
+
+        let current_pkg =
+            baml_compiler2_hir::file_package::file_package(self.db, self.file).package;
+        push_name(current_pkg.clone());
+        for &dep in baml_compiler2_hir::package::package_dependencies(
+            self.db,
+            PackageId::new(self.db, current_pkg),
+        ) {
+            push_name(dep.name(self.db).clone());
+        }
+
+        if let Some(actual_pkg) = Self::tir_type_package_name(actual_ty) {
+            push_name(actual_pkg.clone());
+            for &dep in baml_compiler2_hir::package::package_dependencies(
+                self.db,
+                PackageId::new(self.db, actual_pkg),
+            ) {
+                push_name(dep.name(self.db).clone());
+            }
+        }
+
+        let target_pkg = target_qtn.package().clone();
+        push_name(target_pkg.clone());
+        for &dep in baml_compiler2_hir::package::package_dependencies(
+            self.db,
+            PackageId::new(self.db, target_pkg),
+        ) {
+            push_name(dep.name(self.db).clone());
+        }
+
+        names
+            .into_iter()
+            .map(|name| PackageId::new(self.db, name))
+            .collect()
+    }
+
+    fn tir_type_package_name(ty: &Tir2Ty) -> Option<Name> {
+        match ty {
+            Tir2Ty::Class(qtn, _, _)
+            | Tir2Ty::Interface(qtn, _, _, _)
+            | Tir2Ty::Enum(qtn, _)
+            | Tir2Ty::EnumVariant(qtn, _, _)
+            | Tir2Ty::TypeAlias(qtn, _) => Some(qtn.package().clone()),
+            Tir2Ty::Union(members, _) => {
+                let mut out = None;
+                for member in members {
+                    let pkg = Self::tir_type_package_name(member)?;
+                    match &out {
+                        Some(existing) if existing != &pkg => return None,
+                        None => out = Some(pkg),
+                        _ => {}
+                    }
+                }
+                out
+            }
+            _ => None,
+        }
+    }
+
+    fn interface_view_for_tir_ty(
+        &self,
+        ty: &Tir2Ty,
+        target_tn: &TypeName,
+    ) -> Option<InterfaceTypeView> {
+        match ty {
+            Tir2Ty::Interface(qtn, args, assoc, _) => {
+                let iface_tn = qtn.clone();
+                self.interface_closure_type_name_views(&iface_tn, args, assoc)?
+                    .into_iter()
+                    .find(|(tn, _, _)| tn == target_tn)
+            }
+            Tir2Ty::Class(qtn, args, _) => self
+                .interface_view_for_class_tir_ty(qtn, args, target_tn)
+                .or_else(|| self.interface_view_from_registry(ty, target_tn)),
+            Tir2Ty::TypeVar(name, _) => self
+                .generic_param_bounds
+                .get(name)
+                .and_then(|bound| self.interface_view_for_tir_ty(bound, target_tn)),
+            Tir2Ty::AssociatedTypeProjection { .. } => {
+                let resolver =
+                    baml_compiler2_tir::associated_projection::AssociatedProjectionResolver::new(
+                        self.db,
+                        &self.resolved_aliases.aliases,
+                        &self.generic_param_bounds,
+                    );
+                let resolved = resolver.resolve_deep(ty);
+                if &resolved != ty {
+                    return self.interface_view_for_tir_ty(&resolved, target_tn);
+                }
+                resolver
+                    .resolve_projection_bound(ty)
+                    .and_then(|bound| self.interface_view_for_tir_ty(&bound, target_tn))
+            }
+            _ => self.interface_view_from_registry(ty, target_tn),
+        }
+    }
+
+    fn iterable_view_for_tir_ty(&self, ty: &Tir2Ty) -> Option<InterfaceTypeView> {
+        self.interface_view_for_tir_ty(ty, &Self::baml_iter_type_name("Iterable"))
+    }
+
+    fn lower_iterable_for_loop(
+        &mut self,
+        stmt_id: AstStmtId,
+        binding: AstPatId,
+        collection: AstExprId,
+        body: AstExprId,
+        iterable_view: InterfaceTypeView,
+    ) {
+        let saved_locals = self.locals.clone();
+        let watched_depth = self.watched_locals_stack.len();
+        let coll_tir_ty = self
+            .expr_types
+            .get(&self.expr_metadata_key(collection))
+            .cloned();
+
+        let coll_ty = self.expr_ty(collection);
+        let coll_local = self.builder.temp(coll_ty);
+        self.lower_expr(collection, Place::local(coll_local));
+
+        let (iterable_tn, iterable_args, iterable_assoc) = iterable_view;
+        let item_tir_ty =
+            Self::associated_binding_ty(&iterable_assoc, "Item").unwrap_or_else(|| {
+                Tir2Ty::Unknown {
+                    attr: TyAttr::default(),
+                }
+            });
+        let elem_ty = self.convert_tir_ty_for_runtime(&item_tir_ty);
+
+        let iterator_tn = Self::baml_iter_type_name("Iterator");
+        let iter_method = Name::new("iter");
+        let iter_local = self
+            .builder
+            .temp(self.convert_tir_ty_for_runtime(&Tir2Ty::Interface(
+                Self::baml_iter_qtn("Iterator"),
+                vec![],
+                iterable_assoc.clone(),
+                TyAttr::default(),
+            )));
+        self.emit_interface_dispatch_switch(
+            InterfaceDispatchCall {
+                expr_id: body,
+                recv_local: coll_local,
+                recv_tir_ty: coll_tir_ty.as_ref(),
+                iface_tn: &iterable_tn,
+                iface_type_args: &iterable_args,
+                iface_assoc: &iterable_assoc,
+                method: &iter_method,
+                args: &[],
+            },
+            &Place::local(iter_local),
+        );
+
+        let bb_header = self.builder.create_block();
+        let bb_body = self.builder.create_block();
+        let bb_exit = self.builder.create_block();
+
+        let prev_loop = self.loop_context.take();
+        self.loop_context = Some(LoopContext {
+            break_target: bb_exit,
+            continue_target: bb_header,
+            watched_locals_depth: watched_depth,
+        });
+
+        if !self.builder.is_current_terminated() {
+            self.builder.goto(bb_header);
+        }
+
+        self.builder.set_current_block(bb_header);
+        let next_method = Name::new("next");
+        let next_local = self.builder.temp(RuntimeTy::unknown());
+        let iterator_tir_ty = Tir2Ty::Interface(
+            Self::baml_iter_qtn("Iterator"),
+            vec![],
+            iterable_assoc.clone(),
+            TyAttr::default(),
+        );
+        self.emit_interface_dispatch_switch(
+            InterfaceDispatchCall {
+                expr_id: body,
+                recv_local: iter_local,
+                recv_tir_ty: Some(&iterator_tir_ty),
+                iface_tn: &iterator_tn,
+                iface_type_args: &[],
+                iface_assoc: &iterable_assoc,
+                method: &next_method,
+                args: &[],
+            },
+            &Place::local(next_local),
+        );
+        self.emit_is_type_branch(next_local, Self::baml_iter_done_ty(), bb_exit, bb_body);
+
+        self.builder.set_current_block(bb_body);
+        let elem_local = self.builder.declare_local(None, elem_ty, None, false);
+        self.builder.assign(
+            Place::local(elem_local),
+            Rvalue::Use(Operand::Copy(Place::Local(next_local))),
+        );
+        self.bind_pattern_with_fresh_cells(elem_local, binding);
+        let names: Vec<Name> = self.body.patterns[binding]
+            .bound_names(&self.body.patterns)
+            .into_iter()
+            .cloned()
+            .collect();
+        for name in names {
+            if let Some(&local) = self.locals.get(&name)
+                && let Some(binding_id) =
+                    self.binding_id_for_statement_name(stmt_id, binding, &name)
+            {
+                self.binding_locals.insert(binding_id, local);
+            }
+        }
+
+        let body_temp = self.builder.temp(RuntimeTy::Void {
+            attr: TyAttr::default(),
+        });
+        self.lower_expr(body, Place::local(body_temp));
+
+        if !self.builder.is_current_terminated() {
+            self.emit_unwatch_to_depth(watched_depth);
+            self.builder.goto(bb_header);
+        }
+        self.restore_locals_after_scope(saved_locals, watched_depth);
+
+        self.loop_context = prev_loop;
+        self.builder.set_current_block(bb_exit);
+    }
+
     /// Populate `class_fields` and `enum_variants` from a single package's items.
     ///
     /// Note: `class_type_tags` is built separately via `build_class_type_tags` to ensure
@@ -1423,11 +2129,12 @@ impl<'db> LoweringContext<'db> {
                         let citree = file_item_tree(db, cfile);
                         let class_data = &citree[class_loc.id(db)];
 
-                        let tn = TypeName {
-                            name: class_data.name.clone(),
-                            module_path: module_path.clone(),
-                            display_name: class_data.name.clone(),
-                        };
+                        let class_qtn = QualifiedTypeName::new(
+                            pkg_name.clone(),
+                            ns_names.clone(),
+                            class_data.name.clone(),
+                        );
+                        let tn = class_qtn.clone();
 
                         let mut fields = IndexMap::new();
                         let mut field_types = IndexMap::new();
@@ -1441,9 +2148,9 @@ impl<'db> LoweringContext<'db> {
                              generic_params: &[Name],
                              ns: &[Name],
                              fields: &mut IndexMap<String, usize>,
-                             field_types: &mut IndexMap<String, Ty>,
+                             field_types: &mut IndexMap<String, RuntimeTy>,
                              diags: &mut Vec<_>|
-                             -> Option<(usize, Ty)> {
+                             -> Option<(usize, RuntimeTy)> {
                                 if let Some(idx) = fields.get(name).copied() {
                                     return field_types.get(name).cloned().map(|ty| (idx, ty));
                                 }
@@ -1463,7 +2170,7 @@ impl<'db> LoweringContext<'db> {
                                         );
                                         resolved_aliases.convert(&tir_ty)
                                     })
-                                    .unwrap_or(Ty::Null {
+                                    .unwrap_or(RuntimeTy::Null {
                                         attr: TyAttr::default(),
                                     });
                                 field_types.insert(name.to_string(), field_ty.clone());
@@ -1501,23 +2208,9 @@ impl<'db> LoweringContext<'db> {
                             for iface_loc in baml_compiler2_tir::interfaces::interface_closure_locs(
                                 db, iface_loc, pkg_items, &pkg_ns,
                             ) {
-                                let iface_tree =
-                                    baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
-                                let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db))
+                                let Some(iface_tn) = interface_type_name_from_loc(db, iface_loc)
                                 else {
                                     continue;
-                                };
-                                let iface_pkg = baml_compiler2_hir::file_package::file_package(
-                                    db,
-                                    iface_loc.file(db),
-                                );
-                                let mut iface_module_path: Vec<Name> =
-                                    vec![iface_pkg.package.clone()];
-                                iface_module_path.extend(iface_pkg.namespace_path.iter().cloned());
-                                let iface_tn = TypeName {
-                                    name: iface_data.name.clone(),
-                                    module_path: iface_module_path,
-                                    display_name: iface_data.name.clone(),
                                 };
                                 let entry = out.interface_implementors.entry(iface_tn).or_default();
                                 if !entry.contains(&tn) {
@@ -1667,7 +2360,7 @@ impl<'db> LoweringContext<'db> {
                             ) {
                                 continue;
                             }
-                            let class_tn = qtn_to_type_name(class_qtn);
+                            let class_tn = class_qtn.clone();
                             register_class_for_interface_closure(
                                 db,
                                 root_iface_loc,
@@ -1683,7 +2376,7 @@ impl<'db> LoweringContext<'db> {
                 }
 
                 let target_ty = resolved_aliases.convert(&target_ty_tir);
-                if matches!(target_ty, Ty::Class(..)) {
+                if matches!(target_ty, RuntimeTy::Class(..)) {
                     continue;
                 }
 
@@ -1754,11 +2447,12 @@ impl<'db> LoweringContext<'db> {
             module_path.extend(pkg_info.namespace_path.iter().cloned());
 
             for class_data in item_tree.classes.values() {
-                let tn = TypeName {
-                    name: class_data.name.clone(),
-                    module_path: module_path.clone(),
-                    display_name: class_data.name.clone(),
-                };
+                let class_qtn = QualifiedTypeName::new(
+                    pkg_info.package.clone(),
+                    pkg_info.namespace_path.clone(),
+                    class_data.name.clone(),
+                );
+                let tn = class_qtn.clone();
                 let type_tag = baml_type::typetag::CLASS_BASE + class_type_tag_counter;
                 class_type_tag_counter += 1;
                 // Use entry to avoid overwriting if the same class appears via multiple paths
@@ -1983,6 +2677,18 @@ impl<'db> LoweringContext<'db> {
                 {
                     bound_param_names.extend(iface_data.generic_params.iter().cloned());
                     bound_exprs.extend(iface_data.generic_param_bounds.iter().cloned());
+                    bound_param_names.extend(
+                        iface_data
+                            .associated_types
+                            .iter()
+                            .map(|assoc| assoc.name.clone()),
+                    );
+                    bound_exprs.extend(
+                        iface_data
+                            .associated_types
+                            .iter()
+                            .map(|assoc| assoc.bound.as_ref().map(|bound| bound.expr.clone())),
+                    );
                 }
             }
         }
@@ -2024,9 +2730,27 @@ impl<'db> LoweringContext<'db> {
                     .iter()
                     .map(|p| Tir2Ty::TypeVar(p.clone(), baml_compiler2_tir::ty::TyAttr::default()))
                     .collect();
+                let associated_bindings = iface
+                    .associated_types
+                    .iter()
+                    .map(|assoc| {
+                        (
+                            assoc.name.clone(),
+                            Tir2Ty::TypeVar(
+                                assoc.name.clone(),
+                                baml_compiler2_tir::ty::TyAttr::default(),
+                            ),
+                        )
+                    })
+                    .collect();
                 generic_param_bounds.insert(
                     Name::new("Self"),
-                    Tir2Ty::Interface(qtn, args, vec![], baml_compiler2_tir::ty::TyAttr::default()),
+                    Tir2Ty::Interface(
+                        qtn,
+                        args,
+                        associated_bindings,
+                        baml_compiler2_tir::ty::TyAttr::default(),
+                    ),
                 );
                 break;
             }
@@ -2084,12 +2808,14 @@ impl<'db> LoweringContext<'db> {
             call_plans,
             function_coercions,
             generic_param_bounds,
+            lambda_param_tir_types: FxHashMap::default(),
             current_scope: func_scope_id,
             current_metadata_scope: MetadataScope::Body(func_scope_id),
             body: expr_body,
             source_map,
             file,
             func_loc: Some(func_loc),
+            source_param_scope: Some(func_scope_id),
             scope_func_name: Some(func_data.name.clone()),
             class_fields: &pkg_data.class_fields,
             class_field_types: &pkg_data.class_field_types,
@@ -2303,12 +3029,14 @@ impl<'db> LoweringContext<'db> {
             call_plans,
             function_coercions,
             generic_param_bounds: FxHashMap::default(),
+            lambda_param_tir_types: FxHashMap::default(),
             current_scope: let_scope_id,
             current_metadata_scope: MetadataScope::Body(let_scope_id),
             body: expr_body,
             source_map,
             file,
             func_loc: None,
+            source_param_scope: None,
             scope_func_name: Some(let_name),
             class_fields: &pkg_data.class_fields,
             class_field_types: &pkg_data.class_field_types,
@@ -2326,21 +3054,6 @@ impl<'db> LoweringContext<'db> {
             chain_null_exits: Vec::new(),
             opt,
         }
-    }
-
-    /// Generate a unique synthetic variable name, e.g. __`for_idx`, __`for_idx_1`, __`for_idx_2`.
-    fn gensym(&mut self, prefix: &str) -> Name {
-        let count = self
-            .synthetic_name_counts
-            .entry(prefix.to_string())
-            .or_insert(0);
-        let name = if *count == 0 {
-            prefix.to_string()
-        } else {
-            format!("{prefix}_{count}")
-        };
-        *count += 1;
-        Name::new(&name)
     }
 
     fn scope_is_descendant_or_self(
@@ -2524,8 +3237,8 @@ impl<'db> LoweringContext<'db> {
         }
     }
 
-    /// Get the `baml_type::Ty` for an expression by looking up in the aggregated map
-    /// and converting from TIR Ty. Uses `current_metadata_scope` as the arena namespace.
+    /// Get the `baml_type::RuntimeTy` for an expression by looking up in the aggregated map
+    /// and converting from TIR `Ty`. Uses `current_metadata_scope` as the arena namespace.
     fn expr_metadata_key(&self, expr_id: AstExprId) -> ExprMetadataKey {
         (self.current_metadata_scope, expr_id)
     }
@@ -2534,39 +3247,250 @@ impl<'db> LoweringContext<'db> {
         (self.current_metadata_scope, pat_id)
     }
 
-    fn erase_bound_typevars_for_runtime(&self, ty: &Tir2Ty) -> Tir2Ty {
-        baml_compiler2_tir::generics::erase_typevars_matching(ty, &|name| {
-            self.generic_param_bounds.contains_key(name)
-        })
+    fn convert_tir_ty_for_runtime(&self, ty: &Tir2Ty) -> RuntimeTy {
+        // Resolve associated-type projections against the bounds the compiler
+        // knows statically; anything still symbolic — a `TypeVar` or a
+        // projection off one — is kept faithfully so the runtime can resolve it
+        // from the receiver's actual type. We deliberately do *not* erase type
+        // variables: `RuntimeTy` carries them, and erasing to `unknown` would
+        // throw away the information needed to resolve the type at run time.
+        let resolved =
+            baml_compiler2_tir::associated_projection::AssociatedProjectionResolver::new(
+                self.db,
+                &self.resolved_aliases.aliases,
+                &self.generic_param_bounds,
+            )
+            .resolve_deep(ty);
+        self.resolved_aliases.convert(&resolved)
     }
 
-    fn convert_tir_ty_for_runtime(&self, ty: &Tir2Ty) -> Ty {
-        let erased = self.erase_bound_typevars_for_runtime(ty);
-        convert_tir2_ty(&erased, self.resolved_aliases)
+    /// Lower a method-signature type expression (a parameter or return type) to
+    /// a runtime type. In a method signature `Self` is the receiver type
+    /// variable and `Self.Assoc` is an associated-type projection onto it.
+    /// A bare `lower_type_expr_in_ns` has neither in scope and would erase both
+    /// to `Ty::Unknown`, tripping the runtime lowering boundary — so rewrite
+    /// `Self.Assoc` paths into projections and bind `Self` as a type variable.
+    fn lower_signature_runtime_ty(
+        &self,
+        te: &baml_compiler2_ast::TypeExpr,
+        pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+        ns_context: &[baml_base::Name],
+    ) -> RuntimeTy {
+        let self_subst = std::collections::HashMap::from([(
+            baml_base::Name::new("Self"),
+            baml_compiler2_tir::lower_type_expr::type_expr_for_name(baml_base::Name::new("Self")),
+        )]);
+        let te = baml_compiler2_tir::lower_type_expr::substitute_paths_in(te, &self_subst);
+        let mut generic_params = self.enclosing_generic_params();
+        generic_params.push(baml_base::Name::new("Self"));
+        let mut diags = Vec::new();
+        let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+            self.db,
+            &te,
+            pkg_items,
+            ns_context,
+            &generic_params,
+            &mut diags,
+        );
+        self.convert_tir_ty_for_runtime(&tir_ty)
     }
 
     fn interface_dispatch_target_for_tir_ty(&self, ty: &Tir2Ty) -> Option<InterfaceTypeView> {
         match ty {
-            Tir2Ty::Interface(qtn, type_args, associated_bindings, _) => Some((
-                qtn_to_type_name(qtn),
-                type_args.clone(),
-                associated_bindings.clone(),
-            )),
+            Tir2Ty::Interface(qtn, type_args, associated_bindings, _) => {
+                Some((qtn.clone(), type_args.clone(), associated_bindings.clone()))
+            }
             Tir2Ty::TypeVar(name, _) => self
                 .generic_param_bounds
                 .get(name)
                 .and_then(|bound| self.interface_dispatch_target_for_tir_ty(bound)),
             Tir2Ty::Class(qtn, type_args, _) => {
-                let tn = qtn_to_type_name(qtn);
+                let tn = qtn.clone();
                 self.interface_implementors
                     .contains_key(&tn)
                     .then(|| (tn, type_args.clone(), Vec::new()))
+            }
+            Tir2Ty::AssociatedTypeProjection { .. } => {
+                let resolver =
+                    baml_compiler2_tir::associated_projection::AssociatedProjectionResolver::new(
+                        self.db,
+                        &self.resolved_aliases.aliases,
+                        &self.generic_param_bounds,
+                    );
+                let resolved = resolver.resolve_deep(ty);
+                if &resolved != ty {
+                    return self.interface_dispatch_target_for_tir_ty(&resolved);
+                }
+                resolver
+                    .resolve_projection_bound(ty)
+                    .and_then(|bound| self.interface_dispatch_target_for_tir_ty(&bound))
             }
             _ => None,
         }
     }
 
-    /// BEP-044 wf3 #G7: for a *concrete* receiver (class or primitive) whose
+    fn interface_dispatch_target_for_expr(&self, expr_id: AstExprId) -> Option<InterfaceTypeView> {
+        self.source_param_interface_view_for_expr(expr_id)
+            .or_else(|| {
+                self.expr_types
+                    .get(&self.expr_metadata_key(expr_id))
+                    .and_then(|ty| self.interface_dispatch_target_for_tir_ty(ty))
+            })
+            .or_else(|| {
+                self.self_typevar_for_expr(expr_id)
+                    .and_then(|ty| self.interface_dispatch_target_for_tir_ty(&ty))
+            })
+            .or_else(|| self.upcast_target_interface_view(expr_id))
+    }
+
+    fn source_param_interface_view_for_expr(
+        &self,
+        expr_id: AstExprId,
+    ) -> Option<InterfaceTypeView> {
+        let AstExpr::Path(segments) = &self.body.exprs[expr_id] else {
+            return None;
+        };
+        if segments.len() != 1 {
+            return None;
+        }
+        self.source_param_interface_view_for_name_at(expr_id, &segments[0])
+    }
+
+    fn source_param_interface_view_for_name_at(
+        &self,
+        expr_id: AstExprId,
+        name: &Name,
+    ) -> Option<InterfaceTypeView> {
+        let binding_id = self.binding_id_for_name_at(expr_id, name)?;
+        self.source_param_interface_view_for_binding(name, binding_id)
+    }
+
+    fn source_param_interface_view_for_binding(
+        &self,
+        name: &Name,
+        binding_id: BindingId,
+    ) -> Option<InterfaceTypeView> {
+        let func_loc = self.func_loc?;
+        let param_scope = self.source_param_scope?;
+        let sig = baml_compiler2_ppir::function_signature(self.db, func_loc);
+        let (param_idx, param) = sig
+            .params
+            .iter()
+            .enumerate()
+            .find(|(_, param)| param.name == *name)?;
+        if binding_id != BindingId::parameter(param_scope, param_idx) {
+            return None;
+        }
+
+        let pkg_info = file_package(self.db, self.file);
+        let pkg_id = PackageId::new(self.db, pkg_info.package);
+        let pkg_items = package_items(self.db, pkg_id);
+        let generic_params = self.enclosing_generic_params();
+        let bindings = generic_params
+            .iter()
+            .map(|param| {
+                (
+                    param.clone(),
+                    Tir2Ty::TypeVar(param.clone(), TyAttr::default()),
+                )
+            })
+            .collect();
+        let mut diags = Vec::new();
+        let ty = baml_compiler2_tir::generics::lower_type_expr_with_generics(
+            self.db,
+            &param.ty,
+            pkg_items,
+            &pkg_info.namespace_path,
+            &bindings,
+            &mut diags,
+        );
+        self.interface_dispatch_target_for_tir_ty(&ty)
+    }
+
+    fn dispatch_receiver_static_tir_ty(&self, expr_id: AstExprId) -> Option<Tir2Ty> {
+        if let AstExpr::Upcast { base, .. } = &self.body.exprs[expr_id] {
+            return self
+                .expr_types
+                .get(&self.expr_metadata_key(*base))
+                .cloned()
+                .or_else(|| self.dispatch_receiver_static_tir_ty(*base));
+        }
+        self.expr_types
+            .get(&self.expr_metadata_key(expr_id))
+            .cloned()
+            .or_else(|| self.self_typevar_for_expr(expr_id))
+    }
+
+    fn self_typevar_for_expr(&self, expr_id: AstExprId) -> Option<Tir2Ty> {
+        let AstExpr::Path(segments) = &self.body.exprs[expr_id] else {
+            return None;
+        };
+        if segments.len() == 1
+            && segments[0].as_str() == "self"
+            && self.generic_param_bounds.contains_key(&Name::new("Self"))
+        {
+            Some(Tir2Ty::TypeVar(
+                Name::new("Self"),
+                baml_compiler2_tir::ty::TyAttr::default(),
+            ))
+        } else {
+            None
+        }
+    }
+
+    fn upcast_target_interface_view(&self, expr_id: AstExprId) -> Option<InterfaceTypeView> {
+        let AstExpr::Upcast { target, .. } = &self.body.exprs[expr_id] else {
+            return None;
+        };
+        let pkg_info = baml_compiler2_hir::file_package::file_package(self.db, self.file);
+        let pkg_id = baml_compiler2_hir::package::PackageId::new(self.db, pkg_info.package.clone());
+        let pkg_items = baml_compiler2_hir::package::package_items(self.db, pkg_id);
+        let generic_params = self.enclosing_generic_params();
+        let mut diags = Vec::new();
+        let target_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+            self.db,
+            target,
+            pkg_items,
+            &pkg_info.namespace_path,
+            &generic_params,
+            &mut diags,
+        );
+        self.interface_dispatch_target_for_tir_ty(&target_ty)
+    }
+
+    fn class_dispatch_target_for_tir_ty(&self, ty: &Tir2Ty) -> Option<(TypeName, Vec<RuntimeTy>)> {
+        match ty {
+            Tir2Ty::Class(qtn, type_args, _) => Some((
+                qtn.clone(),
+                type_args
+                    .iter()
+                    .map(|arg| self.convert_tir_ty_for_runtime(arg))
+                    .collect(),
+            )),
+            Tir2Ty::TypeVar(name, _) => self
+                .generic_param_bounds
+                .get(name)
+                .and_then(|bound| self.class_dispatch_target_for_tir_ty(bound)),
+            Tir2Ty::AssociatedTypeProjection { .. } => {
+                let resolver =
+                    baml_compiler2_tir::associated_projection::AssociatedProjectionResolver::new(
+                        self.db,
+                        &self.resolved_aliases.aliases,
+                        &self.generic_param_bounds,
+                    );
+                let resolved = resolver.resolve_deep(ty);
+                if &resolved != ty {
+                    return self.class_dispatch_target_for_tir_ty(&resolved);
+                }
+                resolver
+                    .resolve_projection_bound(ty)
+                    .and_then(|bound| self.class_dispatch_target_for_tir_ty(&bound))
+            }
+            _ => None,
+        }
+    }
+
+    /// BEP-044 wf3 #G7: for a *concrete* receiver whose
     /// method is provided by a blanket / out-of-body `implements … for …` rule
     /// (not an in-body block), find the single interface that provides `method`
     /// so a direct `recv.method()` dispatches through the normal interface
@@ -2579,31 +3503,49 @@ impl<'db> LoweringContext<'db> {
         method: &Name,
     ) -> Option<InterfaceTypeView> {
         // Only concrete receivers — interfaces/type-vars dispatch via the
-        // arms above.
-        if !matches!(recv_ty, Tir2Ty::Class(..) | Tir2Ty::Primitive(..)) {
+        // arms above. Containers are concrete too (`implements<T> I for T[]`).
+        if !matches!(
+            recv_ty,
+            Tir2Ty::Class(..)
+                | Tir2Ty::Int { .. }
+                | Tir2Ty::Bigint { .. }
+                | Tir2Ty::Float { .. }
+                | Tir2Ty::String { .. }
+                | Tir2Ty::Bool { .. }
+                | Tir2Ty::Null { .. }
+                | Tir2Ty::Uint8Array { .. }
+                | Tir2Ty::Media(..)
+                | Tir2Ty::List(..)
+                | Tir2Ty::Map { .. }
+                | Tir2Ty::Future(..)
+        ) {
             return None;
         }
         let pkg = baml_compiler2_hir::file_package::file_package(self.db, self.file).package;
-        let registry = baml_compiler2_tir::interfaces::package_implements_registry(
-            self.db,
-            baml_compiler2_hir::package::PackageId::new(self.db, pkg),
-        );
-        for rule in &registry.interface_impl_rules {
-            let Some(bindings) = baml_compiler2_tir::interfaces::match_ty_pattern(
-                &rule.for_ty_pattern,
-                recv_ty,
-                &rule.generic_params,
-                &self.resolved_aliases.aliases,
-            ) else {
-                continue;
-            };
-            let iface_ty =
-                baml_compiler2_tir::generics::substitute_ty(&rule.interface_ty, &bindings);
-            let Tir2Ty::Interface(iface_qtn, iface_args, iface_assoc, _) = iface_ty else {
-                continue;
-            };
-            if self.mir_interface_declares_method(&iface_qtn, method) {
-                return Some((qtn_to_type_name(&iface_qtn), iface_args, iface_assoc));
+        let pkg_id = baml_compiler2_hir::package::PackageId::new(self.db, pkg);
+        let mut package_ids: Vec<_> =
+            baml_compiler2_hir::package::package_dependencies(self.db, pkg_id).clone();
+        package_ids.push(pkg_id);
+        for package_id in package_ids {
+            let registry =
+                baml_compiler2_tir::interfaces::package_implements_registry(self.db, package_id);
+            for rule in &registry.interface_impl_rules {
+                let Some(bindings) = baml_compiler2_tir::interfaces::match_ty_pattern(
+                    &rule.for_ty_pattern,
+                    recv_ty,
+                    &rule.generic_params,
+                    &self.resolved_aliases.aliases,
+                ) else {
+                    continue;
+                };
+                let iface_ty =
+                    baml_compiler2_tir::generics::substitute_ty(&rule.interface_ty, &bindings);
+                let Tir2Ty::Interface(iface_qtn, iface_args, iface_assoc, _) = iface_ty else {
+                    continue;
+                };
+                if self.mir_interface_declares_method(&iface_qtn, method) {
+                    return Some((iface_qtn, iface_args, iface_assoc));
+                }
             }
         }
         None
@@ -2648,11 +3590,11 @@ impl<'db> LoweringContext<'db> {
         })
     }
 
-    fn expr_ty(&self, expr_id: AstExprId) -> Ty {
+    fn expr_ty(&self, expr_id: AstExprId) -> RuntimeTy {
         self.expr_types
             .get(&self.expr_metadata_key(expr_id))
             .map(|ty| self.convert_tir_ty_for_runtime(ty))
-            .unwrap_or(Ty::Void {
+            .unwrap_or(RuntimeTy::Void {
                 attr: TyAttr::default(),
             })
     }
@@ -2672,23 +3614,38 @@ impl<'db> LoweringContext<'db> {
         }
     }
 
-    /// Get the `baml_type::Ty` for a pattern binding
-    fn pat_ty(&self, pat_id: AstPatId) -> Ty {
+    fn object_class_type_arg_templates(
+        &self,
+        expr_id: AstExprId,
+        explicit_type_args: &[AstTypeExpr],
+    ) -> Vec<TyTemplate> {
+        if explicit_type_args.is_empty() {
+            self.class_type_arg_templates(expr_id)
+        } else {
+            self.generic_apply_type_arg_templates(explicit_type_args)
+        }
+    }
+
+    /// Get the `baml_type::RuntimeTy` for a pattern binding
+    fn pat_ty(&self, pat_id: AstPatId) -> RuntimeTy {
         self.pat_types
             .get(&self.pat_metadata_key(pat_id))
             .map(|ty| self.convert_tir_ty_for_runtime(ty))
-            .unwrap_or(Ty::Void {
+            .unwrap_or(RuntimeTy::Void {
                 attr: TyAttr::default(),
             })
     }
 
-    fn is_pattern_type_recovery(ty: &Ty) -> bool {
-        matches!(ty, Ty::Void { .. } | Ty::BuiltinUnknown { .. })
+    fn is_pattern_type_recovery(ty: &RuntimeTy) -> bool {
+        matches!(
+            ty,
+            RuntimeTy::Void { .. } | RuntimeTy::BuiltinUnknown { .. }
+        )
     }
 
     /// Get the TIR-inferred root segment type for a multi-segment Path expression.
     /// Returns `None` if no root type was recorded (e.g. single-segment paths).
-    fn path_root_ty(&self, expr_id: AstExprId) -> Option<Ty> {
+    fn path_root_ty(&self, expr_id: AstExprId) -> Option<RuntimeTy> {
         self.path_root_types
             .get(&self.expr_metadata_key(expr_id))
             .map(|ty| self.convert_tir_ty_for_runtime(ty))
@@ -2697,30 +3654,44 @@ impl<'db> LoweringContext<'db> {
     /// Get the TIR-inferred type of `segments[..=seg_idx]` for a multi-segment
     /// local-rooted Path expression. Returns `None` if not recorded.
     #[allow(dead_code)]
-    fn path_segment_ty(&self, expr_id: AstExprId, seg_idx: usize) -> Option<Ty> {
+    fn path_segment_ty(&self, expr_id: AstExprId, seg_idx: usize) -> Option<RuntimeTy> {
         self.path_segment_types
             .get(&(self.current_metadata_scope, expr_id, seg_idx))
             .map(|ty| self.convert_tir_ty_for_runtime(ty))
     }
 
-    /// Resolve a `TypeExpr` annotation directly to a `baml_type::Ty`.
+    /// Resolve a `TypeExpr` annotation directly to a `baml_type::RuntimeTy`.
     /// Used for `TypedBinding` patterns where TIR may not have populated the
     /// bindings map (e.g. catch arm and match arm patterns).
-    fn resolve_type_annotation(&self, ty_expr: &baml_compiler2_ast::TypeExpr) -> Ty {
+    fn resolve_type_annotation(&self, ty_expr: &baml_compiler2_ast::TypeExpr) -> RuntimeTy {
+        // Lower with the enclosing function's generic params in scope so a type
+        // variable in the annotation (`let item: T => …`) resolves faithfully
+        // to a `TypeVar` rather than an unresolved `Unknown`. Erasing generics
+        // here would make a `: T` pattern a constant-false test, violating the
+        // type contract.
+        self.resolved_aliases
+            .convert(&self.lower_type_annotation_tir(ty_expr))
+    }
+
+    /// Lower a pattern's type annotation to TIR with the enclosing function's
+    /// generic params in scope, so `TypeVar`s survive and a typed pattern test
+    /// lowers to a `TypeArgRef` template (dynamic dispatch on the realized type
+    /// argument) instead of a constant-false `Void` test.
+    fn lower_type_annotation_tir(&self, ty_expr: &baml_compiler2_ast::TypeExpr) -> Tir2Ty {
         use baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns;
+        let generic_params = self.enclosing_generic_params();
         let pkg_info = file_package(self.db, self.file);
         let pkg_id = PackageId::new(self.db, pkg_info.package);
         let pkg_items = package_items(self.db, pkg_id);
         let mut diags = Vec::new();
-        let tir_ty = lower_type_expr_in_ns(
+        lower_type_expr_in_ns(
             self.db,
             ty_expr,
             pkg_items,
             &pkg_info.namespace_path,
-            &[],
+            &generic_params,
             &mut diags,
-        );
-        self.resolved_aliases.convert(&tir_ty)
+        )
     }
 
     /// Build a `Span` from an expression's source range.
@@ -2759,19 +3730,8 @@ impl<'db> LoweringContext<'db> {
         let ret_ty = sig
             .return_type
             .as_ref()
-            .map(|te| {
-                let mut diags = Vec::new();
-                let tir_ty = lower_type_expr_in_ns(
-                    self.db,
-                    te,
-                    pkg_items,
-                    &pkg_info.namespace_path,
-                    &[],
-                    &mut diags,
-                );
-                self.resolved_aliases.convert(&tir_ty)
-            })
-            .unwrap_or(Ty::Null {
+            .map(|te| self.lower_signature_runtime_ty(te, pkg_items, &pkg_info.namespace_path))
+            .unwrap_or(RuntimeTy::Null {
                 attr: TyAttr::default(),
             });
         let ret = self
@@ -2839,22 +3799,12 @@ impl<'db> LoweringContext<'db> {
                                     self.resolved_aliases.convert(&tir_ty)
                                 })
                         })
-                        .unwrap_or(Ty::Null {
+                        .unwrap_or(RuntimeTy::Null {
                             attr: TyAttr::default(),
                         })
                 }
             } else {
-                let mut diags = Vec::new();
-                let generic_params = self.enclosing_generic_params();
-                let tir_ty = lower_type_expr_in_ns(
-                    self.db,
-                    &param.ty,
-                    pkg_items,
-                    &pkg_info.namespace_path,
-                    &generic_params,
-                    &mut diags,
-                );
-                self.convert_tir_ty_for_runtime(&tir_ty)
+                self.lower_signature_runtime_ty(&param.ty, pkg_items, &pkg_info.namespace_path)
             };
             let local = self
                 .builder
@@ -2924,7 +3874,7 @@ impl<'db> LoweringContext<'db> {
                 continue;
             };
 
-            let test_local = self.builder.temp(Ty::Bool {
+            let test_local = self.builder.temp(RuntimeTy::Bool {
                 attr: TyAttr::default(),
             });
             self.builder.assign(
@@ -2984,7 +3934,7 @@ impl<'db> LoweringContext<'db> {
         // Return place _0 (type unknown — let bodies don't have type annotations)
         let ret = self.builder.declare_local(
             Some(Name::new("_0")),
-            Ty::Null {
+            RuntimeTy::Null {
                 attr: TyAttr::default(),
             },
             None,
@@ -3045,11 +3995,11 @@ impl<'db> LoweringContext<'db> {
         let mut adapter_builder =
             MirBuilder::new(Name::new(&adapter_name), coercion.target_params.len());
 
-        let ret_ty = convert_tir2_ty(&coercion.target_return, self.resolved_aliases);
+        let ret_ty = self.resolved_aliases.convert(&coercion.target_return);
         let ret = adapter_builder.declare_local(Some(Name::new("_0")), ret_ty, None, false);
 
         for param in &coercion.target_params {
-            let param_ty = convert_tir2_ty(&param.ty, self.resolved_aliases);
+            let param_ty = self.resolved_aliases.convert(&param.ty);
             adapter_builder.declare_local(param.name.clone(), param_ty, None, false);
         }
 
@@ -3250,14 +4200,27 @@ impl<'db> LoweringContext<'db> {
         let pkg_items = package_items(self.db, pkg_id);
         let ret = self.builder.declare_local(
             Some(Name::new("_0")),
-            baml_type::Ty::Null {
+            baml_type::RuntimeTy::Null {
                 attr: baml_type::TyAttr::default(),
             },
             None,
             false,
         );
 
-        // Declare parameter locals _1..=_n.
+        // Declare parameter locals _1..=_n. A lambda param annotation may
+        // reference the enclosing function's generics or the lambda's own, so
+        // lower with both in scope; otherwise a `(x: T) => …` would resolve `T`
+        // to an unresolved `Unknown`. Record the lowered TIR type so interface
+        // dispatch on the parameter can recover its (possibly bounded) static
+        // type — TIR does not surface it via `path_segment_types` for lambda
+        // receivers. Restored after the body (`saved_lambda_param_tir_types`
+        // below).
+        let saved_lambda_param_tir_types = self.lambda_param_tir_types.clone();
+        let lambda_param_generics: Vec<Name> = self
+            .enclosing_generic_params()
+            .into_iter()
+            .chain(self.lambda_generic_params.iter().cloned())
+            .collect();
         for (param_idx, param) in func_def.params.iter().enumerate() {
             let param_ty = match &param.type_expr {
                 Some(spanned_te) => {
@@ -3267,12 +4230,14 @@ impl<'db> LoweringContext<'db> {
                         &spanned_te.expr,
                         pkg_items,
                         &pkg_info.namespace_path,
-                        &[],
+                        &lambda_param_generics,
                         &mut diags,
                     );
-                    self.resolved_aliases.convert(&tir_ty)
+                    self.lambda_param_tir_types
+                        .insert(param.name.clone(), tir_ty.clone());
+                    self.convert_tir_ty_for_runtime(&tir_ty)
                 }
-                None => baml_type::Ty::Null {
+                None => baml_type::RuntimeTy::Null {
                     attr: baml_type::TyAttr::default(),
                 },
             };
@@ -3337,6 +4302,7 @@ impl<'db> LoweringContext<'db> {
         let newly_needed_transitive = std::mem::take(&mut self.transitive_captures_needed);
 
         // Restore parent state.
+        self.lambda_param_tir_types = saved_lambda_param_tir_types;
         self.builder = saved_builder;
         self.body = saved_body;
         self.source_map = saved_source_map;
@@ -3558,11 +4524,12 @@ impl LoweringContext<'_> {
 
             AstExpr::Object {
                 type_name,
+                type_args,
                 fields,
                 spreads,
                 ..
             } => {
-                self.lower_object(expr_id, type_name.as_ref(), &fields, &spreads, dest);
+                self.lower_object(expr_id, &type_name, &type_args, &fields, &spreads, dest);
             }
 
             AstExpr::MemberAccess { base, member } => {
@@ -3675,8 +4642,12 @@ impl LoweringContext<'_> {
                 self.emit_panic_call("parse error", expr_id);
             }
 
-            AstExpr::Spawn { name, body } => {
-                self.lower_spawn(expr_id, name, body, dest);
+            AstExpr::Spawn {
+                name,
+                with_exprs,
+                body,
+            } => {
+                self.lower_spawn(expr_id, name, &with_exprs, body, dest);
             }
 
             AstExpr::Await { future } => {
@@ -3687,14 +4658,17 @@ impl LoweringContext<'_> {
         self.builder.current_source_span = prev_span;
     }
 
-    /// Lower `spawn name? { body }` into:
+    /// Lower `spawn name? with? { body }` into:
     ///   1. A `MakeClosure` for the body wrapped as a 0-arg lambda.
     ///   2. A name temp (string operand or null constant).
-    ///   3. A `Terminator::Spawn` writing the resulting Future handle.
+    ///   3. An optional config operand from the `with baml.spawn.options(...)`
+    ///      clause (BEP-034 spawn options).
+    ///   4. A `Terminator::Spawn` writing the resulting Future handle.
     fn lower_spawn(
         &mut self,
         expr_id: AstExprId,
         name: Option<AstExprId>,
+        with_exprs: &[AstExprId],
         body: AstExprId,
         dest: Place,
     ) {
@@ -3702,7 +4676,7 @@ impl LoweringContext<'_> {
         // synthetic 0-arg `Expr::Lambda`. Lowering it through the
         // standard expression path emits a `MakeClosure` rvalue, which
         // is exactly what we want as the closure operand to `Spawn`.
-        let closure_local = self.builder.temp(Ty::Null {
+        let closure_local = self.builder.temp(RuntimeTy::Null {
             attr: TyAttr::default(),
         });
         let closure_place = Place::Local(closure_local);
@@ -3715,19 +4689,71 @@ impl LoweringContext<'_> {
             None => Operand::Constant(Constant::Null),
         };
 
+        // BEP-034 middleware: with transformers present, package the body
+        // closure + name into a `baml.spawn.SpawnParams` instance, apply each
+        // `with` expression to it left-to-right (each is a function
+        // `(SpawnParams<T, E>) -> SpawnParams<U, F>`), and hand the FINAL
+        // params to the spawn as the config operand. The engine reads
+        // body/name/group/cancel/detach from its fields — a transformer may
+        // have replaced any of them, including the body. Fields are built in
+        // declaration order (the engine reads them BY INDEX; see
+        // ns_spawn/spawn.baml).
+        let config_op = if with_exprs.is_empty() {
+            None
+        } else {
+            let params_local = self.builder.temp(RuntimeTy::Null {
+                attr: TyAttr::default(),
+            });
+            self.builder.assign(
+                Place::Local(params_local),
+                Rvalue::Aggregate {
+                    kind: AggregateKind::Class {
+                        name: "baml.spawn.SpawnParams".to_string(),
+                        type_arg_templates: Vec::new(),
+                    },
+                    fields: vec![
+                        closure_op.clone(),
+                        name_op.clone(),
+                        Operand::Constant(Constant::Null),
+                        Operand::Constant(Constant::Null),
+                        Operand::Constant(Constant::Bool(false)),
+                    ],
+                },
+            );
+            let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
+            let mut cur = params_local;
+            for &with_id in with_exprs {
+                let transformer_op = self.lower_to_operand(with_id);
+                let next = self.builder.temp(RuntimeTy::Null {
+                    attr: TyAttr::default(),
+                });
+                let resume = self.builder.create_block();
+                self.builder.call(
+                    transformer_op,
+                    vec![Operand::Copy(Place::Local(cur))],
+                    Place::Local(next),
+                    resume,
+                    unwind,
+                );
+                self.builder.set_current_block(resume);
+                cur = next;
+            }
+            Some(Box::new(Operand::Copy(Place::Local(cur))))
+        };
+
         // Allocate the future temp. Phase C uses a defaulted `Null` type
         // for the future local; the TIR-tracked value/error types flow
         // through to runtime via the surrounding context. A follow-up
-        // can plumb `Tir2Ty::Future` directly through `convert_tir2_ty`
+        // can plumb `Tir2Ty::Future` directly through `convert_tir_ty_for_runtime`
         // here once we read it from `self.expr_types`.
-        let future_local = self.builder.temp(Ty::Null {
+        let future_local = self.builder.temp(RuntimeTy::Null {
             attr: TyAttr::default(),
         });
         let future_place = Place::Local(future_local);
 
         let resume = self.builder.create_block();
         self.builder
-            .spawn(closure_op, name_op, future_place.clone(), resume);
+            .spawn(closure_op, name_op, config_op, future_place.clone(), resume);
         self.builder.set_current_block(resume);
         // The result of `spawn` is the Future handle.
         self.builder
@@ -3740,7 +4766,7 @@ impl LoweringContext<'_> {
     /// Lower `await expr` into a `Terminator::Await` whose destination is
     /// the awaited value.
     fn lower_await(&mut self, _expr_id: AstExprId, future: AstExprId, dest: Place) {
-        let future_local = self.builder.temp(Ty::Null {
+        let future_local = self.builder.temp(RuntimeTy::Null {
             attr: TyAttr::default(),
         });
         let future_place = Place::Local(future_local);
@@ -3753,7 +4779,7 @@ impl LoweringContext<'_> {
         let (await_dest, projection_dest) = match dest {
             Place::Local(_) => (dest, None),
             projection => {
-                let tmp = self.builder.temp(Ty::Null {
+                let tmp = self.builder.temp(RuntimeTy::Null {
                     attr: TyAttr::default(),
                 });
                 (Place::Local(tmp), Some(projection))
@@ -4018,6 +5044,7 @@ impl<'db> LoweringContext<'db> {
                         &iface_type_args,
                         &iface_assoc,
                         &method_name,
+                        recv_tir_ty.as_ref(),
                     );
                     if !resolved.is_empty() {
                         let receiver_segments = &segments[..segments.len() - 1];
@@ -4072,6 +5099,10 @@ impl<'db> LoweringContext<'db> {
         }
 
         let name = &segments[0];
+        if name.as_str() == "$id" {
+            self.lower_current_runtime_id(dest);
+            return;
+        }
 
         let span_start = self
             .source_map
@@ -4148,9 +5179,13 @@ impl<'db> LoweringContext<'db> {
                     // If TIR inferred a more specific type for the root local,
                     // update the MIR local's declared type so the emitter can
                     // resolve field names for display (e.g. `load_field .index`).
-                    if matches!(self.builder.local_ty(root_local), Ty::BuiltinUnknown { .. })
-                        && !matches!(tir_root, Ty::BuiltinUnknown { .. } | Ty::Void { .. })
-                    {
+                    if matches!(
+                        self.builder.local_ty(root_local),
+                        RuntimeTy::BuiltinUnknown { .. }
+                    ) && !matches!(
+                        tir_root,
+                        RuntimeTy::BuiltinUnknown { .. } | RuntimeTy::Void { .. }
+                    ) {
                         self.builder.local_decl_mut(root_local).ty = tir_root.clone();
                     }
                     tir_root
@@ -4162,7 +5197,7 @@ impl<'db> LoweringContext<'db> {
                 let place = Place::Capture(cap_idx);
                 let ty = self
                     .path_root_ty(expr_id)
-                    .unwrap_or_else(|| Ty::BuiltinUnknown {
+                    .unwrap_or_else(|| RuntimeTy::BuiltinUnknown {
                         attr: TyAttr::default(),
                     });
                 (place, ty)
@@ -4171,7 +5206,7 @@ impl<'db> LoweringContext<'db> {
             {
                 // BEP-044 wf3 #4: `default.<field>` denotes the enclosing `self`
                 // viewed at the declaring interface. TIR typed the root as
-                // `Ty::Interface`, so reuse that and let the interface-prefix
+                // `RuntimeTy::Interface`, so reuse that and let the interface-prefix
                 // routing below resolve the field view (same path as
                 // `self.as<I>.field`). Without this the `default` root is not a
                 // local → null → `string + null` VM crash.
@@ -4197,19 +5232,19 @@ impl<'db> LoweringContext<'db> {
             let is_last = seg_idx + 1 == segments.len();
             let interface_prefix =
                 self.interface_receiver_for_path_prefix(expr_id, seg_idx - 1, &current_ty);
-            if interface_prefix.is_none()
-                && let Ty::Class(ref tn, ref class_type_args, _) = current_ty.clone()
+            if let Some((tn, class_type_args)) =
+                self.class_receiver_for_path_prefix(expr_id, seg_idx - 1, &current_ty)
             {
-                if let Some(fields) = self.class_fields.get(tn) {
+                if let Some(fields) = self.class_fields.get(&tn) {
                     if let Some(&idx) = fields.get(seg.as_str()) {
                         // Substitute the receiver's class type-args into the
                         // declared field type so chained access through generic
                         // positions (`b.value.name` where `b: Box<User>`)
-                        // produces `Ty::Class(User, ...)` rather than the
-                        // erased `Ty::Void`.  Without this, the next iteration
-                        // falls through to the map-key fallback below and the
+                        // produces `RuntimeTy::Class(User, ...)` rather than the
+                        // erased runtime metadata. Without this, the next iteration
+                        // falls through to the dynamic map-key path below and the
                         // VM hits `expected Map, got Instance`.
-                        let next_ty = self.class_field_ty(tn, seg, class_type_args);
+                        let next_ty = self.class_field_ty(&tn, seg, &class_type_args);
                         current_place = Place::Field {
                             base: Box::new(current_place),
                             field: idx,
@@ -4220,7 +5255,7 @@ impl<'db> LoweringContext<'db> {
                     if !is_last {
                         let qualified = Name::new(format!("{}.{}", seg, segments[seg_idx + 1]));
                         if let Some(&idx) = fields.get(qualified.as_str()) {
-                            let next_ty = self.class_field_ty(tn, &qualified, class_type_args);
+                            let next_ty = self.class_field_ty(&tn, &qualified, &class_type_args);
                             current_place = Place::Field {
                                 base: Box::new(current_place),
                                 field: idx,
@@ -4233,11 +5268,11 @@ impl<'db> LoweringContext<'db> {
                 }
             }
 
-            let target_ty =
-                self.path_segment_ty(expr_id, seg_idx)
-                    .unwrap_or_else(|| Ty::BuiltinUnknown {
-                        attr: TyAttr::default(),
-                    });
+            let target_ty = self.path_segment_ty(expr_id, seg_idx).unwrap_or_else(|| {
+                RuntimeTy::BuiltinUnknown {
+                    attr: TyAttr::default(),
+                }
+            });
             let target_place = if is_last {
                 dest.clone()
             } else {
@@ -4301,7 +5336,7 @@ impl<'db> LoweringContext<'db> {
             }
 
             // Dynamic map key fallback
-            let key_local = self.builder.temp(Ty::String {
+            let key_local = self.builder.temp(RuntimeTy::String {
                 attr: TyAttr::default(),
             });
             self.builder.assign(
@@ -4323,34 +5358,35 @@ impl<'db> LoweringContext<'db> {
     /// Look up the MIR type of a named field on a class, for chained field access.
     ///
     /// `class_type_args` are the type-args carried on the receiver's
-    /// `Ty::Class(tn, class_type_args, _)` (e.g. `[User]` for `Box<User>`).
+    /// `RuntimeTy::Class(tn, class_type_args, _)` (e.g. `[User]` for `Box<User>`).
     /// They are substituted into the declared field type so a generic-typed
     /// position (`item: T` in `Container<T>`) resolves to the concrete
-    /// receiver-side binding rather than `Ty::Void`.
+    /// receiver-side binding rather than `RuntimeTy::Void`.
     ///
-    /// Returns `Ty::Null` if the field is not found or the type cannot be
+    /// Returns `RuntimeTy::Null` if the field is not found or the type cannot be
     /// resolved.  Called by `lower_multi_segment_path_as_field_chain` to
     /// track the type through a chain of field projections (`a.b.c` needs
     /// the type of `b` to find `c`).
-    fn class_field_ty(&self, class_tn: &TypeName, field_name: &Name, class_type_args: &[Ty]) -> Ty {
+    fn class_field_ty(
+        &self,
+        class_tn: &TypeName,
+        field_name: &Name,
+        class_type_args: &[RuntimeTy],
+    ) -> RuntimeTy {
         use baml_compiler2_hir::{contributions::Definition, package::package_items};
         use baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns;
         let db = self.db;
 
-        let Some(pkg_name) = class_tn.module_path.first() else {
-            return Ty::Null {
-                attr: TyAttr::default(),
-            };
-        };
+        let pkg_name = class_tn.package();
         let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_name.clone());
         let pkg_items_ref = package_items(db, pkg_id);
 
-        let namespace: Vec<Name> = class_tn.module_path[1..].to_vec();
+        let namespace: Vec<Name> = class_tn.namespace().clone();
 
         let Some(Definition::Class(class_loc)) =
-            pkg_items_ref.lookup_type(&namespace, &class_tn.name)
+            pkg_items_ref.lookup_type(&namespace, class_tn.name())
         else {
-            return Ty::Null {
+            return RuntimeTy::Null {
                 attr: TyAttr::default(),
             };
         };
@@ -4360,12 +5396,12 @@ impl<'db> LoweringContext<'db> {
 
         let field = class_data.fields.iter().find(|f| &f.name == field_name);
         let Some(field) = field else {
-            return Ty::Null {
+            return RuntimeTy::Null {
                 attr: TyAttr::default(),
             };
         };
         let Some(ref te) = field.type_expr else {
-            return Ty::Null {
+            return RuntimeTy::Null {
                 attr: TyAttr::default(),
             };
         };
@@ -4479,7 +5515,7 @@ impl LoweringContext<'_> {
 
         // Check if TIR already folded this expression to a literal constant
         if self.opt >= crate::OptLevel::Two {
-            if let Ty::Literal(ref lit, _) = self.expr_ty(expr_id) {
+            if let RuntimeTy::Literal(ref lit, _, _) = self.expr_ty(expr_id) {
                 let constant = Self::lower_literal(lit);
                 self.builder
                     .assign(dest, Rvalue::Use(Operand::Constant(constant)));
@@ -4518,24 +5554,44 @@ impl LoweringContext<'_> {
         dest: Place,
         is_and: bool,
     ) {
+        // `ShortCircuit`'s destination must be a `Place::Local`: the emitter
+        // materializes it with `emit_store_place` on the short-circuit edge,
+        // which does not handle Field/Index projections. Normalize through a
+        // temp and assign through at the join — mirrors `lower_await`.
+        let (sc_dest, projection_dest) = match dest {
+            Place::Local(_) => (dest, None),
+            projection => {
+                let tmp = self.builder.temp(RuntimeTy::Null {
+                    attr: TyAttr::default(),
+                });
+                (Place::Local(tmp), Some(projection))
+            }
+        };
+
         let lhs_op = self.lower_to_operand(lhs);
 
         let bb_rhs = self.builder.create_block();
         let bb_join = self.builder.create_block();
 
-        // ShortCircuit terminator: JumpIfFalse (peek) keeps lhs on TOS
-        // when short-circuiting. The rhs block evaluates and leaves its
-        // result on TOS. At join, dest is on TOS (PhiLike).
+        // ShortCircuit terminator: JumpIfFalse (peek) keeps lhs on TOS when
+        // short-circuiting. The rhs block evaluates and leaves its result on
+        // TOS. At join, dest is on TOS when the destination local is
+        // stack-carried (PhiLike); otherwise the emitter stores to its slot
+        // on both edges and the join reads the slot.
         self.builder
-            .short_circuit(lhs_op, is_and, dest.clone(), bb_rhs, bb_join);
+            .short_circuit(lhs_op, is_and, sc_dest.clone(), bb_rhs, bb_join);
 
         self.builder.set_current_block(bb_rhs);
-        self.lower_expr(rhs, dest);
+        self.lower_expr(rhs, sc_dest.clone());
         if !self.builder.is_current_terminated() {
             self.builder.goto(bb_join);
         }
 
         self.builder.set_current_block(bb_join);
+        if let Some(projection) = projection_dest {
+            self.builder
+                .assign(projection, Rvalue::Use(Operand::Copy(sc_dest)));
+        }
     }
 
     /// Lower `a ?? b` — evaluate `a`, if null then evaluate `b`, otherwise use `a`.
@@ -4557,7 +5613,7 @@ impl LoweringContext<'_> {
             left: lhs_op,
             right: Operand::Constant(Constant::Null),
         };
-        let test_local = self.builder.temp(Ty::Bool {
+        let test_local = self.builder.temp(RuntimeTy::Bool {
             attr: TyAttr::default(),
         });
         self.builder.assign(Place::local(test_local), is_null);
@@ -4691,7 +5747,7 @@ impl LoweringContext<'_> {
             left: base_op,
             right: Operand::Constant(Constant::Null),
         };
-        let test_local = self.builder.temp(Ty::Bool {
+        let test_local = self.builder.temp(RuntimeTy::Bool {
             attr: TyAttr::default(),
         });
         self.builder.assign(Place::local(test_local), is_null);
@@ -4744,7 +5800,7 @@ impl LoweringContext<'_> {
             left: base_op,
             right: Operand::Constant(Constant::Null),
         };
-        let test_local = self.builder.temp(Ty::Bool {
+        let test_local = self.builder.temp(RuntimeTy::Bool {
             attr: TyAttr::default(),
         });
         self.builder.assign(Place::local(test_local), is_null);
@@ -4794,7 +5850,7 @@ impl LoweringContext<'_> {
             left: callee_op,
             right: Operand::Constant(Constant::Null),
         };
-        let test_local = self.builder.temp(Ty::Bool {
+        let test_local = self.builder.temp(RuntimeTy::Bool {
             attr: TyAttr::default(),
         });
         self.builder.assign(Place::local(test_local), is_null);
@@ -4832,7 +5888,7 @@ impl LoweringContext<'_> {
     fn lower_unary(&mut self, expr_id: AstExprId, op: AstUnaryOp, expr: AstExprId, dest: Place) {
         // Check if TIR already folded this expression to a literal constant
         if self.opt >= crate::OptLevel::Two {
-            if let Ty::Literal(ref lit, _) = self.expr_ty(expr_id) {
+            if let RuntimeTy::Literal(ref lit, _, _) = self.expr_ty(expr_id) {
                 let constant = Self::lower_literal(lit);
                 self.builder
                     .assign(dest, Rvalue::Use(Operand::Constant(constant)));
@@ -5029,16 +6085,45 @@ impl LoweringContext<'_> {
                 let recv_tir_ty = self
                     .path_segment_types
                     .get(&(self.current_metadata_scope, callee, recv_seg_idx))
-                    .cloned();
+                    .cloned()
+                    .or_else(|| {
+                        if segments.len() == 2
+                            && segments[0].as_str() == "self"
+                            && self.generic_param_bounds.contains_key(&Name::new("Self"))
+                        {
+                            Some(Tir2Ty::TypeVar(
+                                Name::new("Self"),
+                                baml_compiler2_tir::ty::TyAttr::default(),
+                            ))
+                        } else {
+                            None
+                        }
+                    })
+                    // A lambda-parameter receiver (`(a: T) -> a.compare(b)`) has
+                    // no `path_segment_types` entry; recover its declared type so
+                    // a method on its (bounded) type variable dispatches.
+                    .or_else(|| {
+                        if segments.len() == 2 {
+                            self.lambda_param_tir_types.get(&segments[0]).cloned()
+                        } else {
+                            None
+                        }
+                    });
                 let iface_dispatch_opt: Option<InterfaceTypeView> = if segments.len() == 2 {
-                    if let Some(target) = recv_tir_ty
-                        .as_ref()
-                        .and_then(|ty| self.interface_dispatch_target_for_tir_ty(ty))
+                    if let Some(target) = self
+                        .source_param_interface_view_for_name_at(callee, &segments[0])
+                        .or_else(|| {
+                            recv_tir_ty
+                                .as_ref()
+                                .and_then(|ty| self.interface_dispatch_target_for_tir_ty(ty))
+                        })
                     {
                         Some(target)
                     } else {
                         match self.builder.local_ty(recv_root_local) {
-                            Ty::Class(n, _, _) if self.interface_implementors.contains_key(&n) => {
+                            RuntimeTy::Class(n, _, _)
+                                if self.interface_implementors.contains_key(&n) =>
+                            {
                                 Some((n, Vec::new(), Vec::new()))
                             }
                             _ => None,
@@ -5061,7 +6146,7 @@ impl LoweringContext<'_> {
                     // Decide how many leading segments form the receiver
                     // value (the rest are type qualifiers).
                     let prefix_is_qualifier = segments.len() >= 3
-                        && segments[prefix_idx].as_str() == iface_tn.name.as_str();
+                        && segments[prefix_idx].as_str() == iface_tn.name().as_str();
                     let receiver_segments_end = if prefix_is_qualifier {
                         prefix_idx
                     } else {
@@ -5077,6 +6162,7 @@ impl LoweringContext<'_> {
                         InterfaceDispatchCall {
                             expr_id,
                             recv_local,
+                            recv_tir_ty: recv_tir_ty.as_ref(),
                             iface_tn: &iface_tn,
                             iface_type_args: &iface_type_args,
                             iface_assoc: &iface_assoc,
@@ -5123,6 +6209,7 @@ impl LoweringContext<'_> {
                             expr_id,
                             args,
                             &dest,
+                            None,
                         )
                     {
                         return;
@@ -5136,9 +6223,131 @@ impl LoweringContext<'_> {
         // If the base is a real value (not a package namespace), prepend it as self.
         let mut receiver_base_for_class_type_args: Option<AstExprId> = None;
         let mut receiver_path_tir_ty: Option<Tir2Ty> = None;
-        let (callee_operand, arg_operands) =
-            if let AstExpr::MemberAccess { base, .. } = &callee_expr {
-                if self
+        let (callee_operand, arg_operands) = if let AstExpr::MemberAccess { base, .. } =
+            &callee_expr
+        {
+            if self
+                .resolutions
+                .get(&self.expr_metadata_key(callee))
+                .is_some_and(|r| {
+                    use baml_compiler2_tir::inference::MemberResolution;
+                    matches!(
+                        r,
+                        MemberResolution::BoundMethod { .. }
+                            | MemberResolution::UnboundMethod { .. }
+                            | MemberResolution::Free { .. }
+                            | MemberResolution::InterfaceDefaultMethod { .. }
+                    )
+                })
+            {
+                // Check if base is a value receiver or a bare type/package path.
+                // Type-name bases like `Label<int>.method` can have concrete
+                // TIR types (`Interface`, `Class`) but are not runtime values.
+                let base_is_value = match &self.body.exprs[*base] {
+                    AstExpr::Path(segments) if !segments.is_empty() => {
+                        self.locals.contains_key(&segments[0])
+                            || self
+                                .capture_index_for_name_at(*base, &segments[0])
+                                .is_some()
+                    }
+                    _ => self
+                        .expr_types
+                        .get(&self.expr_metadata_key(*base))
+                        .map(|ty| !matches!(ty, Tir2Ty::Unknown { .. }))
+                        .unwrap_or(false),
+                };
+                // Check if the resolved method expects a `self` receiver.
+                // Static methods (e.g. StreamCache.new) have no `self` param
+                // and must not get the class reference prepended as an argument.
+                let method_takes_self = {
+                    use baml_compiler2_tir::inference::MemberResolution;
+                    self.resolutions
+                        .get(&self.expr_metadata_key(callee))
+                        .is_some_and(|r| match r {
+                            MemberResolution::BoundMethod { func_loc, .. }
+                            | MemberResolution::UnboundMethod { func_loc, .. }
+                            | MemberResolution::Free { func_loc }
+                            | MemberResolution::InterfaceDefaultMethod { func_loc, .. } => {
+                                let sig =
+                                    baml_compiler2_ppir::function_signature(self.db, *func_loc);
+                                sig.params
+                                    .first()
+                                    .is_some_and(|param| param.name.as_str() == "self")
+                            }
+                            _ => false,
+                        })
+                };
+                if base_is_value && method_takes_self {
+                    // Instance method call: arr.length() — prepend receiver as self.
+                    // For immediate calls, emit the callee as a plain function constant
+                    // (not MakeBoundMethod) since the receiver is passed explicitly as self.
+                    let receiver_op = self.lower_to_operand(*base);
+                    receiver_base_for_class_type_args = Some(*base);
+                    let callee_op = {
+                        let resolution = self
+                            .resolutions
+                            .get(&self.expr_metadata_key(callee))
+                            .cloned();
+                        match resolution
+                            .as_ref()
+                            .and_then(|r| resolution_to_item_ref(self.db, r))
+                        {
+                            Some(item) => Operand::Constant(Constant::Function(item)),
+                            None => self.lower_to_operand(callee),
+                        }
+                    };
+                    let mut all_args = vec![receiver_op];
+                    all_args.extend(self.lower_call_arg_operands(expr_id, args));
+                    (callee_op, all_args)
+                } else {
+                    // Non-self method or package function reference:
+                    // e.g. Factory<int>.create(42), baml.Array.length(array).
+                    // Resolve the callee as a plain function constant using
+                    // resolution_to_item_ref to avoid lower_member_access emitting
+                    // MakeBoundMethod (which would try to load the base type as a
+                    // runtime value).
+                    let callee_op = {
+                        let resolution = self
+                            .resolutions
+                            .get(&self.expr_metadata_key(callee))
+                            .cloned();
+                        match resolution
+                            .as_ref()
+                            .and_then(|r| resolution_to_item_ref(self.db, r))
+                        {
+                            Some(item) => Operand::Constant(Constant::Function(item)),
+                            None => self.lower_to_operand(callee),
+                        }
+                    };
+                    (callee_op, self.lower_call_arg_operands(expr_id, args))
+                }
+            } else {
+                let callee_op = self.lower_to_operand(callee);
+                (callee_op, self.lower_call_arg_operands(expr_id, args))
+            }
+        } else if let AstExpr::Path(segments) = &callee_expr {
+            // Check path_member_resolutions first (local-rooted paths like `self.method()`
+            // or `obj.field.method()`). The last resolution determines if the final segment
+            // is a method call (e.g. for `user.profile.items.slice`, resolutions are
+            // [Field{profile}, Field{items}, Method{slice}] — last() is Method).
+            let is_local_method = segments.len() >= 2
+                && self
+                    .path_member_resolutions
+                    .get(&self.expr_metadata_key(callee))
+                    .and_then(|resolutions| resolutions.last())
+                    .is_some_and(|r| {
+                        use baml_compiler2_tir::inference::MemberResolution;
+                        matches!(
+                            r,
+                            MemberResolution::BoundMethod { .. }
+                                | MemberResolution::UnboundMethod { .. }
+                                | MemberResolution::InterfaceDefaultMethod { .. }
+                        )
+                    });
+            // Also check flat resolutions (package-path method call, kept for compatibility).
+            let is_pkg_method = !is_local_method
+                && segments.len() >= 2
+                && self
                     .resolutions
                     .get(&self.expr_metadata_key(callee))
                     .is_some_and(|r| {
@@ -5147,151 +6356,47 @@ impl LoweringContext<'_> {
                             r,
                             MemberResolution::BoundMethod { .. }
                                 | MemberResolution::UnboundMethod { .. }
-                                | MemberResolution::Free { .. }
                                 | MemberResolution::InterfaceDefaultMethod { .. }
                         )
-                    })
-                {
-                    // Check if base is a value receiver or a bare type/package path.
-                    // Type-name bases like `Label<int>.method` can have concrete
-                    // TIR types (`Interface`, `Class`) but are not runtime values.
-                    let base_is_value = match &self.body.exprs[*base] {
-                        AstExpr::Path(segments) if !segments.is_empty() => {
-                            self.locals.contains_key(&segments[0])
-                                || self
-                                    .capture_index_for_name_at(*base, &segments[0])
-                                    .is_some()
-                        }
-                        _ => self
-                            .expr_types
-                            .get(&self.expr_metadata_key(*base))
-                            .map(|ty| !matches!(ty, Tir2Ty::Unknown { .. }))
-                            .unwrap_or(false),
-                    };
-                    // Check if the resolved method expects a `self` receiver.
-                    // Static methods (e.g. StreamCache.new) have no `self` param
-                    // and must not get the class reference prepended as an argument.
-                    let method_takes_self = {
-                        use baml_compiler2_tir::inference::MemberResolution;
-                        self.resolutions
-                            .get(&self.expr_metadata_key(callee))
-                            .is_some_and(|r| match r {
-                                MemberResolution::BoundMethod { func_loc, .. }
-                                | MemberResolution::UnboundMethod { func_loc, .. }
-                                | MemberResolution::Free { func_loc }
-                                | MemberResolution::InterfaceDefaultMethod { func_loc, .. } => {
-                                    let sig =
-                                        baml_compiler2_ppir::function_signature(self.db, *func_loc);
-                                    sig.params
-                                        .first()
-                                        .is_some_and(|param| param.name.as_str() == "self")
-                                }
-                                _ => false,
-                            })
-                    };
-                    if base_is_value && method_takes_self {
-                        // Instance method call: arr.length() — prepend receiver as self.
-                        // For immediate calls, emit the callee as a plain function constant
-                        // (not MakeBoundMethod) since the receiver is passed explicitly as self.
-                        let receiver_op = self.lower_to_operand(*base);
-                        receiver_base_for_class_type_args = Some(*base);
-                        let callee_op = {
-                            let resolution = self
-                                .resolutions
-                                .get(&self.expr_metadata_key(callee))
-                                .cloned();
-                            match resolution
-                                .as_ref()
-                                .and_then(|r| resolution_to_item_ref(self.db, r))
-                            {
-                                Some(item) => Operand::Constant(Constant::Function(item)),
-                                None => self.lower_to_operand(callee),
-                            }
-                        };
-                        let mut all_args = vec![receiver_op];
-                        all_args.extend(self.lower_call_arg_operands(expr_id, args));
-                        (callee_op, all_args)
-                    } else {
-                        // Non-self method or package function reference:
-                        // e.g. Factory<int>.create(42), baml.Array.length(array).
-                        // Resolve the callee as a plain function constant using
-                        // resolution_to_item_ref to avoid lower_member_access emitting
-                        // MakeBoundMethod (which would try to load the base type as a
-                        // runtime value).
-                        let callee_op = {
-                            let resolution = self
-                                .resolutions
-                                .get(&self.expr_metadata_key(callee))
-                                .cloned();
-                            match resolution
-                                .as_ref()
-                                .and_then(|r| resolution_to_item_ref(self.db, r))
-                            {
-                                Some(item) => Operand::Constant(Constant::Function(item)),
-                                None => self.lower_to_operand(callee),
-                            }
-                        };
-                        (callee_op, self.lower_call_arg_operands(expr_id, args))
-                    }
-                } else {
-                    let callee_op = self.lower_to_operand(callee);
-                    (callee_op, self.lower_call_arg_operands(expr_id, args))
-                }
-            } else if let AstExpr::Path(segments) = &callee_expr {
-                // Check path_member_resolutions first (local-rooted paths like `self.method()`
-                // or `obj.field.method()`). The last resolution determines if the final segment
-                // is a method call (e.g. for `user.profile.items.slice`, resolutions are
-                // [Field{profile}, Field{items}, Method{slice}] — last() is Method).
-                let is_local_method = segments.len() >= 2
-                    && self
-                        .path_member_resolutions
-                        .get(&self.expr_metadata_key(callee))
-                        .and_then(|resolutions| resolutions.last())
-                        .is_some_and(|r| {
-                            use baml_compiler2_tir::inference::MemberResolution;
-                            matches!(
-                                r,
-                                MemberResolution::BoundMethod { .. }
-                                    | MemberResolution::UnboundMethod { .. }
-                                    | MemberResolution::InterfaceDefaultMethod { .. }
-                            )
-                        });
-                // Also check flat resolutions (package-path method call, kept for compatibility).
-                let is_pkg_method = !is_local_method
-                    && segments.len() >= 2
-                    && self
-                        .resolutions
-                        .get(&self.expr_metadata_key(callee))
-                        .is_some_and(|r| {
-                            use baml_compiler2_tir::inference::MemberResolution;
-                            matches!(
-                                r,
-                                MemberResolution::BoundMethod { .. }
-                                    | MemberResolution::UnboundMethod { .. }
-                                    | MemberResolution::InterfaceDefaultMethod { .. }
-                            )
-                        });
+                    });
 
-                if is_local_method {
-                    // Multi-segment path callee with a local-rooted Method resolution.
-                    // The last segment is the method; segments[0..n-1] form the receiver.
-                    // e.g. `self.method()` → receiver=self, `user.profile.items.slice()` → receiver=user.profile.items.
-                    //
-                    // For immediate calls we emit the callee as a plain function constant
-                    // (not MakeBoundMethod) since the receiver is passed explicitly as self.
-                    let receiver_segments = &segments[..segments.len() - 1];
-                    let method_resolution = self
-                        .path_member_resolutions
-                        .get(&self.expr_metadata_key(callee))
-                        .and_then(|resolutions| resolutions.last())
-                        .cloned();
-                    let callee_op = match method_resolution
-                        .as_ref()
-                        .and_then(|r| resolution_to_item_ref(self.db, r))
-                    {
-                        Some(item) => Operand::Constant(Constant::Function(item)),
-                        None => self.lower_to_operand(callee),
-                    };
+            if is_local_method {
+                // Multi-segment path callee with a local-rooted Method resolution.
+                // The last segment is the method; segments[0..n-1] form the receiver.
+                // e.g. `self.method()` → receiver=self, `user.profile.items.slice()` → receiver=user.profile.items.
+                //
+                // For immediate calls we emit the callee as a plain function constant
+                // (not MakeBoundMethod) since the receiver is passed explicitly as self.
+                let receiver_segments = &segments[..segments.len() - 1];
+                let method_resolution = self
+                    .path_member_resolutions
+                    .get(&self.expr_metadata_key(callee))
+                    .and_then(|resolutions| resolutions.last())
+                    .cloned();
+                let callee_op = match method_resolution
+                    .as_ref()
+                    .and_then(|r| resolution_to_item_ref(self.db, r))
+                {
+                    Some(item) => Operand::Constant(Constant::Function(item)),
+                    None => self.lower_to_operand(callee),
+                };
+                let method_takes_self = method_resolution.as_ref().is_some_and(|r| {
+                    use baml_compiler2_tir::inference::MemberResolution;
+                    match r {
+                        MemberResolution::BoundMethod { func_loc, .. }
+                        | MemberResolution::UnboundMethod { func_loc, .. }
+                        | MemberResolution::InterfaceDefaultMethod { func_loc, .. } => {
+                            let sig = baml_compiler2_ppir::function_signature(self.db, *func_loc);
+                            sig.params
+                                .first()
+                                .is_some_and(|param| param.name.as_str() == "self")
+                        }
+                        _ => false,
+                    }
+                });
+                if !method_takes_self {
+                    (callee_op, self.lower_call_arg_operands(expr_id, args))
+                } else {
                     let receiver_op = if receiver_segments.len() == 1 {
                         // Simple local variable receiver (e.g. `self`).
                         if let Some(&recv_local) = self.locals.get(&receiver_segments[0]) {
@@ -5322,48 +6427,49 @@ impl LoweringContext<'_> {
                     let mut all_args = vec![receiver_op];
                     all_args.extend(self.lower_call_arg_operands(expr_id, args));
                     (callee_op, all_args)
-                } else if is_pkg_method {
-                    // Package-path method call (via flat resolutions): same treatment.
-                    // For immediate calls, emit the callee as a plain function constant
-                    // (not MakeBoundMethod) since the receiver is passed explicitly as self.
-                    let flat_resolution = self
-                        .resolutions
-                        .get(&self.expr_metadata_key(callee))
-                        .cloned();
-                    let callee_op = match flat_resolution
-                        .as_ref()
-                        .and_then(|r| resolution_to_item_ref(self.db, r))
-                    {
-                        Some(item) => Operand::Constant(Constant::Function(item)),
-                        None => self.lower_to_operand(callee),
-                    };
-                    let first_seg = &segments[0];
-                    let receiver_op = if let Some(&receiver_local) = self.locals.get(first_seg) {
-                        Some(Operand::Copy(Place::Local(receiver_local)))
-                    } else {
-                        self.capture_index_for_name_at(callee, first_seg)
-                            .map(|cap_idx| Operand::Copy(Place::Capture(cap_idx)))
-                    };
-                    if let Some(receiver_op) = receiver_op {
-                        let prefix_idx = segments.len() - 2;
-                        receiver_path_tir_ty = self
-                            .path_segment_types
-                            .get(&(self.current_metadata_scope, callee, prefix_idx))
-                            .cloned();
-                        let mut all_args = vec![receiver_op];
-                        all_args.extend(self.lower_call_arg_operands(expr_id, args));
-                        (callee_op, all_args)
-                    } else {
-                        (callee_op, self.lower_call_arg_operands(expr_id, args))
-                    }
+                }
+            } else if is_pkg_method {
+                // Package-path method call (via flat resolutions): same treatment.
+                // For immediate calls, emit the callee as a plain function constant
+                // (not MakeBoundMethod) since the receiver is passed explicitly as self.
+                let flat_resolution = self
+                    .resolutions
+                    .get(&self.expr_metadata_key(callee))
+                    .cloned();
+                let callee_op = match flat_resolution
+                    .as_ref()
+                    .and_then(|r| resolution_to_item_ref(self.db, r))
+                {
+                    Some(item) => Operand::Constant(Constant::Function(item)),
+                    None => self.lower_to_operand(callee),
+                };
+                let first_seg = &segments[0];
+                let receiver_op = if let Some(&receiver_local) = self.locals.get(first_seg) {
+                    Some(Operand::Copy(Place::Local(receiver_local)))
                 } else {
-                    let callee_op = self.lower_to_operand(callee);
+                    self.capture_index_for_name_at(callee, first_seg)
+                        .map(|cap_idx| Operand::Copy(Place::Capture(cap_idx)))
+                };
+                if let Some(receiver_op) = receiver_op {
+                    let prefix_idx = segments.len() - 2;
+                    receiver_path_tir_ty = self
+                        .path_segment_types
+                        .get(&(self.current_metadata_scope, callee, prefix_idx))
+                        .cloned();
+                    let mut all_args = vec![receiver_op];
+                    all_args.extend(self.lower_call_arg_operands(expr_id, args));
+                    (callee_op, all_args)
+                } else {
                     (callee_op, self.lower_call_arg_operands(expr_id, args))
                 }
             } else {
                 let callee_op = self.lower_to_operand(callee);
                 (callee_op, self.lower_call_arg_operands(expr_id, args))
-            };
+            }
+        } else {
+            let callee_op = self.lower_to_operand(callee);
+            (callee_op, self.lower_call_arg_operands(expr_id, args))
+        };
 
         let target = self.builder.create_block();
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
@@ -5390,7 +6496,7 @@ impl LoweringContext<'_> {
                     let place = match receiver_operand {
                         Operand::Copy(p) | Operand::Move(p) => p.clone(),
                         Operand::Constant(_) => {
-                            let tmp = self.builder.temp(baml_type::Ty::unknown());
+                            let tmp = self.builder.temp(baml_type::RuntimeTy::unknown());
                             self.builder
                                 .assign(Place::Local(tmp), Rvalue::Use(receiver_operand.clone()));
                             Place::Local(tmp)
@@ -5419,27 +6525,28 @@ impl LoweringContext<'_> {
             return;
         }
 
-        // ── Emit LoadType temps for explicit type arguments ──────────────────
-        // When the call carries explicit type args (e.g. `describe<User>()` or
-        // `fwd<T>()` where T forwards to `described_type<T>()`), materialise
-        // each as a `type` value on the stack before the regular value args.
+        // ── Emit LoadType temps for call type arguments ──────────────────────
+        // When the call carries type args, either explicit (`describe<User>()`)
+        // or inferred by TIR, materialise each as a `type` value on the stack
+        // before the regular value args.
         // The VM pops these `ntypeargs` Object::Type values into the new frame's
         // `type_args` vec so that inner `reflect.type_of<T>()` calls can
         // substitute them at runtime.
-        let ast_type_args: Vec<AstTypeExpr> =
-            if let AstExpr::Call { type_args, .. } = &self.body.exprs[expr_id] {
-                type_args.clone()
-            } else {
-                vec![]
-            };
-        let explicit_type_arg_operands = self.lower_explicit_type_args(&ast_type_args);
+        // Check if callee resolves to a builtin IO function (sys-op). Sys-op
+        // glue reads only its declared value args plus any synthetic trailing
+        // `type` operands needed for generic params that are not already
+        // represented by ordinary `type` value params.
+        let sys_op_type_arg_count = self.sys_op_synthetic_type_arg_count(callee);
+        let is_sys_op = sys_op_type_arg_count.is_some();
+        let call_type_arg_operands =
+            self.lower_call_type_args(expr_id, true, sys_op_type_arg_count);
 
         // ── Prepend receiver's class-level type args ─────────────────────────
         // For `b.describe()` where `b: Box<int>`, the method `describe` is compiled
         // as a direct call `describe(b)` (not via MakeBoundMethod). The VM's
         // BoundMethod path for seeding frame.type_args is bypassed, so we instead
-        // emit LoadType for each class-level type arg and prepend them as leading
-        // call-site type args.  This preserves De Bruijn ordering:
+        // emit LoadType for each class-level type arg and prepend them before
+        // the method's own type args. This preserves De Bruijn ordering:
         //   frame.type_args = [class_T, class_U, ..., fn_A, fn_B, ...]
         // matching `enclosing_generic_params()` = class_params ++ fn_params.
         //
@@ -5455,29 +6562,62 @@ impl LoweringContext<'_> {
             } else {
                 receiver_path_tir_ty
             };
-        let receiver_class_type_arg_operands: Vec<Operand> = match receiver_tir_ty {
-            Some(Tir2Ty::Class(_, class_type_args, _)) if !class_type_args.is_empty() => {
-                let generic_params = self.enclosing_generic_params();
-                class_type_args
-                    .iter()
-                    .map(|ty_arg| {
-                        let template = self.ty_to_template(ty_arg, &generic_params);
-                        let temp = self.builder.temp(Ty::type_type());
-                        self.builder
-                            .assign(Place::local(temp), Rvalue::LoadType(template));
-                        Operand::Copy(Place::local(temp))
-                    })
-                    .collect()
-            }
-            _ => vec![],
+        let receiver_class_type_args: Vec<Tir2Ty> =
+            match (&callee_operand, receiver_tir_ty.as_ref()) {
+                (_, Some(Tir2Ty::Class(_, class_type_args, _))) => class_type_args.clone(),
+                (
+                    Operand::Constant(Constant::Function(ItemRef::Method {
+                        package,
+                        namespace,
+                        class,
+                        ..
+                    })),
+                    Some(Tir2Ty::List(inner, _) | Tir2Ty::EvolvingList(inner, _)),
+                ) if package.as_str() == "baml"
+                    && namespace.is_empty()
+                    && class.as_str() == "Array" =>
+                {
+                    vec![inner.as_ref().clone()]
+                }
+                (
+                    Operand::Constant(Constant::Function(ItemRef::Method {
+                        package,
+                        namespace,
+                        class,
+                        ..
+                    })),
+                    Some(Tir2Ty::Map { key, value, .. } | Tir2Ty::EvolvingMap(key, value, _)),
+                ) if package.as_str() == "baml"
+                    && namespace.is_empty()
+                    && class.as_str() == "Map" =>
+                {
+                    vec![key.as_ref().clone(), value.as_ref().clone()]
+                }
+                _ => Vec::new(),
+            };
+        let receiver_class_type_arg_operands: Vec<Operand> = if !receiver_class_type_args.is_empty()
+        {
+            let generic_params = self.enclosing_generic_params();
+            receiver_class_type_args
+                .iter()
+                .map(|ty_arg| {
+                    let template = self.ty_to_template(ty_arg, &generic_params);
+                    let temp = self.builder.temp(RuntimeTy::type_type());
+                    self.builder
+                        .assign(Place::local(temp), Rvalue::LoadType(template));
+                    Operand::Copy(Place::local(temp))
+                })
+                .collect()
+        } else {
+            vec![]
         };
 
         let type_arg_operands: Vec<Operand> = if !receiver_class_type_arg_operands.is_empty() {
             let mut combined = receiver_class_type_arg_operands;
-            combined.extend(explicit_type_arg_operands);
+            combined.extend(call_type_arg_operands);
             combined
         } else {
-            explicit_type_arg_operands
+            call_type_arg_operands
         };
         let ntypeargs = type_arg_operands.len();
 
@@ -5492,8 +6632,40 @@ impl LoweringContext<'_> {
             arg_operands.clone()
         };
 
-        // Check if callee resolves to a builtin IO function (sys-op)
-        let is_sys_op = self.check_sys_op(callee);
+        // BEP-034 `baml.future.__await_any(futures)` lowers to a dedicated
+        // `Terminator::AwaitAny` suspend point (like `await`), not a call.
+        if self.check_await_any(callee) {
+            // The single value arg is the array of futures. (`__await_any` has
+            // two type params T,E used only for type checking; the runtime
+            // terminator just needs the array operand.)
+            let futures_operand = arg_operands
+                .into_iter()
+                .next()
+                .expect("__await_any takes exactly one (array) argument");
+            match &dest {
+                Place::Local(l) => {
+                    self.builder
+                        .await_any(futures_operand, Place::Local(*l), target, unwind);
+                }
+                _ => {
+                    // Projection/capture destination: await into a temp, then
+                    // assign across (mirrors the regular-call path below).
+                    let call_ty = self.expr_ty(expr_id);
+                    let tmp = self.builder.temp(call_ty);
+                    self.builder
+                        .await_any(futures_operand, Place::local(tmp), target, unwind);
+                    self.builder.set_current_block(target);
+                    let after = self.builder.create_block();
+                    self.builder
+                        .assign(dest, Rvalue::Use(Operand::Copy(Place::local(tmp))));
+                    self.builder.goto(after);
+                    self.builder.set_current_block(after);
+                    return;
+                }
+            }
+            self.builder.set_current_block(target);
+            return;
+        }
 
         if is_sys_op {
             // BEP-034 phase D′: sys-ops now lower to a single
@@ -5508,17 +6680,15 @@ impl LoweringContext<'_> {
             //     <store dest>
             let dest_local = match dest {
                 Place::Local(l) => l,
-                _ => self.builder.temp(Ty::Null {
+                _ => self.builder.temp(RuntimeTy::Null {
                     attr: TyAttr::default(),
                 }),
             };
-            // For generic IO builtins (`$rust_io_function` with type
-            // params), the compiler injects synthetic trailing
-            // value-arg slots — one `baml_type::Ty` per type
-            // parameter.  The Rust glue reads them positionally after
-            // the regular value args.  We therefore append type-arg
-            // operands AFTER the value args here (unlike regular BAML
-            // calls where they are prepended as leading args).
+            // For generic IO builtins (`$rust_io_function` with type params),
+            // the compiler may inject synthetic trailing value-arg slots for
+            // runtime `baml_type::RuntimeTy` descriptors. The Rust glue reads them
+            // positionally after the regular value args, so append them here
+            // instead of prepending them like regular BAML frame type args.
             let sys_op_arg_operands = if ntypeargs > 0 {
                 let mut combined = arg_operands;
                 combined.extend(type_arg_operands);
@@ -5573,7 +6743,106 @@ impl LoweringContext<'_> {
         self.builder.set_current_block(target);
     }
 
-    fn check_sys_op(&self, callee: AstExprId) -> bool {
+    /// True when the callee is the BEP-034 `baml.future.__await_any`
+    fn check_await_any(&self, callee: AstExprId) -> bool {
+        matches!(
+            self.callee_builtin_kind(callee),
+            Some(baml_compiler2_ast::BuiltinKind::AwaitAny)
+        )
+    }
+    fn callee_builtin_kind(&self, callee: AstExprId) -> Option<baml_compiler2_ast::BuiltinKind> {
+        // ── Path callee (single- or multi-segment) ─────────────────────────────
+        if let AstExpr::Path(segments) = &self.body.exprs[callee] {
+            let func_loc = if segments.len() == 1 {
+                let span_start = self
+                    .source_map
+                    .as_ref()
+                    .map(|sm| sm.expr_span(callee).start())
+                    .unwrap_or_default();
+                let resolved = resolve_name_at_in_scope(
+                    self.db,
+                    self.file,
+                    span_start,
+                    &segments[0],
+                    self.scope_func_name.as_ref(),
+                );
+                match resolved {
+                    ResolvedName::Builtin(Definition::Function(fl)) => Some(fl),
+                    ResolvedName::Item(Definition::Function(fl)) => Some(fl),
+                    _ => None,
+                }
+            } else {
+                // Multi-segment: check path_member_resolutions first (local-rooted paths
+                // like `file.read_string`), then fall back to flat resolutions (package paths).
+                // The last resolution in path_member_resolutions is the final-segment resolution.
+                use baml_compiler2_tir::inference::MemberResolution;
+                let from_pmr = self
+                    .path_member_resolutions
+                    .get(&self.expr_metadata_key(callee))
+                    .and_then(|resolutions| resolutions.last())
+                    .and_then(|res| match res {
+                        MemberResolution::Free { func_loc } => Some(*func_loc),
+                        MemberResolution::BoundMethod { func_loc, .. }
+                        | MemberResolution::UnboundMethod { func_loc, .. }
+                        | MemberResolution::InterfaceDefaultMethod { func_loc, .. } => {
+                            Some(*func_loc)
+                        }
+                        MemberResolution::Field { .. }
+                        | MemberResolution::Variant { .. }
+                        | MemberResolution::InterfaceRequiredMethod { .. } => None,
+                    });
+                if from_pmr.is_some() {
+                    from_pmr
+                } else {
+                    self.resolutions
+                        .get(&self.expr_metadata_key(callee))
+                        .and_then(|res| match res {
+                            MemberResolution::Free { func_loc } => Some(*func_loc),
+                            MemberResolution::BoundMethod { func_loc, .. }
+                            | MemberResolution::UnboundMethod { func_loc, .. }
+                            | MemberResolution::InterfaceDefaultMethod { func_loc, .. } => {
+                                Some(*func_loc)
+                            }
+                            MemberResolution::Field { .. }
+                            | MemberResolution::Variant { .. }
+                            | MemberResolution::InterfaceRequiredMethod { .. } => None,
+                        })
+                }
+            };
+            if let Some(fl) = func_loc {
+                let body = baml_compiler2_ppir::function_body(self.db, fl);
+                if let FunctionBody::Builtin(kind) = body.as_ref() {
+                    return Some(*kind);
+                }
+            }
+        }
+
+        // ── NEW: MemberAccess callee (e.g. f.read, sock.recv) ──────────────────
+        if let AstExpr::MemberAccess { .. } = &self.body.exprs[callee] {
+            use baml_compiler2_tir::inference::MemberResolution;
+            if let Some(resolution) = self.resolutions.get(&self.expr_metadata_key(callee)) {
+                let func_loc = match resolution {
+                    MemberResolution::BoundMethod { func_loc, .. }
+                    | MemberResolution::UnboundMethod { func_loc, .. }
+                    | MemberResolution::InterfaceDefaultMethod { func_loc, .. } => Some(*func_loc),
+                    MemberResolution::Free { func_loc } => Some(*func_loc),
+                    MemberResolution::Field { .. }
+                    | MemberResolution::Variant { .. }
+                    | MemberResolution::InterfaceRequiredMethod { .. } => None,
+                };
+                if let Some(fl) = func_loc {
+                    let body = baml_compiler2_ppir::function_body(self.db, fl);
+                    if let FunctionBody::Builtin(kind) = body.as_ref() {
+                        return Some(*kind);
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
+    fn sys_op_synthetic_type_arg_count(&self, callee: AstExprId) -> Option<usize> {
         use baml_compiler2_ast::BuiltinKind;
 
         // ── Path callee (single- or multi-segment) ─────────────────────────────
@@ -5637,7 +6906,7 @@ impl LoweringContext<'_> {
             if let Some(fl) = func_loc {
                 let body = baml_compiler2_ppir::function_body(self.db, fl);
                 if let FunctionBody::Builtin(BuiltinKind::Io) = body.as_ref() {
-                    return true;
+                    return Some(self.synthetic_type_arg_count_for_sys_op(fl));
                 }
             }
         }
@@ -5658,17 +6927,38 @@ impl LoweringContext<'_> {
                 if let Some(fl) = func_loc {
                     let body = baml_compiler2_ppir::function_body(self.db, fl);
                     if let FunctionBody::Builtin(BuiltinKind::Io) = body.as_ref() {
-                        return true;
+                        return Some(self.synthetic_type_arg_count_for_sys_op(fl));
                     }
                 }
             }
         }
 
-        false
+        None
+    }
+    fn synthetic_type_arg_count_for_sys_op(
+        &self,
+        func_loc: baml_compiler2_hir::loc::FunctionLoc<'_>,
+    ) -> usize {
+        let item_tree = baml_compiler2_ppir::file_item_tree(self.db, func_loc.file(self.db));
+        let func = &item_tree[func_loc.id(self.db)];
+        let declared_type_value_params = func
+            .params
+            .iter()
+            .filter(|param| {
+                matches!(
+                    param.type_expr.as_ref().map(|ty| &ty.expr),
+                    Some(baml_compiler2_ast::TypeExpr::Type { .. })
+                )
+            })
+            .count();
+        func.generic_params
+            .len()
+            .saturating_sub(declared_type_value_params)
     }
 
     /// Check if the callee resolves to a `$compiler_intrinsic` function and return the
-    /// corresponding `IntrinsicOp`. Follows the same resolution pattern as `check_sys_op`.
+    /// corresponding `IntrinsicOp`. Follows the same resolution pattern as
+    /// `sys_op_synthetic_type_arg_count`.
     fn check_intrinsic(&self, callee: AstExprId) -> Option<IntrinsicOp> {
         use baml_compiler2_ast::BuiltinKind;
 
@@ -5736,7 +7026,6 @@ impl LoweringContext<'_> {
                         "log.debug" => Some(IntrinsicOp::Log(LogLevel::Debug)),
                         "log.warn" => Some(IntrinsicOp::Log(LogLevel::Warn)),
                         "log.error" => Some(IntrinsicOp::Log(LogLevel::Error)),
-                        "baml.events.send" => Some(IntrinsicOp::SendEvent),
                         _ => None,
                     };
                 }
@@ -5756,7 +7045,7 @@ impl LoweringContext<'_> {
     /// Returns `Some(template)` when:
     /// - The callee is the `baml.reflect.type_of` `$compiler_intrinsic`.
     /// - The call carries exactly one type argument.
-    /// - The type argument resolves to a concrete `Ty` (no `TypeVar` leaves).
+    /// - The type argument resolves to a concrete `RuntimeTy` (no `TypeVar` leaves).
     ///
     /// Returns `None` when the callee is not `type_of` **or** when the type
     /// argument contains a `TypeVar` (generic-parameter reference).  The latter
@@ -5769,7 +7058,6 @@ impl LoweringContext<'_> {
         call_expr_id: AstExprId,
     ) -> Option<TyTemplate> {
         use baml_compiler2_ast::BuiltinKind;
-        use baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns;
 
         // ── 1. Check the callee resolves to `baml.reflect.type_of` ──────────
         let func_loc = if let AstExpr::Path(segments) = &self.body.exprs[callee] {
@@ -5857,11 +7145,6 @@ impl LoweringContext<'_> {
         };
         let type_arg = type_args.into_iter().next()?;
 
-        // ── 3. Lower the type expression to a Tir2Ty ────────────────────────
-        let pkg_info = file_package(self.db, self.file);
-        let pkg_id = PackageId::new(self.db, pkg_info.package);
-        let pkg_items = package_items(self.db, pkg_id);
-
         // Include the enclosing class + function generic params so that `T`
         // in `reflect.type_of<T>()` resolves to `Tir2Ty::TypeVar("T")` rather
         // than an unresolved-type error — both for free generic functions and
@@ -5870,19 +7153,61 @@ impl LoweringContext<'_> {
         // ++ user_generic_params` convention used in `callable.rs`.
         let generic_params = self.enclosing_generic_params();
 
+        // ── 4. Build TyTemplate — TypeVar → TypeArgRef(N) ─────────────────────
+        let template = self.type_expr_to_template(&type_arg, &generic_params);
+        Some(template)
+    }
+
+    fn type_expr_to_template(
+        &self,
+        type_arg: &AstTypeExpr,
+        generic_params: &[baml_base::Name],
+    ) -> TyTemplate {
+        if let Some(template) = Self::direct_frame_type_arg_template(type_arg, generic_params) {
+            return template;
+        }
+
+        let pkg_info = file_package(self.db, self.file);
+        let pkg_id = PackageId::new(self.db, pkg_info.package);
+        // The canonical (PPIR-merged) package items, NOT HIR's: explicit type
+        // args synthesized by PPIR companions reference `*$stream` classes
+        // (e.g. `parse<Payload$stream | null, Payload>`), which only exist in
+        // the PPIR-expanded item universe. Resolving against HIR's original
+        // items lowered them to `Unknown` → `Void` and broke `StreamCache.new`
+        // at runtime.
+        let pkg_items = baml_compiler2_ppir::package_items(self.db, pkg_id);
         let mut diags = Vec::new();
-        let tir_ty = lower_type_expr_in_ns(
+        let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
             self.db,
-            &type_arg,
+            type_arg,
             pkg_items,
             &pkg_info.namespace_path,
-            &generic_params,
+            generic_params,
             &mut diags,
         );
+        self.ty_to_template(&tir_ty, generic_params)
+    }
 
-        // ── 4. Build TyTemplate — TypeVar → TypeArgRef(N) ─────────────────────
-        let template = self.ty_to_template(&tir_ty, &generic_params);
-        Some(template)
+    fn direct_frame_type_arg_template(
+        type_arg: &AstTypeExpr,
+        generic_params: &[baml_base::Name],
+    ) -> Option<TyTemplate> {
+        let AstTypeExpr::Path {
+            segments,
+            generic_args,
+            associated_type_bindings,
+            ..
+        } = type_arg
+        else {
+            return None;
+        };
+        if segments.len() != 1 || !generic_args.is_empty() || !associated_type_bindings.is_empty() {
+            return None;
+        }
+        generic_params
+            .iter()
+            .position(|param| param == &segments[0])
+            .map(|idx| TyTemplate::TypeArgRef(u32::try_from(idx).expect("type arg index fits")))
     }
 
     /// Recursively convert a `Tir2Ty` to a `TyTemplate`.
@@ -5908,13 +7233,9 @@ impl LoweringContext<'_> {
     /// convention (see `baml_compiler2_tir::callable`).  This keeps MIR's
     /// view of in-scope generics consistent with how TIR types the body.
     ///
-    /// **Runtime caveat**: the runtime ABI does not yet thread class-level
-    /// type args through method calls (a method's `frame.type_args` is
-    /// populated only from explicit call-site `<...>` args, not from the
-    /// receiver's class type args).  Class-level generics resolve correctly
-    /// at the MIR layer via this helper, but `reflect.type_of<T>()` where
-    /// `T` is a class-level param will substitute to `Ty::unknown` at
-    /// runtime until that gap is closed.
+    /// Runtime lowering is responsible for seeding this frame layout: direct
+    /// method calls prepend receiver class args, and interface dispatch seeds
+    /// either static guard args or the matched receiver instance's class args.
     fn enclosing_generic_params(&self) -> Vec<baml_base::Name> {
         let Some(fl) = self.func_loc else {
             return Vec::new();
@@ -5926,7 +7247,9 @@ impl LoweringContext<'_> {
             .iter()
             .find(|imp| imp.methods.contains(&func_id))
         {
-            return imp.generic_params.clone();
+            let mut params = imp.generic_params.clone();
+            params.extend(item_tree[func_id].generic_params.iter().cloned());
+            return params;
         }
         // BEP-044: interface default methods are lowered as standalone
         // functions, but their bodies reference the *interface's* generic
@@ -5940,6 +7263,12 @@ impl LoweringContext<'_> {
             .find(|iface_data| iface_data.default_methods.contains(&func_id))
         {
             let mut params = iface_data.generic_params.clone();
+            params.extend(
+                iface_data
+                    .associated_types
+                    .iter()
+                    .map(|assoc| assoc.name.clone()),
+            );
             params.extend(item_tree[func_id].generic_params.iter().cloned());
             return params;
         }
@@ -5971,12 +7300,72 @@ impl LoweringContext<'_> {
         tys.iter()
             .map(|ty| {
                 let template = self.ty_to_template(ty, &generic_params);
-                let temp = self.builder.temp(Ty::type_type());
+                let temp = self.builder.temp(RuntimeTy::type_type());
                 self.builder
                     .assign(Place::local(temp), Rvalue::LoadType(template));
                 Operand::Copy(Place::local(temp))
             })
             .collect()
+    }
+
+    fn lower_call_type_args(
+        &mut self,
+        call_expr_id: AstExprId,
+        include_inferred: bool,
+        max_count: Option<usize>,
+    ) -> Vec<Operand> {
+        if max_count == Some(0) {
+            return Vec::new();
+        }
+        let ast_type_args: Vec<AstTypeExpr> =
+            if let AstExpr::Call { type_args, .. } = &self.body.exprs[call_expr_id] {
+                type_args.clone()
+            } else {
+                Vec::new()
+            };
+        if !ast_type_args.is_empty() {
+            let ast_type_args = match max_count {
+                Some(max_count) => ast_type_args.into_iter().take(max_count).collect(),
+                None => ast_type_args,
+            };
+            return self.lower_explicit_type_args(&ast_type_args);
+        }
+        if !include_inferred {
+            return Vec::new();
+        }
+
+        let mut inferred_type_args = self
+            .call_plans
+            .get(&self.expr_metadata_key(call_expr_id))
+            .map(|plan| plan.type_args.clone())
+            .unwrap_or_default();
+        let caller_generic_params = self.enclosing_generic_params();
+        for ty in &mut inferred_type_args {
+            if baml_compiler2_tir::generics::contains_typevar_where(ty, &|name| {
+                !caller_generic_params.iter().any(|param| param == name)
+            }) {
+                *ty = Tir2Ty::BuiltinUnknown {
+                    attr: TyAttr::default(),
+                };
+            }
+        }
+        if let Some(max_count) = max_count {
+            inferred_type_args.truncate(max_count);
+        }
+        if inferred_type_args
+            .iter()
+            .all(|ty| matches!(ty, Tir2Ty::BuiltinUnknown { .. } | Tir2Ty::Unknown { .. }))
+        {
+            return Vec::new();
+        }
+        self.emit_frame_type_arg_ops(&inferred_type_args)
+    }
+
+    fn call_has_explicit_type_args(&self, call_expr_id: AstExprId) -> bool {
+        matches!(
+            &self.body.exprs[call_expr_id],
+            AstExpr::Call { type_args, .. } if !type_args.is_empty()
+        )
     }
 
     /// Emit `LoadType` rvalue assignments for the explicit type arguments of a
@@ -5992,42 +7381,16 @@ impl LoweringContext<'_> {
     /// Returns `(type_arg_operands, ntypeargs)` — the number equals
     /// `ast_type_args.len()`.  Returns an empty vec when there are no type args.
     fn lower_explicit_type_args(&mut self, ast_type_args: &[AstTypeExpr]) -> Vec<Operand> {
-        use baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns;
-
         if ast_type_args.is_empty() {
             return vec![];
         }
 
         let generic_params = self.enclosing_generic_params();
-        let pkg_info = file_package(self.db, self.file);
-        let pkg_id = PackageId::new(self.db, pkg_info.package);
-        let pkg_items = package_items(self.db, pkg_id);
-
-        let type_ty = baml_type::Ty::Opaque(
-            baml_type::TypeName {
-                name: baml_base::Name::new("Type"),
-                module_path: vec![
-                    baml_base::Name::new("baml"),
-                    baml_base::Name::new("reflect"),
-                ],
-                display_name: baml_base::Name::new("type"),
-            },
-            baml_type::TyAttr::default(),
-        );
+        let type_ty = baml_type::RuntimeTy::type_type();
 
         let mut operands = Vec::with_capacity(ast_type_args.len());
         for type_arg in ast_type_args {
-            let mut diags = Vec::new();
-            let tir_ty = lower_type_expr_in_ns(
-                self.db,
-                type_arg,
-                pkg_items,
-                &pkg_info.namespace_path,
-                &generic_params,
-                &mut diags,
-            );
-            // Ignore diagnostics here — TIR already validated the type args.
-            let template = self.ty_to_template(&tir_ty, &generic_params);
+            let template = self.type_expr_to_template(type_arg, &generic_params);
             let temp = self.builder.temp(type_ty.clone());
             self.builder
                 .assign(Place::local(temp), Rvalue::LoadType(template));
@@ -6063,7 +7426,7 @@ impl LoweringContext<'_> {
         if templates.iter().all(TyTemplate::is_fully_concrete) {
             // Concrete args → pooled, interned compile-time constant
             // (pointer-stable identity).
-            let concrete: Vec<Ty> = templates.iter().map(|t| t.substitute(&[])).collect();
+            let concrete: Vec<RuntimeTy> = templates.iter().map(|t| t.substitute(&[])).collect();
             self.builder.assign(
                 dest,
                 Rvalue::Use(Operand::Constant(Constant::GenericFunction {
@@ -6148,25 +7511,10 @@ impl LoweringContext<'_> {
     /// `is_fully_concrete()` unless the arg references an enclosing generic
     /// param (then it carries a `TypeArgRef`, resolved at runtime).
     fn generic_apply_type_arg_templates(&self, type_args: &[AstTypeExpr]) -> Vec<TyTemplate> {
-        use baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns;
         let generic_params = self.enclosing_generic_params();
-        let pkg_info = file_package(self.db, self.file);
-        let pkg_id = PackageId::new(self.db, pkg_info.package);
-        let pkg_items = package_items(self.db, pkg_id);
         type_args
             .iter()
-            .map(|type_arg| {
-                let mut diags = Vec::new();
-                let tir_ty = lower_type_expr_in_ns(
-                    self.db,
-                    type_arg,
-                    pkg_items,
-                    &pkg_info.namespace_path,
-                    &generic_params,
-                    &mut diags,
-                );
-                self.ty_to_template(&tir_ty, &generic_params)
-            })
+            .map(|type_arg| self.type_expr_to_template(type_arg, &generic_params))
             .collect()
     }
 }
@@ -6189,7 +7537,7 @@ impl<'db> LoweringContext<'db> {
             name: Name::new("panic"),
         }));
         let msg = Operand::Constant(Constant::String(message.to_string()));
-        let temp = self.builder.temp(Ty::Null {
+        let temp = self.builder.temp(RuntimeTy::Null {
             attr: TyAttr::default(),
         });
         let unreachable_block = self.builder.create_block();
@@ -6205,6 +7553,45 @@ impl<'db> LoweringContext<'db> {
         // Start a new block for any code after this (dead code)
         let dead = self.builder.create_block();
         self.builder.set_current_block(dead);
+    }
+
+    fn lower_current_runtime_id(&mut self, dest: Place) {
+        let callee = Operand::Constant(Constant::Function(ItemRef::Free {
+            package: Name::new("baml"),
+            namespace: vec![Name::new("id")],
+            name: Name::new("current"),
+        }));
+        let resume = self.builder.create_block();
+        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
+        self.builder.call(callee, Vec::new(), dest, resume, unwind);
+        self.builder.set_current_block(resume);
+    }
+
+    fn lower_set_runtime_id(&mut self, value: AstExprId) {
+        let callee = Operand::Constant(Constant::Function(ItemRef::Free {
+            package: Name::new("baml"),
+            namespace: vec![Name::new("id")],
+            name: Name::new("set"),
+        }));
+        let arg = self.lower_to_operand(value);
+        let dest = self.builder.temp(RuntimeTy::String {
+            attr: TyAttr::default(),
+        });
+        let resume = self.builder.create_block();
+        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
+        self.builder
+            .call(callee, vec![arg], Place::local(dest), resume, unwind);
+        self.builder.set_current_block(resume);
+    }
+
+    /// The `$id` runtime-identity special form. MIR owns its lowering (reads
+    /// → `baml.id.current()`, plain `=` writes → `baml.id.set(...)`); TIR
+    /// owns its typing and rejects the invalid shapes (compound assignment,
+    /// member access, call-site labels, `$id` bindings) — see
+    /// `infer_path` / `Stmt::Assign` / `Stmt::AssignOp` in
+    /// `baml_compiler2_tir/src/builder.rs`. Keep the two layers in sync.
+    fn is_runtime_id_path(expr: &AstExpr) -> bool {
+        matches!(expr, AstExpr::Path(segments) if segments.len() == 1 && segments[0].as_str() == "$id")
     }
 
     fn lower_if(
@@ -6300,7 +7687,8 @@ impl<'db> LoweringContext<'db> {
     fn lower_object(
         &mut self,
         expr_id: AstExprId,
-        type_name: Option<&TypePath>,
+        type_name: &TypePath,
+        type_args: &[AstTypeExpr],
         fields: &[(Name, AstExprId)],
         spreads: &[baml_compiler2_ast::SpreadField],
         dest: Place,
@@ -6313,7 +7701,7 @@ impl<'db> LoweringContext<'db> {
         // which is keyed by `TypeName`.
         let ty = self.expr_ty(expr_id);
         let type_name_key: Option<TypeName> = match &ty {
-            Ty::Class(tn, _, _) => Some(tn.clone()),
+            RuntimeTy::Class(tn, _, _) => Some(tn.clone()),
             _ => None,
         };
         // Prefer the TIR-resolved fully-qualified name (`<package>.<ns>.<name>`)
@@ -6325,11 +7713,9 @@ impl<'db> LoweringContext<'db> {
         // synthetic Object exprs from `lower_cst.rs` that already use registry-
         // matching dotted forms like "baml.llm.Client".
         let class_name = if let Some(tn) = &type_name_key {
-            let mut parts: Vec<String> = tn.module_path.iter().map(ToString::to_string).collect();
-            parts.push(tn.name.to_string());
-            parts.join(".")
+            tn.render_dotted(false)
         } else {
-            type_name.map(ToString::to_string).unwrap_or_default()
+            type_name.to_string()
         };
         let field_slot_count = |field_name_to_idx: &IndexMap<String, usize>| {
             field_name_to_idx
@@ -6372,7 +7758,7 @@ impl<'db> LoweringContext<'db> {
                     .map(|(_, e)| self.lower_to_operand(*e))
                     .collect()
             };
-            let type_arg_templates = self.class_type_arg_templates(expr_id);
+            let type_arg_templates = self.object_class_type_arg_templates(expr_id, type_args);
             self.builder.assign(
                 dest,
                 Rvalue::Aggregate {
@@ -6442,7 +7828,8 @@ impl<'db> LoweringContext<'db> {
                         .iter()
                         .map(|(_, e)| self.lower_to_operand(*e))
                         .collect();
-                    let type_arg_templates = self.class_type_arg_templates(expr_id);
+                    let type_arg_templates =
+                        self.object_class_type_arg_templates(expr_id, type_args);
                     self.builder.assign(
                         dest,
                         Rvalue::Aggregate {
@@ -6491,7 +7878,7 @@ impl<'db> LoweringContext<'db> {
                 }
             }
 
-            let type_arg_templates = self.class_type_arg_templates(expr_id);
+            let type_arg_templates = self.object_class_type_arg_templates(expr_id, type_args);
             self.builder.assign(
                 dest,
                 Rvalue::Aggregate {
@@ -6575,15 +7962,20 @@ impl<'db> LoweringContext<'db> {
         // point). Resolve candidates *before* lowering the receiver so a field
         // access (no method candidates) falls through to the field path below
         // without evaluating the receiver expression twice.
-        if let Some(recv_tir_ty) = self.expr_types.get(&self.expr_metadata_key(base)).cloned()
-            && let Some((iface_tn, iface_type_args, iface_assoc)) =
-                self.interface_dispatch_target_for_tir_ty(&recv_tir_ty)
+        if let Some((iface_tn, iface_type_args, iface_assoc)) =
+            self.interface_dispatch_target_for_expr(base).or_else(|| {
+                self.expr_types
+                    .get(&self.expr_metadata_key(base))
+                    .and_then(|ty| self.registry_dispatch_target_for_concrete(ty, field))
+            })
         {
+            let recv_tir_ty = self.dispatch_receiver_static_tir_ty(base);
             let resolved = self.interface_method_candidates_for(
                 &iface_tn,
                 &iface_type_args,
                 &iface_assoc,
                 field,
+                recv_tir_ty.as_ref(),
             );
             if !resolved.is_empty() {
                 let recv_op = self.lower_to_operand(base);
@@ -6618,7 +8010,7 @@ impl<'db> LoweringContext<'db> {
         }
 
         // Check if this is a package path intermediate (e.g. `baml.HttpMethod` in
-        // `baml.HttpMethod.Get`). TIR marks these as Ty::Unknown. Emit null placeholder.
+        // `baml.HttpMethod.Get`). TIR marks these as RuntimeTy::Unknown. Emit null placeholder.
         // CRITICAL: only treat the expression as a namespace intermediate if the BASE
         // is also Unknown (i.e. `baml` in `baml.HttpMethod`). If the base has a
         // concrete type, this is a real field access whose field type happens to be
@@ -6649,7 +8041,7 @@ impl<'db> LoweringContext<'db> {
         let unwrapped_ty = base_ty.strip_null();
 
         // Look up field index from class_fields
-        let field_idx = if let Ty::Class(tn, _, _) = &unwrapped_ty {
+        let field_idx = if let RuntimeTy::Class(tn, _, _) = &unwrapped_ty {
             self.class_fields
                 .get(tn)
                 .and_then(|fields| fields.get(&field_str))
@@ -6699,20 +8091,22 @@ impl<'db> LoweringContext<'db> {
             if handled_union_field {
                 return;
             }
-            if let Ty::Class(tn, _, _) = &unwrapped_ty {
+            if let RuntimeTy::Class(tn, _, _) = &unwrapped_ty {
                 self.emit_panic_call(
                     &format!(
                         "internal compiler error: MIR failed to resolve field access \
                          .{} against class definition '{}' (module_path: {:?}). \
                          This class should be in class_fields but isn't.",
-                        field_str, tn.name, tn.module_path,
+                        field_str,
+                        tn.name(),
+                        tn.module_path(),
                     ),
                     expr_id,
                 );
                 return;
             }
             // Dynamic map access — only valid for map types, unknown, etc.
-            let key_local = self.builder.temp(Ty::String {
+            let key_local = self.builder.temp(RuntimeTy::String {
                 attr: TyAttr::default(),
             });
             self.builder.assign(
@@ -6733,21 +8127,17 @@ impl<'db> LoweringContext<'db> {
     fn interface_receiver_for_field_access(
         &self,
         base: AstExprId,
-        unwrapped_ty: &Ty,
+        unwrapped_ty: &RuntimeTy,
     ) -> Option<InterfaceTypeView> {
-        if let Some(target) = self
-            .expr_types
-            .get(&self.expr_metadata_key(base))
-            .and_then(|ty| self.interface_dispatch_target_for_tir_ty(ty))
-        {
+        if let Some(target) = self.interface_dispatch_target_for_expr(base) {
             return Some(target);
         }
 
         match unwrapped_ty {
-            Ty::Class(tn, _, _) if self.interface_implementors.contains_key(tn) => {
+            RuntimeTy::Class(tn, _, _) if self.interface_implementors.contains_key(tn) => {
                 Some((tn.clone(), Vec::new(), Vec::new()))
             }
-            Ty::Interface(tn, _, _, _) if self.interface_implementors.contains_key(tn) => {
+            RuntimeTy::Interface(tn, _, _, _) if self.interface_implementors.contains_key(tn) => {
                 Some((tn.clone(), Vec::new(), Vec::new()))
             }
             _ => None,
@@ -6758,7 +8148,7 @@ impl<'db> LoweringContext<'db> {
         &self,
         expr_id: AstExprId,
         prefix_idx: usize,
-        current_ty: &Ty,
+        current_ty: &RuntimeTy,
     ) -> Option<InterfaceTypeView> {
         if let Some(target) = self
             .path_segment_types
@@ -6777,12 +8167,35 @@ impl<'db> LoweringContext<'db> {
         }
 
         match current_ty {
-            Ty::Class(tn, _, _) if self.interface_implementors.contains_key(tn) => {
+            RuntimeTy::Class(tn, _, _) if self.interface_implementors.contains_key(tn) => {
                 Some((tn.clone(), Vec::new(), Vec::new()))
             }
-            Ty::Interface(tn, _, _, _) if self.interface_implementors.contains_key(tn) => {
+            RuntimeTy::Interface(tn, _, _, _) if self.interface_implementors.contains_key(tn) => {
                 Some((tn.clone(), Vec::new(), Vec::new()))
             }
+            _ => None,
+        }
+    }
+
+    fn class_receiver_for_path_prefix(
+        &self,
+        expr_id: AstExprId,
+        prefix_idx: usize,
+        current_ty: &RuntimeTy,
+    ) -> Option<(TypeName, Vec<RuntimeTy>)> {
+        let tir_prefix_ty = if prefix_idx == 0 {
+            self.path_root_types.get(&self.expr_metadata_key(expr_id))
+        } else {
+            self.path_segment_types
+                .get(&(self.current_metadata_scope, expr_id, prefix_idx))
+        };
+        if let Some(target) = tir_prefix_ty.and_then(|ty| self.class_dispatch_target_for_tir_ty(ty))
+        {
+            return Some(target);
+        }
+
+        match current_ty {
+            RuntimeTy::Class(tn, type_args, _) => Some((tn.clone(), type_args.clone())),
             _ => None,
         }
     }
@@ -6791,7 +8204,7 @@ impl<'db> LoweringContext<'db> {
         &mut self,
         _expr_id: AstExprId,
         base_local: Local,
-        base_ty: &Ty,
+        base_ty: &RuntimeTy,
         field: &Name,
         dest: &Place,
     ) -> bool {
@@ -6803,7 +8216,7 @@ impl<'db> LoweringContext<'db> {
         let bb_join = self.builder.create_block();
         let bb_otherwise = self.builder.create_block();
 
-        let tag_local = self.builder.temp(Ty::Int {
+        let tag_local = self.builder.temp(RuntimeTy::Int {
             attr: TyAttr::default(),
         });
         self.builder.assign(
@@ -6816,7 +8229,7 @@ impl<'db> LoweringContext<'db> {
         for (tag, class_name, field_idx) in candidates {
             let bb_body = self.builder.create_block();
             arms.push((tag, bb_body));
-            arm_names.push((tag, class_name.name.to_string()));
+            arm_names.push((tag, class_name.name().to_string()));
 
             self.builder.set_current_block(bb_body);
             self.builder.assign(
@@ -6846,22 +8259,24 @@ impl<'db> LoweringContext<'db> {
 
     fn class_union_field_candidates(
         &self,
-        ty: &Ty,
+        ty: &RuntimeTy,
         field: &Name,
     ) -> Option<Vec<(i64, TypeName, usize)>> {
         // Collect candidate (class_name) entries to search for the field on.
-        // For `Ty::Union`, every member must be `Ty::Class`. For `Ty::Class`
+        // For `RuntimeTy::Union`, every member must be `RuntimeTy::Class`. For `RuntimeTy::Class`
         // whose name is actually a BEP-044 interface, use the registered
         // implementor set.
         let class_names: Vec<TypeName> = match ty {
-            Ty::Union(members, _) => members
+            RuntimeTy::Union(members, _) => members
                 .iter()
                 .filter_map(|m| match m {
-                    Ty::Class(n, _, _) => Some(n.clone()),
+                    RuntimeTy::Class(n, _, _) => Some(n.clone()),
                     _ => None,
                 })
                 .collect(),
-            Ty::Class(class_name, _, _) => self.interface_implementors.get(class_name)?.clone(),
+            RuntimeTy::Class(class_name, _, _) => {
+                self.interface_implementors.get(class_name)?.clone()
+            }
             _ => return None,
         };
         if class_names.is_empty() {
@@ -6900,7 +8315,10 @@ impl<'db> LoweringContext<'db> {
         // the base type is T? but we've already null-checked.
         let unwrapped_ty = base_ty.strip_null();
 
-        let kind = if matches!(&unwrapped_ty, Ty::List(..) | Ty::Uint8Array { .. }) {
+        let kind = if matches!(
+            &unwrapped_ty,
+            RuntimeTy::List(..) | RuntimeTy::Uint8Array { .. }
+        ) {
             IndexKind::Array
         } else {
             IndexKind::Map
@@ -6932,7 +8350,7 @@ impl<'db> LoweringContext<'db> {
     }
 
     /// Convert an operand to a local, materializing a temp if necessary.
-    fn operand_to_local(&mut self, op: Operand, ty: Ty) -> Local {
+    fn operand_to_local(&mut self, op: Operand, ty: RuntimeTy) -> Local {
         match op {
             Operand::Copy(Place::Local(l)) | Operand::Move(Place::Local(l)) => l,
             _ => {
@@ -6958,13 +8376,15 @@ impl<'db> LoweringContext<'db> {
         args: &[AstExprId],
         dest: &Place,
     ) -> bool {
-        let dispatch_target = self
-            .expr_types
-            .get(&self.expr_metadata_key(base))
-            .and_then(|ty| self.interface_dispatch_target_for_tir_ty(ty));
+        let dispatch_target = self.interface_dispatch_target_for_expr(base).or_else(|| {
+            self.expr_types
+                .get(&self.expr_metadata_key(base))
+                .and_then(|ty| self.registry_dispatch_target_for_concrete(ty, method))
+        });
         let Some((iface_tn, iface_type_args, iface_assoc)) = dispatch_target else {
             return false;
         };
+        let recv_tir_ty = self.dispatch_receiver_static_tir_ty(base);
         // Lower receiver to a local we can copy from in every arm.
         let receiver_op = self.lower_to_operand(base);
         let receiver_ty = self.expr_ty(base);
@@ -6973,6 +8393,7 @@ impl<'db> LoweringContext<'db> {
             InterfaceDispatchCall {
                 expr_id,
                 recv_local,
+                recv_tir_ty: recv_tir_ty.as_ref(),
                 iface_tn: &iface_tn,
                 iface_type_args: &iface_type_args,
                 iface_assoc: &iface_assoc,
@@ -7002,7 +8423,7 @@ impl<'db> LoweringContext<'db> {
             .get(&(self.current_metadata_scope, callee, recv_ty_idx))
             .cloned()
             .map(|t| self.convert_tir_ty_for_runtime(&t))
-            .unwrap_or_else(|| Ty::BuiltinUnknown {
+            .unwrap_or_else(|| RuntimeTy::BuiltinUnknown {
                 attr: TyAttr::default(),
             });
         let local = self.builder.temp(recv_ty);
@@ -7083,7 +8504,7 @@ impl<'db> LoweringContext<'db> {
         let receiver_op = self.lower_to_operand(base);
         let receiver_ty = self.expr_ty(base);
         let recv_local = self.operand_to_local(receiver_op, receiver_ty);
-        self.emit_method_candidate_switch(recv_local, &candidates, expr_id, args, dest)
+        self.emit_method_candidate_switch(recv_local, &candidates, expr_id, args, dest, None)
     }
 
     /// Build the runtime-class dispatch candidates for calling `method` on a
@@ -7104,7 +8525,7 @@ impl<'db> LoweringContext<'db> {
         for member in members {
             match member {
                 Tir2Ty::Class(qtn, _, _) => {
-                    let class_tn = qtn_to_type_name(qtn);
+                    let class_tn = qtn.clone();
                     let member_candidates = self.class_member_method_candidates(&class_tn, method);
                     if member_candidates.is_empty() {
                         return None;
@@ -7119,6 +8540,7 @@ impl<'db> LoweringContext<'db> {
                         &iface_type_args,
                         &iface_assoc,
                         method,
+                        None,
                     );
                     if member_candidates.is_empty() {
                         return None;
@@ -7146,7 +8568,7 @@ impl<'db> LoweringContext<'db> {
     ) -> Vec<InterfaceMethodCandidate> {
         if let Some(item_ref) = self.class_method_item_ref_by_name(class_tn, method) {
             return vec![InterfaceMethodCandidate {
-                guard: InterfaceDispatchGuard::Type(Ty::Class(
+                guard: InterfaceDispatchGuard::Type(RuntimeTy::Class(
                     class_tn.clone(),
                     Vec::new(),
                     TyAttr::default(),
@@ -7175,6 +8597,7 @@ impl<'db> LoweringContext<'db> {
                     &iface_args,
                     &iface_assoc,
                     method,
+                    None,
                 ));
             }
         }
@@ -7230,7 +8653,7 @@ impl<'db> LoweringContext<'db> {
             let Tir2Ty::Class(qtn, _, _) = member else {
                 return false;
             };
-            let class_tn = qtn_to_type_name(qtn);
+            let class_tn = qtn.clone();
             let Some(item_ref) = self.class_method_item_ref_by_name(&class_tn, method) else {
                 return false;
             };
@@ -7256,7 +8679,7 @@ impl<'db> LoweringContext<'db> {
             self.builder.set_current_block(next_check);
             self.emit_is_type_branch(
                 recv_local,
-                Ty::Class(class_tn.clone(), Vec::new(), TyAttr::default()),
+                RuntimeTy::Class(class_tn.clone(), Vec::new(), TyAttr::default()),
                 bb_body,
                 bb_next,
             );
@@ -7282,18 +8705,36 @@ impl<'db> LoweringContext<'db> {
         let InterfaceDispatchCall {
             expr_id,
             recv_local,
+            recv_tir_ty,
             iface_tn,
             iface_type_args,
             iface_assoc,
             method,
             args,
         } = call;
-        let resolved =
-            self.interface_method_candidates_for(iface_tn, iface_type_args, iface_assoc, method);
+        let resolved = self.interface_method_candidates_for(
+            iface_tn,
+            iface_type_args,
+            iface_assoc,
+            method,
+            recv_tir_ty,
+        );
         if resolved.is_empty() {
             return false;
         }
-        self.emit_method_candidate_switch(recv_local, &resolved, expr_id, args, dest)
+        self.emit_method_candidate_switch(
+            recv_local,
+            &resolved,
+            expr_id,
+            args,
+            dest,
+            Some(InterfaceDefaultCallContext {
+                iface_tn,
+                iface_type_args,
+                iface_assoc,
+                method,
+            }),
+        )
     }
 
     /// Resolve every concrete-class dispatch candidate for calling `method`
@@ -7307,12 +8748,19 @@ impl<'db> LoweringContext<'db> {
         iface_type_args: &[Tir2Ty],
         iface_assoc: &[(Name, Tir2Ty)],
         method: &Name,
+        recv_tir_ty: Option<&Tir2Ty>,
     ) -> Vec<InterfaceMethodCandidate> {
-        let class_impls = self
+        let mut class_impls = self
             .interface_implementors
             .get(iface_tn)
             .cloned()
             .unwrap_or_default();
+        if let Some(Tir2Ty::Class(qtn, _, _)) = recv_tir_ty {
+            let recv_tn = qtn.clone();
+            if !class_impls.iter().any(|tn| tn == &recv_tn) {
+                class_impls.push(recv_tn);
+            }
+        }
         let type_impls = self
             .interface_type_implementors
             .get(iface_tn)
@@ -7330,17 +8778,12 @@ impl<'db> LoweringContext<'db> {
                     iface_type_args,
                     iface_assoc,
                     method,
+                    recv_tir_ty,
                 )
             })
             .collect();
         for implementor in &type_impls {
-            if !self.interface_tir_type_args_match(&implementor.iface_args, iface_type_args) {
-                continue;
-            }
-            if !self.interface_tir_assoc_match(&implementor.iface_assoc, iface_assoc) {
-                continue;
-            }
-            let Some(item_ref) = self.resolve_type_implementor_method(
+            let Some((item_ref, frame_type_args)) = self.resolve_type_implementor_method(
                 &implementor.tir_ty,
                 iface_tn,
                 iface_type_args,
@@ -7352,10 +8795,35 @@ impl<'db> LoweringContext<'db> {
             resolved.push(InterfaceMethodCandidate {
                 guard: InterfaceDispatchGuard::Type(implementor.runtime_ty.clone()),
                 item_ref,
-                // Type-implementor (primitive / out-of-body) dispatch: frame
-                // type args not threaded here. (Unchanged from prior behavior.)
-                frame_seed: CalleeFrameSeed::Static(Vec::new()),
+                frame_seed: CalleeFrameSeed::Static(frame_type_args),
             });
+        }
+        if let Some(recv_tir_ty) = recv_tir_ty
+            && !matches!(
+                recv_tir_ty,
+                Tir2Ty::Class(..) | Tir2Ty::Interface(..) | Tir2Ty::TypeVar(..)
+            )
+            && let Some((item_ref, frame_type_args)) = self.resolve_type_implementor_method(
+                recv_tir_ty,
+                iface_tn,
+                iface_type_args,
+                iface_assoc,
+                method,
+            )
+        {
+            // A concrete non-class receiver (e.g. `int[]`, `map<string, T>`)
+            // statically pins exactly one implementor of `method` — there is
+            // nothing to discriminate at runtime. Return that single candidate
+            // so dispatch lowers to an unconditional call: this is both an
+            // optimization and a correctness fix, since a container receiver's
+            // `Type` guard (`int[]`) has no representable `IsType` form and
+            // would otherwise always fail and hit the `unreachable` arm.
+            let runtime_ty = self.convert_tir_ty_for_runtime(recv_tir_ty);
+            return vec![InterfaceMethodCandidate {
+                guard: InterfaceDispatchGuard::Type(runtime_ty),
+                item_ref,
+                frame_seed: CalleeFrameSeed::Static(frame_type_args),
+            }];
         }
         resolved
     }
@@ -7370,6 +8838,7 @@ impl<'db> LoweringContext<'db> {
         expr_id: AstExprId,
         args: &[AstExprId],
         dest: &Place,
+        interface_default_context: Option<InterfaceDefaultCallContext<'_>>,
     ) -> bool {
         if resolved.is_empty() {
             return false;
@@ -7377,19 +8846,22 @@ impl<'db> LoweringContext<'db> {
 
         // Lower args once; same operands used in every arm.
         let arg_ops = self.lower_call_arg_operands(expr_id, args);
-        let ast_type_args: Vec<AstTypeExpr> =
-            if let AstExpr::Call { type_args, .. } = &self.body.exprs[expr_id] {
-                type_args.clone()
-            } else {
-                vec![]
-            };
-        let type_arg_ops = self.lower_explicit_type_args(&ast_type_args);
+        let type_arg_ops = self.lower_call_type_args(expr_id, true, None);
+        let has_explicit_type_args = self.call_has_explicit_type_args(expr_id);
         let ntypeargs = type_arg_ops.len();
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
 
         let bb_entry = self.builder.current_block();
         let bb_join = self.builder.create_block();
         let bb_otherwise = self.builder.create_block();
+
+        // A single candidate means the static receiver type admits exactly one
+        // implementor, so it provably matches at runtime and the guard is
+        // redundant. Skipping it also handles concrete container receivers
+        // (e.g. `int[]` dispatched through a blanket `implements ... for T[]`),
+        // whose `IsType` guard has no representable form and would otherwise
+        // always fail and fall to the `unreachable` arm.
+        let single_candidate = resolved.len() == 1;
 
         let mut next_check = bb_entry;
         for (idx, candidate) in resolved.iter().enumerate() {
@@ -7401,12 +8873,16 @@ impl<'db> LoweringContext<'db> {
             };
 
             self.builder.set_current_block(next_check);
-            self.emit_interface_dispatch_guard_branch(
-                recv_local,
-                &candidate.guard,
-                bb_body,
-                bb_next,
-            );
+            if single_candidate {
+                self.builder.goto(bb_body);
+            } else {
+                self.emit_interface_dispatch_guard_branch(
+                    recv_local,
+                    &candidate.guard,
+                    bb_body,
+                    bb_next,
+                );
+            }
             self.builder.set_current_block(bb_body);
             // Seed the callee frame's `type_args` so a dispatched method that
             // reads its enclosing `T` at runtime — e.g. building `Other<T>{}` or
@@ -7417,9 +8893,9 @@ impl<'db> LoweringContext<'db> {
                 CalleeFrameSeed::FromReceiverInstance => {
                     // Bind the receiver so the VM seeds `frame.type_args` from
                     // the instance's `class_type_args` (class-param order) and
-                    // then the explicit call-site args — handling `Any`/partial
+                    // then the method call's type args — handling `Any`/partial
                     // guards that a static seed can't name.
-                    let bm = self.builder.temp(Ty::unknown());
+                    let bm = self.builder.temp(RuntimeTy::unknown());
                     self.builder.assign(
                         Place::local(bm),
                         Rvalue::MakeBoundMethod {
@@ -7428,7 +8904,7 @@ impl<'db> LoweringContext<'db> {
                         },
                     );
                     // A `BoundMethod` callee inserts the receiver itself, so the
-                    // explicit args carry only the call-site type args + values.
+                    // the operands carry only the call type args + values.
                     let mut all_args = type_arg_ops.clone();
                     all_args.extend(arg_ops.iter().cloned());
                     self.builder.call_with_type_args(
@@ -7443,12 +8919,43 @@ impl<'db> LoweringContext<'db> {
                 CalleeFrameSeed::Static(tys) => {
                     let callee_op =
                         Operand::Constant(Constant::Function(candidate.item_ref.clone()));
-                    // De Bruijn order: class/iface params first, then explicit
-                    // call-site `<...>` args. Lowered per-arm (args vary).
+                    let call_type_arg_ops = if let Some(context) = interface_default_context
+                        && Self::item_ref_is_interface_method(
+                            &candidate.item_ref,
+                            context.iface_tn,
+                            context.method,
+                        ) {
+                        let mut owner_tys = context.iface_type_args.to_vec();
+                        owner_tys.extend(self.interface_assoc_frame_tys(
+                            context.iface_tn,
+                            context.iface_type_args,
+                            context.iface_assoc,
+                        ));
+                        let mut owner_ops = self.emit_frame_type_arg_ops(&owner_tys);
+                        let owner_arg_count = owner_tys.len();
+                        let method_arg_count = self
+                            .interface_method_generic_count(context.iface_tn, context.method)
+                            .unwrap_or(0);
+                        if has_explicit_type_args
+                            || (method_arg_count > 0 && type_arg_ops.len() == method_arg_count)
+                        {
+                            owner_ops.extend(type_arg_ops.iter().cloned());
+                        } else if type_arg_ops.len() == owner_arg_count + method_arg_count {
+                            owner_ops.extend(type_arg_ops[owner_arg_count..].iter().cloned());
+                        } else {
+                            owner_ops.extend(type_arg_ops.iter().cloned());
+                        }
+                        owner_ops
+                    } else {
+                        type_arg_ops.clone()
+                    };
+                    // De Bruijn order: class/iface params first, then method
+                    // call type args. Lowered per-arm because the class/iface
+                    // seed can vary by candidate.
                     let frame_type_arg_ops = self.emit_frame_type_arg_ops(tys);
-                    let arm_ntypeargs = frame_type_arg_ops.len() + ntypeargs;
+                    let arm_ntypeargs = frame_type_arg_ops.len() + call_type_arg_ops.len();
                     let mut all_args = frame_type_arg_ops;
-                    all_args.extend(type_arg_ops.iter().cloned());
+                    all_args.extend(call_type_arg_ops);
                     all_args.push(Operand::Copy(Place::Local(recv_local)));
                     all_args.extend(arg_ops.iter().cloned());
                     self.builder.call_with_type_args(
@@ -7469,6 +8976,116 @@ impl<'db> LoweringContext<'db> {
 
         self.builder.set_current_block(bb_join);
         true
+    }
+
+    fn interface_assoc_frame_tys(
+        &self,
+        iface_tn: &TypeName,
+        iface_type_args: &[Tir2Ty],
+        iface_assoc: &[(Name, Tir2Ty)],
+    ) -> Vec<Tir2Ty> {
+        let Some((iface_loc, iface_names)) = self.interface_associated_type_names(iface_tn) else {
+            return Vec::new();
+        };
+        let pkg_info =
+            baml_compiler2_hir::file_package::file_package(self.db, iface_loc.file(self.db));
+        let pkg_items = self.resolve_class_pkg_items_by_name(&pkg_info.package);
+        let completed_assoc =
+            baml_compiler2_tir::interfaces::interface_closure_locs_with_args_and_assoc(
+                self.db,
+                iface_loc,
+                iface_type_args,
+                iface_assoc,
+                pkg_items,
+                &pkg_info.namespace_path,
+            )
+            .into_iter()
+            .next()
+            .map(|(_, _, assoc)| assoc)
+            .unwrap_or_else(|| iface_assoc.to_vec());
+
+        iface_names
+            .into_iter()
+            .map(|name| {
+                completed_assoc
+                    .iter()
+                    .find(|(assoc_name, _)| assoc_name == &name)
+                    .map(|(_, ty)| ty.clone())
+                    .unwrap_or_else(|| Tir2Ty::BuiltinUnknown {
+                        attr: TyAttr::default(),
+                    })
+            })
+            .collect()
+    }
+
+    fn interface_associated_type_names(
+        &self,
+        iface_tn: &TypeName,
+    ) -> Option<(baml_compiler2_hir::loc::InterfaceLoc<'db>, Vec<Name>)> {
+        let iface_pkg_name = iface_tn.package();
+        let iface_pkg_items = self.resolve_class_pkg_items_by_name(iface_pkg_name);
+        let iface_ns: Vec<Name> = iface_tn.namespace().clone();
+        let Definition::Interface(iface_loc) =
+            iface_pkg_items.lookup_type(&iface_ns, iface_tn.name())?
+        else {
+            return None;
+        };
+        let iface_tree = baml_compiler2_hir::file_item_tree(self.db, iface_loc.file(self.db));
+        let iface_data = iface_tree.interfaces.get(&iface_loc.id(self.db))?;
+        Some((
+            iface_loc,
+            iface_data
+                .associated_types
+                .iter()
+                .map(|assoc| assoc.name.clone())
+                .collect(),
+        ))
+    }
+
+    fn item_ref_is_interface_method(
+        item_ref: &ItemRef,
+        iface_tn: &TypeName,
+        method: &Name,
+    ) -> bool {
+        let ItemRef::Method {
+            package,
+            namespace,
+            class,
+            name,
+        } = item_ref
+        else {
+            return false;
+        };
+        name == method
+            && class == iface_tn.name()
+            && iface_tn.package() == package
+            && iface_tn.namespace().iter().eq(namespace.iter())
+    }
+
+    fn interface_method_generic_count(&self, iface_tn: &TypeName, method: &Name) -> Option<usize> {
+        let iface_pkg_name = iface_tn.package();
+        let iface_pkg_items = self.resolve_class_pkg_items_by_name(iface_pkg_name);
+        let iface_ns: Vec<Name> = iface_tn.namespace().clone();
+        let Definition::Interface(iface_loc) =
+            iface_pkg_items.lookup_type(&iface_ns, iface_tn.name())?
+        else {
+            return None;
+        };
+        let iface_tree = baml_compiler2_hir::file_item_tree(self.db, iface_loc.file(self.db));
+        let iface_data = iface_tree.interfaces.get(&iface_loc.id(self.db))?;
+        iface_data
+            .default_methods
+            .iter()
+            .find_map(|fn_id| {
+                let func = &iface_tree[*fn_id];
+                (func.name == *method).then_some(func.generic_params.len())
+            })
+            .or_else(|| {
+                iface_data
+                    .required_methods
+                    .iter()
+                    .find_map(|sig| (sig.name == *method).then_some(sig.generic_params.len()))
+            })
     }
 
     /// Per-arm analogue of [`Self::emit_method_candidate_switch`] that *binds* the
@@ -7493,6 +9110,11 @@ impl<'db> LoweringContext<'db> {
         let bb_join = self.builder.create_block();
         let bb_otherwise = self.builder.create_block();
 
+        // See `emit_method_candidate_switch`: a single candidate provably
+        // matches, so the guard is redundant (and unrepresentable for some
+        // concrete container receiver types).
+        let single_candidate = resolved.len() == 1;
+
         let mut next_check = bb_entry;
         for (idx, candidate) in resolved.iter().enumerate() {
             let bb_body = self.builder.create_block();
@@ -7503,12 +9125,16 @@ impl<'db> LoweringContext<'db> {
             };
 
             self.builder.set_current_block(next_check);
-            self.emit_interface_dispatch_guard_branch(
-                recv_local,
-                &candidate.guard,
-                bb_body,
-                bb_next,
-            );
+            if single_candidate {
+                self.builder.goto(bb_body);
+            } else {
+                self.emit_interface_dispatch_guard_branch(
+                    recv_local,
+                    &candidate.guard,
+                    bb_body,
+                    bb_next,
+                );
+            }
             self.builder.set_current_block(bb_body);
             self.builder.assign(
                 dest.clone(),
@@ -7574,7 +9200,7 @@ impl<'db> LoweringContext<'db> {
         for member in members {
             match member {
                 Tir2Ty::Class(qtn, _, _) => {
-                    let class_tn = qtn_to_type_name(qtn);
+                    let class_tn = qtn.clone();
                     if let Some(field_idx) = self
                         .class_fields
                         .get(&class_tn)
@@ -7695,6 +9321,7 @@ impl<'db> LoweringContext<'db> {
         iface_type_args: &[Tir2Ty],
         iface_assoc: &[(Name, Tir2Ty)],
         method: &Name,
+        recv_tir_ty: Option<&Tir2Ty>,
     ) -> Vec<InterfaceMethodCandidate> {
         let Some(class_loc) = self.resolve_class_loc_by_type_name(impl_tn) else {
             return Vec::new();
@@ -7706,6 +9333,15 @@ impl<'db> LoweringContext<'db> {
         else {
             return Vec::new();
         };
+        let class_owned_method_ids: Vec<_> = class_data
+            .methods
+            .iter()
+            .copied()
+            .filter(|method_id| {
+                class_tree[*method_id].name == *method
+                    && !class_tree.method_to_iface_target.contains_key(method_id)
+            })
+            .collect();
 
         let mut out = Vec::new();
         for &method_id in &class_data.methods {
@@ -7785,20 +9421,41 @@ impl<'db> LoweringContext<'db> {
                 {
                     continue;
                 }
+                if !class_owned_method_ids.is_empty()
+                    && !self.class_method_candidate_already_resolved(
+                        &out,
+                        requested_idx,
+                        impl_tn,
+                        &guard,
+                    )
+                {
+                    for &method_id in &class_owned_method_ids {
+                        let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(
+                            self.db,
+                            class_loc.file(self.db),
+                            method_id,
+                        );
+                        let frame_seed =
+                            class_owned_frame_seed(&guard, !class_data.generic_params.is_empty());
+                        out.push((
+                            requested_idx,
+                            InterfaceMethodCandidate {
+                                guard: InterfaceDispatchGuard::Class {
+                                    impl_tn: impl_tn.clone(),
+                                    guard: guard.clone(),
+                                },
+                                item_ref: method_item_ref(self.db, class_loc, func_loc),
+                                frame_seed,
+                            },
+                        ));
+                    }
+                    continue;
+                }
                 let Some(item_ref) =
                     self.interface_default_method_item_ref(&matched_iface_tn, method)
                 else {
                     continue;
                 };
-                // An inherited interface default reads the *interface's* type
-                // vars (interface-param order), which can differ from the
-                // implementor's class args when the `implements` block
-                // renames/reorders params. Seed from the matched interface
-                // view's args, not the class guard.
-                let frame_type_args = requested_views
-                    .get(requested_idx)
-                    .map(|(_, args, _)| args.clone())
-                    .unwrap_or_default();
                 out.push((
                     requested_idx,
                     InterfaceMethodCandidate {
@@ -7807,7 +9464,7 @@ impl<'db> LoweringContext<'db> {
                             guard,
                         },
                         item_ref,
-                        frame_seed: CalleeFrameSeed::Static(frame_type_args),
+                        frame_seed: CalleeFrameSeed::Static(Vec::new()),
                     },
                 ));
             }
@@ -7823,7 +9480,12 @@ impl<'db> LoweringContext<'db> {
             };
             let candidate_class_ty = Tir2Ty::Class(
                 candidate_class_qtn.clone(),
-                Vec::new(),
+                match recv_tir_ty {
+                    Some(Tir2Ty::Class(qtn, args, _)) if qtn == &candidate_class_qtn => {
+                        args.clone()
+                    }
+                    _ => Vec::new(),
+                },
                 baml_compiler2_tir::ty::TyAttr::default(),
             );
             'blanket_search: for file in compiler2_all_files(self.db) {
@@ -7917,7 +9579,15 @@ impl<'db> LoweringContext<'db> {
                         origin: baml_compiler2_tir::interfaces::InterfaceImplOrigin::OutOfBody,
                     };
                     let candidate_ty =
-                        if matches!(rule.for_ty_pattern, baml_compiler2_tir::ty::Ty::TypeVar(..)) {
+                        if matches!(rule.for_ty_pattern, baml_compiler2_tir::ty::Ty::TypeVar(..))
+                            || baml_compiler2_tir::interfaces::match_ty_pattern(
+                                &rule.for_ty_pattern,
+                                &candidate_class_ty,
+                                &rule.generic_params,
+                                &self.resolved_aliases.aliases,
+                            )
+                            .is_some()
+                        {
                             Some(&candidate_class_ty)
                         } else {
                             None
@@ -7939,11 +9609,11 @@ impl<'db> LoweringContext<'db> {
                             requested_assoc.clone(),
                             baml_compiler2_tir::ty::TyAttr::default(),
                         );
-                        let Some(instantiation) = registry
-                            .instantiate_rule_for_requested_interface(
+                        let instantiation_with_candidate = candidate_ty.and_then(|candidate_ty| {
+                            registry.instantiate_rule_for_requested_interface(
                                 &rule,
                                 &requested_iface_ty,
-                                candidate_ty,
+                                Some(candidate_ty),
                                 &self.resolved_aliases.aliases,
                                 |actual, bound| {
                                     type_satisfies_bound(
@@ -7956,7 +9626,25 @@ impl<'db> LoweringContext<'db> {
                                     )
                                 },
                             )
-                        else {
+                        });
+                        let Some(instantiation) = instantiation_with_candidate.or_else(|| {
+                            registry.instantiate_rule_for_requested_interface(
+                                &rule,
+                                &requested_iface_ty,
+                                None,
+                                &self.resolved_aliases.aliases,
+                                |actual, bound| {
+                                    type_satisfies_bound(
+                                        self.db,
+                                        actual,
+                                        bound,
+                                        &self.resolved_aliases.aliases,
+                                        &file_pkg_info.package,
+                                        BLANKET_BOUND_DEPTH,
+                                    )
+                                },
+                            )
+                        }) else {
                             continue;
                         };
                         let guard = match &instantiation.for_ty {
@@ -7991,25 +9679,10 @@ impl<'db> LoweringContext<'db> {
                                 &file_pkg_info.namespace_path,
                             )
                         {
-                            let iface_tree = baml_compiler2_hir::file_item_tree(
-                                self.db,
-                                iface_loc.file(self.db),
-                            );
-                            let Some(iface_data) =
-                                iface_tree.interfaces.get(&iface_loc.id(self.db))
+                            let Some(current_iface_tn) =
+                                interface_type_name_from_loc(self.db, iface_loc)
                             else {
                                 continue;
-                            };
-                            let iface_pkg = baml_compiler2_hir::file_package::file_package(
-                                self.db,
-                                iface_loc.file(self.db),
-                            );
-                            let mut iface_module_path: Vec<Name> = vec![iface_pkg.package.clone()];
-                            iface_module_path.extend(iface_pkg.namespace_path.iter().cloned());
-                            let current_iface_tn = TypeName {
-                                name: iface_data.name.clone(),
-                                module_path: iface_module_path,
-                                display_name: iface_data.name.clone(),
                             };
                             if current_iface_tn != *requested_tn
                                 || !self.interface_tir_type_args_match(
@@ -8023,6 +9696,19 @@ impl<'db> LoweringContext<'db> {
                             {
                                 continue;
                             }
+                            let iface_tree = baml_compiler2_hir::file_item_tree(
+                                self.db,
+                                iface_loc.file(self.db),
+                            );
+                            let Some(iface_data) =
+                                iface_tree.interfaces.get(&iface_loc.id(self.db))
+                            else {
+                                continue;
+                            };
+                            let iface_pkg = baml_compiler2_hir::file_package::file_package(
+                                self.db,
+                                iface_loc.file(self.db),
+                            );
                             if let Some(method_id) = imp
                                 .methods
                                 .iter()
@@ -8030,6 +9716,12 @@ impl<'db> LoweringContext<'db> {
                             {
                                 let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(
                                     self.db, file, *method_id,
+                                );
+                                let frame_type_args = Self::impl_frame_type_args_for_request(
+                                    &imp.generic_params,
+                                    &instantiation,
+                                    &rule.interface_ty,
+                                    &requested_iface_ty,
                                 );
                                 out.push((
                                     requested_idx,
@@ -8046,33 +9738,48 @@ impl<'db> LoweringContext<'db> {
                                         ),
                                         // Out-of-body override: its frame uses
                                         // `imp.generic_params` order, which can
-                                        // differ from both the class- and
-                                        // interface-arg orders. Not threaded
-                                        // here. (Unchanged from prior behavior.)
-                                        frame_seed: CalleeFrameSeed::Static(Vec::new()),
+                                        // differ from both class- and
+                                        // interface-arg order.
+                                        frame_seed: CalleeFrameSeed::Static(frame_type_args),
                                     },
                                 ));
+                                break 'blanket_search;
+                            }
+                            if !class_owned_method_ids.is_empty()
+                                && !self.class_method_candidate_already_resolved(
+                                    &out,
+                                    requested_idx,
+                                    impl_tn,
+                                    &guard,
+                                )
+                            {
+                                for &method_id in &class_owned_method_ids {
+                                    let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(
+                                        self.db,
+                                        class_loc.file(self.db),
+                                        method_id,
+                                    );
+                                    let frame_seed = class_owned_frame_seed(
+                                        &guard,
+                                        !class_data.generic_params.is_empty(),
+                                    );
+                                    out.push((
+                                        requested_idx,
+                                        InterfaceMethodCandidate {
+                                            guard: InterfaceDispatchGuard::Class {
+                                                impl_tn: impl_tn.clone(),
+                                                guard: guard.clone(),
+                                            },
+                                            item_ref: method_item_ref(self.db, class_loc, func_loc),
+                                            frame_seed,
+                                        },
+                                    ));
+                                }
                                 break 'blanket_search;
                             }
                             // No override in blanket impl — check for interface default method
                             for &fn_id in &iface_data.default_methods {
                                 if iface_tree[fn_id].name == *method {
-                                    // Inherited default for an out-of-body
-                                    // implementor: its body reads the owning
-                                    // interface's type vars (interface-param
-                                    // order). Seed from the resolved closure
-                                    // view args, but only when fully concrete —
-                                    // any residual TypeVar there is `imp`-level,
-                                    // not a caller generic, so it must not be
-                                    // emitted as a caller `TypeArgRef`.
-                                    let frame_type_args = if current_iface_args
-                                        .iter()
-                                        .any(baml_compiler2_tir::generics::contains_typevar)
-                                    {
-                                        Vec::new()
-                                    } else {
-                                        current_iface_args
-                                    };
                                     out.push((
                                         requested_idx,
                                         InterfaceMethodCandidate {
@@ -8086,7 +9793,7 @@ impl<'db> LoweringContext<'db> {
                                                 class: iface_data.name.clone(),
                                                 name: method.clone(),
                                             },
-                                            frame_seed: CalleeFrameSeed::Static(frame_type_args),
+                                            frame_seed: CalleeFrameSeed::Static(Vec::new()),
                                         },
                                     ));
                                     break 'blanket_search;
@@ -8124,13 +9831,136 @@ impl<'db> LoweringContext<'db> {
                 .iter()
                 .find(|(impl_name, _)| impl_name == requested_name)
                 .is_some_and(|(_, impl_ty)| {
-                    baml_compiler2_tir::normalize::is_same_normalized_type(
+                    tir_type_satisfies_dispatch_request(
                         impl_ty,
                         requested_ty,
                         &self.resolved_aliases.aliases,
-                    )
+                    ) || self.tir_types_equivalent(impl_ty, requested_ty)
                 })
         })
+    }
+
+    fn class_method_candidate_already_resolved(
+        &self,
+        resolved: &[(usize, InterfaceMethodCandidate)],
+        requested_idx: usize,
+        impl_tn: &TypeName,
+        guard: &InterfaceClassGuard,
+    ) -> bool {
+        resolved.iter().any(|(idx, candidate)| {
+            if *idx != requested_idx {
+                return false;
+            }
+            let InterfaceDispatchGuard::Class {
+                impl_tn: candidate_impl_tn,
+                guard: candidate_guard,
+            } = &candidate.guard
+            else {
+                return false;
+            };
+            candidate_impl_tn == impl_tn
+                && self.interface_class_guards_equivalent(candidate_guard, guard)
+        })
+    }
+
+    fn interface_class_guards_equivalent(
+        &self,
+        a: &InterfaceClassGuard,
+        b: &InterfaceClassGuard,
+    ) -> bool {
+        match (a, b) {
+            (InterfaceClassGuard::Any, InterfaceClassGuard::Any) => true,
+            (InterfaceClassGuard::Exact(a), InterfaceClassGuard::Exact(b))
+                if a.len() == b.len() =>
+            {
+                a.iter().zip(b).all(|(a, b)| match (a, b) {
+                    (None, None) => true,
+                    (Some(a), Some(b)) => self.tir_types_equivalent(a, b),
+                    _ => false,
+                })
+            }
+            _ => false,
+        }
+    }
+
+    fn impl_frame_type_args_for_request(
+        generic_params: &[Name],
+        instantiation: &baml_compiler2_tir::interfaces::InterfaceImplInstantiation,
+        rule_iface_ty: &Tir2Ty,
+        requested_iface_ty: &Tir2Ty,
+    ) -> Vec<Tir2Ty> {
+        generic_params
+            .iter()
+            .map(|param| {
+                instantiation
+                    .bindings
+                    .get(param)
+                    .filter(|ty| !Self::is_unresolved_impl_binding_for_param(param, ty))
+                    .cloned()
+                    .or_else(|| {
+                        Self::requested_iface_binding_for_impl_param(
+                            param,
+                            rule_iface_ty,
+                            requested_iface_ty,
+                        )
+                    })
+                    .unwrap_or_else(|| Tir2Ty::BuiltinUnknown {
+                        attr: baml_compiler2_tir::ty::TyAttr::default(),
+                    })
+            })
+            .collect()
+    }
+
+    fn is_unresolved_impl_binding_for_param(param: &Name, ty: &Tir2Ty) -> bool {
+        matches!(ty, Tir2Ty::Unknown { .. } | Tir2Ty::BuiltinUnknown { .. })
+            || matches!(ty, Tir2Ty::TypeVar(name, _) if name == param)
+    }
+
+    fn requested_iface_binding_for_impl_param(
+        param: &Name,
+        rule_iface_ty: &Tir2Ty,
+        requested_iface_ty: &Tir2Ty,
+    ) -> Option<Tir2Ty> {
+        let (
+            Tir2Ty::Interface(_, rule_args, rule_assoc, _),
+            Tir2Ty::Interface(_, requested_args, requested_assoc, _),
+        ) = (rule_iface_ty, requested_iface_ty)
+        else {
+            return None;
+        };
+
+        rule_args
+            .iter()
+            .zip(requested_args.iter())
+            .find_map(|(rule_arg, requested_arg)| {
+                Self::is_direct_impl_param_reference(param, rule_arg).then(|| requested_arg.clone())
+            })
+            .or_else(|| {
+                rule_assoc.iter().find_map(|(assoc_name, rule_ty)| {
+                    if !Self::is_direct_impl_param_reference(param, rule_ty) {
+                        return None;
+                    }
+                    requested_assoc
+                        .iter()
+                        .find(|(requested_name, _)| requested_name == assoc_name)
+                        .map(|(_, requested_ty)| requested_ty.clone())
+                })
+            })
+    }
+
+    fn is_direct_impl_param_reference(param: &Name, ty: &Tir2Ty) -> bool {
+        matches!(ty, Tir2Ty::TypeVar(name, _) if name == param)
+    }
+
+    fn tir_types_equivalent(&self, a: &Tir2Ty, b: &Tir2Ty) -> bool {
+        let resolver = baml_compiler2_tir::associated_projection::AssociatedProjectionResolver::new(
+            self.db,
+            &self.resolved_aliases.aliases,
+            &(),
+        );
+        let resolved_a = resolver.resolve_deep(a);
+        let resolved_b = resolver.resolve_deep(b);
+        resolver.types_equivalent(&resolved_a, &resolved_b)
     }
 
     fn interface_closure_type_name_views(
@@ -8139,11 +9969,11 @@ impl<'db> LoweringContext<'db> {
         iface_type_args: &[Tir2Ty],
         iface_assoc: &[(Name, Tir2Ty)],
     ) -> Option<Vec<InterfaceTypeView>> {
-        let iface_pkg_name = iface_tn.module_path.first()?;
+        let iface_pkg_name = iface_tn.package();
         let iface_pkg_items = self.resolve_class_pkg_items_by_name(iface_pkg_name);
-        let iface_ns: Vec<Name> = iface_tn.module_path.iter().skip(1).cloned().collect();
+        let iface_ns: Vec<Name> = iface_tn.namespace().clone();
         let Definition::Interface(requested_root_loc) =
-            iface_pkg_items.lookup_type(&iface_ns, &iface_tn.name)?
+            iface_pkg_items.lookup_type(&iface_ns, iface_tn.name())?
         else {
             return None;
         };
@@ -8158,24 +9988,47 @@ impl<'db> LoweringContext<'db> {
             )
             .into_iter()
             .filter_map(|(loc, args, assoc)| {
-                let tree = baml_compiler2_hir::file_item_tree(self.db, loc.file(self.db));
-                let iface_data = tree.interfaces.get(&loc.id(self.db))?;
-                let iface_pkg =
-                    baml_compiler2_hir::file_package::file_package(self.db, loc.file(self.db));
-                let mut module_path: Vec<Name> = vec![iface_pkg.package.clone()];
-                module_path.extend(iface_pkg.namespace_path.iter().cloned());
-                Some((
-                    TypeName {
-                        name: iface_data.name.clone(),
-                        module_path,
-                        display_name: iface_data.name.clone(),
-                    },
-                    args,
-                    assoc,
-                ))
+                Some((interface_type_name_from_loc(self.db, loc)?, args, assoc))
             })
             .collect(),
         )
+    }
+
+    fn interface_dispatch_instantiation_request(
+        actual_iface_ty: &Tir2Ty,
+        requested_iface_ty: &Tir2Ty,
+    ) -> Tir2Ty {
+        let (
+            Tir2Ty::Interface(actual_qtn, actual_args, actual_assoc, _),
+            Tir2Ty::Interface(requested_qtn, requested_args, requested_assoc, requested_attr),
+        ) = (actual_iface_ty, requested_iface_ty)
+        else {
+            return requested_iface_ty.clone();
+        };
+        if actual_qtn != requested_qtn {
+            return requested_iface_ty.clone();
+        }
+
+        let args = requested_args
+            .iter()
+            .zip(actual_args.iter())
+            .map(|(requested, actual)| rewrite_dispatch_request_ty(actual, requested))
+            .collect();
+        let assoc = requested_assoc
+            .iter()
+            .map(|(name, requested)| {
+                let rewritten = actual_assoc
+                    .iter()
+                    .find(|(actual_name, _)| actual_name == name)
+                    .map_or_else(
+                        || requested.clone(),
+                        |(_, actual)| rewrite_dispatch_request_ty(actual, requested),
+                    );
+                (name.clone(), rewritten)
+            })
+            .collect();
+
+        Tir2Ty::Interface(requested_qtn.clone(), args, assoc, requested_attr.clone())
     }
 
     fn resolve_type_implementor_method(
@@ -8185,7 +10038,7 @@ impl<'db> LoweringContext<'db> {
         iface_type_args: &[Tir2Ty],
         iface_assoc: &[(Name, Tir2Ty)],
         method: &Name,
-    ) -> Option<ItemRef> {
+    ) -> Option<(ItemRef, Vec<Tir2Ty>)> {
         let requested_views =
             self.interface_closure_type_name_views(iface_tn, iface_type_args, iface_assoc)?;
 
@@ -8204,26 +10057,24 @@ impl<'db> LoweringContext<'db> {
                     &mut diags,
                 );
 
-                let bindings = if imp.generic_params.is_empty() {
-                    if !baml_compiler2_tir::normalize::is_same_normalized_type(
+                let target_matches_implementor = if imp.generic_params.is_empty() {
+                    baml_compiler2_tir::normalize::is_same_normalized_type(
                         &target_ty_tir,
                         impl_ty_tir,
                         &self.resolved_aliases.aliases,
-                    ) {
-                        continue;
-                    }
-                    rustc_hash::FxHashMap::default()
+                    )
                 } else {
-                    let Some(bindings) = baml_compiler2_tir::interfaces::match_ty_pattern(
+                    baml_compiler2_tir::interfaces::match_ty_pattern(
                         &target_ty_tir,
                         impl_ty_tir,
                         &imp.generic_params,
                         &self.resolved_aliases.aliases,
-                    ) else {
-                        continue;
-                    };
-                    bindings
+                    )
+                    .is_some()
                 };
+                if !target_matches_implementor {
+                    continue;
+                }
 
                 let Some(root_iface_loc) =
                     baml_compiler2_tir::interfaces::resolve_path_to_interface(
@@ -8235,7 +10086,19 @@ impl<'db> LoweringContext<'db> {
                 else {
                     continue;
                 };
-                let raw_iface_args = match &imp.interface_target.expr {
+                let root_iface_tree =
+                    baml_compiler2_hir::file_item_tree(self.db, root_iface_loc.file(self.db));
+                let Some(root_iface_data) =
+                    root_iface_tree.interfaces.get(&root_iface_loc.id(self.db))
+                else {
+                    continue;
+                };
+                let root_iface_qtn = baml_compiler2_tir::lower_type_expr::qualify_def(
+                    self.db,
+                    Definition::Interface(root_iface_loc),
+                    &root_iface_data.name,
+                );
+                let root_iface_args_tir = match &imp.interface_target.expr {
                     baml_compiler2_ast::TypeExpr::Path { generic_args, .. } => generic_args
                         .iter()
                         .map(|arg| {
@@ -8251,12 +10114,7 @@ impl<'db> LoweringContext<'db> {
                         .collect::<Vec<_>>(),
                     _ => Vec::new(),
                 };
-                // Substitute type variable bindings into interface args for blanket impls.
-                let root_iface_args: Vec<_> = raw_iface_args
-                    .iter()
-                    .map(|a| baml_compiler2_tir::generics::substitute_ty(a, &bindings))
-                    .collect();
-                let raw_iface_assoc = lower_interface_target_associated_bindings(
+                let root_iface_assoc_tir = lower_interface_target_associated_bindings(
                     self.db,
                     &imp.interface_target.expr,
                     &imp.associated_type_bindings,
@@ -8265,80 +10123,167 @@ impl<'db> LoweringContext<'db> {
                     &imp.generic_params,
                     &mut diags,
                 );
-                let root_iface_assoc: Vec<_> = raw_iface_assoc
+                let bounds = imp
+                    .generic_param_bounds
                     .iter()
-                    .map(|(name, ty)| {
-                        (
-                            name.clone(),
-                            baml_compiler2_tir::generics::substitute_ty(ty, &bindings),
-                        )
+                    .map(|bound| {
+                        bound.as_ref().map(|bound| {
+                            baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+                                self.db,
+                                bound,
+                                pkg_items,
+                                &pkg_info.namespace_path,
+                                &imp.generic_params,
+                                &mut diags,
+                            )
+                        })
                     })
                     .collect();
+                let rule = baml_compiler2_tir::interfaces::InterfaceImplRule {
+                    generic_params: imp.generic_params.clone(),
+                    generic_param_bounds: bounds,
+                    for_ty_pattern: target_ty_tir,
+                    interface_ty: Tir2Ty::Interface(
+                        root_iface_qtn,
+                        root_iface_args_tir,
+                        root_iface_assoc_tir,
+                        baml_compiler2_tir::ty::TyAttr::default(),
+                    ),
+                    origin: baml_compiler2_tir::interfaces::InterfaceImplOrigin::OutOfBody,
+                };
+                let registry = baml_compiler2_tir::interfaces::package_implements_registry(
+                    self.db,
+                    PackageId::new(self.db, pkg_info.package.clone()),
+                );
 
-                for (current_iface_loc, current_iface_args, current_iface_assoc) in
-                    baml_compiler2_tir::interfaces::interface_closure_locs_with_args_and_assoc(
-                        self.db,
-                        root_iface_loc,
-                        &root_iface_args,
-                        &root_iface_assoc,
-                        pkg_items,
-                        &pkg_info.namespace_path,
-                    )
-                {
-                    let iface_tree = baml_compiler2_hir::file_item_tree(
-                        self.db,
-                        current_iface_loc.file(self.db),
-                    );
-                    let Some(iface_data) =
-                        iface_tree.interfaces.get(&current_iface_loc.id(self.db))
+                for (requested_tn, requested_args, requested_assoc) in &requested_views {
+                    let Some(requested_iface_qtn) = self.resolve_qtn_by_type_name(requested_tn)
                     else {
                         continue;
                     };
-                    let iface_pkg = baml_compiler2_hir::file_package::file_package(
-                        self.db,
-                        current_iface_loc.file(self.db),
+                    let requested_iface_ty = Tir2Ty::Interface(
+                        requested_iface_qtn,
+                        requested_args.clone(),
+                        requested_assoc.clone(),
+                        baml_compiler2_tir::ty::TyAttr::default(),
                     );
-                    let mut iface_module_path: Vec<Name> = vec![iface_pkg.package.clone()];
-                    iface_module_path.extend(iface_pkg.namespace_path.iter().cloned());
-                    let current_iface_tn = TypeName {
-                        name: iface_data.name.clone(),
-                        module_path: iface_module_path,
-                        display_name: iface_data.name.clone(),
-                    };
-                    if !requested_views.iter().any(
-                        |(requested_tn, requested_args, requested_assoc)| {
-                            current_iface_tn == *requested_tn
-                                && self.interface_tir_type_args_match(
-                                    &current_iface_args,
-                                    requested_args,
+                    let instantiation = registry
+                        .instantiate_rule_for_requested_interface(
+                            &rule,
+                            &requested_iface_ty,
+                            None,
+                            &self.resolved_aliases.aliases,
+                            |actual, bound| {
+                                type_satisfies_bound(
+                                    self.db,
+                                    actual,
+                                    bound,
+                                    &self.resolved_aliases.aliases,
+                                    &pkg_info.package,
+                                    BLANKET_BOUND_DEPTH,
                                 )
-                                && self.interface_tir_assoc_match(
-                                    &current_iface_assoc,
-                                    requested_assoc,
-                                )
-                        },
-                    ) {
+                            },
+                        )
+                        .or_else(|| {
+                            let dispatch_iface_ty = Self::interface_dispatch_instantiation_request(
+                                &rule.interface_ty,
+                                &requested_iface_ty,
+                            );
+                            registry.instantiate_rule_for_requested_interface(
+                                &rule,
+                                &dispatch_iface_ty,
+                                None,
+                                &self.resolved_aliases.aliases,
+                                |actual, bound| {
+                                    type_satisfies_bound(
+                                        self.db,
+                                        actual,
+                                        bound,
+                                        &self.resolved_aliases.aliases,
+                                        &pkg_info.package,
+                                        BLANKET_BOUND_DEPTH,
+                                    )
+                                },
+                            )
+                        });
+                    let Some(instantiation) = instantiation else {
                         continue;
-                    }
+                    };
+                    let (inst_iface_args, inst_iface_assoc): (&[Tir2Ty], &[(Name, Tir2Ty)]) =
+                        match &instantiation.interface_ty {
+                            Tir2Ty::Interface(_, args, assoc, _) => (args, assoc),
+                            _ => (&[], &[]),
+                        };
 
-                    if let Some(method_id) = imp
-                        .methods
-                        .iter()
-                        .find(|method_id| item_tree[**method_id].name == *method)
+                    for (current_iface_loc, current_iface_args, current_iface_assoc) in
+                        baml_compiler2_tir::interfaces::interface_closure_locs_with_args_and_assoc(
+                            self.db,
+                            root_iface_loc,
+                            inst_iface_args,
+                            inst_iface_assoc,
+                            pkg_items,
+                            &pkg_info.namespace_path,
+                        )
                     {
-                        let func_loc =
-                            baml_compiler2_hir::loc::FunctionLoc::new(self.db, file, *method_id);
-                        return Some(def_to_item_ref(self.db, Definition::Function(func_loc)));
-                    }
+                        let Some(current_iface_tn) =
+                            interface_type_name_from_loc(self.db, current_iface_loc)
+                        else {
+                            continue;
+                        };
+                        if current_iface_tn != *requested_tn
+                            || !self
+                                .interface_tir_type_args_match(&current_iface_args, requested_args)
+                            || !self
+                                .interface_tir_assoc_match(&current_iface_assoc, requested_assoc)
+                        {
+                            continue;
+                        }
+                        let iface_tree = baml_compiler2_hir::file_item_tree(
+                            self.db,
+                            current_iface_loc.file(self.db),
+                        );
+                        let Some(iface_data) =
+                            iface_tree.interfaces.get(&current_iface_loc.id(self.db))
+                        else {
+                            continue;
+                        };
+                        let iface_pkg = baml_compiler2_hir::file_package::file_package(
+                            self.db,
+                            current_iface_loc.file(self.db),
+                        );
 
-                    for &fn_id in &iface_data.default_methods {
-                        if iface_tree[fn_id].name == *method {
-                            return Some(ItemRef::Method {
-                                package: iface_pkg.package.clone(),
-                                namespace: iface_pkg.namespace_path,
-                                class: iface_data.name.clone(),
-                                name: method.clone(),
-                            });
+                        if let Some(method_id) = imp
+                            .methods
+                            .iter()
+                            .find(|method_id| item_tree[**method_id].name == *method)
+                        {
+                            let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(
+                                self.db, file, *method_id,
+                            );
+                            let frame_type_args = Self::impl_frame_type_args_for_request(
+                                &imp.generic_params,
+                                &instantiation,
+                                &rule.interface_ty,
+                                &requested_iface_ty,
+                            );
+                            return Some((
+                                def_to_item_ref(self.db, Definition::Function(func_loc)),
+                                frame_type_args,
+                            ));
+                        }
+
+                        for &fn_id in &iface_data.default_methods {
+                            if iface_tree[fn_id].name == *method {
+                                return Some((
+                                    ItemRef::Method {
+                                        package: iface_pkg.package.clone(),
+                                        namespace: iface_pkg.namespace_path,
+                                        class: iface_data.name.clone(),
+                                        name: method.clone(),
+                                    },
+                                    current_iface_args,
+                                ));
+                            }
                         }
                     }
                 }
@@ -8351,26 +10296,28 @@ impl<'db> LoweringContext<'db> {
         &self,
         class_tn: &TypeName,
     ) -> Option<baml_compiler2_hir::loc::ClassLoc<'db>> {
-        let pkg_name = class_tn.module_path.first()?;
+        let pkg_name = class_tn.package();
         let pkg_items = self.resolve_class_pkg_items_by_name(pkg_name);
-        let ns: Vec<Name> = class_tn.module_path.iter().skip(1).cloned().collect();
-        let Some(Definition::Class(class_loc)) = pkg_items.lookup_type(&ns, &class_tn.name) else {
+        let ns: Vec<Name> = class_tn.namespace().clone();
+        let Some(Definition::Class(class_loc)) = pkg_items.lookup_type(&ns, class_tn.name()) else {
             return None;
         };
         Some(class_loc)
     }
 
     fn resolve_qtn_by_type_name(&self, tn: &TypeName) -> Option<QualifiedTypeName> {
-        let pkg_name = tn.module_path.first()?;
+        let pkg_name = tn.package();
         let pkg_items = self.resolve_class_pkg_items_by_name(pkg_name);
-        let ns: Vec<Name> = tn.module_path.iter().skip(1).cloned().collect();
-        let def = pkg_items.lookup_type(&ns, &tn.name)?;
+        let ns: Vec<Name> = tn.namespace().clone();
+        let def = pkg_items.lookup_type(&ns, tn.name())?;
         match def {
             Definition::Class(_)
             | Definition::Enum(_)
             | Definition::Interface(_)
             | Definition::TypeAlias(_) => Some(baml_compiler2_tir::lower_type_expr::qualify_def(
-                self.db, def, &tn.name,
+                self.db,
+                def,
+                tn.name(),
             )),
             _ => None,
         }
@@ -8423,11 +10370,11 @@ impl<'db> LoweringContext<'db> {
         iface_tn: &TypeName,
         method: &Name,
     ) -> Option<ItemRef> {
-        let iface_pkg_name = iface_tn.module_path.first()?;
+        let iface_pkg_name = iface_tn.package();
         let iface_pkg_items = self.resolve_class_pkg_items_by_name(iface_pkg_name);
-        let iface_ns: Vec<Name> = iface_tn.module_path.iter().skip(1).cloned().collect();
+        let iface_ns: Vec<Name> = iface_tn.namespace().clone();
         let Definition::Interface(iface_loc) =
-            iface_pkg_items.lookup_type(&iface_ns, &iface_tn.name)?
+            iface_pkg_items.lookup_type(&iface_ns, iface_tn.name())?
         else {
             return None;
         };
@@ -8535,22 +10482,16 @@ impl<'db> LoweringContext<'db> {
                 })
             })
             .collect();
-        Some((
-            qtn_to_type_name(&target_qtn),
-            target_args,
-            associated_bindings,
-        ))
+        Some((target_qtn, target_args, associated_bindings))
     }
 
     /// True iff the interface named by `iface_tn` declares `field` directly in
     /// its own body (not via `requires`).
     fn interface_declares_field(&self, iface_tn: &TypeName, field: &Name) -> bool {
-        let Some(pkg_name) = iface_tn.module_path.first() else {
-            return false;
-        };
+        let pkg_name = iface_tn.package();
         let pkg_items = self.resolve_class_pkg_items_by_name(pkg_name);
-        let ns: Vec<Name> = iface_tn.module_path.iter().skip(1).cloned().collect();
-        let Some(Definition::Interface(loc)) = pkg_items.lookup_type(&ns, &iface_tn.name) else {
+        let ns: Vec<Name> = iface_tn.namespace().clone();
+        let Some(Definition::Interface(loc)) = pkg_items.lookup_type(&ns, iface_tn.name()) else {
             return false;
         };
         let tree = file_item_tree(self.db, loc.file(self.db));
@@ -8562,12 +10503,10 @@ impl<'db> LoweringContext<'db> {
     /// True iff the interface named by `iface_tn` declares `method` directly
     /// (as a default or required method), not via `requires`.
     fn interface_declares_method(&self, iface_tn: &TypeName, method: &Name) -> bool {
-        let Some(pkg_name) = iface_tn.module_path.first() else {
-            return false;
-        };
+        let pkg_name = iface_tn.package();
         let pkg_items = self.resolve_class_pkg_items_by_name(pkg_name);
-        let ns: Vec<Name> = iface_tn.module_path.iter().skip(1).cloned().collect();
-        let Some(Definition::Interface(loc)) = pkg_items.lookup_type(&ns, &iface_tn.name) else {
+        let ns: Vec<Name> = iface_tn.namespace().clone();
+        let Some(Definition::Interface(loc)) = pkg_items.lookup_type(&ns, iface_tn.name()) else {
             return false;
         };
         let tree = file_item_tree(self.db, loc.file(self.db));
@@ -8773,25 +10712,29 @@ impl<'db> LoweringContext<'db> {
         failure: BlockId,
     ) {
         let ty_template = match guard {
-            InterfaceClassGuard::Any => {
-                TyTemplate::Concrete(Ty::Class(impl_tn.clone(), Vec::new(), TyAttr::default()))
-            }
+            InterfaceClassGuard::Any => TyTemplate::Concrete(RuntimeTy::Class(
+                impl_tn.clone(),
+                Vec::new(),
+                TyAttr::default(),
+            )),
             InterfaceClassGuard::Exact(args) => {
                 let generic_params = self.enclosing_generic_params();
                 TyTemplate::Class(
                     impl_tn.clone(),
                     args.iter()
                         .map(|arg| match arg {
-                            Some(arg) => {
-                                tir2_to_template(arg, self.resolved_aliases, &generic_params)
-                            }
+                            Some(arg) => tir2_to_dispatch_guard_template(
+                                arg,
+                                self.resolved_aliases,
+                                &generic_params,
+                            ),
                             None => TyTemplate::Wildcard,
                         })
                         .collect(),
                 )
             }
         };
-        let test_local = self.builder.temp(Ty::Bool {
+        let test_local = self.builder.temp(RuntimeTy::Bool {
             attr: TyAttr::default(),
         });
         self.builder.assign(
@@ -8904,7 +10847,7 @@ impl LoweringContext<'_> {
             // `let PATTERN = init else { … };` — refutable binding lowered
             // as a two-way pattern test. On match: bind into the current
             // scope (locals survive past the statement); on miss: lower the
-            // else expression (guaranteed `Ty::Never` by TIR, so no
+            // else expression (guaranteed `RuntimeTy::Never` by TIR, so no
             // successor edge is needed). Handled before the structural
             // arms below because a refutable destructure ends up here too.
             AstStmt::Let {
@@ -9214,7 +11157,7 @@ impl LoweringContext<'_> {
                         self.binding_locals.insert(binding_id, local);
                     }
                 }
-                let body_temp = self.builder.temp(Ty::Void {
+                let body_temp = self.builder.temp(RuntimeTy::Void {
                     attr: TyAttr::default(),
                 });
                 self.lower_expr(body, Place::local(body_temp));
@@ -9229,151 +11172,26 @@ impl LoweringContext<'_> {
                 self.builder.set_current_block(bb_exit);
             }
 
-            // For-loop desugaring to index-based iteration.
-            //
-            // We desugar here (at MIR level) rather than at AST level because:
-            // - TIR needs the first-class For node for proper diagnostics
-            // - Future codegen can pattern-match on the loop structure to emit
-            //   native for-loops in target languages
-            //
-            // The desugaring is:
-            //   let __coll = <collection>;
-            //   let __idx = 0;
-            //   while __idx < len(__coll) {
-            //       let <binding> = __coll[__idx];
-            //       <body>;
-            //       __idx += 1;
-            //   }
+            // For loops use the Iterable interface: evaluate the collection,
+            // call iter(), then repeatedly call next() until Done.
             AstStmt::For {
                 binding,
                 collection,
                 body,
             } => {
-                let saved_locals = self.locals.clone();
-                let watched_depth = self.watched_locals_stack.len();
+                let coll_tir_ty = self
+                    .expr_types
+                    .get(&self.expr_metadata_key(collection))
+                    .cloned();
+                let iterable_view = coll_tir_ty
+                    .as_ref()
+                    .and_then(|ty| self.iterable_view_for_tir_ty(ty));
 
-                // 1. Evaluate collection into a temp local
-                let coll_ty = self.expr_ty(collection);
-                let coll_local = self.builder.temp(coll_ty.clone());
-                self.lower_expr(collection, Place::local(coll_local));
-
-                // 2. Determine element type from collection type
-                let elem_ty = match &coll_ty {
-                    Ty::List(inner, _) => *inner.clone(),
-                    _ => Ty::Void {
-                        attr: TyAttr::default(),
-                    },
-                };
-
-                // 3. Create index local, initialized to 0
-                let int_ty = Ty::Int {
-                    attr: TyAttr::default(),
-                };
-                let idx_name = self.gensym("__for_idx");
-                let idx_local =
-                    self.builder
-                        .declare_local(Some(idx_name), int_ty.clone(), None, false);
-                self.builder.assign(
-                    Place::local(idx_local),
-                    Rvalue::Use(Operand::Constant(Constant::Int(0))),
-                );
-
-                // 4. Create loop blocks: header (condition check), body, after (increment), exit
-                let bb_header = self.builder.create_block();
-                let bb_body = self.builder.create_block();
-                let bb_after = self.builder.create_block();
-                let bb_exit = self.builder.create_block();
-
-                // Register loop context so break/continue work inside for-loops
-                let prev_loop = self.loop_context.take();
-                self.loop_context = Some(LoopContext {
-                    break_target: bb_exit,
-                    continue_target: bb_after,
-                    watched_locals_depth: watched_depth,
-                });
-
-                if !self.builder.is_current_terminated() {
-                    self.builder.goto(bb_header);
+                if let Some(iterable_view) = iterable_view {
+                    self.lower_iterable_for_loop(stmt_id, binding, collection, body, iterable_view);
+                } else {
+                    self.emit_panic_call("for loop collection is not iterable", collection);
                 }
-
-                // 5. Header: check __idx < len(__coll)
-                self.builder.set_current_block(bb_header);
-                let len_local = self.builder.temp(int_ty);
-                self.builder.assign(
-                    Place::local(len_local),
-                    Rvalue::Len(Place::local(coll_local)),
-                );
-                let cond_local = self.builder.temp(Ty::Bool {
-                    attr: TyAttr::default(),
-                });
-                self.builder.assign(
-                    Place::local(cond_local),
-                    Rvalue::BinaryOp {
-                        op: BinOp::Lt,
-                        left: Operand::Copy(Place::Local(idx_local)),
-                        right: Operand::Copy(Place::Local(len_local)),
-                    },
-                );
-                self.builder
-                    .branch(Operand::Copy(Place::Local(cond_local)), bb_body, bb_exit);
-
-                // 6. Body: let <binding> = __coll[__idx]; <body_expr>
-                self.builder.set_current_block(bb_body);
-
-                // Bind the loop variable: declare a local and assign __coll[__idx] to it
-                let elem_local = self.builder.declare_local(None, elem_ty, None, false);
-                self.builder.assign(
-                    Place::local(elem_local),
-                    Rvalue::Use(Operand::Copy(Place::Index {
-                        base: Box::new(Place::local(coll_local)),
-                        index: idx_local,
-                        kind: IndexKind::Array,
-                    })),
-                );
-                // Bind the pattern to the element local. FreshCell before each
-                // assignment gives closures a distinct cell per iteration.
-                self.bind_pattern_with_fresh_cells(elem_local, binding);
-                let names: Vec<Name> = self.body.patterns[binding]
-                    .bound_names(&self.body.patterns)
-                    .into_iter()
-                    .cloned()
-                    .collect();
-                for name in names {
-                    if let Some(&local) = self.locals.get(&name)
-                        && let Some(binding_id) =
-                            self.binding_id_for_statement_name(stmt_id, binding, &name)
-                    {
-                        self.binding_locals.insert(binding_id, local);
-                    }
-                }
-
-                // Lower the body expression (result discarded)
-                let body_temp = self.builder.temp(Ty::Void {
-                    attr: TyAttr::default(),
-                });
-                self.lower_expr(body, Place::local(body_temp));
-
-                if !self.builder.is_current_terminated() {
-                    self.emit_unwatch_to_depth(watched_depth);
-                    self.builder.goto(bb_after);
-                }
-                self.restore_locals_after_scope(saved_locals, watched_depth);
-
-                // 7. After: __idx += 1
-                self.builder.set_current_block(bb_after);
-                self.builder.assign(
-                    Place::local(idx_local),
-                    Rvalue::BinaryOp {
-                        op: BinOp::Add,
-                        left: Operand::Copy(Place::Local(idx_local)),
-                        right: Operand::Constant(Constant::Int(1)),
-                    },
-                );
-                self.builder.goto(bb_header);
-
-                // 8. Exit block
-                self.loop_context = prev_loop;
-                self.builder.set_current_block(bb_exit);
             }
 
             AstStmt::Return(expr) => {
@@ -9430,7 +11248,9 @@ impl LoweringContext<'_> {
 
             AstStmt::Assign { target, value } => {
                 let target_expr = &self.body.exprs[target];
-                if let AstExpr::OptionalChain { expr: inner } = target_expr {
+                if Self::is_runtime_id_path(target_expr) {
+                    self.lower_set_runtime_id(value);
+                } else if let AstExpr::OptionalChain { expr: inner } = target_expr {
                     let inner = *inner;
                     self.lower_assign_optional_chain(inner, value);
                 } else {
@@ -9471,7 +11291,7 @@ impl LoweringContext<'_> {
                     name: Name::new("panic"),
                 }));
                 let msg = Operand::Constant(Constant::String("missing statement".to_string()));
-                let temp = self.builder.temp(Ty::Null {
+                let temp = self.builder.temp(RuntimeTy::Null {
                     attr: TyAttr::default(),
                 });
                 let unreachable_block = self.builder.create_block();
@@ -9523,7 +11343,22 @@ impl LoweringContext<'_> {
                     // Assignment to a captured variable in a closure body.
                     Place::Capture(cap_idx)
                 } else {
-                    let temp = self.builder.temp(Ty::Null {
+                    // Unresolved single-segment assignment target. This is
+                    // only reachable for programs TIR already rejected (an
+                    // unresolved name, or a special form like `$id` in a
+                    // position its TIR checks forbid). Fail loudly at runtime
+                    // instead of silently writing into a throwaway temp —
+                    // a silent temp here is how `$id = ...` once compiled to
+                    // a no-op (MIR has no compile-diagnostic channel).
+                    self.emit_panic_call(
+                        &format!(
+                            "internal compiler error: MIR failed to resolve assignment \
+                             target `{}` (TIR should have rejected this program)",
+                            segments[0]
+                        ),
+                        expr_id,
+                    );
+                    let temp = self.builder.temp(RuntimeTy::Null {
                         attr: TyAttr::default(),
                     });
                     Place::Local(temp)
@@ -9541,29 +11376,32 @@ impl LoweringContext<'_> {
                     (Place::Local(l), ty)
                 } else if let Some(cap_idx) = self.capture_index_for_name_at(expr_id, &segments[0])
                 {
-                    let ty = self
-                        .path_root_ty(expr_id)
-                        .unwrap_or_else(|| Ty::BuiltinUnknown {
-                            attr: TyAttr::default(),
-                        });
+                    let ty =
+                        self.path_root_ty(expr_id)
+                            .unwrap_or_else(|| RuntimeTy::BuiltinUnknown {
+                                attr: TyAttr::default(),
+                            });
                     (Place::Capture(cap_idx), ty)
                 } else {
-                    let tmp = self.builder.temp(Ty::Null {
+                    let tmp = self.builder.temp(RuntimeTy::Null {
                         attr: TyAttr::default(),
                     });
                     (
                         Place::Local(tmp),
-                        Ty::Null {
+                        RuntimeTy::Null {
                             attr: TyAttr::default(),
                         },
                     )
                 };
 
-                for seg in &segments[1..] {
-                    if let Ty::Class(ref tn, ref class_type_args, _) = current_ty.clone() {
-                        if let Some(fields) = self.class_fields.get(tn) {
+                for (offset, seg) in segments[1..].iter().enumerate() {
+                    let seg_idx = offset + 1;
+                    if let Some((tn, class_type_args)) =
+                        self.class_receiver_for_path_prefix(expr_id, seg_idx - 1, &current_ty)
+                    {
+                        if let Some(fields) = self.class_fields.get(&tn) {
                             if let Some(&idx) = fields.get(seg.as_str()) {
-                                let next_ty = self.class_field_ty(tn, seg, class_type_args);
+                                let next_ty = self.class_field_ty(&tn, seg, &class_type_args);
                                 current_place = Place::Field {
                                     base: Box::new(current_place),
                                     field: idx,
@@ -9574,7 +11412,7 @@ impl LoweringContext<'_> {
                         }
                     }
                     // Dynamic map fallback for non-class base or unknown field
-                    let key_local = self.builder.temp(Ty::String {
+                    let key_local = self.builder.temp(RuntimeTy::String {
                         attr: TyAttr::default(),
                     });
                     self.builder.assign(
@@ -9595,7 +11433,7 @@ impl LoweringContext<'_> {
                 let member_name = member.clone();
                 let base_place = self.lower_lvalue(base_id);
                 let base_ty = self.expr_ty(base_id);
-                if let Ty::Class(ref tn, _, _) = base_ty {
+                if let RuntimeTy::Class(ref tn, _, _) = base_ty {
                     if let Some(fields) = self.class_fields.get(tn) {
                         if let Some(&idx) = fields.get(member_name.as_str()) {
                             return Place::Field {
@@ -9609,18 +11447,20 @@ impl LoweringContext<'_> {
                             "internal compiler error: MIR failed to resolve member access \
                              .{} against class definition '{}' (module_path: {:?}). \
                              This class should be in class_fields but isn't.",
-                            member_name, tn.name, tn.module_path,
+                            member_name,
+                            tn.name(),
+                            tn.module_path(),
                         ),
                         base_id,
                     );
                     // Dead code after panic — return a dummy place
-                    let dead = self.builder.temp(Ty::Null {
+                    let dead = self.builder.temp(RuntimeTy::Null {
                         attr: TyAttr::default(),
                     });
                     return Place::Local(dead);
                 }
                 // Dynamic map access — only valid for map types, unknown, etc.
-                let key_local = self.builder.temp(Ty::String {
+                let key_local = self.builder.temp(RuntimeTy::String {
                     attr: TyAttr::default(),
                 });
                 self.builder.assign(
@@ -9642,7 +11482,10 @@ impl LoweringContext<'_> {
                 let index_ty = self.expr_ty(index_id);
                 let index_local = self.operand_to_local(index_op, index_ty);
                 let unwrapped_ty = base_ty.strip_null();
-                let kind = if matches!(&unwrapped_ty, Ty::List(..) | Ty::Uint8Array { .. }) {
+                let kind = if matches!(
+                    &unwrapped_ty,
+                    RuntimeTy::List(..) | RuntimeTy::Uint8Array { .. }
+                ) {
                     IndexKind::Array
                 } else {
                     IndexKind::Map
@@ -9668,7 +11511,7 @@ impl LoweringContext<'_> {
                     left: Operand::Copy(Place::Local(base_local)),
                     right: Operand::Constant(Constant::Null),
                 };
-                let test_local = self.builder.temp(Ty::Bool {
+                let test_local = self.builder.temp(RuntimeTy::Bool {
                     attr: TyAttr::default(),
                 });
                 self.builder.assign(Place::local(test_local), is_null);
@@ -9690,7 +11533,7 @@ impl LoweringContext<'_> {
                 let base_place = Place::Local(base_local);
                 // Unwrap Optional — we've already null-checked, so use the inner type.
                 let unwrapped_ty = base_ty.strip_null();
-                if let Ty::Class(tn, _, _) = &unwrapped_ty {
+                if let RuntimeTy::Class(tn, _, _) = &unwrapped_ty {
                     if let Some(fields) = self.class_fields.get(tn) {
                         if let Some(&idx) = fields.get(member_name.as_str()) {
                             return Place::Field {
@@ -9701,7 +11544,7 @@ impl LoweringContext<'_> {
                     }
                 }
                 // Dynamic map access
-                let key_local = self.builder.temp(Ty::String {
+                let key_local = self.builder.temp(RuntimeTy::String {
                     attr: TyAttr::default(),
                 });
                 self.builder.assign(
@@ -9729,7 +11572,7 @@ impl LoweringContext<'_> {
                     left: Operand::Copy(Place::Local(base_local)),
                     right: Operand::Constant(Constant::Null),
                 };
-                let test_local = self.builder.temp(Ty::Bool {
+                let test_local = self.builder.temp(RuntimeTy::Bool {
                     attr: TyAttr::default(),
                 });
                 self.builder.assign(Place::local(test_local), is_null);
@@ -9752,7 +11595,10 @@ impl LoweringContext<'_> {
                 let index_ty = self.expr_ty(index_id);
                 let index_local = self.operand_to_local(index_op, index_ty);
                 let unwrapped_ty = base_ty.strip_null();
-                let kind = if matches!(&unwrapped_ty, Ty::List(..) | Ty::Uint8Array { .. }) {
+                let kind = if matches!(
+                    &unwrapped_ty,
+                    RuntimeTy::List(..) | RuntimeTy::Uint8Array { .. }
+                ) {
                     IndexKind::Array
                 } else {
                     IndexKind::Map
@@ -10056,7 +11902,7 @@ impl LoweringContext<'_> {
         // We must do this before create_block() calls so the assignment goes into bb_entry.
         let switch_operand = match &switch_kind {
             Some(SwitchKind::EnumDiscriminant(_)) => {
-                let disc = self.builder.temp(Ty::Int {
+                let disc = self.builder.temp(RuntimeTy::Int {
                     attr: TyAttr::default(),
                 });
                 self.builder.assign(
@@ -10066,7 +11912,7 @@ impl LoweringContext<'_> {
                 Operand::Copy(Place::Local(disc))
             }
             Some(SwitchKind::TypeTag) => {
-                let tag_local = self.builder.temp(Ty::Int {
+                let tag_local = self.builder.temp(RuntimeTy::Int {
                     attr: TyAttr::default(),
                 });
                 self.builder.assign(
@@ -10149,7 +11995,7 @@ impl LoweringContext<'_> {
                 let reverse_class: std::collections::HashMap<i64, &str> = self
                     .class_type_tags
                     .iter()
-                    .map(|(tn, tag)| (*tag, tn.name.as_str()))
+                    .map(|(tn, tag)| (*tag, tn.name().as_str()))
                     .collect();
                 int_arms
                     .iter()
@@ -10370,15 +12216,15 @@ impl LoweringContext<'_> {
     fn emit_is_type_branch(
         &mut self,
         scrutinee: Local,
-        ty: Ty,
+        ty: RuntimeTy,
         success: BlockId,
         failure: BlockId,
     ) {
         // BEP-044/BEP-057: testing a value against an *interface* type means
         // "is its runtime class an implementor". Interface types used to lower
-        // to `Ty::Class`; they now lower to `Ty::Interface` so reflection can
+        // to `RuntimeTy::Class`; they now lower to `RuntimeTy::Interface` so reflection can
         // retain associated bindings. Accept both runtime shapes here.
-        if let Ty::Class(tn, _, _) | Ty::Interface(tn, _, _, _) = &ty
+        if let RuntimeTy::Class(tn, _, _) | RuntimeTy::Interface(tn, _, _, _) = &ty
             && let Some(impls) = self.interface_implementors.get(tn).cloned()
         {
             if impls.is_empty() {
@@ -10386,19 +12232,19 @@ impl LoweringContext<'_> {
                 self.builder.goto(failure);
                 return;
             }
-            let members: Vec<Ty> = impls
+            let members: Vec<RuntimeTy> = impls
                 .into_iter()
-                .map(|cn| Ty::Class(cn, Vec::new(), TyAttr::default()))
+                .map(|cn| RuntimeTy::Class(cn, Vec::new(), TyAttr::default()))
                 .collect();
             self.emit_is_type_branch(
                 scrutinee,
-                Ty::Union(members, TyAttr::default()),
+                RuntimeTy::Union(members, TyAttr::default()),
                 success,
                 failure,
             );
             return;
         }
-        if let Ty::Union(members, _) = ty {
+        if let RuntimeTy::Union(members, _) = ty {
             // For union A | B | C: check A → success, else check B → success,
             // else check C → success, else failure.
             let mut remaining = members.into_iter().peekable();
@@ -10415,23 +12261,40 @@ impl LoweringContext<'_> {
                 }
             }
         } else {
-            // Convert Ty → TyTemplate so the emitter can handle generic class
-            // checks (Ty::Class with args containing TypeVars map to
+            // Convert RuntimeTy → TyTemplate so the emitter can handle generic class
+            // checks (RuntimeTy::Class with args containing TypeVars map to
             // TyTemplate::Class with TypeArgRef leaves).  For non-generic types
             // the template is TyTemplate::Concrete(ty) — the emitter falls back
             // to the same fast path as before.
             let ty_template = ty_to_template_from_resolved_ty(&ty);
-            let test = Rvalue::IsType {
-                operand: Operand::Copy(Place::Local(scrutinee)),
-                ty_template,
-            };
-            let test_local = self.builder.temp(Ty::Bool {
-                attr: TyAttr::default(),
-            });
-            self.builder.assign(Place::local(test_local), test);
-            self.builder
-                .branch(Operand::Copy(Place::Local(test_local)), success, failure);
+            self.emit_is_type_template_branch(scrutinee, ty_template, success, failure);
         }
+    }
+
+    /// Emit an `IsType` test + branch for an already-built `TyTemplate`.
+    ///
+    /// Used directly (instead of [`Self::emit_is_type_branch`]) when the
+    /// pattern type still contains the enclosing function's `TypeVar`s: the
+    /// caller builds the template via `ty_to_template` so those lower to
+    /// `TypeArgRef` leaves resolved against `frame.type_args` at runtime,
+    /// rather than being erased to `RuntimeTy::Void` (a constant-false test).
+    fn emit_is_type_template_branch(
+        &mut self,
+        scrutinee: Local,
+        ty_template: TyTemplate,
+        success: BlockId,
+        failure: BlockId,
+    ) {
+        let test = Rvalue::IsType {
+            operand: Operand::Copy(Place::Local(scrutinee)),
+            ty_template,
+        };
+        let test_local = self.builder.temp(RuntimeTy::Bool {
+            attr: TyAttr::default(),
+        });
+        self.builder.assign(Place::local(test_local), test);
+        self.builder
+            .branch(Operand::Copy(Place::Local(test_local)), success, failure);
     }
 
     fn emit_is_tir_type_branch(
@@ -10515,7 +12378,7 @@ impl LoweringContext<'_> {
                     return;
                 }
 
-                let class_tn = qtn_to_type_name(qtn);
+                let class_tn = qtn.clone();
                 let fields: Vec<_> = class_fields.into_iter().collect();
                 for (idx, (field_name, field_ty)) in fields.iter().enumerate() {
                     let next = if idx + 1 == fields.len() {
@@ -10564,7 +12427,7 @@ impl LoweringContext<'_> {
             Tir2Ty::Interface(iface_qtn, type_args, associated_bindings, _)
                 if !type_args.is_empty() || !associated_bindings.is_empty() =>
             {
-                let iface_tn = qtn_to_type_name(iface_qtn);
+                let iface_tn = iface_qtn.clone();
                 let guards = self.interface_implementor_class_guards(
                     &iface_tn,
                     type_args,
@@ -10590,14 +12453,14 @@ impl LoweringContext<'_> {
             }
             // Singleton-valued types pin a specific runtime value, so emit
             // equality checks rather than type-tag tests. `is_type` on a
-            // literal type like `Ty::Literal("specific")` checks the value's
+            // literal type like `RuntimeTy::Literal("specific")` checks the value's
             // *type* (string) rather than its content — which is too permissive
             // and would let `let x: "specific" => …` fire on any string.
             Tir2Ty::Literal(lit, _, _) => {
                 let constant = Self::lower_literal(lit);
                 self.emit_value_eq_branch(scrutinee, Operand::Constant(constant), success, failure);
             }
-            Tir2Ty::Primitive(baml_compiler2_tir::ty::PrimitiveType::Null, _) => {
+            Tir2Ty::Null { .. } => {
                 self.emit_value_eq_branch(
                     scrutinee,
                     Operand::Constant(Constant::Null),
@@ -10626,7 +12489,7 @@ impl LoweringContext<'_> {
             left: Operand::Copy(Place::Local(scrutinee)),
             right: rhs,
         };
-        let test_local = self.builder.temp(Ty::Bool {
+        let test_local = self.builder.temp(RuntimeTy::Bool {
             attr: TyAttr::default(),
         });
         self.builder.assign(Place::local(test_local), test);
@@ -10694,24 +12557,22 @@ impl LoweringContext<'_> {
     /// Look up the integer type tag for a type. Returns `Some(tag)` for
     /// primitives (INT=0, STRING=1, etc.) and classes (`CLASS_BASE` + index),
     /// or `None` for types that don't have a tag (unions, generics, etc.).
-    fn type_tag_for_ty(&self, ty: &Ty) -> Option<i64> {
+    fn type_tag_for_ty(&self, ty: &RuntimeTy) -> Option<i64> {
         match ty {
-            Ty::Int { .. } => Some(baml_type::typetag::INT),
-            Ty::Bigint { .. } => Some(baml_type::typetag::BIGINT),
-            Ty::String { .. } => Some(baml_type::typetag::STRING),
-            Ty::Bool { .. } => Some(baml_type::typetag::BOOL),
-            Ty::Null { .. } => Some(baml_type::typetag::NULL),
-            Ty::Float { .. } => Some(baml_type::typetag::FLOAT),
-            Ty::Uint8Array { .. } => Some(baml_type::typetag::UINT8ARRAY),
-            Ty::Enum(..) | Ty::EnumVariant(..) => Some(baml_type::typetag::ENUM),
-            Ty::List(..) => Some(baml_type::typetag::LIST),
-            Ty::Map { .. } => Some(baml_type::typetag::MAP),
-            Ty::Function { .. } => Some(baml_type::typetag::FUNCTION),
-            Ty::Future(..) => Some(baml_type::typetag::FUTURE),
-            Ty::Opaque(tn, _) if tn.display_name.as_str() == "type" => {
-                Some(baml_type::typetag::TYPE)
-            }
-            Ty::Class(tn, _, _) => self.class_type_tags.get(tn).copied(),
+            RuntimeTy::Int { .. } => Some(baml_type::typetag::INT),
+            RuntimeTy::Bigint { .. } => Some(baml_type::typetag::BIGINT),
+            RuntimeTy::String { .. } => Some(baml_type::typetag::STRING),
+            RuntimeTy::Bool { .. } => Some(baml_type::typetag::BOOL),
+            RuntimeTy::Null { .. } => Some(baml_type::typetag::NULL),
+            RuntimeTy::Float { .. } => Some(baml_type::typetag::FLOAT),
+            RuntimeTy::Uint8Array { .. } => Some(baml_type::typetag::UINT8ARRAY),
+            RuntimeTy::Enum(..) | RuntimeTy::EnumVariant(..) => Some(baml_type::typetag::ENUM),
+            RuntimeTy::List(..) => Some(baml_type::typetag::LIST),
+            RuntimeTy::Map { .. } => Some(baml_type::typetag::MAP),
+            RuntimeTy::Function { .. } => Some(baml_type::typetag::FUNCTION),
+            RuntimeTy::Future(..) => Some(baml_type::typetag::FUTURE),
+            RuntimeTy::Type { .. } => Some(baml_type::typetag::TYPE),
+            RuntimeTy::Class(tn, _, _) => self.class_type_tags.get(tn).copied(),
             _ => None,
         }
     }
@@ -10733,13 +12594,13 @@ impl LoweringContext<'_> {
 
     fn class_pattern_type_name(&self, pat_id: AstPatId) -> Option<TypeName> {
         let tir_ty = self.pat_types.get(&self.pat_metadata_key(pat_id))?;
-        match convert_tir2_ty(tir_ty, self.resolved_aliases) {
-            Ty::Class(tn, _, _) => Some(tn),
+        match self.resolved_aliases.convert(tir_ty) {
+            RuntimeTy::Class(tn, _, _) => Some(tn),
             _ => None,
         }
     }
 
-    fn class_pattern_field_ty(&self, pat_id: AstPatId, field: &Name) -> Option<Ty> {
+    fn class_pattern_field_ty(&self, pat_id: AstPatId, field: &Name) -> Option<RuntimeTy> {
         let tir_ty = self.pat_types.get(&self.pat_metadata_key(pat_id))?;
         let Tir2Ty::Class(qtn, type_args, _) = tir_ty else {
             return None;
@@ -10830,7 +12691,7 @@ impl LoweringContext<'_> {
     }
 
     fn const_int_local(&mut self, value: i64) -> Local {
-        let local = self.builder.temp(Ty::Int {
+        let local = self.builder.temp(RuntimeTy::Int {
             attr: TyAttr::default(),
         });
         self.builder.assign(
@@ -10845,7 +12706,7 @@ impl LoweringContext<'_> {
     }
 
     fn array_len_local(&mut self, scrutinee: Local) -> Local {
-        let len_local = self.builder.temp(Ty::Int {
+        let len_local = self.builder.temp(RuntimeTy::Int {
             attr: TyAttr::default(),
         });
         self.builder.assign(
@@ -10865,7 +12726,7 @@ impl LoweringContext<'_> {
     ) {
         let len_local = self.array_len_local(scrutinee);
         let expected = self.const_usize_int_local(fixed_len);
-        let test_local = self.builder.temp(Ty::Bool {
+        let test_local = self.builder.temp(RuntimeTy::Bool {
             attr: TyAttr::default(),
         });
         self.builder.assign(
@@ -10898,7 +12759,7 @@ impl LoweringContext<'_> {
     ) -> Local {
         let len_local = self.array_len_local(scrutinee);
         let offset = self.const_usize_int_local(index_from_end);
-        let index_local = self.builder.temp(Ty::Int {
+        let index_local = self.builder.temp(RuntimeTy::Int {
             attr: TyAttr::default(),
         });
         self.builder.assign(
@@ -10946,7 +12807,7 @@ impl LoweringContext<'_> {
         } else {
             let len_local = self.array_len_local(scrutinee);
             let suffix = self.const_usize_int_local(suffix_len);
-            let end = self.builder.temp(Ty::Int {
+            let end = self.builder.temp(RuntimeTy::Int {
                 attr: TyAttr::default(),
             });
             self.builder.assign(
@@ -11027,12 +12888,18 @@ impl LoweringContext<'_> {
                 self.builder.goto(success);
             }
             AstPattern::Bind { .. } => {
-                if let Some(tir_ty) = self.pat_types.get(&self.pat_metadata_key(pat_id)).cloned() {
-                    let resolved = self.resolved_aliases.convert(&tir_ty);
-                    self.emit_is_type_branch(scrutinee, resolved, success, failure);
-                } else {
-                    self.builder.goto(success);
-                }
+                // A bare `let e` (no annotation — annotated binds carry the
+                // annotation as a subpattern and recursed above) is
+                // IRREFUTABLE: arm dispatch is sequential, so the bind takes
+                // whatever reaches it; its `pat_types` entry is exhaustiveness
+                // bookkeeping, not a runtime dispatch condition. Emitting a
+                // type test here is at best a tautology and at worst a
+                // miscompile: a rigid generic (e.g. the `E` of a combinator's
+                // `catch (e) { let e => … }`) erases to `RuntimeTy::Void` in
+                // `convert_tir_ty_for_runtime`, making the test constant-false and the
+                // catch arm silently rethrow. (Panic fall-through for catch
+                // arms is handled separately by `ThrowIfPanic`.)
+                self.builder.goto(success);
             }
             // OLD's Pattern::Type covered structural shape tests; OLD's
             // Pattern::Literal / Pattern::Null / Pattern::EnumVariant were
@@ -11047,7 +12914,7 @@ impl LoweringContext<'_> {
                         left: Operand::Copy(Place::Local(scrutinee)),
                         right: Operand::Constant(constant),
                     };
-                    let test_local = self.builder.temp(Ty::Bool {
+                    let test_local = self.builder.temp(RuntimeTy::Bool {
                         attr: TyAttr::default(),
                     });
                     self.builder.assign(Place::local(test_local), test);
@@ -11060,7 +12927,7 @@ impl LoweringContext<'_> {
                         left: Operand::Copy(Place::Local(scrutinee)),
                         right: Operand::Constant(Constant::Null),
                     };
-                    let test_local = self.builder.temp(Ty::Bool {
+                    let test_local = self.builder.temp(RuntimeTy::Bool {
                         attr: TyAttr::default(),
                     });
                     self.builder.assign(Place::local(test_local), test);
@@ -11089,7 +12956,7 @@ impl LoweringContext<'_> {
                         left: Operand::Copy(Place::Local(scrutinee)),
                         right: Operand::Constant(Constant::EnumVariant { enum_ref, variant }),
                     };
-                    let test_local = self.builder.temp(Ty::Bool {
+                    let test_local = self.builder.temp(RuntimeTy::Bool {
                         attr: TyAttr::default(),
                     });
                     self.builder.assign(Place::local(test_local), test);
@@ -11097,23 +12964,41 @@ impl LoweringContext<'_> {
                         .branch(Operand::Copy(Place::Local(test_local)), success, failure);
                 }
                 _ => {
+                    // The annotated-bind recursion (`let e: T => …` recurses
+                    // into its Type subpattern) has no `pat_types` entry for
+                    // the subpattern, so fall back to lowering the annotation
+                    // itself with the enclosing generic params in scope.
+                    let pat_tir_ty = self
+                        .pat_types
+                        .get(&self.pat_metadata_key(pat_id))
+                        .cloned()
+                        .unwrap_or_else(|| self.lower_type_annotation_tir(ty_expr));
                     // A generic-interface pattern (`Slot<int>`) needs the
                     // TIR-typed test, which preserves the type argument and
                     // tests only the implementors of *that* instantiation —
                     // otherwise the erased path matches every implementor and a
-                    // `Slot<string>` value falls into a `Slot<int>` arm. Other
-                    // patterns keep the erased fast path (unchanged codegen).
-                    let tir_ty = self.pat_types.get(&self.pat_metadata_key(pat_id)).cloned();
-                    if let Some(tir_ty) = &tir_ty
-                        && Self::tir_ty_needs_interface_shape_test(tir_ty)
-                    {
-                        self.emit_is_tir_type_branch(scrutinee, tir_ty, success, failure);
-                    } else {
-                        let annotation_ty = tir_ty
-                            .map(|t| convert_tir2_ty(&t, self.resolved_aliases))
-                            .unwrap_or_else(|| self.resolve_type_annotation(ty_expr));
-                        self.emit_is_type_branch(scrutinee, annotation_ty, success, failure);
+                    // `Slot<string>` value falls into a `Slot<int>` arm.
+                    if Self::tir_ty_needs_interface_shape_test(&pat_tir_ty) {
+                        self.emit_is_tir_type_branch(scrutinee, &pat_tir_ty, success, failure);
+                        return;
                     }
+                    // A class pattern type still carrying the enclosing
+                    // function's TypeVars (e.g. `let e: AllFailed<E>` inside
+                    // `any<T, E>`) must NOT go through `convert_tir_ty_for_runtime` —
+                    // that erases TypeVar → Void and the test becomes
+                    // constant-false. Build a template instead so the args
+                    // lower to `TypeArgRef` resolved against the frame.
+                    if matches!(&pat_tir_ty, Tir2Ty::Class(..))
+                        && baml_compiler2_tir::generics::contains_typevar(&pat_tir_ty)
+                    {
+                        let generic_params = self.enclosing_generic_params();
+                        let template = self.ty_to_template(&pat_tir_ty, &generic_params);
+                        self.emit_is_type_template_branch(scrutinee, template, success, failure);
+                        return;
+                    }
+                    // Other patterns keep the erased fast path (unchanged codegen).
+                    let annotation_ty = self.resolved_aliases.convert(&pat_tir_ty);
+                    self.emit_is_type_branch(scrutinee, annotation_ty, success, failure);
                 }
             },
             AstPattern::Or(sub_pats) => {
@@ -11339,7 +13224,7 @@ impl LoweringContext<'_> {
                 } else {
                     self.pat_types
                         .get(&self.pat_metadata_key(pat_id))
-                        .map(|ty| convert_tir2_ty(ty, self.resolved_aliases))
+                        .map(|ty| self.resolved_aliases.convert(ty))
                         .unwrap_or_else(|| self.builder.local_ty(scrutinee))
                 };
                 let local = self
@@ -11677,15 +13562,15 @@ impl LoweringContext<'_> {
         }
     }
 
-    /// Convert a `Ty` to the list of type tag integers it corresponds to.
+    /// Convert a `RuntimeTy` to the list of type tag integers it corresponds to.
     /// Returns `None` if the type has no simple tag representation.
     ///
     /// Supports primitives (globally-stable tags) and class types (looked up
     /// from `class_type_tags`). Union types are flattened — all members must
     /// be tag-eligible.
-    fn ty_to_type_tags(&self, ty: &Ty) -> Option<Vec<i64>> {
+    fn ty_to_type_tags(&self, ty: &RuntimeTy) -> Option<Vec<i64>> {
         match ty {
-            Ty::Union(members, _) => {
+            RuntimeTy::Union(members, _) => {
                 let mut tags = Vec::new();
                 for m in members {
                     let member_tags = self.ty_to_type_tags(m)?;
@@ -11792,7 +13677,7 @@ impl LoweringContext<'_> {
         });
         let error_local = self.builder.declare_local(
             single_clause_binding_name,
-            Ty::BuiltinUnknown {
+            RuntimeTy::BuiltinUnknown {
                 attr: TyAttr::default(),
             },
             None,
@@ -11805,7 +13690,7 @@ impl LoweringContext<'_> {
             .then(|| {
                 self.builder.declare_local(
                     None,
-                    Ty::BuiltinUnknown {
+                    RuntimeTy::BuiltinUnknown {
                         attr: TyAttr::default(),
                     },
                     None,
@@ -11823,7 +13708,7 @@ impl LoweringContext<'_> {
                 Some(name) if binding_is_captured => {
                     let local = self.builder.declare_local(
                         Some(name.clone()),
-                        Ty::BuiltinUnknown {
+                        RuntimeTy::BuiltinUnknown {
                             attr: TyAttr::default(),
                         },
                         None,
@@ -11850,7 +13735,7 @@ impl LoweringContext<'_> {
                     Some(name) if is_captured => {
                         let local = self.builder.declare_local(
                             Some(name.clone()),
-                            Ty::BuiltinUnknown {
+                            RuntimeTy::BuiltinUnknown {
                                 attr: TyAttr::default(),
                             },
                             None,
@@ -12061,7 +13946,7 @@ pub fn lower_function<'db>(
             use baml_compiler2_ast::BuiltinKind;
             // For IO builtins (`$rust_io_function`), the compiler injects one
             // synthetic trailing value-arg slot for each generic type parameter
-            // (e.g. `parse<T>` gets one extra `baml_type::Ty` slot after the
+            // (e.g. `parse<T>` gets one extra `baml_type::RuntimeTy` slot after the
             // regular params).  We must include those synthetic slots in the
             // arity so that `ScheduleFuture` pops the correct number of args
             // from the stack.
@@ -12102,7 +13987,7 @@ pub fn lower_function<'db>(
                 locals: (0..=arity)
                     .map(|_| LocalDecl {
                         name: None,
-                        ty: baml_type::Ty::Void {
+                        ty: baml_type::RuntimeTy::Void {
                             attr: baml_type::TyAttr::default(),
                         },
                         is_captured: false,
@@ -12121,14 +14006,29 @@ pub fn lower_function<'db>(
 
 #[cfg(test)]
 mod tests {
+    use baml_compiler2_tir::ty::{MediaKind, PrimitiveType};
+
     use super::*;
 
     fn type_var(name: &str) -> Tir2Ty {
         Tir2Ty::TypeVar(Name::new(name), baml_compiler2_tir::ty::TyAttr::default())
     }
 
-    fn primitive(primitive: PrimitiveType) -> Tir2Ty {
-        Tir2Ty::Primitive(primitive, baml_compiler2_tir::ty::TyAttr::default())
+    fn primitive(primitive: &PrimitiveType) -> Tir2Ty {
+        let attr = baml_compiler2_tir::ty::TyAttr::default();
+        match primitive {
+            PrimitiveType::Int => Tir2Ty::Int { attr },
+            PrimitiveType::Bigint => Tir2Ty::Bigint { attr },
+            PrimitiveType::Float => Tir2Ty::Float { attr },
+            PrimitiveType::String => Tir2Ty::String { attr },
+            PrimitiveType::Bool => Tir2Ty::Bool { attr },
+            PrimitiveType::Null => Tir2Ty::Null { attr },
+            PrimitiveType::Uint8Array => Tir2Ty::Uint8Array { attr },
+            PrimitiveType::Image => Tir2Ty::Media(MediaKind::Image, attr),
+            PrimitiveType::Audio => Tir2Ty::Media(MediaKind::Audio, attr),
+            PrimitiveType::Video => Tir2Ty::Media(MediaKind::Video, attr),
+            PrimitiveType::Pdf => Tir2Ty::Media(MediaKind::Pdf, attr),
+        }
     }
 
     #[test]
@@ -12150,11 +14050,11 @@ mod tests {
     #[test]
     fn interface_class_guard_checks_assoc_when_request_omits_generic_args() {
         let aliases = HashMap::new();
-        let impl_args = vec![primitive(PrimitiveType::String)];
+        let impl_args = vec![primitive(&PrimitiveType::String)];
         let requested_args = Vec::new();
-        let requested_assoc = vec![(Name::new("Value"), primitive(PrimitiveType::Int))];
+        let requested_assoc = vec![(Name::new("Value"), primitive(&PrimitiveType::Int))];
 
-        let int_impl_assoc = vec![(Name::new("Value"), primitive(PrimitiveType::Int))];
+        let int_impl_assoc = vec![(Name::new("Value"), primitive(&PrimitiveType::Int))];
         assert!(matches!(
             interface_class_guard_for_args(
                 &impl_args,
@@ -12167,7 +14067,7 @@ mod tests {
             Some(InterfaceClassGuard::Any)
         ));
 
-        let string_impl_assoc = vec![(Name::new("Value"), primitive(PrimitiveType::String))];
+        let string_impl_assoc = vec![(Name::new("Value"), primitive(&PrimitiveType::String))];
         assert!(
             interface_class_guard_for_args(
                 &impl_args,

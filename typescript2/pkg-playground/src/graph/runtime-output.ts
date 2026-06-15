@@ -22,18 +22,26 @@ export interface GraphRunState {
   functionName?: string | null;
 }
 
-function nodeMatchesFunctionName(node: GraphNode, functionName: string): boolean {
+function nodeMatchesFunctionName(
+  node: GraphNode,
+  functionName: string,
+): boolean {
   const label = node.label.trim();
   if (label === functionName) return true;
   if (label.startsWith(`${functionName}(`)) return true;
 
   const namespacedName = functionName.split('.').pop();
-  return namespacedName != null
-    && namespacedName !== functionName
-    && (label === namespacedName || label.startsWith(`${namespacedName}(`));
+  return (
+    namespacedName != null &&
+    namespacedName !== functionName &&
+    (label === namespacedName || label.startsWith(`${namespacedName}(`))
+  );
 }
 
-function findOutputNodeIds(graphNodes: GraphNode[], functionName: string): string[] {
+function findOutputNodeIds(
+  graphNodes: GraphNode[],
+  functionName: string,
+): string[] {
   const exact = graphNodes
     .filter((node) => node.label.trim() === functionName)
     .map((node) => node.id);
@@ -44,7 +52,10 @@ function findOutputNodeIds(graphNodes: GraphNode[], functionName: string): strin
     .map((node) => node.id);
 }
 
-function findOutputNodeId(graphNodes: GraphNode[], functionName: string): string | null {
+function findOutputNodeId(
+  graphNodes: GraphNode[],
+  functionName: string,
+): string | null {
   return findOutputNodeIds(graphNodes, functionName)[0] ?? null;
 }
 
@@ -59,7 +70,10 @@ const statePriority: Record<NodeExecutionState, number> = {
   error: 6,
 };
 
-function mergeState(current: NodeExecutionState | undefined, next: NodeExecutionState): NodeExecutionState {
+function mergeState(
+  current: NodeExecutionState | undefined,
+  next: NodeExecutionState,
+): NodeExecutionState {
   if (current == null) return next;
   return statePriority[next] > statePriority[current] ? next : current;
 }
@@ -73,9 +87,13 @@ function updateRuntime(
   map.set(nodeId, {
     result: 'result' in patch ? patch.result : prev?.result,
     hasResult: 'hasResult' in patch ? patch.hasResult : prev?.hasResult,
-    imageOutputs: 'imageOutputs' in patch ? (patch.imageOutputs ?? []) : prev?.imageOutputs ?? [],
+    imageOutputs:
+      'imageOutputs' in patch
+        ? (patch.imageOutputs ?? [])
+        : (prev?.imageOutputs ?? []),
     executionState: patch.executionState,
-    errorMessage: 'errorMessage' in patch ? patch.errorMessage : prev?.errorMessage,
+    errorMessage:
+      'errorMessage' in patch ? patch.errorMessage : prev?.errorMessage,
   });
 }
 
@@ -86,7 +104,8 @@ function applySuccessfulRunFallback(
   for (const node of graphNodes) {
     if (map.has(node.id)) continue;
 
-    const hasSourceBackedRuntimeNode = node.parent == null || node.metadata.sourceExpr != null;
+    const hasSourceBackedRuntimeNode =
+      node.parent == null || node.metadata.sourceExpr != null;
     if (!hasSourceBackedRuntimeNode) continue;
 
     updateRuntime(map, node.id, {
@@ -142,8 +161,8 @@ export function collectGraphNodeRuntime(
       });
     } else if (kind?.$case === 'functionEnd') {
       const mappedNodeId = nodeIdBySpanId.get(evt.spanId);
-      const nodeId = mappedNodeId
-        ?? findOutputNodeId(graphNodes, kind.functionEnd.name);
+      const nodeId =
+        mappedNodeId ?? findOutputNodeId(graphNodes, kind.functionEnd.name);
       if (mappedNodeId != null) {
         decrementActiveNodeCount(mappedNodeId);
       }
@@ -155,8 +174,12 @@ export function collectGraphNodeRuntime(
       updateRuntime(direct, nodeId, {
         result: kind.functionEnd.result,
         hasResult: kind.functionEnd.result != null,
-        imageOutputs: kind.functionEnd.result == null ? [] : findImageMedia(kind.functionEnd.result),
-        executionState: remainingActiveCount > 0 ? 'running' : error ? 'error' : 'success',
+        imageOutputs:
+          kind.functionEnd.result == null
+            ? []
+            : findImageMedia(kind.functionEnd.result),
+        executionState:
+          remainingActiveCount > 0 ? 'running' : error ? 'error' : 'success',
         errorMessage: error,
       });
     }
@@ -170,11 +193,13 @@ export function collectGraphNodeRuntime(
     const fallbackNodeId = runState.functionName
       ? findOutputNodeId(graphNodes, runState.functionName)
       : null;
-    const errorTargets = activeNodeIds.length > 0
-      ? activeNodeIds
-      : fallbackNodeId != null && (activeNodeCounts.get(fallbackNodeId) ?? 0) === 0
-        ? [fallbackNodeId]
-        : [];
+    const errorTargets =
+      activeNodeIds.length > 0
+        ? activeNodeIds
+        : fallbackNodeId != null &&
+            (activeNodeCounts.get(fallbackNodeId) ?? 0) === 0
+          ? [fallbackNodeId]
+          : [];
 
     for (const nodeId of errorTargets) {
       updateRuntime(direct, nodeId, {
@@ -200,7 +225,10 @@ export function collectGraphNodeRuntime(
           ...(prev?.imageOutputs ?? []),
           ...(runtime.imageOutputs ?? []),
         ],
-        executionState: mergeState(prev?.executionState, runtime.executionState),
+        executionState: mergeState(
+          prev?.executionState,
+          runtime.executionState,
+        ),
         errorMessage: runtime.errorMessage ?? prev?.errorMessage,
       });
       parentId = parentById.get(parentId);

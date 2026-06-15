@@ -421,8 +421,8 @@ impl io::IoNamespaceHost for WasmHost {
         _call_id: CallId,
         handle: BexExternalValue,
         args: Vec<BexExternalValue>,
-        type_arg_0: baml_type::Ty,
-        _type_arg_1: baml_type::Ty,
+        type_arg_0: baml_type::RuntimeTy,
+        _type_arg_1: baml_type::RuntimeTy,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
         // Extract the HostValueArc from the incoming handle.
@@ -441,7 +441,7 @@ impl io::IoNamespaceHost for WasmHost {
         // arguments to the user callable.
         let options = CffiHandleTableOptions::for_wire();
         let arg_values = BexExternalValue::Array {
-            element_type: baml_type::Ty::unknown(),
+            element_type: baml_type::RuntimeTy::unknown(),
             items: args,
         };
         let encoded: Vec<u8> = match external_to_outbound(&arg_values, &options) {
@@ -540,7 +540,7 @@ impl io::IoNamespaceHost for WasmHost {
 /// yields `Async`.
 fn drain_pending(
     result: SysOpResult,
-    expected: baml_type::Ty,
+    expected: baml_type::RuntimeTy,
     call_id: u32,
     install_guard: bool,
 ) -> SysOpOutput<BexExternalValue> {
@@ -583,7 +583,7 @@ fn drain_pending(
 /// `sys_native::host_impls`.
 fn validate_host_return_value(
     value: &BexExternalValue,
-    expected: &baml_type::Ty,
+    expected: &baml_type::RuntimeTy,
 ) -> Result<(), VmRustFnError> {
     validate_host_return(value, expected).map_err(|err| {
         sys_types::VmPanic::HostContractViolation {
@@ -716,7 +716,7 @@ mod tests {
 
         // `drain_pending` wraps the result + guard into the returned future.
         let SysOpOutput::Async(fut) =
-            drain_pending(result, baml_type::Ty::unknown(), call_id, true)
+            drain_pending(result, baml_type::RuntimeTy::unknown(), call_id, true)
         else {
             panic!("pending() must yield an async output");
         };
@@ -742,7 +742,7 @@ mod tests {
         );
 
         let SysOpOutput::Async(fut) =
-            drain_pending(result, baml_type::Ty::unknown(), call_id, true)
+            drain_pending(result, baml_type::RuntimeTy::unknown(), call_id, true)
         else {
             panic!("pending() must yield an async output");
         };

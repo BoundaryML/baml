@@ -7,9 +7,24 @@ packages:
 allowBuilds:
   '@bufbuild/buf': true
   '@mongodb-js/zstd': true
+  # downloads a prebuilt binary; @posthog/nextjs-config shells out to it
+  '@posthog/cli': true
+  # telemetry only
+  '@scarf/scarf': false
+  # native binding for Tailwind v4
+  '@tailwindcss/oxide': true
+  # postinstall is only an advisory VERCEL_ANALYTICS_ID env check
+  '@vercel/speed-insights': false
+  # postinstall only prints a funding banner
+  core-js: false
   esbuild: true
   msw: true
-  node-liblzma: true
+  # native build needs system liblzma headers, which CI/Vercel images lack.
+  # Was `pnpm.neverBuiltDependencies` in package.json before pnpm 11 stopped
+  # reading that field; just-bash (app-promptfiddle) works without it.
+  node-liblzma: false
+  # selects/downloads prebuilt libvips; Next image optimization needs it
+  sharp: true
   unrs-resolver: true
 
 catalog:

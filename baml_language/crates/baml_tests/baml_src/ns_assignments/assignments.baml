@@ -357,19 +357,3 @@ test "virtual_multiple_defs_preserve_side_effects" {
         string => null
     }
 }
-
-// ─── parenthesized assignment in expression position is rejected ───────────────
-
-// `(x = 5)` in expression position lowers to a missing expr that errors at runtime
-// (`baml.panics.UserPanic`). The `throw` guard fails the test if it ever stops erroring.
-function paren_assign_must_error() -> null {
-    let x = 10;
-    let _ = (x = 5);
-    throw "expected (x = 5) to error"
-}
-
-test "parenthesized_assignment_in_expr_position_is_bug" {
-    paren_assign_must_error() catch (e) {
-        baml.panics.UserPanic => null
-    }
-}

@@ -32,7 +32,7 @@ export namespace baml_core {
                 ADT_TYPE = 13,
                 ADT_TAGGED_HEAP_HANDLE = 14,
                 HOST_VALUE_CALLABLE = 15,
-                HOST_VALUE_ERROR = 16
+                HOST_VALUE_OPAQUE = 16
             }
 
             /** Properties of a BamlHandle. */
@@ -827,6 +827,9 @@ export namespace baml_core {
 
                 /** CallFunctionArgs kwargs */
                 kwargs?: (baml_core.cffi.v1.IInboundMapEntry[]|null);
+
+                /** CallFunctionArgs callId */
+                callId?: (number|Long|null);
             }
 
             /** Represents a CallFunctionArgs. */
@@ -840,6 +843,9 @@ export namespace baml_core {
 
                 /** CallFunctionArgs kwargs. */
                 public kwargs: baml_core.cffi.v1.IInboundMapEntry[];
+
+                /** CallFunctionArgs callId. */
+                public callId: (number|Long);
 
                 /**
                  * Creates a new CallFunctionArgs instance using the specified properties.

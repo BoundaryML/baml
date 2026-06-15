@@ -23,9 +23,15 @@ fn user.apply_to_each(items: Employee[], f: (Employee) -> string throws never) -
     let _0: string[] // _0 // return
     let _1: Employee[] // items // param
     let _2: (Employee) -> string throws never // f // param
+    let _3: type
+    let _4: type
+    let _5: type
 
     bb0: {
-        _0 = call const fn baml.Array.map(copy _1, copy _2) -> [bb1];
+        _3 = load_type(string);
+        _4 = load_type(unknown);
+        _5 = load_type(Employee);
+        _0 = call const fn baml.Array.map<copy _5, copy _3, copy _4>(copy _1, copy _2) -> [bb1];
     }
 
     bb1: {
@@ -262,11 +268,11 @@ fn user.Employee.from_json(j: baml.json.json) -> Employee {
     }
 }
 
-fn user.Box.from_json(j: baml.json.json) -> Box<void> {
+fn user.Box.from_json(j: baml.json.json) -> Box<T> {
     // Locals:
-    let _0: Box<void> // _0 // return
+    let _0: Box<T> // _0 // return
     let _1: baml.json.json // j // param
-    let _2: void
+    let _2: T
     let _3: baml.json.json
     let _4: type
 
@@ -474,13 +480,19 @@ fn user.test_bound_mapper() -> string[] {
     let _2: (string) -> string throws never // transform
     let _3: string[]
     let _4: (string) -> string throws never
+    let _5: type
+    let _6: type
+    let _7: type
 
     bb0: {
         _1 = user.Formatter { const ">> " };
         _2 = make_bound_method user.Formatter.format(copy _1);
         _3 = [const "hello", const "world"];
         _4 = copy _2;
-        _0 = call const fn baml.Array.map(copy _3, copy _4) -> [bb1];
+        _5 = load_type(string);
+        _6 = load_type(never);
+        _7 = load_type(string);
+        _0 = call const fn baml.Array.map<copy _7, copy _5, copy _6>(copy _3, copy _4) -> [bb1];
     }
 
     bb1: {
@@ -495,13 +507,19 @@ fn user.test_bound_validator() -> bool[] {
     let _2: (int) -> bool throws never // check
     let _3: int[]
     let _4: (int) -> bool throws never
+    let _5: type
+    let _6: type
+    let _7: type
 
     bb0: {
         _1 = user.RangeCheck { const 10_i64, const 50_i64 };
         _2 = make_bound_method user.RangeCheck.is_valid(copy _1);
         _3 = [const 5_i64, const 15_i64, const 25_i64, const 75_i64];
         _4 = copy _2;
-        _0 = call const fn baml.Array.map(copy _3, copy _4) -> [bb1];
+        _5 = load_type(bool);
+        _6 = load_type(never);
+        _7 = load_type(int);
+        _0 = call const fn baml.Array.map<copy _7, copy _5, copy _6>(copy _3, copy _4) -> [bb1];
     }
 
     bb1: {
@@ -662,12 +680,18 @@ fn user.test_unbound_in_map() -> string[] {
     let _1: Employee[] // employees
     let _2: Employee
     let _3: Employee
+    let _4: type
+    let _5: type
+    let _6: type
 
     bb0: {
         _2 = user.Employee { const "Alice", const "Smith" };
         _3 = user.Employee { const "Bob", const "Jones" };
         _1 = [copy _2, copy _3];
-        _0 = call const fn baml.Array.map(copy _1, const fn user.Employee.full_name) -> [bb1];
+        _4 = load_type(string);
+        _5 = load_type(never);
+        _6 = load_type(Employee);
+        _0 = call const fn baml.Array.map<copy _6, copy _4, copy _5>(copy _1, const fn user.Employee.full_name) -> [bb1];
     }
 
     bb1: {
@@ -682,24 +706,28 @@ fn user.RangeCheck.to_json(self: RangeCheck) -> baml.json.json {
     let _2: baml.json.json
     let _3: int
     let _4: RangeCheck
-    let _5: baml.json.json
-    let _6: int
-    let _7: RangeCheck
+    let _5: type
+    let _6: baml.json.json
+    let _7: int
+    let _8: RangeCheck
+    let _9: type
 
     bb0: {
         _4 = copy _1;
         _3 = copy _4.0;
-        _2 = call const fn baml.Int.to_json(copy _3) -> [bb1];
+        _5 = load_type(int);
+        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
     }
 
     bb1: {
-        _7 = copy _1;
-        _6 = copy _7.1;
-        _5 = call const fn baml.Int.to_json(copy _6) -> [bb2];
+        _8 = copy _1;
+        _7 = copy _8.1;
+        _9 = load_type(int);
+        _6 = call const fn baml.json.to_json<copy _9>(copy _7) -> [bb2];
     }
 
     bb2: {
-        _0 = { const "min": copy _2, const "max": copy _5 };
+        _0 = { const "min": copy _2, const "max": copy _6 };
         goto -> bb3;
     }
 
@@ -715,11 +743,13 @@ fn user.Config.to_json(self: Config) -> baml.json.json {
     let _2: baml.json.json
     let _3: Encoder
     let _4: Config
+    let _5: type
 
     bb0: {
         _4 = copy _1;
         _3 = copy _4.0;
-        _2 = call const fn user.Encoder.to_json(copy _3) -> [bb1];
+        _5 = load_type(Encoder);
+        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
     }
 
     bb1: {
@@ -739,11 +769,13 @@ fn user.Calculator.to_json(self: Calculator) -> baml.json.json {
     let _2: baml.json.json
     let _3: string
     let _4: Calculator
+    let _5: type
 
     bb0: {
         _4 = copy _1;
         _3 = copy _4.0;
-        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
+        _5 = load_type(string);
+        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
     }
 
     bb1: {
@@ -763,11 +795,13 @@ fn user.Formatter.to_json(self: Formatter) -> baml.json.json {
     let _2: baml.json.json
     let _3: string
     let _4: Formatter
+    let _5: type
 
     bb0: {
         _4 = copy _1;
         _3 = copy _4.0;
-        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
+        _5 = load_type(string);
+        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
     }
 
     bb1: {
@@ -787,24 +821,28 @@ fn user.Employee.to_json(self: Employee) -> baml.json.json {
     let _2: baml.json.json
     let _3: string
     let _4: Employee
-    let _5: baml.json.json
-    let _6: string
-    let _7: Employee
+    let _5: type
+    let _6: baml.json.json
+    let _7: string
+    let _8: Employee
+    let _9: type
 
     bb0: {
         _4 = copy _1;
         _3 = copy _4.0;
-        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
+        _5 = load_type(string);
+        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
     }
 
     bb1: {
-        _7 = copy _1;
-        _6 = copy _7.1;
-        _5 = call const fn baml.String.to_json(copy _6) -> [bb2];
+        _8 = copy _1;
+        _7 = copy _8.1;
+        _9 = load_type(string);
+        _6 = call const fn baml.json.to_json<copy _9>(copy _7) -> [bb2];
     }
 
     bb2: {
-        _0 = { const "first": copy _2, const "last": copy _5 };
+        _0 = { const "first": copy _2, const "last": copy _6 };
         goto -> bb3;
     }
 
@@ -818,13 +856,15 @@ fn user.Box.to_json(self: Box) -> baml.json.json {
     let _0: baml.json.json // _0 // return
     let _1: Box // self // param
     let _2: baml.json.json
-    let _3: void
-    let _4: Box<void>
+    let _3: T
+    let _4: Box<T>
+    let _5: type
 
     bb0: {
         _4 = copy _1;
         _3 = copy _4.0;
-        _2 = call const fn baml.json.to_json(copy _3) -> [bb1];
+        _5 = load_type(#0);
+        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
     }
 
     bb1: {
@@ -844,11 +884,13 @@ fn user.Counter.to_json(self: Counter) -> baml.json.json {
     let _2: baml.json.json
     let _3: int
     let _4: Counter
+    let _5: type
 
     bb0: {
         _4 = copy _1;
         _3 = copy _4.0;
-        _2 = call const fn baml.Int.to_json(copy _3) -> [bb1];
+        _5 = load_type(int);
+        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
     }
 
     bb1: {
@@ -868,11 +910,13 @@ fn user.Encoder.to_json(self: Encoder) -> baml.json.json {
     let _2: baml.json.json
     let _3: string
     let _4: Encoder
+    let _5: type
 
     bb0: {
         _4 = copy _1;
         _3 = copy _4.0;
-        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
+        _5 = load_type(string);
+        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
     }
 
     bb1: {
@@ -885,9 +929,9 @@ fn user.Encoder.to_json(self: Encoder) -> baml.json.json {
     }
 }
 
-fn user.Box.unwrap(self: Box) -> void {
+fn user.Box.unwrap(self: Box) -> T {
     // Locals:
-    let _0: void // _0 // return
+    let _0: T // _0 // return
     let _1: Box // self // param
 
     bb0: {

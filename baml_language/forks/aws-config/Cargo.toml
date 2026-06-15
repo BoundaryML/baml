@@ -21,7 +21,6 @@ name = "aws_config"
 async-trait = { workspace = true }
 aws-sigv4 = { workspace = true }
 hex = { workspace = true }
-serde = { workspace = true }
 serde_json = { workspace = true }
 sha1 = { workspace = true }
 

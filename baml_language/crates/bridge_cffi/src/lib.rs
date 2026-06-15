@@ -104,10 +104,7 @@ pub fn initialize_runtime(
         .map(|(k, v)| (bex_project::FsPath::from_str(k), v))
         .collect();
 
-    let event_sink = runtime_event_sink();
-
-    let rt: Arc<dyn Bex> =
-        bex_project::new(vfs_path, bex_project::SysOps::native(), files, event_sink)?;
+    let rt = bex_project::new(vfs_path, bex_project::SysOps::native(), files)?;
 
     replace_runtime(rt.clone())?;
 
@@ -121,24 +118,11 @@ pub fn initialize_runtime(
 /// live behind `bex_project::new_from_bytecode` so the bridge stays on the
 /// `bex_project` surface rather than reaching into bex internals.
 pub fn initialize_runtime_from_bytecode(bytecode: &[u8]) -> Result<Arc<dyn Bex>, BridgeError> {
-    let rt: Arc<dyn Bex> = bex_project::new_from_bytecode(
-        bytecode,
-        bex_project::SysOps::native(),
-        runtime_event_sink(),
-    )?;
+    let rt: Arc<dyn Bex> = bex_project::new_from_bytecode(bytecode, bex_project::SysOps::native())?;
 
     replace_runtime(rt.clone())?;
 
     Ok(rt)
-}
-
-fn runtime_event_sink() -> Option<Arc<dyn bex_events::EventSink>> {
-    Some(
-        std::env::var("BAML_TRACE_FILE")
-            .ok()
-            .map(|trace_file| bex_events_native::start(trace_file.into()))
-            .unwrap_or_else(bex_events_native::start_stderr),
-    )
 }
 
 fn replace_runtime(rt: Arc<dyn Bex>) -> Result<(), BridgeError> {
@@ -147,20 +131,6 @@ fn replace_runtime(rt: Arc<dyn Bex>) -> Result<(), BridgeError> {
         .map_err(|_| BridgeError::LockPoisoned)?;
     *guard = Some(rt);
     Ok(())
-}
-
-/// Flush the current runtime's event sink. Called by `bridge_python::flush_events()`.
-pub fn flush_event_sink() {
-    if let Ok(rt) = get_runtime()
-        && let Some(sink) = rt.event_sink()
-    {
-        sink.flush();
-    }
-}
-
-/// Get the current runtime's event sink (for passing to HostSpanManager).
-pub fn get_event_sink() -> Option<Arc<dyn bex_events::EventSink>> {
-    get_runtime().ok().and_then(|rt| rt.event_sink())
 }
 
 // ============================================================================
@@ -210,9 +180,10 @@ fn call_function_inner(
     } else {
         unsafe { CallFunctionArgs::from_c_buffer(encoded_args, length) }?
     };
+    let call_id = decoded_call_id(args.call_id)?;
     let kwargs = kwargs_to_bex_values(args.kwargs, &HANDLE_TABLE)?;
 
-    let call_ctx = bex_project::FunctionCallContextBuilder::new(sys_types::CallId(id.into()));
+    let call_ctx = function_call_context_builder(call_id);
 
     get_tokio_runtime()?.spawn(async move {
         // `call_and_encode` already wraps the engine call in its own
@@ -240,17 +211,51 @@ fn call_function_inner(
     Ok(())
 }
 
+fn decoded_call_id(id: u64) -> Result<sys_types::CallId, BridgeError> {
+    if id == 0 {
+        return Err(BridgeError::InvalidCallId);
+    }
+    Ok(sys_types::CallId(id))
+}
+
+/// Allocate a new process-unique function-call ID.
+pub fn new_function_call_id() -> u64 {
+    sys_types::CallId::next().0
+}
+
+/// Build a function-call context builder for a CFFI-owned call id.
+pub fn function_call_context_builder(
+    call_id: sys_types::CallId,
+) -> bex_project::FunctionCallContextBuilder {
+    bex_project::FunctionCallContextBuilder::new(call_id)
+}
+
+/// Cancel an in-flight function call by ID.
+///
+/// Returns true on success, false if the runtime is not initialized.
+pub fn cancel_function_call_by_id(id: u64) -> bool {
+    if id == 0 {
+        return false;
+    }
+    get_runtime()
+        .and_then(|runtime| {
+            runtime
+                .cancel_function_call(sys_types::CallId(id))
+                .map_err(BridgeError::from)
+        })
+        .is_ok()
+}
+
+/// Allocate a new process-unique function-call ID.
+#[unsafe(no_mangle)]
+pub extern "C" fn new_function_call() -> u64 {
+    new_function_call_id()
+}
+
 /// Cancel an in-flight function call.
 ///
 /// Returns 0 on success, 1 if the call ID is unknown or already completed.
 #[unsafe(no_mangle)]
-pub extern "C" fn cancel_function_call(id: u32) -> i32 {
-    let runtime = match get_runtime() {
-        Ok(rt) => rt,
-        Err(_) => return 1,
-    };
-    match runtime.cancel_function_call(sys_types::CallId(id.into())) {
-        Ok(()) => 0,
-        Err(_) => 1,
-    }
+pub extern "C" fn cancel_function_call(id: u64) -> i32 {
+    if cancel_function_call_by_id(id) { 0 } else { 1 }
 }

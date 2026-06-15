@@ -1,0 +1,27 @@
+---
+source: crates/baml_tests/src/compiler2_mir/mod.rs
+---
+fn user.f() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // next
+    let _2: string
+    let _3: string
+
+    bb0: {
+        _1 = call const fn baml.id.new() -> [bb1];
+    }
+
+    bb1: {
+        _2 = copy _1;
+        _3 = call const fn baml.id.set(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        _0 = call const fn baml.id.current() -> [bb3];
+    }
+
+    bb3: {
+        return;
+    }
+}

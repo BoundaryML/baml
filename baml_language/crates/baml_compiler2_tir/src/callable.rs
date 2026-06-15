@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 
 use baml_base::Name;
 use baml_compiler2_ast::ExprBody;
@@ -203,6 +203,7 @@ struct CallableThrowsAnalysis<'a, 'db> {
     pkg_id: PackageId<'db>,
     ns_context: &'a [Name],
     inference: &'a ScopeInference<'db>,
+    aliases: &'a HashMap<crate::ty::QualifiedTypeName, Ty>,
 }
 
 impl ThrowsAnalysisContext for CallableThrowsAnalysis<'_, '_> {
@@ -225,6 +226,7 @@ impl ThrowsAnalysisContext for CallableThrowsAnalysis<'_, '_> {
         let call_plan = self.inference.call_plan_for_provided_args(args);
         instantiated_callee_throws(
             self.inference,
+            self.aliases,
             callee_expr_id,
             args,
             unwrap_optional_callee,
@@ -247,6 +249,12 @@ impl ThrowsAnalysisContext for CallableThrowsAnalysis<'_, '_> {
         )?;
         lookup_named_throw_summary(self.db, self.pkg_id, &key)
     }
+
+    fn runtime_id_set_throws(&self) -> Option<BTreeSet<Ty>> {
+        // Namespace-relative key within the `baml` package — see the
+        // builder impl.
+        lookup_named_throw_summary(self.db, self.pkg_id, &Name::new("id.set"))
+    }
 }
 
 fn callee_uses_method_call_convention(
@@ -266,6 +274,7 @@ fn callee_uses_method_call_convention(
 
 pub(crate) fn instantiated_callee_throws(
     inference: &ScopeInference<'_>,
+    aliases: &HashMap<crate::ty::QualifiedTypeName, Ty>,
     callee_expr_id: baml_compiler2_ast::ExprId,
     args: &[baml_compiler2_ast::ExprId],
     unwrap_optional_callee: bool,
@@ -277,23 +286,34 @@ pub(crate) fn instantiated_callee_throws(
     } else {
         callee_ty.clone()
     };
+    // A callee whose type is a function-type alias (e.g. a `TestSetBody`
+    // parameter) must be resolved to its underlying `Ty::Function` before its
+    // `throws` can be read; otherwise the match below falls through and the
+    // caller fabricates an `Unknown` throw fact.
+    let typed_callee = crate::inference::expand_alias_chains(typed_callee, aliases);
 
-    let Ty::Function { params, throws, .. } = typed_callee else {
-        return None;
-    };
+    let uses_method_convention = callee_uses_method_call_convention(inference, callee_expr_id);
 
-    let effective_params = if callee_uses_method_call_convention(inference, callee_expr_id) {
-        crate::generics::skip_self_param(&params)
-    } else {
-        params.as_slice()
-    };
-
-    let mut bindings: FxHashMap<Name, Ty> = FxHashMap::default();
-    if let Some(call_plan) = call_plan {
-        for (param_index, arg_expr_id) in call_plan.provided_param_args() {
-            let Some(param) = effective_params.get(param_index) else {
-                continue;
-            };
+    // Instantiate a single function callee's declared `throws`: bind its type
+    // parameters from the argument types, then substitute them in.
+    let function_throws = |params: &[_], throws: &Ty| -> Ty {
+        let effective_params: &[_] = if uses_method_convention {
+            crate::generics::skip_self_param(params)
+        } else {
+            params
+        };
+        let pairs: Vec<_> = if let Some(call_plan) = call_plan {
+            call_plan
+                .provided_param_args()
+                .filter_map(|(param_index, arg)| {
+                    effective_params.get(param_index).map(|param| (param, arg))
+                })
+                .collect()
+        } else {
+            effective_params.iter().zip(args.iter().copied()).collect()
+        };
+        let mut bindings: FxHashMap<Name, Ty> = FxHashMap::default();
+        for (param, arg_expr_id) in pairs {
             let arg_ty = inference
                 .expression_type(arg_expr_id)
                 .cloned()
@@ -302,19 +322,28 @@ pub(crate) fn instantiated_callee_throws(
                 });
             crate::generics::infer_bindings_allow_typevars(&param.ty, &arg_ty, &mut bindings);
         }
-    } else {
-        for (param, arg_expr_id) in effective_params.iter().zip(args.iter()) {
-            let arg_ty = inference
-                .expression_type(*arg_expr_id)
-                .cloned()
-                .unwrap_or(Ty::Unknown {
-                    attr: TyAttr::default(),
-                });
-            crate::generics::infer_bindings_allow_typevars(&param.ty, &arg_ty, &mut bindings);
-        }
-    }
+        crate::generics::substitute_ty(throws, &bindings)
+    };
 
-    Some(crate::generics::substitute_ty(&throws, &bindings))
+    match &typed_callee {
+        Ty::Function { params, throws, .. } => Some(function_throws(params, throws)),
+        // A method call dispatched over a union receiver (`(A | B).method()`)
+        // resolves the callee to a union of the members' method types. The call
+        // throws whatever the dispatched member throws, so join the members'
+        // instantiated `throws` — falling back to a conservative `Ty::Unknown`
+        // here would leave the function's `throws` un-resolvable at runtime.
+        Ty::Union(members, attr) if members.iter().all(|m| matches!(m, Ty::Function { .. })) => {
+            let member_throws: Vec<Ty> = members
+                .iter()
+                .filter_map(|member| match member {
+                    Ty::Function { params, throws, .. } => Some(function_throws(params, throws)),
+                    _ => None,
+                })
+                .collect();
+            Some(Ty::Union(member_throws, attr.clone()))
+        }
+        _ => None,
+    }
 }
 
 fn callable_throws_cycle_initial<'db>(
@@ -344,12 +373,15 @@ pub fn callable_throws<'db>(db: &'db dyn crate::Db, function: FunctionLoc<'db>) 
                 };
             };
             let inference = infer_scope_types(db, scope_id);
+            let res_ctx = package_resolution_context(db, pkg_id);
+            let aliases = crate::inference::package_alias_map(db, res_ctx);
             let facts = crate::throws_analysis::collect_escaping_throws(
                 &CallableThrowsAnalysis {
                     db,
                     pkg_id,
                     ns_context: &pkg_info.namespace_path,
                     inference,
+                    aliases: &aliases,
                 },
                 body,
             );

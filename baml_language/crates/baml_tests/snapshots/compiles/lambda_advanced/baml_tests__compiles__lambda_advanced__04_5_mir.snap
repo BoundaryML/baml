@@ -65,13 +65,19 @@ fn user.test_capture_in_map_inferred() -> int[] {
     let _0: int[] // _0 // return
     let _1: int[] // items
     let _2: int // factor [captured]
-    let _3: (int) -> int throws never
+    let _3: (int) -> int throws E
+    let _4: type
+    let _5: type
+    let _6: type
 
     bb0: {
         _1 = [const 1_i64, const 2_i64, const 3_i64];
         _2 = const 10_i64;
         _3 = make_closure lambda[0](copy _2);
-        _0 = call const fn baml.Array.map(copy _1, copy _3) -> [bb1];
+        _4 = load_type(int);
+        _5 = load_type(never);
+        _6 = load_type(int);
+        _0 = call const fn baml.Array.map<copy _6, copy _4, copy _5>(copy _1, copy _3) -> [bb1];
     }
 
     bb1: {
@@ -155,18 +161,30 @@ fn user.test_chained_map() -> int[] {
     let _0: int[] // _0 // return
     let _1: int[] // items
     let _2: int[] // step1
-    let _3: (int) -> int throws never
-    let _4: (int) -> int throws never
+    let _3: (int) -> int throws E
+    let _4: type
+    let _5: type
+    let _6: type
+    let _7: (int) -> int throws E
+    let _8: type
+    let _9: type
+    let _10: type
 
     bb0: {
         _1 = [const 1_i64, const 2_i64, const 3_i64];
         _3 = make_closure lambda[0]();
-        _2 = call const fn baml.Array.map(copy _1, copy _3) -> [bb1];
+        _4 = load_type(int);
+        _5 = load_type(never);
+        _6 = load_type(int);
+        _2 = call const fn baml.Array.map<copy _6, copy _4, copy _5>(copy _1, copy _3) -> [bb1];
     }
 
     bb1: {
-        _4 = make_closure lambda[1]();
-        _0 = call const fn baml.Array.map(copy _2, copy _4) -> [bb2];
+        _7 = make_closure lambda[1]();
+        _8 = load_type(int);
+        _9 = load_type(never);
+        _10 = load_type(int);
+        _0 = call const fn baml.Array.map<copy _10, copy _8, copy _9>(copy _2, copy _7) -> [bb2];
     }
 
     bb2: {
@@ -211,18 +229,30 @@ fn user.test_compose_inferred() -> int[] {
     let _0: int[] // _0 // return
     let _1: int[] // items
     let _2: int[] // step1
-    let _3: (int) -> int throws never
-    let _4: (int) -> int throws never
+    let _3: (int) -> int throws E
+    let _4: type
+    let _5: type
+    let _6: type
+    let _7: (int) -> int throws E
+    let _8: type
+    let _9: type
+    let _10: type
 
     bb0: {
         _1 = [const 1_i64, const 2_i64, const 3_i64];
         _3 = make_closure lambda[0]();
-        _2 = call const fn baml.Array.map(copy _1, copy _3) -> [bb1];
+        _4 = load_type(int);
+        _5 = load_type(never);
+        _6 = load_type(int);
+        _2 = call const fn baml.Array.map<copy _6, copy _4, copy _5>(copy _1, copy _3) -> [bb1];
     }
 
     bb1: {
-        _4 = make_closure lambda[1]();
-        _0 = call const fn baml.Array.map(copy _2, copy _4) -> [bb2];
+        _7 = make_closure lambda[1]();
+        _8 = load_type(int);
+        _9 = load_type(never);
+        _10 = load_type(int);
+        _0 = call const fn baml.Array.map<copy _10, copy _8, copy _9>(copy _2, copy _7) -> [bb2];
     }
 
     bb2: {
@@ -346,8 +376,8 @@ fn .<lambda(test_deep_capture_inferred, 0)>(b: int) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: int // b // param [captured]
-    let _2: (int) -> void throws never // g
-    let _3: (int) -> void throws never
+    let _2: (int) -> int throws never // g
+    let _3: (int) -> int throws never
 
     bb0: {
         _2 = make_closure lambda[0](copy capture[0], copy _1);
@@ -386,12 +416,18 @@ fn user.test_fully_inferred_map() -> int[] {
     // Locals:
     let _0: int[] // _0 // return
     let _1: int[] // items
-    let _2: (int) -> int throws never
+    let _2: (int) -> int throws E
+    let _3: type
+    let _4: type
+    let _5: type
 
     bb0: {
         _1 = [const 1_i64, const 2_i64, const 3_i64];
         _2 = make_closure lambda[0]();
-        _0 = call const fn baml.Array.map(copy _1, copy _2) -> [bb1];
+        _3 = load_type(int);
+        _4 = load_type(never);
+        _5 = load_type(int);
+        _0 = call const fn baml.Array.map<copy _5, copy _3, copy _4>(copy _1, copy _2) -> [bb1];
     }
 
     bb1: {
@@ -418,15 +454,19 @@ fn .<lambda(test_fully_inferred_map, 0)>(x: null) -> null {
 fn user.test_generic_apply_inferred() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: ((void) -> void throws never, void) -> void throws never // apply
-    let _2: ((void) -> void throws never, void) -> void throws never
+    let _1: ((T) -> U throws never, T) -> U throws never // apply
+    let _2: ((T) -> U throws never, T) -> U throws never
     let _3: (21) -> int throws never
+    let _4: type
+    let _5: type
 
     bb0: {
         _1 = make_closure lambda[0]();
         _2 = copy _1;
         _3 = make_closure lambda[1]();
-        _0 = call copy _2(copy _3, const 21_i64) -> [bb1];
+        _4 = load_type(int);
+        _5 = load_type(int);
+        _0 = call copy _2<copy _4, copy _5>(copy _3, const 21_i64) -> [bb1];
     }
 
     bb1: {
@@ -435,11 +475,11 @@ fn user.test_generic_apply_inferred() -> int {
 }
 
 // lambda[0]
-fn .<lambda(test_generic_apply_inferred, 0)>(f: (void) -> void throws never, x: void) -> null {
+fn .<lambda(test_generic_apply_inferred, 0)>(f: (T) -> U throws never, x: T) -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: (void) -> void throws never // f // param
-    let _2: void // x // param
+    let _1: (T) -> U throws never // f // param
+    let _2: T // x // param
 
     bb0: {
         _0 = call copy _1(copy _2) -> [bb1];
@@ -469,21 +509,25 @@ fn .<lambda(test_generic_apply_inferred, 1)>(x: null) -> null {
 fn user.test_generic_multi_instantiation() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: (void) -> void throws never // id
+    let _1: (T) -> T throws never // id
     let _2: int // a
-    let _3: (void) -> void throws never
-    let _4: string // b
-    let _5: (void) -> void throws never
+    let _3: (T) -> T throws never
+    let _4: type
+    let _5: string // b
+    let _6: (T) -> T throws never
+    let _7: type
 
     bb0: {
         _1 = make_closure lambda[0]();
         _3 = copy _1;
-        _2 = call copy _3(const 42_i64) -> [bb1];
+        _4 = load_type(int);
+        _2 = call copy _3<copy _4>(const 42_i64) -> [bb1];
     }
 
     bb1: {
-        _5 = copy _1;
-        _4 = call copy _5(const "hello") -> [bb2];
+        _6 = copy _1;
+        _7 = load_type(string);
+        _5 = call copy _6<copy _7>(const "hello") -> [bb2];
     }
 
     bb2: {
@@ -497,10 +541,10 @@ fn user.test_generic_multi_instantiation() -> int {
 }
 
 // lambda[0]
-fn .<lambda(test_generic_multi_instantiation, 0)>(x: void) -> null {
+fn .<lambda(test_generic_multi_instantiation, 0)>(x: T) -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: void // x // param
+    let _1: T // x // param
 
     bb0: {
         _0 = copy _1;
@@ -857,12 +901,18 @@ fn user.test_lambda_variable_then_pass() -> int[] {
     let _1: int[] // items
     let _2: (int) -> int throws never // halve
     let _3: (int) -> int throws never
+    let _4: type
+    let _5: type
+    let _6: type
 
     bb0: {
         _1 = [const 10_i64, const 20_i64, const 30_i64];
         _2 = make_closure lambda[0]();
         _3 = copy _2;
-        _0 = call const fn baml.Array.map(copy _1, copy _3) -> [bb1];
+        _4 = load_type(int);
+        _5 = load_type(never);
+        _6 = load_type(int);
+        _0 = call const fn baml.Array.map<copy _6, copy _4, copy _5>(copy _1, copy _3) -> [bb1];
     }
 
     bb1: {
@@ -992,12 +1042,18 @@ fn user.test_literal_return_inference() -> int[] {
     // Locals:
     let _0: int[] // _0 // return
     let _1: int[] // items
-    let _2: (int) -> int throws never
+    let _2: (int) -> int throws E
+    let _3: type
+    let _4: type
+    let _5: type
 
     bb0: {
         _1 = [const 1_i64, const 2_i64, const 3_i64];
         _2 = make_closure lambda[0]();
-        _0 = call const fn baml.Array.map(copy _1, copy _2) -> [bb1];
+        _3 = load_type(int);
+        _4 = load_type(never);
+        _5 = load_type(int);
+        _0 = call const fn baml.Array.map<copy _5, copy _3, copy _4>(copy _1, copy _2) -> [bb1];
     }
 
     bb1: {
@@ -1025,12 +1081,18 @@ fn user.test_map_multi_statement() -> int[] {
     // Locals:
     let _0: int[] // _0 // return
     let _1: int[] // items
-    let _2: (int) -> int throws never
+    let _2: (int) -> int throws E
+    let _3: type
+    let _4: type
+    let _5: type
 
     bb0: {
         _1 = [const 1_i64, const 2_i64, const 3_i64];
         _2 = make_closure lambda[0]();
-        _0 = call const fn baml.Array.map(copy _1, copy _2) -> [bb1];
+        _3 = load_type(int);
+        _4 = load_type(never);
+        _5 = load_type(int);
+        _0 = call const fn baml.Array.map<copy _5, copy _3, copy _4>(copy _1, copy _2) -> [bb1];
     }
 
     bb1: {
@@ -1066,12 +1128,18 @@ fn user.test_map_optional_inferred() -> int[] {
     // Locals:
     let _0: int[] // _0 // return
     let _1: (int | null)[] // items
-    let _2: (int | null) -> int throws never
+    let _2: (int | null) -> int throws E
+    let _3: type
+    let _4: type
+    let _5: type
 
     bb0: {
         _1 = [const 1_i64, const null, const 3_i64];
         _2 = make_closure lambda[0]();
-        _0 = call const fn baml.Array.map(copy _1, copy _2) -> [bb1];
+        _3 = load_type(int);
+        _4 = load_type(never);
+        _5 = load_type(int | null);
+        _0 = call const fn baml.Array.map<copy _5, copy _3, copy _4>(copy _1, copy _2) -> [bb1];
     }
 
     bb1: {
@@ -1110,12 +1178,18 @@ fn user.test_map_string_to_int() -> int[] {
     // Locals:
     let _0: int[] // _0 // return
     let _1: string[] // words
-    let _2: (string) -> int throws never
+    let _2: (string) -> int throws E
+    let _3: type
+    let _4: type
+    let _5: type
 
     bb0: {
         _1 = [const "hello", const "world"];
         _2 = make_closure lambda[0]();
-        _0 = call const fn baml.Array.map(copy _1, copy _2) -> [bb1];
+        _3 = load_type(int);
+        _4 = load_type(never);
+        _5 = load_type(string);
+        _0 = call const fn baml.Array.map<copy _5, copy _3, copy _4>(copy _1, copy _2) -> [bb1];
     }
 
     bb1: {
@@ -1142,12 +1216,18 @@ fn user.test_map_type_change_inferred() -> string[] {
     // Locals:
     let _0: string[] // _0 // return
     let _1: int[] // nums
-    let _2: (int) -> string throws never
+    let _2: (int) -> string throws E
+    let _3: type
+    let _4: type
+    let _5: type
 
     bb0: {
         _1 = [const 1_i64, const 2_i64, const 3_i64];
         _2 = make_closure lambda[0]();
-        _0 = call const fn baml.Array.map(copy _1, copy _2) -> [bb1];
+        _3 = load_type(string);
+        _4 = load_type(never);
+        _5 = load_type(int);
+        _0 = call const fn baml.Array.map<copy _5, copy _3, copy _4>(copy _1, copy _2) -> [bb1];
     }
 
     bb1: {
@@ -1190,13 +1270,19 @@ fn user.test_map_with_capture() -> int[] {
     let _0: int[] // _0 // return
     let _1: int[] // items
     let _2: int // factor [captured]
-    let _3: (int) -> int throws never
+    let _3: (int) -> int throws E
+    let _4: type
+    let _5: type
+    let _6: type
 
     bb0: {
         _1 = [const 1_i64, const 2_i64, const 3_i64];
         _2 = const 10_i64;
         _3 = make_closure lambda[0](copy _2);
-        _0 = call const fn baml.Array.map(copy _1, copy _3) -> [bb1];
+        _4 = load_type(int);
+        _5 = load_type(never);
+        _6 = load_type(int);
+        _0 = call const fn baml.Array.map<copy _6, copy _4, copy _5>(copy _1, copy _3) -> [bb1];
     }
 
     bb1: {
@@ -1228,14 +1314,20 @@ fn user.test_nested_map() -> int[][] {
     let _1: int[][] // matrix
     let _2: int[]
     let _3: int[]
-    let _4: (int[]) -> int[] throws never
+    let _4: (int[]) -> int[] throws E
+    let _5: type
+    let _6: type
+    let _7: type
 
     bb0: {
         _2 = [const 1_i64, const 2_i64];
         _3 = [const 3_i64, const 4_i64];
         _1 = [copy _2, copy _3];
         _4 = make_closure lambda[0]();
-        _0 = call const fn baml.Array.map(copy _1, copy _4) -> [bb1];
+        _5 = load_type(int[]);
+        _6 = load_type(never);
+        _7 = load_type(int[]);
+        _0 = call const fn baml.Array.map<copy _7, copy _5, copy _6>(copy _1, copy _4) -> [bb1];
     }
 
     bb1: {
@@ -1248,11 +1340,17 @@ fn .<lambda(test_nested_map, 0)>(row: int[]) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: int[] // row // param
-    let _2: (int) -> int throws never
+    let _2: (int) -> int throws E
+    let _3: type
+    let _4: type
+    let _5: type
 
     bb0: {
         _2 = make_closure lambda[0]();
-        _0 = call const fn baml.Array.map(copy _1, copy _2) -> [bb1];
+        _3 = load_type(int);
+        _4 = load_type(never);
+        _5 = load_type(int);
+        _0 = call const fn baml.Array.map<copy _5, copy _3, copy _4>(copy _1, copy _2) -> [bb1];
     }
 
     bb1: {
@@ -1326,70 +1424,221 @@ fn user.test_shadowing() -> string {
     let _1: string // x
     let _2: int[] // items
     let _3: int[] // mapped
-    let _4: (int) -> int throws never
-    let _5: int[]
-    let _6: int // __for_idx
-    let _7: int
-    let _8: bool
-    let _9: int
-    let _10: int // y
-    let _11: int // i
+    let _4: (int) -> int throws E
+    let _5: type
+    let _6: type
+    let _7: type
+    let _8: int[]
+    let _9: baml.iter.Iterator<Item = int, Error = never>
+    let _10: type
+    let _11: unknown
     let _12: bool
-    let _13: int
-    let _14: int
+    let _13: unknown
+    let _14: bool
+    let _15: bool
+    let _16: type
+    let _17: bool
+    let _18: type
+    let _19: type
+    let _20: bool
+    let _21: type
+    let _22: type
+    let _23: type
+    let _24: bool
+    let _25: type
+    let _26: bool
+    let _27: unknown
+    let _28: bool
+    let _29: type
+    let _30: type
+    let _31: type
+    let _32: bool
+    let _33: unknown
+    let _34: bool
+    let _35: unknown
+    let _36: bool
+    let _37: type
+    let _38: type
+    let _39: bool
+    let _40: int
+    let _41: int // y
+    let _42: int // i
+    let _43: bool
+    let _44: int
+    let _45: int
 
     bb0: {
         _1 = const "999";
         _2 = [const 1_i64, const 2_i64, const 3_i64];
         _4 = make_closure lambda[0]();
-        _3 = call const fn baml.Array.map(copy _2, copy _4) -> [bb1];
+        _5 = load_type(int);
+        _6 = load_type(never);
+        _7 = load_type(int);
+        _3 = call const fn baml.Array.map<copy _7, copy _5, copy _6>(copy _2, copy _4) -> [bb1];
     }
 
     bb1: {
-        _5 = copy _3;
-        _6 = const 0_i64;
+        _8 = copy _3;
         goto -> bb2;
     }
 
     bb2: {
-        _7 = len(_5);
-        _8 = copy _6 < copy _7;
-        branch copy _8 -> [bb5, bb3];
+        _10 = load_type(int);
+        _9 = call const fn baml.iter.Iterable$for$T[].iter<copy _10>(copy _8) -> [bb3];
     }
 
     bb3: {
-        _0 = copy _1;
-        goto -> bb4;
+        _12 = is_type(copy _9, baml.iter.Flatten<_, int, never, never>);
+        branch copy _12 -> [bb25, bb4];
     }
 
     bb4: {
-        return;
+        _14 = is_type(copy _9, baml.iter.Range);
+        branch copy _14 -> [bb24, bb5];
     }
 
     bb5: {
-        _9 = copy _5[_6];
-        fresh_cell(_10);
-        _10 = copy _9;
-        _11 = const 0_i64;
-        goto -> bb6;
+        _15 = is_type(copy _9, baml.iter.ArrayIterator<int>);
+        branch copy _15 -> [bb23, bb6];
     }
 
     bb6: {
-        _13 = copy _11;
-        _14 = copy _10;
-        _12 = copy _13 < copy _14;
-        branch copy _12 -> [bb8, bb7];
+        _17 = is_type(copy _9, baml.iter.StepBy<int, never>);
+        branch copy _17 -> [bb22, bb7];
     }
 
     bb7: {
-        _6 = copy _6 + const 1_i64;
-        goto -> bb2;
+        _20 = is_type(copy _9, baml.iter.Chain<int, never, never>);
+        branch copy _20 -> [bb21, bb8];
     }
 
     bb8: {
+        _24 = is_type(copy _9, baml.iter.Repeat<int>);
+        branch copy _24 -> [bb20, bb9];
+    }
+
+    bb9: {
+        _26 = is_type(copy _9, baml.iter.Map<_, int, never, never>);
+        branch copy _26 -> [bb19, bb10];
+    }
+
+    bb10: {
+        _28 = is_type(copy _9, baml.iter.Filter<int, never, never>);
+        branch copy _28 -> [bb18, bb11];
+    }
+
+    bb11: {
+        _32 = is_type(copy _9, baml.iter.FilterMap<_, int, never, never>);
+        branch copy _32 -> [bb17, bb12];
+    }
+
+    bb12: {
+        _34 = is_type(copy _9, baml.iter.FlatMap<_, int, never, never, never>);
+        branch copy _34 -> [bb16, bb13];
+    }
+
+    bb13: {
+        _36 = is_type(copy _9, baml.iter.Peekable<int, never>);
+        branch copy _36 -> [bb15, bb14];
+    }
+
+    bb14: {
+        unreachable;
+    }
+
+    bb15: {
+        _37 = load_type(int);
+        _38 = load_type(never);
+        _11 = call const fn baml.iter.Peekable.Iterator.next<copy _37, copy _38>(copy _9) -> [bb26];
+    }
+
+    bb16: {
+        _35 = make_bound_method baml.iter.FlatMap.Iterator.next(copy _9);
+        _11 = call copy _35() -> [bb26];
+    }
+
+    bb17: {
+        _33 = make_bound_method baml.iter.FilterMap.Iterator.next(copy _9);
+        _11 = call copy _33() -> [bb26];
+    }
+
+    bb18: {
+        _29 = load_type(int);
+        _30 = load_type(never);
+        _31 = load_type(never);
+        _11 = call const fn baml.iter.Filter.Iterator.next<copy _29, copy _30, copy _31>(copy _9) -> [bb26];
+    }
+
+    bb19: {
+        _27 = make_bound_method baml.iter.Map.Iterator.next(copy _9);
+        _11 = call copy _27() -> [bb26];
+    }
+
+    bb20: {
+        _25 = load_type(int);
+        _11 = call const fn baml.iter.Repeat.Iterator.next<copy _25>(copy _9) -> [bb26];
+    }
+
+    bb21: {
+        _21 = load_type(int);
+        _22 = load_type(never);
+        _23 = load_type(never);
+        _11 = call const fn baml.iter.Chain.Iterator.next<copy _21, copy _22, copy _23>(copy _9) -> [bb26];
+    }
+
+    bb22: {
+        _18 = load_type(int);
+        _19 = load_type(never);
+        _11 = call const fn baml.iter.StepBy.Iterator.next<copy _18, copy _19>(copy _9) -> [bb26];
+    }
+
+    bb23: {
+        _16 = load_type(int);
+        _11 = call const fn baml.iter.ArrayIterator.Iterator.next<copy _16>(copy _9) -> [bb26];
+    }
+
+    bb24: {
+        _11 = call const fn baml.iter.Range.Iterator.next(copy _9) -> [bb26];
+    }
+
+    bb25: {
+        _13 = make_bound_method baml.iter.Flatten.Iterator.next(copy _9);
+        _11 = call copy _13() -> [bb26];
+    }
+
+    bb26: {
+        _39 = is_type(copy _11, baml.iter.Done);
+        branch copy _39 -> [bb30, bb27];
+    }
+
+    bb27: {
+        _40 = copy _11;
+        fresh_cell(_41);
+        _41 = copy _40;
+        _42 = const 0_i64;
+        goto -> bb28;
+    }
+
+    bb28: {
+        _44 = copy _42;
+        _45 = copy _41;
+        _43 = copy _44 < copy _45;
+        branch copy _43 -> [bb29, bb3];
+    }
+
+    bb29: {
         _1 = copy _1 + const "1";
-        _11 = copy _11 + const 1_i64;
-        goto -> bb6;
+        _42 = copy _42 + const 1_i64;
+        goto -> bb28;
+    }
+
+    bb30: {
+        _0 = copy _1;
+        goto -> bb31;
+    }
+
+    bb31: {
+        return;
     }
 }
 
@@ -1413,12 +1662,18 @@ fn user.test_shadowing_inferred() -> int[] {
     // Locals:
     let _0: int[] // _0 // return
     let _1: int[] // items
-    let _2: (int) -> int throws never
+    let _2: (int) -> int throws E
+    let _3: type
+    let _4: type
+    let _5: type
 
     bb0: {
         _1 = [const 1_i64, const 2_i64, const 3_i64];
         _2 = make_closure lambda[0]();
-        _0 = call const fn baml.Array.map(copy _1, copy _2) -> [bb1];
+        _3 = load_type(int);
+        _4 = load_type(never);
+        _5 = load_type(int);
+        _0 = call const fn baml.Array.map<copy _5, copy _3, copy _4>(copy _1, copy _2) -> [bb1];
     }
 
     bb1: {

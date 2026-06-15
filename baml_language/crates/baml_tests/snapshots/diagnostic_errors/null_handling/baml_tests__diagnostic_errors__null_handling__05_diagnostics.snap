@@ -22,6 +22,28 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0004
 ────╯
 
+  [type] warning: unreachable code: 1 statement(s) after diverging statement
+    ╭─[ null_handling.baml:83:19 ]
+    │
+ 83 │ ╭─▶     user?.id += 1;
+    ┆ ┆   
+ 86 │ ├─▶     let a11 = (user?.profile?.name = "new_name");
+    │ │                                                       
+    │ ╰─────────────────────────────────────────────────────── unreachable code: 1 statement(s) after diverging statement
+    │     
+    │     Note: Error code: E0001
+────╯
+
+  [hir] error: assignment is not allowed in expression position; assignment is a statement
+    ╭─[ null_handling.baml:86:16 ]
+    │
+ 86 │     let a11 = (user?.profile?.name = "new_name");
+    │                ────────────────┬───────────────  
+    │                                ╰───────────────── assignment not allowed here
+    │ 
+    │ Note: Error code: E0010
+────╯
+
   [type] error: `unknown | null` is not a function — it cannot be called
      ╭─[ null_handling.baml:121:13 ]
      │
@@ -60,6 +82,28 @@ source: crates/baml_tests/src/generated_tests.rs
      │                       ╰────────── did you mean `nonNullItems[0]`? `nonNullItems?.[0]` is unnecessary, because `nonNullItems` cannot be null
      │ 
      │ Note: Error code: E0004
+─────╯
+
+  [type] warning: unreachable code: 1 statement(s) after diverging statement
+     ╭─[ null_handling.baml:148:28 ]
+     │
+ 148 │ ╭─▶     lookup?.["total"] += 5;
+     ┆ ┆   
+ 151 │ ├─▶     let b13 = (items?.[0] = 77);
+     │ │                                      
+     │ ╰────────────────────────────────────── unreachable code: 1 statement(s) after diverging statement
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [hir] error: assignment is not allowed in expression position; assignment is a statement
+     ╭─[ null_handling.baml:151:16 ]
+     │
+ 151 │     let b13 = (items?.[0] = 77);
+     │                ───────┬───────  
+     │                       ╰───────── assignment not allowed here
+     │ 
+     │ Note: Error code: E0010
 ─────╯
 
   [type] error: did you mean `callback(42)`? `callback?.(42)` is unnecessary, because `callback` cannot be null
@@ -182,4 +226,26 @@ source: crates/baml_tests/src/generated_tests.rs
      │                                              ╰────── type `int` has no member `to_string`
      │ 
      │ Note: Error code: E0007
+─────╯
+
+  [type] warning: unreachable code: 6 statement(s) after diverging statement
+     ╭─[ null_handling.baml:264:36 ]
+     │
+ 264 │ ╭─▶     node?.value += items?.[0] ?? 1;
+     ┆ ┆   
+ 267 │ ├─▶     let e4 = (node?.next?.value = 42);
+     │ │                                            
+     │ ╰──────────────────────────────────────────── unreachable code: 6 statement(s) after diverging statement
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [hir] error: assignment is not allowed in expression position; assignment is a statement
+     ╭─[ null_handling.baml:267:15 ]
+     │
+ 267 │     let e4 = (node?.next?.value = 42);
+     │               ───────────┬──────────  
+     │                          ╰──────────── assignment not allowed here
+     │ 
+     │ Note: Error code: E0010
 ─────╯

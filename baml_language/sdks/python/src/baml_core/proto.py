@@ -343,7 +343,7 @@ def _set_inbound_map_entry(
     _set_inbound_value(entry.value, value, kwarg_name=kwarg_name, registered=registered)
 
 
-def encode_call_args(kwargs: Dict[str, Any]) -> bytes:
+def encode_call_args(kwargs: Dict[str, Any], call_id: int) -> bytes:
     """Encode function keyword arguments as `CallFunctionArgs` protobuf.
 
     Release tradeoff: a callable that encodes successfully is registered in
@@ -357,9 +357,12 @@ def encode_call_args(kwargs: Dict[str, Any]) -> bytes:
     for the life of the process, we track every key registered during this
     encode and release them all if any kwarg fails.
     """
+    if call_id == 0:
+        raise ValueError("call_id must be a nonzero uint64")
     registered: List[int] = []
     try:
         args = baml_inbound_pb2.CallFunctionArgs()
+        args.call_id = call_id
         for key, value in kwargs.items():
             _set_inbound_map_entry(
                 args.kwargs.add(), key, value, kwarg_name=key, registered=registered
@@ -687,7 +690,7 @@ def decode_value(holder, type_map: BamlTypeMap) -> Any:
     return None
 
 
-def _try_rehydrate_host_callable(decoded: Any) -> Optional[BaseException]:
+def _try_rehydrate_host_value(decoded: Any) -> Optional[BaseException]:
     """If `decoded` is a `baml.errors.HostCallable` pydantic instance
     whose `_handle` points at a still-live entry in this runtime's
     host-value registry, return the *original* Python exception object.
@@ -746,7 +749,7 @@ def decode_call_result(data: bytes) -> Any:
         # released keys (last `HostValueArc` clone already dropped) fall
         # through to the metadata-bearing `BamlError` wrapper below.
         if _outbound_class_fqn(msg.value) == "baml.errors.HostCallable":
-            rehydrated = _try_rehydrate_host_callable(decoded)
+            rehydrated = _try_rehydrate_host_value(decoded)
             if rehydrated is not None:
                 raise attach_baml_traceback(rehydrated)
         raise attach_baml_traceback(

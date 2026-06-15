@@ -47,11 +47,14 @@ enum BamlHandleType {
   // Lifetime: Rust drop notifies host via HostReleaseFn (not via
   // HANDLE_TABLE). See bex_external_types::host_value.
   HOST_VALUE_CALLABLE = 15;
-  // Host-owned opaque error value (a native exception with no BAML
-  // representation), referenced via the same per-bridge registry and
-  // HostReleaseFn lifetime as HOST_VALUE_CALLABLE. Surfaced in BAML as
-  // baml.errors.HostCallable. See bex_external_types::host_value.
-  HOST_VALUE_ERROR = 16;
+  // Host-owned opaque value: an arbitrary host object with no BAML
+  // representation, referenced via the per-bridge HostValueRegistry and
+  // released via HostReleaseFn (not via HANDLE_TABLE), same as
+  // HOST_VALUE_CALLABLE. A host-thrown native exception is one consumer:
+  // the bridge registers it as an opaque value and wraps the handle in a
+  // baml.errors.HostCallable instance for throw semantics. See
+  // bex_external_types::host_value.
+  HOST_VALUE_OPAQUE = 16;
 }
 
 message BamlHandle {
@@ -118,6 +121,7 @@ message InboundEnumValue {
 
 message CallFunctionArgs {
   repeated InboundMapEntry kwargs = 1;
+  uint64 call_id = 2;
 }
 
 // CallAck is the engine's acknowledgment of an inbound call. It flows

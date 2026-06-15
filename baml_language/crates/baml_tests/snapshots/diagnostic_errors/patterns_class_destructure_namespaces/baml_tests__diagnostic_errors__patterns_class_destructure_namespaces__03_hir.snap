@@ -30,7 +30,7 @@ function user.llm.openai.from_json(j: baml.json.json) -> user.llm.openai.Respons
   user.llm.openai.Response { score: baml.json.from_json(baml.json.field(j, "score")) }
 }
 function user.llm.openai.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "score": self.score.to_json() }
+  map { "score": baml.json.to_json(self.score) }
 }
 function user.llm.openai.to_json(self: ?) -> baml.json.json  [expr] {
   map { "value": baml.json.to_json(self.value) }

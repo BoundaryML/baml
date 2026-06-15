@@ -1,6 +1,6 @@
 //! Phase 6 tests: Generic type variable binding and builtin method resolution.
 //!
-//! Verifies that `Ty::List`, `Ty::Map`, and `Ty::Primitive(String)` correctly
+//! Verifies that `Ty::List`, `Ty::Map`, and `Ty::String` correctly
 //! resolve methods to the builtin `.baml` stub declarations with type variable
 //! substitution applied.
 
@@ -682,7 +682,7 @@ function f(u: MaybeUser) -> string? {
       name: string
     }
     function user.User.to_json(self: user.User) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      map { "name": self.name.to_json() } : map<string, baml.json.json>
+      map { "name": baml.json.to_json(self.name) } : map<string, baml.json.json>
     }
     function user.User.from_json(j: baml.json.json) -> user.User throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       User { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.User
@@ -1166,7 +1166,12 @@ function f() -> null {
 }
 
 #[test]
-fn stored_lambda_with_omitted_throws_stays_closed_in_expr_type() {
+fn stored_lambda_with_omitted_throws_infers_throws_in_expr_type() {
+    // An UNANNOTATED lambda infers its throws surface from its body — a
+    // lambda throws what it throws (BEP-034 middleware relies on this for
+    // body wraps like `() -> { original() }` where the throws is the
+    // enclosing fn's generic `E`). The stored value's type carries the
+    // inferred, concrete surface instead of a blanket `never`.
     let mut db = make_db();
     let file = db.add_file(
         "test.baml",
@@ -1182,7 +1187,7 @@ function f() -> null {
     );
     assert_eq!(
         expr_type_in_function(&db, file, "f", "risky"),
-        "(x: int) -> int throws never"
+        "(x: int) -> int throws string"
     );
 }
 

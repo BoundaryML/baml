@@ -155,12 +155,12 @@ mod tests {
             }
             serde_json::Value::String(v) => bex_external_types::BexExternalValue::String(v.into()),
             serde_json::Value::Array(items) => bex_external_types::BexExternalValue::Array {
-                element_type: baml_type::Ty::unknown(),
+                element_type: baml_type::RuntimeTy::unknown(),
                 items: items.into_iter().map(json_to_bex).collect(),
             },
             serde_json::Value::Object(map) => bex_external_types::BexExternalValue::Map {
-                key_type: baml_type::Ty::string(),
-                value_type: baml_type::Ty::unknown(),
+                key_type: baml_type::RuntimeTy::string(),
+                value_type: baml_type::RuntimeTy::unknown(),
                 entries: map.into_iter().map(|(k, v)| (k, json_to_bex(v))).collect(),
             },
         }

@@ -21,7 +21,6 @@ fn engine(files: &[(&str, &str)]) -> Arc<BexEngine> {
         BexEngine::new(
             compile_multi_file(files),
             Arc::new(sys_native::SysOps::native()),
-            None,
             Vec::new(),
         )
         .expect("BexEngine::new should succeed"),
@@ -185,7 +184,7 @@ async fn generic_native_json_to_string_callable_as_entry_point() {
             "baml.json.to_string",
             vec![BexExternalValue::Int(7)],
             FunctionCallContextBuilder::new(CallId::next())
-                .with_type_args(vec![baml_type::Ty::int()])
+                .with_type_args(vec![baml_type::RuntimeTy::int()])
                 .build(),
             true,
         )

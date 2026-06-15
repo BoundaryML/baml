@@ -7,7 +7,7 @@ use std::fmt;
 
 use baml_base::{Name, Span};
 pub use baml_compiler2_ast::BuiltinKind;
-use baml_type::{Ty, TyTemplate};
+use baml_type::{RuntimeTy, TyTemplate};
 
 // ============================================================================
 // Optimization Level
@@ -158,7 +158,7 @@ pub struct LocalDecl {
     /// Variable name (None for compiler temporaries).
     pub name: Option<Name>,
     /// Type of this local.
-    pub ty: Ty,
+    pub ty: RuntimeTy,
     /// Source span where this local is declared.
     pub span: Option<Span>,
     /// Source span where this local is in scope.
@@ -245,8 +245,6 @@ pub enum LogLevel {
 pub enum IntrinsicOp {
     /// `log.info`, `log.debug`, `log.warn`, `log.error` — emit a `$baml_log` event.
     Log(LogLevel),
-    /// `baml.events.send` — emit a custom user event.
-    SendEvent,
 }
 
 /// The kind of a MIR statement.
@@ -408,6 +406,13 @@ pub enum Terminator {
         closure: Operand,
         /// Optional name expression (string or null).
         name: Operand,
+        /// Optional `baml.spawn.options(...)` config value from a `with`
+        /// clause (BEP-034 spawn options). `None` when there is no `with`
+        /// clause; the engine reads the config's `cancel` (and later
+        /// `group`/`detach`) to derive the spawn's effective cancel token.
+        /// Boxed to keep `Terminator`'s footprint down (clippy
+        /// `large_enum_variant`): `Spawn` is rare relative to `Call`/`Goto`.
+        config: Option<Box<Operand>>,
         /// Where to store the resulting Future handle.
         future: Place,
         /// Block to resume after the spawn schedules.
@@ -425,6 +430,25 @@ pub enum Terminator {
         /// Block to continue at after result is ready.
         target: BlockId,
         /// Block to jump to if the future fails (for catch).
+        unwind: Option<BlockId>,
+    },
+
+    /// BEP-034 `baml.future.__await_any(futures)` — suspend until the FIRST
+    /// of an array of futures settles, then bind the `int` index (in input
+    /// order) of the first-settled future.
+    ///
+    /// Like `Await`, this is a suspend point. The `race`/`any` combinators
+    /// are pure BAML built on top of it. `__await_any` is declared `throws
+    /// never` (it only reports *which* future settled, never re-throws), so
+    /// `unwind` is normally `None`; it is kept for shape-parity with `Await`.
+    AwaitAny {
+        /// The array of futures to wait on (a read operand).
+        futures: Operand,
+        /// Where to store the winning index (`int`).
+        destination: Place,
+        /// Block to continue at after the first future settles.
+        target: BlockId,
+        /// Catch context (unused — `__await_any` throws never).
         unwind: Option<BlockId>,
     },
 
@@ -481,23 +505,12 @@ impl Terminator {
                 succs
             }
             Terminator::Return => vec![],
-            Terminator::Call { target, unwind, .. } => {
-                let mut succs = vec![*target];
-                if let Some(u) = unwind {
-                    succs.push(*u);
-                }
-                succs
-            }
             Terminator::Unreachable => vec![],
-            Terminator::SysOp { target, unwind, .. } => {
-                let mut succs = vec![*target];
-                if let Some(u) = unwind {
-                    succs.push(*u);
-                }
-                succs
-            }
             Terminator::Spawn { resume, .. } => vec![*resume],
-            Terminator::Await { target, unwind, .. } => {
+            Terminator::Call { target, unwind, .. }
+            | Terminator::SysOp { target, unwind, .. }
+            | Terminator::Await { target, unwind, .. }
+            | Terminator::AwaitAny { target, unwind, .. } => {
                 let mut succs = vec![*target];
                 if let Some(u) = unwind {
                     succs.push(*u);
@@ -815,7 +828,7 @@ pub enum Constant {
         /// The base generic function.
         item: ItemRef,
         /// The concrete type arguments (fully resolved, no type parameters).
-        type_args: Vec<Ty>,
+        type_args: Vec<RuntimeTy>,
     },
     /// An enum variant value.
     EnumVariant {

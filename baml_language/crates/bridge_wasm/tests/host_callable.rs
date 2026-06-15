@@ -263,6 +263,7 @@ fn build_callback_args(callback_key: u64, x: i64) -> Vec<u8> {
                 value: Some(x_value),
             },
         ],
+        call_id: 0,
     };
     args.encode_to_vec()
 }
@@ -371,7 +372,7 @@ fn make_dispatch_error() -> js_sys::Function {
                 value: Some(InboundValue {
                     value: Some(InboundVariant::Handle(BamlHandle {
                         key: UNRESOLVED_HOST_ERROR_KEY,
-                        handle_type: BamlHandleType::HostValueError as i32,
+                        handle_type: BamlHandleType::HostValueOpaque as i32,
                     })),
                 }),
             };

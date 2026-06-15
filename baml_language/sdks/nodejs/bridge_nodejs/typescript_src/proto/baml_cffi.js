@@ -59,7 +59,7 @@ export const baml_core = $root.baml_core = (() => {
              * @property {number} ADT_TYPE=13 ADT_TYPE value
              * @property {number} ADT_TAGGED_HEAP_HANDLE=14 ADT_TAGGED_HEAP_HANDLE value
              * @property {number} HOST_VALUE_CALLABLE=15 HOST_VALUE_CALLABLE value
-             * @property {number} HOST_VALUE_ERROR=16 HOST_VALUE_ERROR value
+             * @property {number} HOST_VALUE_OPAQUE=16 HOST_VALUE_OPAQUE value
              */
             v1.BamlHandleType = (function() {
                 const valuesById = {}, values = Object.create(valuesById);
@@ -77,7 +77,7 @@ export const baml_core = $root.baml_core = (() => {
                 values[valuesById[13] = "ADT_TYPE"] = 13;
                 values[valuesById[14] = "ADT_TAGGED_HEAP_HANDLE"] = 14;
                 values[valuesById[15] = "HOST_VALUE_CALLABLE"] = 15;
-                values[valuesById[16] = "HOST_VALUE_ERROR"] = 16;
+                values[valuesById[16] = "HOST_VALUE_OPAQUE"] = 16;
                 return values;
             })();
 
@@ -358,7 +358,7 @@ export const baml_core = $root.baml_core = (() => {
                     case 15:
                         message.handleType = 15;
                         break;
-                    case "HOST_VALUE_ERROR":
+                    case "HOST_VALUE_OPAQUE":
                     case 16:
                         message.handleType = 16;
                         break;
@@ -2417,6 +2417,7 @@ export const baml_core = $root.baml_core = (() => {
                  * @memberof baml_core.cffi.v1
                  * @interface ICallFunctionArgs
                  * @property {Array.<baml_core.cffi.v1.IInboundMapEntry>|null} [kwargs] CallFunctionArgs kwargs
+                 * @property {number|Long|null} [callId] CallFunctionArgs callId
                  */
 
                 /**
@@ -2442,6 +2443,14 @@ export const baml_core = $root.baml_core = (() => {
                  * @instance
                  */
                 CallFunctionArgs.prototype.kwargs = $util.emptyArray;
+
+                /**
+                 * CallFunctionArgs callId.
+                 * @member {number|Long} callId
+                 * @memberof baml_core.cffi.v1.CallFunctionArgs
+                 * @instance
+                 */
+                CallFunctionArgs.prototype.callId = $util.Long ? $util.Long.fromBits(0,0,true) : 0;
 
                 /**
                  * Creates a new CallFunctionArgs instance using the specified properties.
@@ -2474,6 +2483,8 @@ export const baml_core = $root.baml_core = (() => {
                     if (message.kwargs != null && message.kwargs.length)
                         for (let i = 0; i < message.kwargs.length; ++i)
                             $root.baml_core.cffi.v1.InboundMapEntry.encode(message.kwargs[i], writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
+                    if (message.callId != null && Object.hasOwnProperty.call(message, "callId"))
+                        writer.uint32(/* id 2, wireType 0 =*/16).uint64(message.callId);
                     return writer;
                 };
 
@@ -2518,6 +2529,10 @@ export const baml_core = $root.baml_core = (() => {
                                 if (!(message.kwargs && message.kwargs.length))
                                     message.kwargs = [];
                                 message.kwargs.push($root.baml_core.cffi.v1.InboundMapEntry.decode(reader, reader.uint32(), undefined, long + 1));
+                                break;
+                            }
+                        case 2: {
+                                message.callId = reader.uint64();
                                 break;
                             }
                         default:
@@ -2568,6 +2583,9 @@ export const baml_core = $root.baml_core = (() => {
                                 return "kwargs." + error;
                         }
                     }
+                    if (message.callId != null && message.hasOwnProperty("callId"))
+                        if (!$util.isInteger(message.callId) && !(message.callId && $util.isInteger(message.callId.low) && $util.isInteger(message.callId.high)))
+                            return "callId: integer|Long expected";
                     return null;
                 };
 
@@ -2599,6 +2617,15 @@ export const baml_core = $root.baml_core = (() => {
                             message.kwargs[i] = $root.baml_core.cffi.v1.InboundMapEntry.fromObject(object.kwargs[i], long + 1);
                         }
                     }
+                    if (object.callId != null)
+                        if ($util.Long)
+                            message.callId = $util.Long.fromValue(object.callId, true);
+                        else if (typeof object.callId === "string")
+                            message.callId = parseInt(object.callId, 10);
+                        else if (typeof object.callId === "number")
+                            message.callId = object.callId;
+                        else if (typeof object.callId === "object")
+                            message.callId = new $util.LongBits(object.callId.low >>> 0, object.callId.high >>> 0).toNumber(true);
                     return message;
                 };
 
@@ -2621,11 +2648,24 @@ export const baml_core = $root.baml_core = (() => {
                     let object = {};
                     if (options.arrays || options.defaults)
                         object.kwargs = [];
+                    if (options.defaults)
+                        if ($util.Long) {
+                            let long = new $util.Long(0, 0, true);
+                            object.callId = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : typeof BigInt !== "undefined" && options.longs === BigInt ? long.toBigInt() : long;
+                        } else
+                            object.callId = options.longs === String ? "0" : typeof BigInt !== "undefined" && options.longs === BigInt ? BigInt("0") : 0;
                     if (message.kwargs && message.kwargs.length) {
                         object.kwargs = [];
                         for (let j = 0; j < message.kwargs.length; ++j)
                             object.kwargs[j] = $root.baml_core.cffi.v1.InboundMapEntry.toObject(message.kwargs[j], options, q + 1);
                     }
+                    if (message.callId != null && message.hasOwnProperty("callId"))
+                        if (typeof BigInt !== "undefined" && options.longs === BigInt)
+                            object.callId = typeof message.callId === "number" ? BigInt(message.callId) : $util.Long.fromBits(message.callId.low >>> 0, message.callId.high >>> 0, true).toBigInt();
+                        else if (typeof message.callId === "number")
+                            object.callId = options.longs === String ? String(message.callId) : message.callId;
+                        else
+                            object.callId = options.longs === String ? $util.Long.prototype.toString.call(message.callId) : options.longs === Number ? new $util.LongBits(message.callId.low >>> 0, message.callId.high >>> 0).toNumber(true) : message.callId;
                     return object;
                 };
 
@@ -4883,7 +4923,7 @@ export const baml_core = $root.baml_core = (() => {
                     case 15:
                         message.handleType = 15;
                         break;
-                    case "HOST_VALUE_ERROR":
+                    case "HOST_VALUE_OPAQUE":
                     case 16:
                         message.handleType = 16;
                         break;

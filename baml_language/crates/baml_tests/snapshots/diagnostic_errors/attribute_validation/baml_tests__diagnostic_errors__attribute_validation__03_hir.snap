@@ -26,11 +26,11 @@ function user.from_json(j: baml.json.json) -> user.HasDuplicateFieldAttr  [expr]
   user.HasDuplicateFieldAttr { name: baml.json.from_json(baml.json.field(j, "name")) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": self.name.to_json(), "age": self.age.to_json(), "name": self.name.to_json() }
+  map { "name": baml.json.to_json(self.name), "age": baml.json.to_json(self.age), "name": baml.json.to_json(self.name) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": self.name.to_json() }
+  map { "name": baml.json.to_json(self.name) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": self.name.to_json() }
+  map { "name": baml.json.to_json(self.name) }
 }

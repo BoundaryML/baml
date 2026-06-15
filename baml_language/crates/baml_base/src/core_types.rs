@@ -257,7 +257,9 @@ impl fmt::Display for TypePath {
 }
 
 /// The types of media we support
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Copy, BorshSerialize, BorshDeserialize)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, Hash, Copy, PartialOrd, Ord, BorshSerialize, BorshDeserialize,
+)]
 pub enum MediaKind {
     Image,
     Audio,

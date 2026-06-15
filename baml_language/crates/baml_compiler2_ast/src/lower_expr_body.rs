@@ -32,16 +32,20 @@ pub struct EnvVarRef {
 /// Returns true if `kind` can serve as an identifier token in expression position.
 ///
 /// The parser allows `KW_CLIENT` (and `WORD`) inside `PATH_EXPR` / `FIELD_ACCESS_EXPR`
-/// nodes when `client` is used as a variable or field name. The interface-related
-/// keywords (`implements`, `interface`, `extends`) likewise remain valid as
-/// member names — e.g. `dog_t.implements(animal_t)` on the reflection `type`
-/// value. This must match exactly what `parse_path_or_ident` / `at_member_name`
-/// accept in the parser.
+/// nodes when `client` is used as a variable or field name. It likewise allows
+/// `KW_SPAWN` / `KW_AWAIT` as path segments (e.g. the `baml.spawn` namespace),
+/// since they are unambiguous after a `.`, and the interface-related keywords
+/// (`implements`, `interface`, `extends`) as member names — e.g.
+/// `dog_t.implements(animal_t)` on the reflection `type` value. This must
+/// match exactly what `parse_path_or_ident` / `at_member_name` accept in the
+/// parser; adding a new keyword there requires adding it here too.
 fn is_ident_token(kind: SyntaxKind) -> bool {
     matches!(
         kind,
         SyntaxKind::WORD
             | SyntaxKind::KW_CLIENT
+            | SyntaxKind::KW_SPAWN
+            | SyntaxKind::KW_AWAIT
             | SyntaxKind::KW_IMPLEMENTS
             | SyntaxKind::KW_IMPLEMENT
             | SyntaxKind::KW_INTERFACE
@@ -722,10 +726,63 @@ impl LoweringContext {
         use baml_compiler_syntax::ast as cst_ast;
 
         let mut name: Option<ExprId> = None;
+        let mut with_exprs: Vec<ExprId> = Vec::new();
         let mut body_lambda: Option<ExprId> = None;
+        // The CST is flat: `KW_SPAWN [name expr] [KW_WITH expr (COMMA expr)*]
+        // BLOCK_EXPR`. We walk children-with-tokens so the `KW_WITH` token is
+        // visible; everything after it (other than the body) is a `with` expr.
+        let mut seen_with = false;
 
-        for child in node.children() {
-            if child.kind() == SyntaxKind::BLOCK_EXPR {
+        for child in node.children_with_tokens() {
+            let kind = child.kind();
+            if kind == SyntaxKind::KW_WITH {
+                seen_with = true;
+                continue;
+            }
+            // Expression NODES and bare expression TOKENS both matter past
+            // here (a literal like `spawn with 42 { .. }` arrives as a plain
+            // token); skip `KW_SPAWN`, commas, and trivia. Dropping tokens
+            // here would silently swallow the expression — the type checker
+            // must see it to reject it with a real diagnostic.
+            let child = match child {
+                rowan::NodeOrToken::Node(n) => n,
+                rowan::NodeOrToken::Token(t) => {
+                    let span = t.text_range();
+                    let expr = match t.kind() {
+                        SyntaxKind::INTEGER_LITERAL => Some(Expr::Literal(Literal::Int(
+                            t.text().parse::<i64>().unwrap_or(0),
+                        ))),
+                        SyntaxKind::FLOAT_LITERAL => {
+                            Some(Expr::Literal(Literal::Float(t.text().to_string())))
+                        }
+                        SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => Some(
+                            Expr::Literal(Literal::String(strip_string_delimiters(t.text()))),
+                        ),
+                        // `spawn`/`await` pass `is_ident_token` (they're
+                        // valid path SEGMENTS) but here they're the keywords
+                        // themselves — never a name/with expression.
+                        SyntaxKind::KW_SPAWN | SyntaxKind::KW_AWAIT => None,
+                        k if is_ident_token(k) => Some(match t.text() {
+                            "true" => Expr::Literal(Literal::Bool(true)),
+                            "false" => Expr::Literal(Literal::Bool(false)),
+                            "null" => Expr::Null,
+                            other => Expr::Path(vec![Name::new(other)]),
+                        }),
+                        _ => None,
+                    };
+                    if let Some(expr) = expr {
+                        let id = self.alloc_expr(expr, span);
+                        if seen_with {
+                            with_exprs.push(id);
+                        } else if name.is_none() {
+                            name = Some(id);
+                        }
+                    }
+                    continue;
+                }
+            };
+            let child = &child;
+            if kind == SyntaxKind::BLOCK_EXPR {
                 // Synthesize a 0-arg lambda whose body is this block —
                 // mirroring `lower_lambda_expr` so the existing
                 // capture / scope / MIR plumbing applies unchanged.
@@ -758,13 +815,22 @@ impl LoweringContext {
                     body_lambda =
                         Some(self.alloc_expr(Expr::Lambda(Box::new(fd)), child.text_range()));
                 }
+            } else if seen_with {
+                with_exprs.push(self.lower_expr(child));
             } else if name.is_none() {
-                name = Some(self.lower_expr(&child));
+                name = Some(self.lower_expr(child));
             }
         }
 
         let body = body_lambda.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
-        self.alloc_expr(Expr::Spawn { name, body }, node.text_range())
+        self.alloc_expr(
+            Expr::Spawn {
+                name,
+                with_exprs,
+                body,
+            },
+            node.text_range(),
+        )
     }
 
     /// Lower `await expr`. The CST shape is `AWAIT_EXPR [ KW_AWAIT
@@ -890,8 +956,8 @@ impl LoweringContext {
                         // Assignment operators are not valid in expression context.
                         // They are handled as statements by try_lower_assignment().
                         // If we see them here, the user wrote something like `(x = 5)`
-                        // which is not a valid expression — emit Missing instead of
-                        // silently defaulting to BinaryOp::Add.
+                        // which is not a valid expression — report it and lower to
+                        // Missing instead of silently defaulting to BinaryOp::Add.
                         SyntaxKind::EQUALS
                         | SyntaxKind::PLUS_EQUALS
                         | SyntaxKind::MINUS_EQUALS
@@ -903,6 +969,10 @@ impl LoweringContext {
                         | SyntaxKind::CARET_EQUALS
                         | SyntaxKind::LESS_LESS_EQUALS
                         | SyntaxKind::GREATER_GREATER_EQUALS => {
+                            self.diags
+                                .push(LoweringDiagnostic::AssignmentInExpressionPosition {
+                                    span: node.text_range(),
+                                });
                             return self.alloc_expr(Expr::Missing, node.text_range());
                         }
                         _ => {}
@@ -1578,6 +1648,14 @@ impl LoweringContext {
                     span: token.text_range(),
                 });
         }
+        if let Some(token) = &name_token
+            && token.text() == "$id"
+        {
+            self.diags
+                .push(LoweringDiagnostic::ReservedRuntimeIdBindingName {
+                    span: token.text_range(),
+                });
+        }
 
         let name = name_token.map(|t| Name::new(t.text()));
 
@@ -1753,6 +1831,15 @@ impl LoweringContext {
             None => {
                 // Shorthand `{ f }` → bind to a local of the same name. `_`
                 // canonicalises to `Wildcard`, same rule as elsewhere.
+                // A shorthand binding named `$id` would be silently dead
+                // (reads hit the runtime-identity special form first) —
+                // reject it like every other `$id` binding site.
+                if field_name.as_str() == "$id" {
+                    self.diags
+                        .push(LoweringDiagnostic::ReservedRuntimeIdBindingName {
+                            span: field_span,
+                        });
+                }
                 let synth = if field_name.as_str() == "_" {
                     Pattern::Wildcard
                 } else {
@@ -2330,7 +2417,13 @@ impl LoweringContext {
             return self.alloc_expr(Expr::Missing, node.text_range());
         }
 
-        // Check if single segment is a literal keyword
+        // Check if single segment is a literal keyword.
+        //
+        // Note `$id` is deliberately NOT desugared here: a lone `$id` reaches
+        // the AST as a bare WORD token (the parser only builds PATH_EXPR for
+        // dotted paths), so the special form is owned downstream — TIR types
+        // the read as `string` (builder.rs `infer_path`) and MIR lowers reads
+        // to `baml.id.current()` / writes to `baml.id.set(...)` (lower.rs).
         if segments.len() == 1 {
             match segments[0].0.as_str() {
                 "true" => {
@@ -2714,7 +2807,6 @@ impl LoweringContext {
         let mut fields = Vec::new();
         let mut spreads = Vec::new();
         let mut position = 0;
-        let mut type_name = None;
         let mut type_args: Vec<TypeExpr> = vec![];
         let mut type_path_segments: Vec<Name> = vec![];
 
@@ -2739,9 +2831,10 @@ impl LoweringContext {
                 }
             }
         }
-        if !type_path_segments.is_empty() {
-            type_name = Some(TypePath::new(type_path_segments));
-        }
+        debug_assert!(!type_path_segments.is_empty());
+        // The parser only emits an object literal when a type name precedes the
+        // brace, so the segments are always present.
+        let type_name = TypePath::new(type_path_segments);
 
         // Object fields are child nodes after L_BRACE
         // They come as key-value pairs: WORD COLON expr or SPREAD expr

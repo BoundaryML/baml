@@ -18,6 +18,16 @@ message RuntimeEvent {
   repeated string call_stack = 5;
   EventKind event = 6;
   uint64 call_id = 7;
+  optional RuntimeEventIdentity bex_identity = 8;
+}
+
+/// Compact BEX runtime identity for the function invocation that emitted this event.
+message RuntimeEventIdentity {
+  uint64 thread_id = 1;
+  uint64 call_id = 2;
+  optional uint64 parent_call_id = 3;
+  optional uint32 function_id = 4;
+  string call_ref = 5;
 }
 
 /// The kind of event.
@@ -60,7 +70,7 @@ message SourceLocation {
   uint32 end_offset = 5;
 }
 
-/// A structured log event emitted via `log.info()`, `log.debug()`, etc.
+/// A log event emitted via `log.info()`, `log.debug()`, etc.
 message LogEvent {
   string level = 1;
   BamlOutboundValue data = 2;

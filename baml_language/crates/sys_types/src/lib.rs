@@ -15,7 +15,7 @@ use std::{
 
 use async_trait::async_trait;
 // Re-export BexExternalValue and BexValue for ops
-pub use bex_external_types::{AsBexExternalValue, BexExternalValue};
+pub use bex_external_types::{AsBexExternalValue, BexExternalValue, Handle};
 pub use bex_heap::BexHeap;
 // Re-export SysOp for convenience
 pub use bex_vm_types::SysOp;
@@ -592,6 +592,21 @@ pub trait VmSpawner<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static>>:
         args: Vec<BexExternalValue>,
         cancel: CancellationToken,
     ) -> Result<BexExternalValue, E>;
+
+    /// Spawn a new VM that invokes a callable BAML value — a raw function,
+    /// closure, or bound method — referenced by a [`bex_external_types::Handle`]
+    /// obtained from a sys-op's `function`-typed argument, with `args`, and
+    /// return its result.
+    ///
+    /// Unlike [`Self::spawn_with_function`], the callee need not be a named
+    /// global — this is how a sys-op invokes a BAML callback (e.g. an HTTP
+    /// server `handler`). Generally just calls `BexEngine::call_callable`.
+    async fn spawn_with_callable(
+        self: Arc<Self>,
+        callable: bex_external_types::Handle,
+        args: Vec<BexExternalValue>,
+        cancel: CancellationToken,
+    ) -> Result<BexExternalValue, E>;
 }
 
 /// Context available to `sys_ops` that need engine-level information.
@@ -637,7 +652,7 @@ pub struct SysOpContext<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static
     /// Recursive type alias definitions for output format rendering.
     /// Only recursive aliases are stored (non-recursive ones are expanded inline).
     /// Maps alias name → target type.
-    pub type_alias_definitions: Arc<indexmap::IndexMap<baml_type::TypeName, baml_type::Ty>>,
+    pub type_alias_definitions: Arc<indexmap::IndexMap<baml_type::TypeName, baml_type::RuntimeTy>>,
 
     /// Can be used to spawn new VMs.
     pub spawner: Arc<dyn VmSpawner<E>>,
@@ -690,7 +705,7 @@ pub struct EngineSysOpContext {
     /// Recursive type alias definitions for output format rendering.
     /// Only recursive aliases are stored (non-recursive ones are expanded inline).
     /// Maps alias name → target type.
-    pub type_alias_definitions: Arc<indexmap::IndexMap<baml_type::TypeName, baml_type::Ty>>,
+    pub type_alias_definitions: Arc<indexmap::IndexMap<baml_type::TypeName, baml_type::RuntimeTy>>,
 
     /// Typed async IO interface, built from the `SysOps` table at engine init.
     pub runtime_io: Arc<dyn runtime_io::RuntimeIo>,
@@ -706,10 +721,7 @@ pub struct LlmFunctionInfo {
     /// The client name (e.g., `"MyClient"`) declared in the function.
     pub client_name: String,
     /// The expected return type, used for response parsing.
-    pub return_type: baml_type::Ty,
-    /// The stream-expanded return type (e.g. `null | MyClass$stream`).
-    /// Used by `get_stream_return_type` for constructing `StreamCache`.
-    pub stream_return_type: baml_type::Ty,
+    pub return_type: baml_type::RuntimeTy,
 }
 
 /// Pre-extracted class definition for output format rendering.
@@ -725,7 +737,7 @@ pub struct ClassDefinition {
 #[derive(Clone, Debug)]
 pub struct ClassFieldDefinition {
     pub name: String,
-    pub field_type: baml_type::Ty,
+    pub field_type: baml_type::RuntimeTy,
     pub description: Option<String>,
     pub alias: Option<String>,
     pub skip: bool,
@@ -764,6 +776,17 @@ impl SysOpContext {
                     "VmSpawner::spawn_with_function called on NeverSpawner (empty/test context)",
                 ))
             }
+
+            async fn spawn_with_callable(
+                self: Arc<Self>,
+                _callable: bex_external_types::Handle,
+                _args: Vec<BexExternalValue>,
+                _cancel: CancellationToken,
+            ) -> Result<BexExternalValue, Box<dyn Send + Sync + 'static>> {
+                Err(Box::new(
+                    "VmSpawner::spawn_with_callable called on NeverSpawner (empty/test context)",
+                ))
+            }
         }
         Self {
             llm_functions: Arc::new(std::collections::HashMap::new()),
@@ -778,7 +801,7 @@ impl SysOpContext {
             ),
             type_alias_definitions: Arc::new(indexmap::IndexMap::<
                 baml_type::TypeName,
-                baml_type::Ty,
+                baml_type::RuntimeTy,
             >::new()),
             spawner: Arc::new(NeverSpawner),
             runtime_io: Arc::new(runtime_io::NoopRuntimeIo),
@@ -1147,7 +1170,7 @@ mod tests {
                 language: None,
                 handle: bex_external_types::HostValueArc::new(
                     1,
-                    bex_external_types::HostValueKind::Error,
+                    bex_external_types::HostValueKind::Opaque,
                 ),
             },
         ];

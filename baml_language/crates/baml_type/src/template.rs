@@ -17,21 +17,32 @@
 //! `TypeArgRef(n)` refers to the n-th entry in the enclosing call-frame's
 //! `type_args` vector (0-based).  The compiler assigns indices using
 //! `function_generic_params` ordering so that the mapping is stable across
-//! compilation.
+//! compilation. `TypeArgRefOrWildcard(n)` has the same index, but is only valid
+//! in dispatch guards: if the runtime slot is unconcretized, it matches any
+//! actual type argument instead of materializing `unknown` as a concrete
+//! constraint.
 
 use std::fmt;
 
 use borsh::{BorshDeserialize, BorshSerialize};
 
-use crate::{Ty, TyAttr, TypeName};
+use crate::{RuntimeTy, TyAttr, TypeName};
 
 /// A type expression that may contain unresolved generic-parameter references.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
 pub enum TyTemplate {
     /// Fully concrete leaf — no substitution needed.
-    Concrete(Ty),
+    Concrete(RuntimeTy),
     /// De Bruijn index into the enclosing frame's `type_args`.
     TypeArgRef(u32),
+    /// De Bruijn index into the enclosing frame's `type_args`, with
+    /// unconcretized runtime slots treated as wildcards in dispatch guards.
+    ///
+    /// This is intentionally distinct from `TypeArgRef`: normal type
+    /// materialization must preserve `unknown`, while guard matching needs to
+    /// express "this position came from receiver-relative associated evidence
+    /// that was not concretized at runtime."
+    TypeArgRefOrWildcard(u32),
     /// `T[]`
     Array(Box<TyTemplate>),
     /// `T1 | T2 | ...` (a member being `Concrete(null)` encodes optionality)
@@ -57,35 +68,37 @@ impl TyTemplate {
     ///
     /// If `n` is out of range (e.g. when a generic function is called from a
     /// non-generic context that didn't supply type arguments), the substitution
-    /// falls back to `Ty::unknown()` rather than panicking.  This handles
+    /// falls back to `RuntimeTy::unknown()` rather than panicking.  This handles
     /// stdlib paths where T/S are declared in the function signature for
     /// type-checking purposes but the corresponding Rust sys-op implementation
     /// doesn't use the type-arg slot.
-    pub fn substitute(&self, type_args: &[Ty]) -> Ty {
+    pub fn substitute(&self, type_args: &[RuntimeTy]) -> RuntimeTy {
         match self {
             Self::Concrete(t) => t.clone(),
-            Self::TypeArgRef(n) => type_args
+            Self::TypeArgRef(n) | Self::TypeArgRefOrWildcard(n) => type_args
                 .get(*n as usize)
                 .cloned()
-                .unwrap_or_else(Ty::unknown),
-            Self::Array(inner) => Ty::list(inner.substitute(type_args)),
-            Self::Union(parts) => Ty::union(parts.iter().map(|p| p.substitute(type_args))),
-            Self::Map(k, v) => Ty::Map {
+                .unwrap_or_else(RuntimeTy::unknown),
+            Self::Array(inner) => RuntimeTy::list(inner.substitute(type_args)),
+            Self::Union(parts) => RuntimeTy::union(parts.iter().map(|p| p.substitute(type_args))),
+            Self::Map(k, v) => RuntimeTy::Map {
                 key: Box::new(k.substitute(type_args)),
                 value: Box::new(v.substitute(type_args)),
                 attr: TyAttr::default(),
             },
             Self::Class(name, args) => {
-                let resolved: Vec<Ty> = args.iter().map(|a| a.substitute(type_args)).collect();
-                Ty::Class(name.clone(), resolved, TyAttr::default())
+                let resolved: Vec<RuntimeTy> =
+                    args.iter().map(|a| a.substitute(type_args)).collect();
+                RuntimeTy::Class(name.clone(), resolved, TyAttr::default())
             }
             Self::Interface(name, args, associated_bindings) => {
-                let resolved_args: Vec<Ty> = args.iter().map(|a| a.substitute(type_args)).collect();
+                let resolved_args: Vec<RuntimeTy> =
+                    args.iter().map(|a| a.substitute(type_args)).collect();
                 let resolved_bindings = associated_bindings
                     .iter()
                     .map(|(name, ty)| (name.clone(), ty.substitute(type_args)))
                     .collect();
-                Ty::Interface(
+                RuntimeTy::Interface(
                     name.clone(),
                     resolved_args,
                     resolved_bindings,
@@ -94,7 +107,7 @@ impl TyTemplate {
             }
             // A wildcard never reaches `LoadType` materialization; if it ever
             // does, fall back to `unknown` rather than panicking.
-            Self::Wildcard => Ty::unknown(),
+            Self::Wildcard => RuntimeTy::unknown(),
         }
     }
 
@@ -102,7 +115,7 @@ impl TyTemplate {
     pub fn is_fully_concrete(&self) -> bool {
         match self {
             Self::Concrete(_) => true,
-            Self::TypeArgRef(_) => false,
+            Self::TypeArgRef(_) | Self::TypeArgRefOrWildcard(_) => false,
             Self::Array(inner) => inner.is_fully_concrete(),
             Self::Union(parts) => parts.iter().all(TyTemplate::is_fully_concrete),
             Self::Map(k, v) => k.is_fully_concrete() && v.is_fully_concrete(),
@@ -124,6 +137,7 @@ impl fmt::Display for TyTemplate {
         match self {
             Self::Concrete(ty) => write!(f, "{ty}"),
             Self::TypeArgRef(n) => write!(f, "#{n}"),
+            Self::TypeArgRefOrWildcard(n) => write!(f, "#{n}?"),
             Self::Array(inner) => write!(f, "{inner}[]"),
             Self::Union(parts) => {
                 // `?` is sugar that exists only in source/lowering; after that a
@@ -133,7 +147,7 @@ impl fmt::Display for TyTemplate {
                     .iter()
                     .map(|p| {
                         let rendered = p.to_string();
-                        if matches!(p, TyTemplate::Concrete(ty) if matches!(ty, Ty::Function { .. }))
+                        if matches!(p, TyTemplate::Concrete(ty) if matches!(ty, RuntimeTy::Function { .. }))
                         {
                             format!("({rendered})")
                         } else {
@@ -145,7 +159,7 @@ impl fmt::Display for TyTemplate {
             }
             Self::Map(k, v) => write!(f, "map<{k}, {v}>"),
             Self::Class(name, args) => {
-                write!(f, "{name}")?;
+                write!(f, "{}", name.display_name())?;
                 if !args.is_empty() {
                     write!(f, "<")?;
                     for (i, arg) in args.iter().enumerate() {
@@ -159,7 +173,7 @@ impl fmt::Display for TyTemplate {
                 Ok(())
             }
             Self::Interface(name, args, associated_bindings) => {
-                write!(f, "{name}")?;
+                write!(f, "{}", name.display_name())?;
                 if !args.is_empty() || !associated_bindings.is_empty() {
                     write!(f, "<")?;
                     let mut first = true;
@@ -192,16 +206,16 @@ mod tests {
 
     #[test]
     fn concrete_template_substitutes_to_itself() {
-        let tmpl = TyTemplate::Concrete(Ty::int());
-        assert_eq!(tmpl.substitute(&[]), Ty::int());
+        let tmpl = TyTemplate::Concrete(RuntimeTy::int());
+        assert_eq!(tmpl.substitute(&[]), RuntimeTy::int());
         assert!(tmpl.is_fully_concrete());
     }
 
     #[test]
     fn type_arg_ref_substitutes_correctly() {
         let tmpl = TyTemplate::TypeArgRef(0);
-        let ty = tmpl.substitute(&[Ty::string()]);
-        assert_eq!(ty, Ty::string());
+        let ty = tmpl.substitute(&[RuntimeTy::string()]);
+        assert_eq!(ty, RuntimeTy::string());
         assert!(!tmpl.is_fully_concrete());
     }
 
@@ -209,8 +223,8 @@ mod tests {
     fn array_of_type_arg_ref() {
         // Array(TypeArgRef(0)) with type_args=[int] → int[]
         let tmpl = TyTemplate::Array(Box::new(TyTemplate::TypeArgRef(0)));
-        let ty = tmpl.substitute(&[Ty::int()]);
-        assert_eq!(ty, Ty::list(Ty::int()));
+        let ty = tmpl.substitute(&[RuntimeTy::int()]);
+        assert_eq!(ty, RuntimeTy::list(RuntimeTy::int()));
         assert!(!tmpl.is_fully_concrete());
     }
 
@@ -219,34 +233,37 @@ mod tests {
         // (TypeArgRef(0) | null) with type_args=[string] → string?
         let tmpl = TyTemplate::Union(vec![
             TyTemplate::TypeArgRef(0),
-            TyTemplate::Concrete(Ty::null()),
+            TyTemplate::Concrete(RuntimeTy::null()),
         ]);
-        let ty = tmpl.substitute(&[Ty::string()]);
-        assert_eq!(ty, Ty::optional(Ty::string()));
+        let ty = tmpl.substitute(&[RuntimeTy::string()]);
+        assert_eq!(ty, RuntimeTy::optional(RuntimeTy::string()));
         assert!(!tmpl.is_fully_concrete());
     }
 
     #[test]
     fn concrete_array_is_fully_concrete() {
-        let tmpl = TyTemplate::Array(Box::new(TyTemplate::Concrete(Ty::int())));
+        let tmpl = TyTemplate::Array(Box::new(TyTemplate::Concrete(RuntimeTy::int())));
         assert!(tmpl.is_fully_concrete());
     }
 
     #[test]
     fn union_of_concrete_is_fully_concrete() {
         let tmpl = TyTemplate::Union(vec![
-            TyTemplate::Concrete(Ty::int()),
-            TyTemplate::Concrete(Ty::string()),
+            TyTemplate::Concrete(RuntimeTy::int()),
+            TyTemplate::Concrete(RuntimeTy::string()),
         ]);
         assert!(tmpl.is_fully_concrete());
         let ty = tmpl.substitute(&[]);
-        assert_eq!(ty, Ty::union([Ty::int(), Ty::string()]));
+        assert_eq!(
+            ty,
+            RuntimeTy::union([RuntimeTy::int(), RuntimeTy::string()])
+        );
     }
 
     #[test]
     fn union_containing_type_arg_ref_not_concrete() {
         let tmpl = TyTemplate::Union(vec![
-            TyTemplate::Concrete(Ty::int()),
+            TyTemplate::Concrete(RuntimeTy::int()),
             TyTemplate::TypeArgRef(0),
         ]);
         assert!(!tmpl.is_fully_concrete());
@@ -255,16 +272,16 @@ mod tests {
     #[test]
     fn class_with_type_arg_ref_substitution() {
         // Class("Container", [TypeArgRef(0)]) with type_args=[user_class("User")]
-        // → Ty::Class("Container", [user_class("User")], _)
+        // → RuntimeTy::Class("Container", [user_class("User")], _)
         let tmpl = TyTemplate::Class(
             TypeName::local(crate::Name::new("Container")),
             vec![TyTemplate::TypeArgRef(0)],
         );
-        let user = Ty::user_class("User");
+        let user = RuntimeTy::user_class("User");
         let result = tmpl.substitute(std::slice::from_ref(&user));
         assert_eq!(
             result,
-            Ty::class_with_args(TypeName::local(crate::Name::new("Container")), vec![user])
+            RuntimeTy::class_with_args(TypeName::local(crate::Name::new("Container")), vec![user])
         );
         assert!(!tmpl.is_fully_concrete());
     }
@@ -276,7 +293,7 @@ mod tests {
         let result = tmpl.substitute(&[]);
         assert_eq!(
             result,
-            Ty::Class(
+            RuntimeTy::Class(
                 TypeName::local(crate::Name::new("User")),
                 vec![],
                 crate::TyAttr::default()

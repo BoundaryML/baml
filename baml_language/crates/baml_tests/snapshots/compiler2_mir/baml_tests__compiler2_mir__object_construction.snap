@@ -47,24 +47,28 @@ fn user.Point.to_json(self: Point) -> baml.json.json {
     let _2: baml.json.json
     let _3: int
     let _4: Point
-    let _5: baml.json.json
-    let _6: int
-    let _7: Point
+    let _5: type
+    let _6: baml.json.json
+    let _7: int
+    let _8: Point
+    let _9: type
 
     bb0: {
         _4 = copy _1;
         _3 = copy _4.0;
-        _2 = call const fn baml.Int.to_json(copy _3) -> [bb1];
+        _5 = load_type(int);
+        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
     }
 
     bb1: {
-        _7 = copy _1;
-        _6 = copy _7.1;
-        _5 = call const fn baml.Int.to_json(copy _6) -> [bb2];
+        _8 = copy _1;
+        _7 = copy _8.1;
+        _9 = load_type(int);
+        _6 = call const fn baml.json.to_json<copy _9>(copy _7) -> [bb2];
     }
 
     bb2: {
-        _0 = { const "x": copy _2, const "y": copy _5 };
+        _0 = { const "x": copy _2, const "y": copy _6 };
         goto -> bb3;
     }
 

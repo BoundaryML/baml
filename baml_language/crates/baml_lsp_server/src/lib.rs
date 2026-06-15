@@ -32,10 +32,10 @@
 //! **TLS:** Enable exactly one of `native-tls` or `rustls`. CI may build with
 //! `--all-features` (both enabled); prefer one when building the LSP binary.
 
+mod deadlock_watchdog;
 mod native_lsp_sender;
 mod native_vfs;
 pub mod playground_env;
-pub mod playground_event_sink;
 pub mod playground_http;
 pub mod playground_io;
 pub mod playground_sender;
@@ -95,6 +95,7 @@ pub fn run_server(playground_via_browser: bool) -> anyhow::Result<()> {
         .init();
 
     tracing::info!("baml-lsp v{} starting", version());
+    deadlock_watchdog::spawn();
 
     let tokio_runtime = tokio::runtime::Runtime::new()?;
 
@@ -147,26 +148,6 @@ pub fn run_server(playground_via_browser: bool) -> anyhow::Result<()> {
         playground_via_browser,
     ));
 
-    // Start the native event sink if BAML_TRACE_FILE is set.
-    let file_event_sink: Option<std::sync::Arc<dyn bex_events::EventSink>> =
-        std::env::var("BAML_TRACE_FILE")
-            .ok()
-            .map(|trace_file| bex_events_native::start(trace_file.into()));
-    // Playground event sink — always active so runtime events flow to the WebSocket UI.
-    let playground_event_sink: std::sync::Arc<dyn bex_events::EventSink> = std::sync::Arc::new(
-        playground_event_sink::PlaygroundEventSink::new(broadcast_tx.clone()),
-    );
-
-    // Compose sinks: playground is always present; file sink is optional.
-    let composed_sink: std::sync::Arc<dyn bex_events::EventSink> = {
-        let mut sinks: Vec<std::sync::Arc<dyn bex_events::EventSink>> = vec![playground_event_sink];
-        if let Some(file_sink) = file_event_sink {
-            sinks.push(file_sink);
-        }
-        std::sync::Arc::new(bex_events::FanOutEventSink::new(sinks))
-    };
-    let event_sink = Some(composed_sink.clone());
-
     // Create the BexLsp (multi-project LSP)
     let spawner = bex_project::BackgroundSpawner::with_handle(tokio_runtime.handle().clone());
     let bex = bex_project::new_lsp(
@@ -174,7 +155,6 @@ pub fn run_server(playground_via_browser: bool) -> anyhow::Result<()> {
         lsp_sender,
         playground_sender,
         baml_vfs,
-        event_sink,
         spawner,
     );
     let bex: Arc<dyn bex_project::BexLsp> = Arc::new(bex);
@@ -250,6 +230,5 @@ pub fn run_server(playground_via_browser: bool) -> anyhow::Result<()> {
     }
 
     tracing::info!("LSP server shutting down");
-    composed_sink.flush();
     Ok(())
 }

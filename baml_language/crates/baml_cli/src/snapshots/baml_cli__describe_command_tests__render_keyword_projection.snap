@@ -1,0 +1,18 @@
+---
+source: crates/baml_cli/src/describe_command_tests.rs
+expression: output
+---
+projection — Explains interface value projections and associated type projections.
+
+Syntax:
+  function label(user: User) -> string {
+    return user.as<Named>.name
+  }
+  
+  function head<S extends Stream>(stream: S) -> (S as Iterator).Item? {
+    return stream.next()
+  }
+  
+  type Parsed = (IntParser as Parser).Output
+
+`value.as<Interface>` selects an interface view for member access. `T.Assoc`, `Self.Assoc`, and `(T as Interface).Assoc` project associated types in type positions; use the qualified `(T as Interface).Assoc` form when multiple required interfaces define the same associated type name. `Type.as<Interface>` is not type syntax.

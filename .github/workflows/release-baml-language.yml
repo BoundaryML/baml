@@ -42,6 +42,7 @@ env:
   AWS_REGION: us-east-1
   AWS_ROLE_ARN: arn:aws:iam::277707123528:role/pkg-boundaryml-com-github-release
   PKG_BUCKET: pkgboundarymlcomstack-pkgboundarymlcomsitebucket4f-ybhvygkqittp
+  BAML_AGENT_SKILLS_REPOSITORY: BoundaryML/baml-skill
 
 jobs:
   plan:
@@ -284,6 +285,38 @@ jobs:
           name: baml-vscode-vsix
           path: typescript2/app-vscode-ext/*.vsix
 
+  build-agent-skills:
+    name: Build agent skills
+    needs: [plan]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.BAML_AGENT_SKILLS_REPOSITORY }}
+          path: agent-skills-source
+          persist-credentials: false
+      - name: Package agent skills
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          set -euo pipefail
+          scripts/package-agent-skills \
+            --source agent-skills-source \
+            --version "$VERSION" \
+            --out-dir dist/agent-skills
+
+          archive="dist/agent-skills/baml-agent-skills-$VERSION.tar.gz"
+          tar -tzf "$archive" | tee agent-skills-list.txt
+          grep -E '/SKILL\.md$' agent-skills-list.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agent-skills
+          path: dist/agent-skills/*
+
   build-wrapper:
     name: Build wrapper (${{ matrix.target }})
     needs: [plan]
@@ -362,7 +395,17 @@ jobs:
   build-python-sdk:
     name: Build Python SDK
     needs: [plan]
-    uses: ./.github/workflows/build-python-sdk.reusable.yaml
+    uses: ./.github/workflows/build2-python-sdk.reusable.yaml
+    permissions:
+      contents: read
+    with:
+      release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
+      source_sha: ${{ needs.plan.outputs.source_sha }}
+
+  build-nodejs-sdk:
+    name: Build Node.js SDK
+    needs: [plan]
+    uses: ./.github/workflows/build2-nodejs-sdk.reusable.yaml
     permissions:
       contents: read
     with:
@@ -372,7 +415,14 @@ jobs:
   all-builds:
     name: All builds gate
     runs-on: ubuntu-latest
-    needs: [plan, build-toolchain, build-vsix, build-wrapper, build-python-sdk]
+    needs:
+      - plan
+      - build-toolchain
+      - build-vsix
+      - build-wrapper
+      - build-python-sdk
+      - build-nodejs-sdk
+      - build-agent-skills
     steps:
       - run: echo "all release build jobs completed"
 
@@ -402,111 +452,7 @@ jobs:
             exit 1
           fi
           echo "Found $wheel_count wheels"
-      - name: Check existing PyPI release
-        id: pypi
-        env:
-          RELEASE_PLAN_JSON: ${{ needs.plan.outputs.release_plan_json }}
-        run: |
-          set -euo pipefail
-          python3 - <<'PY' >> "$GITHUB_OUTPUT"
-          import hashlib
-          import json
-          import os
-          import re
-          import sys
-          import urllib.error
-          import urllib.request
-          from pathlib import Path
-
-          plan_json = os.environ.get("RELEASE_PLAN_JSON", "").strip()
-          wheels = sorted(Path("dist").glob("baml_core-*.whl"))
-          if not wheels:
-              print("::error::No baml_core wheels found in dist", file=sys.stderr)
-              raise SystemExit(1)
-
-          if plan_json:
-              version = json.loads(plan_json)["pypi_version"]
-          else:
-              match = re.match(r"^baml_core-(.+?)-", wheels[0].name)
-              if not match:
-                  print(f"::error::Could not infer PyPI version from {wheels[0].name}", file=sys.stderr)
-                  raise SystemExit(1)
-              version = match.group(1)
-
-          local_versions = set()
-          for path in wheels:
-              match = re.match(r"^baml_core-(.+?)-", path.name)
-              if not match:
-                  print(f"::error::Could not infer PyPI version from {path.name}", file=sys.stderr)
-                  raise SystemExit(1)
-              local_versions.add(match.group(1))
-
-          if local_versions != {version}:
-              print(
-                  f"::error::Built wheels do not match PyPI version {version}: {sorted(local_versions)}",
-                  file=sys.stderr,
-              )
-              raise SystemExit(1)
-
-          local_files = sorted(path.name for path in wheels)
-          url = f"https://pypi.org/pypi/baml-core/{version}/json"
-          try:
-              with urllib.request.urlopen(url, timeout=20) as response:
-                  data = json.load(response)
-          except urllib.error.HTTPError as exc:
-              if exc.code == 404:
-                  print(f"pypi_version={version}")
-                  print("release_exists=false")
-                  print("all_files_exist=false")
-                  print(f"PyPI release {version} does not exist yet", file=sys.stderr)
-                  raise SystemExit(0)
-              raise
-
-          remote_digests = {
-              item["filename"]: item.get("digests", {}).get("sha256")
-              for item in data.get("urls", [])
-          }
-          local_digests = {
-              path.name: hashlib.sha256(path.read_bytes()).hexdigest()
-              for path in wheels
-          }
-          missing = [name for name in local_files if name not in remote_digests]
-          unknown_digest = [
-              name
-              for name in local_files
-              if name in remote_digests and not remote_digests[name]
-          ]
-          mismatched = [
-              name
-              for name in local_files
-              if name in remote_digests
-              and remote_digests[name]
-              and remote_digests[name] != local_digests[name]
-          ]
-          print(f"pypi_version={version}")
-          print("release_exists=true")
-          print(f"all_files_exist={'false' if missing else 'true'}")
-          if unknown_digest:
-              print(
-                  f"::error::PyPI release {version} is missing SHA-256 metadata for: {', '.join(unknown_digest)}",
-                  file=sys.stderr,
-              )
-              raise SystemExit(1)
-          if mismatched:
-              print(
-                  f"::error::PyPI release {version} already contains conflicting file content for: {', '.join(mismatched)}",
-                  file=sys.stderr,
-              )
-              raise SystemExit(1)
-          if missing:
-              print(f"PyPI release {version} exists but is missing {len(missing)} file(s); publish will use skip-existing.", file=sys.stderr)
-              for name in missing:
-                  print(f"missing: {name}", file=sys.stderr)
-          else:
-              print(f"PyPI release {version} already contains every built wheel; skipping publish.", file=sys.stderr)
-          PY
       - name: Publish package to PyPI
-        if: ${{ steps.pypi.outputs.all_files_exist != 'true' }}
         # Configure PyPI trusted publishing for this workflow filename:
         # release-baml-language.yml. Leave the PyPI environment blank unless
         # this job grows an explicit GitHub Actions environment.
@@ -515,9 +461,23 @@ jobs:
           packages-dir: dist/
           skip-existing: true
 
-  publish-github-release:
-    name: Publish GitHub release assets
-    needs: [plan, all-builds]
+  publish-nodejs-sdk:
+    name: Publish Node.js npm
+    needs: [plan, build-nodejs-sdk, all-builds]
+    if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
+    # npm OIDC is pinned to release-baml-language.yml
+    uses: ./.github/workflows/publish2-nodejs-sdk.yaml
+    permissions:
+      id-token: write
+      contents: read
+    with:
+      release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
+      source_sha: ${{ needs.plan.outputs.source_sha }}
+      channel: ${{ needs.plan.outputs.channel }}
+
+  publish-toolchain-release:
+    name: Publish toolchain release assets
+    needs: [plan, all-builds, build-agent-skills]
     if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
     runs-on: ubuntu-latest
     env:
@@ -532,13 +492,12 @@ jobs:
           merge-multiple: true
       - uses: actions/download-artifact@v4
         with:
-          pattern: wrapper-*
-          path: dist/wrapper
-          merge-multiple: true
-      - uses: actions/download-artifact@v4
-        with:
           name: baml-vscode-vsix
           path: dist/vsix
+      - uses: actions/download-artifact@v4
+        with:
+          name: agent-skills
+          path: dist/agent-skills
       - name: Generate checksum sidecars
         run: |
           set -euo pipefail
@@ -554,14 +513,36 @@ jobs:
         run: |
           set -euo pipefail
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/toolchain/* dist/vsix/* --clobber
+            gh release upload "$TAG" dist/toolchain/* dist/vsix/* dist/agent-skills/* --clobber
           else
-            gh release create "$TAG" dist/toolchain/* dist/vsix/* \
+            gh release create "$TAG" dist/toolchain/* dist/vsix/* dist/agent-skills/* \
               --title "BAML Language $VERSION" \
               --notes "BAML language toolchain $VERSION"
           fi
+
+  publish-wrapper-release:
+    name: Publish wrapper release assets
+    needs: [plan, all-builds]
+    if: ${{ needs.plan.outputs.wrapper_changed == 'true' && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
+    runs-on: ubuntu-latest
+    env:
+      GH_REPO: ${{ github.repository }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wrapper-*
+          path: dist/wrapper
+          merge-multiple: true
+      - name: Generate checksum sidecars
+        run: |
+          set -euo pipefail
+          find dist/wrapper -type f \( -name '*.tar.gz' -o -name '*.zip' \) -print0 |
+            while IFS= read -r -d '' file; do
+              (cd "$(dirname "$file")" && sha256sum "$(basename "$file")" > "$(basename "$file").sha256")
+            done
       - name: Publish wrapper release
-        if: ${{ needs.plan.outputs.wrapper_changed == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
           WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
@@ -578,8 +559,8 @@ jobs:
 
   publish-pkg-boundaryml-com:
     name: Publish pkg.boundaryml.com manifests
-    needs: [plan, all-builds, publish-pypi, publish-github-release, publish-homebrew, publish-aur]
-    if: ${{ always() && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' && needs.publish-pypi.result == 'success' && needs.publish-github-release.result == 'success' && (needs.plan.outputs.wrapper_changed != 'true' || (needs.publish-homebrew.result == 'success' && needs.publish-aur.result == 'success')) }}
+    needs: [plan, all-builds, publish-pypi, publish-nodejs-sdk, publish-toolchain-release, publish-wrapper-release, publish-homebrew, publish-aur]
+    if: ${{ always() && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' && needs.publish-pypi.result == 'success' && needs.publish-nodejs-sdk.result == 'success' && needs.publish-toolchain-release.result == 'success' && (needs.plan.outputs.wrapper_changed != 'true' || (needs.publish-wrapper-release.result == 'success' && needs.publish-homebrew.result == 'success' && needs.publish-aur.result == 'success')) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -698,7 +679,7 @@ jobs:
 
   publish-homebrew:
     name: Publish Homebrew wrapper formula
-    needs: [plan, all-builds, publish-github-release]
+    needs: [plan, all-builds, publish-wrapper-release]
     if: ${{ needs.plan.outputs.wrapper_changed == 'true' && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
     runs-on: ubuntu-latest
     steps:
@@ -736,7 +717,7 @@ jobs:
 
   publish-aur:
     name: Publish AUR wrapper packages
-    needs: [plan, all-builds, publish-github-release]
+    needs: [plan, all-builds, publish-wrapper-release]
     if: ${{ needs.plan.outputs.wrapper_changed == 'true' && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
     runs-on: ubuntu-latest
     steps:

@@ -396,11 +396,11 @@ fn user.llm.openai.Response.from_json(j: baml.json.json) -> llm.openai.Response 
     }
 }
 
-fn user.llm.openai.Box.from_json(j: baml.json.json) -> llm.openai.Box<void> {
+fn user.llm.openai.Box.from_json(j: baml.json.json) -> llm.openai.Box<T> {
     // Locals:
-    let _0: llm.openai.Box<void> // _0 // return
+    let _0: llm.openai.Box<T> // _0 // return
     let _1: baml.json.json // j // param
-    let _2: void
+    let _2: T
     let _3: baml.json.json
     let _4: type
 
@@ -423,11 +423,11 @@ fn user.llm.openai.Box.from_json(j: baml.json.json) -> llm.openai.Box<void> {
     }
 }
 
-fn user.llm.openai.Outer.from_json(j: baml.json.json) -> llm.openai.Outer<void> {
+fn user.llm.openai.Outer.from_json(j: baml.json.json) -> llm.openai.Outer<T> {
     // Locals:
-    let _0: llm.openai.Outer<void> // _0 // return
+    let _0: llm.openai.Outer<T> // _0 // return
     let _1: baml.json.json // j // param
-    let _2: llm.openai.Box<void>
+    let _2: llm.openai.Box<T>
     let _3: baml.json.json
     let _4: type
 
@@ -455,13 +455,15 @@ fn user.llm.openai.Box.to_json(self: llm.openai.Box) -> baml.json.json {
     let _0: baml.json.json // _0 // return
     let _1: llm.openai.Box // self // param
     let _2: baml.json.json
-    let _3: void
-    let _4: llm.openai.Box<void>
+    let _3: T
+    let _4: llm.openai.Box<T>
+    let _5: type
 
     bb0: {
         _4 = copy _1;
         _3 = copy _4.0;
-        _2 = call const fn baml.json.to_json(copy _3) -> [bb1];
+        _5 = load_type(#0);
+        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
     }
 
     bb1: {
@@ -481,24 +483,28 @@ fn user.llm.openai.Response.to_json(self: llm.openai.Response) -> baml.json.json
     let _2: baml.json.json
     let _3: string
     let _4: llm.openai.Response
-    let _5: baml.json.json
-    let _6: int
-    let _7: llm.openai.Response
+    let _5: type
+    let _6: baml.json.json
+    let _7: int
+    let _8: llm.openai.Response
+    let _9: type
 
     bb0: {
         _4 = copy _1;
         _3 = copy _4.0;
-        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
+        _5 = load_type(string);
+        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
     }
 
     bb1: {
-        _7 = copy _1;
-        _6 = copy _7.1;
-        _5 = call const fn baml.Int.to_json(copy _6) -> [bb2];
+        _8 = copy _1;
+        _7 = copy _8.1;
+        _9 = load_type(int);
+        _6 = call const fn baml.json.to_json<copy _9>(copy _7) -> [bb2];
     }
 
     bb2: {
-        _0 = { const "text": copy _2, const "score": copy _5 };
+        _0 = { const "text": copy _2, const "score": copy _6 };
         goto -> bb3;
     }
 
@@ -512,15 +518,15 @@ fn user.llm.openai.Outer.to_json(self: llm.openai.Outer) -> baml.json.json {
     let _0: baml.json.json // _0 // return
     let _1: llm.openai.Outer // self // param
     let _2: baml.json.json
-    let _3: llm.openai.Box<void>
-    let _4: llm.openai.Outer<void>
+    let _3: llm.openai.Box<T>
+    let _4: llm.openai.Outer<T>
     let _5: type
 
     bb0: {
         _4 = copy _1;
         _3 = copy _4.0;
-        _5 = load_type(#0);
-        _2 = call const fn user.llm.openai.Box.to_json<copy _5>(copy _3) -> [bb1];
+        _5 = load_type(llm.openai.Box<#0>);
+        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
     }
 
     bb1: {

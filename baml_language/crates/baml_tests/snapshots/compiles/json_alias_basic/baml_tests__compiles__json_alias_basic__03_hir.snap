@@ -36,5 +36,5 @@ function user.from_json(j: baml.json.json) -> user.Wrapper  [expr] {
   user.Wrapper { data: baml.json.from_json(baml.json.field(j, "data")) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "data": self.data.to_json() }
+  map { "data": baml.json.to_json(self.data) }
 }

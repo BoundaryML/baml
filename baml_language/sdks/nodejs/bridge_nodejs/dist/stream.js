@@ -20,10 +20,13 @@
 // (`$stream_async`); the per-chunk `next`/`final` pulls here are unrelated to
 // that function-level distinction. The wrapper exposes both sync and async
 // pulls, as Python does.
-import { getRuntime } from './native.js';
+import { getRuntime, newFunctionCall as nativeNewFunctionCall } from './native.js';
 import { encodeCallArgs, decodeCallResult } from './proto.js';
 const STREAM_NEXT_FN = 'baml.llm.Stream.next';
 const STREAM_FINAL_FN = 'baml.llm.Stream.final';
+function newFunctionCall() {
+    return BigInt(nativeNewFunctionCall());
+}
 export class BamlStream {
     _handle;
     constructor(handle) {
@@ -51,14 +54,14 @@ export class BamlStream {
     }
     _callSync(fqn) {
         const rt = getRuntime();
-        const argsProto = encodeCallArgs({ self: this }, /* syncMode */ true);
-        const resultBytes = rt.callFunctionSync(fqn, argsProto, null, null, null);
+        const argsProto = encodeCallArgs({ self: this }, { syncMode: true, callId: newFunctionCall() });
+        const resultBytes = rt.callFunctionSync(fqn, argsProto, null, null);
         return decodeCallResult(resultBytes);
     }
     async _callAsync(fqn) {
         const rt = getRuntime();
-        const argsProto = encodeCallArgs({ self: this });
-        const resultBytes = await rt.callFunction(fqn, argsProto, null, null, null);
+        const argsProto = encodeCallArgs({ self: this }, { callId: newFunctionCall() });
+        const resultBytes = await rt.callFunction(fqn, argsProto, null, null);
         return decodeCallResult(resultBytes);
     }
 }

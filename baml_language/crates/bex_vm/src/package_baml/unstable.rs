@@ -103,7 +103,7 @@ fn format_value_recursive(vm: &BexVm, value: Value, depth: usize) -> Result<Stri
 
             Object::Bigint(bi) => Ok(bi.to_string()),
             Object::String(s) => Ok(format!("\"{s}\"")),
-            Object::Enum(e) => Ok(e.name.display_name.to_string()),
+            Object::Enum(e) => Ok(e.name.display_name().to_string()),
             Object::Variant(variant) => {
                 let enm = vm.get_object(variant.enm);
                 let Object::Enum(enm) = enm else {

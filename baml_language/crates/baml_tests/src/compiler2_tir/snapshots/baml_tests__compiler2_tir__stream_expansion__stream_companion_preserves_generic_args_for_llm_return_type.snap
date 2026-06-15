@@ -26,9 +26,6 @@ function user.GetBoxedInt$build_request(client: baml.llm.Client = Dummy) -> baml
 function user.GetBoxedInt$build_request_stream(client: baml.llm.Client = Dummy) -> baml.http.Request throws never {
   baml.llm.build_request_stream(client, "GetBoxedInt", map {  }) : baml.http.Request
 }
-function user.GetBoxedInt$parse(json: string, client: baml.llm.Client = Dummy) -> user.Box<int> throws never {
-  baml.llm.parse<TFinal>("GetBoxedInt", json) : user.Box<int>
-}
 class user.Box$stream {
   value: T | null
 }
@@ -36,5 +33,8 @@ function user.GetBoxedInt$stream(client: baml.llm.Client = Dummy) -> baml.llm.St
   baml.llm.stream_llm_function(client, "GetBoxedInt", map {  }) : baml.llm.Stream<user.Box$stream<int> | null, user.Box<int>>
 }
 function user.GetBoxedInt$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = Dummy) -> baml.llm.Stream<user.Box$stream<int> | null, user.Box<int>> throws never {
-  client.__make_stream(sse, "GetBoxedInt") : baml.llm.Stream<user.Box$stream<int> | null, user.Box<int>>
+  client.__make_stream(sse) : baml.llm.Stream<user.Box$stream<int> | null, user.Box<int>>
+}
+function user.GetBoxedInt$parse(json: string, client: baml.llm.Client = Dummy) -> user.Box<int> throws never {
+  baml.llm.parse<TFinal>(json) : user.Box<int>
 }

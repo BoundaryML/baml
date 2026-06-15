@@ -294,7 +294,7 @@ fn parse_media_handle(chunk: &str) -> Option<usize> {
 mod tests {
     use std::sync::Arc;
 
-    use baml_type::Ty;
+    use baml_type::RuntimeTy;
 
     use super::*;
 
@@ -310,7 +310,7 @@ mod tests {
                     "system".to_string(),
                 ],
             },
-            output_format: OutputFormatContent::new(Ty::String {
+            output_format: OutputFormatContent::new(RuntimeTy::String {
                 attr: baml_type::TyAttr::default(),
             }),
             tags: IndexMap::new(),
@@ -429,7 +429,7 @@ mod tests {
         args.insert(
             "items".to_string(),
             BexExternalValue::Array {
-                element_type: Ty::String {
+                element_type: RuntimeTy::String {
                     attr: baml_type::TyAttr::default(),
                 },
                 items: vec![
@@ -452,7 +452,7 @@ mod tests {
 
         // Create a context with an int output format
         let mut ctx = test_ctx();
-        ctx.output_format = OutputFormatContent::new(Ty::Int {
+        ctx.output_format = OutputFormatContent::new(RuntimeTy::Int {
             attr: baml_type::TyAttr::default(),
         });
 
@@ -467,7 +467,7 @@ mod tests {
         let args = IndexMap::new();
 
         let mut ctx = test_ctx();
-        ctx.output_format = OutputFormatContent::new(Ty::Int {
+        ctx.output_format = OutputFormatContent::new(RuntimeTy::Int {
             attr: baml_type::TyAttr::default(),
         });
 

@@ -211,28 +211,6 @@ fn synthesize_from_json(class: &ClassDef, span: TextRange) -> FunctionDef {
     }
 }
 
-/// Returns `true` if the type expression is definitely nullable — i.e., the
-/// type system allows the value to be `null` at runtime.
-///
-/// This covers the two main surface forms:
-/// - `T?` — `TypeExpr::Optional`
-/// - `null` — `TypeExpr::Null`
-/// - `A | B | null | ...` — a `TypeExpr::Union` containing a `Null` variant
-///
-/// We only inspect the top-level type expression; deeper structures (e.g.,
-/// `(T?)[]`) are not nullable *at the field level* and don't need special
-/// treatment here.
-fn type_expr_is_nullable(ty: &TypeExpr) -> bool {
-    match ty {
-        TypeExpr::Optional { .. } => true,
-        TypeExpr::Null { .. } => true,
-        TypeExpr::Union { variants, .. } => {
-            variants.iter().any(|v| matches!(v, TypeExpr::Null { .. }))
-        }
-        _ => false,
-    }
-}
-
 /// Returns `true` if the type expression (and all nested types) are safe to
 /// use with per-field `to_json()` synthesis. Returns `false` for types that do
 /// not have a `to_json` method:
@@ -275,50 +253,6 @@ fn class_is_safe_for_per_field_synthesis(class: &ClassDef) -> bool {
             .map(|st| type_expr_is_safe_for_per_field(&st.expr))
             .unwrap_or(false) // fields with missing type annotations are not safe
     })
-}
-
-/// Returns `true` if `ty` is a bare reference to one of the class's generic
-/// parameters (e.g., `T` in `class Box<T> { value T }`).
-///
-/// At MIR lowering, `Tir2Ty::TypeVar` is erased to `Ty::Void`, so MIR cannot
-/// route a `MemberAccess` on a `TypeVar`-typed receiver to a concrete `to_json`
-/// method — it falls through to a generic map-element load that panics at
-/// runtime. The auto-derive synthesizer detects this case at AST time and
-/// emits `baml.json.to_json(self.<f>)` instead, which dispatches via the
-/// runtime value's actual type (`make_to_json_callee` in `bex_vm`).
-fn type_expr_is_typevar_reference(
-    ty: &TypeExpr,
-    generic_params: &std::collections::HashSet<&str>,
-) -> bool {
-    matches!(
-        ty,
-        TypeExpr::Path { segments, generic_args, .. }
-            if segments.len() == 1
-                && generic_args.is_empty()
-                && generic_params.contains(segments[0].as_str())
-    )
-}
-
-/// Returns `true` if `ty` is a `TypeVar` reference, possibly wrapped in
-/// `Optional` or a nullable `Union`. Once null is short-circuited away by
-/// `?.` or narrowing, the live receiver still has `TypeVar` type — so a
-/// `.to_json()` call would hit the same MIR `Ty::Void` erasure described
-/// on `type_expr_is_typevar_reference`. Detect those cases up front and
-/// route them through `baml.json.to_json(self.<f>)` instead.
-fn type_expr_resolves_to_typevar(
-    ty: &TypeExpr,
-    generic_params: &std::collections::HashSet<&str>,
-) -> bool {
-    if type_expr_is_typevar_reference(ty, generic_params) {
-        return true;
-    }
-    match ty {
-        TypeExpr::Optional { inner, .. } => type_expr_resolves_to_typevar(inner, generic_params),
-        TypeExpr::Union { variants, .. } => variants.iter().any(|v| {
-            !matches!(v, TypeExpr::Null { .. }) && type_expr_resolves_to_typevar(v, generic_params)
-        }),
-        _ => false,
-    }
 }
 
 /// Build the fallback AST for `baml.json.parse(baml.json.to_string<Self>(self))`.
@@ -391,17 +325,19 @@ fn build_to_json_wrapper_body(class: &ClassDef, span: TextRange) -> (ExprBody, A
 ///
 /// ```baml
 /// {
-///     "f1": self.f1.to_json(),
-///     "f2": self.f2.to_json(),
+///     "f1": baml.json.to_json(self.f1),
+///     "f2": baml.json.to_json(self.f2),
 ///     ...
 /// }
 /// ```
 ///
-/// Each `self.<field>.to_json()` dispatches through ordinary BAML method
-/// lookup, so user overrides on field types (nested classes, arrays, maps)
-/// are honored automatically. Every built-in type has a `to_json` method
-/// provided by `baml_builtins2`, so this bottoms out for all reachable
-/// field types.
+/// Each field routes through the free function `baml.json.to_json`, which
+/// dispatches on the value's actual runtime type and honors user `to_json`
+/// overrides. This mirrors `from_json`'s per-field `baml.json.from_json<F>`
+/// routing and keeps the two synthesizers symmetric. Every built-in type has a
+/// `to_json`, so this bottoms out for all reachable field types — including
+/// interface- and type-variable-typed fields, whose *static* type exposes no
+/// `to_json` method for a direct `self.<field>.to_json()` call to resolve.
 ///
 /// If any field has a type that doesn't support `to_json()` (e.g., `$rust_type`,
 /// function types, `unknown`), falls back to the wrapper body.
@@ -422,12 +358,6 @@ fn build_to_json_body(class: &ClassDef, span: TextRange) -> (ExprBody, AstSource
         id
     };
 
-    let generic_params: std::collections::HashSet<&str> = class
-        .generic_params
-        .iter()
-        .map(smol_str::SmolStr::as_str)
-        .collect();
-
     let mut entries: Vec<(ExprId, ExprId)> = Vec::with_capacity(class.fields.len());
     for field in &class.fields {
         // Key: the field name as a string literal — `"field_name"`.
@@ -435,95 +365,40 @@ fn build_to_json_body(class: &ClassDef, span: TextRange) -> (ExprBody, AstSource
             field.name.as_str().to_string(),
         )));
 
-        // Detect whether the field type is nullable (T? / null / T | null).
-        // For nullable fields we must use optional chaining so that a null
-        // value doesn't cause a "member access on null" error at runtime.
-        let is_nullable = field
-            .type_expr
-            .as_ref()
-            .map(|st| type_expr_is_nullable(&st.expr))
-            .unwrap_or(false);
-
-        // Detect whether the field type is (or unwraps to) a class generic
-        // parameter — bare `T`, `T?`, or `T | null`. MIR's
-        // `lower_member_access` cannot dispatch a method through a TypeVar
-        // receiver (the receiver type is erased to `Ty::Void` before reaching
-        // MIR, so `field_idx` is `None` and the lowering falls through to a
-        // dynamic-map load that panics on primitive/instance values). The
-        // `T?` / `T | null` cases hit the same panic after `?.` short-circuits
-        // away null. Route these through `baml.json.to_json(self.<f>)` so the
-        // free function dispatches on the runtime value's actual type via
-        // `make_to_json_callee`, preserving user `to_json` overrides through
-        // the generic boundary.
-        let is_typevar = field
-            .type_expr
-            .as_ref()
-            .map(|st| type_expr_resolves_to_typevar(&st.expr, &generic_params))
-            .unwrap_or(false);
-
-        //   1. `self`
+        //   `self`
         let self_path = alloc(Expr::Path(vec![Name::new("self")]));
-        //   2. `self.<field>`
+        //   `self.<field>`
         let field_access = alloc(Expr::MemberAccess {
             base: self_path,
             member: field.name.clone(),
         });
 
-        let value = if is_typevar {
-            // TypeVar-typed field: `baml.json.to_json(self.<field>)`.  The
-            // free function performs runtime dispatch on the value's actual
-            // type, so this works whether `T` is a primitive, a class with a
-            // user `to_json` override, an array, or a map.
-            let to_json_path = alloc(Expr::Path(vec![
-                Name::new("baml"),
-                Name::new("json"),
-                Name::new("to_json"),
-            ]));
-            alloc(Expr::Call {
-                callee: to_json_path,
-                type_args: vec![],
-                args: vec![CallArg::positional(field_access)],
-            })
-        } else if is_nullable {
-            // Nullable field: `self.<field>?.to_json()`
-            //
-            // The `?.` short-circuits to `null` when the field is null.  Since
-            // `null` is one of the arms of `baml.json.json`, the resulting
-            // `json?` type is accepted directly wherever `json` is expected
-            // (the compiler treats them as equivalent here).
-            //
-            //   3. `self.<field>?.to_json`  (optional member access)
-            let to_json_callee = alloc(Expr::OptionalMemberAccess {
-                base: field_access,
-                member: Name::new("to_json"),
-            });
-            //   4. `self.<field>?.to_json()`  (regular call on the optional accessor)
-            let call = alloc(Expr::Call {
-                callee: to_json_callee,
-                type_args: vec![],
-                args: vec![],
-            });
-            //   5. `(self.<field>?.to_json())`  (OptionalChain scope delimiter)
-            alloc(Expr::OptionalChain { expr: call })
-        } else {
-            // Non-nullable field: `self.<field>.to_json()`
-            //   3. `self.<field>.to_json`
-            let to_json_callee = alloc(Expr::MemberAccess {
-                base: field_access,
-                member: Name::new("to_json"),
-            });
-            //   4. `self.<field>.to_json()`
-            alloc(Expr::Call {
-                callee: to_json_callee,
-                type_args: vec![],
-                args: vec![],
-            })
-        };
+        // Route every field through the runtime-dispatch free function
+        // `baml.json.to_json(self.<field>)`, mirroring how `from_json` routes
+        // every field through `baml.json.from_json<F>`. The free function
+        // dispatches on the value's actual runtime type via
+        // `make_to_json_callee`, so it resolves whether the field's static type
+        // is a concrete class, an interface existential, a type variable, a
+        // primitive, or a nullable union, and it honors user `to_json`
+        // overrides. A direct `self.<field>.to_json()` would instead require
+        // the field's *static* type to expose `to_json` — which interface- and
+        // type-variable-typed fields do not — and would fault on member access
+        // through null; passing the value as an argument avoids both.
+        let to_json_path = alloc(Expr::Path(vec![
+            Name::new("baml"),
+            Name::new("json"),
+            Name::new("to_json"),
+        ]));
+        let value = alloc(Expr::Call {
+            callee: to_json_path,
+            type_args: vec![],
+            args: vec![CallArg::positional(field_access)],
+        });
 
         entries.push((key, value));
     }
 
-    // Root expression: `{ "f1": self.f1.to_json(), ... }`.
+    // Root expression: `{ "f1": baml.json.to_json(self.f1), ... }`.
     let map_expr = alloc(Expr::Map { entries });
 
     let body = ExprBody {
@@ -713,7 +588,7 @@ fn build_from_json_body(class: &ClassDef, span: TextRange) -> (ExprBody, AstSour
         })
         .collect();
     let object = alloc(Expr::Object {
-        type_name: Some(TypePath::bare(class.name.clone())),
+        type_name: TypePath::bare(class.name.clone()),
         type_args: generic_args,
         fields: entries,
         spreads: vec![],

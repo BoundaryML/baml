@@ -748,6 +748,7 @@ fn is_item_node(kind: SyntaxKind) -> bool {
     matches!(
         kind,
         SyntaxKind::CLASS_DEF
+            | SyntaxKind::INTERFACE_DEF
             | SyntaxKind::FUNCTION_DEF
             | SyntaxKind::ENUM_DEF
             | SyntaxKind::CLIENT_DEF
@@ -1543,7 +1544,10 @@ fn collect_ty_deps(
         Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
             collect_ty_deps(db, files, inner, deps, seen);
         }
-        Ty::Map(k, v, _) | Ty::EvolvingMap(k, v, _) => {
+        Ty::Map {
+            key: k, value: v, ..
+        }
+        | Ty::EvolvingMap(k, v, _) => {
             collect_ty_deps(db, files, k, deps, seen);
             collect_ty_deps(db, files, v, deps, seen);
         }

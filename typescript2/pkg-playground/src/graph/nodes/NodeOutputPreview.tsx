@@ -43,10 +43,27 @@ export function NodeOutputPreview({
           padding: 8,
         }}
       >
-        <div style={{ color: '#fda4af', fontSize: 10, fontWeight: 700, marginBottom: 4, textTransform: 'uppercase' }}>
+        <div
+          style={{
+            color: '#fda4af',
+            fontSize: 10,
+            fontWeight: 700,
+            marginBottom: 4,
+            textTransform: 'uppercase',
+          }}
+        >
           Error
         </div>
-        <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: '#fecdd3', fontSize: 10, lineHeight: 1.35 }}>
+        <pre
+          style={{
+            margin: 0,
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+            color: '#fecdd3',
+            fontSize: 10,
+            lineHeight: 1.35,
+          }}
+        >
           {errorMessage}
         </pre>
       </div>
@@ -59,7 +76,8 @@ export function NodeOutputPreview({
         className="nodrag nopan"
         style={{
           display: 'grid',
-          gridTemplateColumns: visible.length === 1 ? '1fr' : 'repeat(2, minmax(0, 1fr))',
+          gridTemplateColumns:
+            visible.length === 1 ? '1fr' : 'repeat(2, minmax(0, 1fr))',
           gap: NODE_IMAGE_PREVIEW_GAP,
           marginTop: 6,
           width: '100%',
@@ -68,7 +86,8 @@ export function NodeOutputPreview({
       >
         {visible.map((image, index) => {
           const src = mediaToSrc(image);
-          const isLastWithRemainder = index === visible.length - 1 && remaining > 0;
+          const isLastWithRemainder =
+            index === visible.length - 1 && remaining > 0;
 
           return (
             <div
@@ -76,9 +95,10 @@ export function NodeOutputPreview({
               style={{
                 position: 'relative',
                 width: '100%',
-                height: visible.length === 1
-                  ? NODE_IMAGE_PREVIEW_SINGLE_HEIGHT
-                  : NODE_IMAGE_PREVIEW_TILE_HEIGHT,
+                height:
+                  visible.length === 1
+                    ? NODE_IMAGE_PREVIEW_SINGLE_HEIGHT
+                    : NODE_IMAGE_PREVIEW_TILE_HEIGHT,
                 borderRadius: 6,
                 overflow: 'hidden',
                 background: '#09090b',
@@ -101,7 +121,13 @@ export function NodeOutputPreview({
                   }}
                 />
               ) : (
-                <span style={{ color: '#9ca3af', fontSize: 10, fontFamily: 'monospace' }}>
+                <span
+                  style={{
+                    color: '#9ca3af',
+                    fontSize: 10,
+                    fontFamily: 'monospace',
+                  }}
+                >
                   &lt;image&gt;
                 </span>
               )}
@@ -144,10 +170,22 @@ export function NodeOutputPreview({
           padding: 8,
         }}
       >
-        <div style={{ color: '#9ca3af', fontSize: 10, fontWeight: 700, marginBottom: 4, textTransform: 'uppercase' }}>
+        <div
+          style={{
+            color: '#9ca3af',
+            fontSize: 10,
+            fontWeight: 700,
+            marginBottom: 4,
+            textTransform: 'uppercase',
+          }}
+        >
           Output
         </div>
-        <ValueRenderer value={result} displayMode="expanded" customRenderers={customRenderers} />
+        <ValueRenderer
+          value={result}
+          displayMode="expanded"
+          customRenderers={customRenderers}
+        />
       </div>
     );
   }

@@ -13,7 +13,6 @@ pub(crate) mod jinja;
 mod model_features;
 pub(crate) mod parse_response;
 mod provider;
-mod render_prompt;
 pub(crate) mod resolve_media;
 mod specialize_prompt;
 pub mod stream_accumulator;
@@ -76,7 +75,7 @@ pub fn execute_render_prompt_from_owned(
     client: &baml_std::PrimitiveClient,
     template: &str,
     args: &BexExternalValue,
-    return_type: &baml_type::Ty,
+    return_type: &baml_type::RuntimeTy,
     ctx: &::sys_types::SysOpContext,
 ) -> Result<bex_vm_types::PromptAst, LlmOpError> {
     let BexExternalValue::Map {
@@ -109,10 +108,10 @@ pub fn execute_render_prompt_from_owned(
     Ok(std::sync::Arc::new(prompt_ast))
 }
 
-/// Build an `OutputFormatContent` by walking a `Ty` and collecting all
+/// Build an `OutputFormatContent` by walking a `RuntimeTy` and collecting all
 /// referenced class/enum/type-alias definitions from `SysOpContext`.
 fn build_output_format_content(
-    ty: &baml_type::Ty,
+    ty: &baml_type::RuntimeTy,
     ctx: &::sys_types::SysOpContext,
 ) -> types::OutputFormatContent {
     use std::collections::HashSet;
@@ -134,7 +133,7 @@ fn find_class_definition<'a>(
         let mut matches = ctx
             .class_definitions
             .iter()
-            .filter(|(name, _)| name.display_name == type_name.display_name)
+            .filter(|(name, _)| name.display_name() == type_name.display_name())
             .map(|(_, def)| def);
         let first = matches.next()?;
         matches.next().is_none().then_some(first)
@@ -149,7 +148,7 @@ fn find_enum_definition<'a>(
         let mut matches = ctx
             .enum_definitions
             .iter()
-            .filter(|(name, _)| name.display_name == type_name.display_name)
+            .filter(|(name, _)| name.display_name() == type_name.display_name())
             .map(|(_, def)| def);
         let first = matches.next()?;
         matches.next().is_none().then_some(first)
@@ -159,12 +158,12 @@ fn find_enum_definition<'a>(
 fn find_type_alias_definition<'a>(
     ctx: &'a ::sys_types::SysOpContext,
     type_name: &baml_type::TypeName,
-) -> Option<&'a baml_type::Ty> {
+) -> Option<&'a baml_type::RuntimeTy> {
     ctx.type_alias_definitions.get(type_name).or_else(|| {
         let mut matches = ctx
             .type_alias_definitions
             .iter()
-            .filter(|(name, _)| name.display_name == type_name.display_name)
+            .filter(|(name, _)| name.display_name() == type_name.display_name())
             .map(|(_, ty)| ty);
         let first = matches.next()?;
         matches.next().is_none().then_some(first)
@@ -174,17 +173,17 @@ fn find_type_alias_definition<'a>(
 /// Recursive DFS walk of a type tree. `ancestry` tracks the class names
 /// currently on the call stack so mutual recursion (A → B → A) is detected.
 fn walk_ty(
-    ty: &baml_type::Ty,
+    ty: &baml_type::RuntimeTy,
     ctx: &::sys_types::SysOpContext,
     content: &mut types::OutputFormatContent,
     visited: &mut std::collections::HashSet<baml_base::Name>,
     ancestry: &mut Vec<baml_base::Name>,
 ) {
-    use baml_type::Ty;
+    use baml_type::RuntimeTy;
 
     match ty {
-        Ty::Class(type_name, _, _) => {
-            let key = type_name.display_name.clone();
+        RuntimeTy::Class(type_name, _, _) => {
+            let key = type_name.display_name();
 
             // If this class is already on the ancestry stack, it's a recursive cycle.
             // Only mark classes from the cycle start, not unrelated ancestors.
@@ -213,9 +212,9 @@ fn walk_ty(
                     .collect();
 
                 content.classes.insert(
-                    type_name.display_name.to_string(),
+                    type_name.display_name().to_string(),
                     types::Class {
-                        name: type_name.display_name.to_string(),
+                        name: type_name.display_name().to_string(),
                         alias: class_def.alias.clone(),
                         description: class_def.description.clone(),
                         fields,
@@ -232,8 +231,8 @@ fn walk_ty(
                 ancestry.pop();
             }
         }
-        Ty::Enum(type_name, _) => {
-            let key = type_name.display_name.clone();
+        RuntimeTy::Enum(type_name, _) => {
+            let key = type_name.display_name();
             if !visited.insert(key) {
                 return;
             }
@@ -250,9 +249,9 @@ fn walk_ty(
                     .collect();
 
                 content.enums.insert(
-                    type_name.display_name.to_string(),
+                    type_name.display_name().to_string(),
                     types::Enum {
-                        name: type_name.display_name.to_string(),
+                        name: type_name.display_name().to_string(),
                         alias: enum_def.alias.clone(),
                         description: enum_def.description.clone(),
                         values,
@@ -260,36 +259,36 @@ fn walk_ty(
                 );
             }
         }
-        Ty::TypeAlias(type_name, _) => {
+        RuntimeTy::TypeAlias(type_name, _) => {
             // The `baml.json.json` recursive alias is an opaque leaf for output-format
             // rendering — it has no schema body to collect.  Record the sentinel visit so
             // any later reference is de-duped, but do *not* insert it into
             // `recursive_type_aliases` (which would trigger schema emission) and do *not*
             // recurse into the alias body (which would diverge on the self-referential
             // `json[]` / `map<string, json>` arms).
-            if type_name.display_name.as_str() == ::baml_base::qualified_name::BAML_JSON_JSON {
-                visited.insert(type_name.display_name.clone());
+            if type_name.display_name().as_str() == ::baml_base::qualified_name::BAML_JSON_JSON {
+                visited.insert(type_name.display_name());
                 return;
             }
-            let key = type_name.display_name.clone();
+            let key = type_name.display_name();
             if !visited.insert(key) {
                 return;
             }
             if let Some(target_ty) = find_type_alias_definition(ctx, type_name) {
                 content
                     .recursive_type_aliases
-                    .insert(type_name.display_name.to_string(), target_ty.clone());
+                    .insert(type_name.display_name().to_string(), target_ty.clone());
                 walk_ty(target_ty, ctx, content, visited, ancestry);
             }
         }
-        Ty::List(inner, _) => {
+        RuntimeTy::List(inner, _) => {
             walk_ty(inner, ctx, content, visited, ancestry);
         }
-        Ty::Map { key, value, .. } => {
+        RuntimeTy::Map { key, value, .. } => {
             walk_ty(key, ctx, content, visited, ancestry);
             walk_ty(value, ctx, content, visited, ancestry);
         }
-        Ty::Union(members, _) => {
+        RuntimeTy::Union(members, _) => {
             for member in members {
                 walk_ty(member, ctx, content, visited, ancestry);
             }
@@ -315,7 +314,7 @@ pub fn execute_specialize_prompt_from_owned(
 pub async fn execute_build_request_from_owned(
     client: &baml_std::PrimitiveClient,
     prompt: bex_vm_types::PromptAst,
-    return_type: &baml_type::Ty,
+    return_type: &baml_type::RuntimeTy,
     io: Arc<dyn ::sys_types::runtime_io::RuntimeIo>,
 ) -> Result<baml_std::HttpRequest, LlmOpError> {
     let mut request = build_request::build_request(client, prompt, io)
@@ -331,7 +330,7 @@ pub async fn execute_build_request_from_owned(
 pub async fn execute_build_request_stream_from_owned(
     client: &baml_std::PrimitiveClient,
     prompt: bex_vm_types::PromptAst,
-    return_type: &baml_type::Ty,
+    return_type: &baml_type::RuntimeTy,
     io: Arc<dyn ::sys_types::runtime_io::RuntimeIo>,
 ) -> Result<baml_std::HttpRequest, LlmOpError> {
     let mut request = execute_build_request_from_owned(client, prompt, return_type, io).await?;
@@ -348,7 +347,7 @@ enum ImageGenerationMode {
 
 fn apply_output_request_features(
     client: &baml_std::PrimitiveClient,
-    return_type: &baml_type::Ty,
+    return_type: &baml_type::RuntimeTy,
     request: &mut baml_std::HttpRequest,
 ) -> Result<(), LlmOpError> {
     let provider = LlmProvider::from_str(&client.provider)
@@ -451,21 +450,23 @@ fn enable_openai_responses_image_generation(
     Ok(())
 }
 
-fn image_generation_mode(target: &baml_type::Ty) -> ImageGenerationMode {
+fn image_generation_mode(target: &baml_type::RuntimeTy) -> ImageGenerationMode {
     match target {
-        baml_type::Ty::Media(baml_base::MediaKind::Image, _) => ImageGenerationMode::Required,
-        baml_type::Ty::List(inner, _) => match image_generation_mode(inner) {
+        baml_type::RuntimeTy::Media(baml_base::MediaKind::Image, _) => {
+            ImageGenerationMode::Required
+        }
+        baml_type::RuntimeTy::List(inner, _) => match image_generation_mode(inner) {
             ImageGenerationMode::Required => ImageGenerationMode::Required,
             ImageGenerationMode::Available => ImageGenerationMode::Available,
             ImageGenerationMode::Disabled => ImageGenerationMode::Disabled,
         },
-        baml_type::Ty::Union(_, _) if types::is_text_or_image_union(target) => {
+        baml_type::RuntimeTy::Union(_, _) if types::is_text_or_image_union(target) => {
             ImageGenerationMode::Available
         }
-        baml_type::Ty::Union(members, _) => {
-            let non_null_members: Vec<&baml_type::Ty> = members
+        baml_type::RuntimeTy::Union(members, _) => {
+            let non_null_members: Vec<&baml_type::RuntimeTy> = members
                 .iter()
-                .filter(|member| !matches!(member, baml_type::Ty::Null { .. }))
+                .filter(|member| !matches!(member, baml_type::RuntimeTy::Null { .. }))
                 .collect();
             if non_null_members.is_empty() {
                 return ImageGenerationMode::Disabled;
@@ -529,7 +530,7 @@ pub fn execute_validate_finish_reason(
 pub fn execute_parse_response_from_owned(
     client: &baml_std::PrimitiveClient,
     response: &str,
-    return_type: &baml_type::Ty,
+    return_type: &baml_type::RuntimeTy,
     ctx: &::sys_types::SysOpContext,
 ) -> Result<bex_external_types::BexExternalValue, LlmOpError> {
     let mut provider = LlmProvider::from_str(&client.provider)
@@ -563,7 +564,7 @@ pub fn execute_parse_response_from_owned(
     let compiled = bex_sap::CompiledSapModel::from_sys_op_context(
         ctx,
         return_type.clone(),
-        baml_type::Ty::null(), // no streaming
+        baml_type::RuntimeTy::null(), // no streaming
     )
     .map_err(|e| LlmOpError::ParseResponseError(e.to_string()))?;
     let sap = SapStreamCache::new(compiled);
@@ -571,7 +572,7 @@ pub fn execute_parse_response_from_owned(
 }
 
 fn parse_llm_output_for_target(
-    target: &baml_type::Ty,
+    target: &baml_type::RuntimeTy,
     output: &parse_response::LlmOutput,
 ) -> Result<Option<BexExternalValue>, LlmOpError> {
     if output.parts.is_empty() {
@@ -579,7 +580,7 @@ fn parse_llm_output_for_target(
     }
 
     match target {
-        baml_type::Ty::Media(kind, _) => {
+        baml_type::RuntimeTy::Media(kind, _) => {
             let media = media_parts(output, *kind);
             if media.is_empty() {
                 return Ok(None);
@@ -593,7 +594,9 @@ fn parse_llm_output_for_target(
             }
             Ok(Some(media_to_external(media[0].clone())))
         }
-        baml_type::Ty::List(inner, _) if is_media_type(inner, baml_base::MediaKind::Image) => {
+        baml_type::RuntimeTy::List(inner, _)
+            if is_media_type(inner, baml_base::MediaKind::Image) =>
+        {
             let media = media_parts(output, baml_base::MediaKind::Image);
             if media.is_empty() {
                 return Ok(None);
@@ -604,7 +607,7 @@ fn parse_llm_output_for_target(
                 items: media.into_iter().map(media_to_external).collect(),
             }))
         }
-        baml_type::Ty::List(inner, _) if types::is_text_or_image_union(inner) => {
+        baml_type::RuntimeTy::List(inner, _) if types::is_text_or_image_union(inner) => {
             let items = mixed_text_image_parts(output, inner);
             if items.is_empty() {
                 return Ok(None);
@@ -620,7 +623,7 @@ fn parse_llm_output_for_target(
         target if nullable_list_inner(target).is_some() => {
             parse_nullable_list_output(target, output)
         }
-        baml_type::Ty::Union(_, _) if types::is_text_or_image_union(target) => {
+        baml_type::RuntimeTy::Union(_, _) if types::is_text_or_image_union(target) => {
             // A nullable `(string | image)?` records its non-null members as the
             // union's declared type (optionality is tracked separately), matching
             // the former `Optional` path.
@@ -633,7 +636,7 @@ fn parse_llm_output_for_target(
 }
 
 fn parse_nullable_media_output(
-    target: &baml_type::Ty,
+    target: &baml_type::RuntimeTy,
     output: &parse_response::LlmOutput,
 ) -> Result<Option<BexExternalValue>, LlmOpError> {
     let Some(kind) = nullable_media_kind(target) else {
@@ -653,12 +656,12 @@ fn parse_nullable_media_output(
 
     let value = media_to_external(media[0].clone());
     match target {
-        baml_type::Ty::Union(members, _) => {
+        baml_type::RuntimeTy::Union(members, _) => {
             let selected = members
                 .iter()
                 .find(|member| is_media_type(member, kind))
                 .cloned()
-                .unwrap_or_else(|| baml_type::Ty::Media(kind, baml_type::TyAttr::default()));
+                .unwrap_or_else(|| baml_type::RuntimeTy::Media(kind, baml_type::TyAttr::default()));
             Ok(Some(BexExternalValue::union(
                 value,
                 members.clone(),
@@ -670,13 +673,13 @@ fn parse_nullable_media_output(
 }
 
 fn parse_nullable_list_output(
-    target: &baml_type::Ty,
+    target: &baml_type::RuntimeTy,
     output: &parse_response::LlmOutput,
 ) -> Result<Option<BexExternalValue>, LlmOpError> {
     let Some(list_ty) = nullable_list_inner(target) else {
         return Ok(None);
     };
-    let baml_type::Ty::List(element_type, _) = list_ty else {
+    let baml_type::RuntimeTy::List(element_type, _) = list_ty else {
         return Ok(None);
     };
 
@@ -704,7 +707,7 @@ fn parse_nullable_list_output(
     };
 
     match target {
-        baml_type::Ty::Union(members, _) => Ok(Some(BexExternalValue::union(
+        baml_type::RuntimeTy::Union(members, _) => Ok(Some(BexExternalValue::union(
             array,
             members.clone(),
             list_ty.clone(),
@@ -753,22 +756,27 @@ fn reject_mixed_media_only_output(
 
 fn mixed_text_image_parts(
     output: &parse_response::LlmOutput,
-    target: &baml_type::Ty,
+    target: &baml_type::RuntimeTy,
 ) -> Vec<BexExternalValue> {
-    let baml_type::Ty::Union(members, _) = target else {
+    let baml_type::RuntimeTy::Union(members, _) = target else {
         return Vec::new();
     };
 
     let string_ty = members
         .iter()
-        .find(|member| matches!(member, baml_type::Ty::String { .. }))
+        .find(|member| matches!(member, baml_type::RuntimeTy::String { .. }))
         .cloned()
-        .unwrap_or_else(baml_type::Ty::string);
+        .unwrap_or_else(baml_type::RuntimeTy::string);
     let image_ty = members
         .iter()
-        .find(|member| matches!(member, baml_type::Ty::Media(baml_base::MediaKind::Image, _)))
+        .find(|member| {
+            matches!(
+                member,
+                baml_type::RuntimeTy::Media(baml_base::MediaKind::Image, _)
+            )
+        })
         .cloned()
-        .unwrap_or(baml_type::Ty::Media(
+        .unwrap_or(baml_type::RuntimeTy::Media(
             baml_base::MediaKind::Image,
             baml_type::TyAttr::default(),
         ));
@@ -800,14 +808,14 @@ fn mixed_text_image_parts(
 }
 
 fn single_text_or_image_union_output(
-    target: &baml_type::Ty,
+    target: &baml_type::RuntimeTy,
     items: Vec<BexExternalValue>,
 ) -> Result<Option<BexExternalValue>, LlmOpError> {
     match items.len() {
         0 => Ok(None),
         1 => Ok(Some(items.into_iter().next().expect("length checked"))),
         _ if all_union_items_are_text(&items) => {
-            let baml_type::Ty::Union(members, _) = target else {
+            let baml_type::RuntimeTy::Union(members, _) = target else {
                 return Ok(None);
             };
             let text: String = items
@@ -823,9 +831,9 @@ fn single_text_or_image_union_output(
                 .collect();
             let string_ty = members
                 .iter()
-                .find(|member| matches!(member, baml_type::Ty::String { .. }))
+                .find(|member| matches!(member, baml_type::RuntimeTy::String { .. }))
                 .cloned()
-                .unwrap_or_else(baml_type::Ty::string);
+                .unwrap_or_else(baml_type::RuntimeTy::string);
             Ok(Some(BexExternalValue::union(
                 BexExternalValue::String(bex_external_types::BexStr::from(text.as_str())),
                 members.clone(),
@@ -852,18 +860,18 @@ fn media_to_external(media: std::sync::Arc<baml_builtins2::MediaValue>) -> BexEx
     BexExternalValue::Adt(bex_external_types::BexExternalAdt::Media(media))
 }
 
-fn is_media_type(target: &baml_type::Ty, kind: baml_base::MediaKind) -> bool {
-    matches!(target, baml_type::Ty::Media(actual, _) if *actual == kind)
+fn is_media_type(target: &baml_type::RuntimeTy, kind: baml_base::MediaKind) -> bool {
+    matches!(target, baml_type::RuntimeTy::Media(actual, _) if *actual == kind)
 }
 
-fn nullable_media_kind(target: &baml_type::Ty) -> Option<baml_base::MediaKind> {
+fn nullable_media_kind(target: &baml_type::RuntimeTy) -> Option<baml_base::MediaKind> {
     match target {
-        baml_type::Ty::Union(members, _) => {
+        baml_type::RuntimeTy::Union(members, _) => {
             let mut kind = None;
             let mut has_null = false;
             for member in members {
                 match member {
-                    baml_type::Ty::Media(media_kind, _) => {
+                    baml_type::RuntimeTy::Media(media_kind, _) => {
                         if kind
                             .replace(*media_kind)
                             .is_some_and(|prev| prev != *media_kind)
@@ -871,7 +879,7 @@ fn nullable_media_kind(target: &baml_type::Ty) -> Option<baml_base::MediaKind> {
                             return None;
                         }
                     }
-                    baml_type::Ty::Null { .. } => has_null = true,
+                    baml_type::RuntimeTy::Null { .. } => has_null = true,
                     _ => return None,
                 }
             }
@@ -882,19 +890,19 @@ fn nullable_media_kind(target: &baml_type::Ty) -> Option<baml_base::MediaKind> {
     }
 }
 
-fn nullable_list_inner(target: &baml_type::Ty) -> Option<&baml_type::Ty> {
+fn nullable_list_inner(target: &baml_type::RuntimeTy) -> Option<&baml_type::RuntimeTy> {
     match target {
-        baml_type::Ty::Union(members, _) => {
+        baml_type::RuntimeTy::Union(members, _) => {
             let mut list = None;
             let mut has_null = false;
             for member in members {
                 match member {
-                    baml_type::Ty::List(_, _) => {
+                    baml_type::RuntimeTy::List(_, _) => {
                         if list.replace(member).is_some() {
                             return None;
                         }
                     }
-                    baml_type::Ty::Null { .. } => has_null = true,
+                    baml_type::RuntimeTy::Null { .. } => has_null = true,
                     _ => return None,
                 }
             }
@@ -967,7 +975,7 @@ mod tests {
         runtime_io::NoopRuntimeIo,
     };
     use baml_builtins2::{MediaContent, MediaValue, PromptAst};
-    use bex_external_types::{BexExternalValue, Ty};
+    use bex_external_types::{BexExternalValue, RuntimeTy};
 
     use super::{
         build_output_format_content, execute_build_request_from_owned,
@@ -1057,7 +1065,7 @@ mod tests {
         let allowed = execute_parse_response_from_owned(
             &allow_client,
             response_stop,
-            &::baml_type::Ty::String {
+            &::baml_type::RuntimeTy::String {
                 attr: TyAttr::default(),
             },
             &ctx,
@@ -1068,7 +1076,7 @@ mod tests {
         let blocked = execute_parse_response_from_owned(
             &allow_client,
             response_length,
-            &::baml_type::Ty::String {
+            &::baml_type::RuntimeTy::String {
                 attr: TyAttr::default(),
             },
             &ctx,
@@ -1084,7 +1092,7 @@ mod tests {
         let denied = execute_parse_response_from_owned(
             &deny_client,
             response_length,
-            &::baml_type::Ty::String {
+            &::baml_type::RuntimeTy::String {
                 attr: TyAttr::default(),
             },
             &ctx,
@@ -1123,7 +1131,7 @@ mod tests {
         let result = execute_parse_response_from_owned(
             &client,
             anthropic_response,
-            &::baml_type::Ty::String {
+            &::baml_type::RuntimeTy::String {
                 attr: TyAttr::default(),
             },
             &ctx,
@@ -1173,7 +1181,7 @@ mod tests {
         let result = execute_parse_response_from_owned(
             &client,
             response,
-            &baml_type::Ty::List(Box::new(ty_image()), TyAttr::default()),
+            &baml_type::RuntimeTy::List(Box::new(ty_image()), TyAttr::default()),
             &SysOpContext::empty(),
         )
         .unwrap();
@@ -1238,7 +1246,7 @@ mod tests {
         let result = execute_parse_response_from_owned(
             &client,
             response,
-            &baml_type::Ty::List(Box::new(ty_text_image_union()), TyAttr::default()),
+            &baml_type::RuntimeTy::List(Box::new(ty_text_image_union()), TyAttr::default()),
             &SysOpContext::empty(),
         )
         .unwrap();
@@ -1310,7 +1318,7 @@ mod tests {
         assert_eq!(metadata.union_type, inner);
         assert_eq!(
             metadata.selected_option,
-            baml_type::Ty::Media(baml_base::MediaKind::Image, TyAttr::default())
+            baml_type::RuntimeTy::Media(baml_base::MediaKind::Image, TyAttr::default())
         );
         let BexExternalValue::Adt(bex_external_types::BexExternalAdt::Media(media)) =
             value.as_ref()
@@ -1376,7 +1384,7 @@ mod tests {
         let request = execute_build_request_from_owned(
             &client,
             prompt_msg("Return a caption and generate an illustration."),
-            &baml_type::Ty::List(Box::new(ty_text_image_union()), TyAttr::default()),
+            &baml_type::RuntimeTy::List(Box::new(ty_text_image_union()), TyAttr::default()),
             Arc::new(NoopRuntimeIo),
         )
         .await
@@ -1417,7 +1425,7 @@ mod tests {
             request_body: indexmap::IndexMap::from([(
                 "modalities".to_string(),
                 BexExternalValue::Array {
-                    element_type: Ty::String {
+                    element_type: RuntimeTy::String {
                         attr: TyAttr::default(),
                     },
                     items: vec![BexExternalValue::String("text".into())],
@@ -1503,8 +1511,10 @@ mod tests {
         };
         assert_eq!(media.base64(), "aW1hZ2U=");
 
-        let image_null_union =
-            baml_type::Ty::Union(vec![ty_image(), baml_type::Ty::null()], TyAttr::default());
+        let image_null_union = baml_type::RuntimeTy::Union(
+            vec![ty_image(), baml_type::RuntimeTy::null()],
+            TyAttr::default(),
+        );
         let result = super::parse_llm_output_for_target(&image_null_union, &output)
             .unwrap()
             .expect("expected union media");
@@ -1532,7 +1542,7 @@ mod tests {
             serde_json::Value::Null,
         );
 
-        let image_list = baml_type::Ty::List(Box::new(ty_image()), TyAttr::default());
+        let image_list = baml_type::RuntimeTy::List(Box::new(ty_image()), TyAttr::default());
         let result = super::parse_llm_output_for_target(&ty_optional(image_list.clone()), &output)
             .unwrap()
             .expect("expected optional image list");
@@ -1574,29 +1584,29 @@ mod tests {
     // build_output_format_content / walk_ty tests
     // ========================================================================
 
-    fn ty_class(name: &str) -> baml_type::Ty {
-        baml_type::Ty::Class(
+    fn ty_class(name: &str) -> baml_type::RuntimeTy {
+        baml_type::RuntimeTy::Class(
             baml_type::TypeName::local(name.into()),
             Vec::new(),
             TyAttr::default(),
         )
     }
-    fn ty_enum(name: &str) -> baml_type::Ty {
-        baml_type::Ty::Enum(baml_type::TypeName::local(name.into()), TyAttr::default())
+    fn ty_enum(name: &str) -> baml_type::RuntimeTy {
+        baml_type::RuntimeTy::Enum(baml_type::TypeName::local(name.into()), TyAttr::default())
     }
-    fn ty_string() -> baml_type::Ty {
-        baml_type::Ty::String {
+    fn ty_string() -> baml_type::RuntimeTy {
+        baml_type::RuntimeTy::String {
             attr: TyAttr::default(),
         }
     }
-    fn ty_image() -> baml_type::Ty {
-        baml_type::Ty::Media(baml_base::MediaKind::Image, TyAttr::default())
+    fn ty_image() -> baml_type::RuntimeTy {
+        baml_type::RuntimeTy::Media(baml_base::MediaKind::Image, TyAttr::default())
     }
-    fn ty_text_image_union() -> baml_type::Ty {
-        baml_type::Ty::Union(vec![ty_string(), ty_image()], TyAttr::default())
+    fn ty_text_image_union() -> baml_type::RuntimeTy {
+        baml_type::RuntimeTy::Union(vec![ty_string(), ty_image()], TyAttr::default())
     }
-    fn ty_optional(inner: baml_type::Ty) -> baml_type::Ty {
-        baml_type::Ty::optional(inner)
+    fn ty_optional(inner: baml_type::RuntimeTy) -> baml_type::RuntimeTy {
+        baml_type::RuntimeTy::optional(inner)
     }
     fn tn(name: &str) -> baml_type::TypeName {
         baml_type::TypeName::local(name.into())

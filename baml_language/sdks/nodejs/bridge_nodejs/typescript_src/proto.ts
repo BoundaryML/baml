@@ -17,11 +17,11 @@ import {
     completeHostCall,
 } from './native.js';
 import { BamlStream } from './stream.js';
-import { BamlError, BamlPanic } from './errors.js';
+import { BamlAbortError, BamlCancelledError, BamlError, BamlPanic } from './errors.js';
 import {
-    registerHostError,
-    tryRehydrateFromHandle,
-} from './host_error_registry.js';
+    registerHostOpaque,
+    tryRehydrateHostValueByKey,
+} from './host_value_registry.js';
 import { BamlTypeMap, getTypeMap } from './typemap.js';
 
 const CallFunctionArgs = baml_core.cffi.v1.CallFunctionArgs;
@@ -31,6 +31,7 @@ const InboundValue = baml_core.cffi.v1.InboundValue;
 const InboundClassValue = baml_core.cffi.v1.InboundClassValue;
 const InboundMapEntry = baml_core.cffi.v1.InboundMapEntry;
 const BamlHandleType = baml_core.cffi.v1.BamlHandleType;
+const CANCELLED_PANIC_CLASS = 'baml.panics.Cancelled';
 
 // ─── Inbound (TS → Rust) ───
 
@@ -60,6 +61,11 @@ export class HostCallableSyncError extends Error {
 interface EncodeCtx {
     syncMode: boolean;
     registered: HandleKey[];
+}
+
+export interface EncodeCallArgsOptions {
+    callId: bigint;
+    syncMode?: boolean;
 }
 
 function setInboundValue(iv: baml_core.cffi.v1.IInboundValue, value: unknown, ctx: EncodeCtx): void {
@@ -219,8 +225,12 @@ function setInboundValue(iv: baml_core.cffi.v1.IInboundValue, value: unknown, ct
  * later kwarg fails, the engine never sees (and so never releases) the keys we
  * already registered, so we release them here.
  */
-export function encodeCallArgs(kwargs: Record<string, unknown>, syncMode = false): Buffer {
-    const ctx: EncodeCtx = { syncMode, registered: [] };
+export function encodeCallArgs(kwargs: Record<string, unknown>, options: EncodeCallArgsOptions): Buffer {
+    const callId = options.callId;
+    if (callId === 0n) {
+        throw new TypeError('callId must be a nonzero uint64');
+    }
+    const ctx: EncodeCtx = { syncMode: options.syncMode ?? false, registered: [] };
     try {
         const entries: baml_core.cffi.v1.IInboundMapEntry[] = [];
         for (const [key, value] of Object.entries(kwargs)) {
@@ -230,7 +240,7 @@ export function encodeCallArgs(kwargs: Record<string, unknown>, syncMode = false
             entry.value = iv;
             entries.push(entry);
         }
-        const msg = CallFunctionArgs.create({ kwargs: entries });
+        const msg = CallFunctionArgs.fromObject({ kwargs: entries, callId: callId.toString() });
         return Buffer.from(CallFunctionArgs.encode(msg).finish());
     } catch (err) {
         // Roll back any host callables registered before the failure so
@@ -483,6 +493,12 @@ function formatThrownMessage(kind: string, className: string, message: string, t
     return text;
 }
 
+function cancellationAbortError(message: string): BamlAbortError {
+    return new BamlAbortError(message, {
+        reason: new BamlCancelledError(message),
+    });
+}
+
 /**
  * Decode a `BamlOutboundResult` envelope (the engine's call-result wire shape
  * after 31c/31e). The `ok` arm returns the decoded value; the `error`/`panic`
@@ -500,7 +516,7 @@ export function decodeCallResult(data: Buffer | Uint8Array): unknown {
             const { value, className, message } = decodeThrown(result.error?.value);
             const trace = result.error?.trace ?? [];
             // Same-host rehydration: a `baml.errors.HostCallable` carrying a
-            // `_handle` that still resolves in this process's host-error
+            // `_handle` that still resolves in this process's host-value
             // registry re-throws the *original* JS error object the bridge
             // registered on the inbound throw — preserving `raised === caught`
             // identity. Foreign runtimes (a different Node process, the
@@ -508,13 +524,17 @@ export function decodeCallResult(data: Buffer | Uint8Array): unknown {
             // metadata-bearing `BamlError(HostCallable)` wrapper below.
             if (className === 'baml.errors.HostCallable' && value !== null && typeof value === 'object') {
                 const handle = (value as Record<string, unknown>)._handle;
-                const original = tryRehydrateFromHandle(handle);
+                const original = tryRehydrateHostValueByKey(handle);
                 if (original !== undefined) {
                     throw original;
                 }
             }
+            const formatted = formatThrownMessage('error', className ?? '', message, trace);
+            if (className === CANCELLED_PANIC_CLASS) {
+                throw cancellationAbortError(formatted);
+            }
             throw new BamlError(
-                formatThrownMessage('error', className ?? '', message, trace),
+                formatted,
                 { value, bamlTrace: trace, className },
             );
         }
@@ -529,8 +549,12 @@ export function decodeCallResult(data: Buffer | Uint8Array): unknown {
             }
             const { value, className, message } = decodeThrown(panic?.value);
             const trace = panic?.trace ?? [];
+            const formatted = formatThrownMessage('panic', className ?? '', message, trace);
+            if (className === CANCELLED_PANIC_CLASS) {
+                throw cancellationAbortError(formatted);
+            }
             throw new BamlPanic(
-                formatThrownMessage('panic', className ?? '', message, trace),
+                formatted,
                 { value, bamlTrace: trace, className },
             );
         }
@@ -672,7 +696,7 @@ function buildHostCallableInbound(
         value: InboundValue.create({
             handle: {
                 key: handleKey,
-                handleType: BamlHandleType.HOST_VALUE_ERROR,
+                handleType: BamlHandleType.HOST_VALUE_OPAQUE,
             },
         }),
     });
@@ -695,7 +719,7 @@ function buildHostCallableInbound(
 
 // Sentinel `_handle` key used by paths that have *no* JS error object to
 // register (the `completeHostCallLastResort` fallback below). Real host
-// throws register the JS error via `registerHostError` and emit its
+// throws register the JS error via `registerHostOpaque` and emit its
 // minted key; engine-internal synthetic faults use this sentinel. The
 // engine's structural check accepts either; same-host decoders that look
 // up `{low:0,high:0}` find nothing and fall through to the
@@ -774,14 +798,14 @@ function sendHostCallableError(callId: number, err: unknown): void {
         // throw when given a hostile input (e.g. a Proxy whose `constructor`,
         // `name`, or `message` getters throw — see the
         // `host-callable always completes on abnormal paths` jest suite).
-        // In that case `registerHostError` is never reached, control jumps
+        // In that case `registerHostOpaque` is never reached, control jumps
         // to the outer `catch (innerErr)` → `completeHostCallLastResort`,
         // and the user sees a metadata-only `HostCallable` instead of the
         // original Proxy. Identity loss here is the right trade — the
         // alternative is hanging the call.
         //
         // Registration-leak edge case (rare, bounded): if encoding succeeds
-        // through `registerHostError` but `buildHostCallableInbound` or
+        // through `registerHostOpaque` but `buildHostCallableInbound` or
         // `InboundValue.encode` fails after, the TS map entry stays alive
         // with no corresponding engine-side `HostValueArc` to release it,
         // so it lives until process exit. Both downstream calls are deeply
@@ -789,7 +813,7 @@ function sendHostCallableError(callId: number, err: unknown): void {
         // and don't depend on `err`'s shape, so this is effectively
         // unreachable outside protobufjs / native-binding corruption.
         const { className, message, stack } = describeError(err);
-        const handleKey = registerHostError(err);
+        const handleKey = registerHostOpaque(err);
         const inbound = buildHostCallableInbound(className, message, stack, handleKey);
         const bytes = Buffer.from(InboundValue.encode(inbound).finish());
         completeHostCall(callId, 1, bytes);

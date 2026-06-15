@@ -364,7 +364,15 @@ impl PpirTy {
                 CannotBeStreamedOrigin::Uint8Array => TypeExpr::Uint8Array { attrs: vec![] },
                 CannotBeStreamedOrigin::RustType => TypeExpr::Rust { attrs: vec![] },
                 CannotBeStreamedOrigin::Error => TypeExpr::Error { attrs: vec![] },
-                CannotBeStreamedOrigin::Unknown => TypeExpr::Unknown { attrs: vec![] },
+                // `Unknown` covers function-typed fields as well as genuinely
+                // unresolved ones (both map to this origin on the way in). When
+                // this materializes a synthesized `$stream` class field it must
+                // be a *valid* runtime type — a non-streamable field is just
+                // opaque during streaming — so reconstruct it as the `unknown`
+                // type rather than the error-recovery `Unknown` sentinel, which
+                // would trip the runtime lowering boundary (`Ty::Unknown` has no
+                // `RuntimeTy`).
+                CannotBeStreamedOrigin::Unknown => TypeExpr::BuiltinUnknown { attrs: vec![] },
             },
         }
     }

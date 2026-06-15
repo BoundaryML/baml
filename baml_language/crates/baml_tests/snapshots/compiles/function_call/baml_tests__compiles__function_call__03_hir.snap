@@ -27,5 +27,5 @@ function user.param_in_if_statement(b: bool) -> int  [expr] {
   {  } if (b) {  } 1 else {  } 2
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": self.name.to_json() }
+  map { "name": baml.json.to_json(self.name) }
 }

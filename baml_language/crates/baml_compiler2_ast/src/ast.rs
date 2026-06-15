@@ -716,13 +716,17 @@ pub enum Expr {
     Throw {
         value: ExprId,
     },
-    /// BEP-034 `spawn name_expr? { body }`. The body is always a block
-    /// expression that runs on a freshly-spawned green thread; the
-    /// optional `name` is any expression that evaluates to a string and
+    /// BEP-034 `spawn name_expr? (with expr (, expr)*)? { body }`. The body is
+    /// always a block expression that runs on a freshly-spawned green thread;
+    /// the optional `name` is any expression that evaluates to a string and
     /// surfaces in debug / stack traces.
     Spawn {
         /// Optional human-readable label for the spawn.
         name: Option<ExprId>,
+        /// BEP-034 spawn options: the `with expr (, expr)*` clause. Each entry
+        /// is an arbitrary expression; in v1 TIR requires exactly one, a call
+        /// to `baml.spawn.options(...)`. Empty when there is no `with` clause.
+        with_exprs: Vec<ExprId>,
         /// Body of the spawn (`{...}`) — always an `Expr::Block` after
         /// CST lowering.
         body: ExprId,
@@ -750,7 +754,11 @@ pub enum Expr {
         args: Vec<CallArg>,
     },
     Object {
-        type_name: Option<TypePath>,
+        /// The constructed type's name. Always present: the parser only emits an
+        /// object literal when a type name precedes the brace
+        /// (`looks_like_object_constructor`), so a name-less `{ .. }` is a map or
+        /// block, never an object literal.
+        type_name: TypePath,
         /// Explicit generic type args from syntax like `Foo<int> { ... }`.
         /// Empty when no `<...>` was written (e.g. bare `Foo { ... }`).
         type_args: Vec<TypeExpr>,
@@ -1293,6 +1301,11 @@ pub enum BuiltinKind {
     /// Compiler intrinsic — lowered to `StatementKind::Intrinsic` in MIR,
     /// not compiled as a callable function.
     Intrinsic,
+    /// BEP-034 `baml.future.__await_any` — lowered to a `Terminator::AwaitAny`
+    /// suspend point (like `await`), not a normal call. The single argument is
+    /// the array of futures; the result is the `int` index of the first to
+    /// settle.
+    AwaitAny,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

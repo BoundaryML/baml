@@ -4,7 +4,8 @@
 import builtins
 import typing
 __all__ = [
-    "AbortController",
+    "BamlCallContext",
+    "cancel_function_call",
     "BamlAudio",
     "BamlImage",
     "BamlPdf",
@@ -21,23 +22,24 @@ __all__ = [
     "flush_events",
     "get_runtime",
     "get_version",
+    "new_function_call",
     "lookup_host_value",
     "register_host_callable",
     "release_host_callable",
 ]
 
 @typing.final
-class AbortController:
+class BamlCallContext:
     r"""
-    An abort controller for cancelling BAML function calls.
-    
+    A call context for cancelling BAML function calls.
+
     Usage from Python:
     ```python
-    controller = AbortController()
+    ctx = BamlCallContext()
     # Pass to call_function / call_function_sync:
-    result = await call_function(rt, "MyFunc", args, abort_controller=controller)
+    result = await call_function(rt, "MyFunc", args, _ctx=ctx)
     # Cancel from another task:
-    controller.abort()
+    ctx.abort()
     ```
     """
     @property
@@ -45,11 +47,11 @@ class AbortController:
         r"""
         Whether `abort()` has been called.
         """
-    def __new__(cls) -> AbortController: ...
+    def __new__(cls) -> BamlCallContext: ...
     def abort(self) -> None:
         r"""
         Cancel the associated function call.
-        
+
         If the function is still running, it will be interrupted at the next
         cancellation check point (before HTTP calls, between retries, etc.).
         Calling `abort()` multiple times is harmless.
@@ -152,11 +154,11 @@ class BamlRuntime:
     def initialize_runtime(root_path: builtins.str, files: typing.Mapping[builtins.str, builtins.str]) -> BamlRuntime:
         r"""
         Initialize the process-global runtime from in-memory BAML source files.
-        
+
         Mirrors `bridge_cffi::initialize_runtime`: the same
         single-slot singleton is used, so a second call replaces the prior
         runtime.
-        
+
         # Arguments
         * `root_path` - Root path for BAML files
         * `files` - Map of filename to file content
@@ -165,18 +167,18 @@ class BamlRuntime:
     def initialize_runtime_from_bytecode(bytecode: typing.Sequence[builtins.int]) -> BamlRuntime:
         r"""
         Initialize the process-global runtime from serialized BAML bytecode.
-        
+
         Generated SDKs use this path so importing `baml_sdk` can skip parsing
         and compiling the inlined BAML source files.
-        
+
         # Arguments
         * `bytecode` - borsh-encoded BAML bytecode program
         """
-    def call_function(self, function_name: str, args_proto: bytes, ctx: typing.Optional["HostSpanManager"] = None, collectors: typing.Optional[typing.Sequence["Collector"]] = None, abort_controller: typing.Optional["AbortController"] = None) -> typing.Any:
+    def call_function(self, function_name: str, args_proto: bytes, ctx: typing.Optional["HostSpanManager"] = None, collectors: typing.Optional[typing.Sequence["Collector"]] = None) -> typing.Any:
         r"""
         Call a BAML function asynchronously.
         """
-    def call_function_sync(self, function_name: str, args_proto: bytes, ctx: typing.Optional["HostSpanManager"] = None, collectors: typing.Optional[typing.Sequence["Collector"]] = None, abort_controller: typing.Optional["AbortController"] = None) -> bytes:
+    def call_function_sync(self, function_name: str, args_proto: bytes, ctx: typing.Optional["HostSpanManager"] = None, collectors: typing.Optional[typing.Sequence["Collector"]] = None) -> bytes:
         r"""
         Call a BAML function synchronously (blocking).
         """
@@ -210,7 +212,7 @@ class BamlVideo:
 class Collector:
     r"""
     Python-facing Collector that tracks BAML function call logs.
-    
+
     Usage:
     ```python
     from baml_py import Collector
@@ -298,7 +300,7 @@ class FunctionLog:
 class FunctionResult:
     r"""
     Result of a BAML function call.
-    
+
     Contains the parsed Python object returned by the function.
     """
     def __new__(cls, value: typing.Any) -> FunctionResult:
@@ -316,7 +318,7 @@ class FunctionResult:
 class HostSpanManager:
     r"""
     Manages host-side span tracking for `@trace` in Python.
-    
+
     This is a thin PyO3 wrapper around `bridge_cffi::host_spans::HostSpanManager`.
     All core logic (span stack, event emission) lives in bridge_cffi.
     """
@@ -433,19 +435,23 @@ def get_runtime() -> BamlRuntime:
     r"""
     Return the process-global `BamlRuntime`, or raise `BamlError` if
     `BamlRuntime.initialize_runtime(...)` has not been called yet.
-    
+
     Used by the pure-Python factories in `baml_core` so generated
     leaves don't have to thread a runtime reference through every call
     site.
     """
 
+def cancel_function_call(call_id: builtins.int) -> builtins.bool: ...
+
 def get_version() -> builtins.str: ...
+
+def new_function_call() -> builtins.int: ...
 
 def lookup_host_value(handle: BamlPyHandle) -> typing.Optional[typing.Any]:
     r"""
     Look up the host-registered Python object referenced by a
     `BamlPyHandle` whose `handle_type` is `HOST_VALUE_CALLABLE` /
-    `HOST_VALUE_ERROR`, returning a fresh strong reference if the entry
+    `HOST_VALUE_OPAQUE`, returning a fresh strong reference if the entry
     is still live. Used by the outbound error decoder in
     `baml_core.proto` to rehydrate a `baml.errors.HostCallable` thrown
     by BAML back to the original Python exception object on same-host
@@ -460,7 +466,7 @@ def lookup_host_value(handle: BamlPyHandle) -> typing.Optional[typing.Any]:
 def register_host_callable(callable: typing.Any) -> builtins.int:
     r"""
     Insert a Python callable into the registry and return its key.
-    
+
     Exposed to Python as `baml_py.register_host_callable(callable) -> int`.
     Called from the inbound encoder in `baml_core.proto` whenever a Python
     callable appears as a kwarg.
@@ -470,7 +476,7 @@ def release_host_callable(host_value_key: builtins.int) -> None:
     r"""
     Release a host callable the inbound encoder registered but never handed to
     the engine — the encode-error rollback path.
-    
+
     Exposed to Python as `baml_py.release_host_callable(key)`. When
     `encode_call_args` registers a callable for an early kwarg and then a
     later kwarg fails to encode, the `CallFunctionArgs` is never sent, so the

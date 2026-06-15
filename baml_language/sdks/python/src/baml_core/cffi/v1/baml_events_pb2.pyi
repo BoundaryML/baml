@@ -8,7 +8,7 @@ from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 DESCRIPTOR: _descriptor.FileDescriptor
 
 class RuntimeEvent(_message.Message):
-    __slots__ = ("span_id", "parent_span_id", "root_span_id", "timestamp_ms", "call_stack", "event", "call_id")
+    __slots__ = ("span_id", "parent_span_id", "root_span_id", "timestamp_ms", "call_stack", "event", "call_id", "bex_identity")
     SPAN_ID_FIELD_NUMBER: _ClassVar[int]
     PARENT_SPAN_ID_FIELD_NUMBER: _ClassVar[int]
     ROOT_SPAN_ID_FIELD_NUMBER: _ClassVar[int]
@@ -16,6 +16,7 @@ class RuntimeEvent(_message.Message):
     CALL_STACK_FIELD_NUMBER: _ClassVar[int]
     EVENT_FIELD_NUMBER: _ClassVar[int]
     CALL_ID_FIELD_NUMBER: _ClassVar[int]
+    BEX_IDENTITY_FIELD_NUMBER: _ClassVar[int]
     span_id: str
     parent_span_id: str
     root_span_id: str
@@ -23,7 +24,22 @@ class RuntimeEvent(_message.Message):
     call_stack: _containers.RepeatedScalarFieldContainer[str]
     event: EventKind
     call_id: int
-    def __init__(self, span_id: _Optional[str] = ..., parent_span_id: _Optional[str] = ..., root_span_id: _Optional[str] = ..., timestamp_ms: _Optional[int] = ..., call_stack: _Optional[_Iterable[str]] = ..., event: _Optional[_Union[EventKind, _Mapping]] = ..., call_id: _Optional[int] = ...) -> None: ...
+    bex_identity: RuntimeEventIdentity
+    def __init__(self, span_id: _Optional[str] = ..., parent_span_id: _Optional[str] = ..., root_span_id: _Optional[str] = ..., timestamp_ms: _Optional[int] = ..., call_stack: _Optional[_Iterable[str]] = ..., event: _Optional[_Union[EventKind, _Mapping]] = ..., call_id: _Optional[int] = ..., bex_identity: _Optional[_Union[RuntimeEventIdentity, _Mapping]] = ...) -> None: ...
+
+class RuntimeEventIdentity(_message.Message):
+    __slots__ = ("thread_id", "call_id", "parent_call_id", "function_id", "call_ref")
+    THREAD_ID_FIELD_NUMBER: _ClassVar[int]
+    CALL_ID_FIELD_NUMBER: _ClassVar[int]
+    PARENT_CALL_ID_FIELD_NUMBER: _ClassVar[int]
+    FUNCTION_ID_FIELD_NUMBER: _ClassVar[int]
+    CALL_REF_FIELD_NUMBER: _ClassVar[int]
+    thread_id: int
+    call_id: int
+    parent_call_id: int
+    function_id: int
+    call_ref: str
+    def __init__(self, thread_id: _Optional[int] = ..., call_id: _Optional[int] = ..., parent_call_id: _Optional[int] = ..., function_id: _Optional[int] = ..., call_ref: _Optional[str] = ...) -> None: ...
 
 class EventKind(_message.Message):
     __slots__ = ("function_start", "function_end", "set_tags", "log", "custom")

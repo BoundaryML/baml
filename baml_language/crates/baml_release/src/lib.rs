@@ -357,7 +357,7 @@ pub fn parse_release_checksum(checksum_text: &str, archive_name: &str) -> Result
 fn download_bytes(url: &str) -> Result<Vec<u8>, FetchError> {
     let client = reqwest::blocking::Client::builder()
         .connect_timeout(Duration::from_secs(10))
-        .timeout(Duration::from_secs(600))
+        .timeout(Duration::from_mins(10))
         .user_agent("baml-release/1")
         .build()
         .map_err(|source| FetchError::Network {

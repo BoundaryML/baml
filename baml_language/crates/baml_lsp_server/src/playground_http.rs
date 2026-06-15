@@ -12,8 +12,9 @@ use std::{
 };
 
 use bex_heap::BexHeap;
+use parking_lot::Mutex;
 use sys_ops::io::{self, owned};
-use sys_types::{CallId, SysOpContext, SysOpOutput};
+use sys_types::{CallId, SysOpContext, SysOpOutput, VmPanic};
 use tokio::sync::broadcast;
 
 use crate::playground_ws::WsOutMessage;
@@ -23,7 +24,7 @@ pub struct PlaygroundHttpState {
     broadcast_tx: broadcast::Sender<WsOutMessage>,
     next_fetch_id: AtomicU64,
     /// Maps response body pointer → (call_id, fetch_id) for response_text tracking.
-    response_to_fetch: std::sync::Mutex<HashMap<usize, (u64, u64)>>,
+    response_to_fetch: Mutex<HashMap<usize, (u64, u64)>>,
 }
 
 impl PlaygroundHttpState {
@@ -31,7 +32,7 @@ impl PlaygroundHttpState {
         Self {
             broadcast_tx,
             next_fetch_id: AtomicU64::new(1),
-            response_to_fetch: std::sync::Mutex::new(HashMap::new()),
+            response_to_fetch: Mutex::new(HashMap::new()),
         }
     }
 }
@@ -61,7 +62,7 @@ impl io::IoClassHttpResponse for PlaygroundHttp {
     ) -> SysOpOutput<String> {
         let state = self.0.clone();
         let key = response_body_key(&response);
-        let fetch_info = state.response_to_fetch.lock().unwrap().remove(&key);
+        let fetch_info = state.response_to_fetch.lock().remove(&key);
 
         let native_result = <sys_native::NativeSysOps as io::IoClassHttpResponse>::text(
             &sys_native::NativeSysOps,
@@ -101,7 +102,7 @@ impl io::IoClassHttpResponse for PlaygroundHttp {
     ) -> SysOpOutput<Vec<u8>> {
         let state = self.0.clone();
         let key = response_body_key(&response);
-        let fetch_info = state.response_to_fetch.lock().unwrap().remove(&key);
+        let fetch_info = state.response_to_fetch.lock().remove(&key);
 
         let native_result = <sys_native::NativeSysOps as io::IoClassHttpResponse>::bytes(
             &sys_native::NativeSysOps,
@@ -130,6 +131,76 @@ impl io::IoClassHttpResponse for PlaygroundHttp {
             },
             None => native_result,
         }
+    }
+
+    fn new(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _status_code: i64,
+        _headers: indexmap::IndexMap<String, String>,
+        _body: Vec<u8>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::http::Response> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+}
+
+// The HTTP server primitives are not available in the playground proxy.
+impl io::IoClassHttpTlsConfig for PlaygroundHttp {
+    fn _new(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _cert_pem: Vec<u8>,
+        _key_pem: Vec<u8>,
+        _allow_tls1_2: bool,
+        _handshake_timeout_nanos: Arc<num_bigint::BigInt>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::http::TlsConfig> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+}
+
+// The HTTP server primitives are not available in the playground proxy.
+impl io::IoClassHttpServer for PlaygroundHttp {
+    fn bind(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _addr: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::http::Server> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    fn _serve(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _server: owned::http::Server,
+        _handler: sys_types::Handle,
+        _tls_config: Option<owned::http::TlsConfig>,
+        _allow_http1: bool,
+        _allow_http2: bool,
+        _max_body_size: i64,
+        _max_connections: i64,
+        _header_read_timeout_nanos: Arc<num_bigint::BigInt>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 }
 
@@ -206,7 +277,6 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
                         state
                             .response_to_fetch
                             .lock()
-                            .unwrap()
                             .insert(response_body_key(resp), (cid, fetch_id));
                         let headers: HashMap<String, String> = resp
                             .headers
@@ -244,7 +314,6 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
                         state
                             .response_to_fetch
                             .lock()
-                            .unwrap()
                             .insert(response_body_key(resp), (cid, fetch_id));
                         let headers: HashMap<String, String> = resp
                             .headers

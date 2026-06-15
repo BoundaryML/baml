@@ -3,18 +3,66 @@ source: crates/baml_tests/src/compiler2_tir/phase5.rs
 expression: output
 ---
 namespace baml:
-  class Array<T> { methods: [length, at, push, pop, concat, reverse, slice, join, map, to_json, some, every, find, find_index, find_last, find_last_index, includes, index_of, last_index_of, reduce, flat_map, clear, shift, unshift, insert, splice, from_json] }
+  class Array<T> { methods: [length, at, push, pop, remove_at, concat, for_each, filter, filter_map, reverse, sort_by, sort_by_key, slice, join, map, to_json, some, every, find, find_index, find_last, find_last_index, includes, index_of, last_index_of, reduce, flat_map, clear, shift, unshift, insert, splice, from_json] }
   class Bigint { methods: [to_json, abs, min, max, clamp, isqrt, pow, ilog, parse, random, from_json] }
   class Bool { methods: [to_json, from_json] }
+  type Comparable
   class Float { methods: [to_json, is_nan, is_infinite, is_finite, abs, min, max, clamp, floor, ceil, round, trunc, fract, ifloor, iceil, iround, itrunc, sqrt, pow, log, hypot, sin, cos, tan, asin, acos, atan, atan2, sinh, cosh, tanh, asinh, acosh, atanh, to_radians, to_degrees, parse, random, pi, e, golden_ratio, nan, inf, from_json] }
   class Int { methods: [to_json, abs, min, max, clamp, isqrt, pow, ilog, leading_zeros, leading_ones, trailing_zeros, trailing_ones, count_zeros, count_ones, parse, random, max_value, min_value, from_json] }
   class Map<K, V> { methods: [length, has, keys, values, set, get, to_json, delete, get_or_insert, clear, from_json] }
   class Null { methods: [to_json, from_json] }
+  type Sortable
   class String { methods: [to_json, length, char_count, byte_length, to_lower_case, to_upper_case, trim, trim_start, trim_end, includes, starts_with, ends_with, split, lines, substring, replace, index_of, char_at, repeat, matches, replace_all, is_numeric, is_alphabetic, is_alphanumeric, is_uppercase, is_lowercase, is_whitespace, is_control, is_graphic, is_ascii, is_ascii_numeric, is_ascii_alphabetic, is_ascii_alphanumeric, is_ascii_uppercase, is_ascii_lowercase, is_ascii_whitespace, is_ascii_control, is_ascii_graphic, is_ascii_hex, to_utf8, from_utf8, from_code_points, from_json] }
   class TypeValue { methods: [to_string, implements, implemented_by, implementors, to_json, from_json] }
   class Uint8Array { methods: [to_json, length, at, push, pop, concat, includes, reverse, slice, zeroes, from_array, to_array, from_hex, to_hex, from_base64, to_base64, to_string, sort, from_json] }
+  function _compare_shim<T>
+  function _float_total_cmp
+  function _is_primitive_array<T>
+  function _rust_sort<A>
   function deep_copy<T>
   function deep_equals<T>
+namespace baml.csv:
+  class CsvError { methods: [to_json, from_json] }
+  enum CsvErrorKind
+  class CsvHeaders { methods: [to_json, from_json] }
+  class CsvNeedData { methods: [to_json, from_json] }
+  class CsvPosition { methods: [to_json, from_json] }
+  class CsvReader { methods: [headers, rows, skipped, skipped_count, position, close, _poll, _poll_headers, _feed, _feed_eof, _mark_closed, _mark_exhausted, _read_chunk, to_json, from_json, iter, next] }
+  class CsvRecord { methods: [get, get_at, fields, length, position, decode, to_map, to_json, from_json] }
+  class CsvRows<T> { methods: [to_json, from_json, iter, next] }
+  class CsvSkip { methods: [to_json, from_json] }
+  type CsvValue
+  class CsvWriter { methods: [write_record, write_row, write_rows, write_header, records_written, text, flush, close, _encode_record, _encode_header, _bytes_written, _mark_closed, _emit, to_json, from_json] }
+  class ReaderOptions { methods: [to_json, from_json] }
+  class WriterOptions { methods: [to_json, from_json] }
+  function _buffer
+  function _cell_by_index<T>
+  function _cell_by_name<T>
+  function _decode_record<T>
+  function _encode_row<T>
+  function _encode_rows<T>
+  function _error
+  function _reader
+  function _to_markdown<T>
+  function _to_markdown_records
+  function _try_decode<T>
+  function _validate_columns<T>
+  function _writer
+  function buffer
+  function create
+  function decode<T>
+  function decode_one<T>
+  function decode_optional<T>
+  function open
+  function parse
+  function read<T>
+  function reader
+  function stringify<T>
+  function stringify_records
+  function to_markdown<T>
+  function to_markdown_records
+  function write<T>
+  function writer
 namespace baml.env:
   function get
   function get_or_panic
@@ -35,7 +83,6 @@ namespace baml.errors:
   class Timeout { methods: [to_json, from_json] }
   class Unsupported { methods: [to_json, from_json] }
 namespace baml.events:
-  function send
 namespace baml.fs:
   class DirEntry { methods: [to_json, from_json] }
   class File { methods: [text, bytes, read, read_bytes, close, seek_from, write, write_bytes, to_json, from_json] }
@@ -50,8 +97,14 @@ namespace baml.fs:
   function write
   function write_bytes
 namespace baml.future:
+  class AllFailed<E> { methods: [to_json, from_json] }
   class Future<T, E> { methods: [cancel, is_settled, is_cancelled, is_result, is_error, state, to_json, from_json] }
   enum FutureState
+  function __await_any<T, E>
+  function all<T, E>
+  function all_complete<T, E>
+  function any<T, Err>
+  function race<T, E>
 namespace baml.glob:
   class Glob { methods: [scan, matches, to_json, from_json] }
   class ScanOptions { methods: [to_json, from_json] }
@@ -61,17 +114,39 @@ namespace baml.host:
   function call_host_value<T, E>
 namespace baml.http:
   class Request { methods: [to_json, from_json] }
-  class Response { methods: [text, bytes, ok, to_json, from_json] }
+  class Response { methods: [text, bytes, ok, new, to_json, from_json] }
+  class Server { methods: [bind, serve, _serve, to_json, from_json] }
   class SseStream { methods: [next, close, to_json, from_json] }
+  class TlsConfig { methods: [new, _new, to_json, from_json] }
   function fetch
   function fetch_sse
   function send
+namespace baml.id:
+  function current
+  function new
+  function set
 namespace baml.io:
   function eprint
   function eprintln
   function input
   function print
   function println
+namespace baml.iter:
+  class ArrayIterator<T> { methods: [new, to_json, from_json, iter, next] }
+  class Chain<T, E, E2> { methods: [to_json, from_json, iter, next] }
+  class Done { methods: [to_json, from_json] }
+  class Filter<T, E, E2> { methods: [to_json, from_json, iter, next] }
+  class FilterMap<T, R, E, E2> { methods: [to_json, from_json, iter, next] }
+  class FlatMap<T, R, E, E2, E3> { methods: [to_json, from_json, iter, next] }
+  class Flatten<I, R, E, E3> { methods: [to_json, from_json, iter, next] }
+  type Iterable
+  type Iterator
+  class Map<T, R, E, E2> { methods: [to_json, from_json, iter, next] }
+  class Peekable<T, E> { methods: [peek, to_json, from_json, iter, next] }
+  class Range { methods: [new, to_json, from_json, iter, next] }
+  class Repeat<T> { methods: [new, to_json, from_json, iter, next] }
+  class StepBy<T, E> { methods: [to_json, from_json, iter, next] }
+  function flatten<R, E, E3, I>
 namespace baml.json:
   class JsonDecodeError { methods: [to_json, from_json] }
   class JsonParseError { methods: [to_json, from_json] }
@@ -113,7 +188,6 @@ namespace baml.llm:
   function from_shorthand
   function get_jinja_template
   function get_return_type
-  function get_stream_return_type
   function parse<TStream, TFinal>
   function render_prompt
   function stream_llm_function<TStream, TFinal>
@@ -153,6 +227,11 @@ namespace baml.panics:
   class StackOverflow { methods: [to_json, from_json] }
   class Unreachable { methods: [to_json, from_json] }
   class UserPanic { methods: [to_json, from_json] }
+namespace baml.spawn:
+  class CancelToken { methods: [new, any, cancel, is_cancelled, to_json, from_json] }
+  class SpawnParams<T, E> { methods: [to_json, from_json] }
+  class TaskGroup { methods: [new, cancel, set_limit, limit, name, active_count, queued_count, to_json, from_json] }
+  function options<T, E>
 namespace baml.stream:
   class StreamFinished { methods: [to_json, from_json] }
   class StreamNoYield { methods: [to_json, from_json] }
@@ -189,3 +268,7 @@ namespace baml.toml:
   function item_to_json
 namespace baml.unstable:
   function string<T>
+namespace baml.yaml:
+  class YamlParseError { methods: [to_json, from_json] }
+  function deserialize<T>
+  function parse

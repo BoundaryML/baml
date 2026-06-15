@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use js_sys::{Function, Object, Promise, Reflect};
 use sys_ops::io::{self, IoClassHttpResponse, IoNamespaceHttp};
-use sys_types::{BexHeap, CallId, SysOpContext, SysOpOutput, VmBamlError, VmRustFnError};
+use sys_types::{BexHeap, CallId, SysOpContext, SysOpOutput, VmBamlError, VmPanic, VmRustFnError};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
 
@@ -262,6 +262,76 @@ impl IoClassHttpResponse for WasmHttp {
             }
             .map_err(VmRustFnError::from)
         }))
+    }
+
+    fn new(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _status_code: i64,
+        _headers: indexmap::IndexMap<String, String>,
+        _body: Vec<u8>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::http::Response> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+}
+
+// The HTTP server primitives are native-only; a browser cannot bind a listener.
+impl io::IoClassHttpTlsConfig for WasmHttp {
+    fn _new(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _cert_pem: Vec<u8>,
+        _key_pem: Vec<u8>,
+        _allow_tls1_2: bool,
+        _handshake_timeout_nanos: Arc<num_bigint::BigInt>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::http::TlsConfig> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+}
+
+// The HTTP server primitives are native-only; a browser cannot bind a listener.
+impl io::IoClassHttpServer for WasmHttp {
+    fn bind(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _addr: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::http::Server> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    fn _serve(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _server: io::owned::http::Server,
+        _handler: sys_types::Handle,
+        _tls_config: Option<io::owned::http::TlsConfig>,
+        _allow_http1: bool,
+        _allow_http2: bool,
+        _max_body_size: i64,
+        _max_connections: i64,
+        _header_read_timeout_nanos: Arc<num_bigint::BigInt>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 }
 

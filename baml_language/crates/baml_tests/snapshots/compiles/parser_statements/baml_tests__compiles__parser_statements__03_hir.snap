@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 16488
 ---
 === HIR2 ===
 class user.EdgeFoo {
@@ -52,7 +51,7 @@ function user.sub_assign() -> int  [expr] {
   { let x = 10; x Sub= 3; return x }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "x": self.x.to_json() }
+  map { "x": baml.json.to_json(self.x) }
 }
 function user.break_in_for() -> int  [expr] {
   { { let i = 0; while i Lt 10 { break } }; return 1 }
@@ -98,7 +97,7 @@ function user.let_statements() -> int  [expr] {
   { let x = 1; let y: int = 2; let z: int[] = [1, 2, 3]; let point: user.Point = user.Point { x: 1, y: 2 }; return point.x Add point.y }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "x": self.x.to_json(), "y": self.y.to_json() }
+  map { "x": baml.json.to_json(self.x), "y": baml.json.to_json(self.y) }
 }
 function user.nested_while_loop() -> int  [expr] {
   { let i = 0; while i Lt 10 { let j = 0; while j Lt 10 { j = j Add 1 } }; return i }

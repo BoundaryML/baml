@@ -10,7 +10,7 @@
 //!
 //! Salsa-tracked so subtype calls don't rebuild the closure on each check.
 
-use baml_base::Name;
+use baml_base::{Literal, Name};
 use baml_compiler2_hir::{contributions::Definition, package::PackageId};
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -18,7 +18,7 @@ use crate::{
     generics,
     lower_type_expr::qualify_def,
     normalize,
-    ty::{FunctionParamTy, PrimitiveType, QualifiedTypeName, Ty, TyAttr},
+    ty::{FunctionParamTy, QualifiedTypeName, Ty, TyAttr},
 };
 
 pub type TypeBindings = FxHashMap<Name, Ty>;
@@ -327,8 +327,27 @@ impl ImplementsRegistry {
             aliases,
             &mut bindings,
         )?;
+        if all_rule_generic_params_bound(rule, &bindings) {
+            let instantiated_interface_ty = generics::substitute_ty(&rule.interface_ty, &bindings);
+            let requested_iface_ty = generics::substitute_ty(requested_iface_ty, &bindings);
+            if !interface_ty_satisfies_request(
+                &instantiated_interface_ty,
+                &requested_iface_ty,
+                aliases,
+                &mut is_subtype,
+            ) {
+                return None;
+            }
+            validate_rule_bounds(rule, &bindings, &mut is_subtype, true)?;
+            return Some(InterfaceImplInstantiation {
+                bindings: bindings.clone(),
+                for_ty: generics::substitute_ty(&rule.for_ty_pattern, &bindings),
+                interface_ty: instantiated_interface_ty,
+            });
+        }
+        let interface_pattern = generics::substitute_ty(&rule.interface_ty, &bindings);
         match_ty_pattern_into(
-            &rule.interface_ty,
+            &interface_pattern,
             requested_iface_ty,
             &rule.generic_params,
             aliases,
@@ -366,16 +385,31 @@ impl ImplementsRegistry {
             {
                 continue;
             }
-            if match_ty_pattern_into(
-                &rule.interface_ty,
-                requested_iface_ty,
-                &rule.generic_params,
-                aliases,
-                &mut bindings,
-            )
-            .is_none()
-            {
-                continue;
+            if all_rule_generic_params_bound(rule, &bindings) {
+                let instantiated_interface_ty =
+                    generics::substitute_ty(&rule.interface_ty, &bindings);
+                let requested_iface_ty = generics::substitute_ty(requested_iface_ty, &bindings);
+                if !interface_ty_satisfies_request(
+                    &instantiated_interface_ty,
+                    &requested_iface_ty,
+                    aliases,
+                    &mut is_subtype,
+                ) {
+                    continue;
+                }
+            } else {
+                let interface_pattern = generics::substitute_ty(&rule.interface_ty, &bindings);
+                if match_ty_pattern_into(
+                    &interface_pattern,
+                    requested_iface_ty,
+                    &rule.generic_params,
+                    aliases,
+                    &mut bindings,
+                )
+                .is_none()
+                {
+                    continue;
+                }
             }
             for (param, bound) in rule
                 .generic_params
@@ -534,8 +568,27 @@ impl ImplementsRegistry {
                 &mut bindings,
             )?;
         }
+        if all_rule_generic_params_bound(rule, &bindings) {
+            let instantiated_interface_ty = generics::substitute_ty(&rule.interface_ty, &bindings);
+            let requested_iface_ty = generics::substitute_ty(requested_iface_ty, &bindings);
+            if !interface_ty_satisfies_request(
+                &instantiated_interface_ty,
+                &requested_iface_ty,
+                aliases,
+                &mut is_subtype,
+            ) {
+                return None;
+            }
+            validate_rule_bounds(rule, &bindings, &mut is_subtype, false)?;
+            return Some(InterfaceImplInstantiation {
+                bindings: bindings.clone(),
+                for_ty: generics::substitute_ty(&rule.for_ty_pattern, &bindings),
+                interface_ty: instantiated_interface_ty,
+            });
+        }
+        let interface_pattern = generics::substitute_ty(&rule.interface_ty, &bindings);
         match_ty_pattern_into(
-            &rule.interface_ty,
+            &interface_pattern,
             requested_iface_ty,
             &rule.generic_params,
             aliases,
@@ -788,6 +841,110 @@ fn interface_qtn(ty: &Ty) -> Option<&QualifiedTypeName> {
     }
 }
 
+fn all_rule_generic_params_bound(rule: &InterfaceImplRule, bindings: &TypeBindings) -> bool {
+    rule.generic_params
+        .iter()
+        .all(|param| bindings.contains_key(param))
+}
+
+fn interface_ty_satisfies_request(
+    actual: &Ty,
+    requested: &Ty,
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    is_subtype: &mut impl FnMut(&Ty, &Ty) -> bool,
+) -> bool {
+    let (
+        Ty::Interface(actual_qtn, actual_args, actual_assoc, _),
+        Ty::Interface(requested_qtn, requested_args, requested_assoc, _),
+    ) = (actual, requested)
+    else {
+        return normalize::is_same_normalized_type(actual, requested, aliases);
+    };
+    actual_qtn == requested_qtn
+        && actual_args.len() == requested_args.len()
+        && actual_args
+            .iter()
+            .zip(requested_args.iter())
+            .all(|(actual_arg, requested_arg)| {
+                types_equivalent_for_rule_match(actual_arg, requested_arg, aliases, is_subtype)
+            })
+        && requested_assoc
+            .iter()
+            .all(|(requested_name, requested_ty)| {
+                actual_assoc
+                    .iter()
+                    .find(|(actual_name, _)| actual_name == requested_name)
+                    .is_some_and(|(_, actual_ty)| {
+                        types_equivalent_for_rule_match(
+                            actual_ty,
+                            requested_ty,
+                            aliases,
+                            is_subtype,
+                        )
+                    })
+            })
+}
+
+fn types_equivalent_for_rule_match(
+    actual: &Ty,
+    requested: &Ty,
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    is_subtype: &mut impl FnMut(&Ty, &Ty) -> bool,
+) -> bool {
+    if normalize::is_same_normalized_type(actual, requested, aliases) {
+        return true;
+    }
+
+    // Concrete interface args/bindings must not be "proven" equivalent by a
+    // permissive probing predicate. Symbolic projections and type vars still
+    // need the semantic subtype relation because bounds can resolve cases like
+    // `T.Item == string` even when normalized syntax is still a projection.
+    (contains_rule_match_symbolic_ty(actual) || contains_rule_match_symbolic_ty(requested))
+        && is_subtype(actual, requested)
+        && is_subtype(requested, actual)
+}
+
+fn contains_rule_match_symbolic_ty(ty: &Ty) -> bool {
+    match ty {
+        Ty::TypeVar(..) | Ty::AssociatedTypeProjection { .. } => true,
+        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => contains_rule_match_symbolic_ty(inner),
+        Ty::Map {
+            key: k, value: v, ..
+        }
+        | Ty::EvolvingMap(k, v, _) => {
+            contains_rule_match_symbolic_ty(k) || contains_rule_match_symbolic_ty(v)
+        }
+        Ty::Union(tys, _) => tys.iter().any(contains_rule_match_symbolic_ty),
+        Ty::Future(value, error, _) => {
+            contains_rule_match_symbolic_ty(value) || contains_rule_match_symbolic_ty(error)
+        }
+        Ty::Function {
+            generic_param_bounds,
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            generic_param_bounds
+                .iter()
+                .any(|bound| bound.as_ref().is_some_and(contains_rule_match_symbolic_ty))
+                || params
+                    .iter()
+                    .any(|param| contains_rule_match_symbolic_ty(&param.ty))
+                || contains_rule_match_symbolic_ty(ret)
+                || contains_rule_match_symbolic_ty(throws)
+        }
+        Ty::Class(_, type_args, _) => type_args.iter().any(contains_rule_match_symbolic_ty),
+        Ty::Interface(_, type_args, associated_bindings, _) => {
+            type_args.iter().any(contains_rule_match_symbolic_ty)
+                || associated_bindings
+                    .iter()
+                    .any(|(_, ty)| contains_rule_match_symbolic_ty(ty))
+        }
+        _ => false,
+    }
+}
+
 pub fn match_ty_pattern(
     pattern: &Ty,
     concrete: &Ty,
@@ -844,7 +1001,14 @@ fn match_ty_pattern_into(
         (Ty::List(p, _), Ty::List(c, _)) | (Ty::EvolvingList(p, _), Ty::EvolvingList(c, _)) => {
             match_ty_pattern_into(p, c, generic_params, aliases, bindings)
         }
-        (Ty::Map(pk, pv, _), Ty::Map(ck, cv, _))
+        (
+            Ty::Map {
+                key: pk, value: pv, ..
+            },
+            Ty::Map {
+                key: ck, value: cv, ..
+            },
+        )
         | (Ty::EvolvingMap(pk, pv, _), Ty::EvolvingMap(ck, cv, _)) => {
             match_ty_pattern_into(pk, ck, generic_params, aliases, bindings)?;
             match_ty_pattern_into(pv, cv, generic_params, aliases, bindings)
@@ -858,11 +1022,11 @@ fn match_ty_pattern_into(
         {
             match_union_members(p_members, c_members, generic_params, aliases, bindings)
         }
-        (Ty::Primitive(primitive, _), Ty::Literal(literal, _, _))
-            if PrimitiveType::from_literal(literal) == *primitive =>
-        {
-            Some(())
-        }
+        (Ty::Int { .. }, Ty::Literal(Literal::Int(_), _, _))
+        | (Ty::Bigint { .. }, Ty::Literal(Literal::Bigint(_), _, _))
+        | (Ty::Float { .. }, Ty::Literal(Literal::Float(_), _, _))
+        | (Ty::String { .. }, Ty::Literal(Literal::String(_), _, _))
+        | (Ty::Bool { .. }, Ty::Literal(Literal::Bool(_), _, _)) => Some(()),
         (
             Ty::Function {
                 generic_params: p_generic_params,
@@ -1059,7 +1223,11 @@ fn contains_bound_typevar(ty: &Ty, generic_params: &[Name]) -> bool {
         Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
             contains_bound_typevar(inner, generic_params)
         }
-        Ty::Map(k, v, _) | Ty::EvolvingMap(k, v, _) | Ty::Future(k, v, _) => {
+        Ty::Map {
+            key: k, value: v, ..
+        }
+        | Ty::EvolvingMap(k, v, _)
+        | Ty::Future(k, v, _) => {
             contains_bound_typevar(k, generic_params) || contains_bound_typevar(v, generic_params)
         }
         Ty::Function {
@@ -1095,7 +1263,11 @@ fn contains_generic_function_binders(ty: &Ty) -> bool {
                     .any(|(_, ty)| contains_generic_function_binders(ty))
         }
         Ty::List(inner, _) | Ty::EvolvingList(inner, _) => contains_generic_function_binders(inner),
-        Ty::Map(k, v, _) | Ty::EvolvingMap(k, v, _) | Ty::Future(k, v, _) => {
+        Ty::Map {
+            key: k, value: v, ..
+        }
+        | Ty::EvolvingMap(k, v, _)
+        | Ty::Future(k, v, _) => {
             contains_generic_function_binders(k) || contains_generic_function_binders(v)
         }
         Ty::Function {
@@ -1124,20 +1296,54 @@ fn contains_generic_function_binders(ty: &Ty) -> bool {
 
 pub fn implementation_key_for_ty(ty: &Ty) -> Option<Ty> {
     match ty {
-        Ty::Primitive(primitive, _) => Some(Ty::Primitive(primitive.clone(), TyAttr::default())),
-        Ty::Literal(literal, _, _) => Some(Ty::Primitive(
-            PrimitiveType::from_literal(literal),
-            TyAttr::default(),
-        )),
+        Ty::Int { .. } => Some(Ty::Int {
+            attr: TyAttr::default(),
+        }),
+        Ty::Bigint { .. } => Some(Ty::Bigint {
+            attr: TyAttr::default(),
+        }),
+        Ty::Float { .. } => Some(Ty::Float {
+            attr: TyAttr::default(),
+        }),
+        Ty::String { .. } => Some(Ty::String {
+            attr: TyAttr::default(),
+        }),
+        Ty::Bool { .. } => Some(Ty::Bool {
+            attr: TyAttr::default(),
+        }),
+        Ty::Null { .. } => Some(Ty::Null {
+            attr: TyAttr::default(),
+        }),
+        Ty::Uint8Array { .. } => Some(Ty::Uint8Array {
+            attr: TyAttr::default(),
+        }),
+        Ty::Media(kind, _) => Some(Ty::Media(*kind, TyAttr::default())),
+        Ty::Literal(literal, _, _) => Some(match literal {
+            Literal::Int(_) => Ty::Int {
+                attr: TyAttr::default(),
+            },
+            Literal::Bigint(_) => Ty::Bigint {
+                attr: TyAttr::default(),
+            },
+            Literal::Float(_) => Ty::Float {
+                attr: TyAttr::default(),
+            },
+            Literal::String(_) => Ty::String {
+                attr: TyAttr::default(),
+            },
+            Literal::Bool(_) => Ty::Bool {
+                attr: TyAttr::default(),
+            },
+        }),
         Ty::List(inner, _) => Some(Ty::List(
             Box::new(implementation_key_for_ty(inner)?),
             TyAttr::default(),
         )),
-        Ty::Map(key, value, _) => Some(Ty::Map(
-            Box::new(implementation_key_for_ty(key)?),
-            Box::new(implementation_key_for_ty(value)?),
-            TyAttr::default(),
-        )),
+        Ty::Map { key, value, .. } => Some(Ty::Map {
+            key: Box::new(implementation_key_for_ty(key)?),
+            value: Box::new(implementation_key_for_ty(value)?),
+            attr: TyAttr::default(),
+        }),
         Ty::Union(members, _) => {
             let mut keys = members
                 .iter()
@@ -1666,16 +1872,41 @@ mod tests {
         Ty::Interface(qtn(&[], name), args, vec![], TyAttr::default())
     }
 
+    fn interface_with_assoc(name: &str, assoc: Vec<(&str, Ty)>) -> Ty {
+        Ty::Interface(
+            qtn(&[], name),
+            vec![],
+            assoc
+                .into_iter()
+                .map(|(name, ty)| (Name::new(name), ty))
+                .collect(),
+            TyAttr::default(),
+        )
+    }
+
     fn int() -> Ty {
-        Ty::Primitive(PrimitiveType::Int, TyAttr::default())
+        Ty::Int {
+            attr: TyAttr::default(),
+        }
     }
 
     fn string() -> Ty {
-        Ty::Primitive(PrimitiveType::String, TyAttr::default())
+        Ty::String {
+            attr: TyAttr::default(),
+        }
     }
 
     fn type_var(name: &str) -> Ty {
         Ty::TypeVar(Name::new(name), TyAttr::default())
+    }
+
+    fn associated_projection(base: Ty, interface: Ty, member: &str) -> Ty {
+        Ty::AssociatedTypeProjection {
+            base: Box::new(base),
+            interface: Some(Box::new(interface)),
+            member: Name::new(member),
+            attr: TyAttr::default(),
+        }
     }
 
     fn never() -> Ty {
@@ -1709,8 +1940,12 @@ mod tests {
 
     #[test]
     fn implementation_key_for_ty_canonicalizes_union_members() {
-        let int = Ty::Primitive(PrimitiveType::Int, TyAttr::default());
-        let string = Ty::Primitive(PrimitiveType::String, TyAttr::default());
+        let int = Ty::Int {
+            attr: TyAttr::default(),
+        };
+        let string = Ty::String {
+            attr: TyAttr::default(),
+        };
         let lhs = Ty::Union(vec![int.clone(), string.clone()], TyAttr::default());
         let rhs = Ty::Union(vec![string, int], TyAttr::default());
 
@@ -1722,7 +1957,9 @@ mod tests {
 
     #[test]
     fn implementation_key_for_ty_dedupes_union_members() {
-        let int = Ty::Primitive(PrimitiveType::Int, TyAttr::default());
+        let int = Ty::Int {
+            attr: TyAttr::default(),
+        };
         let duplicated = Ty::Union(vec![int.clone(), int.clone()], TyAttr::default());
 
         assert_eq!(
@@ -1988,6 +2225,56 @@ mod tests {
                     |_, _| true,
                 )
                 .is_none()
+        );
+    }
+
+    #[test]
+    fn rule_matches_actual_accepts_projection_binding_when_subtype_proves_equivalent() {
+        let registry = ImplementsRegistry {
+            interface_impl_rules: Vec::new(),
+            interface_impl_rule_index: InterfaceImplRuleIndex::default(),
+            class_implements: FxHashMap::default(),
+            type_implements: FxHashMap::default(),
+            blanket_class_implements: Vec::new(),
+            implements_type_args: FxHashMap::default(),
+            type_implements_type_args: FxHashMap::default(),
+            interface_requires: FxHashMap::default(),
+        };
+        let source = interface("Source", vec![]);
+        let projected_item = associated_projection(type_var("T"), source, "Item");
+        let rule = InterfaceImplRule {
+            generic_params: vec![Name::new("T")],
+            generic_param_bounds: vec![None],
+            for_ty_pattern: class(&[], "Wrapped", vec![type_var("T")]),
+            interface_ty: interface_with_assoc("Renderable", vec![("Output", projected_item)]),
+            origin: InterfaceImplOrigin::OutOfBody,
+        };
+        let actual = class(&[], "Wrapped", vec![class(&[], "TextSource", vec![])]);
+        let requested = interface_with_assoc("Renderable", vec![("Output", string())]);
+
+        assert!(
+            registry
+                .rule_matches_actual(
+                    &rule,
+                    &actual,
+                    &requested,
+                    &std::collections::HashMap::default(),
+                    |lhs, rhs| {
+                        matches!(lhs, Ty::AssociatedTypeProjection { member, .. } if member.as_str() == "Item")
+                            && normalize::is_same_normalized_type(
+                                rhs,
+                                &string(),
+                                &std::collections::HashMap::default(),
+                            )
+                            || matches!(rhs, Ty::AssociatedTypeProjection { member, .. } if member.as_str() == "Item")
+                                && normalize::is_same_normalized_type(
+                                    lhs,
+                                    &string(),
+                                    &std::collections::HashMap::default(),
+                                )
+                    },
+                )
+                .is_some()
         );
     }
 }

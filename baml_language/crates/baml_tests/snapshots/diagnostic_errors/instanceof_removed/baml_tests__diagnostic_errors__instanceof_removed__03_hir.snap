@@ -21,8 +21,8 @@ function user.from_json(j: baml.json.json) -> user.Dog  [expr] {
   user.Dog { breed: baml.json.from_json(baml.json.field(j, "breed")) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "breed": self.breed.to_json() }
+  map { "breed": baml.json.to_json(self.breed) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": self.name.to_json() }
+  map { "name": baml.json.to_json(self.name) }
 }

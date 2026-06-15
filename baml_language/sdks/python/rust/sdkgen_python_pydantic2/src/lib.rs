@@ -524,6 +524,7 @@ mod tests {
         Class, ClassProperty, DefaultLiteral, Enum, EnumVariant, Function, FunctionArgument,
         FunctionArgumentDefault, Origin, Ty, TypeAlias,
     };
+    use pretty_assertions::{assert_eq, assert_ne};
 
     use super::*;
 

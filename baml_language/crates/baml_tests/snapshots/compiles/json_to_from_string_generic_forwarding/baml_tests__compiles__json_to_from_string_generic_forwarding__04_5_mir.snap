@@ -2,9 +2,9 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.fetch_as(s: string) -> void {
+fn user.fetch_as(s: string) -> T {
     // Locals:
-    let _0: void // _0 // return
+    let _0: T // _0 // return
     let _1: string // s // param
     let _2: type
 

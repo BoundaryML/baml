@@ -2299,10 +2299,16 @@ impl<'a> Parser<'a> {
             // Note: true/false are Word tokens, and they become BoolLiteral types
             self.bump();
 
-            // Consume dot-separated path segments (e.g., baml.http.Request)
+            // Consume dot-separated path segments (e.g., baml.http.Request).
+            // `spawn`/`await` are reserved keywords but valid as namespace
+            // segments after a `.` (e.g. `baml.spawn.SpawnParams` in a type
+            // annotation), mirroring `parse_path_or_ident`'s segment set.
             while self.at(TokenKind::Dot) {
                 self.bump(); // dot
-                if self.at(TokenKind::Word) {
+                if self.at(TokenKind::Word)
+                    || self.at(TokenKind::Spawn)
+                    || self.at(TokenKind::Await)
+                {
                     self.bump(); // next segment
                 } else {
                     self.error_unexpected_token("type name segment after '.'".to_string());
@@ -4421,7 +4427,12 @@ impl<'a> Parser<'a> {
                 | TokenKind::Quote
                 | TokenKind::Hash
                 | TokenKind::LParen
-                | TokenKind::RParen => {}
+                | TokenKind::RParen
+                // `spawn`/`await` are valid namespace segments inside type
+                // args (`foo<baml.spawn.SpawnParams<T, E>>(x)`), mirroring
+                // the type-path parser's segment set.
+                | TokenKind::Spawn
+                | TokenKind::Await => {}
                 _ => return None,
             }
             i = self.skip_trivia_and_comments_from(i + 1);
@@ -5381,10 +5392,15 @@ impl<'a> Parser<'a> {
         } else if self.at(TokenKind::Await) {
             // BEP-034 `await expr` — prefix operator binding like other
             // prefixes so postfix `.`/`()`/`[]` still attach to the
-            // awaited value.
+            // awaited value. The operand is parsed *no-catch* (like the
+            // payload of `throw`, see `parse_throw_expr`) so a trailing
+            // `catch` binds to the whole `await expr` — i.e.
+            // `await f catch (e) {…}` is `(await f) catch (e) {…}`, catching
+            // the error `await` re-throws — not `await (f catch …)`, which
+            // would attach the handler to the never-throwing future handle.
             self.with_node(SyntaxKind::AWAIT_EXPR, |p| {
                 p.bump(); // `await`
-                p.parse_expr_bp(PREFIX_BP);
+                p.parse_expr_bp_no_catch(PREFIX_BP);
             });
         } else if self.at(TokenKind::Spawn) {
             // BEP-034 `spawn name_expr? block`.
@@ -5394,23 +5410,42 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse `spawn name_expr? { body }`. The name expression is optional
-    /// and is parsed until we see `{` (v1 has no `with` clause). The body
-    /// is always a brace-delimited block.
+    /// Parse `spawn name_expr? (with expr (, expr)*)? { body }`. The name
+    /// expression is optional and is parsed until we see `with` or `{`. The
+    /// optional `with` clause (BEP-034 spawn options) is a comma-separated
+    /// list of expressions; in v1 the only accepted form is a single
+    /// `baml.spawn.options(...)` call, enforced later in TIR. The body is
+    /// always a brace-delimited block.
     fn parse_spawn_expr(&mut self) {
         self.with_node(SyntaxKind::SPAWN_EXPR, |p| {
             p.bump(); // `spawn`
             // Optional name expression: anything that can lead an
-            // expression and is not `{`. We parse the name with a binding
-            // power of 0 (no infix beyond what naturally terminates at
-            // `{`), then the brace-block.
-            if !p.at(TokenKind::LBrace) {
+            // expression and is not `{` or `with`. We parse the name with a
+            // binding power of 1 (`with` is a bare Word with no infix binding
+            // power, so the name naturally terminates before it), then the
+            // optional `with` clause, then the brace-block.
+            if !p.at(TokenKind::LBrace) && !p.at_contextual_kw("with") {
                 // Suppress object-literal postfix so the body brace
                 // isn't consumed as a struct constructor — without
                 // this, `spawn nm { y: 1 }` parses `nm { y: 1 }` as
                 // an OBJECT_LITERAL and the body is missing.
                 p.suppress_object_literal_depth += 1;
                 p.parse_expr_bp(1);
+                p.suppress_object_literal_depth -= 1;
+            }
+            // Optional `with expr (, expr)*` clause. Suppress object literals
+            // for the same reason as the name: keep the body brace available.
+            if p.at_contextual_kw("with") {
+                p.bump_contextual_with();
+                p.suppress_object_literal_depth += 1;
+                p.parse_expr_bp(1);
+                while p.eat(TokenKind::Comma) {
+                    // Tolerate a trailing comma before the body brace.
+                    if p.at(TokenKind::LBrace) {
+                        break;
+                    }
+                    p.parse_expr_bp(1);
+                }
                 p.suppress_object_literal_depth -= 1;
             }
             if p.at(TokenKind::LBrace) {
@@ -5661,7 +5696,12 @@ impl<'a> Parser<'a> {
                 | TokenKind::Quote
                 | TokenKind::Hash
                 | TokenKind::LParen
-                | TokenKind::RParen => {}
+                | TokenKind::RParen
+                // `spawn`/`await` are valid namespace segments inside type
+                // args (`foo<baml.spawn.SpawnParams<T, E>>(x)`), mirroring
+                // the type-path parser's segment set.
+                | TokenKind::Spawn
+                | TokenKind::Await => {}
                 // Anything else — operators, braces, EOF-ish tokens — can't
                 // appear in a type, so this `<` is a comparison.
                 _ => return false,
@@ -6122,7 +6162,17 @@ impl<'a> Parser<'a> {
             return;
         }
 
-        let segment = |k: TokenKind| matches!(k, TokenKind::Word | TokenKind::Client);
+        // `spawn` / `await` are reserved keywords but are valid as path
+        // segments after a `.` (e.g. the `baml.spawn` namespace). They are
+        // unambiguous in segment position — a leading `spawn`/`await` is
+        // handled before this point. `is_ident_token` in
+        // `baml_compiler2_ast::lower_expr_body` must mirror this set.
+        let segment = |k: TokenKind| {
+            matches!(
+                k,
+                TokenKind::Word | TokenKind::Client | TokenKind::Spawn | TokenKind::Await
+            )
+        };
 
         // Check if this looks like a path (ident.client followed by dot and another ident)
         if self.peek(1).map(|t| t.kind) == Some(TokenKind::Dot)
@@ -6139,7 +6189,7 @@ impl<'a> Parser<'a> {
                 // Parse remaining segments
                 while p.at(TokenKind::Dot) && !p.looks_like_as_projection() {
                     p.bump();
-                    if p.at(TokenKind::Word) || p.at(TokenKind::Client) {
+                    if p.current().map(|t| segment(t.kind)).unwrap_or(false) {
                         p.bump(); // Next segment
                     } else {
                         p.error_unexpected_token("path segment after '.'".to_string());

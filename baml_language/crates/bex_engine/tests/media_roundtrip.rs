@@ -60,13 +60,8 @@ class Holder {
 "#;
     let snapshot = compile_for_engine(source);
     let engine = Arc::new(
-        BexEngine::new(
-            snapshot,
-            Arc::new(sys_native::SysOps::native()),
-            None,
-            Vec::new(),
-        )
-        .expect("Failed to create engine"),
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
     );
 
     let original = pdf_media();

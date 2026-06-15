@@ -53,15 +53,24 @@ function inlineSummary(code: number, stdout: string, stderr: string): string {
   const parts = [`shell exit ${code}.`];
   const stdoutLines = stdout ? stdout.split('\n').filter(Boolean).length : 0;
   const stderrLines = stderr ? stderr.split('\n').filter(Boolean).length : 0;
-  if (stdoutLines > 0) parts.push(`stdout: ${stdoutLines} ${stdoutLines === 1 ? 'line' : 'lines'}.`);
-  if (stderrLines > 0) parts.push(`stderr: ${stderrLines} ${stderrLines === 1 ? 'line' : 'lines'}.`);
+  if (stdoutLines > 0)
+    parts.push(
+      `stdout: ${stdoutLines} ${stdoutLines === 1 ? 'line' : 'lines'}.`,
+    );
+  if (stderrLines > 0)
+    parts.push(
+      `stderr: ${stderrLines} ${stderrLines === 1 ? 'line' : 'lines'}.`,
+    );
   if (stdoutLines === 0 && stderrLines === 0) parts.push('no output.');
   return parts.join(' ');
 }
 
 type OutputTab = 'stdout' | 'stderr';
 
-const OutputTabs: FC<{ stdout: string; stderr: string }> = ({ stdout, stderr }) => {
+const OutputTabs: FC<{ stdout: string; stderr: string }> = ({
+  stdout,
+  stderr,
+}) => {
   const [tab, setTab] = useState<OutputTab>('stdout');
   const content = tab === 'stdout' ? stdout : stderr;
   const empty = !content;
@@ -84,11 +93,13 @@ const OutputTabs: FC<{ stdout: string; stderr: string }> = ({ stdout, stderr }) 
       {empty ? (
         <div className="text-[11px] text-vsc-text-faint italic pl-1">empty</div>
       ) : (
-        <pre className={`whitespace-pre-wrap p-1.5 rounded overflow-auto max-h-[300px] m-0 text-xs ${
-          isErr
-            ? 'bg-red-500/5 border border-red-500/20 text-red-300'
-            : 'bg-vsc-bg border border-vsc-border text-vsc-text'
-        }`}>
+        <pre
+          className={`whitespace-pre-wrap p-1.5 rounded overflow-auto max-h-[300px] m-0 text-xs ${
+            isErr
+              ? 'bg-red-500/5 border border-red-500/20 text-red-300'
+              : 'bg-vsc-bg border border-vsc-border text-vsc-text'
+          }`}
+        >
           {content}
         </pre>
       )}
@@ -96,11 +107,18 @@ const OutputTabs: FC<{ stdout: string; stderr: string }> = ({ stdout, stderr }) 
   );
 };
 
-export const ShellOutputRenderer: FC<ResultRendererProps> = ({ value, displayMode }) => {
+export const ShellOutputRenderer: FC<ResultRendererProps> = ({
+  value,
+  displayMode,
+}) => {
   const [expanded, setExpanded] = useState(false);
   const shell = isShellOutput(value) ? value : null;
   if (!shell) {
-    return <pre className="font-vsc-mono text-xs text-vsc-text">{JSON.stringify(value, null, 2)}</pre>;
+    return (
+      <pre className="font-vsc-mono text-xs text-vsc-text">
+        {JSON.stringify(value, null, 2)}
+      </pre>
+    );
   }
 
   const ok = shell.exit_code === 0;
@@ -114,7 +132,9 @@ export const ShellOutputRenderer: FC<ResultRendererProps> = ({ value, displayMod
     return (
       <span className="font-vsc-mono text-xs inline-flex items-center gap-1.5">
         <span className="text-vsc-text-muted">baml.sys.ShellOutput</span>
-        <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${ok ? 'bg-green-500/15 text-green-400' : 'bg-red-500/15 text-red-400'}`}>
+        <span
+          className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${ok ? 'bg-green-500/15 text-green-400' : 'bg-red-500/15 text-red-400'}`}
+        >
           exit_code: {code}
         </span>
       </span>
@@ -127,7 +147,9 @@ export const ShellOutputRenderer: FC<ResultRendererProps> = ({ value, displayMod
       {/* Header: class name + exit code */}
       <div className="flex items-center gap-2">
         <span className="text-vsc-text-muted">baml.sys.ShellOutput</span>
-        <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${ok ? 'bg-green-500/15 text-green-400' : 'bg-red-500/15 text-red-400'}`}>
+        <span
+          className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${ok ? 'bg-green-500/15 text-green-400' : 'bg-red-500/15 text-red-400'}`}
+        >
           exit_code: {code}
         </span>
       </div>

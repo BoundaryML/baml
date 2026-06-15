@@ -28,11 +28,8 @@ log = { workspace = true }
 num-bigint = { workspace = true }
 ouroboros = { workspace = true }
 regex = { workspace = true }
-rowan = { workspace = true }
-salsa = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-strsim = { workspace = true }
 thiserror = { workspace = true }
 unicode-normalization = { workspace = true }
 

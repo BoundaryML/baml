@@ -18,7 +18,7 @@ pub enum StreamingMode {
     Streaming,
 }
 
-/// Self-referential struct that owns the [`sap_model::TypeCtx`] and the [`baml_type::Ty`]
+/// Self-referential struct that owns the [`sap_model::TypeCtx`] and the [`baml_type::RuntimeTy`]
 /// for the parse target, and borrows `TypeRefDb` + `AnnotatedTy` from them.
 pub struct CompiledSapModel {
     inner: CompiledSapModelInner,
@@ -27,8 +27,8 @@ pub struct CompiledSapModel {
 impl CompiledSapModel {
     pub fn from_type_ctx(
         type_ctx: sap_model::TypeCtx,
-        target: baml_type::Ty,
-        stream_target: baml_type::Ty,
+        target: baml_type::RuntimeTy,
+        stream_target: baml_type::RuntimeTy,
     ) -> Result<Self, sap_model::ConvertError> {
         let inner = CompiledSapModelInner::try_new(
             type_ctx,
@@ -42,8 +42,8 @@ impl CompiledSapModel {
     }
     pub fn from_sys_op_context(
         ctx: &::sys_types::SysOpContext,
-        target: baml_type::Ty,
-        stream_target: baml_type::Ty,
+        target: baml_type::RuntimeTy,
+        stream_target: baml_type::RuntimeTy,
     ) -> Result<Self, sap_model::ConvertError> {
         let type_ctx = sap_model::TypeCtx::from_sys_op_context(ctx);
         Self::from_type_ctx(type_ctx, target, stream_target)
@@ -66,8 +66,8 @@ impl CompiledSapModel {
 struct CompiledSapModelInner {
     pub type_ctx: sap_model::TypeCtx,
     /// The target type
-    pub parse_ty: baml_type::Ty,
-    pub parse_stream_ty: baml_type::Ty,
+    pub parse_ty: baml_type::RuntimeTy,
+    pub parse_stream_ty: baml_type::RuntimeTy,
     #[borrows(type_ctx)]
     #[covariant]
     pub db: TypeRefDb<'this, TypeName>,

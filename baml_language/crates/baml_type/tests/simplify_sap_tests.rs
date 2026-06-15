@@ -1,13 +1,15 @@
 //! Markdown-driven tests for `simplify_sap::simplify`.
 //!
 //! Test cases live in `simplify_sap_tests.md`.  A tiny type DSL is parsed
-//! into `baml_type::Ty` values (with attrs), fed through `simplify`, and
+//! into `baml_type::RuntimeTy` values (with attrs), fed through `simplify`, and
 //! the result is compared structurally (including attrs) against the expected
 //! output parsed from the same DSL.
 
 use std::collections::{HashMap, HashSet};
 
-use baml_type::{Literal, Ty, TyAttr, TyAttrValue, TypeName, simplify_sap::simplify};
+use baml_type::{
+    Freshness, Literal, RuntimeTy, TyAttr, TyAttrValue, TypeName, simplify_sap::simplify,
+};
 
 // =========================================================================
 // Markdown → TestCase parser
@@ -15,9 +17,9 @@ use baml_type::{Literal, Ty, TyAttr, TyAttrValue, TypeName, simplify_sap::simpli
 
 struct TestCase {
     name: String,
-    aliases: HashMap<TypeName, Ty>,
-    input: Ty,
-    expected: Ty,
+    aliases: HashMap<TypeName, RuntimeTy>,
+    input: RuntimeTy,
+    expected: RuntimeTy,
 }
 
 fn parse_test_cases(markdown: &str) -> Vec<TestCase> {
@@ -105,7 +107,7 @@ fn collect_section_body(
 // Alias helpers
 // =========================================================================
 
-fn parse_aliases(s: &str) -> HashMap<TypeName, Ty> {
+fn parse_aliases(s: &str) -> HashMap<TypeName, RuntimeTy> {
     let mut map = HashMap::new();
     for line in s.split('\n') {
         let line = line.trim();
@@ -121,7 +123,7 @@ fn parse_aliases(s: &str) -> HashMap<TypeName, Ty> {
     map
 }
 
-fn find_recursive_aliases(aliases: &HashMap<TypeName, Ty>) -> HashSet<TypeName> {
+fn find_recursive_aliases(aliases: &HashMap<TypeName, RuntimeTy>) -> HashSet<TypeName> {
     let mut recursive = HashSet::new();
     for name in aliases.keys() {
         let mut visiting = HashSet::new();
@@ -134,7 +136,7 @@ fn find_recursive_aliases(aliases: &HashMap<TypeName, Ty>) -> HashSet<TypeName> 
 
 fn is_alias_recursive(
     name: &TypeName,
-    aliases: &HashMap<TypeName, Ty>,
+    aliases: &HashMap<TypeName, RuntimeTy>,
     visiting: &mut HashSet<TypeName>,
 ) -> bool {
     if !visiting.insert(name.clone()) {
@@ -152,26 +154,28 @@ fn is_alias_recursive(
     false
 }
 
-fn collect_alias_refs(ty: &Ty) -> Vec<TypeName> {
+fn collect_alias_refs(ty: &RuntimeTy) -> Vec<TypeName> {
     let mut refs = Vec::new();
     collect_alias_refs_inner(ty, &mut refs);
     refs
 }
 
-fn collect_alias_refs_inner(ty: &Ty, out: &mut Vec<TypeName>) {
+fn collect_alias_refs_inner(ty: &RuntimeTy, out: &mut Vec<TypeName>) {
     match ty {
-        Ty::TypeAlias(name, _) => out.push(name.clone()),
-        Ty::List(inner, _) | Ty::WatchAccessor(inner, _) => collect_alias_refs_inner(inner, out),
-        Ty::Future(value, error, _) => {
+        RuntimeTy::TypeAlias(name, _) => out.push(name.clone()),
+        RuntimeTy::List(inner, _) | RuntimeTy::WatchAccessor(inner, _) => {
+            collect_alias_refs_inner(inner, out)
+        }
+        RuntimeTy::Future(value, error, _) => {
             collect_alias_refs_inner(value, out);
             collect_alias_refs_inner(error, out);
         }
-        Ty::Union(members, _) => {
+        RuntimeTy::Union(members, _) => {
             for m in members {
                 collect_alias_refs_inner(m, out);
             }
         }
-        Ty::Map { key, value, .. } => {
+        RuntimeTy::Map { key, value, .. } => {
             collect_alias_refs_inner(key, out);
             collect_alias_refs_inner(value, out);
         }
@@ -273,14 +277,14 @@ impl Parser {
     }
 
     // type := union_expr attrs?
-    fn parse_type(&mut self) -> Ty {
+    fn parse_type(&mut self) -> RuntimeTy {
         let ty = self.parse_union();
         let attr = self.parse_attrs();
         apply_attr(ty, attr)
     }
 
     // union_expr := element ('|' element)*
-    fn parse_union(&mut self) -> Ty {
+    fn parse_union(&mut self) -> RuntimeTy {
         let first = self.parse_element();
         let mut members = vec![first];
         loop {
@@ -295,19 +299,19 @@ impl Parser {
         if members.len() == 1 {
             members.pop().unwrap()
         } else {
-            Ty::Union(members, TyAttr::default())
+            RuntimeTy::Union(members, TyAttr::default())
         }
     }
 
     // element := postfix attrs?
-    fn parse_element(&mut self) -> Ty {
+    fn parse_element(&mut self) -> RuntimeTy {
         let ty = self.parse_postfix();
         let attr = self.parse_attrs();
         apply_attr(ty, attr)
     }
 
     // postfix := atom ('[]' | '?')*
-    fn parse_postfix(&mut self) -> Ty {
+    fn parse_postfix(&mut self) -> RuntimeTy {
         let mut ty = self.parse_atom();
         loop {
             self.skip_ws();
@@ -316,10 +320,10 @@ impl Parser {
                 && self.chars[self.pos + 1] == ']'
             {
                 self.pos += 2;
-                ty = Ty::List(Box::new(ty), TyAttr::default());
+                ty = RuntimeTy::List(Box::new(ty), TyAttr::default());
             } else if self.peek() == Some('?') {
                 self.advance();
-                ty = Ty::optional(ty);
+                ty = RuntimeTy::optional(ty);
             } else {
                 break;
             }
@@ -327,7 +331,7 @@ impl Parser {
         ty
     }
 
-    fn parse_atom(&mut self) -> Ty {
+    fn parse_atom(&mut self) -> RuntimeTy {
         self.skip_ws();
         match self.peek() {
             Some('(') => {
@@ -340,22 +344,30 @@ impl Parser {
             Some('$') => {
                 self.advance();
                 let name = self.read_word();
-                Ty::TypeAlias(TypeName::local(name.into()), TyAttr::default())
+                RuntimeTy::TypeAlias(TypeName::local(name.into()), TyAttr::default())
             }
             Some(c) if c.is_ascii_digit() || c == '-' => {
                 let n = self.read_int();
-                Ty::Literal(Literal::Int(n), TyAttr::default())
+                RuntimeTy::Literal(Literal::Int(n), Freshness::Regular, TyAttr::default())
             }
             Some(c) if c.is_alphabetic() => {
                 let word = self.read_word();
                 match word.as_str() {
-                    "int" => Ty::int(),
-                    "float" => Ty::float(),
-                    "string" => Ty::string(),
-                    "bool" => Ty::bool(),
-                    "null" => Ty::null(),
-                    "true" => Ty::Literal(Literal::Bool(true), TyAttr::default()),
-                    "false" => Ty::Literal(Literal::Bool(false), TyAttr::default()),
+                    "int" => RuntimeTy::int(),
+                    "float" => RuntimeTy::float(),
+                    "string" => RuntimeTy::string(),
+                    "bool" => RuntimeTy::bool(),
+                    "null" => RuntimeTy::null(),
+                    "true" => RuntimeTy::Literal(
+                        Literal::Bool(true),
+                        Freshness::Regular,
+                        TyAttr::default(),
+                    ),
+                    "false" => RuntimeTy::Literal(
+                        Literal::Bool(false),
+                        Freshness::Regular,
+                        TyAttr::default(),
+                    ),
                     "map" => {
                         self.skip_ws();
                         assert_eq!(self.advance(), '<');
@@ -365,14 +377,18 @@ impl Parser {
                         let value = self.parse_type();
                         self.skip_ws();
                         assert_eq!(self.advance(), '>');
-                        Ty::Map {
+                        RuntimeTy::Map {
                             key: Box::new(key),
                             value: Box::new(value),
                             attr: TyAttr::default(),
                         }
                     }
                     // Capitalized or otherwise — treat as class name.
-                    name => Ty::Class(TypeName::local(name.into()), Vec::new(), TyAttr::default()),
+                    name => RuntimeTy::Class(
+                        TypeName::local(name.into()),
+                        Vec::new(),
+                        TyAttr::default(),
+                    ),
                 }
             }
             other => panic!("unexpected {:?} at pos {} in type DSL", other, self.pos),
@@ -404,8 +420,8 @@ impl Parser {
     }
 }
 
-/// Apply a parsed attr to a Ty. If the attr is all-default, return ty unchanged.
-fn apply_attr(ty: Ty, attr: TyAttr) -> Ty {
+/// Apply a parsed attr to a RuntimeTy. If the attr is all-default, return ty unchanged.
+fn apply_attr(ty: RuntimeTy, attr: TyAttr) -> RuntimeTy {
     if attr == TyAttr::default() {
         ty
     } else {
@@ -413,7 +429,7 @@ fn apply_attr(ty: Ty, attr: TyAttr) -> Ty {
     }
 }
 
-fn parse_ty(s: &str) -> Ty {
+fn parse_ty(s: &str) -> RuntimeTy {
     let mut parser = Parser::new(s);
     let ty = parser.parse_type();
     parser.skip_ws();

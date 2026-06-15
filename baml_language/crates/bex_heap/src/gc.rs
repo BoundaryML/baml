@@ -47,7 +47,12 @@ fn future_object_ref(fut: &Future) -> Option<HeapPtr> {
     use bex_vm_types::FutureRead;
     match fut.read() {
         FutureRead::Ready(v) | FutureRead::Error(v) => v.as_object_ptr(),
-        FutureRead::Pending(_) | FutureRead::Cancelled | FutureRead::InternalError(_) => None,
+        // ErrorPending's value lives in the ENGINE's GC-rooted stash, not in
+        // the heap future — nothing reachable from here.
+        FutureRead::Pending(_)
+        | FutureRead::Cancelled
+        | FutureRead::InternalError(_)
+        | FutureRead::ErrorPending(_) => None,
     }
 }
 
@@ -392,16 +397,19 @@ impl BexHeap {
                 if let Some(name_ptr) = future.name {
                     worklist.push(name_ptr);
                 }
+                if let Some(config_ptr) = future.config {
+                    worklist.push(config_ptr);
+                }
                 worklist.push(future.closure);
             }
             // Primitives have no references
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
             // `HostClosure` carries only an `Arc<HostValueArc>` (Rust-side
-            // stub, not a heap object) and a `Box<Ty>` (no `HeapPtr`s).
+            // stub, not a heap object) and a `Box<RuntimeTy>` (no `HeapPtr`s).
             Object::HostClosure(_) => {}
             // `GenericFunction` references its base function by `GlobalIndex`
-            // (not a `HeapPtr`) and holds only inline `Ty`s — nothing to trace.
+            // (not a `HeapPtr`) and holds only inline `RuntimeTy`s — nothing to trace.
             Object::String(_)
             | Object::Bigint(_)
             | Object::Uint8Array(_)
@@ -547,6 +555,11 @@ impl BexHeap {
                     && let Some(&new_ptr) = forwarding.get(name_ptr)
                 {
                     *name_ptr = new_ptr;
+                }
+                if let Some(config_ptr) = &mut future.config
+                    && let Some(&new_ptr) = forwarding.get(config_ptr)
+                {
+                    *config_ptr = new_ptr;
                 }
                 if let Some(&new_ptr) = forwarding.get(&future.closure) {
                     future.closure = new_ptr;
@@ -818,6 +831,11 @@ impl BexHeap {
                     && self.generation_of(name_ptr).is_young()
                 {
                     worklist.push(name_ptr);
+                }
+                if let Some(config_ptr) = future.config
+                    && self.generation_of(config_ptr).is_young()
+                {
+                    worklist.push(config_ptr);
                 }
                 if self.generation_of(future.closure).is_young() {
                     worklist.push(future.closure);
@@ -1146,10 +1164,10 @@ mod tests {
             name: baml_type::TypeName::local(baml_type::Name::new("C")),
             fields: vec![bex_vm_types::ClassField {
                 name: "x".to_string(),
-                field_type: baml_type::Ty::Int {
+                field_type: baml_type::RuntimeTy::Int {
                     attr: baml_type::TyAttr::default(),
                 },
-                field_template: baml_type::TyTemplate::Concrete(baml_type::Ty::Int {
+                field_template: baml_type::TyTemplate::Concrete(baml_type::RuntimeTy::Int {
                     attr: baml_type::TyAttr::default(),
                 }),
                 description: None,
@@ -1805,7 +1823,7 @@ mod tests {
         let Object::Class(c) = (unsafe { inst.class.get() }) else {
             panic!("not class")
         };
-        assert_eq!(c.name.name.as_str(), "TestClass");
+        assert_eq!(c.name.name().as_str(), "TestClass");
     }
 
     #[test]
@@ -1837,7 +1855,7 @@ mod tests {
         let Object::Enum(e) = (unsafe { v.enm.get() }) else {
             panic!("not enum")
         };
-        assert_eq!(e.name.name.as_str(), "Color");
+        assert_eq!(e.name.name().as_str(), "Color");
     }
 
     #[test]
@@ -1924,10 +1942,11 @@ mod tests {
         // purposes — the GC only needs a valid HeapPtr to walk.
         let closure = tlab.alloc_string("closure-stand-in".to_string());
         let name = tlab.alloc_string("spawn-name".to_string());
-        let future_ptr = tlab.alloc(Object::UnscheduledFuture(UnscheduledFuture {
+        let future_ptr = tlab.alloc(Object::UnscheduledFuture(Box::new(UnscheduledFuture {
             closure,
             name: Some(name),
-        }));
+            config: None,
+        })));
 
         let roots = vec![future_ptr];
         let (stats, _new_roots, _) = unsafe { heap.collect_garbage(&roots) };
@@ -2047,7 +2066,7 @@ mod tests {
         let Object::Class(c) = (unsafe { new_roots[0].get() }) else {
             panic!("not class")
         };
-        assert_eq!(c.name.name.as_str(), "MyClass");
+        assert_eq!(c.name.name().as_str(), "MyClass");
         assert_eq!(c.type_tag, 42);
     }
 
@@ -2070,14 +2089,14 @@ mod tests {
         let Object::Enum(e) = (unsafe { new_roots[0].get() }) else {
             panic!("not enum")
         };
-        assert_eq!(e.name.name.as_str(), "Status");
+        assert_eq!(e.name.name().as_str(), "Status");
     }
 
     #[test]
     fn test_gc_leaf_type_preserved() {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
-        let ptr = tlab.alloc(Object::Type(Box::new(baml_type::Ty::Int {
+        let ptr = tlab.alloc(Object::Type(Box::new(baml_type::RuntimeTy::Int {
             attr: baml_type::TyAttr::default(),
         })));
 
@@ -2085,7 +2104,7 @@ mod tests {
         let Object::Type(ty) = (unsafe { new_roots[0].get() }) else {
             panic!("not type")
         };
-        assert!(matches!(**ty, baml_type::Ty::Int { .. }));
+        assert!(matches!(**ty, baml_type::RuntimeTy::Int { .. }));
     }
 
     #[test]
@@ -2440,10 +2459,11 @@ mod tests {
         // --- Container: Object::UnscheduledFuture ---
         // After BEP-034 phase D′ the spawn case is all that's left;
         // the closure pointer stands in as the traced HeapPtr.
-        let future_container = tlab.alloc(Object::UnscheduledFuture(UnscheduledFuture {
+        let future_container = tlab.alloc(Object::UnscheduledFuture(Box::new(UnscheduledFuture {
             closure: leaf_for_future,
             name: None,
-        }));
+            config: None,
+        })));
 
         // --- Container: Object::Instance ---
         // Instance requires a class pointer.
@@ -2579,7 +2599,7 @@ mod tests {
         let Object::Enum(e) = (unsafe { var.enm.get() }) else {
             panic!("variant.enm not Enum")
         };
-        assert_eq!(e.name.name.as_str(), "E");
+        assert_eq!(e.name.name().as_str(), "E");
     }
 
     // ========================================================================

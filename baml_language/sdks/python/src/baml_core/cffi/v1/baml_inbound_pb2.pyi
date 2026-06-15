@@ -23,7 +23,7 @@ class BamlHandleType(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     ADT_TYPE: _ClassVar[BamlHandleType]
     ADT_TAGGED_HEAP_HANDLE: _ClassVar[BamlHandleType]
     HOST_VALUE_CALLABLE: _ClassVar[BamlHandleType]
-    HOST_VALUE_ERROR: _ClassVar[BamlHandleType]
+    HOST_VALUE_OPAQUE: _ClassVar[BamlHandleType]
 HANDLE_UNSPECIFIED: BamlHandleType
 UNTAGGED_RUST_DATA: BamlHandleType
 UNTAGGED_BEX_HEAP: BamlHandleType
@@ -38,7 +38,7 @@ ADT_COLLECTOR: BamlHandleType
 ADT_TYPE: BamlHandleType
 ADT_TAGGED_HEAP_HANDLE: BamlHandleType
 HOST_VALUE_CALLABLE: BamlHandleType
-HOST_VALUE_ERROR: BamlHandleType
+HOST_VALUE_OPAQUE: BamlHandleType
 
 class BamlHandle(_message.Message):
     __slots__ = ("key", "handle_type")
@@ -117,10 +117,12 @@ class InboundEnumValue(_message.Message):
     def __init__(self, name: _Optional[str] = ..., value: _Optional[str] = ...) -> None: ...
 
 class CallFunctionArgs(_message.Message):
-    __slots__ = ("kwargs",)
+    __slots__ = ("kwargs", "call_id")
     KWARGS_FIELD_NUMBER: _ClassVar[int]
+    CALL_ID_FIELD_NUMBER: _ClassVar[int]
     kwargs: _containers.RepeatedCompositeFieldContainer[InboundMapEntry]
-    def __init__(self, kwargs: _Optional[_Iterable[_Union[InboundMapEntry, _Mapping]]] = ...) -> None: ...
+    call_id: int
+    def __init__(self, kwargs: _Optional[_Iterable[_Union[InboundMapEntry, _Mapping]]] = ..., call_id: _Optional[int] = ...) -> None: ...
 
 class CallAck(_message.Message):
     __slots__ = ("error",)

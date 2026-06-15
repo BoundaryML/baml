@@ -30,13 +30,13 @@ function user.from_json(j: baml.json.json) -> user.Profile  [expr] {
   user.Profile { bio: baml.json.from_json(baml.json.field(j, "bio")), settings: baml.json.from_json(baml.json.field(j, "settings")) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "bio": self.bio.to_json(), "settings": self.settings.to_json() }
+  map { "bio": baml.json.to_json(self.bio), "settings": baml.json.to_json(self.settings) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": self.name.to_json(), "profile": self.profile.to_json(), "tags": self.tags.to_json() }
+  map { "name": baml.json.to_json(self.name), "profile": baml.json.to_json(self.profile), "tags": baml.json.to_json(self.tags) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "theme": self.theme.to_json() }
+  map { "theme": baml.json.to_json(self.theme) }
 }
 class user.IndexUser {
   name: string
@@ -50,7 +50,7 @@ function user.from_json(j: baml.json.json) -> user.IndexUser  [expr] {
   user.IndexUser { name: baml.json.from_json(baml.json.field(j, "name")), age: baml.json.from_json(baml.json.field(j, "age")), tags: baml.json.from_json(baml.json.field(j, "tags")) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": self.name.to_json(), "age": self.age.to_json(), "tags": self.tags.to_json() }
+  map { "name": baml.json.to_json(self.name), "age": baml.json.to_json(self.age), "tags": baml.json.to_json(self.tags) }
 }
 function user.TestPrecedence() -> bool  [expr] {
   { let a = 2 Add 3 Mul 4; let c = 2 Mul 3 Add 4; let b = a Gt 10 Add 2; let d = true Or false And false; return d }

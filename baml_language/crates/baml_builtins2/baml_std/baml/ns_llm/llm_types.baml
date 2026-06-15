@@ -183,7 +183,7 @@ class Client {
 
         let http_request = primitive.build_request_stream(specialized, return_type);
         let sse = root.http.fetch_sse(http_request);
-        let stream: Stream<TStream, TFinal> = self.__make_stream(sse, context.function_name);
+        let stream: Stream<TStream, TFinal> = self.__make_stream<TStream, TFinal>(sse);
         return stream;
       }
 
@@ -216,12 +216,10 @@ class Client {
   }
 
   /// DO NOT CALL FROM USER CODE
-  function __make_stream<TStream, TFinal>(self, sse: root.http.SseStream, function_name: string) -> Stream<TStream, TFinal> {
+  function __make_stream<TStream, TFinal>(self, sse: root.http.SseStream) -> Stream<TStream, TFinal> {
     let primitive = self.to_primitive_client()
-    let return_type = get_return_type(function_name)
-    let stream_return_type = get_stream_return_type(function_name)
     let acc = primitive.new_stream_accumulator()
-    let cache: StreamCache<TStream, TFinal> = StreamCache.new(return_type, stream_return_type)
+    let cache: StreamCache<TStream, TFinal> = StreamCache.new(reflect.type_of<TStream>(), reflect.type_of<TFinal>())
     Stream { _client: primitive, _acc: acc, _sse: sse, _cache: cache }
   }
 
@@ -463,7 +461,7 @@ class StreamCache<TStream, TFinal> {
   _data $rust_type
 
   /// DO NOT CALL FROM USER CODE
-  function new(target: type, streaming: type) -> StreamCache<TStream, TFinal> throws never {
+  function new(t_stream: type, t_final: type) -> StreamCache<TStream, TFinal> throws never {
     $rust_io_function
   }
 }
@@ -530,7 +528,7 @@ class Stream<TStream, TFinal> {
     }
     match (self._acc.finish_reason()) {
       null => {
-        throw root.errors.LlmClientError { message: "Streaming finished without finish_reason" };
+        throw root.errors.LlmClient { message: "Streaming finished without finish_reason" };
       },
       let reason: string => self._client.validate_finish_reason(reason),
     }
@@ -613,15 +611,6 @@ function get_jinja_template(function_name: string) -> string throws root.errors.
 }
 
 function get_return_type(function_name: string) -> type throws root.errors.InvalidArgument {
-  $rust_io_function
-}
-
-/// Returns the stream-expanded return type for an LLM function.
-///
-/// For a function returning `MyClass`, this returns the type that SAP uses for
-/// partial streaming (e.g. `null | MyClass$stream`). Used by `__make_stream`
-/// to construct a `StreamCache` with the correct streaming type schema.
-function get_stream_return_type(function_name: string) -> type throws root.errors.InvalidArgument {
   $rust_io_function
 }
 

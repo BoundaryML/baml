@@ -50,6 +50,7 @@ env:
   # Inputs read by .envrc; everything else (RUSTC_WRAPPER, SCCACHE_*) is set by
   # .envrc itself so it stays the single source of truth across CI and local.
   # The R2 credentials .envrc maps to AWS_* for sccache (mapped to AWS_*).
+  # Native Cargo linker overrides live in baml_language/.cargo/config.toml.
   BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
   BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
   CARGO_INCREMENTAL: 0
@@ -109,8 +110,22 @@ jobs:
       # Snapshot tests live in `baml_tests` and are exercised end-to-end by
       # the dedicated `snapshot-tests` job. The `sdk_test_*` crates need uv
       # and run in the dedicated `sdk-tests` matrix below. Skip both here.
+      # `pack_e2e` is excluded here and run as its own step below: its harness
+      # builds `baml-pack-host` once and shares it across the suite via a
+      # process-global OnceLock, which nextest's process-per-test model would
+      # defeat (every test would rebuild the host).
       - name: "Run tests with nextest"
-        run: cargo nextest run --all-features -E 'not package(baml_tests) and not package(/^sdk_test_/)'
+        run: cargo nextest run --all-features -E 'not package(baml_tests) and not package(/^sdk_test_/) and not binary(=pack_e2e)'
+        working-directory: baml_language
+
+      # The only Linux coverage of `baml pack`'s ELF embed/extract path. The
+      # team develops on macOS, where libsui takes the Mach-O path, so an ELF
+      # writer bug (see crates/baml_cli/src/pack_elf.rs) shipped uncaught. The
+      # bug lives in ELF layout, not codegen, so it reproduces in debug too —
+      # running here (reusing the build above) keeps the gate cheap. `cargo
+      # test`, not nextest, lets the harness build the host once.
+      - name: "Run pack e2e tests (linux)"
+        run: cargo test -p baml_cli --test pack_e2e --all-features
         working-directory: baml_language
 
       - name: "Upload test results on failure"

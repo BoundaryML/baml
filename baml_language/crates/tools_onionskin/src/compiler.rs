@@ -518,10 +518,7 @@ fn expr_desc_spans<'db>(
         Expr::Object {
             type_name, fields, ..
         } => {
-            let tn = type_name
-                .as_ref()
-                .map(ToString::to_string)
-                .unwrap_or_else(|| "_".to_string());
+            let tn = type_name.to_string();
             spans.push(DetailSpan::Code(format!("{tn} {{ ")));
             for (i, (name, val)) in fields.iter().enumerate() {
                 if i > 0 {
@@ -642,6 +639,7 @@ fn expr_desc_spans<'db>(
         }
         Expr::Spawn {
             name,
+            with_exprs: _,
             body: spawn_body,
         } => {
             spans.push(DetailSpan::Code("spawn ".into()));
@@ -2085,10 +2083,7 @@ impl CompilerRunner {
                 Expr::Object {
                     type_name, fields, ..
                 } => {
-                    let tn = type_name
-                        .as_ref()
-                        .map(ToString::to_string)
-                        .unwrap_or_else(|| "_".to_string());
+                    let tn = type_name.to_string();
                     format!("{tn} {{ {} fields }}", fields.len())
                 }
                 Expr::Array { elements } => format!("[{} items]", elements.len()),
@@ -4004,6 +3999,13 @@ impl CompilerRunner {
                     ));
                     break;
                 }
+                Ok(VmExecState::AwaitAny(_)) => {
+                    self.vm_runner_state.execution_result = Some(VmExecutionResult::Error(
+                        "Function awaits any of several futures (not supported in VM Runner)"
+                            .to_string(),
+                    ));
+                    break;
+                }
                 Ok(VmExecState::Spawn(_)) => {
                     self.vm_runner_state.execution_result = Some(VmExecutionResult::Error(
                         "Function spawned a future (not supported in VM Runner)".to_string(),
@@ -4022,10 +4024,6 @@ impl CompilerRunner {
                             .to_string(),
                     ));
                     break;
-                }
-                Ok(VmExecState::SpanNotify(_)) => {
-                    // Span notifications are ignored — push null and continue.
-                    vm.stack.push(Value::NULL);
                 }
                 Ok(VmExecState::Event { .. }) => {
                     // Custom events are not surfaced — push null and continue.

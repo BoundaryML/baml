@@ -543,10 +543,14 @@ impl<'db> SemanticIndexBuilder<'db> {
             }
             ast::Expr::Spawn {
                 name,
+                with_exprs,
                 body: spawn_body,
             } => {
                 if let Some(name) = name {
                     self.walk_expr(*name, body, source_map, true);
+                }
+                for with_expr in with_exprs {
+                    self.walk_expr(*with_expr, body, source_map, true);
                 }
                 self.walk_expr(*spawn_body, body, source_map, true);
             }
@@ -1493,6 +1497,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                     ast::BuiltinKind::Vm => "$rust_function",
                     ast::BuiltinKind::Io => "$rust_io_function",
                     ast::BuiltinKind::Intrinsic => "$compiler_intrinsic",
+                    ast::BuiltinKind::AwaitAny => "$await_any",
                 };
                 self.diagnostics.push(Hir2Diagnostic::BuiltinOnlySyntax {
                     feature: feature.to_string(),
@@ -1817,7 +1822,24 @@ impl<'db> SemanticIndexBuilder<'db> {
                     && allowed_generic_params
                         .iter()
                         .any(|name| name == &segments[0]);
-                if !is_builtin_error && !is_builtin_class_ref && !is_allowed_generic {
+                // A projection off one of the function's own generic params —
+                // e.g. `T.CompareError` for `<T extends Comparable>`, which parses
+                // as a dotted path at this phase. The concrete error is the
+                // implementor's associated type, resolved at the call site; the
+                // host fn just propagates whatever the dispatched method throws
+                // (the declared `throws` is erased for builtins). Lets
+                // `_compare_shim` declare `throws T.CompareError` instead of an
+                // unconstrained error param that call sites cannot pin.
+                let is_generic_param_projection = segments.len() >= 2
+                    && generic_args.is_empty()
+                    && allowed_generic_params
+                        .iter()
+                        .any(|name| name == &segments[0]);
+                if !is_builtin_error
+                    && !is_builtin_class_ref
+                    && !is_allowed_generic
+                    && !is_generic_param_projection
+                {
                     invalid.push(Self::render_type_expr(type_expr));
                 }
             }
@@ -1826,6 +1848,21 @@ impl<'db> SemanticIndexBuilder<'db> {
                     Self::collect_invalid_builtin_throw_types(ty, allowed_generic_params, invalid);
                 }
             }
+            // A projection off one of the function's own generic params — e.g.
+            // `T.CompareError` for `<T extends Comparable>`. The concrete error is
+            // the implementor's associated type, resolved at the call site; the
+            // host fn just propagates whatever the dispatched method throws (the
+            // declared `throws` is erased for builtins), so this is sound. Lets
+            // `_compare_shim` declare `throws T.CompareError` rather than an
+            // unconstrained error param that call sites cannot pin.
+            ast::TypeExpr::AssociatedTypeProjection { base, .. }
+                if matches!(
+                    base.as_ref(),
+                    ast::TypeExpr::Path { segments, generic_args, .. }
+                        if generic_args.is_empty()
+                            && segments.len() == 1
+                            && allowed_generic_params.iter().any(|name| name == &segments[0])
+                ) => {}
             // `throws never` is the explicit "infallible" marker — always valid.
             ast::TypeExpr::Never { .. } => {}
             _ => invalid.push(Self::render_type_expr(type_expr)),

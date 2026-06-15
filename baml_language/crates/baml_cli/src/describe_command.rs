@@ -527,6 +527,10 @@ pub fn write_description(
     let body_lines: Vec<&str> = desc.full_body.lines().collect();
 
     if !is_local {
+        // The separator blank line is deliberately not counted against the
+        // budget: the body's available-line computation predates the section
+        // budgeting below and is a documented guarantee (a fields-only class
+        // body must fit at budget 5).
         writeln!(w)?;
         let available_for_body = budget.saturating_sub(lines_used);
         let was_truncated = body_lines.len() > available_for_body;
@@ -562,17 +566,40 @@ pub fn write_description(
                 total = body_lines.len(),
                 needed = body_lines.len() + 1,
             )?;
+            lines_used += 2;
         }
     }
 
+    // Whatever budget the body didn't consume flows into the list sections
+    // below (methods, dependencies, references), in priority order. The
+    // budget is soft: section headers are always emitted (so the symbol's
+    // surface stays discoverable), entries are never split mid-unit, and
+    // anything elided is replaced by an explicit "… <n> more lines" marker.
+    let mut remaining = budget.saturating_sub(lines_used);
+
     // ── Methods (instance) ───────────────────────────────────────────────────
-    // Methods are always shown in full — they bypass the body budget entirely.
-    write_method_section(w, db, project_root, "methods", &desc.instance_methods)?;
+    remaining = write_method_section(
+        w,
+        db,
+        project_root,
+        "methods",
+        &desc.instance_methods,
+        remaining,
+    )?;
 
     // ── Static methods ───────────────────────────────────────────────────────
-    write_method_section(w, db, project_root, "static_methods", &desc.static_methods)?;
+    remaining = write_method_section(
+        w,
+        db,
+        project_root,
+        "static_methods",
+        &desc.static_methods,
+        remaining,
+    )?;
 
     // ── Container ────────────────────────────────────────────────────────────
+    // Always shown in full: it's a single entry and part of the symbol's
+    // identity, like the header.
     if let Some(ref c) = desc.container {
         writeln!(w)?;
         writeln!(w, "container:")?;
@@ -586,13 +613,20 @@ pub fn write_description(
             c_path.display(),
             c_line
         )?;
+        remaining = remaining.saturating_sub(3);
     }
 
     // ── Dependencies ─────────────────────────────────────────────────────────
     if !desc.dependencies.is_empty() {
         writeln!(w)?;
         writeln!(w, "dependencies:")?;
+        remaining = remaining.saturating_sub(2);
+        let mut elided = 0usize;
         for dep in &desc.dependencies {
+            if remaining == 0 {
+                elided += 1;
+                continue;
+            }
             let dep_path = relative_path(&dep.file.path(db), project_root);
             let dep_line = line_number_at_offset(dep.file.text(db), dep.name_span.start().into());
             writeln!(
@@ -603,13 +637,23 @@ pub fn write_description(
                 dep_path.display(),
                 dep_line,
             )?;
+            remaining -= 1;
         }
+        write_elision_marker(w, elided)?;
     }
 
     // ── References ───────────────────────────────────────────────────────────
+    // Lowest priority: references are the first thing to give way under a
+    // tight budget. The header always shows the total count.
     writeln!(w)?;
     writeln!(w, "references ({}):", desc.references.len())?;
+    remaining = remaining.saturating_sub(2);
+    let mut elided = 0usize;
     for r in &desc.references {
+        if remaining == 0 {
+            elided += 1;
+            continue;
+        }
         let ref_path = relative_path(&r.file.path(db), project_root);
         writeln!(
             w,
@@ -618,9 +662,19 @@ pub fn write_description(
             r.line_number,
             r.line_text.trim()
         )?;
+        remaining -= 1;
     }
+    write_elision_marker(w, elided)?;
 
-    let _ = lines_used; // budget tracking removed with new format
+    Ok(())
+}
+
+/// Write the soft-budget elision marker for `elided` hidden lines (no-op when
+/// nothing was elided).
+fn write_elision_marker(w: &mut impl std::io::Write, elided: usize) -> std::io::Result<()> {
+    if elided > 0 {
+        writeln!(w, "  … {elided} more lines (re-run with a higher --budget)")?;
+    }
     Ok(())
 }
 
@@ -673,21 +727,32 @@ pub(crate) fn definition_line_range(
 /// Render a `methods:` / `static_methods:` section.
 ///
 /// Each method shows its first-line docstring (when present) followed by its
-/// canonical signature and full definition line range. Methods are always
-/// rendered in full — they never pass through the body budget/truncation.
+/// canonical signature and full definition line range. The section consumes
+/// from the soft line `budget` and returns what's left: the header is always
+/// emitted, each method is an atomic unit (docstring + signature are never
+/// split, even if the last one runs slightly over), and methods that don't
+/// fit are summarized by an elision marker.
 fn write_method_section(
     w: &mut impl std::io::Write,
     db: &ProjectDatabase,
     project_root: &std::path::Path,
     label: &str,
     methods: &[describe::MethodRef],
-) -> std::io::Result<()> {
+    budget: usize,
+) -> std::io::Result<usize> {
     if methods.is_empty() {
-        return Ok(());
+        return Ok(budget);
     }
     writeln!(w)?;
     writeln!(w, "{label}:")?;
+    let mut remaining = budget.saturating_sub(2);
+    let mut elided_lines = 0usize;
     for m in methods {
+        let unit_cost = 1 + usize::from(m.docstring.is_some());
+        if remaining == 0 {
+            elided_lines += unit_cost;
+            continue;
+        }
         if let Some(doc) = &m.docstring {
             writeln!(w, "  /// {doc}")?;
         }
@@ -703,8 +768,10 @@ fn write_method_section(
             start,
             end
         )?;
+        remaining = remaining.saturating_sub(unit_cost);
     }
-    Ok(())
+    write_elision_marker(w, elided_lines)?;
+    Ok(remaining)
 }
 
 /// Render a flat listing of entries to stdout.

@@ -134,7 +134,7 @@ interface Animal {
   function speak(self) -> string
 }
 
-class <[CURSOR]Dog {
+class Dog<[CURSOR] {
   name: string
 }
 
@@ -155,10 +155,38 @@ implements Animal for Dog {
 }
 
 #[test]
+fn class_hover_shows_associated_type_bindings_in_implements() {
+    let test = CursorTest::new(
+        r#"
+interface Decoder<Input> {
+  type Output
+  function decode(self, raw: Input) -> Self.Output
+}
+
+class IntDecoder<[CURSOR] {
+  implements Decoder<string> {
+    type Output = int
+    function decode(self, raw: string) -> Self.Output { return 1 }
+  }
+}
+"#,
+    );
+
+    let markdown = type_at(&test.db, test.cursor.file, test.cursor.offset)
+        .expect("hover info")
+        .to_hover_markdown();
+
+    assert!(
+        markdown.contains("type Output = int"),
+        "expected class hover to include associated type bindings, got:\n{markdown}"
+    );
+}
+
+#[test]
 fn class_hover_shows_describe_hint_when_methods_exist() {
     let test = CursorTest::new(
         r#"/// Does foo things.
-class <[CURSOR]Foo {
+class Foo<[CURSOR] {
     bar int
 
     function greet(self) -> string {
@@ -195,7 +223,7 @@ class <[CURSOR]Foo {
 #[test]
 fn class_hover_omits_hint_without_methods() {
     let test = CursorTest::new(
-        r#"class <[CURSOR]Point {
+        r#"class Point<[CURSOR] {
     x int
     y int
 }"#,

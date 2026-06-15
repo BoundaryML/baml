@@ -4,7 +4,7 @@ use super::{BamlClassTypeValue, PackageBamlImpl};
 use crate::BexVm;
 
 impl BamlClassTypeValue for PackageBamlImpl {
-    /// Returns the `Ty`'s display name.  Includes namespaces and (for
+    /// Returns the `RuntimeTy`'s display name.  Includes namespaces and (for
     /// non-`user` packages) the package prefix, so two distinct types never
     /// collide on this string — package names are unique within a workspace,
     /// so eliding the implicit `user.` prefix is unambiguous.
@@ -85,7 +85,8 @@ impl BamlClassTypeValue for PackageBamlImpl {
                     && associated_bindings_equivalent(impl_assoc, &iface_assoc)
             })
             .map(|(name, _, _)| {
-                let ty = baml_type::Ty::Class(name, Vec::new(), baml_type::TyAttr::default());
+                let ty =
+                    baml_type::RuntimeTy::Class(name, Vec::new(), baml_type::TyAttr::default());
                 Value::object(vm.tlab.alloc(Object::Type(Box::new(ty))))
             })
             .collect()
@@ -98,19 +99,19 @@ impl BamlClassTypeValue for PackageBamlImpl {
 /// semantically irrelevant — the type checker already treats `int | string`
 /// and `string | int` as identical). Falls back to structural `==` for
 /// non-union leaves.
-fn ty_args_equivalent(a: &[baml_type::Ty], b: &[baml_type::Ty]) -> bool {
+fn ty_args_equivalent(a: &[baml_type::RuntimeTy], b: &[baml_type::RuntimeTy]) -> bool {
     a.len() == b.len() && a.iter().zip(b.iter()).all(|(x, y)| ty_equivalent(x, y))
 }
 
-fn ty_equivalent(a: &baml_type::Ty, b: &baml_type::Ty) -> bool {
-    use baml_type::Ty;
+fn ty_equivalent(a: &baml_type::RuntimeTy, b: &baml_type::RuntimeTy) -> bool {
+    use baml_type::RuntimeTy;
     match (a, b) {
         // Order-insensitive comparison of union members via a one-to-one
         // matching: each `a` member must pair with a *distinct* equivalent `b`
         // member. A plain `all(|x| any(|y| ...))` would wrongly accept
         // `int | int` as equivalent to `int | string` (both members of the left
         // match the single `int` on the right), so consume each matched member.
-        (Ty::Union(am, _), Ty::Union(bm, _)) => {
+        (RuntimeTy::Union(am, _), RuntimeTy::Union(bm, _)) => {
             if am.len() != bm.len() {
                 return false;
             }
@@ -127,20 +128,22 @@ fn ty_equivalent(a: &baml_type::Ty, b: &baml_type::Ty) -> bool {
             true
         }
         // Recurse into nested generic instantiations (`Box<Slot<int | string>>`).
-        (Ty::Class(an, aa, _), Ty::Class(bn, ba, _)) => an == bn && ty_args_equivalent(aa, ba),
-        (Ty::Interface(an, aa, ab, _), Ty::Interface(bn, ba, bb, _)) => {
+        (RuntimeTy::Class(an, aa, _), RuntimeTy::Class(bn, ba, _)) => {
+            an == bn && ty_args_equivalent(aa, ba)
+        }
+        (RuntimeTy::Interface(an, aa, ab, _), RuntimeTy::Interface(bn, ba, bb, _)) => {
             an == bn && ty_args_equivalent(aa, ba) && associated_bindings_exactly_equivalent(ab, bb)
         }
         // Recurse through container/optional wrappers so a union nested inside
         // them is still compared order-insensitively (`Box<(int | string)?>` ==
         // `Box<(string | int)?>`); otherwise the wrapper would fall to the
         // structural `==` below and defeat the union-set comparison.
-        (Ty::List(ai, _), Ty::List(bi, _)) => ty_equivalent(ai, bi),
+        (RuntimeTy::List(ai, _), RuntimeTy::List(bi, _)) => ty_equivalent(ai, bi),
         (
-            Ty::Map {
+            RuntimeTy::Map {
                 key: ak, value: av, ..
             },
-            Ty::Map {
+            RuntimeTy::Map {
                 key: bk, value: bv, ..
             },
         ) => ty_equivalent(ak, bk) && ty_equivalent(av, bv),
@@ -181,11 +184,13 @@ fn ty_name_args_and_assoc(vm: &BexVm, value: Value) -> Option<InterfaceImplement
         return None;
     };
     match ty.as_ref() {
-        baml_type::Ty::Class(name, args, _) => Some((name.clone(), args.clone(), Vec::new())),
-        baml_type::Ty::Interface(name, args, associated_bindings, _) => {
+        baml_type::RuntimeTy::Class(name, args, _) => {
+            Some((name.clone(), args.clone(), Vec::new()))
+        }
+        baml_type::RuntimeTy::Interface(name, args, associated_bindings, _) => {
             Some((name.clone(), args.clone(), associated_bindings.clone()))
         }
-        baml_type::Ty::Enum(name, _) => Some((name.clone(), Vec::new(), Vec::new())),
+        baml_type::RuntimeTy::Enum(name, _) => Some((name.clone(), Vec::new(), Vec::new())),
         other => primitive_type_name(other).map(|name| (name, Vec::new(), Vec::new())),
     }
 }
@@ -195,26 +200,24 @@ fn ty_name_args_and_assoc(vm: &BexVm, value: Value) -> Option<InterfaceImplement
 /// (`reflect.type_of<int>().implements(...)` / `I.implementors()`). Must match
 /// the naming used by `baml_compiler2_emit`'s Pass 7.6 when it bakes the
 /// implementor table.
-fn primitive_type_name(ty: &baml_type::Ty) -> Option<baml_type::TypeName> {
+fn primitive_type_name(ty: &baml_type::RuntimeTy) -> Option<baml_type::TypeName> {
     let name = match ty {
-        baml_type::Ty::Int { .. } => "int",
-        baml_type::Ty::Bigint { .. } => "bigint",
-        baml_type::Ty::Float { .. } => "float",
-        baml_type::Ty::String { .. } => "string",
-        baml_type::Ty::Bool { .. } => "bool",
-        baml_type::Ty::Null { .. } => "null",
+        baml_type::RuntimeTy::Int { .. } => "int",
+        baml_type::RuntimeTy::Bigint { .. } => "bigint",
+        baml_type::RuntimeTy::Float { .. } => "float",
+        baml_type::RuntimeTy::String { .. } => "string",
+        baml_type::RuntimeTy::Bool { .. } => "bool",
+        baml_type::RuntimeTy::Null { .. } => "null",
         _ => return None,
     };
-    Some(baml_type::TypeName {
-        name: baml_type::Name::new(name),
-        module_path: Vec::new(),
-        display_name: baml_type::Name::new(name),
-    })
+    Some(baml_type::QualifiedTypeName::local(baml_type::Name::new(
+        name,
+    )))
 }
 
 /// Project a `Value::Object(Object::Type)` to its underlying `TypeName`,
-/// when the wrapped `Ty` is name-bearing (class, enum, interface — all of
-/// which round-trip through `Ty::Class` at the runtime layer; see
+/// when the wrapped `RuntimeTy` is name-bearing (class, enum, interface — all of
+/// which round-trip through `RuntimeTy::Class` at the runtime layer; see
 /// `baml_compiler2_mir/src/lower.rs`). Returns `None` for primitive types,
 /// containers, and anything else without a stable name.
 fn ty_name(vm: &BexVm, value: Value) -> Option<baml_type::TypeName> {
@@ -223,9 +226,9 @@ fn ty_name(vm: &BexVm, value: Value) -> Option<baml_type::TypeName> {
         return None;
     };
     match ty.as_ref() {
-        baml_type::Ty::Class(name, _, _)
-        | baml_type::Ty::Interface(name, _, _, _)
-        | baml_type::Ty::Enum(name, _) => Some(name.clone()),
+        baml_type::RuntimeTy::Class(name, _, _)
+        | baml_type::RuntimeTy::Interface(name, _, _, _)
+        | baml_type::RuntimeTy::Enum(name, _) => Some(name.clone()),
         other => primitive_type_name(other),
     }
 }

@@ -8,7 +8,7 @@
 //!
 //! 1. The caller looks up the builtin class (e.g. `Array`) from the `"baml"`
 //!    package and extracts its `generic_params` (e.g. `["T"]`).
-//! 2. It provides the concrete type arguments (e.g. `[Ty::Primitive(Int, TyAttr::default())]`).
+//! 2. It provides the concrete type arguments (e.g. `[Ty::Int { attr: TyAttr::default() }]`).
 //! 3. `bind_type_vars` zips them together: `{T → int}`.
 //! 4. For each method parameter/return type, `lower_type_expr_with_generics`
 //!    is called: if the `TypeExpr` is a `Path(["T"])` that matches a bound
@@ -30,7 +30,7 @@ use crate::{
 
 /// Bind type variables from generic params to concrete type arguments.
 ///
-/// Example: `bind_type_vars(&["T"], &[Ty::Primitive(Int, TyAttr::default())])` → `{"T" → Int}`
+/// Example: `bind_type_vars(&["T"], &[Ty::Int { attr: TyAttr::default() }])` → `{"T" → Int}`
 ///
 /// If there are more params than args (or vice versa), the extra entries are
 /// silently ignored — callers are responsible for providing matching lengths.
@@ -60,11 +60,15 @@ pub fn substitute_ty(ty: &Ty, bindings: &FxHashMap<Name, Ty>) -> Ty {
         Ty::EvolvingList(inner, attr) => {
             Ty::EvolvingList(Box::new(substitute_ty(inner, bindings)), attr.clone())
         }
-        Ty::Map(k, v, attr) => Ty::Map(
-            Box::new(substitute_ty(k, bindings)),
-            Box::new(substitute_ty(v, bindings)),
-            attr.clone(),
-        ),
+        Ty::Map {
+            key: k,
+            value: v,
+            attr,
+        } => Ty::Map {
+            key: Box::new(substitute_ty(k, bindings)),
+            value: Box::new(substitute_ty(v, bindings)),
+            attr: attr.clone(),
+        },
         Ty::EvolvingMap(k, v, attr) => Ty::EvolvingMap(
             Box::new(substitute_ty(k, bindings)),
             Box::new(substitute_ty(v, bindings)),
@@ -88,8 +92,8 @@ pub fn substitute_ty(ty: &Ty, bindings: &FxHashMap<Name, Ty>) -> Ty {
             member: member.clone(),
             attr: attr.clone(),
         },
-        Ty::Union(members, attr) => Ty::Union(
-            members.iter().map(|m| substitute_ty(m, bindings)).collect(),
+        Ty::Union(members, attr) => normalize_union_members(
+            members.iter().map(|m| substitute_ty(m, bindings)),
             attr.clone(),
         ),
         Ty::Function {
@@ -227,7 +231,7 @@ pub fn lower_type_expr_with_generics(
     // in nested positions are also intercepted before triggering "unresolved type".
     match expr {
         // `T?` is sugar for `T | null` — lower it directly to a nullable union.
-        TypeExpr::Optional { inner, .. } => Ty::nullable(lower_type_expr_with_generics(
+        TypeExpr::Optional { inner, .. } => Ty::optional(lower_type_expr_with_generics(
             db,
             inner,
             package_items,
@@ -246,8 +250,8 @@ pub fn lower_type_expr_with_generics(
             )),
             TyAttr::default(),
         ),
-        TypeExpr::Map { key, value, .. } => Ty::Map(
-            Box::new(lower_type_expr_with_generics(
+        TypeExpr::Map { key, value, .. } => Ty::Map {
+            key: Box::new(lower_type_expr_with_generics(
                 db,
                 key,
                 package_items,
@@ -255,7 +259,7 @@ pub fn lower_type_expr_with_generics(
                 bindings,
                 diagnostics,
             )),
-            Box::new(lower_type_expr_with_generics(
+            value: Box::new(lower_type_expr_with_generics(
                 db,
                 value,
                 package_items,
@@ -263,8 +267,8 @@ pub fn lower_type_expr_with_generics(
                 bindings,
                 diagnostics,
             )),
-            TyAttr::default(),
-        ),
+            attr: TyAttr::default(),
+        },
         TypeExpr::Union {
             variants: members, ..
         } => Ty::Union(
@@ -450,7 +454,10 @@ pub fn contains_typevar(ty: &Ty) -> bool {
                     .is_some_and(|interface| contains_typevar(interface))
         }
         Ty::List(inner, _) | Ty::EvolvingList(inner, _) => contains_typevar(inner),
-        Ty::Map(k, v, _) | Ty::EvolvingMap(k, v, _) => contains_typevar(k) || contains_typevar(v),
+        Ty::Map {
+            key: k, value: v, ..
+        }
+        | Ty::EvolvingMap(k, v, _) => contains_typevar(k) || contains_typevar(v),
         Ty::Union(tys, _) => tys.iter().any(contains_typevar),
         Ty::Future(value, error, _) => contains_typevar(value) || contains_typevar(error),
         Ty::Function {
@@ -487,6 +494,19 @@ pub fn is_value_call_inferable(name: &Name, generic_params: &[Name]) -> bool {
     generic_params.contains(name) || crate::ty::is_synthetic_effect_param(name)
 }
 
+/// Like [`contains_typevar`], but ignores type variables whose name appears in
+/// `rigid`. Used at a generic call site to tell the callee's still-unbound
+/// inference variables apart from the *enclosing* function's generic params:
+/// the latter are rigid (fixed, concrete-enough) types within the current body,
+/// so a callback parameter like `Future<T, E>` — where `T`/`E` are the caller's
+/// own generics — can drive bidirectional checking of an unannotated lambda
+/// parameter instead of falling back to synthesis (which would reject the bare
+/// param). A typevar that is NOT rigid is one the callee must still infer, so a
+/// param mentioning it genuinely cannot give the lambda a concrete shape.
+pub fn contains_non_rigid_typevar(ty: &Ty, rigid: &[Name]) -> bool {
+    contains_typevar_where(ty, &|name| !rigid.iter().any(|r| r == name))
+}
+
 /// Returns `true` if `ty` contains any type variable for which `pred` returns
 /// `true`. A general form of [`contains_typevar`] used by call validation to
 /// distinguish *rigid* type variables (the pinned `Self`, caller-scope generic
@@ -496,10 +516,16 @@ pub fn contains_typevar_where(ty: &Ty, pred: &dyn Fn(&Name) -> bool) -> bool {
     match ty {
         Ty::TypeVar(name, _) => pred(name),
         Ty::List(inner, _) | Ty::EvolvingList(inner, _) => contains_typevar_where(inner, pred),
-        Ty::Map(k, v, _) | Ty::EvolvingMap(k, v, _) => {
+        Ty::Map {
+            key: k, value: v, ..
+        }
+        | Ty::EvolvingMap(k, v, _) => {
             contains_typevar_where(k, pred) || contains_typevar_where(v, pred)
         }
         Ty::Union(tys, _) => tys.iter().any(|t| contains_typevar_where(t, pred)),
+        Ty::Future(value, error, _) => {
+            contains_typevar_where(value, pred) || contains_typevar_where(error, pred)
+        }
         Ty::Function {
             generic_params,
             generic_param_bounds,
@@ -548,7 +574,7 @@ pub fn contains_typevar_where(ty: &Ty, pred: &dyn Fn(&Name) -> bool) -> bool {
 
 /// Infer type variable bindings by walking formal and actual types in parallel.
 ///
-/// When `formal` is `Ty::TypeVar("T", TyAttr::default())` and `actual` is `Ty::Primitive(Int, TyAttr::default())`,
+/// When `formal` is `Ty::TypeVar("T", TyAttr::default())` and `actual` is `Ty::Int { attr: TyAttr::default() }`,
 /// records `T → int` in `bindings`. For structural types, recurses into
 /// matching structures. Conflicting inferences are merged via `union_ty`.
 fn infer_bindings_inner(
@@ -564,6 +590,25 @@ fn infer_bindings_inner(
     // inference is completely unchanged.
     rigid: Option<&Name>,
 ) {
+    fn nullable_non_null_part(ty: &Ty) -> Option<Ty> {
+        let Ty::Union(members, attr) = ty else {
+            return None;
+        };
+        if !members.iter().any(Ty::is_null) {
+            return None;
+        }
+        let non_null: Vec<Ty> = members
+            .iter()
+            .filter(|member| !member.is_null())
+            .cloned()
+            .collect();
+        match non_null.as_slice() {
+            [] => None,
+            [single] => Some(single.clone()),
+            _ => Some(Ty::Union(non_null, attr.clone())),
+        }
+    }
+
     match (formal, actual) {
         (Ty::TypeVar(name, _), actual_ty) => {
             if rigid == Some(name) {
@@ -575,6 +620,14 @@ fn infer_bindings_inner(
             if !allow_typevar_actuals && matches!(actual_ty, Ty::TypeVar(_, _)) {
                 return;
             }
+            // An `Unknown` actual carries NO information: binding it (or
+            // unioning it into an existing binding) only poisons the result —
+            // e.g. an expected return of `SpawnParams<unknown, unknown>`
+            // driving phase-0 must not turn a param-bound `T = int` into
+            // `int | unknown`.
+            if matches!(actual_ty, Ty::Unknown { .. }) {
+                return;
+            }
             bindings
                 .entry(name.clone())
                 .and_modify(|existing| *existing = union_ty(existing, actual_ty))
@@ -583,9 +636,40 @@ fn infer_bindings_inner(
         (Ty::List(f, _), Ty::List(a, _)) => {
             infer_bindings_inner(f, a, bindings, allow_typevar_actuals, rigid);
         }
-        (Ty::Map(fk, fv, _), Ty::Map(ak, av, _)) => {
+        (
+            Ty::Map {
+                key: fk, value: fv, ..
+            },
+            Ty::Map {
+                key: ak, value: av, ..
+            },
+        ) => {
             infer_bindings_inner(fk, ak, bindings, allow_typevar_actuals, rigid);
             infer_bindings_inner(fv, av, bindings, allow_typevar_actuals, rigid);
+        }
+        (Ty::Union(_, _), _) if nullable_non_null_part(formal).is_some() => {
+            let formal_inner = nullable_non_null_part(formal).expect("checked above");
+            let actual_inner = nullable_non_null_part(actual).unwrap_or_else(|| actual.clone());
+            infer_bindings_inner(
+                &formal_inner,
+                &actual_inner,
+                bindings,
+                allow_typevar_actuals,
+                rigid,
+            );
+        }
+        (Ty::Union(f_members, _), Ty::Union(a_members, _))
+            if f_members.len() == a_members.len() =>
+        {
+            for (formal_member, actual_member) in f_members.iter().zip(a_members.iter()) {
+                infer_bindings_inner(
+                    formal_member,
+                    actual_member,
+                    bindings,
+                    allow_typevar_actuals,
+                    rigid,
+                );
+            }
         }
         (
             Ty::Function {
@@ -607,12 +691,47 @@ fn infer_bindings_inner(
             infer_bindings_inner(fr, ar, bindings, allow_typevar_actuals, rigid);
             infer_bindings_inner(fth, ath, bindings, allow_typevar_actuals, rigid);
         }
-        (Ty::Class(fn_name, f_args, _), Ty::Class(an_name, a_args, _))
-        | (Ty::Interface(fn_name, f_args, _, _), Ty::Interface(an_name, a_args, _, _))
-            if fn_name == an_name =>
-        {
+        (Ty::Class(fn_name, f_args, _), Ty::Class(an_name, a_args, _)) if fn_name == an_name => {
             for (ft, at) in f_args.iter().zip(a_args.iter()) {
                 infer_bindings_inner(ft, at, bindings, allow_typevar_actuals, rigid);
+            }
+        }
+        // `Future<T, E>` is its own variant — descend into both params so the
+        // future combinators can infer `<T, E>` from a `Future<T, E>[]` arg.
+        (Ty::Future(f_value, f_error, _), Ty::Future(a_value, a_error, _)) => {
+            infer_bindings_inner(f_value, a_value, bindings, allow_typevar_actuals, rigid);
+            infer_bindings_inner(f_error, a_error, bindings, allow_typevar_actuals, rigid);
+        }
+        // A heterogeneous future array — e.g. `[spawn { 1 }, spawn { 2 }]` —
+        // types as `(Future<A, EA> | Future<B, EB>)[]` because `Future` is
+        // invariant. Match the `Future<T, E>` formal against each union member
+        // so `T`/`E` bind to the union of the member value/error types (the
+        // TypeVar arm merges the per-member bindings via `union_ty`).
+        (Ty::Future(_, _, _), Ty::Union(members, _)) => {
+            for member in members {
+                infer_bindings_inner(formal, member, bindings, allow_typevar_actuals, rigid);
+            }
+        }
+        (
+            Ty::Interface(fn_name, f_args, f_assoc, _),
+            Ty::Interface(an_name, a_args, a_assoc, _),
+        ) if fn_name == an_name => {
+            for (ft, at) in f_args.iter().zip(a_args.iter()) {
+                infer_bindings_inner(ft, at, bindings, allow_typevar_actuals, rigid);
+            }
+            for (formal_name, formal_ty) in f_assoc {
+                if let Some((_, actual_ty)) = a_assoc
+                    .iter()
+                    .find(|(actual_name, _)| actual_name == formal_name)
+                {
+                    infer_bindings_inner(
+                        formal_ty,
+                        actual_ty,
+                        bindings,
+                        allow_typevar_actuals,
+                        rigid,
+                    );
+                }
             }
         }
         // Builtin container bridging: Array<T> ↔ List(T), Map<K,V> ↔ Map(K,V)
@@ -629,9 +748,14 @@ fn infer_bindings_inner(
                 rigid,
             );
         }
-        (Ty::Class(class_name, f_args, _), Ty::Map(actual_key, actual_val, _))
-            if class_name.is_builtin_root_type("Map") && f_args.len() == 2 =>
-        {
+        (
+            Ty::Class(class_name, f_args, _),
+            Ty::Map {
+                key: actual_key,
+                value: actual_val,
+                ..
+            },
+        ) if class_name.is_builtin_root_type("Map") && f_args.len() == 2 => {
             infer_bindings_inner(
                 &f_args[0],
                 actual_key,
@@ -676,36 +800,38 @@ pub fn infer_bindings_rigid_self(
 /// Used when the same type variable is inferred from multiple arguments
 /// (e.g., `deep_equals(myInt, myString)` → `T` gets `int` then `string`).
 pub fn union_ty(a: &Ty, b: &Ty) -> Ty {
-    if a == b {
-        return a.clone();
-    }
-    let mut members = Vec::new();
-    match a {
-        Ty::Union(tys, _) => members.extend(tys.iter().cloned()),
-        other => members.push(other.clone()),
-    }
-    match b {
-        Ty::Union(tys, _) => {
-            for t in tys {
-                if !members.contains(t) {
-                    members.push(t.clone());
+    normalize_union_members([a.clone(), b.clone()], TyAttr::default())
+}
+
+fn normalize_union_members(members: impl IntoIterator<Item = Ty>, attr: TyAttr) -> Ty {
+    let mut normalized = Vec::new();
+    for member in members {
+        match member {
+            Ty::Never { .. } => {}
+            Ty::Union(inner, _) => {
+                for inner_member in inner {
+                    if !matches!(inner_member, Ty::Never { .. })
+                        && !normalized.contains(&inner_member)
+                    {
+                        normalized.push(inner_member);
+                    }
                 }
             }
-        }
-        other => {
-            if !members.contains(other) {
-                members.push(other.clone());
-            }
+            other if !normalized.contains(&other) => normalized.push(other),
+            _ => {}
         }
     }
-    if members.len() == 1 {
-        members.pop().unwrap()
-    } else {
-        // TODO(TyAttr): This union is synthesized from two input types — there's no single
-        // "original attr" to preserve. If both inputs are unions with different attrs, which
-        // one wins? May need a merge/lattice operation on TyAttr, or TyAttr::default() may
-        // be correct if attrs describe declaration sites rather than computed types.
-        Ty::Union(members, TyAttr::default())
+
+    match normalized.len() {
+        0 => Ty::Never { attr },
+        1 => normalized.pop().expect("length checked"),
+        _ => {
+            // TODO(TyAttr): This union is synthesized from multiple input types — there's no
+            // single "original attr" to preserve. If inputs carry different attrs, which one
+            // wins? May need a merge/lattice operation on TyAttr, or default may be correct if
+            // attrs describe declaration sites rather than computed types.
+            Ty::Union(normalized, attr)
+        }
     }
 }
 
@@ -715,6 +841,123 @@ pub fn union_ty(a: &Ty, b: &Ty) -> Ty {
 /// VIR/runtime. Each erased `TypeVar` produces a `CannotInferTypeParameter`
 /// diagnostic.
 #[allow(clippy::only_used_in_recursion)] // diagnostics param kept for future use
+/// Replace every `Ty::TypeVar` for which `pred` returns `true` with
+/// `Ty::Never`, recursing structurally. Used to drop UNBOUND callee generics
+/// from an instantiated throws type: an unconstrained type variable there
+/// means "nothing nameable is thrown", and `Never` vanishes from throw-fact
+/// sets (`flatten_ty_to_facts` skips it), while a raw `TypeVar` fact would
+/// poison the enclosing effective-throws surface.
+pub fn erase_typevars_where(ty: &Ty, pred: &dyn Fn(&Name) -> bool) -> Ty {
+    match ty {
+        Ty::TypeVar(name, attr) => {
+            if pred(name) {
+                Ty::Never { attr: attr.clone() }
+            } else {
+                ty.clone()
+            }
+        }
+        Ty::List(inner, attr) => {
+            Ty::List(Box::new(erase_typevars_where(inner, pred)), attr.clone())
+        }
+        Ty::Map {
+            key: k,
+            value: v,
+            attr,
+        } => Ty::Map {
+            key: Box::new(erase_typevars_where(k, pred)),
+            value: Box::new(erase_typevars_where(v, pred)),
+            attr: attr.clone(),
+        },
+        Ty::Union(members, attr) => Ty::Union(
+            members
+                .iter()
+                .map(|m| erase_typevars_where(m, pred))
+                .collect(),
+            attr.clone(),
+        ),
+        Ty::EvolvingList(inner, attr) => {
+            Ty::EvolvingList(Box::new(erase_typevars_where(inner, pred)), attr.clone())
+        }
+        Ty::EvolvingMap(k, v, attr) => Ty::EvolvingMap(
+            Box::new(erase_typevars_where(k, pred)),
+            Box::new(erase_typevars_where(v, pred)),
+            attr.clone(),
+        ),
+        Ty::Class(name, type_args, attr) => Ty::Class(
+            name.clone(),
+            type_args
+                .iter()
+                .map(|t| erase_typevars_where(t, pred))
+                .collect(),
+            attr.clone(),
+        ),
+        Ty::Interface(name, type_args, associated_bindings, attr) => Ty::Interface(
+            name.clone(),
+            type_args
+                .iter()
+                .map(|t| erase_typevars_where(t, pred))
+                .collect(),
+            associated_bindings
+                .iter()
+                .map(|(n, t)| (n.clone(), erase_typevars_where(t, pred)))
+                .collect(),
+            attr.clone(),
+        ),
+        Ty::AssociatedTypeProjection {
+            base,
+            interface,
+            member,
+            attr,
+        } => Ty::AssociatedTypeProjection {
+            base: Box::new(erase_typevars_where(base, pred)),
+            interface: interface
+                .as_ref()
+                .map(|interface| Box::new(erase_typevars_where(interface, pred))),
+            member: member.clone(),
+            attr: attr.clone(),
+        },
+        Ty::Future(value, error, attr) => Ty::Future(
+            Box::new(erase_typevars_where(value, pred)),
+            Box::new(erase_typevars_where(error, pred)),
+            attr.clone(),
+        ),
+        Ty::Function {
+            generic_params,
+            generic_param_bounds,
+            params,
+            ret,
+            throws,
+            attr,
+        } => {
+            // A function type's own generic params are local binders —
+            // shadow them out of the predicate before recursing.
+            let shadowed = |name: &Name| !generic_params.iter().any(|g| g == name) && pred(name);
+            let shadowed: &dyn Fn(&Name) -> bool = &shadowed;
+            Ty::Function {
+                generic_params: generic_params.clone(),
+                generic_param_bounds: generic_param_bounds
+                    .iter()
+                    .map(|b| b.as_ref().map(|t| erase_typevars_where(t, shadowed)))
+                    .collect(),
+                params: params
+                    .iter()
+                    .map(|p| FunctionParamTy {
+                        name: p.name.clone(),
+                        ty: erase_typevars_where(&p.ty, shadowed),
+                        mode: p.mode,
+                    })
+                    .collect(),
+                ret: Box::new(erase_typevars_where(ret, shadowed)),
+                throws: Box::new(erase_typevars_where(throws, shadowed)),
+                attr: attr.clone(),
+            }
+        }
+        // Leaves (primitives, enums, etc.) — pass through.
+        _ => ty.clone(),
+    }
+}
+
+#[allow(clippy::only_used_in_recursion)]
 pub fn erase_unresolved_typevars(
     ty: &Ty,
     diagnostics: &mut Vec<crate::infer_context::TirTypeError>,
@@ -729,11 +972,15 @@ pub fn erase_unresolved_typevars(
             Box::new(erase_unresolved_typevars(inner, diagnostics)),
             attr.clone(),
         ),
-        Ty::Map(k, v, attr) => Ty::Map(
-            Box::new(erase_unresolved_typevars(k, diagnostics)),
-            Box::new(erase_unresolved_typevars(v, diagnostics)),
-            attr.clone(),
-        ),
+        Ty::Map {
+            key: k,
+            value: v,
+            attr,
+        } => Ty::Map {
+            key: Box::new(erase_unresolved_typevars(k, diagnostics)),
+            value: Box::new(erase_unresolved_typevars(v, diagnostics)),
+            attr: attr.clone(),
+        },
         Ty::AssociatedTypeProjection {
             base,
             interface,
@@ -790,6 +1037,11 @@ pub fn erase_unresolved_typevars(
                 .collect(),
             attr.clone(),
         ),
+        Ty::Future(value, error, attr) => Ty::Future(
+            Box::new(erase_unresolved_typevars(value, diagnostics)),
+            Box::new(erase_unresolved_typevars(error, diagnostics)),
+            attr.clone(),
+        ),
         other => other.clone(),
     }
 }
@@ -832,11 +1084,11 @@ pub fn erase_typevars_matching(ty: &Ty, should_erase: &impl Fn(&Name) -> bool) -
             Box::new(erase_typevars_matching(inner, should_erase)),
             attr.clone(),
         ),
-        Ty::Map(key, value, attr) => Ty::Map(
-            Box::new(erase_typevars_matching(key, should_erase)),
-            Box::new(erase_typevars_matching(value, should_erase)),
-            attr.clone(),
-        ),
+        Ty::Map { key, value, attr } => Ty::Map {
+            key: Box::new(erase_typevars_matching(key, should_erase)),
+            value: Box::new(erase_typevars_matching(value, should_erase)),
+            attr: attr.clone(),
+        },
         Ty::EvolvingMap(key, value, attr) => Ty::EvolvingMap(
             Box::new(erase_typevars_matching(key, should_erase)),
             Box::new(erase_typevars_matching(value, should_erase)),

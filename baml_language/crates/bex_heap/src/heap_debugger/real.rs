@@ -340,7 +340,10 @@ impl BexHeap {
                 FutureRead::Ready(value) | FutureRead::Error(value) => {
                     self.debug_assert_valid_value(&value);
                 }
-                FutureRead::Pending(_) | FutureRead::Cancelled | FutureRead::InternalError(_) => {}
+                FutureRead::Pending(_)
+                | FutureRead::ErrorPending(_)
+                | FutureRead::Cancelled
+                | FutureRead::InternalError(_) => {}
             },
             Object::UnscheduledFuture(future) => {
                 if let Some(name_ptr) = future.name {

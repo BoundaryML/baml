@@ -17,7 +17,7 @@ use baml_compiler2_hir::{
 use baml_compiler2_tir::{
     lower_type_expr,
     normalize::find_recursive_aliases,
-    ty::{FunctionParamMode, PrimitiveType, QualifiedTypeName, Ty as TirTy},
+    ty::{FunctionParamMode, MediaKind, QualifiedTypeName, Ty as TirTy},
 };
 use baml_db::Name;
 
@@ -132,16 +132,26 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
         let item_tree = baml_compiler2_ppir::file_item_tree(db, source_file);
         let source_file_path: String = source_file.path(db).to_string_lossy().into_owned();
 
-        // Collect the set of function IDs that are class methods for this
-        // file so the free-function walk below can skip them. Methods live in
-        // `item_tree.functions` alongside top-level functions; without this
-        // filter, a user-declared LLM method would incorrectly land in the
-        // free-function pool.
-        let mut method_ids: std::collections::HashSet<LocalItemId<FunctionMarker>> =
+        // Collect function IDs that are not package-level functions so the
+        // free-function walk below can skip them. Class methods, interface
+        // default methods, and out-of-body implements methods all live in
+        // `item_tree.functions`, but none of them are directly callable as
+        // `<pkg>.<ns>.<method>` from generated SDKs.
+        let mut non_free_function_ids: std::collections::HashSet<LocalItemId<FunctionMarker>> =
             std::collections::HashSet::new();
         for class in item_tree.classes.values() {
             for m in &class.methods {
-                method_ids.insert(*m);
+                non_free_function_ids.insert(*m);
+            }
+        }
+        for interface in item_tree.interfaces.values() {
+            for m in &interface.default_methods {
+                non_free_function_ids.insert(*m);
+            }
+        }
+        for imp in &item_tree.implements_for {
+            for m in &imp.methods {
+                non_free_function_ids.insert(*m);
             }
         }
 
@@ -369,7 +379,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
         // through as their own pool entries; parent and companion alike are
         // inserted directly, keyed on the suffixed name.
         for (id, func) in &item_tree.functions {
-            if method_ids.contains(id) {
+            if non_free_function_ids.contains(id) {
                 continue;
             }
 
@@ -553,31 +563,33 @@ fn convert_tir_leaf(
 ) -> cg::Ty {
     match ty {
         // Primitives
-        TirTy::Primitive(PrimitiveType::Int, _) => cg::Ty::Int,
-        TirTy::Primitive(PrimitiveType::Bigint, _) => cg::Ty::Bigint,
-        TirTy::Primitive(PrimitiveType::Float, _) => cg::Ty::Float,
-        TirTy::Primitive(PrimitiveType::String, _) => cg::Ty::String,
-        TirTy::Primitive(PrimitiveType::Bool, _) => cg::Ty::Bool,
-        TirTy::Primitive(PrimitiveType::Null, _) => cg::Ty::Null,
-        TirTy::Primitive(PrimitiveType::Uint8Array, _) => cg::Ty::Uint8Array,
-        TirTy::Primitive(PrimitiveType::Image, _) => cg::Ty::Media(baml_db::MediaKind::Image),
-        TirTy::Primitive(PrimitiveType::Audio, _) => cg::Ty::Media(baml_db::MediaKind::Audio),
-        TirTy::Primitive(PrimitiveType::Video, _) => cg::Ty::Media(baml_db::MediaKind::Video),
-        TirTy::Primitive(PrimitiveType::Pdf, _) => cg::Ty::Media(baml_db::MediaKind::Pdf),
+        TirTy::Int { .. } => cg::Ty::Int,
+        TirTy::Bigint { .. } => cg::Ty::Bigint,
+        TirTy::Float { .. } => cg::Ty::Float,
+        TirTy::String { .. } => cg::Ty::String,
+        TirTy::Bool { .. } => cg::Ty::Bool,
+        TirTy::Null { .. } => cg::Ty::Null,
+        TirTy::Uint8Array { .. } => cg::Ty::Uint8Array,
+        TirTy::Media(MediaKind::Image, _) => cg::Ty::Media(baml_db::MediaKind::Image),
+        TirTy::Media(MediaKind::Audio, _) => cg::Ty::Media(baml_db::MediaKind::Audio),
+        TirTy::Media(MediaKind::Video, _) => cg::Ty::Media(baml_db::MediaKind::Video),
+        TirTy::Media(MediaKind::Pdf, _) => cg::Ty::Media(baml_db::MediaKind::Pdf),
+        // `MediaKind::Generic` is never produced by TIR; handled defensively.
+        TirTy::Media(MediaKind::Generic, _) => cg::Ty::BuiltinUnknown,
 
-        // Named types — preserve full QualifiedTypeName via name_from_qtn.
-        // Interfaces (BEP-044) lower to `cg::Ty::Class` in client codegen:
-        // generated SDKs expose interface-typed values as union-of-implementors
-        // (BEP-044 §LLM Functions), which the codegen path handles via union
-        // simplification once the implementor set is enumerated; treating them
-        // as a regular nominal type here lets that machinery run unchanged.
-        TirTy::Class(qtn, type_args, _) | TirTy::Interface(qtn, type_args, _, _) => cg::Ty::Class(
+        // Named class types — preserve full QualifiedTypeName via name_from_qtn.
+        TirTy::Class(qtn, type_args, _) => cg::Ty::Class(
             name_from_qtn(qtn),
             type_args
                 .iter()
                 .map(|t| convert_tir_to_codegen_ty(t, alias_map, recursive_aliases))
                 .collect(),
         ),
+        // Interfaces are BAML-side contracts, not serializable host SDK
+        // models. Until codegen grows a structural interface representation,
+        // surface interface-typed boundary positions as opaque values instead
+        // of emitting references to types the SDK does not define.
+        TirTy::Interface(_, _, _, _) => cg::Ty::BuiltinUnknown,
         TirTy::Enum(qtn, _) => cg::Ty::Enum(name_from_qtn(qtn)),
         TirTy::EnumVariant(qtn, _variant, _) => cg::Ty::Enum(name_from_qtn(qtn)),
 
@@ -598,7 +610,10 @@ fn convert_tir_leaf(
         TirTy::List(inner, _) | TirTy::EvolvingList(inner, _) => cg::Ty::List(Box::new(
             convert_tir_to_codegen_ty(inner, alias_map, recursive_aliases),
         )),
-        TirTy::Map(k, v, _) | TirTy::EvolvingMap(k, v, _) => cg::Ty::Map {
+        TirTy::Map {
+            key: k, value: v, ..
+        }
+        | TirTy::EvolvingMap(k, v, _) => cg::Ty::Map {
             key: Box::new(convert_tir_to_codegen_ty(k, alias_map, recursive_aliases)),
             value: Box::new(convert_tir_to_codegen_ty(v, alias_map, recursive_aliases)),
         },
@@ -653,6 +668,12 @@ fn convert_tir_leaf(
         // returns futures must `await` them before crossing the host
         // boundary in v1.
         TirTy::Future(_, _, _) => cg::Ty::Unit,
+        // `Resource`/`PromptAst`/`WatchAccessor` are never produced by TIR; the
+        // arms exist only so the match stays exhaustive over the shared
+        // `baml_type::Ty`.
+        TirTy::Resource { .. } | TirTy::PromptAst { .. } | TirTy::WatchAccessor(..) => {
+            cg::Ty::BuiltinUnknown
+        }
     }
 }
 
@@ -1232,6 +1253,93 @@ function Extract(client: string, text: string) -> string {
         assert!(
             matches!(pool.get(key), Some(cg::Symbol::Function(_))),
             "ReturnInt must be a Function symbol",
+        );
+    }
+
+    #[test]
+    fn test_interface_and_implements_methods_do_not_reach_free_function_pool() {
+        let root = Path::new("/tmp/interface_methods_not_free_codegen_functions");
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(root);
+        db.add_or_update_file(
+            root.join("main.baml").as_path(),
+            r#"
+interface Callable {
+  function run(self) -> int throws never { 1 }
+}
+
+class Box {
+  implements Callable {}
+}
+
+implements Callable for int {
+  function run(self) -> int throws never { self }
+}
+
+function top() -> int { 0 }
+"#,
+        );
+
+        let diagnostics = crate::collect_compiler2_diagnostics(&db);
+        assert!(diagnostics.is_empty(), "diagnostics: {diagnostics:#?}");
+
+        let pool = build_symbol_pool(&db);
+
+        assert!(
+            !pool
+                .keys()
+                .any(|k| k.name.as_str() == "run" && k.namespace_path.is_empty()),
+            "interface/default-impl methods must not become free SDK functions"
+        );
+        let key = pool
+            .keys()
+            .find(|k| k.name.as_str() == "top")
+            .expect("top must be in the pool");
+        assert!(
+            matches!(pool.get(key), Some(cg::Symbol::Function(_))),
+            "ordinary free functions should still reach the pool"
+        );
+    }
+
+    #[test]
+    fn test_interface_typed_sdk_boundaries_are_opaque() {
+        let root = Path::new("/tmp/interface_typed_sdk_boundaries_are_opaque");
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(root);
+        db.add_or_update_file(
+            root.join("main.baml").as_path(),
+            r#"
+interface Marker {}
+
+class Box {
+  implements Marker {}
+}
+
+function passthrough(x: Marker) -> Marker { x }
+"#,
+        );
+
+        let diagnostics = crate::collect_compiler2_diagnostics(&db);
+        assert!(diagnostics.is_empty(), "diagnostics: {diagnostics:#?}");
+
+        let pool = build_symbol_pool(&db);
+        let key = pool
+            .keys()
+            .find(|k| k.name.as_str() == "passthrough")
+            .expect("passthrough must be in the pool");
+        let Some(cg::Symbol::Function(function)) = pool.get(key) else {
+            panic!("passthrough must be a function");
+        };
+
+        assert_eq!(
+            function.arguments[0].ty,
+            cg::Ty::BuiltinUnknown,
+            "interface parameters should be opaque at the SDK boundary"
+        );
+        assert_eq!(
+            function.return_type,
+            cg::Ty::BuiltinUnknown,
+            "interface returns should be opaque at the SDK boundary"
         );
     }
 }
