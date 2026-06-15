@@ -3176,7 +3176,7 @@ class baml.mock.Mock {
   call_count: int
 }
 function baml.mock.Mock.to_json(self: baml.mock.Mock) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "call_count": self.call_count.to_json() } : map<string, baml.json.json>
+  map { "call_count": baml.json.to_json(self.call_count) } : map<string, baml.json.json>
 }
 function baml.mock.Mock.from_json(j: baml.json.json) -> baml.mock.Mock<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Mock { call_count: baml.json.from_json<int>(baml.json.field(j, "call_count")) } : baml.mock.Mock<T>

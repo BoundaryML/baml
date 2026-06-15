@@ -17137,7 +17137,7 @@ function baml.media.Video.to_json(self: baml.media.Video) -> baml.json.json {
 function baml.media.Video.url(self: baml.media.Video) -> string | null {
 }
 
-function baml.mock.Mock.from_json(j: baml.json.json) -> baml.mock.Mock<void> {
+function baml.mock.Mock.from_json(j: baml.json.json) -> baml.mock.Mock<T> {
     load_var j
     load_const "call_count"
     call baml.json.field
@@ -17150,34 +17150,37 @@ function baml.mock.Mock.from_json(j: baml.json.json) -> baml.mock.Mock<void> {
     return
 }
 
-function baml.mock.Mock.replace(self: baml.mock.Mock, replacement: void) -> void {
+function baml.mock.Mock.replace(self: baml.mock.Mock<T>, replacement: T) -> void {
 }
 
-function baml.mock.Mock.to_json(self: baml.mock.Mock) -> baml.json.json {
+function baml.mock.Mock.to_json(self: baml.mock.Mock<T>) -> baml.json.json {
+    load_type int
     load_var self
     load_field .call_count
-    call baml.Int.to_json
+    call baml.json.to_json
     load_const "call_count"
     alloc_map 1
     return
 }
 
-function baml.mock.__enter(mocks: baml.mock.Mock<void>) -> void {
+function baml.mock.__enter(mocks: baml.mock.Mock<T>) -> void {
 }
 
-function baml.mock.__exit(mocks: baml.mock.Mock<void>) -> void {
+function baml.mock.__exit(mocks: baml.mock.Mock<T>) -> void {
 }
 
-function baml.mock.__new(original: void) -> baml.mock.Mock<void> {
+function baml.mock.__new(original: T) -> baml.mock.Mock<T> {
 }
 
-function baml.mock.new(original: void) -> baml.mock.Mock<void> {
+function baml.mock.new(original: T) -> baml.mock.Mock<T> {
+    load_type #0
     load_var original
     call baml.mock.__new
     return
 }
 
-function baml.mock.scope(mocks: baml.mock.Mock<void>, body: () -> void throws never) -> void {
+function baml.mock.scope(mocks: baml.mock.Mock<T>, body: () -> void throws E) -> void {
+    load_type #0
     load_var mocks
     call baml.mock.__enter
     pop 1
@@ -17187,6 +17190,7 @@ function baml.mock.scope(mocks: baml.mock.Mock<void>, body: () -> void throws ne
     jump L0
     load_var e
     throw_if_panic
+    load_type #0
     load_var mocks
     call baml.mock.__exit
     pop 1
@@ -17194,6 +17198,7 @@ function baml.mock.scope(mocks: baml.mock.Mock<void>, body: () -> void throws ne
     throw
 
   L0:
+    load_type #0
     load_var mocks
     call baml.mock.__exit
     return

@@ -1513,7 +1513,7 @@ function baml.mock.scope(mocks: baml.mock.Mock<T>, body: () -> void throws E) ->
   { baml.mock.__enter(mocks); body() catch (e) { _ => { baml.mock.__exit(mocks); throw e } } } baml.mock.__exit(mocks)
 }
 function baml.mock.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "call_count": self.call_count.to_json() }
+  map { "call_count": baml.json.to_json(self.call_count) }
 }
 
 --- <builtin>/baml/ns_net/net.baml ---
