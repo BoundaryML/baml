@@ -34,36 +34,22 @@ function call_with_class_callback(callback: (Person) -> string, p: Person) -> st
 //
 // These exercise the intersection of two surfaces that were each covered
 // in isolation but never together: a host callable whose *own* type
-// carries an optional parameter (`y?: int`). Defaults are not permitted
-// inside a callable type — only the `?` optional marker is — so the host's
-// own language-level default is the only source of a value when BAML omits
-// the arg.
-
-// Optional arg SUPPLIED by name across the host boundary. BAML resolves
-// `y = 9` into the callable's positional arg list, so the host receives
-// both args positionally (`callable.call1` in bridge_python's
-// host_value.rs). The happy path for an optional-arg host callable.
-function call_optional_callback_supplied(callback: (x: int, y?: int) -> string, x: int) -> string {
-    callback(x, y = 9)
+// carries optional parameters (`y?: int, z?: string`). Defaults are not
+// permitted inside a callable type — only the `?` optional marker is — so the
+// host's own language-level default is the only source of a value when BAML
+// omits the arg. Every case below uses the same two-optional callback shape so
+// the per-bridge `$opts` reshape is exercised with more than one optional in
+// every scenario (supplied, int-return, omitted, and second-only).
+function call_callback_with_optional_args_all_unset(callback: (x: int, y?: int, z?: int) -> int, x: int) -> int[] {
+    [callback(x)]
 }
 
-// Same optional-arg callable shape with a non-string (`int`) return —
-// covers the result-encode path for an optional-arg host callable.
-function call_optional_int_callback_supplied(callback: (x: int, y?: int) -> int, x: int) -> int {
-    callback(x, y = 100)
+function call_callback_with_optional_args_partially_set(callback: (x: int, y?: int, z?: int) -> int, x: int) -> int[] {
+    [callback(x, y = 2), callback(x, z = 3)]
 }
 
-// Optional arg OMITTED across the host boundary. Unlike a BAML→BAML call —
-// where the engine resolves an omitted optional natively (see the
-// `optional_dropping_adapter` case in ns_optional_function_parameters) —
-// the omitted-arg sentinel (`ValueKind::OmittedArg`) cannot be converted
-// to an owned `BexExternalValue` for the wire, so building the host-call
-// arg list raises `baml.errors.AccessError("omitted argument")` *before*
-// the host callable ever runs. This pins the current limitation: a host
-// callable cannot have an optional arg omitted at the call site, so the
-// host's own default never gets a chance to apply.
-function call_optional_callback_omitted(callback: (x: int, y?: int) -> string, x: int) -> string {
-    callback(x)
+function call_callback_with_optional_args_all_set(callback: (x: int, y?: int, z?: int) -> int, x: int) -> int[] {
+    [callback(x, y = 2, z = 3)]
 }
 
 // Loop that invokes the callback N times — exercises N round-trips

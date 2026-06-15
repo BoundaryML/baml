@@ -275,6 +275,22 @@ class BamlTy(_message.Message):
     bigint_type: BamlTyBigint
     def __init__(self, string_type: _Optional[_Union[BamlTyString, _Mapping]] = ..., int_type: _Optional[_Union[BamlTyInt, _Mapping]] = ..., float_type: _Optional[_Union[BamlTyFloat, _Mapping]] = ..., bool_type: _Optional[_Union[BamlTyBool, _Mapping]] = ..., null_type: _Optional[_Union[BamlTyNull, _Mapping]] = ..., literal_type: _Optional[_Union[BamlTyLiteral, _Mapping]] = ..., media_type: _Optional[_Union[BamlTyMedia, _Mapping]] = ..., enum_type: _Optional[_Union[BamlTyEnum, _Mapping]] = ..., class_type: _Optional[_Union[BamlTyClass, _Mapping]] = ..., type_alias_type: _Optional[_Union[BamlTyTypeAlias, _Mapping]] = ..., list_type: _Optional[_Union[BamlTyList, _Mapping]] = ..., map_type: _Optional[_Union[BamlTyMap, _Mapping]] = ..., union_variant_type: _Optional[_Union[BamlTyUnionVariant, _Mapping]] = ..., optional_type: _Optional[_Union[BamlTyOptional, _Mapping]] = ..., any_type: _Optional[_Union[BamlTyAny, _Mapping]] = ..., uint8array_type: _Optional[_Union[BamlTyUint8Array, _Mapping]] = ..., unknown_type: _Optional[_Union[BamlTyUnknown, _Mapping]] = ..., bigint_type: _Optional[_Union[BamlTyBigint, _Mapping]] = ...) -> None: ...
 
+class BamlToHostCall(_message.Message):
+    __slots__ = ("args",)
+    ARGS_FIELD_NUMBER: _ClassVar[int]
+    args: _containers.RepeatedCompositeFieldContainer[BamlToHostArg]
+    def __init__(self, args: _Optional[_Iterable[_Union[BamlToHostArg, _Mapping]]] = ...) -> None: ...
+
+class BamlToHostArg(_message.Message):
+    __slots__ = ("value", "arg_name", "is_optional_arg")
+    VALUE_FIELD_NUMBER: _ClassVar[int]
+    ARG_NAME_FIELD_NUMBER: _ClassVar[int]
+    IS_OPTIONAL_ARG_FIELD_NUMBER: _ClassVar[int]
+    value: BamlOutboundValue
+    arg_name: str
+    is_optional_arg: bool
+    def __init__(self, value: _Optional[_Union[BamlOutboundValue, _Mapping]] = ..., arg_name: _Optional[str] = ..., is_optional_arg: bool = ...) -> None: ...
+
 class BamlTyString(_message.Message):
     __slots__ = ()
     def __init__(self) -> None: ...

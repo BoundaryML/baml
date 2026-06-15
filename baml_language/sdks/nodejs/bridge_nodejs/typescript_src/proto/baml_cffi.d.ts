@@ -3468,6 +3468,212 @@ export namespace baml_core {
                 public static getTypeUrl(typeUrlPrefix?: string): string;
             }
 
+            /** Properties of a BamlToHostCall. */
+            interface IBamlToHostCall {
+
+                /** BamlToHostCall args */
+                args?: (baml_core.cffi.v1.IBamlToHostArg[]|null);
+            }
+
+            /** Represents a BamlToHostCall. */
+            class BamlToHostCall implements IBamlToHostCall {
+
+                /**
+                 * Constructs a new BamlToHostCall.
+                 * @param [properties] Properties to set
+                 */
+                constructor(properties?: baml_core.cffi.v1.IBamlToHostCall);
+
+                /** BamlToHostCall args. */
+                public args: baml_core.cffi.v1.IBamlToHostArg[];
+
+                /**
+                 * Creates a new BamlToHostCall instance using the specified properties.
+                 * @param [properties] Properties to set
+                 * @returns BamlToHostCall instance
+                 */
+                public static create(properties?: baml_core.cffi.v1.IBamlToHostCall): baml_core.cffi.v1.BamlToHostCall;
+
+                /**
+                 * Encodes the specified BamlToHostCall message. Does not implicitly {@link baml_core.cffi.v1.BamlToHostCall.verify|verify} messages.
+                 * @param message BamlToHostCall message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encode(message: baml_core.cffi.v1.IBamlToHostCall, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Encodes the specified BamlToHostCall message, length delimited. Does not implicitly {@link baml_core.cffi.v1.BamlToHostCall.verify|verify} messages.
+                 * @param message BamlToHostCall message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encodeDelimited(message: baml_core.cffi.v1.IBamlToHostCall, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Decodes a BamlToHostCall message from the specified reader or buffer.
+                 * @param reader Reader or buffer to decode from
+                 * @param [length] Message length if known beforehand
+                 * @returns BamlToHostCall
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml_core.cffi.v1.BamlToHostCall;
+
+                /**
+                 * Decodes a BamlToHostCall message from the specified reader or buffer, length delimited.
+                 * @param reader Reader or buffer to decode from
+                 * @returns BamlToHostCall
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml_core.cffi.v1.BamlToHostCall;
+
+                /**
+                 * Verifies a BamlToHostCall message.
+                 * @param message Plain object to verify
+                 * @returns `null` if valid, otherwise the reason why it is not
+                 */
+                public static verify(message: { [k: string]: any }): (string|null);
+
+                /**
+                 * Creates a BamlToHostCall message from a plain object. Also converts values to their respective internal types.
+                 * @param object Plain object
+                 * @returns BamlToHostCall
+                 */
+                public static fromObject(object: { [k: string]: any }): baml_core.cffi.v1.BamlToHostCall;
+
+                /**
+                 * Creates a plain object from a BamlToHostCall message. Also converts values to other types if specified.
+                 * @param message BamlToHostCall
+                 * @param [options] Conversion options
+                 * @returns Plain object
+                 */
+                public static toObject(message: baml_core.cffi.v1.BamlToHostCall, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+                /**
+                 * Converts this BamlToHostCall to JSON.
+                 * @returns JSON object
+                 */
+                public toJSON(): { [k: string]: any };
+
+                /**
+                 * Gets the default type url for BamlToHostCall
+                 * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns The default type url
+                 */
+                public static getTypeUrl(typeUrlPrefix?: string): string;
+            }
+
+            /** Properties of a BamlToHostArg. */
+            interface IBamlToHostArg {
+
+                /** BamlToHostArg value */
+                value?: (baml_core.cffi.v1.IBamlOutboundValue|null);
+
+                /** BamlToHostArg argName */
+                argName?: (string|null);
+
+                /** BamlToHostArg isOptionalArg */
+                isOptionalArg?: (boolean|null);
+            }
+
+            /** Represents a BamlToHostArg. */
+            class BamlToHostArg implements IBamlToHostArg {
+
+                /**
+                 * Constructs a new BamlToHostArg.
+                 * @param [properties] Properties to set
+                 */
+                constructor(properties?: baml_core.cffi.v1.IBamlToHostArg);
+
+                /** BamlToHostArg value. */
+                public value?: (baml_core.cffi.v1.IBamlOutboundValue|null);
+
+                /** BamlToHostArg argName. */
+                public argName: string;
+
+                /** BamlToHostArg isOptionalArg. */
+                public isOptionalArg: boolean;
+
+                /**
+                 * Creates a new BamlToHostArg instance using the specified properties.
+                 * @param [properties] Properties to set
+                 * @returns BamlToHostArg instance
+                 */
+                public static create(properties?: baml_core.cffi.v1.IBamlToHostArg): baml_core.cffi.v1.BamlToHostArg;
+
+                /**
+                 * Encodes the specified BamlToHostArg message. Does not implicitly {@link baml_core.cffi.v1.BamlToHostArg.verify|verify} messages.
+                 * @param message BamlToHostArg message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encode(message: baml_core.cffi.v1.IBamlToHostArg, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Encodes the specified BamlToHostArg message, length delimited. Does not implicitly {@link baml_core.cffi.v1.BamlToHostArg.verify|verify} messages.
+                 * @param message BamlToHostArg message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encodeDelimited(message: baml_core.cffi.v1.IBamlToHostArg, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Decodes a BamlToHostArg message from the specified reader or buffer.
+                 * @param reader Reader or buffer to decode from
+                 * @param [length] Message length if known beforehand
+                 * @returns BamlToHostArg
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml_core.cffi.v1.BamlToHostArg;
+
+                /**
+                 * Decodes a BamlToHostArg message from the specified reader or buffer, length delimited.
+                 * @param reader Reader or buffer to decode from
+                 * @returns BamlToHostArg
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml_core.cffi.v1.BamlToHostArg;
+
+                /**
+                 * Verifies a BamlToHostArg message.
+                 * @param message Plain object to verify
+                 * @returns `null` if valid, otherwise the reason why it is not
+                 */
+                public static verify(message: { [k: string]: any }): (string|null);
+
+                /**
+                 * Creates a BamlToHostArg message from a plain object. Also converts values to their respective internal types.
+                 * @param object Plain object
+                 * @returns BamlToHostArg
+                 */
+                public static fromObject(object: { [k: string]: any }): baml_core.cffi.v1.BamlToHostArg;
+
+                /**
+                 * Creates a plain object from a BamlToHostArg message. Also converts values to other types if specified.
+                 * @param message BamlToHostArg
+                 * @param [options] Conversion options
+                 * @returns Plain object
+                 */
+                public static toObject(message: baml_core.cffi.v1.BamlToHostArg, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+                /**
+                 * Converts this BamlToHostArg to JSON.
+                 * @returns JSON object
+                 */
+                public toJSON(): { [k: string]: any };
+
+                /**
+                 * Gets the default type url for BamlToHostArg
+                 * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns The default type url
+                 */
+                public static getTypeUrl(typeUrlPrefix?: string): string;
+            }
+
             /** Properties of a BamlTyString. */
             interface IBamlTyString {
             }

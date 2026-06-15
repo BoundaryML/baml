@@ -1972,6 +1972,131 @@ func (*BamlTy_UnknownType) isBamlTy_Type() {}
 
 func (*BamlTy_BigintType) isBamlTy_Type() {}
 
+// Engine→host call of a host-callable. The engine has already resolved the call
+// against the callee's declared parameters and dropped any omitted optionals, so
+// `args` is a flat, declared-order list of the *supplied* args. Each arg carries
+// enough for a bridge to apply its own calling convention without the callee
+// type on the wire — `is_optional_arg` says whether it belongs in the positional
+// run or the host's optional/keyword bucket, and `arg_name` keys that bucket.
+// Omitted optionals are simply absent (the host's own language-level default
+// then applies). TypeScript folds the optional args into the trailing `$opts`
+// object; Python passes them as keyword arguments. Replaces the bare
+// `BamlOutboundValue` list previously passed to the dispatch FFI.
+type BamlToHostCall struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Args []*BamlToHostArg `protobuf:"bytes,1,rep,name=args,proto3" json:"args,omitempty"`
+}
+
+func (x *BamlToHostCall) Reset() {
+	*x = BamlToHostCall{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[21]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *BamlToHostCall) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BamlToHostCall) ProtoMessage() {}
+
+func (x *BamlToHostCall) ProtoReflect() protoreflect.Message {
+	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[21]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BamlToHostCall.ProtoReflect.Descriptor instead.
+func (*BamlToHostCall) Descriptor() ([]byte, []int) {
+	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *BamlToHostCall) GetArgs() []*BamlToHostArg {
+	if x != nil {
+		return x.Args
+	}
+	return nil
+}
+
+type BamlToHostArg struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Value *BamlOutboundValue `protobuf:"bytes,1,opt,name=value,proto3" json:"value,omitempty"`
+	// The parameter name, used to key the host's optional/keyword bucket. We
+	// leave `arg_name` empty for positional (required) args, which the host takes
+	// by position.
+	ArgName string `protobuf:"bytes,2,opt,name=arg_name,json=argName,proto3" json:"arg_name,omitempty"`
+	// Whether this is a supplied optional arg (→ the host's `$opts`/kwargs
+	// bucket) rather than a required positional arg.
+	IsOptionalArg bool `protobuf:"varint,3,opt,name=is_optional_arg,json=isOptionalArg,proto3" json:"is_optional_arg,omitempty"`
+}
+
+func (x *BamlToHostArg) Reset() {
+	*x = BamlToHostArg{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[22]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *BamlToHostArg) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BamlToHostArg) ProtoMessage() {}
+
+func (x *BamlToHostArg) ProtoReflect() protoreflect.Message {
+	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[22]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BamlToHostArg.ProtoReflect.Descriptor instead.
+func (*BamlToHostArg) Descriptor() ([]byte, []int) {
+	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *BamlToHostArg) GetValue() *BamlOutboundValue {
+	if x != nil {
+		return x.Value
+	}
+	return nil
+}
+
+func (x *BamlToHostArg) GetArgName() string {
+	if x != nil {
+		return x.ArgName
+	}
+	return ""
+}
+
+func (x *BamlToHostArg) GetIsOptionalArg() bool {
+	if x != nil {
+		return x.IsOptionalArg
+	}
+	return false
+}
+
 // Simple marker messages for primitive types.
 type BamlTyString struct {
 	state         protoimpl.MessageState
@@ -1982,7 +2107,7 @@ type BamlTyString struct {
 func (x *BamlTyString) Reset() {
 	*x = BamlTyString{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[21]
+		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[23]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1995,7 +2120,7 @@ func (x *BamlTyString) String() string {
 func (*BamlTyString) ProtoMessage() {}
 
 func (x *BamlTyString) ProtoReflect() protoreflect.Message {
-	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[21]
+	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[23]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2008,7 +2133,7 @@ func (x *BamlTyString) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BamlTyString.ProtoReflect.Descriptor instead.
 func (*BamlTyString) Descriptor() ([]byte, []int) {
-	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{21}
+	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{23}
 }
 
 type BamlTyInt struct {
@@ -2020,7 +2145,7 @@ type BamlTyInt struct {
 func (x *BamlTyInt) Reset() {
 	*x = BamlTyInt{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[22]
+		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[24]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2033,7 +2158,7 @@ func (x *BamlTyInt) String() string {
 func (*BamlTyInt) ProtoMessage() {}
 
 func (x *BamlTyInt) ProtoReflect() protoreflect.Message {
-	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[22]
+	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[24]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2046,7 +2171,7 @@ func (x *BamlTyInt) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BamlTyInt.ProtoReflect.Descriptor instead.
 func (*BamlTyInt) Descriptor() ([]byte, []int) {
-	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{22}
+	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{24}
 }
 
 type BamlTyFloat struct {
@@ -2058,7 +2183,7 @@ type BamlTyFloat struct {
 func (x *BamlTyFloat) Reset() {
 	*x = BamlTyFloat{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[23]
+		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[25]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2071,7 +2196,7 @@ func (x *BamlTyFloat) String() string {
 func (*BamlTyFloat) ProtoMessage() {}
 
 func (x *BamlTyFloat) ProtoReflect() protoreflect.Message {
-	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[23]
+	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[25]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2084,7 +2209,7 @@ func (x *BamlTyFloat) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BamlTyFloat.ProtoReflect.Descriptor instead.
 func (*BamlTyFloat) Descriptor() ([]byte, []int) {
-	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{23}
+	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{25}
 }
 
 type BamlTyBool struct {
@@ -2096,7 +2221,7 @@ type BamlTyBool struct {
 func (x *BamlTyBool) Reset() {
 	*x = BamlTyBool{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[24]
+		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[26]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2109,7 +2234,7 @@ func (x *BamlTyBool) String() string {
 func (*BamlTyBool) ProtoMessage() {}
 
 func (x *BamlTyBool) ProtoReflect() protoreflect.Message {
-	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[24]
+	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[26]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2122,7 +2247,7 @@ func (x *BamlTyBool) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BamlTyBool.ProtoReflect.Descriptor instead.
 func (*BamlTyBool) Descriptor() ([]byte, []int) {
-	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{24}
+	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{26}
 }
 
 type BamlTyNull struct {
@@ -2134,7 +2259,7 @@ type BamlTyNull struct {
 func (x *BamlTyNull) Reset() {
 	*x = BamlTyNull{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[25]
+		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[27]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2147,7 +2272,7 @@ func (x *BamlTyNull) String() string {
 func (*BamlTyNull) ProtoMessage() {}
 
 func (x *BamlTyNull) ProtoReflect() protoreflect.Message {
-	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[25]
+	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[27]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2160,7 +2285,7 @@ func (x *BamlTyNull) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BamlTyNull.ProtoReflect.Descriptor instead.
 func (*BamlTyNull) Descriptor() ([]byte, []int) {
-	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{25}
+	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{27}
 }
 
 type BamlTyUint8Array struct {
@@ -2172,7 +2297,7 @@ type BamlTyUint8Array struct {
 func (x *BamlTyUint8Array) Reset() {
 	*x = BamlTyUint8Array{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[26]
+		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[28]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2185,7 +2310,7 @@ func (x *BamlTyUint8Array) String() string {
 func (*BamlTyUint8Array) ProtoMessage() {}
 
 func (x *BamlTyUint8Array) ProtoReflect() protoreflect.Message {
-	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[26]
+	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[28]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2198,7 +2323,7 @@ func (x *BamlTyUint8Array) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BamlTyUint8Array.ProtoReflect.Descriptor instead.
 func (*BamlTyUint8Array) Descriptor() ([]byte, []int) {
-	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{26}
+	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{28}
 }
 
 type BamlTyAny struct {
@@ -2210,7 +2335,7 @@ type BamlTyAny struct {
 func (x *BamlTyAny) Reset() {
 	*x = BamlTyAny{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[27]
+		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[29]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2223,7 +2348,7 @@ func (x *BamlTyAny) String() string {
 func (*BamlTyAny) ProtoMessage() {}
 
 func (x *BamlTyAny) ProtoReflect() protoreflect.Message {
-	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[27]
+	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[29]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2236,7 +2361,7 @@ func (x *BamlTyAny) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BamlTyAny.ProtoReflect.Descriptor instead.
 func (*BamlTyAny) Descriptor() ([]byte, []int) {
-	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{27}
+	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{29}
 }
 
 type BamlTyUnknown struct {
@@ -2248,7 +2373,7 @@ type BamlTyUnknown struct {
 func (x *BamlTyUnknown) Reset() {
 	*x = BamlTyUnknown{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[28]
+		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[30]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2261,7 +2386,7 @@ func (x *BamlTyUnknown) String() string {
 func (*BamlTyUnknown) ProtoMessage() {}
 
 func (x *BamlTyUnknown) ProtoReflect() protoreflect.Message {
-	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[28]
+	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[30]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2274,7 +2399,7 @@ func (x *BamlTyUnknown) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BamlTyUnknown.ProtoReflect.Descriptor instead.
 func (*BamlTyUnknown) Descriptor() ([]byte, []int) {
-	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{28}
+	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{30}
 }
 
 type BamlTyBigint struct {
@@ -2286,7 +2411,7 @@ type BamlTyBigint struct {
 func (x *BamlTyBigint) Reset() {
 	*x = BamlTyBigint{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[29]
+		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[31]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2299,7 +2424,7 @@ func (x *BamlTyBigint) String() string {
 func (*BamlTyBigint) ProtoMessage() {}
 
 func (x *BamlTyBigint) ProtoReflect() protoreflect.Message {
-	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[29]
+	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[31]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2312,7 +2437,7 @@ func (x *BamlTyBigint) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BamlTyBigint.ProtoReflect.Descriptor instead.
 func (*BamlTyBigint) Descriptor() ([]byte, []int) {
-	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{29}
+	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{31}
 }
 
 // Literal: wraps a literal oneof.
@@ -2327,7 +2452,7 @@ type BamlLiteralString struct {
 func (x *BamlLiteralString) Reset() {
 	*x = BamlLiteralString{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[30]
+		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[32]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2340,7 +2465,7 @@ func (x *BamlLiteralString) String() string {
 func (*BamlLiteralString) ProtoMessage() {}
 
 func (x *BamlLiteralString) ProtoReflect() protoreflect.Message {
-	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[30]
+	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[32]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2353,7 +2478,7 @@ func (x *BamlLiteralString) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BamlLiteralString.ProtoReflect.Descriptor instead.
 func (*BamlLiteralString) Descriptor() ([]byte, []int) {
-	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{30}
+	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *BamlLiteralString) GetValue() string {
@@ -2374,7 +2499,7 @@ type BamlLiteralInt struct {
 func (x *BamlLiteralInt) Reset() {
 	*x = BamlLiteralInt{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[31]
+		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[33]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2387,7 +2512,7 @@ func (x *BamlLiteralInt) String() string {
 func (*BamlLiteralInt) ProtoMessage() {}
 
 func (x *BamlLiteralInt) ProtoReflect() protoreflect.Message {
-	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[31]
+	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[33]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2400,7 +2525,7 @@ func (x *BamlLiteralInt) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BamlLiteralInt.ProtoReflect.Descriptor instead.
 func (*BamlLiteralInt) Descriptor() ([]byte, []int) {
-	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{31}
+	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *BamlLiteralInt) GetValue() int64 {
@@ -2421,7 +2546,7 @@ type BamlLiteralBool struct {
 func (x *BamlLiteralBool) Reset() {
 	*x = BamlLiteralBool{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[32]
+		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[34]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2434,7 +2559,7 @@ func (x *BamlLiteralBool) String() string {
 func (*BamlLiteralBool) ProtoMessage() {}
 
 func (x *BamlLiteralBool) ProtoReflect() protoreflect.Message {
-	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[32]
+	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[34]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2447,7 +2572,7 @@ func (x *BamlLiteralBool) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BamlLiteralBool.ProtoReflect.Descriptor instead.
 func (*BamlLiteralBool) Descriptor() ([]byte, []int) {
-	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{32}
+	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *BamlLiteralBool) GetValue() bool {
@@ -2471,7 +2596,7 @@ type BamlLiteralBigint struct {
 func (x *BamlLiteralBigint) Reset() {
 	*x = BamlLiteralBigint{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[33]
+		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[35]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2484,7 +2609,7 @@ func (x *BamlLiteralBigint) String() string {
 func (*BamlLiteralBigint) ProtoMessage() {}
 
 func (x *BamlLiteralBigint) ProtoReflect() protoreflect.Message {
-	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[33]
+	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[35]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2497,7 +2622,7 @@ func (x *BamlLiteralBigint) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BamlLiteralBigint.ProtoReflect.Descriptor instead.
 func (*BamlLiteralBigint) Descriptor() ([]byte, []int) {
-	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{33}
+	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *BamlLiteralBigint) GetValue() string {
@@ -2524,7 +2649,7 @@ type BamlTyLiteral struct {
 func (x *BamlTyLiteral) Reset() {
 	*x = BamlTyLiteral{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[34]
+		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[36]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2537,7 +2662,7 @@ func (x *BamlTyLiteral) String() string {
 func (*BamlTyLiteral) ProtoMessage() {}
 
 func (x *BamlTyLiteral) ProtoReflect() protoreflect.Message {
-	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[34]
+	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[36]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2550,7 +2675,7 @@ func (x *BamlTyLiteral) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BamlTyLiteral.ProtoReflect.Descriptor instead.
 func (*BamlTyLiteral) Descriptor() ([]byte, []int) {
-	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{34}
+	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{36}
 }
 
 func (m *BamlTyLiteral) GetLiteral() isBamlTyLiteral_Literal {
@@ -2628,7 +2753,7 @@ type BamlTyMedia struct {
 func (x *BamlTyMedia) Reset() {
 	*x = BamlTyMedia{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[35]
+		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[37]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2641,7 +2766,7 @@ func (x *BamlTyMedia) String() string {
 func (*BamlTyMedia) ProtoMessage() {}
 
 func (x *BamlTyMedia) ProtoReflect() protoreflect.Message {
-	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[35]
+	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[37]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2654,7 +2779,7 @@ func (x *BamlTyMedia) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BamlTyMedia.ProtoReflect.Descriptor instead.
 func (*BamlTyMedia) Descriptor() ([]byte, []int) {
-	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{35}
+	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *BamlTyMedia) GetMedia() MediaTypeEnum {
@@ -2675,7 +2800,7 @@ type BamlTyEnum struct {
 func (x *BamlTyEnum) Reset() {
 	*x = BamlTyEnum{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[36]
+		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[38]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2688,7 +2813,7 @@ func (x *BamlTyEnum) String() string {
 func (*BamlTyEnum) ProtoMessage() {}
 
 func (x *BamlTyEnum) ProtoReflect() protoreflect.Message {
-	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[36]
+	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[38]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2701,7 +2826,7 @@ func (x *BamlTyEnum) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BamlTyEnum.ProtoReflect.Descriptor instead.
 func (*BamlTyEnum) Descriptor() ([]byte, []int) {
-	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{36}
+	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *BamlTyEnum) GetName() string {
@@ -2722,7 +2847,7 @@ type BamlTyClass struct {
 func (x *BamlTyClass) Reset() {
 	*x = BamlTyClass{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[37]
+		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[39]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2735,7 +2860,7 @@ func (x *BamlTyClass) String() string {
 func (*BamlTyClass) ProtoMessage() {}
 
 func (x *BamlTyClass) ProtoReflect() protoreflect.Message {
-	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[37]
+	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[39]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2748,7 +2873,7 @@ func (x *BamlTyClass) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BamlTyClass.ProtoReflect.Descriptor instead.
 func (*BamlTyClass) Descriptor() ([]byte, []int) {
-	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{37}
+	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *BamlTyClass) GetName() *BamlTyName {
@@ -2769,7 +2894,7 @@ type BamlTyTypeAlias struct {
 func (x *BamlTyTypeAlias) Reset() {
 	*x = BamlTyTypeAlias{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[38]
+		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[40]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2782,7 +2907,7 @@ func (x *BamlTyTypeAlias) String() string {
 func (*BamlTyTypeAlias) ProtoMessage() {}
 
 func (x *BamlTyTypeAlias) ProtoReflect() protoreflect.Message {
-	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[38]
+	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[40]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2795,7 +2920,7 @@ func (x *BamlTyTypeAlias) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BamlTyTypeAlias.ProtoReflect.Descriptor instead.
 func (*BamlTyTypeAlias) Descriptor() ([]byte, []int) {
-	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{38}
+	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *BamlTyTypeAlias) GetName() *BamlTyName {
@@ -2816,7 +2941,7 @@ type BamlTyList struct {
 func (x *BamlTyList) Reset() {
 	*x = BamlTyList{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[39]
+		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[41]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2829,7 +2954,7 @@ func (x *BamlTyList) String() string {
 func (*BamlTyList) ProtoMessage() {}
 
 func (x *BamlTyList) ProtoReflect() protoreflect.Message {
-	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[39]
+	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[41]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2842,7 +2967,7 @@ func (x *BamlTyList) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BamlTyList.ProtoReflect.Descriptor instead.
 func (*BamlTyList) Descriptor() ([]byte, []int) {
-	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{39}
+	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *BamlTyList) GetItemType() *BamlTy {
@@ -2864,7 +2989,7 @@ type BamlTyMap struct {
 func (x *BamlTyMap) Reset() {
 	*x = BamlTyMap{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[40]
+		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[42]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2877,7 +3002,7 @@ func (x *BamlTyMap) String() string {
 func (*BamlTyMap) ProtoMessage() {}
 
 func (x *BamlTyMap) ProtoReflect() protoreflect.Message {
-	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[40]
+	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[42]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2890,7 +3015,7 @@ func (x *BamlTyMap) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BamlTyMap.ProtoReflect.Descriptor instead.
 func (*BamlTyMap) Descriptor() ([]byte, []int) {
-	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{40}
+	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *BamlTyMap) GetKeyType() *BamlTy {
@@ -2918,7 +3043,7 @@ type BamlTyUnionVariant struct {
 func (x *BamlTyUnionVariant) Reset() {
 	*x = BamlTyUnionVariant{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[41]
+		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[43]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2931,7 +3056,7 @@ func (x *BamlTyUnionVariant) String() string {
 func (*BamlTyUnionVariant) ProtoMessage() {}
 
 func (x *BamlTyUnionVariant) ProtoReflect() protoreflect.Message {
-	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[41]
+	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[43]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2944,7 +3069,7 @@ func (x *BamlTyUnionVariant) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BamlTyUnionVariant.ProtoReflect.Descriptor instead.
 func (*BamlTyUnionVariant) Descriptor() ([]byte, []int) {
-	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{41}
+	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *BamlTyUnionVariant) GetName() *BamlTyName {
@@ -2965,7 +3090,7 @@ type BamlTyOptional struct {
 func (x *BamlTyOptional) Reset() {
 	*x = BamlTyOptional{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[42]
+		mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[44]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2978,7 +3103,7 @@ func (x *BamlTyOptional) String() string {
 func (*BamlTyOptional) ProtoMessage() {}
 
 func (x *BamlTyOptional) ProtoReflect() protoreflect.Message {
-	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[42]
+	mi := &file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[44]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2991,7 +3116,7 @@ func (x *BamlTyOptional) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BamlTyOptional.ProtoReflect.Descriptor instead.
 func (*BamlTyOptional) Descriptor() ([]byte, []int) {
-	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{42}
+	return file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *BamlTyOptional) GetValue() *BamlTy {
@@ -3327,90 +3452,104 @@ var file_baml_core_cffi_v1_baml_outbound_proto_rawDesc = []byte{
 	0x15, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x1f, 0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f, 0x63, 0x6f, 0x72,
 	0x65, 0x2e, 0x63, 0x66, 0x66, 0x69, 0x2e, 0x76, 0x31, 0x2e, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79,
 	0x42, 0x69, 0x67, 0x69, 0x6e, 0x74, 0x48, 0x00, 0x52, 0x0a, 0x62, 0x69, 0x67, 0x69, 0x6e, 0x74,
-	0x54, 0x79, 0x70, 0x65, 0x42, 0x06, 0x0a, 0x04, 0x74, 0x79, 0x70, 0x65, 0x22, 0x0e, 0x0a, 0x0c,
-	0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79, 0x53, 0x74, 0x72, 0x69, 0x6e, 0x67, 0x22, 0x0b, 0x0a, 0x09,
-	0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79, 0x49, 0x6e, 0x74, 0x22, 0x0d, 0x0a, 0x0b, 0x42, 0x61, 0x6d,
-	0x6c, 0x54, 0x79, 0x46, 0x6c, 0x6f, 0x61, 0x74, 0x22, 0x0c, 0x0a, 0x0a, 0x42, 0x61, 0x6d, 0x6c,
-	0x54, 0x79, 0x42, 0x6f, 0x6f, 0x6c, 0x22, 0x0c, 0x0a, 0x0a, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79,
-	0x4e, 0x75, 0x6c, 0x6c, 0x22, 0x12, 0x0a, 0x10, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79, 0x55, 0x69,
-	0x6e, 0x74, 0x38, 0x41, 0x72, 0x72, 0x61, 0x79, 0x22, 0x0b, 0x0a, 0x09, 0x42, 0x61, 0x6d, 0x6c,
-	0x54, 0x79, 0x41, 0x6e, 0x79, 0x22, 0x0f, 0x0a, 0x0d, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79, 0x55,
-	0x6e, 0x6b, 0x6e, 0x6f, 0x77, 0x6e, 0x22, 0x0e, 0x0a, 0x0c, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79,
-	0x42, 0x69, 0x67, 0x69, 0x6e, 0x74, 0x22, 0x29, 0x0a, 0x11, 0x42, 0x61, 0x6d, 0x6c, 0x4c, 0x69,
-	0x74, 0x65, 0x72, 0x61, 0x6c, 0x53, 0x74, 0x72, 0x69, 0x6e, 0x67, 0x12, 0x14, 0x0a, 0x05, 0x76,
-	0x61, 0x6c, 0x75, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75,
-	0x65, 0x22, 0x26, 0x0a, 0x0e, 0x42, 0x61, 0x6d, 0x6c, 0x4c, 0x69, 0x74, 0x65, 0x72, 0x61, 0x6c,
-	0x49, 0x6e, 0x74, 0x12, 0x14, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x01, 0x20, 0x01,
-	0x28, 0x03, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x22, 0x27, 0x0a, 0x0f, 0x42, 0x61, 0x6d,
-	0x6c, 0x4c, 0x69, 0x74, 0x65, 0x72, 0x61, 0x6c, 0x42, 0x6f, 0x6f, 0x6c, 0x12, 0x14, 0x0a, 0x05,
-	0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x08, 0x52, 0x05, 0x76, 0x61, 0x6c,
-	0x75, 0x65, 0x22, 0x29, 0x0a, 0x11, 0x42, 0x61, 0x6d, 0x6c, 0x4c, 0x69, 0x74, 0x65, 0x72, 0x61,
-	0x6c, 0x42, 0x69, 0x67, 0x69, 0x6e, 0x74, 0x12, 0x14, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65,
-	0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x22, 0xc7, 0x02,
-	0x0a, 0x0d, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79, 0x4c, 0x69, 0x74, 0x65, 0x72, 0x61, 0x6c, 0x12,
-	0x4d, 0x0a, 0x0e, 0x73, 0x74, 0x72, 0x69, 0x6e, 0x67, 0x5f, 0x6c, 0x69, 0x74, 0x65, 0x72, 0x61,
-	0x6c, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x24, 0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f, 0x63,
-	0x6f, 0x72, 0x65, 0x2e, 0x63, 0x66, 0x66, 0x69, 0x2e, 0x76, 0x31, 0x2e, 0x42, 0x61, 0x6d, 0x6c,
-	0x4c, 0x69, 0x74, 0x65, 0x72, 0x61, 0x6c, 0x53, 0x74, 0x72, 0x69, 0x6e, 0x67, 0x48, 0x00, 0x52,
-	0x0d, 0x73, 0x74, 0x72, 0x69, 0x6e, 0x67, 0x4c, 0x69, 0x74, 0x65, 0x72, 0x61, 0x6c, 0x12, 0x44,
-	0x0a, 0x0b, 0x69, 0x6e, 0x74, 0x5f, 0x6c, 0x69, 0x74, 0x65, 0x72, 0x61, 0x6c, 0x18, 0x02, 0x20,
-	0x01, 0x28, 0x0b, 0x32, 0x21, 0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f, 0x63, 0x6f, 0x72, 0x65, 0x2e,
+	0x54, 0x79, 0x70, 0x65, 0x42, 0x06, 0x0a, 0x04, 0x74, 0x79, 0x70, 0x65, 0x22, 0x46, 0x0a, 0x0e,
+	0x42, 0x61, 0x6d, 0x6c, 0x54, 0x6f, 0x48, 0x6f, 0x73, 0x74, 0x43, 0x61, 0x6c, 0x6c, 0x12, 0x34,
+	0x0a, 0x04, 0x61, 0x72, 0x67, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x20, 0x2e, 0x62,
+	0x61, 0x6d, 0x6c, 0x5f, 0x63, 0x6f, 0x72, 0x65, 0x2e, 0x63, 0x66, 0x66, 0x69, 0x2e, 0x76, 0x31,
+	0x2e, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x6f, 0x48, 0x6f, 0x73, 0x74, 0x41, 0x72, 0x67, 0x52, 0x04,
+	0x61, 0x72, 0x67, 0x73, 0x22, 0x8e, 0x01, 0x0a, 0x0d, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x6f, 0x48,
+	0x6f, 0x73, 0x74, 0x41, 0x72, 0x67, 0x12, 0x3a, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18,
+	0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x24, 0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f, 0x63, 0x6f, 0x72,
+	0x65, 0x2e, 0x63, 0x66, 0x66, 0x69, 0x2e, 0x76, 0x31, 0x2e, 0x42, 0x61, 0x6d, 0x6c, 0x4f, 0x75,
+	0x74, 0x62, 0x6f, 0x75, 0x6e, 0x64, 0x56, 0x61, 0x6c, 0x75, 0x65, 0x52, 0x05, 0x76, 0x61, 0x6c,
+	0x75, 0x65, 0x12, 0x19, 0x0a, 0x08, 0x61, 0x72, 0x67, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x02,
+	0x20, 0x01, 0x28, 0x09, 0x52, 0x07, 0x61, 0x72, 0x67, 0x4e, 0x61, 0x6d, 0x65, 0x12, 0x26, 0x0a,
+	0x0f, 0x69, 0x73, 0x5f, 0x6f, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x61, 0x6c, 0x5f, 0x61, 0x72, 0x67,
+	0x18, 0x03, 0x20, 0x01, 0x28, 0x08, 0x52, 0x0d, 0x69, 0x73, 0x4f, 0x70, 0x74, 0x69, 0x6f, 0x6e,
+	0x61, 0x6c, 0x41, 0x72, 0x67, 0x22, 0x0e, 0x0a, 0x0c, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79, 0x53,
+	0x74, 0x72, 0x69, 0x6e, 0x67, 0x22, 0x0b, 0x0a, 0x09, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79, 0x49,
+	0x6e, 0x74, 0x22, 0x0d, 0x0a, 0x0b, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79, 0x46, 0x6c, 0x6f, 0x61,
+	0x74, 0x22, 0x0c, 0x0a, 0x0a, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79, 0x42, 0x6f, 0x6f, 0x6c, 0x22,
+	0x0c, 0x0a, 0x0a, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79, 0x4e, 0x75, 0x6c, 0x6c, 0x22, 0x12, 0x0a,
+	0x10, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79, 0x55, 0x69, 0x6e, 0x74, 0x38, 0x41, 0x72, 0x72, 0x61,
+	0x79, 0x22, 0x0b, 0x0a, 0x09, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79, 0x41, 0x6e, 0x79, 0x22, 0x0f,
+	0x0a, 0x0d, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79, 0x55, 0x6e, 0x6b, 0x6e, 0x6f, 0x77, 0x6e, 0x22,
+	0x0e, 0x0a, 0x0c, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79, 0x42, 0x69, 0x67, 0x69, 0x6e, 0x74, 0x22,
+	0x29, 0x0a, 0x11, 0x42, 0x61, 0x6d, 0x6c, 0x4c, 0x69, 0x74, 0x65, 0x72, 0x61, 0x6c, 0x53, 0x74,
+	0x72, 0x69, 0x6e, 0x67, 0x12, 0x14, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x01, 0x20,
+	0x01, 0x28, 0x09, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x22, 0x26, 0x0a, 0x0e, 0x42, 0x61,
+	0x6d, 0x6c, 0x4c, 0x69, 0x74, 0x65, 0x72, 0x61, 0x6c, 0x49, 0x6e, 0x74, 0x12, 0x14, 0x0a, 0x05,
+	0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x03, 0x52, 0x05, 0x76, 0x61, 0x6c,
+	0x75, 0x65, 0x22, 0x27, 0x0a, 0x0f, 0x42, 0x61, 0x6d, 0x6c, 0x4c, 0x69, 0x74, 0x65, 0x72, 0x61,
+	0x6c, 0x42, 0x6f, 0x6f, 0x6c, 0x12, 0x14, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x01,
+	0x20, 0x01, 0x28, 0x08, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x22, 0x29, 0x0a, 0x11, 0x42,
+	0x61, 0x6d, 0x6c, 0x4c, 0x69, 0x74, 0x65, 0x72, 0x61, 0x6c, 0x42, 0x69, 0x67, 0x69, 0x6e, 0x74,
+	0x12, 0x14, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52,
+	0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x22, 0xc7, 0x02, 0x0a, 0x0d, 0x42, 0x61, 0x6d, 0x6c, 0x54,
+	0x79, 0x4c, 0x69, 0x74, 0x65, 0x72, 0x61, 0x6c, 0x12, 0x4d, 0x0a, 0x0e, 0x73, 0x74, 0x72, 0x69,
+	0x6e, 0x67, 0x5f, 0x6c, 0x69, 0x74, 0x65, 0x72, 0x61, 0x6c, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b,
+	0x32, 0x24, 0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f, 0x63, 0x6f, 0x72, 0x65, 0x2e, 0x63, 0x66, 0x66,
+	0x69, 0x2e, 0x76, 0x31, 0x2e, 0x42, 0x61, 0x6d, 0x6c, 0x4c, 0x69, 0x74, 0x65, 0x72, 0x61, 0x6c,
+	0x53, 0x74, 0x72, 0x69, 0x6e, 0x67, 0x48, 0x00, 0x52, 0x0d, 0x73, 0x74, 0x72, 0x69, 0x6e, 0x67,
+	0x4c, 0x69, 0x74, 0x65, 0x72, 0x61, 0x6c, 0x12, 0x44, 0x0a, 0x0b, 0x69, 0x6e, 0x74, 0x5f, 0x6c,
+	0x69, 0x74, 0x65, 0x72, 0x61, 0x6c, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x21, 0x2e, 0x62,
+	0x61, 0x6d, 0x6c, 0x5f, 0x63, 0x6f, 0x72, 0x65, 0x2e, 0x63, 0x66, 0x66, 0x69, 0x2e, 0x76, 0x31,
+	0x2e, 0x42, 0x61, 0x6d, 0x6c, 0x4c, 0x69, 0x74, 0x65, 0x72, 0x61, 0x6c, 0x49, 0x6e, 0x74, 0x48,
+	0x00, 0x52, 0x0a, 0x69, 0x6e, 0x74, 0x4c, 0x69, 0x74, 0x65, 0x72, 0x61, 0x6c, 0x12, 0x47, 0x0a,
+	0x0c, 0x62, 0x6f, 0x6f, 0x6c, 0x5f, 0x6c, 0x69, 0x74, 0x65, 0x72, 0x61, 0x6c, 0x18, 0x03, 0x20,
+	0x01, 0x28, 0x0b, 0x32, 0x22, 0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f, 0x63, 0x6f, 0x72, 0x65, 0x2e,
 	0x63, 0x66, 0x66, 0x69, 0x2e, 0x76, 0x31, 0x2e, 0x42, 0x61, 0x6d, 0x6c, 0x4c, 0x69, 0x74, 0x65,
-	0x72, 0x61, 0x6c, 0x49, 0x6e, 0x74, 0x48, 0x00, 0x52, 0x0a, 0x69, 0x6e, 0x74, 0x4c, 0x69, 0x74,
-	0x65, 0x72, 0x61, 0x6c, 0x12, 0x47, 0x0a, 0x0c, 0x62, 0x6f, 0x6f, 0x6c, 0x5f, 0x6c, 0x69, 0x74,
-	0x65, 0x72, 0x61, 0x6c, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x22, 0x2e, 0x62, 0x61, 0x6d,
-	0x6c, 0x5f, 0x63, 0x6f, 0x72, 0x65, 0x2e, 0x63, 0x66, 0x66, 0x69, 0x2e, 0x76, 0x31, 0x2e, 0x42,
-	0x61, 0x6d, 0x6c, 0x4c, 0x69, 0x74, 0x65, 0x72, 0x61, 0x6c, 0x42, 0x6f, 0x6f, 0x6c, 0x48, 0x00,
-	0x52, 0x0b, 0x62, 0x6f, 0x6f, 0x6c, 0x4c, 0x69, 0x74, 0x65, 0x72, 0x61, 0x6c, 0x12, 0x4d, 0x0a,
-	0x0e, 0x62, 0x69, 0x67, 0x69, 0x6e, 0x74, 0x5f, 0x6c, 0x69, 0x74, 0x65, 0x72, 0x61, 0x6c, 0x18,
-	0x04, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x24, 0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f, 0x63, 0x6f, 0x72,
-	0x65, 0x2e, 0x63, 0x66, 0x66, 0x69, 0x2e, 0x76, 0x31, 0x2e, 0x42, 0x61, 0x6d, 0x6c, 0x4c, 0x69,
-	0x74, 0x65, 0x72, 0x61, 0x6c, 0x42, 0x69, 0x67, 0x69, 0x6e, 0x74, 0x48, 0x00, 0x52, 0x0d, 0x62,
-	0x69, 0x67, 0x69, 0x6e, 0x74, 0x4c, 0x69, 0x74, 0x65, 0x72, 0x61, 0x6c, 0x42, 0x09, 0x0a, 0x07,
-	0x6c, 0x69, 0x74, 0x65, 0x72, 0x61, 0x6c, 0x22, 0x45, 0x0a, 0x0b, 0x42, 0x61, 0x6d, 0x6c, 0x54,
-	0x79, 0x4d, 0x65, 0x64, 0x69, 0x61, 0x12, 0x36, 0x0a, 0x05, 0x6d, 0x65, 0x64, 0x69, 0x61, 0x18,
-	0x01, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x20, 0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f, 0x63, 0x6f, 0x72,
-	0x65, 0x2e, 0x63, 0x66, 0x66, 0x69, 0x2e, 0x76, 0x31, 0x2e, 0x4d, 0x65, 0x64, 0x69, 0x61, 0x54,
-	0x79, 0x70, 0x65, 0x45, 0x6e, 0x75, 0x6d, 0x52, 0x05, 0x6d, 0x65, 0x64, 0x69, 0x61, 0x22, 0x20,
-	0x0a, 0x0a, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79, 0x45, 0x6e, 0x75, 0x6d, 0x12, 0x12, 0x0a, 0x04,
-	0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65,
-	0x22, 0x40, 0x0a, 0x0b, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79, 0x43, 0x6c, 0x61, 0x73, 0x73, 0x12,
-	0x31, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x1d, 0x2e,
-	0x62, 0x61, 0x6d, 0x6c, 0x5f, 0x63, 0x6f, 0x72, 0x65, 0x2e, 0x63, 0x66, 0x66, 0x69, 0x2e, 0x76,
-	0x31, 0x2e, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79, 0x4e, 0x61, 0x6d, 0x65, 0x52, 0x04, 0x6e, 0x61,
-	0x6d, 0x65, 0x22, 0x44, 0x0a, 0x0f, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79, 0x54, 0x79, 0x70, 0x65,
-	0x41, 0x6c, 0x69, 0x61, 0x73, 0x12, 0x31, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20,
-	0x01, 0x28, 0x0b, 0x32, 0x1d, 0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f, 0x63, 0x6f, 0x72, 0x65, 0x2e,
-	0x63, 0x66, 0x66, 0x69, 0x2e, 0x76, 0x31, 0x2e, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79, 0x4e, 0x61,
-	0x6d, 0x65, 0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x22, 0x44, 0x0a, 0x0a, 0x42, 0x61, 0x6d, 0x6c,
-	0x54, 0x79, 0x4c, 0x69, 0x73, 0x74, 0x12, 0x36, 0x0a, 0x09, 0x69, 0x74, 0x65, 0x6d, 0x5f, 0x74,
-	0x79, 0x70, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x19, 0x2e, 0x62, 0x61, 0x6d, 0x6c,
-	0x5f, 0x63, 0x6f, 0x72, 0x65, 0x2e, 0x63, 0x66, 0x66, 0x69, 0x2e, 0x76, 0x31, 0x2e, 0x42, 0x61,
-	0x6d, 0x6c, 0x54, 0x79, 0x52, 0x08, 0x69, 0x74, 0x65, 0x6d, 0x54, 0x79, 0x70, 0x65, 0x22, 0x7b,
-	0x0a, 0x09, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79, 0x4d, 0x61, 0x70, 0x12, 0x34, 0x0a, 0x08, 0x6b,
-	0x65, 0x79, 0x5f, 0x74, 0x79, 0x70, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x19, 0x2e,
-	0x62, 0x61, 0x6d, 0x6c, 0x5f, 0x63, 0x6f, 0x72, 0x65, 0x2e, 0x63, 0x66, 0x66, 0x69, 0x2e, 0x76,
-	0x31, 0x2e, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79, 0x52, 0x07, 0x6b, 0x65, 0x79, 0x54, 0x79, 0x70,
-	0x65, 0x12, 0x38, 0x0a, 0x0a, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x5f, 0x74, 0x79, 0x70, 0x65, 0x18,
-	0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x19, 0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f, 0x63, 0x6f, 0x72,
-	0x65, 0x2e, 0x63, 0x66, 0x66, 0x69, 0x2e, 0x76, 0x31, 0x2e, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79,
-	0x52, 0x09, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x54, 0x79, 0x70, 0x65, 0x22, 0x47, 0x0a, 0x12, 0x42,
-	0x61, 0x6d, 0x6c, 0x54, 0x79, 0x55, 0x6e, 0x69, 0x6f, 0x6e, 0x56, 0x61, 0x72, 0x69, 0x61, 0x6e,
-	0x74, 0x12, 0x31, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32,
-	0x1d, 0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f, 0x63, 0x6f, 0x72, 0x65, 0x2e, 0x63, 0x66, 0x66, 0x69,
-	0x2e, 0x76, 0x31, 0x2e, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79, 0x4e, 0x61, 0x6d, 0x65, 0x52, 0x04,
-	0x6e, 0x61, 0x6d, 0x65, 0x22, 0x41, 0x0a, 0x0e, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79, 0x4f, 0x70,
-	0x74, 0x69, 0x6f, 0x6e, 0x61, 0x6c, 0x12, 0x2f, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18,
-	0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x19, 0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f, 0x63, 0x6f, 0x72,
-	0x65, 0x2e, 0x63, 0x66, 0x66, 0x69, 0x2e, 0x76, 0x31, 0x2e, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79,
-	0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x2a, 0x60, 0x0a, 0x0d, 0x4d, 0x65, 0x64, 0x69, 0x61,
-	0x54, 0x79, 0x70, 0x65, 0x45, 0x6e, 0x75, 0x6d, 0x12, 0x1a, 0x0a, 0x16, 0x4d, 0x45, 0x44, 0x49,
-	0x41, 0x5f, 0x54, 0x59, 0x50, 0x45, 0x5f, 0x55, 0x4e, 0x53, 0x50, 0x45, 0x43, 0x49, 0x46, 0x49,
-	0x45, 0x44, 0x10, 0x00, 0x12, 0x09, 0x0a, 0x05, 0x49, 0x4d, 0x41, 0x47, 0x45, 0x10, 0x01, 0x12,
-	0x09, 0x0a, 0x05, 0x41, 0x55, 0x44, 0x49, 0x4f, 0x10, 0x02, 0x12, 0x07, 0x0a, 0x03, 0x50, 0x44,
-	0x46, 0x10, 0x03, 0x12, 0x09, 0x0a, 0x05, 0x56, 0x49, 0x44, 0x45, 0x4f, 0x10, 0x04, 0x12, 0x09,
-	0x0a, 0x05, 0x4f, 0x54, 0x48, 0x45, 0x52, 0x10, 0x05, 0x42, 0x08, 0x5a, 0x06, 0x2e, 0x2f, 0x63,
-	0x66, 0x66, 0x69, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x72, 0x61, 0x6c, 0x42, 0x6f, 0x6f, 0x6c, 0x48, 0x00, 0x52, 0x0b, 0x62, 0x6f, 0x6f, 0x6c, 0x4c,
+	0x69, 0x74, 0x65, 0x72, 0x61, 0x6c, 0x12, 0x4d, 0x0a, 0x0e, 0x62, 0x69, 0x67, 0x69, 0x6e, 0x74,
+	0x5f, 0x6c, 0x69, 0x74, 0x65, 0x72, 0x61, 0x6c, 0x18, 0x04, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x24,
+	0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f, 0x63, 0x6f, 0x72, 0x65, 0x2e, 0x63, 0x66, 0x66, 0x69, 0x2e,
+	0x76, 0x31, 0x2e, 0x42, 0x61, 0x6d, 0x6c, 0x4c, 0x69, 0x74, 0x65, 0x72, 0x61, 0x6c, 0x42, 0x69,
+	0x67, 0x69, 0x6e, 0x74, 0x48, 0x00, 0x52, 0x0d, 0x62, 0x69, 0x67, 0x69, 0x6e, 0x74, 0x4c, 0x69,
+	0x74, 0x65, 0x72, 0x61, 0x6c, 0x42, 0x09, 0x0a, 0x07, 0x6c, 0x69, 0x74, 0x65, 0x72, 0x61, 0x6c,
+	0x22, 0x45, 0x0a, 0x0b, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79, 0x4d, 0x65, 0x64, 0x69, 0x61, 0x12,
+	0x36, 0x0a, 0x05, 0x6d, 0x65, 0x64, 0x69, 0x61, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x20,
+	0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f, 0x63, 0x6f, 0x72, 0x65, 0x2e, 0x63, 0x66, 0x66, 0x69, 0x2e,
+	0x76, 0x31, 0x2e, 0x4d, 0x65, 0x64, 0x69, 0x61, 0x54, 0x79, 0x70, 0x65, 0x45, 0x6e, 0x75, 0x6d,
+	0x52, 0x05, 0x6d, 0x65, 0x64, 0x69, 0x61, 0x22, 0x20, 0x0a, 0x0a, 0x42, 0x61, 0x6d, 0x6c, 0x54,
+	0x79, 0x45, 0x6e, 0x75, 0x6d, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20,
+	0x01, 0x28, 0x09, 0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x22, 0x40, 0x0a, 0x0b, 0x42, 0x61, 0x6d,
+	0x6c, 0x54, 0x79, 0x43, 0x6c, 0x61, 0x73, 0x73, 0x12, 0x31, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65,
+	0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x1d, 0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f, 0x63, 0x6f,
+	0x72, 0x65, 0x2e, 0x63, 0x66, 0x66, 0x69, 0x2e, 0x76, 0x31, 0x2e, 0x42, 0x61, 0x6d, 0x6c, 0x54,
+	0x79, 0x4e, 0x61, 0x6d, 0x65, 0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x22, 0x44, 0x0a, 0x0f, 0x42,
+	0x61, 0x6d, 0x6c, 0x54, 0x79, 0x54, 0x79, 0x70, 0x65, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x12, 0x31,
+	0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x1d, 0x2e, 0x62,
+	0x61, 0x6d, 0x6c, 0x5f, 0x63, 0x6f, 0x72, 0x65, 0x2e, 0x63, 0x66, 0x66, 0x69, 0x2e, 0x76, 0x31,
+	0x2e, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79, 0x4e, 0x61, 0x6d, 0x65, 0x52, 0x04, 0x6e, 0x61, 0x6d,
+	0x65, 0x22, 0x44, 0x0a, 0x0a, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79, 0x4c, 0x69, 0x73, 0x74, 0x12,
+	0x36, 0x0a, 0x09, 0x69, 0x74, 0x65, 0x6d, 0x5f, 0x74, 0x79, 0x70, 0x65, 0x18, 0x01, 0x20, 0x01,
+	0x28, 0x0b, 0x32, 0x19, 0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f, 0x63, 0x6f, 0x72, 0x65, 0x2e, 0x63,
+	0x66, 0x66, 0x69, 0x2e, 0x76, 0x31, 0x2e, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79, 0x52, 0x08, 0x69,
+	0x74, 0x65, 0x6d, 0x54, 0x79, 0x70, 0x65, 0x22, 0x7b, 0x0a, 0x09, 0x42, 0x61, 0x6d, 0x6c, 0x54,
+	0x79, 0x4d, 0x61, 0x70, 0x12, 0x34, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x5f, 0x74, 0x79, 0x70, 0x65,
+	0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x19, 0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f, 0x63, 0x6f,
+	0x72, 0x65, 0x2e, 0x63, 0x66, 0x66, 0x69, 0x2e, 0x76, 0x31, 0x2e, 0x42, 0x61, 0x6d, 0x6c, 0x54,
+	0x79, 0x52, 0x07, 0x6b, 0x65, 0x79, 0x54, 0x79, 0x70, 0x65, 0x12, 0x38, 0x0a, 0x0a, 0x76, 0x61,
+	0x6c, 0x75, 0x65, 0x5f, 0x74, 0x79, 0x70, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x19,
+	0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f, 0x63, 0x6f, 0x72, 0x65, 0x2e, 0x63, 0x66, 0x66, 0x69, 0x2e,
+	0x76, 0x31, 0x2e, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79, 0x52, 0x09, 0x76, 0x61, 0x6c, 0x75, 0x65,
+	0x54, 0x79, 0x70, 0x65, 0x22, 0x47, 0x0a, 0x12, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79, 0x55, 0x6e,
+	0x69, 0x6f, 0x6e, 0x56, 0x61, 0x72, 0x69, 0x61, 0x6e, 0x74, 0x12, 0x31, 0x0a, 0x04, 0x6e, 0x61,
+	0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x1d, 0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f,
+	0x63, 0x6f, 0x72, 0x65, 0x2e, 0x63, 0x66, 0x66, 0x69, 0x2e, 0x76, 0x31, 0x2e, 0x42, 0x61, 0x6d,
+	0x6c, 0x54, 0x79, 0x4e, 0x61, 0x6d, 0x65, 0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x22, 0x41, 0x0a,
+	0x0e, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79, 0x4f, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x61, 0x6c, 0x12,
+	0x2f, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x19,
+	0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f, 0x63, 0x6f, 0x72, 0x65, 0x2e, 0x63, 0x66, 0x66, 0x69, 0x2e,
+	0x76, 0x31, 0x2e, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65,
+	0x2a, 0x60, 0x0a, 0x0d, 0x4d, 0x65, 0x64, 0x69, 0x61, 0x54, 0x79, 0x70, 0x65, 0x45, 0x6e, 0x75,
+	0x6d, 0x12, 0x1a, 0x0a, 0x16, 0x4d, 0x45, 0x44, 0x49, 0x41, 0x5f, 0x54, 0x59, 0x50, 0x45, 0x5f,
+	0x55, 0x4e, 0x53, 0x50, 0x45, 0x43, 0x49, 0x46, 0x49, 0x45, 0x44, 0x10, 0x00, 0x12, 0x09, 0x0a,
+	0x05, 0x49, 0x4d, 0x41, 0x47, 0x45, 0x10, 0x01, 0x12, 0x09, 0x0a, 0x05, 0x41, 0x55, 0x44, 0x49,
+	0x4f, 0x10, 0x02, 0x12, 0x07, 0x0a, 0x03, 0x50, 0x44, 0x46, 0x10, 0x03, 0x12, 0x09, 0x0a, 0x05,
+	0x56, 0x49, 0x44, 0x45, 0x4f, 0x10, 0x04, 0x12, 0x09, 0x0a, 0x05, 0x4f, 0x54, 0x48, 0x45, 0x52,
+	0x10, 0x05, 0x42, 0x08, 0x5a, 0x06, 0x2e, 0x2f, 0x63, 0x66, 0x66, 0x69, 0x62, 0x06, 0x70, 0x72,
+	0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -3426,7 +3565,7 @@ func file_baml_core_cffi_v1_baml_outbound_proto_rawDescGZIP() []byte {
 }
 
 var file_baml_core_cffi_v1_baml_outbound_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_baml_core_cffi_v1_baml_outbound_proto_msgTypes = make([]protoimpl.MessageInfo, 43)
+var file_baml_core_cffi_v1_baml_outbound_proto_msgTypes = make([]protoimpl.MessageInfo, 45)
 var file_baml_core_cffi_v1_baml_outbound_proto_goTypes = []interface{}{
 	(MediaTypeEnum)(0),                       // 0: baml_core.cffi.v1.MediaTypeEnum
 	(*BamlOutboundResult)(nil),               // 1: baml_core.cffi.v1.BamlOutboundResult
@@ -3450,29 +3589,31 @@ var file_baml_core_cffi_v1_baml_outbound_proto_goTypes = []interface{}{
 	(*BamlValuePromptAstSimple)(nil),         // 19: baml_core.cffi.v1.BamlValuePromptAstSimple
 	(*BamlValuePromptAstSimpleMultiple)(nil), // 20: baml_core.cffi.v1.BamlValuePromptAstSimpleMultiple
 	(*BamlTy)(nil),                           // 21: baml_core.cffi.v1.BamlTy
-	(*BamlTyString)(nil),                     // 22: baml_core.cffi.v1.BamlTyString
-	(*BamlTyInt)(nil),                        // 23: baml_core.cffi.v1.BamlTyInt
-	(*BamlTyFloat)(nil),                      // 24: baml_core.cffi.v1.BamlTyFloat
-	(*BamlTyBool)(nil),                       // 25: baml_core.cffi.v1.BamlTyBool
-	(*BamlTyNull)(nil),                       // 26: baml_core.cffi.v1.BamlTyNull
-	(*BamlTyUint8Array)(nil),                 // 27: baml_core.cffi.v1.BamlTyUint8Array
-	(*BamlTyAny)(nil),                        // 28: baml_core.cffi.v1.BamlTyAny
-	(*BamlTyUnknown)(nil),                    // 29: baml_core.cffi.v1.BamlTyUnknown
-	(*BamlTyBigint)(nil),                     // 30: baml_core.cffi.v1.BamlTyBigint
-	(*BamlLiteralString)(nil),                // 31: baml_core.cffi.v1.BamlLiteralString
-	(*BamlLiteralInt)(nil),                   // 32: baml_core.cffi.v1.BamlLiteralInt
-	(*BamlLiteralBool)(nil),                  // 33: baml_core.cffi.v1.BamlLiteralBool
-	(*BamlLiteralBigint)(nil),                // 34: baml_core.cffi.v1.BamlLiteralBigint
-	(*BamlTyLiteral)(nil),                    // 35: baml_core.cffi.v1.BamlTyLiteral
-	(*BamlTyMedia)(nil),                      // 36: baml_core.cffi.v1.BamlTyMedia
-	(*BamlTyEnum)(nil),                       // 37: baml_core.cffi.v1.BamlTyEnum
-	(*BamlTyClass)(nil),                      // 38: baml_core.cffi.v1.BamlTyClass
-	(*BamlTyTypeAlias)(nil),                  // 39: baml_core.cffi.v1.BamlTyTypeAlias
-	(*BamlTyList)(nil),                       // 40: baml_core.cffi.v1.BamlTyList
-	(*BamlTyMap)(nil),                        // 41: baml_core.cffi.v1.BamlTyMap
-	(*BamlTyUnionVariant)(nil),               // 42: baml_core.cffi.v1.BamlTyUnionVariant
-	(*BamlTyOptional)(nil),                   // 43: baml_core.cffi.v1.BamlTyOptional
-	(BamlHandleType)(0),                      // 44: baml_core.cffi.v1.BamlHandleType
+	(*BamlToHostCall)(nil),                   // 22: baml_core.cffi.v1.BamlToHostCall
+	(*BamlToHostArg)(nil),                    // 23: baml_core.cffi.v1.BamlToHostArg
+	(*BamlTyString)(nil),                     // 24: baml_core.cffi.v1.BamlTyString
+	(*BamlTyInt)(nil),                        // 25: baml_core.cffi.v1.BamlTyInt
+	(*BamlTyFloat)(nil),                      // 26: baml_core.cffi.v1.BamlTyFloat
+	(*BamlTyBool)(nil),                       // 27: baml_core.cffi.v1.BamlTyBool
+	(*BamlTyNull)(nil),                       // 28: baml_core.cffi.v1.BamlTyNull
+	(*BamlTyUint8Array)(nil),                 // 29: baml_core.cffi.v1.BamlTyUint8Array
+	(*BamlTyAny)(nil),                        // 30: baml_core.cffi.v1.BamlTyAny
+	(*BamlTyUnknown)(nil),                    // 31: baml_core.cffi.v1.BamlTyUnknown
+	(*BamlTyBigint)(nil),                     // 32: baml_core.cffi.v1.BamlTyBigint
+	(*BamlLiteralString)(nil),                // 33: baml_core.cffi.v1.BamlLiteralString
+	(*BamlLiteralInt)(nil),                   // 34: baml_core.cffi.v1.BamlLiteralInt
+	(*BamlLiteralBool)(nil),                  // 35: baml_core.cffi.v1.BamlLiteralBool
+	(*BamlLiteralBigint)(nil),                // 36: baml_core.cffi.v1.BamlLiteralBigint
+	(*BamlTyLiteral)(nil),                    // 37: baml_core.cffi.v1.BamlTyLiteral
+	(*BamlTyMedia)(nil),                      // 38: baml_core.cffi.v1.BamlTyMedia
+	(*BamlTyEnum)(nil),                       // 39: baml_core.cffi.v1.BamlTyEnum
+	(*BamlTyClass)(nil),                      // 40: baml_core.cffi.v1.BamlTyClass
+	(*BamlTyTypeAlias)(nil),                  // 41: baml_core.cffi.v1.BamlTyTypeAlias
+	(*BamlTyList)(nil),                       // 42: baml_core.cffi.v1.BamlTyList
+	(*BamlTyMap)(nil),                        // 43: baml_core.cffi.v1.BamlTyMap
+	(*BamlTyUnionVariant)(nil),               // 44: baml_core.cffi.v1.BamlTyUnionVariant
+	(*BamlTyOptional)(nil),                   // 45: baml_core.cffi.v1.BamlTyOptional
+	(BamlHandleType)(0),                      // 46: baml_core.cffi.v1.BamlHandleType
 }
 var file_baml_core_cffi_v1_baml_outbound_proto_depIdxs = []int32{
 	4,  // 0: baml_core.cffi.v1.BamlOutboundResult.ok:type_name -> baml_core.cffi.v1.BamlOutboundValue
@@ -3483,14 +3624,14 @@ var file_baml_core_cffi_v1_baml_outbound_proto_depIdxs = []int32{
 	8,  // 5: baml_core.cffi.v1.BamlOutboundValue.null_value:type_name -> baml_core.cffi.v1.BamlValueNull
 	12, // 6: baml_core.cffi.v1.BamlOutboundValue.class_value:type_name -> baml_core.cffi.v1.BamlValueClass
 	13, // 7: baml_core.cffi.v1.BamlOutboundValue.enum_value:type_name -> baml_core.cffi.v1.BamlValueEnum
-	35, // 8: baml_core.cffi.v1.BamlOutboundValue.literal_value:type_name -> baml_core.cffi.v1.BamlTyLiteral
+	37, // 8: baml_core.cffi.v1.BamlOutboundValue.literal_value:type_name -> baml_core.cffi.v1.BamlTyLiteral
 	9,  // 9: baml_core.cffi.v1.BamlOutboundValue.list_value:type_name -> baml_core.cffi.v1.BamlValueList
 	11, // 10: baml_core.cffi.v1.BamlOutboundValue.map_value:type_name -> baml_core.cffi.v1.BamlValueMap
 	14, // 11: baml_core.cffi.v1.BamlOutboundValue.union_variant_value:type_name -> baml_core.cffi.v1.BamlValueUnionVariant
 	5,  // 12: baml_core.cffi.v1.BamlOutboundValue.handle_value:type_name -> baml_core.cffi.v1.BamlOutboundHandle
 	15, // 13: baml_core.cffi.v1.BamlOutboundValue.media_value:type_name -> baml_core.cffi.v1.BamlValueMedia
 	16, // 14: baml_core.cffi.v1.BamlOutboundValue.prompt_ast_value:type_name -> baml_core.cffi.v1.BamlValuePromptAst
-	44, // 15: baml_core.cffi.v1.BamlOutboundHandle.handle_type:type_name -> baml_core.cffi.v1.BamlHandleType
+	46, // 15: baml_core.cffi.v1.BamlOutboundHandle.handle_type:type_name -> baml_core.cffi.v1.BamlHandleType
 	6,  // 16: baml_core.cffi.v1.BamlOutboundHandle.name:type_name -> baml_core.cffi.v1.BamlTyName
 	7,  // 17: baml_core.cffi.v1.BamlTyName.generic_args:type_name -> baml_core.cffi.v1.BamlTyGenericArg
 	21, // 18: baml_core.cffi.v1.BamlTyGenericArg.ty:type_name -> baml_core.cffi.v1.BamlTy
@@ -3515,41 +3656,43 @@ var file_baml_core_cffi_v1_baml_outbound_proto_depIdxs = []int32{
 	15, // 37: baml_core.cffi.v1.BamlValuePromptAstSimple.media:type_name -> baml_core.cffi.v1.BamlValueMedia
 	20, // 38: baml_core.cffi.v1.BamlValuePromptAstSimple.multiple:type_name -> baml_core.cffi.v1.BamlValuePromptAstSimpleMultiple
 	19, // 39: baml_core.cffi.v1.BamlValuePromptAstSimpleMultiple.items:type_name -> baml_core.cffi.v1.BamlValuePromptAstSimple
-	22, // 40: baml_core.cffi.v1.BamlTy.string_type:type_name -> baml_core.cffi.v1.BamlTyString
-	23, // 41: baml_core.cffi.v1.BamlTy.int_type:type_name -> baml_core.cffi.v1.BamlTyInt
-	24, // 42: baml_core.cffi.v1.BamlTy.float_type:type_name -> baml_core.cffi.v1.BamlTyFloat
-	25, // 43: baml_core.cffi.v1.BamlTy.bool_type:type_name -> baml_core.cffi.v1.BamlTyBool
-	26, // 44: baml_core.cffi.v1.BamlTy.null_type:type_name -> baml_core.cffi.v1.BamlTyNull
-	35, // 45: baml_core.cffi.v1.BamlTy.literal_type:type_name -> baml_core.cffi.v1.BamlTyLiteral
-	36, // 46: baml_core.cffi.v1.BamlTy.media_type:type_name -> baml_core.cffi.v1.BamlTyMedia
-	37, // 47: baml_core.cffi.v1.BamlTy.enum_type:type_name -> baml_core.cffi.v1.BamlTyEnum
-	38, // 48: baml_core.cffi.v1.BamlTy.class_type:type_name -> baml_core.cffi.v1.BamlTyClass
-	39, // 49: baml_core.cffi.v1.BamlTy.type_alias_type:type_name -> baml_core.cffi.v1.BamlTyTypeAlias
-	40, // 50: baml_core.cffi.v1.BamlTy.list_type:type_name -> baml_core.cffi.v1.BamlTyList
-	41, // 51: baml_core.cffi.v1.BamlTy.map_type:type_name -> baml_core.cffi.v1.BamlTyMap
-	42, // 52: baml_core.cffi.v1.BamlTy.union_variant_type:type_name -> baml_core.cffi.v1.BamlTyUnionVariant
-	43, // 53: baml_core.cffi.v1.BamlTy.optional_type:type_name -> baml_core.cffi.v1.BamlTyOptional
-	28, // 54: baml_core.cffi.v1.BamlTy.any_type:type_name -> baml_core.cffi.v1.BamlTyAny
-	27, // 55: baml_core.cffi.v1.BamlTy.uint8array_type:type_name -> baml_core.cffi.v1.BamlTyUint8Array
-	29, // 56: baml_core.cffi.v1.BamlTy.unknown_type:type_name -> baml_core.cffi.v1.BamlTyUnknown
-	30, // 57: baml_core.cffi.v1.BamlTy.bigint_type:type_name -> baml_core.cffi.v1.BamlTyBigint
-	31, // 58: baml_core.cffi.v1.BamlTyLiteral.string_literal:type_name -> baml_core.cffi.v1.BamlLiteralString
-	32, // 59: baml_core.cffi.v1.BamlTyLiteral.int_literal:type_name -> baml_core.cffi.v1.BamlLiteralInt
-	33, // 60: baml_core.cffi.v1.BamlTyLiteral.bool_literal:type_name -> baml_core.cffi.v1.BamlLiteralBool
-	34, // 61: baml_core.cffi.v1.BamlTyLiteral.bigint_literal:type_name -> baml_core.cffi.v1.BamlLiteralBigint
-	0,  // 62: baml_core.cffi.v1.BamlTyMedia.media:type_name -> baml_core.cffi.v1.MediaTypeEnum
-	6,  // 63: baml_core.cffi.v1.BamlTyClass.name:type_name -> baml_core.cffi.v1.BamlTyName
-	6,  // 64: baml_core.cffi.v1.BamlTyTypeAlias.name:type_name -> baml_core.cffi.v1.BamlTyName
-	21, // 65: baml_core.cffi.v1.BamlTyList.item_type:type_name -> baml_core.cffi.v1.BamlTy
-	21, // 66: baml_core.cffi.v1.BamlTyMap.key_type:type_name -> baml_core.cffi.v1.BamlTy
-	21, // 67: baml_core.cffi.v1.BamlTyMap.value_type:type_name -> baml_core.cffi.v1.BamlTy
-	6,  // 68: baml_core.cffi.v1.BamlTyUnionVariant.name:type_name -> baml_core.cffi.v1.BamlTyName
-	21, // 69: baml_core.cffi.v1.BamlTyOptional.value:type_name -> baml_core.cffi.v1.BamlTy
-	70, // [70:70] is the sub-list for method output_type
-	70, // [70:70] is the sub-list for method input_type
-	70, // [70:70] is the sub-list for extension type_name
-	70, // [70:70] is the sub-list for extension extendee
-	0,  // [0:70] is the sub-list for field type_name
+	24, // 40: baml_core.cffi.v1.BamlTy.string_type:type_name -> baml_core.cffi.v1.BamlTyString
+	25, // 41: baml_core.cffi.v1.BamlTy.int_type:type_name -> baml_core.cffi.v1.BamlTyInt
+	26, // 42: baml_core.cffi.v1.BamlTy.float_type:type_name -> baml_core.cffi.v1.BamlTyFloat
+	27, // 43: baml_core.cffi.v1.BamlTy.bool_type:type_name -> baml_core.cffi.v1.BamlTyBool
+	28, // 44: baml_core.cffi.v1.BamlTy.null_type:type_name -> baml_core.cffi.v1.BamlTyNull
+	37, // 45: baml_core.cffi.v1.BamlTy.literal_type:type_name -> baml_core.cffi.v1.BamlTyLiteral
+	38, // 46: baml_core.cffi.v1.BamlTy.media_type:type_name -> baml_core.cffi.v1.BamlTyMedia
+	39, // 47: baml_core.cffi.v1.BamlTy.enum_type:type_name -> baml_core.cffi.v1.BamlTyEnum
+	40, // 48: baml_core.cffi.v1.BamlTy.class_type:type_name -> baml_core.cffi.v1.BamlTyClass
+	41, // 49: baml_core.cffi.v1.BamlTy.type_alias_type:type_name -> baml_core.cffi.v1.BamlTyTypeAlias
+	42, // 50: baml_core.cffi.v1.BamlTy.list_type:type_name -> baml_core.cffi.v1.BamlTyList
+	43, // 51: baml_core.cffi.v1.BamlTy.map_type:type_name -> baml_core.cffi.v1.BamlTyMap
+	44, // 52: baml_core.cffi.v1.BamlTy.union_variant_type:type_name -> baml_core.cffi.v1.BamlTyUnionVariant
+	45, // 53: baml_core.cffi.v1.BamlTy.optional_type:type_name -> baml_core.cffi.v1.BamlTyOptional
+	30, // 54: baml_core.cffi.v1.BamlTy.any_type:type_name -> baml_core.cffi.v1.BamlTyAny
+	29, // 55: baml_core.cffi.v1.BamlTy.uint8array_type:type_name -> baml_core.cffi.v1.BamlTyUint8Array
+	31, // 56: baml_core.cffi.v1.BamlTy.unknown_type:type_name -> baml_core.cffi.v1.BamlTyUnknown
+	32, // 57: baml_core.cffi.v1.BamlTy.bigint_type:type_name -> baml_core.cffi.v1.BamlTyBigint
+	23, // 58: baml_core.cffi.v1.BamlToHostCall.args:type_name -> baml_core.cffi.v1.BamlToHostArg
+	4,  // 59: baml_core.cffi.v1.BamlToHostArg.value:type_name -> baml_core.cffi.v1.BamlOutboundValue
+	33, // 60: baml_core.cffi.v1.BamlTyLiteral.string_literal:type_name -> baml_core.cffi.v1.BamlLiteralString
+	34, // 61: baml_core.cffi.v1.BamlTyLiteral.int_literal:type_name -> baml_core.cffi.v1.BamlLiteralInt
+	35, // 62: baml_core.cffi.v1.BamlTyLiteral.bool_literal:type_name -> baml_core.cffi.v1.BamlLiteralBool
+	36, // 63: baml_core.cffi.v1.BamlTyLiteral.bigint_literal:type_name -> baml_core.cffi.v1.BamlLiteralBigint
+	0,  // 64: baml_core.cffi.v1.BamlTyMedia.media:type_name -> baml_core.cffi.v1.MediaTypeEnum
+	6,  // 65: baml_core.cffi.v1.BamlTyClass.name:type_name -> baml_core.cffi.v1.BamlTyName
+	6,  // 66: baml_core.cffi.v1.BamlTyTypeAlias.name:type_name -> baml_core.cffi.v1.BamlTyName
+	21, // 67: baml_core.cffi.v1.BamlTyList.item_type:type_name -> baml_core.cffi.v1.BamlTy
+	21, // 68: baml_core.cffi.v1.BamlTyMap.key_type:type_name -> baml_core.cffi.v1.BamlTy
+	21, // 69: baml_core.cffi.v1.BamlTyMap.value_type:type_name -> baml_core.cffi.v1.BamlTy
+	6,  // 70: baml_core.cffi.v1.BamlTyUnionVariant.name:type_name -> baml_core.cffi.v1.BamlTyName
+	21, // 71: baml_core.cffi.v1.BamlTyOptional.value:type_name -> baml_core.cffi.v1.BamlTy
+	72, // [72:72] is the sub-list for method output_type
+	72, // [72:72] is the sub-list for method input_type
+	72, // [72:72] is the sub-list for extension type_name
+	72, // [72:72] is the sub-list for extension extendee
+	0,  // [0:72] is the sub-list for field type_name
 }
 
 func init() { file_baml_core_cffi_v1_baml_outbound_proto_init() }
@@ -3812,7 +3955,7 @@ func file_baml_core_cffi_v1_baml_outbound_proto_init() {
 			}
 		}
 		file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[21].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*BamlTyString); i {
+			switch v := v.(*BamlToHostCall); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -3824,7 +3967,7 @@ func file_baml_core_cffi_v1_baml_outbound_proto_init() {
 			}
 		}
 		file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[22].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*BamlTyInt); i {
+			switch v := v.(*BamlToHostArg); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -3836,7 +3979,7 @@ func file_baml_core_cffi_v1_baml_outbound_proto_init() {
 			}
 		}
 		file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[23].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*BamlTyFloat); i {
+			switch v := v.(*BamlTyString); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -3848,7 +3991,7 @@ func file_baml_core_cffi_v1_baml_outbound_proto_init() {
 			}
 		}
 		file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[24].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*BamlTyBool); i {
+			switch v := v.(*BamlTyInt); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -3860,7 +4003,7 @@ func file_baml_core_cffi_v1_baml_outbound_proto_init() {
 			}
 		}
 		file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[25].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*BamlTyNull); i {
+			switch v := v.(*BamlTyFloat); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -3872,7 +4015,7 @@ func file_baml_core_cffi_v1_baml_outbound_proto_init() {
 			}
 		}
 		file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[26].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*BamlTyUint8Array); i {
+			switch v := v.(*BamlTyBool); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -3884,7 +4027,7 @@ func file_baml_core_cffi_v1_baml_outbound_proto_init() {
 			}
 		}
 		file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[27].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*BamlTyAny); i {
+			switch v := v.(*BamlTyNull); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -3896,7 +4039,7 @@ func file_baml_core_cffi_v1_baml_outbound_proto_init() {
 			}
 		}
 		file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[28].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*BamlTyUnknown); i {
+			switch v := v.(*BamlTyUint8Array); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -3908,7 +4051,7 @@ func file_baml_core_cffi_v1_baml_outbound_proto_init() {
 			}
 		}
 		file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[29].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*BamlTyBigint); i {
+			switch v := v.(*BamlTyAny); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -3920,7 +4063,7 @@ func file_baml_core_cffi_v1_baml_outbound_proto_init() {
 			}
 		}
 		file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[30].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*BamlLiteralString); i {
+			switch v := v.(*BamlTyUnknown); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -3932,7 +4075,7 @@ func file_baml_core_cffi_v1_baml_outbound_proto_init() {
 			}
 		}
 		file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[31].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*BamlLiteralInt); i {
+			switch v := v.(*BamlTyBigint); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -3944,7 +4087,7 @@ func file_baml_core_cffi_v1_baml_outbound_proto_init() {
 			}
 		}
 		file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[32].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*BamlLiteralBool); i {
+			switch v := v.(*BamlLiteralString); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -3956,7 +4099,7 @@ func file_baml_core_cffi_v1_baml_outbound_proto_init() {
 			}
 		}
 		file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[33].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*BamlLiteralBigint); i {
+			switch v := v.(*BamlLiteralInt); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -3968,7 +4111,7 @@ func file_baml_core_cffi_v1_baml_outbound_proto_init() {
 			}
 		}
 		file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[34].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*BamlTyLiteral); i {
+			switch v := v.(*BamlLiteralBool); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -3980,7 +4123,7 @@ func file_baml_core_cffi_v1_baml_outbound_proto_init() {
 			}
 		}
 		file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[35].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*BamlTyMedia); i {
+			switch v := v.(*BamlLiteralBigint); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -3992,7 +4135,7 @@ func file_baml_core_cffi_v1_baml_outbound_proto_init() {
 			}
 		}
 		file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[36].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*BamlTyEnum); i {
+			switch v := v.(*BamlTyLiteral); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -4004,7 +4147,7 @@ func file_baml_core_cffi_v1_baml_outbound_proto_init() {
 			}
 		}
 		file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[37].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*BamlTyClass); i {
+			switch v := v.(*BamlTyMedia); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -4016,7 +4159,7 @@ func file_baml_core_cffi_v1_baml_outbound_proto_init() {
 			}
 		}
 		file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[38].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*BamlTyTypeAlias); i {
+			switch v := v.(*BamlTyEnum); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -4028,7 +4171,7 @@ func file_baml_core_cffi_v1_baml_outbound_proto_init() {
 			}
 		}
 		file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[39].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*BamlTyList); i {
+			switch v := v.(*BamlTyClass); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -4040,7 +4183,7 @@ func file_baml_core_cffi_v1_baml_outbound_proto_init() {
 			}
 		}
 		file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[40].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*BamlTyMap); i {
+			switch v := v.(*BamlTyTypeAlias); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -4052,7 +4195,7 @@ func file_baml_core_cffi_v1_baml_outbound_proto_init() {
 			}
 		}
 		file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[41].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*BamlTyUnionVariant); i {
+			switch v := v.(*BamlTyList); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -4064,6 +4207,30 @@ func file_baml_core_cffi_v1_baml_outbound_proto_init() {
 			}
 		}
 		file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[42].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*BamlTyMap); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[43].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*BamlTyUnionVariant); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[44].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*BamlTyOptional); i {
 			case 0:
 				return &v.state
@@ -4134,7 +4301,7 @@ func file_baml_core_cffi_v1_baml_outbound_proto_init() {
 		(*BamlTy_UnknownType)(nil),
 		(*BamlTy_BigintType)(nil),
 	}
-	file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[34].OneofWrappers = []interface{}{
+	file_baml_core_cffi_v1_baml_outbound_proto_msgTypes[36].OneofWrappers = []interface{}{
 		(*BamlTyLiteral_StringLiteral)(nil),
 		(*BamlTyLiteral_IntLiteral)(nil),
 		(*BamlTyLiteral_BoolLiteral)(nil),
@@ -4146,7 +4313,7 @@ func file_baml_core_cffi_v1_baml_outbound_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_baml_core_cffi_v1_baml_outbound_proto_rawDesc,
 			NumEnums:      1,
-			NumMessages:   43,
+			NumMessages:   45,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

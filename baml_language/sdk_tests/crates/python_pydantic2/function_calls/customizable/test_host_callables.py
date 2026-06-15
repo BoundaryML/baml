@@ -19,14 +19,13 @@ import pytest
 
 import baml_sdk  # noqa: F401  — initializes the BAML runtime
 from baml_sdk.baml import BamlError
-from baml_sdk.baml.errors import AccessError
 from baml_sdk.host_callable_tests import (
     Person,
     ValidationError,
+    call_callback_with_optional_args_all_set,
+    call_callback_with_optional_args_all_unset,
+    call_callback_with_optional_args_partially_set,
     call_int_callback,
-    call_optional_callback_omitted,
-    call_optional_callback_supplied,
-    call_optional_int_callback_supplied,
     call_repeatedly,
     call_with_callback,
     call_with_class_callback,
@@ -348,56 +347,45 @@ def test_call_with_throwing_in_baml_catches_host_callable_error():
 # ---------------------------------------------------------------------------
 # Optional args × host callables (the combination).
 #
-# Optional args (test_optional_args.py) and host callables (the cases above)
-# were each covered in isolation but never together: a host callable whose
-# *own* type carries an optional parameter (`(x: int, y?: int) -> ...`).
-# Defaults aren't allowed inside a callable type — only the `?` optional
-# marker — so the host's own language-level default is the only possible
-# source of a value when BAML omits the arg.
+# A host callable whose *own* type carries optional parameters
+# (`(x: int, y?: int, z?: int) -> int`). Defaults aren't allowed inside a
+# callable type — only the `?` optional marker — so the host's own
+# language-level default is the only source of a value when BAML omits the arg.
+# `y` and `z` cross the boundary by name, so each can be supplied or omitted
+# independently; an omitted optional is dropped before dispatch and the host's
+# default fills it. The callback returns `x*100 + y*10 + z` so each test can read
+# off exactly which optionals were delivered.
 # ---------------------------------------------------------------------------
 
 
-def test_optional_arg_callable_supplied_passes_value_positionally():
-    """When BAML supplies the callable's optional arg (`callback(x, y = 9)`),
-    the engine resolves the named arg into the positional arg list, so the
-    Python callback receives both values positionally — overriding its own
-    default. Exercises the optional-args surface across the host boundary."""
-    seen: list[tuple[int, int]] = []
-
-    def cb(x: int, y: int = -1) -> str:
-        seen.append((x, y))
-        return f"{x}:{y}"
-
-    result = call_optional_callback_supplied(callback=cb, x=5)
-    assert result == "5:9"
-    assert seen == [(5, 9)]
+def optional_args_cb(x: int, y: int = 8, z: int = 9) -> int:
+    return x * 100 + y * 10 + z
 
 
-def test_optional_arg_callable_supplied_int_return():
-    """Same supplied-optional path with a non-string (`int`) return value —
-    covers the result-encode branch for an optional-arg host callable."""
+def test_optional_args_all_unset_apply_host_defaults():
+    """`callback(x)` supplies neither optional. Both are dropped before dispatch,
+    so the Python callback runs with only `x` and its own defaults fill `y`/`z`
+    (8 and 9), yielding `5*100 + 8*10 + 9 = 589`."""
+    assert call_callback_with_optional_args_all_unset(
+        callback=optional_args_cb, x=5
+    ) == [589]
 
-    def cb(x: int, y: int = 7) -> int:
-        return x * 10 + y
 
-    assert call_optional_int_callback_supplied(callback=cb, x=5) == 150
+def test_optional_args_partially_set_deliver_by_name():
+    """Two calls each supplying exactly one optional by name:
+    `callback(x, y = 2)` (→ `500 + 20 + 9 = 529`) then `callback(x, z = 3)`
+    (→ `500 + 80 + 3 = 583`). Optionals cross by name, so each supplied value is
+    delivered as a keyword and the omitted one falls back to the host default
+    (`y`→8, `z`→9) — including the case where the *leading* optional `y` is
+    skipped while `z` is supplied."""
+    assert call_callback_with_optional_args_partially_set(
+        callback=optional_args_cb, x=5
+    ) == [529, 583]
 
 
-def test_optional_arg_callable_omitted_raises_access_error():
-    """Omitting the callable's optional arg at the BAML call site
-    (`callback(x)`) currently fails. Unlike a BAML→BAML call — where the
-    engine resolves an omitted optional natively — the omitted-arg sentinel
-    cannot be converted to an owned value for the host wire, so the engine
-    raises `baml.errors.AccessError` *before* the callback ever runs. Pins
-    the current limitation: a host callable's optional arg cannot be omitted,
-    so the host's own default never gets a chance to apply."""
-    invoked: list[tuple[int, int]] = []
-
-    def cb(x: int, y: int = 0) -> str:
-        invoked.append((x, y))
-        return f"{x}:{y}"
-
-    with pytest.raises(BamlError) as exc_info:
-        call_optional_callback_omitted(callback=cb, x=5)
-    assert isinstance(exc_info.value.value, AccessError)
-    assert invoked == []  # the engine fails before dispatching to the host
+def test_optional_args_all_set_deliver_both():
+    """`callback(x, y = 2, z = 3)` supplies both optionals; both arrive by name
+    and override the host defaults, yielding `500 + 20 + 3 = 523`."""
+    assert call_callback_with_optional_args_all_set(
+        callback=optional_args_cb, x=5
+    ) == [523]
