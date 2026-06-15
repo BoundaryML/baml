@@ -14,6 +14,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 mod attr;
 mod defs;
 mod names;
+pub mod normalize;
 mod primitive;
 pub mod simplify_sap;
 pub mod template;
