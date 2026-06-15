@@ -11,15 +11,16 @@
 use std::collections::HashMap;
 
 use proc_macro2::{Group, Ident, TokenStream, TokenTree};
-use quote::{ToTokens, quote};
-use syn::Attribute;
+use quote::{ToTokens, format_ident, quote};
+use syn::{Attribute, Fields};
 
-use crate::parse::{Family, Member, Satellite};
+use crate::parse::{Family, MVariant, Member, Satellite};
 
 pub(crate) fn emit(family: &Family) -> TokenStream {
     let mut out = TokenStream::new();
     for member in &family.members {
         out.extend(gen_member_enum(family, member));
+        out.extend(gen_accessors(family, member));
     }
     // Satellites are generated only for deep members; shallow members reuse
     // their child's satellite (e.g. `ConcreteTy::Function` holds
@@ -38,16 +39,12 @@ fn gen_member_enum(family: &Family, member: &Member) -> TokenStream {
     let child = &family.members[member.child];
     let map = replacements(family, &child.name);
 
-    let variants = family
-        .variants
-        .iter()
-        .filter(|v| member.includes.contains(&v.axis))
-        .map(|v| {
-            let attrs = &v.attrs;
-            let ident = &v.ident;
-            let fields = replace_idents(v.fields.to_token_stream(), &map);
-            quote! { #(#attrs)* #ident #fields }
-        });
+    let variants = member_variants(family, member).map(|v| {
+        let attrs = &v.attrs;
+        let ident = &v.ident;
+        let fields = replace_idents(v.fields.to_token_stream(), &map);
+        quote! { #(#attrs)* #ident #fields }
+    });
 
     let docs = member_docs(family, member);
     let derives = nondoc_attrs(&family.master_attrs);
@@ -59,6 +56,85 @@ fn gen_member_enum(family: &Family, member: &Member) -> TokenStream {
             #(#variants),*
         }
     }
+}
+
+/// The variants present in `member` (those whose axis is in its include-set).
+fn member_variants<'a>(
+    family: &'a Family,
+    member: &'a Member,
+) -> impl Iterator<Item = &'a MVariant> {
+    family
+        .variants
+        .iter()
+        .filter(move |v| member.includes.contains(&v.axis))
+}
+
+/// Generate the mechanical `attr` / `with_attr` accessors for a member. Every
+/// variant carries a `TyAttr`: named variants in an `attr` field, tuple
+/// variants as the last positional. A unit variant (none today) would have
+/// nowhere to hold one, so it is rejected with a `compile_error!`.
+fn gen_accessors(family: &Family, member: &Member) -> TokenStream {
+    let name = &member.name;
+    let attr_arms = member_variants(family, member).map(|v| attr_arm(name, v));
+    let with_arms = member_variants(family, member).map(|v| with_attr_arm(name, v));
+    quote! {
+        impl #name {
+            #[doc = " Borrow this type's streaming/SAP attributes ([`TyAttr`])."]
+            pub fn attr(&self) -> &TyAttr {
+                match self {
+                    #(#attr_arms),*
+                }
+            }
+
+            #[doc = " Return this type with its [`TyAttr`] replaced by `attr`."]
+            pub fn with_attr(self, attr: TyAttr) -> Self {
+                match self {
+                    #(#with_arms),*
+                }
+            }
+        }
+    }
+}
+
+fn attr_arm(name: &Ident, v: &MVariant) -> TokenStream {
+    let vident = &v.ident;
+    match &v.fields {
+        Fields::Named(_) => quote! { #name::#vident { attr, .. } => attr },
+        Fields::Unnamed(_) => quote! { #name::#vident(.., attr) => attr },
+        Fields::Unit => attr_less_error(name, vident),
+    }
+}
+
+fn with_attr_arm(name: &Ident, v: &MVariant) -> TokenStream {
+    let vident = &v.ident;
+    match &v.fields {
+        Fields::Named(named) => {
+            let rest: Vec<&Ident> = named
+                .named
+                .iter()
+                .filter_map(|f| f.ident.as_ref())
+                .filter(|id| *id != "attr")
+                .collect();
+            quote! {
+                #name::#vident { #(#rest,)* .. } => #name::#vident { #(#rest,)* attr }
+            }
+        }
+        Fields::Unnamed(unnamed) => {
+            let lead = unnamed.unnamed.len().saturating_sub(1);
+            let binds: Vec<Ident> = (0..lead).map(|i| format_ident!("f{}", i)).collect();
+            quote! {
+                #name::#vident(#(#binds,)* _) => #name::#vident(#(#binds,)* attr)
+            }
+        }
+        Fields::Unit => attr_less_error(name, vident),
+    }
+}
+
+fn attr_less_error(name: &Ident, vident: &Ident) -> TokenStream {
+    let msg = format!(
+        "ty_family: variant `{name}::{vident}` has no `TyAttr` field, so `attr`/`with_attr` cannot be generated"
+    );
+    quote! { #name::#vident => ::core::compile_error!(#msg) }
 }
 
 fn gen_satellite(family: &Family, member: &Member, sat: &Satellite) -> TokenStream {
