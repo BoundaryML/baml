@@ -54,8 +54,43 @@ impl ProfileWriter {
         Ok(writer)
     }
 
+    /// Writes one length-delimited event.
+    ///
+    /// The two hot records — `CallFunction`/`EndFunction`, the per-call pair
+    /// that is essentially all of the event volume — are serialized by a
+    /// hand-rolled single-pass protobuf encoder rather than prost.
+    ///
+    /// Why: prost serializes this nested-oneof message by walking it ~3×
+    /// (`encoded_len`, then `encode_raw`, whose embedded-message path recomputes
+    /// the inner message's length a third time) before writing a byte. Measured
+    /// at ~40-55 ns/record — roughly a third of the consumer's per-record cost.
+    /// A direct encoder with back-patched 1-byte length prefixes does it in a
+    /// single pass. This is the same approach Perfetto takes with its trace
+    /// protobufs — its "protozero" streaming/zero-copy encoder, adopted there
+    /// for exactly this hot-path-serialization reason
+    /// (<https://perfetto.dev/docs/design-docs/protozero>).
+    ///
+    /// Correctness: `to_disk_event` still constructs the prost structs, so a
+    /// proto field add/remove/rename/type-change is a *compile* error (the
+    /// exhaustive struct literal + the field reads in the encoders below); the
+    /// differential test `hand_encoder_matches_prost` pins byte-for-byte
+    /// equality with prost over a range of inputs, covering even a field
+    /// renumber. Every other (cold) record stays on prost.
     pub(crate) fn write_event(&mut self, event: &pb::DiskEventV1) -> io::Result<()> {
-        self.write_message(event)
+        use pb::disk_event_v1::Event;
+        self.scratch.clear();
+        match &event.event {
+            Some(Event::CallFunction(cf)) => encode_call_function_event(&mut self.scratch, cf),
+            Some(Event::EndFunction(ef)) => encode_end_function_event(&mut self.scratch, ef),
+            // Cold/rare records (StartThread, SetFunctionId, EndThread,
+            // Heartbeat, and any future variant) go through prost.
+            _ => {
+                event
+                    .encode_length_delimited(&mut self.scratch)
+                    .map_err(io::Error::other)?;
+            }
+        }
+        self.writer.write_all(&self.scratch)
     }
 
     fn write_message(&mut self, msg: &impl Message) -> io::Result<()> {
@@ -86,6 +121,100 @@ impl ProfileWriter {
     pub(crate) fn path(&self) -> &Path {
         &self.path
     }
+}
+
+// ── Hand-rolled protobuf for the two hot events (see `write_event`) ──────────
+//
+// These emit a length-delimited `DiskEventV1{ call_function | end_function }`
+// byte-for-byte as prost would, in one pass. Both messages are < 128 bytes
+// (≤ 5 small scalar fields), so the outer (`DiskEventV1`) and inner length
+// prefixes are each a single varint byte we back-patch — minimal varints,
+// identical to prost's output. proto3 implicit-presence rules are replicated
+// explicitly: zero-valued scalars are omitted; `optional parent_call_id` is
+// emitted iff `Some`. Field numbers/wire-types are from `bamlprof.proto`
+// (`DiskEventV1.call_function = 3`, `.end_function = 5`; inner fields 1..=5).
+
+/// Append `v` as a protobuf LEB128 varint.
+#[inline]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "varint extracts the low 7 bits per byte"
+)]
+fn put_varint(out: &mut Vec<u8>, mut v: u64) {
+    while v >= 0x80 {
+        out.push((v as u8) | 0x80);
+        v >>= 7;
+    }
+    out.push(v as u8);
+}
+
+/// proto3 implicit-presence scalar: key byte + varint, omitted when the value
+/// is the default (0) — matching prost.
+#[inline]
+fn put_scalar(out: &mut Vec<u8>, key: u8, v: u64) {
+    if v != 0 {
+        out.push(key);
+        put_varint(out, v);
+    }
+}
+
+/// Back-patch the inner-message and outer-`DiskEventV1` single-byte length
+/// prefixes once the body is written.
+#[inline]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "messages are < 128 bytes; asserted"
+)]
+fn patch_lengths(out: &mut [u8], outer_at: usize, inner_len_at: usize, inner_start: usize) {
+    let inner_len = out.len() - inner_start;
+    debug_assert!(
+        inner_len < 128,
+        "event message exceeds single-byte length prefix"
+    );
+    out[inner_len_at] = inner_len as u8;
+    let outer_len = out.len() - outer_at - 1;
+    debug_assert!(
+        outer_len < 128,
+        "DiskEventV1 exceeds single-byte length prefix"
+    );
+    out[outer_at] = outer_len as u8;
+}
+
+fn encode_call_function_event(out: &mut Vec<u8>, cf: &pb::CallFunction) {
+    let outer_at = out.len();
+    out.push(0); // DiskEventV1 length (patched)
+    out.push(0x1A); // field 3 (call_function), wire-type 2 (LEN)
+    let inner_len_at = out.len();
+    out.push(0); // CallFunction length (patched)
+    let inner_start = out.len();
+    put_scalar(out, 0x08, cf.thread_id); // field 1
+    put_scalar(out, 0x10, cf.call_id); // field 2
+    if let Some(p) = cf.parent_call_id {
+        // field 3, optional (explicit presence): emitted iff Some.
+        out.push(0x18);
+        put_varint(out, p);
+    }
+    put_scalar(out, 0x20, u64::from(cf.function_id)); // field 4 (uint32)
+    put_scalar(out, 0x28, cf.timestamp_ns); // field 5
+    patch_lengths(out, outer_at, inner_len_at, inner_start);
+}
+
+fn encode_end_function_event(out: &mut Vec<u8>, ef: &pb::EndFunction) {
+    let outer_at = out.len();
+    out.push(0); // DiskEventV1 length (patched)
+    out.push(0x2A); // field 5 (end_function), wire-type 2 (LEN)
+    let inner_len_at = out.len();
+    out.push(0); // EndFunction length (patched)
+    let inner_start = out.len();
+    put_scalar(out, 0x08, ef.thread_id); // field 1
+    put_scalar(out, 0x10, ef.call_id); // field 2
+    // field 3, status enum (implicit presence): omit default (0 = OK).
+    if ef.status != 0 {
+        out.push(0x18);
+        put_varint(out, u64::try_from(ef.status).unwrap_or(0));
+    }
+    put_scalar(out, 0x20, ef.timestamp_ns); // field 4
+    patch_lengths(out, outer_at, inner_len_at, inner_start);
 }
 
 fn hex_uuid(bytes: [u8; 16]) -> String {
@@ -192,4 +321,69 @@ pub fn read_bamlprof(path: &Path) -> io::Result<BamlprofContents> {
 pub fn header_started_at_epoch_ns(header: &pb::EventFileHeaderV1) -> Option<u128> {
     let bytes: [u8; 16] = header.started_at_epoch_ns.as_slice().try_into().ok()?;
     Some(u128::from_le_bytes(bytes))
+}
+
+#[cfg(test)]
+mod hand_encoder_tests {
+    use prost::Message;
+
+    use super::{encode_call_function_event, encode_end_function_event};
+    use crate::prof::pb;
+
+    /// The hand-rolled encoders must produce byte-for-byte the same output as
+    /// prost's `encode_length_delimited` for every input — that equality is
+    /// the wire contract. This also catches a proto field *renumber* that the
+    /// struct literal in `to_disk_event` would not (the gap noted in
+    /// `write_event`'s docs).
+    #[test]
+    fn hand_encoder_matches_prost() {
+        let call_fns = [
+            // includes zero scalars (omitted), max-width varints, and the
+            // optional parent present (Some) / absent (None).
+            (1u64, 1u64, None, 0u32, 0u64),
+            (5, 7, Some(3), 9, 12_345),
+            (u64::MAX, 1, Some(2), u32::MAX, u64::MAX),
+            (0, 0, None, 0, 0),
+            (128, 16_384, Some(2_097_152), 100_000, 1 << 40),
+            (9, 7, Some(0), 4, 1), // optional present with value 0
+        ];
+        for &(thread_id, call_id, parent_call_id, function_id, timestamp_ns) in &call_fns {
+            let cf = pb::CallFunction {
+                thread_id,
+                call_id,
+                parent_call_id,
+                function_id,
+                timestamp_ns,
+            };
+            let event = pb::DiskEventV1 {
+                event: Some(pb::disk_event_v1::Event::CallFunction(cf)),
+            };
+            let mut prost_bytes = Vec::new();
+            event.encode_length_delimited(&mut prost_bytes).unwrap();
+            let mut hand = Vec::new();
+            encode_call_function_event(&mut hand, &cf);
+            assert_eq!(hand, prost_bytes, "CallFunction {cf:?}");
+        }
+
+        for status in 0..4i32 {
+            for &(thread_id, call_id, timestamp_ns) in
+                &[(1u64, 1u64, 0u64), (9, 7, 12_345), (u64::MAX, 1, u64::MAX)]
+            {
+                let ef = pb::EndFunction {
+                    thread_id,
+                    call_id,
+                    status,
+                    timestamp_ns,
+                };
+                let event = pb::DiskEventV1 {
+                    event: Some(pb::disk_event_v1::Event::EndFunction(ef)),
+                };
+                let mut prost_bytes = Vec::new();
+                event.encode_length_delimited(&mut prost_bytes).unwrap();
+                let mut hand = Vec::new();
+                encode_end_function_event(&mut hand, &ef);
+                assert_eq!(hand, prost_bytes, "EndFunction {ef:?}");
+            }
+        }
+    }
 }
