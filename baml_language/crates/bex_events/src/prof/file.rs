@@ -18,6 +18,13 @@ use crate::prof::pb;
 pub(crate) struct ProfileWriter {
     writer: BufWriter<File>,
     path: PathBuf,
+    /// Reused length-delimited encode buffer. One allocation that grows to
+    /// the largest message, then stays — avoids a `Vec` allocation (and the
+    /// extra `encoded_len` walk a pre-sized `with_capacity` would cost) on
+    /// every event written. The consumer transcodes one event per record on
+    /// its hot path, so this is the difference between zero and one malloc
+    /// per traced event.
+    scratch: Vec<u8>,
 }
 
 impl ProfileWriter {
@@ -41,6 +48,7 @@ impl ProfileWriter {
         let mut writer = ProfileWriter {
             writer: BufWriter::new(file),
             path,
+            scratch: Vec::new(),
         };
         writer.write_message(header)?;
         Ok(writer)
@@ -51,10 +59,16 @@ impl ProfileWriter {
     }
 
     fn write_message(&mut self, msg: &impl Message) -> io::Result<()> {
-        let mut buf = Vec::with_capacity(msg.encoded_len() + 4);
-        msg.encode_length_delimited(&mut buf)
+        // Reuse `scratch` across events: `encode_length_delimited` writes its
+        // own varint length prefix and grows the buffer as needed, so after
+        // the first few events the capacity is stable and no allocation
+        // happens. (`encode_length_delimited` already computes the length
+        // internally, so a `with_capacity(encoded_len())` would only add a
+        // redundant encode walk.)
+        self.scratch.clear();
+        msg.encode_length_delimited(&mut self.scratch)
             .map_err(io::Error::other)?;
-        self.writer.write_all(&buf)
+        self.writer.write_all(&self.scratch)
     }
 
     pub(crate) fn flush(&mut self) -> io::Result<()> {
