@@ -79,8 +79,23 @@ mod imp {
         meta: ClockMeta,
     }
 
+    static ANCHOR: OnceLock<Anchor> = OnceLock::new();
+
+    /// The process clock anchor. Fast path is a single `OnceLock::get`
+    /// (Acquire load + branch) that inlines into `now_ticks` — and thus
+    /// into the VM's call hot path — so the raw counter read can pipeline
+    /// with the surrounding encode/push work rather than hiding behind a
+    /// cross-crate call. The one-time init is `#[cold]` and out-of-line.
+    #[inline]
     fn anchor() -> &'static Anchor {
-        static ANCHOR: OnceLock<Anchor> = OnceLock::new();
+        match ANCHOR.get() {
+            Some(a) => a,
+            None => anchor_init(),
+        }
+    }
+
+    #[cold]
+    fn anchor_init() -> &'static Anchor {
         ANCHOR.get_or_init(|| {
             let (source, ns_per_tick) = detect();
             let kind = match source {

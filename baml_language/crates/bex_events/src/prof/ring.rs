@@ -294,17 +294,35 @@ impl Ring {
     /// `0 < rec.len() <= seg_bytes`.
     pub unsafe fn push(&self, rec: &[u8]) {
         debug_assert!(!rec.is_empty());
+        // SAFETY: same producer contract as `push_with`; the closure copies
+        // exactly `rec.len()` bytes into the (uninitialized) slot.
+        unsafe {
+            self.push_with(rec.len(), |slot| slot.copy_from_slice(rec));
+        }
+    }
+
+    /// Reserve `len` bytes in the ring and let the producer serialize a record
+    /// *directly into them* via `write`, avoiding the encode-to-stack-buffer +
+    /// copy-into-ring double write that [`push`] pays. `write` must initialize
+    /// all `len` bytes (they are committed immediately after it returns).
+    ///
+    /// # Safety
+    /// Same contract as [`push`]: this OS thread is the ring's live producer
+    /// (D5a refresh), and exec does not cross an `.await` (plan §6 inv. 4).
+    #[inline]
+    pub unsafe fn push_with(&self, len: usize, write: impl FnOnce(&mut [u8])) {
+        debug_assert!(len > 0);
         self.p.with_mut(|p| {
             let p = unsafe { &mut *p };
-            if p.head_pos + rec.len() > self.seg_bytes {
+            if p.head_pos + len > self.seg_bytes {
                 // An oversized record necessarily lands here (head_pos ≥ 0),
                 // so this release-mode check costs one compare per segment
-                // fill — never per push — and is what keeps the memcpy below
+                // fill — never per push — and is what keeps the write below
                 // in bounds for arbitrary input.
                 assert!(
-                    rec.len() <= self.seg_bytes,
+                    len <= self.seg_bytes,
                     "profiling record ({} bytes) exceeds the ring segment size ({} bytes)",
-                    rec.len(),
+                    len,
                     self.seg_bytes
                 );
                 // Slow path: link a recycled or fresh segment.
@@ -334,8 +352,8 @@ impl Ring {
             }
             unsafe {
                 let head = &*p.head;
-                head.buf.write(p.head_pos, rec);
-                p.head_pos += rec.len();
+                head.buf.with_slice_mut(p.head_pos, len, write);
+                p.head_pos += len;
                 #[expect(
                     clippy::cast_possible_truncation,
                     reason = "head_pos <= seg_bytes <= 16 MiB, far below u32::MAX"

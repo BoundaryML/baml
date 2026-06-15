@@ -76,26 +76,43 @@ impl Buf {
         self.bytes.len()
     }
 
-    /// Copies `src` into the buffer at `offset`.
+    /// Calls `f` with a mutable view of `[offset, offset + len)` so the
+    /// producer can serialize a record *directly into the ring*, skipping the
+    /// intermediate stack buffer and the extra copy that encoding into a
+    /// scratch buffer and copying it in would require.
     ///
     /// # Safety
     /// Caller is the ring's unique producer, the range is in bounds, and no
     /// byte of it has been published (the consumer never reads it
-    /// concurrently).
+    /// concurrently). `f` must initialize every byte of the slice before it
+    /// is committed.
     #[cfg(not(baml_loom))]
     #[inline]
-    pub(crate) unsafe fn write(&self, offset: usize, src: &[u8]) {
-        debug_assert!(offset + src.len() <= self.bytes.len());
-        // Provenance: `as_ptr` spans the whole slice; `raw_get` is a cast
-        // (interior mutability through a shared reference), not a retag.
+    pub(crate) unsafe fn with_slice_mut(
+        &self,
+        offset: usize,
+        len: usize,
+        f: impl FnOnce(&mut [u8]),
+    ) {
+        debug_assert!(offset + len <= self.bytes.len());
         let base = std::cell::UnsafeCell::raw_get(self.bytes.as_ptr());
-        unsafe { std::ptr::copy_nonoverlapping(src.as_ptr(), base.add(offset), src.len()) };
+        let slice = unsafe { std::slice::from_raw_parts_mut(base.add(offset), len) };
+        f(slice);
     }
 
-    /// See the std-build `write`.
+    /// See the std-build `with_slice_mut`. Fills a temp then stores per byte so
+    /// loom still models the producer's writes (the in-place path is a std-only
+    /// optimization; the byte-level write set is identical).
     #[cfg(baml_loom)]
-    pub(crate) unsafe fn write(&self, offset: usize, src: &[u8]) {
-        for (i, byte) in src.iter().enumerate() {
+    pub(crate) unsafe fn with_slice_mut(
+        &self,
+        offset: usize,
+        len: usize,
+        f: impl FnOnce(&mut [u8]),
+    ) {
+        let mut tmp = vec![0u8; len];
+        f(&mut tmp);
+        for (i, byte) in tmp.iter().enumerate() {
             self.bytes[offset + i].with_mut(|p| unsafe { *p = *byte });
         }
     }
