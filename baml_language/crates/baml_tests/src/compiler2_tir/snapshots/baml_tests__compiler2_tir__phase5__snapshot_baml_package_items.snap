@@ -118,6 +118,9 @@ namespace baml.http:
   class Server { methods: [bind, serve, _serve, to_json, from_json] }
   class SseStream { methods: [next, close, to_json, from_json] }
   class TlsConfig { methods: [new, _new, to_json, from_json] }
+  function _fetch
+  function _send
+  function _timeout_nanos
   function fetch
   function fetch_sse
   function send
@@ -201,8 +204,9 @@ namespace baml.media:
 namespace baml.net:
   class Datagram { methods: [to_json, from_json] }
   class TcpListener { methods: [bind, accept, close, to_json, from_json] }
-  class TcpStream { methods: [connect, read, write, close, to_json, from_json] }
-  class UdpSocket { methods: [bind, send_to, recv_from, close, to_json, from_json] }
+  class TcpStream { methods: [connect, _connect, read, _read, write, _write, close, to_json, from_json] }
+  class UdpSocket { methods: [bind, send_to, _send_to, recv_from, _recv_from, close, to_json, from_json] }
+  function _timeout_nanos
 namespace baml.panics:
   class AllocFailure { methods: [to_json, from_json] }
   class AssertionFailed { methods: [to_json, from_json] }

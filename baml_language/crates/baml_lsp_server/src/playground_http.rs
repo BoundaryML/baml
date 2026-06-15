@@ -239,11 +239,12 @@ impl io::IoClassHttpSseStream for PlaygroundHttp {
 }
 
 impl io::IoNamespaceHttp for PlaygroundHttp {
-    fn send(
+    fn _send(
         &self,
         heap: &Arc<BexHeap>,
         call_id: CallId,
         request: owned::http::Request,
+        timeout_nanos: Arc<num_bigint::BigInt>,
         ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::Response> {
         let state = self.0.clone();
@@ -260,11 +261,12 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
             request_body: request.body.clone(),
         });
 
-        let native_result = <sys_native::NativeSysOps as io::IoNamespaceHttp>::send(
+        let native_result = <sys_native::NativeSysOps as io::IoNamespaceHttp>::_send(
             &sys_native::NativeSysOps,
             heap,
             call_id,
             request,
+            timeout_nanos,
             ctx,
         );
 
@@ -347,11 +349,12 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
         }
     }
 
-    fn fetch(
+    fn _fetch(
         &self,
         heap: &Arc<BexHeap>,
         call_id: CallId,
         url: String,
+        timeout_nanos: Arc<num_bigint::BigInt>,
         ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::Response> {
         let req = owned::http::Request {
@@ -360,7 +363,7 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
             headers: indexmap::IndexMap::new(),
             body: String::new(),
         };
-        self.send(heap, call_id, req, ctx)
+        self._send(heap, call_id, req, timeout_nanos, ctx)
     }
 
     fn fetch_sse(

@@ -7067,6 +7067,7 @@ dependencies = [
  "indexmap",
  "infer",
  "minijinja",
+ "num-bigint",
  "rsa",
  "rustls",
  "serde",
