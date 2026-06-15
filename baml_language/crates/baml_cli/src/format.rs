@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     fs,
     path::{Path, PathBuf},
 };
@@ -161,6 +162,8 @@ fn expand_explicit_paths(paths: &[PathBuf]) -> Vec<PathBuf> {
         }
     }
 
+    let mut seen = HashSet::new();
+    expanded.retain(|path| seen.insert(path.clone()));
     expanded
 }
 
@@ -231,5 +234,27 @@ mod tests {
             baml_fmt::format(nested_source, &FormatOptions::default()).unwrap()
         );
         assert_eq!(fs::read_to_string(ignored).unwrap(), ignored_source);
+    }
+
+    #[test]
+    fn explicit_overlapping_paths_are_deduplicated() {
+        let tmp = tempfile::tempdir().unwrap();
+        let baml_src = tmp.path().join("baml_src");
+        let nested_dir = baml_src.join("nested");
+        fs::create_dir_all(&nested_dir).unwrap();
+
+        let main = baml_src.join("main.baml");
+        let nested = nested_dir.join("nested.baml");
+        fs::write(&main, "function main() -> string { \"hello\" }\n").unwrap();
+        fs::write(&nested, "function nested() -> int { 1 }\n").unwrap();
+
+        let expanded = expand_explicit_paths(&[
+            baml_src.clone(),
+            main.clone(),
+            nested_dir.clone(),
+            nested.clone(),
+        ]);
+
+        assert_eq!(expanded, vec![main, nested]);
     }
 }
