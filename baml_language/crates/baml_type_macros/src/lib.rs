@@ -17,10 +17,12 @@
 //! `lower_to_runtime` boundary) stay hand-written on the generated types.
 
 use proc_macro::TokenStream;
+use quote::quote;
 use syn::parse_macro_input;
 
 use crate::parse::{Family, FamilyInput};
 
+mod convert;
 mod emit;
 mod parse;
 
@@ -30,7 +32,11 @@ mod parse;
 pub fn ty_family(input: TokenStream) -> TokenStream {
     let parsed = parse_macro_input!(input as FamilyInput);
     match Family::from_input(parsed) {
-        Ok(family) => emit::emit(&family).into(),
+        Ok(family) => {
+            let types = emit::emit(&family);
+            let conversions = convert::emit_conversions(&family);
+            quote! { #types #conversions }.into()
+        }
         Err(err) => err.to_compile_error().into(),
     }
 }

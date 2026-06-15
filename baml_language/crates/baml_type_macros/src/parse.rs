@@ -284,10 +284,39 @@ fn resolve_variant(
         )
     })?;
     let axis = axis_index(&axis_ident)?;
+    if !carries_ty_attr(&variant.fields) {
+        return Err(syn::Error::new(
+            span,
+            format!(
+                "variant `{}` must carry a `TyAttr` (a named `attr` field, or as the last \
+                 tuple field) so `attr`/`with_attr` can be generated",
+                variant.ident
+            ),
+        ));
+    }
     Ok(MVariant {
         attrs,
         ident: variant.ident,
         fields: variant.fields,
         axis,
     })
+}
+
+/// Every family variant must hold a `TyAttr` for the generated `attr`/`with_attr`
+/// accessors: in a field named `attr` (struct variants) or as the last
+/// positional (tuple variants). Validated up front so a non-conforming variant
+/// fails with a clear, spanned error instead of a cryptic one from the
+/// generated `match`.
+fn carries_ty_attr(fields: &Fields) -> bool {
+    fn is_ty_attr(ty: &syn::Type) -> bool {
+        matches!(ty, syn::Type::Path(p) if p.path.segments.last().is_some_and(|s| s.ident == "TyAttr"))
+    }
+    match fields {
+        Fields::Named(n) => n
+            .named
+            .iter()
+            .any(|f| f.ident.as_ref().is_some_and(|id| id == "attr") && is_ty_attr(&f.ty)),
+        Fields::Unnamed(u) => u.unnamed.last().is_some_and(|f| is_ty_attr(&f.ty)),
+        Fields::Unit => false,
+    }
 }

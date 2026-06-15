@@ -43,7 +43,6 @@ pub use family::*;
 pub use interface::*;
 pub use names::*;
 pub use primitive::*;
-pub use realized_ty::*;
 pub use runtime_ty::*;
 pub use template::TyTemplate;
 

@@ -59,7 +59,7 @@ fn gen_member_enum(family: &Family, member: &Member) -> TokenStream {
 }
 
 /// The variants present in `member` (those whose axis is in its include-set).
-fn member_variants<'a>(
+pub(crate) fn member_variants<'a>(
     family: &'a Family,
     member: &'a Member,
 ) -> impl Iterator<Item = &'a MVariant> {
@@ -199,7 +199,7 @@ fn replace_idents(tokens: TokenStream, map: &HashMap<String, Ident>) -> TokenStr
 
 /// `RuntimeTy` + `FunctionParamTy` → `RuntimeFunctionParamTy`; the master `Ty`
 /// (prefix empty) leaves the satellite name unchanged.
-fn satellite_name_for(member: &Ident, sat: &Ident) -> Ident {
+pub(crate) fn satellite_name_for(member: &Ident, sat: &Ident) -> Ident {
     let s = member.to_string();
     let prefix = s.strip_suffix("Ty").unwrap_or(&s);
     Ident::new(&format!("{prefix}{sat}"), sat.span())
