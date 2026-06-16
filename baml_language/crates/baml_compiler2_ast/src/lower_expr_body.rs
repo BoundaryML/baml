@@ -249,35 +249,13 @@ pub(crate) fn lower_runner_element(
 /// directly into the same arena (no IIFE indirection needed).
 pub(crate) struct InitTestContext {
     inner: LoweringContext,
-    /// Counter for generating unique synthetic spans for lambda expressions.
-    /// Synthesized lambdas all share span `0..0`, which causes the HIR scope
-    /// builder and MIR lowering to confuse them. Each lambda gets a unique
-    /// synthetic span at offset `(counter * 2)..(counter * 2 + 1)` to make
-    /// them distinguishable.
-    synthetic_lambda_counter: u32,
 }
 
 impl InitTestContext {
     pub(crate) fn new() -> Self {
         let mut inner = LoweringContext::new();
         inner.names_in_scope.insert("registry".to_string());
-        Self {
-            inner,
-            synthetic_lambda_counter: 0,
-        }
-    }
-
-    /// Generate a unique synthetic span for a lambda expression.
-    /// Each call returns a different 1-byte span to ensure that HIR Lambda
-    /// scopes can be distinguished by their `range` field.
-    pub(crate) fn next_lambda_span(&mut self) -> text_size::TextRange {
-        let offset = self.synthetic_lambda_counter;
-        self.synthetic_lambda_counter += 1;
-        // Use offsets starting at 1 to avoid collision with the default 0..0 span
-        // used for the function itself and non-lambda expressions.
-        let start = text_size::TextSize::from((offset + 1) * 2);
-        let end = start + text_size::TextSize::from(1);
-        text_size::TextRange::new(start, end)
+        Self { inner }
     }
 
     pub(crate) fn alloc_expr(&mut self, expr: Expr, span: text_size::TextRange) -> ExprId {

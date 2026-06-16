@@ -822,3 +822,113 @@ async fn collect_tests_expand_nested_testsets_full_depth() {
     let final_ser = serialize_registry(&engine, registry).await;
     final_ser.expect("final serialize should succeed");
 }
+
+/// A `let`-bound local inside a `test` body must resolve to its binding so the
+/// value keeps its runtime type. Regression guard: the test-body lambda was once
+/// given a synthetic span disjoint from the body's real source offsets, so HIR
+/// offset-based name resolution never found the `let n` binding — `n` resolved to
+/// a null placeholder and `n + 1` crashed with
+/// `CannotApplyBinOp { left: Object(Any), right: Int, op: Add }`.
+#[tokio::test]
+async fn test_body_let_local_resolves_to_binding() {
+    let source = r#"
+        test "t" {
+            let n: int = 5;
+            assert.equal(n + 1, 6);
+            let r = "x";
+            assert.equal(r, "x");
+        }
+    "#;
+
+    let engine = make_engine(source);
+    let registry = engine
+        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .await
+        .expect("collect_tests should succeed");
+
+    let report = run_named_test(&engine, registry, "t")
+        .await
+        .expect("run_test should not crash on a let-bound local");
+    assert_outcome(&report, "pass");
+}
+
+/// Extract the `outcome` string from a `testing.TestReport` instance.
+fn report_outcome(report: &BexExternalValue) -> String {
+    let BexExternalValue::Instance { class_name, fields } = report else {
+        panic!("expected TestReport instance, got: {report:?}");
+    };
+    assert_eq!(class_name, "testing.TestReport");
+    match fields.get("outcome") {
+        Some(BexExternalValue::String(outcome)) => outcome.to_string(),
+        Some(BexExternalValue::Union { value, .. }) => match value.as_ref() {
+            BexExternalValue::String(outcome) => outcome.to_string(),
+            other => panic!("expected string outcome inside union, got: {other:?}"),
+        },
+        other => panic!("expected string outcome field, got: {other:?}"),
+    }
+}
+
+fn assert_outcome(report: &BexExternalValue, expected: &str) {
+    assert_eq!(report_outcome(report), expected, "unexpected test outcome");
+}
+
+/// Two `test` blocks may reuse the same `let` binding name without conflict —
+/// each test body lowers to its own lambda scope, so the bindings are isolated.
+#[tokio::test]
+async fn test_bodies_reuse_same_let_name_without_conflict() {
+    let source = r#"
+        test "a" { let x: int = 1; assert.equal(x, 1); }
+        test "b" { let x: int = 2; assert.equal(x, 2); }
+    "#;
+
+    let engine = make_engine(source);
+    let registry = engine
+        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .await
+        .expect("collect_tests should succeed");
+
+    let a = run_named_test(&engine, registry.clone(), "a")
+        .await
+        .expect("run_test a should succeed");
+    assert_outcome(&a, "pass");
+
+    let b = run_named_test(&engine, registry, "b")
+        .await
+        .expect("run_test b should succeed");
+    assert_outcome(&b, "pass");
+}
+
+/// `let` resolution honors lexical scoping across a testset and its inner tests:
+/// a testset-level `let` is captured by inner tests, an inner `let` shadows the
+/// testset's binding of the same name, and a sibling test that does not shadow
+/// still sees the testset-level binding.
+#[tokio::test]
+async fn testset_let_capture_and_shadowing_resolve_correctly() {
+    let source = r#"
+        testset "s" {
+            let base: int = 10;
+            let v: string = "outer";
+            test "capture" { let x: int = base + 1; assert.equal(x, 11); }
+            test "shadow" { let v: string = "inner"; assert.equal(v, "inner"); }
+            test "ref_outer" { assert.equal(v, "outer"); }
+        }
+    "#;
+
+    let engine = make_engine(source);
+    let registry = engine
+        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .await
+        .expect("collect_tests should succeed");
+
+    // Inner tests are registered under full path names once the set is expanded.
+    expand_testset(&engine, registry.clone(), "s")
+        .await
+        .expect("expand_set should succeed");
+
+    for name in ["s/capture", "s/shadow", "s/ref_outer"] {
+        let report = run_named_test(&engine, registry.clone(), name)
+            .await
+            .unwrap_or_else(|e| panic!("run_test {name} should succeed: {e:?}"));
+        assert_outcome(&report, "pass");
+    }
+}

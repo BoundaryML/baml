@@ -2009,9 +2009,15 @@ fn synthesize_register_call(
 
             // Args: (name_expr, lambda, runner_or_null)
             let name_arg = lower_expr_body::lower_runner_element(ctx, name_element);
-            // Use a unique synthetic span for the lambda so the HIR scope builder
-            // can distinguish this lambda's scope from other synthesized lambdas.
-            let lambda_span = ctx.next_lambda_span();
+            // Use the test body's real CST range as the lambda's span so HIR
+            // scope lookup resolves names inside the body correctly. The body's
+            // statements carry real source offsets, so a synthetic span (disjoint
+            // from those offsets) would make `scope_at_offset` miss the lambda
+            // scope, and every `let`-bound local would fail to resolve (reading
+            // the local would fall back to a null placeholder). The range is
+            // unique per test block, so distinct lambda scopes stay
+            // distinguishable. Mirrors the testset collector lambda below.
+            let lambda_span = body_node.text_range();
             let lambda_arg = ctx.alloc_expr(Expr::Lambda(Box::new(lambda_def)), lambda_span);
             let runner_arg = lower_runner_element(runner_element.as_ref(), ctx, span);
 
