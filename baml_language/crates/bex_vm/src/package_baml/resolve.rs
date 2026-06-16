@@ -14,10 +14,7 @@
 use std::borrow::Cow;
 
 use baml_type::{Literal, MediaKind, Name, RuntimeTy, TyAttr, TyTemplate, TypeName};
-use bex_vm_types::{
-    HeapPtr,
-    types::{Object, RuntimeImplRule},
-};
+use bex_vm_types::types::{Object, RuntimeImplRule};
 
 use crate::BexVm;
 
@@ -100,47 +97,63 @@ fn candidate_rules<'a>(
         .collect()
 }
 
-/// Resolve `<concrete_ty as iface>::method` to a concrete callee plus the impl's
-/// bound type args. `None` when no impl of `iface` applies to `concrete_ty`.
-/// `rule.methods` already includes the interface's inherited default methods (the
-/// bake merges them, override winning), so a plain lookup resolves both.
-//
-// Wired by the broad `==` driver (`EqualsDriver` dispatches a class's `Equals.eq`).
-// Caveats that only bite if this is extended to *generic* interfaces (`Equals`/`Compare`
-// are non-generic, so neither applies to them today):
-//  - It ignores the requested interface instantiation, so a type implementing one
-//    generic interface at two args (`Slot<L>` + `Slot<R>`) would resolve to the first
-//    match; a generic-interface caller must thread the requested args the way
-//    `type_implements` does.
-//  - It returns the first rule by sort order when several apply. Compile-time coherence
-//    (per-package plus the dependency closure) rejects overlapping impls, so this is
-//    unreachable for statically-known packages; a mutable dynamically-loaded package
-//    could still introduce an overlap the orphan rule can't rule out.
-pub(super) fn resolve_interface_method(
-    vm: &BexVm,
+/// Resolve `(Self, Iface<Args>)` to the single applicable `implements` rule, plus
+/// the impl's bound type args — its generics realized by matching `concrete_ty`
+/// against the rule's `for` pattern. That rule is the canonical handle: read the
+/// concrete method off `rule.methods` (defaults are merged in at bake time,
+/// overrides winning), the associated bindings off `rule.interface_assoc`, etc.;
+/// the returned type args are the realization env for them.
+///
+/// Selection is keyed on `Self` (`concrete_ty`, including its own type args) and
+/// the interface's **input** args only. Associated types are *outputs*
+/// (functionally determined by the impl), so they never affect which impl is
+/// selected — coherence is per `(Self, Iface<Args>)`. A caller holding an
+/// *expected* associated projection can validate it against the resolved rule via
+/// [`type_implements`]; that is checking, not selection. An empty `iface_args`
+/// request matches any instantiation — the case for non-generic interfaces
+/// (`Equals`/`Compare`), which have exactly one rule per type.
+///
+/// `None` when no impl of `iface` applies to `concrete_ty`. When several rules
+/// apply — a type implementing one generic interface at distinct instantiations
+/// (`Converter<int>` + `Converter<float>`) — the one whose args match the request
+/// wins; the fallback to the first applicable rule serves the empty-request /
+/// single-impl cases and is defensive for the (compile-time-coherence-forbidden)
+/// no-match case.
+pub(crate) fn resolve_implements_rule<'a>(
+    vm: &'a BexVm,
     concrete_ty: &RuntimeTy,
     iface: &TypeName,
-    method: &str,
-) -> Option<(HeapPtr, Vec<RuntimeTy>)> {
+    iface_args: &[RuntimeTy],
+) -> Option<(&'a RuntimeImplRule, Vec<RuntimeTy>)> {
+    let mut fallback: Option<(&'a RuntimeImplRule, Vec<RuntimeTy>)> = None;
     for rule in candidate_rules(vm, concrete_ty, iface) {
         let Some(type_args) = rule_applies(vm, rule, concrete_ty, &mut Vec::new()) else {
             continue;
         };
-        // A matching rule should carry every interface method (defaults are merged in at
-        // bake time), so this lookup normally succeeds. If a method or its handle is
-        // somehow absent, skip to the next candidate instead of abandoning the whole
-        // search — coherence gives ≤1 applicable rule today, so this is defensive, but it
-        // keeps the documented "first applicable rule" contract honest rather than turning
-        // one missing handle into a global `None`.
-        let Some(fqn) = rule.methods.get(method) else {
-            continue;
-        };
-        let Some(callee) = vm.find_function_by_name(fqn) else {
-            continue;
-        };
-        return Some((callee, type_args));
+        // Select on the interface's input args only (associated types are outputs).
+        let rule_args: Vec<RuntimeTy> = rule
+            .interface_args
+            .iter()
+            .map(|t| substitute_checked(t, &type_args))
+            .collect();
+        if iface_args.is_empty() || ty_args_equivalent(&rule_args, iface_args) {
+            return Some((rule, type_args));
+        }
+        fallback.get_or_insert((rule, type_args));
     }
-    None
+    fallback
+}
+
+/// Realize a [`MethodImpl`](bex_vm_types::types::MethodImpl) frame template (De
+/// Bruijn over the impl's generic params) against the impl's bound type args
+/// (from [`resolve_implements_rule`]). The result is the `frame.type_args` to
+/// seed the resolved callee with: the impl's own generics for an impl method, or
+/// the interface's args + associated types for an inherited default.
+pub(crate) fn realize_frame(template: &[TyTemplate], bound_args: &[RuntimeTy]) -> Vec<RuntimeTy> {
+    template
+        .iter()
+        .map(|t| substitute_checked(t, bound_args))
+        .collect()
 }
 
 /// Whether `concrete_ty` implements `iface` at the requested args / associated
@@ -239,6 +252,26 @@ fn rule_applies(
                 .iter()
                 .map(|(n, t)| (n.clone(), substitute_checked(t, &type_args)))
                 .collect();
+            // An interface-existential type arg satisfies a bound that names the
+            // same interface directly: the type checker only forms `Iterable<Item
+            // = int>` for a value that already implements `Iterable`, and there is
+            // no concrete impl rule to find for an interface *type*. This is the
+            // only way `T extends Iterable` is discharged when `T` is realized to
+            // an interface-existential (e.g. `Flatten<I extends Iterable>`
+            // instantiated with `I = Iterable<int>`). It is bound-discharge only,
+            // *not* general membership — an interface type does not *implement* the
+            // interface (reflection's "does X implement I"), so it stays out of
+            // `prove`/`type_implements`. (Super-interface bounds — an `Iterator`
+            // existential under an `Iterable` bound — would additionally consult
+            // the interface's `requires` closure; not handled here.)
+            if interface_existential_satisfies_bound(
+                &type_args[param],
+                &bound.interface,
+                &req_args,
+                &req_assoc,
+            ) {
+                continue;
+            }
             if !prove(
                 vm,
                 &type_args[param],
@@ -252,6 +285,27 @@ fn rule_applies(
         }
     }
     Some(type_args)
+}
+
+/// Whether `concrete_ty` is an interface-existential that discharges a bound
+/// naming `iface` directly (same interface, equivalent args, matching assoc).
+///
+/// This is *bound discharge*, not membership: an interface type does not
+/// *implement* an interface, so this must not be folded into `prove` /
+/// `type_implements` (reflection relies on `Iterable` not implementing itself).
+fn interface_existential_satisfies_bound(
+    concrete_ty: &RuntimeTy,
+    iface: &TypeName,
+    requested_args: &[RuntimeTy],
+    requested_assoc: &[(Name, RuntimeTy)],
+) -> bool {
+    let base = concrete_base(concrete_ty);
+    let RuntimeTy::Interface(ex_qtn, ex_args, ex_assoc, _) = base.as_ref() else {
+        return false;
+    };
+    ex_qtn == iface
+        && (requested_args.is_empty() || ty_args_equivalent(ex_args, requested_args))
+        && associated_bindings_equivalent(ex_assoc, requested_assoc)
 }
 
 /// Unify a `TyTemplate` pattern against a concrete `RuntimeTy`, binding each

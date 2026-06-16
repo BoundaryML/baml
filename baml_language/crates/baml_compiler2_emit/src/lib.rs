@@ -68,7 +68,9 @@ fn build_interface_impls(
         lower_type_expr::{lower_type_expr_in_ns, qualify_def},
         ty,
     };
-    use bex_vm_types::types::{InterfaceBound, InterfaceImplsByPackage, RuntimeImplRule};
+    use bex_vm_types::types::{
+        InterfaceBound, InterfaceImplsByPackage, MethodImpl, RuntimeImplRule,
+    };
 
     type IfaceParts = (
         baml_type::TypeName,
@@ -118,6 +120,13 @@ fn build_interface_impls(
         baml_type::TypeName,
         indexmap::IndexMap<Name, String>,
     > = indexmap::IndexMap::new();
+    // Per interface (with defaults), its declared associated-type names *in order*.
+    // An inherited default is compiled against the interface's frame, so its
+    // type-arg layout is `[interface generic args ++ associated types]`, the assoc
+    // ordered by this declaration order (matching the closed-world switch's
+    // `interface_assoc_frame_tys`). Used to build each default method's frame.
+    let mut iface_assoc_order: indexmap::IndexMap<baml_type::TypeName, Vec<Name>> =
+        indexmap::IndexMap::new();
     for file in all_files {
         let item_tree = file_item_tree(db, *file);
         for (iface_id, iface_data) in &item_tree.interfaces {
@@ -129,6 +138,15 @@ fn build_interface_impls(
                 Definition::Interface(InterfaceLoc::new(db, *file, *iface_id)),
                 &iface_data.name,
             );
+            iface_assoc_order
+                .entry(iface_tn.clone())
+                .or_insert_with(|| {
+                    iface_data
+                        .associated_types
+                        .iter()
+                        .map(|assoc| assoc.name.clone())
+                        .collect()
+                });
             let entry = iface_defaults.entry(iface_tn).or_default();
             for &m in &iface_data.default_methods {
                 entry.insert(
@@ -139,12 +157,36 @@ fn build_interface_impls(
             }
         }
     }
-    // Fill a rule's method table with the interface's defaults, override winning.
-    let merge_defaults = |methods: &mut indexmap::IndexMap<Name, String>,
-                          iface_tn: &baml_type::TypeName| {
+    // The frame an inherited default of `iface_tn` is invoked with, for a rule
+    // implementing it at `interface_args` / `interface_assoc`: the interface's
+    // generic args followed by its associated types in declared order (templates
+    // over the impl's generics). A non-generic interface with no associated types
+    // (`Equals`/`Compare`) yields `[]`.
+    let interface_frame = |iface_tn: &baml_type::TypeName,
+                           interface_args: &[baml_type::TyTemplate],
+                           interface_assoc: &[(Name, baml_type::TyTemplate)]|
+     -> Vec<baml_type::TyTemplate> {
+        let mut frame: Vec<baml_type::TyTemplate> = interface_args.to_vec();
+        if let Some(order) = iface_assoc_order.get(iface_tn) {
+            for name in order {
+                if let Some((_, t)) = interface_assoc.iter().find(|(an, _)| an == name) {
+                    frame.push(t.clone());
+                }
+            }
+        }
+        frame
+    };
+    // Fill a rule's method table with the interface's defaults (override winning),
+    // each carrying the interface frame it is invoked with.
+    let merge_defaults = |methods: &mut indexmap::IndexMap<Name, MethodImpl>,
+                          iface_tn: &baml_type::TypeName,
+                          interface_frame: &[baml_type::TyTemplate]| {
         if let Some(defaults) = iface_defaults.get(iface_tn) {
             for (name, fqn) in defaults {
-                methods.entry(name.clone()).or_insert_with(|| fqn.clone());
+                methods.entry(name.clone()).or_insert_with(|| MethodImpl {
+                    fqn: fqn.clone(),
+                    frame: interface_frame.to_vec(),
+                });
             }
         }
     };
@@ -237,15 +279,27 @@ fn build_interface_impls(
             else {
                 continue;
             };
+            // An impl's own method is compiled against the impl's own generics.
+            let impl_frame: Vec<baml_type::TyTemplate> =
+                (0..u32::try_from(imp.generic_params.len()).expect("generic arity fits u32"))
+                    .map(baml_type::TyTemplate::TypeArgRef)
+                    .collect();
             let mut methods = indexmap::IndexMap::new();
             for &m in &imp.methods {
                 methods.insert(
                     item_tree[m].name.clone(),
-                    def_to_item_ref(db, Definition::Function(FunctionLoc::new(db, *file, m)))
+                    MethodImpl {
+                        fqn: def_to_item_ref(
+                            db,
+                            Definition::Function(FunctionLoc::new(db, *file, m)),
+                        )
                         .to_string(),
+                        frame: impl_frame.clone(),
+                    },
                 );
             }
-            merge_defaults(&mut methods, &iface_tn);
+            let iface_frame = interface_frame(&iface_tn, &interface_args, &interface_assoc);
+            merge_defaults(&mut methods, &iface_tn, &iface_frame);
             interface_impls
                 .entry(pkg_info.package.clone())
                 .or_default()
@@ -276,26 +330,33 @@ fn build_interface_impls(
             );
             let generics = &class_data.generic_params;
 
-            // Folded methods grouped by the interface they implement.
-            let mut methods_by_iface: indexmap::IndexMap<
+            // Each folded method tagged with the full interface instantiation it
+            // implements (name + args). A class may implement the same interface
+            // at several instantiations (e.g. `Converter<int>` + `Converter<float>`),
+            // each with its own methods; keying only by interface name would let
+            // one block's method overwrite the other's, so methods are matched to
+            // their block by the full instantiation below.
+            let class_method_impls: Vec<(
                 baml_type::TypeName,
-                indexmap::IndexMap<Name, String>,
-            > = indexmap::IndexMap::new();
-            for &m in &class_data.methods {
-                let Some(target) = item_tree.method_to_iface_target.get(&m) else {
-                    continue;
-                };
-                let Some((iface_tn, _, _)) =
-                    split_interface(&lower(&target.expr, generics), resolved, generics)
-                else {
-                    continue;
-                };
-                methods_by_iface.entry(iface_tn).or_default().insert(
-                    item_tree[m].name.clone(),
-                    def_to_item_ref(db, Definition::Function(FunctionLoc::new(db, *file, m)))
-                        .to_string(),
-                );
-            }
+                Vec<baml_type::TyTemplate>,
+                Name,
+                String,
+            )> = class_data
+                .methods
+                .iter()
+                .filter_map(|&m| {
+                    let target = item_tree.method_to_iface_target.get(&m)?;
+                    let (m_iface_tn, m_args, _m_assoc) =
+                        split_interface(&lower(&target.expr, generics), resolved, generics)?;
+                    Some((
+                        m_iface_tn,
+                        m_args,
+                        item_tree[m].name.clone(),
+                        def_to_item_ref(db, Definition::Function(FunctionLoc::new(db, *file, m)))
+                            .to_string(),
+                    ))
+                })
+                .collect();
 
             // The implementor pattern is the class at its own parameters; bounds
             // come from the class's generic parameters. Shared by all its blocks.
@@ -317,6 +378,11 @@ fn build_interface_impls(
             else {
                 continue;
             };
+            // An impl block's own methods are compiled against the class's generics.
+            let impl_frame: Vec<baml_type::TyTemplate> = (0..u32::try_from(generics.len())
+                .expect("generic arity fits u32"))
+                .map(baml_type::TyTemplate::TypeArgRef)
+                .collect();
 
             for block in &class_data.implements {
                 let Some((iface_tn, interface_args, mut interface_assoc)) =
@@ -325,8 +391,28 @@ fn build_interface_impls(
                     continue;
                 };
                 interface_assoc.extend(lower_assoc(&block.associated_type_bindings, generics));
-                let mut methods = methods_by_iface.get(&iface_tn).cloned().unwrap_or_default();
-                merge_defaults(&mut methods, &iface_tn);
+                // Match folded methods to THIS block by the full interface
+                // instantiation (name + args), not name alone — coherence makes a
+                // given `(type, Iface<Args>)` unique, so this picks exactly this
+                // block's methods even when the class implements the same
+                // interface at another instantiation.
+                let mut methods: indexmap::IndexMap<Name, MethodImpl> = class_method_impls
+                    .iter()
+                    .filter(|(m_iface_tn, m_args, _, _)| {
+                        *m_iface_tn == iface_tn && *m_args == interface_args
+                    })
+                    .map(|(_, _, name, fqn)| {
+                        (
+                            name.clone(),
+                            MethodImpl {
+                                fqn: fqn.clone(),
+                                frame: impl_frame.clone(),
+                            },
+                        )
+                    })
+                    .collect();
+                let iface_frame = interface_frame(&iface_tn, &interface_args, &interface_assoc);
+                merge_defaults(&mut methods, &iface_tn, &iface_frame);
                 interface_impls
                     .entry(pkg_info.package.clone())
                     .or_default()

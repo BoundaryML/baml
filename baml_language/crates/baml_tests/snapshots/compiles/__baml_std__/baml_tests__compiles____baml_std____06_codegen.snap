@@ -3112,153 +3112,28 @@ function baml.csv.decode(source: string | uint8array, options: baml.csv.ReaderOp
     load_type #0
     load_var _6
     call baml.csv.CsvReader.rows
-    store_var _5
-    load_var _5
-    is_type baml.iter.Flatten<...>
-    pop_jump_if_false L1
-    jump L18
-
-  L1:
-    load_var _5
-    is_type baml.iter.StepBy<...>
-    pop_jump_if_false L2
-    jump L17
-
-  L2:
-    load_var _5
-    is_type baml.iter.Chain<...>
-    pop_jump_if_false L3
-    jump L16
-
-  L3:
-    load_var _5
-    is_type baml.iter.Map<...>
-    pop_jump_if_false L4
-    jump L15
-
-  L4:
-    load_var _5
-    is_type baml.iter.Filter<...>
-    pop_jump_if_false L5
-    jump L14
-
-  L5:
-    load_var _5
-    is_type baml.iter.FilterMap<...>
-    pop_jump_if_false L6
-    jump L13
-
-  L6:
-    load_var _5
-    is_type baml.iter.FlatMap<...>
-    pop_jump_if_false L7
-    jump L12
-
-  L7:
-    load_var _5
-    is_type baml.iter.Peekable<...>
-    pop_jump_if_false L8
-    jump L11
-
-  L8:
-    load_var _5
-    is_type baml.csv.CsvRows<...>
-    pop_jump_if_false L9
-    jump L10
-
-  L9:
-    load_var _5
-    is_type baml.csv.CsvReader
-    pop_jump_if_false L22
-    load_type #0
-    load_type baml.csv.CsvError | baml.errors.Io
-    load_var _5
-    call baml.iter.Iterator.collect
-    jump L21
-
-  L10:
-    load_type #0
-    load_type baml.csv.CsvError | baml.errors.Io
-    load_var _5
-    call baml.iter.Iterator.collect
-    jump L21
-
-  L11:
-    load_type #0
-    load_type baml.csv.CsvError | baml.errors.Io
-    load_var _5
-    call baml.iter.Iterator.collect
-    jump L21
-
-  L12:
-    load_type #0
-    load_type baml.csv.CsvError | baml.errors.Io
-    load_var _5
-    call baml.iter.Iterator.collect
-    jump L21
-
-  L13:
-    load_type #0
-    load_type baml.csv.CsvError | baml.errors.Io
-    load_var _5
-    call baml.iter.Iterator.collect
-    jump L21
-
-  L14:
-    load_type #0
-    load_type baml.csv.CsvError | baml.errors.Io
-    load_var _5
-    call baml.iter.Iterator.collect
-    jump L21
-
-  L15:
-    load_type #0
-    load_type baml.csv.CsvError | baml.errors.Io
-    load_var _5
-    call baml.iter.Iterator.collect
-    jump L21
-
-  L16:
-    load_type #0
-    load_type baml.csv.CsvError | baml.errors.Io
-    load_var _5
-    call baml.iter.Iterator.collect
-    jump L21
-
-  L17:
-    load_type #0
-    load_type baml.csv.CsvError | baml.errors.Io
-    load_var _5
-    call baml.iter.Iterator.collect
-    jump L21
-
-  L18:
-    load_type #0
-    load_type baml.csv.CsvError | baml.errors.Io
-    load_var _5
-    call baml.iter.Iterator.collect
-    jump L21
+    load_type baml.iter.Iterator<Item = T, Error = baml.csv.CsvError | baml.errors.Io>
+    load_const "collect"
+    virtual_call nargs=1 ntypeargs=0
+    jump L3
     load_var _
     is_type baml.errors.Io
-    pop_jump_if_false L19
-    jump L20
+    pop_jump_if_false L1
+    jump L2
 
-  L19:
+  L1:
     load_var _
     throw
 
-  L20:
+  L2:
     load_const "unreachable: in-memory CSV source raised Io: "
     load_var _
     load_field .0
     bin_op +
     call baml.sys.panic
 
-  L21:
+  L3:
     return
-
-  L22:
-    unreachable
 }
 
 function baml.csv.decode_one(source: string | uint8array, options: baml.csv.ReaderOptions | null) -> T {
@@ -3609,151 +3484,15 @@ function baml.csv.read(path: string, options: baml.csv.ReaderOptions | null) -> 
     load_type #0
     load_var r
     call baml.csv.CsvReader.rows
-    store_var _6
-    load_var _6
-    is_type baml.iter.Flatten<...>
-    pop_jump_if_false L1
-    jump L18
-
-  L1:
-    load_var _6
-    is_type baml.iter.StepBy<...>
-    pop_jump_if_false L2
-    jump L17
-
-  L2:
-    load_var _6
-    is_type baml.iter.Chain<...>
-    pop_jump_if_false L3
-    jump L16
-
-  L3:
-    load_var _6
-    is_type baml.iter.Map<...>
-    pop_jump_if_false L4
-    jump L15
-
-  L4:
-    load_var _6
-    is_type baml.iter.Filter<...>
-    pop_jump_if_false L5
-    jump L14
-
-  L5:
-    load_var _6
-    is_type baml.iter.FilterMap<...>
-    pop_jump_if_false L6
-    jump L13
-
-  L6:
-    load_var _6
-    is_type baml.iter.FlatMap<...>
-    pop_jump_if_false L7
-    jump L12
-
-  L7:
-    load_var _6
-    is_type baml.iter.Peekable<...>
-    pop_jump_if_false L8
-    jump L11
-
-  L8:
-    load_var _6
-    is_type baml.csv.CsvRows<...>
-    pop_jump_if_false L9
-    jump L10
-
-  L9:
-    load_var _6
-    is_type baml.csv.CsvReader
-    pop_jump_if_false L20
-    load_type #0
-    load_type baml.csv.CsvError | baml.errors.Io
-    load_var _6
-    call baml.iter.Iterator.collect
+    load_type baml.iter.Iterator<Item = T, Error = baml.csv.CsvError | baml.errors.Io>
+    load_const "collect"
+    virtual_call nargs=1 ntypeargs=0
     store_var result
-    jump L19
-
-  L10:
-    load_type #0
-    load_type baml.csv.CsvError | baml.errors.Io
-    load_var _6
-    call baml.iter.Iterator.collect
-    store_var result
-    jump L19
-
-  L11:
-    load_type #0
-    load_type baml.csv.CsvError | baml.errors.Io
-    load_var _6
-    call baml.iter.Iterator.collect
-    store_var result
-    jump L19
-
-  L12:
-    load_type #0
-    load_type baml.csv.CsvError | baml.errors.Io
-    load_var _6
-    call baml.iter.Iterator.collect
-    store_var result
-    jump L19
-
-  L13:
-    load_type #0
-    load_type baml.csv.CsvError | baml.errors.Io
-    load_var _6
-    call baml.iter.Iterator.collect
-    store_var result
-    jump L19
-
-  L14:
-    load_type #0
-    load_type baml.csv.CsvError | baml.errors.Io
-    load_var _6
-    call baml.iter.Iterator.collect
-    store_var result
-    jump L19
-
-  L15:
-    load_type #0
-    load_type baml.csv.CsvError | baml.errors.Io
-    load_var _6
-    call baml.iter.Iterator.collect
-    store_var result
-    jump L19
-
-  L16:
-    load_type #0
-    load_type baml.csv.CsvError | baml.errors.Io
-    load_var _6
-    call baml.iter.Iterator.collect
-    store_var result
-    jump L19
-
-  L17:
-    load_type #0
-    load_type baml.csv.CsvError | baml.errors.Io
-    load_var _6
-    call baml.iter.Iterator.collect
-    store_var result
-    jump L19
-
-  L18:
-    load_type #0
-    load_type baml.csv.CsvError | baml.errors.Io
-    load_var _6
-    call baml.iter.Iterator.collect
-    store_var result
-
-  L19:
     load_var r
     call baml.csv.CsvReader.close
     pop 1
     load_var result
     return
-
-  L20:
-    unreachable
 }
 
 function baml.csv.reader(source: string | uint8array | baml.fs.File, options: baml.csv.ReaderOptions | null) -> baml.csv.CsvReader {

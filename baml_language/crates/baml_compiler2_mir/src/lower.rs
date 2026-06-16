@@ -3440,6 +3440,32 @@ impl<'db> LoweringContext<'db> {
         name: &Name,
         binding_id: BindingId,
     ) -> Option<InterfaceTypeView> {
+        let ty = self.source_param_tir_ty_for_binding(name, binding_id)?;
+        self.interface_dispatch_target_for_tir_ty(&ty)
+    }
+
+    /// Resolve a single-segment path expression to its source parameter's
+    /// **declared** static type, with the enclosing generic params bound to
+    /// themselves (so `T extends I` stays a `TypeVar`). `None` if the expression
+    /// is not a reference to a parameter of the current function. This is the
+    /// authoritative receiver type for a parameter — `expr_types` is not always
+    /// populated for the receiver position of a method-call path.
+    fn source_param_tir_ty_for_expr(&self, expr_id: AstExprId) -> Option<Tir2Ty> {
+        let AstExpr::Path(segments) = &self.body.exprs[expr_id] else {
+            return None;
+        };
+        if segments.len() != 1 {
+            return None;
+        }
+        let binding_id = self.binding_id_for_name_at(expr_id, &segments[0])?;
+        self.source_param_tir_ty_for_binding(&segments[0], binding_id)
+    }
+
+    fn source_param_tir_ty_for_binding(
+        &self,
+        name: &Name,
+        binding_id: BindingId,
+    ) -> Option<Tir2Ty> {
         let func_loc = self.func_loc?;
         let param_scope = self.source_param_scope?;
         let sig = baml_compiler2_ppir::function_signature(self.db, func_loc);
@@ -3466,15 +3492,39 @@ impl<'db> LoweringContext<'db> {
             })
             .collect();
         let mut diags = Vec::new();
-        let ty = baml_compiler2_tir::generics::lower_type_expr_with_generics(
+        Some(baml_compiler2_tir::generics::lower_type_expr_with_generics(
             self.db,
             &param.ty,
             pkg_items,
             &pkg_info.namespace_path,
             &bindings,
             &mut diags,
-        );
-        self.interface_dispatch_target_for_tir_ty(&ty)
+        ))
+    }
+
+    /// Whether a dispatch receiver's concrete type is statically **undetermined**
+    /// (case B) — an interface-existential `I`, a bounded type-var `T extends I`,
+    /// `Self` in an interface default body, or an associated-type projection — so
+    /// the implementation must be resolved at runtime via a virtual call.
+    /// Concrete classes and containers are determined (case A) and stay on the
+    /// static dispatch path (and must, since a container's element type cannot be
+    /// recovered from the receiver value at runtime).
+    ///
+    /// Resolves the receiver's static type from the parameter declaration first
+    /// (authoritative, and populated even when `expr_types` is not for a method
+    /// receiver position), then the inferred expr type / `Self` fallback.
+    fn dispatch_receiver_is_virtual(&self, base: AstExprId) -> bool {
+        let ty = self
+            .source_param_tir_ty_for_expr(base)
+            .or_else(|| self.dispatch_receiver_static_tir_ty(base));
+        matches!(
+            ty.as_ref(),
+            Some(
+                Tir2Ty::Interface(..)
+                    | Tir2Ty::TypeVar(..)
+                    | Tir2Ty::AssociatedTypeProjection { .. }
+            )
+        )
     }
 
     fn dispatch_receiver_static_tir_ty(&self, expr_id: AstExprId) -> Option<Tir2Ty> {
@@ -8631,6 +8681,59 @@ impl<'db> LoweringContext<'db> {
         let receiver_op = self.lower_to_operand(base);
         let receiver_ty = self.expr_ty(base);
         let recv_local = self.operand_to_local(receiver_op, receiver_ty);
+        // A statically-undetermined receiver — a bounded type-var `T extends I`,
+        // an interface-existential `I`, or `Self` inside an interface default
+        // body (also a type-var bounded by `I`) — has its concrete `Self` type
+        // known only at runtime. Resolve open-world via a virtual call keyed on
+        // the receiver's runtime concrete type, instead of the closed-world
+        // compile-time type-tag switch (which enumerates only the implementors
+        // visible when this site was compiled and is therefore unsound for
+        // user/cross-package/eval types). A *concrete* container receiver (`int[]`)
+        // pins a single static impl below, so it never reaches the virtual call.
+        //
+        // !!!! TODO: remove once we have added type data to array/map
+        // The one exclusion is an interface that can be backed by a *container* at
+        // runtime — it has a `for T[]` / `for map<K,V>` implementor (or a bare
+        // `for T` blanket that matches one), so an interface-existential receiver
+        // may hold an array/map. The virtual call reads `Self` from the receiver
+        // value, but arrays/maps erase their element type
+        // (`value_concrete_runtime_ty` cannot recover `int[]`), so it would hit
+        // that gap. Such interfaces stay on the closed-world switch (which resolves
+        // every implementor visible at the site) until containers carry their
+        // element type at runtime — then this guard can be removed. This is a
+        // container constraint, not an associated-type one: `Iterable` is excluded
+        // because it is `implement<T> Iterable for T[]`, while `Iterator` (also an
+        // associated-type interface, but implemented only by adapter *classes*)
+        // and `Equals`/`Compare`/`Converter` all take the virtual-call path. The
+        // per-method frame seeding inherited defaults need is in place, so those
+        // open-world defaults resolve their associated types correctly.
+        // A container implementor's pattern is a list/map, or a bare type-var
+        // blanket (`for T`) that also matches one. Inlined (not a method) so it is
+        // deleted with the rest of this guard once containers carry their element
+        // type at runtime and the virtual call can resolve a container receiver.
+        let iface_may_be_container_backed = self
+            .interface_type_implementors
+            .get(&iface_tn)
+            .is_some_and(|impls| {
+                impls.iter().any(|imp| {
+                    matches!(
+                        imp.tir_ty,
+                        Tir2Ty::List(..) | Tir2Ty::Map { .. } | Tir2Ty::TypeVar(..)
+                    )
+                })
+            });
+        if !iface_may_be_container_backed && self.dispatch_receiver_is_virtual(base) {
+            return self.emit_virtual_call(
+                recv_local,
+                &iface_tn,
+                &iface_type_args,
+                &iface_assoc,
+                method,
+                expr_id,
+                args,
+                dest,
+            );
+        }
         self.emit_interface_dispatch_switch(
             InterfaceDispatchCall {
                 expr_id,
@@ -8644,6 +8747,79 @@ impl<'db> LoweringContext<'db> {
             },
             dest,
         )
+    }
+
+    /// Emit an open-world [`Terminator::VirtualCall`] dispatching `method` of
+    /// interface `iface_tn` on `recv_local`. The receiver is passed as the first
+    /// value argument; the VM reads its runtime concrete type as `Self` and
+    /// resolves the impl (coherence guarantees at most one). Always succeeds
+    /// (returns `true`): the type checker has already proved the receiver
+    /// implements the interface, so no compile-time candidate enumeration — and
+    /// hence no closed-world fall-through — is needed.
+    #[expect(clippy::too_many_arguments)]
+    fn emit_virtual_call(
+        &mut self,
+        recv_local: Local,
+        iface_tn: &TypeName,
+        iface_type_args: &[Tir2Ty],
+        iface_assoc: &[(Name, Tir2Ty)],
+        method: &Name,
+        expr_id: AstExprId,
+        args: &[AstExprId],
+        dest: &Place,
+    ) -> bool {
+        // `args = [method_type_args… ++ receiver ++ value_args…]` (type args lead,
+        // mirroring `Call`). The resolved frame already carries the interface's
+        // args + associated types (from the impl); a *generic* interface method
+        // (`Iterator.map<R, E2>`) also needs its own type args, which the VM
+        // appends to that frame. Those are the trailing `method_arg_count` of the
+        // call's type args — inference may also surface the owner (interface) args,
+        // which lead and are dropped here since the VM supplies them from the impl.
+        let arg_ops = self.lower_call_arg_operands(expr_id, args);
+        let method_arg_count = self
+            .interface_method_generic_count(iface_tn, method)
+            .unwrap_or(0);
+        let type_arg_ops = self.lower_call_type_args(expr_id, true, None);
+        let method_type_arg_ops = if method_arg_count == 0 {
+            Vec::new()
+        } else {
+            let skip = type_arg_ops.len().saturating_sub(method_arg_count);
+            type_arg_ops[skip..].to_vec()
+        };
+        let ntypeargs = method_type_arg_ops.len();
+        let mut all_args = Vec::with_capacity(ntypeargs + arg_ops.len() + 1);
+        all_args.extend(method_type_arg_ops);
+        all_args.push(Operand::Copy(Place::Local(recv_local)));
+        all_args.extend(arg_ops);
+        // Non-generic interfaces (`Equals`/`Compare`) carry empty args/assoc; a
+        // parameterized interface bakes its (here runtime-converted) arguments
+        // into the template. The VM threads these to the resolver to disambiguate
+        // a type implementing the same interface at several instantiations.
+        let iface_template = TyTemplate::Concrete(RuntimeTy::Interface(
+            iface_tn.clone(),
+            iface_type_args
+                .iter()
+                .map(|a| self.convert_tir_ty_for_runtime(a))
+                .collect(),
+            iface_assoc
+                .iter()
+                .map(|(name, ty)| (name.clone(), self.convert_tir_ty_for_runtime(ty)))
+                .collect(),
+            TyAttr::default(),
+        ));
+        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
+        let resume = self.builder.create_block();
+        self.builder.virtual_call(
+            iface_template,
+            method.to_string(),
+            all_args,
+            ntypeargs,
+            dest.clone(),
+            resume,
+            unwind,
+        );
+        self.builder.set_current_block(resume);
+        true
     }
 
     /// Lower the receiver of a method-call path (`receiver_segments` — the path

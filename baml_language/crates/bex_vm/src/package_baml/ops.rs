@@ -580,7 +580,13 @@ fn value_concrete_ty(vm: &BexVm, ptr: HeapPtr) -> Option<RuntimeTy> {
 /// concrete type carries any `class_type_args`, so a generic/blanket impl
 /// (`implement<T> Equals for Box<T>`) resolves at the right `T`.
 fn resolve_equals_eq(vm: &BexVm, concrete: &RuntimeTy) -> Option<(HeapPtr, Vec<RuntimeTy>)> {
-    resolve::resolve_interface_method(vm, concrete, &equals_qtn(), "eq")
+    // `Equals` is non-generic — no interface args to select on; off the resolved
+    // rule, `eq` is the concrete method (the impl's own, or the merged default),
+    // invoked with its frame realized against the impl's bound type args.
+    let (rule, bound_args) = resolve::resolve_implements_rule(vm, concrete, &equals_qtn(), &[])?;
+    let method = rule.methods.get("eq")?;
+    let callee = vm.find_function_by_name(&method.fqn)?;
+    Some((callee, resolve::realize_frame(&method.frame, &bound_args)))
 }
 
 /// The `baml.ops.Equals` interface name.

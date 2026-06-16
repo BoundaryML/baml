@@ -556,6 +556,29 @@ fn simulate_terminator_stack(
             sim.push();
             simulate_store_place_stack(destination, sim, classifications)
         }
+        Terminator::VirtualCall {
+            args, destination, ..
+        } => {
+            let mut sink = StackCarryPullSink {
+                sim,
+                carried_local,
+                classifications,
+                def_use,
+            };
+            if pull_semantics::walk_call_direct_args(&mut sink, args).is_err() {
+                return false;
+            }
+            // After the value args, emit pushes the interface type (LoadType)
+            // and the method name (LoadConst); `VirtualCall` then pops the args
+            // plus those two operands and pushes the result.
+            sim.push();
+            sim.push();
+            if !sim.pop_n(args.len() + 2) {
+                return false;
+            }
+            sim.push();
+            simulate_store_place_stack(destination, sim, classifications)
+        }
         Terminator::SysOp {
             callee,
             args,

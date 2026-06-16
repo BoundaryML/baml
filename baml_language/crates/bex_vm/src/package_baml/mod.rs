@@ -34,6 +34,7 @@ mod media;
 mod ops;
 mod primitives;
 mod resolve;
+pub(crate) use resolve::{realize_frame, resolve_implements_rule};
 mod root;
 mod spawn;
 mod stack_trace;

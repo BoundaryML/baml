@@ -30,7 +30,7 @@ fn impl_methods(program: &Program, iface: &str, for_type: &str) -> Vec<(String, 
         .unwrap_or_else(|| panic!("no `{for_type} implements {iface}` rule baked"))
         .methods
         .iter()
-        .map(|(name, fqn)| (name.as_str().to_string(), fqn.clone()))
+        .map(|(name, method)| (name.as_str().to_string(), method.fqn.clone()))
         .collect()
 }
 

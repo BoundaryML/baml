@@ -145,6 +145,9 @@ pub(crate) fn display_instruction(
             display_global_ref(*function, globals, objects, compile_time_globals)
         }
         Instruction::MakeGenericFunctionFromValue { .. } => String::new(),
+        Instruction::VirtualCall { nargs, ntypeargs } => {
+            format!("nargs={nargs} ntypeargs={ntypeargs}")
+        }
         Instruction::LoadVar(index)
         | Instruction::StoreVar(index)
         | Instruction::StoreVarLoadVar(index)
@@ -392,7 +395,9 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::JumpIfFalse(_)
         | Instruction::JumpTable { .. }
         | Instruction::DenseTag(_) => Style::new().yellow(),
-        Instruction::Call { .. } | Instruction::CallIndirect => Style::new().magenta(),
+        Instruction::Call { .. } | Instruction::CallIndirect | Instruction::VirtualCall { .. } => {
+            Style::new().magenta()
+        }
         Instruction::Return | Instruction::Pop(_) | Instruction::Copy(_) | Instruction::Throw => {
             Style::new().red()
         }
@@ -867,6 +872,9 @@ fn display_instruction_textual(
         // --- Calls ---
         Instruction::Call { .. } => format!("call {}", meta_str(&"")),
         Instruction::CallIndirect => "call_indirect".to_string(),
+        Instruction::VirtualCall { nargs, ntypeargs } => {
+            format!("virtual_call nargs={nargs} ntypeargs={ntypeargs}")
+        }
         Instruction::SysOp(_) => format!("sys_op {}", meta_str(&"")),
         Instruction::Spawn => "spawn".to_string(),
         Instruction::Await => "await".to_string(),
@@ -1346,6 +1354,12 @@ pub fn display_compact_bytecode(
             OpCode::MakeGenericFunctionFromValue => {
                 let ntypeargs = read_u16(code, &mut pc);
                 writeln!(f, "ntypeargs={ntypeargs}")?;
+            }
+
+            OpCode::VirtualCall => {
+                let nargs = read_u16(code, &mut pc);
+                let ntypeargs = read_u16(code, &mut pc);
+                writeln!(f, "nargs={nargs} ntypeargs={ntypeargs}")?;
             }
 
             OpCode::MakeClosure => {
