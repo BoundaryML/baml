@@ -334,6 +334,14 @@ impl LoweringDiagnostic {
                         "stray ${else if} outside an ${if} block",
                         "${else if} must be inside ${if}…${endif}",
                     ),
+                    K::DuplicateElse => (
+                        "duplicate ${else} in the same ${if} chain",
+                        "this ${if} already has an ${else}",
+                    ),
+                    K::ElseIfAfterElse => (
+                        "${else if} after ${else} in the same ${if} chain",
+                        "move ${else if} branches before ${else}",
+                    ),
                 };
                 (
                     DiagnosticId::InvalidSyntax,

@@ -1665,6 +1665,10 @@ pub enum BacktickStructuralErrorKind {
     StrayElse,
     /// `${else if}` outside an `${if}` block.
     StrayElseIf,
+    /// A second `${else}` in the same `${if}` chain.
+    DuplicateElse,
+    /// `${else if}` appearing after the chain's `${else}`.
+    ElseIfAfterElse,
 }
 
 /// Stack-based block-tag matcher over the flat part stream — reports unclosed,
@@ -1675,7 +1679,12 @@ fn validate_block_structure(parts: &[FlatPart]) -> Vec<BacktickStructuralError> 
     #[derive(Clone, Copy, PartialEq)]
     enum Open {
         For,
-        If,
+        /// `seen_else` flips once the chain's `${else}` is matched, so a later
+        /// `${else}` / `${else if}` in the same chain can be rejected as
+        /// out-of-order rather than silently accepted.
+        If {
+            seen_else: bool,
+        },
     }
     let push = |errors: &mut Vec<BacktickStructuralError>, kind: K, span: rowan::TextRange| {
         errors.push(BacktickStructuralError { kind, span });
@@ -1685,19 +1694,19 @@ fn validate_block_structure(parts: &[FlatPart]) -> Vec<BacktickStructuralError> 
     for part in parts {
         match part {
             FlatPart::ForOpen(n) => stack.push((Open::For, n.text_range())),
-            FlatPart::IfOpen(n) => stack.push((Open::If, n.text_range())),
+            FlatPart::IfOpen(n) => stack.push((Open::If { seen_else: false }, n.text_range())),
             FlatPart::Endfor(n) => match stack.last() {
                 Some((Open::For, _)) => {
                     stack.pop();
                 }
-                Some((Open::If, _)) => {
+                Some((Open::If { .. }, _)) => {
                     stack.pop();
                     push(&mut errors, K::MismatchedIfClose, n.text_range());
                 }
                 None => push(&mut errors, K::StrayEndfor, n.text_range()),
             },
             FlatPart::Endif(n) => match stack.last() {
-                Some((Open::If, _)) => {
+                Some((Open::If { .. }, _)) => {
                     stack.pop();
                 }
                 Some((Open::For, _)) => {
@@ -1706,16 +1715,23 @@ fn validate_block_structure(parts: &[FlatPart]) -> Vec<BacktickStructuralError> 
                 }
                 None => push(&mut errors, K::StrayEndif, n.text_range()),
             },
-            FlatPart::Else(n) => {
-                if !matches!(stack.last(), Some((Open::If, _))) {
-                    push(&mut errors, K::StrayElse, n.text_range());
+            FlatPart::Else(n) => match stack.last_mut() {
+                // First `${else}` in the chain: mark it seen.
+                Some((Open::If { seen_else }, _)) if !*seen_else => *seen_else = true,
+                // A second `${else}` after one already closed the chain's tail.
+                Some((Open::If { .. }, _)) => {
+                    push(&mut errors, K::DuplicateElse, n.text_range());
                 }
-            }
-            FlatPart::ElseIf(n) => {
-                if !matches!(stack.last(), Some((Open::If, _))) {
-                    push(&mut errors, K::StrayElseIf, n.text_range());
+                _ => push(&mut errors, K::StrayElse, n.text_range()),
+            },
+            FlatPart::ElseIf(n) => match stack.last() {
+                Some((Open::If { seen_else: false }, _)) => {}
+                // `${else if}` after the chain's `${else}` is out of order.
+                Some((Open::If { seen_else: true }, _)) => {
+                    push(&mut errors, K::ElseIfAfterElse, n.text_range());
                 }
-            }
+                _ => push(&mut errors, K::StrayElseIf, n.text_range()),
+            },
             FlatPart::Text(_) | FlatPart::Interp(_) => {}
         }
     }
@@ -1723,7 +1739,7 @@ fn validate_block_structure(parts: &[FlatPart]) -> Vec<BacktickStructuralError> 
     for (open, span) in stack {
         let kind = match open {
             Open::For => K::UnclosedFor,
-            Open::If => K::UnclosedIf,
+            Open::If { .. } => K::UnclosedIf,
         };
         push(&mut errors, kind, span);
     }

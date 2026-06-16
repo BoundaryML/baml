@@ -81,9 +81,52 @@ fn stray_else_diagnoses() {
 }
 
 #[test]
+fn out_of_order_else_branches_diagnose() {
+    // A second ${else} in the same chain.
+    assert_has(
+        &prompt("${if (true)}a${else}b${else}c${endif}"),
+        "duplicate ${else}",
+    );
+    assert_has(
+        &untagged("${if (true)}a${else}b${else}c${endif}"),
+        "duplicate ${else}",
+    );
+    // ${else if} after the chain's ${else} is out of order.
+    assert_has(
+        &prompt("${if (true)}a${else}b${else if (false)}c${endif}"),
+        "${else if} after ${else}",
+    );
+    assert_has(
+        &untagged("${if (true)}a${else}b${else if (false)}c${endif}"),
+        "${else if} after ${else}",
+    );
+}
+
+#[test]
 fn empty_interpolation_diagnoses() {
     assert_has(&prompt("x${}y"), "empty interpolation");
     assert_has(&untagged("x${}y"), "empty interpolation");
+}
+
+#[test]
+fn for_header_accepts_const_binding() {
+    // `${for (const x in xs)}` must parse like the host `for` (which accepts the
+    // contextual `const`) — not fall into the C-style path and error.
+    let msgs = messages(&prompt("${for (const x in [1, 2])}${x}${endfor}"));
+    // No parse failure (the old bug routed `const` into the C-style path).
+    assert!(
+        msgs.iter().all(|m| !m.contains("unexpected")
+            && !m.contains("Unexpected")
+            && !m.contains("'let' or ';'")
+            && !m.contains("unclosed")
+            && !m.contains("stray")),
+        "const for-header should parse cleanly, got: {msgs:#?}"
+    );
+    // Reaching binding handling is proven by the standard `const`→`let` advisory.
+    assert!(
+        msgs.iter().any(|m| m.contains("treated like `let`")),
+        "expected the const→let advisory (proves the binding was recognized), got: {msgs:#?}"
+    );
 }
 
 #[test]

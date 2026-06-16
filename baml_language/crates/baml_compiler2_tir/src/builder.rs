@@ -2936,14 +2936,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                         } => (*initializer, Some(*pattern)),
                         _ => (None, None),
                     };
-                    // `cond` and the initializer may reference outer names.
-                    Self::collect_default_expr_forward_references(
-                        *cond,
-                        body,
-                        later_params,
-                        shadowed,
-                        refs,
-                    );
+                    // The initializer runs before the loop var is bound, so it
+                    // may reference outer names but never the loop var itself —
+                    // process it before shadowing.
                     if let Some(e) = init_initializer {
                         Self::collect_default_expr_forward_references(
                             e,
@@ -2953,10 +2948,21 @@ impl<'db> TypeInferenceBuilder<'db> {
                             refs,
                         );
                     }
+                    // Shadow the loop var, then process `cond` and the body — both
+                    // see the binding (e.g. `i` in `for (let i = 0; i < n; …)`), so
+                    // a later param sharing the name must not flag them as
+                    // forward references.
                     let saved_len = shadowed.len();
                     if let Some(p) = init_pattern {
                         Self::push_pattern_bindings(p, body, shadowed);
                     }
+                    Self::collect_default_expr_forward_references(
+                        *cond,
+                        body,
+                        later_params,
+                        shadowed,
+                        refs,
+                    );
                     Self::collect_default_expr_forward_references_in_template_segments(
                         inner,
                         body,
@@ -8143,9 +8149,18 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self.collect_throw_facts_from_template_segments(inner, body, out);
                 }
                 ast::TemplateSegment::CStyleFor {
-                    cond, body: inner, ..
+                    init,
+                    cond,
+                    step,
+                    body: inner,
                 } => {
+                    // `init` (a `let`) and `step` (an assignment) are statements
+                    // whose initializer/RHS can throw, so walk them too.
+                    self.collect_throw_facts_from_stmt(*init, body, out);
                     self.collect_throw_facts_from_expr(*cond, body, out);
+                    if let Some(step_stmt) = step {
+                        self.collect_throw_facts_from_stmt(*step_stmt, body, out);
+                    }
                     self.collect_throw_facts_from_template_segments(inner, body, out);
                 }
                 ast::TemplateSegment::If {

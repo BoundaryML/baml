@@ -642,9 +642,18 @@ impl<'a> Parser<'a> {
     fn has_newline_ahead(&self) -> bool {
         let mut i = self.current;
         while i < self.tokens.len() {
-            // Skip comments (they're trivia for line termination purposes)
+            // Skip comments (they're trivia for line-termination purposes) — but
+            // a block comment can itself span lines (`/*\n*/`), and that interior
+            // newline still terminates the line, so a tag separated from its
+            // backtick by such a comment must NOT absorb it as a tagged template.
             let new_i = self.skip_comment_at(i);
             if new_i != i {
+                if self.tokens[i..new_i]
+                    .iter()
+                    .any(|t| t.kind == TokenKind::Newline)
+                {
+                    return true;
+                }
                 i = new_i;
                 continue;
             }
@@ -2201,7 +2210,10 @@ impl<'a> Parser<'a> {
             // Stop at the next top-level item — keywords like `function`,
             // `class`, etc. that always start a fresh item at module scope.
             // A backtick literal lives inside one item; close runs from
-            // other items don't count.
+            // other items don't count. But this boundary only applies when the
+            // keyword *begins a line* (where module items actually start): a
+            // keyword sitting mid-line is backtick content (e.g.
+            // ````function name````) and must not suppress a valid close run.
             if matches!(
                 self.tokens[i].kind,
                 TokenKind::Class
@@ -2214,7 +2226,8 @@ impl<'a> Parser<'a> {
                     | TokenKind::RetryPolicy
                     | TokenKind::TemplateString
                     | TokenKind::TypeBuilder
-            ) {
+            ) && self.token_starts_line(i)
+            {
                 return false;
             }
 
@@ -2241,6 +2254,23 @@ impl<'a> Parser<'a> {
             }
         }
         false
+    }
+
+    /// Whether the token at `idx` is the first non-whitespace token on its line
+    /// — preceded only by `Whitespace` back to a `Newline` or the start of
+    /// input. Distinguishes a module-item keyword that begins a line from one
+    /// appearing mid-line as backtick content.
+    fn token_starts_line(&self, idx: usize) -> bool {
+        let mut j = idx;
+        while j > 0 {
+            j -= 1;
+            match self.tokens[j].kind {
+                TokenKind::Whitespace => continue,
+                TokenKind::Newline => return true,
+                _ => return false,
+            }
+        }
+        true
     }
 
     /// Count consecutive `Backtick` tokens at `self.current` (after skipping
@@ -2446,11 +2476,10 @@ impl<'a> Parser<'a> {
                 }
             }
             TokenKind::Else => {
-                // `${else}` or `${else if (cond)}`. Look past `else` to disambiguate.
-                let mut j = i + 1;
-                while j < self.tokens.len() && self.is_basic_trivia(self.tokens[j].kind) {
-                    j += 1;
-                }
+                // `${else}` or `${else if (cond)}`. Look past `else` to
+                // disambiguate, skipping comments too (`${else /* c */ if}`) so an
+                // interposed comment doesn't misclassify it as a plain `${else}`.
+                let j = self.skip_trivia_and_comments_from(i + 1);
                 if j < self.tokens.len() && self.tokens[j].kind == TokenKind::If {
                     BacktickInterpForm::ElseIfBlockTag
                 } else {
@@ -2477,6 +2506,13 @@ impl<'a> Parser<'a> {
         let mut paren_depth: i32 = 0;
         let mut bracket_depth: i32 = 0;
         while i < self.tokens.len() {
+            // Skip comments so a brace inside one (`${if cond /* { */}`) doesn't
+            // get mistaken for the then-block opener / interp close.
+            let new_i = self.skip_comment_at(i);
+            if new_i != i {
+                i = new_i;
+                continue;
+            }
             match self.tokens[i].kind {
                 TokenKind::LParen => paren_depth += 1,
                 TokenKind::RParen => paren_depth = paren_depth.saturating_sub(1),
@@ -2574,7 +2610,10 @@ impl<'a> Parser<'a> {
         // C-style for, AND non-paren iterator form (`for let x in xs`).
         if self.at(TokenKind::LParen) {
             self.bump(); // (
-            if self.at(TokenKind::Let) {
+            // Mirror the host `for` parser: a binding intro is `let` OR the
+            // contextual `const`, so `${for (const x in xs)}` parses like host
+            // syntax instead of falling into the C-style path and erroring.
+            if self.at_binding_intro_stmt() {
                 if self.looks_like_for_in_loop() {
                     self.parse_for_in_pattern();
                     self.expect(TokenKind::In);
@@ -10425,6 +10464,23 @@ function Demo() -> string {
         assert_no_errors(&errors);
         let lit = find_backtick_literal(&root);
         assert_eq!(lit.text().to_string(), "```nested ``double`` ticks```");
+    }
+
+    #[test]
+    fn backtick_multi_tick_keyword_content_not_flagged_empty() {
+        // A top-level item keyword (`function`) sitting mid-line as multi-tick
+        // CONTENT must not be treated as an item boundary by the empty-multi-tick
+        // guard — the close run is still ahead, so the literal parses normally.
+        let source = "
+function Demo() -> string {
+    let s = ``function keyword``
+    s
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let lit = find_backtick_literal(&root);
+        assert_eq!(lit.text().to_string(), "``function keyword``");
     }
 
     #[test]

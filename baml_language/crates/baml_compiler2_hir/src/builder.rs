@@ -680,17 +680,19 @@ impl<'db> SemanticIndexBuilder<'db> {
         // enclosing scope, so `inference_owner_scope` must climb past it.
         self.scopes[scope_id.index() as usize].is_template_body = true;
         self.lambda_stack.push(scope_id);
-        // Walk the desugared flatten block's CONTENTS inline (not via
-        // `walk_expr`, which treats `Expr::Block` as a no-op): its `${…}` exprs
-        // referencing enclosing locals become captures, its synthetic
-        // accumulator `let`s register as lambda-locals, and any `${for}`
-        // binding nests in a child block scope. The Lambda scope range stays
-        // == the template-expr span, which MIR matches to find these captures.
-        if let ast::Expr::Block { stmts, tail_expr } = &body.exprs[flatten_body] {
-            self.walk_block_contents(stmts, *tail_expr, body, source_map);
-        } else {
-            self.walk_expr(flatten_body, body, source_map, true);
-        }
+        // Walk the desugared flatten block's CONTENTS inline in THIS synthetic
+        // Lambda scope: its `${…}` exprs referencing enclosing locals become
+        // captures, its synthetic accumulator `let`s register as lambda-locals,
+        // and any `${for}` binding nests in a child block scope. The Lambda scope
+        // range stays == the template-expr span, which MIR matches to find these
+        // captures.
+        //
+        // `push_block_scope = false` keeps a block body's contents in this scope
+        // (no child block scope) while still recording the block's own `ExprId`
+        // in `expr_scopes`, so MIR/TIR scope lookups for the synthetic body
+        // resolve. For a non-block body this matches the old `walk_expr(.., true)`
+        // — `push_block_scope` is consulted only for `Expr::Block`.
+        self.walk_expr(flatten_body, body, source_map, false);
         self.analyze_lambda_captures(scope_id, body, source_map);
 
         // BEP-049 §10 — transitive capture through a *synthetic* lambda. When a

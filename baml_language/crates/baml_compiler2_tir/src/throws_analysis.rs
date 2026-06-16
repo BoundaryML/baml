@@ -384,6 +384,9 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
         Expr::Template { tag, segments } => {
             if let ast::TemplateTag::Custom { tag, .. } = tag {
                 collect_from_expr(context, *tag, body, out);
+                // A tagged template invokes the tag fn, so its declared `throws`
+                // escape just like a direct call's would.
+                collect_callee_escaping_throws(context, *tag, &[], body, false, out);
             }
             collect_from_template_segments(context, segments, body, out);
         }
@@ -420,9 +423,18 @@ fn collect_from_template_segments<C: ThrowsAnalysisContext>(
                 collect_from_template_segments(context, inner, body, out);
             }
             ast::TemplateSegment::CStyleFor {
-                cond, body: inner, ..
+                init,
+                cond,
+                step,
+                body: inner,
             } => {
+                // `init`/`step` are statements (the `let` and the assignment) that
+                // can throw, so traverse them alongside `cond` and the body.
+                collect_from_stmt(context, *init, body, out);
                 collect_from_expr(context, *cond, body, out);
+                if let Some(step_stmt) = step {
+                    collect_from_stmt(context, *step_stmt, body, out);
+                }
                 collect_from_template_segments(context, inner, body, out);
             }
             ast::TemplateSegment::If {
