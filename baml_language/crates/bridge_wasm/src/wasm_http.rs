@@ -543,11 +543,17 @@ async fn sse_background_task(
 }
 
 impl IoNamespaceHttp for WasmHttp {
-    fn fetch(
+    // `timeout_nanos` is accepted for parity with the native ops but not yet
+    // honored: the browser `fetch` backend behind reqwest's wasm client has no
+    // straightforward per-request timeout hook. A `null` BAML timeout (the
+    // default) is unbounded regardless, so omitting it only affects explicit
+    // deadlines on the playground/wasm path.
+    fn _fetch(
         &self,
         _heap: &Arc<BexHeap>,
         call_id: CallId,
         url: String,
+        _timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::Response> {
         let req = io::owned::http::Request {
@@ -559,11 +565,12 @@ impl IoNamespaceHttp for WasmHttp {
         self.do_send(call_id, req)
     }
 
-    fn send(
+    fn _send(
         &self,
         _heap: &Arc<BexHeap>,
         call_id: CallId,
         request: io::owned::http::Request,
+        _timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::Response> {
         self.do_send(call_id, request)

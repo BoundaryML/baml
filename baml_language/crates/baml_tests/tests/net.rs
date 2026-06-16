@@ -33,8 +33,10 @@ async fn net_connect_and_read() {
     insta::assert_snapshot!(stabilize_bytecode(&output.bytecode, &addr), @r#"
     function main() -> uint8array {
         load_const "{ADDR}"
-        sys_op baml.net.TcpStream.connect
-        sys_op baml.net.TcpStream.read
+        load_const <omitted>
+        call baml.net.TcpStream.connect
+        load_const <omitted>
+        call baml.net.TcpStream.read
         return
     }
     "#);
@@ -58,8 +60,10 @@ async fn net_connect_failure() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> uint8array {
         load_const "127.0.0.1:1"
-        sys_op baml.net.TcpStream.connect
-        sys_op baml.net.TcpStream.read
+        load_const <omitted>
+        call baml.net.TcpStream.connect
+        load_const <omitted>
+        call baml.net.TcpStream.read
         return
     }
     "#);
@@ -96,13 +100,16 @@ async fn net_multiple_reads() {
     insta::assert_snapshot!(stabilize_bytecode(&output.bytecode, &addr), @r#"
     function main() -> uint8array {
         load_const "{ADDR}"
-        sys_op baml.net.TcpStream.connect
+        load_const <omitted>
+        call baml.net.TcpStream.connect
         store_var sock
         load_var sock
-        sys_op baml.net.TcpStream.read
+        load_const <omitted>
+        call baml.net.TcpStream.read
         store_var first
         load_var sock
-        sys_op baml.net.TcpStream.read
+        load_const <omitted>
+        call baml.net.TcpStream.read
         store_var second
         load_var first
         return
@@ -111,6 +118,99 @@ async fn net_multiple_reads() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::Uint8Array(b"chunk1".to_vec()))
+    );
+}
+
+#[tokio::test]
+async fn net_read_timeout_fires() {
+    // The server accepts the connection but never writes, so a bare read() would
+    // block forever. A short read timeout must surface as baml.errors.Timeout.
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap().to_string();
+
+    let server = tokio::spawn(async move {
+        let _conn = listener.accept().await.unwrap();
+        // Hold the connection open (silent) past the client's deadline.
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+    });
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> uint8array {{
+                let sock = baml.net.TcpStream.connect("{addr}");
+                sock.read(timeout = baml.time.Duration.from_milliseconds(50n))
+            }}
+        "#
+    ));
+    server.await.unwrap();
+
+    let err = output
+        .result
+        .expect_err("read with a 50ms timeout against a silent peer should time out")
+        .to_string();
+    assert!(
+        err.contains("baml.errors.Timeout"),
+        "expected a baml.errors.Timeout throw, got: {err}"
+    );
+}
+
+#[tokio::test]
+async fn net_read_succeeds_within_timeout() {
+    // A generous read timeout must not interfere with a prompt response.
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap().to_string();
+
+    let server = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        socket.write_all(b"prompt").await.unwrap();
+        socket.shutdown().await.unwrap();
+    });
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> uint8array {{
+                let sock = baml.net.TcpStream.connect("{addr}");
+                sock.read(timeout = baml.time.Duration.from_seconds(5n))
+            }}
+        "#
+    ));
+    server.await.unwrap();
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::Uint8Array(b"prompt".to_vec()))
+    );
+}
+
+#[tokio::test]
+async fn net_connect_timeout_param_accepted() {
+    // Exercises the connect(timeout=…) path end-to-end: a generous deadline
+    // against a live listener still connects and reads normally.
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap().to_string();
+
+    let server = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        socket.write_all(b"connected").await.unwrap();
+        socket.shutdown().await.unwrap();
+    });
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> uint8array {{
+                let sock = baml.net.TcpStream.connect(
+                    "{addr}",
+                    timeout = baml.time.Duration.from_seconds(5n),
+                );
+                sock.read()
+            }}
+        "#
+    ));
+    server.await.unwrap();
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::Uint8Array(b"connected".to_vec()))
     );
 }
 
@@ -133,6 +233,61 @@ async fn net_udp_send_recv() {
                 let sock = baml.net.UdpSocket.bind("127.0.0.1:0");
                 sock.send_to("ping".to_utf8(), "{peer_addr}");
                 let dgram = sock.recv_from();
+                dgram.data
+            }}
+        "#
+    ));
+    server.await.unwrap();
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::Uint8Array(b"pong".to_vec()))
+    );
+}
+
+#[tokio::test]
+async fn net_udp_recv_timeout_fires() {
+    // A bound socket with nobody sending: recv_from(timeout=50ms) must surface
+    // as baml.errors.Timeout rather than blocking forever.
+    let output = baml_test!(
+        r#"
+            function main() -> uint8array {
+                let sock = baml.net.UdpSocket.bind("127.0.0.1:0");
+                let dgram = sock.recv_from(timeout = baml.time.Duration.from_milliseconds(50n));
+                dgram.data
+            }
+        "#
+    );
+
+    let err = output
+        .result
+        .expect_err("recv_from with a 50ms timeout and no datagram should time out")
+        .to_string();
+    assert!(
+        err.contains("baml.errors.Timeout"),
+        "expected a baml.errors.Timeout throw, got: {err}"
+    );
+}
+
+#[tokio::test]
+async fn net_udp_recv_succeeds_within_timeout() {
+    // A generous recv timeout must not interfere with a prompt datagram.
+    let peer = tokio::net::UdpSocket::bind("127.0.0.1:0").await.unwrap();
+    let peer_addr = peer.local_addr().unwrap().to_string();
+
+    let server = tokio::spawn(async move {
+        let mut buf = vec![0u8; 1024];
+        let (n, from) = peer.recv_from(&mut buf).await.unwrap();
+        assert_eq!(&buf[..n], b"ping");
+        peer.send_to(b"pong", from).await.unwrap();
+    });
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> uint8array {{
+                let sock = baml.net.UdpSocket.bind("127.0.0.1:0");
+                sock.send_to("ping".to_utf8(), "{peer_addr}", timeout = baml.time.Duration.from_seconds(5n));
+                let dgram = sock.recv_from(timeout = baml.time.Duration.from_seconds(5n));
                 dgram.data
             }}
         "#
