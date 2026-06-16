@@ -4915,6 +4915,9 @@ function baml.http.Request.to_json(self: baml.http.Request) -> baml.json.json {
 function baml.http.Response.bytes(self: baml.http.Response) -> uint8array {
 }
 
+function baml.http.Response.end(self: baml.http.Response) -> null {
+}
+
 function baml.http.Response.from_json(j: baml.json.json) -> baml.http.Response {
     load_var j
     call baml.json.stringify
@@ -4926,6 +4929,9 @@ function baml.http.Response.from_json(j: baml.json.json) -> baml.http.Response {
 }
 
 function baml.http.Response.new(status_code: int, headers: map<string, string>, body: uint8array) -> baml.http.Response {
+}
+
+function baml.http.Response.new_streaming(status_code: int, headers: map<string, string>) -> baml.http.Response {
 }
 
 function baml.http.Response.ok(self: baml.http.Response) -> bool {
@@ -4953,6 +4959,9 @@ function baml.http.Response.to_json(self: baml.http.Response) -> baml.json.json 
     call baml.json.to_string
     call baml.json.parse
     return
+}
+
+function baml.http.Response.write(self: baml.http.Response, data: uint8array) -> null {
 }
 
 function baml.http.Server._serve(self: baml.http.Server, handler: (baml.http.Request) -> baml.http.Response throws never, tls_config: baml.http.TlsConfig | null, allow_http1: bool, allow_http2: bool, max_body_size: int, max_connections: int, header_read_timeout_nanos: bigint) -> never {

@@ -8,6 +8,7 @@ members = [
   "sdks/python/rust/*",
   "sdk_tests/harness_setup",
   "sdk_tests/harness_runner",
+  "sdk_tests/harness/llm_recordings",
   "sdk_tests/crates/python_pydantic2",
   # `sdk_tests/crates/typescript_node`'s build.rs runs codegen +
   # `pnpm install` but soft-fails into `$OUT_DIR/build_diagnostics.txt`
