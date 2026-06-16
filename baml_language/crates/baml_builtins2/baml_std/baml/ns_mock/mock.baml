@@ -32,8 +32,10 @@ function __new<T>(original: T) -> Mock<T> throws never {
 }
 
 /// Internal: push `mocks` (a single mock or an array) onto the active-mock
-/// table and reset their counters.
+/// table and reset their counters. Panics (non-recoverable) if `mocks` is an
+/// array containing a non-`Mock` element.
 //baml:mut_vm
+//baml:fallible
 function __enter<T>(mocks: Mock<T>) -> void throws never {
   $rust_function
 }
