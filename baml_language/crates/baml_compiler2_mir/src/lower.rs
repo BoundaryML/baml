@@ -1569,6 +1569,79 @@ enum CalleeFrameSeed {
     Static(Vec<Tir2Ty>),
 }
 
+/// A method resolved on a concrete type's interface implementation: the callable
+/// plus how to seed its frame's type args. The single currency of interface
+/// method resolution — produced by [`ResolvedImplBlock::get_method`].
+// Consumers (operator dispatch + the resolver consolidation that retires
+// `resolve_*_method`) land in follow-up units; this is the foundation they build on.
+#[expect(dead_code)]
+struct ResolvedMethod {
+    item_ref: ItemRef,
+    frame_seed: CalleeFrameSeed,
+}
+
+/// The one `implements` block of a given interface by a given *concrete* type —
+/// the canonical bridge from "does `T` implement `I`?" (membership) to "what are
+/// `I`'s methods/fields/associated types on `T`?" (resolution).
+///
+/// Obtained from [`LoweringContext::get_implements_block`]; coherence guarantees
+/// at most one per `(concrete type, interface)`. This is the single place
+/// interface-member resolution lives — both the static-concrete direct-call path
+/// and (eventually) each runtime-dispatch arm resolve through it. The `iface`
+/// view is the *requested* interface (the resolvers below re-match it against the
+/// implementing block's `requires` closure, exactly as the operator/method-call
+/// dispatch paths do).
+struct ResolvedImplBlock<'a, 'db> {
+    ctx: &'a LoweringContext<'db>,
+    recv_ty: Tir2Ty,
+    iface_tn: TypeName,
+    iface_type_args: Vec<Tir2Ty>,
+    iface_assoc: Vec<(Name, Tir2Ty)>,
+}
+
+impl ResolvedImplBlock<'_, '_> {
+    /// Resolve `method` on this impl to a direct call target — the block's own
+    /// override, or the interface default it inherits. `None` only if the
+    /// interface closure declares no such method.
+    #[expect(dead_code)]
+    fn get_method(&self, method: &Name) -> Option<ResolvedMethod> {
+        // A concrete class implementor (in-body *or* out-of-body) resolves through
+        // the class path; every other concrete implementor (primitives,
+        // containers, ...) through the type path. Both fall back to interface
+        // defaults internally.
+        if let Tir2Ty::Class(class_qtn, _, _) = &self.recv_ty {
+            self.ctx
+                .resolve_implementor_method_candidates(
+                    class_qtn,
+                    &self.iface_tn,
+                    &self.iface_type_args,
+                    &self.iface_assoc,
+                    method,
+                    Some(&self.recv_ty),
+                )
+                .into_iter()
+                .next()
+                .map(|candidate| ResolvedMethod {
+                    item_ref: candidate.item_ref,
+                    frame_seed: candidate.frame_seed,
+                })
+        } else {
+            self.ctx
+                .resolve_type_implementor_method(
+                    &self.recv_ty,
+                    &self.iface_tn,
+                    &self.iface_type_args,
+                    &self.iface_assoc,
+                    method,
+                )
+                .map(|(item_ref, frame_type_args)| ResolvedMethod {
+                    item_ref,
+                    frame_seed: CalleeFrameSeed::Static(frame_type_args),
+                })
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum MetadataScope {
     Body(FileScopeId),
@@ -3546,6 +3619,103 @@ impl<'db> LoweringContext<'db> {
             }
         }
         None
+    }
+
+    /// The one `implements` block of `iface` by the *concrete* type `ty`, or
+    /// `None` if `ty` does not implement `iface`.
+    ///
+    /// This is the canonical entry point for interface-implementation lookup:
+    /// membership is `get_implements_block(ty, iface).is_some()`, and method /
+    /// field / associated-type resolution go through the returned
+    /// [`ResolvedImplBlock`]. Per coherence (`TYPE_SYSTEM.md`), a concrete type has
+    /// at most one implementation of a given interface, so this returns `Option`,
+    /// not a set. `ty` must be concrete — type-vars and interface-existentials
+    /// dispatch dynamically and never resolve to a single static block.
+    ///
+    /// Searches the current file's package plus its dependencies (the orphan rule
+    /// puts every impl in the package of either the interface or the type).
+    #[expect(dead_code)]
+    fn get_implements_block<'a>(
+        &'a self,
+        ty: &Tir2Ty,
+        iface: &baml_type::Interface,
+    ) -> Option<ResolvedImplBlock<'a, 'db>> {
+        // Only concrete receivers implement interfaces. Containers count as
+        // concrete (`implements<T> I for T[]`). Mirrors the gate in
+        // `registry_dispatch_target_for_concrete`.
+        if !matches!(
+            ty,
+            Tir2Ty::Class(..)
+                | Tir2Ty::Int { .. }
+                | Tir2Ty::Bigint { .. }
+                | Tir2Ty::Float { .. }
+                | Tir2Ty::String { .. }
+                | Tir2Ty::Bool { .. }
+                | Tir2Ty::Null { .. }
+                | Tir2Ty::Uint8Array { .. }
+                | Tir2Ty::Media(..)
+                | Tir2Ty::List(..)
+                | Tir2Ty::Map { .. }
+                | Tir2Ty::Future(..)
+        ) {
+            return None;
+        }
+
+        // Associated-type constraints are an unordered map; the rule matcher takes
+        // an ordered `Vec`. Sort by name for a deterministic request.
+        let mut iface_assoc: Vec<(Name, Tir2Ty)> = iface
+            .associated_types
+            .iter()
+            .map(|(name, ty)| (name.clone(), ty.clone()))
+            .collect();
+        iface_assoc.sort_by(|(a, _), (b, _)| a.as_str().cmp(b.as_str()));
+        let iface_type_args = iface.generics.clone();
+        let requested_iface_ty = Tir2Ty::Interface(
+            iface.name.clone(),
+            iface_type_args.clone(),
+            iface_assoc.clone(),
+            baml_compiler2_tir::ty::TyAttr::default(),
+        );
+
+        let pkg = file_package(self.db, self.file).package;
+        let pkg_id = baml_compiler2_hir::package::PackageId::new(self.db, pkg.clone());
+        let mut package_ids: Vec<_> =
+            baml_compiler2_hir::package::package_dependencies(self.db, pkg_id).clone();
+        package_ids.push(pkg_id);
+        let implements = package_ids.iter().any(|&package_id| {
+            let registry =
+                baml_compiler2_tir::interfaces::package_implements_registry(self.db, package_id);
+            registry.interface_impl_rules.iter().any(|rule| {
+                registry
+                    .rule_matches_actual(
+                        rule,
+                        ty,
+                        &requested_iface_ty,
+                        &self.resolved_aliases.aliases,
+                        |actual, bound| {
+                            type_satisfies_bound(
+                                self.db,
+                                actual,
+                                bound,
+                                &self.resolved_aliases.aliases,
+                                &pkg,
+                                BLANKET_BOUND_DEPTH,
+                            )
+                        },
+                    )
+                    .is_some()
+            })
+        });
+        if !implements {
+            return None;
+        }
+        Some(ResolvedImplBlock {
+            ctx: self,
+            recv_ty: ty.clone(),
+            iface_tn: iface.name.clone(),
+            iface_type_args,
+            iface_assoc,
+        })
     }
 
     /// Whether `iface_qtn` or any interface in its `requires` closure declares a

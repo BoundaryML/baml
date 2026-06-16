@@ -13,6 +13,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 
 mod attr;
 mod defs;
+mod interface;
 mod names;
 pub mod normalize;
 mod primitive;
@@ -21,6 +22,7 @@ pub mod template;
 pub mod typetag;
 pub use attr::*;
 pub use defs::*;
+pub use interface::*;
 pub use names::*;
 pub use primitive::*;
 mod runtime_ty;
