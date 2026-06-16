@@ -3148,13 +3148,21 @@ impl BexVm {
     /// regular methods. (Same-namespace interface impls only; a cross-namespace
     /// `implements` would not round-trip through this name derivation.)
     fn interface_method_key(&self, name: &str) -> Option<String> {
+        // A generic interface implementation method names the interface with its
+        // type args (`user.M.Converter<int>.convert`); strip them so the derived
+        // key matches the interface-method mock, which keys on the bare interface
+        // method name (`user.Converter.convert`). (Generic-specialization-keyed
+        // interface mocks are a separate, unimplemented refinement.)
+        fn strip_generics(component: &str) -> &str {
+            component.split('<').next().unwrap_or(component)
+        }
         let comps: Vec<&str> = name.split('.').collect();
         let n = comps.len();
         if n < 3 {
             return None;
         }
-        let candidate_interface = comps[n - 2];
-        let candidate_class = comps[n - 3];
+        let candidate_interface = strip_generics(comps[n - 2]);
+        let candidate_class = strip_generics(comps[n - 3]);
         let implements = self.interface_implementors.iter().any(|(iface, impls)| {
             iface.name().as_str() == candidate_interface
                 && impls

@@ -1891,6 +1891,26 @@ impl<'db> TypeInferenceBuilder<'db> {
         body: &ExprBody,
         expr_id: ExprId,
     ) -> Ty {
+        // `Iface<T>.method` / `Class<T>.method`: the base names a generic *type*,
+        // not a value callable. Try resolving `base<type_args>` as a type first
+        // — if it's an interface or class, return the instantiated type so an
+        // enclosing member access resolves the method (e.g.
+        // `Converter<int>.convert` → an interface method value `baml.mock.new`
+        // can key on). A generic *function* base (`foo<int>`) doesn't resolve to
+        // a type, so it falls through to the value-callable path below.
+        if let Expr::Path(segments) = &body.exprs[base] {
+            let ty_expr = TypeExpr::Path {
+                segments: segments.clone(),
+                generic_args: type_args.to_vec(),
+                associated_type_bindings: Vec::new(),
+                attrs: Vec::new(),
+            };
+            let mut diags = Vec::new();
+            let lowered = self.lower_type_expr_in_current_body(&ty_expr, &mut diags);
+            if matches!(lowered, Ty::Interface(..) | Ty::Class(..)) {
+                return lowered;
+            }
+        }
         let base_ty = self.infer_expr(base, body);
         // If the base already failed to type-check, propagate its
         // `Unknown`/`Error` instead of cascading a second `TypeIsNotGeneric`
@@ -4215,6 +4235,17 @@ impl<'db> TypeInferenceBuilder<'db> {
         // reference (bound = false).
         let base_is_value = match &body.exprs[base] {
             Expr::Path(segments) if !segments.is_empty() => self.locals.contains_key(&segments[0]),
+            // `Iface<T>.method` / `Class<T>.method`: a generic type-name
+            // qualifier (e.g. `Converter<int>.convert`) — unbound, like the bare
+            // `Path` case, unless its root is a local (then it's a generic
+            // value). Without this, the access binds as a value method and
+            // strips `self`, breaking the interface-method-value form.
+            Expr::GenericApply { base: inner, .. } => match &body.exprs[*inner] {
+                Expr::Path(segments) if !segments.is_empty() => {
+                    self.locals.contains_key(&segments[0])
+                }
+                _ => true,
+            },
             _ => true, // complex expressions are always values
         };
 
