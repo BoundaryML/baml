@@ -2949,7 +2949,7 @@ function exceptions.s5_bad_2() -> int {
     load_const 1
     load_const 2
     alloc_array 2
-    load_const 1
+    load_const 3
     unary_op -
     load_array_element
     return
