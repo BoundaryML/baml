@@ -690,3 +690,205 @@ function demo() -> ((x: int) -> int) -> int {
         "expected function-valued return annotation to preserve callback forwarding surface, got:\n{output}"
     );
 }
+
+/// Helper: does compiling `source` produce a `type mismatch` diagnostic?
+fn has_type_mismatch(source: &str) -> bool {
+    let mut db = make_db();
+    db.add_file("test.baml", source);
+    baml_project::collect_compiler2_diagnostics(&db)
+        .iter()
+        .any(|diag| diag.message.contains("type mismatch"))
+}
+
+// ─── B-236: reassigning an unannotated local across container kinds ──────────
+//
+// `let x = {}` gives `x` an (evolving) map type. Reassigning the empty array
+// `[]` used to be accepted silently: `x` stayed map-typed while it held an
+// array at runtime, so indexing it aborted the VM with `expected map, got
+// array`. Reassignment must instead be rejected at compile time.
+
+#[test]
+fn reassign_empty_map_local_to_array_is_rejected() {
+    assert!(
+        has_type_mismatch(
+            r#"function main() -> int {
+    let x = {};
+    x = [];
+    return 0;
+}"#
+        ),
+        "reassigning [] into a map-typed local should report a type mismatch"
+    );
+}
+
+#[test]
+fn reassign_empty_array_local_to_map_is_rejected() {
+    assert!(
+        has_type_mismatch(
+            r#"function main() -> int {
+    let x = [];
+    x = {};
+    return 0;
+}"#
+        ),
+        "reassigning {{}} into a list-typed local should report a type mismatch"
+    );
+}
+
+#[test]
+fn reassign_if_else_with_empty_array_else_branch_is_rejected() {
+    // The exact ticket shape: the empty array lives in an if/else else-branch.
+    assert!(
+        has_type_mismatch(
+            r#"function main() -> int {
+    let x = {};
+    x = if false { {"a": 1} } else { [] };
+    return x["a"];
+}"#
+        ),
+        "if/else result mixing a map then-branch with an empty-array else-branch \
+         must not be assignable to a map-typed local"
+    );
+}
+
+#[test]
+fn reassign_unannotated_scalar_local_to_incompatible_type_is_rejected() {
+    assert!(
+        has_type_mismatch(
+            r#"function main() -> int {
+    let n = 1;
+    n = "hello";
+    return 0;
+}"#
+        ),
+        "reassigning a string into an int-typed local should report a type mismatch"
+    );
+}
+
+#[test]
+fn empty_array_local_still_evolves_via_reassignment() {
+    // Regression guard: an *empty* evolving list must still accept a populated
+    // list of the same kind — only cross-kind reassignment is rejected.
+    assert!(
+        !has_type_mismatch(
+            r#"function main() -> int {
+    let a = [];
+    a = [1, 2, 3];
+    return 0;
+}"#
+        ),
+        "reassigning a populated list into an empty-list local must stay allowed"
+    );
+}
+
+// ─── Index-key type validation ───────────────────────────────────────────────
+//
+// The runtime does no key coercion: a list is subscripted by an `int` and a
+// map by a `string`. A wrong-typed subscript used to slip past the checker and
+// abort the VM (`expected int, got string` / `expected string, got int`).
+
+#[test]
+fn list_indexed_by_string_key_is_rejected() {
+    assert!(
+        has_type_mismatch(
+            r#"function main() -> int {
+    let x = [1, 2, 3];
+    return x["a"];
+}"#
+        ),
+        "indexing a list with a string key should report a type mismatch"
+    );
+}
+
+#[test]
+fn list_index_assign_with_string_key_is_rejected() {
+    assert!(
+        has_type_mismatch(
+            r#"function main() -> int {
+    let x = [];
+    x["a"] = 1;
+    return 0;
+}"#
+        ),
+        "index-assigning a list with a string key should report a type mismatch"
+    );
+}
+
+#[test]
+fn map_indexed_by_int_key_is_rejected() {
+    assert!(
+        has_type_mismatch(
+            r#"function main() -> int {
+    let m = {"a": 1};
+    return m[0];
+}"#
+        ),
+        "indexing a map with an int key should report a type mismatch"
+    );
+}
+
+#[test]
+fn empty_map_index_assign_with_int_key_is_rejected() {
+    assert!(
+        has_type_mismatch(
+            r#"function main() -> int {
+    let m = {};
+    m[0] = 1;
+    return 0;
+}"#
+        ),
+        "index-assigning an empty map with an int key should report a type mismatch"
+    );
+}
+
+#[test]
+fn well_typed_index_access_is_accepted() {
+    // Regression guard: int-keyed list and string-keyed map (incl. evolving
+    // empties) must stay valid.
+    assert!(
+        !has_type_mismatch(
+            r#"function main() -> int {
+    let x = [];
+    x[0] = 1;
+    let m = {};
+    m["k"] = 2;
+    return x[0] + m["k"];
+}"#
+        ),
+        "int-keyed list and string-keyed map access must stay allowed"
+    );
+}
+
+#[test]
+fn list_indexed_by_nullable_int_is_rejected() {
+    // A subscript must be non-null — the runtime has no null index (it aborts
+    // with the confusing `type error: ... got any`).
+    assert!(
+        has_type_mismatch(
+            r#"function main() -> int {
+    let arr = [1, 2, 3];
+    let i: int? = null;
+    return arr[i];
+}"#
+        ),
+        "indexing a list with a nullable int should report a type mismatch"
+    );
+}
+
+#[test]
+fn narrowed_nullable_index_is_accepted() {
+    // Regression guard: a nullable index narrowed to non-null must stay valid.
+    assert!(
+        !has_type_mismatch(
+            r#"function main() -> int {
+    let arr = [1, 2, 3];
+    let i: int? = 0;
+    if i != null {
+        return arr[i];
+    }
+    return 0;
+}"#
+        ),
+        "a nullable index narrowed to non-null must stay allowed"
+    );
+}

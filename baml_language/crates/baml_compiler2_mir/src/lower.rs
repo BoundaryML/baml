@@ -5770,7 +5770,7 @@ impl LoweringContext<'_> {
                 .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_access);
 
             self.builder.set_current_block(bb_access);
-            self.lower_index(expr_id, base, index, dest);
+            self.lower_optional_index_access(expr_id, base, index, dest, bb_null);
         } else {
             let bb_null = self.builder.create_block();
             let bb_join = self.builder.create_block();
@@ -5779,7 +5779,7 @@ impl LoweringContext<'_> {
                 .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_access);
 
             self.builder.set_current_block(bb_access);
-            self.lower_index(expr_id, base, index, dest.clone());
+            self.lower_optional_index_access(expr_id, base, index, dest.clone(), bb_null);
             if !self.builder.is_current_terminated() {
                 self.builder.goto(bb_join);
             }
@@ -5791,6 +5791,39 @@ impl LoweringContext<'_> {
 
             self.builder.set_current_block(bb_join);
         }
+    }
+
+    /// Lower the access half of `base?.[index]`, with the base already known
+    /// non-null. `?.[]` is the null-safe index operator, so a null *subscript*
+    /// must short-circuit the whole expression to null (via `bb_null`) rather
+    /// than abort the VM — mirroring the base guard. Only a nullable-typed index
+    /// needs the extra check; a non-null index lowers straight to the access.
+    fn lower_optional_index_access(
+        &mut self,
+        expr_id: AstExprId,
+        base: AstExprId,
+        index: AstExprId,
+        dest: Place,
+        bb_null: BlockId,
+    ) {
+        let index_ty = self.expr_ty(index);
+        if index_ty != index_ty.strip_null() {
+            let index_op = self.lower_to_operand(index);
+            let is_null = Rvalue::BinaryOp {
+                op: BinOp::Eq,
+                left: index_op,
+                right: Operand::Constant(Constant::Null),
+            };
+            let test_local = self.builder.temp(RuntimeTy::Bool {
+                attr: TyAttr::default(),
+            });
+            self.builder.assign(Place::local(test_local), is_null);
+            let bb_real = self.builder.create_block();
+            self.builder
+                .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_real);
+            self.builder.set_current_block(bb_real);
+        }
+        self.lower_index(expr_id, base, index, dest);
     }
 
     /// Lower `func?.(args)` — null-check callee, then call or produce null.
