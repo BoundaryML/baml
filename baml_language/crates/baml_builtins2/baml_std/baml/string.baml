@@ -140,19 +140,20 @@ class String {
 
   /// Returns the substring between two **character** offsets `[start, end)`.
   ///
-  /// Both `start` and `end` are codepoint indices, matching `length()`. They
-  /// are clamped to the range `[0, length()]`, and `end` is further clamped
-  /// so that `end >= start`. Out-of-bounds indices are silently clamped —
-  /// this method never throws.
+  /// Both `start` and `end` are codepoint indices, matching `length()`. Negative
+  /// indices count from the end. The resolved offsets are clamped to
+  /// `[0, length()]`, and an `end` that resolves at or before `start` yields an
+  /// empty string. Never throws.
   ///
   /// # Examples
   /// ```
   /// "hello world".substring(0, 5)   // "hello"
   /// "hello".substring(2, 100)       // "llo" (end clamped)
+  /// "hello".substring(-3, -1)       // "ll" (counts from the end)
   /// "😀hello".substring(0, 1)       // "😀"
   /// "😀hello".substring(1, 4)       // "hel"
   /// ```
-  function substring(self, start: int, end: int) -> string throws root.errors.InvalidArgument {
+  function substring(self, start: int, end: int) -> string throws never {
     $rust_function
   }
 
@@ -178,18 +179,20 @@ class String {
   /// Returns the character at the given **codepoint index** as a
   /// one-character string.
   ///
-  /// Returns an empty string if `index >= length()`. Throws
-  /// `InvalidArgument` if `index` is negative.
+  /// Negative indices count from the end: `-1` is the last character. Raises
+  /// `IndexOutOfBounds` when the index is out of range after counting from the
+  /// end, so a successful call always returns exactly one character.
   ///
   /// # Examples
   /// ```
   /// "hello".char_at(0)   // "h"
   /// "héllo".char_at(1)   // "é"
-  /// "héllo".char_at(2)   // "l"
   /// "😀hello".char_at(0) // "😀"
-  /// "hi".char_at(99)     // ""
+  /// "hello".char_at(-1)  // "o"
+  /// "hi".char_at(99)     // raises IndexOutOfBounds
   /// ```
-  function char_at(self, index: int) -> string throws root.errors.InvalidArgument {
+  //baml:fallible
+  function char_at(self, index: int) -> string throws never {
     $rust_function
   }
 
