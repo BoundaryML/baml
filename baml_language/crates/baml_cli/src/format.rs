@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     fs,
     path::{Path, PathBuf},
 };
@@ -40,13 +41,9 @@ impl FormatArgs {
         // project-marker rule keeps `baml fmt` from silently rewriting
         // every `.baml` under cwd from an unrelated directory; with no
         // marker there's simply nothing to format (a no-op success).
-        let discovered;
-        let paths: &[PathBuf] = if self.paths.is_empty() {
+        let paths = if self.paths.is_empty() {
             match discover_project_files(&self.from)? {
-                Some(files) => {
-                    discovered = files;
-                    &discovered
-                }
+                Some(files) => files,
                 None => {
                     // No `baml.toml` / `baml_src/` here — there's nothing to
                     // format, so don't fail. A no-op success beats a hard
@@ -57,14 +54,20 @@ impl FormatArgs {
                 }
             }
         } else {
-            &self.paths
+            expand_explicit_paths(&self.paths)
         };
 
         if paths.is_empty() {
-            crate::reporter::print_error(format_args!(
-                "no .baml files found in {}",
-                self.from.display()
-            ));
+            let search_root = if self.paths.is_empty() {
+                self.from.display().to_string()
+            } else {
+                self.paths
+                    .iter()
+                    .map(|path| path.display().to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            };
+            crate::reporter::print_error(format_args!("no .baml files found in {}", search_root));
             return Ok(crate::ExitCode::Other);
         }
 
@@ -80,7 +83,7 @@ impl FormatArgs {
         };
 
         let mut num_failures: usize = 0;
-        for path in paths {
+        for path in &paths {
             if let Some(r) = &reporter {
                 r.spin("Formatting", path.display().to_string());
             }
@@ -148,6 +151,22 @@ impl FormatArgs {
     }
 }
 
+fn expand_explicit_paths(paths: &[PathBuf]) -> Vec<PathBuf> {
+    let mut expanded = Vec::new();
+
+    for path in paths {
+        if path.is_dir() {
+            expanded.extend(discover_baml_files(path));
+        } else {
+            expanded.push(path.clone());
+        }
+    }
+
+    let mut seen = HashSet::new();
+    expanded.retain(|path| seen.insert(path.clone()));
+    expanded
+}
+
 /// Walk a project root and return every `.baml` file inside it. Requires a
 /// `baml.toml` or `baml_src/` marker so `baml fmt` doesn't accidentally
 /// rewrite every `.baml` under cwd from an unrelated directory, and prefers
@@ -172,4 +191,70 @@ fn discover_project_files(from: &Path) -> Result<Option<Vec<PathBuf>>> {
 
     let walk_root = if has_baml_src { baml_src } else { canonical };
     Ok(Some(discover_baml_files(&walk_root)))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use super::*;
+
+    #[test]
+    fn explicit_directory_formats_baml_files_recursively() {
+        let tmp = tempfile::tempdir().unwrap();
+        let baml_src = tmp.path().join("baml_src");
+        let nested_dir = baml_src.join("nested");
+        fs::create_dir_all(&nested_dir).unwrap();
+
+        let main = baml_src.join("main.baml");
+        let nested = nested_dir.join("nested.baml");
+        let ignored = nested_dir.join("ignored.txt");
+        let main_source = "function main() -> string { \"hello\" }\n";
+        let nested_source = "function nested() -> int { 1 }\n";
+        let ignored_source = "function ignored() -> int { 1 }\n";
+
+        fs::write(&main, main_source).unwrap();
+        fs::write(&nested, nested_source).unwrap();
+        fs::write(&ignored, ignored_source).unwrap();
+
+        let args = FormatArgs {
+            paths: vec![baml_src],
+            from: tmp.path().to_path_buf(),
+            dry_run: false,
+        };
+        let exit_code = args.run().unwrap();
+
+        assert!(matches!(exit_code, crate::ExitCode::Success));
+        assert_eq!(
+            fs::read_to_string(&main).unwrap(),
+            baml_fmt::format(main_source, &FormatOptions::default()).unwrap()
+        );
+        assert_eq!(
+            fs::read_to_string(&nested).unwrap(),
+            baml_fmt::format(nested_source, &FormatOptions::default()).unwrap()
+        );
+        assert_eq!(fs::read_to_string(ignored).unwrap(), ignored_source);
+    }
+
+    #[test]
+    fn explicit_overlapping_paths_are_deduplicated() {
+        let tmp = tempfile::tempdir().unwrap();
+        let baml_src = tmp.path().join("baml_src");
+        let nested_dir = baml_src.join("nested");
+        fs::create_dir_all(&nested_dir).unwrap();
+
+        let main = baml_src.join("main.baml");
+        let nested = nested_dir.join("nested.baml");
+        fs::write(&main, "function main() -> string { \"hello\" }\n").unwrap();
+        fs::write(&nested, "function nested() -> int { 1 }\n").unwrap();
+
+        let expanded = expand_explicit_paths(&[
+            baml_src.clone(),
+            main.clone(),
+            nested_dir.clone(),
+            nested.clone(),
+        ]);
+
+        assert_eq!(expanded, vec![main, nested]);
+    }
 }

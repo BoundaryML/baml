@@ -5112,13 +5112,66 @@ function baml.http.TlsConfig.to_json(self: baml.http.TlsConfig) -> baml.json.jso
     return
 }
 
-function baml.http.fetch(url: string) -> baml.http.Response {
+function baml.http._fetch(url: string, timeout_nanos: bigint) -> baml.http.Response {
+}
+
+function baml.http._send(request: baml.http.Request, timeout_nanos: bigint) -> baml.http.Response {
+}
+
+function baml.http._timeout_nanos(timeout: baml.time.Duration | null) -> bigint {
+    load_var timeout
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var timeout
+    call baml.time.Duration.to_nanoseconds
+    jump L2
+
+  L1:
+    load_const 0n
+
+  L2:
+    return
+}
+
+function baml.http.fetch(url: string, timeout: baml.time.Duration | null) -> baml.http.Response {
+    load_var timeout
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var timeout
+
+  L0:
+    load_var timeout
+    call baml.http._timeout_nanos
+    store_var _4
+    load_var2 1 3
+    sys_op baml.http._fetch
+    return
 }
 
 function baml.http.fetch_sse(request: baml.http.Request) -> baml.http.SseStream {
 }
 
-function baml.http.send(request: baml.http.Request) -> baml.http.Response {
+function baml.http.send(request: baml.http.Request, timeout: baml.time.Duration | null) -> baml.http.Response {
+    load_var timeout
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var timeout
+
+  L0:
+    load_var timeout
+    call baml.http._timeout_nanos
+    store_var _4
+    load_var2 1 3
+    sys_op baml.http._send
+    return
 }
 
 function baml.id.current() -> string {
@@ -15495,7 +15548,8 @@ function baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: ba
     load_var2 4 7
     load_var return_type
     sys_op baml.llm.PrimitiveClient.build_request
-    sys_op baml.http.send
+    load_const <omitted>
+    call baml.http.send
     store_var http_response
     load_var http_response
     call baml.http.Response.ok
@@ -17265,10 +17319,33 @@ function baml.net.TcpListener.to_json(self: baml.net.TcpListener) -> baml.json.j
     return
 }
 
+function baml.net.TcpStream._connect(addr: string, timeout_nanos: bigint) -> baml.net.TcpStream {
+}
+
+function baml.net.TcpStream._read(self: baml.net.TcpStream, timeout_nanos: bigint) -> uint8array {
+}
+
+function baml.net.TcpStream._write(self: baml.net.TcpStream, data: uint8array, timeout_nanos: bigint) -> null {
+}
+
 function baml.net.TcpStream.close(self: baml.net.TcpStream) -> null {
 }
 
-function baml.net.TcpStream.connect(addr: string) -> baml.net.TcpStream {
+function baml.net.TcpStream.connect(addr: string, timeout: baml.time.Duration | null) -> baml.net.TcpStream {
+    load_var timeout
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var timeout
+
+  L0:
+    load_var timeout
+    call baml.net._timeout_nanos
+    store_var _4
+    load_var2 1 3
+    sys_op baml.net.TcpStream._connect
+    return
 }
 
 function baml.net.TcpStream.from_json(j: baml.json.json) -> baml.net.TcpStream {
@@ -17281,7 +17358,21 @@ function baml.net.TcpStream.from_json(j: baml.json.json) -> baml.net.TcpStream {
     return
 }
 
-function baml.net.TcpStream.read(self: baml.net.TcpStream) -> uint8array {
+function baml.net.TcpStream.read(self: baml.net.TcpStream, timeout: baml.time.Duration | null) -> uint8array {
+    load_var timeout
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var timeout
+
+  L0:
+    load_var timeout
+    call baml.net._timeout_nanos
+    store_var _4
+    load_var2 1 3
+    sys_op baml.net.TcpStream._read
+    return
 }
 
 function baml.net.TcpStream.to_json(self: baml.net.TcpStream) -> baml.json.json {
@@ -17292,7 +17383,28 @@ function baml.net.TcpStream.to_json(self: baml.net.TcpStream) -> baml.json.json 
     return
 }
 
-function baml.net.TcpStream.write(self: baml.net.TcpStream, data: uint8array) -> null {
+function baml.net.TcpStream.write(self: baml.net.TcpStream, data: uint8array, timeout: baml.time.Duration | null) -> null {
+    load_var timeout
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var timeout
+
+  L0:
+    load_var timeout
+    call baml.net._timeout_nanos
+    store_var _5
+    load_var2 1 2
+    load_var _5
+    sys_op baml.net.TcpStream._write
+    return
+}
+
+function baml.net.UdpSocket._recv_from(self: baml.net.UdpSocket, timeout_nanos: bigint) -> baml.net.Datagram {
+}
+
+function baml.net.UdpSocket._send_to(self: baml.net.UdpSocket, data: uint8array, addr: string, timeout_nanos: bigint) -> int {
 }
 
 function baml.net.UdpSocket.bind(addr: string) -> baml.net.UdpSocket {
@@ -17311,10 +17423,39 @@ function baml.net.UdpSocket.from_json(j: baml.json.json) -> baml.net.UdpSocket {
     return
 }
 
-function baml.net.UdpSocket.recv_from(self: baml.net.UdpSocket) -> baml.net.Datagram {
+function baml.net.UdpSocket.recv_from(self: baml.net.UdpSocket, timeout: baml.time.Duration | null) -> baml.net.Datagram {
+    load_var timeout
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var timeout
+
+  L0:
+    load_var timeout
+    call baml.net._timeout_nanos
+    store_var _4
+    load_var2 1 3
+    sys_op baml.net.UdpSocket._recv_from
+    return
 }
 
-function baml.net.UdpSocket.send_to(self: baml.net.UdpSocket, data: uint8array, addr: string) -> int {
+function baml.net.UdpSocket.send_to(self: baml.net.UdpSocket, data: uint8array, addr: string, timeout: baml.time.Duration | null) -> int {
+    load_var timeout
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var timeout
+
+  L0:
+    load_var timeout
+    call baml.net._timeout_nanos
+    store_var _6
+    load_var2 1 2
+    load_var2 3 5
+    sys_op baml.net.UdpSocket._send_to
+    return
 }
 
 function baml.net.UdpSocket.to_json(self: baml.net.UdpSocket) -> baml.json.json {
@@ -17322,6 +17463,25 @@ function baml.net.UdpSocket.to_json(self: baml.net.UdpSocket) -> baml.json.json 
     load_var self
     call baml.json.to_string
     call baml.json.parse
+    return
+}
+
+function baml.net._timeout_nanos(timeout: baml.time.Duration | null) -> bigint {
+    load_var timeout
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var timeout
+    call baml.time.Duration.to_nanoseconds
+    jump L2
+
+  L1:
+    load_const 0n
+
+  L2:
     return
 }
 

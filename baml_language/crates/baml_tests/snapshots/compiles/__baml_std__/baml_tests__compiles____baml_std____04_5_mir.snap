@@ -7057,11 +7057,71 @@ fn baml.host.HostValue.to_json(self: baml.host.HostValue) -> baml.json.json {
     }
 }
 
+fn baml.http._fetch = builtin(io)
+
+fn baml.http._send = builtin(io)
+
+fn baml.http._timeout_nanos(timeout: baml.time.Duration | null) -> bigint {
+    // Locals:
+    let _0: bigint // _0 // return
+    let _1: baml.time.Duration | null // timeout // param
+    let _2: bool
+    let _3: baml.time.Duration // t
+
+    bb0: {
+        _2 = copy _1 == const null;
+        branch copy _2 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _3 = copy _1;
+        _0 = call const fn baml.time.Duration.to_nanoseconds(copy _3) -> [bb3];
+    }
+
+    bb2: {
+        _0 = const 0n;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
 fn baml.http.Response.bytes = builtin(io)
 
 fn baml.http.SseStream.close = builtin(io)
 
-fn baml.http.fetch = builtin(io)
+fn baml.http.fetch(url: string, timeout: baml.time.Duration | null) -> baml.http.Response {
+    // Locals:
+    let _0: baml.http.Response // _0 // return
+    let _1: string // url // param
+    let _2: baml.time.Duration | null // timeout // param
+    let _3: bool
+    let _4: bigint
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = call const fn baml.http._timeout_nanos(copy _2) -> [bb3];
+    }
+
+    bb3: {
+        _0 = sys_op const fn baml.http._fetch(copy _1, copy _4) -> bb4;
+    }
+
+    bb4: {
+        return;
+    }
+}
 
 fn baml.http.fetch_sse = builtin(io)
 
@@ -7199,7 +7259,36 @@ fn baml.http.Response.ok(self: baml.http.Response) -> bool {
     }
 }
 
-fn baml.http.send = builtin(io)
+fn baml.http.send(request: baml.http.Request, timeout: baml.time.Duration | null) -> baml.http.Response {
+    // Locals:
+    let _0: baml.http.Response // _0 // return
+    let _1: baml.http.Request // request // param
+    let _2: baml.time.Duration | null // timeout // param
+    let _3: bool
+    let _4: bigint
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = call const fn baml.http._timeout_nanos(copy _2) -> [bb3];
+    }
+
+    bb3: {
+        _0 = sys_op const fn baml.http._send(copy _1, copy _4) -> bb4;
+    }
+
+    bb4: {
+        return;
+    }
+}
 
 fn baml.http.Response.text = builtin(io)
 
@@ -15990,7 +16079,7 @@ fn baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: baml.llm
 
     bb15: {
         _18 = copy _14;
-        _17 = sys_op const fn baml.http.send(copy _18) -> bb16;
+        _17 = call const fn baml.http.send(copy _18, const <omitted>) -> [bb16];
     }
 
     bb16: {
@@ -18745,6 +18834,43 @@ fn baml.mock.Mock.to_json(self: baml.mock.Mock) -> baml.json.json {
     }
 }
 
+fn baml.net.TcpStream._connect = builtin(io)
+
+fn baml.net.TcpStream._read = builtin(io)
+
+fn baml.net.UdpSocket._recv_from = builtin(io)
+
+fn baml.net.UdpSocket._send_to = builtin(io)
+
+fn baml.net._timeout_nanos(timeout: baml.time.Duration | null) -> bigint {
+    // Locals:
+    let _0: bigint // _0 // return
+    let _1: baml.time.Duration | null // timeout // param
+    let _2: bool
+    let _3: baml.time.Duration // t
+
+    bb0: {
+        _2 = copy _1 == const null;
+        branch copy _2 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _3 = copy _1;
+        _0 = call const fn baml.time.Duration.to_nanoseconds(copy _3) -> [bb3];
+    }
+
+    bb2: {
+        _0 = const 0n;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn baml.net.TcpStream._write = builtin(io)
+
 fn baml.net.TcpListener.accept = builtin(io)
 
 fn baml.net.TcpListener.bind = builtin(io)
@@ -18757,7 +18883,36 @@ fn baml.net.TcpListener.close = builtin(io)
 
 fn baml.net.UdpSocket.close = builtin(io)
 
-fn baml.net.TcpStream.connect = builtin(io)
+fn baml.net.TcpStream.connect(addr: string, timeout: baml.time.Duration | null) -> baml.net.TcpStream {
+    // Locals:
+    let _0: baml.net.TcpStream // _0 // return
+    let _1: string // addr // param
+    let _2: baml.time.Duration | null // timeout // param
+    let _3: bool
+    let _4: bigint
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = call const fn baml.net._timeout_nanos(copy _2) -> [bb3];
+    }
+
+    bb3: {
+        _0 = sys_op const fn baml.net.TcpStream._connect(copy _1, copy _4) -> bb4;
+    }
+
+    bb4: {
+        return;
+    }
+}
 
 fn baml.net.TcpStream.from_json(j: baml.json.json) -> baml.net.TcpStream {
     // Locals:
@@ -18861,11 +19016,100 @@ fn baml.net.UdpSocket.from_json(j: baml.json.json) -> baml.net.UdpSocket {
     }
 }
 
-fn baml.net.TcpStream.read = builtin(io)
+fn baml.net.TcpStream.read(self: baml.net.TcpStream, timeout: baml.time.Duration | null) -> uint8array {
+    // Locals:
+    let _0: uint8array // _0 // return
+    let _1: baml.net.TcpStream // self // param
+    let _2: baml.time.Duration | null // timeout // param
+    let _3: bool
+    let _4: bigint
 
-fn baml.net.UdpSocket.recv_from = builtin(io)
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
 
-fn baml.net.UdpSocket.send_to = builtin(io)
+    bb1: {
+        _2 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = call const fn baml.net._timeout_nanos(copy _2) -> [bb3];
+    }
+
+    bb3: {
+        _0 = sys_op const fn baml.net.TcpStream._read(copy _1, copy _4) -> bb4;
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn baml.net.UdpSocket.recv_from(self: baml.net.UdpSocket, timeout: baml.time.Duration | null) -> baml.net.Datagram {
+    // Locals:
+    let _0: baml.net.Datagram // _0 // return
+    let _1: baml.net.UdpSocket // self // param
+    let _2: baml.time.Duration | null // timeout // param
+    let _3: bool
+    let _4: bigint
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = call const fn baml.net._timeout_nanos(copy _2) -> [bb3];
+    }
+
+    bb3: {
+        _0 = sys_op const fn baml.net.UdpSocket._recv_from(copy _1, copy _4) -> bb4;
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn baml.net.UdpSocket.send_to(self: baml.net.UdpSocket, data: uint8array, addr: string, timeout: baml.time.Duration | null) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: baml.net.UdpSocket // self // param
+    let _2: uint8array // data // param
+    let _3: string // addr // param
+    let _4: baml.time.Duration | null // timeout // param
+    let _5: bool
+    let _6: bigint
+
+    bb0: {
+        _5 = copy _4 == const <omitted>;
+        branch copy _5 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _4 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _6 = call const fn baml.net._timeout_nanos(copy _4) -> [bb3];
+    }
+
+    bb3: {
+        _0 = sys_op const fn baml.net.UdpSocket._send_to(copy _1, copy _2, copy _3, copy _6) -> bb4;
+    }
+
+    bb4: {
+        return;
+    }
+}
 
 fn baml.net.TcpStream.to_json(self: baml.net.TcpStream) -> baml.json.json {
     // Locals:
@@ -18967,7 +19211,37 @@ fn baml.net.UdpSocket.to_json(self: baml.net.UdpSocket) -> baml.json.json {
     }
 }
 
-fn baml.net.TcpStream.write = builtin(io)
+fn baml.net.TcpStream.write(self: baml.net.TcpStream, data: uint8array, timeout: baml.time.Duration | null) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: baml.net.TcpStream // self // param
+    let _2: uint8array // data // param
+    let _3: baml.time.Duration | null // timeout // param
+    let _4: bool
+    let _5: bigint
+
+    bb0: {
+        _4 = copy _3 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _3 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _5 = call const fn baml.net._timeout_nanos(copy _3) -> [bb3];
+    }
+
+    bb3: {
+        _0 = sys_op const fn baml.net.TcpStream._write(copy _1, copy _2, copy _5) -> bb4;
+    }
+
+    bb4: {
+        return;
+    }
+}
 
 fn baml.panics.HostUnavailable.from_json(j: baml.json.json) -> baml.panics.HostUnavailable {
     // Locals:

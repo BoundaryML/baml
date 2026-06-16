@@ -1098,22 +1098,24 @@ impl io::IoClassHttpSseStream for DefaultIoOps {
 }
 
 impl io::IoNamespaceHttp for DefaultIoOps {
-    fn fetch(
+    fn _fetch(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
         _url: String,
+        _timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::Response> {
         SysOpOutput::err(VmBamlError::Unsupported {
             message: "Operation not supported on this platform".to_string(),
         })
     }
-    fn send(
+    fn _send(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
         _req: io::owned::http::Request,
+        _timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::Response> {
         SysOpOutput::err(VmBamlError::Unsupported {
@@ -1134,34 +1136,37 @@ impl io::IoNamespaceHttp for DefaultIoOps {
 }
 
 impl io::IoClassNetTcpStream for DefaultIoOps {
-    fn connect(
+    fn _connect(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
         _addr: String,
+        _timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::net::TcpStream> {
         SysOpOutput::err(VmBamlError::Unsupported {
             message: "Operation not supported on this platform".to_string(),
         })
     }
-    fn read(
+    fn _read(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
         _s: io::owned::net::TcpStream,
+        _timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Vec<u8>> {
         SysOpOutput::err(VmBamlError::Unsupported {
             message: "Operation not supported on this platform".to_string(),
         })
     }
-    fn write(
+    fn _write(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
         _s: io::owned::net::TcpStream,
         _data: Vec<u8>,
+        _timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
         SysOpOutput::err(VmBamlError::Unsupported {
@@ -1229,24 +1234,26 @@ impl io::IoClassNetUdpSocket for DefaultIoOps {
             message: "Operation not supported on this platform".to_string(),
         })
     }
-    fn send_to(
+    fn _send_to(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
         _s: io::owned::net::UdpSocket,
         _data: Vec<u8>,
         _addr: String,
+        _timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
         SysOpOutput::err(VmBamlError::Unsupported {
             message: "Operation not supported on this platform".to_string(),
         })
     }
-    fn recv_from(
+    fn _recv_from(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
         _s: io::owned::net::UdpSocket,
+        _timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::net::Datagram> {
         SysOpOutput::err(VmBamlError::Unsupported {
@@ -1746,16 +1753,16 @@ impl IoSysOpsBuilder {
         mut self,
         instance: Arc<dyn io::IoNamespaceHttp + Send + Sync + 'static>,
     ) -> Self {
-        self.inner.baml_http_fetch = {
+        self.inner.baml_http__fetch = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_http_fetch(heap, permit, args, ctx, call_id)
+                t.__glue_baml_http__fetch(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_http_send = {
+        self.inner.baml_http__send = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_http_send(heap, permit, args, ctx, call_id)
+                t.__glue_baml_http__send(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_http_response_text = {
@@ -1828,22 +1835,22 @@ impl IoSysOpsBuilder {
         mut self,
         instance: Arc<dyn io::IoNamespaceNet + Send + Sync + 'static>,
     ) -> Self {
-        self.inner.baml_net_tcpstream_connect = {
+        self.inner.baml_net_tcpstream__connect = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_tcpstream_connect(heap, permit, args, ctx, call_id)
+                t.__glue_baml_net_tcpstream__connect(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_net_tcpstream_read = {
+        self.inner.baml_net_tcpstream__read = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_tcpstream_read(heap, permit, args, ctx, call_id)
+                t.__glue_baml_net_tcpstream__read(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_net_tcpstream_write = {
+        self.inner.baml_net_tcpstream__write = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_tcpstream_write(heap, permit, args, ctx, call_id)
+                t.__glue_baml_net_tcpstream__write(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_net_tcpstream_close = {
@@ -1876,16 +1883,16 @@ impl IoSysOpsBuilder {
                 t.__glue_baml_net_udpsocket_bind(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_net_udpsocket_send_to = {
+        self.inner.baml_net_udpsocket__send_to = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_udpsocket_send_to(heap, permit, args, ctx, call_id)
+                t.__glue_baml_net_udpsocket__send_to(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_net_udpsocket_recv_from = {
+        self.inner.baml_net_udpsocket__recv_from = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_udpsocket_recv_from(heap, permit, args, ctx, call_id)
+                t.__glue_baml_net_udpsocket__recv_from(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_net_udpsocket_close = {

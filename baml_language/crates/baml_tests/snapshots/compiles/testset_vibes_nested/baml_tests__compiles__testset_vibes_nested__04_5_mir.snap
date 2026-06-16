@@ -270,7 +270,7 @@ fn .<lambda(<lambda($init_test_main, 0)>, 1)>(testset: testing.TestCollector) ->
     bb0: {
         _4 = copy capture[0];
         _3 = const "http://localhost:8000/" + copy _4;
-        _2 = sys_op const fn baml.http.fetch(copy _3) -> bb1;
+        _2 = call const fn baml.http.fetch(copy _3, const <omitted>) -> [bb1];
     }
 
     bb1: {

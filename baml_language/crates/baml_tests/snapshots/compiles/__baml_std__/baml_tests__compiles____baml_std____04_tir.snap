@@ -1275,6 +1275,25 @@ function baml.http.SseStream.to_json(self: baml.http.SseStream) -> baml.json.jso
 function baml.http.SseStream.from_json(j: baml.json.json) -> baml.http.SseStream throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : baml.http.SseStream
 }
+function baml.http._timeout_nanos(timeout: baml.time.Duration | null) -> bigint throws never {
+  { : 0n | bigint
+    match (timeout : baml.time.Duration | null) : 0n | bigint
+      null =>
+        0n : 0n
+      t: root.time.Duration =>
+        t.to_nanoseconds() : bigint
+  }
+}
+function baml.http.fetch(url: string, timeout: baml.time.Duration | null = null) -> baml.http.Response throws baml.errors.Io | baml.errors.Timeout {
+  { : baml.http.Response
+    _fetch(url, _timeout_nanos(timeout)) : baml.http.Response
+  }
+}
+function baml.http.send(request: baml.http.Request, timeout: baml.time.Duration | null = null) -> baml.http.Response throws baml.errors.Io | baml.errors.Timeout {
+  { : baml.http.Response
+    _send(request, _timeout_nanos(timeout)) : baml.http.Response
+  }
+}
 class baml.http.Request$stream {
   method: string | null
   url: string | null
@@ -3186,8 +3205,32 @@ class baml.mock.Mock$stream {
 }
 
 --- <builtin>/baml/ns_net/net.baml ---
+function baml.net._timeout_nanos(timeout: baml.time.Duration | null) -> bigint throws never {
+  { : 0n | bigint
+    match (timeout : baml.time.Duration | null) : 0n | bigint
+      null =>
+        0n : 0n
+      t: root.time.Duration =>
+        t.to_nanoseconds() : bigint
+  }
+}
 class baml.net.TcpStream {
   _handle: $rust_type
+}
+function baml.net.TcpStream.connect(addr: string, timeout: baml.time.Duration | null = null) -> baml.net.TcpStream throws baml.errors.Io | baml.errors.Timeout {
+  { : baml.net.TcpStream
+    TcpStream._connect(addr, _timeout_nanos(timeout)) : baml.net.TcpStream
+  }
+}
+function baml.net.TcpStream.read(self: baml.net.TcpStream, timeout: baml.time.Duration | null = null) -> uint8array throws baml.errors.Io | baml.errors.Timeout {
+  { : uint8array
+    self._read(_timeout_nanos(timeout)) : uint8array
+  }
+}
+function baml.net.TcpStream.write(self: baml.net.TcpStream, data: uint8array, timeout: baml.time.Duration | null = null) -> null throws baml.errors.Io | baml.errors.Timeout {
+  { : null
+    self._write(data, _timeout_nanos(timeout)) : null
+  }
 }
 function baml.net.TcpStream.to_json(self: baml.net.TcpStream) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
   baml.json.parse(baml.json.to_string<TcpStream>(self)) : baml.json.json
@@ -3206,6 +3249,16 @@ function baml.net.TcpListener.from_json(j: baml.json.json) -> baml.net.TcpListen
 }
 class baml.net.UdpSocket {
   _handle: $rust_type
+}
+function baml.net.UdpSocket.send_to(self: baml.net.UdpSocket, data: uint8array, addr: string, timeout: baml.time.Duration | null = null) -> int throws baml.errors.Io | baml.errors.Timeout {
+  { : int
+    self._send_to(data, addr, _timeout_nanos(timeout)) : int
+  }
+}
+function baml.net.UdpSocket.recv_from(self: baml.net.UdpSocket, timeout: baml.time.Duration | null = null) -> baml.net.Datagram throws baml.errors.Io | baml.errors.Timeout {
+  { : baml.net.Datagram
+    self._recv_from(_timeout_nanos(timeout)) : baml.net.Datagram
+  }
 }
 function baml.net.UdpSocket.to_json(self: baml.net.UdpSocket) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
   baml.json.parse(baml.json.to_string<UdpSocket>(self)) : baml.json.json

@@ -1048,15 +1048,17 @@ mod tests {
             .unwrap();
         assert_eq!(fs_open.throws, throws(&["Io", "InvalidArgument"]));
 
+        // `connect`/`fetch` are now thin BAML wrappers that resolve the optional
+        // `timeout` default; the underlying sys-ops are the `_`-prefixed forms.
         let net_connect = io_builtins
             .iter()
-            .find(|b| b.path == "baml.net.TcpStream.connect")
+            .find(|b| b.path == "baml.net.TcpStream._connect")
             .unwrap();
         assert_eq!(net_connect.throws, throws(&["Io", "Timeout"]));
 
         let http_fetch = io_builtins
             .iter()
-            .find(|b| b.path == "baml.http.fetch")
+            .find(|b| b.path == "baml.http._fetch")
             .unwrap();
         assert_eq!(http_fetch.throws, throws(&["Io", "Timeout"]));
 
