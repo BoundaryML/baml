@@ -9,7 +9,7 @@ use crate::{
         Token, Type, UnaryOp, tokens as t,
     },
     printer::{PrintInfo, PrintMultiLine, Printable, Printer, Shape},
-    trivia_classifier::TriviaSliceExt,
+    trivia_classifier::{EmittableTrivia, TriviaSliceExt},
 };
 
 #[derive(Debug)]
@@ -3742,9 +3742,18 @@ impl MapLiteral {
     /// Returns the width of the expression if it fits on a single line.
     /// Returns `None` if it can never be single-lined.
     pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
-        // { k1: v1, k2: v2 }
-        let mut len = const { "{  }".len() };
         let (_, open_trailing) = input.trivia.get_for_range_split(self.open_brace.span());
+        let (close_leading, _) = input.trivia.get_for_range_split(self.close_brace.span());
+        // A populated map carries two interior padding spaces (`{ k1: v1 }`);
+        // an empty map is just `{}`. Keep this in sync with `try_print_single_line`.
+        let has_content = !self.fields.is_empty()
+            || open_trailing.iter().any(EmittableTrivia::is_comment)
+            || close_leading.iter().any(EmittableTrivia::is_comment);
+        let mut len = if has_content {
+            const { "{  }".len() }
+        } else {
+            const { "{}".len() }
+        };
         for t in open_trailing {
             len += t.single_line_len(input.input)?;
         }
@@ -3784,7 +3793,6 @@ impl MapLiteral {
                 }
             }
         }
-        let (close_leading, _) = input.trivia.get_for_range_split(self.close_brace.span());
         for t in close_leading {
             len += t.single_line_len(input.input)?;
         }
@@ -3794,9 +3802,19 @@ impl MapLiteral {
     /// Should be passed a sub-printer to avoid printing trivia in the outer printer
     /// in the event that the printer is unable to fit the map literal on a single line.
     fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
-        printer.print_raw_token(&self.open_brace);
-        printer.print_str(" ");
         let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_brace.span());
+        let (close_leading, _) = printer.trivia.get_for_range_split(self.close_brace.span());
+        // An empty map renders as `{}` with no interior padding. The padding
+        // spaces are only added when there is something to surround: fields or
+        // an interior comment (the only trivia that prints on a single line).
+        let has_content = !self.fields.is_empty()
+            || open_trailing.iter().any(EmittableTrivia::is_comment)
+            || close_leading.iter().any(EmittableTrivia::is_comment);
+
+        printer.print_raw_token(&self.open_brace);
+        if has_content {
+            printer.print_str(" ");
+        }
         printer.try_print_trivia_single_line_squished(open_trailing)?;
 
         for (i, (field, comma)) in self.fields.iter().enumerate() {
@@ -3831,9 +3849,10 @@ impl MapLiteral {
                 printer.try_print_trivia_single_line_squished(comma_trailing)?;
             }
         }
-        let (close_leading, _) = printer.trivia.get_for_range_split(self.close_brace.span());
         printer.try_print_trivia_single_line_squished(close_leading)?;
-        printer.print_str(" ");
+        if has_content {
+            printer.print_str(" ");
+        }
         printer.print_raw_token(&self.close_brace);
 
         if printer.output.len() > shape.width {
