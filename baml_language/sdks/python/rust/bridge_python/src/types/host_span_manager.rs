@@ -27,9 +27,8 @@ impl Default for HostSpanManager {
 
 impl HostSpanManager {
     pub fn new() -> Self {
-        let sink = bridge_cffi::get_event_sink();
         Self {
-            inner: bridge_cffi::host_spans::HostSpanManager::new(sink),
+            inner: bridge_cffi::host_spans::HostSpanManager::new(),
         }
     }
 

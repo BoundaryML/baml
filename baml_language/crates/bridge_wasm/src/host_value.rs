@@ -71,14 +71,14 @@ use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
 use bex_project::{host_release_dispatch, validate_host_return};
 use bridge_ctypes::{
-    CffiHandleTableOptions, HANDLE_TABLE,
-    baml_core::cffi::{HostCallableError, HostCallableErrorCategory, InboundValue},
-    external_to_outbound, inbound_to_external,
+    CffiHandleTableOptions, HANDLE_TABLE, baml_core::cffi::InboundValue, external_to_outbound,
+    inbound_to_external,
 };
 use js_sys::Function;
 use prost::Message;
 use sys_ops::io::{
-    self, BexExternalValue, CallId, OpError, OpErrorKind, SysOpContext, SysOpOutput, SysOpResult,
+    self, BexExternalValue, CallId, OpError, SysOpContext, SysOpOutput, SysOpResult, VmBamlError,
+    VmRustFnError,
 };
 use sys_types::{BexHeap, CompletionHandle, SysOp};
 use wasm_bindgen::prelude::*;
@@ -178,9 +178,9 @@ fn insert_in_flight(call_id: u32, completion: CompletionHandle) -> bool {
         );
         completion.complete(Err(OpError::new(
             SysOp::BamlHostCallHostValue,
-            OpErrorKind::Other(format!(
-                "host-call id {call_id} collided with a live in-flight call"
-            )),
+            VmBamlError::DevOther {
+                message: format!("host-call id {call_id} collided with a live in-flight call"),
+            },
         )));
         return false;
     }
@@ -239,7 +239,14 @@ pub fn register_host_callable(callable: Function) -> u64 {
 /// (host→engine direction, no type metadata — engine re-validates against the
 /// declared return type).
 ///
-/// On error (`is_error != 0`), `content` is a protobuf-encoded `HostCallableError`.
+/// On error (`is_error != 0`), `content` is a protobuf-encoded `InboundValue`
+/// representing the thrown value. The host bridge SDK wraps native exceptions
+/// in a synthetic `Instance` of class `baml.errors.HostCallable` carrying
+/// `message` / `class_name` / `language` / `traceback` fields; codegenned
+/// BAML errors flow through as their own `Instance` shape. The engine's
+/// `materialize_host_throw` runs the declared-throws contract check on the
+/// decoded value and either re-injects it as a catchable throw or escalates
+/// to a `HostContractViolation` panic.
 ///
 /// `call_id` is globally unique, so it resolves the originating runtime's
 /// pending call unambiguously. If `call_id` is unknown the call is silently
@@ -251,6 +258,23 @@ pub fn complete_host_call(call_id: u32, is_error: i32, content: &[u8]) {
         log::warn!("completeHostCall for unknown call id {call_id}");
         return;
     };
+
+    // Strict 0/1 contract: any other value is a bridge wire-protocol bug
+    // (an `i32` could carry uninitialised memory, a forgotten cast, or
+    // someone repurposing the flag) — surface it as `BridgeFailure` so the
+    // bug is loud, instead of silently aliasing into the throw branch.
+    if is_error != 0 && is_error != 1 {
+        completion.complete(Err(OpError::new(
+            SysOp::BamlHostCallHostValue,
+            sys_types::VmInternalError::BridgeFailure {
+                message: format!(
+                    "completeHostCall: invalid isError value {is_error}; \
+                     expected 0 (success) or 1 (error)"
+                ),
+            },
+        )));
+        return;
+    }
 
     if is_error == 0 {
         // Success: decode InboundValue → BexExternalValue.
@@ -264,7 +288,9 @@ pub fn complete_host_call(call_id: u32, is_error: i32, content: &[u8]) {
             Err(e) => {
                 completion.complete(Err(OpError::new(
                     SysOp::BamlHostCallHostValue,
-                    OpErrorKind::Other(format!("completeHostCall decode failure: {e}")),
+                    VmBamlError::ParseError {
+                        message: format!("completeHostCall decode failure: {e}"),
+                    },
                 )));
                 return;
             }
@@ -273,37 +299,49 @@ pub fn complete_host_call(call_id: u32, is_error: i32, content: &[u8]) {
             Ok(v) => completion.complete(Ok(v)),
             Err(e) => completion.complete(Err(OpError::new(
                 SysOp::BamlHostCallHostValue,
-                OpErrorKind::Other(format!("completeHostCall decode failure: {e}")),
+                VmBamlError::ParseError {
+                    message: format!("completeHostCall decode failure: {e}"),
+                },
             ))),
         }
     } else {
-        // Error: decode HostCallableError → OpError.
+        // Throw: decode `InboundValue` → `BexExternalValue` → engine. The
+        // engine's `materialize_host_throw` runs the declared-throws
+        // contract check on the decoded value.
         let mapped = if content.is_empty() {
+            // An empty throw payload is a host bridge bug, not a user
+            // contract violation: `is_error == 1` requires a protobuf-
+            // encoded `InboundValue`, and only the bridge itself decides
+            // what to send on the wire. A misbehaving bridge is an
+            // infrastructure fault — surface it as `BridgeFailure` (which
+            // codegens to `baml.panics.SdkPanic` on the host side), not as
+            // `HostContractViolation` (which would falsely accuse the
+            // user's callable of returning the wrong shape).
             OpError::new(
                 SysOp::BamlHostCallHostValue,
-                OpErrorKind::HostCallable {
-                    class_name: String::new(),
-                    message: "host callable returned error with no payload".to_string(),
-                    traceback: None,
-                    language: None,
-                    category: 0,
+                sys_types::VmInternalError::BridgeFailure {
+                    message: "host bridge called completeHostCall(isError=1) \
+                              with no payload; expected a protobuf-encoded \
+                              InboundValue describing the thrown value"
+                        .to_string(),
                 },
             )
         } else {
-            match HostCallableError::decode(content) {
-                Ok(err) => OpError::host_callable(
-                    SysOp::BamlHostCallHostValue,
-                    err.class_name,
-                    err.message,
-                    err.traceback,
-                    err.language,
-                    err.category,
-                ),
+            match InboundValue::decode(content) {
+                Ok(inbound) => match inbound_to_external(inbound, &HANDLE_TABLE) {
+                    Ok(v) => OpError::host_thrown_value(SysOp::BamlHostCallHostValue, v),
+                    Err(e) => OpError::new(
+                        SysOp::BamlHostCallHostValue,
+                        VmBamlError::ParseError {
+                            message: format!("completeHostCall throw-payload decode failure: {e}"),
+                        },
+                    ),
+                },
                 Err(e) => OpError::new(
                     SysOp::BamlHostCallHostValue,
-                    OpErrorKind::Other(format!(
-                        "completeHostCall error-payload decode failure: {e}"
-                    )),
+                    VmBamlError::ParseError {
+                        message: format!("completeHostCall throw-payload decode failure: {e}"),
+                    },
                 ),
             }
         };
@@ -383,16 +421,16 @@ impl io::IoNamespaceHost for WasmHost {
         _call_id: CallId,
         handle: BexExternalValue,
         args: Vec<BexExternalValue>,
-        type_arg_0: baml_type::Ty,
+        type_arg_0: baml_type::RuntimeTy,
+        _type_arg_1: baml_type::RuntimeTy,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
         // Extract the HostValueArc from the incoming handle.
         let host_arc = match handle {
             BexExternalValue::HostValue(arc) => arc,
             other => {
-                return SysOpOutput::err(OpErrorKind::TypeError {
-                    expected: "HostValue",
-                    actual: format!("{other:?}"),
+                return SysOpOutput::err(VmBamlError::InvalidArgument {
+                    message: format!("expected HostValue, got {other:?}"),
                 });
             }
         };
@@ -403,18 +441,19 @@ impl io::IoNamespaceHost for WasmHost {
         // arguments to the user callable.
         let options = CffiHandleTableOptions::for_wire();
         let arg_values = BexExternalValue::Array {
-            element_type: baml_type::Ty::unknown(),
+            element_type: baml_type::RuntimeTy::unknown(),
             items: args,
         };
         let encoded: Vec<u8> = match external_to_outbound(&arg_values, &options) {
             Ok(value) => value.encode_to_vec(),
             Err(e) => {
-                return SysOpOutput::err(OpErrorKind::HostCallable {
-                    class_name: String::new(),
+                // Arg encoding is bridge-side serialization, not a
+                // host-language error. A failure here means the engine
+                // had a `BexExternalValue` it could not put on the wire
+                // — an engine/bridge bug. Surface as a fatal internal
+                // error rather than a catchable `VmBamlError`.
+                return SysOpOutput::err(sys_types::VmInternalError::BridgeFailure {
                     message: format!("failed to encode host-call arguments: {e}"),
-                    traceback: None,
-                    language: None,
-                    category: HostCallableErrorCategory::HostCallableInvalidArgument as i32,
                 });
             }
         };
@@ -455,14 +494,17 @@ impl io::IoNamespaceHost for WasmHost {
                 let popped = IN_FLIGHT.with(|cell| cell.borrow_mut().remove(&call_id));
                 if let Some(c) = popped {
                     let msg = err.as_string().unwrap_or_else(|| format!("{err:?}"));
+                    // The WASM bridge's JS dispatch wrapper threw before
+                    // scheduling work — this is a bridge-layer fault.
+                    // The bridge is engine-owned infrastructure, so its
+                    // failure is treated as an engine bug (internal,
+                    // non-catchable) rather than a `HostCallable`
+                    // (which represents a user-level host-language
+                    // exception with a rehydration handle).
                     c.complete(Err(OpError::new(
                         SysOp::BamlHostCallHostValue,
-                        OpErrorKind::HostCallable {
-                            class_name: "Error".to_string(),
+                        sys_types::VmInternalError::BridgeFailure {
                             message: format!("host_dispatch JS callback threw: {msg}"),
-                            traceback: None,
-                            language: Some("javascript".to_string()),
-                            category: HostCallableErrorCategory::HostCallableHostError as i32,
                         },
                     )));
                 }
@@ -498,7 +540,7 @@ impl io::IoNamespaceHost for WasmHost {
 /// yields `Async`.
 fn drain_pending(
     result: SysOpResult,
-    expected: baml_type::Ty,
+    expected: baml_type::RuntimeTy,
     call_id: u32,
     install_guard: bool,
 ) -> SysOpOutput<BexExternalValue> {
@@ -508,7 +550,14 @@ fn drain_pending(
             Ok(()) => SysOpOutput::ok(value),
             Err(kind) => SysOpOutput::err(kind),
         },
-        SysOpResult::Ready(Err(err)) => SysOpOutput::err(err.kind),
+        SysOpResult::Ready(Err(err)) => match err.payload {
+            sys_types::OpErrorPayload::Vm(kind) => SysOpOutput::err(kind),
+            // `SysOpResult::pending` always yields `Async`, so a Ready(Err)
+            // here can't actually originate from the host-throw path.
+            sys_types::OpErrorPayload::HostThrown(_) => {
+                unreachable!("Ready(Err) is never produced for the host-callable sysop")
+            }
+        },
         SysOpResult::Async(fut) => {
             SysOpOutput::Async(Box::pin(crate::send_wrapper::SendFuture(async move {
                 // Move the guard into the future so cancellation (future drop)
@@ -516,7 +565,10 @@ fn drain_pending(
                 // there is no entry of ours to evict and `fut` resolves to the
                 // collision error.
                 let _guard = guard;
-                let value = fut.await.map_err(|op_err| op_err.kind)?;
+                // `?` propagates `OpError → VmRustFnError` via the `From`
+                // impl in `sys_types`; `validate_host_return_value` yields
+                // `Result<_, VmRustFnError>` directly.
+                let value = fut.await?;
                 validate_host_return_value(&value, &expected)?;
                 Ok(value)
             })))
@@ -524,18 +576,24 @@ fn drain_pending(
     }
 }
 
-/// Strictly validate a host-returned value against the declared return type,
-/// mapping a mismatch to an `OpErrorKind::HostCallable` (invalid-argument).
+/// Strictly validate a host-returned value against the declared return type.
+/// A mismatch is a `baml.panics.HostContractViolation` panic — the host has
+/// violated its typed contract, so the call cannot be reasonably continued.
+/// Mirrors the native bridge's `validate_return_value` in
+/// `sys_native::host_impls`.
 fn validate_host_return_value(
     value: &BexExternalValue,
-    expected: &baml_type::Ty,
-) -> Result<(), OpErrorKind> {
-    validate_host_return(value, expected).map_err(|err| OpErrorKind::HostCallable {
-        class_name: "TypeError".to_string(),
-        message: err.to_string(),
-        traceback: None,
-        language: None,
-        category: HostCallableErrorCategory::HostCallableInvalidArgument as i32,
+    expected: &baml_type::RuntimeTy,
+) -> Result<(), VmRustFnError> {
+    validate_host_return(value, expected).map_err(|err| {
+        sys_types::VmPanic::HostContractViolation {
+            message: format!(
+                "host callable returned a value of the wrong type: {err} (expected {expected})"
+            ),
+            class_name: None,
+            language: None,
+        }
+        .into()
     })
 }
 
@@ -658,7 +716,7 @@ mod tests {
 
         // `drain_pending` wraps the result + guard into the returned future.
         let SysOpOutput::Async(fut) =
-            drain_pending(result, baml_type::Ty::unknown(), call_id, true)
+            drain_pending(result, baml_type::RuntimeTy::unknown(), call_id, true)
         else {
             panic!("pending() must yield an async output");
         };
@@ -684,7 +742,7 @@ mod tests {
         );
 
         let SysOpOutput::Async(fut) =
-            drain_pending(result, baml_type::Ty::unknown(), call_id, true)
+            drain_pending(result, baml_type::RuntimeTy::unknown(), call_id, true)
         else {
             panic!("pending() must yield an async output");
         };

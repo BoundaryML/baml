@@ -1,4 +1,10 @@
-/// An HTTP request to be sent with `baml.http.send` or `baml.http.fetch_sse`.
+/// An HTTP request — outgoing (built for `baml.http.send`/`fetch_sse`) or
+/// incoming (passed to an `http.Server` handler).
+///
+/// For an incoming server request: `url` is the request-target as received
+/// (origin-form, e.g. `/path?q=1`, on HTTP/1; the authority lives in the `host`
+/// header), `body` is the bytes decoded lossily as UTF-8 (non-UTF-8 bytes become
+/// U+FFFD), and a header sent multiple times has its values joined with `, `.
 class Request {
   method string
   url string
@@ -26,6 +32,18 @@ class Response {
   /// Returns `true` if `status_code` is in the 200–299 range.
   function ok(self) -> bool {
     self.status_code >= 200 && self.status_code < 300
+  }
+
+  /// Builds a response to return from an `http.Server` handler.
+  ///
+  /// `body` is sent verbatim as the response body. `headers` should include a
+  /// `Content-Type` if the client needs one; `Content-Length` is set for you.
+  function new(
+    status_code: int,
+    headers: map<string, string>,
+    body: uint8array,
+  ) -> Response throws never {
+    $rust_io_function
   }
 }
 

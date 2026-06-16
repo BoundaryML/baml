@@ -132,7 +132,7 @@ function instantiation_expr.$init_test_ns_instantiation_expr_instantiation_expr(
     return
 }
 
-function instantiation_expr.GenBox.pick(self: instantiation_expr.GenBox, x: void) -> void {
+function instantiation_expr.GenBox.pick(self: instantiation_expr.GenBox, x: T) -> T {
     load_var x
     return
 }
@@ -185,7 +185,7 @@ function instantiation_expr.describe_via_local_value_param() -> string {
     return
 }
 
-function instantiation_expr.forward(x: void) -> void {
+function instantiation_expr.forward(x: T) -> T {
     load_var x
     load_type #0
     make_generic_function user.instantiation_expr.identity ntypeargs=1
@@ -216,15 +216,17 @@ function instantiation_expr.from_string_via_local_value() -> instantiation_expr.
     return
 }
 
-function instantiation_expr.identity(x: void) -> void {
+function instantiation_expr.identity(x: T) -> T {
     load_var x
     return
 }
 
 function instantiation_expr.identity_deep_copy_equal() -> bool {
+    load_type (int) -> int throws never
     load_const user.instantiation_expr.identity<...>
     call baml.deep_copy
     store_var _3
+    load_type (int) -> int throws never
     load_const user.instantiation_expr.identity<...>
     load_var _3
     call baml.deep_equals
@@ -239,6 +241,7 @@ function instantiation_expr.identity_int_value_fn() -> int {
 }
 
 function instantiation_expr.identity_same_specialization() -> bool {
+    load_type (int) -> int throws never
     load_const user.instantiation_expr.identity<...>
     load_const user.instantiation_expr.identity<...>
     call baml.deep_equals
@@ -270,7 +273,7 @@ function instantiation_expr.lambda_reflects_enclosing_U() -> string {
     return
 }
 
-function instantiation_expr.pair(a: void, b: void) -> void {
+function instantiation_expr.pair(a: A, b: B) -> B {
     load_var b
     return
 }

@@ -2,9 +2,18 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR2 ===
+class user.BuildError {
+  reason: string
+}
 enum user.Status {HttpError, IndexError, AuthError, SomeOtherError}
 function user.AlwaysThrowsStatus(n: int) -> user.Status  [expr] {
   {  } match (n) { 0 => throw "http_error", _ => throw 404 }
+}
+function user.BuildWithBuildError(ok: bool) -> string  [expr] {
+  {  } GenerateWithBuildError(ok)
+}
+function user.CatchAllMissingString(ok: bool) -> string  [expr] {
+  {  } BuildWithBuildError(ok) catch_all (e) { user.BuildError => "recovered: " Add e.reason }
 }
 function user.CatchAllStatusVariants(n: int) -> string  [expr] {
   {  } ThrowsAllStatusVariants(n) catch (e) { user.Status.HttpError => "http!" } catch (e) { user.Status.IndexError => "index!" } catch (e) { user.Status.AuthError => "auth!" } catch (e) { user.Status.SomeOtherError => "other!" }
@@ -14,6 +23,9 @@ function user.CatchAlwaysThrows(n: int) -> string  [expr] {
 }
 function user.CatchRecursiveThrow(n: int) -> string  [expr] {
   {  } RecB(n) catch (e) { string => "handled" }
+}
+function user.GenerateWithBuildError(ok: bool) -> string  [expr] {
+  { if (Not ok) { throw user.BuildError { reason: "generate failed" } }; if (ok) { throw "string" } } "ok"
 }
 function user.RecA(n: int) -> string  [expr] {
   {  } match (n) { 0 => throw "boom", _ => RecB(n) }
@@ -29,4 +41,10 @@ function user.UnreachableTailStillChecked() -> string  [expr] {
 }
 function user.WrapperAlwaysThrows(n: int) -> user.Status  [expr] {
   {  } AlwaysThrowsStatus(n)
+}
+function user.from_json(j: baml.json.json) -> user.BuildError  [expr] {
+  user.BuildError { reason: baml.json.from_json(baml.json.field(j, "reason")) }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "reason": baml.json.to_json(self.reason) }
 }

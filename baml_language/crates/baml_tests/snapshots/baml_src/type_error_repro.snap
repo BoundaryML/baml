@@ -516,6 +516,7 @@ function type_error_repro.Stack.peek(self: type_error_repro.Stack) -> int {
 }
 
 function type_error_repro.Stack.push(self: type_error_repro.Stack, val: int) -> null {
+    load_type int
     load_var self
     load_field .items
     load_var val
@@ -726,7 +727,6 @@ function type_error_repro.bytecode_set_item(c: type_error_repro.BytecodeContaine
 }
 
 function type_error_repro.class_method_1d_array_write_through_self_body() -> string {
-    load_const null
     call user.type_error_repro.ContainerSelf.new
     store_var c
     load_var c
@@ -741,7 +741,6 @@ function type_error_repro.class_method_1d_array_write_through_self_body() -> str
 }
 
 function type_error_repro.class_method_2d_array_write_minimal_body() -> null {
-    load_const null
     call user.type_error_repro.BoardMinimal.new
     load_const "x"
     load_const 1
@@ -753,7 +752,6 @@ function type_error_repro.class_method_2d_array_write_minimal_body() -> null {
 }
 
 function type_error_repro.class_method_2d_array_write_through_self_literals_body() -> string {
-    load_const null
     call user.type_error_repro.GridSelf.new
     store_var g
     load_var g
@@ -770,7 +768,6 @@ function type_error_repro.class_method_2d_array_write_through_self_literals_body
 }
 
 function type_error_repro.class_method_3d_array_write_through_self_body() -> int {
-    load_const null
     call user.type_error_repro.Cube.new
     store_var c
     load_var c
@@ -789,7 +786,6 @@ function type_error_repro.class_method_3d_array_write_through_self_body() -> int
 }
 
 function type_error_repro.class_method_array_push_through_self_body() -> int {
-    load_const null
     call user.type_error_repro.Stack.new
     store_var s
     load_var s
@@ -802,7 +798,6 @@ function type_error_repro.class_method_array_push_through_self_body() -> int {
 }
 
 function type_error_repro.class_method_array_read_works_body() -> string {
-    load_const null
     call user.type_error_repro.BoardRead.new
     load_const 1
     load_const 2
@@ -811,7 +806,6 @@ function type_error_repro.class_method_array_read_works_body() -> string {
 }
 
 function type_error_repro.class_method_array_write_type_error_body() -> string {
-    load_const null
     call user.type_error_repro.BoardWrite.new
     store_var board
     load_var board
@@ -828,7 +822,6 @@ function type_error_repro.class_method_array_write_type_error_body() -> string {
 }
 
 function type_error_repro.class_method_map_then_array_write_through_self_body() -> int {
-    load_const null
     call user.type_error_repro.Registry.new
     store_var r
     load_var r
@@ -845,7 +838,6 @@ function type_error_repro.class_method_map_then_array_write_through_self_body() 
 }
 
 function type_error_repro.class_method_map_write_through_self_body() -> int {
-    load_const null
     call user.type_error_repro.ScoresSelf.new
     store_var s
     load_var s
@@ -860,7 +852,6 @@ function type_error_repro.class_method_map_write_through_self_body() -> int {
 }
 
 function type_error_repro.class_method_nested_field_array_write_body() -> string {
-    load_const null
     call user.type_error_repro.OuterItems.new
     store_var o
     load_var o

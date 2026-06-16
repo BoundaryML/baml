@@ -28,7 +28,7 @@ pub enum ConvertError {
     #[error("Float literals cannot be parsed")]
     FloatLiteral,
     #[error("Non-parsable type: {0:?}")]
-    NonParsableType(Box<baml_type::Ty>),
+    NonParsableType(Box<baml_type::RuntimeTy>),
     #[error("Unknown class: {0}")]
     UnknownClass(baml_type::TypeName),
     #[error("Unknown enum: {0}")]
@@ -70,7 +70,7 @@ const MAX_RECURSION_DEPTH: usize = 16;
 pub struct TypeCtx {
     class_definitions: IndexMap<baml_type::TypeName, ClassDefinition>,
     enum_definitions: Arc<IndexMap<baml_type::TypeName, EnumDefinition>>,
-    type_alias_definitions: HashMap<baml_type::TypeName, baml_type::Ty>,
+    type_alias_definitions: HashMap<baml_type::TypeName, baml_type::RuntimeTy>,
     sap_parseable: HashMap<TypeName, bool>,
 }
 impl TypeCtx {
@@ -80,7 +80,7 @@ impl TypeCtx {
     pub fn new(
         class_definitions: &IndexMap<baml_type::TypeName, ClassDefinition>,
         enum_definitions: Arc<IndexMap<baml_type::TypeName, EnumDefinition>>,
-        type_alias_definitions: &HashMap<baml_type::TypeName, baml_type::Ty>,
+        type_alias_definitions: &HashMap<baml_type::TypeName, baml_type::RuntimeTy>,
     ) -> Self {
         // todo: we can hold more of this by reference probably
         let recursive_aliases = type_alias_definitions.keys().cloned().collect();
@@ -267,7 +267,7 @@ impl TypeCtx {
     fn convert_type_alias<'a>(
         &'a self,
         name: &baml_type::TypeName,
-        alias_ty: &'a baml_type::Ty,
+        alias_ty: &'a baml_type::RuntimeTy,
         recursion_depth: usize,
     ) -> Result<TyResolved<'a, TypeName>, ConvertError> {
         if recursion_depth > MAX_RECURSION_DEPTH {
@@ -312,34 +312,34 @@ impl TypeCtx {
     /// Converts a BAML type into a sap model type.
     pub fn convert_ty<'a>(
         &'a self,
-        ty: &'a baml_type::Ty,
+        ty: &'a baml_type::RuntimeTy,
     ) -> Result<AnnotatedTy<'a, TypeName>, ConvertError> {
         let ty = match ty {
-            baml_type::Ty::Int { attr } => TyWithMeta::new(
+            baml_type::RuntimeTy::Int { attr } => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::Int(IntTy)),
                 convert_ty_attrs(attr),
             ),
-            baml_type::Ty::Bigint { attr } => TyWithMeta::new(
+            baml_type::RuntimeTy::Bigint { attr } => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::Bigint(BigintTy)),
                 convert_ty_attrs(attr),
             ),
-            baml_type::Ty::Float { attr } => TyWithMeta::new(
+            baml_type::RuntimeTy::Float { attr } => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::Float(FloatTy)),
                 convert_ty_attrs(attr),
             ),
-            baml_type::Ty::String { attr } => TyWithMeta::new(
+            baml_type::RuntimeTy::String { attr } => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::String(StringTy)),
                 convert_ty_attrs(attr),
             ),
-            baml_type::Ty::Bool { attr } => TyWithMeta::new(
+            baml_type::RuntimeTy::Bool { attr } => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::Bool(BoolTy)),
                 convert_ty_attrs(attr),
             ),
-            baml_type::Ty::Null { attr } => TyWithMeta::new(
+            baml_type::RuntimeTy::Null { attr } => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::Null(NullTy)),
                 convert_ty_attrs(attr),
             ),
-            baml_type::Ty::Media(media_kind, ty_attr) => {
+            baml_type::RuntimeTy::Media(media_kind, ty_attr) => {
                 let media_kind = match media_kind {
                     baml_type::MediaKind::Image => MediaTy::Image,
                     baml_type::MediaKind::Video => MediaTy::Video,
@@ -354,29 +354,33 @@ impl TypeCtx {
                     convert_ty_attrs(ty_attr),
                 )
             }
-            baml_type::Ty::Literal(baml_type::Literal::Int(i), attr) => TyWithMeta::new(
+            baml_type::RuntimeTy::Literal(baml_type::Literal::Int(i), _, attr) => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::LiteralInt(IntLiteralTy(*i))),
                 convert_ty_attrs(attr),
             ),
-            baml_type::Ty::Literal(baml_type::Literal::Bigint(bi), attr) => TyWithMeta::new(
-                sap_model::Ty::Resolved(TyResolved::LiteralBigint(BigintLiteralTy(bi.clone()))),
-                convert_ty_attrs(attr),
-            ),
-            baml_type::Ty::Literal(baml_type::Literal::Float(..), ..) => {
+            baml_type::RuntimeTy::Literal(baml_type::Literal::Bigint(bi), _, attr) => {
+                TyWithMeta::new(
+                    sap_model::Ty::Resolved(TyResolved::LiteralBigint(BigintLiteralTy(bi.clone()))),
+                    convert_ty_attrs(attr),
+                )
+            }
+            baml_type::RuntimeTy::Literal(baml_type::Literal::Float(..), ..) => {
                 return Err(ConvertError::FloatLiteral);
             }
-            baml_type::Ty::Literal(baml_type::Literal::String(s), attr) => TyWithMeta::new(
-                sap_model::Ty::Resolved(TyResolved::LiteralString(StringLiteralTy(Cow::Borrowed(
-                    s,
-                )))),
-                convert_ty_attrs(attr),
-            ),
-            baml_type::Ty::Literal(baml_type::Literal::Bool(b), attr) => TyWithMeta::new(
+            baml_type::RuntimeTy::Literal(baml_type::Literal::String(s), _, attr) => {
+                TyWithMeta::new(
+                    sap_model::Ty::Resolved(TyResolved::LiteralString(StringLiteralTy(
+                        Cow::Borrowed(s),
+                    ))),
+                    convert_ty_attrs(attr),
+                )
+            }
+            baml_type::RuntimeTy::Literal(baml_type::Literal::Bool(b), _, attr) => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::LiteralBool(BoolLiteralTy(*b))),
                 convert_ty_attrs(attr),
             ),
-            baml_type::Ty::Class(type_name, _, attr)
-            | baml_type::Ty::Interface(type_name, _, _, attr) => {
+            baml_type::RuntimeTy::Class(type_name, _, attr)
+            | baml_type::RuntimeTy::Interface(type_name, _, _, attr) => {
                 if self.sap_parseable.get(type_name).is_some_and(|v| !v) {
                     return Err(ConvertError::NonParsableType(Box::new(ty.clone())));
                 }
@@ -387,11 +391,11 @@ impl TypeCtx {
                     convert_ty_attrs(attr),
                 )
             }
-            baml_type::Ty::Enum(type_name, attr) => TyWithMeta::new(
+            baml_type::RuntimeTy::Enum(type_name, attr) => TyWithMeta::new(
                 sap_model::Ty::Unresolved(type_name.clone()),
                 convert_ty_attrs(attr),
             ),
-            baml_type::Ty::EnumVariant(type_name, variant, attr) => {
+            baml_type::RuntimeTy::EnumVariant(type_name, variant, attr) => {
                 let enum_def = self
                     .enum_definitions
                     .get(type_name)
@@ -419,32 +423,13 @@ impl TypeCtx {
                     convert_ty_attrs(attr),
                 )
             }
-            baml_type::Ty::Optional(ty, attr) => {
-                if self.is_union_like(ty) {
-                    return Err(ConvertError::UnflattenedUnion);
-                }
-                // becomes a union
-                let ty = self.convert_ty(ty)?;
-                TyWithMeta::new(
-                    sap_model::Ty::Resolved(TyResolved::Union(UnionTy {
-                        variants: vec![
-                            TyWithMeta::new(
-                                sap_model::Ty::Resolved(TyResolved::Null(NullTy)),
-                                TypeAnnotations::default(),
-                            ),
-                            ty,
-                        ],
-                    })),
-                    convert_ty_attrs(attr),
-                )
-            }
-            baml_type::Ty::List(ty, attr) => TyWithMeta::new(
+            baml_type::RuntimeTy::List(ty, attr) => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::Array(ArrayTy {
                     ty: Box::new(self.convert_ty(ty)?),
                 })),
                 convert_ty_attrs(attr),
             ),
-            baml_type::Ty::Map { key, value, attr } => {
+            baml_type::RuntimeTy::Map { key, value, attr } => {
                 let key = self.convert_ty(key)?;
                 let value = self.convert_ty(value)?;
                 TyWithMeta::new(
@@ -455,7 +440,7 @@ impl TypeCtx {
                     convert_ty_attrs(attr),
                 )
             }
-            baml_type::Ty::Union(items, ty_attr) => {
+            baml_type::RuntimeTy::Union(items, ty_attr) => {
                 if items.iter().any(|ty| self.is_union_like(ty)) {
                     return Err(ConvertError::UnflattenedUnion);
                 }
@@ -468,7 +453,7 @@ impl TypeCtx {
                     convert_ty_attrs(ty_attr),
                 )
             }
-            baml_type::Ty::TypeAlias(type_name, attr) => {
+            baml_type::RuntimeTy::TypeAlias(type_name, attr) => {
                 if self.sap_parseable.get(type_name).is_some_and(|v| !v) {
                     return Err(ConvertError::NonParsableType(Box::new(ty.clone())));
                 }
@@ -482,7 +467,7 @@ impl TypeCtx {
                         return Err(ConvertError::UnknownTypeAlias(innermost_name.clone()));
                     };
                     match inner_ty {
-                        baml_type::Ty::TypeAlias(name, inner_attr) => {
+                        baml_type::RuntimeTy::TypeAlias(name, inner_attr) => {
                             if innermost_name == type_name {
                                 return Err(ConvertError::DirectRecursiveTypeAlias(
                                     type_name.clone(),
@@ -491,9 +476,9 @@ impl TypeCtx {
                             attr = merge_ty_attrs(&attr, inner_attr);
                             innermost_name = name;
                         }
-                        baml_type::Ty::Class(name, _, inner_attr)
-                        | baml_type::Ty::Interface(name, _, _, inner_attr)
-                        | baml_type::Ty::Enum(name, inner_attr) => {
+                        baml_type::RuntimeTy::Class(name, _, inner_attr)
+                        | baml_type::RuntimeTy::Interface(name, _, _, inner_attr)
+                        | baml_type::RuntimeTy::Enum(name, inner_attr) => {
                             attr = merge_ty_attrs(&attr, inner_attr);
                             innermost_name = name;
                             break;
@@ -510,23 +495,29 @@ impl TypeCtx {
                     convert_ty_attrs(&attr),
                 )
             }
-            unparsable @ (baml_type::Ty::Uint8Array { .. }
-            | baml_type::Ty::Opaque(_, _)
-            | baml_type::Ty::Function { .. }
-            | baml_type::Ty::Void { .. }
-            | baml_type::Ty::WatchAccessor(_, _)
-            | baml_type::Ty::BuiltinUnknown { .. }
-            | baml_type::Ty::Future(_, _, _)) => {
+            unparsable @ (baml_type::RuntimeTy::Uint8Array { .. }
+            | baml_type::RuntimeTy::Resource { .. }
+            | baml_type::RuntimeTy::PromptAst { .. }
+            | baml_type::RuntimeTy::Function { .. }
+            | baml_type::RuntimeTy::Void { .. }
+            | baml_type::RuntimeTy::WatchAccessor(_, _)
+            | baml_type::RuntimeTy::BuiltinUnknown { .. }
+            | baml_type::RuntimeTy::Future(_, _, _)
+            | baml_type::RuntimeTy::TypeVar(_, _)
+            | baml_type::RuntimeTy::AssociatedTypeProjection { .. }
+            | baml_type::RuntimeTy::Never { .. }
+            | baml_type::RuntimeTy::RustType { .. }
+            | baml_type::RuntimeTy::Type { .. }) => {
                 return Err(ConvertError::NonParsableType(Box::new(unparsable.clone())));
             }
         };
         Ok(ty)
     }
 
-    fn is_union_like(&self, ty: &baml_type::Ty) -> bool {
+    fn is_union_like(&self, ty: &baml_type::RuntimeTy) -> bool {
         match ty {
-            baml_type::Ty::Union(..) | baml_type::Ty::Optional(..) => true,
-            baml_type::Ty::TypeAlias(name, ..) => self
+            baml_type::RuntimeTy::Union(..) => true,
+            baml_type::RuntimeTy::TypeAlias(name, ..) => self
                 .type_alias_definitions
                 .get(name)
                 .is_some_and(|ty| self.is_union_like(ty)),
@@ -542,7 +533,7 @@ impl TypeCtx {
     /// `(class_in_progress_field_missing, class_completed_field_missing)`
     fn get_field_attrs<'a>(
         &'a self,
-        field_type: &'a ::baml_type::Ty,
+        field_type: &'a ::baml_type::RuntimeTy,
         recursion_depth: usize,
     ) -> Result<(AttrLiteral<'a, TypeName>, AttrLiteral<'a, TypeName>), ConvertError> {
         if recursion_depth > MAX_RECURSION_DEPTH {
@@ -561,59 +552,68 @@ impl TypeCtx {
         }
 
         let field_attrs = match field_type {
-            ::baml_type::Ty::Int { .. }
-            | ::baml_type::Ty::Bigint { .. }
-            | ::baml_type::Ty::Float { .. }
-            | ::baml_type::Ty::String { .. }
-            | ::baml_type::Ty::Bool { .. }
-            | ::baml_type::Ty::Uint8Array { .. }
-            | ::baml_type::Ty::Media(..)
-            | ::baml_type::Ty::Literal(..)
-            | ::baml_type::Ty::Class(..)
-            | ::baml_type::Ty::Interface(..)
-            | ::baml_type::Ty::Enum(..)
-            | ::baml_type::Ty::EnumVariant(..) => (AttrLiteral::Never, AttrLiteral::Never),
-            ::baml_type::Ty::Null { .. } | ::baml_type::Ty::Optional(..) => {
+            ::baml_type::RuntimeTy::Int { .. }
+            | ::baml_type::RuntimeTy::Bigint { .. }
+            | ::baml_type::RuntimeTy::Float { .. }
+            | ::baml_type::RuntimeTy::String { .. }
+            | ::baml_type::RuntimeTy::Bool { .. }
+            | ::baml_type::RuntimeTy::Uint8Array { .. }
+            | ::baml_type::RuntimeTy::Media(..)
+            | ::baml_type::RuntimeTy::Literal(..)
+            | ::baml_type::RuntimeTy::Class(..)
+            | ::baml_type::RuntimeTy::Interface(..)
+            | ::baml_type::RuntimeTy::Enum(..)
+            | ::baml_type::RuntimeTy::EnumVariant(..) => (AttrLiteral::Never, AttrLiteral::Never),
+            ::baml_type::RuntimeTy::Null { .. } => {
                 unreachable!("nullable fields should be returned before field attr derivation")
             }
-            ::baml_type::Ty::List(..) => (
+            ::baml_type::RuntimeTy::List(..) => (
                 AttrLiteral::Array(Vec::new()),
                 AttrLiteral::Array(Vec::new()),
             ),
-            ::baml_type::Ty::Map { .. } => (
+            ::baml_type::RuntimeTy::Map { .. } => (
                 AttrLiteral::Map(IndexMap::new()),
                 AttrLiteral::Map(IndexMap::new()),
             ),
-            ::baml_type::Ty::Union(members, ..) => members
+            ::baml_type::RuntimeTy::Union(members, ..) => members
                 .first()
                 .map(|first| self.get_field_attrs(first, recursion_depth + 1))
                 .transpose()?
                 .unwrap_or((AttrLiteral::Never, AttrLiteral::Never)),
-            ::baml_type::Ty::TypeAlias(name, ..) => {
+            ::baml_type::RuntimeTy::TypeAlias(name, ..) => {
                 let Some(alias_ty) = self.type_alias_definitions.get(name) else {
                     return Err(ConvertError::UnknownTypeAlias(name.clone()));
                 };
                 self.get_field_attrs(alias_ty, recursion_depth + 1)?
             }
-            unparsable @ (::baml_type::Ty::Opaque(_, _)
-            | ::baml_type::Ty::Function { .. }
-            | ::baml_type::Ty::Void { .. }
-            | ::baml_type::Ty::WatchAccessor(_, _)
-            | ::baml_type::Ty::BuiltinUnknown { .. }
-            | ::baml_type::Ty::Future(_, _, _)) => {
+            unparsable @ (::baml_type::RuntimeTy::Resource { .. }
+            | ::baml_type::RuntimeTy::PromptAst { .. }
+            | ::baml_type::RuntimeTy::Function { .. }
+            | ::baml_type::RuntimeTy::Void { .. }
+            | ::baml_type::RuntimeTy::WatchAccessor(_, _)
+            | ::baml_type::RuntimeTy::BuiltinUnknown { .. }
+            | ::baml_type::RuntimeTy::Future(_, _, _)
+            | ::baml_type::RuntimeTy::TypeVar(_, _)
+            | ::baml_type::RuntimeTy::AssociatedTypeProjection { .. }
+            | ::baml_type::RuntimeTy::Never { .. }
+            | ::baml_type::RuntimeTy::RustType { .. }
+            | ::baml_type::RuntimeTy::Type { .. }) => {
                 return Err(ConvertError::NonParsableType(Box::new(unparsable.clone())));
             }
         };
         Ok(field_attrs)
     }
 
-    fn field_type_is_nullable(&self, field_type: &::baml_type::Ty) -> Result<bool, ConvertError> {
+    fn field_type_is_nullable(
+        &self,
+        field_type: &::baml_type::RuntimeTy,
+    ) -> Result<bool, ConvertError> {
         self.field_type_is_nullable_inner(field_type, &mut HashSet::new(), 0)
     }
 
     fn field_type_is_nullable_inner(
         &self,
-        field_type: &::baml_type::Ty,
+        field_type: &::baml_type::RuntimeTy,
         aliases_in_progress: &mut HashSet<TypeName>,
         recursion_depth: usize,
     ) -> Result<bool, ConvertError> {
@@ -624,8 +624,8 @@ impl TypeCtx {
         }
 
         Ok(match field_type {
-            ::baml_type::Ty::Null { .. } | ::baml_type::Ty::Optional(..) => true,
-            ::baml_type::Ty::Union(members, ..) => {
+            ::baml_type::RuntimeTy::Null { .. } => true,
+            ::baml_type::RuntimeTy::Union(members, ..) => {
                 let mut is_nullable = false;
                 for member in members {
                     if self.field_type_is_nullable_inner(
@@ -639,7 +639,7 @@ impl TypeCtx {
                 }
                 is_nullable
             }
-            ::baml_type::Ty::TypeAlias(name, ..) => {
+            ::baml_type::RuntimeTy::TypeAlias(name, ..) => {
                 if !aliases_in_progress.insert(name.clone()) {
                     // A cycle by itself does not prove nullability for this branch.
                     false
@@ -689,7 +689,7 @@ fn merge_ty_attrs(outer: &baml_type::TyAttr, inner: &baml_type::TyAttr) -> baml_
 fn check_parseable(
     name: &TypeName,
     class_definitions: &IndexMap<TypeName, ClassDefinition>,
-    type_alias_definitions: &HashMap<TypeName, baml_type::Ty>,
+    type_alias_definitions: &HashMap<TypeName, baml_type::RuntimeTy>,
     enum_definitions: &IndexMap<TypeName, EnumDefinition>,
     cache: &mut HashMap<TypeName, bool>,
     checking: &mut HashSet<TypeName>,
@@ -746,47 +746,51 @@ fn check_parseable(
     result
 }
 
-fn is_sap_parseable(ty: &baml_type::Ty) -> Result<Vec<TypeName>, ()> {
+fn is_sap_parseable(ty: &baml_type::RuntimeTy) -> Result<Vec<TypeName>, ()> {
     match ty {
-        baml_type::Ty::Int { .. }
-        | baml_type::Ty::Bigint { .. }
-        | baml_type::Ty::Float { .. }
-        | baml_type::Ty::String { .. }
-        | baml_type::Ty::Bool { .. }
-        | baml_type::Ty::Null { .. }
-        | baml_type::Ty::Literal(..) => Ok(Vec::new()),
-        baml_type::Ty::Uint8Array { .. } | baml_type::Ty::Media(..) => Err(()),
-        baml_type::Ty::Class(name, _, _) | baml_type::Ty::Interface(name, _, _, _) => {
-            Ok(vec![name.clone()])
-        }
-        baml_type::Ty::Enum(..) | baml_type::Ty::EnumVariant(..) => Ok(Vec::new()),
-        baml_type::Ty::Optional(inner, _) => is_sap_parseable(inner),
-        baml_type::Ty::List(inner, _) => is_sap_parseable(inner),
-        baml_type::Ty::Map { key, value, .. } => {
+        baml_type::RuntimeTy::Int { .. }
+        | baml_type::RuntimeTy::Bigint { .. }
+        | baml_type::RuntimeTy::Float { .. }
+        | baml_type::RuntimeTy::String { .. }
+        | baml_type::RuntimeTy::Bool { .. }
+        | baml_type::RuntimeTy::Null { .. }
+        | baml_type::RuntimeTy::Literal(..) => Ok(Vec::new()),
+        baml_type::RuntimeTy::Uint8Array { .. } | baml_type::RuntimeTy::Media(..) => Err(()),
+        baml_type::RuntimeTy::Class(name, _, _)
+        | baml_type::RuntimeTy::Interface(name, _, _, _) => Ok(vec![name.clone()]),
+        baml_type::RuntimeTy::Enum(..) | baml_type::RuntimeTy::EnumVariant(..) => Ok(Vec::new()),
+        baml_type::RuntimeTy::List(inner, _) => is_sap_parseable(inner),
+        baml_type::RuntimeTy::Map { key, value, .. } => {
             let keys = is_sap_parseable(key)?;
             let values = is_sap_parseable(value)?;
             Ok(keys.into_iter().chain(values).collect())
         }
-        baml_type::Ty::Union(members, _) => {
+        baml_type::RuntimeTy::Union(members, _) => {
             let mut names = Vec::new();
             for member in members {
                 names.extend(is_sap_parseable(member)?);
             }
             Ok(names)
         }
-        baml_type::Ty::TypeAlias(name, _) => Ok(vec![name.clone()]),
-        baml_type::Ty::Opaque(..)
-        | baml_type::Ty::Function { .. }
-        | baml_type::Ty::Void { .. }
-        | baml_type::Ty::WatchAccessor(..)
-        | baml_type::Ty::BuiltinUnknown { .. }
-        | baml_type::Ty::Future(..) => Err(()),
+        baml_type::RuntimeTy::TypeAlias(name, _) => Ok(vec![name.clone()]),
+        baml_type::RuntimeTy::Resource { .. }
+        | baml_type::RuntimeTy::PromptAst { .. }
+        | baml_type::RuntimeTy::Function { .. }
+        | baml_type::RuntimeTy::Void { .. }
+        | baml_type::RuntimeTy::WatchAccessor(..)
+        | baml_type::RuntimeTy::BuiltinUnknown { .. }
+        | baml_type::RuntimeTy::Future(..)
+        | baml_type::RuntimeTy::TypeVar(..)
+        | baml_type::RuntimeTy::AssociatedTypeProjection { .. }
+        | baml_type::RuntimeTy::Never { .. }
+        | baml_type::RuntimeTy::RustType { .. }
+        | baml_type::RuntimeTy::Type { .. } => Err(()),
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use baml_type::{Ty, TyAttr};
+    use baml_type::{RuntimeTy, TyAttr};
 
     use super::*;
 
@@ -803,14 +807,14 @@ mod tests {
         let type_alias_definitions = HashMap::from([
             (
                 maybe_text.clone(),
-                Ty::union([
-                    Ty::TypeAlias(text_ref.clone(), alias_attr.clone()),
-                    Ty::null(),
+                RuntimeTy::union([
+                    RuntimeTy::TypeAlias(text_ref.clone(), alias_attr.clone()),
+                    RuntimeTy::null(),
                 ]),
             ),
             (
                 text_ref,
-                Ty::TypeAlias(maybe_text.clone(), alias_attr.clone()),
+                RuntimeTy::TypeAlias(maybe_text.clone(), alias_attr.clone()),
             ),
         ]);
 
@@ -821,7 +825,7 @@ mod tests {
         );
 
         assert!(
-            ctx.field_type_is_nullable(&Ty::TypeAlias(maybe_text, alias_attr))
+            ctx.field_type_is_nullable(&RuntimeTy::TypeAlias(maybe_text, alias_attr))
                 .unwrap()
         );
     }
@@ -840,12 +844,15 @@ mod tests {
             let next = window[1].clone();
             type_alias_definitions.insert(
                 current,
-                Ty::union([Ty::TypeAlias(next, alias_attr.clone()), Ty::string()]),
+                RuntimeTy::union([
+                    RuntimeTy::TypeAlias(next, alias_attr.clone()),
+                    RuntimeTy::string(),
+                ]),
             );
         }
         type_alias_definitions.insert(
             names.last().cloned().unwrap(),
-            Ty::union([Ty::string(), Ty::bool()]),
+            RuntimeTy::union([RuntimeTy::string(), RuntimeTy::bool()]),
         );
 
         let ctx = TypeCtx::new(
@@ -855,7 +862,7 @@ mod tests {
         );
 
         assert!(matches!(
-            ctx.field_type_is_nullable(&Ty::TypeAlias(names[0].clone(), alias_attr)),
+            ctx.field_type_is_nullable(&RuntimeTy::TypeAlias(names[0].clone(), alias_attr)),
             Err(ConvertError::RecursionDepthExceeded(
                 "class field nullability derivation"
             ))

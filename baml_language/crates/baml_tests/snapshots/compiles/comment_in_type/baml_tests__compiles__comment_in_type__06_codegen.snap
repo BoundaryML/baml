@@ -67,13 +67,14 @@ function user.CommentAfterArrow$parse(json: string, client: baml.llm.Client) -> 
     store_var client
 
   L0:
-    load_const "CommentAfterArrow"
+    load_type string | null
+    load_type string
     load_var json
     call baml.llm.parse
     return
 }
 
-function user.CommentAfterArrow$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<null | string, string> {
+function user.CommentAfterArrow$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -82,8 +83,9 @@ function user.CommentAfterArrow$parse_stream(sse: baml.http.SseStream, client: b
     store_var client
 
   L0:
+    load_type string | null
+    load_type string
     load_var2 2 1
-    load_const "CommentAfterArrow"
     call baml.llm.Client.__make_stream
     return
 }
@@ -104,7 +106,7 @@ function user.CommentAfterArrow$render_prompt(client: baml.llm.Client) -> baml.l
     return
 }
 
-function user.CommentAfterArrow$stream(client: baml.llm.Client) -> baml.llm.Stream<null | string, string> {
+function user.CommentAfterArrow$stream(client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -113,6 +115,8 @@ function user.CommentAfterArrow$stream(client: baml.llm.Client) -> baml.llm.Stre
     store_var client
 
   L0:
+    load_type string | null
+    load_type string
     load_var client
     load_const "CommentAfterArrow"
     alloc_map 0
@@ -189,13 +193,14 @@ function user.FunctionWithComments$parse(json: string, client: baml.llm.Client) 
     store_var client
 
   L0:
-    load_const "FunctionWithComments"
+    load_type string | null
+    load_type string
     load_var json
     call baml.llm.parse
     return
 }
 
-function user.FunctionWithComments$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<null | string, string> {
+function user.FunctionWithComments$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -204,8 +209,9 @@ function user.FunctionWithComments$parse_stream(sse: baml.http.SseStream, client
     store_var client
 
   L0:
+    load_type string | null
+    load_type string
     load_var2 2 1
-    load_const "FunctionWithComments"
     call baml.llm.Client.__make_stream
     return
 }
@@ -229,7 +235,7 @@ function user.FunctionWithComments$render_prompt(a: string, b: int, client: baml
     return
 }
 
-function user.FunctionWithComments$stream(a: string, b: int, client: baml.llm.Client) -> baml.llm.Stream<null | string, string> {
+function user.FunctionWithComments$stream(a: string, b: int, client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -238,6 +244,8 @@ function user.FunctionWithComments$stream(a: string, b: int, client: baml.llm.Cl
     store_var client
 
   L0:
+    load_type string | null
+    load_type string
     load_var client
     load_const "FunctionWithComments"
     load_var2 1 2

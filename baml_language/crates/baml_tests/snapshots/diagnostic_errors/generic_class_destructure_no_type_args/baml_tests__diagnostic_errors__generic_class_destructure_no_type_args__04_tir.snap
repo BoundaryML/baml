@@ -14,13 +14,12 @@ function user.Box.from_json(j: baml.json.json) -> user.Box<unknown> throws baml.
 function user.main() -> int throws never {
   { : T
     let boxed: Box<int> = Box { value: 42 } : user.Box<int>
-    let Box { value: value } = boxed : user.Box<int> -> user.Box
+    let Box { value: value } = boxed : user.Box<int> -> user.Box<T>
     value : T
   }
-  !! 350..372: type mismatch: expected Box<int>, got Box
   !! 375..380: generic class destructure `Box { ... }` must specify type arguments
   !! 386..391: type mismatch: expected int, got T
 }
 class user.Box$stream {
-  value: null | T
+  value: T | null
 }

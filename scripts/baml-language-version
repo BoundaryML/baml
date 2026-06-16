@@ -21,6 +21,7 @@ PYPROJECT = ROOT / "baml_language" / "sdks" / "python" / "pyproject.toml"
 PY_INIT = ROOT / "baml_language" / "sdks" / "python" / "src" / "baml_core" / "__init__.py"
 VSIX_PACKAGE = ROOT / "typescript2" / "app-vscode-ext" / "package.json"
 NODE_PACKAGE = ROOT / "baml_language" / "sdks" / "nodejs" / "bridge_nodejs" / "package.json"
+NODE_NATIVE_JS = ROOT / "baml_language" / "sdks" / "nodejs" / "bridge_nodejs" / "dist" / "native.js"
 WRAPPER_CARGO_TOML = ROOT / "baml_language" / "crates" / "baml" / "Cargo.toml"
 
 SEMVER_RE = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
@@ -358,8 +359,36 @@ def stamp(plan: ReleasePlan) -> None:
     PY_INIT.write_text(text, encoding="utf-8")
 
 
+def regenerate_node_bridge() -> None:
+    if not NODE_PACKAGE.exists():
+        return
+
+    try:
+        subprocess.run(
+            ["pnpm", "install", "--frozen-lockfile", "--ignore-workspace", "--ignore-scripts"],
+            cwd=NODE_PACKAGE.parent,
+            check=True,
+        )
+        subprocess.run(
+            ["pnpm", "build:debug"],
+            cwd=NODE_PACKAGE.parent,
+            check=True,
+        )
+    except FileNotFoundError:
+        fail("pnpm is required to install and regenerate the Node bridge after a canary version bump")
+    except subprocess.CalledProcessError as exc:
+        fail(
+            "failed to install or regenerate the Node bridge after stamping versions. "
+            "Run `cd baml_language/sdks/nodejs/bridge_nodejs && "
+            "pnpm install --frozen-lockfile --ignore-workspace --ignore-scripts && pnpm build:debug` "
+            "for details.",
+            code=exc.returncode,
+        )
+
+
 def sync_canary() -> None:
     stamp(make_plan("canary"))
+    regenerate_node_bridge()
 
 
 def check_release() -> None:
@@ -384,6 +413,29 @@ def check_release() -> None:
     }
     if NODE_PACKAGE.exists():
         checks["node package version"] = f'"version": "{expected.canonical_version}"' in NODE_PACKAGE.read_text(encoding="utf-8")
+        if not NODE_NATIVE_JS.exists():
+            mismatches.append(
+                "node native loader version guards: "
+                f"{NODE_NATIVE_JS.relative_to(ROOT)} is missing. Run "
+                "`scripts/baml-language-version sync` and commit the generated output."
+            )
+        else:
+            native_text = NODE_NATIVE_JS.read_text(encoding="utf-8")
+            native_versions = sorted(
+                set(re.findall(r"bindingPackageVersion !== '([^']+)'", native_text))
+            )
+            if not native_versions:
+                mismatches.append(
+                    "node native loader version guards: no napi version guards found in "
+                    f"{NODE_NATIVE_JS.relative_to(ROOT)}"
+                )
+            elif native_versions != [expected.canonical_version]:
+                mismatches.append(
+                    "node native loader version guards: "
+                    f"{NODE_NATIVE_JS.relative_to(ROOT)} embeds {', '.join(native_versions)}; "
+                    f"expected {expected.canonical_version}. Run "
+                    "`scripts/baml-language-version sync` and commit the generated output."
+                )
 
     for name, ok in checks.items():
         if not ok:

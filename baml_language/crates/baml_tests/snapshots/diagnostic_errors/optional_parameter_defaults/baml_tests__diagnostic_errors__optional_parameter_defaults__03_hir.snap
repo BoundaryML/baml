@@ -56,5 +56,5 @@ function user.from_json(j: baml.json.json) -> user.Counter  [expr] {
   user.Counter { value: baml.json.from_json(baml.json.field(j, "value")) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "value": self.value.to_json() }
+  map { "value": baml.json.to_json(self.value) }
 }

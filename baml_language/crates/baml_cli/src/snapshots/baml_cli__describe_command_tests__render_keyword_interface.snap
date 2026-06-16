@@ -1,0 +1,28 @@
+---
+source: crates/baml_cli/src/describe_command_tests.rs
+expression: output
+---
+interface — Defines a structural contract of fields, methods, and associated types.
+
+Syntax:
+  interface Named {
+    type Key = string
+    id: Self.Key
+    name: string
+    function label(self) -> string
+    function display(self) -> string {
+      return self.name
+    }
+  }
+  
+  class Dog {
+    id: string
+    name: string
+    implements Named {
+      function label(self) -> string {
+        return self.name
+      }
+    }
+  }
+
+Interface fields use `name: Type` syntax. Interfaces can declare associated types with `type Name`, optionally with `extends Bound` and/or `= Default`; use `Self.Name` inside the interface body to refer to the implementing type's binding. A method without a body is required; a method with a body is a default method that implementors inherit unless they override it. Interfaces compose with `requires`, not `extends`.

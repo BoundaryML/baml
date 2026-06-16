@@ -22,7 +22,7 @@ fn render_mir(db: &ProjectDatabase, file: baml_base::SourceFile) -> String {
     let item_tree = file_item_tree(db, file);
     let mut output = String::new();
 
-    for (local_id, _func_data) in item_tree.functions.iter() {
+    for local_id in item_tree.functions.keys() {
         let func_loc = FunctionLoc::new(db, file, *local_id);
         let mir = lower_function(db, func_loc, OptLevel::Two);
         writeln!(output, "{}", display_function(&mir)).unwrap();
@@ -219,7 +219,7 @@ fn match_expr() {
     let file = db.add_file(
         "test.baml",
         r#"function f(x: int) -> string {
-            return match x {
+            return match (x) {
                 1 => "one",
                 2 => "two",
                 _ => "other",
@@ -325,6 +325,40 @@ fn match_or_class_union_field_access_uses_runtime_dispatch() {
     assert!(output.contains("C:") && output.contains("D:"), "{output}");
 }
 
+#[test]
+fn source_param_interface_dispatch_respects_shadowed_local_binding() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+        class Shadow {
+            function iter(self) -> string {
+                "shadow"
+            }
+        }
+
+        function f(source: baml.iter.Iterable<Item = int, Error = never>) -> string {
+            let source = Shadow {};
+            source.iter()
+        }
+        "#,
+    );
+    let output = render_mir(&db, file);
+    let f_body = output
+        .split("fn user.f(")
+        .nth(1)
+        .and_then(|tail| tail.split("\nfn ").next())
+        .unwrap_or(&output);
+    assert!(
+        f_body.contains("call const fn user.Shadow.iter"),
+        "shadowed source parameter should dispatch to the local class method:\n{output}"
+    );
+    assert!(
+        !f_body.contains("call copy"),
+        "shadowed source parameter should not lower through interface dispatch:\n{output}"
+    );
+}
+
 // ─── Phase 4: reflect.type_of concrete types ─────────────────────────────────
 
 /// `reflect.type_of<User>()` should lower to `_N = load_type(Concrete(User))`.
@@ -390,4 +424,44 @@ fn reflect_type_of_array_of_typevar() {
         "#,
     );
     mir_snapshot!("reflect_type_of_array_of_typevar", render_mir(&db, file));
+}
+
+/// Bare `$id` read is a special form: it must lower to a call of
+/// `baml.id.current` — never to a name lookup or a local read.
+#[test]
+fn runtime_id_read_lowers_to_baml_id_current() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+        function f() -> string {
+            $id
+        }
+        "#,
+    );
+    mir_snapshot!(
+        "runtime_id_read_lowers_to_baml_id_current",
+        render_mir(&db, file)
+    );
+}
+
+/// `$id = e` is the write special form: it must lower to `baml.id.set(e)` —
+/// never to an assignment into a (silently dead) temp.
+#[test]
+fn runtime_id_assignment_lowers_to_baml_id_set() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+        function f() -> string {
+            let next = baml.id.new();
+            $id = next;
+            $id
+        }
+        "#,
+    );
+    mir_snapshot!(
+        "runtime_id_assignment_lowers_to_baml_id_set",
+        render_mir(&db, file)
+    );
 }

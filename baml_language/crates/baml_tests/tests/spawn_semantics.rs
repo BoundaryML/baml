@@ -5,7 +5,7 @@
 
 use std::time::{Duration, Instant};
 
-use baml_tests::baml_test;
+use baml_tests::engine::{IndexMap, OptLevel, compile_source_with_opt, run_compiled};
 
 /// BEP-034: "Parent throws still cascade-cancel children." When the
 /// parent function throws an unhandled error, the parent thread's
@@ -19,8 +19,10 @@ use baml_tests::baml_test;
 /// hold the engine alive for 60s.
 #[tokio::test]
 async fn parent_throw_cancels_running_children() {
-    let started = Instant::now();
-    let output = baml_test!(
+    // Compile OUTSIDE the timed region: compiling the (growing) BAML stdlib
+    // takes seconds and is not what this test measures. Time only the engine
+    // run, which is what the cascade makes prompt.
+    let program = compile_source_with_opt(
         r#"
         function main() -> int throws baml.errors.Io {
             // Spawn a long-running child. The cascade should fire its
@@ -28,8 +30,11 @@ async fn parent_throw_cancels_running_children() {
             let _ = spawn { baml.sys.sleep(60000); 42 };
             throw baml.errors.Io { message: "parent boom" }
         }
-        "#
+        "#,
+        OptLevel::One,
     );
+    let started = Instant::now();
+    let output = run_compiled(program, "main", IndexMap::new(), false).await;
     let elapsed = started.elapsed();
 
     // Main throws → host receives unhandled Io.

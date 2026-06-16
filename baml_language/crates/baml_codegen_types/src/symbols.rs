@@ -50,6 +50,7 @@ pub struct Function {
     pub origin: Origin,
 }
 
+#[derive(Clone)]
 pub struct FunctionArgument {
     pub name: baml_base::Name,
     pub docstring: Option<String>,
@@ -224,7 +225,7 @@ impl super::Ty {
                     unions.extend(a.walk_all_unions());
                 }
             }
-            Ty::Optional(ty) | Ty::List(ty) | Ty::Map { key: _, value: ty } => {
+            Ty::List(ty) | Ty::Map { key: _, value: ty } => {
                 unions.extend(ty.walk_all_unions());
             }
             Ty::Callable { params, ret } => {

@@ -15,13 +15,19 @@ use once_cell::sync::Lazy;
 
 /// Discriminator for what kind of host value a key refers to.
 ///
-/// Reserved for forward-compatibility: opaque non-callable host values
-/// can be added by introducing a new variant without changing the wire
-/// shape.
+/// Opaque non-callable host values are distinguished from callables by
+/// their variant; the wire shape (`BamlHandle { key, handle_type }`) is
+/// shared, with `handle_type` carrying the discriminant.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum HostValueKind {
     /// A host-language callable (function/closure/method).
     Callable,
+    /// An arbitrary host-language value with no BAML representation, referenced
+    /// by key and round-tripped by identity. Surfaces in BAML as an opaque
+    /// `$rust_type` value (`Ty::RustType`). A native host exception is one
+    /// consumer: the bridge registers it as an opaque value and wraps the
+    /// handle in `baml.errors.HostCallable`.
+    Opaque,
 }
 
 /// Drop-on-last-clone notification fired to the host language.
@@ -31,7 +37,11 @@ pub type HostReleaseFn = extern "C" fn(host_value_key: u64);
 ///
 /// `Drop` fires `host_release_dispatch::fire(self.key)` so the bridge can
 /// remove the underlying host object from its registry.
-#[derive(Debug)]
+///
+/// `PartialEq` compares by `(key, kind)`: the process-global interner
+/// guarantees one live `Arc<HostValueArc>` per key (see [`Self::intern`]),
+/// so two `Arc`s with the same key always refer to the same host object.
+#[derive(Debug, PartialEq, Eq)]
 pub struct HostValueArc {
     pub key: u64,
     pub kind: HostValueKind,
@@ -550,6 +560,52 @@ mod tests {
             FIRED.lock().unwrap().as_slice(),
             &[key],
             "a key enqueued twice must fire release exactly once per drain"
+        );
+    }
+
+    /// `HostValueKind::Opaque` (used for opaque host-value round-trip, e.g. the
+    /// host-callable error wrapper) must follow the same intern/refcount/release
+    /// contract as `Callable`.
+    #[test]
+    fn opaque_kind_release_fires_on_last_drop() {
+        let _guard = lock_and_reset();
+        let key = 200;
+        let arc = HostValueArc::new(key, HostValueKind::Opaque);
+        drop(arc);
+        assert_eq!(
+            FIRED.lock().unwrap().as_slice(),
+            &[key],
+            "Opaque-kind release must fire just like Callable"
+        );
+    }
+
+    /// Intern with mismatched kinds for the same key is an interner-contract
+    /// violation. Debug builds catch it via `debug_assert_eq!`; release builds
+    /// (where the assert is stripped) coerce to the existing kind. This test
+    /// pins the release-build behavior so a future tightening (e.g. promoting
+    /// the assert to a runtime check) is an intentional change.
+    #[cfg(not(debug_assertions))]
+    #[test]
+    fn intern_collision_callable_vs_opaque_release_build_keeps_existing() {
+        let _guard = lock_and_reset();
+        let key = 201;
+        let callable = HostValueArc::intern(key, HostValueKind::Callable);
+        let coerced = HostValueArc::intern(key, HostValueKind::Opaque);
+        assert!(
+            Arc::ptr_eq(&callable, &coerced),
+            "release-build intern collision must alias to the existing Arc"
+        );
+        assert_eq!(
+            coerced.kind,
+            HostValueKind::Callable,
+            "the existing kind wins in release builds (no panic, no replace)"
+        );
+        drop(callable);
+        drop(coerced);
+        assert_eq!(
+            FIRED.lock().unwrap().as_slice(),
+            &[key],
+            "single release fires for the coerced/aliased pair"
         );
     }
 }

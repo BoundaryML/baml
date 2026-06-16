@@ -19,7 +19,7 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
-use bex_engine::{BexExternalValue, Ty, UserFunctionInfo};
+use bex_engine::{BexExternalValue, RuntimeTy, UserFunctionInfo};
 use clap::{
     Arg, ArgMatches, Command,
     builder::{PossibleValuesParser, styling},
@@ -302,10 +302,10 @@ fn build_target_command_with_name(
         // wrapped values stay on the generic String parser since "null"
         // also has to be accepted alongside the inner type.
         match ty {
-            Ty::Bool { .. } => {
+            RuntimeTy::Bool { .. } => {
                 arg = arg.value_parser(PossibleValuesParser::new(["true", "false"]));
             }
-            Ty::Null { .. } => {
+            RuntimeTy::Null { .. } => {
                 arg = arg.value_parser(PossibleValuesParser::new(["null"]));
             }
             _ => {}
@@ -410,7 +410,7 @@ fn function_signature(display: &str, func_info: &UserFunctionInfo) -> String {
 /// table already documents them.
 fn json_only_params_block(func_info: &UserFunctionInfo) -> Option<String> {
     use std::fmt::Write as _;
-    let json_only: Vec<(&String, &Ty, bool)> = func_info
+    let json_only: Vec<(&String, &RuntimeTy, bool)> = func_info
         .param_names
         .iter()
         .zip(func_info.param_types.iter())
@@ -451,34 +451,33 @@ mod tests {
 
     use super::*;
 
-    fn ty_string() -> Ty {
-        Ty::String {
+    fn ty_string() -> RuntimeTy {
+        RuntimeTy::String {
             attr: TyAttr::default(),
         }
     }
-    fn ty_int() -> Ty {
-        Ty::Int {
+    fn ty_int() -> RuntimeTy {
+        RuntimeTy::Int {
             attr: TyAttr::default(),
         }
     }
-    fn ty_bool() -> Ty {
-        Ty::Bool {
+    fn ty_bool() -> RuntimeTy {
+        RuntimeTy::Bool {
             attr: TyAttr::default(),
         }
     }
-    fn ty_class(name: &str) -> Ty {
-        Ty::Class(
-            TypeName {
-                name: name.into(),
-                module_path: vec![],
-                display_name: name.into(),
-            },
-            vec![],
-            TyAttr::default(),
-        )
+    fn ty_class(name: &str) -> RuntimeTy {
+        RuntimeTy::Class(TypeName::local(name.into()), vec![], TyAttr::default())
     }
 
-    fn func_info(names: &[&str], types: Vec<Ty>, defaults: Vec<bool>, ret: Ty) -> UserFunctionInfo {
+    fn func_info(
+        names: &[&str],
+        types: Vec<RuntimeTy>,
+        defaults: Vec<bool>,
+        ret: RuntimeTy,
+    ) -> UserFunctionInfo {
+        let display_param_types = types.iter().map(ToString::to_string).collect();
+        let display_return_type = ret.to_string();
         UserFunctionInfo {
             qualified_name: "user.Test".into(),
             display_name: "Test".into(),
@@ -487,6 +486,9 @@ mod tests {
             param_types: types,
             param_has_default: defaults,
             return_type: ret,
+            display_type_params: Vec::new(),
+            display_param_types,
+            display_return_type,
             source_file: String::new(),
             is_llm: false,
         }
@@ -807,7 +809,7 @@ mod tests {
     fn target_entry(
         qualified: &str,
         info_param_names: &[&str],
-        info_param_types: Vec<Ty>,
+        info_param_types: Vec<RuntimeTy>,
         info_param_defaults: Vec<bool>,
     ) -> (TargetEntry, UserFunctionInfo) {
         let display = qualified.strip_prefix("user.").unwrap_or(qualified);

@@ -5,12 +5,13 @@ import { BamlOutboundValue, MediaTypeEnum } from '../generated/baml_core/cffi/v1
 
 describe('encodeCallArgs', () => {
   it('encodes an unsorted array as function kwargs', () => {
-    const bytes = encodeCallArgs({ arr: [5, 3, 1, 4, 2] });
+    const bytes = encodeCallArgs({ arr: [5, 3, 1, 4, 2] }, 123);
     expect(bytes).toBeInstanceOf(Uint8Array);
     expect(bytes.length).toBeGreaterThan(0);
 
     // Decode back to proto to verify structure
     const decoded = CallFunctionArgs.decode(bytes);
+    expect(decoded.callId).toBe(123);
     expect(decoded.kwargs).toHaveLength(1);
 
     const kwarg = decoded.kwargs[0];
@@ -38,7 +39,7 @@ describe('encodeCallArgs', () => {
       score: 99.5,
       active: true,
       nothing: null,
-    });
+    }, 124);
     const decoded = CallFunctionArgs.decode(bytes);
     expect(decoded.kwargs).toHaveLength(5);
 
@@ -59,7 +60,7 @@ describe('encodeCallArgs', () => {
   it('encodes nested objects as maps', () => {
     const bytes = encodeCallArgs({
       user: { name: 'Bob', scores: [10, 20] },
-    });
+    }, 125);
     const decoded = CallFunctionArgs.decode(bytes);
     const userVal = decoded.kwargs[0].value;
     expect(userVal?.value?.$case).toBe('mapValue');
@@ -84,7 +85,7 @@ describe('encodeCallArgs', () => {
         };
       },
     };
-    const bytes = encodeCallArgs({ obj: custom });
+    const bytes = encodeCallArgs({ obj: custom }, 126);
     const decoded = CallFunctionArgs.decode(bytes);
     const val = decoded.kwargs[0].value;
     expect(val?.value?.$case).toBe('classValue');
@@ -329,7 +330,7 @@ describe('decodeCallResult', () => {
 describe('round-trip: encode bubble sort args', () => {
   it('encodes the unsorted array that would be passed to BubbleSort', () => {
     const unsorted = [5, 3, 1, 4, 2];
-    const bytes = encodeCallArgs({ arr: unsorted });
+    const bytes = encodeCallArgs({ arr: unsorted }, 127);
 
     // Verify it's valid protobuf
     const decoded = CallFunctionArgs.decode(bytes);

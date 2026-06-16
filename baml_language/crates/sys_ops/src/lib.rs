@@ -30,8 +30,8 @@ pub mod io {
     // so that `io::owned::llm::*` paths continue to work.
     pub use sys_types::generated::owned;
     pub use sys_types::{
-        AsBexExternalValue, BexExternalValue, BexHeap, CallId, OpError, OpErrorKind, SysOpContext,
-        SysOpFn, SysOpOutput, SysOpResult,
+        AsBexExternalValue, BexExternalValue, BexHeap, CallId, OpError, SysOpContext, SysOpFn,
+        SysOpOutput, SysOpResult, VmBamlError, VmPanic, VmRustFnError,
     };
 
     include!(concat!(env!("OUT_DIR"), "/io_generated.rs"));
@@ -112,14 +112,16 @@ impl<T> io::IoClassLlmClient for T {
         ) {
             sys_types::ResolveOutcome::Found(_, idx) => idx,
             sys_types::ResolveOutcome::Ambiguous => {
-                return SysOpOutput::err(OpErrorKind::Other(format!(
-                    "Client resolve function {resolve_fn_name} matches multiple namespaced entries"
-                )));
+                return SysOpOutput::err(VmBamlError::DevOther {
+                    message: format!(
+                        "Client resolve function {resolve_fn_name} matches multiple namespaced entries"
+                    ),
+                });
             }
             sys_types::ResolveOutcome::NotFound => {
-                return SysOpOutput::err(OpErrorKind::Other(format!(
-                    "Client resolve function not found: {resolve_fn_name}"
-                )));
+                return SysOpOutput::err(VmBamlError::DevOther {
+                    message: format!("Client resolve function not found: {resolve_fn_name}"),
+                });
             }
         };
         SysOpOutput::ok(
@@ -130,17 +132,19 @@ impl<T> io::IoClassLlmClient for T {
 
 fn shorthand_to_primitive_client(
     shorthand: &str,
-) -> Result<io::owned::llm::PrimitiveClient, OpErrorKind> {
+) -> Result<io::owned::llm::PrimitiveClient, VmRustFnError> {
     let shorthand = shorthand.trim();
     let Some((provider, model)) = shorthand.split_once('/') else {
-        return Err(OpErrorKind::Other(format!(
-            "Invalid short hand name: {shorthand}"
-        )));
+        return Err(VmBamlError::InvalidArgument {
+            message: format!("Invalid short hand name: {shorthand}"),
+        }
+        .into());
     };
     if provider.is_empty() || model.is_empty() {
-        return Err(OpErrorKind::Other(format!(
-            "Invalid short hand name: {shorthand}"
-        )));
+        return Err(VmBamlError::InvalidArgument {
+            message: format!("Invalid short hand name: {shorthand}"),
+        }
+        .into());
     }
 
     Ok(io::owned::llm::PrimitiveClient {
@@ -164,16 +168,20 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
         client: io::owned::llm::PrimitiveClient,
         template: String,
         args: indexmap::IndexMap<String, BexExternalValue>,
-        return_type: baml_type::Ty,
+        return_type: baml_type::RuntimeTy,
         ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::llm::PromptAst> {
         let old_client = match convert_io_primitive_client(&client) {
             Ok(c) => c,
-            Err(e) => return SysOpOutput::err(OpErrorKind::Other(e.to_string())),
+            Err(e) => {
+                return SysOpOutput::err(VmBamlError::InvalidArgument {
+                    message: e.to_string(),
+                });
+            }
         };
         let args_ext = BexExternalValue::Map {
-            key_type: baml_type::Ty::string(),
-            value_type: baml_type::Ty::unknown(),
+            key_type: baml_type::RuntimeTy::string(),
+            value_type: baml_type::RuntimeTy::unknown(),
             entries: args,
         };
         SysOpOutput::Ready(
@@ -185,7 +193,7 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
                 ctx,
             )
             .map(wrap_prompt_ast)
-            .map_err(OpErrorKind::from),
+            .map_err(VmRustFnError::from),
         )
     }
 
@@ -199,13 +207,17 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
     ) -> SysOpOutput<io::owned::llm::PromptAst> {
         let old_client = match convert_io_primitive_client(&client) {
             Ok(c) => c,
-            Err(e) => return SysOpOutput::err(OpErrorKind::Other(e.to_string())),
+            Err(e) => {
+                return SysOpOutput::err(VmBamlError::InvalidArgument {
+                    message: e.to_string(),
+                });
+            }
         };
         let prompt_ast = unwrap_prompt_ast(&prompt);
         SysOpOutput::Ready(
             sys_llm::execute_specialize_prompt_from_owned(&old_client, prompt_ast)
                 .map(wrap_prompt_ast)
-                .map_err(OpErrorKind::from),
+                .map_err(VmRustFnError::from),
         )
     }
 
@@ -215,12 +227,16 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
         _call_id: CallId,
         client: io::owned::llm::PrimitiveClient,
         prompt: io::owned::llm::PromptAst,
-        return_type: baml_type::Ty,
+        return_type: baml_type::RuntimeTy,
         ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
         let old_client = match convert_io_primitive_client(&client) {
             Ok(c) => c,
-            Err(e) => return SysOpOutput::err(OpErrorKind::Other(e.to_string())),
+            Err(e) => {
+                return SysOpOutput::err(VmBamlError::InvalidArgument {
+                    message: e.to_string(),
+                });
+            }
         };
         let prompt_ast = unwrap_prompt_ast(&prompt);
         let io = ctx.runtime_io.clone();
@@ -241,7 +257,7 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
                 }
                 .into_bex_external_value()
             })
-            .map_err(OpErrorKind::from)
+            .map_err(VmRustFnError::from)
         })
     }
 
@@ -251,17 +267,21 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
         _call_id: CallId,
         client: io::owned::llm::PrimitiveClient,
         response: String,
-        type_arg_0: baml_type::Ty,
+        type_arg_0: baml_type::RuntimeTy,
         ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
         let old_client = match convert_io_primitive_client(&client) {
             Ok(c) => c,
-            Err(e) => return SysOpOutput::err(OpErrorKind::Other(e.to_string())),
+            Err(e) => {
+                return SysOpOutput::err(VmBamlError::InvalidArgument {
+                    message: e.to_string(),
+                });
+            }
         };
         SysOpOutput::Ready(
             sys_llm::execute_parse_response_from_owned(&old_client, &response, &type_arg_0, ctx)
                 .map(bex_external_types::AsBexExternalValue::into_bex_external_value)
-                .map_err(OpErrorKind::from),
+                .map_err(VmRustFnError::from),
         )
     }
 
@@ -271,12 +291,16 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
         _call_id: CallId,
         client: io::owned::llm::PrimitiveClient,
         prompt: io::owned::llm::PromptAst,
-        return_type: baml_type::Ty,
+        return_type: baml_type::RuntimeTy,
         ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
         let old_client = match convert_io_primitive_client(&client) {
             Ok(c) => c,
-            Err(e) => return SysOpOutput::err(OpErrorKind::Other(e.to_string())),
+            Err(e) => {
+                return SysOpOutput::err(VmBamlError::InvalidArgument {
+                    message: e.to_string(),
+                });
+            }
         };
         let prompt_ast = unwrap_prompt_ast(&prompt);
         let io = ctx.runtime_io.clone();
@@ -297,7 +321,7 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
                 }
                 .into_bex_external_value()
             })
-            .map_err(OpErrorKind::from)
+            .map_err(VmRustFnError::from)
         })
     }
 
@@ -314,7 +338,7 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
                     std::sync::Arc::new(handle);
                 SysOpOutput::ok(io::owned::llm::StreamAccumulator { _handle: handle })
             }
-            Err(e) => SysOpOutput::err(OpErrorKind::from(e)),
+            Err(e) => SysOpOutput::err(VmRustFnError::from(e)),
         }
     }
 
@@ -328,11 +352,15 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
     ) -> SysOpOutput<()> {
         let old_client = match convert_io_primitive_client(&client) {
             Ok(c) => c,
-            Err(e) => return SysOpOutput::err(OpErrorKind::Other(e.to_string())),
+            Err(e) => {
+                return SysOpOutput::err(VmBamlError::InvalidArgument {
+                    message: e.to_string(),
+                });
+            }
         };
         SysOpOutput::Ready(
             sys_llm::execute_validate_finish_reason(&old_client, &finish_reason)
-                .map_err(OpErrorKind::from),
+                .map_err(VmRustFnError::from),
         )
     }
 }
@@ -341,17 +369,47 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
 /// [`sys_types::resolve_name`] rule. The suffix-scan step handles
 /// functions declared inside a user namespace (e.g. `ns_lorem/`) — the
 /// synthesized companion passes the bare BAML identifier, not the FQN,
-/// so without it a namespaced LLM function fails to resolve. Ambiguity
-/// collapses to `None` so the caller's "not found" error path surfaces.
+/// so without it a namespaced LLM function fails to resolve. Returns the
+/// full `ResolveOutcome` (rather than collapsing to `Option`) so callers
+/// can distinguish ambiguity from a true not-found in their error
+/// messages: both still abort the sysop as a `DevOther`, but the
+/// distinction matters for diagnosing synthesis / name-resolution bugs.
 fn lookup_llm_function<'a>(
     function_name: &str,
     llm_functions: &'a std::collections::HashMap<String, LlmFunctionInfo>,
-) -> Option<&'a LlmFunctionInfo> {
-    // Ambiguity collapses to `None` so the existing "function not found"
-    // error path surfaces — cleaner than silently picking one match.
+) -> sys_types::ResolveOutcome<'a, LlmFunctionInfo> {
     sys_types::resolve_name(llm_functions, function_name)
-        .found()
-        .map(|(_k, info)| info)
+}
+
+/// Format a `lookup_llm_function` miss as a sysop error message,
+/// distinguishing ambiguous from not-found.
+fn llm_function_lookup_error(
+    function_name: &str,
+    outcome: &sys_types::ResolveOutcome<'_, LlmFunctionInfo>,
+) -> VmBamlError {
+    match outcome {
+        sys_types::ResolveOutcome::Found(_, _) => {
+            // Unreachable in practice — caller only invokes this on a miss.
+            // We still produce a coherent message rather than panicking so
+            // a future refactor can't accidentally trip on this.
+            VmBamlError::DevOther {
+                message: format!(
+                    "internal: llm_function_lookup_error called with a Found \
+                     outcome for `{function_name}`"
+                ),
+            }
+        }
+        sys_types::ResolveOutcome::NotFound => VmBamlError::DevOther {
+            message: format!("LLM function not found: {function_name}"),
+        },
+        sys_types::ResolveOutcome::Ambiguous => VmBamlError::DevOther {
+            message: format!(
+                "LLM function name `{function_name}` is ambiguous: two or more \
+                 namespaced functions end with `.{function_name}`. Pass a fully \
+                 qualified name (e.g. `<pkg>.<ns>.{function_name}`) to disambiguate."
+            ),
+        },
+    }
 }
 
 /// Blanket impl — all types get real `StreamAccumulator` behavior via `sys_llm` delegation.
@@ -368,13 +426,13 @@ impl<T> io::IoClassLlmStreamAccumulator for T {
             ._handle
             .downcast::<bex_resource_types::ResourceHandle>()
         else {
-            return SysOpOutput::err(OpErrorKind::Other(
-                "Invalid stream accumulator handle".into(),
-            ));
+            return SysOpOutput::err(VmBamlError::DevOther {
+                message: "Invalid stream accumulator handle".into(),
+            });
         };
         match sys_llm::stream_accumulator::add_events(&handle, &events) {
             Ok(()) => SysOpOutput::ok(()),
-            Err(e) => SysOpOutput::err(OpErrorKind::from(e)),
+            Err(e) => SysOpOutput::err(VmRustFnError::from(e)),
         }
     }
 
@@ -389,13 +447,13 @@ impl<T> io::IoClassLlmStreamAccumulator for T {
             ._handle
             .downcast::<bex_resource_types::ResourceHandle>()
         else {
-            return SysOpOutput::err(OpErrorKind::Other(
-                "Invalid stream accumulator handle".into(),
-            ));
+            return SysOpOutput::err(VmBamlError::DevOther {
+                message: "Invalid stream accumulator handle".into(),
+            });
         };
         match sys_llm::stream_accumulator::get_content(&handle) {
             Ok(content) => SysOpOutput::ok(content),
-            Err(e) => SysOpOutput::err(OpErrorKind::from(e)),
+            Err(e) => SysOpOutput::err(VmRustFnError::from(e)),
         }
     }
 
@@ -410,13 +468,13 @@ impl<T> io::IoClassLlmStreamAccumulator for T {
             ._handle
             .downcast::<bex_resource_types::ResourceHandle>()
         else {
-            return SysOpOutput::err(OpErrorKind::Other(
-                "Invalid stream accumulator handle".into(),
-            ));
+            return SysOpOutput::err(VmBamlError::DevOther {
+                message: "Invalid stream accumulator handle".into(),
+            });
         };
         match sys_llm::stream_accumulator::is_done(&handle) {
             Ok(done) => SysOpOutput::ok(done),
-            Err(e) => SysOpOutput::err(OpErrorKind::from(e)),
+            Err(e) => SysOpOutput::err(VmRustFnError::from(e)),
         }
     }
 
@@ -431,13 +489,13 @@ impl<T> io::IoClassLlmStreamAccumulator for T {
             ._handle
             .downcast::<bex_resource_types::ResourceHandle>()
         else {
-            return SysOpOutput::err(OpErrorKind::Other(
-                "Invalid stream accumulator handle".into(),
-            ));
+            return SysOpOutput::err(VmBamlError::DevOther {
+                message: "Invalid stream accumulator handle".into(),
+            });
         };
         match sys_llm::stream_accumulator::get_model(&handle) {
             Ok(model) => SysOpOutput::ok(model),
-            Err(e) => SysOpOutput::err(OpErrorKind::from(e)),
+            Err(e) => SysOpOutput::err(VmRustFnError::from(e)),
         }
     }
 
@@ -452,13 +510,13 @@ impl<T> io::IoClassLlmStreamAccumulator for T {
             ._handle
             .downcast::<bex_resource_types::ResourceHandle>()
         else {
-            return SysOpOutput::err(OpErrorKind::Other(
-                "Invalid stream accumulator handle".into(),
-            ));
+            return SysOpOutput::err(VmBamlError::DevOther {
+                message: "Invalid stream accumulator handle".into(),
+            });
         };
         match sys_llm::stream_accumulator::get_finish_reason(&handle) {
             Ok(reason) => SysOpOutput::ok(reason),
-            Err(e) => SysOpOutput::err(OpErrorKind::from(e)),
+            Err(e) => SysOpOutput::err(VmRustFnError::from(e)),
         }
     }
 
@@ -473,13 +531,13 @@ impl<T> io::IoClassLlmStreamAccumulator for T {
             ._handle
             .downcast::<bex_resource_types::ResourceHandle>()
         else {
-            return SysOpOutput::err(OpErrorKind::Other(
-                "Invalid stream accumulator handle".into(),
-            ));
+            return SysOpOutput::err(VmBamlError::DevOther {
+                message: "Invalid stream accumulator handle".into(),
+            });
         };
         match sys_llm::stream_accumulator::get_input_tokens(&handle) {
             Ok(tokens) => SysOpOutput::ok(tokens.map(u64::cast_signed)),
-            Err(e) => SysOpOutput::err(OpErrorKind::from(e)),
+            Err(e) => SysOpOutput::err(VmRustFnError::from(e)),
         }
     }
 
@@ -494,31 +552,37 @@ impl<T> io::IoClassLlmStreamAccumulator for T {
             ._handle
             .downcast::<bex_resource_types::ResourceHandle>()
         else {
-            return SysOpOutput::err(OpErrorKind::Other(
-                "Invalid stream accumulator handle".into(),
-            ));
+            return SysOpOutput::err(VmBamlError::DevOther {
+                message: "Invalid stream accumulator handle".into(),
+            });
         };
         match sys_llm::stream_accumulator::get_output_tokens(&handle) {
             Ok(tokens) => SysOpOutput::ok(tokens.map(u64::cast_signed)),
-            Err(e) => SysOpOutput::err(OpErrorKind::from(e)),
+            Err(e) => SysOpOutput::err(VmRustFnError::from(e)),
         }
     }
 }
 
 /// Blanket impl — `StreamCache.new()` creates a SAP cache from a type descriptor.
+/// Parameter order follows the BAML decl (`new(streaming, target)` — stream
+/// type first, mirroring `StreamCache<TStream, TFinal>`).
 impl<T> io::IoClassLlmStreamCache for T {
     fn new(
         &self,
         _heap: &std::sync::Arc<BexHeap>,
         _call_id: CallId,
-        target: baml_type::Ty,
-        stream_target: baml_type::Ty,
+        stream_target: baml_type::RuntimeTy,
+        target: baml_type::RuntimeTy,
         ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::llm::StreamCache> {
         let compiled =
             match ::bex_sap::CompiledSapModel::from_sys_op_context(ctx, target, stream_target) {
                 Ok(compiled) => compiled,
-                Err(e) => return SysOpOutput::err(OpErrorKind::Other(e.to_string())),
+                Err(e) => {
+                    return SysOpOutput::err(VmBamlError::InvalidArgument {
+                        message: e.to_string(),
+                    });
+                }
             };
         let sap = ::sys_llm::SapStreamCache::new(compiled);
         let data: std::sync::Arc<dyn std::any::Any + Send + Sync> = std::sync::Arc::new(sap);
@@ -572,10 +636,15 @@ impl<T> io::IoNamespaceLlm for T {
         function_name: String,
         ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
-        let Some(info) = lookup_llm_function(&function_name, &ctx.llm_functions) else {
-            return SysOpOutput::err(OpErrorKind::Other(format!(
-                "LLM function not found: {function_name}"
-            )));
+        // Aligned with `get_constructor`: the function name passed here is
+        // synthesised by the compiler from the call site, so a missing entry
+        // indicates a build artifact mismatch (a synthesis bug), not a
+        // user-recoverable argument error. Ambiguity is surfaced separately
+        // (rather than collapsed to "not found") so debuggers see the
+        // actual failure mode.
+        let outcome = lookup_llm_function(&function_name, &ctx.llm_functions);
+        let sys_types::ResolveOutcome::Found(_, info) = outcome else {
+            return SysOpOutput::err(llm_function_lookup_error(&function_name, &outcome));
         };
         let dedented = sys_llm::preprocess_template(&info.prompt_template);
         let template = if ctx.template_strings_macros.is_empty() {
@@ -603,7 +672,7 @@ impl<T> io::IoNamespaceLlm for T {
         &self,
         _heap: &std::sync::Arc<BexHeap>,
         _call_id: CallId,
-        return_type: baml_type::Ty,
+        return_type: baml_type::RuntimeTy,
         ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
         // BEP-049 §10 (M5b): the `ctx.output_format` schema string.
@@ -614,7 +683,7 @@ impl<T> io::IoNamespaceLlm for T {
         &self,
         _heap: &std::sync::Arc<BexHeap>,
         _call_id: CallId,
-        return_type: baml_type::Ty,
+        return_type: baml_type::RuntimeTy,
         ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::llm::OutputFormat> {
         // BEP-049 §10 (M5b.2): build the opaque schema handle `Context._output_format`
@@ -629,28 +698,12 @@ impl<T> io::IoNamespaceLlm for T {
         _call_id: CallId,
         function_name: String,
         ctx: &SysOpContext,
-    ) -> SysOpOutput<baml_type::Ty> {
-        let Some(info) = lookup_llm_function(&function_name, &ctx.llm_functions) else {
-            return SysOpOutput::err(OpErrorKind::Other(format!(
-                "LLM function not found: {function_name}"
-            )));
+    ) -> SysOpOutput<baml_type::RuntimeTy> {
+        let outcome = lookup_llm_function(&function_name, &ctx.llm_functions);
+        let sys_types::ResolveOutcome::Found(_, info) = outcome else {
+            return SysOpOutput::err(llm_function_lookup_error(&function_name, &outcome));
         };
         SysOpOutput::ok(info.return_type.clone())
-    }
-
-    fn get_stream_return_type(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        function_name: String,
-        ctx: &SysOpContext,
-    ) -> SysOpOutput<baml_type::Ty> {
-        let Some(info) = lookup_llm_function(&function_name, &ctx.llm_functions) else {
-            return SysOpOutput::err(OpErrorKind::Other(format!(
-                "LLM function not found: {function_name}"
-            )));
-        };
-        SysOpOutput::ok(info.stream_return_type.clone())
     }
 
     fn from_shorthand(
@@ -683,7 +736,9 @@ impl<T> io::IoNamespaceLlm for T {
             if let Ok(Some(val)) = io.env_get(env_var.to_string()).await {
                 client.options.api_key = Some(val);
             }
-            Ok(client)
+            // Body never errors; annotate the error type so the
+            // `Result<_, VmRustFnError>` return contract is locked in.
+            Ok::<_, bex_vm_types::errors::VmRustFnError>(client)
         })
     }
 
@@ -693,17 +748,17 @@ impl<T> io::IoNamespaceLlm for T {
         _call_id: CallId,
         json: String,
         cache: io::owned::llm::StreamCache,
-        _type_arg_0: baml_type::Ty,
-        _type_arg_1: baml_type::Ty,
+        _type_arg_0: baml_type::RuntimeTy,
+        _type_arg_1: baml_type::RuntimeTy,
         ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
         let Ok(sap) = cache._data.downcast::<::sys_llm::SapStreamCache>() else {
-            return SysOpOutput::err(OpErrorKind::Other(
-                "Invalid StreamCache: expected SapStreamCache".into(),
-            ));
+            return SysOpOutput::err(VmBamlError::DevOther {
+                message: "Invalid StreamCache: expected SapStreamCache".into(),
+            });
         };
         SysOpOutput::Ready(
-            sys_llm::execute_sap_parse_final(&json, &sap, ctx).map_err(OpErrorKind::from),
+            sys_llm::execute_sap_parse_final(&json, &sap, ctx).map_err(VmRustFnError::from),
         )
     }
 
@@ -713,14 +768,14 @@ impl<T> io::IoNamespaceLlm for T {
         _call_id: CallId,
         json: String,
         cache: io::owned::llm::StreamCache,
-        _type_arg_0: baml_type::Ty,
-        _type_arg_1: baml_type::Ty,
+        _type_arg_0: baml_type::RuntimeTy,
+        _type_arg_1: baml_type::RuntimeTy,
         ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
         let Ok(sap) = cache._data.downcast::<::sys_llm::SapStreamCache>() else {
-            return SysOpOutput::err(OpErrorKind::Other(
-                "Invalid StreamCache: expected SapStreamCache".into(),
-            ));
+            return SysOpOutput::err(VmBamlError::DevOther {
+                message: "Invalid StreamCache: expected SapStreamCache".into(),
+            });
         };
         let result = match sys_llm::execute_sap_parse_partial(&json, &sap, ctx) {
             Ok(Some(value)) => Ok(value),
@@ -728,7 +783,7 @@ impl<T> io::IoNamespaceLlm for T {
                 "baml.stream.StreamNoYield",
                 ::indexmap::IndexMap::new(),
             )),
-            Err(e) => Err(OpErrorKind::from(e)),
+            Err(e) => Err(VmRustFnError::from(e)),
         };
         SysOpOutput::Ready(result)
     }
@@ -901,7 +956,9 @@ impl io::IoClassFsFile for DefaultIoOps {
         _f: io::owned::fs::File,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
     fn bytes(
         &self,
@@ -910,7 +967,9 @@ impl io::IoClassFsFile for DefaultIoOps {
         _f: io::owned::fs::File,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Vec<u8>> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
     fn read(
         &self,
@@ -920,7 +979,9 @@ impl io::IoClassFsFile for DefaultIoOps {
         _n: i64,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
     fn read_bytes(
         &self,
@@ -930,7 +991,9 @@ impl io::IoClassFsFile for DefaultIoOps {
         _n: i64,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Vec<u8>> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
     fn close(
         &self,
@@ -939,7 +1002,9 @@ impl io::IoClassFsFile for DefaultIoOps {
         _f: io::owned::fs::File,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
     fn seek_from(
         &self,
@@ -950,7 +1015,9 @@ impl io::IoClassFsFile for DefaultIoOps {
         _offset: i64,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
     fn write(
         &self,
@@ -960,7 +1027,9 @@ impl io::IoClassFsFile for DefaultIoOps {
         _data: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
     fn write_bytes(
         &self,
@@ -970,7 +1039,9 @@ impl io::IoClassFsFile for DefaultIoOps {
         _data: Vec<u8>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 }
 
@@ -983,7 +1054,9 @@ impl io::IoNamespaceFs for DefaultIoOps {
         _mode: BexExternalValue,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::fs::File> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 
     fn exists(
@@ -993,7 +1066,9 @@ impl io::IoNamespaceFs for DefaultIoOps {
         _path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<bool> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 
     fn remove(
@@ -1003,7 +1078,9 @@ impl io::IoNamespaceFs for DefaultIoOps {
         _path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 
     fn size(
@@ -1013,7 +1090,9 @@ impl io::IoNamespaceFs for DefaultIoOps {
         _path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 
     fn read(
@@ -1023,7 +1102,9 @@ impl io::IoNamespaceFs for DefaultIoOps {
         _path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 
     fn write(
@@ -1034,7 +1115,9 @@ impl io::IoNamespaceFs for DefaultIoOps {
         _content: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 
     fn write_bytes(
@@ -1045,7 +1128,9 @@ impl io::IoNamespaceFs for DefaultIoOps {
         _content: Vec<u8>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 
     fn read_dir(
@@ -1055,7 +1140,9 @@ impl io::IoNamespaceFs for DefaultIoOps {
         _path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Vec<io::owned::fs::DirEntry>> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 
     fn mkdir(
@@ -1066,7 +1153,9 @@ impl io::IoNamespaceFs for DefaultIoOps {
         _options: io::owned::fs::MkdirOptions,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 }
 
@@ -1078,7 +1167,9 @@ impl io::IoClassHttpResponse for DefaultIoOps {
         _r: io::owned::http::Response,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
     fn bytes(
         &self,
@@ -1087,7 +1178,72 @@ impl io::IoClassHttpResponse for DefaultIoOps {
         _r: io::owned::http::Response,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Vec<u8>> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+    fn new(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _status_code: i64,
+        _headers: indexmap::IndexMap<String, String>,
+        _body: Vec<u8>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::http::Response> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+}
+
+impl io::IoClassHttpTlsConfig for DefaultIoOps {
+    fn _new(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _cert_pem: Vec<u8>,
+        _key_pem: Vec<u8>,
+        _allow_tls1_2: bool,
+        _handshake_timeout_nanos: Arc<num_bigint::BigInt>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::http::TlsConfig> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+}
+
+impl io::IoClassHttpServer for DefaultIoOps {
+    fn bind(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _addr: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::http::Server> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    fn _serve(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _server: io::owned::http::Server,
+        _handler: bex_external_types::Handle,
+        _tls_config: Option<io::owned::http::TlsConfig>,
+        _allow_http1: bool,
+        _allow_http2: bool,
+        _max_body_size: i64,
+        _max_connections: i64,
+        _header_read_timeout_nanos: Arc<num_bigint::BigInt>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 }
 
@@ -1099,7 +1255,9 @@ impl io::IoClassHttpSseStream for DefaultIoOps {
         _s: io::owned::http::SseStream,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Option<String>> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
     fn close(
         &self,
@@ -1108,7 +1266,9 @@ impl io::IoClassHttpSseStream for DefaultIoOps {
         _s: io::owned::http::SseStream,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 }
 
@@ -1120,7 +1280,9 @@ impl io::IoNamespaceHttp for DefaultIoOps {
         _url: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::Response> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
     fn send(
         &self,
@@ -1129,7 +1291,9 @@ impl io::IoNamespaceHttp for DefaultIoOps {
         _req: io::owned::http::Request,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::Response> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
     fn fetch_sse(
         &self,
@@ -1138,82 +1302,146 @@ impl io::IoNamespaceHttp for DefaultIoOps {
         _req: io::owned::http::Request,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::SseStream> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 }
 
-impl io::IoClassNetSocket for DefaultIoOps {
-    fn read(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _s: io::owned::net::Socket,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<String> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
-    }
-    fn write(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _s: io::owned::net::Socket,
-        _data: String,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
-    }
-    fn close(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _s: io::owned::net::Socket,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
-    }
-}
-
-impl io::IoClassNetTcpListener for DefaultIoOps {
-    fn accept(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _l: io::owned::net::TcpListener,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::net::Socket> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
-    }
-    fn close(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _l: io::owned::net::TcpListener,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
-    }
-}
-
-impl io::IoNamespaceNet for DefaultIoOps {
+impl io::IoClassNetTcpStream for DefaultIoOps {
     fn connect(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
         _addr: String,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::net::Socket> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+    ) -> SysOpOutput<io::owned::net::TcpStream> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
-    fn listen(
+    fn read(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _s: io::owned::net::TcpStream,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Vec<u8>> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+    fn write(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _s: io::owned::net::TcpStream,
+        _data: Vec<u8>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+    fn close(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _s: io::owned::net::TcpStream,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+}
+
+impl io::IoClassNetTcpListener for DefaultIoOps {
+    fn bind(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
         _addr: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::net::TcpListener> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+    fn accept(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _l: io::owned::net::TcpListener,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::net::TcpStream> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+    fn close(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _l: io::owned::net::TcpListener,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 }
+
+impl io::IoClassNetUdpSocket for DefaultIoOps {
+    fn bind(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _addr: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::net::UdpSocket> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+    fn send_to(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _s: io::owned::net::UdpSocket,
+        _data: Vec<u8>,
+        _addr: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<i64> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+    fn recv_from(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _s: io::owned::net::UdpSocket,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::net::Datagram> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+    fn close(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _s: io::owned::net::UdpSocket,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+}
+
+impl io::IoNamespaceNet for DefaultIoOps {}
 
 impl io::IoNamespaceEnv for DefaultIoOps {
     fn get(
@@ -1223,7 +1451,9 @@ impl io::IoNamespaceEnv for DefaultIoOps {
         _key: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Option<String>> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 }
 
@@ -1235,7 +1465,9 @@ impl io::IoNamespaceIo for DefaultIoOps {
         _prompt: Option<String>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
     fn print(
         &self,
@@ -1244,7 +1476,9 @@ impl io::IoNamespaceIo for DefaultIoOps {
         _s: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
     fn println(
         &self,
@@ -1253,7 +1487,9 @@ impl io::IoNamespaceIo for DefaultIoOps {
         _s: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
     fn eprint(
         &self,
@@ -1262,7 +1498,9 @@ impl io::IoNamespaceIo for DefaultIoOps {
         _s: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
     fn eprintln(
         &self,
@@ -1271,7 +1509,9 @@ impl io::IoNamespaceIo for DefaultIoOps {
         _s: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 }
 
@@ -1285,7 +1525,9 @@ impl io::IoNamespaceSys for DefaultIoOps {
         _options: Option<io::owned::sys::ProcessOptions>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::sys::ShellOutput> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 
     fn shell(
@@ -1296,7 +1538,9 @@ impl io::IoNamespaceSys for DefaultIoOps {
         _options: Option<io::owned::sys::ProcessOptions>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::sys::ShellOutput> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 
     fn sleep(
@@ -1306,7 +1550,9 @@ impl io::IoNamespaceSys for DefaultIoOps {
         _ms: i64,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 }
 
@@ -1319,7 +1565,9 @@ impl io::IoClassGlobGlob for DefaultIoOps {
         _root: BexExternalValue,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Vec<String>> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 
     fn matches(
@@ -1330,7 +1578,9 @@ impl io::IoClassGlobGlob for DefaultIoOps {
         _path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<bool> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 }
 
@@ -1342,7 +1592,9 @@ impl io::IoNamespaceGlob for DefaultIoOps {
         _pattern: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::glob::Glob> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 }
 
@@ -1353,10 +1605,13 @@ impl io::IoNamespaceHost for DefaultIoOps {
         _call_id: CallId,
         _handle: BexExternalValue,
         _args: Vec<BexExternalValue>,
-        _type_arg_0: baml_type::Ty,
+        _type_arg_0: baml_type::RuntimeTy,
+        _type_arg_1: baml_type::RuntimeTy,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 }
 
@@ -1367,11 +1622,51 @@ impl io::IoClassTimeInstant for DefaultIoOps {
         _c: CallId,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::time::Instant> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 }
 
-impl io::IoNamespaceTime for DefaultIoOps {}
+impl io::IoNamespaceTime for DefaultIoOps {
+    fn system_timezone(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    fn _tz_offset_at(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _timezone: String,
+        _at_ns: Arc<num_bigint::BigInt>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<i64>> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    fn _tz_to_instant(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _timezone: String,
+        _civil_ns: Arc<num_bigint::BigInt>,
+        _disambiguation: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<Arc<num_bigint::BigInt>>> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+}
 
 impl io::IoPackageBaml for DefaultIoOps {}
 
@@ -1663,9 +1958,33 @@ impl IoSysOpsBuilder {
             })
         };
         self.inner.baml_http_ssestream_close = {
-            let t = instance;
+            let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
                 t.__glue_baml_http_ssestream_close(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_http_response_new = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_http_response_new(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_http_tlsconfig__new = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_http_tlsconfig__new(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_http_server_bind = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_http_server_bind(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_http_server__serve = {
+            let t = instance;
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_http_server__serve(heap, permit, args, ctx, call_id)
             })
         };
         self
@@ -1677,40 +1996,41 @@ impl IoSysOpsBuilder {
         self.with_http_instance(Arc::new(T::default()))
     }
 
-    /// Override the `net` namespace (including `net.Socket` methods) with a pre-built instance.
+    /// Override the `net` namespace (`TcpStream` / `TcpListener` / `UdpSocket`
+    /// methods) with a pre-built instance.
     #[must_use]
     pub fn with_net_instance(
         mut self,
         instance: Arc<dyn io::IoNamespaceNet + Send + Sync + 'static>,
     ) -> Self {
-        self.inner.baml_net_connect = {
+        self.inner.baml_net_tcpstream_connect = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_connect(heap, permit, args, ctx, call_id)
+                t.__glue_baml_net_tcpstream_connect(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_net_listen = {
+        self.inner.baml_net_tcpstream_read = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_listen(heap, permit, args, ctx, call_id)
+                t.__glue_baml_net_tcpstream_read(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_net_socket_read = {
+        self.inner.baml_net_tcpstream_write = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_socket_read(heap, permit, args, ctx, call_id)
+                t.__glue_baml_net_tcpstream_write(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_net_socket_write = {
+        self.inner.baml_net_tcpstream_close = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_socket_write(heap, permit, args, ctx, call_id)
+                t.__glue_baml_net_tcpstream_close(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_net_socket_close = {
+        self.inner.baml_net_tcplistener_bind = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_socket_close(heap, permit, args, ctx, call_id)
+                t.__glue_baml_net_tcplistener_bind(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_net_tcplistener_accept = {
@@ -1720,9 +2040,33 @@ impl IoSysOpsBuilder {
             })
         };
         self.inner.baml_net_tcplistener_close = {
-            let t = instance;
+            let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
                 t.__glue_baml_net_tcplistener_close(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_net_udpsocket_bind = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_net_udpsocket_bind(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_net_udpsocket_send_to = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_net_udpsocket_send_to(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_net_udpsocket_recv_from = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_net_udpsocket_recv_from(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_net_udpsocket_close = {
+            let t = instance;
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_net_udpsocket_close(heap, permit, args, ctx, call_id)
             })
         };
         self
@@ -1829,8 +2173,8 @@ use ::bex_heap::{BexExternalValue, BexHeap};
 use ::std::sync::Arc;
 // Re-export io::SysOps as the primary SysOps type.
 use ::sys_types::{
-    AsBexExternalValue as _, CallId, FunctionRef, LlmFunctionInfo, OpErrorKind, SysOpContext,
-    SysOpOutput,
+    AsBexExternalValue as _, CallId, FunctionRef, LlmFunctionInfo, SysOpContext, SysOpOutput,
+    VmBamlError, VmRustFnError,
 };
 pub use io::SysOps;
 
@@ -1865,7 +2209,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_unsupported_returns_error() {
-        use sys_types::{OpErrorKind, SysOpResult};
+        use bex_vm_types::errors::{VmBamlError, VmRustFnError};
+        use sys_types::SysOpResult;
 
         let heap = test_heap();
         let ctx = test_ctx();
@@ -1874,7 +2219,12 @@ mod tests {
         let result = op(&heap, permit.proof(), vec![], &ctx, CallId::next());
         match result {
             SysOpResult::Ready(Err(e)) => {
-                assert!(matches!(e.kind, OpErrorKind::Unsupported));
+                assert!(matches!(
+                    e.payload,
+                    sys_types::OpErrorPayload::Vm(VmRustFnError::BamlError(
+                        VmBamlError::Unsupported { .. }
+                    ))
+                ));
                 assert_eq!(e.fn_name, SysOp::BamlSysShell);
             }
             _ => panic!("Expected Unsupported error"),
@@ -1883,7 +2233,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_all_unsupported() {
-        use sys_types::{OpError, OpErrorKind, SysOpResult};
+        use bex_vm_types::errors::{VmBamlError, VmRustFnError};
+        use sys_types::{OpError, SysOpResult};
 
         let heap = test_heap();
         let ctx = test_ctx();
@@ -1896,7 +2247,9 @@ mod tests {
             result,
             SysOpResult::Ready(Err(OpError {
                 fn_name: SysOp::BamlFsOpen,
-                kind: OpErrorKind::Unsupported,
+                payload: sys_types::OpErrorPayload::Vm(VmRustFnError::BamlError(
+                    VmBamlError::Unsupported { .. }
+                )),
             }))
         ));
 
@@ -1906,7 +2259,9 @@ mod tests {
             result,
             SysOpResult::Ready(Err(OpError {
                 fn_name: SysOp::BamlSysShell,
-                kind: OpErrorKind::Unsupported,
+                payload: sys_types::OpErrorPayload::Vm(VmRustFnError::BamlError(
+                    VmBamlError::Unsupported { .. }
+                )),
             }))
         ));
     }
@@ -1943,7 +2298,9 @@ mod tests {
         let err = shorthand_to_primitive_client("openai").unwrap_err();
         assert_eq!(
             err,
-            OpErrorKind::Other("Invalid short hand name: openai".to_string())
+            VmRustFnError::from(VmBamlError::InvalidArgument {
+                message: "Invalid short hand name: openai".to_string()
+            })
         );
     }
 }

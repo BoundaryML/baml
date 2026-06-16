@@ -6,7 +6,12 @@
  * gives exhaustive switch narrowing.
  */
 
-import type { BamlJsValue, PlainHandleDescriptor, SourceLocation, TagEntry } from '@b/pkg-proto';
+import type {
+  BamlJsValue,
+  PlainHandleDescriptor,
+  SourceLocation,
+  TagEntry,
+} from '@b/pkg-proto';
 
 /** Runtime event with BamlOutboundValue fields deserialized to BamlJsValue. */
 export interface DeserializedRuntimeEvent {
@@ -19,9 +24,23 @@ export interface DeserializedRuntimeEvent {
 }
 
 export type DeserializedEventKind =
-  | { $case: 'functionStart'; functionStart: { name: string; args: BamlJsValue[] } }
-  | { $case: 'functionEnd'; functionEnd: { name: string; durationMs: number; result: BamlJsValue | null; error?: string | null } }
-  | { $case: 'log'; log: { data: BamlJsValue | null; level: string; source?: SourceLocation } }
+  | {
+      $case: 'functionStart';
+      functionStart: { name: string; args: BamlJsValue[] };
+    }
+  | {
+      $case: 'functionEnd';
+      functionEnd: {
+        name: string;
+        durationMs: number;
+        result: BamlJsValue | null;
+        error?: string | null;
+      };
+    }
+  | {
+      $case: 'log';
+      log: { data: BamlJsValue | null; level: string; source?: SourceLocation };
+    }
   | { $case: 'custom'; custom: { name: string; data: BamlJsValue | null } }
   | { $case: 'setTags'; setTags: { tags: TagEntry[] } };
 
@@ -50,10 +69,11 @@ interface SourceNavigationTargetBase {
   endOffset?: number;
 }
 
-export type SourceNavigationTarget = SourceNavigationTargetBase & (
-  | { fileId: number; filePath?: string }
-  | { filePath: string; fileId?: number }
-);
+export type SourceNavigationTarget = SourceNavigationTargetBase &
+  (
+    | { fileId: number; filePath?: string }
+    | { filePath: string; fileId?: number }
+  );
 
 // ---------------------------------------------------------------------------
 // Shared domain types
@@ -100,10 +120,27 @@ export interface ProjectUpdate {
 export type PlaygroundNotification =
   | { type: 'listProjects'; projects: string[] }
   | { type: 'updateProject'; project: string; update: ProjectUpdate }
-  | { type: 'openPlayground'; project: string; functionName?: string }
-  | { type: 'controlFlowGraphResult'; functionName: string; graph: ControlFlowGraph | null }
+  | {
+      type: 'openPlayground';
+      project: string;
+      functionName?: string;
+      testName?: string;
+      testsetName?: string;
+    }
+  | {
+      type: 'controlFlowGraphResult';
+      functionName: string;
+      graph: ControlFlowGraph | null;
+    }
   | { type: 'cursorContext'; context: CursorContext }
-  | { type: 'testCollectionResult'; project: string; generation: number; callId: number; data: number[]; expandError?: { testsetName: string; message: string } }
+  | {
+      type: 'testCollectionResult';
+      project: string;
+      generation: number;
+      callId: number;
+      data: number[];
+      expandError?: { testsetName: string; message: string };
+    }
   | { type: 'runtimeEvent'; data: number[]; callId?: number };
 
 // ---------------------------------------------------------------------------
@@ -117,7 +154,8 @@ export type CfgNodeType =
   | 'branchGroup'
   | 'branchArm'
   | 'loop'
-  | 'otherScope';
+  | 'otherScope'
+  | 'return';
 
 export interface CfgNode {
   id: number;
@@ -129,6 +167,10 @@ export interface CfgNode {
   nodeType: CfgNodeType;
   llmClient?: string;
   calleeName?: string;
+  /** ALL functions called anywhere inside this node's expression subtree
+   *  (e.g. an if-condition `Abs(LineTotal(x))` reports both). Superset of
+   *  calleeName. Absent on older runtimes. */
+  calleeNames?: string[];
   isContainer: boolean;
 }
 
@@ -212,22 +254,46 @@ export type WorkerOutMessage =
   | { type: 'ready' }
   | { type: 'playgroundNotification'; notification: PlaygroundNotification }
   | { type: 'diagnostics'; entries: DiagnosticEntry[] }
-  | { type: 'callFunctionResult'; id: number; result: BamlJsValue<PlainHandleDescriptor> }
-  | { type: 'callFunctionError'; id: number; error: string; cancelled?: boolean }
+  | {
+      type: 'callFunctionResult';
+      id: number;
+      result: BamlJsValue<PlainHandleDescriptor>;
+    }
+  | {
+      type: 'callFunctionError';
+      id: number;
+      error: string;
+      cancelled?: boolean;
+    }
+  | { type: 'nextFunctionCallResult'; id: number; callId: number }
+  | { type: 'nextFunctionCallError'; id: number; error: string }
   | { type: 'fetchLogNew'; entry: FetchLogEntry }
   | { type: 'fetchLogUpdate'; logId: number; patch: Partial<FetchLogEntry> }
-  | { type: 'runtimeEventNew'; event: DeserializedRuntimeEvent; callId: number | null }
+  | {
+      type: 'runtimeEventNew';
+      event: DeserializedRuntimeEvent;
+      callId: number | null;
+    }
   | { type: 'runtimeEventError'; error: string }
   | { type: 'envVarRequest'; id: number; variable: string }
   | { type: 'processEnvVars'; vars: Record<string, string> }
   | { type: 'envVarFromShell'; variable: string; value: string }
   | { type: 'knownEnvVarNames'; names: string[] }
-  | { type: 'inputRequest'; id: number; prompt: string | undefined; callId: number }
+  | {
+      type: 'inputRequest';
+      id: number;
+      prompt: string | undefined;
+      callId: number;
+    }
   | { type: 'inputResolved'; id: number; callId: number }
   | { type: 'vfsFileChanged'; path: string; content: string }
   | { type: 'vfsFileDeleted'; path: string }
   | { type: 'buildTime'; value: string }
-  | { type: 'controlFlowGraphResult'; functionName: string; graph: ControlFlowGraph | null }
+  | {
+      type: 'controlFlowGraphResult';
+      functionName: string;
+      graph: ControlFlowGraph | null;
+    }
   | { type: 'cursorContext'; context: CursorContext }
   | { type: 'logDecorations'; decorations: LogDecoration[] }
   | { type: 'clearLogDecorations' }
@@ -238,10 +304,22 @@ export type WorkerOutMessage =
 // ---------------------------------------------------------------------------
 
 export type WorkerInMessage =
-  | { type: 'callFunction'; id: number; name: string; argsProto: Uint8Array; project: string }
+  | { type: 'nextFunctionCall'; id: number }
+  | {
+      type: 'callFunction';
+      id: number;
+      name: string;
+      argsProto: Uint8Array;
+      project: string;
+    }
   | { type: 'cancelCall'; id: number; project: string }
   | { type: 'clearHandles'; runIds: number[] }
-  | { type: 'envVarResponse'; id: number; value: string | undefined; variable?: string }
+  | {
+      type: 'envVarResponse';
+      id: number;
+      value: string | undefined;
+      variable?: string;
+    }
   | { type: 'inputResponse'; id: number; value: string; callId: number }
   | { type: 'setEnvVar'; key: string; value: string }
   | { type: 'deleteEnvVar'; key: string }
@@ -250,8 +328,19 @@ export type WorkerInMessage =
   | { type: 'requestControlFlowGraph'; project: string; functionName: string }
   | { type: 'cursorPosition'; file: string; line: number; column: number }
   | { type: 'requestCollectTests'; project: string }
-  | { type: 'callTestFunction'; id: number; project: string; generation: number; testName: string }
-  | { type: 'expandTestSet'; project: string; generation: number; testsetName: string }
+  | {
+      type: 'callTestFunction';
+      id: number;
+      project: string;
+      generation: number;
+      testName: string;
+    }
+  | {
+      type: 'expandTestSet';
+      project: string;
+      generation: number;
+      testsetName: string;
+    }
   | { type: 'filesChanged'; files: Record<string, string> }
   | { type: 'dispose' };
 

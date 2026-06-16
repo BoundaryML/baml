@@ -14,9 +14,10 @@ function user.AppError.from_json(j: baml.json.json) -> AppError {
 }
 
 function user.AppError.to_json(self: AppError) -> baml.json.json {
+    load_type int
     load_var self
     load_field .code
-    call baml.Int.to_json
+    call baml.json.to_json
     load_const "code"
     alloc_map 1
     return
@@ -35,9 +36,10 @@ function user.PatternBucket.from_json(j: baml.json.json) -> PatternBucket {
 }
 
 function user.PatternBucket.to_json(self: PatternBucket) -> baml.json.json {
+    load_type int[]
     load_var self
     load_field .values
-    call baml.Array.to_json
+    call baml.json.to_json
     load_const "values"
     alloc_map 1
     return
@@ -56,9 +58,10 @@ function user.PatternMatrix.from_json(j: baml.json.json) -> PatternMatrix {
 }
 
 function user.PatternMatrix.to_json(self: PatternMatrix) -> baml.json.json {
+    load_type int[][]
     load_var self
     load_field .rows
-    call baml.Array.to_json
+    call baml.json.to_json
     load_const "rows"
     alloc_map 1
     return
@@ -81,7 +84,7 @@ function user.bare_type_arm(v: int | string) -> int {
     return
 }
 
-function user.call_either_int_caller(cb: (int) -> int throws never | (bool) -> int throws never) -> int {
+function user.call_either_int_caller(cb: ((int) -> int throws never) | ((bool) -> int throws never)) -> int {
     load_var cb
     is_type (int) -> int throws never
     pop_jump_if_false L0
@@ -105,7 +108,7 @@ function user.call_int_callback(cb: (int) -> int throws never) -> int {
     return
 }
 
-function user.call_with_callback(runner: ((int) -> int throws never) -> int throws never | ((string) -> int throws never) -> int throws never) -> int {
+function user.call_with_callback(runner: (((int) -> int throws never) -> int throws never) | (((string) -> int throws never) -> int throws never)) -> int {
     load_var runner
     is_type ((int) -> int throws never) -> int throws never
     pop_jump_if_false L0
@@ -225,7 +228,7 @@ function user.chain_narrow_then_wildcard(v: int | string | bool) -> int {
     return
 }
 
-function user.dispatch_callback(cb: (int) -> int throws never | (string) -> string throws never) -> int {
+function user.dispatch_callback(cb: ((int) -> int throws never) | ((string) -> string throws never)) -> int {
     load_var cb
     is_type (int) -> int throws never
     pop_jump_if_false L0
@@ -244,7 +247,7 @@ function user.dispatch_callback(cb: (int) -> int throws never | (string) -> stri
     return
 }
 
-function user.dispatch_with_wildcard(cb: (int) -> int throws never | (string) -> int throws never) -> int {
+function user.dispatch_with_wildcard(cb: ((int) -> int throws never) | ((string) -> int throws never)) -> int {
     load_var cb
     is_type (int) -> int throws never
     pop_jump_if_false L0
@@ -292,95 +295,511 @@ function user.fn_return_widens(cb: (int) -> int | string throws never) -> int {
 function user.for_let_ascription(items: int[]) -> int {
     load_const 0
     store_var sum
-    load_const 0
-    store_var __for_idx
+    load_type int
+    load_var items
+    call baml.iter.Iterable$for$T[].iter
+    store_var _3
 
   L0:
-    load_var2 3 1
-    container_len
-    cmp_int_op <
+    load_var _3
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L1
-    jump L2
+    jump L20
 
   L1:
-    load_var sum
-    return
+    load_var _3
+    is_type baml.iter.Range
+    pop_jump_if_false L2
+    jump L19
 
   L2:
-    load_var2 1 3
-    load_array_element
+    load_var _3
+    is_type baml.iter.ArrayIterator<...>
+    pop_jump_if_false L3
+    jump L18
+
+  L3:
+    load_var _3
+    is_type baml.iter.StepBy<...>
+    pop_jump_if_false L4
+    jump L17
+
+  L4:
+    load_var _3
+    is_type baml.iter.Chain<...>
+    pop_jump_if_false L5
+    jump L16
+
+  L5:
+    load_var _3
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L6
+    jump L15
+
+  L6:
+    load_var _3
+    is_type baml.iter.Map<...>
+    pop_jump_if_false L7
+    jump L14
+
+  L7:
+    load_var _3
+    is_type baml.iter.Filter<...>
+    pop_jump_if_false L8
+    jump L13
+
+  L8:
+    load_var _3
+    is_type baml.iter.FilterMap<...>
+    pop_jump_if_false L9
+    jump L12
+
+  L9:
+    load_var _3
+    is_type baml.iter.FlatMap<...>
+    pop_jump_if_false L10
+    jump L11
+
+  L10:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L24
+    load_type int
+    load_type never
+    load_var _3
+    call baml.iter.Peekable.Iterator.next
+    store_var _5
+    jump L21
+
+  L11:
+    load_var _3
+    make_bound_method baml.iter.FlatMap.Iterator.next
+    call_indirect
+    store_var _5
+    jump L21
+
+  L12:
+    load_var _3
+    make_bound_method baml.iter.FilterMap.Iterator.next
+    call_indirect
+    store_var _5
+    jump L21
+
+  L13:
+    load_type int
+    load_type never
+    load_type never
+    load_var _3
+    call baml.iter.Filter.Iterator.next
+    store_var _5
+    jump L21
+
+  L14:
+    load_var _3
+    make_bound_method baml.iter.Map.Iterator.next
+    call_indirect
+    store_var _5
+    jump L21
+
+  L15:
+    load_type int
+    load_var _3
+    call baml.iter.Repeat.Iterator.next
+    store_var _5
+    jump L21
+
+  L16:
+    load_type int
+    load_type never
+    load_type never
+    load_var _3
+    call baml.iter.Chain.Iterator.next
+    store_var _5
+    jump L21
+
+  L17:
+    load_type int
+    load_type never
+    load_var _3
+    call baml.iter.StepBy.Iterator.next
+    store_var _5
+    jump L21
+
+  L18:
+    load_type int
+    load_var _3
+    call baml.iter.ArrayIterator.Iterator.next
+    store_var _5
+    jump L21
+
+  L19:
+    load_var _3
+    call baml.iter.Range.Iterator.next
+    store_var _5
+    jump L21
+
+  L20:
+    load_var _3
+    make_bound_method baml.iter.Flatten.Iterator.next
+    call_indirect
+    store_var _5
+
+  L21:
+    load_var _5
+    is_type baml.iter.Done
+    pop_jump_if_false L22
+    jump L23
+
+  L22:
+    load_var _5
     store_var n
     load_var sum
     load_const 1
     add_int
     store_var sum
-    load_var __for_idx
-    load_const 1
-    add_int
-    store_var __for_idx
     jump L0
+
+  L23:
+    load_var sum
+    return
+
+  L24:
+    unreachable
 }
 
 function user.for_let_fn_narrow(items: ((int) -> int throws never)[]) -> int {
     load_const 0
     store_var total
-    load_const 0
-    store_var __for_idx
+    load_type (int) -> int throws never
+    load_var items
+    call baml.iter.Iterable$for$T[].iter
+    store_var _3
 
   L0:
-    load_var2 3 1
-    container_len
-    cmp_int_op <
+    load_var _3
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L1
-    jump L2
+    jump L18
 
   L1:
-    load_var total
-    return
+    load_var _3
+    is_type baml.iter.ArrayIterator<...>
+    pop_jump_if_false L2
+    jump L17
 
   L2:
+    load_var _3
+    is_type baml.iter.StepBy<...>
+    pop_jump_if_false L3
+    jump L16
+
+  L3:
+    load_var _3
+    is_type baml.iter.Chain<...>
+    pop_jump_if_false L4
+    jump L15
+
+  L4:
+    load_var _3
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L5
+    jump L14
+
+  L5:
+    load_var _3
+    is_type baml.iter.Map<...>
+    pop_jump_if_false L6
+    jump L13
+
+  L6:
+    load_var _3
+    is_type baml.iter.Filter<...>
+    pop_jump_if_false L7
+    jump L12
+
+  L7:
+    load_var _3
+    is_type baml.iter.FilterMap<...>
+    pop_jump_if_false L8
+    jump L11
+
+  L8:
+    load_var _3
+    is_type baml.iter.FlatMap<...>
+    pop_jump_if_false L9
+    jump L10
+
+  L9:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L22
+    load_type (int) -> int throws never
+    load_type never
+    load_var _3
+    call baml.iter.Peekable.Iterator.next
+    store_var _5
+    jump L19
+
+  L10:
+    load_var _3
+    make_bound_method baml.iter.FlatMap.Iterator.next
+    call_indirect
+    store_var _5
+    jump L19
+
+  L11:
+    load_var _3
+    make_bound_method baml.iter.FilterMap.Iterator.next
+    call_indirect
+    store_var _5
+    jump L19
+
+  L12:
+    load_type (int) -> int throws never
+    load_type never
+    load_type never
+    load_var _3
+    call baml.iter.Filter.Iterator.next
+    store_var _5
+    jump L19
+
+  L13:
+    load_var _3
+    make_bound_method baml.iter.Map.Iterator.next
+    call_indirect
+    store_var _5
+    jump L19
+
+  L14:
+    load_type (int) -> int throws never
+    load_var _3
+    call baml.iter.Repeat.Iterator.next
+    store_var _5
+    jump L19
+
+  L15:
+    load_type (int) -> int throws never
+    load_type never
+    load_type never
+    load_var _3
+    call baml.iter.Chain.Iterator.next
+    store_var _5
+    jump L19
+
+  L16:
+    load_type (int) -> int throws never
+    load_type never
+    load_var _3
+    call baml.iter.StepBy.Iterator.next
+    store_var _5
+    jump L19
+
+  L17:
+    load_type (int) -> int throws never
+    load_var _3
+    call baml.iter.ArrayIterator.Iterator.next
+    store_var _5
+    jump L19
+
+  L18:
+    load_var _3
+    make_bound_method baml.iter.Flatten.Iterator.next
+    call_indirect
+    store_var _5
+
+  L19:
+    load_var _5
+    is_type baml.iter.Done
+    pop_jump_if_false L20
+    jump L21
+
+  L20:
     load_const 0
-    load_var2 1 3
-    load_array_element
+    load_var _5
     call_indirect
     load_var total
     add_int
     store_var total
-    load_var __for_idx
-    load_const 1
-    add_int
-    store_var __for_idx
     jump L0
+
+  L21:
+    load_var total
+    return
+
+  L22:
+    unreachable
 }
 
 function user.for_let_with_narrow(items: int[]) -> int {
     load_const 0
     store_var sum
-    load_const 0
-    store_var __for_idx
+    load_type int
+    load_var items
+    call baml.iter.Iterable$for$T[].iter
+    store_var _3
 
   L0:
-    load_var2 3 1
-    container_len
-    cmp_int_op <
+    load_var _3
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L1
-    jump L2
+    jump L20
 
   L1:
+    load_var _3
+    is_type baml.iter.Range
+    pop_jump_if_false L2
+    jump L19
+
+  L2:
+    load_var _3
+    is_type baml.iter.ArrayIterator<...>
+    pop_jump_if_false L3
+    jump L18
+
+  L3:
+    load_var _3
+    is_type baml.iter.StepBy<...>
+    pop_jump_if_false L4
+    jump L17
+
+  L4:
+    load_var _3
+    is_type baml.iter.Chain<...>
+    pop_jump_if_false L5
+    jump L16
+
+  L5:
+    load_var _3
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L6
+    jump L15
+
+  L6:
+    load_var _3
+    is_type baml.iter.Map<...>
+    pop_jump_if_false L7
+    jump L14
+
+  L7:
+    load_var _3
+    is_type baml.iter.Filter<...>
+    pop_jump_if_false L8
+    jump L13
+
+  L8:
+    load_var _3
+    is_type baml.iter.FilterMap<...>
+    pop_jump_if_false L9
+    jump L12
+
+  L9:
+    load_var _3
+    is_type baml.iter.FlatMap<...>
+    pop_jump_if_false L10
+    jump L11
+
+  L10:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L24
+    load_type int
+    load_type never
+    load_var _3
+    call baml.iter.Peekable.Iterator.next
+    store_var _5
+    jump L21
+
+  L11:
+    load_var _3
+    make_bound_method baml.iter.FlatMap.Iterator.next
+    call_indirect
+    store_var _5
+    jump L21
+
+  L12:
+    load_var _3
+    make_bound_method baml.iter.FilterMap.Iterator.next
+    call_indirect
+    store_var _5
+    jump L21
+
+  L13:
+    load_type int
+    load_type never
+    load_type never
+    load_var _3
+    call baml.iter.Filter.Iterator.next
+    store_var _5
+    jump L21
+
+  L14:
+    load_var _3
+    make_bound_method baml.iter.Map.Iterator.next
+    call_indirect
+    store_var _5
+    jump L21
+
+  L15:
+    load_type int
+    load_var _3
+    call baml.iter.Repeat.Iterator.next
+    store_var _5
+    jump L21
+
+  L16:
+    load_type int
+    load_type never
+    load_type never
+    load_var _3
+    call baml.iter.Chain.Iterator.next
+    store_var _5
+    jump L21
+
+  L17:
+    load_type int
+    load_type never
+    load_var _3
+    call baml.iter.StepBy.Iterator.next
+    store_var _5
+    jump L21
+
+  L18:
+    load_type int
+    load_var _3
+    call baml.iter.ArrayIterator.Iterator.next
+    store_var _5
+    jump L21
+
+  L19:
+    load_var _3
+    call baml.iter.Range.Iterator.next
+    store_var _5
+    jump L21
+
+  L20:
+    load_var _3
+    make_bound_method baml.iter.Flatten.Iterator.next
+    call_indirect
+    store_var _5
+
+  L21:
+    load_var _5
+    is_type baml.iter.Done
+    pop_jump_if_false L22
+    jump L23
+
+  L22:
+    load_var2 2 4
+    add_int
+    store_var sum
+    jump L0
+
+  L23:
     load_var sum
     return
 
-  L2:
-    load_var2 2 1
-    load_var __for_idx
-    load_array_element
-    add_int
-    store_var sum
-    load_var __for_idx
-    load_const 1
-    add_int
-    store_var __for_idx
-    jump L0
+  L24:
+    unreachable
 }
 
 function user.int_widens_to_alias(v: int | float) -> int {
@@ -404,7 +823,7 @@ function user.nested_paren_union_array_one(items: (int | string)[]) -> int {
     return
 }
 
-function user.nested_paren_union_array_optional(v: (int | string)[]?) -> int {
+function user.nested_paren_union_array_optional(v: (int | string)[] | null) -> int {
     load_const 1
     return
 }
@@ -423,31 +842,6 @@ function user.nested_paren_union_array_two(items: (int | string)[]) -> int {
 
 function user.or_with_repeated_bare_binding(v: int) -> int {
     load_var v
-    is_type int
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
-    load_var v
-    is_type int
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    load_var v
-    is_type int
-    pop_jump_if_false L4
-    load_var v
-    jump L4
-
-  L2:
-    load_var v
-    jump L4
-
-  L3:
-    load_var v
-
-  L4:
     return
 }
 
@@ -515,7 +909,7 @@ function user.risky_error(mode: int) -> int {
     throw
 }
 
-function user.unwrap_curried(f: (int) -> ((int) -> ((int) -> int throws never) throws never) throws never | (string) -> ((string) -> string throws never) throws never) -> int {
+function user.unwrap_curried(f: ((int) -> ((int) -> ((int) -> int throws never) throws never) throws never) | ((string) -> ((string) -> string throws never) throws never)) -> int {
     load_var f
     is_type (int) -> ((int) -> ((int) -> int throws never) throws never) throws never
     pop_jump_if_false L0
@@ -542,9 +936,9 @@ function user.unwrap_curried(f: (int) -> ((int) -> ((int) -> int throws never) t
     return
 }
 
-function user.unwrap_typed(cb: (int) -> void throws never | (string) -> void throws never) -> void {
+function user.unwrap_typed(cb: ((int) -> T throws never) | ((string) -> T throws never)) -> T {
     load_var cb
-    is_type (int) -> void throws never
+    is_type (int) -> T throws never
     pop_jump_if_false L0
     jump L1
 

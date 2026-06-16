@@ -101,13 +101,14 @@ function type_reflection.GetBar$parse(json: string, client: baml.llm.Client) -> 
     store_var client
 
   L0:
-    load_const "GetBar"
+    load_type type_reflection.Bar$stream | null
+    load_type type_reflection.Bar
     load_var json
     call baml.llm.parse
     return
 }
 
-function type_reflection.GetBar$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<null | type_reflection.Bar$stream, type_reflection.Bar> {
+function type_reflection.GetBar$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<type_reflection.Bar$stream | null, type_reflection.Bar> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -116,8 +117,9 @@ function type_reflection.GetBar$parse_stream(sse: baml.http.SseStream, client: b
     store_var client
 
   L0:
+    load_type type_reflection.Bar$stream | null
+    load_type type_reflection.Bar
     load_var2 2 1
-    load_const "GetBar"
     call baml.llm.Client.__make_stream
     return
 }
@@ -138,7 +140,7 @@ function type_reflection.GetBar$render_prompt(client: baml.llm.Client) -> baml.l
     return
 }
 
-function type_reflection.GetBar$stream(client: baml.llm.Client) -> baml.llm.Stream<null | type_reflection.Bar$stream, type_reflection.Bar> {
+function type_reflection.GetBar$stream(client: baml.llm.Client) -> baml.llm.Stream<type_reflection.Bar$stream | null, type_reflection.Bar> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -147,6 +149,8 @@ function type_reflection.GetBar$stream(client: baml.llm.Client) -> baml.llm.Stre
     store_var client
 
   L0:
+    load_type type_reflection.Bar$stream | null
+    load_type type_reflection.Bar
     load_var client
     load_const "GetBar"
     alloc_map 0
@@ -214,13 +218,14 @@ function type_reflection.GetFoo$parse(json: string, client: baml.llm.Client) -> 
     store_var client
 
   L0:
-    load_const "GetFoo"
+    load_type type_reflection.Foo$stream | null
+    load_type type_reflection.Foo
     load_var json
     call baml.llm.parse
     return
 }
 
-function type_reflection.GetFoo$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<null | type_reflection.Foo$stream, type_reflection.Foo> {
+function type_reflection.GetFoo$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<type_reflection.Foo$stream | null, type_reflection.Foo> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -229,8 +234,9 @@ function type_reflection.GetFoo$parse_stream(sse: baml.http.SseStream, client: b
     store_var client
 
   L0:
+    load_type type_reflection.Foo$stream | null
+    load_type type_reflection.Foo
     load_var2 2 1
-    load_const "GetFoo"
     call baml.llm.Client.__make_stream
     return
 }
@@ -251,7 +257,7 @@ function type_reflection.GetFoo$render_prompt(client: baml.llm.Client) -> baml.l
     return
 }
 
-function type_reflection.GetFoo$stream(client: baml.llm.Client) -> baml.llm.Stream<null | type_reflection.Foo$stream, type_reflection.Foo> {
+function type_reflection.GetFoo$stream(client: baml.llm.Client) -> baml.llm.Stream<type_reflection.Foo$stream | null, type_reflection.Foo> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -260,6 +266,8 @@ function type_reflection.GetFoo$stream(client: baml.llm.Client) -> baml.llm.Stre
     store_var client
 
   L0:
+    load_type type_reflection.Foo$stream | null
+    load_type type_reflection.Foo
     load_var client
     load_const "GetFoo"
     alloc_map 0
@@ -298,6 +306,7 @@ function type_reflection.deep_equals_type_values_different_fn() -> bool {
     load_const "GetBar"
     sys_op baml.llm.get_return_type
     store_var b
+    load_type type
     load_var2 1 2
     call baml.deep_equals
     return
@@ -310,6 +319,7 @@ function type_reflection.deep_equals_type_values_same_fn() -> bool {
     load_const "GetFoo"
     sys_op baml.llm.get_return_type
     store_var b
+    load_type type
     load_var2 1 2
     call baml.deep_equals
     return

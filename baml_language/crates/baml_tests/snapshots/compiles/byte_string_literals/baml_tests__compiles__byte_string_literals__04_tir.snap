@@ -26,10 +26,10 @@ function user.ByteStringStandardEscapes() -> int throws never {
     data.length() : int
   }
 }
-function user.ByteStringIndexAccess() -> int? throws never {
-  { : int?
+function user.ByteStringIndexAccess() -> int | null throws never {
+  { : int | null
     let data = b"<3 bytes>" : uint8array
-    data.at(0) : int?
+    data.at(0) : int | null
   }
 }
 function user.ByteStringInCondition() -> int throws never {
@@ -54,11 +54,11 @@ function user.ByteStringPassAndReturn(data: uint8array) -> int throws never {
     data.length() : int
   }
 }
-function user.ByteStringMutate() -> int? throws never {
-  { : int?
+function user.ByteStringMutate() -> int | null throws never {
+  { : int | null
     let data = b"<3 bytes>" : uint8array
     data[0] = 42 : 42
-    data.at(0) : int?
+    data.at(0) : int | null
   }
 }
 function user.ByteStringDirectIndexRead() -> int throws never {

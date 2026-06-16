@@ -37,9 +37,6 @@ struct BexMulitProject {
     projects:
         std::sync::Arc<std::sync::Mutex<HashMap<crate::fs::FsPath, std::sync::Arc<LiveProject>>>>,
     sys_op_factory: SysOpFactory,
-    event_sink: Option<std::sync::Arc<dyn bex_events::EventSink>>,
-    #[allow(dead_code)] // TODO: reserved for upcoming playground integration
-    playground_state: std::sync::Arc<std::sync::Mutex<PlaygroundState>>,
     sender: std::sync::Arc<dyn LspClientSenderTrait + Send + Sync>,
     playground_sender: std::sync::Arc<dyn crate::bex_lsp::PlaygroundSender>,
 
@@ -85,84 +82,6 @@ pub trait LspClientSenderTrait {
     fn make_request(&self, msg: lsp_server::Request) -> Result<(), LspError>;
 }
 
-// #[derive(Clone, Debug)]
-// struct LspClientSender {
-//     weak_sender: std::sync::Weak<crossbeam::channel::Sender<lsp_server::Message>>,
-// }
-
-// impl LspClientSenderTrait for LspClientSender {
-//     fn send_notification(&self, msg: lsp_server::Notification) -> Result<(), LspError> {
-//         let Some(sender) = self.weak_sender.upgrade() else {
-//             return Err(LspError::ClientClosed);
-//         };
-//         sender
-//             .send(lsp_server::Message::Notification(msg))
-//             .map_err(|_| LspError::ClientClosed)
-//     }
-
-//     #[allow(dead_code)]
-//     fn make_request(&self, msg: lsp_server::Request) -> Result<(), LspError> {
-//         let Some(sender) = self.weak_sender.upgrade() else {
-//             return Err(LspError::ClientClosed);
-//         };
-//         sender
-//             .send(lsp_server::Message::Request(msg))
-//             .map_err(|_| LspError::ClientClosed)
-//     }
-
-//     fn send_response_impl(&self, response: lsp_server::Response) -> Result<(), LspError> {
-//         let Some(sender) = self.weak_sender.upgrade() else {
-//             return Err(LspError::ClientClosed);
-//         };
-
-//         sender
-//             .send(lsp_server::Message::Response(response))
-//             .map_err(|_| LspError::ClientClosed)
-//     }
-// }
-
-#[allow(dead_code)]
-enum SelectionReason {
-    UserSelection,
-    AutomaticSelection,
-}
-
-#[allow(dead_code)]
-struct Selection<T> {
-    value: Option<T>,
-    reason: SelectionReason,
-}
-
-impl<T> Default for Selection<T> {
-    fn default() -> Self {
-        Self {
-            value: None,
-            reason: SelectionReason::AutomaticSelection,
-        }
-    }
-}
-
-#[allow(dead_code)]
-impl<T> Selection<T> {
-    fn set_user_selection(&mut self, value: T) {
-        self.value = Some(value);
-        self.reason = SelectionReason::UserSelection;
-    }
-
-    fn set_automatic_selection(&mut self, value: T) {
-        self.value = Some(value);
-        self.reason = SelectionReason::AutomaticSelection;
-    }
-}
-
-#[allow(dead_code, clippy::struct_field_names)]
-#[derive(Default)]
-struct PlaygroundState {
-    last_selected_project: Selection<vfs::VfsPath>,
-    last_selected_function: Selection<String>,
-    last_selected_test: Selection<String>,
-}
-
 enum ProjectRefreshMode {
     Full,
     InMemoryChangesOnly,
@@ -175,16 +94,11 @@ impl BexMulitProject {
         sender: std::sync::Arc<dyn LspClientSenderTrait + Send + Sync>,
         playground_sender: std::sync::Arc<dyn crate::bex_lsp::PlaygroundSender>,
         fs: crate::fs::BamlVFS,
-        event_sink: Option<std::sync::Arc<dyn bex_events::EventSink>>,
         spawner: BackgroundSpawner,
     ) -> Self {
         Self {
             projects: std::sync::Arc::new(std::sync::Mutex::new(HashMap::new())),
             sys_op_factory,
-            event_sink,
-            playground_state: std::sync::Arc::new(
-                std::sync::Mutex::new(PlaygroundState::default()),
-            ),
             sender,
             playground_sender,
             position_encoding: PositionEncoding::UTF8,
@@ -216,7 +130,7 @@ impl BexMulitProject {
         }
 
         let sys_ops = (self.sys_op_factory)(&root_path);
-        let project = crate::project::BexProject::new(&root_path, sys_ops, self.event_sink.clone());
+        let project = crate::project::BexProject::new(&root_path, sys_ops);
         let project = std::sync::Arc::new(LiveProject {
             project,
             in_memory_changes: std::sync::Arc::new(std::sync::Mutex::new(HashMap::new())),
@@ -972,7 +886,7 @@ impl super::BexLsp for BexMulitProject {
     fn all_env_var_names(&self) -> Vec<String> {
         let projects = self.projects.lock().unwrap();
         let mut names = std::collections::BTreeSet::new();
-        for (_path, project) in projects.iter() {
+        for project in projects.values() {
             let db_guard = project.project.db.lock().unwrap();
             let db = db_guard.db();
             for name in baml_lsp2_actions::all_env_var_names(db) {
@@ -1119,15 +1033,7 @@ pub fn new_lsp(
     sender: std::sync::Arc<dyn LspClientSenderTrait + Send + Sync>,
     playground_sender: std::sync::Arc<dyn crate::bex_lsp::PlaygroundSender>,
     fs: crate::fs::BamlVFS,
-    event_sink: Option<std::sync::Arc<dyn bex_events::EventSink>>,
     spawner: BackgroundSpawner,
 ) -> impl crate::bex_lsp::BexLsp {
-    BexMulitProject::new(
-        sys_op_factory,
-        sender,
-        playground_sender,
-        fs,
-        event_sink,
-        spawner,
-    )
+    BexMulitProject::new(sys_op_factory, sender, playground_sender, fs, spawner)
 }

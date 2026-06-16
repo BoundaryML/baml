@@ -92,13 +92,14 @@ function user.ClassifySentiment$parse(json: string, client: baml.llm.Client) -> 
     store_var client
 
   L0:
-    load_const "ClassifySentiment"
+    load_type Sentiment$stream | null
+    load_type Sentiment
     load_var json
     call baml.llm.parse
     return
 }
 
-function user.ClassifySentiment$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<null | Sentiment$stream, Sentiment> {
+function user.ClassifySentiment$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<Sentiment$stream | null, Sentiment> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -107,8 +108,9 @@ function user.ClassifySentiment$parse_stream(sse: baml.http.SseStream, client: b
     store_var client
 
   L0:
+    load_type Sentiment$stream | null
+    load_type Sentiment
     load_var2 2 1
-    load_const "ClassifySentiment"
     call baml.llm.Client.__make_stream
     return
 }
@@ -131,7 +133,7 @@ function user.ClassifySentiment$render_prompt(text: string, client: baml.llm.Cli
     return
 }
 
-function user.ClassifySentiment$stream(text: string, client: baml.llm.Client) -> baml.llm.Stream<null | Sentiment$stream, Sentiment> {
+function user.ClassifySentiment$stream(text: string, client: baml.llm.Client) -> baml.llm.Stream<Sentiment$stream | null, Sentiment> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -140,6 +142,8 @@ function user.ClassifySentiment$stream(text: string, client: baml.llm.Client) ->
     store_var client
 
   L0:
+    load_type Sentiment$stream | null
+    load_type Sentiment
     load_var client
     load_const "ClassifySentiment"
     load_var text
@@ -215,13 +219,14 @@ function user.ClassifySentiment2$parse(json: string, client: baml.llm.Client) ->
     store_var client
 
   L0:
-    load_const "ClassifySentiment2"
+    load_type string | null
+    load_type string
     load_var json
     call baml.llm.parse
     return
 }
 
-function user.ClassifySentiment2$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<null | string, string> {
+function user.ClassifySentiment2$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -230,8 +235,9 @@ function user.ClassifySentiment2$parse_stream(sse: baml.http.SseStream, client: 
     store_var client
 
   L0:
+    load_type string | null
+    load_type string
     load_var2 2 1
-    load_const "ClassifySentiment2"
     call baml.llm.Client.__make_stream
     return
 }
@@ -254,7 +260,7 @@ function user.ClassifySentiment2$render_prompt(text: string, client: baml.llm.Cl
     return
 }
 
-function user.ClassifySentiment2$stream(text: string, client: baml.llm.Client) -> baml.llm.Stream<null | string, string> {
+function user.ClassifySentiment2$stream(text: string, client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -263,6 +269,8 @@ function user.ClassifySentiment2$stream(text: string, client: baml.llm.Client) -
     store_var client
 
   L0:
+    load_type string | null
+    load_type string
     load_var client
     load_const "ClassifySentiment2"
     load_var text
@@ -396,7 +404,8 @@ function user.GenerateTests$parse(json: string, client: baml.llm.Client) -> stri
     store_var client
 
   L0:
-    load_const "GenerateTests"
+    load_type string[]
+    load_type string[]
     load_var json
     call baml.llm.parse
     return
@@ -411,8 +420,9 @@ function user.GenerateTests$parse_stream(sse: baml.http.SseStream, client: baml.
     store_var client
 
   L0:
+    load_type string[]
+    load_type string[]
     load_var2 2 1
-    load_const "GenerateTests"
     call baml.llm.Client.__make_stream
     return
 }
@@ -445,6 +455,8 @@ function user.GenerateTests$stream(count: int, topic: string, client: baml.llm.C
     store_var client
 
   L0:
+    load_type string[]
+    load_type string[]
     load_var client
     load_const "GenerateTests"
     load_var2 1 2
@@ -483,15 +495,18 @@ function user.Sentiment.from_json(j: baml.json.json) -> Sentiment {
 }
 
 function user.Sentiment.to_json(self: Sentiment) -> baml.json.json {
+    load_type string
     load_var self
     load_field .feeling
-    call baml.String.to_json
+    call baml.json.to_json
+    load_type float
     load_var self
     load_field .confidence
-    call baml.Float.to_json
+    call baml.json.to_json
+    load_type string
     load_var self
     load_field .reasoning
-    call baml.String.to_json
+    call baml.json.to_json
     load_const "feeling"
     load_const "confidence"
     load_const "reasoning"

@@ -73,7 +73,6 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
             }
         }
         Ty::TypeVar(name) => name.as_str().to_string(),
-        Ty::Optional(inner) => format!("typing.Optional[{}]", translate_ty(inner, ctx)),
         Ty::List(inner) => format!("typing.List[{}]", translate_ty(inner, ctx)),
         Ty::Map { key, value } => {
             format!(
@@ -82,14 +81,24 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
                 translate_ty(value, ctx)
             )
         }
-        Ty::Union(items) => format!(
-            "typing.Union[{}]",
-            items
-                .iter()
-                .map(|item| translate_ty(item, ctx))
-                .collect::<Vec<_>>()
-                .join(", ")
-        ),
+        Ty::Union(items) => {
+            // `T | null` (a single non-null member plus null) is optionality —
+            // emit idiomatic `typing.Optional[T]`. Multi-member nullable unions
+            // fall through to `typing.Union[A, B, None]` (Null → "None").
+            let non_null: Vec<&Ty> = items.iter().filter(|t| !matches!(t, Ty::Null)).collect();
+            if non_null.len() == 1 && non_null.len() < items.len() {
+                format!("typing.Optional[{}]", translate_ty(non_null[0], ctx))
+            } else {
+                format!(
+                    "typing.Union[{}]",
+                    items
+                        .iter()
+                        .map(|item| translate_ty(item, ctx))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
+        }
         Ty::BuiltinUnknown => "typing.Any".to_string(),
         Ty::Callable { params, ret } => {
             let ret = translate_ty(ret, ctx);
@@ -185,6 +194,7 @@ fn render_name_ref(name: &Name, ctx: &TranslateCtx) -> String {
 #[cfg(test)]
 mod tests {
     use baml_base::Name as BaseName;
+    use pretty_assertions::assert_eq;
 
     use super::*;
 
@@ -294,7 +304,6 @@ mod tests {
             | Ty::Enum(_)
             | Ty::TypeAlias(_)
             | Ty::TypeVar(_)
-            | Ty::Optional(_)
             | Ty::List(_)
             | Ty::Map { .. }
             | Ty::Union(_)
@@ -533,7 +542,7 @@ mod tests {
             },
             Case {
                 label: "optional string",
-                ty: Ty::Optional(Box::new(Ty::String)),
+                ty: Ty::Union(vec![Ty::String, Ty::Null]),
                 ctx: ctx(&["lorem"]),
                 expected: "typing.Optional[str]",
             },
@@ -575,16 +584,19 @@ mod tests {
             },
             Case {
                 label: "optional list same leaf class",
-                ty: Ty::Optional(Box::new(Ty::List(Box::new(Ty::Class(
-                    name("user", &["lorem"], "Resume"),
-                    vec![],
-                ))))),
+                ty: Ty::Union(vec![
+                    Ty::List(Box::new(Ty::Class(
+                        name("user", &["lorem"], "Resume"),
+                        vec![],
+                    ))),
+                    Ty::Null,
+                ]),
                 ctx: ctx(&["lorem"]),
                 expected: "typing.Optional[typing.List[Resume]]",
             },
             Case {
                 label: "list optional string",
-                ty: Ty::List(Box::new(Ty::Optional(Box::new(Ty::String)))),
+                ty: Ty::List(Box::new(Ty::Union(vec![Ty::String, Ty::Null]))),
                 ctx: ctx(&["lorem"]),
                 expected: "typing.List[typing.Optional[str]]",
             },
@@ -622,7 +634,7 @@ mod tests {
                 label: "callable nested params",
                 ty: Ty::Callable {
                     params: vec![callable_param(Ty::List(Box::new(Ty::Int)))],
-                    ret: Box::new(Ty::Optional(Box::new(Ty::String))),
+                    ret: Box::new(Ty::Union(vec![Ty::String, Ty::Null])),
                 },
                 ctx: ctx(&["lorem"]),
                 expected: "typing.Callable[[typing.List[int]], typing.Optional[str]]",
@@ -650,7 +662,7 @@ mod tests {
             },
             Case {
                 label: "optional media",
-                ty: Ty::Optional(Box::new(Ty::Media(MediaKind::Image))),
+                ty: Ty::Union(vec![Ty::Media(MediaKind::Image), Ty::Null]),
                 ctx: ctx(&["lorem"]),
                 expected: "typing.Optional[baml.media.Image]",
             },
@@ -752,10 +764,10 @@ mod tests {
             },
             Case {
                 label: "optional stdlib class",
-                ty: Ty::Optional(Box::new(Ty::Class(
-                    name("baml", &["http"], "Response"),
-                    vec![],
-                ))),
+                ty: Ty::Union(vec![
+                    Ty::Class(name("baml", &["http"], "Response"), vec![]),
+                    Ty::Null,
+                ]),
                 ctx: ctx(&["lorem"]),
                 expected: "typing.Optional[baml.http.Response]",
             },

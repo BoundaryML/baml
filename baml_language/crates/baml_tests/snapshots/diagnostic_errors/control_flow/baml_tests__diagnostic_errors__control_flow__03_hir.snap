@@ -20,9 +20,6 @@ function user.LlmFunction$build_request(input: string, client: baml.llm.Client =
 function user.LlmFunction$build_request_stream(input: string, client: baml.llm.Client = TestClient) -> baml.http.Request  [expr] {
   baml.llm.build_request_stream(client, "LlmFunction", map { "input": input })
 }
-function user.LlmFunction$parse(json: string, client: baml.llm.Client = TestClient) -> string  [expr] {
-  baml.llm.parse("LlmFunction", json)
-}
 function user.LlmFunction$render_prompt(input: string, client: baml.llm.Client = TestClient) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "LlmFunction", map { "input": input })
 }

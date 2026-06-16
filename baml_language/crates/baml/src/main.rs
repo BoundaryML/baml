@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 
 const CONFIG_FILE: &str = "config.toml";
 const STATE_FILE: &str = "state.toml";
-const CHANNEL_CACHE_TTL: Duration = Duration::from_secs(24 * 60 * 60);
+const CHANNEL_CACHE_TTL: Duration = Duration::from_hours(24);
 const HTTP_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -88,6 +88,38 @@ enum FetchPolicy {
     ForceRemote,
 }
 
+const TOOLCHAIN_HELP: &str = r#"BAML toolchain management
+
+Usage:
+  baml toolchain <command>
+
+Commands:
+  use <canary|nightly|version>       Install if needed and select as default
+  install <canary|nightly|version>   Download without selecting
+  update                             Advance the active channel
+  status                             Check latest remote version without installing
+  list                               Show installed toolchains, local only
+  uninstall <version>                Remove an installed concrete version
+
+Network behavior:
+  list is local-only.
+  status checks remote metadata but does not install or change selection.
+  use, install, and update may download toolchains or change local state.
+
+Wrapper updates:
+  baml self-update                   Update curl-installed wrapper only
+"#;
+
+const SELF_UPDATE_HELP: &str = r#"BAML wrapper self-update
+
+Usage:
+  baml self-update
+
+Updates the wrapper binary only. It never installs or changes the active
+language toolchain. Package-manager-managed wrappers refuse self-update and
+print the package-manager upgrade command instead.
+"#;
+
 fn main() {
     let exit = match run() {
         Ok(code) => code,
@@ -107,7 +139,7 @@ fn run() -> Result<i32> {
         return replace_running_exe(args).map(|()| 0);
     }
     if matches!(args.first().map(String::as_str), Some("--version" | "-V")) {
-        println!("baml {}", env!("CARGO_PKG_VERSION"));
+        print_version();
         return Ok(0);
     }
     if args.first().map(String::as_str) == Some("toolchain") {
@@ -115,9 +147,60 @@ fn run() -> Result<i32> {
         return toolchain(args).map(|()| 0);
     }
     if args.first().map(String::as_str) == Some("self-update") {
+        if args.get(1).is_some_and(|arg| is_help_arg(arg)) {
+            print!("{SELF_UPDATE_HELP}");
+            return Ok(0);
+        }
+        if args.len() > 1 {
+            return Err(anyhow!(
+                "usage: baml self-update\nunexpected arguments: {}",
+                args[1..].join(" ")
+            ));
+        }
         return self_update().map(|()| 0);
     }
     pass_through(args)
+}
+
+fn print_version() {
+    println!("baml wrapper {}", env!("CARGO_PKG_VERSION"));
+    let selector = match active_selector() {
+        Ok(selector) => selector,
+        Err(err) => {
+            println!("baml toolchain not resolved");
+            println!("{err:#}");
+            return;
+        }
+    };
+    let version = match concrete_version_for_selector(&selector) {
+        Ok(version) => version,
+        Err(_) if is_channel(&selector.selector) => {
+            println!("baml toolchain not installed");
+            println!("Run: baml toolchain use {}", selector.selector);
+            return;
+        }
+        Err(err) => {
+            println!("baml toolchain not resolved");
+            println!("{err:#}");
+            return;
+        }
+    };
+    if !toolchain_cli_path(&version).exists() {
+        println!("baml toolchain not installed ({version})");
+        if is_channel(&selector.selector) {
+            println!("Run: baml toolchain use {}", selector.selector);
+        } else {
+            println!("Run: baml toolchain install {version}");
+        }
+        return;
+    }
+    match verify_toolchain_version_file(&version) {
+        Ok(()) => println!("baml toolchain {version}"),
+        Err(_) => {
+            println!("baml toolchain corrupt ({version})");
+            println!("Run: baml toolchain install {version} --force");
+        }
+    }
 }
 
 fn baml_home() -> PathBuf {
@@ -191,6 +274,10 @@ fn write_toml_atomic<T: Serialize>(path: &Path, value: &T) -> Result<()> {
 fn toolchain(args: Vec<String>) -> Result<()> {
     let (args, manifest_base_url) = parse_manifest_base_url(args)?;
     match args.first().map(String::as_str) {
+        Some("--help" | "-h" | "help") | None => {
+            print!("{TOOLCHAIN_HELP}");
+            Ok(())
+        }
         Some("install") => {
             let selector = args
                 .get(1)
@@ -205,6 +292,7 @@ fn toolchain(args: Vec<String>) -> Result<()> {
             use_toolchain(selector, manifest_base_url.as_deref())
         }
         Some("update") => update_toolchain(manifest_base_url.as_deref()),
+        Some("status") => status_toolchain(manifest_base_url.as_deref()),
         Some("list") => {
             list_toolchains();
             Ok(())
@@ -215,10 +303,14 @@ fn toolchain(args: Vec<String>) -> Result<()> {
                 .ok_or_else(|| anyhow!("usage: baml toolchain uninstall <version>"))?;
             uninstall_toolchain(version)
         }
-        _ => Err(anyhow!(
-            "usage: baml toolchain <install|use|update|list|uninstall> ..."
+        Some(other) => Err(anyhow!(
+            "unknown toolchain command {other:?}\n\n{TOOLCHAIN_HELP}"
         )),
     }
+}
+
+fn is_help_arg(arg: &str) -> bool {
+    matches!(arg, "--help" | "-h" | "help")
 }
 
 fn parse_manifest_base_url(mut args: Vec<String>) -> Result<(Vec<String>, Option<String>)> {
@@ -321,10 +413,16 @@ fn project_toolchain_selector() -> Result<Option<(PathBuf, String)>> {
 }
 
 fn concrete_version_for_selector(selector: &ResolvedSelector) -> Result<String> {
+    concrete_version_for_selector_with_base(selector, &baml_release::manifest_base_url())
+}
+
+fn concrete_version_for_selector_with_base(
+    selector: &ResolvedSelector,
+    current_base: &str,
+) -> Result<String> {
     if is_channel(&selector.selector) {
         let state = read_state();
         if let Some(channel) = state.channels.get(&selector.selector) {
-            let current_base = baml_release::manifest_base_url();
             if channel
                 .manifest_base_url
                 .as_deref()
@@ -602,6 +700,67 @@ fn update_toolchain(override_url: Option<&str>) -> Result<()> {
     })
 }
 
+fn status_toolchain(override_url: Option<&str>) -> Result<()> {
+    let selector = active_selector()?;
+    let base = manifest_base_url(override_url);
+    println!("active selector: {}", selector.selector);
+
+    if is_channel(&selector.selector) {
+        match concrete_version_for_selector_with_base(&selector, &base) {
+            Ok(version) => println!("active version: {version}"),
+            Err(_) => println!("active version: (none recorded locally)"),
+        }
+
+        let manifest = fetch_manifest(&selector.selector, override_url, FetchPolicy::ForceRemote)
+            .with_context(|| {
+                format!(
+                    "failed to check latest {} from the remote manifest; local toolchain state was left unchanged",
+                    selector.selector
+                )
+            })?;
+        println!("latest {}: {}", selector.selector, manifest.version);
+
+        match concrete_version_for_selector_with_base(&selector, &base).ok() {
+            Some(active) if active == manifest.version => {
+                println!("status: up to date");
+            }
+            Some(_) => {
+                println!(
+                    "status: a newer {} toolchain is available",
+                    selector.selector
+                );
+                println!("Run: baml toolchain update");
+            }
+            None => {
+                println!(
+                    "status: no active {} toolchain is recorded locally",
+                    selector.selector
+                );
+                println!("Run: baml toolchain use {}", selector.selector);
+            }
+        }
+        return Ok(());
+    }
+
+    if toolchain_cli_path(&selector.selector).exists() {
+        println!("selected version: {}", selector.selector);
+    } else {
+        println!("selected version: {} (not installed)", selector.selector);
+        println!("Run: baml toolchain install {}", selector.selector);
+    }
+
+    let canary = fetch_manifest("canary", override_url, FetchPolicy::ForceRemote)
+        .context("failed to check latest canary from the remote manifest")?;
+    let nightly = fetch_manifest("nightly", override_url, FetchPolicy::ForceRemote)
+        .context("failed to check latest nightly from the remote manifest")?;
+    println!("latest canary: {}", canary.version);
+    println!("latest nightly: {}", nightly.version);
+    println!("status: exact versions do not advance automatically");
+    println!("Run: baml toolchain use canary");
+    println!("Or:  baml toolchain use nightly");
+    Ok(())
+}
+
 fn installed_toolchains() -> Vec<String> {
     let mut versions = fs::read_dir(toolchains_dir())
         .ok()
@@ -636,6 +795,9 @@ fn list_toolchains() {
             println!("  {version}");
         }
     }
+    println!();
+    println!("Remote versions were not checked.");
+    println!("Run: baml toolchain status");
 }
 
 fn uninstall_toolchain(version: &str) -> Result<()> {

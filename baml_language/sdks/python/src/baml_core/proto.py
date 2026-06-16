@@ -220,8 +220,7 @@ def _set_inbound_value(
     # precede the media-class branch since the media types compose a
     # `BamlPyHandle` internally and recurse here on `_to_pyhandle()`.
     if isinstance(value, BamlPyHandle):
-        from .baml_py import put_pyhandle_into_table
-        key, ht = put_pyhandle_into_table(value)
+        key, ht = value._clone_key_for_wire()
         inbound_value.handle.key = key
         # Wire field stays populated for cross-bridge compat. The proto
         # field is typed as the enum class, but `BamlHandleType` is an
@@ -344,7 +343,7 @@ def _set_inbound_map_entry(
     _set_inbound_value(entry.value, value, kwarg_name=kwarg_name, registered=registered)
 
 
-def encode_call_args(kwargs: Dict[str, Any]) -> bytes:
+def encode_call_args(kwargs: Dict[str, Any], call_id: int) -> bytes:
     """Encode function keyword arguments as `CallFunctionArgs` protobuf.
 
     Release tradeoff: a callable that encodes successfully is registered in
@@ -358,9 +357,12 @@ def encode_call_args(kwargs: Dict[str, Any]) -> bytes:
     for the life of the process, we track every key registered during this
     encode and release them all if any kwarg fails.
     """
+    if call_id == 0:
+        raise ValueError("call_id must be a nonzero uint64")
     registered: List[int] = []
     try:
         args = baml_inbound_pb2.CallFunctionArgs()
+        args.call_id = call_id
         for key, value in kwargs.items():
             _set_inbound_map_entry(
                 args.kwargs.add(), key, value, kwarg_name=key, registered=registered
@@ -565,10 +567,9 @@ def _decode_handle(handle, type_map: BamlTypeMap) -> Any:
     directly; the production path goes through `_decode_value_holder`,
     which hands us the outbound shape.
     """
-    from .baml_py import take_pyhandle_from_table
     HT = baml_inbound_pb2.BamlHandleType
     ht = handle.handle_type
-    pyhandle = take_pyhandle_from_table(handle.key, int(ht))
+    pyhandle = BamlPyHandle(handle.key, int(ht))
 
     if ht == HT.ADT_MEDIA_IMAGE:
         return BamlImage._from_pyhandle(pyhandle)
@@ -689,6 +690,28 @@ def decode_value(holder, type_map: BamlTypeMap) -> Any:
     return None
 
 
+def _try_rehydrate_host_value(decoded: Any) -> Optional[BaseException]:
+    """If `decoded` is a `baml.errors.HostCallable` pydantic instance
+    whose `_handle` points at a still-live entry in this runtime's
+    host-value registry, return the *original* Python exception object.
+    Otherwise return `None` (foreign runtime, released key, or
+    unexpected shape) so the caller falls back to the metadata-bearing
+    `BamlError` wrapper.
+    """
+    private = getattr(decoded, "__pydantic_private__", None)
+    if not isinstance(private, dict):
+        return None
+    handle = private.get("_handle")
+    if handle is None:
+        return None
+    from .baml_py import lookup_host_value
+
+    original = lookup_host_value(handle)
+    if isinstance(original, BaseException):
+        return original
+    return None
+
+
 def _outbound_class_fqn(holder) -> Optional[str]:
     """The BAML FQN of a `BamlOutboundValue` that is a class instance (e.g.
     `baml.json.JsonParseError`), else `None`. Used only to build a readable
@@ -717,9 +740,21 @@ def decode_call_result(data: bytes) -> Any:
 
     if which == "error":
         msg = result.error
+        decoded = decode_value(msg.value, type_map)
+        # Same-host rehydration: a `baml.errors.HostCallable` carrying a
+        # `_handle` that still resolves in this runtime's host-value
+        # registry re-raises the *original* native exception object the
+        # bridge registered on the inbound throw — preserving `raised is
+        # caught` identity. Foreign runtimes (different process) and
+        # released keys (last `HostValueArc` clone already dropped) fall
+        # through to the metadata-bearing `BamlError` wrapper below.
+        if _outbound_class_fqn(msg.value) == "baml.errors.HostCallable":
+            rehydrated = _try_rehydrate_host_value(decoded)
+            if rehydrated is not None:
+                raise attach_baml_traceback(rehydrated)
         raise attach_baml_traceback(
             BamlError(
-                decode_value(msg.value, type_map),
+                decoded,
                 baml_trace=list(msg.trace),
                 class_name=_outbound_class_fqn(msg.value),
             )

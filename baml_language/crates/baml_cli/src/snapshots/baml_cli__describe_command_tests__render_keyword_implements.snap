@@ -1,0 +1,19 @@
+---
+source: crates/baml_cli/src/describe_command_tests.rs
+expression: output
+---
+implements — Declares that a class or type implements an interface contract.
+
+Syntax:
+  class Dog {
+    name: string
+    implements Named {}
+  }
+  
+  implements<T extends Named> Printable for Box<T> {
+    function display(self) -> string {
+      return self.value.name
+    }
+  }
+
+A class-body `implements I { ... }` block can map fields with `field as class_field`, bind associated types with `type Name = Concrete`, and define required or override methods. A top-level `implements I for T { ... }` block adds an out-of-body implementation. For blanket implementations, declare the implementation's own type parameters immediately after `implements`, as in `implements<T extends Named> Printable for Box<T> { ... }`; those parameters must appear in the `for` type. Associated type bindings are not allowed in the `implements` target itself; write `implements Iterator { type Item = int }`, not `implements Iterator<Item = int>`.

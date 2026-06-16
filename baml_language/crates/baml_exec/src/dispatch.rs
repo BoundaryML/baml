@@ -7,7 +7,8 @@ use std::{collections::HashMap, sync::Arc};
 
 use anyhow::{Context, Result, anyhow};
 use bex_engine::{
-    BexCallArg, BexEngine, BexExternalValue, CallId, EngineError, FunctionCallContextBuilder, Ty,
+    BexCallArg, BexEngine, BexExternalValue, CallId, EngineError, FunctionCallContextBuilder,
+    RuntimeTy,
 };
 
 use crate::output::{OutputFormat, write_output};
@@ -95,7 +96,7 @@ pub async fn dispatch_target(
         Ok(value) => {
             // No stdout for `void` return; value-carrying types like `int?`
             // still emit their serialization even when null.
-            if !matches!(func_info.return_type, Ty::Void { .. }) {
+            if !matches!(func_info.return_type, RuntimeTy::Void { .. }) {
                 write_output(&engine, value, &func_info.return_type, output_format).await?;
             }
             Ok(DispatchResult::Ok)
@@ -139,7 +140,7 @@ pub async fn build_args_from_signature(
     cli_values: HashMap<String, BexExternalValue>,
     json_args: Option<&serde_json::Value>,
     param_names: &[String],
-    param_types: &[Ty],
+    param_types: &[RuntimeTy],
     param_has_default: &[bool],
 ) -> Result<Vec<BexCallArg>> {
     let _ = param_types;
@@ -221,7 +222,7 @@ pub async fn build_args_from_signature(
 async fn deserialize_via_baml_json(
     engine: &Arc<BexEngine>,
     json_text: &str,
-    ty: &Ty,
+    ty: &RuntimeTy,
 ) -> Result<BexExternalValue> {
     let result = engine
         .call_function(
@@ -248,23 +249,18 @@ mod tests {
     fn engine(source: &str) -> Arc<BexEngine> {
         let snapshot = baml_tests::engine::compile_source(source);
         Arc::new(
-            BexEngine::new(
-                snapshot,
-                Arc::new(sys_native::SysOps::native()),
-                None,
-                Vec::new(),
-            )
-            .expect("BexEngine::new should succeed"),
+            BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+                .expect("BexEngine::new should succeed"),
         )
     }
 
-    fn ty_string() -> Ty {
-        Ty::String {
+    fn ty_string() -> RuntimeTy {
+        RuntimeTy::String {
             attr: TyAttr::default(),
         }
     }
-    fn ty_int() -> Ty {
-        Ty::Int {
+    fn ty_int() -> RuntimeTy {
+        RuntimeTy::Int {
             attr: TyAttr::default(),
         }
     }

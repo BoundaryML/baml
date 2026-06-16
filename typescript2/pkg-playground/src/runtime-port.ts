@@ -10,6 +10,9 @@
 import type { WorkerOutMessage, WorkerInMessage } from './worker-protocol';
 
 export interface RuntimePort {
+  /** Allocate a fresh BAML function call ID. */
+  nextFunctionCall(): Promise<number>;
+
   /** Send a command to the runtime. */
   postMessage(msg: WorkerInMessage): void;
 

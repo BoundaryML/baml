@@ -17,12 +17,12 @@ function user.ExtractAny$build_request(client: baml.llm.Client = TestClient) -> 
 function user.ExtractAny$build_request_stream(client: baml.llm.Client = TestClient) -> baml.http.Request throws never {
   baml.llm.build_request_stream(client, "ExtractAny", map {  }) : baml.http.Request
 }
+function user.ExtractAny$stream(client: baml.llm.Client = TestClient) -> baml.llm.Stream<baml.json.json$stream | null, baml.json.json> throws never {
+  baml.llm.stream_llm_function(client, "ExtractAny", map {  }) : baml.llm.Stream<baml.json.json$stream | null, baml.json.json>
+}
+function user.ExtractAny$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = TestClient) -> baml.llm.Stream<baml.json.json$stream | null, baml.json.json> throws never {
+  client.__make_stream(sse) : baml.llm.Stream<baml.json.json$stream | null, baml.json.json>
+}
 function user.ExtractAny$parse(json: string, client: baml.llm.Client = TestClient) -> baml.json.json throws never {
-  baml.llm.parse<TFinal>("ExtractAny", json) : baml.json.json
-}
-function user.ExtractAny$stream(client: baml.llm.Client = TestClient) -> baml.llm.Stream<null | baml.json.json$stream, baml.json.json> throws never {
-  baml.llm.stream_llm_function(client, "ExtractAny", map {  }) : baml.llm.Stream<null | baml.json.json$stream, baml.json.json>
-}
-function user.ExtractAny$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = TestClient) -> baml.llm.Stream<null | baml.json.json$stream, baml.json.json> throws never {
-  client.__make_stream(sse, "ExtractAny") : baml.llm.Stream<null | baml.json.json$stream, baml.json.json>
+  baml.llm.parse<TFinal>(json) : baml.json.json
 }

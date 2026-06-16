@@ -22,6 +22,7 @@ function user.test_capture() -> int {
 }
 
 function user.test_generic_lambda() -> int {
+    load_type int
     load_const 42
     make_closure .<lambda(test_generic_lambda, 0)>, 0
     call_indirect
@@ -36,6 +37,9 @@ function user.test_inferred_return() -> int {
 }
 
 function user.test_map_inferred() -> int[] {
+    load_type int
+    load_type int
+    load_type never
     load_const 1
     load_const 2
     load_const 3

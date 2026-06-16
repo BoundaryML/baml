@@ -9,9 +9,7 @@ use rustc_hash::FxHashSet;
 
 use crate::{
     infer_context::TirTypeError,
-    ty::{
-        Freshness, FunctionParamMode, FunctionParamTy, PrimitiveType, QualifiedTypeName, Ty, TyAttr,
-    },
+    ty::{Freshness, FunctionParamMode, FunctionParamTy, MediaKind, QualifiedTypeName, Ty, TyAttr},
 };
 
 /// Resolve an AST `TypeExpr` to a `Ty` using package-level name resolution.
@@ -50,6 +48,39 @@ pub fn substitute_self_in(type_expr: &TypeExpr, replacement: &TypeExpr) -> TypeE
     substitute_self(type_expr, replacement)
 }
 
+/// Like [`substitute_self_in`], but keeps `Self.Assoc` visible to generic
+/// binding substitution. Interface member lowering installs bindings such as
+/// `Item -> int`; eagerly rewriting `Self.Item` to `Iterator.Item` would hide
+/// that concrete associated type from the lowering pass.
+pub fn substitute_self_in_preserving_associated_projections(
+    type_expr: &TypeExpr,
+    replacement: &TypeExpr,
+) -> TypeExpr {
+    substitute_self_preserving_associated_projections(type_expr, replacement)
+}
+
+fn projection_chain_from_root(
+    root: TypeExpr,
+    members: &[baml_base::Name],
+    attrs: &[baml_compiler2_ast::RawAttribute],
+) -> TypeExpr {
+    members
+        .iter()
+        .enumerate()
+        .fold(root, |base, (idx, member)| {
+            TypeExpr::AssociatedTypeProjection {
+                base: Box::new(base),
+                interface: None,
+                member: member.clone(),
+                attrs: if idx + 1 == members.len() {
+                    attrs.to_vec()
+                } else {
+                    Vec::new()
+                },
+            }
+        })
+}
+
 /// BEP-044 generic bounds: walk `type_expr` and replace any single-
 /// segment `Path` whose name appears in `subst` with the matching
 /// replacement `TypeExpr`. Used at MIR lowering to substitute bounded
@@ -76,12 +107,14 @@ fn substitute_paths_walk(
             associated_type_bindings,
             attrs,
         } => {
-            if segments.len() == 1
-                && generic_args.is_empty()
+            if generic_args.is_empty()
                 && associated_type_bindings.is_empty()
                 && let Some(replacement) = subst.get(&segments[0])
             {
-                return replacement.clone();
+                if segments.len() == 1 {
+                    return replacement.clone();
+                }
+                return projection_chain_from_root(replacement.clone(), &segments[1..], attrs);
             }
             TypeExpr::Path {
                 segments: segments.clone(),
@@ -179,12 +212,14 @@ fn substitute_self(type_expr: &TypeExpr, replacement: &TypeExpr) -> TypeExpr {
             associated_type_bindings,
             attrs,
         } => {
-            if segments.len() == 1
-                && generic_args.is_empty()
+            if generic_args.is_empty()
                 && associated_type_bindings.is_empty()
                 && segments[0].as_str() == "Self"
             {
-                return replacement.clone();
+                if segments.len() == 1 {
+                    return replacement.clone();
+                }
+                return projection_chain_from_root(replacement.clone(), &segments[1..], attrs);
             }
             TypeExpr::Path {
                 segments: segments.clone(),
@@ -270,6 +305,143 @@ fn substitute_self(type_expr: &TypeExpr, replacement: &TypeExpr) -> TypeExpr {
     }
 }
 
+fn substitute_self_preserving_associated_projections(
+    type_expr: &TypeExpr,
+    replacement: &TypeExpr,
+) -> TypeExpr {
+    match type_expr {
+        TypeExpr::Path {
+            segments,
+            generic_args,
+            associated_type_bindings,
+            attrs,
+        } => {
+            if generic_args.is_empty()
+                && associated_type_bindings.is_empty()
+                && segments[0].as_str() == "Self"
+            {
+                if segments.len() == 1 {
+                    return replacement.clone();
+                }
+                return TypeExpr::Path {
+                    segments: segments.clone(),
+                    generic_args: Vec::new(),
+                    associated_type_bindings: Vec::new(),
+                    attrs: attrs.clone(),
+                };
+            }
+            TypeExpr::Path {
+                segments: segments.clone(),
+                generic_args: generic_args
+                    .iter()
+                    .map(|a| substitute_self_preserving_associated_projections(a, replacement))
+                    .collect(),
+                associated_type_bindings: associated_type_bindings
+                    .iter()
+                    .map(|binding| baml_compiler2_ast::AssociatedTypeBinding {
+                        name: binding.name.clone(),
+                        ty: Box::new(substitute_self_preserving_associated_projections(
+                            &binding.ty,
+                            replacement,
+                        )),
+                    })
+                    .collect(),
+                attrs: attrs.clone(),
+            }
+        }
+        TypeExpr::AssociatedTypeProjection {
+            base,
+            interface,
+            member,
+            attrs,
+        } => TypeExpr::AssociatedTypeProjection {
+            base: Box::new(substitute_self_preserving_associated_projections(
+                base,
+                replacement,
+            )),
+            interface: interface.as_ref().map(|interface| {
+                Box::new(substitute_self_preserving_associated_projections(
+                    interface,
+                    replacement,
+                ))
+            }),
+            member: member.clone(),
+            attrs: attrs.clone(),
+        },
+        TypeExpr::List { inner, attrs } => TypeExpr::List {
+            inner: Box::new(substitute_self_preserving_associated_projections(
+                inner,
+                replacement,
+            )),
+            attrs: attrs.clone(),
+        },
+        TypeExpr::Optional { inner, attrs } => TypeExpr::Optional {
+            inner: Box::new(substitute_self_preserving_associated_projections(
+                inner,
+                replacement,
+            )),
+            attrs: attrs.clone(),
+        },
+        TypeExpr::Map { key, value, attrs } => TypeExpr::Map {
+            key: Box::new(substitute_self_preserving_associated_projections(
+                key,
+                replacement,
+            )),
+            value: Box::new(substitute_self_preserving_associated_projections(
+                value,
+                replacement,
+            )),
+            attrs: attrs.clone(),
+        },
+        TypeExpr::Union { variants, attrs } => TypeExpr::Union {
+            variants: variants
+                .iter()
+                .map(|v| substitute_self_preserving_associated_projections(v, replacement))
+                .collect(),
+            attrs: attrs.clone(),
+        },
+        TypeExpr::Function {
+            generic_params,
+            generic_param_bounds,
+            params,
+            ret,
+            throws,
+            attrs,
+        } => TypeExpr::Function {
+            generic_params: generic_params.clone(),
+            generic_param_bounds: generic_param_bounds
+                .iter()
+                .map(|bound| {
+                    bound.as_ref().map(|bound| {
+                        substitute_self_preserving_associated_projections(bound, replacement)
+                    })
+                })
+                .collect(),
+            params: params
+                .iter()
+                .map(|param| {
+                    let mut param = param.clone();
+                    param.ty =
+                        substitute_self_preserving_associated_projections(&param.ty, replacement);
+                    param
+                })
+                .collect(),
+            ret: Box::new(substitute_self_preserving_associated_projections(
+                ret,
+                replacement,
+            )),
+            throws: throws.as_ref().map(|ty| {
+                Box::new(substitute_self_preserving_associated_projections(
+                    ty,
+                    replacement,
+                ))
+            }),
+            attrs: attrs.clone(),
+        },
+        _ => type_expr.clone(),
+    }
+}
+
 /// Build a `TypeExpr::Path` referring to a single named type, so
 /// `substitute_self` can swap `Self` for the enclosing class /
 /// interface name.
@@ -336,11 +508,48 @@ pub fn lower_type_expr_in_ns(
                     None
                 }
             });
+            // `$stream` companion fallback. PPIR synthesizes a `<T>$stream`
+            // class/alias for every class and alias, but those synthetics live
+            // only in the per-file item tree — not in the cross-file
+            // `package_items` resolution index — so a written `T$stream`
+            // reference (e.g. in a function signature) would otherwise erase to
+            // `Ty::Unknown`. Resolve the base type; the `Definition::Class` /
+            // `TypeAlias` arms below re-qualify it under the original `$stream`
+            // name (via `short`), producing the companion's `Class`/`TypeAlias`
+            // type. `$` is reserved for synthetics, so this never shadows a
+            // user-declared name.
+            let resolved = resolved.or_else(|| {
+                let base = item.as_str().strip_suffix("$stream")?;
+                let base_name = baml_base::Name::new(base);
+                let base_def = if !ns_context.is_empty() {
+                    let ns: Vec<baml_base::Name> =
+                        ns_context.iter().chain(seg_ns.iter()).cloned().collect();
+                    package_items.lookup_type(&ns, &base_name)
+                } else {
+                    package_items.lookup_type(seg_ns, &base_name)
+                }
+                .or_else(|| {
+                    if segments.len() >= 2 {
+                        if segments[0].as_str() == "root" {
+                            package_items.lookup_type(&segments[1..segments.len() - 1], &base_name)
+                        } else {
+                            let pkg_id = PackageId::new(db, segments[0].clone());
+                            let pkg = baml_compiler2_ppir::package_items(db, pkg_id);
+                            pkg.lookup_type(&segments[1..segments.len() - 1], &base_name)
+                        }
+                    } else {
+                        None
+                    }
+                })?;
+                // Only classes and aliases get a `$stream` companion.
+                matches!(base_def, Definition::Class(_) | Definition::TypeAlias(_))
+                    .then_some(base_def)
+            });
 
             if let Some(def) = resolved {
                 let short = segments.last().expect("non-empty path");
                 match def {
-                    Definition::Class(_) => {
+                    Definition::Class(class_loc) => {
                         // Collect and lower generic args, storing them in Ty::Class.
                         let lowered_args: Vec<Ty> = generic_args
                             .iter()
@@ -355,6 +564,21 @@ pub fn lower_type_expr_in_ns(
                                 )
                             })
                             .collect();
+
+                        let class_tree =
+                            baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
+                        let expected_type_args = class_tree
+                            .classes
+                            .get(&class_loc.id(db))
+                            .map(|class| class.generic_params.len())
+                            .unwrap_or(0);
+                        if !generic_args.is_empty() && generic_args.len() != expected_type_args {
+                            diagnostics.push(TirTypeError::WrongNumberOfTypeArgs {
+                                type_name: short.clone(),
+                                expected: expected_type_args,
+                                got: generic_args.len(),
+                            });
+                        }
 
                         // BEP-034: `baml.future.Future<T, E>` resolves to the
                         // dedicated `Ty::Future` variant rather than the
@@ -378,11 +602,6 @@ pub fn lower_type_expr_in_ns(
                             );
                         }
 
-                        // Class arity mismatches are not flagged here — downstream
-                        // checks (pattern subtype check, generic substitution,
-                        // assignment checks) already produce a clearer diagnostic
-                        // (e.g. `expected Box<int>, got Box`) when the arity
-                        // mismatch actually matters at the use site.
                         Ty::Class(qtn, lowered_args, TyAttr::default())
                     }
                     Definition::Interface(iface_loc) => {
@@ -401,7 +620,20 @@ pub fn lower_type_expr_in_ns(
                                 )
                             })
                             .collect();
-                        let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
+                        let iface_tree =
+                            baml_compiler2_ppir::file_item_tree(db, iface_loc.file(db));
+                        let expected_type_args = iface_tree
+                            .interfaces
+                            .get(&iface_loc.id(db))
+                            .map(|iface| iface.generic_params.len())
+                            .unwrap_or(0);
+                        if !generic_args.is_empty() && generic_args.len() != expected_type_args {
+                            diagnostics.push(TirTypeError::WrongNumberOfTypeArgs {
+                                type_name: short.clone(),
+                                expected: expected_type_args,
+                                got: generic_args.len(),
+                            });
+                        }
                         let known_associated_types: FxHashSet<baml_base::Name> = iface_tree
                             .interfaces
                             .get(&iface_loc.id(db))
@@ -627,45 +859,52 @@ pub fn lower_type_expr_in_ns(
                 }
             }
         }
-        TypeExpr::Int { .. } => Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
-        TypeExpr::Bigint { .. } => Ty::Primitive(PrimitiveType::Bigint, TyAttr::default()),
-        TypeExpr::Float { .. } => Ty::Primitive(PrimitiveType::Float, TyAttr::default()),
-        TypeExpr::String { .. } => Ty::Primitive(PrimitiveType::String, TyAttr::default()),
-        TypeExpr::Bool { .. } => Ty::Primitive(PrimitiveType::Bool, TyAttr::default()),
-        TypeExpr::Null { .. } => Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
+        TypeExpr::Int { .. } => Ty::Int {
+            attr: TyAttr::default(),
+        },
+        TypeExpr::Bigint { .. } => Ty::Bigint {
+            attr: TyAttr::default(),
+        },
+        TypeExpr::Float { .. } => Ty::Float {
+            attr: TyAttr::default(),
+        },
+        TypeExpr::String { .. } => Ty::String {
+            attr: TyAttr::default(),
+        },
+        TypeExpr::Bool { .. } => Ty::Bool {
+            attr: TyAttr::default(),
+        },
+        TypeExpr::Null { .. } => Ty::Null {
+            attr: TyAttr::default(),
+        },
         TypeExpr::Never { .. } => Ty::Never {
             attr: TyAttr::default(),
         },
         TypeExpr::Void { .. } => Ty::Void {
             attr: TyAttr::default(),
         },
-        TypeExpr::Uint8Array { .. } => Ty::Primitive(PrimitiveType::Uint8Array, TyAttr::default()),
-        TypeExpr::Media { kind, .. } => Ty::Primitive(
-            match kind {
-                baml_base::MediaKind::Image => PrimitiveType::Image,
-                baml_base::MediaKind::Audio => PrimitiveType::Audio,
-                baml_base::MediaKind::Video => PrimitiveType::Video,
-                baml_base::MediaKind::Pdf => PrimitiveType::Pdf,
-                // Generic media — treated as unknown for type resolution purposes
-                baml_base::MediaKind::Generic => {
-                    return Ty::Unknown {
-                        attr: TyAttr::default(),
-                    };
-                }
+        TypeExpr::Uint8Array { .. } => Ty::Uint8Array {
+            attr: TyAttr::default(),
+        },
+        TypeExpr::Media { kind, .. } => match kind {
+            baml_base::MediaKind::Image => Ty::Media(MediaKind::Image, TyAttr::default()),
+            baml_base::MediaKind::Audio => Ty::Media(MediaKind::Audio, TyAttr::default()),
+            baml_base::MediaKind::Video => Ty::Media(MediaKind::Video, TyAttr::default()),
+            baml_base::MediaKind::Pdf => Ty::Media(MediaKind::Pdf, TyAttr::default()),
+            // Generic media — treated as unknown for type resolution purposes
+            baml_base::MediaKind::Generic => Ty::Unknown {
+                attr: TyAttr::default(),
             },
-            TyAttr::default(),
-        ),
-        TypeExpr::Optional { inner, .. } => Ty::Optional(
-            Box::new(lower_type_expr_in_ns(
-                db,
-                inner,
-                package_items,
-                ns_context,
-                generic_params,
-                diagnostics,
-            )),
-            TyAttr::default(),
-        ),
+        },
+        // `T?` is sugar for `T | null` — lower it directly to a nullable union.
+        TypeExpr::Optional { inner, .. } => Ty::optional(lower_type_expr_in_ns(
+            db,
+            inner,
+            package_items,
+            ns_context,
+            generic_params,
+            diagnostics,
+        )),
         TypeExpr::List { inner, .. } => Ty::List(
             Box::new(lower_type_expr_in_ns(
                 db,
@@ -677,8 +916,8 @@ pub fn lower_type_expr_in_ns(
             )),
             TyAttr::default(),
         ),
-        TypeExpr::Map { key, value, .. } => Ty::Map(
-            Box::new(lower_type_expr_in_ns(
+        TypeExpr::Map { key, value, .. } => Ty::Map {
+            key: Box::new(lower_type_expr_in_ns(
                 db,
                 key,
                 package_items,
@@ -686,7 +925,7 @@ pub fn lower_type_expr_in_ns(
                 generic_params,
                 diagnostics,
             )),
-            Box::new(lower_type_expr_in_ns(
+            value: Box::new(lower_type_expr_in_ns(
                 db,
                 value,
                 package_items,
@@ -694,8 +933,8 @@ pub fn lower_type_expr_in_ns(
                 generic_params,
                 diagnostics,
             )),
-            TyAttr::default(),
-        ),
+            attr: TyAttr::default(),
+        },
         TypeExpr::Union {
             variants: members, ..
         } => Ty::Union(
@@ -895,8 +1134,12 @@ mod tests {
     impl crate::Db for TestDb {}
 
     fn path(name: &str) -> TypeExpr {
+        path_segments(&[name])
+    }
+
+    fn path_segments(names: &[&str]) -> TypeExpr {
         TypeExpr::Path {
-            segments: vec![Name::new(name)],
+            segments: names.iter().map(|name| Name::new(*name)).collect(),
             generic_args: vec![],
             associated_type_bindings: vec![],
             attrs: vec![],
@@ -937,6 +1180,28 @@ mod tests {
     }
 
     #[test]
+    fn substitute_paths_rewrites_substituted_root_member_path_to_projection() {
+        let type_expr = path_segments(&["T", "Item"]);
+        let replacement = path("Box");
+        let mut subst = std::collections::HashMap::new();
+        subst.insert(Name::new("T"), replacement.clone());
+
+        let TypeExpr::AssociatedTypeProjection {
+            base,
+            interface,
+            member,
+            ..
+        } = substitute_paths_in(&type_expr, &subst)
+        else {
+            panic!("expected associated type projection");
+        };
+
+        assert_eq!(*base, replacement);
+        assert!(interface.is_none());
+        assert_eq!(member, Name::new("Item"));
+    }
+
+    #[test]
     fn substitute_self_recurses_into_function_type() {
         let type_expr = TypeExpr::Function {
             generic_params: Vec::new(),
@@ -970,6 +1235,26 @@ mod tests {
         assert_eq!(params[0].ty, replacement);
         assert_eq!(*ret, replacement);
         assert_eq!(throws.map(|ty| *ty), Some(replacement));
+    }
+
+    #[test]
+    fn substitute_self_rewrites_member_path_to_projection() {
+        let type_expr = path_segments(&["Self", "Record"]);
+        let replacement = path("UserRepository");
+
+        let TypeExpr::AssociatedTypeProjection {
+            base,
+            interface,
+            member,
+            ..
+        } = substitute_self_in(&type_expr, &replacement)
+        else {
+            panic!("expected associated type projection");
+        };
+
+        assert_eq!(*base, replacement);
+        assert!(interface.is_none());
+        assert_eq!(member, Name::new("Record"));
     }
 
     #[test]

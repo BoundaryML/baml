@@ -144,10 +144,20 @@ export type WasmShellCallback = (
 ///   1. Decode `argsBytes` (a protobuf-encoded `BamlOutboundValue` list)
 ///      into JS positional arguments.
 ///   2. Invoke the user callable (awaiting a returned Promise if any).
-///   3. Encode the result as an `InboundValue` (success) or
-///      `HostCallableError` (failure) protobuf payload.
+///   3. Encode the outcome as an `InboundValue` protobuf payload:
+///      - **Return:** the returned value itself.
+///      - **Throw:** *any* `InboundValue` describing the thrown value.
+///        A typed BAML error class (when the wrapper unwraps a
+///        `BamlError(value=...)` whose inner value is a codegenned
+///        BAML class) round-trips as that class so the BAML caller's
+///        typed `catch (e: MyError)` matches structurally. An opaque
+///        native JS exception is wrapped as an `Instance` of
+///        `baml.errors.HostCallable` carrying the exception's metadata
+///        (`message`, `class_name`, `language`, optional `traceback`),
+///        with an optional same-host rehydration handle in `_handle`.
 ///   4. Call `completeHostCall(callId, isError, content)` (the wasm-bindgen
-///      export from this module) to resolve the in-flight call.
+///      export from this module) to resolve the in-flight call — `isError`
+///      is `0` for the return path and `1` for the throw path.
 export type WasmHostDispatchCallback = (
   key: bigint,
   callId: number,
@@ -277,8 +287,7 @@ impl BamlWasmRuntime {
 
         let lsp = wasm_lsp::WasmLsp::new(send_notification_fn, send_response_fn, make_request_fn);
         let playground =
-            wasm_playground::WasmPlaygroundSender::new(playground_send_notification_fn.clone());
-        let event_sink = wasm_playground::WasmEventSink::new(playground_send_notification_fn);
+            wasm_playground::WasmPlaygroundSender::new(playground_send_notification_fn);
 
         let vfs = wasm_fs::WasmFs::new(wasm_vfs_arc);
         let vfs = std::sync::Arc::new(vfs);
@@ -288,18 +297,24 @@ impl BamlWasmRuntime {
             std::sync::Arc::new(lsp),
             std::sync::Arc::new(playground),
             bex_project::BamlVFS::new(vfs),
-            Some(std::sync::Arc::new(event_sink)),
             bex_project::BackgroundSpawner::new(),
         );
 
         Ok(BamlWasmRuntime { bex: Box::new(bex) })
     }
 
+    /// Allocate a fresh function call ID.
+    #[wasm_bindgen(js_name = nextFunctionCall)]
+    pub fn next_function_call(&self) -> Result<u32, JsError> {
+        let call_id = sys_types::CallId::next().0;
+        u32::try_from(call_id).map_err(|_| JsError::new("Function call ID overflowed u32"))
+    }
+
     /// Call a BAML function for a specific project.
     ///
     /// # Arguments
     ///
-    /// * `id` - Unique call identifier
+    /// * `_id` - Transport correlation identifier; the engine call ID is read from `args_proto`
     /// * `project` - Project root path (e.g. `"/workspace/baml_src"`)
     /// * `name` - The function name to call
     /// * `args_proto` - Protobuf-encoded `HostFunctionArguments`
@@ -310,7 +325,7 @@ impl BamlWasmRuntime {
     #[wasm_bindgen(js_name = callFunction)]
     pub async fn call_function(
         &self,
-        id: u32,
+        _id: u32,
         project: String,
         name: &str,
         args_proto: &[u8],
@@ -322,7 +337,7 @@ impl BamlWasmRuntime {
         let kwargs = kwargs_to_bex_values(args.kwargs, &HANDLE_TABLE)
             .map_err(|e| JsError::new(&format!("Failed to convert arguments: {e}")))?;
 
-        let call_id = sys_types::CallId(u64::from(id));
+        let call_id = sys_types::CallId(args.call_id);
         let fs_path = bex_project::FsPath::from_str(project);
 
         let function_call_ctx = bex_project::FunctionCallContextBuilder::new(call_id);

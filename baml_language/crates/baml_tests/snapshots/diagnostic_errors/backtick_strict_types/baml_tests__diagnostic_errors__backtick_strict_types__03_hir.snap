@@ -21,5 +21,5 @@ function user.get_count() -> int?  [expr] {
   {  } 42
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "x": self.x.to_json() }
+  map { "x": baml.json.to_json(self.x) }
 }

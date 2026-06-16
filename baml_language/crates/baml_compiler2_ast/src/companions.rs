@@ -18,11 +18,15 @@ use crate::{
 
 type CompanionExpander = fn(&FunctionDef) -> Option<FunctionDef>;
 
+// NOTE: the `$stream` and `$parse_stream` companions are synthesized at PPIR
+// level (`baml_compiler2_ppir::ppir_expansion_items`), not here — their
+// bodies need the stream-expanded return type, which only PPIR can compute.
+// `$parse` (below) is defined here but likewise *invoked* from PPIR, with the
+// stream-expanded type passed in.
 const COMPANIONS: &[CompanionExpander] = &[
     llm_render_prompt,
     llm_build_request,
     llm_build_request_stream,
-    llm_parse,
 ];
 
 /// Run all companion expanders on the given function.
@@ -69,8 +73,16 @@ fn llm_build_request_stream(parent: &FunctionDef) -> Option<FunctionDef> {
     ))
 }
 
-fn llm_parse(parent: &FunctionDef) -> Option<FunctionDef> {
-    // Only LLM functions get parse companion.
+/// Build the `$parse` companion for an LLM function.
+///
+/// Unlike the expanders in `COMPANIONS`, this is invoked from PPIR
+/// (`ppir_expansion_items`), not at CST-lowering time: the companion body
+/// passes `<STREAM_EXPANDED, ORIGINAL>` as explicit type args
+/// (`baml.llm.parse<...>(json)`), and the stream-expanded return type is
+/// only computable with PPIR context (package items, block attrs, alias
+/// bodies) — hence the extra `type_args` parameter.
+pub fn llm_parse(parent: &FunctionDef, type_args: Vec<TypeExpr>) -> Option<FunctionDef> {
+    // Only LLM functions get a parse companion.
     if !matches!(&parent.declarative_meta, Some(DeclarativeMeta::Llm(_))) {
         return None;
     }
@@ -93,7 +105,7 @@ fn llm_parse(parent: &FunctionDef) -> Option<FunctionDef> {
     // Return type is the same as the parent function.
     let return_type = parent.return_type.clone();
 
-    let (body, source_map) = synthesize_llm_parse_call(parent.name.as_str(), parent.span);
+    let (body, source_map) = synthesize_llm_parse_call(type_args, parent.span);
     let mut params = vec![json_param];
     if let Some(client_param) = parent.params.iter().find(|p| p.name.as_str() == "client") {
         params.push(client_param.clone());

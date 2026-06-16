@@ -73,7 +73,8 @@ function user.GenerateImage$parse(json: string, client: baml.llm.Client) -> imag
     store_var client
 
   L0:
-    load_const "GenerateImage"
+    load_type image
+    load_type image
     load_var json
     call baml.llm.parse
     return
@@ -88,8 +89,9 @@ function user.GenerateImage$parse_stream(sse: baml.http.SseStream, client: baml.
     store_var client
 
   L0:
+    load_type image
+    load_type image
     load_var2 2 1
-    load_const "GenerateImage"
     call baml.llm.Client.__make_stream
     return
 }
@@ -121,6 +123,8 @@ function user.GenerateImage$stream(prompt: string, client: baml.llm.Client) -> b
     store_var client
 
   L0:
+    load_type image
+    load_type image
     load_var client
     load_const "GenerateImage"
     load_var prompt
@@ -196,7 +200,8 @@ function user.GenerateImageSet$parse(json: string, client: baml.llm.Client) -> i
     store_var client
 
   L0:
-    load_const "GenerateImageSet"
+    load_type image[]
+    load_type image[]
     load_var json
     call baml.llm.parse
     return
@@ -211,8 +216,9 @@ function user.GenerateImageSet$parse_stream(sse: baml.http.SseStream, client: ba
     store_var client
 
   L0:
+    load_type image[]
+    load_type image[]
     load_var2 2 1
-    load_const "GenerateImageSet"
     call baml.llm.Client.__make_stream
     return
 }
@@ -244,6 +250,8 @@ function user.GenerateImageSet$stream(prompt: string, client: baml.llm.Client) -
     store_var client
 
   L0:
+    load_type image[]
+    load_type image[]
     load_var client
     load_const "GenerateImageSet"
     load_var prompt
@@ -319,7 +327,8 @@ function user.GenerateMixedImageNarrative$parse(json: string, client: baml.llm.C
     store_var client
 
   L0:
-    load_const "GenerateMixedImageNarrative"
+    load_type image | string[]
+    load_type image | string[]
     load_var json
     call baml.llm.parse
     return
@@ -334,8 +343,9 @@ function user.GenerateMixedImageNarrative$parse_stream(sse: baml.http.SseStream,
     store_var client
 
   L0:
+    load_type image | string[]
+    load_type image | string[]
     load_var2 2 1
-    load_const "GenerateMixedImageNarrative"
     call baml.llm.Client.__make_stream
     return
 }
@@ -367,6 +377,8 @@ function user.GenerateMixedImageNarrative$stream(prompt: string, client: baml.ll
     store_var client
 
   L0:
+    load_type image | string[]
+    load_type image | string[]
     load_var client
     load_const "GenerateMixedImageNarrative"
     load_var prompt

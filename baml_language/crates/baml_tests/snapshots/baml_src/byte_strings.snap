@@ -206,7 +206,7 @@ function byte_strings.byte_strings_index_read_direct() -> int {
     return
 }
 
-function byte_strings.byte_strings_index_write() -> int? {
+function byte_strings.byte_strings_index_write() -> int | null {
     load_const b"\x00\x00"
     call baml.deep_copy
     store_var data

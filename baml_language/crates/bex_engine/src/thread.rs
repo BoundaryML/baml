@@ -123,32 +123,47 @@ pub struct BexThread {
     /// Clone of the parent's `pending_child_errors`, or `None` for the
     /// root thread. When this thread terminates with an unhandled throw,
     /// the engine pushes our settled future ptr here so the parent
-    /// observes the error at its next await.
+    /// observes the error at its next await. For a `detach = true` spawn the
+    /// engine sets this to the *root* thread's queue instead of the spawner's.
     pub parent_pending_errors: Option<Arc<ChildErrorQueue>>,
+    /// The root call's `pending_child_errors` queue, propagated unchanged down
+    /// the whole spawn tree (for the root thread this is its own queue). A
+    /// `detach = true` spawn routes its unhandled errors here so they surface
+    /// at the root's next await rather than the spawner's (BEP-034 decision
+    /// #11 / fire-and-forget). Logged-and-dropped if the root already returned.
+    pub root_pending_errors: Arc<ChildErrorQueue>,
 }
 
 impl BexThread {
-    /// Build a root thread — no parent, no future to settle.
+    /// Build a root thread — no parent, no future to settle. The root's own
+    /// `pending_child_errors` queue is also its `root_pending_errors`, so
+    /// detached descendants route their errors back here.
     pub fn new_root(vm: BexVm, cancel: CancellationToken) -> Self {
+        let pending = ChildErrorQueue::new();
         Self {
             vm,
             name: None,
             cancel,
             settles_future: None,
-            pending_child_errors: ChildErrorQueue::new(),
+            pending_child_errors: Arc::clone(&pending),
             parent_pending_errors: None,
+            root_pending_errors: pending,
         }
     }
 
     /// Build a child thread that will settle `future_id` when its body
-    /// terminates. `parent_pending_errors` is a clone of the spawning
-    /// thread's `pending_child_errors` queue Arc.
+    /// terminates. `parent_pending_errors` is the queue this child pushes an
+    /// unhandled error onto (the spawner's queue normally, or the root's for a
+    /// detached spawn). `root_pending_errors` is the root call's queue,
+    /// propagated unchanged so this child's own detached descendants can find
+    /// the root.
     pub fn new_child(
         vm: BexVm,
         cancel: CancellationToken,
         name: Option<String>,
         settles_future: FutureId,
         parent_pending_errors: Arc<ChildErrorQueue>,
+        root_pending_errors: Arc<ChildErrorQueue>,
     ) -> Self {
         Self {
             vm,
@@ -157,6 +172,7 @@ impl BexThread {
             settles_future: Some(settles_future),
             pending_child_errors: ChildErrorQueue::new(),
             parent_pending_errors: Some(parent_pending_errors),
+            root_pending_errors,
         }
     }
 
@@ -206,6 +222,14 @@ impl BexThread {
     /// freshly spawned children as their `parent_pending_errors`.
     pub fn vm_thread_pending_errors_arc(&self) -> Arc<ChildErrorQueue> {
         Arc::clone(&self.pending_child_errors)
+    }
+
+    /// Clone of the root call's `pending_child_errors` Arc, propagated down
+    /// the spawn tree. Used as a detached child's `parent_pending_errors`
+    /// (so its errors surface at the root) and passed unchanged to every
+    /// spawned child as their `root_pending_errors`.
+    pub fn vm_thread_root_errors_arc(&self) -> Arc<ChildErrorQueue> {
+        Arc::clone(&self.root_pending_errors)
     }
 }
 

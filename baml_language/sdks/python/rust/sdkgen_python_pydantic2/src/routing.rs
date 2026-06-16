@@ -113,6 +113,7 @@ fn route_inner(name: &Name, honor_stream_suffix: bool) -> LeafPath {
 mod tests {
     use baml_base::Name as BaseName;
     use baml_codegen_types::{Class, Enum, EnumVariant, Function, FunctionArgument, Origin, Ty};
+    use pretty_assertions::assert_eq;
 
     use super::*;
 

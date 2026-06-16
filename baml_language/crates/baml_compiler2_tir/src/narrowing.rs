@@ -34,7 +34,7 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     builder::LocalBinding,
-    ty::{PrimitiveType, Ty, TyAttr},
+    ty::{Ty, TyAttr},
 };
 
 // ── Narrowing descriptor ──────────────────────────────────────────────────────
@@ -106,13 +106,17 @@ fn collect_narrowings(
                 let (then_ty, else_ty) = if negated {
                     // !(x != null) == x == null
                     (
-                        Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
+                        Ty::Null {
+                            attr: TyAttr::default(),
+                        },
                         remove_null(&original_ty),
                     )
                 } else {
                     (
                         remove_null(&original_ty),
-                        Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
+                        Ty::Null {
+                            attr: TyAttr::default(),
+                        },
                     )
                 };
                 out.push(Narrowing {
@@ -134,11 +138,15 @@ fn collect_narrowings(
                     // !(x == null) == x != null
                     (
                         remove_null(&original_ty),
-                        Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
+                        Ty::Null {
+                            attr: TyAttr::default(),
+                        },
                     )
                 } else {
                     (
-                        Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
+                        Ty::Null {
+                            attr: TyAttr::default(),
+                        },
                         remove_null(&original_ty),
                     )
                 };
@@ -258,11 +266,8 @@ fn null_check_name(
 /// with null) or is directly `Null`.
 fn is_nullable(ty: &Ty) -> bool {
     match ty {
-        Ty::Optional(_, _) => true,
-        Ty::Primitive(PrimitiveType::Null, _) => true,
-        Ty::Union(members, _) => members
-            .iter()
-            .any(|m| matches!(m, Ty::Primitive(PrimitiveType::Null, _))),
+        Ty::Null { .. } => true,
+        Ty::Union(members, _) => members.iter().any(|m| matches!(m, Ty::Null { .. })),
         _ => false,
     }
 }
@@ -283,13 +288,22 @@ fn is_nullable(ty: &Ty) -> bool {
 /// `TyAttr::default()` while source-derived members may not. Comparing by
 /// shape only is sound for the membership test we need here.
 pub(crate) fn subtract_pattern_type(scrutinee: &Ty, matched: &Ty) -> Ty {
-    let matched_set: Vec<&Ty> = match matched {
-        Ty::Union(members, _) => members.iter().collect(),
-        _ => vec![matched],
-    };
+    // Flatten nested unions to leaf members on both sides. `int | string?`
+    // lowers to `Union([int, Union([string, null])])`; without flattening, the
+    // nested `string?` member never aligns with the matched pattern's members
+    // (`string`, `null`) and the else branch fails to narrow. (Pre-union, the
+    // deleted `(Optional, Optional)` arm in `ty_shape_eq` covered this.)
+    fn flat_members(ty: &Ty) -> Vec<&Ty> {
+        match ty {
+            Ty::Union(members, _) => members.iter().flat_map(flat_members).collect(),
+            other => vec![other],
+        }
+    }
+
+    let matched_set: Vec<&Ty> = flat_members(matched);
 
     let scrut_members: Vec<&Ty> = match scrutinee {
-        Ty::Union(members, _) => members.iter().collect(),
+        Ty::Union(_, _) => flat_members(scrutinee),
         _ => return scrutinee.clone(),
     };
 
@@ -324,7 +338,14 @@ pub(crate) fn subtract_pattern_type(scrutinee: &Ty, matched: &Ty) -> Ty {
 /// (less narrowing, never unsound).
 fn ty_shape_eq(a: &Ty, b: &Ty) -> bool {
     match (a, b) {
-        (Ty::Primitive(p1, _), Ty::Primitive(p2, _)) => p1 == p2,
+        (Ty::Int { .. }, Ty::Int { .. })
+        | (Ty::Bigint { .. }, Ty::Bigint { .. })
+        | (Ty::Float { .. }, Ty::Float { .. })
+        | (Ty::String { .. }, Ty::String { .. })
+        | (Ty::Bool { .. }, Ty::Bool { .. })
+        | (Ty::Null { .. }, Ty::Null { .. })
+        | (Ty::Uint8Array { .. }, Ty::Uint8Array { .. }) => true,
+        (Ty::Media(k1, _), Ty::Media(k2, _)) => k1 == k2,
         (Ty::Class(n1, args1, _), Ty::Class(n2, args2, _)) => {
             n1 == n2
                 && args1.len() == args2.len()
@@ -334,8 +355,14 @@ fn ty_shape_eq(a: &Ty, b: &Ty) -> bool {
         (Ty::EnumVariant(n1, v1, _), Ty::EnumVariant(n2, v2, _)) => n1 == n2 && v1 == v2,
         (Ty::TypeAlias(n1, _), Ty::TypeAlias(n2, _)) => n1 == n2,
         (Ty::List(t1, _), Ty::List(t2, _)) => ty_shape_eq(t1, t2),
-        (Ty::Map(k1, v1, _), Ty::Map(k2, v2, _)) => ty_shape_eq(k1, k2) && ty_shape_eq(v1, v2),
-        (Ty::Optional(t1, _), Ty::Optional(t2, _)) => ty_shape_eq(t1, t2),
+        (
+            Ty::Map {
+                key: k1, value: v1, ..
+            },
+            Ty::Map {
+                key: k2, value: v2, ..
+            },
+        ) => ty_shape_eq(k1, k2) && ty_shape_eq(v1, v2),
         (Ty::Literal(l1, _, _), Ty::Literal(l2, _, _)) => l1 == l2,
         _ => false,
     }
@@ -351,11 +378,10 @@ fn ty_shape_eq(a: &Ty, b: &Ty) -> bool {
 /// | `T` (not nullable)  | `T` (unchanged)            |
 pub fn remove_null(ty: &Ty) -> Ty {
     match ty {
-        Ty::Optional(inner, _) => inner.as_ref().clone(),
         Ty::Union(members, _) => {
             let filtered: Vec<Ty> = members
                 .iter()
-                .filter(|m| !matches!(m, Ty::Primitive(PrimitiveType::Null, _)))
+                .filter(|m| !matches!(m, Ty::Null { .. }))
                 .cloned()
                 .collect();
             match filtered.len() {
@@ -366,7 +392,7 @@ pub fn remove_null(ty: &Ty) -> Ty {
                 _ => Ty::Union(filtered, TyAttr::default()),
             }
         }
-        Ty::Primitive(PrimitiveType::Null, _) => Ty::Never {
+        Ty::Null { .. } => Ty::Never {
             attr: TyAttr::default(),
         },
         _ => ty.clone(),

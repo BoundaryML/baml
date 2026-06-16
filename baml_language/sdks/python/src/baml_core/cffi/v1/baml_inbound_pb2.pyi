@@ -23,13 +23,7 @@ class BamlHandleType(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     ADT_TYPE: _ClassVar[BamlHandleType]
     ADT_TAGGED_HEAP_HANDLE: _ClassVar[BamlHandleType]
     HOST_VALUE_CALLABLE: _ClassVar[BamlHandleType]
-
-class HostCallableErrorCategory(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
-    __slots__ = ()
-    HOST_CALLABLE_ERROR_UNSPECIFIED: _ClassVar[HostCallableErrorCategory]
-    HOST_CALLABLE_HOST_ERROR: _ClassVar[HostCallableErrorCategory]
-    HOST_CALLABLE_INVALID_ARGUMENT: _ClassVar[HostCallableErrorCategory]
-    HOST_CALLABLE_CANCELLED: _ClassVar[HostCallableErrorCategory]
+    HOST_VALUE_OPAQUE: _ClassVar[BamlHandleType]
 HANDLE_UNSPECIFIED: BamlHandleType
 UNTAGGED_RUST_DATA: BamlHandleType
 UNTAGGED_BEX_HEAP: BamlHandleType
@@ -44,10 +38,7 @@ ADT_COLLECTOR: BamlHandleType
 ADT_TYPE: BamlHandleType
 ADT_TAGGED_HEAP_HANDLE: BamlHandleType
 HOST_VALUE_CALLABLE: BamlHandleType
-HOST_CALLABLE_ERROR_UNSPECIFIED: HostCallableErrorCategory
-HOST_CALLABLE_HOST_ERROR: HostCallableErrorCategory
-HOST_CALLABLE_INVALID_ARGUMENT: HostCallableErrorCategory
-HOST_CALLABLE_CANCELLED: HostCallableErrorCategory
+HOST_VALUE_OPAQUE: BamlHandleType
 
 class BamlHandle(_message.Message):
     __slots__ = ("key", "handle_type")
@@ -125,25 +116,13 @@ class InboundEnumValue(_message.Message):
     value: str
     def __init__(self, name: _Optional[str] = ..., value: _Optional[str] = ...) -> None: ...
 
-class HostCallableError(_message.Message):
-    __slots__ = ("class_name", "message", "traceback", "language", "category")
-    CLASS_NAME_FIELD_NUMBER: _ClassVar[int]
-    MESSAGE_FIELD_NUMBER: _ClassVar[int]
-    TRACEBACK_FIELD_NUMBER: _ClassVar[int]
-    LANGUAGE_FIELD_NUMBER: _ClassVar[int]
-    CATEGORY_FIELD_NUMBER: _ClassVar[int]
-    class_name: str
-    message: str
-    traceback: str
-    language: str
-    category: HostCallableErrorCategory
-    def __init__(self, class_name: _Optional[str] = ..., message: _Optional[str] = ..., traceback: _Optional[str] = ..., language: _Optional[str] = ..., category: _Optional[_Union[HostCallableErrorCategory, str]] = ...) -> None: ...
-
 class CallFunctionArgs(_message.Message):
-    __slots__ = ("kwargs",)
+    __slots__ = ("kwargs", "call_id")
     KWARGS_FIELD_NUMBER: _ClassVar[int]
+    CALL_ID_FIELD_NUMBER: _ClassVar[int]
     kwargs: _containers.RepeatedCompositeFieldContainer[InboundMapEntry]
-    def __init__(self, kwargs: _Optional[_Iterable[_Union[InboundMapEntry, _Mapping]]] = ...) -> None: ...
+    call_id: int
+    def __init__(self, kwargs: _Optional[_Iterable[_Union[InboundMapEntry, _Mapping]]] = ..., call_id: _Optional[int] = ...) -> None: ...
 
 class CallAck(_message.Message):
     __slots__ = ("error",)

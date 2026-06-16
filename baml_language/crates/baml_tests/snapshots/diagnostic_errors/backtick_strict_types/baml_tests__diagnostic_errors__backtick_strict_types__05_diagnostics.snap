@@ -22,12 +22,12 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0001
 ────╯
 
-  [type] error: cannot interpolate a value of type `int?` — it may be null; coalesce with `?? "…"` or unwrap it first
+  [type] error: cannot interpolate a value of type `int | null` — it may be null; coalesce with `?? "…"` or unwrap it first
     ╭─[ main.baml:41:14 ]
     │
  41 │     `count: ${c}`
     │              ─┬─  
-    │               ╰─── cannot interpolate a value of type `int?` — it may be null; coalesce with `?? "…"` or unwrap it first
+    │               ╰─── cannot interpolate a value of type `int | null` — it may be null; coalesce with `?? "…"` or unwrap it first
     │ 
     │ Note: Error code: E0001
 ────╯

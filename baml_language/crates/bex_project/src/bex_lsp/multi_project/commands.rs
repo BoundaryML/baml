@@ -36,12 +36,21 @@ pub(super) struct OpenBamlPanel {
     pub project_path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub function_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub test_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub testset_name: Option<String>,
+    /// Lens title override (display-only; not serialized into command args).
+    #[serde(skip)]
+    pub title: Option<String>,
 }
 
 impl BexLspCommand for OpenBamlPanel {
     const COMMAND_ID: &'static str = "baml.openBamlPanel";
 
     fn command_text(&self) -> String {
-        "▶ Open 🐑 Playground".to_string()
+        self.title
+            .clone()
+            .unwrap_or_else(|| "▶ Open 🐑 Playground".to_string())
     }
 }

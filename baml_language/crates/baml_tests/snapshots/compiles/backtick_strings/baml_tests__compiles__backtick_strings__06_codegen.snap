@@ -146,40 +146,171 @@ function user.BacktickLiteralAsArg() -> string {
 function user.BacktickM3ForLoop(xs: string[]) -> string {
     load_const ""
     store_var  __m3_for
-    load_const 0
-    store_var __for_idx
+    load_type string
+    load_var xs
+    call baml.iter.Iterable$for$T[].iter
+    store_var _3
 
   L0:
-    load_var2 3 1
-    container_len
-    cmp_int_op <
+    load_var _3
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L1
-    jump L2
+    jump L18
 
   L1:
-    load_var  __m3_for
-    return
+    load_var _3
+    is_type baml.iter.ArrayIterator<...>
+    pop_jump_if_false L2
+    jump L17
 
   L2:
+    load_var _3
+    is_type baml.iter.StepBy<...>
+    pop_jump_if_false L3
+    jump L16
+
+  L3:
+    load_var _3
+    is_type baml.iter.Chain<...>
+    pop_jump_if_false L4
+    jump L15
+
+  L4:
+    load_var _3
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L5
+    jump L14
+
+  L5:
+    load_var _3
+    is_type baml.iter.Map<...>
+    pop_jump_if_false L6
+    jump L13
+
+  L6:
+    load_var _3
+    is_type baml.iter.Filter<...>
+    pop_jump_if_false L7
+    jump L12
+
+  L7:
+    load_var _3
+    is_type baml.iter.FilterMap<...>
+    pop_jump_if_false L8
+    jump L11
+
+  L8:
+    load_var _3
+    is_type baml.iter.FlatMap<...>
+    pop_jump_if_false L9
+    jump L10
+
+  L9:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L22
+    load_type string
+    load_type never
+    load_var _3
+    call baml.iter.Peekable.Iterator.next
+    store_var _5
+    jump L19
+
+  L10:
+    load_var _3
+    make_bound_method baml.iter.FlatMap.Iterator.next
+    call_indirect
+    store_var _5
+    jump L19
+
+  L11:
+    load_var _3
+    make_bound_method baml.iter.FilterMap.Iterator.next
+    call_indirect
+    store_var _5
+    jump L19
+
+  L12:
+    load_type string
+    load_type never
+    load_type never
+    load_var _3
+    call baml.iter.Filter.Iterator.next
+    store_var _5
+    jump L19
+
+  L13:
+    load_var _3
+    make_bound_method baml.iter.Map.Iterator.next
+    call_indirect
+    store_var _5
+    jump L19
+
+  L14:
+    load_type string
+    load_var _3
+    call baml.iter.Repeat.Iterator.next
+    store_var _5
+    jump L19
+
+  L15:
+    load_type string
+    load_type never
+    load_type never
+    load_var _3
+    call baml.iter.Chain.Iterator.next
+    store_var _5
+    jump L19
+
+  L16:
+    load_type string
+    load_type never
+    load_var _3
+    call baml.iter.StepBy.Iterator.next
+    store_var _5
+    jump L19
+
+  L17:
+    load_type string
+    load_var _3
+    call baml.iter.ArrayIterator.Iterator.next
+    store_var _5
+    jump L19
+
+  L18:
+    load_var _3
+    make_bound_method baml.iter.Flatten.Iterator.next
+    call_indirect
+    store_var _5
+
+  L19:
+    load_var _5
+    is_type baml.iter.Done
+    pop_jump_if_false L20
+    jump L21
+
+  L20:
     load_var  __m3_for
-    store_var _9
-    load_var2 1 3
-    load_array_element
+    store_var _35
+    load_var _5
     call baml.String.to_string
-    store_var _12
-    load_var _9
+    store_var _38
+    load_var _35
     load_const "- "
-    load_var _12
+    load_var _38
     bin_op +
     load_const "\n"
     bin_op +
     bin_op +
     store_var  __m3_for
-    load_var __for_idx
-    load_const 1
-    add_int
-    store_var __for_idx
     jump L0
+
+  L21:
+    load_var  __m3_for
+    return
+
+  L22:
+    unreachable
 }
 
 function user.BacktickM3IfBlock(show: bool) -> string {

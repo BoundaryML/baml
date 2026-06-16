@@ -54,6 +54,84 @@ generator py {
 }
 
 // ============================================================================
+// Tests for `baml check` exit codes
+// ============================================================================
+
+/// A valid project should return exit code 0 from `baml check`.
+#[test]
+fn check_valid_project_returns_zero_exit_code() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(
+        tmp.path(),
+        "function greet(name: string) -> string {\n  \"Hello, \" + name\n}\n",
+    );
+
+    let output = run_baml_cli(built, tmp.path(), &["check", "--from", "."]);
+
+    assert!(
+        output.status.success(),
+        "Expected exit code 0 for valid project, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+}
+
+/// `baml check` with no `--from` is sugar for `baml check --from .`.
+#[test]
+fn check_defaults_from_to_current_directory() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(
+        tmp.path(),
+        "function greet(name: string) -> string {\n  \"Hello, \" + name\n}\n",
+    );
+
+    let output = run_baml_cli(built, tmp.path(), &["check"]);
+
+    assert!(
+        output.status.success(),
+        "Expected exit code 0 for `baml check` defaulting to cwd, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+}
+
+/// Compilation errors must result in a non-zero exit code for `baml check`.
+#[test]
+fn check_compilation_error_returns_nonzero_exit_code() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(
+        tmp.path(),
+        "function broken() -> MissingType {\n  \"never\"\n}\n",
+    );
+
+    let output = run_baml_cli(built, tmp.path(), &["check", "--from", "."]);
+
+    assert!(
+        !output.status.success(),
+        "Expected non-zero exit code for compilation error in `baml check`",
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(4),
+        "Expected exit code 4 for compilation error",
+    );
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("MissingType") || stderr.contains("unresolved"),
+        "Expected error message to mention the unresolved type, got: {stderr}",
+    );
+}
+
+// ============================================================================
 // Tests for `baml generate` exit codes
 // ============================================================================
 
@@ -148,6 +226,15 @@ fn generate_valid_project_returns_zero_exit_code() {
         output.status.code(),
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr),
+    );
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains(&format!(
+            "Generating clients with CLI version: {}",
+            baml_version::CANONICAL_VERSION
+        )),
+        "Expected generate output to include CLI version, got: {stderr}",
     );
 }
 
@@ -460,6 +547,272 @@ fn run_execute_function_without_baml_toml_succeeds() {
         stdout.contains("42"),
         "Expected the result `42`, got:\n{stdout}"
     );
+}
+
+/// `baml describe --from` uses the same manifest-less `baml_src/` project
+/// marker as `run`; agents should be able to inspect symbols in scratch
+/// projects created without a `baml.toml`.
+#[test]
+fn describe_from_baml_src_only_project_finds_user_symbols() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+    let src = tmp.path().join("baml_src");
+    std::fs::create_dir_all(&src).unwrap();
+    std::fs::write(
+        src.join("main.baml"),
+        r#"
+interface Named {
+  function label(self) -> string
+}
+
+class Ticket {
+  id: string
+
+  implements Named {
+    function label(self) -> string {
+      return self.id
+    }
+  }
+}
+"#,
+    )
+    .unwrap();
+
+    let output = run_baml_cli(
+        built,
+        tmp.path(),
+        &["describe", "Ticket", "--from", ".", "--budget", "120"],
+    );
+
+    assert!(
+        output.status.success(),
+        "Expected describe to find Ticket in a baml_src-only project, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("class Ticket"),
+        "Expected class description, got:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("implements Named"),
+        "Expected implements summary, got:\n{stdout}"
+    );
+}
+
+/// Associated type projections that resolve to concrete value types must still
+/// produce stdout through `baml run`. This catches a real boundary bug where the
+/// VM metadata erased `(Class as Interface).Assoc` to `void`; dispatch treats
+/// `void` as "do not print", so a value-returning function silently produced no
+/// output.
+#[test]
+fn run_prints_concrete_associated_type_projection_return() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(
+        tmp.path(),
+        r#"
+interface PublicIdentity {
+  type Key
+  key: Key
+}
+
+class AccountRecord {
+  public_key: string
+
+  implements PublicIdentity {
+    type Key = string
+    key as public_key
+  }
+}
+
+function get_public_key() -> (AccountRecord as PublicIdentity).Key {
+  let account = AccountRecord { public_key: "visible-key" }
+  return account.as<PublicIdentity>.key
+}
+"#,
+    );
+
+    let output = run_baml_cli(
+        built,
+        tmp.path(),
+        &["run", "get_public_key", "--from", ".", "--features", "beta"],
+    );
+
+    assert!(
+        output.status.success(),
+        "Expected exit 0 for projected associated type return, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("visible-key"),
+        "Expected projected string return to be printed, got:\n{stdout}"
+    );
+}
+
+/// `baml run --list` reads VM function metadata, so concrete associated
+/// projections must resolve while generic signatures stay visible for users and
+/// agents instead of inheriting runtime erasure.
+#[test]
+fn run_list_prints_resolved_associated_projection_metadata() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(
+        tmp.path(),
+        r#"
+interface PublicIdentity {
+  type Key
+  key: Key
+}
+
+class AccountRecord {
+  public_key: string
+
+  implements PublicIdentity {
+    type Key = string
+    key as public_key
+  }
+}
+
+interface Repository {
+  type Record
+  function find(self) -> Self.Record
+}
+
+class UserRecord {
+  name: string
+}
+
+class UserRepository {
+  value: UserRecord
+
+  implements Repository {
+    type Record = UserRecord
+
+    function find(self) -> Self.Record {
+      return self.value
+    }
+  }
+}
+
+class GenericBox<T> {
+  value: T
+
+  function get(self) -> T {
+    return self.value
+  }
+}
+
+interface BoxLike {
+  type Item
+  function get(self) -> Self.Item
+}
+
+function get_public_key(account: AccountRecord) -> (AccountRecord as PublicIdentity).Key {
+  return account.as<PublicIdentity>.key
+}
+
+function read_item<T extends BoxLike>(box: T) -> T.Item {
+  return box.get()
+}
+"#,
+    );
+
+    let output = run_baml_cli(
+        built,
+        tmp.path(),
+        &["run", "--list", "--from", ".", "--features", "beta"],
+    );
+
+    assert!(
+        output.status.success(),
+        "Expected exit 0 listing projected associated type metadata, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    for expected in [
+        "get_public_key(account: AccountRecord) -> string",
+        "UserRepository.Repository.find(self: UserRepository) -> UserRecord",
+        "GenericBox.get<T>(self: GenericBox<T>) -> T",
+        "read_item<T extends BoxLike>(box: T) -> T.Item",
+    ] {
+        assert!(
+            stdout.contains(expected),
+            "Expected `baml run --list` output to contain `{expected}`, got:\n{stdout}"
+        );
+    }
+    assert!(
+        !stdout.contains("read_item(box: unknown) -> unknown"),
+        "Generic associated projection signatures must not be erased in list output:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains("-> void"),
+        "Projected value-returning functions must not be listed as void:\n{stdout}"
+    );
+
+    let json_output = run_baml_cli(
+        built,
+        tmp.path(),
+        &[
+            "run",
+            "--list",
+            "--output-format",
+            "json",
+            "--from",
+            ".",
+            "--features",
+            "beta",
+        ],
+    );
+    assert!(
+        json_output.status.success(),
+        "Expected JSON list exit 0, got: {:?}\nstdout: {}\nstderr: {}",
+        json_output.status.code(),
+        String::from_utf8_lossy(&json_output.stdout),
+        String::from_utf8_lossy(&json_output.stderr),
+    );
+    let value: serde_json::Value =
+        serde_json::from_slice(&json_output.stdout).expect("parse run --list JSON output");
+    let functions = value["functions"]
+        .as_array()
+        .expect("JSON list has functions array");
+    let read_item = functions
+        .iter()
+        .find(|f| f["name"].as_str() == Some("read_item"))
+        .expect("read_item listed in JSON");
+    let generic_params: Vec<&str> = read_item["generic_params"]
+        .as_array()
+        .expect("read_item has generic_params")
+        .iter()
+        .map(|v| v.as_str().expect("generic param is string"))
+        .collect();
+    assert_eq!(generic_params, vec!["T extends BoxLike"]);
+    assert_eq!(read_item["params"][0]["type"].as_str(), Some("T"));
+    assert_eq!(read_item["return_type"].as_str(), Some("T.Item"));
+
+    let generic_box_get = functions
+        .iter()
+        .find(|f| f["name"].as_str() == Some("GenericBox.get"))
+        .expect("GenericBox.get listed in JSON");
+    let generic_box_params: Vec<&str> = generic_box_get["generic_params"]
+        .as_array()
+        .expect("GenericBox.get has generic_params")
+        .iter()
+        .map(|v| v.as_str().expect("generic param is string"))
+        .collect();
+    assert_eq!(generic_box_params, vec!["T"]);
+    assert_eq!(
+        generic_box_get["params"][0]["type"].as_str(),
+        Some("GenericBox<T>")
+    );
+    assert_eq!(generic_box_get["return_type"].as_str(), Some("T"));
 }
 
 /// `baml run -e <expr>` picks up a manifest-less `baml_src/` project's

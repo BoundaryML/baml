@@ -223,6 +223,23 @@ function main() -> string {{
 }
 
 #[tokio::test]
+async fn tagged_template_for_body_interp_nested_lambda_uses_loop_local_in_let() {
+    // Companion to the capturing_loop_local case: the nested lambda captures the
+    // `${for}` loop-local `x` and binds it through a local `let z` before use.
+    // Confirms the captured loop-local resolves to a concrete `string` (so the
+    // `let`/concat type-check and lower) rather than degrading to `Ty::Unknown`.
+    let output = baml_test!(&format!(
+        r#"{RENDER_TAG}
+function main() -> string {{
+  let xs = ["a", "b"]
+  render`${{for (let x in xs)}}${{["1"].map((y) -> {{ let z = x + "!"; z + y }}).join("")}}${{endfor}}`
+}}
+"#
+    ));
+    assert_eq!(output.result, ok_string("a!1b!1"));
+}
+
+#[tokio::test]
 async fn tagged_template_nested_for_in_if() {
     // Nested control flow: a `${for}` inside a taken `${if}` branch.
     let output = baml_test!(&format!(

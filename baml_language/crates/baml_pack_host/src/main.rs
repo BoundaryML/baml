@@ -93,7 +93,6 @@ fn run_single(envelope: PackEnvelope) -> ExitCode {
     let engine = match BexEngine::new(
         envelope.program,
         Arc::new(sys_native::SysOps::native()),
-        None,
         argv.clone(),
     ) {
         Ok(e) => Arc::new(e),
@@ -167,7 +166,6 @@ fn run_subcommand(envelope: PackEnvelope) -> ExitCode {
     let mut engine = match BexEngine::new(
         envelope.program,
         Arc::new(sys_native::SysOps::native()),
-        None,
         bootstrap_argv,
     ) {
         Ok(e) => e,
@@ -262,6 +260,11 @@ fn finalize_dispatch(
         json_args,
         output_format,
     ));
+
+    // Drain the profiling rings to .bamlprof before exit (no-op when
+    // BAML_PROFILE is off). NB: `baml.sys.exit()` paths bypass this — same
+    // caveat as the legacy event sink.
+    bex_events::prof::flush_and_join(std::time::Duration::from_secs(10));
 
     match result {
         Ok(DispatchResult::Ok) => ExitCode::SUCCESS,

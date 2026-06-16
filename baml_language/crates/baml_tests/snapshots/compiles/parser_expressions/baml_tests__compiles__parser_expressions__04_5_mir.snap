@@ -183,24 +183,28 @@ fn user.Profile.to_json(self: Profile) -> baml.json.json {
     let _2: baml.json.json
     let _3: string
     let _4: Profile
-    let _5: baml.json.json
-    let _6: Settings
-    let _7: Profile
+    let _5: type
+    let _6: baml.json.json
+    let _7: Settings
+    let _8: Profile
+    let _9: type
 
     bb0: {
         _4 = copy _1;
         _3 = copy _4.0;
-        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
+        _5 = load_type(string);
+        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
     }
 
     bb1: {
-        _7 = copy _1;
-        _6 = copy _7.1;
-        _5 = call const fn user.Settings.to_json(copy _6) -> [bb2];
+        _8 = copy _1;
+        _7 = copy _8.1;
+        _9 = load_type(Settings);
+        _6 = call const fn baml.json.to_json<copy _9>(copy _7) -> [bb2];
     }
 
     bb2: {
-        _0 = { const "bio": copy _2, const "settings": copy _5 };
+        _0 = { const "bio": copy _2, const "settings": copy _6 };
         goto -> bb3;
     }
 
@@ -216,33 +220,39 @@ fn user.User.to_json(self: User) -> baml.json.json {
     let _2: baml.json.json
     let _3: string
     let _4: User
-    let _5: baml.json.json
-    let _6: Profile
-    let _7: User
-    let _8: baml.json.json
-    let _9: string[]
-    let _10: User
+    let _5: type
+    let _6: baml.json.json
+    let _7: Profile
+    let _8: User
+    let _9: type
+    let _10: baml.json.json
+    let _11: string[]
+    let _12: User
+    let _13: type
 
     bb0: {
         _4 = copy _1;
         _3 = copy _4.0;
-        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
+        _5 = load_type(string);
+        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
     }
 
     bb1: {
-        _7 = copy _1;
-        _6 = copy _7.1;
-        _5 = call const fn user.Profile.to_json(copy _6) -> [bb2];
+        _8 = copy _1;
+        _7 = copy _8.1;
+        _9 = load_type(Profile);
+        _6 = call const fn baml.json.to_json<copy _9>(copy _7) -> [bb2];
     }
 
     bb2: {
-        _10 = copy _1;
-        _9 = copy _10.2;
-        _8 = call const fn baml.Array.to_json(copy _9) -> [bb3];
+        _12 = copy _1;
+        _11 = copy _12.2;
+        _13 = load_type(string[]);
+        _10 = call const fn baml.json.to_json<copy _13>(copy _11) -> [bb3];
     }
 
     bb3: {
-        _0 = { const "name": copy _2, const "profile": copy _5, const "tags": copy _8 };
+        _0 = { const "name": copy _2, const "profile": copy _6, const "tags": copy _10 };
         goto -> bb4;
     }
 
@@ -258,11 +268,13 @@ fn user.Settings.to_json(self: Settings) -> baml.json.json {
     let _2: baml.json.json
     let _3: string
     let _4: Settings
+    let _5: type
 
     bb0: {
         _4 = copy _1;
         _3 = copy _4.0;
-        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
+        _5 = load_type(string);
+        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
     }
 
     bb1: {
@@ -376,33 +388,39 @@ fn user.IndexUser.to_json(self: IndexUser) -> baml.json.json {
     let _2: baml.json.json
     let _3: string
     let _4: IndexUser
-    let _5: baml.json.json
-    let _6: int
-    let _7: IndexUser
-    let _8: baml.json.json
-    let _9: string[]
-    let _10: IndexUser
+    let _5: type
+    let _6: baml.json.json
+    let _7: int
+    let _8: IndexUser
+    let _9: type
+    let _10: baml.json.json
+    let _11: string[]
+    let _12: IndexUser
+    let _13: type
 
     bb0: {
         _4 = copy _1;
         _3 = copy _4.0;
-        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
+        _5 = load_type(string);
+        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
     }
 
     bb1: {
-        _7 = copy _1;
-        _6 = copy _7.1;
-        _5 = call const fn baml.Int.to_json(copy _6) -> [bb2];
+        _8 = copy _1;
+        _7 = copy _8.1;
+        _9 = load_type(int);
+        _6 = call const fn baml.json.to_json<copy _9>(copy _7) -> [bb2];
     }
 
     bb2: {
-        _10 = copy _1;
-        _9 = copy _10.2;
-        _8 = call const fn baml.Array.to_json(copy _9) -> [bb3];
+        _12 = copy _1;
+        _11 = copy _12.2;
+        _13 = load_type(string[]);
+        _10 = call const fn baml.json.to_json<copy _13>(copy _11) -> [bb3];
     }
 
     bb3: {
-        _0 = { const "name": copy _2, const "age": copy _5, const "tags": copy _8 };
+        _0 = { const "name": copy _2, const "age": copy _6, const "tags": copy _10 };
         goto -> bb4;
     }
 

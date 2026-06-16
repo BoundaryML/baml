@@ -85,13 +85,7 @@ async fn parallel_sum_scaling() {
         OptLevel::One,
     );
     let engine = Arc::new(
-        BexEngine::new(
-            program,
-            Arc::new(sys_ops::SysOps::native()),
-            None,
-            Vec::new(),
-        )
-        .expect("engine"),
+        BexEngine::new(program, Arc::new(sys_ops::SysOps::native()), Vec::new()).expect("engine"),
     );
 
     // Warm up

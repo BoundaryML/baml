@@ -35,6 +35,7 @@ function or_pattern_leak() -> int {
 class WrapNonGeneric {
     x: int,
 }
+
 function unresolved_class_head(v: WrapNonGeneric) -> bool {
     v is Frobnitz { x }
 }
@@ -43,6 +44,7 @@ function unresolved_class_head(v: WrapNonGeneric) -> bool {
 class WrapGeneric<T> {
     val: T,
 }
+
 function unresolved_generic_arg(v: WrapGeneric<int>) -> bool {
     v is WrapGeneric<Missing>
 }

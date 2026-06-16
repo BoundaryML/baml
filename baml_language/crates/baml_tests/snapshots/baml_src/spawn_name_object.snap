@@ -20,20 +20,22 @@ function spawn_name_object.$init_test_ns_spawn_name_object_spawn_name_object(reg
 
 function spawn_name_object.spawn_name_then_map_literal_body_fn() -> int {
     make_closure .<lambda(spawn_name_then_map_literal_body_fn, 0)>, 0
+    load_const "task"
     load_const null
     spawn
-    store_var _3
-    load_var _3
+    store_var _5
+    load_var _5
     await
     return
 }
 
 function spawn_name_object.spawn_name_then_struct_body_parses_correctly_fn() -> int {
     make_closure .<lambda(spawn_name_then_struct_body_parses_correctly_fn, 0)>, 0
+    load_const "task"
     load_const null
     spawn
-    store_var _3
-    load_var _3
+    store_var _5
+    load_var _5
     await
     load_field .x
     return

@@ -6,7 +6,7 @@ class user.User {
   name: string
 }
 function user.User.to_json(self: user.User) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "name": self.name.to_json() } : map<string, baml.json.json>
+  map { "name": baml.json.to_json(self.name) } : map<string, baml.json.json>
 }
 function user.User.from_json(j: baml.json.json) -> user.User throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   User { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.User
@@ -31,7 +31,7 @@ function user.too_many_type_args() -> type throws never {
   !! 884..919: function `type_of` expects 1 type argument(s), got 2
 }
 class user.User$stream {
-  name: null | string
+  name: string | null
 }
 function user.assign_type_to_int(function_name: string) -> int throws never {
   { : never

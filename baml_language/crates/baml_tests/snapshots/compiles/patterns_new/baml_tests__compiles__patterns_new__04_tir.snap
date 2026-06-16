@@ -43,54 +43,54 @@ function user.call_int_callback(cb: (int) -> int throws never) -> int throws nev
         f(10) : int
   }
 }
-function user.dispatch_callback(cb: (int) -> int throws never | (string) -> string throws never) -> int throws never {
+function user.dispatch_callback(cb: ((int) -> int throws never) | ((string) -> string throws never)) -> int throws never {
   { : int | 0
-    match (cb : (int) -> int throws never | (string) -> string throws never) : int | 0
+    match (cb : ((int) -> int throws never) | ((string) -> string throws never)) : int | 0
       f: (int) -> int =>
         f(0) : int
       (string) -> string =>
         0 : 0
   }
 }
-function user.call_either_int_caller(cb: (int) -> int throws never | (bool) -> int throws never) -> int throws never {
+function user.call_either_int_caller(cb: ((int) -> int throws never) | ((bool) -> int throws never)) -> int throws never {
   { : 1 | 2
-    match (cb : (int) -> int throws never | (bool) -> int throws never) : 1 | 2
+    match (cb : ((int) -> int throws never) | ((bool) -> int throws never)) : 1 | 2
       (int) -> int =>
         1 : 1
       (bool) -> int =>
         2 : 2
   }
 }
-function user.dispatch_with_wildcard(cb: (int) -> int throws never | (string) -> int throws never) -> int throws never {
+function user.dispatch_with_wildcard(cb: ((int) -> int throws never) | ((string) -> int throws never)) -> int throws never {
   { : 1 | 0
-    match (cb : (int) -> int throws never | (string) -> int throws never) : 1 | 0
+    match (cb : ((int) -> int throws never) | ((string) -> int throws never)) : 1 | 0
       (int) -> int =>
         1 : 1
       _ =>
         0 : 0
   }
 }
-function user.unwrap_typed<T>(cb: (int) -> T throws never | (string) -> T throws never) -> T throws never {
+function user.unwrap_typed<T>(cb: ((int) -> T throws never) | ((string) -> T throws never)) -> T throws never {
   { : T
-    match (cb : (int) -> T throws never | (string) -> T throws never) : T
+    match (cb : ((int) -> T throws never) | ((string) -> T throws never)) : T
       f: (int) -> T =>
         f<T>(0) : T
       f: (string) -> T =>
         f<T>("") : T
   }
 }
-function user.unwrap_curried(f: (int) -> ((int) -> ((int) -> int throws never) throws never) throws never | (string) -> ((string) -> string throws never) throws never) -> int throws never {
+function user.unwrap_curried(f: ((int) -> ((int) -> ((int) -> int throws never) throws never) throws never) | ((string) -> ((string) -> string throws never) throws never)) -> int throws never {
   { : int | 0
-    match (f : (int) -> ((int) -> ((int) -> int throws never) throws never) throws never | (string) -> ((string) -> string throws never) throws never) : int | 0
+    match (f : ((int) -> ((int) -> ((int) -> int throws never) throws never) throws never) | ((string) -> ((string) -> string throws never) throws never)) : int | 0
       triple: (int) -> ((int) -> ((int) -> int)) =>
         triple(1)(2)(3) : int
       pair: (string) -> ((string) -> string) =>
         0 : 0
   }
 }
-function user.call_with_callback(runner: ((int) -> int throws never) -> int throws never | ((string) -> int throws never) -> int throws never) -> int throws never {
+function user.call_with_callback(runner: (((int) -> int throws never) -> int throws never) | (((string) -> int throws never) -> int throws never)) -> int throws never {
   { : int
-    match (runner : ((int) -> int throws never) -> int throws never | ((string) -> int throws never) -> int throws never) : int
+    match (runner : (((int) -> int throws never) -> int throws never) | (((string) -> int throws never) -> int throws never)) : int
       r: ((int) -> int) -> int =>
         r((x: int) -> int { ... }) : int
           (x: int) -> int { ... } : (x: int) -> int throws never
@@ -179,7 +179,7 @@ class user.AppError {
   code: int
 }
 function user.AppError.to_json(self: user.AppError) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "code": self.code.to_json() } : map<string, baml.json.json>
+  map { "code": baml.json.to_json(self.code) } : map<string, baml.json.json>
 }
 function user.AppError.from_json(j: baml.json.json) -> user.AppError throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   AppError { code: baml.json.from_json<int>(baml.json.field(j, "code")) } : user.AppError
@@ -234,9 +234,9 @@ function user.nested_paren_union_array_three(v: (int | string)[][]) -> int throw
     v.length() : int
   }
 }
-function user.nested_paren_union_array_optional(v: (int | string)[]?) -> int throws never {
+function user.nested_paren_union_array_optional(v: (int | string)[] | null) -> int throws never {
   { : 1
-    match (v : (int | string)[]?) : 1
+    match (v : (int | string)[] | null) : 1
       (int | string)[]? =>
         1 : 1
   }
@@ -252,7 +252,7 @@ class user.PatternBucket {
   values: int[]
 }
 function user.PatternBucket.to_json(self: user.PatternBucket) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "values": self.values.to_json() } : map<string, baml.json.json>
+  map { "values": baml.json.to_json(self.values) } : map<string, baml.json.json>
 }
 function user.PatternBucket.from_json(j: baml.json.json) -> user.PatternBucket throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   PatternBucket { values: baml.json.from_json<int[]>(baml.json.field(j, "values")) } : user.PatternBucket
@@ -261,14 +261,14 @@ class user.PatternMatrix {
   rows: int[][]
 }
 function user.PatternMatrix.to_json(self: user.PatternMatrix) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "rows": self.rows.to_json() } : map<string, baml.json.json>
+  map { "rows": baml.json.to_json(self.rows) } : map<string, baml.json.json>
 }
 function user.PatternMatrix.from_json(j: baml.json.json) -> user.PatternMatrix throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   PatternMatrix { rows: baml.json.from_json<int[][]>(baml.json.field(j, "rows")) } : user.PatternMatrix
 }
 type user.Number$stream = int | float
 class user.AppError$stream {
-  code: null | int
+  code: int | null
 }
 class user.PatternBucket$stream {
   values: int[]

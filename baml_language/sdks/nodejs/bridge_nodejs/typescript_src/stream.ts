@@ -14,11 +14,15 @@
 // that function-level distinction. The wrapper exposes both sync and async
 // pulls, as Python does.
 
-import { BamlHandle, getRuntime } from './native.js';
+import { BamlHandle, getRuntime, newFunctionCall as nativeNewFunctionCall } from './native.js';
 import { encodeCallArgs, decodeCallResult } from './proto.js';
 
 const STREAM_NEXT_FN = 'baml.llm.Stream.next';
 const STREAM_FINAL_FN = 'baml.llm.Stream.final';
+
+function newFunctionCall(): bigint {
+    return BigInt(nativeNewFunctionCall());
+}
 
 export class BamlStream<TStream, TFinal> {
     private _handle: BamlHandle;
@@ -52,14 +56,14 @@ export class BamlStream<TStream, TFinal> {
 
     private _callSync(fqn: string): unknown {
         const rt = getRuntime();
-        const argsProto = encodeCallArgs({ self: this }, /* syncMode */ true);
-        const resultBytes = rt.callFunctionSync(fqn, argsProto, null, null, null);
+        const argsProto = encodeCallArgs({ self: this }, { syncMode: true, callId: newFunctionCall() });
+        const resultBytes = rt.callFunctionSync(fqn, argsProto, null, null);
         return decodeCallResult(resultBytes);
     }
     private async _callAsync(fqn: string): Promise<unknown> {
         const rt = getRuntime();
-        const argsProto = encodeCallArgs({ self: this });
-        const resultBytes = await rt.callFunction(fqn, argsProto, null, null, null);
+        const argsProto = encodeCallArgs({ self: this }, { callId: newFunctionCall() });
+        const resultBytes = await rt.callFunction(fqn, argsProto, null, null);
         return decodeCallResult(resultBytes);
     }
 }

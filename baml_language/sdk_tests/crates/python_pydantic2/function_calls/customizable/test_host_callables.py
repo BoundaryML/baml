@@ -18,14 +18,18 @@ import weakref
 import pytest
 
 import baml_sdk  # noqa: F401  — initializes the BAML runtime
+from baml_sdk.baml import BamlError
 from baml_sdk.host_callable_tests import (
     Person,
+    ValidationError,
     call_int_callback,
     call_repeatedly,
     call_with_callback,
     call_with_class_callback,
     call_with_throwing,
     call_with_two_args,
+    call_with_typed_throws,
+    call_with_typed_throws_propagating,
 )
 
 
@@ -53,17 +57,145 @@ def test_int_return_callable_round_trip():
     assert result == 42
 
 
-def test_throwing_callable_surfaces_as_baml_error():
-    def cb(_x: int) -> str:
-        raise ValueError("nope")
+def test_throwing_callable_round_trips_original_python_exception():
+    """A native Python exception raised inside a host callable surfaces
+    back to the caller as the *same* exception object (`raised is caught`
+    identity), not flattened into a `BamlError(HostCallable(...))`
+    wrapper. The bridge registers the exception in its host-value
+    registry on the inbound throw, BAML transports the
+    `baml.errors.HostCallable` Instance with the handle in `_handle`,
+    and the outbound decoder looks the handle up to re-raise the
+    original."""
+    raised = ValueError("nope")
 
-    with pytest.raises(Exception) as exc_info:
+    def cb(_x: int) -> str:
+        raise raised
+
+    with pytest.raises(ValueError) as exc_info:
         call_with_callback(callback=cb, x=1)
-    # The host-callable error round-trips the class name and message
-    # via `HostCallableError` proto → `OpErrorKind::HostCallable` →
-    # `root.errors.HostCallable` throw → Python exception.
-    msg = str(exc_info.value)
-    assert "nope" in msg or "ValueError" in msg
+    assert exc_info.value is raised
+    assert str(exc_info.value) == "nope"
+
+
+def test_throwing_callable_keyerror_round_trips_with_identity():
+    """The native-exception rehydration path is class-agnostic: any
+    `BaseException` subclass round-trips by reference, not just
+    `ValueError`. Different exception classes should not collide in the
+    bridge's host-value registry."""
+    raised = KeyError("missing")
+
+    def cb(_x: int) -> str:
+        raise raised
+
+    with pytest.raises(KeyError) as exc_info:
+        call_with_callback(callback=cb, x=1)
+    assert exc_info.value is raised
+
+
+def test_throwing_callable_custom_python_exception_round_trips_with_identity():
+    """A user-defined Python exception subclass also round-trips by
+    identity — the bridge doesn't care about the concrete type."""
+
+    class MyDomainError(Exception):
+        def __init__(self, message: str, code: int) -> None:
+            super().__init__(message)
+            self.code = code
+
+    raised = MyDomainError("custom domain failure", code=42)
+
+    def cb(_x: int) -> str:
+        raise raised
+
+    with pytest.raises(MyDomainError) as exc_info:
+        call_with_callback(callback=cb, x=1)
+    assert exc_info.value is raised
+    assert exc_info.value.code == 42
+
+
+def test_throwing_callable_bamlerror_wrapping_codegenned_class_is_caught_in_baml():
+    """When the host raises `BamlError(value=<codegenned BAML class>)`,
+    the bridge unwraps the inner pydantic model and emits it as that
+    real BAML class on the wire — not as an opaque `HostCallable` with
+    a stringified `class_name`. The BAML side's typed `catch
+    (e: ValidationError) { ... }` matches structurally and reads
+    `e.code` / `e.message` / `e.fields` as real fields, demonstrating
+    the typed-error contract holds end-to-end across the host boundary."""
+
+    def cb(_x: int) -> str:
+        raise BamlError(
+            ValidationError(
+                code=4,
+                message="bad shape",
+                fields=["name", "age", "email", "phone"],
+            ),
+        )
+
+    result = call_with_typed_throws(callback=cb, x=1)
+    assert result == "caught: bad shape"
+
+
+def test_throwing_callable_bamlerror_propagates_back_with_typed_fields():
+    """The same `BamlError(ValidationError(...))` raised by the host,
+    when *not* caught in BAML, propagates back out to Python with all
+    typed fields preserved on the pydantic instance — the engine
+    transports it as a real `ValidationError` class instance both
+    directions, never collapsing to a stringified HostCallable
+    metadata blob."""
+    raised = BamlError(
+        ValidationError(
+            code=7,
+            message="propagated through",
+            fields=["x", "y"],
+        ),
+    )
+
+    def cb(_x: int) -> str:
+        raise raised
+
+    with pytest.raises(BamlError) as exc_info:
+        call_with_typed_throws_propagating(callback=cb, x=1)
+    decoded = exc_info.value.value
+    assert isinstance(decoded, ValidationError)
+    assert decoded.code == 7
+    assert decoded.message == "propagated through"
+    assert decoded.fields == ["x", "y"]
+
+
+def test_throwing_async_callable_round_trips_original_python_exception():
+    """Async callables go through the same `run_if_coroutine` dispatch
+    path; native exceptions raised inside the coroutine should round-trip
+    by identity just like the sync case."""
+    raised = ValueError("async nope")
+
+    async def cb(_x: int) -> str:
+        raise raised
+
+    with pytest.raises(ValueError) as exc_info:
+        call_with_callback(callback=cb, x=1)
+    assert exc_info.value is raised
+
+
+def test_multiple_throws_in_flight_do_not_collide_in_registry():
+    """Each host throw mints a fresh host-value key; calls in quick
+    succession must not see the wrong original exception. Exercises the
+    `next_key()` minting + per-call cleanup invariant of the
+    host-value registry."""
+    raised_first = ValueError("first")
+    raised_second = ValueError("second")
+
+    def cb_first(_x: int) -> str:
+        raise raised_first
+
+    def cb_second(_x: int) -> str:
+        raise raised_second
+
+    with pytest.raises(ValueError) as ei1:
+        call_with_callback(callback=cb_first, x=1)
+    with pytest.raises(ValueError) as ei2:
+        call_with_callback(callback=cb_second, x=2)
+    assert ei1.value is raised_first
+    assert ei2.value is raised_second
+    assert ei1.value is not ei2.value
 
 
 @pytest.mark.xfail(
@@ -184,20 +316,26 @@ def test_call_repeatedly_with_zero_n_returns_empty_list():
     assert invocations == []
 
 
-def test_call_with_throwing_surfaces_declared_host_callable_error():
-    """The BAML catch fixture currently surfaces the host-callable error.
+def test_call_with_throwing_in_baml_catches_host_callable_error():
+    """The BAML `catch (e)` clause around a host-callable invocation now
+    intercepts a host-thrown `baml.errors.HostCallable` and returns the
+    recovery branch.
 
-    Root-thread `BamlHostCallHostValue` errors leave the VM as an unhandled
-    `baml.errors.HostCallable` before the BAML `catch` expression can intercept
-    them. Keep that current behavior covered without hiding it behind xfail.
+    The fixture (`call_with_throwing`) declares the callback's throws
+    contract as `baml.errors.HostCallable` and wraps the call site in
+    ``catch (e) { _ => "caught:" + e.class_name }``. The host raises
+    `RuntimeError`; the bridge wraps it as a `HostCallable` Instance with
+    `class_name="RuntimeError"`; the engine's throws-contract check
+    accepts it (since the declared `E` is `HostCallable`); the throw is
+    injected through the VM's unwinder and caught by the BAML `catch`;
+    the recovery expression returns the string. Earlier in the branch
+    this surfaced as an unhandled Python exception — the engine now
+    threads sysop throws through the same unwinder a `throw` opcode uses,
+    so an in-BAML `catch` can intercept them like any other throw.
     """
 
     def cb(_x: int) -> str:
         raise RuntimeError("boom from host")
 
-    with pytest.raises(Exception) as exc_info:
-        call_with_throwing(callback=cb, x=1)
-
-    msg = str(exc_info.value)
-    assert "baml.errors.HostCallable" in msg
-    assert "RuntimeError" in msg or "boom from host" in msg
+    result = call_with_throwing(callback=cb, x=1)
+    assert result == "caught:RuntimeError"

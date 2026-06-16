@@ -165,11 +165,9 @@ impl TypeInfo {
                     .iter()
                     .map(|(n, t)| format!("    {n}: {t},"))
                     .collect();
-                member_strs.extend(
-                    implements
-                        .iter()
-                        .map(|target| format!("    implements {target} {{}}")),
-                );
+                for implements_block in implements {
+                    member_strs.extend(implements_block.lines().map(|line| format!("    {line}")));
+                }
 
                 if member_strs.is_empty() {
                     format!("class {name}{generics} {{}}")
@@ -402,7 +400,7 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
             let implements = class_data
                 .implements
                 .iter()
-                .map(|block| format!("{}", block.target.expr))
+                .map(render_implements_block)
                 .collect();
 
             let qtn = baml_compiler2_tir::lower_type_expr::qualify_def(db, def, &class_data.name);
@@ -524,6 +522,37 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
     }
 }
 
+fn render_implements_block(block: &baml_compiler2_hir::item_tree::ImplementsBlock) -> String {
+    let mut members = Vec::new();
+
+    members.extend(block.field_links.iter().map(|link| {
+        format!(
+            "{} as {}",
+            link.interface_field.as_str(),
+            link.class_field.as_str()
+        )
+    }));
+    members.extend(block.associated_type_bindings.iter().map(|binding| {
+        let ty = binding
+            .type_expr
+            .as_ref()
+            .map(|type_expr| type_expr.expr.to_string())
+            .unwrap_or_else(|| "unknown".to_string());
+        format!("type {} = {}", binding.name.as_str(), ty)
+    }));
+
+    if members.is_empty() {
+        format!("implements {} {{}}", block.target.expr)
+    } else {
+        let members = members
+            .into_iter()
+            .map(|member| format!("    {member}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        format!("implements {} {{\n{members}\n}}", block.target.expr)
+    }
+}
+
 fn display_surface_ty(db: &dyn Db, file: SourceFile, ty: &baml_compiler2_tir::ty::Ty) -> String {
     utils::display_ty_for_file(db, file, ty)
 }
@@ -544,14 +573,10 @@ fn function_param_matches_effect_slot(ty: &baml_compiler2_tir::ty::Ty, effect_na
             throws.as_ref(),
             Ty::TypeVar(name, _) if name == effect_name
         ),
-        Ty::Optional(inner, _) => function_param_matches_effect_slot(inner, effect_name),
         Ty::Union(members, _) => {
             let mut matched = false;
             for member in members {
-                if matches!(
-                    member,
-                    Ty::Primitive(baml_compiler2_tir::ty::PrimitiveType::Null, _)
-                ) {
+                if matches!(member, Ty::Null { .. }) {
                     continue;
                 }
                 if !function_param_matches_effect_slot(member, effect_name) {

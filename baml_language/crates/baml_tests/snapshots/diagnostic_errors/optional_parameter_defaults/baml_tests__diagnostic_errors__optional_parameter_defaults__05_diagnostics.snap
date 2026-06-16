@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 44976
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] error: defaulted parameter `max_results` must be passed by name
@@ -103,12 +102,12 @@ assertion_line: 44976
     │ Note: Error code: E0010
 ────╯
 
-  [type] error: type mismatch: expected NamedLimit, got (query: string, filter?: string?) -> int throws never
+  [type] error: type mismatch: expected NamedLimit, got (query: string, filter?: string | null) -> int throws never
     ╭─[ unsupported_contexts.baml:24:23 ]
     │
  24 │   let f: NamedLimit = Filtered
     │                       ────┬───  
-    │                           ╰───── type mismatch: expected NamedLimit, got (query: string, filter?: string?) -> int throws never
+    │                           ╰───── type mismatch: expected NamedLimit, got (query: string, filter?: string | null) -> int throws never
     │ 
     │ Note: Error code: E0001
 ────╯

@@ -29,7 +29,7 @@ class user.NotJSON {
   inner: unknown
 }
 function user.NotJSON.to_json(self: user.NotJSON) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "inner": self.inner.to_json() } : map<string, unknown>
+  map { "inner": baml.json.to_json(self.inner) } : map<string, baml.json.json>
 }
 function user.NotJSON.from_json(j: baml.json.json) -> user.NotJSON throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   NotJSON { inner: baml.json.from_json<name>(baml.json.field(j, "inner")) } : user.NotJSON
@@ -47,5 +47,5 @@ function user.MakeJSON(i: user.NotJSON) -> user.JSON throws never {
 }
 type user.JSON$stream = int | float | string | bool | user.JSON$stream[] | map<string, baml.json.json$stream>
 class user.NotJSON$stream {
-  inner: null | unknown
+  inner: unknown | null
 }

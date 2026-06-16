@@ -14,25 +14,25 @@ function user.Fn$build_request(client: baml.llm.Client = ...) -> baml.http.Reque
 function user.Fn$build_request_stream(client: baml.llm.Client = ...) -> baml.http.Request throws never {
   baml.llm.build_request_stream(client, "Fn", map {  }) : baml.http.Request
 }
-function user.Fn$parse(json: string, client: baml.llm.Client = ...) -> string throws never {
-  baml.llm.parse<TFinal>("Fn", json) : string
-}
 class user.TopLevelClass {
   a: string
 }
 function user.TopLevelClass.to_json(self: user.TopLevelClass) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "a": self.a.to_json() } : map<string, baml.json.json>
+  map { "a": baml.json.to_json(self.a) } : map<string, baml.json.json>
 }
 function user.TopLevelClass.from_json(j: baml.json.json) -> user.TopLevelClass throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   TopLevelClass { a: baml.json.from_json<string>(baml.json.field(j, "a")) } : user.TopLevelClass
 }
 enum user.TopLevelEnum
-function user.Fn$stream(client: baml.llm.Client = ...) -> baml.llm.Stream<null | string, string> throws never {
-  baml.llm.stream_llm_function(client, "Fn", map {  }) : baml.llm.Stream<null | string, string>
+function user.Fn$stream(client: baml.llm.Client = ...) -> baml.llm.Stream<string | null, string> throws never {
+  baml.llm.stream_llm_function(client, "Fn", map {  }) : baml.llm.Stream<string | null, string>
 }
-function user.Fn$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = ...) -> baml.llm.Stream<null | string, string> throws never {
-  client.__make_stream(sse, "Fn") : baml.llm.Stream<null | string, string>
+function user.Fn$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = ...) -> baml.llm.Stream<string | null, string> throws never {
+  client.__make_stream(sse) : baml.llm.Stream<string | null, string>
+}
+function user.Fn$parse(json: string, client: baml.llm.Client = ...) -> string throws never {
+  baml.llm.parse<TFinal>(json) : string
 }
 class user.TopLevelClass$stream {
-  a: null | string
+  a: string | null
 }

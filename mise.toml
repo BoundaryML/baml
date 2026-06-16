@@ -11,6 +11,7 @@ java = "temurin-23"
 uv = "0.11.3"
 direnv = "2.37.1"
 sccache = "0.10.0"
+clang = "22.1.7" # LLVM tools for CI, including llvm-strip
 
 # Rust tools
 "cargo:bacon" = "latest"
@@ -20,6 +21,9 @@ sccache = "0.10.0"
 "cargo:ripgrep" = "latest"
 "cargo:just" = "latest"
 "cargo:prek" = "0.3.13"
+"cargo:cargo-nextest" = "latest"
+"cargo:cargo-insta" = "latest"
+"cargo:cargo-shear" = "latest"
 
 # Go tools
 # locked to match the version in .github/actions/setup-go/action.yml

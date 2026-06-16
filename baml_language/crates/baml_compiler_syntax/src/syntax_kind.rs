@@ -31,6 +31,7 @@ pub enum SyntaxKind {
     KW_FOR,
     KW_WHILE,
     KW_LET,
+    KW_CONST,
     KW_IN,
     KW_BREAK,
     KW_CONTINUE,
@@ -523,6 +524,7 @@ impl SyntaxKind {
                 | Self::KW_FOR
                 | Self::KW_WHILE
                 | Self::KW_LET
+                | Self::KW_CONST
                 | Self::KW_IN
                 | Self::KW_BREAK
                 | Self::KW_CONTINUE

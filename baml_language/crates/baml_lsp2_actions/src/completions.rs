@@ -42,7 +42,7 @@ use baml_compiler2_hir::{
     semantic_index::ScopeBindings,
     signature::function_signature,
 };
-use baml_compiler2_tir::ty::{PrimitiveType, Ty};
+use baml_compiler2_tir::ty::{MediaKind, PrimitiveType, Ty};
 use rowan::{NodeOrToken, ast::AstNode};
 use text_size::TextSize;
 
@@ -933,16 +933,16 @@ fn builtin_static_class_path_for_root(root: &str) -> Option<&'static [&'static s
     }
 }
 
-fn builtin_instance_class_path_for_primitive(
-    primitive: &PrimitiveType,
-) -> Option<&'static [&'static str]> {
-    match primitive {
-        PrimitiveType::String => Some(&["String"]),
-        PrimitiveType::Uint8Array
-        | PrimitiveType::Image
-        | PrimitiveType::Audio
-        | PrimitiveType::Video
-        | PrimitiveType::Pdf => Some(primitive.builtin_class_path()),
+fn builtin_instance_class_path_for_primitive(ty: &Ty) -> Option<&'static [&'static str]> {
+    match ty {
+        Ty::String { .. } | Ty::Literal(baml_base::Literal::String(_), _, _) => {
+            Some(PrimitiveType::String.builtin_class_path())
+        }
+        Ty::Uint8Array { .. } => Some(PrimitiveType::Uint8Array.builtin_class_path()),
+        Ty::Media(MediaKind::Image, _) => Some(PrimitiveType::Image.builtin_class_path()),
+        Ty::Media(MediaKind::Audio, _) => Some(PrimitiveType::Audio.builtin_class_path()),
+        Ty::Media(MediaKind::Video, _) => Some(PrimitiveType::Video.builtin_class_path()),
+        Ty::Media(MediaKind::Pdf, _) => Some(PrimitiveType::Pdf.builtin_class_path()),
         _ => None,
     }
 }
@@ -1184,18 +1184,23 @@ fn completions_for_ty_members(db: &dyn Db, file: SourceFile, ty: &Ty) -> Vec<Com
             completions_for_builtin_class_methods(db, &["Array"], BuiltinMethodMode::Instance)
         }
 
-        Ty::Map(..) | Ty::EvolvingMap(..) => {
+        Ty::Map { .. } | Ty::EvolvingMap(..) => {
             completions_for_builtin_class_methods(db, &["Map"], BuiltinMethodMode::Instance)
         }
 
-        Ty::Primitive(primitive, _) => builtin_instance_class_path_for_primitive(primitive)
-            .map(|class_path| {
-                completions_for_builtin_class_methods(db, class_path, BuiltinMethodMode::Instance)
-            })
-            .unwrap_or_default(),
-
-        Ty::Literal(baml_base::Literal::String(_), _, _) => {
-            completions_for_builtin_class_methods(db, &["String"], BuiltinMethodMode::Instance)
+        Ty::String { .. }
+        | Ty::Uint8Array { .. }
+        | Ty::Media(_, _)
+        | Ty::Literal(baml_base::Literal::String(_), _, _) => {
+            builtin_instance_class_path_for_primitive(ty)
+                .map(|class_path| {
+                    completions_for_builtin_class_methods(
+                        db,
+                        class_path,
+                        BuiltinMethodMode::Instance,
+                    )
+                })
+                .unwrap_or_default()
         }
 
         _ => Vec::new(),

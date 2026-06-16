@@ -4,7 +4,7 @@
 //! sibling. The fields (`param_names`, `arg_tys`, …) carry the data the
 //! renderer needs to emit the typed cast.
 
-use baml_codegen_types::Ty;
+use baml_codegen_types::{FunctionArgumentDefault, Ty};
 
 /// Async/sync marker carried by factory bindings. Each BAML `Function`
 /// (and each of its companions) fans out into one sync and one async
@@ -30,6 +30,10 @@ pub(crate) struct NodeFunction {
     /// Parameter types matching `param_names`. Consumed when rendering the
     /// binding's `as (...) => ...` surface type in `index.ts`.
     pub(crate) arg_tys: Vec<Ty>,
+    /// Default metadata matching `param_names`. `None` means the parameter
+    /// remains positional; `Some` means it is rendered in the final `$opts`
+    /// object and omitted from positional slots.
+    pub(crate) arg_defaults: Vec<Option<FunctionArgumentDefault>>,
     /// Return type, consumed when rendering the binding's surface type.
     pub(crate) return_ty: Ty,
     /// `TypeVar` names declared on this function.

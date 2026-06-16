@@ -29,6 +29,26 @@ test "from_string_simple_class" {
     assert.is_true(baml.deep_equals(from_string_simple_class_name(), "Ada"))
 }
 
+function from_string_infers_simple_class_name() -> string {
+    let u: User = baml.json.from_string("{\"name\":\"Ada\",\"age\":30}");
+    u.name
+}
+
+test "from_string_infers_simple_class" {
+    assert.is_true(baml.deep_equals(from_string_infers_simple_class_name(), "Ada"))
+}
+
+function to_string_infers_simple_class() -> string {
+    baml.json.to_string(User { name: "Ada", age: 30 })
+}
+
+test "to_string_infers_simple_class" {
+    assert.is_true(baml.deep_equals(
+        to_string_infers_simple_class(),
+        "{\"name\":\"Ada\",\"age\":30}"
+    ))
+}
+
 function roundtrip_simple_age() -> int {
     let u: User = User { name: "Ada", age: 30 };
     let s: string = baml.json.to_string<User>(u);

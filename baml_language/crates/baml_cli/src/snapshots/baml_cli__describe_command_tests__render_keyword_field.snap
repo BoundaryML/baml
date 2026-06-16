@@ -1,0 +1,18 @@
+---
+source: crates/baml_cli/src/describe_command_tests.rs
+expression: output
+---
+field — Declares data members on classes and required data members on interfaces.
+
+Syntax:
+  interface HasId {
+    id: string
+  }
+  
+  class User {
+    id string
+    display_name: string
+    implements HasId {}
+  }
+
+Class fields may use `name Type` or `name: Type`. Interface fields use `name: Type` and are satisfied by same-named class fields or by field mappings inside an `implements` block, such as `id as user_id`. A class value is constructed with an object literal like `User { id: "u1", display_name: "Ada" }`; BAML does not use `new` constructors.

@@ -42,16 +42,6 @@ pub struct PpirExpansionItems<'db> {
     #[tracked]
     #[returns(ref)]
     pub items: Vec<ast::Item>,
-    /// Stream-expanded return types for LLM functions in this file.
-    /// Each entry maps `(qualified_function_name, stream_expanded_type_expr)`.
-    ///
-    /// This is the streaming counterpart of `Function.return_type` in
-    /// [`bex_vm_types::Function`]: where `return_type` holds the original
-    /// declared type (e.g. `MyClass`), entries here hold the stream-expanded
-    /// version (e.g. `null | MyClass$stream`).
-    #[tracked]
-    #[returns(ref)]
-    pub stream_return_types: Vec<(SmolStr, ast::TypeExpr)>,
 }
 
 // -- Block attributes ---------------------------------------------------------
@@ -224,7 +214,6 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
     let alias_bodies = &expansion_maps.alias_bodies;
 
     let mut synthetic_items = Vec::new();
-    let mut stream_return_types: Vec<(SmolStr, ast::TypeExpr)> = Vec::new();
     let mut seen_class_names = FxHashSet::default();
     let mut seen_alias_names = FxHashSet::default();
 
@@ -415,20 +404,6 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                 let (stream_type, _sap_attrs) = stream_expand(&ppir_ty, &ctx);
                 let stream_type_expr = stream_type.to_type_expr();
 
-                // Store the stream-expanded return type for this function.
-                let qualified_name = if pkg_info.namespace_path.is_empty() {
-                    SmolStr::new(format!("{package_name}.{}", func.name))
-                } else {
-                    let ns = pkg_info
-                        .namespace_path
-                        .iter()
-                        .map(Name::as_str)
-                        .collect::<Vec<_>>()
-                        .join(".");
-                    SmolStr::new(format!("{package_name}.{ns}.{}", func.name))
-                };
-                stream_return_types.push((qualified_name, stream_type_expr.clone()));
-
                 // Extract client name from parent's LLM metadata.
                 let client_name = match &func.declarative_meta {
                     Some(ast::DeclarativeMeta::Llm(llm)) => {
@@ -444,11 +419,22 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                 // Return type: baml.llm.Stream<STREAM_EXPANDED_TYPE, ORIGINAL_RETURN_TYPE>
                 // (matches the stdlib `class Stream<TStream, TFinal>` ordering:
                 // stream type first, final type second.)
+                //
+                // The same `<STREAM_EXPANDED, ORIGINAL>` pair is also passed as
+                // explicit call-site type args in every companion body below, so
+                // the stdlib reifies the types from its frame
+                // (`reflect.type_of<TStream/TFinal>()`) instead of a name-keyed
+                // registry lookup. Explicit args lower through
+                // `lower_type_expr_in_ns` with the companion's own namespace
+                // context — bare in-namespace names resolve correctly, with
+                // diagnostics surfaced as ordinary compile errors.
                 let original_return_type_expr = return_type_spanned.expr.clone();
-                let stream_return_type = ast::SpannedTypeExpr {
+                let companion_type_args =
+                    || vec![stream_type_expr.clone(), original_return_type_expr.clone()];
+                let companion_stream_return_type = ast::SpannedTypeExpr {
                     expr: ast::TypeExpr::Path {
                         segments: vec![Name::new("baml"), Name::new("llm"), Name::new("Stream")],
-                        generic_args: vec![stream_type_expr, original_return_type_expr],
+                        generic_args: companion_type_args(),
                         associated_type_bindings: vec![],
                         attrs: vec![],
                     },
@@ -488,7 +474,7 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                             func.name.as_str(),
                             &param_names,
                             client_arg_name,
-                            Vec::new(),
+                            companion_type_args(),
                             span,
                         )
                     });
@@ -498,7 +484,7 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                         generic_param_bounds: func.generic_param_bounds.clone(),
                         params: func.params.clone(),
                         defaults: func.defaults.clone(),
-                        return_type: Some(stream_return_type.clone()),
+                        return_type: Some(companion_stream_return_type.clone()),
                         throws: None,
                         body: Some(ast::FunctionBodyDef::Expr(body, source_map)),
                         declarative_meta: None,
@@ -542,7 +528,7 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                     };
 
                     let (body, source_map) = ast::synthesize_llm_make_stream_call(
-                        func.name.as_str(),
+                        companion_type_args(),
                         client_arg_name,
                         span,
                     );
@@ -559,7 +545,7 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                         generic_param_bounds: func.generic_param_bounds.clone(),
                         params,
                         defaults: func.defaults.clone(),
-                        return_type: Some(stream_return_type),
+                        return_type: Some(companion_stream_return_type),
                         throws: None,
                         body: Some(ast::FunctionBodyDef::Expr(body, source_map)),
                         declarative_meta: None,
@@ -572,12 +558,21 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                     };
                     synthetic_items.push(ast::Item::Function(companion));
                 }
+
+                // --- $parse companion ---
+                // Built by `companions::llm_parse` (kept with its sibling
+                // expanders in baml_compiler2_ast), but invoked from here:
+                // its body needs the stream-expanded return type as an
+                // explicit type arg, which only PPIR can compute.
+                if let Some(companion) = ast::llm_parse_companion(func, companion_type_args()) {
+                    synthetic_items.push(ast::Item::Function(companion));
+                }
             }
             _ => {}
         }
     }
 
-    PpirExpansionItems::new(db, synthetic_items, stream_return_types)
+    PpirExpansionItems::new(db, synthetic_items)
 }
 
 // -- Canonical queries (original + *$stream) ----------------------------------

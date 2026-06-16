@@ -114,6 +114,7 @@ function deep_copy.deep_copy_circular_helper() -> int {
     init_instance user.deep_copy.Node .value, .children
     alloc_array 1
     store_field .children
+    load_type deep_copy.Node
     load_var a
     call baml.deep_copy
     load_var a
@@ -140,7 +141,9 @@ function deep_copy.deep_copy_complex_helper() -> int {
     load_const "second"
     alloc_map 2
     init_instance user.deep_copy.DeepOuter .middle, .data
-    store_var_load_var original
+    store_var original
+    load_type deep_copy.DeepOuter
+    load_var original
     call baml.deep_copy
     store_var copy
     load_var original
@@ -191,7 +194,9 @@ function deep_copy.deep_copy_independence_helper() -> int {
     init_instance user.deep_copy.Node .value, .children
     alloc_array 2
     init_instance user.deep_copy.Node .value, .children
-    store_var_load_var original
+    store_var original
+    load_type deep_copy.Node
+    load_var original
     call baml.deep_copy
     load_var original
     load_field .children
@@ -213,7 +218,9 @@ function deep_copy.deep_copy_map_helper() -> int {
     load_const "b"
     alloc_map 2
     init_instance user.deep_copy.Container .values
-    store_var_load_var original
+    store_var original
+    load_type deep_copy.Container
+    load_var original
     call baml.deep_copy
     load_var original
     load_field .values
@@ -235,7 +242,9 @@ function deep_copy.deep_copy_nested_arrays_helper() -> int {
     alloc_array 2
     alloc_array 2
     init_instance user.deep_copy.Matrix .data
-    store_var_load_var original
+    store_var original
+    load_type deep_copy.Matrix
+    load_var original
     call baml.deep_copy
     load_var original
     load_field .data
@@ -253,6 +262,7 @@ function deep_copy.deep_copy_nested_arrays_helper() -> int {
 }
 
 function deep_copy.deep_copy_object_helper() -> deep_copy.Tree {
+    load_type deep_copy.Tree
     load_const "1"
     load_const "2"
     alloc_array 0
@@ -289,12 +299,14 @@ function deep_copy.deep_equals_circular_helper() -> bool {
     init_instance user.deep_copy.Node .value, .children
     alloc_array 1
     store_field .children
+    load_type deep_copy.Node
     load_var2 1 2
     call baml.deep_equals
     return
 }
 
 function deep_copy.deep_equals_different_primitives_helper() -> bool {
+    load_type int
     load_const 42
     load_const 43
     call baml.deep_equals
@@ -302,6 +314,7 @@ function deep_copy.deep_equals_different_primitives_helper() -> bool {
 }
 
 function deep_copy.deep_equals_primitives_helper() -> bool {
+    load_type int
     load_const 42
     load_const 42
     call baml.deep_equals
@@ -312,8 +325,9 @@ function deep_copy.deep_equals_same_reference_helper() -> bool {
     load_const 1
     alloc_array 0
     init_instance user.deep_copy.Node .value, .children
-    store_var_load_var n
-    load_var n
+    store_var n
+    load_type deep_copy.Node
+    load_var2 1 1
     call baml.deep_equals
     return
 }

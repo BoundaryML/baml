@@ -16,7 +16,8 @@ use std::{
 };
 
 use bex_heap::BexHeap;
-use sys_types::{CallId, OpErrorKind, SysOpContext, SysOpOutput};
+use parking_lot::Mutex;
+use sys_types::{CallId, SysOpContext, SysOpOutput, VmBamlError, VmRustFnError};
 use tokio::sync::{broadcast, oneshot};
 
 use crate::playground_ws::WsOutMessage;
@@ -27,7 +28,7 @@ const INPUT_REQUEST_TIMEOUT: std::time::Duration =
 
 /// Shared state for resolving IO input requests from the playground UI.
 pub struct PlaygroundIoState {
-    pending: std::sync::Mutex<HashMap<u64, oneshot::Sender<String>>>,
+    pending: Mutex<HashMap<u64, oneshot::Sender<String>>>,
     broadcast_tx: broadcast::Sender<WsOutMessage>,
     next_id: AtomicU64,
 }
@@ -35,7 +36,7 @@ pub struct PlaygroundIoState {
 impl PlaygroundIoState {
     pub fn new(broadcast_tx: broadcast::Sender<WsOutMessage>) -> Self {
         Self {
-            pending: std::sync::Mutex::new(HashMap::new()),
+            pending: Mutex::new(HashMap::new()),
             broadcast_tx,
             next_id: AtomicU64::new(1),
         }
@@ -46,7 +47,7 @@ impl PlaygroundIoState {
     /// After fulfilling the oneshot, broadcasts `InputResolved` so other
     /// connected clients can dismiss the input prompt.
     pub fn resolve(&self, id: u64, call_id: u64, value: String) {
-        let sender = self.pending.lock().unwrap().remove(&id);
+        let sender = self.pending.lock().remove(&id);
         if let Some(sender) = sender {
             let _ = sender.send(value);
         }
@@ -71,7 +72,7 @@ impl sys_ops::io::IoNamespaceIo for PlaygroundIo {
     ) -> SysOpOutput<String> {
         // If no playground client is connected, return an IO error.
         if self.0.broadcast_tx.receiver_count() == 0 {
-            return SysOpOutput::err(OpErrorKind::Io {
+            return SysOpOutput::err(VmBamlError::Io {
                 message: "No playground connection to handle baml.io.input()".into(),
             });
         }
@@ -81,7 +82,7 @@ impl sys_ops::io::IoNamespaceIo for PlaygroundIo {
         SysOpOutput::async_op(async move {
             let (tx, rx) = oneshot::channel();
             let id = state.next_id.fetch_add(1, Ordering::Relaxed);
-            state.pending.lock().unwrap().insert(id, tx);
+            state.pending.lock().insert(id, tx);
             let _ = state.broadcast_tx.send(WsOutMessage::InputRequest {
                 id,
                 prompt,
@@ -91,17 +92,23 @@ impl sys_ops::io::IoNamespaceIo for PlaygroundIo {
                 Ok(Ok(value)) => Ok(value),
                 Ok(Err(_)) => {
                     // Channel closed (e.g. call cancelled) — clean up.
-                    state.pending.lock().unwrap().remove(&id);
-                    Err(OpErrorKind::Io {
+                    state.pending.lock().remove(&id);
+                    Err(VmRustFnError::from(VmBamlError::Io {
                         message: "Input request was cancelled".into(),
-                    })
+                    }))
                 }
                 Err(_) => {
-                    state.pending.lock().unwrap().remove(&id);
-                    Err(OpErrorKind::Timeout {
+                    state.pending.lock().remove(&id);
+                    // `INPUT_REQUEST_TIMEOUT_SECS` is a hard-coded
+                    // constant (300s); the `i64::try_from` cannot fail in
+                    // practice, but stays as a `Some` so a future bump to
+                    // a much larger timeout surfaces the overflow loudly.
+                    let duration_ms = i64::try_from(INPUT_REQUEST_TIMEOUT.as_millis())
+                        .expect("INPUT_REQUEST_TIMEOUT must fit in i64 ms");
+                    Err(VmRustFnError::from(VmBamlError::Timeout {
                         message: "No response to baml.io.input()".into(),
-                        duration: INPUT_REQUEST_TIMEOUT,
-                    })
+                        duration_ms: Some(duration_ms),
+                    }))
                 }
             }
         })
@@ -116,7 +123,9 @@ impl sys_ops::io::IoNamespaceIo for PlaygroundIo {
     ) -> SysOpOutput<()> {
         // Playground UI currently has no stdout channel; surface as Unsupported
         // so user code can `catch` and fall back.
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
     fn println(
         &self,
@@ -125,7 +134,9 @@ impl sys_ops::io::IoNamespaceIo for PlaygroundIo {
         _s: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
     fn eprint(
         &self,
@@ -134,7 +145,9 @@ impl sys_ops::io::IoNamespaceIo for PlaygroundIo {
         _s: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
     fn eprintln(
         &self,
@@ -143,6 +156,8 @@ impl sys_ops::io::IoNamespaceIo for PlaygroundIo {
         _s: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 }

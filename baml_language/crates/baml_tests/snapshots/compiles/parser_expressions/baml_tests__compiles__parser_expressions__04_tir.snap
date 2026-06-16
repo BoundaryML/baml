@@ -26,7 +26,7 @@ class user.User {
   tags: string[]
 }
 function user.User.to_json(self: user.User) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "name": self.name.to_json(), "profile": self.profile.to_json(), "tags": self.tags.to_json() } : map<string, baml.json.json>
+  map { "name": baml.json.to_json(self.name), "profile": baml.json.to_json(self.profile), "tags": baml.json.to_json(self.tags) } : map<string, baml.json.json>
 }
 function user.User.from_json(j: baml.json.json) -> user.User throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   User { name: baml.json.from_json<string>(baml.json.field(j, "name")), profile: baml.json.from_json<Profile>(baml.json.field(j, "profile")), tags: baml.json.from_json<string[]>(baml.json.field(j, "tags")) } : user.User
@@ -36,7 +36,7 @@ class user.Profile {
   settings: user.Settings
 }
 function user.Profile.to_json(self: user.Profile) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "bio": self.bio.to_json(), "settings": self.settings.to_json() } : map<string, baml.json.json>
+  map { "bio": baml.json.to_json(self.bio), "settings": baml.json.to_json(self.settings) } : map<string, baml.json.json>
 }
 function user.Profile.from_json(j: baml.json.json) -> user.Profile throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Profile { bio: baml.json.from_json<string>(baml.json.field(j, "bio")), settings: baml.json.from_json<Settings>(baml.json.field(j, "settings")) } : user.Profile
@@ -45,22 +45,22 @@ class user.Settings {
   theme: string
 }
 function user.Settings.to_json(self: user.Settings) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "theme": self.theme.to_json() } : map<string, baml.json.json>
+  map { "theme": baml.json.to_json(self.theme) } : map<string, baml.json.json>
 }
 function user.Settings.from_json(j: baml.json.json) -> user.Settings throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Settings { theme: baml.json.from_json<string>(baml.json.field(j, "theme")) } : user.Settings
 }
 class user.User$stream {
-  name: null | string
-  profile: null | user.Profile$stream
+  name: string | null
+  profile: user.Profile$stream | null
   tags: string[]
 }
 class user.Profile$stream {
-  bio: null | string
-  settings: null | user.Settings$stream
+  bio: string | null
+  settings: user.Settings$stream | null
 }
 class user.Settings$stream {
-  theme: null | string
+  theme: string | null
 }
 class user.IndexUser {
   name: string
@@ -68,7 +68,7 @@ class user.IndexUser {
   tags: string[]
 }
 function user.IndexUser.to_json(self: user.IndexUser) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "name": self.name.to_json(), "age": self.age.to_json(), "tags": self.tags.to_json() } : map<string, baml.json.json>
+  map { "name": baml.json.to_json(self.name), "age": baml.json.to_json(self.age), "tags": baml.json.to_json(self.tags) } : map<string, baml.json.json>
 }
 function user.IndexUser.from_json(j: baml.json.json) -> user.IndexUser throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   IndexUser { name: baml.json.from_json<string>(baml.json.field(j, "name")), age: baml.json.from_json<int>(baml.json.field(j, "age")), tags: baml.json.from_json<string[]>(baml.json.field(j, "tags")) } : user.IndexUser
@@ -84,8 +84,8 @@ function user.IndexAccess(users: user.IndexUser[]) -> string throws never {
   }
 }
 class user.IndexUser$stream {
-  name: null | string
-  age: null | int
+  name: string | null
+  age: int | null
   tags: string[]
 }
 function user.TestPrecedence() -> bool throws never {

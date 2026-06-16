@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 23854
 ---
 function user.Education.from_json(j: baml.json.json) -> Education {
     load_var j
@@ -29,17 +28,18 @@ function user.Education.from_json(j: baml.json.json) -> Education {
 }
 
 function user.Education.to_json(self: Education) -> baml.json.json {
+    load_type string
     load_var self
     load_field .school
-    call baml.String.to_json
+    call baml.json.to_json
+    load_type Degree
     load_var self
     load_field .degree
-    load_const "to_json"
-    load_map_element
-    call_indirect
+    call baml.json.to_json
+    load_type int
     load_var self
     load_field .year
-    call baml.Int.to_json
+    call baml.json.to_json
     load_const "school"
     load_const "degree"
     load_const "year"
@@ -81,20 +81,22 @@ function user.Resume.from_json(j: baml.json.json) -> Resume {
 }
 
 function user.Resume.to_json(self: Resume) -> baml.json.json {
+    load_type string
     load_var self
     load_field .name
-    call baml.String.to_json
+    call baml.json.to_json
+    load_type Education[]
     load_var self
     load_field .education
-    call baml.Array.to_json
+    call baml.json.to_json
+    load_type Degree
     load_var self
     load_field .highest_degree
-    load_const "to_json"
-    load_map_element
-    call_indirect
+    call baml.json.to_json
+    load_type Education[]
     load_var self
     load_field .aliases
-    call baml.Array.to_json
+    call baml.json.to_json
     load_const "name"
     load_const "education"
     load_const "highest_degree"

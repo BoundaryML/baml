@@ -6,7 +6,14 @@ use bex_vm_types::{
 };
 use indexmap::IndexMap;
 
-use super::{BamlPackageBaml, PackageBamlImpl};
+use super::{
+    BamlPackageBaml, Continuation, NativeCallResult, PackageBamlImpl,
+    array::{
+        NaturalDomain, compare_natural_values, is_primitive_array_values,
+        validate_natural_order_with_vm,
+    },
+    make_compare_callee,
+};
 use crate::BexVm;
 
 impl BamlPackageBaml for PackageBamlImpl {
@@ -19,6 +26,113 @@ impl BamlPackageBaml for PackageBamlImpl {
         let mut visited = HashMap::new();
         deep_equals_recursive(vm, *a, *b, &mut visited)
     }
+
+    /// `baml._float_total_cmp(a, b)` — bit-exact `f64::total_cmp` three-way
+    /// comparison backing `Comparable for float`. Kept in lockstep with the
+    /// float domain of `compare_natural_values` (the `_rust_sort` fast path)
+    /// so the two sort paths can never disagree on a float ordering.
+    fn _float_total_cmp(a: f64, b: f64) -> i64 {
+        match a.total_cmp(&b) {
+            std::cmp::Ordering::Less => -1,
+            std::cmp::Ordering::Equal => 0,
+            std::cmp::Ordering::Greater => 1,
+        }
+    }
+
+    /// `baml._is_primitive_array(arr)` — `Sortable.sort`'s dispatch guard:
+    /// whether the first element's runtime tag is a natural-sort primitive
+    /// (int/bigint/string/float). Empty arrays report `true`.
+    fn _is_primitive_array(vm: &BexVm, arr: &[Value]) -> bool {
+        is_primitive_array_values(vm, arr)
+    }
+
+    /// `baml._rust_sort(arr)` — the primitive fast path of `Sortable.sort`.
+    /// Stable natural-order sort of a homogeneous primitive array, in place
+    /// (the receiver's backing `Vec` is sorted or replaced; the returned value
+    /// IS the receiver). The comparator is pure Rust — no per-pair yield to
+    /// BAML — and the float domain uses `f64::total_cmp`, so no domain throws.
+    /// The validation rejections are defensive only: the `_is_primitive_array`
+    /// guard plus `T[]` homogeneity make them unreachable from `Sortable.sort`.
+    fn _rust_sort(vm: &mut BexVm, arr: &Value) -> NativeCallResult {
+        let domain = {
+            let values = match vm.as_array(arr) {
+                Ok(guard) => guard,
+                Err(e) => return NativeCallResult::Error(e.into()),
+            };
+            if values.len() <= 1 {
+                return NativeCallResult::Done(*arr);
+            }
+            match validate_natural_order_with_vm(vm, "sort", &values) {
+                Ok(domain) => domain,
+                Err(e) => return NativeCallResult::Error(e),
+            }
+        };
+        if matches!(domain, NaturalDomain::Int) {
+            // Int values are tag-only (no heap reads), so the comparator
+            // needs no `&BexVm` and the backing Vec sorts truly in place.
+            let mut values = match vm.as_array_mut(arr) {
+                Ok(guard) => guard,
+                Err(e) => return NativeCallResult::Error(e.into()),
+            };
+            values.sort_by(|left, right| {
+                left.as_int()
+                    .expect("validated int sort value should be int")
+                    .cmp(
+                        &right
+                            .as_int()
+                            .expect("validated int sort value should be int"),
+                    )
+            });
+            return NativeCallResult::Done(*arr);
+        }
+        // Heap-read domains (float/bigint/string): the comparator needs
+        // `&BexVm`, which conflicts with holding the array's mutable guard —
+        // sort a snapshot of the backing Vec, then swap it back in. One Vec
+        // (re)allocation; still no per-element BAML round trips or re-push.
+        let mut values = match vm.as_array(arr) {
+            Ok(guard) => guard.to_vec(),
+            Err(e) => return NativeCallResult::Error(e.into()),
+        };
+        values.sort_by(|left, right| compare_natural_values(vm, domain, *left, *right));
+        match vm.as_array_mut(arr) {
+            Ok(mut guard) => *guard = values,
+            Err(e) => return NativeCallResult::Error(e.into()),
+        }
+        NativeCallResult::Done(*arr)
+    }
+
+    /// `baml._compare_shim(a, b)` — the dispatch shim for the `Sortable`
+    /// blanket `sort`'s comparator path. Resolves `Comparable.compare` on
+    /// `a`'s runtime class and yields to it with `b`; the comparison's `int`
+    /// result (or thrown error) is returned straight through. See
+    /// `make_compare_callee` for why the sort cannot dispatch `compare`
+    /// itself.
+    fn _compare_shim(vm: &mut BexVm, a: &Value, b: &Value) -> NativeCallResult {
+        let callee = match make_compare_callee(vm, *a) {
+            Ok(ptr) => ptr,
+            Err(e) => return NativeCallResult::Error(e),
+        };
+        NativeCallResult::YieldToCall {
+            callee,
+            args: vec![*b],
+            type_args: vec![],
+            continuation: Box::new(PassThroughContinuation),
+        }
+    }
+}
+
+/// Returns the callee's result unchanged. Used by `_compare_shim`, whose only
+/// job is to dispatch one `compare` call and surface its value.
+struct PassThroughContinuation;
+
+impl Continuation for PassThroughContinuation {
+    fn call(self: Box<Self>, _vm: &mut BexVm, value: Value) -> NativeCallResult {
+        NativeCallResult::Done(value)
+    }
+    fn gc_roots(&self) -> Vec<HeapPtr> {
+        Vec::new()
+    }
+    fn apply_forwarding(&mut self, _forwarding: &HashMap<HeapPtr, HeapPtr>) {}
 }
 
 fn deep_copy_value_recursive(
@@ -263,7 +377,9 @@ fn deep_equals_recursive(
                 }
 
                 (Object::UnscheduledFuture(a_fut), Object::UnscheduledFuture(b_fut)) => {
-                    a_fut.closure == b_fut.closure && a_fut.name == b_fut.name
+                    a_fut.closure == b_fut.closure
+                        && a_fut.name == b_fut.name
+                        && a_fut.config == b_fut.config
                 }
 
                 _ => false,

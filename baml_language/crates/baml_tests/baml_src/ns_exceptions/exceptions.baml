@@ -1398,15 +1398,15 @@ test "catch_without_stack_trace_still_works" {
 
 // named_wrapper_value_catches_callback_throw: catch a throw from a callback
 // passed through multiple forwarding functions.
-function s17_direct_cb(cb: (value: int) -> int) -> int {
+function s17_direct_cb(cb: (value: int) -> string) -> string {
     cb(1)
 }
 
-function s17_forward_cb(cb: (value: int) -> int) -> int {
+function s17_forward_cb(cb: (value: int) -> string) -> string {
     s17_direct_cb(cb)
 }
 
-function s17_risky_cb(value: int) -> int throws string {
+function s17_risky_cb(value: int) -> string throws string {
     throw "boom"
 }
 

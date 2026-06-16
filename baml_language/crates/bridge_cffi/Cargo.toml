@@ -23,7 +23,6 @@ bundle-http = [ "sys_native/bundle-http" ]
 [dependencies]
 baml_version = { workspace = true }
 bex_events = { workspace = true }
-bex_events_native = { workspace = true }
 bex_project = { workspace = true }
 bridge_ctypes = { workspace = true }
 sys_native = { workspace = true }
@@ -36,11 +35,7 @@ prost = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = [ "rt", "rt-multi-thread" ] }
-tokio-util = { workspace = true }
 vfs = { workspace = true }
-
-[build-dependencies]
-cbindgen = { workspace = true }
 
 [package.metadata.ci]
 wasm_support = false

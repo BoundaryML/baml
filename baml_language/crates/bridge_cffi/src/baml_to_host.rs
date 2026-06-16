@@ -229,17 +229,18 @@ pub fn error_to_outbound(err: BridgeError) -> Vec<u8> {
             .expect("result_to_outbound always sets the result oneof"),
 
         // Bad function name / arguments → InvalidArgument.
-        err @ (BridgeError::NullFunctionName
+        err @ (BridgeError::Ctypes(_)
+        | BridgeError::NullFunctionName
         | BridgeError::InvalidFunctionName(_)
         | BridgeError::FunctionNotFound { .. }
-        | BridgeError::MissingArgument { .. }) => infra_error_arm(
+        | BridgeError::MissingArgument { .. }
+        | BridgeError::InvalidCallId) => infra_error_arm(
             message_instance(INVALID_ARGUMENT_CLASS, err.to_string()),
             &options,
         ),
 
-        // Setup / internal host failures (Ctypes, NotInitialized,
-        // ProjectNotInitialized, LockPoisoned, NotImplemented, DuplicateCallId,
-        // Internal) → GenericSdkError.
+        // Setup / internal host failures (NotInitialized, ProjectNotInitialized,
+        // LockPoisoned, NotImplemented, DuplicateCallId, Internal) → GenericSdkError.
         err => infra_error_arm(
             message_instance(GENERIC_SDK_ERROR_CLASS, err.to_string()),
             &options,

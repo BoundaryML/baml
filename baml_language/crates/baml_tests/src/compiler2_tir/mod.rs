@@ -261,10 +261,7 @@ pub(crate) mod support {
             Expr::Object {
                 type_name, fields, ..
             } => {
-                let tn = type_name
-                    .as_ref()
-                    .map(ToString::to_string)
-                    .unwrap_or_else(|| "_".to_string());
+                let tn = type_name.to_string();
                 let field_strs: Vec<String> = fields
                     .iter()
                     .map(|(name, val)| format!("{name}: {}", expr_desc(*val, body)))
@@ -471,10 +468,14 @@ pub(crate) mod support {
     }
 
     /// Format an expression's inferred type as a string.
+    ///
+    /// Uses `render_canonical()` (fully-qualified leaf names, including the
+    /// implicit `user` package) so the TIR dump keeps `user.X` rather than the
+    /// user-facing `Display`, which elides `user`.
     fn expr_ty(inference: &ScopeInference, expr_id: ExprId) -> String {
         inference
             .expression_type(expr_id)
-            .map(|t| t.to_string())
+            .map(|t| t.render_canonical())
             .unwrap_or_else(|| "unknown".into())
     }
 
@@ -768,8 +769,10 @@ pub(crate) mod support {
                     out.push(s);
                 }
             }
-            Ty::List(inner, _) | Ty::Optional(inner, _) => collect_typevars_inner(inner, out),
-            Ty::Map(k, v, _) => {
+            Ty::List(inner, _) => collect_typevars_inner(inner, out),
+            Ty::Map {
+                key: k, value: v, ..
+            } => {
                 collect_typevars_inner(k, out);
                 collect_typevars_inner(v, out);
             }
@@ -812,7 +815,9 @@ pub(crate) mod support {
                 let pat_name = pat_desc(*pattern, body);
                 if let Some(init) = initializer {
                     let init_ty = expr_ty(inference, *init);
-                    let binding_ty = inference.binding_type(*pattern).map(|t| t.to_string());
+                    let binding_ty = inference
+                        .binding_type(*pattern)
+                        .map(|t| t.render_canonical());
                     let ty_display = match &binding_ty {
                         Some(bt) if *bt != init_ty => format!("{init_ty} -> {bt}"),
                         _ => init_ty,
@@ -1014,14 +1019,14 @@ pub(crate) mod support {
                                         .collect();
                                     // Format: field: (Ty @ty_attr) @field_attr
                                     let ty_str = if ty_attr_names.is_empty() {
-                                        format!("{fty}")
+                                        fty.render_canonical()
                                     } else {
                                         let ta = ty_attr_names
                                             .iter()
                                             .map(|a| format!("@{a}"))
                                             .collect::<Vec<_>>()
                                             .join(" ");
-                                        format!("({fty} {ta})")
+                                        format!("({} {ta})", fty.render_canonical())
                                     };
                                     if field_attr_strs.is_empty() {
                                         writeln!(output, "  {fname}: {ty_str}").ok();
@@ -1056,7 +1061,12 @@ pub(crate) mod support {
                                 && let Definition::TypeAlias(alias_loc) = c.definition
                             {
                                 let resolved = resolve_type_alias(db, alias_loc);
-                                writeln!(output, "{kind_str} {fqn} = {}", resolved.ty).ok();
+                                writeln!(
+                                    output,
+                                    "{kind_str} {fqn} = {}",
+                                    resolved.ty.render_canonical()
+                                )
+                                .ok();
                                 // Render type-lowering diagnostics
                                 for (diag, span) in &resolved.diagnostics {
                                     let start = u32::from(span.start());
@@ -1160,7 +1170,12 @@ pub(crate) mod support {
                                     parameter_defaults.param_default(index),
                                     &parameter_defaults.defaults,
                                 );
-                                format!("{}: {}{}", param.name, ty, default_suffix)
+                                format!(
+                                    "{}: {}{}",
+                                    param.name,
+                                    ty.render_canonical(),
+                                    default_suffix
+                                )
                             })
                             .collect();
                         let ret = sig
@@ -1169,7 +1184,7 @@ pub(crate) mod support {
                             .map(|t| {
                                 let mut diags = Vec::new();
                                 lower_type_expr_in_ns(db, t, pkg_items, ns, gp, &mut diags)
-                                    .to_string()
+                                    .render_canonical()
                             })
                             .unwrap_or_else(|| "?".into());
                         // Compute inferred throws from transitive throw set
@@ -1180,7 +1195,7 @@ pub(crate) mod support {
                                 .filter(|facts| !facts.is_empty())
                                 .map(|facts| {
                                     let types: Vec<String> =
-                                        facts.iter().map(|f| f.to_string()).collect();
+                                        facts.iter().map(|f| f.render_canonical()).collect();
                                     types.join(" | ")
                                 })
                         };
@@ -1188,7 +1203,8 @@ pub(crate) mod support {
                         let throws = if let Some(t) = &sig.throws {
                             let mut diags = Vec::new();
                             let declared =
-                                lower_type_expr_in_ns(db, t, pkg_items, ns, gp, &mut diags);
+                                lower_type_expr_in_ns(db, t, pkg_items, ns, gp, &mut diags)
+                                    .render_canonical();
                             match &inferred_throws {
                                 Some(inferred) => {
                                     format!(" throws {declared} infers {inferred}")
@@ -1664,10 +1680,7 @@ pub(crate) mod support {
                 Expr::Object {
                     type_name, fields, ..
                 } => {
-                    let tn = type_name
-                        .as_ref()
-                        .map(|n| qualify_type_name(n, prefix, local_type_names))
-                        .unwrap_or_else(|| "_".into());
+                    let tn = qualify_type_name(type_name, prefix, local_type_names);
                     let field_strs: Vec<String> = fields
                         .iter()
                         .map(|(name, val)| {
@@ -2108,7 +2121,7 @@ pub(crate) mod support {
 
         inference
             .expression_type(expr_id)
-            .map(|ty| ty.to_string())
+            .map(|ty| ty.render_canonical())
             .unwrap_or_else(|| {
                 panic!(
                     "expression `{expr_text}` in function `{function_name}` has no inferred type"

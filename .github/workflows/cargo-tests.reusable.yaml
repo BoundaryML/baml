@@ -50,6 +50,7 @@ env:
   # Inputs read by .envrc; everything else (RUSTC_WRAPPER, SCCACHE_*) is set by
   # .envrc itself so it stays the single source of truth across CI and local.
   # The R2 credentials .envrc maps to AWS_* for sccache (mapped to AWS_*).
+  # Native Cargo linker overrides live in baml_language/.cargo/config.toml.
   BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
   BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
   CARGO_INCREMENTAL: 0
@@ -61,7 +62,7 @@ jobs:
 
   cargo-test-linux:
     name: "cargo test (linux)"
-    runs-on: blacksmith-16vcpu-ubuntu-2404
+    runs-on: blacksmith-8vcpu-ubuntu-2404
     timeout-minutes: 25
     steps:
       - uses: useblacksmith/checkout@v1
@@ -72,10 +73,12 @@ jobs:
         run: rustup show
         working-directory: baml_language
 
-      - name: "Install sccache and direnv"
+      # mise installs sccache/direnv AND cargo-nextest (cargo: backend ->
+      # cargo-binstall prebuilt), replacing taiki-e/install-action.
+      - name: "Install tools (mise)"
         uses: ./.github/actions/setup-mise
         with:
-          install_args: "sccache direnv"
+          install_args: "sccache direnv cargo:cargo-nextest"
 
       - name: "Verify sccache"
         run: sccache --version
@@ -100,11 +103,6 @@ jobs:
         run: cargo fetch
         working-directory: baml_language
 
-      - name: "Install cargo nextest"
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-nextest
-
       - name: "Build tests with --timings"
         run: cargo test --no-run --all-features --timings
         working-directory: baml_language
@@ -112,8 +110,22 @@ jobs:
       # Snapshot tests live in `baml_tests` and are exercised end-to-end by
       # the dedicated `snapshot-tests` job. The `sdk_test_*` crates need uv
       # and run in the dedicated `sdk-tests` matrix below. Skip both here.
+      # `pack_e2e` is excluded here and run as its own step below: its harness
+      # builds `baml-pack-host` once and shares it across the suite via a
+      # process-global OnceLock, which nextest's process-per-test model would
+      # defeat (every test would rebuild the host).
       - name: "Run tests with nextest"
-        run: cargo nextest run --all-features -E 'not package(baml_tests) and not package(/^sdk_test_/)'
+        run: cargo nextest run --all-features -E 'not package(baml_tests) and not package(/^sdk_test_/) and not binary(=pack_e2e)'
+        working-directory: baml_language
+
+      # The only Linux coverage of `baml pack`'s ELF embed/extract path. The
+      # team develops on macOS, where libsui takes the Mach-O path, so an ELF
+      # writer bug (see crates/baml_cli/src/pack_elf.rs) shipped uncaught. The
+      # bug lives in ELF layout, not codegen, so it reproduces in debug too —
+      # running here (reusing the build above) keeps the gate cheap. `cargo
+      # test`, not nextest, lets the harness build the host once.
+      - name: "Run pack e2e tests (linux)"
+        run: cargo test -p baml_cli --test pack_e2e --all-features
         working-directory: baml_language
 
       - name: "Upload test results on failure"
@@ -169,10 +181,10 @@ jobs:
         run: rustup show
         working-directory: baml_language
 
-      - name: "Install sccache and direnv"
+      - name: "Install tools (mise)"
         uses: ./.github/actions/setup-mise
         with:
-          install_args: "sccache direnv"
+          install_args: "sccache direnv cargo:cargo-nextest"
 
       - name: "Verify sccache"
         run: sccache --version
@@ -197,19 +209,14 @@ jobs:
         run: cargo fetch
         working-directory: baml_language
 
-      - name: "Install cargo nextest"
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-nextest
-
       - name: "Build tests with --timings"
         run: cargo test --no-run --all-features --timings
         working-directory: baml_language
 
-      # Snapshot tests live in `baml_tests` and are covered by the dedicated
-      # `snapshot-tests` job. The `sdk_test_*` crates need uv and run in the
-      # dedicated `sdk-tests` matrix below. Skip both here.
-      - name: "Run tests"
+      # Snapshot tests live in `baml_tests` and are exercised end-to-end by
+      # the dedicated `snapshot-tests` job. The `sdk_test_*` crates need uv
+      # and run in the dedicated `sdk-tests` matrix below. Skip both here.
+      - name: "Run tests with nextest"
         run: cargo nextest run --all-features -E 'not package(baml_tests) and not package(/^sdk_test_/)'
         working-directory: baml_language
 
@@ -246,7 +253,11 @@ jobs:
     # Skip in the merge queue: windows already ran on the PR. The merge_group
     # event is inherited from ci.yaml through the workflow_call boundary.
     if: ${{ github.event_name != 'merge_group' }}
-    runs-on: blacksmith-4vcpu-windows-2025
+    # 8-vCPU + CARGO_BUILD_JOBS=16 (2x cores) was the value sweet spot for the
+    # native Windows Rust builds (build-caching/04 Exp 7/9).
+    runs-on: blacksmith-8vcpu-windows-2025
+    env:
+      CARGO_BUILD_JOBS: "16"
     # TODO: Reduce this once our changes to aws-sdk-rust are upstreamed
     # Right now it needs to download our repo every time which is very slow
     timeout-minutes: 50
@@ -259,10 +270,10 @@ jobs:
         run: rustup show
         working-directory: baml_language
 
-      - name: "Install sccache and direnv"
+      - name: "Install sccache, direnv, and cargo-nextest"
         uses: ./.github/actions/setup-mise
         with:
-          install_args: "sccache direnv"
+          install_args: "sccache direnv cargo:cargo-nextest"
 
       - name: "Verify sccache"
         run: sccache --version
@@ -301,11 +312,6 @@ jobs:
           cargo build -p tools_sccache
           echo "RUSTC_WRAPPER=$(pwd -W)/target/debug/baml-sccache.exe" >> "$GITHUB_ENV"
         working-directory: baml_language
-
-      - name: "Install cargo nextest"
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-nextest
 
       - name: "Build tests with --timings"
         run: cargo test --no-run --all-features --timings
@@ -362,7 +368,7 @@ jobs:
                 "sdk-label": "python-pydantic2",
                 "package-name": "sdk_test_python_pydantic2",
                 "sdk-path": "python_pydantic2",
-                "install-args": "sccache direnv python uv",
+                "install-args": "sccache direnv python uv cargo:cargo-nextest",
                 "os-label": "linux",
                 "runs-on": "blacksmith-16vcpu-ubuntu-2404",
                 "rust-cache-key": "linux-cargo",
@@ -372,7 +378,7 @@ jobs:
                 "sdk-label": "typescript-node",
                 "package-name": "sdk_test_typescript_node",
                 "sdk-path": "typescript_node",
-                "install-args": "sccache direnv node npm:pnpm",
+                "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest",
                 "os-label": "linux",
                 "runs-on": "blacksmith-16vcpu-ubuntu-2404",
                 "rust-cache-key": "linux-cargo",
@@ -382,7 +388,7 @@ jobs:
                 "sdk-label": "python-pydantic2",
                 "package-name": "sdk_test_python_pydantic2",
                 "sdk-path": "python_pydantic2",
-                "install-args": "sccache direnv python uv",
+                "install-args": "sccache direnv python uv cargo:cargo-nextest",
                 "os-label": "macos",
                 "runs-on": "blacksmith-6vcpu-macos-latest",
                 "rust-cache-key": "macos-cargo",
@@ -392,7 +398,7 @@ jobs:
                 "sdk-label": "typescript-node",
                 "package-name": "sdk_test_typescript_node",
                 "sdk-path": "typescript_node",
-                "install-args": "sccache direnv node npm:pnpm",
+                "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest",
                 "os-label": "macos",
                 "runs-on": "blacksmith-6vcpu-macos-latest",
                 "rust-cache-key": "macos-cargo",
@@ -402,9 +408,9 @@ jobs:
                 "sdk-label": "python-pydantic2",
                 "package-name": "sdk_test_python_pydantic2",
                 "sdk-path": "python_pydantic2",
-                "install-args": "sccache direnv python uv",
+                "install-args": "sccache direnv python uv cargo:cargo-nextest",
                 "os-label": "windows",
-                "runs-on": "blacksmith-4vcpu-windows-2025",
+                "runs-on": "blacksmith-8vcpu-windows-2025",
                 "rust-cache-key": "windows-cargo",
                 "timeout": 60,
               },
@@ -412,9 +418,9 @@ jobs:
                 "sdk-label": "typescript-node",
                 "package-name": "sdk_test_typescript_node",
                 "sdk-path": "typescript_node",
-                "install-args": "sccache direnv node npm:pnpm",
+                "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest",
                 "os-label": "windows",
-                "runs-on": "blacksmith-4vcpu-windows-2025",
+                "runs-on": "blacksmith-8vcpu-windows-2025",
                 "rust-cache-key": "windows-cargo",
                 "timeout": 60,
               },
@@ -492,12 +498,18 @@ jobs:
           set -euo pipefail
           cargo build -p tools_sccache
           echo "RUSTC_WRAPPER=$(pwd -W)/target/debug/baml-sccache.exe" >> "$GITHUB_ENV"
+          # CARGO_BUILD_JOBS oversubscription only matters for the Windows build.
+          echo "CARGO_BUILD_JOBS=16" >> "$GITHUB_ENV"
         working-directory: baml_language
 
-      - name: "Install cargo nextest"
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-nextest
+      # Windows Python only: setup.ps1 builds one baml_core wheel and strips
+      # the editable source block from each fixture so `uv sync` installs that
+      # prebuilt wheel instead of rebuilding baml_core per fixture. The later
+      # test-time `uv run` processes also need this wheelhouse.
+      - name: "Configure Python wheelhouse"
+        if: matrix.os-label == 'windows' && matrix.sdk-label == 'python-pydantic2'
+        run: echo "UV_FIND_LINKS=$(pwd -W)/target/wheels" >> "$GITHUB_ENV"
+        working-directory: baml_language
 
       - name: "Build tests with --timings"
         run: cargo test --no-run -p ${{ matrix.package-name }} --all-features --timings
@@ -804,7 +816,7 @@ jobs:
 
   snapshot-tests:
     name: "snapshot tests"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: blacksmith-8vcpu-ubuntu-2404
     timeout-minutes: 30
     steps:
       - uses: useblacksmith/checkout@v1
@@ -815,10 +827,10 @@ jobs:
         run: rustup show
         working-directory: baml_language
 
-      - name: "Install sccache, direnv, python, and uv"
+      - name: "Install tools (mise)"
         uses: ./.github/actions/setup-mise
         with:
-          install_args: "sccache direnv python uv"
+          install_args: "sccache direnv python uv cargo:cargo-insta cargo:cargo-nextest"
 
       - name: "Verify sccache"
         run: sccache --version
@@ -842,11 +854,6 @@ jobs:
       - name: "Fetch cargo dependencies"
         run: cargo fetch
         working-directory: baml_language
-
-      - name: "Install cargo insta and nextest"
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-insta,cargo-nextest
 
       - name: "Build tests with --timings"
         run: cargo test --no-run -p baml_tests -p baml_cli -p baml_lsp2_actions --all-features --timings

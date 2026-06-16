@@ -33,16 +33,20 @@ pub struct EnvVarRef {
 /// Returns true if `kind` can serve as an identifier token in expression position.
 ///
 /// The parser allows `KW_CLIENT` (and `WORD`) inside `PATH_EXPR` / `FIELD_ACCESS_EXPR`
-/// nodes when `client` is used as a variable or field name. The interface-related
-/// keywords (`implements`, `interface`, `extends`) likewise remain valid as
-/// member names — e.g. `dog_t.implements(animal_t)` on the reflection `type`
-/// value. This must match exactly what `parse_path_or_ident` / `at_member_name`
-/// accept in the parser.
+/// nodes when `client` is used as a variable or field name. It likewise allows
+/// `KW_SPAWN` / `KW_AWAIT` as path segments (e.g. the `baml.spawn` namespace),
+/// since they are unambiguous after a `.`, and the interface-related keywords
+/// (`implements`, `interface`, `extends`) as member names — e.g.
+/// `dog_t.implements(animal_t)` on the reflection `type` value. This must
+/// match exactly what `parse_path_or_ident` / `at_member_name` accept in the
+/// parser; adding a new keyword there requires adding it here too.
 fn is_ident_token(kind: SyntaxKind) -> bool {
     matches!(
         kind,
         SyntaxKind::WORD
             | SyntaxKind::KW_CLIENT
+            | SyntaxKind::KW_SPAWN
+            | SyntaxKind::KW_AWAIT
             | SyntaxKind::KW_IMPLEMENTS
             | SyntaxKind::KW_IMPLEMENT
             | SyntaxKind::KW_INTERFACE
@@ -373,7 +377,7 @@ pub(crate) fn synthesize_llm_call_with_prompt(
             let counter = ctx.alloc_expr(Expr::Literal(Literal::Int(0)), span);
             ctx.alloc_expr(
                 Expr::Object {
-                    type_name: Some(baml_base::TypePath::from_dotted("baml.llm.Client")),
+                    type_name: baml_base::TypePath::from_dotted("baml.llm.Client"),
                     type_args: vec![],
                     fields: vec![
                         (Name::new("name"), name_lit),
@@ -465,6 +469,23 @@ impl LoweringContext {
         let mut ctx = Self::new();
         ctx.testset_collector_var = Some(collector_var);
         ctx
+    }
+
+    fn warn_const_introducer(&mut self, span: TextRange) {
+        self.diags
+            .push(LoweringDiagnostic::ConstBindingIntroducer { span });
+    }
+
+    fn warn_direct_const_introducers(&mut self, node: &SyntaxNode) {
+        let spans: Vec<TextRange> = node
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::KW_CONST)
+            .map(|token| token.text_range())
+            .collect();
+        for span in spans {
+            self.warn_const_introducer(span);
+        }
     }
 
     fn alloc_expr(&mut self, expr: Expr, range: TextRange) -> ExprId {
@@ -817,10 +838,63 @@ impl LoweringContext {
         use baml_compiler_syntax::ast as cst_ast;
 
         let mut name: Option<ExprId> = None;
+        let mut with_exprs: Vec<ExprId> = Vec::new();
         let mut body_lambda: Option<ExprId> = None;
+        // The CST is flat: `KW_SPAWN [name expr] [KW_WITH expr (COMMA expr)*]
+        // BLOCK_EXPR`. We walk children-with-tokens so the `KW_WITH` token is
+        // visible; everything after it (other than the body) is a `with` expr.
+        let mut seen_with = false;
 
-        for child in node.children() {
-            if child.kind() == SyntaxKind::BLOCK_EXPR {
+        for child in node.children_with_tokens() {
+            let kind = child.kind();
+            if kind == SyntaxKind::KW_WITH {
+                seen_with = true;
+                continue;
+            }
+            // Expression NODES and bare expression TOKENS both matter past
+            // here (a literal like `spawn with 42 { .. }` arrives as a plain
+            // token); skip `KW_SPAWN`, commas, and trivia. Dropping tokens
+            // here would silently swallow the expression — the type checker
+            // must see it to reject it with a real diagnostic.
+            let child = match child {
+                rowan::NodeOrToken::Node(n) => n,
+                rowan::NodeOrToken::Token(t) => {
+                    let span = t.text_range();
+                    let expr = match t.kind() {
+                        SyntaxKind::INTEGER_LITERAL => Some(Expr::Literal(Literal::Int(
+                            t.text().parse::<i64>().unwrap_or(0),
+                        ))),
+                        SyntaxKind::FLOAT_LITERAL => {
+                            Some(Expr::Literal(Literal::Float(t.text().to_string())))
+                        }
+                        SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => Some(
+                            Expr::Literal(Literal::String(strip_string_delimiters(t.text()))),
+                        ),
+                        // `spawn`/`await` pass `is_ident_token` (they're
+                        // valid path SEGMENTS) but here they're the keywords
+                        // themselves — never a name/with expression.
+                        SyntaxKind::KW_SPAWN | SyntaxKind::KW_AWAIT => None,
+                        k if is_ident_token(k) => Some(match t.text() {
+                            "true" => Expr::Literal(Literal::Bool(true)),
+                            "false" => Expr::Literal(Literal::Bool(false)),
+                            "null" => Expr::Null,
+                            other => Expr::Path(vec![Name::new(other)]),
+                        }),
+                        _ => None,
+                    };
+                    if let Some(expr) = expr {
+                        let id = self.alloc_expr(expr, span);
+                        if seen_with {
+                            with_exprs.push(id);
+                        } else if name.is_none() {
+                            name = Some(id);
+                        }
+                    }
+                    continue;
+                }
+            };
+            let child = &child;
+            if kind == SyntaxKind::BLOCK_EXPR {
                 // Synthesize a 0-arg lambda whose body is this block —
                 // mirroring `lower_lambda_expr` so the existing
                 // capture / scope / MIR plumbing applies unchanged.
@@ -854,13 +928,22 @@ impl LoweringContext {
                     body_lambda =
                         Some(self.alloc_expr(Expr::Lambda(Box::new(fd)), child.text_range()));
                 }
+            } else if seen_with {
+                with_exprs.push(self.lower_expr(child));
             } else if name.is_none() {
-                name = Some(self.lower_expr(&child));
+                name = Some(self.lower_expr(child));
             }
         }
 
         let body = body_lambda.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
-        self.alloc_expr(Expr::Spawn { name, body }, node.text_range())
+        self.alloc_expr(
+            Expr::Spawn {
+                name,
+                with_exprs,
+                body,
+            },
+            node.text_range(),
+        )
     }
 
     /// Lower `await expr`. The CST shape is `AWAIT_EXPR [ KW_AWAIT
@@ -986,8 +1069,8 @@ impl LoweringContext {
                         // Assignment operators are not valid in expression context.
                         // They are handled as statements by try_lower_assignment().
                         // If we see them here, the user wrote something like `(x = 5)`
-                        // which is not a valid expression — emit Missing instead of
-                        // silently defaulting to BinaryOp::Add.
+                        // which is not a valid expression — report it and lower to
+                        // Missing instead of silently defaulting to BinaryOp::Add.
                         SyntaxKind::EQUALS
                         | SyntaxKind::PLUS_EQUALS
                         | SyntaxKind::MINUS_EQUALS
@@ -999,6 +1082,10 @@ impl LoweringContext {
                         | SyntaxKind::CARET_EQUALS
                         | SyntaxKind::LESS_LESS_EQUALS
                         | SyntaxKind::GREATER_GREATER_EQUALS => {
+                            self.diags
+                                .push(LoweringDiagnostic::AssignmentInExpressionPosition {
+                                    span: node.text_range(),
+                                });
                             return self.alloc_expr(Expr::Missing, node.text_range());
                         }
                         _ => {}
@@ -1295,6 +1382,8 @@ impl LoweringContext {
         // The scrutinee can appear as either a wrapper node (PATH_EXPR,
         // BINARY_EXPR, …) or as a bare token (single identifier / literal), so
         // we mirror `lower_if_expr` and walk children-with-tokens.
+        self.warn_direct_const_introducers(node);
+
         let mut pattern = None;
         let mut exprs: Vec<ExprId> = Vec::new();
         for elem in node.children_with_tokens() {
@@ -1343,6 +1432,8 @@ impl LoweringContext {
         // CST shape: `while let PATTERN = SCRUTINEE BODY_BLOCK`.
         // The first PATTERN node is the pattern; remaining children are
         // [0]=scrutinee, [1]=body (mirrors `lower_if_let_expr` minus else).
+        self.warn_direct_const_introducers(node);
+
         let mut pattern = None;
         let mut exprs: Vec<ExprId> = Vec::new();
         for elem in node.children_with_tokens() {
@@ -1612,6 +1703,8 @@ impl LoweringContext {
     /// `DESTRUCTURE_PATTERN`, `ARRAY_PATTERN`, `TYPE_PATTERN`,
     /// `PAREN_PATTERN`). Returns a fresh `PatId`.
     fn lower_pattern_atom_node(&mut self, node: &SyntaxNode) -> PatId {
+        self.warn_direct_const_introducers(node);
+
         match node.kind() {
             SyntaxKind::UNION_PATTERN => self.lower_union_pattern(node),
             SyntaxKind::BINDING_PATTERN => self.lower_binding_pattern(node),
@@ -1648,17 +1741,36 @@ impl LoweringContext {
         }
     }
 
-    /// Lower a `BINDING_PATTERN` (`let WORD`). The parser routes `let _` to
+    /// Lower a `BINDING_PATTERN` (`let WORD` / `const WORD`). The parser routes
+    /// `let _` / `const _` to
     /// `WILDCARD_PATTERN` before it ever reaches here, so the WORD's text is
     /// never `_`. The only defensive case is a malformed `let` without a
     /// following WORD (parse error like `let = 1`), which we recover as
     /// wildcard.
     fn lower_binding_pattern(&mut self, node: &SyntaxNode) -> PatId {
-        let name = node
+        let name_token = node
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .find(|t| t.kind() == SyntaxKind::WORD)
-            .map(|t| Name::new(t.text()));
+            .find(|t| t.kind() == SyntaxKind::WORD);
+
+        if let Some(token) = &name_token
+            && token.text() == "const"
+        {
+            self.diags
+                .push(LoweringDiagnostic::ReservedConstBindingName {
+                    span: token.text_range(),
+                });
+        }
+        if let Some(token) = &name_token
+            && token.text() == "$id"
+        {
+            self.diags
+                .push(LoweringDiagnostic::ReservedRuntimeIdBindingName {
+                    span: token.text_range(),
+                });
+        }
+
+        let name = name_token.map(|t| Name::new(t.text()));
 
         // The parser folds `: <pattern>` into BINDING_PATTERN as a
         // PATTERN child (any pattern).
@@ -1747,9 +1859,10 @@ impl LoweringContext {
         self.alloc_pattern(Pattern::Type(ty), node.text_range())
     }
 
-    /// Lower a `DESTRUCTURE_PATTERN` (`(let)? PATH ('<' types '>')? '{' field_list '}'`).
+    /// Lower a `DESTRUCTURE_PATTERN` (`(let|const)? PATH ('<' types '>')? '{' field_list '}'`).
     fn lower_destructure_pattern(&mut self, node: &SyntaxNode) -> PatId {
-        // Path tokens live between (the optional) `KW_LET` and either
+        // Path tokens live between the optional binding introducer
+        // (`KW_LET`/`KW_CONST`) and either
         // `GENERIC_ARGS`, `TYPE_ARGS`, or `L_BRACE`.
         // Collect WORD tokens in that range, ignoring DOTs.
         let mut class: Vec<Name> = Vec::new();
@@ -1831,6 +1944,15 @@ impl LoweringContext {
             None => {
                 // Shorthand `{ f }` → bind to a local of the same name. `_`
                 // canonicalises to `Wildcard`, same rule as elsewhere.
+                // A shorthand binding named `$id` would be silently dead
+                // (reads hit the runtime-identity special form first) —
+                // reject it like every other `$id` binding site.
+                if field_name.as_str() == "$id" {
+                    self.diags
+                        .push(LoweringDiagnostic::ReservedRuntimeIdBindingName {
+                            span: field_span,
+                        });
+                }
                 let synth = if field_name.as_str() == "_" {
                     Pattern::Wildcard
                 } else {
@@ -2408,7 +2530,13 @@ impl LoweringContext {
             return self.alloc_expr(Expr::Missing, node.text_range());
         }
 
-        // Check if single segment is a literal keyword
+        // Check if single segment is a literal keyword.
+        //
+        // Note `$id` is deliberately NOT desugared here: a lone `$id` reaches
+        // the AST as a bare WORD token (the parser only builds PATH_EXPR for
+        // dotted paths), so the special form is owned downstream — TIR types
+        // the read as `string` (builder.rs `infer_path`) and MIR lowers reads
+        // to `baml.id.current()` / writes to `baml.id.set(...)` (lower.rs).
         if segments.len() == 1 {
             match segments[0].0.as_str() {
                 "true" => {
@@ -3091,7 +3219,7 @@ impl LoweringContext {
         let values_ref = self.tt_path(&values, span);
         let tail = self.alloc_expr(
             Expr::Object {
-                type_name: Some(baml_base::TypePath::from_dotted("baml.TaggedString")),
+                type_name: baml_base::TypePath::from_dotted("baml.TaggedString"),
                 type_args: Vec::new(),
                 fields: vec![
                     (Name::new("parts"), parts_ref),
@@ -3526,7 +3654,6 @@ impl LoweringContext {
         let mut fields = Vec::new();
         let mut spreads = Vec::new();
         let mut position = 0;
-        let mut type_name = None;
         let mut type_args: Vec<TypeExpr> = vec![];
         let mut type_path_segments: Vec<Name> = vec![];
 
@@ -3551,9 +3678,10 @@ impl LoweringContext {
                 }
             }
         }
-        if !type_path_segments.is_empty() {
-            type_name = Some(TypePath::new(type_path_segments));
-        }
+        debug_assert!(!type_path_segments.is_empty());
+        // The parser only emits an object literal when a type name precedes the
+        // brace, so the segments are always present.
+        let type_name = TypePath::new(type_path_segments);
 
         // Object fields are child nodes after L_BRACE
         // They come as key-value pairs: WORD COLON expr or SPREAD expr
@@ -3870,7 +3998,7 @@ impl LoweringContext {
 
     fn lower_let_stmt(&mut self, node: &SyntaxNode, is_watched: bool) -> StmtId {
         // LET_STMT shape (post-pattern-rewrite):
-        //   KW_WATCH? KW_LET? PATTERN EQUALS <init-expr> (KW_ELSE BLOCK_EXPR)? SEMICOLON?
+        //   KW_WATCH? (KW_LET|KW_CONST)? PATTERN EQUALS <init-expr> (KW_ELSE BLOCK_EXPR)? SEMICOLON?
         //
         // The pattern carries its own `: T` narrow as a Chain link, so all we
         // do here is locate the PATTERN child, the initialiser child, and an
@@ -3880,6 +4008,7 @@ impl LoweringContext {
         let mut else_branch = None;
         let mut seen_equals = false;
         let mut seen_else = false;
+        self.warn_direct_const_introducers(node);
 
         for elem in node.children_with_tokens() {
             match elem {
@@ -4083,6 +4212,7 @@ impl LoweringContext {
                 },
                 rowan::NodeOrToken::Node(child) => {
                     if !seen_in && binding_id.is_none() && child.kind() == SyntaxKind::LET_STMT {
+                        self.warn_direct_const_introducers(&child);
                         if let Some(pat_node) =
                             child.children().find(|n| n.kind() == SyntaxKind::PATTERN)
                         {

@@ -13,7 +13,7 @@
 //!
 //! This validator is the **shape-level** guard shared by the native and WASM
 //! bridges (`sys_native::host_impls`, `bridge_wasm::host_value`). It enforces
-//! everything that can be checked from the value tree + the declared [`Ty`]
+//! everything that can be checked from the value tree + the declared [`RuntimeTy`]
 //! alone:
 //!
 //! - scalar discrimination (`Int` does *not* satisfy `Float` and vice-versa);
@@ -28,18 +28,18 @@
 //!   instance of the declared class).
 //!
 //! It deliberately does **not** validate class *field types*: a
-//! [`Ty::Class`] carries only the class name + generic args, not its field
+//! [`RuntimeTy::Class`] carries only the class name + generic args, not its field
 //! definitions, so per-field type checking requires the engine's resolved
 //! class schema and is performed engine-side at the result-push site (see
 //! `bex_engine::conversion`). This module is the first, schema-free line of
 //! defense; the engine adds the schema-aware second line.
 //!
-//! `Ty::TypeVar`-style opaque positions and [`Ty::BuiltinUnknown`] accept any
+//! `RuntimeTy::TypeVar`-style opaque positions and [`RuntimeTy::BuiltinUnknown`] accept any
 //! value: at the FFI boundary the declared return type handed to a host call
 //! is always concrete (generic functions are not host entry points), so these
 //! arms are defensive rather than load-bearing.
 
-use baml_type::{Literal, Ty, TypeName};
+use baml_type::{Literal, RuntimeTy, TypeName};
 
 use crate::BexExternalValue;
 
@@ -73,10 +73,10 @@ impl std::error::Error for HostReturnTypeError {}
 ///
 /// Returns `Ok(())` when the value's shape can inhabit `expected`, or a
 /// [`HostReturnTypeError`] describing the mismatch otherwise. See the module
-/// docs for the exact per-`Ty` contract and the shape-vs-schema layering.
+/// docs for the exact per-`RuntimeTy` contract and the shape-vs-schema layering.
 pub fn validate_host_return(
     value: &BexExternalValue,
-    expected: &Ty,
+    expected: &RuntimeTy,
 ) -> Result<(), HostReturnTypeError> {
     if value_satisfies_ty(value, expected) {
         Ok(())
@@ -88,7 +88,7 @@ pub fn validate_host_return(
     }
 }
 
-/// Strict, recursive shape match of a `BexExternalValue` against a `Ty`.
+/// Strict, recursive shape match of a `BexExternalValue` against a `RuntimeTy`.
 ///
 /// Unlike a conservative "reject only the obviously-wrong" check, this returns
 /// `false` whenever the value's runtime shape is not a member of `ty`. It
@@ -96,20 +96,15 @@ pub fn validate_host_return(
 /// where the necessary schema (class field types) is unavailable in this
 /// crate — class checking is limited to name identity here and completed
 /// engine-side.
-fn value_satisfies_ty(value: &BexExternalValue, ty: &Ty) -> bool {
+fn value_satisfies_ty(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
     match ty {
         // `unknown` / `any`: accept anything. At the FFI boundary the declared
         // return type is concrete, so this is defensive.
-        Ty::BuiltinUnknown { .. } => true,
-
-        // Optional: null or inner-valid.
-        Ty::Optional(inner, _) => {
-            matches!(value, BexExternalValue::Null) || value_satisfies_ty(value, inner)
-        }
+        RuntimeTy::BuiltinUnknown { .. } => true,
 
         // Union: matches at least one member. A `Union`-wrapped value is
         // unwrapped and checked against the arms.
-        Ty::Union(members, _) => match value {
+        RuntimeTy::Union(members, _) => match value {
             BexExternalValue::Union { value: inner, .. } => {
                 members.iter().any(|m| value_satisfies_ty(inner, m))
             }
@@ -125,20 +120,22 @@ fn value_satisfies_ty(value: &BexExternalValue, ty: &Ty) -> bool {
             value_satisfies_ty(inner, ty)
         }
 
-        Ty::Null { .. } => matches!(value, BexExternalValue::Null),
-        Ty::Bool { .. } => matches!(value, BexExternalValue::Bool(_)),
+        RuntimeTy::Null { .. } => matches!(value, BexExternalValue::Null),
+        RuntimeTy::Bool { .. } => matches!(value, BexExternalValue::Bool(_)),
         // `Int` and `Float` are distinct: an `Int` value does NOT satisfy
         // `Float`, nor a `Float` value `Int`. The numeric-widening that
-        // `Ty::is_subtype_of` allows for *static* typing must not silently
+        // `RuntimeTy::is_subtype_of` allows for *static* typing must not silently
         // reinterpret a host's returned tag.
-        Ty::Int { .. } => matches!(value, BexExternalValue::Int(_)),
-        Ty::Float { .. } => matches!(value, BexExternalValue::Float(_)),
-        Ty::String { .. } => matches!(value, BexExternalValue::String(_)),
-        Ty::Uint8Array { .. } => matches!(value, BexExternalValue::Uint8Array(_)),
+        RuntimeTy::Int { .. } => matches!(value, BexExternalValue::Int(_)),
+        RuntimeTy::Float { .. } => matches!(value, BexExternalValue::Float(_)),
+        RuntimeTy::Bigint { .. } => matches!(value, BexExternalValue::Bigint(_)),
+        RuntimeTy::String { .. } => matches!(value, BexExternalValue::String(_)),
+        RuntimeTy::Uint8Array { .. } => matches!(value, BexExternalValue::Uint8Array(_)),
 
-        Ty::Literal(lit, _) => match (lit, value) {
+        RuntimeTy::Literal(lit, _, _) => match (lit, value) {
             (Literal::Bool(b), BexExternalValue::Bool(v)) => b == v,
             (Literal::Int(i), BexExternalValue::Int(v)) => i == v,
+            (Literal::Bigint(b), BexExternalValue::Bigint(v)) => b == v,
             (Literal::String(s), BexExternalValue::String(v)) => s == v,
             // `Literal::Float` stores the literal as a string for precision;
             // match by tag (any float), mirroring
@@ -147,14 +144,14 @@ fn value_satisfies_ty(value: &BexExternalValue, ty: &Ty) -> bool {
             _ => false,
         },
 
-        Ty::List(inner, _) => match value {
+        RuntimeTy::List(inner, _) => match value {
             BexExternalValue::Array { items, .. } => {
                 items.iter().all(|item| value_satisfies_ty(item, inner))
             }
             _ => false,
         },
 
-        Ty::Map { value: v_ty, .. } => match value {
+        RuntimeTy::Map { value: v_ty, .. } => match value {
             BexExternalValue::Map { entries, .. } => {
                 entries.values().all(|v| value_satisfies_ty(v, v_ty))
             }
@@ -165,10 +162,10 @@ fn value_satisfies_ty(value: &BexExternalValue, ty: &Ty) -> bool {
         // `Map` does NOT satisfy a class type — a class return must arrive as a
         // class value (→ `Instance`); a plain map materializes as `Object::Map`
         // engine-side, never an instance of the declared class. Field *types*
-        // are not checked here (the declared `Ty::Class` carries no field
+        // are not checked here (the declared `RuntimeTy::Class` carries no field
         // defs); the engine completes per-field validation against its resolved
         // schema.
-        Ty::Class(tn, _, _) => match value {
+        RuntimeTy::Class(tn, _, _) => match value {
             BexExternalValue::Instance { class_name, .. } => {
                 type_name_matches_external_name(class_name, tn)
             }
@@ -176,14 +173,14 @@ fn value_satisfies_ty(value: &BexExternalValue, ty: &Ty) -> bool {
         },
 
         // Enum identity: a `Variant` must name the declared enum.
-        Ty::Enum(tn, _) => match value {
+        RuntimeTy::Enum(tn, _) => match value {
             BexExternalValue::Variant { enum_name, .. } => {
                 type_name_matches_external_name(enum_name, tn)
             }
             _ => false,
         },
 
-        Ty::Media(..) => matches!(
+        RuntimeTy::Media(..) => matches!(
             value,
             BexExternalValue::Adt(crate::BexExternalAdt::Media(_))
         ),
@@ -192,12 +189,12 @@ fn value_satisfies_ty(value: &BexExternalValue, ty: &Ty) -> bool {
         // callable (`HostValue`) or a BAML function reference (`FunctionRef`).
         // No other value can inhabit a function type, so reject it rather than
         // let it fall through to the accept-anything opaque tail below.
-        Ty::Function { .. } => matches!(
+        RuntimeTy::Function { .. } => matches!(
             value,
             BexExternalValue::HostValue(_) | BexExternalValue::FunctionRef { .. }
         ),
 
-        // Opaque / compiler-only / otherwise-unhandled `Ty` shapes (e.g.
+        // Opaque / compiler-only / otherwise-unhandled `RuntimeTy` shapes (e.g.
         // `Opaque`, `Future`): accept rather than risk a false rejection of a
         // value the engine's typed conversion will handle. These should not
         // appear as concrete host-callable return types in practice.
@@ -213,69 +210,65 @@ fn value_satisfies_ty(value: &BexExternalValue, ty: &Ty) -> bool {
 /// name, the bare short name (for local types), or the dotted module-qualified
 /// name. Mirrors `bex_engine::conversion::type_name_matches_external_name`.
 fn type_name_matches_external_name(external_name: &str, type_name: &TypeName) -> bool {
-    if external_name == type_name.display_name.as_str() {
-        return true;
-    }
-
-    if type_name.module_path.is_empty() {
-        return external_name == type_name.name.as_str();
-    }
-
-    let qualified_name = type_name
-        .module_path
-        .iter()
-        .map(baml_type::Name::as_str)
-        .chain(std::iter::once(type_name.name.as_str()))
-        .collect::<Vec<_>>()
-        .join(".");
-
-    external_name == qualified_name
+    external_name == type_name.display_name().as_str()
+        || external_name == type_name.render_dotted(false)
 }
 
 #[cfg(test)]
 mod tests {
-    use baml_type::{Literal, Name, Ty, TyAttr, TypeName};
+    use baml_type::{
+        Freshness, Literal, Name, RuntimeFunctionParamTy, RuntimeTy, TyAttr, TypeName,
+    };
     use indexmap::IndexMap;
 
     use super::*;
     use crate::BexExternalValue;
 
-    fn int_ty() -> Ty {
-        Ty::int()
+    fn int_ty() -> RuntimeTy {
+        RuntimeTy::int()
     }
 
     #[test]
     fn scalar_int_does_not_satisfy_float_and_vice_versa() {
         // The core int≠float distinction.
-        assert!(validate_host_return(&BexExternalValue::Int(1), &Ty::int()).is_ok());
-        assert!(validate_host_return(&BexExternalValue::Int(1), &Ty::float()).is_err());
-        assert!(validate_host_return(&BexExternalValue::Float(1.0), &Ty::float()).is_ok());
-        assert!(validate_host_return(&BexExternalValue::Float(1.0), &Ty::int()).is_err());
+        assert!(validate_host_return(&BexExternalValue::Int(1), &RuntimeTy::int()).is_ok());
+        assert!(validate_host_return(&BexExternalValue::Int(1), &RuntimeTy::float()).is_err());
+        assert!(validate_host_return(&BexExternalValue::Float(1.0), &RuntimeTy::float()).is_ok());
+        assert!(validate_host_return(&BexExternalValue::Float(1.0), &RuntimeTy::int()).is_err());
     }
 
     #[test]
     fn scalar_exact_tags() {
-        assert!(validate_host_return(&BexExternalValue::Bool(true), &Ty::bool()).is_ok());
-        assert!(validate_host_return(&BexExternalValue::String("x".into()), &Ty::string()).is_ok());
+        assert!(validate_host_return(&BexExternalValue::Bool(true), &RuntimeTy::bool()).is_ok());
         assert!(
-            validate_host_return(&BexExternalValue::Uint8Array(vec![1]), &Ty::uint8array()).is_ok()
+            validate_host_return(&BexExternalValue::String("x".into()), &RuntimeTy::string())
+                .is_ok()
         );
-        assert!(validate_host_return(&BexExternalValue::Null, &Ty::null()).is_ok());
+        assert!(
+            validate_host_return(
+                &BexExternalValue::Uint8Array(vec![1]),
+                &RuntimeTy::uint8array()
+            )
+            .is_ok()
+        );
+        assert!(validate_host_return(&BexExternalValue::Null, &RuntimeTy::null()).is_ok());
         // Cross-tag rejections.
-        assert!(validate_host_return(&BexExternalValue::String("x".into()), &Ty::int()).is_err());
-        assert!(validate_host_return(&BexExternalValue::Bool(true), &Ty::string()).is_err());
+        assert!(
+            validate_host_return(&BexExternalValue::String("x".into()), &RuntimeTy::int()).is_err()
+        );
+        assert!(validate_host_return(&BexExternalValue::Bool(true), &RuntimeTy::string()).is_err());
     }
 
     #[test]
     fn literal_value_equality() {
-        let lit5 = Ty::Literal(Literal::Int(5), TyAttr::default());
+        let lit5 = RuntimeTy::Literal(Literal::Int(5), Freshness::Regular, TyAttr::default());
         assert!(validate_host_return(&BexExternalValue::Int(5), &lit5).is_ok());
         assert!(validate_host_return(&BexExternalValue::Int(6), &lit5).is_err());
     }
 
     #[test]
     fn optional_accepts_null_or_inner() {
-        let opt_int = Ty::optional(int_ty());
+        let opt_int = RuntimeTy::optional(int_ty());
         assert!(validate_host_return(&BexExternalValue::Null, &opt_int).is_ok());
         assert!(validate_host_return(&BexExternalValue::Int(1), &opt_int).is_ok());
         assert!(validate_host_return(&BexExternalValue::String("x".into()), &opt_int).is_err());
@@ -283,7 +276,7 @@ mod tests {
 
     #[test]
     fn union_matches_one_member() {
-        let union = Ty::union([int_ty(), Ty::string()]);
+        let union = RuntimeTy::union([int_ty(), RuntimeTy::string()]);
         assert!(validate_host_return(&BexExternalValue::Int(1), &union).is_ok());
         assert!(validate_host_return(&BexExternalValue::String("x".into()), &union).is_ok());
         assert!(validate_host_return(&BexExternalValue::Bool(true), &union).is_err());
@@ -291,7 +284,7 @@ mod tests {
 
     #[test]
     fn list_and_map_recurse() {
-        let list_int = Ty::list(int_ty());
+        let list_int = RuntimeTy::list(int_ty());
         assert!(
             validate_host_return(
                 &BexExternalValue::Array {
@@ -313,8 +306,8 @@ mod tests {
             .is_err()
         );
 
-        let map_int = Ty::Map {
-            key: Box::new(Ty::string()),
+        let map_int = RuntimeTy::Map {
+            key: Box::new(RuntimeTy::string()),
             value: Box::new(int_ty()),
             attr: TyAttr::default(),
         };
@@ -323,7 +316,7 @@ mod tests {
         assert!(
             validate_host_return(
                 &BexExternalValue::Map {
-                    key_type: Ty::string(),
+                    key_type: RuntimeTy::string(),
                     value_type: int_ty(),
                     entries: ok_entries,
                 },
@@ -336,7 +329,7 @@ mod tests {
         assert!(
             validate_host_return(
                 &BexExternalValue::Map {
-                    key_type: Ty::string(),
+                    key_type: RuntimeTy::string(),
                     value_type: int_ty(),
                     entries: bad_entries,
                 },
@@ -348,7 +341,7 @@ mod tests {
 
     #[test]
     fn enum_identity_is_enforced() {
-        let status = Ty::Enum(TypeName::local(Name::new("Status")), TyAttr::default());
+        let status = RuntimeTy::Enum(TypeName::local(Name::new("Status")), TyAttr::default());
         assert!(validate_host_return(&BexExternalValue::variant("Status", "Ok"), &status,).is_ok());
         // Wrong enum name → reject.
         assert!(
@@ -360,7 +353,7 @@ mod tests {
 
     #[test]
     fn class_name_identity_is_enforced() {
-        let user = Ty::Class(
+        let user = RuntimeTy::Class(
             TypeName::local(Name::new("User")),
             Vec::new(),
             TyAttr::default(),
@@ -391,8 +384,8 @@ mod tests {
         assert!(
             validate_host_return(
                 &BexExternalValue::Map {
-                    key_type: Ty::string(),
-                    value_type: Ty::unknown(),
+                    key_type: RuntimeTy::string(),
+                    value_type: RuntimeTy::unknown(),
                     entries: IndexMap::new(),
                 },
                 &user,
@@ -403,10 +396,12 @@ mod tests {
 
     #[test]
     fn function_type_accepts_only_callables() {
-        let fn_ty = Ty::Function {
-            params: vec![Ty::int()],
-            ret: Box::new(Ty::string()),
-            throws: Box::new(Ty::null()),
+        let fn_ty = RuntimeTy::Function {
+            generic_params: vec![],
+            generic_param_bounds: vec![],
+            params: vec![RuntimeFunctionParamTy::required(None, RuntimeTy::int())],
+            ret: Box::new(RuntimeTy::string()),
+            throws: Box::new(RuntimeTy::null()),
             attr: TyAttr::default(),
         };
         // A host callable satisfies a function-typed return.
@@ -428,9 +423,12 @@ mod tests {
     #[test]
     fn builtin_unknown_accepts_anything() {
         assert!(
-            validate_host_return(&BexExternalValue::String("anything".into()), &Ty::unknown())
-                .is_ok()
+            validate_host_return(
+                &BexExternalValue::String("anything".into()),
+                &RuntimeTy::unknown()
+            )
+            .is_ok()
         );
-        assert!(validate_host_return(&BexExternalValue::Int(1), &Ty::unknown()).is_ok());
+        assert!(validate_host_return(&BexExternalValue::Int(1), &RuntimeTy::unknown()).is_ok());
     }
 }

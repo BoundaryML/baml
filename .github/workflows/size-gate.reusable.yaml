@@ -218,29 +218,29 @@ jobs:
 
   size-gate-windows:
     name: "size-gate (windows)"
-    runs-on: blacksmith-4vcpu-windows-2025
+    runs-on: blacksmith-8vcpu-windows-2025
     # TODO: Reduce this once our changes to aws-sdk-rust are upstreamed
     # Right now it needs to download our repo every time which is very slow
     timeout-minutes: 45
     continue-on-error: true
+    env:
+      CARGO_BUILD_JOBS: "16"
     steps:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
 
-      - name: "Install LLVM tools (llvm-strip)"
-        run: |
-          choco install llvm -y
-          echo 'C:\Program Files\LLVM\bin' >> $GITHUB_PATH
-
       - name: "Install Rust toolchain"
         run: rustup show
         working-directory: baml_language
 
-      - name: "Install sccache and direnv"
+      # Cargo linking uses rust-lld from the Rust toolchain on Windows. The
+      # extra clang tool is installed through mise for llvm-strip, replacing
+      # the previous Chocolatey LLVM install.
+      - name: "Install sccache, direnv, and clang"
         uses: ./.github/actions/setup-mise
         with:
-          install_args: "sccache direnv"
+          install_args: "sccache direnv clang"
 
       - name: "Verify sccache"
         run: sccache --version

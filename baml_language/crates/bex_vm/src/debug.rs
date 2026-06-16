@@ -125,13 +125,6 @@ pub(crate) fn display_instruction(
         .and_then(|m| m.operand.as_ref());
 
     let metadata = match instruction {
-        Instruction::NotifyBlock(block_index) => {
-            if let Some(notification) = function.block_notifications.get(*block_index) {
-                format!("({})", &notification.block_name)
-            } else {
-                format!("(invalid block index: {block_index})")
-            }
-        }
         Instruction::LoadConst(index) => {
             // Prefer resolved_constants (runtime), fall back to constants (compile-time)
             if let Some(value) = function.bytecode.resolved_constants.get(*index) {
@@ -185,13 +178,6 @@ pub(crate) fn display_instruction(
             }
         }
 
-        Instruction::VizEnter(index) | Instruction::VizExit(index) => {
-            if let Some(node) = function.viz_nodes.get(*index) {
-                format!("({})", &node.label)
-            } else {
-                format!("(invalid viz index: {index})")
-            }
-        }
         Instruction::JumpTable(table_idx) => {
             format!("(table {table_idx})")
         }
@@ -238,6 +224,7 @@ pub(crate) fn display_instruction(
         | Instruction::StoreArrayElement
         | Instruction::StoreMapElement
         | Instruction::Await
+        | Instruction::AwaitAny
         | Instruction::CallIndirect
         | Instruction::Throw
         | Instruction::Discriminant
@@ -359,7 +346,6 @@ const COLUMN_MARGIN: usize = 3;
 /// Get color style for an instruction based on its type.
 fn instruction_style(instruction: &Instruction) -> Style {
     match instruction {
-        Instruction::NotifyBlock(_) => Style::new().yellow().bright(),
         Instruction::LoadConst(_)
         | Instruction::LoadVar(_)
         | Instruction::LoadVar2(..)
@@ -415,13 +401,12 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::InitInstance(_)
         | Instruction::AllocVariant(_)
         | Instruction::AllocArray(_) => Style::new().cyan(),
-        Instruction::SysOp(_) | Instruction::Spawn | Instruction::Await => {
+        Instruction::SysOp(_) | Instruction::Spawn | Instruction::Await | Instruction::AwaitAny => {
             Style::new().green().bright()
         }
         Instruction::Watch(_) | Instruction::Unwatch(_) | Instruction::Notify(_) => {
             Style::new().red().bright()
         }
-        Instruction::VizEnter(_) | Instruction::VizExit(_) => Style::new().yellow().bright(),
         Instruction::Discriminant
         | Instruction::TypeTag
         | Instruction::IsType(_)
@@ -885,6 +870,7 @@ fn display_instruction_textual(
         Instruction::SysOp(_) => format!("sys_op {}", meta_str(&"")),
         Instruction::Spawn => "spawn".to_string(),
         Instruction::Await => "await".to_string(),
+        Instruction::AwaitAny => "await_any".to_string(),
 
         // --- Control ---
         Instruction::Return => "return".to_string(),
@@ -894,29 +880,6 @@ fn display_instruction_textual(
         Instruction::Watch(idx) => format!("watch {}", meta_str(idx)),
         Instruction::Unwatch(idx) => format!("unwatch {}", meta_str(idx)),
         Instruction::Notify(idx) => format!("notify {}", meta_str(idx)),
-        Instruction::NotifyBlock(block_index) => {
-            if let Some(notification) = function.block_notifications.get(*block_index) {
-                format!("notify_block {}", notification.block_name)
-            } else {
-                format!("notify_block {block_index}")
-            }
-        }
-
-        // --- Visualization ---
-        Instruction::VizEnter(index) => {
-            if let Some(node) = function.viz_nodes.get(*index) {
-                format!("viz_enter {}", node.label)
-            } else {
-                format!("viz_enter {index}")
-            }
-        }
-        Instruction::VizExit(index) => {
-            if let Some(node) = function.viz_nodes.get(*index) {
-                format!("viz_exit {}", node.label)
-            } else {
-                format!("viz_exit {index}")
-            }
-        }
 
         // --- Type introspection ---
         Instruction::Discriminant => "discriminant".to_string(),
@@ -1179,20 +1142,6 @@ fn display_expanded_metadata(ip: usize, instruction: &Instruction, function: &Fu
             }
         }
 
-        // Block notifications: show block name.
-        Instruction::NotifyBlock(block_index) => function
-            .block_notifications
-            .get(*block_index)
-            .map(|n| format!("({})", n.block_name))
-            .unwrap_or_default(),
-
-        // Visualization: show node label.
-        Instruction::VizEnter(index) | Instruction::VizExit(index) => function
-            .viz_nodes
-            .get(*index)
-            .map(|n| format!("({})", n.label))
-            .unwrap_or_default(),
-
         // All other instructions: no metadata.
         _ => String::new(),
     }
@@ -1235,6 +1184,7 @@ pub fn display_compact_bytecode(
             // Unit ops: no operands
             OpCode::Return
             | OpCode::Await
+            | OpCode::AwaitAny
             | OpCode::Throw
             | OpCode::LoadArrayElement
             | OpCode::LoadMapElement
@@ -1345,9 +1295,6 @@ pub fn display_compact_bytecode(
             | OpCode::Watch
             | OpCode::Unwatch
             | OpCode::Notify
-            | OpCode::NotifyBlock
-            | OpCode::VizEnter
-            | OpCode::VizExit
             | OpCode::IsType
             | OpCode::DenseTag
             | OpCode::LoadType

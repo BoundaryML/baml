@@ -50,6 +50,8 @@ jobs:
       unsafe: ${{ steps.check_unsafe.outputs.changed }}
       # Flag for proto codegen changes - triggers generated file sync check
       proto: ${{ steps.check_proto.outputs.changed }}
+      # Flag for profiling-ring changes (bex_events) - triggers loom + miri
+      prof: ${{ steps.check_prof.outputs.changed }}
       # Flag that is raised when perf benchmarks (CodSpeed) should run: always
       # after merge (push to main/canary) and on manual dispatch; on PRs only
       # when the PR title/body or a commit message opts in.
@@ -85,8 +87,8 @@ jobs:
             ':tools/pkg_boundaryml_com/**' \
             ':.github/workflows/ci.yaml' \
             ':.github/workflows/release-baml-language.yml' \
-            ':.github/workflows/build-python-sdk.reusable.yaml' \
-            ':.github/workflows/build-nodejs-sdk.reusable.yaml' \
+            ':.github/workflows/build2-python-sdk.reusable.yaml' \
+            ':.github/workflows/build2-nodejs-sdk.reusable.yaml' \
             ':.github/workflows/cargo-tests.reusable.yaml' \
             ':.github/workflows/size-gate.reusable.yaml' \
             ':.github/workflows/wasm-pack-tests.reusable.yaml' \
@@ -227,6 +229,28 @@ jobs:
         run: |
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
             ':baml_language/crates/bridge_ctypes/**/*.proto' \
+          ; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Includes the job's own inputs (workspace manifest with the
+      # loom/minstant dep versions + check-cfg list, the pinned toolchain,
+      # and this workflow file) so a change that can break the loom/miri
+      # build re-runs the gate. Cargo.lock is deliberately excluded: it
+      # churns on every dep bump and the cargo-tests job already covers the
+      # std halves of the suite.
+      - name: Check if profiling ring code changed
+        id: check_prof
+        env:
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+        run: |
+          if git diff --quiet "${MERGE_BASE}...HEAD" -- \
+            ':baml_language/crates/bex_events/**' \
+            ':baml_language/Cargo.toml' \
+            ':baml_language/rust-toolchain.toml' \
+            ':.github/workflows/ci.yaml' \
           ; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
@@ -473,6 +497,63 @@ jobs:
         run: cargo miri test -p bex_heap --lib
         working-directory: baml_language
 
+  # Loom + Miri verification for the lock-free profiling ring
+  # (bex_events::prof). Scoped to the prof:: tests so it stays minutes-fast —
+  # deliberately narrower than the (disabled) whole-crate miri-tests job
+  # above, whose bex_heap runs were timing out.
+  prof-concurrency:
+    name: "Profiling ring (loom + miri)"
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    needs: determine_changes
+    if: needs.determine_changes.outputs.prof == 'true'
+    timeout-minutes: 45
+    steps:
+      - name: "Checkout"
+        uses: useblacksmith/checkout@v1
+        with:
+          persist-credentials: false
+
+      # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version.
+      - name: "Install Rust toolchain"
+        run: rustup toolchain install
+        working-directory: baml_language
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          shared-key: "prof-concurrency"
+
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch
+        working-directory: baml_language
+
+      # The model checker explores every interleaving (bounded at 3
+      # preemptions, set in the test harness) of the ring's
+      # producer/consumer/lifecycle protocols. The custom cfg name
+      # (baml_loom, not the conventional loom) keeps the flag from
+      # half-activating loom support in third-party deps (e.g. boxcar) that
+      # gate on cfg(loom) but need their own loom feature enabled to compile.
+      - name: "Loom model checking (bex_events::prof)"
+        run: 'cargo test -p bex_events --release --lib prof::'
+        working-directory: baml_language
+        env:
+          RUSTFLAGS: "--cfg baml_loom"
+          CARGO_TARGET_DIR: target/loom
+
+      - name: "Install Rust nightly and Miri"
+        run: rustup toolchain install nightly --component miri
+        working-directory: baml_language
+
+      # Miri checks the raw-pointer/UnsafeCell discipline of the same
+      # scenarios on real threads. Leaked rings are by design (&'static
+      # lifetime model); isolation is off for park_timeout/sleep in the
+      # stress tests.
+      - name: "Miri (bex_events::prof)"
+        run: 'cargo +nightly miri test -p bex_events --lib prof::'
+        working-directory: baml_language
+        env:
+          MIRIFLAGS: "-Zmiri-ignore-leaks -Zmiri-disable-isolation"
+
   proto-sync:
     name: "proto generated files sync"
     runs-on: blacksmith-4vcpu-ubuntu-2404
@@ -522,8 +603,16 @@ jobs:
         run: ./build.sh
         working-directory: baml_language/sdks/go/bridge_go
 
+      # --ignore-workspace: install from bridge_nodejs's own pnpm-lock.yaml
+      # rather than the root workspace lockfile. The two resolve different
+      # protobufjs-cli versions, and pbjs codegen output (committed under
+      # typescript_src/proto/) must come from the version this package pins.
+      # --ignore-scripts: skip dependency build scripts (esbuild's binary
+      # fetch, protobufjs postinstall) — none are needed for pbjs/tsc/napi
+      # codegen, and pnpm errors on unapproved build scripts otherwise.
+      # Same flags as sdk_tests/crates/typescript_node/setup.sh.
       - name: "Install Node SDK dependencies"
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --ignore-workspace --ignore-scripts
         working-directory: baml_language/sdks/nodejs/bridge_nodejs
 
       # Node / TypeScript (protobufjs) — writes into sdks/nodejs/bridge_nodejs/typescript_src/proto/.
@@ -831,6 +920,7 @@ jobs:
       - docs
       - webview-tests
       # - miri-tests  # TEMPORARILY DISABLED: miri tests timing out
+      - prof-concurrency
       - proto-sync
       # NOTE: size-gate is intentionally NOT a required gate. It is an
       # informational signal (PR comment + daily baseline auto-refresh), not
@@ -855,6 +945,7 @@ jobs:
           echo "| docs | ${{ needs.docs.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| webview-tests | ${{ needs.webview-tests.result }} |" >> $GITHUB_STEP_SUMMARY
           # echo "| miri-tests | ${{ needs.miri-tests.result }} |" >> $GITHUB_STEP_SUMMARY  # TEMPORARILY DISABLED
+          echo "| prof-concurrency | ${{ needs.prof-concurrency.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| proto-sync | ${{ needs.proto-sync.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "::error::One or more CI jobs failed!"

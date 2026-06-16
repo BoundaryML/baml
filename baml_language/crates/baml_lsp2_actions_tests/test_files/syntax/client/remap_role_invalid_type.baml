@@ -19,10 +19,10 @@ client<llm> MyClient {
 //    ╭─[ client_remap_role_invalid_type.baml:1:1 ]
 //    │
 //  1 │ ╭─▶ client<llm> MyClient {
-//    ┆ ┆   
+//    ┆ ┆
 //  7 │ ├─▶ }
-//    │ │       
+//    │ │
 //    │ ╰─────── type mismatch: expected map<string, string> | null, got "not_a_map"
-//    │     
+//    │
 //    │     Note: Error code: E0001
 // ───╯

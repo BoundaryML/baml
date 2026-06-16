@@ -64,8 +64,8 @@ function user.BadRequiredAfterDefault(a: int = 1, b: int) -> int throws never {
   }
   !! 793..800: required parameter `b` cannot appear after a defaulted parameter
 }
-type user.NamedFilter = (query: string, filter?: string?) -> int throws never
-type user.NamedLimit = (query: string, limit?: string?) -> int throws never
+type user.NamedFilter = (query: string, filter?: string | null) -> int throws never
+type user.NamedLimit = (query: string, limit?: string | null) -> int throws never
 class user.Counter {
   value: int
 }
@@ -76,7 +76,7 @@ function user.Counter.Current(self: user.Counter = null) -> int throws never {
   !! 245..249: `self` cannot have a default value
 }
 function user.Counter.to_json(self: user.Counter) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "value": self.value.to_json() } : map<string, baml.json.json>
+  map { "value": baml.json.to_json(self.value) } : map<string, baml.json.json>
 }
 function user.Counter.from_json(j: baml.json.json) -> user.Counter throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Counter { value: baml.json.from_json<int>(baml.json.field(j, "value")) } : user.Counter
@@ -93,20 +93,20 @@ function user.LambdaDefault() -> int throws never {
 }
 lambda user.LambdaDefault {
 }
-function user.Filtered(query: string, filter: string? = null) -> int throws never {
+function user.Filtered(query: string, filter: string | null = null) -> int throws never {
   { : int
     query.length() : int
   }
 }
 function user.OptionalNameMismatch() -> int throws never {
   { : int
-    let f: NamedLimit = Filtered : (query: string, filter?: string?) -> int throws never -> (query: string, limit?: string?) -> int throws never
+    let f: NamedLimit = Filtered : (query: string, filter?: string | null) -> int throws never -> (query: string, limit?: string | null) -> int throws never
     f("cats", limit = "recent") : int
   }
-  !! 511..519: type mismatch: expected NamedLimit, got (query: string, filter?: string?) -> int throws never
+  !! 511..519: type mismatch: expected NamedLimit, got (query: string, filter?: string | null) -> int throws never
 }
 type user.NamedFilter$stream = unknown
 type user.NamedLimit$stream = unknown
 class user.Counter$stream {
-  value: null | int
+  value: int | null
 }

@@ -16,7 +16,9 @@ use baml_project::ProjectDatabase;
 use clap::Args;
 use sdkgen_python_pydantic2::{NamingConvention, OutputType};
 
-use crate::{project_load::load_project_from_reporting, reporter::Reporter};
+use crate::{
+    commands::release_version, project_load::load_project_from_reporting, reporter::Reporter,
+};
 
 #[derive(Args, Clone, Debug)]
 pub struct GenerateArgs {
@@ -43,6 +45,10 @@ struct GeneratorDef {
 impl GenerateArgs {
     pub fn run(&self) -> Result<crate::ExitCode> {
         let reporter = Reporter::new();
+        reporter.status(
+            "Generating",
+            format!("clients with CLI version: {}", release_version()),
+        );
         let (db, from, baml_files) = load_project_from_reporting(&self.from, &reporter)?;
         if baml_files.is_empty() {
             reporter.abandon();

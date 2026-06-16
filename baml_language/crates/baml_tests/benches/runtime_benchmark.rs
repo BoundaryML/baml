@@ -58,13 +58,8 @@ fn compile_source(source: &str) -> (ProjectDatabase, BexEngine) {
         },
     )
     .expect("benchmark compilation failed");
-    let engine = BexEngine::new(
-        bytecode,
-        Arc::new(sys_native::SysOps::native()),
-        None,
-        vec![],
-    )
-    .expect("benchmark engine creation failed");
+    let engine = BexEngine::new(bytecode, Arc::new(sys_native::SysOps::native()), vec![])
+        .expect("benchmark engine creation failed");
     (db, engine)
 }
 

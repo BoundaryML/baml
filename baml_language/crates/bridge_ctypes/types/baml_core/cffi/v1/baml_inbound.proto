@@ -47,6 +47,14 @@ enum BamlHandleType {
   // Lifetime: Rust drop notifies host via HostReleaseFn (not via
   // HANDLE_TABLE). See bex_external_types::host_value.
   HOST_VALUE_CALLABLE = 15;
+  // Host-owned opaque value: an arbitrary host object with no BAML
+  // representation, referenced via the per-bridge HostValueRegistry and
+  // released via HostReleaseFn (not via HANDLE_TABLE), same as
+  // HOST_VALUE_CALLABLE. A host-thrown native exception is one consumer:
+  // the bridge registers it as an opaque value and wraps the handle in a
+  // baml.errors.HostCallable instance for throw semantics. See
+  // bex_external_types::host_value.
+  HOST_VALUE_OPAQUE = 16;
 }
 
 message BamlHandle {
@@ -108,35 +116,12 @@ message InboundEnumValue {
 }
 
 // -----------------------------------------------------------------------------
-// Host-callable error
-// -----------------------------------------------------------------------------
-
-enum HostCallableErrorCategory {
-  HOST_CALLABLE_ERROR_UNSPECIFIED = 0;
-  // Default — user's host callable raised an exception.
-  HOST_CALLABLE_HOST_ERROR = 1;
-  // Host bridge rejected args before invoking (arity / type mismatch).
-  HOST_CALLABLE_INVALID_ARGUMENT = 2;
-  // Host bridge observed cancellation (only meaningful when v2
-  // cancel_host_call lands).
-  HOST_CALLABLE_CANCELLED = 3;
-}
-
-// Sent by the host via complete_host_call when is_error = 1.
-message HostCallableError {
-  string class_name = 1;
-  string message = 2;
-  optional string traceback = 3;
-  optional string language = 4;
-  HostCallableErrorCategory category = 5;
-}
-
-// -----------------------------------------------------------------------------
 // Function call protocol
 // -----------------------------------------------------------------------------
 
 message CallFunctionArgs {
   repeated InboundMapEntry kwargs = 1;
+  uint64 call_id = 2;
 }
 
 // CallAck is the engine's acknowledgment of an inbound call. It flows

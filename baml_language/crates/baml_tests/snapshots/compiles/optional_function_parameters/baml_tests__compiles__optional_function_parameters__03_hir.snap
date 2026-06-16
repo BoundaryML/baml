@@ -16,9 +16,6 @@ function user.AskDocs$build_request(query: string, max_results: int = 10, filter
 function user.AskDocs$build_request_stream(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.llm.Client = TestClient) -> baml.http.Request  [expr] {
   baml.llm.build_request_stream(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter })
 }
-function user.AskDocs$parse(json: string, client: baml.llm.Client = TestClient) -> string  [expr] {
-  baml.llm.parse("AskDocs", json)
-}
 function user.AskDocs$render_prompt(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.llm.Client = TestClient) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter })
 }
@@ -59,5 +56,5 @@ function user.from_json(j: baml.json.json) -> user.SearchService  [expr] {
   user.SearchService { base: baml.json.from_json(baml.json.field(j, "base")) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "base": self.base.to_json() }
+  map { "base": baml.json.to_json(self.base) }
 }

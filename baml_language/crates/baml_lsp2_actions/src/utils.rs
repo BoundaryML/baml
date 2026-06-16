@@ -178,7 +178,7 @@ impl TyDisplayContext<'_> {
 }
 
 impl TyRenderStrategy for TyDisplayContext<'_> {
-    fn qtn(&self, qtn: &QualifiedTypeName, _with_generic_params: bool) -> String {
+    fn qtn(&self, qtn: &QualifiedTypeName) -> String {
         self.display_qtn(qtn)
     }
 
@@ -190,25 +190,20 @@ impl TyRenderStrategy for TyDisplayContext<'_> {
         }
     }
 
-    // Hover/completion show declared shapes: the bare name (no `<_>`
-    // placeholders) and no streaming-only `(evolving)` annotation.
-    fn show_unspecialized_placeholders(&self) -> bool {
-        false
-    }
-
+    // Hover/completion hide the streaming-only `(evolving)` annotation.
     fn show_evolving(&self) -> bool {
         false
     }
 }
 
 /// Context-free strategy: like the canonical form but elides the implicit
-/// `user` package, hides `(evolving)`/`<_>` placeholders, and shows synthetic
-/// effect params as `callback`. Used by [`display_ty`] where no current-package
-/// context is available.
+/// `user` package, hides `(evolving)`, and shows synthetic effect params as
+/// `callback`. Used by [`display_ty`] where no current-package context is
+/// available.
 struct PlainTyRender;
 
 impl TyRenderStrategy for PlainTyRender {
-    fn qtn(&self, qtn: &QualifiedTypeName, _with_generic_params: bool) -> String {
+    fn qtn(&self, qtn: &QualifiedTypeName) -> String {
         qtn.render_user_facing()
     }
 
@@ -218,10 +213,6 @@ impl TyRenderStrategy for PlainTyRender {
         } else {
             name.to_string()
         }
-    }
-
-    fn show_unspecialized_placeholders(&self) -> bool {
-        false
     }
 
     fn show_evolving(&self) -> bool {

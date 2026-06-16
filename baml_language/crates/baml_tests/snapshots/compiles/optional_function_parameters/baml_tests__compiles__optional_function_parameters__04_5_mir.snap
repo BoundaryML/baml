@@ -157,32 +157,6 @@ fn user.AskDocs$build_request_stream(query: string, max_results: int, filter: st
     }
 }
 
-fn user.AskDocs$parse(json: string, client: baml.llm.Client) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: string // json // param
-    let _2: baml.llm.Client // client // param
-    let _3: bool
-
-    bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _2 = const fn user.TestClient;
-        goto -> bb2;
-    }
-
-    bb2: {
-        _0 = call const fn baml.llm.parse(const "AskDocs", copy _1) -> [bb3];
-    }
-
-    bb3: {
-        return;
-    }
-}
-
 fn user.AskDocs$render_prompt(query: string, max_results: int, filter: string, client: baml.llm.Client) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -248,12 +222,12 @@ fn user.DefaultFilter() -> string {
     }
 }
 
-fn user.SearchService.Docs(self: SearchService, query: string, filter: string?) -> string[] {
+fn user.SearchService.Docs(self: SearchService, query: string, filter: string | null) -> string[] {
     // Locals:
     let _0: string[] // _0 // return
     let _1: SearchService // self // param
     let _2: string // query // param
-    let _3: string? // filter // param
+    let _3: string | null // filter // param
     let _4: bool
 
     bb0: {
@@ -275,12 +249,12 @@ fn user.SearchService.Docs(self: SearchService, query: string, filter: string?) 
     }
 }
 
-fn user.HostEntry(query: string, max_results: int, filter: string?) -> int {
+fn user.HostEntry(query: string, max_results: int, filter: string | null) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: string // query // param
     let _2: int // max_results // param
-    let _3: string? // filter // param
+    let _3: string | null // filter // param
     let _4: bool
     let _5: bool
     let _6: bool
@@ -393,12 +367,12 @@ fn user.Search(query: string, max_results: int, filter: string) -> int {
     }
 }
 
-fn user.SearchDocs(query: string, max_results: int, filter: string?, chunk_size: int) -> string[] {
+fn user.SearchDocs(query: string, max_results: int, filter: string | null, chunk_size: int) -> string[] {
     // Locals:
     let _0: string[] // _0 // return
     let _1: string // query // param
     let _2: int // max_results // param
-    let _3: string? // filter // param
+    let _3: string | null // filter // param
     let _4: int // chunk_size // param
     let _5: bool
     let _6: bool
@@ -494,9 +468,9 @@ fn user.UseNamedDefaults() -> int {
 fn user.UseOptionalDropping() -> string[] {
     // Locals:
     let _0: string[] // _0 // return
-    let _1: (string, string?) -> string[] throws never // narrowed
-    let _2: (string, int, string?, int) -> string[] throws never [captured]
-    let _3: (string, string?) -> string[] throws never
+    let _1: (string, string | null) -> string[] throws never // narrowed
+    let _2: (string, int, string | null, int) -> string[] throws never [captured]
+    let _3: (string, string | null) -> string[] throws never
 
     bb0: {
         _2 = const fn user.SearchDocs;
@@ -511,11 +485,11 @@ fn user.UseOptionalDropping() -> string[] {
 }
 
 // lambda[0]
-fn .<optional-adapter(UseOptionalDropping, 0)>(query: string, filter: string?) -> string[] {
+fn .<optional-adapter(UseOptionalDropping, 0)>(query: string, filter: string | null) -> string[] {
     // Locals:
     let _0: string[] // _0 // return
     let _1: string // query // param
-    let _2: string? // filter // param
+    let _2: string | null // filter // param
 
     bb0: {
         _0 = call copy capture[0](copy _1, const <omitted>, copy _2, const <omitted>) -> [bb1];
@@ -573,11 +547,13 @@ fn user.SearchService.to_json(self: SearchService) -> baml.json.json {
     let _2: baml.json.json
     let _3: string
     let _4: SearchService
+    let _5: type
 
     bb0: {
         _4 = copy _1;
         _3 = copy _4.0;
-        _2 = call const fn baml.String.to_json(copy _3) -> [bb1];
+        _5 = load_type(string);
+        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
     }
 
     bb1: {

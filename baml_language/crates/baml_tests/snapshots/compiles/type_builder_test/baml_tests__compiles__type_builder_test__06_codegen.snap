@@ -84,13 +84,14 @@ function user.Fn$parse(json: string, client: baml.llm.Client) -> string {
     store_var client
 
   L0:
-    load_const "Fn"
+    load_type string | null
+    load_type string
     load_var json
     call baml.llm.parse
     return
 }
 
-function user.Fn$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<null | string, string> {
+function user.Fn$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -105,8 +106,9 @@ function user.Fn$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client)
     store_var client
 
   L0:
+    load_type string | null
+    load_type string
     load_var2 2 1
-    load_const "Fn"
     call baml.llm.Client.__make_stream
     return
 }
@@ -133,7 +135,7 @@ function user.Fn$render_prompt(client: baml.llm.Client) -> baml.llm.PromptAst {
     return
 }
 
-function user.Fn$stream(client: baml.llm.Client) -> baml.llm.Stream<null | string, string> {
+function user.Fn$stream(client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -148,6 +150,8 @@ function user.Fn$stream(client: baml.llm.Client) -> baml.llm.Stream<null | strin
     store_var client
 
   L0:
+    load_type string | null
+    load_type string
     load_var client
     load_const "Fn"
     alloc_map 0
@@ -169,9 +173,10 @@ function user.TopLevelClass.from_json(j: baml.json.json) -> TopLevelClass {
 }
 
 function user.TopLevelClass.to_json(self: TopLevelClass) -> baml.json.json {
+    load_type string
     load_var self
     load_field .a
-    call baml.String.to_json
+    call baml.json.to_json
     load_const "a"
     alloc_map 1
     return

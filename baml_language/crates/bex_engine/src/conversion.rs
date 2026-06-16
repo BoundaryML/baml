@@ -7,7 +7,7 @@
 use ::bex_heap::{BexValue, HeapPermit, PermitProof, TlabHolder};
 use ::bex_vm_types::{HeapPtr, Object, ObjectType, RootHaver, Value, ValueKind};
 use baml_type::Literal;
-use bex_external_types::{BexExternalAdt, BexExternalValue, Ty, UnionMetadata};
+use bex_external_types::{BexExternalAdt, BexExternalValue, RuntimeTy, UnionMetadata};
 use bex_vm::BexVm;
 
 use crate::{BexEngine, EngineError};
@@ -23,7 +23,7 @@ impl BexEngine {
     pub(crate) fn convert_vm_value_to_external_with_type(
         &self,
         value: Value,
-        declared_type: &Ty,
+        declared_type: &RuntimeTy,
         permit: PermitProof<'_>,
     ) -> Result<BexExternalValue, EngineError> {
         // If declared type is a union, find which member matches the actual value
@@ -57,7 +57,7 @@ impl BexEngine {
     fn convert_heap_ptr_to_external_with_type(
         &self,
         ptr: HeapPtr,
-        effective_type: &Ty,
+        effective_type: &RuntimeTy,
         permit: PermitProof<'_>,
     ) -> Result<BexExternalValue, EngineError> {
         // SAFETY: We only read objects, and the pointer comes from a valid handle.
@@ -72,8 +72,8 @@ impl BexEngine {
                 // the declared type doesn't resolve (e.g., builtin class arrays)
 
                 let element_type = match effective_type {
-                    Ty::List(elem_ty, _) => elem_ty.as_ref(),
-                    _ => &Ty::Null {
+                    RuntimeTy::List(elem_ty, _) => elem_ty.as_ref(),
+                    _ => &RuntimeTy::Null {
                         attr: baml_type::TyAttr::default(),
                     },
                 };
@@ -96,12 +96,12 @@ impl BexEngine {
                 // Null when the declared type doesn't resolve
 
                 let (key_type, value_type) = match effective_type {
-                    Ty::Map { key, value, .. } => (key.as_ref(), value.as_ref()),
+                    RuntimeTy::Map { key, value, .. } => (key.as_ref(), value.as_ref()),
                     _ => (
-                        &Ty::String {
+                        &RuntimeTy::String {
                             attr: baml_type::TyAttr::default(),
                         },
-                        &Ty::Null {
+                        &RuntimeTy::Null {
                             attr: baml_type::TyAttr::default(),
                         },
                     ),
@@ -144,9 +144,9 @@ impl BexEngine {
                 // once at lift time and carried inline on the variant so
                 // the wire encoder doesn't need a heap permit. See plan
                 // 23a §"Engine-side ripple effects".
-                if class.name.display_name.as_str() == "baml.llm.Stream" {
+                if class.name.display_name().as_str() == "baml.llm.Stream" {
                     let handle = self.heap.create_handle(ptr);
-                    let ty = Ty::Class(
+                    let ty = RuntimeTy::Class(
                         class.name.clone(),
                         instance.class_type_args.clone(),
                         baml_type::TyAttr::default(),
@@ -282,20 +282,20 @@ impl BexEngine {
         external: BexExternalValue,
     ) -> Result<Value, EngineError> {
         // Default: no declared-type context. Inbound `HostValue` arguments
-        // need the declared `Ty::Function` to materialize an
+        // need the declared `RuntimeTy::Function` to materialize an
         // `Object::HostClosure` — callers that thread the type in should
         // use `convert_external_to_vm_value_with_ty`.
         self.convert_external_to_vm_value_with_ty(holder, external, None)
     }
 
     /// Like [`Self::convert_external_to_vm_value`], but threads the declared
-    /// parameter `Ty` for the top-level value so a `BexExternalValue::HostValue`
+    /// parameter `RuntimeTy` for the top-level value so a `BexExternalValue::HostValue`
     /// can be bound to its function signature as an [`Object::HostClosure`].
     ///
     /// `expected_ty` is honoured only at the top level — nested array
     /// elements / map values / instance fields fall back to the untyped path
     /// (`None`). Adding type-driven element handling here would require
-    /// re-traversing the declared `Ty` in lockstep with the value; we don't
+    /// re-traversing the declared `RuntimeTy` in lockstep with the value; we don't
     /// yet support host callables in collection positions, so the
     /// type-context is dropped on entry into containers and any nested
     /// `HostValue` is rejected with `EngineError::CannotConvert`.
@@ -303,7 +303,7 @@ impl BexEngine {
         &self,
         holder: &mut impl HeapPermit<T>,
         external: BexExternalValue,
-        expected_ty: Option<&Ty>,
+        expected_ty: Option<&RuntimeTy>,
     ) -> Result<Value, EngineError> {
         Ok(match external {
             BexExternalValue::Handle(handle) => Value::object(
@@ -397,7 +397,12 @@ impl BexEngine {
                     }
                 };
 
-                // Build field values in the order defined by the class
+                // Build field values in the order defined by the class.
+                // Each field's declared `RuntimeTy` is passed as the conversion
+                // context so type-polymorphic external values (notably
+                // `BexExternalValue::HostValue`, which can land in either a
+                // function-typed slot as a callable or a `$rust_type` slot
+                // as an opaque handle) can branch on the declared shape.
                 let mut values = Vec::with_capacity(class_fields.len());
                 for class_field in class_fields {
                     let ext = fields.get(&class_field.name).ok_or_else(|| {
@@ -408,7 +413,11 @@ impl BexEngine {
                             ),
                         }
                     })?;
-                    values.push(self.convert_external_to_vm_value(holder, ext.clone())?);
+                    values.push(self.convert_external_to_vm_value_with_ty(
+                        holder,
+                        ext.clone(),
+                        Some(&class_field.field_type),
+                    )?);
                 }
                 Value::object(
                     holder
@@ -491,26 +500,40 @@ impl BexEngine {
                 slice[global_index]
             }
             BexExternalValue::HostValue(arc) => {
-                // A `HostValue` argument materializes a callable
-                // `Object::HostClosure` bound to the declared parameter's
-                // function signature. The declared `Ty::Function` must be
-                // available at this site so the closure carries the arity
-                // (drained from the stack on `CallIndirect`) and the return
-                // type (handed to `SysOp::BamlHostCallHostValue` as
-                // `type_arg_0`).
+                // A `HostValue` lands in one of two declared shapes:
+                //
+                // - `RuntimeTy::RustType` (opaque `$rust_type` field, e.g. the
+                //   `_handle` slot on `baml.errors.HostCallable`): wrap the
+                //   arc in `Object::RustData` so the BAML→host decoder can
+                //   later downcast it back to a `HostValueArc`. No
+                //   function signature involved.
+                // - `RuntimeTy::Function` (host callable passed as a function
+                //   argument): build a `HostClosure` bound to the declared
+                //   signature so the call site can invoke it.
                 let ty = expected_ty.ok_or_else(|| EngineError::CannotConvert {
-                    type_name: "host_value (no declared function type in context)".to_string(),
+                    type_name: "host_value (no declared type in context)".to_string(),
                 })?;
+                if matches!(peel_to_rust_type(ty), Some(())) {
+                    let dyn_arc: std::sync::Arc<dyn std::any::Any + Send + Sync> = arc;
+                    return Ok(Value::object(
+                        holder.holder_mut().tlab_mut().alloc_rust_data(dyn_arc),
+                    ));
+                }
                 // Peel through Optional / Union to land on the function type.
                 let function_ty =
                     peel_function_ty(ty).ok_or_else(|| EngineError::TypeMismatch {
                         message: format!(
                             "host callable cannot be passed where the declared type \
-                             is `{ty}`; expected a function type",
+                             is `{ty}`; expected a function type or `$rust_type`",
                         ),
                     })?;
-                let (params, ret) = match function_ty {
-                    Ty::Function { params, ret, .. } => (params, ret.as_ref().clone()),
+                let (params, ret, throws) = match function_ty {
+                    RuntimeTy::Function {
+                        params,
+                        ret,
+                        throws,
+                        ..
+                    } => (params, ret.as_ref().clone(), throws.as_ref().clone()),
                     other => {
                         return Err(EngineError::TypeMismatch {
                             message: format!(
@@ -521,14 +544,13 @@ impl BexEngine {
                     }
                 };
                 // The host's returned value is validated against `ret` when the
-                // call completes. A generic return type erases to `Ty::Void`
-                // (or `BuiltinUnknown`) at runtime, which the return validator
-                // treats as "accept anything" — letting the host inject a value
-                // of any type into a position BAML treats as the instantiated
-                // type variable. Reject such a callable at bind time rather than
+                // call completes. A generic return type erases to
+                // `BuiltinUnknown` at runtime, which the return validator treats
+                // as "accept anything" — letting the host inject a value of any
+                // type into a position BAML treats as the instantiated type
+                // variable. Reject such a callable at bind time rather than
                 // admit an unvalidatable return. (This also rejects a genuine
-                // bare `-> void` host callable, which is indistinguishable from
-                // an erased generic at runtime; such a callable must declare a
+                // bare `-> void` host callable; such a callable must declare a
                 // concrete return type.)
                 if ret_ty_has_unvalidatable_position(&ret) {
                     return Err(EngineError::TypeMismatch {
@@ -539,9 +561,29 @@ impl BexEngine {
                         ),
                     });
                 }
+                // `throws` is the callable's declared error contract `E`
+                // (`call_host_value<T, E>`). When the parameter pins no
+                // concrete error type the throws lowers to a bottom/unit
+                // shape: an omitted `throws` becomes `Never` (the function-type
+                // lowering's default) and a bare `-> void` throws becomes
+                // `Void`. Neither names an error the host is obligated to
+                // honor — and the host is foreign code that may surface a
+                // native exception regardless (materialized as
+                // `baml.errors.HostCallable`). Normalize both to
+                // `BuiltinUnknown` so such a throw is accepted opaquely and an
+                // in-BAML `catch` can match it, rather than being rejected as a
+                // `HostContractViolation`. Concrete throws (e.g.
+                // `throws ParseError`) pass through unchanged and stay enforced.
+                let normalized_throws = match throws {
+                    RuntimeTy::Void { attr } | RuntimeTy::Never { attr } => {
+                        RuntimeTy::BuiltinUnknown { attr }
+                    }
+                    other => other,
+                };
                 let host_closure = bex_vm_types::HostClosure {
                     handle: arc,
                     ret_ty: Box::new(ret),
+                    throws_ty: Box::new(normalized_throws),
                     arity: params.len(),
                 };
                 Value::object(
@@ -650,10 +692,40 @@ impl BexEngine {
 /// Wrap a value in Union metadata if the declared type is a union.
 pub(crate) fn maybe_wrap_union(
     value: BexExternalValue,
-    declared_type: &Ty,
+    declared_type: &RuntimeTy,
 ) -> Result<BexExternalValue, EngineError> {
     match declared_type {
-        Ty::Union(members, _) => {
+        // A nullable union (`T?` == `T | null`) is optionality, not a tagged
+        // union: a null value is bare `Null`, and a single non-null member is
+        // unwrapped to its bare value (recursing in case that member is itself a
+        // real union). This preserves the pre-desugaring behavior where optional
+        // values carried no union metadata.
+        RuntimeTy::Union(members, attr) if members.iter().any(RuntimeTy::is_null) => {
+            if matches!(value, BexExternalValue::Null) {
+                return Ok(BexExternalValue::Null);
+            }
+            let non_null: Vec<RuntimeTy> =
+                members.iter().filter(|m| !m.is_null()).cloned().collect();
+            match non_null.len() {
+                0 => Ok(value),
+                1 => maybe_wrap_union(value, &non_null[0]),
+                _ => {
+                    // Keep `null` in the recorded union type so the value stays
+                    // marked optional (preserving the nullable FFI wire shape);
+                    // select the matching non-null arm.
+                    let selected = find_matching_member(&value, &non_null)?;
+                    let metadata = UnionMetadata::new(
+                        RuntimeTy::Union(members.clone(), attr.clone()),
+                        selected,
+                    );
+                    Ok(BexExternalValue::Union {
+                        value: Box::new(value),
+                        metadata,
+                    })
+                }
+            }
+        }
+        RuntimeTy::Union(members, _) => {
             let selected = find_matching_member(&value, members)?;
             let metadata = UnionMetadata::new(declared_type.clone(), selected);
             Ok(BexExternalValue::Union {
@@ -661,35 +733,52 @@ pub(crate) fn maybe_wrap_union(
                 metadata,
             })
         }
-        Ty::Optional(inner, _opt_attr) => {
-            // Optional is just T | null. If the value is null, return Null directly.
-            // If non-null, recurse into the inner type to preserve union metadata.
-            if matches!(value, BexExternalValue::Null) {
-                Ok(BexExternalValue::Null)
-            } else {
-                maybe_wrap_union(value, inner)
-            }
-        }
         _ => Ok(value),
     }
 }
 
 /// Peel `Optional` and singleton-`Union` wrappers off `ty`, returning the
-/// underlying `Ty::Function` if there is one. Returns `None` if the type is
+/// underlying `RuntimeTy::Function` if there is one. Returns `None` if the type is
 /// not a function (after peeling).
 ///
 /// Used by `convert_external_to_vm_value_with_ty` to find the function
 /// signature behind, e.g., `(int) -> int` and `((int) -> int)?` so that an
 /// inbound `BexExternalValue::HostValue` can be bound to it as an
 /// `Object::HostClosure`.
-pub(crate) fn peel_function_ty(ty: &Ty) -> Option<&Ty> {
+/// Returns `Some(())` if `ty` is the runtime representation of
+/// `$rust_type` — i.e. `RuntimeTy::RustType` — possibly
+/// wrapped in a `Union` (the post-`RuntimeTy::Optional`-removal encoding of
+/// `T?` is `RuntimeTy::Union([T, Null], _)`, so nullable forms flow through
+/// the union arm). Mirrors [`peel_function_ty`] for the `$rust_type`
+/// field shape that a `HostValue` argument can land in.
+pub(crate) fn peel_to_rust_type(ty: &RuntimeTy) -> Option<()> {
+    if matches!(ty, RuntimeTy::RustType { .. }) {
+        return Some(());
+    }
     match ty {
-        Ty::Function { .. } => Some(ty),
-        Ty::Optional(inner, _) => peel_function_ty(inner),
-        Ty::Union(members, _) => {
+        RuntimeTy::Union(members, _) => {
+            let mut found = false;
+            for m in members {
+                if peel_to_rust_type(m).is_some() {
+                    if found {
+                        return None;
+                    }
+                    found = true;
+                }
+            }
+            if found { Some(()) } else { None }
+        }
+        _ => None,
+    }
+}
+
+pub(crate) fn peel_function_ty(ty: &RuntimeTy) -> Option<&RuntimeTy> {
+    match ty {
+        RuntimeTy::Function { .. } => Some(ty),
+        RuntimeTy::Union(members, _) => {
             // Find the single function member, if any. If there are multiple
             // function members or none, we can't pick deterministically.
-            let mut found: Option<&Ty> = None;
+            let mut found: Option<&RuntimeTy> = None;
             for m in members {
                 if let Some(f) = peel_function_ty(m) {
                     if found.is_some() {
@@ -705,21 +794,68 @@ pub(crate) fn peel_function_ty(ty: &Ty) -> Option<&Ty> {
 }
 
 /// Whether a host-callable's declared return type contains a position the
-/// host-return validator treats as "accept anything": a `Ty::Void` (the runtime
+/// host-return validator treats as "accept anything": a `RuntimeTy::Void` (the runtime
 /// form of an erased generic type variable, and also a bare `-> void`) or a
-/// `Ty::BuiltinUnknown`. Recurses through `Optional` / `List` / `Map`-value /
+/// `RuntimeTy::BuiltinUnknown`. Recurses through `Optional` / `List` / `Map`-value /
 /// `Union` / `Class`-generic-args so a nested erased position (`(T)[]`,
 /// `Box<T>`) is caught too. A host callable with such a return type cannot have
 /// its returned value validated, so binding one is rejected.
-fn ret_ty_has_unvalidatable_position(ty: &Ty) -> bool {
+fn ret_ty_has_unvalidatable_position(ty: &RuntimeTy) -> bool {
     match ty {
-        Ty::Void { .. } | Ty::BuiltinUnknown { .. } => true,
-        Ty::Optional(inner, _) => ret_ty_has_unvalidatable_position(inner),
-        Ty::List(elem, _) => ret_ty_has_unvalidatable_position(elem),
-        Ty::Map { value, .. } => ret_ty_has_unvalidatable_position(value),
-        Ty::Union(members, _) => members.iter().any(ret_ty_has_unvalidatable_position),
-        Ty::Class(_, generic_args, _) => generic_args.iter().any(ret_ty_has_unvalidatable_position),
-        _ => false,
+        // Unvalidatable: the host's opaque returned value cannot be checked
+        // against these declared types (the host-return validator has no
+        // positive discriminator for them), so a host could inject a value that
+        // violates the declared type. Reject binding such a callable.
+        //   - `Void`/`BuiltinUnknown`: accept-anything tops.
+        //   - `TypeVar`/`AssociatedTypeProjection`: faithful (un-erased) generic
+        //     positions whose instantiation can't be validated.
+        //   - `Interface`: implementation can't be checked at the FFI boundary.
+        //   - `EnumVariant`: a single variant can't be checked (the validator
+        //     only checks enum identity).
+        //   - `Future`: the host cannot produce a VM future, and nothing
+        //     validates one.
+        RuntimeTy::Void { .. }
+        | RuntimeTy::BuiltinUnknown { .. }
+        | RuntimeTy::TypeVar(..)
+        | RuntimeTy::AssociatedTypeProjection { .. }
+        | RuntimeTy::Interface(..)
+        | RuntimeTy::EnumVariant(..)
+        | RuntimeTy::Future(..) => true,
+
+        // Container positions are validated structurally; recurse so a nested
+        // unvalidatable position (`(T)[]`, `Box<T>`, `int | T`) is caught too.
+        RuntimeTy::List(elem, _) => ret_ty_has_unvalidatable_position(elem),
+        RuntimeTy::Map { value, .. } => ret_ty_has_unvalidatable_position(value),
+        RuntimeTy::Union(members, _) => members.iter().any(ret_ty_has_unvalidatable_position),
+        RuntimeTy::Class(_, generic_args, _) => {
+            generic_args.iter().any(ret_ty_has_unvalidatable_position)
+        }
+
+        // Directly validated by the host-return validator.
+        RuntimeTy::Null { .. }
+        | RuntimeTy::Bool { .. }
+        | RuntimeTy::Int { .. }
+        | RuntimeTy::Float { .. }
+        | RuntimeTy::Bigint { .. }
+        | RuntimeTy::String { .. }
+        | RuntimeTy::Uint8Array { .. }
+        | RuntimeTy::Literal(..)
+        | RuntimeTy::Enum(..)
+        | RuntimeTy::Media(..)
+        | RuntimeTy::Function { .. } => false,
+
+        // Opaque runtime handles: the declared type is itself opaque, so the
+        // host's value has no concrete contract to violate. (Most cannot be a
+        // host-callable return type in practice; an unexpanded `TypeAlias` here
+        // would be a prior-stage bug, and `-> never` is a callable that only
+        // ever throws.)
+        RuntimeTy::RustType { .. }
+        | RuntimeTy::Type { .. }
+        | RuntimeTy::Resource { .. }
+        | RuntimeTy::PromptAst { .. }
+        | RuntimeTy::WatchAccessor(..)
+        | RuntimeTy::TypeAlias(..)
+        | RuntimeTy::Never { .. } => false,
     }
 }
 
@@ -729,14 +865,18 @@ fn ret_ty_has_unvalidatable_position(ty: &Ty) -> bool {
 /// considered last so a more-specific arm wins. This keeps the union
 /// metadata's `selected_option` faithful when concrete arms (e.g.
 /// `StreamFinished` in `BuiltinUnknown | StreamFinished`) actually fit.
-fn find_matching_member(value: &BexExternalValue, members: &[Ty]) -> Result<Ty, EngineError> {
+fn find_matching_member(
+    value: &BexExternalValue,
+    members: &[RuntimeTy],
+) -> Result<RuntimeTy, EngineError> {
     for member in members {
-        if !matches!(member, Ty::BuiltinUnknown { .. }) && value_matches_type(value, member) {
+        if !matches!(member, RuntimeTy::BuiltinUnknown { .. }) && value_matches_type(value, member)
+        {
             return Ok(member.clone());
         }
     }
     for member in members {
-        if matches!(member, Ty::BuiltinUnknown { .. }) {
+        if matches!(member, RuntimeTy::BuiltinUnknown { .. }) {
             return Ok(member.clone());
         }
     }
@@ -751,23 +891,8 @@ fn find_matching_member(value: &BexExternalValue, members: &[Ty]) -> Result<Ty, 
 }
 
 fn type_name_matches_external_name(external_name: &str, type_name: &baml_type::TypeName) -> bool {
-    if external_name == type_name.display_name.as_str() {
-        return true;
-    }
-
-    if type_name.module_path.is_empty() {
-        return external_name == type_name.name.as_str();
-    }
-
-    let qualified_name = type_name
-        .module_path
-        .iter()
-        .map(baml_type::Name::as_str)
-        .chain(std::iter::once(type_name.name.as_str()))
-        .collect::<Vec<_>>()
-        .join(".");
-
-    external_name == qualified_name
+    external_name == type_name.display_name().as_str()
+        || external_name == type_name.render_dotted(false)
 }
 
 fn resolve_named_object<'a>(
@@ -779,8 +904,8 @@ fn resolve_named_object<'a>(
     if let Some(found) = objects.get(name) {
         return Some(found);
     }
-    // MIR's `qtn_to_type_name` strips the `user.` prefix from
-    // `display_name` for user-package types, so an `Instance` arriving
+    // MIR uses `display_name`, which strips the `user.` prefix for
+    // user-package types, so an `Instance` arriving
     // from `coerce_arg_to_declared_type` may carry `lorem.MyLorem` while
     // the engine registered `user.lorem.MyLorem`. Try the `user.`
     // prefix as a fallback before giving up. Builtin/vendor types keep
@@ -793,58 +918,53 @@ fn resolve_named_object<'a>(
 }
 
 /// Check if a value matches a declared type.
-fn value_matches_type(value: &BexExternalValue, ty: &Ty) -> bool {
+fn value_matches_type(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
     match (value, ty) {
         // `BuiltinUnknown` is the engine's "any value matches" sentinel
-        // (TypeScript `unknown` semantics — see `baml_type::Ty::BuiltinUnknown`).
+        // (TypeScript `unknown` semantics — see `baml_type::RuntimeTy::BuiltinUnknown`).
         // Used by the stdlib generics hardcode in `baml_compiler2_mir::lower`
         // so e.g. `Stream<TStream, TFinal>.next() -> TStream | StreamFinished`
         // accepts any partial-stream payload as the `TStream` arm.
-        (_, Ty::BuiltinUnknown { .. }) => true,
-        (BexExternalValue::Null, Ty::Null { .. }) => true,
-        (BexExternalValue::Int(_), Ty::Int { .. }) => true,
-        (BexExternalValue::Bigint(_), Ty::Bigint { .. }) => true,
-        (BexExternalValue::Float(_), Ty::Float { .. }) => true,
-        (BexExternalValue::Bool(_), Ty::Bool { .. }) => true,
-        (BexExternalValue::String(_), Ty::String { .. }) => true,
+        (_, RuntimeTy::BuiltinUnknown { .. }) => true,
+        (BexExternalValue::Null, RuntimeTy::Null { .. }) => true,
+        (BexExternalValue::Int(_), RuntimeTy::Int { .. }) => true,
+        (BexExternalValue::Bigint(_), RuntimeTy::Bigint { .. }) => true,
+        (BexExternalValue::Float(_), RuntimeTy::Float { .. }) => true,
+        (BexExternalValue::Bool(_), RuntimeTy::Bool { .. }) => true,
+        (BexExternalValue::String(_), RuntimeTy::String { .. }) => true,
         // Literal types match their corresponding runtime values
-        (BexExternalValue::Int(_), Ty::Literal(Literal::Int(_), _)) => true,
-        (BexExternalValue::Bigint(_), Ty::Literal(Literal::Bigint(_), _)) => true,
-        (BexExternalValue::Float(_), Ty::Literal(Literal::Float(_), _)) => true,
-        (BexExternalValue::Uint8Array(_), Ty::Uint8Array { .. }) => true,
-        (BexExternalValue::String(_), Ty::Literal(Literal::String(_), _)) => true,
-        (BexExternalValue::Bool(_), Ty::Literal(Literal::Bool(_), _)) => true,
-        (BexExternalValue::Array { .. }, Ty::List(_, _)) => true,
-        (BexExternalValue::Map { .. }, Ty::Map { .. }) => true,
+        (BexExternalValue::Int(_), RuntimeTy::Literal(Literal::Int(_), _, _)) => true,
+        (BexExternalValue::Bigint(_), RuntimeTy::Literal(Literal::Bigint(_), _, _)) => true,
+        (BexExternalValue::Float(_), RuntimeTy::Literal(Literal::Float(_), _, _)) => true,
+        (BexExternalValue::Uint8Array(_), RuntimeTy::Uint8Array { .. }) => true,
+        (BexExternalValue::String(_), RuntimeTy::Literal(Literal::String(_), _, _)) => true,
+        (BexExternalValue::Bool(_), RuntimeTy::Literal(Literal::Bool(_), _, _)) => true,
+        (BexExternalValue::Array { .. }, RuntimeTy::List(_, _)) => true,
+        (BexExternalValue::Map { .. }, RuntimeTy::Map { .. }) => true,
         // A host-encoded object arrives as a bare `Map` (the JS encoder emits
         // every non-builtin object as `map_value`, no FQN), so a `Map`
         // matches a `Class` slot at the FFI boundary — it is promoted to an
         // `Instance` during materialization. This lets a host-built class
         // value satisfy a union's class member (e.g. `T | string`).
-        (BexExternalValue::Map { .. }, Ty::Class(..)) => true,
+        (BexExternalValue::Map { .. }, RuntimeTy::Class(..)) => true,
         // For FFI-boundary matching we only compare class names because
         // `BexExternalValue::Instance` does not carry class_type_args (that
         // field lives on the VM-side `Object::Instance`).  Fine-grained
         // generic disambiguation (e.g. `Foo<int>` vs `Foo<string>`) is
         // handled in-VM via `IsType` instructions (Phase 8.6) and
         // `find_matching_union_member` below.
-        (BexExternalValue::Instance { class_name, .. }, Ty::Class(tn, _, _)) => {
+        (BexExternalValue::Instance { class_name, .. }, RuntimeTy::Class(tn, _, _)) => {
             type_name_matches_external_name(class_name, tn)
         }
-        (BexExternalValue::Variant { enum_name, .. }, Ty::Enum(tn, _)) => {
+        (BexExternalValue::Variant { enum_name, .. }, RuntimeTy::Enum(tn, _)) => {
             type_name_matches_external_name(enum_name, tn)
         }
         (BexExternalValue::Adt(BexExternalAdt::Collector(_)), _) => false,
-        (BexExternalValue::Adt(BexExternalAdt::Type(_)), ty)
-            if ty.is_opaque("baml.reflect.Type") =>
-        {
-            true
-        }
+        (BexExternalValue::Adt(BexExternalAdt::Type(_)), RuntimeTy::Type { .. }) => true,
         (BexExternalValue::Union { value, .. }, ty) => value_matches_type(value, ty),
-        // Handle nested unions/optionals in the type
-        (value, Ty::Union(members, _)) => members.iter().any(|m| value_matches_type(value, m)),
-        (value, Ty::Optional(inner, _)) => {
-            matches!(value, BexExternalValue::Null) || value_matches_type(value, inner)
+        // Handle nested unions (including nullable `T | null`) in the type.
+        (value, RuntimeTy::Union(members, _)) => {
+            members.iter().any(|m| value_matches_type(value, m))
         }
         _ => false,
     }
@@ -865,29 +985,21 @@ impl BexEngine {
     /// field's value against its instantiated field type.
     ///
     /// Returns `Err(message)` describing the first mismatch; the caller maps
-    /// it to an `OpErrorKind::HostCallable` so it surfaces as a catchable
+    /// it to a `VmBamlError::HostCallable` so it surfaces as a catchable
     /// `root.errors.HostCallable`.
     pub(crate) fn validate_host_return_schema(
         &self,
         value: &BexExternalValue,
-        expected: &Ty,
+        expected: &RuntimeTy,
     ) -> Result<(), String> {
         match expected {
             // `unknown` / opaque-any: accept (defensive — concrete at the FFI
             // boundary).
-            Ty::BuiltinUnknown { .. } => Ok(()),
+            RuntimeTy::BuiltinUnknown { .. } => Ok(()),
 
-            // Optional: null or inner-valid.
-            Ty::Optional(inner, _) => {
-                if matches!(value, BexExternalValue::Null) {
-                    Ok(())
-                } else {
-                    self.validate_host_return_schema(value, inner)
-                }
-            }
-
-            // Union: must satisfy at least one member (schema-aware).
-            Ty::Union(members, _) => {
+            // Union (including nullable `T | null`): must satisfy at least one
+            // member (schema-aware).
+            RuntimeTy::Union(members, _) => {
                 let inner = match value {
                     BexExternalValue::Union { value: inner, .. } => inner.as_ref(),
                     other => other,
@@ -915,7 +1027,7 @@ impl BexEngine {
                 self.validate_host_return_schema(inner, expected)
             }
 
-            Ty::List(inner, _) => match value {
+            RuntimeTy::List(inner, _) => match value {
                 BexExternalValue::Array { items, .. } => {
                     for item in items {
                         self.validate_host_return_schema(item, inner)?;
@@ -928,7 +1040,7 @@ impl BexEngine {
                 )),
             },
 
-            Ty::Map { value: v_ty, .. } => match value {
+            RuntimeTy::Map { value: v_ty, .. } => match value {
                 BexExternalValue::Map { entries, .. } => {
                     for v in entries.values() {
                         self.validate_host_return_schema(v, v_ty)?;
@@ -948,7 +1060,7 @@ impl BexEngine {
             // class — accepting it would hand back a value that cannot inhabit
             // the declared return type. A host returning a class must encode it
             // as a class value (→ `Instance`), not a plain map.
-            Ty::Class(tn, expected_args, _) => match value {
+            RuntimeTy::Class(tn, expected_args, _) => match value {
                 BexExternalValue::Instance { class_name, fields } => {
                     if !type_name_matches_external_name(class_name, tn) {
                         return Err(format!(
@@ -994,7 +1106,7 @@ impl BexEngine {
             // Enum identity: a `Variant` must name the declared enum, and the
             // variant must exist on that enum (the latter is also enforced by
             // `convert_external_to_vm_value`).
-            Ty::Enum(tn, _) => match value {
+            RuntimeTy::Enum(tn, _) => match value {
                 BexExternalValue::Variant {
                     enum_name,
                     variant_name,
@@ -1041,7 +1153,7 @@ impl BexEngine {
             // top-level function return and — via the `List` / `Map` / `Class`
             // recursion above — any nested function position (`(() -> int)[]`,
             // `class { cb: () -> int }`, …).
-            Ty::Function { .. } => Err(format!(
+            RuntimeTy::Function { .. } => Err(format!(
                 "host callable returned a value typed `{expected}`; returning a \
                  callable (a function-typed value) is not supported",
             )),
@@ -1058,41 +1170,46 @@ impl BexEngine {
 /// For union types, find which member matches the actual runtime value.
 ///
 /// If the declared type is not a union, returns it unchanged.
-fn resolve_effective_type(value: Value, declared_type: &Ty) -> &Ty {
+fn resolve_effective_type(value: Value, declared_type: &RuntimeTy) -> &RuntimeTy {
     match declared_type {
-        Ty::Union(members, _) => find_matching_union_member(value, members)
+        RuntimeTy::Union(members, _) => find_matching_union_member(value, members)
             .unwrap_or_else(|| members.first().unwrap_or(declared_type)),
-        Ty::Optional(inner, _) => {
-            if value.is_null() {
-                declared_type
-            } else {
-                resolve_effective_type(value, inner)
-            }
-        }
         _ => declared_type,
     }
 }
 
 /// Find the union member that matches the runtime value's type.
-fn find_matching_union_member(value: Value, members: &[Ty]) -> Option<&Ty> {
+fn find_matching_union_member(value: Value, members: &[RuntimeTy]) -> Option<&RuntimeTy> {
     match value.kind() {
         ValueKind::OmittedArg => None,
-        ValueKind::Null => members.iter().find(|m| matches!(m, Ty::Null { .. })),
-        ValueKind::Int(_) => members
-            .iter()
-            .find(|m| matches!(m, Ty::Int { .. } | Ty::Literal(Literal::Int(_), _))),
-        ValueKind::Bool(_) => members
-            .iter()
-            .find(|m| matches!(m, Ty::Bool { .. } | Ty::Literal(Literal::Bool(_), _))),
+        ValueKind::Null => members.iter().find(|m| matches!(m, RuntimeTy::Null { .. })),
+        ValueKind::Int(_) => members.iter().find(|m| {
+            matches!(
+                m,
+                RuntimeTy::Int { .. } | RuntimeTy::Literal(Literal::Int(_), _, _)
+            )
+        }),
+        ValueKind::Bool(_) => members.iter().find(|m| {
+            matches!(
+                m,
+                RuntimeTy::Bool { .. } | RuntimeTy::Literal(Literal::Bool(_), _, _)
+            )
+        }),
         ValueKind::Object(ptr) => {
             let obj = unsafe { ptr.get() };
             match obj {
-                Object::Float(_) => members
-                    .iter()
-                    .find(|m| matches!(m, Ty::Float { .. } | Ty::Literal(Literal::Float(_), _))),
-                Object::String(_) => members
-                    .iter()
-                    .find(|m| matches!(m, Ty::String { .. } | Ty::Literal(Literal::String(_), _))),
+                Object::Float(_) => members.iter().find(|m| {
+                    matches!(
+                        m,
+                        RuntimeTy::Float { .. } | RuntimeTy::Literal(Literal::Float(_), _, _)
+                    )
+                }),
+                Object::String(_) => members.iter().find(|m| {
+                    matches!(
+                        m,
+                        RuntimeTy::String { .. } | RuntimeTy::Literal(Literal::String(_), _, _)
+                    )
+                }),
                 Object::Instance(inst) => {
                     let class_obj = unsafe { inst.class.get() };
                     if let Object::Class(class) = class_obj {
@@ -1104,7 +1221,7 @@ fn find_matching_union_member(value: Value, members: &[Ty]) -> Option<&Ty> {
                         // on the union member they must equal the instance's
                         // class_type_args exactly.
                         members.iter().find(|m| {
-                            matches!(m, Ty::Class(tn, expected_args, _)
+                            matches!(m, RuntimeTy::Class(tn, expected_args, _)
                                 if *tn == class.name
                                 && (expected_args.is_empty()
                                     || expected_args == &inst.class_type_args))
@@ -1118,7 +1235,7 @@ fn find_matching_union_member(value: Value, members: &[Ty]) -> Option<&Ty> {
                     if let Object::Enum(enm) = enum_obj {
                         members
                             .iter()
-                            .find(|m| matches!(m, Ty::Enum(tn, _) if *tn == enm.name))
+                            .find(|m| matches!(m, RuntimeTy::Enum(tn, _) if *tn == enm.name))
                     } else {
                         None
                     }
@@ -1127,7 +1244,7 @@ fn find_matching_union_member(value: Value, members: &[Ty]) -> Option<&Ty> {
                     // For arrays, check first element to determine which List type
                     if let Some(first) = elements.get(0) {
                         members.iter().find(|m| {
-                            if let Ty::List(elem_ty, _) = m {
+                            if let RuntimeTy::List(elem_ty, _) = m {
                                 find_matching_union_member(first, &[elem_ty.as_ref().clone()])
                                     .is_some()
                             } else {
@@ -1136,16 +1253,19 @@ fn find_matching_union_member(value: Value, members: &[Ty]) -> Option<&Ty> {
                         })
                     } else {
                         // Empty array - match any List type
-                        members.iter().find(|m| matches!(m, Ty::List(_, _)))
+                        members.iter().find(|m| matches!(m, RuntimeTy::List(_, _)))
                     }
                 }
-                Object::Map(_) => members.iter().find(|m| matches!(m, Ty::Map { .. })),
-                Object::Uint8Array(_) => {
-                    members.iter().find(|m| matches!(m, Ty::Uint8Array { .. }))
-                }
-                Object::Bigint(_) => members
+                Object::Map(_) => members.iter().find(|m| matches!(m, RuntimeTy::Map { .. })),
+                Object::Uint8Array(_) => members
                     .iter()
-                    .find(|m| matches!(m, Ty::Bigint { .. } | Ty::Literal(Literal::Bigint(_), _))),
+                    .find(|m| matches!(m, RuntimeTy::Uint8Array { .. })),
+                Object::Bigint(_) => members.iter().find(|m| {
+                    matches!(
+                        m,
+                        RuntimeTy::Bigint { .. } | RuntimeTy::Literal(Literal::Bigint(_), _, _)
+                    )
+                }),
                 // Types that don't participate in union discrimination.
                 Object::Function(_)
                 | Object::Closure(_)
@@ -1189,7 +1309,7 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: Value) -> BexExternalValue {
                     let items: Vec<BexExternalValue> =
                         snap.iter().map(|v| vm_arg_to_external(vm, *v)).collect();
                     BexExternalValue::Array {
-                        element_type: bex_external_types::Ty::Null {
+                        element_type: bex_external_types::RuntimeTy::Null {
                             attr: baml_type::TyAttr::default(),
                         },
                         items,
@@ -1202,10 +1322,10 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: Value) -> BexExternalValue {
                         .map(|(k, v)| (k.to_string(), vm_arg_to_external(vm, *v)))
                         .collect();
                     BexExternalValue::Map {
-                        key_type: bex_external_types::Ty::String {
+                        key_type: bex_external_types::RuntimeTy::String {
                             attr: baml_type::TyAttr::default(),
                         },
-                        value_type: bex_external_types::Ty::Null {
+                        value_type: bex_external_types::RuntimeTy::Null {
                             attr: baml_type::TyAttr::default(),
                         },
                         entries,
@@ -1297,23 +1417,23 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: Value) -> BexExternalValue {
 /// walked; host-side schema-aware encoders own that shaping.
 pub(crate) fn coerce_arg_to_declared_type(
     value: BexExternalValue,
-    ty: &Ty,
+    ty: &RuntimeTy,
 ) -> Result<BexExternalValue, EngineError> {
     match (value, ty) {
         // ── Class / enum naming (incoming only) ──────────────────────────
-        (BexExternalValue::Map { entries, .. }, Ty::Class(type_name, _, _)) => {
+        (BexExternalValue::Map { entries, .. }, RuntimeTy::Class(type_name, _, _)) => {
             Ok(BexExternalValue::Instance {
                 class_name: type_name.to_string(),
                 fields: entries,
             })
         }
-        (BexExternalValue::Instance { fields, .. }, Ty::Class(type_name, _, _)) => {
+        (BexExternalValue::Instance { fields, .. }, RuntimeTy::Class(type_name, _, _)) => {
             Ok(BexExternalValue::Instance {
                 class_name: type_name.to_string(),
                 fields,
             })
         }
-        (BexExternalValue::Variant { variant_name, .. }, Ty::Enum(type_name, _)) => {
+        (BexExternalValue::Variant { variant_name, .. }, RuntimeTy::Enum(type_name, _)) => {
             Ok(BexExternalValue::Variant {
                 enum_name: type_name.to_string(),
                 variant_name,
@@ -1331,7 +1451,7 @@ pub(crate) fn coerce_arg_to_declared_type(
         // member; numeric/string arms are left to the existing routing.
         (
             value @ (BexExternalValue::Map { .. } | BexExternalValue::Instance { .. }),
-            Ty::Union(members, _),
+            RuntimeTy::Union(members, _),
         ) => {
             if let Some(class_arm) = members.iter().find_map(union_class_arm) {
                 coerce_arg_to_declared_type(value, class_arm)
@@ -1346,11 +1466,10 @@ pub(crate) fn coerce_arg_to_declared_type(
 }
 
 /// If `ty` is a class (directly, or inside an `Optional`), return that class
-/// `Ty`. Used to route a host-encoded object value to a union's class member.
-fn union_class_arm(ty: &Ty) -> Option<&Ty> {
+/// `RuntimeTy`. Used to route a host-encoded object value to a union's class member.
+fn union_class_arm(ty: &RuntimeTy) -> Option<&RuntimeTy> {
     match ty {
-        Ty::Class(..) => Some(ty),
-        Ty::Optional(inner, _) => union_class_arm(inner),
+        RuntimeTy::Class(..) => Some(ty),
         _ => None,
     }
 }
@@ -1371,7 +1490,7 @@ fn union_class_arm(ty: &Ty) -> Option<&Ty> {
 /// host-side type lookups.
 pub(crate) fn coerce_return_to_declared_type(
     value: BexExternalValue,
-    ty: &Ty,
+    ty: &RuntimeTy,
 ) -> Result<BexExternalValue, EngineError> {
     coerce_numeric_to_declared_type(value, ty)
 }
@@ -1381,53 +1500,60 @@ pub(crate) fn coerce_return_to_declared_type(
 ///
 /// These conversions exist only at the FFI boundary. The compile-time subtype
 /// relation (`baml_compiler2_tir::normalize::is_subtype_of`,
-/// `baml_type::Ty::is_subtype_of`) is purely structural and does **not** widen
+/// `baml_type::RuntimeTy::is_subtype_of`) is purely structural and does **not** widen
 /// `int` to `bigint`; the arms below add that widening (plus a checked
 /// `bigint → int` narrowing) only when crossing the host boundary.
 fn coerce_numeric_to_declared_type(
     value: BexExternalValue,
-    ty: &Ty,
+    ty: &RuntimeTy,
 ) -> Result<BexExternalValue, EngineError> {
     match (value, ty) {
         // Int → Bigint widening (FFI boundary only — `int` is not a subtype of
         // `bigint` in the type system).
-        (BexExternalValue::Int(i), Ty::Bigint { .. } | Ty::Literal(Literal::Bigint(_), _)) => {
-            Ok(BexExternalValue::Bigint(num_bigint::BigInt::from(i)))
-        }
+        (
+            BexExternalValue::Int(i),
+            RuntimeTy::Bigint { .. } | RuntimeTy::Literal(Literal::Bigint(_), _, _),
+        ) => Ok(BexExternalValue::Bigint(num_bigint::BigInt::from(i))),
 
         // Bigint → Int narrowing: host-supplied bigint must fit in i64, otherwise
         // there is no safe representation in the `int` slot and we reject the
         // call rather than silently truncate.
-        (BexExternalValue::Bigint(bi), Ty::Int { .. } | Ty::Literal(Literal::Int(_), _)) => {
-            i64::try_from(&bi)
-                .map(BexExternalValue::Int)
-                .map_err(|_| EngineError::TypeMismatch {
-                    message: format!("bigint value {bi} does not fit in i64"),
-                })
-        }
-
-        // Optional<inner>: null short-circuits; otherwise unwrap and recurse.
-        (BexExternalValue::Null, Ty::Optional(_, _)) => Ok(BexExternalValue::Null),
-        (v, Ty::Optional(inner, _)) => coerce_numeric_to_declared_type(v, inner),
+        (
+            BexExternalValue::Bigint(bi),
+            RuntimeTy::Int { .. } | RuntimeTy::Literal(Literal::Int(_), _, _),
+        ) => i64::try_from(&bi)
+            .map(BexExternalValue::Int)
+            .map_err(|_| EngineError::TypeMismatch {
+                message: format!("bigint value {bi} does not fit in i64"),
+            }),
 
         // Union with exactly one of {Int, Bigint}: route to that member.
+        // Nullable numeric unions (`int | null`) flow through here too — a
+        // `Null` value coerced against the chosen numeric member falls to the
+        // catch-all `(v, _) => Ok(v)` and is preserved.
         // Unions containing both are left alone; `find_matching_union_member`
         // picks by value shape at the VM boundary.
-        (v, Ty::Union(members, _)) => {
-            let has_int = members
-                .iter()
-                .any(|m| matches!(m, Ty::Int { .. } | Ty::Literal(Literal::Int(_), _)));
-            let has_bigint = members
-                .iter()
-                .any(|m| matches!(m, Ty::Bigint { .. } | Ty::Literal(Literal::Bigint(_), _)));
+        (v, RuntimeTy::Union(members, _)) => {
+            let has_int = members.iter().any(|m| {
+                matches!(
+                    m,
+                    RuntimeTy::Int { .. } | RuntimeTy::Literal(Literal::Int(_), _, _)
+                )
+            });
+            let has_bigint = members.iter().any(|m| {
+                matches!(
+                    m,
+                    RuntimeTy::Bigint { .. } | RuntimeTy::Literal(Literal::Bigint(_), _, _)
+                )
+            });
             if has_int == has_bigint {
                 Ok(v)
             } else if let Some(target) = members.iter().find(|m| {
                 matches!(
                     m,
-                    Ty::Int { .. }
-                        | Ty::Bigint { .. }
-                        | Ty::Literal(Literal::Int(_) | Literal::Bigint(_), _)
+                    RuntimeTy::Int { .. }
+                        | RuntimeTy::Bigint { .. }
+                        | RuntimeTy::Literal(Literal::Int(_) | Literal::Bigint(_), _, _)
                 )
             }) {
                 coerce_numeric_to_declared_type(v, target)
@@ -1467,5 +1593,275 @@ pub fn test_arg_to_external(v: &bex_vm_types::TestArgValue) -> BexExternalValue 
                 .map(|(k, v)| (k.clone(), test_arg_to_external(v)))
                 .collect(),
         },
+    }
+}
+
+#[cfg(test)]
+mod peel_to_rust_type_tests {
+    use baml_type::TyAttr;
+
+    use super::*;
+
+    /// `RuntimeTy::RustType` — the canonical `$rust_type` shape.
+    fn rust_type() -> RuntimeTy {
+        RuntimeTy::RustType {
+            attr: TyAttr::default(),
+        }
+    }
+
+    #[test]
+    fn direct_rust_type_matches() {
+        assert_eq!(peel_to_rust_type(&rust_type()), Some(()));
+    }
+
+    #[test]
+    fn optional_rust_type_peels_through() {
+        // `RuntimeTy::optional(RustType)` lowers to `RuntimeTy::Union([RustType, Null])`
+        // post-`RuntimeTy::Optional`-removal; the union arm in `peel_to_rust_type`
+        // picks the single RustType member.
+        let ty = RuntimeTy::optional(rust_type());
+        assert_eq!(peel_to_rust_type(&ty), Some(()));
+    }
+
+    #[test]
+    fn nested_optional_rust_type_peels_through() {
+        // `T??` collapses to `T?` per `RuntimeTy::optional`'s idempotence rule
+        // (a union already containing `null` is returned unchanged), so
+        // this is effectively the same shape as the single-optional case
+        // — still a single non-null member that peels.
+        let ty = RuntimeTy::optional(RuntimeTy::optional(rust_type()));
+        assert_eq!(peel_to_rust_type(&ty), Some(()));
+    }
+
+    #[test]
+    fn singleton_union_with_rust_type_and_null_matches() {
+        // `RustType | null` — only one non-null arm so the peel
+        // unambiguously picks `RustType`.
+        let ty = RuntimeTy::Union(
+            vec![
+                rust_type(),
+                RuntimeTy::Null {
+                    attr: TyAttr::default(),
+                },
+            ],
+            TyAttr::default(),
+        );
+        assert_eq!(peel_to_rust_type(&ty), Some(()));
+    }
+
+    #[test]
+    fn union_with_rust_type_plus_non_rust_arm_still_unique_matches() {
+        // `RustType | string` — there's still exactly one `RustType` arm,
+        // and `peel_to_rust_type` only cares about uniqueness of *that*
+        // shape (non-`RustType` arms count as "doesn't match" and don't
+        // contribute to the duplicate-count).
+        let ty = RuntimeTy::Union(
+            vec![
+                rust_type(),
+                RuntimeTy::String {
+                    attr: TyAttr::default(),
+                },
+            ],
+            TyAttr::default(),
+        );
+        assert_eq!(peel_to_rust_type(&ty), Some(()));
+    }
+
+    #[test]
+    fn union_with_two_rust_type_arms_is_ambiguous() {
+        // `RustType | RustType` — two arms peel to the target. The
+        // function rejects to avoid silently picking one.
+        let ty = RuntimeTy::Union(vec![rust_type(), rust_type()], TyAttr::default());
+        assert_eq!(peel_to_rust_type(&ty), None);
+    }
+
+    #[test]
+    fn plain_string_does_not_match() {
+        assert_eq!(
+            peel_to_rust_type(&RuntimeTy::String {
+                attr: TyAttr::default()
+            }),
+            None,
+        );
+    }
+
+    #[test]
+    fn unrelated_opaque_does_not_match() {
+        // A different opaque leaf type — e.g. `baml.llm.PromptAst` — must
+        // not be confused with `$rust_type`.
+        let ty = RuntimeTy::PromptAst {
+            attr: TyAttr::default(),
+        };
+        assert_eq!(peel_to_rust_type(&ty), None);
+    }
+
+    #[test]
+    fn optional_of_unrelated_type_does_not_match() {
+        let ty = RuntimeTy::optional(RuntimeTy::String {
+            attr: TyAttr::default(),
+        });
+        assert_eq!(peel_to_rust_type(&ty), None);
+    }
+
+    #[test]
+    fn union_with_no_rust_type_arm_does_not_match() {
+        let ty = RuntimeTy::Union(
+            vec![
+                RuntimeTy::String {
+                    attr: TyAttr::default(),
+                },
+                RuntimeTy::Int {
+                    attr: TyAttr::default(),
+                },
+            ],
+            TyAttr::default(),
+        );
+        assert_eq!(peel_to_rust_type(&ty), None);
+    }
+}
+
+#[cfg(test)]
+mod peel_function_ty_tests {
+    use baml_type::{RuntimeFunctionParamTy, TyAttr};
+
+    use super::*;
+
+    /// `(int) -> string` — the canonical concrete function shape.
+    fn fn_ty() -> RuntimeTy {
+        RuntimeTy::Function {
+            generic_params: vec![],
+            generic_param_bounds: vec![],
+            params: vec![RuntimeFunctionParamTy::required(
+                None,
+                RuntimeTy::Int {
+                    attr: TyAttr::default(),
+                },
+            )],
+            ret: Box::new(RuntimeTy::String {
+                attr: TyAttr::default(),
+            }),
+            throws: Box::new(RuntimeTy::Void {
+                attr: TyAttr::default(),
+            }),
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// A second, distinct function shape — `() -> int` — used to verify the
+    /// uniqueness rule rejects two function members in a union.
+    fn other_fn_ty() -> RuntimeTy {
+        RuntimeTy::Function {
+            generic_params: vec![],
+            generic_param_bounds: vec![],
+            params: vec![],
+            ret: Box::new(RuntimeTy::Int {
+                attr: TyAttr::default(),
+            }),
+            throws: Box::new(RuntimeTy::Void {
+                attr: TyAttr::default(),
+            }),
+            attr: TyAttr::default(),
+        }
+    }
+
+    #[test]
+    fn direct_function_returns_itself() {
+        let ty = fn_ty();
+        let peeled = peel_function_ty(&ty).expect("must peel a direct Function");
+        assert!(matches!(peeled, RuntimeTy::Function { .. }));
+    }
+
+    #[test]
+    fn optional_function_peels_through() {
+        // `RuntimeTy::optional(fn)` lowers to `RuntimeTy::Union([fn, Null])`; the union
+        // arm in `peel_function_ty` picks the single function member.
+        let ty = RuntimeTy::optional(fn_ty());
+        let peeled = peel_function_ty(&ty).expect("Union<fn, Null> must peel");
+        assert!(matches!(peeled, RuntimeTy::Function { .. }));
+    }
+
+    #[test]
+    fn nested_optional_function_peels_through() {
+        // `RuntimeTy::optional` is idempotent — `T??` collapses to `T?` — so this
+        // is effectively the same shape as the single-optional case.
+        let ty = RuntimeTy::optional(RuntimeTy::optional(fn_ty()));
+        assert!(peel_function_ty(&ty).is_some());
+    }
+
+    #[test]
+    fn union_with_single_function_arm_peels_through() {
+        // `((int) -> string) | null` — only one function member.
+        let ty = RuntimeTy::Union(
+            vec![
+                fn_ty(),
+                RuntimeTy::Null {
+                    attr: TyAttr::default(),
+                },
+            ],
+            TyAttr::default(),
+        );
+        assert!(peel_function_ty(&ty).is_some());
+    }
+
+    #[test]
+    fn union_with_function_plus_non_function_arm_peels_through() {
+        // `((int) -> string) | string` — exactly one function member.
+        let ty = RuntimeTy::Union(
+            vec![
+                fn_ty(),
+                RuntimeTy::String {
+                    attr: TyAttr::default(),
+                },
+            ],
+            TyAttr::default(),
+        );
+        assert!(peel_function_ty(&ty).is_some());
+    }
+
+    #[test]
+    fn union_with_two_distinct_function_arms_is_ambiguous() {
+        // `((int) -> string) | (() -> int)` — two function members.
+        // The peel rejects to avoid silently picking one. Pins the
+        // determinism contract of the helper.
+        let ty = RuntimeTy::Union(vec![fn_ty(), other_fn_ty()], TyAttr::default());
+        assert!(peel_function_ty(&ty).is_none());
+    }
+
+    #[test]
+    fn plain_string_does_not_match() {
+        let ty = RuntimeTy::String {
+            attr: TyAttr::default(),
+        };
+        assert!(peel_function_ty(&ty).is_none());
+    }
+
+    #[test]
+    fn optional_of_non_function_does_not_match() {
+        let ty = RuntimeTy::optional(RuntimeTy::String {
+            attr: TyAttr::default(),
+        });
+        assert!(peel_function_ty(&ty).is_none());
+    }
+
+    #[test]
+    fn union_with_no_function_arm_does_not_match() {
+        let ty = RuntimeTy::Union(
+            vec![
+                RuntimeTy::String {
+                    attr: TyAttr::default(),
+                },
+                RuntimeTy::Int {
+                    attr: TyAttr::default(),
+                },
+            ],
+            TyAttr::default(),
+        );
+        assert!(peel_function_ty(&ty).is_none());
+    }
+
+    #[test]
+    fn empty_union_does_not_match() {
+        let ty = RuntimeTy::Union(vec![], TyAttr::default());
+        assert!(peel_function_ty(&ty).is_none());
     }
 }

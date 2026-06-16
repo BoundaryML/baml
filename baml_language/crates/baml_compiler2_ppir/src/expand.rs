@@ -337,11 +337,11 @@ pub fn expand_partial(ty: &PpirTy, ctx: &ExpandCtx<'_>) -> PpirTy {
             attrs: d,
         },
 
-        // Optional → null | expand_partial(inner)
+        // Optional → expand_partial(inner) | null
         PpirTy::Optional { inner, .. } => PpirTy::Union {
             variants: vec![
-                PpirTy::Null { attrs: d.clone() },
                 expand_partial(inner, ctx),
+                PpirTy::Null { attrs: d.clone() },
             ],
             attrs: d,
         },
@@ -571,12 +571,12 @@ fn stream_expand_inner(ty: &PpirTy, ctx: &ExpandCtx<'_>, depth: u32) -> (PpirTy,
             InProgress::Allowed,
         ),
 
-        // Optional → null | expand_partial(inner)
+        // Optional → expand_partial(inner) | null
         PpirTy::Optional { inner, .. } => (
             PpirTy::Union {
                 variants: vec![
-                    PpirTy::Null { attrs: d.clone() },
                     expand_partial(inner, ctx),
+                    PpirTy::Null { attrs: d.clone() },
                 ],
                 attrs: d.clone(),
             },
@@ -624,9 +624,10 @@ fn stream_expand_inner(ty: &PpirTy, ctx: &ExpandCtx<'_>, depth: u32) -> (PpirTy,
     } else {
         match default_when_pending {
             DefaultWhenPending::PrependNull => {
-                // Prepend null | stream_type
+                // Make the field nullable so a not-yet-streamed value can be
+                // null. Null goes last (`T | null`) to match the `?` lowering.
                 stream_type = PpirTy::Union {
-                    variants: vec![PpirTy::Null { attrs: d }, stream_type],
+                    variants: vec![stream_type, PpirTy::Null { attrs: d }],
                     attrs: PpirTypeAttrs::default(),
                 };
                 sap_attrs.parse_without_null = TyAttrValue::Set;

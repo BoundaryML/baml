@@ -21,13 +21,18 @@ fn extract_dotted_name<'a>(tokens: impl Iterator<Item = &'a SyntaxToken>) -> Opt
     };
     parts.push(first.text().to_string());
 
-    // Consume alternating DOT + WORD
+    // Consume alternating DOT + WORD. `spawn`/`await` are reserved keywords
+    // but valid as namespace segments after a `.` (e.g. `baml.spawn.SpawnParams`
+    // in a type annotation), mirroring the parser's segment set.
     while let Some(t) = iter.next() {
         if t.kind() != SyntaxKind::DOT {
             break;
         }
         let Some(word) = iter.next() else { break };
-        if word.kind() != SyntaxKind::WORD {
+        if !matches!(
+            word.kind(),
+            SyntaxKind::WORD | SyntaxKind::KW_SPAWN | SyntaxKind::KW_AWAIT
+        ) {
             break;
         }
         parts.push(word.text().to_string());
@@ -3649,6 +3654,11 @@ impl BlockExpr {
                         | SyntaxKind::OBJECT_LITERAL
                         | SyntaxKind::MAP_LITERAL
                         | SyntaxKind::STRING_LITERAL
+                        // A lambda can be a block's tail expression — e.g. a
+                        // function whose body returns a middleware transformer
+                        // (BEP-034). Without this it was silently dropped and
+                        // the block typed as void ("missing return value").
+                        | SyntaxKind::LAMBDA_EXPR
                         | SyntaxKind::RAW_STRING_LITERAL
                         | SyntaxKind::BACKTICK_STRING_LITERAL
                         | SyntaxKind::TAGGED_TEMPLATE_EXPR => Some(BlockElement::ExprNode(n)),

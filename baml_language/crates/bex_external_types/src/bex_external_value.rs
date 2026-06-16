@@ -22,8 +22,8 @@
 //! }
 //! ```
 
-// Re-export Ty and TypeName from baml_type for convenience
-pub use baml_type::{Ty, TyAttr, TypeName};
+// Re-export RuntimeTy and TypeName from baml_type for convenience
+pub use baml_type::{RuntimeTy, TyAttr, TypeName};
 use indexmap::IndexMap;
 
 /// Metadata about a union type, embedded with values from union-typed contexts.
@@ -44,25 +44,24 @@ pub struct UnionMetadata {
     pub is_single_pattern: bool,
 
     /// The full union type for serialization.
-    pub union_type: Ty,
+    pub union_type: RuntimeTy,
 
-    /// Which option of the union was selected (e.g., `Ty::Int`, `Ty::String`, `Ty::Class("Success")`).
-    pub selected_option: Ty,
+    /// Which option of the union was selected (e.g., `RuntimeTy::Int`, `RuntimeTy::String`, `RuntimeTy::Class("Success")`).
+    pub selected_option: RuntimeTy,
 }
 
 impl UnionMetadata {
     /// Create metadata for a union type.
-    pub fn new(union_type: Ty, selected_option: Ty) -> Self {
+    pub fn new(union_type: RuntimeTy, selected_option: RuntimeTy) -> Self {
         let (is_optional, is_single_pattern) = match &union_type {
-            Ty::Union(members, _) => {
-                let has_null = members.iter().any(|m| matches!(m, Ty::Null { .. }));
+            RuntimeTy::Union(members, _) => {
+                let has_null = members.iter().any(|m| matches!(m, RuntimeTy::Null { .. }));
                 let non_null_count = members
                     .iter()
-                    .filter(|m| !matches!(m, Ty::Null { .. }))
+                    .filter(|m| !matches!(m, RuntimeTy::Null { .. }))
                     .count();
                 (has_null, non_null_count == 1)
             }
-            Ty::Optional(..) => (true, true),
             _ => (false, false),
         };
 
@@ -85,7 +84,7 @@ impl UnionMetadata {
 #[derive(Clone, Debug, PartialEq)]
 pub enum BexExternalAdt {
     Collector(bex_vm_types::CollectorRef),
-    Type(baml_type::Ty),
+    Type(baml_type::RuntimeTy),
     /// A rendered prompt AST (from `baml.llm.render_prompt`).
     PromptAst(std::sync::Arc<baml_builtins2::PromptAst>),
     /// A media value (image, audio, etc.) passed as a function argument.
@@ -93,7 +92,7 @@ pub enum BexExternalAdt {
     /// GC-rooted reference to a heap instance, paired with the full
     /// type identity of the instance (class FQN + concrete generic args).
     ///
-    /// `ty` is canonically a `Ty::Class { name, args }` — the same shape
+    /// `ty` is canonically a `RuntimeTy::Class { name, args }` — the same shape
     /// the wire encoder projects to `BamlTyName`. The `heap_handle` keeps
     /// the instance alive on the heap so the engine can re-enter it for
     /// instance-method calls (`Stream.next`, `Stream.final`, …).
@@ -102,7 +101,7 @@ pub enum BexExternalAdt {
     /// class that wants typed-handle round-trip treatment uses this same
     /// variant.
     TaggedHeapHandle {
-        ty: baml_type::Ty,
+        ty: baml_type::RuntimeTy,
         heap_handle: crate::Handle,
     },
 }
@@ -144,17 +143,17 @@ pub enum BexExternalValue {
     /// Owned array of values with element type.
     Array {
         /// The declared element type (e.g., `int | string` for `(int | string)[]`).
-        element_type: Ty,
+        element_type: RuntimeTy,
         /// The array items.
         items: Vec<BexExternalValue>,
     },
 
     /// Owned map with string keys and type information.
     Map {
-        /// The declared key type (usually `Ty::String`).
-        key_type: Ty,
+        /// The declared key type (usually `RuntimeTy::String`).
+        key_type: RuntimeTy,
         /// The declared value type (e.g., `int | string` for `map<string, int | string>`).
-        value_type: Ty,
+        value_type: RuntimeTy,
         /// The map entries.
         entries: IndexMap<String, BexExternalValue>,
     },
@@ -365,14 +364,14 @@ impl BexExternalValue {
     /// Construct a union value (`A | B | ...`) with metadata.
     ///
     /// ```ignore
-    /// BexExternalValue::union(BexExternalValue::Int(42), [Ty::int(), Ty::string()], Ty::int())
+    /// BexExternalValue::union(BexExternalValue::Int(42), [RuntimeTy::int(), RuntimeTy::string()], RuntimeTy::int())
     /// ```
     pub fn union(
         value: BexExternalValue,
-        members: impl IntoIterator<Item = Ty>,
-        selected: Ty,
+        members: impl IntoIterator<Item = RuntimeTy>,
+        selected: RuntimeTy,
     ) -> Self {
-        let union_type = Ty::Union(members.into_iter().collect(), TyAttr::default());
+        let union_type = RuntimeTy::Union(members.into_iter().collect(), TyAttr::default());
         BexExternalValue::Union {
             value: Box::new(value),
             metadata: UnionMetadata::new(union_type, selected),
@@ -381,14 +380,14 @@ impl BexExternalValue {
 
     /// Construct an optional value (`T?`) with metadata.
     ///
-    /// Selected type is auto-detected: `inner` when non-null, `Ty::null()` when null.
-    pub fn optional(value: BexExternalValue, inner: Ty) -> Self {
+    /// Selected type is auto-detected: `inner` when non-null, `RuntimeTy::null()` when null.
+    pub fn optional(value: BexExternalValue, inner: RuntimeTy) -> Self {
         let selected = if matches!(value, BexExternalValue::Null) {
-            Ty::null()
+            RuntimeTy::null()
         } else {
             inner.clone()
         };
-        let optional_type = Ty::Optional(Box::new(inner), TyAttr::default());
+        let optional_type = RuntimeTy::optional(inner);
         BexExternalValue::Union {
             value: Box::new(value),
             metadata: UnionMetadata::new(optional_type, selected),
@@ -554,7 +553,13 @@ impl AsBexExternalValue for bool {
     }
 }
 
-impl AsBexExternalValue for baml_type::Ty {
+impl AsBexExternalValue for std::sync::Arc<num_bigint::BigInt> {
+    fn into_bex_external_value(self) -> BexExternalValue {
+        BexExternalValue::Bigint(std::sync::Arc::unwrap_or_clone(self))
+    }
+}
+
+impl AsBexExternalValue for baml_type::RuntimeTy {
     fn into_bex_external_value(self) -> BexExternalValue {
         BexExternalValue::Adt(BexExternalAdt::Type(self))
     }
@@ -572,8 +577,8 @@ impl<T: AsBexExternalValue> AsBexExternalValue for Option<T> {
 impl AsBexExternalValue for indexmap::IndexMap<String, String> {
     fn into_bex_external_value(self) -> BexExternalValue {
         BexExternalValue::Map {
-            key_type: baml_type::Ty::string(),
-            value_type: baml_type::Ty::string(),
+            key_type: baml_type::RuntimeTy::string(),
+            value_type: baml_type::RuntimeTy::string(),
             entries: self
                 .into_iter()
                 .map(|(k, v)| (k, v.into_bex_external_value()))
@@ -586,8 +591,8 @@ impl AsBexExternalValue for indexmap::IndexMap<String, String> {
 impl AsBexExternalValue for indexmap::IndexMap<String, BexExternalValue> {
     fn into_bex_external_value(self) -> BexExternalValue {
         BexExternalValue::Map {
-            key_type: baml_type::Ty::string(),
-            value_type: baml_type::Ty::unknown(),
+            key_type: baml_type::RuntimeTy::string(),
+            value_type: baml_type::RuntimeTy::unknown(),
             entries: self,
         }
         .into_bex_external_value()
@@ -597,7 +602,7 @@ impl AsBexExternalValue for indexmap::IndexMap<String, BexExternalValue> {
 impl AsBexExternalValue for Vec<String> {
     fn into_bex_external_value(self) -> BexExternalValue {
         BexExternalValue::Array {
-            element_type: baml_type::Ty::string(),
+            element_type: baml_type::RuntimeTy::string(),
             items: self
                 .into_iter()
                 .map(|s| BexExternalValue::String(bex_str::BexStr::from(s)))
@@ -648,6 +653,15 @@ pub fn try_convert_rust_data(
     }
     if let Ok(typed) = arc.clone().downcast::<baml_builtins2::MediaValue>() {
         return Some(typed.to_bex_external_value());
+    }
+    // A `HostValueArc` wrapped into `Object::RustData` (e.g. the `_handle`
+    // slot of a `baml.errors.HostCallable` inbound from the host bridge):
+    // convert back to a `BexExternalValue::HostValue` so the outbound
+    // encoder emits a `Handle(HOST_VALUE_{CALLABLE,ERROR})` carrying the
+    // same `(key, kind)` — letting the originating bridge resolve the
+    // handle back to the original native object on round-trip.
+    if let Ok(typed) = arc.clone().downcast::<bex_resource_types::HostValueArc>() {
+        return Some(BexExternalValue::HostValue(typed));
     }
     None
 }

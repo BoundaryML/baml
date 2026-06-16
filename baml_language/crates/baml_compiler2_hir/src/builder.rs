@@ -199,6 +199,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             name,
             range,
             descendants: id.next()..id.next(), // empty initially; filled on pop
+            is_template_body: false,
         });
         self.scope_bindings.push(ScopeBindings::new());
         self.scope_stack.push(id);
@@ -543,10 +544,14 @@ impl<'db> SemanticIndexBuilder<'db> {
             }
             ast::Expr::Spawn {
                 name,
+                with_exprs,
                 body: spawn_body,
             } => {
                 if let Some(name) = name {
                     self.walk_expr(*name, body, source_map, true);
+                }
+                for with_expr in with_exprs {
+                    self.walk_expr(*with_expr, body, source_map, true);
                 }
                 self.walk_expr(*spawn_body, body, source_map, true);
             }
@@ -670,6 +675,10 @@ impl<'db> SemanticIndexBuilder<'db> {
 
         self.push_scope(ScopeKind::Lambda, None, source_map.expr_span(expr_id));
         let scope_id = self.current_scope_id();
+        // Mark this as a synthetic template body: it is a Lambda scope for
+        // capture-analysis purposes, but TIR types its body inline in the
+        // enclosing scope, so `inference_owner_scope` must climb past it.
+        self.scopes[scope_id.index() as usize].is_template_body = true;
         self.lambda_stack.push(scope_id);
         // Walk the desugared flatten block's CONTENTS inline (not via
         // `walk_expr`, which treats `Expr::Block` as a no-op): its `${…}` exprs
@@ -1585,6 +1594,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                     ast::BuiltinKind::Vm => "$rust_function",
                     ast::BuiltinKind::Io => "$rust_io_function",
                     ast::BuiltinKind::Intrinsic => "$compiler_intrinsic",
+                    ast::BuiltinKind::AwaitAny => "$await_any",
                 };
                 self.diagnostics.push(Hir2Diagnostic::BuiltinOnlySyntax {
                     feature: feature.to_string(),
@@ -1909,7 +1919,24 @@ impl<'db> SemanticIndexBuilder<'db> {
                     && allowed_generic_params
                         .iter()
                         .any(|name| name == &segments[0]);
-                if !is_builtin_error && !is_builtin_class_ref && !is_allowed_generic {
+                // A projection off one of the function's own generic params —
+                // e.g. `T.CompareError` for `<T extends Comparable>`, which parses
+                // as a dotted path at this phase. The concrete error is the
+                // implementor's associated type, resolved at the call site; the
+                // host fn just propagates whatever the dispatched method throws
+                // (the declared `throws` is erased for builtins). Lets
+                // `_compare_shim` declare `throws T.CompareError` instead of an
+                // unconstrained error param that call sites cannot pin.
+                let is_generic_param_projection = segments.len() >= 2
+                    && generic_args.is_empty()
+                    && allowed_generic_params
+                        .iter()
+                        .any(|name| name == &segments[0]);
+                if !is_builtin_error
+                    && !is_builtin_class_ref
+                    && !is_allowed_generic
+                    && !is_generic_param_projection
+                {
                     invalid.push(Self::render_type_expr(type_expr));
                 }
             }
@@ -1918,6 +1945,21 @@ impl<'db> SemanticIndexBuilder<'db> {
                     Self::collect_invalid_builtin_throw_types(ty, allowed_generic_params, invalid);
                 }
             }
+            // A projection off one of the function's own generic params — e.g.
+            // `T.CompareError` for `<T extends Comparable>`. The concrete error is
+            // the implementor's associated type, resolved at the call site; the
+            // host fn just propagates whatever the dispatched method throws (the
+            // declared `throws` is erased for builtins), so this is sound. Lets
+            // `_compare_shim` declare `throws T.CompareError` rather than an
+            // unconstrained error param that call sites cannot pin.
+            ast::TypeExpr::AssociatedTypeProjection { base, .. }
+                if matches!(
+                    base.as_ref(),
+                    ast::TypeExpr::Path { segments, generic_args, .. }
+                        if generic_args.is_empty()
+                            && segments.len() == 1
+                            && allowed_generic_params.iter().any(|name| name == &segments[0])
+                ) => {}
             // `throws never` is the explicit "infallible" marker — always valid.
             ast::TypeExpr::Never { .. } => {}
             _ => invalid.push(Self::render_type_expr(type_expr)),

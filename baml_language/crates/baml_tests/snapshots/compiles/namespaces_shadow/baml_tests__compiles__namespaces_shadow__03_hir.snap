@@ -9,7 +9,7 @@ function user.from_json(j: baml.json.json) -> user.foo  [expr] {
   user.foo { x: baml.json.from_json(baml.json.field(j, "x")) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "x": self.x.to_json() }
+  map { "x": baml.json.to_json(self.x) }
 }
 class user.foo.Bar {
   y: string
@@ -18,5 +18,5 @@ function user.foo.from_json(j: baml.json.json) -> user.foo.Bar  [expr] {
   user.foo.Bar { y: baml.json.from_json(baml.json.field(j, "y")) }
 }
 function user.foo.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "y": self.y.to_json() }
+  map { "y": baml.json.to_json(self.y) }
 }

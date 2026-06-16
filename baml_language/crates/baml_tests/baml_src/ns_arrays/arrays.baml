@@ -16,6 +16,12 @@
 // results, `count` accumulators) therefore bind the expected value to a local
 // too, since two locals compare correctly.
 
+class ArraySortItem {
+    key int
+    label string
+    nullable int?
+}
+
 test "array_literal" {
     assert.is_true(baml.deep_equals([1, 2, 3], [1, 2, 3]))
 }
@@ -33,6 +39,215 @@ test "array_push" {
     // `expected` is a local: a test-block local compares unequal to a literal (VM bug)
     let expected = [1, 2, 3, 4];
     assert.is_true(baml.deep_equals(a, expected))
+}
+
+// ─── sort ────────────────────────────────────────────────────────────────────
+
+test "array_sort_ints_in_place" {
+    let xs = [3, 1, 2];
+    let result = xs.sort();
+    let expected = [1, 2, 3];
+    assert.is_true(result == xs);
+    assert.is_true(baml.deep_equals(xs, expected))
+}
+
+test "array_sort_returns_self" {
+    let xs = [3, 1, 2];
+    let result = xs.sort();
+    assert.is_true(result == xs);
+    result.push(4);
+    let expected = [1, 2, 3, 4];
+    assert.is_true(baml.deep_equals(xs, expected))
+}
+
+test "array_sort_empty_is_noop" {
+    let xs: int[] = [];
+    let result = xs.sort();
+    let expected: int[] = [];
+    assert.is_true(result == xs);
+    assert.is_true(baml.deep_equals(xs, expected))
+}
+
+test "array_sort_duplicates_stable" {
+    let xs = [3, 1, 2, 1, 3];
+    xs.sort();
+    let expected = [1, 1, 2, 3, 3];
+    assert.is_true(baml.deep_equals(xs, expected))
+}
+
+test "array_sort_strings" {
+    let xs = ["b", "a", "aa"];
+    xs.sort();
+    let expected = ["a", "aa", "b"];
+    assert.is_true(baml.deep_equals(xs, expected))
+}
+
+test "array_sort_bigints" {
+    let xs = [3n, 1n, 2n];
+    xs.sort();
+    let expected = [1n, 2n, 3n];
+    assert.is_true(baml.deep_equals(xs, expected))
+}
+
+test "array_sort_floats" {
+    let xs = [2.5, 0.5, 1.5];
+    let result = xs.sort();
+    let expected = [0.5, 1.5, 2.5];
+    assert.is_true(result == xs);
+    assert.is_true(baml.deep_equals(xs, expected))
+}
+
+// PHASE-5 cutover: `sort()` is now the `Sortable` blanket method requiring
+// `T implements Comparable`. The previously-runtime rejections below became
+// compile errors and moved to Rust `assert_compile_error_*` tests in
+// `tests/comparable_sort.rs` (`phase5_*`):
+//   • `(int | float)[].sort()` — unions can't implement `Comparable`
+//   • `(float | bigint)[].sort()` — likewise
+//   • `int?[].sort()` (optional = union)
+//   • `ArraySortItem[].sort()` (class without a `Comparable` impl)
+//   • `(int | string)[].sort()` — rollback now pinned via `sort_by`
+//     (`array_sort_by_callback_throws`)
+// 02-PLAN cutover (reverses the 01b NaN decision): `float` now binds
+// `type CompareError = never` and orders by `f64::total_cmp`, so `float[].sort()`
+// no longer rejects NaN — NaN sorts deterministically after +inf.
+test "array_sort_nan_sorts_last" {
+    let xs = [1.0, float.nan()];
+    xs.sort();
+    assert.equal(xs.at(0), 1.0);
+    match (xs.at(1)) {
+        null => assert.is_true(false)
+        let f: float => assert.is_true(f.is_nan())
+    }
+}
+
+// ─── sort_by ─────────────────────────────────────────────────────────────────
+
+test "array_sort_by_descending" {
+    let xs = [1, 3, 2];
+    xs.sort_by((a: int, b: int) -> int { b - a });
+    let expected = [3, 2, 1];
+    assert.is_true(baml.deep_equals(xs, expected))
+}
+
+test "array_sort_by_returns_self" {
+    let xs = [1, 3, 2];
+    let result = xs.sort_by((a: int, b: int) -> int { a - b });
+    assert.is_true(result == xs);
+    result.push(4);
+    let expected = [1, 2, 3, 4];
+    assert.is_true(baml.deep_equals(xs, expected))
+}
+
+test "array_sort_by_callback_throws" {
+    let xs = [1, 3, 2];
+    let caught = {
+        xs.sort_by((a: int, b: int) -> int throws string {
+            if (a == 2 || b == 2) { throw "bad compare" }
+            a - b
+        });
+        false
+    } catch (e) {
+        string => true
+    };
+    let expected_caught = true;
+    assert.is_true(baml.deep_equals(caught, expected_caught));
+    let expected = [1, 3, 2];
+    assert.is_true(baml.deep_equals(xs, expected))
+}
+
+// ─── sort_by_key ─────────────────────────────────────────────────────────────
+
+test "array_sort_by_key_class_field" {
+    let xs = [
+        ArraySortItem { key: 3, label: "c", nullable: 3 },
+        ArraySortItem { key: 1, label: "a", nullable: 1 },
+        ArraySortItem { key: 2, label: "b", nullable: 2 }
+    ];
+    xs.sort_by_key((x: ArraySortItem) -> int { x.key });
+    let labels = xs.map((x: ArraySortItem) -> string { x.label });
+    let expected = ["a", "b", "c"];
+    assert.is_true(baml.deep_equals(labels, expected))
+}
+
+test "array_sort_by_key_stable" {
+    let xs = [
+        ArraySortItem { key: 2, label: "a", nullable: 2 },
+        ArraySortItem { key: 1, label: "b", nullable: 1 },
+        ArraySortItem { key: 2, label: "c", nullable: 2 },
+        ArraySortItem { key: 1, label: "d", nullable: 1 }
+    ];
+    xs.sort_by_key((x: ArraySortItem) -> int { x.key });
+    let labels = xs.map((x: ArraySortItem) -> string { x.label });
+    let expected = ["b", "d", "a", "c"];
+    assert.is_true(baml.deep_equals(labels, expected))
+}
+
+test "array_sort_by_key_called_once_per_element" {
+    let count = 0;
+    let xs = [3, 1, 2];
+    xs.sort_by_key((x: int) -> int {
+        count = count + 1;
+        x
+    });
+    let expected_count = 3;
+    assert.is_true(baml.deep_equals(count, expected_count));
+    let expected = [1, 2, 3];
+    assert.is_true(baml.deep_equals(xs, expected))
+}
+
+test "array_sort_by_key_empty_does_not_call_callback" {
+    let xs: int[] = [];
+    let result = xs.sort_by_key((x: int) -> int throws string { throw "should not call" });
+    let expected: int[] = [];
+    assert.is_true(result == xs);
+    assert.is_true(baml.deep_equals(xs, expected))
+}
+
+test "array_sort_by_key_callback_throws" {
+    let xs = [3, 1, 2];
+    let caught = {
+        xs.sort_by_key((x: int) -> int throws string {
+            if (x == 1) { throw "bad key" }
+            x
+        });
+        false
+    } catch (e) {
+        string => true
+    };
+    let expected_caught = true;
+    assert.is_true(baml.deep_equals(caught, expected_caught))
+}
+
+test "array_sort_by_key_throw_does_not_write_back" {
+    let xs = [3, 1, 2];
+    let caught = {
+        xs.sort_by_key((x: int) -> int throws string {
+            if (x == 1) { throw "bad key" }
+            x
+        });
+        false
+    } catch (e) {
+        string => true
+    };
+    let expected_caught = true;
+    assert.is_true(baml.deep_equals(caught, expected_caught));
+    let expected = [3, 1, 2];
+    assert.is_true(baml.deep_equals(xs, expected))
+}
+
+// `sort_by_key` now requires the key type to be `Comparable` (it sorts by the
+// key's natural order, `Comparable.compare`). A nullable key (`int?` = a union)
+// cannot implement `Comparable`, so it is a *compile* error rather than the old
+// runtime `InvalidArgument` — pinned by the Rust test
+// `phase5_sort_by_key_nullable_key_is_compile_error`.
+
+test "array_sort_by_key_returns_self" {
+    let xs = [3, 1, 2];
+    let result = xs.sort_by_key((x: int) -> int { x });
+    assert.is_true(result == xs);
+    result.push(4);
+    let expected = [1, 2, 3, 4];
+    assert.is_true(baml.deep_equals(xs, expected))
 }
 
 // ============================================================================
@@ -104,6 +319,53 @@ test "array_map_string_elements" {
     assert.is_true(baml.deep_equals(items.map((s: string) -> string { s + "!" }), ["a!", "b!", "c!"]))
 }
 
+// ============================================================================
+// Array.filter tests
+// ============================================================================
+
+test "array_filter_even_numbers" {
+    let items = [1, 2, 3, 4, 5, 6];
+    let result = items.filter((x: int) -> bool { x % 2 == 0 });
+    let expected = [2, 4, 6];
+    assert.is_true(baml.deep_equals(result, expected))
+}
+
+test "array_filter_empty_array_does_not_call_callback" {
+    let items: int[] = [];
+    let result = items.filter((x: int) -> bool throws string { throw "should not call" });
+    let expected: int[] = [];
+    assert.is_true(baml.deep_equals(result, expected))
+}
+
+test "array_filter_does_not_mutate_source" {
+    let items = [1, 2, 3, 4];
+    let result = items.filter((x: int) -> bool { x > 2 });
+    let expected_result = [3, 4];
+    let expected_items = [1, 2, 3, 4];
+    assert.is_true(baml.deep_equals(result, expected_result));
+    assert.is_true(baml.deep_equals(items, expected_items))
+}
+
+test "array_filter_callback_throws" {
+    let items = [1, 2, 3];
+    assert.is_true(baml.deep_equals(
+        items.filter((x: int) -> bool throws string {
+            if (x == 2) { throw "bad value" }
+            true
+        }) catch (e) {
+            string => "caught"
+        },
+        "caught"
+    ))
+}
+
+test "array_filter_string_elements" {
+    let items = ["ant", "bear", "cat"];
+    let result = items.filter((s: string) -> bool { s.length() == 3 });
+    let expected = ["ant", "cat"];
+    assert.is_true(baml.deep_equals(result, expected))
+}
+
 // ─── clear ────────────────────────────────────────────────────────────────────
 
 test "array_clear_non_empty" {
@@ -124,6 +386,53 @@ test "array_clear_returns_array_after" {
     // `expected` is a local: a test-block local compares unequal to a literal (VM bug)
     let expected: int[] = [];
     assert.is_true(baml.deep_equals(xs, expected))
+}
+
+// ─── remove_at ────────────────────────────────────────────────────────────────
+
+test "array_remove_at_returns_removed_element" {
+    let xs = [10, 20, 30];
+    assert.equal(xs.remove_at(1), 20)
+}
+
+test "array_remove_at_modifies_array_in_place" {
+    let xs = [10, 20, 30];
+    let _ = xs.remove_at(1);
+    let expected = [10, 30];
+    assert.is_true(baml.deep_equals(xs, expected))
+}
+
+test "array_remove_at_zero_removes_first_element" {
+    let xs = [10, 20, 30];
+    assert.equal(xs.remove_at(0), 10);
+    let expected = [20, 30];
+    assert.is_true(baml.deep_equals(xs, expected))
+}
+
+test "array_remove_at_last_index_removes_last_element" {
+    let xs = [10, 20, 30];
+    assert.equal(xs.remove_at(2), 30);
+    let expected = [10, 20];
+    assert.is_true(baml.deep_equals(xs, expected))
+}
+
+test "array_remove_at_out_of_bounds_returns_null_and_keeps_array" {
+    let xs = [10, 20, 30];
+    assert.equal(xs.remove_at(99), null);
+    let expected = [10, 20, 30];
+    assert.is_true(baml.deep_equals(xs, expected))
+}
+
+test "array_remove_at_negative_returns_null_and_keeps_array" {
+    let xs = [10, 20, 30];
+    assert.equal(xs.remove_at(-1), null);
+    let expected = [10, 20, 30];
+    assert.is_true(baml.deep_equals(xs, expected))
+}
+
+test "array_remove_at_empty_returns_null" {
+    let xs: int[] = [];
+    assert.equal(xs.remove_at(0), null)
 }
 
 // ─── shift ────────────────────────────────────────────────────────────────────

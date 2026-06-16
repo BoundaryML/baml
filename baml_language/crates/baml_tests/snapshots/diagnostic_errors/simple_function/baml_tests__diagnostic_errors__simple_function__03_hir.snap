@@ -15,9 +15,6 @@ function user.HelloWorld$build_request(name: string, client: baml.llm.Client = G
 function user.HelloWorld$build_request_stream(name: string, client: baml.llm.Client = GPT4) -> baml.http.Request  [expr] {
   baml.llm.build_request_stream(client, "HelloWorld", map { "name": name })
 }
-function user.HelloWorld$parse(json: string, client: baml.llm.Client = GPT4) -> string  [expr] {
-  baml.llm.parse("HelloWorld", json)
-}
 function user.HelloWorld$render_prompt(name: string, client: baml.llm.Client = GPT4) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "HelloWorld", map { "name": name })
 }
@@ -25,5 +22,5 @@ function user.from_json(j: baml.json.json) -> user.User  [expr] {
   user.User { name: baml.json.from_json(baml.json.field(j, "name")), age: baml.json.from_json(baml.json.field(j, "age")) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": self.name.to_json(), "age": self.age.to_json() }
+  map { "name": baml.json.to_json(self.name), "age": baml.json.to_json(self.age) }
 }

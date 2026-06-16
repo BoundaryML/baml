@@ -87,13 +87,6 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
         Ty::Media(MediaKind::Pdf) => media_ref("Pdf", ctx),
         Ty::Media(MediaKind::Generic) => TranslatedType::bare("unknown"),
 
-        Ty::Optional(inner) => {
-            let inner = translate_ty(inner, ctx);
-            TranslatedType {
-                expr: format!("{} | null", inner.expr),
-                imports: inner.imports,
-            }
-        }
         Ty::List(inner) => {
             let inner = translate_ty(inner, ctx);
             // Postfix `[]` binds tighter than `|`, so a union/optional element
@@ -311,7 +304,6 @@ mod tests {
             | Ty::Enum(_)
             | Ty::TypeAlias(_)
             | Ty::TypeVar(_)
-            | Ty::Optional(_)
             | Ty::List(_)
             | Ty::Map { .. }
             | Ty::Union(_)
@@ -520,7 +512,7 @@ mod tests {
             // ── Containers ──
             Case {
                 label: "optional_string",
-                ty: Ty::Optional(boxed(Ty::String)),
+                ty: Ty::Union(vec![Ty::String, Ty::Null]),
                 ctx: ctx(&[]),
                 expected_expr: "string | null",
                 expected_imports: &[],
@@ -534,14 +526,14 @@ mod tests {
             },
             Case {
                 label: "list_optional_string",
-                ty: Ty::List(boxed(Ty::Optional(boxed(Ty::String)))),
+                ty: Ty::List(boxed(Ty::Union(vec![Ty::String, Ty::Null]))),
                 ctx: ctx(&[]),
                 expected_expr: "(string | null)[]",
                 expected_imports: &[],
             },
             Case {
                 label: "optional_list_string",
-                ty: Ty::Optional(boxed(Ty::List(boxed(Ty::String)))),
+                ty: Ty::Union(vec![Ty::List(boxed(Ty::String)), Ty::Null]),
                 ctx: ctx(&[]),
                 expected_expr: "string[] | null",
                 expected_imports: &[],
@@ -745,7 +737,7 @@ mod tests {
                 label: "callable_generic_arg",
                 ty: Ty::Callable {
                     params: vec![callable_param(Ty::List(boxed(Ty::Int)))],
-                    ret: boxed(Ty::Optional(boxed(Ty::String))),
+                    ret: boxed(Ty::Union(vec![Ty::String, Ty::Null])),
                 },
                 ctx: ctx(&[]),
                 expected_expr: "(arg0: number[]) => string | null",

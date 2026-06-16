@@ -34,10 +34,10 @@ function user.test_sequential_lambdas(obj: user.Outer) -> int  [expr] {
   { let get_name = () -> string { {  } obj.name }; let get_value = () -> int { {  } obj.inner.value }; let n = get_name() } get_value()
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "inner": self.inner.to_json(), "name": self.name.to_json() }
+  map { "inner": baml.json.to_json(self.inner), "name": baml.json.to_json(self.name) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "value": self.value.to_json() }
+  map { "value": baml.json.to_json(self.value) }
 }
 
 --- captures ---

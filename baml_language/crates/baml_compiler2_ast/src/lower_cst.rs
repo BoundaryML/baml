@@ -262,6 +262,13 @@ fn lower_function(
     };
     let name = Name::new(name_token.text());
     let name_span = name_token.text_range();
+    // A function named `$id` is unreachable through a bare call (`$id()`
+    // resolves to the runtime-identity special form first) — reject the
+    // declaration with the reserved-name diagnostic instead of letting use
+    // sites fail with a misleading "`string` is not a function".
+    if name.as_str() == "$id" {
+        diags.push(LoweringDiagnostic::ReservedRuntimeIdBindingName { span: name_span });
+    }
 
     let generic_params_with_bounds = extract_generic_params_with_bounds(node);
     let generic_params: Vec<Name> = generic_params_with_bounds
@@ -448,6 +455,7 @@ fn check_builtin_body(expr_body_node: &SyntaxNode) -> Option<BuiltinKind> {
             "$rust_function" => return Some(BuiltinKind::Vm),
             "$rust_io_function" => return Some(BuiltinKind::Io),
             "$compiler_intrinsic" => return Some(BuiltinKind::Intrinsic),
+            "$await_any" => return Some(BuiltinKind::AwaitAny),
             _ => {}
         }
     }
@@ -543,6 +551,13 @@ pub(crate) fn lower_param(
         return None;
     };
     let param_name_str = name_token.text().to_string();
+    // `$id` is the runtime-identity special form; a parameter named `$id`
+    // would be a silently-dead binding (reads hit the special cases first).
+    if param_name_str == "$id" {
+        diags.push(LoweringDiagnostic::ReservedRuntimeIdBindingName {
+            span: name_token.text_range(),
+        });
+    }
     Some(Param {
         name: Name::new(&param_name_str),
         type_expr: param.ty().map(|te| {
@@ -655,7 +670,7 @@ fn alloc_client_override_default_expr(
         alloc(
             defaults,
             Expr::Object {
-                type_name: Some(TypePath::from_dotted("baml.llm.Client")),
+                type_name: TypePath::from_dotted("baml.llm.Client"),
                 type_args: vec![],
                 fields: vec![
                     (Name::new("name"), name_lit),
@@ -769,7 +784,7 @@ pub fn synthesize_llm_builtin_call(
             let retry = alloc(Expr::Null);
             let counter = alloc(Expr::Literal(Literal::Int(0)));
             alloc(Expr::Object {
-                type_name: Some(TypePath::from_dotted("baml.llm.Client")),
+                type_name: TypePath::from_dotted("baml.llm.Client"),
                 type_args: vec![],
                 fields: vec![
                     (Name::new("name"), name_lit),
@@ -825,18 +840,21 @@ pub fn synthesize_llm_builtin_call(
     (body, source_map)
 }
 
-/// Synthesize a `baml.llm.parse("FunctionName", json)` call.
+/// Synthesize a `baml.llm.parse<STREAM_EXPANDED, ORIGINAL>(json)` call.
 ///
 /// Unlike `synthesize_llm_builtin_call`, there is no client argument and
-/// the second argument is a single `json` identifier (a path expression)
-/// rather than a map of parent params.
+/// the only argument is a single `json` identifier (a path expression)
+/// rather than a map of parent params. The explicit type args carry the
+/// stream-expanded and original return types so the stdlib `parse` can
+/// reify them via `reflect.type_of` instead of a name-keyed registry
+/// lookup (same threading as `call_llm_function<T>`).
 pub(crate) fn synthesize_llm_parse_call(
-    function_name: &str,
+    type_args: Vec<crate::ast::TypeExpr>,
     span: text_size::TextRange,
 ) -> (crate::ast::ExprBody, crate::ast::AstSourceMap) {
     use la_arena::Arena;
 
-    use crate::ast::{AstSourceMap, Expr, ExprBody, Literal};
+    use crate::ast::{AstSourceMap, Expr, ExprBody};
 
     let mut exprs = Arena::new();
     let mut expr_spans = Arena::new();
@@ -847,13 +865,10 @@ pub(crate) fn synthesize_llm_parse_call(
         id
     };
 
-    // 1. Function name literal: "FunctionName"
-    let fn_name_expr = alloc(Expr::Literal(Literal::String(function_name.to_string())));
-
-    // 2. `json` parameter reference
+    // 1. `json` parameter reference
     let json_expr = alloc(Expr::Path(vec![Name::new("json")]));
 
-    // 3. Callee: baml.llm.parse
+    // 2. Callee: baml.llm.parse
     let callee = alloc(Expr::Path(vec![
         Name::new("baml"),
         Name::new("llm"),
@@ -862,11 +877,8 @@ pub(crate) fn synthesize_llm_parse_call(
 
     let call = alloc(Expr::Call {
         callee,
-        type_args: vec![],
-        args: vec![
-            CallArg::positional(fn_name_expr),
-            CallArg::positional(json_expr),
-        ],
+        type_args,
+        args: vec![CallArg::positional(json_expr)],
     });
 
     let body = ExprBody {
@@ -894,11 +906,14 @@ pub(crate) fn synthesize_llm_parse_call(
     (body, source_map)
 }
 
-/// Synthesize a `CLIENT.__make_stream(sse, "FunctionName")` method call.
+/// Synthesize a `CLIENT.__make_stream<STREAM_EXPANDED, ORIGINAL>(sse)` method call.
 ///
 /// Used by the PPIR to generate `$parse_stream` companion function bodies.
+/// The explicit type args carry the stream-expanded and original return
+/// types into `__make_stream`'s frame, where `reflect.type_of` reifies them
+/// for `StreamCache.new`.
 pub fn synthesize_llm_make_stream_call(
-    function_name: &str,
+    type_args: Vec<crate::ast::TypeExpr>,
     client_name: &str,
     span: text_size::TextRange,
 ) -> (crate::ast::ExprBody, crate::ast::AstSourceMap) {
@@ -918,10 +933,7 @@ pub fn synthesize_llm_make_stream_call(
     // 1. `sse` parameter reference
     let sse_expr = alloc(Expr::Path(vec![Name::new("sse")]));
 
-    // 2. Function name literal: "FunctionName"
-    let fn_name_expr = alloc(Expr::Literal(Literal::String(function_name.to_string())));
-
-    // 3. Client argument (same logic as synthesize_llm_builtin_call)
+    // 2. Client argument (same logic as synthesize_llm_builtin_call)
     let client_arg = if client_name.contains('/') {
         let name_lit = alloc(Expr::Literal(Literal::String(client_name.to_string())));
         let ct_path = alloc(Expr::Path(vec![
@@ -937,7 +949,7 @@ pub fn synthesize_llm_make_stream_call(
         let retry = alloc(Expr::Null);
         let counter = alloc(Expr::Literal(Literal::Int(0)));
         alloc(Expr::Object {
-            type_name: Some(TypePath::from_dotted("baml.llm.Client")),
+            type_name: TypePath::from_dotted("baml.llm.Client"),
             type_args: vec![],
             fields: vec![
                 (Name::new("name"), name_lit),
@@ -952,7 +964,7 @@ pub fn synthesize_llm_make_stream_call(
         alloc(Expr::Path(vec![Name::new(client_name)]))
     };
 
-    // 4. Callee: CLIENT.__make_stream (method call on the client)
+    // 3. Callee: CLIENT.__make_stream (method call on the client)
     let callee = alloc(Expr::MemberAccess {
         base: client_arg,
         member: Name::new("__make_stream"),
@@ -960,11 +972,8 @@ pub fn synthesize_llm_make_stream_call(
 
     let call = alloc(Expr::Call {
         callee,
-        type_args: vec![],
-        args: vec![
-            CallArg::positional(sse_expr),
-            CallArg::positional(fn_name_expr),
-        ],
+        type_args,
+        args: vec![CallArg::positional(sse_expr)],
     });
 
     let body = ExprBody {
@@ -2219,7 +2228,7 @@ fn lower_template_string(
 
 /// Synthesize an `Item::Let` for a `retry_policy` declaration.
 ///
-/// Produces: `RetryPolicy { max_retries: N, initial_delay_ms: N, multiplier: F, max_delay_ms: N }`
+/// Produces: `baml.llm.RetryPolicy { max_retries: N, initial_delay_ms: N, multiplier: F, max_delay_ms: N }`
 ///
 /// Each config field is lowered generically via `lower_config_item::lower_config_value`,
 /// then wrapped in a typed `Expr::Object`.
@@ -2277,7 +2286,7 @@ fn synthesize_retry_policy_let(
         .collect();
 
     let root = alloc(Expr::Object {
-        type_name: Some(TypePath::bare(Name::new("RetryPolicy"))),
+        type_name: TypePath::from_dotted("baml.llm.RetryPolicy"),
         type_args: vec![],
         fields,
         spreads: vec![],
@@ -2401,7 +2410,7 @@ fn synthesize_client_items(
 
 /// Build the `Client` identity let binding.
 ///
-/// Produces: `Client { name, client_type, sub_clients, retry, counter }`
+/// Produces: `baml.llm.Client { name, client_type, sub_clients, retry, counter }`
 ///
 /// - Composite clients (fallback/round-robin) get sub-client `Expr::Path` references
 ///   from `options { strategy [A, B] }`, enabling TIR name validation and
@@ -2514,9 +2523,9 @@ fn synthesize_client_let(
     let counter_val = if is_round_robin { round_robin_start } else { 0 };
     let counter_expr = alloc(Expr::Literal(Literal::Int(counter_val)));
 
-    // Client { name, client_type, sub_clients, retry, counter }
+    // baml.llm.Client { name, client_type, sub_clients, retry, counter }
     let root = alloc(Expr::Object {
-        type_name: Some(TypePath::bare(Name::new("Client"))),
+        type_name: TypePath::from_dotted("baml.llm.Client"),
         type_args: vec![],
         fields: vec![
             (Name::new("name"), name_expr),
@@ -2723,7 +2732,7 @@ fn synthesize_client_new_companion(
             .collect();
         if !provider_fields_set.is_empty() {
             alloc(Expr::Object {
-                type_name: Some(TypePath::from_dotted(type_name)),
+                type_name: TypePath::from_dotted(type_name),
                 type_args: vec![],
                 fields: prov_fields,
                 spreads: vec![],
@@ -2768,7 +2777,7 @@ fn synthesize_client_new_companion(
     options_fields.push((Name::new("request_body"), request_body));
 
     let options_expr = alloc(Expr::Object {
-        type_name: Some(TypePath::from_dotted("baml.llm.PrimitiveClientOptions")),
+        type_name: TypePath::from_dotted("baml.llm.PrimitiveClientOptions"),
         type_args: vec![],
         fields: options_fields,
         spreads: vec![],
@@ -2780,7 +2789,7 @@ fn synthesize_client_new_companion(
         provider.map_or("unknown", |s| s.as_str()).to_string(),
     )));
     let root = alloc(Expr::Object {
-        type_name: Some(TypePath::from_dotted("baml.llm.PrimitiveClient")),
+        type_name: TypePath::from_dotted("baml.llm.PrimitiveClient"),
         type_args: vec![],
         fields: vec![
             (Name::new("name"), name_lit),

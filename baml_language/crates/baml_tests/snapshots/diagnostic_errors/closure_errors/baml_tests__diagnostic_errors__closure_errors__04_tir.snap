@@ -11,7 +11,7 @@ function user.Formatter.format(self: user.Formatter, text: string) -> string thr
   }
 }
 function user.Formatter.to_json(self: user.Formatter) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "prefix": self.prefix.to_json() } : map<string, baml.json.json>
+  map { "prefix": baml.json.to_json(self.prefix) } : map<string, baml.json.json>
 }
 function user.Formatter.from_json(j: baml.json.json) -> user.Formatter throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Formatter { prefix: baml.json.from_json<string>(baml.json.field(j, "prefix")) } : user.Formatter
@@ -26,7 +26,7 @@ function user.Counter.increment(self: user.Counter) -> int throws never {
   }
 }
 function user.Counter.to_json(self: user.Counter) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "value": self.value.to_json() } : map<string, baml.json.json>
+  map { "value": baml.json.to_json(self.value) } : map<string, baml.json.json>
 }
 function user.Counter.from_json(j: baml.json.json) -> user.Counter throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Counter { value: baml.json.from_json<int>(baml.json.field(j, "value")) } : user.Counter
@@ -41,7 +41,7 @@ function user.Employee.full_name(self: user.Employee) -> string throws never {
   }
 }
 function user.Employee.to_json(self: user.Employee) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "first": self.first.to_json(), "last": self.last.to_json() } : map<string, baml.json.json>
+  map { "first": baml.json.to_json(self.first), "last": baml.json.to_json(self.last) } : map<string, baml.json.json>
 }
 function user.Employee.from_json(j: baml.json.json) -> user.Employee throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Employee { first: baml.json.from_json<string>(baml.json.field(j, "first")), last: baml.json.from_json<string>(baml.json.field(j, "last")) } : user.Employee
@@ -91,12 +91,12 @@ function user.test_err_bound_for_unbound() -> string throws never {
   !! 1259..1270: type mismatch: expected (Employee) -> string throws never, got () -> string throws never
 }
 class user.Formatter$stream {
-  prefix: null | string
+  prefix: string | null
 }
 class user.Counter$stream {
-  value: null | int
+  value: int | null
 }
 class user.Employee$stream {
-  first: null | string
-  last: null | string
+  first: string | null
+  last: string | null
 }

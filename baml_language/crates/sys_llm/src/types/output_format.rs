@@ -1,7 +1,7 @@
 use std::fmt::Write as _;
 
 use baml_base::Literal as LiteralValue;
-use baml_type::Ty;
+use baml_type::RuntimeTy;
 use indexmap::IndexMap;
 use thiserror::Error;
 
@@ -38,7 +38,7 @@ pub struct Enum {
 pub struct ClassField {
     pub name: String,
     pub alias: Option<String>,
-    pub field_type: Ty,
+    pub field_type: RuntimeTy,
     pub description: Option<String>,
 }
 
@@ -56,15 +56,15 @@ pub struct Class {
 pub struct OutputFormatContent {
     pub enums: IndexMap<String, Enum>,
     pub classes: IndexMap<String, Class>,
-    pub target: Ty,
+    pub target: RuntimeTy,
     pub recursive_classes: indexmap::IndexSet<String>,
     /// Recursive type aliases: alias name → target type.
-    pub recursive_type_aliases: IndexMap<String, Ty>,
+    pub recursive_type_aliases: IndexMap<String, RuntimeTy>,
 }
 
 impl OutputFormatContent {
     /// Create a new `OutputFormatContent` with the given target type.
-    pub fn new(target: Ty) -> Self {
+    pub fn new(target: RuntimeTy) -> Self {
         Self {
             enums: IndexMap::new(),
             classes: IndexMap::new(),
@@ -97,7 +97,7 @@ impl OutputFormatContent {
 
     /// Add a recursive type alias (alias name → target type).
     #[must_use]
-    pub fn with_recursive_type_alias(mut self, name: String, target: Ty) -> Self {
+    pub fn with_recursive_type_alias(mut self, name: String, target: RuntimeTy) -> Self {
         self.recursive_type_aliases.insert(name, target);
         self
     }
@@ -125,7 +125,8 @@ impl OutputFormatContent {
         }
 
         // For string target with no explicit prefix, return None
-        if matches!(self.target, Ty::String { .. }) && matches!(options.prefix, RenderSetting::Auto)
+        if matches!(self.target, RuntimeTy::String { .. })
+            && matches!(options.prefix, RenderSetting::Auto)
         {
             return Ok(None);
         }
@@ -133,8 +134,8 @@ impl OutputFormatContent {
         // The `json` type alias is an opaque leaf from the LLM's perspective.
         // Regardless of rendering options, the only thing we ask the model to produce
         // is arbitrary JSON — no schema body, no prefix enumeration.
-        if let Ty::TypeAlias(tn, _) = &self.target {
-            if tn.display_name.as_str() == ::baml_base::qualified_name::BAML_JSON_JSON {
+        if let RuntimeTy::TypeAlias(tn, _) = &self.target {
+            if tn.display_name().as_str() == ::baml_base::qualified_name::BAML_JSON_JSON {
                 return Ok(Some("Respond with valid JSON.".to_string()));
             }
         }
@@ -149,15 +150,18 @@ impl OutputFormatContent {
         // But with explicit prefix, we need to append the type
         if matches!(
             self.target,
-            Ty::Int { .. } | Ty::Bigint { .. } | Ty::Float { .. } | Ty::Bool { .. }
+            RuntimeTy::Int { .. }
+                | RuntimeTy::Bigint { .. }
+                | RuntimeTy::Float { .. }
+                | RuntimeTy::Bool { .. }
         ) && matches!(options.prefix, RenderSetting::Auto)
         {
             return Ok(prefix);
         }
 
         // Check if the target is a hoisted enum
-        let target_is_hoisted_enum = if let Ty::Enum(tn, _) = &self.target {
-            hoisted_enums.contains(tn.display_name.as_str())
+        let target_is_hoisted_enum = if let RuntimeTy::Enum(tn, _) = &self.target {
+            hoisted_enums.contains(tn.display_name().as_str())
         } else {
             false
         };
@@ -169,7 +173,12 @@ impl OutputFormatContent {
                 let enm = self.find_enum(name)?;
                 let enum_str = self.render_enum(enm, options);
                 // If this is the target enum, prepend prefix
-                if target_is_hoisted_enum && enm_display_name(&self.target) == Some(name.as_str()) {
+                if target_is_hoisted_enum
+                    && enm_display_name(&self.target)
+                        .as_ref()
+                        .map(baml_type::Name::as_str)
+                        == Some(name.as_str())
+                {
                     match &prefix {
                         Some(p) => Some(format!("{p}{enum_str}")),
                         None => Some(enum_str),
@@ -232,28 +241,31 @@ impl OutputFormatContent {
         }
 
         // Render the target type with hoisting awareness
-        let message = if let Ty::Class(tn, _, _) | Ty::Interface(tn, _, _, _) = &self.target {
-            if hoisted_classes.contains(tn.display_name.as_str()) {
+        let message = if let RuntimeTy::Class(tn, _, _) | RuntimeTy::Interface(tn, _, _, _) =
+            &self.target
+        {
+            let tn_display_name = tn.display_name();
+            if hoisted_classes.contains(tn_display_name.as_str()) {
                 let display_name = self
-                    .find_class(tn.display_name.as_str())
+                    .find_class(tn_display_name.as_str())
                     .and_then(|cls| cls.alias.as_deref())
-                    .unwrap_or(tn.display_name.as_str());
+                    .unwrap_or(tn_display_name.as_str());
                 Some(display_name.to_string())
             } else {
                 self.render_type_hoisted(&self.target, options, &hoisted_classes, &hoisted_enums)?
             }
-        } else if let Ty::Enum(tn, _) = &self.target {
+        } else if let RuntimeTy::Enum(tn, _) = &self.target {
             if target_is_hoisted_enum {
                 // Hoisted target enum: rendered in enum_definitions block
                 None
-            } else if let Some(enm) = self.find_enum(tn.display_name.as_str()) {
+            } else if let Some(enm) = self.find_enum(tn.display_name().as_str()) {
                 // Non-hoisted target enum: render full block format (not inline)
                 Some(self.render_enum(enm, options))
             } else {
-                Some(tn.display_name.to_string())
+                Some(tn.display_name().to_string())
             }
-        } else if let Ty::TypeAlias(fqn, _) = &self.target {
-            Some(fqn.display_name.to_string())
+        } else if let RuntimeTy::TypeAlias(fqn, _) = &self.target {
+            Some(fqn.display_name().to_string())
         } else {
             self.render_type_hoisted(&self.target, options, &hoisted_classes, &hoisted_enums)?
         };
@@ -355,66 +367,80 @@ impl OutputFormatContent {
                     _ => "schema",
                 };
 
-                match &self.target {
-                    Ty::String { .. } => None,
-                    Ty::Int { .. } => Some("Answer as an int".to_string()),
-                    Ty::Bigint { .. } => Some("Answer as a bigint".to_string()),
-                    Ty::Float { .. } => Some("Answer as a float".to_string()),
-                    Ty::Bool { .. } => Some("Answer as a bool".to_string()),
-                    Ty::List(..) => {
-                        Some("Answer with a JSON Array using this schema:\n".to_string())
-                    }
-                    Ty::Class(tn, _, _) | Ty::Interface(tn, _, _, _) => {
-                        let end = if hoisted.contains(tn.display_name.as_str()) {
-                            " "
-                        } else {
-                            "\n"
-                        };
-                        Some(format!("Answer in JSON using this {type_word}:{end}"))
-                    }
-                    Ty::Map { .. } => Some(format!("Answer in JSON using this {type_word}:\n")),
-                    Ty::Enum(..) => Some("Answer with any of the categories:\n".to_string()),
-                    Ty::Union(variants, _) => {
-                        // Distinguish optional (1 non-null variant) from true union (multiple)
-                        let non_null_count = variants
-                            .iter()
-                            .filter(|v| !matches!(v, Ty::Null { .. }))
-                            .count();
-                        if non_null_count > 1 {
-                            Some(format!("Answer in JSON using any of these {type_word}s:\n"))
-                        } else {
-                            Some(format!("Answer in JSON using this {type_word}:\n"))
-                        }
-                    }
-                    Ty::TypeAlias(tn, _)
-                        if tn.display_name.as_str()
-                            == ::baml_base::qualified_name::BAML_JSON_JSON =>
-                    {
-                        None
-                    }
-                    Ty::TypeAlias(..) => Some(format!("Answer in JSON using this {type_word}: ")),
-                    Ty::Literal(..) => Some("Answer using this specific value:\n".to_string()),
-                    _ => None,
+                Self::auto_prefix(&self.target, type_word, hoisted)
+            }
+        }
+    }
+
+    /// The `Auto`-mode schema prefix for a given target type. A nullable union
+    /// (`T?` == `T | null`) delegates to its non-null part — so `string?` has no
+    /// prefix like `string`, and `Class?` uses the class prefix.
+    fn auto_prefix(
+        ty: &RuntimeTy,
+        type_word: &str,
+        hoisted: &indexmap::IndexSet<String>,
+    ) -> Option<String> {
+        match ty {
+            RuntimeTy::String { .. } => None,
+            RuntimeTy::Int { .. } => Some("Answer as an int".to_string()),
+            RuntimeTy::Bigint { .. } => Some("Answer as a bigint".to_string()),
+            RuntimeTy::Float { .. } => Some("Answer as a float".to_string()),
+            RuntimeTy::Bool { .. } => Some("Answer as a bool".to_string()),
+            RuntimeTy::List(..) => {
+                Some("Answer with a JSON Array using this schema:\n".to_string())
+            }
+            RuntimeTy::Class(tn, _, _) | RuntimeTy::Interface(tn, _, _, _) => {
+                let end = if hoisted.contains(tn.display_name().as_str()) {
+                    " "
+                } else {
+                    "\n"
+                };
+                Some(format!("Answer in JSON using this {type_word}:{end}"))
+            }
+            RuntimeTy::Map { .. } => Some(format!("Answer in JSON using this {type_word}:\n")),
+            RuntimeTy::Enum(..) => Some("Answer with any of the categories:\n".to_string()),
+            RuntimeTy::Union(variants, _) => {
+                let non_null: Vec<&RuntimeTy> = variants
+                    .iter()
+                    .filter(|v| !matches!(v, RuntimeTy::Null { .. }))
+                    .collect();
+                // `T?` (single non-null member + null) follows the inner type's
+                // prefix; a true multi-member union gets the union prefix.
+                if non_null.len() == 1 && non_null.len() < variants.len() {
+                    Self::auto_prefix(non_null[0], type_word, hoisted)
+                } else if non_null.len() > 1 {
+                    Some(format!("Answer in JSON using any of these {type_word}s:\n"))
+                } else {
+                    Some(format!("Answer in JSON using this {type_word}:\n"))
                 }
             }
+            RuntimeTy::TypeAlias(tn, _)
+                if tn.display_name().as_str() == ::baml_base::qualified_name::BAML_JSON_JSON =>
+            {
+                None
+            }
+            RuntimeTy::TypeAlias(..) => Some(format!("Answer in JSON using this {type_word}: ")),
+            RuntimeTy::Literal(..) => Some("Answer using this specific value:\n".to_string()),
+            _ => None,
         }
     }
 
     /// Render a type, with hoisted classes rendered as just their name.
     fn render_type_hoisted(
         &self,
-        ty: &Ty,
+        ty: &RuntimeTy,
         options: &RenderOptions,
         hoisted_classes: &indexmap::IndexSet<String>,
         hoisted_enums: &indexmap::IndexSet<String>,
     ) -> Result<Option<String>, RenderError> {
         // Intercept hoisted classes: return just the (aliased) name
-        if let Ty::Class(tn, _, _) | Ty::Interface(tn, _, _, _) = ty {
-            if hoisted_classes.contains(tn.display_name.as_str()) {
+        if let RuntimeTy::Class(tn, _, _) | RuntimeTy::Interface(tn, _, _, _) = ty {
+            let tn_display_name = tn.display_name();
+            if hoisted_classes.contains(tn_display_name.as_str()) {
                 let display_name = self
-                    .find_class(tn.display_name.as_str())
+                    .find_class(tn_display_name.as_str())
                     .and_then(|cls| cls.alias.as_deref())
-                    .unwrap_or(tn.display_name.as_str());
+                    .unwrap_or(tn_display_name.as_str());
                 return Ok(Some(display_name.to_string()));
             }
         }
@@ -425,55 +451,48 @@ impl OutputFormatContent {
         };
 
         match ty {
-            Ty::String { .. } => Ok(Some("string".to_string())),
-            Ty::Int { .. } => Ok(Some("int".to_string())),
-            Ty::Bigint { .. } => Ok(Some("bigint".to_string())),
-            Ty::Float { .. } => Ok(Some("float".to_string())),
-            Ty::Bool { .. } => Ok(Some("bool".to_string())),
-            Ty::Null { .. } => Ok(Some("null".to_string())),
+            RuntimeTy::String { .. } => Ok(Some("string".to_string())),
+            RuntimeTy::Int { .. } => Ok(Some("int".to_string())),
+            RuntimeTy::Bigint { .. } => Ok(Some("bigint".to_string())),
+            RuntimeTy::Float { .. } => Ok(Some("float".to_string())),
+            RuntimeTy::Bool { .. } => Ok(Some("bool".to_string())),
+            RuntimeTy::Null { .. } => Ok(Some("null".to_string())),
 
-            Ty::Optional(inner, _) => {
-                let inner_str = self
-                    .render_type_hoisted(inner, options, hoisted_classes, hoisted_enums)?
-                    .unwrap_or_else(|| "unknown".to_string());
-                Ok(Some(format!("{inner_str}{or_splitter}null")))
-            }
-
-            Ty::List(inner, _) => {
+            RuntimeTy::List(inner, _) => {
                 let inner_str = self
                     .render_type_hoisted(inner, options, hoisted_classes, hoisted_enums)?
                     .unwrap_or_else(|| "unknown".to_string());
 
                 // Determine if we need multiline rendering
                 let is_hoisted = match inner.as_ref() {
-                    Ty::Class(tn, _, _) | Ty::Interface(tn, _, _, _) => {
-                        hoisted_classes.contains(tn.display_name.as_str())
+                    RuntimeTy::Class(tn, _, _) | RuntimeTy::Interface(tn, _, _, _) => {
+                        hoisted_classes.contains(tn.display_name().as_str())
                     }
-                    Ty::TypeAlias(tn, _) => self
+                    RuntimeTy::TypeAlias(tn, _) => self
                         .recursive_type_aliases
-                        .contains_key(tn.display_name.as_str()),
+                        .contains_key(tn.display_name().as_str()),
                     _ => false,
                 };
                 let needs_multiline = !is_hoisted
                     && match inner.as_ref() {
-                        Ty::String { .. }
-                        | Ty::Int { .. }
-                        | Ty::Float { .. }
-                        | Ty::Bool { .. }
-                        | Ty::Null { .. } => false,
-                        Ty::Enum(tn, _) => {
+                        RuntimeTy::String { .. }
+                        | RuntimeTy::Int { .. }
+                        | RuntimeTy::Float { .. }
+                        | RuntimeTy::Bool { .. }
+                        | RuntimeTy::Null { .. } => false,
+                        RuntimeTy::Enum(tn, _) => {
                             // Inline enums render short; hoisted ones are just a name
-                            !hoisted_enums.contains(tn.display_name.as_str())
+                            !hoisted_enums.contains(tn.display_name().as_str())
                                 && inner_str.len() > 15
                         }
-                        Ty::Union(items, _) => items.iter().all(|t| {
+                        RuntimeTy::Union(items, _) => items.iter().all(|t| {
                             !matches!(
                                 t,
-                                Ty::String { .. }
-                                    | Ty::Int { .. }
-                                    | Ty::Float { .. }
-                                    | Ty::Bool { .. }
-                                    | Ty::Null { .. }
+                                RuntimeTy::String { .. }
+                                    | RuntimeTy::Int { .. }
+                                    | RuntimeTy::Float { .. }
+                                    | RuntimeTy::Bool { .. }
+                                    | RuntimeTy::Null { .. }
                             )
                         }),
                         _ => true,
@@ -481,14 +500,14 @@ impl OutputFormatContent {
 
                 if needs_multiline {
                     Ok(Some(format!("[\n  {}\n]", inner_str.replace('\n', "\n  "))))
-                } else if matches!(inner.as_ref(), Ty::Union(_, _)) {
+                } else if matches!(inner.as_ref(), RuntimeTy::Union(_, _)) {
                     Ok(Some(format!("({inner_str})[]")))
                 } else {
                     Ok(Some(format!("{inner_str}[]")))
                 }
             }
 
-            Ty::Map { key, value, .. } => {
+            RuntimeTy::Map { key, value, .. } => {
                 let key_str = self
                     .render_type_hoisted(key, options, hoisted_classes, hoisted_enums)?
                     .unwrap_or_else(|| "string".to_string());
@@ -503,7 +522,7 @@ impl OutputFormatContent {
                 }
             }
 
-            Ty::Union(variants, _) => {
+            RuntimeTy::Union(variants, _) => {
                 let rendered: Vec<String> = variants
                     .iter()
                     .filter_map(|v| {
@@ -515,15 +534,16 @@ impl OutputFormatContent {
                 Ok(Some(rendered.join(or_splitter)))
             }
 
-            Ty::Enum(tn, _) => {
-                if hoisted_enums.contains(tn.display_name.as_str()) {
+            RuntimeTy::Enum(tn, _) => {
+                let tn_display_name = tn.display_name();
+                if hoisted_enums.contains(tn_display_name.as_str()) {
                     // Hoisted enum: render as just the display name
-                    let enm = self.find_enum(tn.display_name.as_str());
+                    let enm = self.find_enum(tn_display_name.as_str());
                     let display_name = enm
                         .and_then(|e| e.alias.as_deref())
-                        .unwrap_or(tn.display_name.as_str());
+                        .unwrap_or(tn_display_name.as_str());
                     Ok(Some(display_name.to_string()))
-                } else if let Some(enm) = self.find_enum(tn.display_name.as_str()) {
+                } else if let Some(enm) = self.find_enum(tn_display_name.as_str()) {
                     // Inline enum: render as 'val1' or 'val2' or 'val3'
                     let values: Vec<String> = enm
                         .values
@@ -535,12 +555,12 @@ impl OutputFormatContent {
                         .collect();
                     Ok(Some(values.join(or_splitter)))
                 } else {
-                    Ok(Some(tn.display_name.to_string()))
+                    Ok(Some(tn.display_name().to_string()))
                 }
             }
 
-            Ty::Class(tn, _, _) | Ty::Interface(tn, _, _, _) => {
-                if let Some(cls) = self.find_class(tn.display_name.as_str()) {
+            RuntimeTy::Class(tn, _, _) | RuntimeTy::Interface(tn, _, _, _) => {
+                if let Some(cls) = self.find_class(tn.display_name().as_str()) {
                     Ok(Some(self.render_class_hoisted(
                         cls,
                         options,
@@ -549,32 +569,44 @@ impl OutputFormatContent {
                         false,
                     )?))
                 } else {
-                    Ok(Some(tn.display_name.to_string()))
+                    Ok(Some(tn.display_name().to_string()))
                 }
             }
 
-            Ty::Uint8Array { .. } => Err(RenderError::UnsupportedType("uint8array".to_string())),
-            Ty::Media(kind, _) => Ok(Some(kind.to_string())),
+            RuntimeTy::Uint8Array { .. } => {
+                Err(RenderError::UnsupportedType("uint8array".to_string()))
+            }
+            RuntimeTy::Media(kind, _) => Ok(Some(kind.to_string())),
 
-            Ty::Literal(lit, _) => Ok(Some(render_literal(lit))),
+            RuntimeTy::Literal(lit, _, _) => Ok(Some(render_literal(lit))),
 
-            Ty::Opaque(tn, _) => Err(RenderError::UnsupportedType(tn.to_string())),
+            // Opaque leaf types have no JSON output-format schema. They surface
+            // as `UnsupportedType` named the same way `RuntimeTy`'s `Display` renders
+            // them (`type`, or the fixed qualified name).
+            RuntimeTy::Type { .. } => Err(RenderError::UnsupportedType("type".to_string())),
+            RuntimeTy::Resource { .. } => Err(RenderError::UnsupportedType(
+                "baml.llm.Resource".to_string(),
+            )),
+            RuntimeTy::PromptAst { .. } => Err(RenderError::UnsupportedType(
+                "baml.llm.PromptAst".to_string(),
+            )),
 
-            Ty::TypeAlias(fqn, _) => {
+            RuntimeTy::TypeAlias(fqn, _) => {
                 // Recursive type aliases render as just their display name
-                Ok(Some(fqn.display_name.to_string()))
+                Ok(Some(fqn.display_name().to_string()))
             }
 
-            Ty::Function { .. }
-            | Ty::Void { .. }
-            | Ty::WatchAccessor(..)
-            | Ty::BuiltinUnknown { .. }
-            | Ty::EnumVariant(..)
-            | Ty::Future(..) => {
-                unreachable!(
-                    "compiler-only variant {:?} should not reach output_format",
-                    ty
-                )
+            RuntimeTy::Function { .. }
+            | RuntimeTy::Void { .. }
+            | RuntimeTy::WatchAccessor(..)
+            | RuntimeTy::BuiltinUnknown { .. }
+            | RuntimeTy::EnumVariant(..)
+            | RuntimeTy::Future(..)
+            | RuntimeTy::TypeVar(..)
+            | RuntimeTy::AssociatedTypeProjection { .. }
+            | RuntimeTy::Never { .. }
+            | RuntimeTy::RustType { .. } => {
+                unreachable!("non-data type {:?} should not reach output_format", ty)
             }
         }
     }
@@ -683,9 +715,9 @@ fn rendered_name<'a>(name: &'a str, alias: Option<&'a String>) -> &'a str {
 }
 
 /// Extract the display name from an enum target type.
-fn enm_display_name(ty: &Ty) -> Option<&str> {
+fn enm_display_name(ty: &RuntimeTy) -> Option<baml_type::Name> {
     match ty {
-        Ty::Enum(tn, _) => Some(tn.display_name.as_str()),
+        RuntimeTy::Enum(tn, _) => Some(tn.display_name()),
         _ => None,
     }
 }
@@ -701,18 +733,15 @@ fn render_literal(lit: &LiteralValue) -> String {
     }
 }
 
-fn media_output_instruction(target: &Ty) -> Option<String> {
+fn media_output_instruction(target: &RuntimeTy) -> Option<String> {
     match target {
-        Ty::Media(kind, _) => Some(format!("Return an {kind} output.")),
-        Ty::Optional(inner, _) => {
-            media_output_instruction(inner).map(|s| format!("{} or null.", s.trim_end_matches('.')))
-        }
-        Ty::Union(variants, _) if nullable_media_union_kind(variants).is_some() => {
+        RuntimeTy::Media(kind, _) => Some(format!("Return an {kind} output.")),
+        RuntimeTy::Union(variants, _) if nullable_media_union_kind(variants).is_some() => {
             let kind = nullable_media_union_kind(variants).expect("checked above");
             Some(format!("Return an {kind} output or null."))
         }
-        Ty::List(inner, _) => match inner.as_ref() {
-            Ty::Media(kind, _) => Some(format!("Return one or more {kind} outputs.")),
+        RuntimeTy::List(inner, _) => match inner.as_ref() {
+            RuntimeTy::Media(kind, _) => Some(format!("Return one or more {kind} outputs.")),
             inner if is_text_or_image_union(inner) => {
                 Some("Return an ordered sequence of text and image outputs.".to_string())
             }
@@ -725,12 +754,12 @@ fn media_output_instruction(target: &Ty) -> Option<String> {
     }
 }
 
-fn nullable_media_union_kind(variants: &[Ty]) -> Option<baml_base::MediaKind> {
+fn nullable_media_union_kind(variants: &[RuntimeTy]) -> Option<baml_base::MediaKind> {
     let mut kind = None;
     let mut has_null = false;
     for variant in variants {
         match variant {
-            Ty::Media(media_kind, _) => {
+            RuntimeTy::Media(media_kind, _) => {
                 if kind
                     .replace(*media_kind)
                     .is_some_and(|prev| prev != *media_kind)
@@ -738,7 +767,7 @@ fn nullable_media_union_kind(variants: &[Ty]) -> Option<baml_base::MediaKind> {
                     return None;
                 }
             }
-            Ty::Null { .. } => has_null = true,
+            RuntimeTy::Null { .. } => has_null = true,
             _ => return None,
         }
     }
@@ -746,8 +775,8 @@ fn nullable_media_union_kind(variants: &[Ty]) -> Option<baml_base::MediaKind> {
     if has_null { kind } else { None }
 }
 
-pub(crate) fn is_text_or_image_union(target: &Ty) -> bool {
-    let Ty::Union(variants, _) = target else {
+pub(crate) fn is_text_or_image_union(target: &RuntimeTy) -> bool {
+    let RuntimeTy::Union(variants, _) = target else {
         return false;
     };
 
@@ -755,9 +784,9 @@ pub(crate) fn is_text_or_image_union(target: &Ty) -> bool {
     let mut has_image = false;
     for variant in variants {
         match variant {
-            Ty::String { .. } => has_string = true,
-            Ty::Media(baml_base::MediaKind::Image, _) => has_image = true,
-            Ty::Null { .. } => {}
+            RuntimeTy::String { .. } => has_string = true,
+            RuntimeTy::Media(baml_base::MediaKind::Image, _) => has_image = true,
+            RuntimeTy::Null { .. } => {}
             _ => return false,
         }
     }
@@ -844,7 +873,7 @@ impl RenderOptions {
 
 #[cfg(test)]
 mod tests {
-    use baml_type::{TyAttr, TypeName};
+    use baml_type::{Freshness, TyAttr, TypeName};
 
     use super::*;
 
@@ -852,13 +881,13 @@ mod tests {
     // Phase 3: json alias sentinel
     // -------------------------------------------------------------------------
 
-    /// `Ty::TypeAlias("baml.json.json")` as the target type renders as the static
+    /// `RuntimeTy::TypeAlias("baml.json.json")` as the target type renders as the static
     /// literal "Respond with valid JSON." regardless of render options, with no
     /// schema body appended.
     #[test]
     fn test_render_json_alias_sentinel() {
         let json_tn = TypeName::from_dotted_path(::baml_base::qualified_name::BAML_JSON_JSON);
-        let json_ty = Ty::TypeAlias(json_tn, TyAttr::default());
+        let json_ty = RuntimeTy::TypeAlias(json_tn, TyAttr::default());
         let content = OutputFormatContent::new(json_ty);
 
         let rendered = content.render(&RenderOptions::default()).unwrap();
@@ -874,7 +903,7 @@ mod tests {
     #[test]
     fn test_render_json_alias_sentinel_ignores_explicit_prefix() {
         let json_tn = TypeName::from_dotted_path(::baml_base::qualified_name::BAML_JSON_JSON);
-        let json_ty = Ty::TypeAlias(json_tn, TyAttr::default());
+        let json_ty = RuntimeTy::TypeAlias(json_tn, TyAttr::default());
         let content = OutputFormatContent::new(json_ty);
 
         let options = RenderOptions {
@@ -893,7 +922,7 @@ mod tests {
     #[test]
     fn test_render_non_json_alias_does_not_sentinel() {
         let other_tn = TypeName::from_dotted_path("baml.other.SomeAlias");
-        let other_ty = Ty::TypeAlias(other_tn, TyAttr::default());
+        let other_ty = RuntimeTy::TypeAlias(other_tn, TyAttr::default());
         // Without any class/enum definitions or recursive_type_aliases, the alias
         // renders as just its display name (the existing fallback).
         let content = OutputFormatContent::new(other_ty);
@@ -909,7 +938,7 @@ mod tests {
 
     #[test]
     fn test_render_string() {
-        let content = OutputFormatContent::new(Ty::String {
+        let content = OutputFormatContent::new(RuntimeTy::String {
             attr: TyAttr::default(),
         });
         let rendered = content.render(&RenderOptions::default()).unwrap();
@@ -918,7 +947,7 @@ mod tests {
 
     #[test]
     fn test_render_int() {
-        let content = OutputFormatContent::new(Ty::Int {
+        let content = OutputFormatContent::new(RuntimeTy::Int {
             attr: TyAttr::default(),
         });
         let rendered = content.render(&RenderOptions::default()).unwrap();
@@ -927,7 +956,7 @@ mod tests {
 
     #[test]
     fn test_render_bigint() {
-        let content = OutputFormatContent::new(Ty::Bigint {
+        let content = OutputFormatContent::new(RuntimeTy::Bigint {
             attr: TyAttr::default(),
         });
         let rendered = content.render(&RenderOptions::default()).unwrap();
@@ -936,7 +965,7 @@ mod tests {
 
     #[test]
     fn test_render_float() {
-        let content = OutputFormatContent::new(Ty::Float {
+        let content = OutputFormatContent::new(RuntimeTy::Float {
             attr: TyAttr::default(),
         });
         let rendered = content.render(&RenderOptions::default()).unwrap();
@@ -945,7 +974,7 @@ mod tests {
 
     #[test]
     fn test_render_bool() {
-        let content = OutputFormatContent::new(Ty::Bool {
+        let content = OutputFormatContent::new(RuntimeTy::Bool {
             attr: TyAttr::default(),
         });
         let rendered = content.render(&RenderOptions::default()).unwrap();
@@ -954,8 +983,8 @@ mod tests {
 
     #[test]
     fn test_render_list() {
-        let content = OutputFormatContent::new(Ty::List(
-            Box::new(Ty::String {
+        let content = OutputFormatContent::new(RuntimeTy::List(
+            Box::new(RuntimeTy::String {
                 attr: TyAttr::default(),
             }),
             TyAttr::default(),
@@ -969,8 +998,8 @@ mod tests {
 
     #[test]
     fn test_render_list_of_int() {
-        let content = OutputFormatContent::new(Ty::List(
-            Box::new(Ty::Int {
+        let content = OutputFormatContent::new(RuntimeTy::List(
+            Box::new(RuntimeTy::Int {
                 attr: TyAttr::default(),
             }),
             TyAttr::default(),
@@ -984,7 +1013,7 @@ mod tests {
 
     #[test]
     fn test_render_media_output_instructions() {
-        let image = Ty::Media(baml_base::MediaKind::Image, TyAttr::default());
+        let image = RuntimeTy::Media(baml_base::MediaKind::Image, TyAttr::default());
 
         let rendered = OutputFormatContent::new(image.clone())
             .render(&RenderOptions::default())
@@ -992,7 +1021,7 @@ mod tests {
         assert_eq!(rendered, Some("Return an image output.".to_string()));
 
         let rendered =
-            OutputFormatContent::new(Ty::List(Box::new(image.clone()), TyAttr::default()))
+            OutputFormatContent::new(RuntimeTy::List(Box::new(image.clone()), TyAttr::default()))
                 .render(&RenderOptions::default())
                 .unwrap();
         assert_eq!(
@@ -1000,9 +1029,9 @@ mod tests {
             Some("Return one or more image outputs.".to_string())
         );
 
-        let text_or_image = Ty::Union(
+        let text_or_image = RuntimeTy::Union(
             vec![
-                Ty::String {
+                RuntimeTy::String {
                     attr: TyAttr::default(),
                 },
                 image.clone(),
@@ -1019,7 +1048,7 @@ mod tests {
         );
 
         let rendered =
-            OutputFormatContent::new(Ty::List(Box::new(text_or_image), TyAttr::default()))
+            OutputFormatContent::new(RuntimeTy::List(Box::new(text_or_image), TyAttr::default()))
                 .render(&RenderOptions::default())
                 .unwrap();
         assert_eq!(
@@ -1027,19 +1056,18 @@ mod tests {
             Some("Return an ordered sequence of text and image outputs.".to_string())
         );
 
-        let rendered =
-            OutputFormatContent::new(Ty::Optional(Box::new(image.clone()), TyAttr::default()))
-                .render(&RenderOptions::default())
-                .unwrap();
+        let rendered = OutputFormatContent::new(RuntimeTy::optional(image.clone()))
+            .render(&RenderOptions::default())
+            .unwrap();
         assert_eq!(
             rendered,
             Some("Return an image output or null.".to_string())
         );
 
-        let rendered = OutputFormatContent::new(Ty::Union(
+        let rendered = OutputFormatContent::new(RuntimeTy::Union(
             vec![
                 image,
-                Ty::Null {
+                RuntimeTy::Null {
                     attr: TyAttr::default(),
                 },
             ],
@@ -1055,23 +1083,20 @@ mod tests {
 
     #[test]
     fn test_render_optional() {
-        let content = OutputFormatContent::new(Ty::Optional(
-            Box::new(Ty::String {
-                attr: TyAttr::default(),
-            }),
-            TyAttr::default(),
-        ));
+        let content = OutputFormatContent::new(RuntimeTy::optional(RuntimeTy::String {
+            attr: TyAttr::default(),
+        }));
         let rendered = content.render(&RenderOptions::default()).unwrap();
         assert_eq!(rendered, Some("string or null".to_string()));
     }
 
     #[test]
     fn test_render_map() {
-        let content = OutputFormatContent::new(Ty::Map {
-            key: Box::new(Ty::String {
+        let content = OutputFormatContent::new(RuntimeTy::Map {
+            key: Box::new(RuntimeTy::String {
                 attr: TyAttr::default(),
             }),
-            value: Box::new(Ty::Int {
+            value: Box::new(RuntimeTy::Int {
                 attr: TyAttr::default(),
             }),
             attr: TyAttr::default(),
@@ -1093,7 +1118,7 @@ mod tests {
                 ClassField {
                     name: "name".to_string(),
                     alias: None,
-                    field_type: Ty::String {
+                    field_type: RuntimeTy::String {
                         attr: TyAttr::default(),
                     },
                     description: None,
@@ -1101,7 +1126,7 @@ mod tests {
                 ClassField {
                     name: "age".to_string(),
                     alias: None,
-                    field_type: Ty::Int {
+                    field_type: RuntimeTy::Int {
                         attr: TyAttr::default(),
                     },
                     description: Some("Age in years".to_string()),
@@ -1109,7 +1134,7 @@ mod tests {
             ],
         };
 
-        let content = OutputFormatContent::new(Ty::Class(
+        let content = OutputFormatContent::new(RuntimeTy::Class(
             baml_type::TypeName::local("Person".into()),
             Vec::new(),
             TyAttr::default(),
@@ -1143,7 +1168,7 @@ mod tests {
                 ClassField {
                     name: "x".to_string(),
                     alias: None,
-                    field_type: Ty::Int {
+                    field_type: RuntimeTy::Int {
                         attr: TyAttr::default(),
                     },
                     description: None,
@@ -1151,7 +1176,7 @@ mod tests {
                 ClassField {
                     name: "y".to_string(),
                     alias: None,
-                    field_type: Ty::Int {
+                    field_type: RuntimeTy::Int {
                         attr: TyAttr::default(),
                     },
                     description: None,
@@ -1159,7 +1184,7 @@ mod tests {
             ],
         };
 
-        let content = OutputFormatContent::new(Ty::Class(
+        let content = OutputFormatContent::new(RuntimeTy::Class(
             baml_type::TypeName::local("Point".into()),
             Vec::new(),
             TyAttr::default(),
@@ -1205,7 +1230,7 @@ mod tests {
             ],
         };
 
-        let content = OutputFormatContent::new(Ty::Enum(
+        let content = OutputFormatContent::new(RuntimeTy::Enum(
             baml_type::TypeName::local("Color".into()),
             TyAttr::default(),
         ))
@@ -1228,15 +1253,15 @@ mod tests {
 
     #[test]
     fn test_render_union() {
-        let content = OutputFormatContent::new(Ty::Union(
+        let content = OutputFormatContent::new(RuntimeTy::Union(
             vec![
-                Ty::String {
+                RuntimeTy::String {
                     attr: TyAttr::default(),
                 },
-                Ty::Int {
+                RuntimeTy::Int {
                     attr: TyAttr::default(),
                 },
-                Ty::Bool {
+                RuntimeTy::Bool {
                     attr: TyAttr::default(),
                 },
             ],
@@ -1251,12 +1276,12 @@ mod tests {
 
     #[test]
     fn test_render_with_custom_or_splitter() {
-        let content = OutputFormatContent::new(Ty::Union(
+        let content = OutputFormatContent::new(RuntimeTy::Union(
             vec![
-                Ty::String {
+                RuntimeTy::String {
                     attr: TyAttr::default(),
                 },
-                Ty::Int {
+                RuntimeTy::Int {
                     attr: TyAttr::default(),
                 },
             ],
@@ -1275,8 +1300,9 @@ mod tests {
 
     #[test]
     fn test_render_literal_string() {
-        let content = OutputFormatContent::new(Ty::Literal(
+        let content = OutputFormatContent::new(RuntimeTy::Literal(
             LiteralValue::String("hello".to_string()),
+            Freshness::Regular,
             TyAttr::default(),
         ));
         let rendered = content.render(&RenderOptions::default()).unwrap();
@@ -1288,8 +1314,11 @@ mod tests {
 
     #[test]
     fn test_render_literal_int() {
-        let content =
-            OutputFormatContent::new(Ty::Literal(LiteralValue::Int(42), TyAttr::default()));
+        let content = OutputFormatContent::new(RuntimeTy::Literal(
+            LiteralValue::Int(42),
+            Freshness::Regular,
+            TyAttr::default(),
+        ));
         let rendered = content.render(&RenderOptions::default()).unwrap();
         assert_eq!(
             rendered,
@@ -1299,8 +1328,11 @@ mod tests {
 
     #[test]
     fn test_render_literal_bool() {
-        let content =
-            OutputFormatContent::new(Ty::Literal(LiteralValue::Bool(true), TyAttr::default()));
+        let content = OutputFormatContent::new(RuntimeTy::Literal(
+            LiteralValue::Bool(true),
+            Freshness::Regular,
+            TyAttr::default(),
+        ));
         let rendered = content.render(&RenderOptions::default()).unwrap();
         assert_eq!(
             rendered,
@@ -1310,7 +1342,7 @@ mod tests {
 
     #[test]
     fn test_render_opaque_unsupported() {
-        let content = OutputFormatContent::new(Ty::type_type());
+        let content = OutputFormatContent::new(RuntimeTy::type_type());
         let err = content.render(&RenderOptions::default()).unwrap_err();
         assert!(matches!(err, RenderError::UnsupportedType(s) if s == "type"));
     }
@@ -1319,55 +1351,55 @@ mod tests {
     // Helper functions for creating types (used by recursive type tests)
     // ========================================================================
 
-    fn ty_int() -> Ty {
-        Ty::Int {
+    fn ty_int() -> RuntimeTy {
+        RuntimeTy::Int {
             attr: TyAttr::default(),
         }
     }
-    fn ty_bool() -> Ty {
-        Ty::Bool {
+    fn ty_bool() -> RuntimeTy {
+        RuntimeTy::Bool {
             attr: TyAttr::default(),
         }
     }
-    fn ty_string() -> Ty {
-        Ty::String {
+    fn ty_string() -> RuntimeTy {
+        RuntimeTy::String {
             attr: TyAttr::default(),
         }
     }
-    fn ty_float() -> Ty {
-        Ty::Float {
+    fn ty_float() -> RuntimeTy {
+        RuntimeTy::Float {
             attr: TyAttr::default(),
         }
     }
-    fn ty_class(name: &str) -> Ty {
-        Ty::Class(
+    fn ty_class(name: &str) -> RuntimeTy {
+        RuntimeTy::Class(
             baml_type::TypeName::local(name.into()),
             Vec::new(),
             TyAttr::default(),
         )
     }
-    fn ty_optional(inner: Ty) -> Ty {
-        Ty::Optional(Box::new(inner), TyAttr::default())
+    fn ty_optional(inner: RuntimeTy) -> RuntimeTy {
+        RuntimeTy::optional(inner)
     }
-    fn ty_list(inner: Ty) -> Ty {
-        Ty::List(Box::new(inner), TyAttr::default())
+    fn ty_list(inner: RuntimeTy) -> RuntimeTy {
+        RuntimeTy::List(Box::new(inner), TyAttr::default())
     }
-    fn ty_map(key: Ty, value: Ty) -> Ty {
-        Ty::Map {
+    fn ty_map(key: RuntimeTy, value: RuntimeTy) -> RuntimeTy {
+        RuntimeTy::Map {
             key: Box::new(key),
             value: Box::new(value),
             attr: TyAttr::default(),
         }
     }
-    fn ty_union(variants: Vec<Ty>) -> Ty {
-        Ty::Union(variants, TyAttr::default())
+    fn ty_union(variants: Vec<RuntimeTy>) -> RuntimeTy {
+        RuntimeTy::Union(variants, TyAttr::default())
     }
 
-    fn ty_enum(name: &str) -> Ty {
-        Ty::Enum(baml_type::TypeName::local(name.into()), TyAttr::default())
+    fn ty_enum(name: &str) -> RuntimeTy {
+        RuntimeTy::Enum(baml_type::TypeName::local(name.into()), TyAttr::default())
     }
 
-    fn mk_class(name: &str, fields: Vec<(&str, Ty)>) -> Class {
+    fn mk_class(name: &str, fields: Vec<(&str, RuntimeTy)>) -> Class {
         Class {
             name: name.to_string(),
             alias: None,
@@ -1384,7 +1416,7 @@ mod tests {
         }
     }
 
-    fn mk_class_desc(name: &str, desc: &str, fields: Vec<(&str, Ty)>) -> Class {
+    fn mk_class_desc(name: &str, desc: &str, fields: Vec<(&str, RuntimeTy)>) -> Class {
         Class {
             name: name.to_string(),
             alias: None,
@@ -2436,8 +2468,9 @@ Answer in JSON using this schema: Ret"#
                     alias: None,
                     field_type: ty_union(vec![
                         ty_class("Date"),
-                        Ty::Literal(
+                        RuntimeTy::Literal(
                             LiteralValue::String("current".to_string()),
+                            Freshness::Regular,
                             TyAttr::default(),
                         ),
                     ]),
@@ -2558,8 +2591,9 @@ Answer in JSON using this schema: Ret"#
                     alias: None,
                     field_type: ty_union(vec![
                         ty_class("Date"),
-                        Ty::Literal(
+                        RuntimeTy::Literal(
                             LiteralValue::String("current".to_string()),
+                            Freshness::Regular,
                             TyAttr::default(),
                         ),
                     ]),
@@ -2842,8 +2876,8 @@ Answer in JSON using this schema: Ret"#
     // Phase 5: Additional test coverage
     // ========================================================================
 
-    fn ty_alias(name: &str) -> Ty {
-        Ty::TypeAlias(baml_type::TypeName::local(name.into()), TyAttr::default())
+    fn ty_alias(name: &str) -> RuntimeTy {
+        RuntimeTy::TypeAlias(baml_type::TypeName::local(name.into()), TyAttr::default())
     }
 
     #[test]

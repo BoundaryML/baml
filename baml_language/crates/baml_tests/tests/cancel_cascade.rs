@@ -15,8 +15,10 @@ use baml_tests::baml_test;
 /// until `slow` settles 60s later.
 #[tokio::test]
 async fn cancel_unblocks_await_on_non_descendant() {
-    let started = Instant::now();
-    let output = baml_test!(
+    // Compile OUTSIDE the timed region: we are measuring cancel-on-await
+    // promptness, not the debug-build compile (which grows with the stdlib and
+    // once crept up toward the bound). Time only the engine run.
+    let program = baml_tests::engine::compile_source_with_opt(
         r#"
         function main() -> int {
             let slow = spawn { baml.sys.sleep(60000); 42 };
@@ -27,8 +29,17 @@ async fn cancel_unblocks_await_on_non_descendant() {
             // race must observe it and settle waiter immediately.
             await waiter
         }
-        "#
+        "#,
+        baml_tests::engine::OptLevel::One,
     );
+    let started = Instant::now();
+    let output = baml_tests::engine::run_compiled(
+        program,
+        "main",
+        baml_tests::engine::IndexMap::new(),
+        false,
+    )
+    .await;
     let elapsed = started.elapsed();
 
     // `await waiter` throws Cancelled because waiter is in Cancelled

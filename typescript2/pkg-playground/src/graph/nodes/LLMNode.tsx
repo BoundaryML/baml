@@ -1,7 +1,12 @@
 import { type NodeProps } from '@xyflow/react';
 import { Sparkles } from 'lucide-react';
 import { type ComponentType, memo } from 'react';
-import { nodeBackground, nodeShadow, selectionRing, stateColors } from '../constants';
+import {
+  nodeBackground,
+  nodeShadow,
+  selectionRing,
+  stateColors,
+} from '../constants';
 import type { WorkflowNodeData } from '../types';
 import { NodeHandles } from './NodeHandles';
 import { NodeOutputPreview } from './NodeOutputPreview';
@@ -15,8 +20,8 @@ export const LLMNode: ComponentType<NodeProps> = memo(({ data }) => {
   const base = stateColors[d.executionState] ?? stateColors['not-started'];
   const colors = {
     ...base,
-    accent: '#a78bfa',
-    border: isHighlighted ? selectionRing.color : 'rgba(167,139,250,0.35)',
+    accent: '#6D28D9',
+    border: isHighlighted ? selectionRing.color : 'rgba(109,40,217,0.40)',
   };
 
   return (
@@ -36,7 +41,8 @@ export const LLMNode: ComponentType<NodeProps> = memo(({ data }) => {
           height: '100%',
           boxSizing: 'border-box',
           color: colors.text,
-          fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
+          fontFamily:
+            'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
           transition: 'box-shadow 120ms ease, border-color 120ms ease',
         }}
       >
@@ -51,15 +57,19 @@ export const LLMNode: ComponentType<NodeProps> = memo(({ data }) => {
               fontSize: 9,
               fontWeight: 700,
               letterSpacing: '0.06em',
-              background: 'rgba(167,139,250,0.15)',
-              color: '#c4b5fd',
-              boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.35)',
+              background: 'rgba(109,40,217,0.10)',
+              color: '#6D28D9',
+              boxShadow: 'inset 0 0 0 1px rgba(109,40,217,0.30)',
             }}
           >
             <Sparkles
               size={9}
               strokeWidth={2.5}
-              style={isRunning ? { animation: 'baml-graph-spin 900ms linear infinite' } : undefined}
+              style={
+                isRunning
+                  ? { animation: 'baml-graph-spin 900ms linear infinite' }
+                  : undefined
+              }
             />
             LLM
           </span>
@@ -67,7 +77,7 @@ export const LLMNode: ComponentType<NodeProps> = memo(({ data }) => {
             style={{
               fontSize: 12,
               fontWeight: 600,
-              color: '#ddd6fe',
+              color: colors.text,
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',

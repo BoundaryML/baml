@@ -85,32 +85,6 @@ fn user.ExtractAny$build_request_stream(client: baml.llm.Client) -> baml.http.Re
     }
 }
 
-fn user.ExtractAny$parse(json: string, client: baml.llm.Client) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: string // json // param
-    let _2: baml.llm.Client // client // param
-    let _3: bool
-
-    bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _2 = const fn user.TestClient;
-        goto -> bb2;
-    }
-
-    bb2: {
-        _0 = call const fn baml.llm.parse(const "ExtractAny", copy _1) -> [bb3];
-    }
-
-    bb3: {
-        return;
-    }
-}
-
 fn user.ExtractAny$render_prompt(client: baml.llm.Client) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return

@@ -31,6 +31,27 @@ function baml.from_json(j: baml.json.json) -> baml.Bool  [expr] {
 function baml.to_json(self: ?) -> baml.json.json  [builtin]
 function baml.to_string(self: ?) -> string  [builtin]
 
+--- <builtin>/baml/comparable.baml ---
+function baml._compare_shim(a: T, b: T) -> int  [builtin]
+function baml._float_total_cmp(a: float, b: float) -> int  [builtin]
+function baml._is_primitive_array(arr: T[]) -> bool  [builtin]
+function baml._rust_sort(arr: A) -> A  [builtin]
+function baml.compare(self: ?, other: Self) -> int  [expr] {
+  {  } if (self Lt other) {  } Neg 1 else if (self Gt other) {  } 1 else {  } 0
+}
+function baml.compare(self: ?, other: Self) -> int  [expr] {
+  {  } root._float_total_cmp(self, other)
+}
+function baml.compare(self: ?, other: Self) -> int  [expr] {
+  {  } if (self Lt other) {  } Neg 1 else if (self Gt other) {  } 1 else {  } 0
+}
+function baml.compare(self: ?, other: Self) -> int  [expr] {
+  {  } if (self Lt other) {  } Neg 1 else if (self Gt other) {  } 1 else {  } 0
+}
+function baml.sort(self: ?) -> Self  [expr] {
+  {  } if (root._is_primitive_array(self)) {  } root._rust_sort(self) else {  } self.sort_by((a: T, b: T) -> int throws T.CompareError { {  } root._compare_shim(a, b) })
+}
+
 --- <builtin>/baml/containers.baml ---
 class baml.Array {
 }
@@ -42,11 +63,18 @@ function baml.clear(self: ?) -> null  [builtin]
 function baml.concat(self: ?, other: T[]) -> T[]  [builtin]
 function baml.delete(self: ?, key: K) -> V?  [builtin]
 function baml.every(self: ?, predicate: (T) -> bool throws E) -> bool  [builtin]
+function baml.filter(self: ?, predicate: (T) -> bool throws E) -> T[]  [builtin]
+function baml.filter_map(self: ?, fn: (T) -> U? throws E) -> U[]  [expr] {
+  { let out: U[] = []; for x in self.slice(0, self.length()) {  } match (fn(x)) { null => {  }, y: U => { out.push(y) } } } out
+}
 function baml.find(self: ?, predicate: (T) -> bool throws E) -> T?  [builtin]
 function baml.find_index(self: ?, predicate: (T) -> bool throws E) -> int?  [builtin]
 function baml.find_last(self: ?, predicate: (T) -> bool throws E) -> T?  [builtin]
 function baml.find_last_index(self: ?, predicate: (T) -> bool throws E) -> int?  [builtin]
 function baml.flat_map(self: ?, f: (T) -> U[] throws E) -> U[]  [builtin]
+function baml.for_each(self: ?, fn: (T) -> void throws E) -> void  [expr] {
+  { for x in self.slice(0, self.length()) { fn(x) } }
+}
 function baml.from_json(j: baml.json.json) -> baml.Map<K, V>  [expr] {
   baml.Map {  }
 }
@@ -68,16 +96,24 @@ function baml.map(self: ?, f: (T) -> U throws E) -> U[]  [builtin]
 function baml.pop(self: ?) -> T?  [builtin]
 function baml.push(self: ?, item: T) -> int  [builtin]
 function baml.reduce(self: ?, reducer: (A, T) -> A throws E, initial: A) -> A  [builtin]
+function baml.remove_at(self: ?, index: int) -> T?  [builtin]
 function baml.reverse(self: ?) -> T[]  [builtin]
 function baml.set(self: ?, key: K, value: V) -> V?  [builtin]
 function baml.shift(self: ?) -> T?  [builtin]
 function baml.slice(self: ?, start: int, end: int) -> T[]  [builtin]
 function baml.some(self: ?, predicate: (T) -> bool throws E) -> bool  [builtin]
+function baml.sort_by(self: ?, compare: (T, T) -> int throws E) -> T[]  [builtin]
+function baml.sort_by_key(self: ?, key: (T) -> U throws E) -> T[]  [expr] {
+  { let n = self.length(); if (n Le 1) { return self }; let items = self.slice(0, n); let keys: U[] = []; for x in items { keys.push(key(x)) }; let order: int[] = []; let p = 0; while p Lt n { order.push(p); p Add= 1 }; order.sort_by((i: int, j: int) -> int throws U.CompareError { {  } match (keys.at(i)) { null => 0, ki: U => match (keys.at(j)) { null => 0, kj: U => ki.compare(kj) } } }); let sorted: T[] = []; for i in order {  } match (items.at(i)) { null => {  }, item: T => { sorted.push(item) } }; self.clear(); for s in sorted { self.push(s) }; return self }
+}
 function baml.splice(self: ?, start: int, count: int, replace: T[]) -> null  [builtin]
 function baml.to_json(self: ?) -> baml.json.json  [builtin]
 function baml.to_json(self: ?) -> baml.json.json  [builtin]
 function baml.unshift(self: ?, item: T) -> int  [builtin]
 function baml.values(self: ?) -> V[]  [builtin]
+
+--- captures ---
+lambda (i, j) in sort_by_key: captures [keys]
 
 --- <builtin>/baml/core.baml ---
 class baml.TaggedString {
@@ -180,6 +216,281 @@ function baml.to_string(self: ?) -> string  [builtin]
 function baml.trailing_ones(self: ?) -> int  [builtin]
 function baml.trailing_zeros(self: ?) -> int  [builtin]
 
+--- <builtin>/baml/ns_csv/csv.baml ---
+class baml.csv.CsvError {
+  kind: baml.csv.CsvErrorKind
+  message: string
+  line: int?
+  record: int?
+  field: int?
+  column: string?
+  expected: int?
+  found: int?
+}
+class baml.csv.CsvHeaders {
+  names: string[]?
+}
+class baml.csv.CsvNeedData {
+}
+class baml.csv.CsvPosition {
+  byte: int
+  line: int
+  record: int
+}
+class baml.csv.CsvReader {
+  _handle: $rust_type
+  _file: root.fs.File?
+  _on_skip: (baml.csv.CsvError) -> null?
+  _owns_file: bool
+}
+class baml.csv.CsvRecord {
+  _handle: $rust_type
+}
+class baml.csv.CsvRows {
+  reader: baml.csv.CsvReader
+}
+class baml.csv.CsvSkip {
+  error: baml.csv.CsvError
+}
+class baml.csv.CsvWriter {
+  _handle: $rust_type
+  _file: root.fs.File?
+  _owns_file: bool
+}
+class baml.csv.ReaderOptions {
+  delimiter: string?
+  quote: string?
+  quoting: bool?
+  escape: string?
+  has_header: bool?
+  headers: string[]?
+  comment: string?
+  trim: "none" | "headers" | "fields" | "all"?
+  skip_lines: int?
+  skip_blank_records: bool?
+  ragged: "strict" | "pad" | "truncate"?
+  null_values: string[]?
+  encoding: "utf8" | "utf8-lossy"?
+  bom: "strip" | "keep"?
+  on_error: "throw" | "skip"?
+  on_skip: (baml.csv.CsvError) -> null?
+  max_skipped: int?
+  limit: int?
+}
+class baml.csv.WriterOptions {
+  delimiter: string?
+  quote: string?
+  quote_style: "minimal" | "all" | "never"?
+  escape: string?
+  terminator: "lf" | "crlf"?
+  write_header: bool?
+  headers: string[]?
+  null_value: string?
+  bom: bool?
+  sanitize_formulas: bool?
+}
+enum baml.csv.CsvErrorKind {Options, Quote, FieldCount, Encoding, Header, Decode, Encode, NotFound, TooManyRows, Closed}
+type baml.csv.CsvValue = null | bool | int | bigint | float | string
+function baml.csv._buffer(options: baml.csv.WriterOptions?) -> baml.csv.CsvWriter  [builtin]
+function baml.csv._bytes_written(self: ?) -> int  [builtin]
+function baml.csv._cell_by_index(rec: baml.csv.CsvRecord, index: int) -> T?  [builtin]
+function baml.csv._cell_by_name(rec: baml.csv.CsvRecord, column: string) -> T?  [builtin]
+function baml.csv._decode_record(rec: baml.csv.CsvRecord) -> T  [builtin]
+function baml.csv._emit(self: ?, out: string) -> null  [expr] {
+  {  } match (self._file) { null => null, f: root.fs.File => { if (out.length() Gt 0) { f.write(out) catch (_) { root.errors.InvalidArgument { message: message } => throw root.errors.Io { message: "underlying file h..." Add message } } } } null }
+}
+function baml.csv._encode_header(self: ?, names: string[]) -> string  [builtin]
+function baml.csv._encode_record(self: ?, record: baml.csv.CsvValue[]) -> string  [builtin]
+function baml.csv._encode_row(w: baml.csv.CsvWriter, row: T) -> string  [builtin]
+function baml.csv._encode_rows(w: baml.csv.CsvWriter, rows: T[]) -> string  [builtin]
+function baml.csv._error(kind: baml.csv.CsvErrorKind, message: string) -> baml.csv.CsvError  [expr] {
+  {  } baml.csv.CsvError { kind: kind, message: message, line: null, record: null, field: null, column: null, expected: null, found: null }
+}
+function baml.csv._feed(self: ?, chunk: uint8array) -> null  [builtin]
+function baml.csv._feed_eof(self: ?) -> null  [builtin]
+function baml.csv._mark_closed(self: ?) -> null  [builtin]
+function baml.csv._mark_closed(self: ?) -> null  [builtin]
+function baml.csv._mark_exhausted(self: ?) -> null  [builtin]
+function baml.csv._poll(self: ?) -> baml.csv.CsvRecord | baml.csv.CsvSkip | baml.csv.CsvNeedData | root.iter.Done  [builtin]
+function baml.csv._poll_headers(self: ?) -> baml.csv.CsvHeaders | baml.csv.CsvNeedData  [builtin]
+function baml.csv._read_chunk(self: ?) -> null  [expr] {
+  {  } match (self._file) { null => { self._feed_eof() } null, f: root.fs.File => { let chunk = f.read_bytes(65536) catch (e) { root.errors.InvalidArgument { message: message } => throw _error(CsvErrorKind.Closed, "underlying file h..." Add message), root.errors.Io => { self._mark_exhausted(); throw e } }; if (chunk.length() Eq 0) { self._feed_eof() } else { self._feed(chunk) } } null }
+}
+function baml.csv._reader(source: string | uint8array | root.fs.File, options: baml.csv.ReaderOptions?, owns_file: bool) -> baml.csv.CsvReader  [builtin]
+function baml.csv._to_markdown(rows: T[], max_rows: int) -> string  [builtin]
+function baml.csv._to_markdown_records(records: string[][], headers: string[]?, max_rows: int) -> string  [builtin]
+function baml.csv._try_decode(rec: baml.csv.CsvRecord, r: baml.csv.CsvReader) -> T | baml.csv.CsvSkip  [builtin]
+function baml.csv._validate_columns(r: baml.csv.CsvReader) -> null  [builtin]
+function baml.csv._writer(file: root.fs.File, options: baml.csv.WriterOptions?, owns_file: bool) -> baml.csv.CsvWriter  [builtin]
+function baml.csv.buffer(options: baml.csv.WriterOptions? = null) -> baml.csv.CsvWriter  [expr] {
+  {  } _buffer(options = options)
+}
+function baml.csv.close(self: ?) -> null  [expr] {
+  { self._mark_closed() } match (self._file) { null => null, f: root.fs.File => { if (self._owns_file) { f.close() catch (_) { root.errors.InvalidArgument => null } } } null }
+}
+function baml.csv.close(self: ?) -> null  [expr] {
+  { self._mark_closed() } match (self._file) { null => null, f: root.fs.File => { if (self._owns_file) { f.close() catch (_) { root.errors.InvalidArgument => null } } } null }
+}
+function baml.csv.create(path: string, options: baml.csv.WriterOptions? = null) -> baml.csv.CsvWriter  [expr] {
+  { let f = baml.fs.open(path, "w") catch (_) { root.errors.InvalidArgument { message: message } => throw root.errors.Io { message: message } } } _writer(f, options, true)
+}
+function baml.csv.decode(source: string | uint8array, options: baml.csv.ReaderOptions? = null) -> T[]  [expr] {
+  {  } {  } reader(source, options = options).rows().collect() catch (_) { root.errors.Io { message: message } => root.sys.panic("unreachable: in-m..." Add message) }
+}
+function baml.csv.decode(self: ?) -> T  [expr] {
+  {  } _decode_record(self)
+}
+function baml.csv.decode_one(source: string | uint8array, options: baml.csv.ReaderOptions? = null) -> T  [expr] {
+  { let all = decode(source, options = options); if (all.length() Eq 0) { throw _error(CsvErrorKind.NotFound, "expected exactly ...") }; if (all.length() Gt 1) { throw _error(CsvErrorKind.TooManyRows, "expected exactly ..." Add root.json.stringify(all.length())) } } match (all.at(0)) { null => root.sys.panic("unreachable: deco..."), v: T => v }
+}
+function baml.csv.decode_optional(source: string | uint8array, options: baml.csv.ReaderOptions? = null) -> T?  [expr] {
+  { let all = decode(source, options = options); if (all.length() Gt 1) { throw _error(CsvErrorKind.TooManyRows, "expected at most ..." Add root.json.stringify(all.length())) } } all.at(0)
+}
+function baml.csv.fields(self: ?) -> string[]  [builtin]
+function baml.csv.flush(self: ?) -> null  [expr] {
+  {  } null
+}
+function baml.csv.from_json(j: baml.json.json) -> baml.csv.CsvNeedData  [expr] {
+  baml.csv.CsvNeedData {  }
+}
+function baml.csv.from_json(j: baml.json.json) -> baml.csv.CsvWriter  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function baml.csv.from_json(j: baml.json.json) -> baml.csv.WriterOptions  [expr] {
+  baml.csv.WriterOptions { delimiter: baml.json.from_json(baml.json.field(j, "delimiter")), quote: baml.json.from_json(baml.json.field(j, "quote")), quote_style: baml.json.from_json(baml.json.field(j, "quote_style")), escape: baml.json.from_json(baml.json.field(j, "escape")), terminator: baml.json.from_json(baml.json.field(j, "terminator")), write_header: baml.json.from_json(baml.json.field(j, "write_header")), headers: baml.json.from_json(baml.json.field(j, "headers")), null_value: baml.json.from_json(baml.json.field(j, "null_value")), bom: baml.json.from_json(baml.json.field(j, "bom")), sanitize_formulas: baml.json.from_json(baml.json.field(j, "sanitize_formulas")) }
+}
+function baml.csv.from_json(j: baml.json.json) -> baml.csv.CsvRows<T>  [expr] {
+  baml.csv.CsvRows { reader: baml.json.from_json(baml.json.field(j, "reader")) }
+}
+function baml.csv.from_json(j: baml.json.json) -> baml.csv.ReaderOptions  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function baml.csv.from_json(j: baml.json.json) -> baml.csv.CsvReader  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function baml.csv.from_json(j: baml.json.json) -> baml.csv.CsvPosition  [expr] {
+  baml.csv.CsvPosition { byte: baml.json.from_json(baml.json.field(j, "byte")), line: baml.json.from_json(baml.json.field(j, "line")), record: baml.json.from_json(baml.json.field(j, "record")) }
+}
+function baml.csv.from_json(j: baml.json.json) -> baml.csv.CsvRecord  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function baml.csv.from_json(j: baml.json.json) -> baml.csv.CsvError  [expr] {
+  baml.csv.CsvError { kind: baml.json.from_json(baml.json.field(j, "kind")), message: baml.json.from_json(baml.json.field(j, "message")), line: baml.json.from_json(baml.json.field(j, "line")), record: baml.json.from_json(baml.json.field(j, "record")), field: baml.json.from_json(baml.json.field(j, "field")), column: baml.json.from_json(baml.json.field(j, "column")), expected: baml.json.from_json(baml.json.field(j, "expected")), found: baml.json.from_json(baml.json.field(j, "found")) }
+}
+function baml.csv.from_json(j: baml.json.json) -> baml.csv.CsvHeaders  [expr] {
+  baml.csv.CsvHeaders { names: baml.json.from_json(baml.json.field(j, "names")) }
+}
+function baml.csv.from_json(j: baml.json.json) -> baml.csv.CsvSkip  [expr] {
+  baml.csv.CsvSkip { error: baml.json.from_json(baml.json.field(j, "error")) }
+}
+function baml.csv.get(self: ?, column: string) -> T?  [expr] {
+  {  } _cell_by_name(self, column)
+}
+function baml.csv.get_at(self: ?, index: int) -> T?  [expr] {
+  {  } _cell_by_index(self, index)
+}
+function baml.csv.headers(self: ?) -> string[]?  [expr] {
+  { while true {  } match (self._poll_headers()) { h: baml.csv.CsvHeaders => { return h.names }, baml.csv.CsvNeedData => { self._read_chunk() } } } root.sys.panic("unreachable: CsvR...")
+}
+function baml.csv.iter(self: ?) -> root.iter.Iterator<Item = baml.csv.CsvRecord, Error = baml.csv.CsvError | root.errors.Io>  [expr] {
+  {  } self
+}
+function baml.csv.iter(self: ?) -> root.iter.Iterator<Item = T, Error = baml.csv.CsvError | root.errors.Io>  [expr] {
+  {  } self
+}
+function baml.csv.length(self: ?) -> int  [builtin]
+function baml.csv.next(self: ?) -> T | root.iter.Done  [expr] {
+  { while true {  } match (self.reader.next()) { d: root.iter.Done => { return d }, rec: baml.csv.CsvRecord => {  } match (_try_decode(rec, self.reader)) { s: baml.csv.CsvSkip => { match (self.reader._on_skip) { null => null, cb: (baml.csv.CsvError) -> null => cb(s.error) } }, v: T => { return v } } } } root.sys.panic("unreachable: CsvR...")
+}
+function baml.csv.next(self: ?) -> baml.csv.CsvRecord | root.iter.Done  [expr] {
+  { while true {  } match (self._poll()) { rec: baml.csv.CsvRecord => { return rec }, d: root.iter.Done => { return d }, s: baml.csv.CsvSkip => { match (self._on_skip) { null => null, cb: (baml.csv.CsvError) -> null => cb(s.error) } }, baml.csv.CsvNeedData => { self._read_chunk() } } } root.sys.panic("unreachable: CsvR...")
+}
+function baml.csv.open(path: string, options: baml.csv.ReaderOptions? = null) -> baml.csv.CsvReader  [expr] {
+  { let f = baml.fs.open(path, "r") catch (_) { root.errors.InvalidArgument { message: message } => throw root.errors.Io { message: message } } } _reader(f, options, true)
+}
+function baml.csv.parse(source: string | uint8array, options: baml.csv.ReaderOptions? = null) -> string[][]  [expr] {
+  {  } { let r = reader(source, options = options); let out: string[][] = []; while true {  } match (r.next()) { root.iter.Done => { break }, rec: baml.csv.CsvRecord => { out.push(rec.fields()) } } } out catch (_) { root.errors.Io { message: message } => root.sys.panic("unreachable: in-m..." Add message) }
+}
+function baml.csv.position(self: ?) -> baml.csv.CsvPosition  [builtin]
+function baml.csv.position(self: ?) -> baml.csv.CsvPosition  [builtin]
+function baml.csv.read(path: string, options: baml.csv.ReaderOptions? = null) -> T[]  [expr] {
+  { let r = open(path, options = options); let result = r.rows().collect(); r.close() } result
+}
+function baml.csv.reader(source: string | uint8array | root.fs.File, options: baml.csv.ReaderOptions? = null) -> baml.csv.CsvReader  [expr] {
+  {  } _reader(source, options, false)
+}
+function baml.csv.records_written(self: ?) -> int  [builtin]
+function baml.csv.rows(self: ?) -> root.iter.Iterator<Item = T, Error = baml.csv.CsvError | root.errors.Io>  [expr] {
+  { self.headers(); _validate_columns(self) } baml.csv.CsvRows { reader: self }
+}
+function baml.csv.skipped(self: ?) -> baml.csv.CsvError[]  [builtin]
+function baml.csv.skipped_count(self: ?) -> int  [builtin]
+function baml.csv.stringify(rows: T[], options: baml.csv.WriterOptions? = null) -> string  [expr] {
+  {  } { let w = buffer(options = options); w.write_rows(rows) } w.text() catch (_) { root.errors.Io { message: message } => root.sys.panic("unreachable: buff..." Add message) }
+}
+function baml.csv.stringify_records(records: baml.csv.CsvValue[][], options: baml.csv.WriterOptions? = null) -> string  [expr] {
+  {  } { let w = buffer(options = options); for rec in records { w.write_record(rec) } } w.text() catch (_) { root.errors.Io { message: message } => root.sys.panic("unreachable: buff..." Add message) }
+}
+function baml.csv.text(self: ?) -> string  [builtin]
+function baml.csv.to_json(self: ?) -> baml.json.json  [expr] {
+  map {  }
+}
+function baml.csv.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}
+function baml.csv.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "delimiter": baml.json.to_json(self.delimiter), "quote": baml.json.to_json(self.quote), "quote_style": baml.json.to_json(self.quote_style), "escape": baml.json.to_json(self.escape), "terminator": baml.json.to_json(self.terminator), "write_header": baml.json.to_json(self.write_header), "headers": baml.json.to_json(self.headers), "null_value": baml.json.to_json(self.null_value), "bom": baml.json.to_json(self.bom), "sanitize_formulas": baml.json.to_json(self.sanitize_formulas) }
+}
+function baml.csv.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "reader": baml.json.to_json(self.reader) }
+}
+function baml.csv.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}
+function baml.csv.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}
+function baml.csv.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "byte": baml.json.to_json(self.byte), "line": baml.json.to_json(self.line), "record": baml.json.to_json(self.record) }
+}
+function baml.csv.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}
+function baml.csv.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "kind": baml.json.to_json(self.kind), "message": baml.json.to_json(self.message), "line": baml.json.to_json(self.line), "record": baml.json.to_json(self.record), "field": baml.json.to_json(self.field), "column": baml.json.to_json(self.column), "expected": baml.json.to_json(self.expected), "found": baml.json.to_json(self.found) }
+}
+function baml.csv.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "names": baml.json.to_json(self.names) }
+}
+function baml.csv.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "error": baml.json.to_json(self.error) }
+}
+function baml.csv.to_map(self: ?) -> map<string, string>  [builtin]
+function baml.csv.to_markdown(rows: T[], max_rows: int = 100) -> string  [expr] {
+  {  } _to_markdown(rows, max_rows = max_rows)
+}
+function baml.csv.to_markdown_records(records: string[][], headers: string[]? = null, max_rows: int = 100) -> string  [expr] {
+  {  } _to_markdown_records(records, headers = headers, max_rows = max_rows)
+}
+function baml.csv.write(path: string, rows: T[], options: baml.csv.WriterOptions? = null) -> int  [expr] {
+  { let w = create(path, options = options); w.write_rows(rows); w.close() } w._bytes_written()
+}
+function baml.csv.write_header(self: ?, names: string[]) -> null  [expr] {
+  {  } self._emit(self._encode_header(names))
+}
+function baml.csv.write_record(self: ?, record: baml.csv.CsvValue[]) -> null  [expr] {
+  {  } self._emit(self._encode_record(record))
+}
+function baml.csv.write_row(self: ?, row: T) -> null  [expr] {
+  {  } self._emit(_encode_row(self, row))
+}
+function baml.csv.write_rows(self: ?, rows: T[]) -> null  [expr] {
+  {  } self._emit(_encode_rows(self, rows))
+}
+function baml.csv.writer(file: root.fs.File, options: baml.csv.WriterOptions? = null) -> baml.csv.CsvWriter  [expr] {
+  {  } _writer(file, options, false)
+}
+
 --- <builtin>/baml/ns_env/env.baml ---
 function baml.env.get(key: string) -> string?  [builtin]
 function baml.env.get_or_panic(key: string) -> string  [expr] {
@@ -204,10 +515,7 @@ class baml.errors.HostCallable {
   class_name: string
   language: string
   traceback: string?
-  category: int
-}
-class baml.errors.HostPanic {
-  message: string
+  _handle: $rust_type
 }
 class baml.errors.InvalidArgument {
   message: string
@@ -237,8 +545,8 @@ class baml.errors.Unsupported {
 function baml.errors.from_json(j: baml.json.json) -> baml.errors.InvalidArgument  [expr] {
   baml.errors.InvalidArgument { message: baml.json.from_json(baml.json.field(j, "message")) }
 }
-function baml.errors.from_json(j: baml.json.json) -> baml.errors.HostCallable  [expr] {
-  baml.errors.HostCallable { message: baml.json.from_json(baml.json.field(j, "message")), class_name: baml.json.from_json(baml.json.field(j, "class_name")), language: baml.json.from_json(baml.json.field(j, "language")), traceback: baml.json.from_json(baml.json.field(j, "traceback")), category: baml.json.from_json(baml.json.field(j, "category")) }
+function baml.errors.from_json(j: baml.json.json) -> baml.errors.GenericSdkError  [expr] {
+  baml.errors.GenericSdkError { message: baml.json.from_json(baml.json.field(j, "message")) }
 }
 function baml.errors.from_json(j: baml.json.json) -> baml.errors.Timeout  [expr] {
   baml.errors.Timeout { message: baml.json.from_json(baml.json.field(j, "message")), duration_ms: baml.json.from_json(baml.json.field(j, "duration_ms")) }
@@ -252,8 +560,8 @@ function baml.errors.from_json(j: baml.json.json) -> baml.errors.DevOther  [expr
 function baml.errors.from_json(j: baml.json.json) -> baml.errors.ParseError  [expr] {
   baml.errors.ParseError { message: baml.json.from_json(baml.json.field(j, "message")) }
 }
-function baml.errors.from_json(j: baml.json.json) -> baml.errors.GenericSdkError  [expr] {
-  baml.errors.GenericSdkError { message: baml.json.from_json(baml.json.field(j, "message")) }
+function baml.errors.from_json(j: baml.json.json) -> baml.errors.CompilationError  [expr] {
+  baml.errors.CompilationError { message: baml.json.from_json(baml.json.field(j, "message")) }
 }
 function baml.errors.from_json(j: baml.json.json) -> baml.errors.Unsupported  [expr] {
   baml.errors.Unsupported { message: baml.json.from_json(baml.json.field(j, "message")) }
@@ -261,14 +569,11 @@ function baml.errors.from_json(j: baml.json.json) -> baml.errors.Unsupported  [e
 function baml.errors.from_json(j: baml.json.json) -> baml.errors.NotImplemented  [expr] {
   baml.errors.NotImplemented { message: baml.json.from_json(baml.json.field(j, "message")) }
 }
-function baml.errors.from_json(j: baml.json.json) -> baml.errors.HostPanic  [expr] {
-  baml.errors.HostPanic { message: baml.json.from_json(baml.json.field(j, "message")) }
+function baml.errors.from_json(j: baml.json.json) -> baml.errors.HostCallable  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
 }
 function baml.errors.from_json(j: baml.json.json) -> baml.errors.Io  [expr] {
   baml.errors.Io { message: baml.json.from_json(baml.json.field(j, "message")) }
-}
-function baml.errors.from_json(j: baml.json.json) -> baml.errors.CompilationError  [expr] {
-  baml.errors.CompilationError { message: baml.json.from_json(baml.json.field(j, "message")) }
 }
 function baml.errors.from_json(j: baml.json.json) -> baml.errors.AccessError  [expr] {
   baml.errors.AccessError { message: baml.json.from_json(baml.json.field(j, "message")) }
@@ -277,46 +582,43 @@ function baml.errors.from_json(j: baml.json.json) -> baml.errors.LlmClient  [exp
   baml.errors.LlmClient { message: baml.json.from_json(baml.json.field(j, "message")) }
 }
 function baml.errors.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  map { "message": baml.json.to_json(self.message) }
 }
 function baml.errors.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  map { "message": baml.json.to_json(self.message) }
 }
 function baml.errors.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json(), "class_name": self.class_name.to_json(), "language": self.language.to_json(), "traceback": self.traceback?.to_json(), "category": self.category.to_json() }
+  map { "message": baml.json.to_json(self.message) }
 }
 function baml.errors.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json(), "duration_ms": self.duration_ms?.to_json() }
+  map { "message": baml.json.to_json(self.message), "duration_ms": baml.json.to_json(self.duration_ms) }
 }
 function baml.errors.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  map { "message": baml.json.to_json(self.message) }
 }
 function baml.errors.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  map { "message": baml.json.to_json(self.message) }
 }
 function baml.errors.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  map { "message": baml.json.to_json(self.message) }
 }
 function baml.errors.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  map { "message": baml.json.to_json(self.message) }
 }
 function baml.errors.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  map { "message": baml.json.to_json(self.message) }
 }
 function baml.errors.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  map { "message": baml.json.to_json(self.message) }
 }
 function baml.errors.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  baml.json.parse(baml.json.to_string(self))
 }
 function baml.errors.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  map { "message": baml.json.to_json(self.message) }
 }
 function baml.errors.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
-}
-function baml.errors.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  map { "message": baml.json.to_json(self.message) }
 }
 
 --- <builtin>/baml/ns_errors/stack_trace.baml ---
@@ -335,15 +637,14 @@ function baml.errors.from_json(j: baml.json.json) -> baml.errors.StackTrace  [ex
   baml.errors.StackTrace { frames: baml.json.from_json(baml.json.field(j, "frames")) }
 }
 function baml.errors.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "frames": self.frames.to_json() }
+  map { "frames": baml.json.to_json(self.frames) }
 }
 function baml.errors.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "file": self.file.to_json(), "line": self.line.to_json(), "function_name": self.function_name.to_json() }
+  map { "file": baml.json.to_json(self.file), "line": baml.json.to_json(self.line), "function_name": baml.json.to_json(self.function_name) }
 }
 function baml.errors.to_string(self: ?) -> string  [builtin]
 
 --- <builtin>/baml/ns_events/events.baml ---
-function baml.events.send(event_name: string, data: map<string, unknown>) -> void  [builtin]
 
 --- <builtin>/baml/ns_fs/fs.baml ---
 class baml.fs.DirEntry {
@@ -384,10 +685,10 @@ function baml.fs.to_json(self: ?) -> baml.json.json  [expr] {
   baml.json.parse(baml.json.to_string(self))
 }
 function baml.fs.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": self.name.to_json(), "is_dir": self.is_dir.to_json(), "is_file": self.is_file.to_json(), "is_symlink": self.is_symlink.to_json() }
+  map { "name": baml.json.to_json(self.name), "is_dir": baml.json.to_json(self.is_dir), "is_file": baml.json.to_json(self.is_file), "is_symlink": baml.json.to_json(self.is_symlink) }
 }
 function baml.fs.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "recursive": self.recursive.to_json() }
+  map { "recursive": baml.json.to_json(self.recursive) }
 }
 function baml.fs.write(self: ?, data: string) -> int  [builtin]
 function baml.fs.write(path: string, content: string) -> int  [builtin]
@@ -395,21 +696,50 @@ function baml.fs.write_bytes(self: ?, data: uint8array) -> int  [builtin]
 function baml.fs.write_bytes(path: string, content: uint8array) -> int  [builtin]
 
 --- <builtin>/baml/ns_future/future.baml ---
+class baml.future.AllFailed {
+  errors: E[]
+}
 class baml.future.Future {
 }
 enum baml.future.FutureState {Pending, Ready, Error, Cancelled}
+function baml.future.__await_any(futures: baml.future.Future<T, E>[]) -> int  [builtin]
+function baml.future.all(futures: baml.future.Future<T, E>[]) -> baml.future.Future<T[], E>  [expr] {
+  {  } spawn { () -> { {  } futures.map((f) -> { {  } await f catch (e) { e => { futures.map((g) -> { {  } g.cancel() }); let j = 0; while j Lt futures.length() { let g = futures[j]; if (g.is_error()) { await g catch (drained) { drained => null } }; j = j Add 1 }; throw e } } }) } }
+}
+function baml.future.all_complete(futures: baml.future.Future<T, E>[]) -> baml.future.Future<T[], E>  [expr] {
+  {  } spawn { () -> { {  } futures.map((f) -> { {  } await f }) } }
+}
+function baml.future.any(futures: baml.future.Future<T, Err>[]) -> baml.future.Future<T, baml.future.AllFailed<Err>>  [expr] {
+  {  } spawn { () -> { { let winners: T[] = []; let remaining = futures; while remaining.length() Gt 0 { let i = baml.future.__await_any(remaining); let f = remaining[i]; if (f.is_result()) { winners.push(await f catch (e) { e => { let failure: baml.future.AllFailed<Err> = baml.future.AllFailed { errors: [e] }; throw failure } }); break }; if (f.is_error()) { await f catch (e) { e => null } }; remaining = remaining.slice(0, i).concat(remaining.slice(i Add 1, remaining.length())) }; if (winners.length() Eq 0) { let errors: Err[] = []; let j = 0; while j Lt futures.length() { let g = futures[j]; if (g.is_error()) { await g catch (e) { e => { errors.push(e) } null } }; j = j Add 1 }; let failure: baml.future.AllFailed<Err> = baml.future.AllFailed { errors: errors }; throw failure }; futures.map((g) -> { {  } g.cancel() }) } winners[0] } }
+}
 function baml.future.cancel(self: ?) -> bool  [builtin]
 function baml.future.from_json(j: baml.json.json) -> baml.future.Future<T, E>  [expr] {
   baml.future.Future {  }
+}
+function baml.future.from_json(j: baml.json.json) -> baml.future.AllFailed<E>  [expr] {
+  baml.future.AllFailed { errors: baml.json.from_json(baml.json.field(j, "errors")) }
 }
 function baml.future.is_cancelled(self: ?) -> bool  [builtin]
 function baml.future.is_error(self: ?) -> bool  [builtin]
 function baml.future.is_result(self: ?) -> bool  [builtin]
 function baml.future.is_settled(self: ?) -> bool  [builtin]
+function baml.future.race(futures: baml.future.Future<T, E>[]) -> baml.future.Future<T, E>  [expr] {
+  {  } spawn { () -> { { let i = baml.future.__await_any(futures); futures.map((f) -> { {  } f.cancel() }) } await futures[i] } }
+}
 function baml.future.state(self: ?) -> baml.future.FutureState  [builtin]
 function baml.future.to_json(self: ?) -> baml.json.json  [expr] {
   map {  }
 }
+function baml.future.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "errors": baml.json.to_json(self.errors) }
+}
+
+--- captures ---
+lambda () in all_complete: captures [futures]
+lambda () in all: captures [futures]
+lambda (f) in ?: captures [futures]
+lambda () in race: captures [futures]
+lambda () in any: captures [futures]
 
 --- <builtin>/baml/ns_glob/glob.baml ---
 class baml.glob.Glob {
@@ -436,7 +766,7 @@ function baml.glob.to_json(self: ?) -> baml.json.json  [expr] {
   baml.json.parse(baml.json.to_string(self))
 }
 function baml.glob.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "cwd": self.cwd?.to_json(), "dot": self.dot?.to_json(), "absolute": self.absolute?.to_json(), "follow_symlinks": self.follow_symlinks?.to_json(), "throw_error_on_br...": self.throw_error_on_broken_symlink?.to_json(), "only_files": self.only_files?.to_json() }
+  map { "cwd": baml.json.to_json(self.cwd), "dot": baml.json.to_json(self.dot), "absolute": baml.json.to_json(self.absolute), "follow_symlinks": baml.json.to_json(self.follow_symlinks), "throw_error_on_br...": baml.json.to_json(self.throw_error_on_broken_symlink), "only_files": baml.json.to_json(self.only_files) }
 }
 
 --- <builtin>/baml/ns_host/host.baml ---
@@ -474,12 +804,13 @@ function baml.http.fetch_sse(request: baml.http.Request) -> baml.http.SseStream 
 function baml.http.from_json(j: baml.json.json) -> baml.http.Request  [expr] {
   baml.http.Request { method: baml.json.from_json(baml.json.field(j, "method")), url: baml.json.from_json(baml.json.field(j, "url")), headers: baml.json.from_json(baml.json.field(j, "headers")), body: baml.json.from_json(baml.json.field(j, "body")) }
 }
-function baml.http.from_json(j: baml.json.json) -> baml.http.SseStream  [expr] {
-  baml.json.from_string(baml.json.stringify(j))
-}
 function baml.http.from_json(j: baml.json.json) -> baml.http.Response  [expr] {
   baml.json.from_string(baml.json.stringify(j))
 }
+function baml.http.from_json(j: baml.json.json) -> baml.http.SseStream  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function baml.http.new(status_code: int, headers: map<string, string>, body: uint8array) -> baml.http.Response  [builtin]
 function baml.http.next(self: ?) -> string?  [builtin]
 function baml.http.ok(self: ?) -> bool  [expr] {
   {  } self.status_code Ge 200 And self.status_code Lt 300
@@ -487,14 +818,52 @@ function baml.http.ok(self: ?) -> bool  [expr] {
 function baml.http.send(request: baml.http.Request) -> baml.http.Response  [builtin]
 function baml.http.text(self: ?) -> string  [builtin]
 function baml.http.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
-}
-function baml.http.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "method": self.method.to_json(), "url": self.url.to_json(), "headers": self.headers.to_json(), "body": self.body.to_json() }
+  map { "method": baml.json.to_json(self.method), "url": baml.json.to_json(self.url), "headers": baml.json.to_json(self.headers), "body": baml.json.to_json(self.body) }
 }
 function baml.http.to_json(self: ?) -> baml.json.json  [expr] {
   baml.json.parse(baml.json.to_string(self))
 }
+function baml.http.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}
+
+--- <builtin>/baml/ns_http/server.baml ---
+class baml.http.Server {
+  addr: string
+  _state: $rust_type
+}
+class baml.http.TlsConfig {
+  allow_tls1_2: bool
+  _certificate: $rust_type
+  _private_key: $rust_type
+  _handshake_timeout_nanos: bigint
+}
+function baml.http._new(cert_pem: uint8array, key_pem: uint8array, allow_tls1_2: bool, handshake_timeout_nanos: bigint) -> baml.http.TlsConfig  [builtin]
+function baml.http._serve(self: ?, handler: (req: Request) -> Response throws never, tls_config: baml.http.TlsConfig?, allow_http1: bool, allow_http2: bool, max_body_size: int, max_connections: int, header_read_timeout_nanos: bigint) -> never  [builtin]
+function baml.http.bind(addr: string) -> baml.http.Server  [builtin]
+function baml.http.from_json(j: baml.json.json) -> baml.http.Server  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function baml.http.from_json(j: baml.json.json) -> baml.http.TlsConfig  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function baml.http.new(cert_pem: uint8array, key_pem: uint8array, allow_tls1_2: bool = true, handshake_timeout: root.time.Duration = root.time.Duration.from_seconds(10n)) -> baml.http.TlsConfig  [expr] {
+  {  } TlsConfig._new(cert_pem, key_pem, allow_tls1_2, handshake_timeout.to_nanoseconds())
+}
+function baml.http.serve(self: ?, handler: (req: Request) -> Response throws never, tls_config: baml.http.TlsConfig? = null, allow_http1: bool = true, allow_http2: bool = true, max_body_size: int = 104857600, max_connections: int = 1024, header_read_timeout: root.time.Duration = root.time.Duration.from_seconds(30n)) -> never  [expr] {
+  {  } self._serve(handler, tls_config, allow_http1, allow_http2, max_body_size, max_connections, header_read_timeout.to_nanoseconds())
+}
+function baml.http.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}
+function baml.http.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}
+
+--- <builtin>/baml/ns_id/id.baml ---
+function baml.id.current() -> string  [builtin]
+function baml.id.new() -> string  [builtin]
+function baml.id.set(id: string) -> string  [builtin]
 
 --- <builtin>/baml/ns_io/io.baml ---
 function baml.io.eprint(s: string) -> null  [builtin]
@@ -502,6 +871,257 @@ function baml.io.eprintln(s: string) -> null  [builtin]
 function baml.io.input(prompt: string?) -> string  [builtin]
 function baml.io.print(s: string) -> null  [builtin]
 function baml.io.println(s: string) -> null  [builtin]
+
+--- <builtin>/baml/ns_iter/iter.baml ---
+class baml.iter.ArrayIterator {
+  arr: T[]
+  idx: int
+}
+class baml.iter.Chain {
+  first: Iterator<Item = T, Error = E>
+  other: Iterator<Item = T, Error = E2>
+  first_done: bool
+}
+class baml.iter.Done {
+}
+class baml.iter.Filter {
+  source: Iterator<Item = T, Error = E>
+  predicate: (T) -> bool throws E2
+}
+class baml.iter.FilterMap {
+  source: Iterator<Item = T, Error = E>
+  func: (T) -> R? throws E2
+}
+class baml.iter.FlatMap {
+  source: Iterator<Item = T, Error = E>
+  func: (T) -> Iterable<Item = R, Error = E3> throws E2
+  inner: Iterator<Item = R, Error = E3> | baml.iter.Done
+}
+class baml.iter.Flatten {
+  source: Iterator<Item = I, Error = E>
+  inner: Iterator<Item = R, Error = E3> | baml.iter.Done
+}
+class baml.iter.Map {
+  source: Iterator<Item = T, Error = E>
+  func: (T) -> R throws E2
+}
+class baml.iter.Peekable {
+  source: Iterator<Item = T, Error = E>
+  buffer: T | baml.iter.Done
+  has_buffer: bool
+}
+class baml.iter.Range {
+  i: int
+  max: int
+  step: int
+}
+class baml.iter.Repeat {
+  value: T
+  count: int
+}
+class baml.iter.StepBy {
+  source: Iterator<Item = T, Error = E>
+  n: int
+  first: bool
+}
+function baml.iter.chain(self: ?, other: Iterable<Item = Item, Error = E2>) -> Iterator<Item = Item, Error = Error | E2>  [expr] {
+  {  } baml.iter.Chain { first: self, other: other.iter(), first_done: false }
+}
+function baml.iter.collect(self: ?) -> Item[]  [expr] {
+  { let r: Item[] = []; while true {  } match (self.next()) { baml.iter.Done => { break }, x: Item => r.push(x) } } r
+}
+function baml.iter.count(self: ?) -> int  [expr] {
+  { let n: int = 0; while true {  } match (self.next()) { baml.iter.Done => { break }, x: Item => { n Add= 1 } } } n
+}
+function baml.iter.every(self: ?, predicate: (Item) -> bool throws E2) -> bool  [expr] {
+  { while true {  } match (self.next()) { baml.iter.Done => { break }, x: Item => {  } if (Not predicate(x)) { return false } } } true
+}
+function baml.iter.filter(self: ?, predicate: (Item) -> bool throws E2) -> Iterator<Item = Item, Error = Error | E2>  [expr] {
+  {  } baml.iter.Filter { source: self, predicate: predicate }
+}
+function baml.iter.filter_map(self: ?, fn: (Item) -> R? throws E2) -> Iterator<Item = R, Error = Error | E2>  [expr] {
+  {  } baml.iter.FilterMap { source: self, func: fn }
+}
+function baml.iter.find(self: ?, predicate: (Item) -> bool throws E2) -> Item?  [expr] {
+  { while true {  } match (self.next()) { baml.iter.Done => { break }, x: Item => {  } if (predicate(x)) { return x } } } null
+}
+function baml.iter.flat_map(self: ?, fn: (Item) -> Iterable<Item = R, Error = E3> throws E2) -> Iterator<Item = R, Error = Error | E2 | E3>  [expr] {
+  {  } baml.iter.FlatMap { source: self, func: fn, inner: baml.iter.Done {  } }
+}
+function baml.iter.flatten(src: Iterator<Item = I, Error = E>) -> Iterator<Item = R, Error = E | E3>  [expr] {
+  {  } baml.iter.Flatten { source: src, inner: baml.iter.Done {  } }
+}
+function baml.iter.for_each(self: ?, fn: (Item) -> void throws E2) -> void  [expr] {
+  { while true {  } match (self.next()) { baml.iter.Done => { break }, x: Item => { fn(x) } } }
+}
+function baml.iter.from_json(j: baml.json.json) -> baml.iter.Chain<T, E, E2>  [expr] {
+  baml.iter.Chain { first: baml.json.from_json(baml.json.field(j, "first")), other: baml.json.from_json(baml.json.field(j, "other")), first_done: baml.json.from_json(baml.json.field(j, "first_done")) }
+}
+function baml.iter.from_json(j: baml.json.json) -> baml.iter.Map<T, R, E, E2>  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function baml.iter.from_json(j: baml.json.json) -> baml.iter.StepBy<T, E>  [expr] {
+  baml.iter.StepBy { source: baml.json.from_json(baml.json.field(j, "source")), n: baml.json.from_json(baml.json.field(j, "n")), first: baml.json.from_json(baml.json.field(j, "first")) }
+}
+function baml.iter.from_json(j: baml.json.json) -> baml.iter.Repeat<T>  [expr] {
+  baml.iter.Repeat { value: baml.json.from_json(baml.json.field(j, "value")), count: baml.json.from_json(baml.json.field(j, "count")) }
+}
+function baml.iter.from_json(j: baml.json.json) -> baml.iter.Peekable<T, E>  [expr] {
+  baml.iter.Peekable { source: baml.json.from_json(baml.json.field(j, "source")), buffer: baml.json.from_json(baml.json.field(j, "buffer")), has_buffer: baml.json.from_json(baml.json.field(j, "has_buffer")) }
+}
+function baml.iter.from_json(j: baml.json.json) -> baml.iter.Range  [expr] {
+  baml.iter.Range { i: baml.json.from_json(baml.json.field(j, "i")), max: baml.json.from_json(baml.json.field(j, "max")), step: baml.json.from_json(baml.json.field(j, "step")) }
+}
+function baml.iter.from_json(j: baml.json.json) -> baml.iter.Flatten<I, R, E, E3>  [expr] {
+  baml.iter.Flatten { source: baml.json.from_json(baml.json.field(j, "source")), inner: baml.json.from_json(baml.json.field(j, "inner")) }
+}
+function baml.iter.from_json(j: baml.json.json) -> baml.iter.ArrayIterator<T>  [expr] {
+  baml.iter.ArrayIterator { arr: baml.json.from_json(baml.json.field(j, "arr")), idx: baml.json.from_json(baml.json.field(j, "idx")) }
+}
+function baml.iter.from_json(j: baml.json.json) -> baml.iter.FlatMap<T, R, E, E2, E3>  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function baml.iter.from_json(j: baml.json.json) -> baml.iter.Done  [expr] {
+  baml.iter.Done {  }
+}
+function baml.iter.from_json(j: baml.json.json) -> baml.iter.FilterMap<T, R, E, E2>  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function baml.iter.from_json(j: baml.json.json) -> baml.iter.Filter<T, E, E2>  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function baml.iter.iter(self: ?) -> Iterator<Item = T, Error = never>  [expr] {
+  {  } self
+}
+function baml.iter.iter(self: ?) -> Iterator<Item = R, Error = E | E2 | E3>  [expr] {
+  {  } self
+}
+function baml.iter.iter(self: ?) -> Iterator<Item = R, Error = E | E2>  [expr] {
+  {  } self
+}
+function baml.iter.iter(self: ?) -> Iterator<Item = T, Error = never>  [expr] {
+  {  } ArrayIterator.new(self)
+}
+function baml.iter.iter(self: ?) -> Iterator<Item = T, Error = E | E2>  [expr] {
+  {  } self
+}
+function baml.iter.iter(self: ?) -> Iterator<Item = T, Error = E | E2>  [expr] {
+  {  } self
+}
+function baml.iter.iter(self: ?) -> Iterator<Item = R, Error = E | E2>  [expr] {
+  {  } self
+}
+function baml.iter.iter(self: ?) -> Iterator<Item = T, Error = E>  [expr] {
+  {  } self
+}
+function baml.iter.iter(self: ?) -> Iterator<Item = T, Error = never>  [expr] {
+  {  } self
+}
+function baml.iter.iter(self: ?) -> Iterator<Item = T, Error = E>  [expr] {
+  {  } self
+}
+function baml.iter.iter(self: ?) -> Iterator<Item = int, Error = never>  [expr] {
+  {  } self
+}
+function baml.iter.iter(self: ?) -> Iterator<Item = R, Error = E | E3>  [expr] {
+  {  } self
+}
+function baml.iter.map(self: ?, fn: (Item) -> R throws E2) -> Iterator<Item = R, Error = Error | E2>  [expr] {
+  {  } baml.iter.Map { source: self, func: fn }
+}
+function baml.iter.new(value: T, count: int = ...) -> baml.iter.Repeat<T>  [expr] {
+  {  } baml.iter.Repeat { value: value, count: count }
+}
+function baml.iter.new(min: int, max: int, step: int = 1) -> baml.iter.Range  [expr] {
+  {  } baml.iter.Range { i: min, max: max, step: step }
+}
+function baml.iter.new(arr: T[]) -> baml.iter.ArrayIterator<T>  [expr] {
+  {  } baml.iter.ArrayIterator { arr: arr, idx: 0 }
+}
+function baml.iter.next(self: ?) -> T | baml.iter.Done  [expr] {
+  { while true {  } match (self.source.next()) { baml.iter.Done => { return baml.iter.Done {  } }, x: T => {  } if (self.predicate(x)) { return x } } } baml.iter.Done {  }
+}
+function baml.iter.next(self: ?) -> T | baml.iter.Done  [expr] {
+  { if (Not self.first_done) {  } match (self.first.next()) { baml.iter.Done => { self.first_done = true }, x: T => { return x } } } self.other.next()
+}
+function baml.iter.next(self: ?) -> R | baml.iter.Done  [expr] {
+  {  } match (self.source.next()) { baml.iter.Done => baml.iter.Done {  }, x: T => self.func(x) }
+}
+function baml.iter.next(self: ?) -> T | baml.iter.Done  [expr] {
+  { if (self.first) { self.first = false; return self.source.next() }; { let i = 0; while i Lt self.n Sub 1 {  } match (self.source.next()) { baml.iter.Done => { return baml.iter.Done {  } }, x: T => {  } } } } self.source.next()
+}
+function baml.iter.next(self: ?) -> T | baml.iter.Done  [expr] {
+  {  } if (self.count Lt 0) {  } self.value else if (self.count Gt 0) { self.count Sub= 1 } self.value else {  } baml.iter.Done {  }
+}
+function baml.iter.next(self: ?) -> T | baml.iter.Done  [expr] {
+  { if (self.has_buffer) { let v = self.buffer; self.buffer = baml.iter.Done {  }; self.has_buffer = false; return v } } self.source.next()
+}
+function baml.iter.next(self: ?) -> int | baml.iter.Done  [expr] {
+  {  } if (self.i Lt self.max) { let cur = self.i; self.i Add= self.step } cur else {  } baml.iter.Done {  }
+}
+function baml.iter.next(self: ?) -> R | baml.iter.Done  [expr] {
+  { while true {  } match (self.inner) { cur: Iterator<Item = R, Error = E3> => {  } match (cur.next()) { baml.iter.Done => { self.inner = baml.iter.Done {  } }, y: R => { return y } }, baml.iter.Done => {  } match (self.source.next()) { baml.iter.Done => { return baml.iter.Done {  } }, x: I => { let it = x.iter(); self.inner = it } } } } baml.iter.Done {  }
+}
+function baml.iter.next(self: ?) -> T | baml.iter.Done  [expr] {
+  { if (self.idx Ge self.arr.length()) { return baml.iter.Done {  } }; let item = self.arr.at(self.idx); self.idx Add= 1 } match (item) { value: T => value }
+}
+function baml.iter.next(self: ?) -> R | baml.iter.Done  [expr] {
+  { while true {  } match (self.inner) { cur: Iterator<Item = R, Error = E3> => {  } match (cur.next()) { baml.iter.Done => { self.inner = baml.iter.Done {  } }, y: R => { return y } }, baml.iter.Done => {  } match (self.source.next()) { baml.iter.Done => { return baml.iter.Done {  } }, x: T => { let it = self.func(x).iter(); self.inner = it } } } } baml.iter.Done {  }
+}
+function baml.iter.next(self: ?) -> R | baml.iter.Done  [expr] {
+  { while true {  } match (self.source.next()) { baml.iter.Done => { return baml.iter.Done {  } }, x: T => {  } match (self.func(x)) { null => {  }, y: R => { return y } } } } baml.iter.Done {  }
+}
+function baml.iter.peek(self: ?) -> T | baml.iter.Done  [expr] {
+  { if (self.has_buffer) { return self.buffer }; let v = self.source.next(); self.buffer = v; self.has_buffer = true } v
+}
+function baml.iter.peekable(self: ?) -> baml.iter.Peekable<Item, Error>  [expr] {
+  {  } baml.iter.Peekable { source: self, buffer: baml.iter.Done {  }, has_buffer: false }
+}
+function baml.iter.reduce(self: ?, fn: (A, Item) -> A throws E2, initial: A) -> A  [expr] {
+  { let acc: A = initial; while true {  } match (self.next()) { baml.iter.Done => { break }, x: Item => { acc = fn(acc, x) } } } acc
+}
+function baml.iter.some(self: ?, predicate: (Item) -> bool throws E2) -> bool  [expr] {
+  { while true {  } match (self.next()) { baml.iter.Done => { break }, x: Item => {  } if (predicate(x)) { return true } } } false
+}
+function baml.iter.step_by(self: ?, n: int) -> Iterator<Item = Item, Error = Error>  [expr] {
+  {  } baml.iter.StepBy { source: self, n: n, first: true }
+}
+function baml.iter.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "first": baml.json.to_json(self.first), "other": baml.json.to_json(self.other), "first_done": baml.json.to_json(self.first_done) }
+}
+function baml.iter.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}
+function baml.iter.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "source": baml.json.to_json(self.source), "n": baml.json.to_json(self.n), "first": baml.json.to_json(self.first) }
+}
+function baml.iter.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "value": baml.json.to_json(self.value), "count": baml.json.to_json(self.count) }
+}
+function baml.iter.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "source": baml.json.to_json(self.source), "buffer": baml.json.to_json(self.buffer), "has_buffer": baml.json.to_json(self.has_buffer) }
+}
+function baml.iter.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "i": baml.json.to_json(self.i), "max": baml.json.to_json(self.max), "step": baml.json.to_json(self.step) }
+}
+function baml.iter.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "source": baml.json.to_json(self.source), "inner": baml.json.to_json(self.inner) }
+}
+function baml.iter.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "arr": baml.json.to_json(self.arr), "idx": baml.json.to_json(self.idx) }
+}
+function baml.iter.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}
+function baml.iter.to_json(self: ?) -> baml.json.json  [expr] {
+  map {  }
+}
+function baml.iter.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}
+function baml.iter.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}
 
 --- <builtin>/baml/ns_json/json.baml ---
 class baml.json.JsonDecodeError {
@@ -539,14 +1159,14 @@ function baml.json.serialize(v: T) -> string  [expr] {
 function baml.json.stringify(j: baml.json.json) -> string  [builtin]
 function baml.json.stringify_pretty(j: baml.json.json) -> string  [builtin]
 function baml.json.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  map { "message": baml.json.to_json(self.message) }
 }
 function baml.json.to_json(v: T) -> baml.json.json  [builtin]
 function baml.json.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json(), "path": self.path.to_json() }
+  map { "message": baml.json.to_json(self.message), "path": baml.json.to_json(self.path) }
 }
 function baml.json.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json(), "path": self.path.to_json(), "reason": self.reason.to_json() }
+  map { "message": baml.json.to_json(self.message), "path": baml.json.to_json(self.path), "reason": baml.json.to_json(self.reason) }
 }
 function baml.json.to_string(v: T) -> string  [builtin]
 
@@ -582,8 +1202,8 @@ function baml.llm.from_json(j: baml.json.json) -> baml.llm.PlannerState  [expr] 
 function baml.llm.from_json(j: baml.json.json) -> baml.llm.ExecutionContext  [expr] {
   baml.json.from_string(baml.json.stringify(j))
 }
-function baml.llm.parse(function_name: string, json: string) -> TFinal  [expr] {
-  { let return_type = get_return_type(function_name); let stream_return_type = get_stream_return_type(function_name); let cache = StreamCache.new(return_type, stream_return_type) } __sap_parse_final(json, cache)
+function baml.llm.parse(json: string) -> TFinal  [expr] {
+  { let cache: StreamCache<TStream, TFinal> = StreamCache.new(reflect.type_of(), reflect.type_of()) } __sap_parse_final(json, cache)
 }
 function baml.llm.render_prompt(client: Client, function_name: string, args: map<string, unknown>) -> PromptAst  [expr] {
   { let jinja_string = get_jinja_template(function_name); let return_type = get_return_type(function_name); let primitive_client = client.to_primitive_client(); let prompt = primitive_client.render_prompt(jinja_string, args, return_type) } primitive_client.specialize_prompt(prompt)
@@ -601,10 +1221,10 @@ function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
   baml.json.parse(baml.json.to_string(self))
 }
 function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "primitive_client": self.primitive_client.to_json(), "delay_ms": self.delay_ms.to_json() }
+  map { "primitive_client": baml.json.to_json(self.primitive_client), "delay_ms": baml.json.to_json(self.delay_ms) }
 }
 function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "rr_client_names": self.rr_client_names.to_json() }
+  map { "rr_client_names": baml.json.to_json(self.rr_client_names) }
 }
 
 --- <builtin>/baml/ns_llm/llm_types.baml ---
@@ -711,8 +1331,8 @@ class baml.llm.VertexAiOptions {
   project_id: string | null
 }
 enum baml.llm.ClientType {Primitive, Fallback, RoundRobin}
-function baml.llm.__make_stream(self: ?, sse: root.http.SseStream, function_name: string) -> baml.llm.Stream<TStream, TFinal>  [expr] {
-  { let primitive = self.to_primitive_client(); let return_type = get_return_type(function_name); let stream_return_type = get_stream_return_type(function_name); let acc = primitive.new_stream_accumulator(); let cache: baml.llm.StreamCache<TStream, TFinal> = StreamCache.new(return_type, stream_return_type) } baml.llm.Stream { _client: primitive, _acc: acc, _sse: sse, _cache: cache }
+function baml.llm.__make_stream(self: ?, sse: root.http.SseStream) -> baml.llm.Stream<TStream, TFinal>  [expr] {
+  { let primitive = self.to_primitive_client(); let acc = primitive.new_stream_accumulator(); let cache: baml.llm.StreamCache<TStream, TFinal> = StreamCache.new(reflect.type_of(), reflect.type_of()) } baml.llm.Stream { _client: primitive, _acc: acc, _sse: sse, _cache: cache }
 }
 function baml.llm.__sap_parse_final(json: string, cache: baml.llm.StreamCache<TStream, TFinal>) -> TFinal  [builtin]
 function baml.llm.__sap_parse_partial(json: string, cache: baml.llm.StreamCache<TStream, TFinal>) -> TStream | root.stream.StreamNoYield  [builtin]
@@ -741,7 +1361,7 @@ function baml.llm.execute_once_oneshot(self: ?, context: ExecutionContext, activ
   {  } match (self.client_type) { baml.llm.ClientType.Primitive => { let primitive = self.to_primitive_client(); let return_type = reflect.type_of(); let prompt = match (context.prompt_closure) { null => primitive.render_prompt(context.jinja_string, context.args, return_type), closure: (baml.llm.Context) -> baml.llm.PromptAst => closure(build_prompt_context(primitive, return_type)) }; let specialized = primitive.specialize_prompt(prompt); let http_request = primitive.build_request(specialized, return_type); let http_response = root.http.send(http_request) } if (http_response.ok()) { let body = http_response.text(); let result: T = primitive.parse(body) catch (e) { _ => { if (active_delay_ms Gt 0) {  } root.sys.sleep(active_delay_ms); throw e } } } result else { let error_body = http_response.text() catch (e) { _ => {  } "" }; if (active_delay_ms Gt 0) {  } root.sys.sleep(active_delay_ms); throw root.errors.DevOther { message: "HTTP request fail..." Add error_body } }, baml.llm.ClientType.Fallback => { for sub in self.sub_clients { let result2: T = sub.execute_oneshot(context, active_delay_ms) catch (e) { _ => { continue } }; return result2 }; throw root.errors.DevOther { message: "All orchestration..." } }, baml.llm.ClientType.RoundRobin => { if (self.sub_clients.length() Eq 0) { throw root.errors.DevOther { message: "RoundRobin client..." } }; let idx = self.counter Mod self.sub_clients.length(); self.counter Add= 1; let result3: T = self.sub_clients[idx].execute_oneshot(context, active_delay_ms); return result3 } }
 }
 function baml.llm.execute_once_stream(self: ?, context: ExecutionContext, active_delay_ms: int) -> baml.llm.Stream<TStream, TFinal>  [expr] {
-  {  } match (self.client_type) { baml.llm.ClientType.Primitive => { let primitive = self.to_primitive_client(); let return_type = get_return_type(context.function_name); let prompt = match (context.prompt_closure) { null => primitive.render_prompt(context.jinja_string, context.args, return_type), closure: (baml.llm.Context) -> baml.llm.PromptAst => closure(build_prompt_context(primitive, return_type)) }; let specialized = primitive.specialize_prompt(prompt); let http_request = primitive.build_request_stream(specialized, return_type); let sse = root.http.fetch_sse(http_request); let stream: baml.llm.Stream<TStream, TFinal> = self.__make_stream(sse, context.function_name); return stream }, baml.llm.ClientType.Fallback => { for sub in self.sub_clients { let result2: baml.llm.Stream<TStream, TFinal> = sub.execute_stream(context, active_delay_ms) catch (e) { _ => { continue } }; return result2 }; throw root.errors.DevOther { message: "All orchestration..." } }, baml.llm.ClientType.RoundRobin => { if (self.sub_clients.length() Eq 0) { throw root.errors.DevOther { message: "RoundRobin client..." } }; let idx = self.counter Mod self.sub_clients.length(); self.counter Add= 1; let result3: baml.llm.Stream<TStream, TFinal> = self.sub_clients[idx].execute_stream(context, active_delay_ms); return result3 } }
+  {  } match (self.client_type) { baml.llm.ClientType.Primitive => { let primitive = self.to_primitive_client(); let return_type = get_return_type(context.function_name); let prompt = match (context.prompt_closure) { null => primitive.render_prompt(context.jinja_string, context.args, return_type), closure: (baml.llm.Context) -> baml.llm.PromptAst => closure(build_prompt_context(primitive, return_type)) }; let specialized = primitive.specialize_prompt(prompt); let http_request = primitive.build_request_stream(specialized, return_type); let sse = root.http.fetch_sse(http_request); let stream: baml.llm.Stream<TStream, TFinal> = self.__make_stream(sse); return stream }, baml.llm.ClientType.Fallback => { for sub in self.sub_clients { let result2: baml.llm.Stream<TStream, TFinal> = sub.execute_stream(context, active_delay_ms) catch (e) { _ => { continue } }; return result2 }; throw root.errors.DevOther { message: "All orchestration..." } }, baml.llm.ClientType.RoundRobin => { if (self.sub_clients.length() Eq 0) { throw root.errors.DevOther { message: "RoundRobin client..." } }; let idx = self.counter Mod self.sub_clients.length(); self.counter Add= 1; let result3: baml.llm.Stream<TStream, TFinal> = self.sub_clients[idx].execute_stream(context, active_delay_ms); return result3 } }
 }
 function baml.llm.execute_oneshot(self: ?, context: ExecutionContext, inherited_delay_ms: int) -> T  [expr] {
   {  } match (self.retry) { r: baml.llm.RetryPolicy => { let current_delay = r.initial_delay_ms Add 0.0; { let attempt = 0; while attempt Le r.max_retries { let attempt_delay = inherited_delay_ms; if (attempt Gt 0) { attempt_delay = root.math.trunc(current_delay); let next = current_delay Mul r.multiplier } if (next Gt r.max_delay_ms Add 0.0) { current_delay = r.max_delay_ms Add 0.0 } else { current_delay = next }; if (attempt Eq r.max_retries) { attempt_delay = inherited_delay_ms }; let result2: T = self.execute_once_oneshot(context, attempt_delay) catch (e) { _ => { continue } }; return result2 } }; throw root.errors.DevOther { message: "All orchestration..." } }, null => { let result: T = self.execute_once_oneshot(context, inherited_delay_ms); return result } }
@@ -750,7 +1370,7 @@ function baml.llm.execute_stream(self: ?, context: ExecutionContext, inherited_d
   {  } match (self.retry) { r: baml.llm.RetryPolicy => { let current_delay = r.initial_delay_ms Add 0.0; { let attempt = 0; while attempt Le r.max_retries { let attempt_delay = inherited_delay_ms; if (attempt Gt 0) { attempt_delay = root.math.trunc(current_delay); let next = current_delay Mul r.multiplier } if (next Gt r.max_delay_ms Add 0.0) { current_delay = r.max_delay_ms Add 0.0 } else { current_delay = next }; if (attempt Eq r.max_retries) { attempt_delay = inherited_delay_ms }; let result2: baml.llm.Stream<TStream, TFinal> = self.execute_once_stream(context, attempt_delay) catch (e) { _ => { continue } }; return result2 } }; throw root.errors.DevOther { message: "All orchestration..." } }, null => { let result: baml.llm.Stream<TStream, TFinal> = self.execute_once_stream(context, inherited_delay_ms); return result } }
 }
 function baml.llm.final(self: ?) -> TFinal  [expr] {
-  { while Not self._acc.is_done() { let next = match (self._sse.next()) { null => { break }, next: string => next }; self._acc.add_events(next) } if (self._acc.is_done()) { self._sse.close(); break }; match (self._acc.finish_reason()) { null => { throw root.errors.LlmClientError { message: "Streaming finishe..." } }, reason: string => self._client.validate_finish_reason(reason) }; let content = self._acc.content() } __sap_parse_final(content, self._cache)
+  { while Not self._acc.is_done() { let next = match (self._sse.next()) { null => { break }, next: string => next }; self._acc.add_events(next) } if (self._acc.is_done()) { self._sse.close(); break }; match (self._acc.finish_reason()) { null => { throw root.errors.LlmClient { message: "Streaming finishe..." } }, reason: string => self._client.validate_finish_reason(reason) }; let content = self._acc.content() } __sap_parse_final(content, self._cache)
 }
 function baml.llm.finish_reason(self: ?) -> string?  [builtin]
 function baml.llm.from_json(j: baml.json.json) -> baml.llm.VertexAiOptions  [expr] {
@@ -808,14 +1428,13 @@ function baml.llm.from_shorthand(shorthand: string) -> baml.llm.PrimitiveClient 
 function baml.llm.get_constructor(self: ?) -> () -> baml.llm.PrimitiveClient throws root.errors.InvalidArgument  [builtin]
 function baml.llm.get_jinja_template(function_name: string) -> string  [builtin]
 function baml.llm.get_return_type(function_name: string) -> type  [builtin]
-function baml.llm.get_stream_return_type(function_name: string) -> type  [builtin]
 function baml.llm.input_tokens(self: ?) -> int?  [builtin]
 function baml.llm.is_done(self: ?) -> bool  [builtin]
 function baml.llm.make_role(name: string) -> baml.llm.Role  [expr] {
   {  } baml.llm.Role { name: name, metadata: map {  } }
 }
 function baml.llm.model(self: ?) -> string?  [builtin]
-function baml.llm.new(target: type, streaming: type) -> baml.llm.StreamCache<TStream, TFinal>  [builtin]
+function baml.llm.new(t_stream: type, t_final: type) -> baml.llm.StreamCache<TStream, TFinal>  [builtin]
 function baml.llm.new_stream_accumulator(self: ?) -> baml.llm.StreamAccumulator  [builtin]
 function baml.llm.next(self: ?) -> TStream | root.stream.StreamFinished  [expr] {
   { while true { let next = match (self._sse.next()) { null => { return root.stream.StreamFinished {  } }, next: string => next }; self._acc.add_events(next); if (self._acc.is_done()) { self._sse.close(); return root.stream.StreamFinished {  } }; let content = self._acc.content(); let parsed: TStream | root.stream.StreamNoYield = __sap_parse_partial(content, self._cache) } match (parsed) { root.stream.StreamNoYield => { continue }, parsed: TStream => { return parsed } } } root.sys.panic("Unreachable")
@@ -830,31 +1449,25 @@ function baml.llm.render_output_format(return_type: type) -> string  [builtin]
 function baml.llm.render_prompt(self: ?, template: string, args: map<string, unknown>, return_type: type) -> baml.llm.PromptAst  [builtin]
 function baml.llm.specialize_prompt(self: ?, prompt: baml.llm.PromptAst) -> baml.llm.PromptAst  [builtin]
 function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "credentials": self.credentials?.to_json(), "credentials_content": self.credentials_content?.to_json(), "location": self.location?.to_json(), "project_id": self.project_id?.to_json() }
+  map { "credentials": baml.json.to_json(self.credentials), "credentials_content": baml.json.to_json(self.credentials_content), "location": baml.json.to_json(self.location), "project_id": baml.json.to_json(self.project_id) }
 }
 function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
   baml.json.parse(baml.json.to_string(self))
 }
 function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "max_tokens": self.max_tokens?.to_json() }
+  map { "max_tokens": baml.json.to_json(self.max_tokens) }
 }
 function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": self.name.to_json(), "provider": self.provider.to_json(), "options": self.options.to_json() }
+  map { "name": baml.json.to_json(self.name), "provider": baml.json.to_json(self.provider), "options": baml.json.to_json(self.options) }
 }
 function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": self.name.to_json(), "provider": self.provider.to_json(), "default_role": self.default_role.to_json(), "allowed_roles": self.allowed_roles.to_json() }
+  map { "name": baml.json.to_json(self.name), "provider": baml.json.to_json(self.provider), "default_role": baml.json.to_json(self.default_role), "allowed_roles": baml.json.to_json(self.allowed_roles) }
 }
 function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "resource_name": self.resource_name?.to_json(), "deployment_id": self.deployment_id?.to_json(), "api_version": self.api_version.to_json(), "max_tokens": self.max_tokens?.to_json() }
+  map { "resource_name": baml.json.to_json(self.resource_name), "deployment_id": baml.json.to_json(self.deployment_id), "api_version": baml.json.to_json(self.api_version), "max_tokens": baml.json.to_json(self.max_tokens) }
 }
 function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "_client": self._client.to_json(), "_acc": self._acc.to_json(), "_sse": self._sse.to_json(), "_cache": self._cache.to_json() }
-}
-function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
-}
-function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
+  map { "_client": baml.json.to_json(self._client), "_acc": baml.json.to_json(self._acc), "_sse": baml.json.to_json(self._sse), "_cache": baml.json.to_json(self._cache) }
 }
 function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
   baml.json.parse(baml.json.to_string(self))
@@ -863,7 +1476,13 @@ function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
   baml.json.parse(baml.json.to_string(self))
 }
 function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "image": self.image?.to_json(), "audio": self.audio?.to_json(), "video": self.video?.to_json(), "pdf": self.pdf?.to_json() }
+  baml.json.parse(baml.json.to_string(self))
+}
+function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}
+function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "image": baml.json.to_json(self.image), "audio": baml.json.to_json(self.audio), "video": baml.json.to_json(self.video), "pdf": baml.json.to_json(self.pdf) }
 }
 function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
   baml.json.parse(baml.json.to_string(self))
@@ -872,13 +1491,13 @@ function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
   baml.json.parse(baml.json.to_string(self))
 }
 function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": self.name.to_json(), "client_type": self.client_type.to_json(), "sub_clients": self.sub_clients.to_json(), "retry": self.retry?.to_json(), "counter": self.counter.to_json() }
+  map { "name": baml.json.to_json(self.name), "client_type": baml.json.to_json(self.client_type), "sub_clients": baml.json.to_json(self.sub_clients), "retry": baml.json.to_json(self.retry), "counter": baml.json.to_json(self.counter) }
 }
 function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "region": self.region?.to_json(), "endpoint_url": self.endpoint_url?.to_json(), "access_key_id": self.access_key_id?.to_json(), "secret_access_key": self.secret_access_key?.to_json(), "session_token": self.session_token?.to_json(), "profile": self.profile?.to_json(), "stop_sequences": self.stop_sequences?.to_json(), "max_tokens": self.max_tokens?.to_json(), "temperature": self.temperature?.to_json(), "top_p": self.top_p?.to_json() }
+  map { "region": baml.json.to_json(self.region), "endpoint_url": baml.json.to_json(self.endpoint_url), "access_key_id": baml.json.to_json(self.access_key_id), "secret_access_key": baml.json.to_json(self.secret_access_key), "session_token": baml.json.to_json(self.session_token), "profile": baml.json.to_json(self.profile), "stop_sequences": baml.json.to_json(self.stop_sequences), "max_tokens": baml.json.to_json(self.max_tokens), "temperature": baml.json.to_json(self.temperature), "top_p": baml.json.to_json(self.top_p) }
 }
 function baml.llm.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "max_retries": self.max_retries.to_json(), "initial_delay_ms": self.initial_delay_ms.to_json(), "multiplier": self.multiplier.to_json(), "max_delay_ms": self.max_delay_ms.to_json() }
+  map { "max_retries": baml.json.to_json(self.max_retries), "initial_delay_ms": baml.json.to_json(self.initial_delay_ms), "multiplier": baml.json.to_json(self.multiplier), "max_delay_ms": baml.json.to_json(self.max_delay_ms) }
 }
 function baml.llm.to_primitive_client(self: ?) -> baml.llm.PrimitiveClient  [expr] {
   {  } if (self.name.includes("/")) {  } from_shorthand(self.name) else {  } self.get_constructor()()
@@ -950,31 +1569,54 @@ function baml.media.url(self: ?) -> string?  [builtin]
 function baml.media.url(self: ?) -> string?  [builtin]
 
 --- <builtin>/baml/ns_net/net.baml ---
-class baml.net.Socket {
-  _handle: $rust_type
+class baml.net.Datagram {
+  data: uint8array
+  addr: string
 }
 class baml.net.TcpListener {
   _handle: $rust_type
 }
-function baml.net.accept(self: ?) -> baml.net.Socket  [builtin]
+class baml.net.TcpStream {
+  _handle: $rust_type
+}
+class baml.net.UdpSocket {
+  _handle: $rust_type
+}
+function baml.net.accept(self: ?) -> baml.net.TcpStream  [builtin]
+function baml.net.bind(addr: string) -> baml.net.TcpListener  [builtin]
+function baml.net.bind(addr: string) -> baml.net.UdpSocket  [builtin]
 function baml.net.close(self: ?) -> null  [builtin]
 function baml.net.close(self: ?) -> null  [builtin]
-function baml.net.connect(addr: string) -> baml.net.Socket  [builtin]
-function baml.net.from_json(j: baml.json.json) -> baml.net.Socket  [expr] {
+function baml.net.close(self: ?) -> null  [builtin]
+function baml.net.connect(addr: string) -> baml.net.TcpStream  [builtin]
+function baml.net.from_json(j: baml.json.json) -> baml.net.TcpStream  [expr] {
   baml.json.from_string(baml.json.stringify(j))
+}
+function baml.net.from_json(j: baml.json.json) -> baml.net.Datagram  [expr] {
+  baml.net.Datagram { data: baml.json.from_json(baml.json.field(j, "data")), addr: baml.json.from_json(baml.json.field(j, "addr")) }
 }
 function baml.net.from_json(j: baml.json.json) -> baml.net.TcpListener  [expr] {
   baml.json.from_string(baml.json.stringify(j))
 }
-function baml.net.listen(addr: string) -> baml.net.TcpListener  [builtin]
-function baml.net.read(self: ?) -> string  [builtin]
+function baml.net.from_json(j: baml.json.json) -> baml.net.UdpSocket  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function baml.net.read(self: ?) -> uint8array  [builtin]
+function baml.net.recv_from(self: ?) -> baml.net.Datagram  [builtin]
+function baml.net.send_to(self: ?, data: uint8array, addr: string) -> int  [builtin]
 function baml.net.to_json(self: ?) -> baml.json.json  [expr] {
   baml.json.parse(baml.json.to_string(self))
 }
 function baml.net.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "data": baml.json.to_json(self.data), "addr": baml.json.to_json(self.addr) }
+}
+function baml.net.to_json(self: ?) -> baml.json.json  [expr] {
   baml.json.parse(baml.json.to_string(self))
 }
-function baml.net.write(self: ?, data: string) -> null  [builtin]
+function baml.net.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}
+function baml.net.write(self: ?, data: uint8array) -> null  [builtin]
 
 --- <builtin>/baml/ns_panics/panics.baml ---
 class baml.panics.AllocFailure {
@@ -991,6 +1633,11 @@ class baml.panics.DivisionByZero {
 }
 class baml.panics.Exit {
   code: int
+}
+class baml.panics.HostContractViolation {
+  message: string
+  class_name: string?
+  language: string?
 }
 class baml.panics.HostUnavailable {
   resource: string
@@ -1022,27 +1669,15 @@ class baml.panics.Unreachable {
 class baml.panics.UserPanic {
   message: string
 }
-type baml.panics.Panic = baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.InvalidFieldAccess | baml.panics.MapKeyNotFound | baml.panics.StackOverflow | baml.panics.AssertionFailed | baml.panics.Unreachable | baml.panics.Cancelled | baml.panics.UserPanic | baml.panics.Exit | baml.panics.AllocFailure | baml.panics.HostUnavailable | baml.panics.NegativeBitShift | baml.panics.SdkPanic
-function baml.panics.from_json(j: baml.json.json) -> baml.panics.DivisionByZero  [expr] {
-  baml.panics.DivisionByZero { dividend: baml.json.from_json(baml.json.field(j, "dividend")) }
-}
+type baml.panics.Panic = baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.InvalidFieldAccess | baml.panics.MapKeyNotFound | baml.panics.StackOverflow | baml.panics.AssertionFailed | baml.panics.Unreachable | baml.panics.Cancelled | baml.panics.UserPanic | baml.panics.Exit | baml.panics.AllocFailure | baml.panics.HostUnavailable | baml.panics.NegativeBitShift | baml.panics.SdkPanic | baml.panics.HostContractViolation
 function baml.panics.from_json(j: baml.json.json) -> baml.panics.HostUnavailable  [expr] {
   baml.panics.HostUnavailable { resource: baml.json.from_json(baml.json.field(j, "resource")), message: baml.json.from_json(baml.json.field(j, "message")) }
 }
-function baml.panics.from_json(j: baml.json.json) -> baml.panics.MapKeyNotFound  [expr] {
-  baml.panics.MapKeyNotFound { key: baml.json.from_json(baml.json.field(j, "key")) }
-}
-function baml.panics.from_json(j: baml.json.json) -> baml.panics.Unreachable  [expr] {
-  baml.panics.Unreachable { message: baml.json.from_json(baml.json.field(j, "message")) }
-}
-function baml.panics.from_json(j: baml.json.json) -> baml.panics.Exit  [expr] {
-  baml.panics.Exit { code: baml.json.from_json(baml.json.field(j, "code")) }
+function baml.panics.from_json(j: baml.json.json) -> baml.panics.HostContractViolation  [expr] {
+  baml.panics.HostContractViolation { message: baml.json.from_json(baml.json.field(j, "message")), class_name: baml.json.from_json(baml.json.field(j, "class_name")), language: baml.json.from_json(baml.json.field(j, "language")) }
 }
 function baml.panics.from_json(j: baml.json.json) -> baml.panics.IndexOutOfBounds  [expr] {
   baml.panics.IndexOutOfBounds { index: baml.json.from_json(baml.json.field(j, "index")), length: baml.json.from_json(baml.json.field(j, "length")) }
-}
-function baml.panics.from_json(j: baml.json.json) -> baml.panics.NegativeBitShift  [expr] {
-  baml.panics.NegativeBitShift { message: baml.json.from_json(baml.json.field(j, "message")) }
 }
 function baml.panics.from_json(j: baml.json.json) -> baml.panics.StackOverflow  [expr] {
   baml.panics.StackOverflow { message: baml.json.from_json(baml.json.field(j, "message")) }
@@ -1053,11 +1688,26 @@ function baml.panics.from_json(j: baml.json.json) -> baml.panics.Cancelled  [exp
 function baml.panics.from_json(j: baml.json.json) -> baml.panics.AllocFailure  [expr] {
   baml.panics.AllocFailure { message: baml.json.from_json(baml.json.field(j, "message")) }
 }
-function baml.panics.from_json(j: baml.json.json) -> baml.panics.InvalidFieldAccess  [expr] {
-  baml.panics.InvalidFieldAccess { field_index: baml.json.from_json(baml.json.field(j, "field_index")), field_count: baml.json.from_json(baml.json.field(j, "field_count")) }
-}
 function baml.panics.from_json(j: baml.json.json) -> baml.panics.SdkPanic  [expr] {
   baml.panics.SdkPanic { message: baml.json.from_json(baml.json.field(j, "message")) }
+}
+function baml.panics.from_json(j: baml.json.json) -> baml.panics.DivisionByZero  [expr] {
+  baml.panics.DivisionByZero { dividend: baml.json.from_json(baml.json.field(j, "dividend")) }
+}
+function baml.panics.from_json(j: baml.json.json) -> baml.panics.MapKeyNotFound  [expr] {
+  baml.panics.MapKeyNotFound { key: baml.json.from_json(baml.json.field(j, "key")) }
+}
+function baml.panics.from_json(j: baml.json.json) -> baml.panics.Unreachable  [expr] {
+  baml.panics.Unreachable { message: baml.json.from_json(baml.json.field(j, "message")) }
+}
+function baml.panics.from_json(j: baml.json.json) -> baml.panics.Exit  [expr] {
+  baml.panics.Exit { code: baml.json.from_json(baml.json.field(j, "code")) }
+}
+function baml.panics.from_json(j: baml.json.json) -> baml.panics.NegativeBitShift  [expr] {
+  baml.panics.NegativeBitShift { message: baml.json.from_json(baml.json.field(j, "message")) }
+}
+function baml.panics.from_json(j: baml.json.json) -> baml.panics.InvalidFieldAccess  [expr] {
+  baml.panics.InvalidFieldAccess { field_index: baml.json.from_json(baml.json.field(j, "field_index")), field_count: baml.json.from_json(baml.json.field(j, "field_count")) }
 }
 function baml.panics.from_json(j: baml.json.json) -> baml.panics.AssertionFailed  [expr] {
   baml.panics.AssertionFailed { message: baml.json.from_json(baml.json.field(j, "message")) }
@@ -1066,47 +1716,100 @@ function baml.panics.from_json(j: baml.json.json) -> baml.panics.UserPanic  [exp
   baml.panics.UserPanic { message: baml.json.from_json(baml.json.field(j, "message")) }
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  map { "message": baml.json.to_json(self.message) }
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "dividend": self.dividend.to_json() }
+  map { "resource": baml.json.to_json(self.resource), "message": baml.json.to_json(self.message) }
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "resource": self.resource.to_json(), "message": self.message.to_json() }
+  map { "message": baml.json.to_json(self.message), "class_name": baml.json.to_json(self.class_name), "language": baml.json.to_json(self.language) }
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "key": self.key.to_json() }
+  map { "index": baml.json.to_json(self.index), "length": baml.json.to_json(self.length) }
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  map { "message": baml.json.to_json(self.message) }
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "code": self.code.to_json() }
+  map { "message": baml.json.to_json(self.message) }
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "index": self.index.to_json(), "length": self.length.to_json() }
+  map { "message": baml.json.to_json(self.message) }
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  map { "message": baml.json.to_json(self.message) }
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  map { "dividend": baml.json.to_json(self.dividend) }
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  map { "key": baml.json.to_json(self.key) }
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  map { "message": baml.json.to_json(self.message) }
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "field_index": self.field_index.to_json(), "field_count": self.field_count.to_json() }
+  map { "code": baml.json.to_json(self.code) }
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  map { "message": baml.json.to_json(self.message) }
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "message": self.message.to_json() }
+  map { "field_index": baml.json.to_json(self.field_index), "field_count": baml.json.to_json(self.field_count) }
 }
+function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "message": baml.json.to_json(self.message) }
+}
+
+--- <builtin>/baml/ns_spawn/spawn.baml ---
+class baml.spawn.CancelToken {
+  _handle: $rust_type
+}
+class baml.spawn.SpawnParams {
+  body: () -> T throws E
+  name: string?
+  group: baml.spawn.TaskGroup?
+  cancel: baml.spawn.CancelToken?
+  detach: bool
+}
+class baml.spawn.TaskGroup {
+  _handle: $rust_type
+}
+function baml.spawn.active_count(self: ?) -> int  [builtin]
+function baml.spawn.any(tokens: baml.spawn.CancelToken[]) -> baml.spawn.CancelToken  [builtin]
+function baml.spawn.cancel(self: ?, pending: bool? = true, active: bool? = true) -> int  [builtin]
+function baml.spawn.cancel(self: ?) -> int  [builtin]
+function baml.spawn.from_json(j: baml.json.json) -> baml.spawn.SpawnParams<T, E>  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function baml.spawn.from_json(j: baml.json.json) -> baml.spawn.TaskGroup  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function baml.spawn.from_json(j: baml.json.json) -> baml.spawn.CancelToken  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function baml.spawn.is_cancelled(self: ?) -> bool  [builtin]
+function baml.spawn.limit(self: ?) -> int  [builtin]
+function baml.spawn.name(self: ?) -> string?  [builtin]
+function baml.spawn.new() -> baml.spawn.CancelToken  [builtin]
+function baml.spawn.new(limit: int, name: string? = null) -> baml.spawn.TaskGroup  [builtin]
+function baml.spawn.options(group: baml.spawn.TaskGroup? = null, cancel: baml.spawn.CancelToken? = null, detach: bool? = null) -> (baml.spawn.SpawnParams<T, E>) -> baml.spawn.SpawnParams<T, E> throws never  [expr] {
+  {  } (params: SpawnParams<T, E>) -> SpawnParams<T, E> { {  } baml.spawn.SpawnParams { body: params.body, name: params.name, group: group NullCoalesce params.group, cancel: cancel NullCoalesce params.cancel, detach: detach NullCoalesce params.detach } }
+}
+function baml.spawn.queued_count(self: ?) -> int  [builtin]
+function baml.spawn.set_limit(self: ?, limit: int) -> void  [builtin]
+function baml.spawn.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}
+function baml.spawn.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}
+function baml.spawn.to_json(self: ?) -> baml.json.json  [expr] {
+  baml.json.parse(baml.json.to_string(self))
+}
+
+--- captures ---
+lambda (params) in options: captures [group, cancel, detach]
 
 --- <builtin>/baml/ns_stream/stream.baml ---
 class baml.stream.StreamFinished {
@@ -1155,10 +1858,10 @@ function baml.sys.panic(message: string) -> never  [builtin]
 function baml.sys.shell(command: string, options: baml.sys.ProcessOptions?) -> baml.sys.ShellOutput  [builtin]
 function baml.sys.sleep(ms: int) -> null  [builtin]
 function baml.sys.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "stdout": self.stdout.to_json(), "stderr": self.stderr.to_json(), "exit_code": self.exit_code.to_json() }
+  map { "stdout": baml.json.to_json(self.stdout), "stderr": baml.json.to_json(self.stderr), "exit_code": baml.json.to_json(self.exit_code) }
 }
 function baml.sys.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "cwd": self.cwd?.to_json(), "env": self.env?.to_json(), "timeout_ms": self.timeout_ms?.to_json(), "stdin": self.stdin?.to_json() }
+  map { "cwd": baml.json.to_json(self.cwd), "env": baml.json.to_json(self.env), "timeout_ms": baml.json.to_json(self.timeout_ms), "stdin": baml.json.to_json(self.stdin) }
 }
 
 --- <builtin>/baml/ns_time/duration.baml ---
@@ -1193,7 +1896,7 @@ function baml.time.to_hours(self: ?) -> bigint  [expr] {
   {  } self._nanoseconds Div 3600000000000
 }
 function baml.time.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "_nanoseconds": self._nanoseconds.to_json() }
+  map { "_nanoseconds": baml.json.to_json(self._nanoseconds) }
 }
 function baml.time.to_microseconds(self: ?) -> bigint  [expr] {
   {  } self._nanoseconds Div 1000
@@ -1264,8 +1967,266 @@ function baml.time.to_timestamp_seconds(self: ?) -> bigint  [expr] {
   {  } self._nanoseconds Div 1000000000
 }
 
+--- <builtin>/baml/ns_time/plaindate.baml ---
+class baml.time.PlainDate {
+  _days: int
+}
+function baml.time._to_plain_datetime(self: ?, time: PlainTime?) -> PlainDateTime  [builtin]
+function baml.time.day(self: ?) -> int  [builtin]
+function baml.time.from_components(year: int, month: int, day: int) -> baml.time.PlainDate  [builtin]
+function baml.time.from_json(j: baml.json.json) -> baml.time.PlainDate  [expr] {
+  {  } match (j) { string => PlainDate.parse(j) catch (_) { root.errors.ParseError { message: message } => throw root.json.JsonDecodeError { message: message, path: "" } }, _ => throw root.json.JsonDecodeError { message: "Expected ISO 8601..." } }
+}
+function baml.time.month(self: ?) -> int  [builtin]
+function baml.time.parse(s: string) -> baml.time.PlainDate  [builtin]
+function baml.time.to_json(self: ?) -> string  [expr] {
+  {  } self.to_string() catch (_) { root.errors.InvalidArgument { message: message } => throw root.json.JsonSerializationError { message: message, path: "" } }
+}
+function baml.time.to_plain_datetime(self: ?, time: PlainTime? = null) -> PlainDateTime  [expr] {
+  {  } self._to_plain_datetime(time)
+}
+function baml.time.to_string(self: ?) -> string  [builtin]
+function baml.time.year(self: ?) -> int  [builtin]
+
+--- <builtin>/baml/ns_time/plaindatetime.baml ---
+class baml.time.PlainDateTime {
+  _nanoseconds: bigint
+}
+function baml.time._from_components(year: int, month: int, day: int, hour: int, minute: int, second: int, millisecond: int, microsecond: int, nanosecond: int) -> baml.time.PlainDateTime  [builtin]
+function baml.time.day(self: ?) -> int  [builtin]
+function baml.time.from_components(year: int, month: int, day: int, hour: int = 0, minute: int = 0, second: int = 0, millisecond: int = 0, microsecond: int = 0, nanosecond: int = 0) -> baml.time.PlainDateTime  [expr] {
+  {  } PlainDateTime._from_components(year, month, day, hour, minute, second, millisecond, microsecond, nanosecond)
+}
+function baml.time.from_json(j: baml.json.json) -> baml.time.PlainDateTime  [expr] {
+  {  } match (j) { string => PlainDateTime.parse(j) catch (_) { root.errors.ParseError { message: message } => throw root.json.JsonDecodeError { message: message, path: "" } }, _ => throw root.json.JsonDecodeError { message: "Expected zoneless..." } }
+}
+function baml.time.hour(self: ?) -> int  [builtin]
+function baml.time.max(self: ?, other: baml.time.PlainDateTime) -> baml.time.PlainDateTime  [expr] {
+  {  } if (other._nanoseconds Gt self._nanoseconds) {  } other else {  } self
+}
+function baml.time.millisecond(self: ?) -> int  [builtin]
+function baml.time.min(self: ?, other: baml.time.PlainDateTime) -> baml.time.PlainDateTime  [expr] {
+  {  } if (other._nanoseconds Lt self._nanoseconds) {  } other else {  } self
+}
+function baml.time.minute(self: ?) -> int  [builtin]
+function baml.time.month(self: ?) -> int  [builtin]
+function baml.time.parse(s: string) -> baml.time.PlainDateTime  [builtin]
+function baml.time.second(self: ?) -> int  [builtin]
+function baml.time.to_json(self: ?) -> string  [expr] {
+  {  } self.to_string() catch (_) { root.errors.InvalidArgument { message: message } => throw root.json.JsonSerializationError { message: message, path: "" } }
+}
+function baml.time.to_plain_date(self: ?) -> PlainDate  [builtin]
+function baml.time.to_plain_time(self: ?) -> PlainTime  [builtin]
+function baml.time.to_string(self: ?) -> string  [builtin]
+function baml.time.to_zoned(self: ?, timezone: TimeZoneOffset | string, disambiguation: Disambiguation = "compatible") -> ZonedDateTime  [expr] {
+  {  } match (timezone) { TimeZoneOffset => ZonedDateTime { _nanoseconds: self._nanoseconds Sub timezone._nanoseconds, _offset_ns: timezone._nanoseconds, _iana: null }, string => if (disambiguation Eq "reject") {  } match (_tz_to_instant(timezone, self._nanoseconds, "earlier")) { null => throw UnknownTimezoneError { timezone: timezone }, earlier => match (_tz_to_instant(timezone, self._nanoseconds, "later")) { null => throw UnknownTimezoneError { timezone: timezone }, later => if (earlier Eq later) {  } ZonedDateTime { _nanoseconds: earlier NullCoalesce 0n, _offset_ns: null, _iana: timezone } else { throw AmbiguousTimeError { message: "wall-clock time i..." Add timezone } } } } else {  } match (_tz_to_instant(timezone, self._nanoseconds, disambiguation)) { null => throw UnknownTimezoneError { timezone: timezone }, resolved => ZonedDateTime { _nanoseconds: resolved NullCoalesce 0n, _offset_ns: null, _iana: timezone } } }
+}
+function baml.time.year(self: ?) -> int  [builtin]
+
+--- <builtin>/baml/ns_time/plaintime.baml ---
+class baml.time.PlainTime {
+  _nanoseconds: int
+}
+function baml.time._from_components(hour: int, minute: int, second: int, millisecond: int, microsecond: int, nanosecond: int) -> baml.time.PlainTime  [builtin]
+function baml.time.from_components(hour: int, minute: int = 0, second: int = 0, millisecond: int = 0, microsecond: int = 0, nanosecond: int = 0) -> baml.time.PlainTime  [expr] {
+  {  } PlainTime._from_components(hour, minute, second, millisecond, microsecond, nanosecond)
+}
+function baml.time.from_json(j: baml.json.json) -> baml.time.PlainTime  [expr] {
+  {  } match (j) { string => PlainTime.parse(j) catch (_) { root.errors.ParseError { message: message } => throw root.json.JsonDecodeError { message: message, path: "" } }, _ => throw root.json.JsonDecodeError { message: "Expected ISO 8601..." } }
+}
+function baml.time.hour(self: ?) -> int  [expr] {
+  {  } self._nanoseconds Div 3600000000000
+}
+function baml.time.millisecond(self: ?) -> int  [expr] {
+  {  } self._nanoseconds Div 1000000 Mod 1000
+}
+function baml.time.minute(self: ?) -> int  [expr] {
+  {  } self._nanoseconds Div 60000000000 Mod 60
+}
+function baml.time.parse(s: string) -> baml.time.PlainTime  [builtin]
+function baml.time.second(self: ?) -> int  [expr] {
+  {  } self._nanoseconds Div 1000000000 Mod 60
+}
+function baml.time.to_json(self: ?) -> string  [expr] {
+  {  } self.to_string()
+}
+function baml.time.to_plain_datetime(self: ?, date: PlainDate) -> PlainDateTime  [expr] {
+  {  } date.to_plain_datetime(time = self)
+}
+function baml.time.to_string(self: ?) -> string  [builtin]
+
+--- <builtin>/baml/ns_time/timezone.baml ---
+class baml.time.AmbiguousTimeError {
+  message: string
+}
+class baml.time.TimeZoneOffset {
+  _nanoseconds: int
+}
+class baml.time.UnknownTimezoneError {
+  timezone: string
+}
+type baml.time.Disambiguation = "compatible" | "earlier" | "later" | "reject"
+function baml.time._tz_offset_at(timezone: string, at_ns: bigint) -> int?  [builtin]
+function baml.time._tz_to_instant(timezone: string, civil_ns: bigint, disambiguation: string) -> bigint?  [builtin]
+function baml.time.from_duration(duration: Duration) -> baml.time.TimeZoneOffset  [builtin]
+function baml.time.from_json(j: baml.json.json) -> baml.time.UnknownTimezoneError  [expr] {
+  baml.time.UnknownTimezoneError { timezone: baml.json.from_json(baml.json.field(j, "timezone")) }
+}
+function baml.time.from_json(j: baml.json.json) -> baml.time.AmbiguousTimeError  [expr] {
+  baml.time.AmbiguousTimeError { message: baml.json.from_json(baml.json.field(j, "message")) }
+}
+function baml.time.from_json(j: baml.json.json) -> baml.time.TimeZoneOffset  [expr] {
+  baml.time.TimeZoneOffset { _nanoseconds: baml.json.from_json(baml.json.field(j, "_nanoseconds")) }
+}
+function baml.time.from_timezone(timezone: string, at: Instant) -> baml.time.TimeZoneOffset  [expr] {
+  {  } match (_tz_offset_at(timezone, at._nanoseconds)) { null => throw baml.time.UnknownTimezoneError { timezone: timezone }, offset => baml.time.TimeZoneOffset { _nanoseconds: offset NullCoalesce 0 } }
+}
+function baml.time.hours(self: ?) -> int  [expr] {
+  {  } self._nanoseconds Div 3600000000000
+}
+function baml.time.local() -> baml.time.TimeZoneOffset  [expr] {
+  {  } TimeZoneOffset.from_timezone(system_timezone(), Instant.now())
+}
+function baml.time.minutes(self: ?) -> int  [expr] {
+  {  } self._nanoseconds Div 60000000000 Mod 60
+}
+function baml.time.new(hours: int, minutes: int) -> baml.time.TimeZoneOffset  [expr] {
+  { if (hours Gt 0 And minutes Lt 0 Or hours Lt 0 And minutes Gt 0) { throw root.errors.InvalidArgument { message: "TimeZoneOffset.ne..." } }; let nanoseconds = hours Mul 60 Add minutes Mul 60 Mul 1000000000; if (nanoseconds Gt 86400000000000 Or nanoseconds Lt Neg 86400000000000) { throw root.errors.InvalidArgument { message: "TimeZoneOffset ou..." } } } baml.time.TimeZoneOffset { _nanoseconds: nanoseconds }
+}
+function baml.time.system_timezone() -> string  [builtin]
+function baml.time.to_duration(self: ?) -> Duration  [expr] {
+  {  } Duration { _nanoseconds: 0n Add self._nanoseconds }
+}
+function baml.time.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "timezone": baml.json.to_json(self.timezone) }
+}
+function baml.time.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "message": baml.json.to_json(self.message) }
+}
+function baml.time.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "_nanoseconds": baml.json.to_json(self._nanoseconds) }
+}
+function baml.time.utc() -> baml.time.TimeZoneOffset  [expr] {
+  {  } baml.time.TimeZoneOffset { _nanoseconds: 0 }
+}
+
+--- <builtin>/baml/ns_time/zoneddatetime.baml ---
+class baml.time.ZonedDateTime {
+  _nanoseconds: bigint
+  _offset_ns: int?
+  _iana: string?
+}
+function baml.time._format_zoned(epoch_ns: bigint, offset_ns: int, iana: string?) -> string  [builtin]
+function baml.time.day(self: ?) -> int  [expr] {
+  {  } self.to_plain().day()
+}
+function baml.time.from_components(timezone: TimeZoneOffset | string, year: int, month: int, day: int, hour: int = 0, minute: int = 0, second: int = 0, millisecond: int = 0, microsecond: int = 0, nanosecond: int = 0, disambiguation: Disambiguation = "compatible") -> baml.time.ZonedDateTime  [expr] {
+  {  } PlainDateTime.from_components(year, month, day, hour = hour, minute = minute, second = second, millisecond = millisecond, microsecond = microsecond, nanosecond = nanosecond).to_zoned(timezone, disambiguation = disambiguation)
+}
+function baml.time.from_instant(instant: Instant, timezone: TimeZoneOffset | string) -> baml.time.ZonedDateTime  [expr] {
+  {  } match (timezone) { TimeZoneOffset => baml.time.ZonedDateTime { _nanoseconds: instant._nanoseconds, _offset_ns: timezone._nanoseconds, _iana: null }, string => baml.time.ZonedDateTime { _nanoseconds: instant._nanoseconds, _offset_ns: null, _iana: timezone } }
+}
+function baml.time.from_json(j: baml.json.json) -> baml.time.ZonedDateTime  [expr] {
+  {  } match (j) { string => ZonedDateTime.parse(j) catch (_) { root.errors.ParseError { message: message } => throw root.json.JsonDecodeError { message: message, path: "" } }, _ => throw root.json.JsonDecodeError { message: "Expected RFC 3339..." } }
+}
+function baml.time.hour(self: ?) -> int  [expr] {
+  {  } self.to_plain().hour()
+}
+function baml.time.max(self: ?, other: baml.time.ZonedDateTime) -> baml.time.ZonedDateTime  [expr] {
+  {  } if (other._nanoseconds Gt self._nanoseconds) {  } other else {  } self
+}
+function baml.time.millisecond(self: ?) -> int  [expr] {
+  {  } self.to_plain().millisecond()
+}
+function baml.time.min(self: ?, other: baml.time.ZonedDateTime) -> baml.time.ZonedDateTime  [expr] {
+  {  } if (other._nanoseconds Lt self._nanoseconds) {  } other else {  } self
+}
+function baml.time.minute(self: ?) -> int  [expr] {
+  {  } self.to_plain().minute()
+}
+function baml.time.month(self: ?) -> int  [expr] {
+  {  } self.to_plain().month()
+}
+function baml.time.now() -> baml.time.ZonedDateTime  [expr] {
+  {  } ZonedDateTime.from_instant(Instant.now(), system_timezone())
+}
+function baml.time.now_in(timezone: TimeZoneOffset | string) -> baml.time.ZonedDateTime  [expr] {
+  {  } ZonedDateTime.from_instant(Instant.now(), timezone)
+}
+function baml.time.parse(s: string) -> baml.time.ZonedDateTime  [builtin]
+function baml.time.second(self: ?) -> int  [expr] {
+  {  } self.to_plain().second()
+}
+function baml.time.timezone(self: ?) -> TimeZoneOffset | string  [expr] {
+  {  } match (self._iana) { null => TimeZoneOffset { _nanoseconds: self._offset_ns NullCoalesce 0 }, iana => iana NullCoalesce "" }
+}
+function baml.time.timezone_offset(self: ?) -> TimeZoneOffset  [expr] {
+  {  } match (self._iana) { null => TimeZoneOffset { _nanoseconds: self._offset_ns NullCoalesce 0 }, iana => match (_tz_offset_at(iana NullCoalesce "", self._nanoseconds)) { null => throw UnknownTimezoneError { timezone: iana NullCoalesce "" }, offset => TimeZoneOffset { _nanoseconds: offset NullCoalesce 0 } } }
+}
+function baml.time.to_instant(self: ?) -> Instant  [expr] {
+  {  } Instant { _nanoseconds: self._nanoseconds }
+}
+function baml.time.to_json(self: ?) -> string  [expr] {
+  {  } self.to_string() catch (_) { root.errors.InvalidArgument { message: message } => throw root.json.JsonSerializationError { message: message, path: "" }, UnknownTimezoneError { timezone: timezone } => throw root.json.JsonSerializationError { message: "unknown timezone: " Add timezone, path: "" }, root.errors.Io { message: message } => throw root.json.JsonSerializationError { message: message, path: "" } }
+}
+function baml.time.to_plain(self: ?) -> PlainDateTime  [expr] {
+  {  } PlainDateTime { _nanoseconds: self._nanoseconds Add self.timezone_offset()._nanoseconds }
+}
+function baml.time.to_string(self: ?) -> string  [expr] {
+  {  } _format_zoned(self._nanoseconds, self.timezone_offset()._nanoseconds, self._iana)
+}
+function baml.time.with_timezone(self: ?, timezone: TimeZoneOffset | string) -> baml.time.ZonedDateTime  [expr] {
+  {  } ZonedDateTime.from_instant(self.to_instant(), timezone)
+}
+function baml.time.year(self: ?) -> int  [expr] {
+  {  } self.to_plain().year()
+}
+
+--- <builtin>/baml/ns_toml/toml.baml ---
+class baml.toml.Table {
+  items: map<string, baml.toml.Item>
+}
+class baml.toml.TomlParseError {
+  message: string
+}
+type baml.toml.Item = baml.toml.Table | baml.toml.Item[] | bool | int | float | string | baml.time.ZonedDateTime | baml.time.PlainDateTime | baml.time.PlainDate | baml.time.PlainTime
+function baml.toml.from_json(json: baml.json.json) -> baml.toml.Table  [expr] {
+  {  } match (json) { map<string, baml.json.json> => { let items: map<string, baml.toml.Item> = map {  }; for key in json.keys() { items[key] = match (json[key]) { null => { continue }, item => item_from_json(item) } } } baml.toml.Table { items: items }, _ => throw baml.json.JsonDecodeError { message: "expected map", path: "" } }
+}
+function baml.toml.from_json(j: baml.json.json) -> baml.toml.TomlParseError  [expr] {
+  baml.toml.TomlParseError { message: baml.json.from_json(baml.json.field(j, "message")) }
+}
+function baml.toml.item_from_json(json: baml.json.json) -> baml.toml.Item  [expr] {
+  {  } match (json) { bool | int | float | string => json, null => throw baml.json.JsonDecodeError { message: "TOML does not sup...", path: "" }, map<string, baml.json.json> => Table.from_json(json), baml.json.json[] => json.map(item_from_json) }
+}
+function baml.toml.item_to_json(item: baml.toml.Item) -> baml.json.json  [expr] {
+  {  } match (item) { bool | int | float | string => item, baml.toml.Table => item.to_json(), baml.toml.Item[] => item.map(item_to_json), baml.time.ZonedDateTime => item.to_json(), baml.time.PlainDateTime => item.to_json(), baml.time.PlainDate => item.to_json(), baml.time.PlainTime => item.to_json() }
+}
+function baml.toml.parse(s: string) -> baml.toml.Table  [builtin]
+function baml.toml.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "message": baml.json.to_json(self.message) }
+}
+function baml.toml.to_json(self: ?) -> baml.json.json  [expr] {
+  {  } self.items.to_json() catch (_) { root.json.JsonParseError { message: message } => throw root.json.JsonSerializationError { message: message, path: "" } }
+}
+
 --- <builtin>/baml/ns_unstable/unstable.baml ---
 function baml.unstable.string(value: T) -> string  [builtin]
+
+--- <builtin>/baml/ns_yaml/yaml.baml ---
+class baml.yaml.YamlParseError {
+  message: string
+}
+function baml.yaml.deserialize(s: string) -> T  [expr] {
+  {  } baml.json.from_json(parse(s)) catch (e) { err: baml.json.JsonParseError => throw baml.json.JsonDecodeError { message: err.message, path: "" } }
+}
+function baml.yaml.from_json(j: baml.json.json) -> baml.yaml.YamlParseError  [expr] {
+  baml.yaml.YamlParseError { message: baml.json.from_json(baml.json.field(j, "message")) }
+}
+function baml.yaml.parse(s: string) -> baml.json.json  [builtin]
+function baml.yaml.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "message": baml.json.to_json(self.message) }
+}
 
 --- <builtin>/baml/null.baml ---
 class baml.Null {

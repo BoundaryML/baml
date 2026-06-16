@@ -12,13 +12,9 @@ use std::{
 
 use bex_resource_types::{ResourceHandle, ResourceRegistryRef, ResourceType};
 use sys_types::sse::SseEvent;
+use tokio::{fs::File, net::TcpStream, sync::Mutex as TokioMutex};
 #[cfg(feature = "bundle-http")]
-use tokio::task::AbortHandle;
-use tokio::{
-    fs::File,
-    net::TcpStream,
-    sync::{Mutex as TokioMutex, Notify},
-};
+use tokio::{sync::Notify, task::AbortHandle};
 
 /// A file resource with async-safe access.
 pub struct FileResource {

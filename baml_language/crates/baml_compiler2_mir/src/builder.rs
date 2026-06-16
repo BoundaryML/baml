@@ -9,8 +9,8 @@
 //! let mut builder = MirBuilder::new(Name::new("my_function"), 1);
 //!
 //! // Declare return place and parameter
-//! let ret = builder.declare_local(Some("_return".into()), Ty::Int, None);
-//! let param = builder.declare_local(Some("x".into()), Ty::Int, None);
+//! let ret = builder.declare_local(Some("_return".into()), RuntimeTy::Int, None);
+//! let param = builder.declare_local(Some("x".into()), RuntimeTy::Int, None);
 //!
 //! // Create blocks
 //! let entry = builder.create_block();
@@ -27,7 +27,7 @@
 //! ```
 
 use baml_base::{Name, Span};
-use baml_type::Ty;
+use baml_type::RuntimeTy;
 
 use crate::{
     BasicBlock, BlockId, CatchRegion, Constant, ItemRef, Local, LocalDecl, MirFunction,
@@ -91,7 +91,7 @@ impl MirBuilder {
     pub(crate) fn declare_local(
         &mut self,
         name: Option<Name>,
-        ty: Ty,
+        ty: RuntimeTy,
         span: Option<Span>,
         is_watched: bool,
     ) -> Local {
@@ -108,7 +108,7 @@ impl MirBuilder {
     }
 
     /// Allocate a temporary (unnamed local).
-    pub(crate) fn temp(&mut self, ty: Ty) -> Local {
+    pub(crate) fn temp(&mut self, ty: RuntimeTy) -> Local {
         self.declare_local(None, ty, None, false)
     }
 
@@ -121,7 +121,7 @@ impl MirBuilder {
     ///
     /// Used by `bind_pattern` in `lower.rs` to propagate the scrutinee's type
     /// to catch binding locals when TIR has not populated the pattern type map.
-    pub(crate) fn local_ty(&self, local: Local) -> Ty {
+    pub(crate) fn local_ty(&self, local: Local) -> RuntimeTy {
         self.locals[local.0].ty.clone()
     }
 
@@ -411,6 +411,27 @@ impl MirBuilder {
         });
     }
 
+    /// BEP-034: emit an `await_any` terminator — suspend until the first of
+    /// the `futures` array settles and bind its `int` index into `destination`.
+    pub(crate) fn await_any(
+        &mut self,
+        futures: Operand,
+        destination: Place,
+        target: BlockId,
+        unwind: Option<BlockId>,
+    ) {
+        debug_assert!(
+            matches!(destination, Place::Local(_)),
+            "AwaitAny destination must be a local place"
+        );
+        self.set_terminator(Terminator::AwaitAny {
+            futures,
+            destination,
+            target,
+            unwind,
+        });
+    }
+
     /// BEP-034: emit a spawn terminator. Pops a closure operand plus an
     /// optional name operand and binds the resulting `Future<T, E>`
     /// handle into `future`.
@@ -418,6 +439,7 @@ impl MirBuilder {
         &mut self,
         closure: Operand,
         name: Operand,
+        config: Option<Box<Operand>>,
         future: Place,
         resume: BlockId,
     ) {
@@ -428,6 +450,7 @@ impl MirBuilder {
         self.set_terminator(Terminator::Spawn {
             closure,
             name,
+            config,
             future,
             resume,
         });

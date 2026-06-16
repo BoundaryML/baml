@@ -7,7 +7,7 @@
 
 use baml_builtins2::{PromptAst as BuiltinPromptAst, PromptAstSimple};
 use baml_type::TyAttr;
-use bex_engine::{FunctionCallContextBuilder, Ty};
+use bex_engine::{FunctionCallContextBuilder, RuntimeTy};
 use bex_heap::BexExternalValue;
 
 #[tokio::test]
@@ -45,7 +45,7 @@ async fn test_render_prompt_directly() {
             default_role: client.default_role.clone(),
             allowed_roles: client.allowed_roles,
         },
-        output_format: sys_llm::OutputFormatContent::new(Ty::String {
+        output_format: sys_llm::OutputFormatContent::new(RuntimeTy::String {
             attr: TyAttr::default(),
         }),
         tags: IndexMap::new(),
@@ -103,7 +103,7 @@ You are a helpful assistant.
             default_role: client.default_role.clone(),
             allowed_roles: client.allowed_roles,
         },
-        output_format: sys_llm::OutputFormatContent::new(Ty::String {
+        output_format: sys_llm::OutputFormatContent::new(RuntimeTy::String {
             attr: TyAttr::default(),
         }),
         tags: IndexMap::new(),
@@ -183,7 +183,7 @@ async fn test_render_prompt_with_enums() {
             default_role: "user".to_string(),
             allowed_roles: vec!["user".to_string()],
         },
-        output_format: sys_llm::OutputFormatContent::new(Ty::String {
+        output_format: sys_llm::OutputFormatContent::new(RuntimeTy::String {
             attr: TyAttr::default(),
         }),
         tags: IndexMap::new(),
@@ -271,13 +271,8 @@ function test_render() -> int {
 
     let snapshot = common::compile_for_engine(source);
     let engine = std::sync::Arc::new(
-        BexEngine::new(
-            snapshot,
-            sys_native::SysOps::native().into(),
-            None,
-            Vec::new(),
-        )
-        .expect("Failed to create engine"),
+        BexEngine::new(snapshot, sys_native::SysOps::native().into(), Vec::new())
+            .expect("Failed to create engine"),
     );
 
     let result = engine
@@ -319,13 +314,8 @@ function get_prompt() -> baml.llm.PromptAst {
 
     let snapshot = common::compile_for_engine(source);
     let engine = std::sync::Arc::new(
-        BexEngine::new(
-            snapshot,
-            sys_native::SysOps::native().into(),
-            None,
-            Vec::new(),
-        )
-        .expect("Failed to create engine"),
+        BexEngine::new(snapshot, sys_native::SysOps::native().into(), Vec::new())
+            .expect("Failed to create engine"),
     );
 
     let result = engine
@@ -375,13 +365,8 @@ function get_prompt() -> baml.llm.PromptAst {
 
     let snapshot = common::compile_for_engine(source);
     let engine = std::sync::Arc::new(
-        BexEngine::new(
-            snapshot,
-            sys_native::SysOps::native().into(),
-            None,
-            Vec::new(),
-        )
-        .expect("Failed to create engine"),
+        BexEngine::new(snapshot, sys_native::SysOps::native().into(), Vec::new())
+            .expect("Failed to create engine"),
     );
 
     let result = engine
@@ -458,13 +443,8 @@ function test_build_request() -> int {
 
     let snapshot = common::compile_for_engine(source);
     let engine = std::sync::Arc::new(
-        BexEngine::new(
-            snapshot,
-            sys_native::SysOps::native().into(),
-            None,
-            Vec::new(),
-        )
-        .expect("Failed to create engine"),
+        BexEngine::new(snapshot, sys_native::SysOps::native().into(), Vec::new())
+            .expect("Failed to create engine"),
     );
 
     let result = engine
@@ -506,13 +486,8 @@ function test_call_llm() -> unknown {
 
     let snapshot = common::compile_for_engine(source);
     let engine = std::sync::Arc::new(
-        BexEngine::new(
-            snapshot,
-            sys_native::SysOps::native().into(),
-            None,
-            Vec::new(),
-        )
-        .expect("Failed to create engine"),
+        BexEngine::new(snapshot, sys_native::SysOps::native().into(), Vec::new())
+            .expect("Failed to create engine"),
     );
 
     // build_request now succeeds; this should panic at the next unimplemented
@@ -549,13 +524,8 @@ function Greet(name: string) -> string {
 
     let snapshot = common::compile_for_engine(source);
     let engine = std::sync::Arc::new(
-        BexEngine::new(
-            snapshot,
-            sys_native::SysOps::native().into(),
-            None,
-            Vec::new(),
-        )
-        .expect("Failed to create engine"),
+        BexEngine::new(snapshot, sys_native::SysOps::native().into(), Vec::new())
+            .expect("Failed to create engine"),
     );
 
     let result = engine
@@ -602,13 +572,8 @@ function test_call_llm() -> string {
 
     let snapshot = common::compile_for_engine(source);
     let engine = std::sync::Arc::new(
-        BexEngine::new(
-            snapshot,
-            sys_native::SysOps::native().into(),
-            None,
-            Vec::new(),
-        )
-        .expect("Failed to create engine"),
+        BexEngine::new(snapshot, sys_native::SysOps::native().into(), Vec::new())
+            .expect("Failed to create engine"),
     );
 
     // build_request now succeeds; this should panic at the next unimplemented
@@ -657,13 +622,8 @@ function test_call_llm() -> unknown {
 
     let snapshot = common::compile_for_engine(source);
     let engine = std::sync::Arc::new(
-        BexEngine::new(
-            snapshot,
-            sys_native::SysOps::native().into(),
-            None,
-            Vec::new(),
-        )
-        .expect("Failed to create engine"),
+        BexEngine::new(snapshot, sys_native::SysOps::native().into(), Vec::new())
+            .expect("Failed to create engine"),
     );
 
     // build_request now succeeds; this should panic at the next unimplemented
@@ -739,13 +699,8 @@ function get_prompt() -> baml.llm.PromptAst {
 
     let snapshot = common::compile_for_engine(source);
     let engine = std::sync::Arc::new(
-        BexEngine::new(
-            snapshot,
-            sys_native::SysOps::native().into(),
-            None,
-            Vec::new(),
-        )
-        .expect("Failed to create engine"),
+        BexEngine::new(snapshot, sys_native::SysOps::native().into(), Vec::new())
+            .expect("Failed to create engine"),
     );
 
     let result = engine
@@ -790,13 +745,8 @@ function get_prompt() -> baml.llm.PromptAst {
 
     let snapshot = common::compile_for_engine(source);
     let engine = std::sync::Arc::new(
-        BexEngine::new(
-            snapshot,
-            sys_native::SysOps::native().into(),
-            None,
-            Vec::new(),
-        )
-        .expect("Failed to create engine"),
+        BexEngine::new(snapshot, sys_native::SysOps::native().into(), Vec::new())
+            .expect("Failed to create engine"),
     );
 
     let result = engine
@@ -847,13 +797,8 @@ function get_prompt() -> baml.llm.PromptAst {
 
     let snapshot = common::compile_for_engine(source);
     let engine = std::sync::Arc::new(
-        BexEngine::new(
-            snapshot,
-            sys_native::SysOps::native().into(),
-            None,
-            Vec::new(),
-        )
-        .expect("Failed to create engine"),
+        BexEngine::new(snapshot, sys_native::SysOps::native().into(), Vec::new())
+            .expect("Failed to create engine"),
     );
 
     let result = engine
@@ -898,13 +843,8 @@ function get_prompt() -> baml.llm.PromptAst {
 
     let snapshot = common::compile_for_engine(source);
     let engine = std::sync::Arc::new(
-        BexEngine::new(
-            snapshot,
-            sys_native::SysOps::native().into(),
-            None,
-            Vec::new(),
-        )
-        .expect("Failed to create engine"),
+        BexEngine::new(snapshot, sys_native::SysOps::native().into(), Vec::new())
+            .expect("Failed to create engine"),
     );
 
     let result = engine
@@ -959,13 +899,8 @@ function get_prompt() -> baml.llm.PromptAst {
 
     let snapshot = common::compile_for_engine(source);
     let engine = std::sync::Arc::new(
-        BexEngine::new(
-            snapshot,
-            sys_native::SysOps::native().into(),
-            None,
-            Vec::new(),
-        )
-        .expect("Failed to create engine"),
+        BexEngine::new(snapshot, sys_native::SysOps::native().into(), Vec::new())
+            .expect("Failed to create engine"),
     );
 
     let result = engine

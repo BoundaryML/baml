@@ -37,7 +37,7 @@ class user.WrapNonGeneric {
   x: int
 }
 function user.WrapNonGeneric.to_json(self: user.WrapNonGeneric) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "x": self.x.to_json() } : map<string, baml.json.json>
+  map { "x": baml.json.to_json(self.x) } : map<string, baml.json.json>
 }
 function user.WrapNonGeneric.from_json(j: baml.json.json) -> user.WrapNonGeneric throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   WrapNonGeneric { x: baml.json.from_json<int>(baml.json.field(j, "x")) } : user.WrapNonGeneric
@@ -70,8 +70,8 @@ function user.unresolved_type_pattern(v: int | string) -> bool throws never {
   !! 1438..1447: unresolved type: Frobnitz
 }
 class user.WrapNonGeneric$stream {
-  x: null | int
+  x: int | null
 }
 class user.WrapGeneric$stream {
-  val: null | T
+  val: T | null
 }

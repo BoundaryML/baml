@@ -132,13 +132,13 @@ function typed_outputs.map_with_union_values_main() -> map<string, int | string>
     return
 }
 
-function typed_outputs.optional_class_main() -> typed_outputs.OutputData? {
+function typed_outputs.optional_class_main() -> typed_outputs.OutputData | null {
     load_const 42
     init_instance user.typed_outputs.OutputData .value
     return
 }
 
-function typed_outputs.optional_class_null_main() -> typed_outputs.OutputData? {
+function typed_outputs.optional_class_null_main() -> typed_outputs.OutputData | null {
     load_const null
     return
 }
@@ -164,22 +164,22 @@ function typed_outputs.optional_class_value() -> int {
     return
 }
 
-function typed_outputs.optional_int_null_main() -> int? {
+function typed_outputs.optional_int_null_main() -> int | null {
     load_const null
     return
 }
 
-function typed_outputs.optional_int_value_main() -> int? {
+function typed_outputs.optional_int_value_main() -> int | null {
     load_const 42
     return
 }
 
-function typed_outputs.optional_union_null_main() -> (int | string)? {
+function typed_outputs.optional_union_null_main() -> int | string | null {
     load_const null
     return
 }
 
-function typed_outputs.optional_union_value_main() -> (int | string)? {
+function typed_outputs.optional_union_value_main() -> int | string | null {
     load_const 42
     return
 }

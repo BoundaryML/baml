@@ -22,7 +22,9 @@
 
 use std::sync::Arc;
 
-pub use baml_project::testing::{OptLevel, compile_source, compile_source_with_opt};
+pub use baml_project::testing::{
+    OptLevel, compile_multi_file, compile_source, compile_source_with_opt,
+};
 use bex_engine::{BexCallArg, BexEngine, BexExternalValue, FunctionCallContextBuilder};
 use bex_vm::debug::{BytecodeFormat, display_program};
 use bex_vm_types::{Function, FunctionOrigin, Object, Program};
@@ -208,7 +210,19 @@ pub async fn run_test_with_options(
     show_auto_derive: bool,
 ) -> TestOutput {
     let program = compile_source_with_opt(source, opt);
+    run_compiled(program, entry, args, show_auto_derive).await
+}
 
+/// Run an already-compiled `program`, returning its bytecode display and the
+/// engine result. Split out of [`run_test_with_options`] so timing-sensitive
+/// tests can compile FIRST (compilation grows with the stdlib) and time only
+/// the engine execution — see `cancel_cascade.rs`.
+pub async fn run_compiled(
+    program: Program,
+    entry: &str,
+    args: IndexMap<&str, BexExternalValue>,
+    show_auto_derive: bool,
+) -> TestOutput {
     // Display bytecode before the engine consumes the program.
     let bytecode = display_user_functions_with_options(&program, show_auto_derive);
 
@@ -219,13 +233,8 @@ pub async fn run_test_with_options(
     let positional_args = resolve_args(&program, entry, args);
 
     // Create engine and execute.
-    let engine = BexEngine::new(
-        program,
-        Arc::new(sys_ops::SysOps::native()),
-        None,
-        Vec::new(),
-    )
-    .expect("Failed to create BexEngine");
+    let engine = BexEngine::new(program, Arc::new(sys_ops::SysOps::native()), Vec::new())
+        .expect("Failed to create BexEngine");
     let engine = Arc::new(engine);
 
     let result = engine
@@ -302,13 +311,8 @@ mod tests {
             OptLevel::One,
         );
         let engine = Arc::new(
-            BexEngine::new(
-                program,
-                Arc::new(sys_ops::SysOps::native()),
-                None,
-                Vec::new(),
-            )
-            .expect("engine"),
+            BexEngine::new(program, Arc::new(sys_ops::SysOps::native()), Vec::new())
+                .expect("engine"),
         );
 
         let err = engine
@@ -331,13 +335,8 @@ mod tests {
     async fn bound_args_reject_omitted_default_for_required_param() {
         let program = compile_source_with_opt("function main(x: int) -> int { x }", OptLevel::One);
         let engine = Arc::new(
-            BexEngine::new(
-                program,
-                Arc::new(sys_ops::SysOps::native()),
-                None,
-                Vec::new(),
-            )
-            .expect("engine"),
+            BexEngine::new(program, Arc::new(sys_ops::SysOps::native()), Vec::new())
+                .expect("engine"),
         );
 
         let err = engine

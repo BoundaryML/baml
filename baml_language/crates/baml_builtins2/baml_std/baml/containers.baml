@@ -31,14 +31,132 @@ class Array<T> {
     $rust_function
   }
 
+  /// Removes and returns the element at `index`, or `null` if out of bounds.
+  /// Mutates `self` in place.
+  ///
+  /// `O(n)` because subsequent elements shift backward. For `O(1)` removal from
+  /// the back use `pop`.
+  ///
+  /// # Examples
+  /// ```
+  /// let xs = [10, 20, 30];
+  /// xs.remove_at(1)   // 20
+  /// xs                // [10, 30]
+  /// xs.remove_at(99)  // null
+  /// ```
+  //baml:mut_self
+  function remove_at(self, index: int) -> T? throws never {
+    $rust_function
+  }
+
   /// Returns a new array with the elements of `self` followed by the elements of `other`.
   function concat(self, other: T[]) -> T[] throws never {
     $rust_function
   }
 
+  /// Calls `fn` once for each element in the array.
+  function for_each<E>(self, fn: (T) -> void throws E) -> void throws E {
+    for (let x in self.slice(0, self.length())) {
+      fn(x);
+    }
+  }
+
+  /// Returns a new array containing the elements for which `predicate` returns
+  /// true. The predicate is called once per element, left-to-right. Does not
+  /// mutate `self`.
+  //baml:mut_vm
+  //baml:may_yield
+  function filter<E>(self, predicate: (T) -> bool throws E) -> T[] throws E {
+    $rust_function
+  }
+
+  /// Returns a new array containing the non-null results of `fn` applied to
+  /// every element. The function is called once per element, left-to-right.
+  /// Does not mutate `self`. For a lazy version, use `iter().filter_map(fn)`.
+  function filter_map<U, E>(self, fn: (T) -> U? throws E) -> U[] throws E {
+    let out: U[] = [];
+    for (let x in self.slice(0, self.length())) {
+      match (fn(x)) {
+        null => {},
+        let y: U => {
+          out.push(y);
+        },
+      }
+    }
+    out
+  }
+
   /// Returns a new array with the elements in reverse order. Does not mutate `self`.
   function reverse(self) -> T[] throws never {
     $rust_function
+  }
+
+  // `sort()` is no longer a method of `Array<T>`: it is provided by the
+  // `Sortable` interface (`baml/comparable.baml`), blanket-implemented for
+  // `T[]` where `T implements Comparable`. This makes `sort()` reject
+  // non-orderable element types at compile time (with a `sort_by` pointer)
+  // and infallible (`throws never`) for `int`/`bigint`/`string`, instead of
+  // the old unconditional `throws InvalidArgument`. `sort_by`/`sort_by_key`
+  // remain here.
+
+  /// Sorts this array in place using a comparator, then returns `self`.
+  ///
+  /// The comparator follows the JavaScript convention: negative means the
+  /// first argument sorts before the second, zero preserves relative order, and
+  /// positive means it sorts after the second.
+  ///
+  /// Stable: elements the comparator reports as equal keep their relative
+  /// order. If the comparator throws, `self` is left in its pre-sort state —
+  /// the sorted result is written back only once the whole sort completes.
+  //baml:mut_vm
+  //baml:may_yield
+  //baml:mut_self
+  function sort_by<E>(self, compare: (T, T) -> int throws E) -> T[] throws E {
+    $rust_function
+  }
+
+  /// Sorts this array in place by keys computed once per element, then returns
+  /// `self`.
+  ///
+  /// Each key is computed exactly once, left-to-right, and the elements are
+  /// ordered by their keys' natural order (`Comparable.compare`). The sort is
+  /// stable: elements with equal keys keep their relative order. If computing a
+  /// key — or comparing two keys — throws, `self` is left in its pre-sort
+  /// state.
+  ///
+  /// The key type must be `Comparable`; `U.CompareError` (the key's comparison
+  /// error) propagates to the caller alongside the key callback's own `E`. For
+  /// `int`/`bigint`/`string` keys that is `never`, so the only error is `E`.
+  //baml:mut_self
+  function sort_by_key<U extends Comparable, E>(self, key: (T) -> U throws E) -> T[] throws E | U.CompareError {
+    let n = self.length();
+    if (n <= 1) { return self; }
+    let items = self.slice(0, n);
+    // Compute each key exactly once, left to right.
+    let keys: U[] = [];
+    for (let x in items) { keys.push(key(x)); }
+    // Stably sort the positions `[0, n)` by their keys. `sort_by` is stable, so
+    // equal keys keep their original relative order with no explicit tie-break.
+    let order: int[] = [];
+    let p = 0;
+    while (p < n) { order.push(p); p += 1; }
+    order.sort_by((i: int, j: int) -> int throws U.CompareError {
+      match (keys.at(i)) {
+        null => 0
+        let ki: U => match (keys.at(j)) {
+          null => 0
+          let kj: U => ki.compare(kj)
+        }
+      }
+    });
+    // Materialize the reordered elements, then write them back in place.
+    let sorted: T[] = [];
+    for (let i in order) {
+      match (items.at(i)) { null => {} let item: T => { sorted.push(item); } }
+    }
+    self.clear();
+    for (let s in sorted) { self.push(s); }
+    return self;
   }
 
   /// Returns a sub-array from index `start` (inclusive) to `end` (exclusive).

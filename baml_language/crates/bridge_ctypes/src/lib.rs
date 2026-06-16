@@ -5,7 +5,6 @@
 //! and `bridge_wasm`.
 
 mod error;
-mod event_encode;
 mod handle_table;
 mod traceback;
 mod utils;
@@ -21,7 +20,6 @@ pub mod baml_core {
 }
 
 pub use error::CtypesError;
-pub use event_encode::{runtime_event_to_bytes, runtime_event_to_proto};
 pub use handle_table::{
     CffiHandleTable, CffiHandleTableEntry, CffiHandleTableOptions, HANDLE_TABLE,
 };

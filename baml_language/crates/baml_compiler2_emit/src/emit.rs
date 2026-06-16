@@ -14,20 +14,19 @@ use baml_compiler2_mir::{
     BasicBlock, BinOp, BlockId, Constant, IndexKind, IntrinsicOp, Local, LogLevel, MirFunctionBody,
     Operand, Place, Rvalue, StatementKind, Terminator, UnaryOp,
 };
-use baml_type::{Ty, TyTemplate};
+use baml_type::{RuntimeTy, TyTemplate, TypeName};
 use bex_vm_types::{
     BinOp as VmBinOp, Bytecode, CmpOp, ConstValue, Function, FunctionKind, FunctionOrigin,
     GlobalIndex, Instruction, Object, ObjectIndex, ObjectPool, UnaryOp as VmUnaryOp,
     bytecode::{
-        BlockNotification, BlockNotificationType, ClassInitPlan, DebugLocalScope, FieldCopy,
-        FieldCopySet, InstructionMeta, JumpTableData, LineTableEntry, MatchHashEntry,
-        MatchHashTable, OperandMeta,
+        ClassInitPlan, DebugLocalScope, FieldCopy, FieldCopySet, InstructionMeta, JumpTableData,
+        LineTableEntry, MatchHashEntry, MatchHashTable, OperandMeta,
     },
 };
 
 /// Coarse arithmetic-type classification used by [`try_specialize_binary_op`].
 ///
-/// Collapses `Ty::Int { .. }` / `Ty::Literal(Int(_))` (and similar) into a
+/// Collapses `RuntimeTy::Int { .. }` / `RuntimeTy::Literal(Int(_))` (and similar) into a
 /// single tag so specialization works regardless of whether TIR preserved a
 /// literal type after constant-folding.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -328,11 +327,8 @@ struct StackifyCodegen<'ctx, 'obj> {
     /// We only emit Watch once per watched local (at initialization).
     watched_locals_initialized: HashSet<Local>,
 
-    /// Block notifications to be attached to the compiled function.
-    block_notifications: Vec<BlockNotification>,
-
     /// MIR local types for field name resolution (debug info).
-    local_types: HashMap<Local, Ty>,
+    local_types: HashMap<Local, RuntimeTy>,
 
     /// Slot index → variable name mapping for debug metadata.
     slot_names: Vec<String>,
@@ -348,7 +344,7 @@ struct StackifyCodegen<'ctx, 'obj> {
 
     /// Compile-time types for this function's closure captures, indexed by
     /// `Place::Capture`.
-    capture_types: Vec<Ty>,
+    capture_types: Vec<RuntimeTy>,
 
     /// Set of locals that are captured by child lambdas and need cell wrapping.
     /// Derived from `LocalDecl.is_captured` during `compile()`.
@@ -412,7 +408,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             next_block: None,
             current_block_start: 0,
             watched_locals_initialized: HashSet::new(),
-            block_notifications: Vec::new(),
             local_types: HashMap::new(),
             slot_names: Vec::new(),
             lambda_object_indices: ctx.lambda_object_indices.to_vec(),
@@ -434,18 +429,29 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         }
     }
 
+    fn class_object_index_for_type_name(&self, tn: &TypeName) -> Option<usize> {
+        let full_name = tn.render_dotted(false);
+        self.class_object_indices
+            .get(&full_name)
+            .copied()
+            .or_else(|| {
+                self.class_object_indices
+                    .get(tn.display_name().as_str())
+                    .copied()
+            })
+            .or_else(|| self.class_object_indices.get(tn.name().as_str()).copied())
+    }
+
     /// Resolve the type of a MIR Place by walking from the root local through projections.
-    fn resolve_place_type(&self, place: &Place) -> Option<Ty> {
+    fn resolve_place_type(&self, place: &Place) -> Option<RuntimeTy> {
         match place {
             Place::Local(local) => self.local_types.get(local).cloned(),
             Place::Capture(idx) => self.capture_types.get(*idx).cloned(),
             Place::Field { base, field } => {
                 let base_ty = self.resolve_place_type(base)?;
                 match &base_ty {
-                    Ty::Class(type_name, _, _) => {
-                        let &obj_idx = self
-                            .class_object_indices
-                            .get(type_name.display_name.as_str())?;
+                    RuntimeTy::Class(type_name, _, _) => {
+                        let obj_idx = self.class_object_index_for_type_name(type_name)?;
                         match self.objects.get(obj_idx)? {
                             Object::Class(class) => {
                                 class.fields.get(*field).map(|f| f.field_type.clone())
@@ -459,8 +465,8 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Place::Index { base, .. } => {
                 let base_ty = self.resolve_place_type(base)?;
                 match base_ty {
-                    Ty::List(inner, _) => Some(*inner),
-                    Ty::Map { value, .. } => Some(*value),
+                    RuntimeTy::List(inner, _) => Some(*inner),
+                    RuntimeTy::Map { value, .. } => Some(*value),
                     _ => None,
                 }
             }
@@ -468,15 +474,15 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     }
 
     /// Resolve the compile-time type of an operand, if known.
-    fn resolve_operand_type(&self, operand: &Operand) -> Option<Ty> {
+    fn resolve_operand_type(&self, operand: &Operand) -> Option<RuntimeTy> {
         match operand {
             Operand::Constant(c) => match c {
-                Constant::Int(_) => Some(Ty::int()),
-                Constant::Bigint(_) => Some(Ty::bigint()),
-                Constant::Float(_) => Some(Ty::float()),
-                Constant::String(_) => Some(Ty::string()),
-                Constant::Bool(_) => Some(Ty::bool()),
-                Constant::Null => Some(Ty::null()),
+                Constant::Int(_) => Some(RuntimeTy::int()),
+                Constant::Bigint(_) => Some(RuntimeTy::bigint()),
+                Constant::Float(_) => Some(RuntimeTy::float()),
+                Constant::String(_) => Some(RuntimeTy::string()),
+                Constant::Bool(_) => Some(RuntimeTy::bool()),
+                Constant::Null => Some(RuntimeTy::null()),
                 Constant::OmittedArg => None,
                 _ => None,
             },
@@ -487,18 +493,18 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     /// Classify a type for binary-op specialization. Returns `None` if the
     /// type isn't one of the primitive numeric forms we can specialize on.
     ///
-    /// Both `Ty::Int { .. }` and `Ty::Literal(Literal::Int(_), _)` map to
+    /// Both `RuntimeTy::Int { .. }` and `RuntimeTy::Literal(Literal::Int(_), _)` map to
     /// `Int`, and similarly for `Float`/`Bigint`. This lets us specialize
     /// expressions like `(-1n) & 255n` where the lhs operand carries a
-    /// `Ty::Literal(Bigint(-1))` after constant-folding in TIR.
-    fn classify_arith_ty(ty: &Ty) -> Option<ArithTyClass> {
+    /// `RuntimeTy::Literal(Bigint(-1))` after constant-folding in TIR.
+    fn classify_arith_ty(ty: &RuntimeTy) -> Option<ArithTyClass> {
         match ty {
-            Ty::Int { .. } => Some(ArithTyClass::Int),
-            Ty::Float { .. } => Some(ArithTyClass::Float),
-            Ty::Bigint { .. } => Some(ArithTyClass::Bigint),
-            Ty::Literal(baml_type::Literal::Int(_), _) => Some(ArithTyClass::Int),
-            Ty::Literal(baml_type::Literal::Float(_), _) => Some(ArithTyClass::Float),
-            Ty::Literal(baml_type::Literal::Bigint(_), _) => Some(ArithTyClass::Bigint),
+            RuntimeTy::Int { .. } => Some(ArithTyClass::Int),
+            RuntimeTy::Float { .. } => Some(ArithTyClass::Float),
+            RuntimeTy::Bigint { .. } => Some(ArithTyClass::Bigint),
+            RuntimeTy::Literal(baml_type::Literal::Int(_), _, _) => Some(ArithTyClass::Int),
+            RuntimeTy::Literal(baml_type::Literal::Float(_), _, _) => Some(ArithTyClass::Float),
+            RuntimeTy::Literal(baml_type::Literal::Bigint(_), _, _) => Some(ArithTyClass::Bigint),
             _ => None,
         }
     }
@@ -943,19 +949,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         // 4. Build exception table from MIR catch regions
         self.build_exception_table(mir);
 
-        // 5. Convert MIR VizNodes to VM VizNodeMeta
-        let viz_nodes = mir
-            .viz_nodes
-            .iter()
-            .map(|node| bex_vm_types::VizNodeMeta {
-                node_id: node.node_id,
-                log_filter_key: node.log_filter_key.clone(),
-                parent_log_filter_key: node.parent_log_filter_key.clone(),
-                node_type: Self::convert_viz_node_type(node.node_type),
-                label: node.label.clone(),
-                header_level: node.header_level,
-            })
-            .collect();
         let debug_locals = Self::build_debug_locals(mir, &self.local_slots);
 
         // 5. Build the Function
@@ -971,39 +964,19 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             local_names: self.slot_names,
             debug_locals,
             span: Span::fake(),
-            block_notifications: self.block_notifications,
-            viz_nodes,
-            return_type: baml_type::Ty::Null {
-                attr: baml_type::TyAttr::default(),
-            },
-            stream_return_type: baml_type::Ty::Null {
+            return_type: baml_type::RuntimeTy::Null {
                 attr: baml_type::TyAttr::default(),
             },
             param_names: Vec::new(),
             param_types: Vec::new(),
             param_has_default: Vec::new(),
+            display_type_params: Vec::new(),
+            display_param_types: Vec::new(),
+            display_return_type: "null".to_string(),
             throws_type: None,
             origin: FunctionOrigin::Internal,
             body_meta: None,
-            trace: false,
-        }
-    }
-
-    /// Convert MIR `VizNodeType` to VM `VizNodeType`.
-    fn convert_viz_node_type(
-        mir_type: baml_compiler2_mir::VizNodeType,
-    ) -> bex_vm_types::VizNodeType {
-        match mir_type {
-            baml_compiler2_mir::VizNodeType::FunctionRoot => {
-                bex_vm_types::VizNodeType::FunctionRoot
-            }
-            baml_compiler2_mir::VizNodeType::HeaderContextEnter => {
-                bex_vm_types::VizNodeType::HeaderContextEnter
-            }
-            baml_compiler2_mir::VizNodeType::BranchGroup => bex_vm_types::VizNodeType::BranchGroup,
-            baml_compiler2_mir::VizNodeType::BranchArm => bex_vm_types::VizNodeType::BranchArm,
-            baml_compiler2_mir::VizNodeType::Loop => bex_vm_types::VizNodeType::Loop,
-            baml_compiler2_mir::VizNodeType::OtherScope => bex_vm_types::VizNodeType::OtherScope,
+            function_id: 0, // assigned at engine init (interim provider)
         }
     }
 
@@ -1387,17 +1360,8 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 let inst = self.emit(Instruction::Unwatch(slot));
                 self.set_var_operand(inst, slot);
             }
-            StatementKind::NotifyBlock { name, level } => {
-                // Add block notification to the function's metadata
-                let block_index = self.block_notifications.len();
-                self.block_notifications.push(BlockNotification {
-                    function_name: String::new(), // Filled in by VM at runtime
-                    block_name: name.to_string(),
-                    level: *level,
-                    block_type: BlockNotificationType::Statement,
-                    is_enter: true,
-                });
-                self.emit(Instruction::NotifyBlock(block_index));
+            StatementKind::NotifyBlock { name: _, level: _ } => {
+                // Block/viz observability is not emitted to bytecode.
             }
             StatementKind::WatchOptions { local, filter } => {
                 let channel_name = self.body.local(*local).name.as_deref();
@@ -1414,11 +1378,11 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 let inst = self.emit(Instruction::Notify(slot));
                 self.set_var_operand(inst, slot);
             }
-            StatementKind::VizEnter(node_idx) => {
-                self.emit(Instruction::VizEnter(*node_idx));
+            StatementKind::VizEnter(_node_idx) => {
+                // Viz observability is not emitted to bytecode.
             }
-            StatementKind::VizExit(node_idx) => {
-                self.emit(Instruction::VizExit(*node_idx));
+            StatementKind::VizExit(_node_idx) => {
+                // Viz observability is not emitted to bytecode.
             }
             StatementKind::FreshCell(local) => {
                 if self.captured_locals.contains(local) {
@@ -1434,19 +1398,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             }
             StatementKind::Intrinsic { op, args } => {
                 match op {
-                    IntrinsicOp::SendEvent => {
-                        // Same bytecode as the old baml.events.send string-match arm:
-                        // push args (event_name, data), then SendEvent.
-                        unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
-                        self.emit(Instruction::SendEvent);
-                        // The engine pushes `null` after resuming from SendEvent.
-                        // Since this is a statement (not an rvalue), discard it.
-                        self.emit(Instruction::Pop(1));
-                    }
                     IntrinsicOp::Log(level) => {
-                        // Same bytecode as the old log.* string-match arm:
-                        // Synthesize SendEvent with "$baml_log" event name and
-                        // { level: "<level>", data: <user_arg> } payload.
+                        // Emit the reserved "$baml_log" event with payload
+                        // { level: "<level>", data: <user_arg> }, where
+                        // <user_arg> may be any BAML value.
 
                         // Save call-site span — walking args may overwrite current_debug_span
                         let call_site_span = self.current_debug_span;
@@ -2025,21 +1980,14 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 then_block,
                 else_block,
             } => {
-                // Optimization: If else_block is unreachable (last arm of exhaustive match),
-                // we know the condition must be true, so skip the comparison entirely.
-                if self.analysis.is_block_unreachable(*else_block, self.body) {
-                    // Don't evaluate condition - just go directly to then_block
-                    self.emit_jump_unless_fallthrough(*then_block);
-                } else {
-                    self.emit_operand_pull(condition);
-                    // PopJumpIfFalse to else_block (pops condition from stack)
-                    // Apply jump threading to resolve through empty blocks
-                    let resolved_else = self.resolve_pending_target(*else_block);
-                    let else_jump = self.emit(Instruction::PopJumpIfFalse(0));
-                    self.pending_jumps.push((else_jump, resolved_else));
-                    // Jump to then_block (may be elided if it's next)
-                    self.emit_jump_unless_fallthrough(*then_block);
-                }
+                self.emit_operand_pull(condition);
+                // PopJumpIfFalse to else_block (pops condition from stack).
+                // Apply jump threading to resolve through empty blocks.
+                let resolved_else = self.resolve_pending_target(*else_block);
+                let else_jump = self.emit(Instruction::PopJumpIfFalse(0));
+                self.pending_jumps.push((else_jump, resolved_else));
+                // Jump to then_block (may be elided if it's next).
+                self.emit_jump_unless_fallthrough(*then_block);
             }
 
             Terminator::Switch {
@@ -2184,13 +2132,18 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Terminator::Spawn {
                 closure,
                 name,
+                config,
                 future,
                 resume,
             } => {
-                // Push closure then name. The runtime `OpCode::Spawn`
-                // pops them in reverse: name first, then closure.
+                // Push closure, name, then config. The runtime `OpCode::Spawn`
+                // pops them in reverse: config first, then name, then closure.
+                // Config is null when there is no `with` clause, so a fixed
+                // three values are always pushed (BEP-034 spawn options).
                 self.emit_operand_pull(closure);
                 self.emit_operand_pull(name);
+                let null_config = Operand::Constant(Constant::Null);
+                self.emit_operand_pull(config.as_deref().unwrap_or(&null_config));
                 self.emit(Instruction::Spawn);
                 self.emit_store_place(future);
                 self.emit_jump_unless_fallthrough(*resume);
@@ -2204,6 +2157,21 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             } => {
                 unwrap_infallible(pull_semantics::walk_await_future(self, future));
                 self.emit(Instruction::Await);
+
+                self.emit_store_place(destination);
+                self.emit_jump_unless_fallthrough(*target);
+            }
+
+            Terminator::AwaitAny {
+                futures,
+                destination,
+                target,
+                unwind: _,
+            } => {
+                // Push the array of futures, then AWAIT_ANY pops it and pushes
+                // the winning `int` index (BEP-034 `baml.future.__await_any`).
+                self.emit_operand_pull(futures);
+                self.emit(Instruction::AwaitAny);
 
                 self.emit_store_place(destination);
                 self.emit_jump_unless_fallthrough(*target);
@@ -2223,27 +2191,57 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Terminator::ShortCircuit {
                 operand,
                 is_and,
-                destination: _,
+                destination,
                 eval_rhs,
                 join,
             } => {
-                // Legacy-style short-circuit using JumpIfFalse (peek, no pop).
-                // The destination local is PhiLike — value stays on TOS, no store/load.
+                // Short-circuit lowering using JumpIfFalse (peek, no pop).
+                //
+                // The short-circuit (taken) path leaves the operand value on TOS
+                // and jumps to the join. The `eval_rhs` block computes and stores
+                // the result via its own trailing `destination = <rhs>` statement.
+                // Both paths must agree on where the result lives at the join:
+                //
+                // * When `destination` is stack-carried, the join consumes the
+                //   value straight off TOS, and the `eval_rhs` store is also
+                //   elided. The taken path should leave the value on TOS.
+                // * Otherwise `destination` is a real slot: the `eval_rhs` store
+                //   writes the slot and pops, so the taken path must also store
+                //   its TOS value into the slot before the join.
+                let store_on_taken_path = !matches!(destination, Place::Local(l)
+                    if matches!(
+                        pull_semantics::local_store_behavior(self.analysis.classifications[l]),
+                        pull_semantics::LocalStoreBehavior::KeepOnStack
+                    )
+                );
                 self.emit_operand_pull(operand);
 
                 if *is_and {
-                    // &&: false → short-circuit (value stays on TOS), jump to join.
+                    // &&: false → short-circuit edge (materialize dest), jump to join.
                     //     true → pop, evaluate rhs.
                     let sc_jump = self.emit(Instruction::JumpIfFalse(0));
                     let resolved_join = self.resolve_pending_target(*join);
-                    self.pending_jumps.push((sc_jump, resolved_join));
-                    self.emit(Instruction::Pop(1));
-                    self.emit_jump_unless_fallthrough(*eval_rhs);
+                    if store_on_taken_path {
+                        self.emit(Instruction::Pop(1));
+                        self.emit_jump_always(*eval_rhs);
+                        let taken_pc = self.bytecode.instructions.len();
+                        self.patch_jump_to(sc_jump, taken_pc);
+                        self.emit_store_place(destination);
+                        let join_jump = self.emit(Instruction::Jump(0));
+                        self.pending_jumps.push((join_jump, resolved_join));
+                    } else {
+                        self.pending_jumps.push((sc_jump, resolved_join));
+                        self.emit(Instruction::Pop(1));
+                        self.emit_jump_unless_fallthrough(*eval_rhs);
+                    }
                 } else {
                     // ||: false → pop, evaluate rhs.
-                    //     true → value stays on TOS, jump to join.
+                    //     true → short-circuit edge (materialize dest), jump to join.
                     let false_jump = self.emit(Instruction::JumpIfFalse(0));
                     let resolved_join = self.resolve_pending_target(*join);
+                    if store_on_taken_path {
+                        self.emit_store_place(destination);
+                    }
                     let true_jump = self.emit(Instruction::Jump(0));
                     self.pending_jumps.push((true_jump, resolved_join));
                     // False landing: patch JumpIfFalse to here, pop, fall to eval_rhs.
@@ -3060,15 +3058,15 @@ impl PullSink for StackifyCodegen<'_, '_> {
     }
 
     fn is_type(&mut self, ty_template: &TyTemplate) -> Result<(), Self::Error> {
-        // Helper: emit IsType for a concrete Ty leaf.
+        // Helper: emit IsType for a concrete RuntimeTy leaf.
         match ty_template {
             // ── Class check ──────────────────────────────────────────────────
             TyTemplate::Class(tn, type_args_templates) => {
                 // Generic class instantiation with TypeArgRef leaves or
                 // concrete-but-parametric (e.g. Foo<int>).  Use the
                 // ClassWithTypeArgs constant so the VM can compare args.
-                let class_name_str = tn.display_name.as_str();
-                if let Some(&class_obj_idx) = self.class_object_indices.get(class_name_str) {
+                let class_name_str = tn.display_name();
+                if let Some(class_obj_idx) = self.class_object_index_for_type_name(tn) {
                     let c = self.add_constant(ConstValue::ClassWithTypeArgs {
                         class_obj: ObjectIndex::from_raw(class_obj_idx),
                         type_args_templates: type_args_templates.clone(),
@@ -3086,13 +3084,13 @@ impl PullSink for StackifyCodegen<'_, '_> {
             TyTemplate::Concrete(ty) => {
                 // ── Class (concrete) ─────────────────────────────────────────
                 let maybe_class = match ty {
-                    Ty::Class(tn, ty_args, _) => Some((tn, Some(ty_args.as_slice()))),
-                    Ty::TypeAlias(tn, _) => Some((tn, None)),
+                    RuntimeTy::Class(tn, ty_args, _) => Some((tn, Some(ty_args.as_slice()))),
+                    RuntimeTy::TypeAlias(tn, _) => Some((tn, None)),
                     _ => None,
                 };
                 if let Some((tn, ty_args_opt)) = maybe_class {
-                    let class_name_str = tn.display_name.as_str();
-                    if let Some(&class_obj_idx) = self.class_object_indices.get(class_name_str) {
+                    let class_name_str = tn.display_name();
+                    if let Some(class_obj_idx) = self.class_object_index_for_type_name(tn) {
                         match ty_args_opt {
                             Some(ty_args) if !ty_args.is_empty() => {
                                 // Concrete generic class, e.g. Foo<int>: emit
@@ -3134,18 +3132,18 @@ impl PullSink for StackifyCodegen<'_, '_> {
 
                 // ── Primitive type tags ───────────────────────────────────────
                 let type_tag = match ty {
-                    Ty::Int { .. } => Some(baml_type::typetag::INT),
-                    Ty::Bigint { .. } => Some(baml_type::typetag::BIGINT),
-                    Ty::String { .. } => Some(baml_type::typetag::STRING),
-                    Ty::Bool { .. } => Some(baml_type::typetag::BOOL),
-                    Ty::Null { .. } => Some(baml_type::typetag::NULL),
-                    Ty::Float { .. } => Some(baml_type::typetag::FLOAT),
-                    Ty::Enum(..) => Some(baml_type::typetag::ENUM),
-                    Ty::List(..) => Some(baml_type::typetag::LIST),
-                    Ty::Map { .. } => Some(baml_type::typetag::MAP),
-                    Ty::Function { .. } => Some(baml_type::typetag::FUNCTION),
-                    Ty::Uint8Array { .. } => Some(baml_type::typetag::UINT8ARRAY),
-                    Ty::Literal(lit, _) => Some(match lit {
+                    RuntimeTy::Int { .. } => Some(baml_type::typetag::INT),
+                    RuntimeTy::Bigint { .. } => Some(baml_type::typetag::BIGINT),
+                    RuntimeTy::String { .. } => Some(baml_type::typetag::STRING),
+                    RuntimeTy::Bool { .. } => Some(baml_type::typetag::BOOL),
+                    RuntimeTy::Null { .. } => Some(baml_type::typetag::NULL),
+                    RuntimeTy::Float { .. } => Some(baml_type::typetag::FLOAT),
+                    RuntimeTy::Enum(..) => Some(baml_type::typetag::ENUM),
+                    RuntimeTy::List(..) => Some(baml_type::typetag::LIST),
+                    RuntimeTy::Map { .. } => Some(baml_type::typetag::MAP),
+                    RuntimeTy::Function { .. } => Some(baml_type::typetag::FUNCTION),
+                    RuntimeTy::Uint8Array { .. } => Some(baml_type::typetag::UINT8ARRAY),
+                    RuntimeTy::Literal(lit, _, _) => Some(match lit {
                         baml_base::Literal::Int(_) => baml_type::typetag::INT,
                         baml_base::Literal::Bigint(_) => baml_type::typetag::BIGINT,
                         baml_base::Literal::Float(_) => baml_type::typetag::FLOAT,
@@ -3241,7 +3239,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
 
     fn resolve_field_name(&self, base: &Place, field_idx: usize) -> String {
         let class_name = match self.resolve_place_type(base) {
-            Some(Ty::Class(tn, _, _)) => tn.display_name.to_string(),
+            Some(RuntimeTy::Class(tn, _, _)) => tn.display_name().to_string(),
             _ => return format!("{field_idx}"),
         };
         self.lookup_class_field_name(&class_name, field_idx)
@@ -3338,4 +3336,109 @@ pub(crate) fn compile_mir_function<'mir>(
         f.span = span;
     }
     f
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::{HashMap, HashSet};
+
+    use baml_compiler2_mir::{
+        BasicBlock, BlockId, Constant, Local, LocalDecl, MirFunctionBody, Operand, Place, Rvalue,
+        Statement, StatementKind, Terminator,
+    };
+    use baml_type::RuntimeTy;
+    use bex_vm_types::{Instruction, ObjectPool};
+
+    use super::compile_mir_function;
+    use crate::{MirCodegenContext, analysis::OptLevel};
+
+    fn local(ty: RuntimeTy) -> LocalDecl {
+        LocalDecl {
+            name: None,
+            ty,
+            span: None,
+            scope_span: None,
+            is_watched: false,
+            is_captured: false,
+        }
+    }
+
+    #[test]
+    fn branch_condition_is_emitted_even_when_else_is_unreachable() {
+        let mut entry = BasicBlock::new(BlockId(0));
+        entry.terminator = Some(Terminator::Branch {
+            condition: Operand::copy_local(Local(1)),
+            then_block: BlockId(1),
+            else_block: BlockId(2),
+        });
+
+        let mut then_block = BasicBlock::new(BlockId(1));
+        then_block.statements.push(Statement {
+            kind: StatementKind::Assign {
+                destination: Place::local(Local(0)),
+                value: Rvalue::Use(Operand::constant(Constant::Int(1))),
+            },
+            span: None,
+        });
+        then_block.terminator = Some(Terminator::Goto { target: BlockId(3) });
+
+        let mut unreachable_else = BasicBlock::new(BlockId(2));
+        unreachable_else.terminator = Some(Terminator::Unreachable);
+
+        let mut return_block = BasicBlock::new(BlockId(3));
+        return_block.terminator = Some(Terminator::Return);
+
+        let body = MirFunctionBody {
+            blocks: vec![entry, then_block, unreachable_else, return_block],
+            entry: BlockId(0),
+            locals: vec![local(RuntimeTy::int()), local(RuntimeTy::bool())],
+            catch_regions: Vec::new(),
+            viz_nodes: Vec::new(),
+        };
+
+        let globals = HashMap::new();
+        let classes = HashMap::new();
+        let class_object_indices = HashMap::new();
+        let enum_object_indices = HashMap::new();
+        let enum_variants = HashMap::new();
+        let mut objects = ObjectPool::default();
+        let lambda_object_indices = Vec::new();
+        let lambda_names = Vec::new();
+        let capture_types = Vec::new();
+        let spawn_capture_indices = HashSet::new();
+        let line_starts = [0];
+
+        let function = compile_mir_function(
+            &body,
+            1,
+            None,
+            &line_starts,
+            MirCodegenContext {
+                globals: &globals,
+                classes: &classes,
+                class_object_indices: &class_object_indices,
+                enum_object_indices: &enum_object_indices,
+                enum_variants: &enum_variants,
+                objects: &mut objects,
+                lambda_object_indices: &lambda_object_indices,
+                lambda_names: &lambda_names,
+                capture_types: &capture_types,
+                spawn_capture_indices: &spawn_capture_indices,
+            },
+            OptLevel::One,
+        );
+
+        assert!(
+            function
+                .bytecode
+                .instructions
+                .windows(2)
+                .any(|window| matches!(
+                    window,
+                    [Instruction::LoadVar(1), Instruction::PopJumpIfFalse(_)]
+                )),
+            "expected branch bytecode to load the condition before PopJumpIfFalse, got: {:?}",
+            function.bytecode.instructions
+        );
+    }
 }

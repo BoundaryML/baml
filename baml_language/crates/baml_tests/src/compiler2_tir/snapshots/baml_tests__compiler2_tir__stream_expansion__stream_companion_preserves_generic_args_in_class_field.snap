@@ -15,14 +15,14 @@ class user.Container {
   inner: user.Box<int>
 }
 function user.Container.to_json(self: user.Container) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "inner": self.inner.to_json() } : map<string, baml.json.json>
+  map { "inner": baml.json.to_json(self.inner) } : map<string, baml.json.json>
 }
 function user.Container.from_json(j: baml.json.json) -> user.Container throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Container { inner: baml.json.from_json<Box<int>>(baml.json.field(j, "inner")) } : user.Container
 }
 class user.Box$stream {
-  value: null | T
+  value: T | null
 }
 class user.Container$stream {
-  inner: null | user.Box$stream<int>
+  inner: user.Box$stream<int> | null
 }

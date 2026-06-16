@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 24012
 ---
 === TIR2 ===
 function user.DestructureQualifiedLet() -> int throws never {
@@ -118,7 +117,7 @@ class user.llm.openai.Response {
   score: int
 }
 function user.llm.openai.Response.to_json(self: user.llm.openai.Response) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "text": self.text.to_json(), "score": self.score.to_json() } : map<string, baml.json.json>
+  map { "text": baml.json.to_json(self.text), "score": baml.json.to_json(self.score) } : map<string, baml.json.json>
 }
 function user.llm.openai.Response.from_json(j: baml.json.json) -> user.llm.openai.Response throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Response { text: baml.json.from_json<string>(baml.json.field(j, "text")), score: baml.json.from_json<int>(baml.json.field(j, "score")) } : user.llm.openai.Response
@@ -136,7 +135,7 @@ class user.llm.openai.Outer {
   inner: user.llm.openai.Box<T>
 }
 function user.llm.openai.Outer.to_json(self: user.llm.openai.Outer) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "inner": self.inner.to_json() } : map<string, baml.json.json>
+  map { "inner": baml.json.to_json(self.inner) } : map<string, baml.json.json>
 }
 function user.llm.openai.Outer.from_json(j: baml.json.json) -> user.llm.openai.Outer<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Outer { inner: baml.json.from_json<Box<T>>(baml.json.field(j, "inner")) } : user.llm.openai.Outer<T>
@@ -148,12 +147,12 @@ function user.llm.openai.DestructureBareInNamespace(response: user.llm.openai.Re
   }
 }
 class user.llm.openai.Response$stream {
-  text: null | string
-  score: null | int
+  text: string | null
+  score: int | null
 }
 class user.llm.openai.Box$stream {
-  value: null | T
+  value: T | null
 }
 class user.llm.openai.Outer$stream {
-  inner: null | user.llm.openai.Box$stream<T>
+  inner: user.llm.openai.Box$stream<T> | null
 }

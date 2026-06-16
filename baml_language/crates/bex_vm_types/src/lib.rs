@@ -11,22 +11,22 @@
 //! The instructions that the VM runs are defined in [`Instruction`] enum.
 
 pub mod bytecode;
+pub mod errors;
 pub mod heap_ptr;
 pub mod indexable;
 pub mod lazy_biased_mutex;
 mod roots;
+pub mod task_group;
 pub mod types;
 
 pub use bex_str::BexStr;
-pub use bytecode::{
-    BinOp, Bytecode, CmpOp, Instruction, JumpTableData, UnaryOp, VizExecDelta, VizExecEvent,
-    VizNodeMeta, VizNodeType,
-};
+pub use bytecode::{BinOp, Bytecode, CmpOp, Instruction, JumpTableData, UnaryOp};
 pub use heap_ptr::HeapPtr;
 pub use indexable::{
     GlobalIndex, GlobalPool, ObjectIndex, ObjectPool, SharedGlobals, StackIndex, VmGlobals,
 };
 pub use roots::{PermitProof, RootHaver, WriteBarrier};
+pub use task_group::{TaskGroupInner, TaskGroupPermit, TaskGroupTicket};
 pub use types::{
     ArrayContainer, ArrayReadGuard, ArrayWriteGuard, AtomicValueSlot, BoundMethod, Class,
     ClassField, ClientBuildMeta, ClientBuildType, CollectorRef, ConstValue, Enum, EnumVariant,

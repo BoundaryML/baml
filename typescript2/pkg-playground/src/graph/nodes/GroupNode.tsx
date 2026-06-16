@@ -17,15 +17,17 @@ import { NodeHandles } from './NodeHandles';
 export const GroupNode: ComponentType<NodeProps> = memo(({ data, id }) => {
   const d = data as WorkflowNodeData;
   const isHighlighted = d.selected;
-  const stateStyle = stateColors[d.executionState] ?? stateColors['not-started'];
+  const stateStyle =
+    stateColors[d.executionState] ?? stateColors['not-started'];
   const stateAccent = stateStyle.accent;
-  const isStateful = d.executionState !== 'not-started' && d.executionState !== 'skipped';
+  const isStateful =
+    d.executionState !== 'not-started' && d.executionState !== 'skipped';
 
   const borderColor = isHighlighted
     ? selectionRing.color
     : isStateful
       ? stateStyle.border
-      : 'rgba(255,255,255,0.10)';
+      : 'rgba(26,22,18,0.28)';
 
   return (
     <div
@@ -38,7 +40,7 @@ export const GroupNode: ComponentType<NodeProps> = memo(({ data, id }) => {
         // Frame-only: no fill, so the canvas reads through. Nested groups
         // never stack into a darker patch — they just compose hairline frames.
         background: 'transparent',
-        border: `1px solid ${borderColor}`,
+        border: `1.5px ${isStateful || isHighlighted ? 'solid' : 'dashed'} ${borderColor}`,
         boxShadow: isHighlighted
           ? `0 0 0 1px ${selectionRing.glow}`
           : undefined,
@@ -65,18 +67,19 @@ export const GroupNode: ComponentType<NodeProps> = memo(({ data, id }) => {
           fontWeight: 600,
           fontSize: 11,
           letterSpacing: '-0.005em',
-          color: isHighlighted ? '#ecfeff' : '#e4e4e7',
+          color: isHighlighted ? '#1D4ED8' : '#1A1612',
           background: isHighlighted
-            ? 'rgba(8,47,73,0.85)'
-            : 'rgba(24,24,27,0.85)',
-          border: `1px solid ${isHighlighted ? selectionRing.color : 'rgba(255,255,255,0.10)'}`,
+            ? 'rgba(234,241,254,0.94)'
+            : 'rgba(255,253,246,0.94)',
+          border: `1px solid ${isHighlighted ? selectionRing.color : '#D8CFBD'}`,
           backdropFilter: 'blur(8px)',
           WebkitBackdropFilter: 'blur(8px)',
           boxShadow: isHighlighted
-            ? `0 0 0 2px ${selectionRing.glow}, 0 1px 2px rgba(0,0,0,0.4)`
-            : '0 1px 2px rgba(0,0,0,0.4)',
+            ? `0 0 0 2px ${selectionRing.glow}, 0 1px 2px rgba(26,22,18,0.15)`
+            : '0 1px 2px rgba(26,22,18,0.12)',
           transition: 'all 150ms ease',
-          fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
+          fontFamily:
+            'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
         }}
       >
         {/* State accent dot (only for stateful runs) */}
@@ -102,8 +105,8 @@ export const GroupNode: ComponentType<NodeProps> = memo(({ data, id }) => {
               marginLeft: 2,
               padding: '1px 6px',
               borderRadius: 999,
-              background: 'rgba(59,130,246,0.18)',
-              color: '#93c5fd',
+              background: 'rgba(37,99,235,0.10)',
+              color: '#1D4ED8',
               fontSize: 10,
               fontWeight: 600,
               fontVariantNumeric: 'tabular-nums',

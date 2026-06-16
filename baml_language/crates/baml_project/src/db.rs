@@ -381,6 +381,33 @@ impl ProjectDatabase {
     pub fn get_bytecode(
         &self,
     ) -> Result<bex_vm_types::Program, baml_compiler2_emit::LoweringError> {
+        // Bytecode generation lowers types through the runtime-conversion
+        // boundary (`ResolvedAliases::convert`), which deliberately panics on
+        // inference-only `Unknown`/`Error` types. Those are legitimate
+        // error-recovery types in a program that does not type-check, so do not
+        // attempt codegen on an error-bearing project: surface the failure as a
+        // recoverable `LoweringError`. The diagnostics themselves are reported
+        // through the normal check path. (CLI commands gate before calling
+        // `generate_project_bytecode` directly; this protects the in-process /
+        // runtime-eval callers that go through `get_bytecode`.) The error filter
+        // matches `testing::assert_no_diagnostic_errors` — user-file errors only.
+        let user_file_ids: std::collections::HashSet<_> = self
+            .get_source_files()
+            .iter()
+            .map(|f| f.file_id(self))
+            .collect();
+        let error_count = crate::check::collect_compiler2_diagnostics(self)
+            .iter()
+            .filter(|d| matches!(d.severity, baml_compiler_diagnostics::Severity::Error))
+            .filter(|d| {
+                d.primary_span()
+                    .map(|span| user_file_ids.contains(&span.file_id))
+                    .unwrap_or(false)
+            })
+            .count();
+        if error_count > 0 {
+            return Err(baml_compiler2_emit::LoweringError::ProjectHasErrors { error_count });
+        }
         let opts = baml_compiler2_emit::CompileOptions {
             emit_test_cases: false,
         };
@@ -494,26 +521,85 @@ impl ProjectDatabase {
         body: &baml_compiler2_ast::ExprBody,
         expanding: &mut HashSet<String>,
     ) {
+        use baml_compiler2_visualization::control_flow::NodeType;
+
         for (call_expr, callee_name) in Self::call_sites_by_source_expr(body) {
-            let Some(call_node_id) = graph
+            let Some((call_node_id, is_return_node)) = graph
                 .nodes
                 .values()
                 .find(|node| node.source_expr == Some(call_expr))
-                .map(|node| node.id)
+                .map(|node| (node.id, matches!(node.node_type, NodeType::Return)))
             else {
                 continue;
             };
+            if is_return_node {
+                continue;
+            }
 
             let Some(callee_graph) = self.ast_control_flow_graph_impl(&callee_name, expanding)
             else {
                 continue;
             };
+
             if Self::is_single_llm_graph(&callee_graph) {
+                // Calls to LLM functions always render. Mark the call node so
+                // the visualization prep keeps it (and styles it as an LLM
+                // call) instead of pruning it like a plain function call.
+                let client_name = callee_graph
+                    .nodes
+                    .values()
+                    .next()
+                    .and_then(|node| node.llm_client.clone());
+                if let Some(node) = graph.nodes.get_mut(&call_node_id) {
+                    node.llm_client = Some(client_name.unwrap_or_else(|| "unknown".to_string()));
+                    if matches!(node.node_type, NodeType::OtherScope) {
+                        node.node_type = NodeType::LlmFunction;
+                    }
+                }
                 continue;
+            }
+
+            // A `//#` header directly above the callee's declaration names the
+            // call node: `//# process stuff` above `function somefunc()` makes
+            // every `somefunc()` call render as a "process stuff" node.
+            if let Some(title) = self.function_header_title(&callee_name) {
+                if let Some(node) = graph.nodes.get_mut(&call_node_id) {
+                    node.label = title;
+                    if matches!(node.node_type, NodeType::OtherScope) {
+                        node.node_type = NodeType::HeaderContextEnter;
+                    }
+                }
             }
 
             Self::merge_callee_graph_under_call_node(graph, call_node_id, &callee_graph);
         }
+    }
+
+    /// Find the `//#` header comment immediately above a function declaration,
+    /// if any. Blank lines and regular `//` comments between the header and
+    /// the declaration are skipped; any other code stops the search. If multiple
+    /// same-named declarations have different headers, do not guess which one a
+    /// name-only call resolved to.
+    fn function_header_title(&self, function_name: &str) -> Option<String> {
+        let mut unique_title = None;
+        for source_file in self.file_map.values().copied() {
+            let index = baml_compiler2_ppir::file_semantic_index(self, source_file);
+            for func_data in index.item_tree.functions.values() {
+                if func_data.name.as_str() != function_name {
+                    continue;
+                }
+                let text = source_file.text(self);
+                let start = usize::from(func_data.span.start()).min(text.len());
+                if let Some(title) = header_title_above(&text[..start]) {
+                    match &unique_title {
+                        Some(existing) if existing != &title => return None,
+                        Some(_) => {}
+                        None => unique_title = Some(title),
+                    }
+                }
+            }
+        }
+        unique_title
     }
 
     fn call_sites_by_source_expr(body: &baml_compiler2_ast::ExprBody) -> Vec<(u32, String)> {
@@ -1142,6 +1228,32 @@ impl ProjectDatabase {
     }
 }
 
+/// Scan backwards through the source text that precedes a declaration and
+/// return the title of the nearest `//#` header comment, if it is separated
+/// from the declaration only by blank lines and regular `//` comments.
+fn header_title_above(before: &str) -> Option<String> {
+    for line in before.lines().rev() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let Some(rest) = trimmed.strip_prefix("//") else {
+            // Reached code — no header directly above the declaration.
+            return None;
+        };
+        if let Some(title) = rest.strip_prefix('#') {
+            let title = title.trim_start_matches('#').trim();
+            if title.is_empty() {
+                return None;
+            }
+            return Some(title.to_string());
+        }
+        // Regular `//` or `///` comment between the header and the
+        // declaration — keep scanning upwards.
+    }
+    None
+}
+
 impl Default for ProjectDatabase {
     fn default() -> Self {
         Self::new()
@@ -1381,6 +1493,280 @@ function GuessingGame() -> string {
             edge_labels.contains(&r#""hit""#) && edge_labels.contains(&"default"),
             "prepared match fan-out edges should preserve match arm labels, got {edge_labels:?}"
         );
+    }
+
+    #[test]
+    fn test_llm_call_node_is_marked_and_always_rendered() {
+        use baml_compiler2_visualization::control_flow::{
+            NodeType, prepare_control_flow_graph_for_visualization,
+        };
+
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("/tmp"));
+        db.add_or_update_file(
+            std::path::Path::new("/tmp/wf.baml"),
+            r##"
+function Summarize(input: string) -> string {
+    client GPT4
+    prompt #"Summarize {{ input }}"#
+}
+
+function Workflow(input: string) -> string {
+    let x = Summarize(input);
+    x
+}
+"##,
+        );
+
+        let graph = db
+            .ast_control_flow_graph("Workflow")
+            .expect("expected graph for Workflow");
+        let call_node = graph
+            .nodes
+            .values()
+            .find(|n| n.label == "Summarize(input)")
+            .expect("caller graph should contain the Summarize call node");
+        assert!(
+            matches!(call_node.node_type, NodeType::LlmFunction),
+            "LLM call node should be marked as LlmFunction, got {:?}",
+            call_node.node_type
+        );
+        assert_eq!(call_node.llm_client.as_deref(), Some("GPT4"));
+
+        // Even with no //# headers anywhere, the LLM call must survive
+        // visualization prep.
+        let prepared = prepare_control_flow_graph_for_visualization(&graph);
+        assert!(
+            prepared.nodes.contains_key(&call_node.id),
+            "LLM call must always render"
+        );
+    }
+
+    #[test]
+    fn test_function_level_header_labels_call_nodes() {
+        use baml_compiler2_visualization::control_flow::{
+            NodeType, prepare_control_flow_graph_for_visualization,
+        };
+
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("/tmp"));
+        db.add_or_update_file(
+            std::path::Path::new("/tmp/wf.baml"),
+            r#"
+//# process stuff
+function somefunc(x: int) -> int {
+    //# inner step
+    x + 1
+}
+
+//# do the thing
+
+// a regular note between the header and the function is fine
+function plain(x: int) -> int { x + 1 }
+
+function Caller(x: int) -> int {
+    let a = somefunc(x);
+    let b = plain(a);
+    b
+}
+"#,
+        );
+
+        let graph = db
+            .ast_control_flow_graph("Caller")
+            .expect("expected graph for Caller");
+
+        let somefunc_node = graph
+            .nodes
+            .values()
+            .find(|n| n.label == "process stuff")
+            .expect("somefunc call should be relabeled from its function-level header");
+        assert!(matches!(
+            somefunc_node.node_type,
+            NodeType::HeaderContextEnter
+        ));
+        // The callee's body headers nest under the relabeled call node.
+        assert!(
+            graph
+                .nodes
+                .values()
+                .any(|n| n.label == "inner step" && n.log_filter_key.starts_with("somefunc|")),
+            "callee body headers should be expanded under the call node"
+        );
+
+        let plain_node = graph
+            .nodes
+            .values()
+            .find(|n| n.label == "do the thing")
+            .expect("plain call should be relabeled from its function-level header");
+
+        let prepared = prepare_control_flow_graph_for_visualization(&graph);
+        assert!(
+            prepared.nodes.contains_key(&somefunc_node.id),
+            "annotated function call must render"
+        );
+        assert!(
+            prepared.nodes.contains_key(&plain_node.id),
+            "function-level header alone is enough to render the call node"
+        );
+    }
+
+    #[test]
+    fn test_function_header_title_keeps_searching_after_missing_header() {
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("/tmp"));
+        db.add_or_update_file(
+            std::path::Path::new("/tmp/dupe.baml"),
+            r#"
+function helper(x: int) -> int { x }
+
+//# titled helper
+function helper(x: int) -> int { x + 1 }
+"#,
+        );
+
+        assert_eq!(
+            db.function_header_title("helper"),
+            Some("titled helper".to_string())
+        );
+    }
+
+    #[test]
+    fn test_function_header_title_ignores_ambiguous_same_name_headers() {
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("/tmp"));
+        db.add_or_update_file(
+            std::path::Path::new("/tmp/dupe.baml"),
+            r#"
+//# first helper
+function helper(x: int) -> int { x }
+
+//# second helper
+function helper(x: int) -> int { x + 1 }
+"#,
+        );
+
+        assert_eq!(db.function_header_title("helper"), None);
+    }
+
+    #[test]
+    fn test_early_return_renders_as_terminal_node() {
+        use baml_compiler2_visualization::control_flow::{
+            NodeType, prepare_control_flow_graph_for_visualization,
+        };
+
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("/tmp"));
+        db.add_or_update_file(
+            std::path::Path::new("/tmp/early.baml"),
+            r#"
+function Early(x: int) -> string {
+    //# Validate
+    if (x < 0) {
+        //# bail out
+        return "neg";
+    }
+    //# Continue
+    "ok"
+}
+"#,
+        );
+
+        let graph = db
+            .ast_control_flow_graph("Early")
+            .expect("expected graph for Early");
+        let ret_node = graph
+            .nodes
+            .values()
+            .find(|n| matches!(n.node_type, NodeType::Return))
+            .expect("early return should create a Return node");
+        assert!(ret_node.label.starts_with("return"));
+
+        let prepared = prepare_control_flow_graph_for_visualization(&graph);
+        let prepared_ret = prepared
+            .nodes
+            .get(&ret_node.id)
+            .expect("return inside annotated branch should render");
+        let outgoing = prepared
+            .edges_by_src
+            .get(&prepared_ret.id)
+            .map(Vec::len)
+            .unwrap_or(0);
+        assert_eq!(
+            outgoing, 0,
+            "return node must not be connected to later nodes"
+        );
+    }
+
+    #[test]
+    fn test_return_call_is_not_expanded_under_return_node() {
+        use baml_compiler2_visualization::control_flow::NodeType;
+
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("/tmp"));
+        db.add_or_update_file(
+            std::path::Path::new("/tmp/return-call.baml"),
+            r#"
+function Helper() -> string {
+    //# helper body
+    "ok"
+}
+
+function Early(x: int) -> string {
+    if (x < 0) {
+        return Helper();
+    }
+
+    "later"
+}
+"#,
+        );
+
+        let graph = db
+            .ast_control_flow_graph("Early")
+            .expect("expected graph for Early");
+        let ret_node = graph
+            .nodes
+            .values()
+            .find(|n| matches!(n.node_type, NodeType::Return))
+            .expect("return call should create a Return node");
+
+        assert_eq!(ret_node.label, "return Helper()");
+        assert!(
+            graph
+                .edges_by_src
+                .get(&ret_node.id)
+                .is_none_or(Vec::is_empty),
+            "return-call node must stay terminal instead of owning callee edges"
+        );
+        assert!(
+            graph.nodes.values().all(|n| n.label != "helper body"),
+            "callee body headers should not be expanded below a terminal return"
+        );
+    }
+
+    #[test]
+    fn test_header_title_above() {
+        assert_eq!(
+            header_title_above("//# process stuff\n"),
+            Some("process stuff".to_string())
+        );
+        assert_eq!(
+            header_title_above("//# process stuff\n\n// note\n/// docs\n"),
+            Some("process stuff".to_string()),
+            "blank lines and comments between header and declaration are skipped"
+        );
+        assert_eq!(
+            header_title_above("//## nested level\n"),
+            Some("nested level".to_string())
+        );
+        assert_eq!(
+            header_title_above("//# old header\n}\n"),
+            None,
+            "code between the header and the declaration stops the search"
+        );
+        assert_eq!(header_title_above("// just a comment\n"), None);
+        assert_eq!(header_title_above(""), None);
     }
 
     #[test]

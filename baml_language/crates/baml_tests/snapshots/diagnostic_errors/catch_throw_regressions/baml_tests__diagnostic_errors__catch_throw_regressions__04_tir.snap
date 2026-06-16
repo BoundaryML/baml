@@ -82,6 +82,42 @@ function user.CatchRecursiveThrow(n: int) -> string throws never {
           "handled" : "handled"
   }
 }
+class user.BuildError {
+  reason: string
+}
+function user.BuildError.to_json(self: user.BuildError) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "reason": baml.json.to_json(self.reason) } : map<string, baml.json.json>
+}
+function user.BuildError.from_json(j: baml.json.json) -> user.BuildError throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  BuildError { reason: baml.json.from_json<string>(baml.json.field(j, "reason")) } : user.BuildError
+}
+function user.GenerateWithBuildError(ok: bool) -> string throws never {
+  { : "ok"
+    if (Not ok : bool) : void
+      { : never
+        throw BuildError { reason: "generate failed" } : user.BuildError
+      }
+    if (ok : bool) : void
+      { : never
+        throw "string" : "string"
+      }
+    "ok" : "ok"
+  }
+}
+function user.BuildWithBuildError(ok: bool) -> string throws never {
+  { : string
+    GenerateWithBuildError(ok) : string
+  }
+}
+function user.CatchAllMissingString(ok: bool) -> string throws never {
+  { : string
+    catch (BuildWithBuildError(ok) : string) : unknown
+      catch_all (e)
+        BuildError =>
+          "recovered: " + e.reason : string
+  }
+  !! 2151..2248: non-exhaustive catch_all on `string | BuildError`; missing: string
+}
 function user.UnreachableTailStillChecked() -> string throws never {
   { : never
     { : never
@@ -90,5 +126,8 @@ function user.UnreachableTailStillChecked() -> string throws never {
       x.missing : unknown
     }
   }
-  ?? 1891..1913: unreachable code: 2 statement(s) after diverging statement
+  ?? 2429..2451: unreachable code: 2 statement(s) after diverging statement
+}
+class user.BuildError$stream {
+  reason: string | null
 }

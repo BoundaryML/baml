@@ -96,13 +96,14 @@ function user.TestFunc$parse(json: string, client: baml.llm.Client) -> string {
     store_var client
 
   L0:
-    load_const "TestFunc"
+    load_type string | null
+    load_type string
     load_var json
     call baml.llm.parse
     return
 }
 
-function user.TestFunc$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<null | string, string> {
+function user.TestFunc$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -111,8 +112,9 @@ function user.TestFunc$parse_stream(sse: baml.http.SseStream, client: baml.llm.C
     store_var client
 
   L0:
+    load_type string | null
+    load_type string
     load_var2 2 1
-    load_const "TestFunc"
     call baml.llm.Client.__make_stream
     return
 }
@@ -135,7 +137,7 @@ function user.TestFunc$render_prompt(input: string, client: baml.llm.Client) -> 
     return
 }
 
-function user.TestFunc$stream(input: string, client: baml.llm.Client) -> baml.llm.Stream<null | string, string> {
+function user.TestFunc$stream(input: string, client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -144,6 +146,8 @@ function user.TestFunc$stream(input: string, client: baml.llm.Client) -> baml.ll
     store_var client
 
   L0:
+    load_type string | null
+    load_type string
     load_var client
     load_const "TestFunc"
     load_var input
@@ -155,6 +159,8 @@ function user.TestFunc$stream(input: string, client: baml.llm.Client) -> baml.ll
 }
 
 function user.call_stream_inferred() -> baml.llm.Stream<null | string, string> {
+    load_type null | string
+    load_type string
     load_global user.TestClient
     load_const "TestFunc"
     load_const "world"

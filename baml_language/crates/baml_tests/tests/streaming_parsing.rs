@@ -47,14 +47,14 @@ fn streaming_llm_source(base_url: &str) -> String {
     )
 }
 
-/// Phase 6 regression pin (paired with `projects/compiles/stream_llm_inferred_typeargs/`):
-/// `baml.llm.stream_llm_function(...)` is called with **no** explicit `<T, S>`.
-/// `T` and `S` are inferred via the let-binding annotation, but inferred
-/// type-args don't reach MIR lowering today, so `__make_stream<T, S>` falls
-/// back to a registry lookup (`get_return_type(function_name)`) instead of
-/// `reflect.type_of<T>()`. If anyone removes that workaround without first
-/// landing inferred-arg lowering, this test will crash with a
-/// `Non-parsable type: BuiltinUnknown` error from the sys-op layer.
+/// Inferred-type-args pin (paired with `projects/compiles/stream_llm_inferred_typeargs/`):
+/// `baml.llm.stream_llm_function(...)` is called with **no** explicit
+/// `<TStream, TFinal>` — they are inferred from the let-binding annotation
+/// (TIR phase-0 reverse inference, persisted in `CallPlan.type_args`,
+/// materialized into the callee frame by MIR) and reified inside
+/// `__make_stream` via `reflect.type_of<TStream/TFinal>()`. There is no
+/// name-keyed registry fallback anymore; a propagation gap surfaces as a
+/// "Non-parsable type: ..." crash from `StreamCache.new`.
 #[tokio::test]
 async fn stream_string_final_value() {
     let server = MockServer::start().await;
@@ -88,6 +88,164 @@ async fn stream_string_final_value() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String("Hello, world!".to_string().into()))
+    );
+}
+
+/// Regression pin: class-typed streaming for a function declared inside a
+/// namespace. Historically broken twice by the same genus of bug — a
+/// stream-expanded type expr re-resolved in the wrong context, lowering
+/// `Unknown → Void` and crashing at runtime in `StreamCache.new` with
+/// "Non-parsable type: Void":
+///   1. emit's `compute_stream_return_type` (since deleted) passed the
+///      namespace path into `lower_type_expr`'s *generic-params* slot;
+///   2. MIR's `type_expr_to_template` resolved explicit call-site type args
+///      against HIR's package items, where PPIR-synthetic `Doc$stream`
+///      doesn't exist.
+/// The stream type now travels only through the PPIR-synthesized companion
+/// (signature + explicit type args) and is reified via
+/// `reflect.type_of<TStream/TFinal>()` in `__make_stream` — there is no
+/// baked `stream_return_type` metadata left to diverge. See
+/// thoughts/sam-projects/bridge-generics/streaming/00 + 01 and the
+/// live-OpenAI coverage in `sdk_tests/.../test_streaming_class_e2e.py`.
+#[tokio::test]
+async fn stream_class_in_namespace_final_value() {
+    let server = MockServer::start().await;
+    // Two chunks splitting mid-string so the partial parser sees an
+    // incomplete object before the final one.
+    let sse_body = openai_sse_body(
+        &[
+            r#"{\"title\": \"Hello\", \"body\": \"Wor"#,
+            r#"ld\", \"word_count\": 1}"#,
+        ],
+        "stop",
+    );
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_body_string(sse_body),
+        )
+        .mount(&server)
+        .await;
+    let uri = server.uri();
+
+    let ns_source = format!(
+        r##"
+        client<llm> TestClient {{
+            provider openai
+            options {{
+                model "gpt-4o"
+                api_key "test-key"
+                base_url "{uri}"
+            }}
+        }}
+
+        class Doc {{
+            title string
+            body string?
+            word_count int
+        }}
+
+        function TestFunc(input: string) -> Doc {{
+            client TestClient
+            prompt #"Say hello to {{{{ input }}}}"#
+        }}
+
+        function main() -> string {{
+            let s = TestFunc$stream("world");
+            let d = s.final();
+            d.title
+        }}
+    "##
+    );
+
+    let program =
+        baml_tests::engine::compile_multi_file(&[("ns_extract/main.baml", ns_source.as_str())]);
+    let output = baml_tests::engine::run_compiled(
+        program,
+        "extract.main",
+        baml_tests::engine::IndexMap::new(),
+        false,
+    )
+    .await;
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("Hello".to_string().into()))
+    );
+}
+
+/// Pin for the `$parse_stream` companion's type-arg threading: its body is
+/// synthesized by PPIR as `CLIENT.__make_stream<STREAM_EXPANDED, ORIGINAL>(sse)`
+/// (see `synthesize_llm_make_stream_call`), so `StreamCache.new` gets its
+/// types from the frame via `reflect.type_of` — no function-name string is
+/// involved. Class-typed + namespaced to exercise resolution of the
+/// PPIR-synthetic `Doc$stream` in the explicit type args.
+#[tokio::test]
+async fn parse_stream_companion_class_in_namespace() {
+    let server = MockServer::start().await;
+    let sse_body = openai_sse_body(
+        &[
+            r#"{\"title\": \"Hello\", \"body\": \"Wor"#,
+            r#"ld\", \"word_count\": 1}"#,
+        ],
+        "stop",
+    );
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_body_string(sse_body),
+        )
+        .mount(&server)
+        .await;
+    let uri = server.uri();
+
+    let ns_source = format!(
+        r##"
+        client<llm> TestClient {{
+            provider openai
+            options {{
+                model "gpt-4o"
+                api_key "test-key"
+                base_url "{uri}"
+            }}
+        }}
+
+        class Doc {{
+            title string
+            body string?
+            word_count int
+        }}
+
+        function TestFunc(input: string) -> Doc {{
+            client TestClient
+            prompt #"Say hello to {{{{ input }}}}"#
+        }}
+
+        function main() -> string {{
+            let req = TestFunc$build_request_stream("world");
+            let sse = baml.http.fetch_sse(req);
+            let s = TestFunc$parse_stream(sse);
+            let d = s.final();
+            d.title
+        }}
+    "##
+    );
+
+    let program =
+        baml_tests::engine::compile_multi_file(&[("ns_extract/main.baml", ns_source.as_str())]);
+    let output = baml_tests::engine::run_compiled(
+        program,
+        "extract.main",
+        baml_tests::engine::IndexMap::new(),
+        false,
+    )
+    .await;
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("Hello".to_string().into()))
     );
 }
 

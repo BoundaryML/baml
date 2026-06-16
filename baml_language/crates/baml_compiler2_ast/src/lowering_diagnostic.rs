@@ -4,7 +4,7 @@
 //! boundary in `check_file()`.
 
 use baml_base::{FileId, Span};
-use baml_compiler_diagnostics::diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase};
+use baml_compiler_diagnostics::diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase, Severity};
 use text_size::TextRange;
 
 /// Diagnostic emitted during CST → AST lowering.
@@ -117,6 +117,24 @@ pub enum LoweringDiagnostic {
         span: TextRange,
     },
 
+    /// `const` currently parses as a non-immutable alias for `let`.
+    ConstBindingIntroducer { span: TextRange },
+
+    /// `const` is reserved as future language surface and cannot be used as a
+    /// binding name.
+    ReservedConstBindingName { span: TextRange },
+
+    /// `$id` is the runtime-identity special form (reads lower to
+    /// `baml.id.current()`, writes to `baml.id.set(...)`); a binding named
+    /// `$id` would be silently dead, so it is rejected.
+    ReservedRuntimeIdBindingName { span: TextRange },
+
+    /// An assignment operator (`=`, `+=`, …) appeared in expression position,
+    /// e.g. `(x = 5)`. Assignment is statement-only in BAML, so the expression
+    /// has no value; without this diagnostic it would lower to a `Missing` that
+    /// only fails at runtime.
+    AssignmentInExpressionPosition { span: TextRange },
+
     /// Top-level `implements I for T` where `T` does not match any class in the file.
     UnresolvedImplementsForTarget {
         interface_name: String,
@@ -147,21 +165,24 @@ impl LoweringDiagnostic {
     /// `file_id` is the file this diagnostic was produced in — needed to
     /// construct `Span` values from the stored `TextRange`s.
     pub fn to_diagnostic(&self, file_id: FileId) -> Diagnostic {
-        let (id, message, range, label) = match self {
+        let (id, severity, message, range, label) = match self {
             LoweringDiagnostic::MissingItemName { item_kind, span } => (
                 DiagnosticId::MissingName,
+                Severity::Error,
                 format!("{item_kind} is missing a name"),
                 *span,
                 "expected a name here",
             ),
             LoweringDiagnostic::MissingFieldName { class_name, span } => (
                 DiagnosticId::MissingName,
+                Severity::Error,
                 format!("field in class `{class_name}` is missing a name"),
                 *span,
                 "expected a field name",
             ),
             LoweringDiagnostic::UnparseableType { context, span } => (
                 DiagnosticId::UnparseableType,
+                Severity::Error,
                 format!("could not parse type expression for {context}"),
                 *span,
                 "unparseable type",
@@ -171,12 +192,14 @@ impl LoweringDiagnostic {
                 span,
             } => (
                 DiagnosticId::MissingName,
+                Severity::Error,
                 format!("parameter in function `{function_name}` is missing a name"),
                 *span,
                 "expected a parameter name",
             ),
             LoweringDiagnostic::UnsupportedParameterDefault { context, span } => (
                 DiagnosticId::InvalidSyntax,
+                Severity::Error,
                 format!("parameter defaults are not supported in {context}"),
                 *span,
                 "default value is not allowed here",
@@ -187,6 +210,7 @@ impl LoweringDiagnostic {
                 span,
             } => (
                 DiagnosticId::InvalidSyntax,
+                Severity::Error,
                 format!(
                     "LLM function `{function_name}` cannot declare a parameter named `{param_name}`; `client` is reserved for the compiler-injected LLM client override"
                 ),
@@ -195,12 +219,14 @@ impl LoweringDiagnostic {
             ),
             LoweringDiagnostic::MissingVariantName { enum_name, span } => (
                 DiagnosticId::MissingName,
+                Severity::Error,
                 format!("variant in enum `{enum_name}` is missing a name"),
                 *span,
                 "expected a variant name",
             ),
             LoweringDiagnostic::MalformedAttribute { context, span } => (
                 DiagnosticId::MalformedAttribute,
+                Severity::Error,
                 format!("attribute on {context} is missing a name"),
                 *span,
                 "malformed attribute",
@@ -211,6 +237,7 @@ impl LoweringDiagnostic {
                 span,
             } => (
                 DiagnosticId::MissingConfigKey,
+                Severity::Error,
                 format!("config entry in {block_kind} `{block_name}` is missing a key"),
                 *span,
                 "expected a key",
@@ -221,6 +248,7 @@ impl LoweringDiagnostic {
                 span,
             } => (
                 DiagnosticId::MissingConfigBlock,
+                Severity::Error,
                 format!("{block_kind} `{block_name}` is missing a required config block"),
                 *span,
                 "expected a config block",
@@ -231,6 +259,7 @@ impl LoweringDiagnostic {
                 span,
             } => (
                 DiagnosticId::UnknownProvider,
+                Severity::Error,
                 format!("unknown provider '{provider}'"),
                 *span,
                 "unknown provider",
@@ -241,12 +270,14 @@ impl LoweringDiagnostic {
                 span,
             } => (
                 DiagnosticId::MissingClientOptions,
+                Severity::Error,
                 message.clone(),
                 *span,
                 "missing options",
             ),
             LoweringDiagnostic::FieldAttributeInTypePosition { attr_name, span } => (
                 DiagnosticId::FieldAttributeInTypePosition,
+                Severity::Error,
                 format!(
                     "`@{attr_name}` is only allowed on class fields and enum variants; \
                      remove it here"
@@ -256,12 +287,14 @@ impl LoweringDiagnostic {
             ),
             LoweringDiagnostic::InvalidByteStringEscape { message, span } => (
                 DiagnosticId::InvalidByteStringEscape,
+                Severity::Error,
                 format!("invalid byte string literal: {message}"),
                 *span,
                 "invalid escape",
             ),
             LoweringDiagnostic::InstanceofRemoved { span } => (
                 DiagnosticId::InstanceofRemoved,
+                Severity::Error,
                 "`instanceof` is no longer supported. Use a `match` expression for type checking instead.".to_string(),
                 *span,
                 "use `match` instead",
@@ -302,25 +335,63 @@ impl LoweringDiagnostic {
                         "${else if} must be inside ${if}…${endif}",
                     ),
                 };
-                (DiagnosticId::InvalidSyntax, message.to_string(), *span, label)
+                (
+                    DiagnosticId::InvalidSyntax,
+                    Severity::Error,
+                    message.to_string(),
+                    *span,
+                    label,
+                )
             }
             LoweringDiagnostic::EmptyInterpolation { span } => (
                 DiagnosticId::InvalidSyntax,
+                Severity::Error,
                 "empty interpolation ${} has no expression".to_string(),
                 *span,
                 "expected an expression inside ${…}",
             ),
             LoweringDiagnostic::VoidInNonReturnPosition { context, span } => (
                 DiagnosticId::VoidInNonReturnPosition,
+                Severity::Error,
                 format!("`void` can only be used as a function return type, not as {context}"),
                 *span,
                 "`void` not allowed here",
             ),
             LoweringDiagnostic::InvalidPatternAscription { reason, span } => (
                 DiagnosticId::TypeMismatch,
+                Severity::Error,
                 format!("invalid pattern type ascription: {reason}"),
                 *span,
                 "type ascription not allowed here",
+            ),
+            LoweringDiagnostic::ConstBindingIntroducer { span } => (
+                DiagnosticId::InvalidSyntax,
+                Severity::Warning,
+                "`const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.".to_string(),
+                *span,
+                "`const` behaves like `let` for now",
+            ),
+            LoweringDiagnostic::ReservedConstBindingName { span } => (
+                DiagnosticId::InvalidSyntax,
+                Severity::Error,
+                "`const` is reserved and cannot be used as a binding name".to_string(),
+                *span,
+                "`const` is reserved here",
+            ),
+            LoweringDiagnostic::ReservedRuntimeIdBindingName { span } => (
+                DiagnosticId::InvalidSyntax,
+                Severity::Error,
+                "`$id` is the runtime identity and cannot be used as a binding name".to_string(),
+                *span,
+                "`$id` is reserved here",
+            ),
+            LoweringDiagnostic::AssignmentInExpressionPosition { span } => (
+                DiagnosticId::InvalidSyntax,
+                Severity::Error,
+                "assignment is not allowed in expression position; assignment is a statement"
+                    .to_string(),
+                *span,
+                "assignment not allowed here",
             ),
             LoweringDiagnostic::UnresolvedImplementsForTarget {
                 interface_name,
@@ -328,12 +399,14 @@ impl LoweringDiagnostic {
                 span,
             } => (
                 DiagnosticId::UnknownType,
+                Severity::Error,
                 format!("`implements {interface_name} for {target_name}`: type `{target_name}` not found"),
                 *span,
                 "unknown target type",
             ),
             LoweringDiagnostic::InvalidImplementsForFieldsTarget { target_name, span } => (
                 DiagnosticId::TypeMismatch,
+                Severity::Error,
                 format!(
                     "`implements for {target_name}` cannot declare fields; only class targets can add interface fields"
                 ),
@@ -346,6 +419,7 @@ impl LoweringDiagnostic {
                 span,
             } => (
                 DiagnosticId::InterfaceFieldDeclaredInImplementsBlock,
+                Severity::Error,
                 format!(
                     "field `{field_name}` cannot be declared inside `implements {interface_name}`"
                 ),
@@ -354,7 +428,7 @@ impl LoweringDiagnostic {
             ),
         };
 
-        Diagnostic::error(id, message)
+        Diagnostic::new(id, severity, message)
             .with_primary(Span { file_id, range }, label)
             .with_phase(DiagnosticPhase::Hir)
     }

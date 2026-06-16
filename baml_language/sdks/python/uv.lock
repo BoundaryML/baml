@@ -2,6 +2,10 @@ version = 1
 revision = 3
 requires-python = ">=3.10"
 
+[options]
+exclude-newer = "2026-06-04T23:27:10.616668Z"
+exclude-newer-span = "-P7D"
+
 [[package]]
 name = "annotated-types"
 version = "0.7.0"
@@ -22,7 +26,7 @@ wheels = [
 
 [[package]]
 name = "baml-core"
-version = "0.11.0"
+version = "0.12.0"
 source = { editable = "." }
 dependencies = [
     { name = "protobuf" },
@@ -47,7 +51,7 @@ requires-dist = [{ name = "protobuf", specifier = ">=6.31.1" }]
 [package.metadata.requires-dev]
 dev = [
     { name = "grpcio-tools", specifier = ">=1.50" },
-    { name = "maturin", specifier = ">=1.0,<2.0" },
+    { name = "maturin", specifier = ">=1.9.4,<2.0" },
     { name = "pydantic", specifier = ">=2" },
     { name = "pyright", specifier = ">=1.1.409" },
     { name = "pytest", specifier = ">=7" },
