@@ -214,3 +214,90 @@ fn char_count_concat() {
     assert_eq!(c.char_count(), 6);
     assert_eq!(c.len(), 9);
 }
+
+// ── Shared-Concat-node flatten regression (B-262 / B-233) ──────────────────
+//
+// Concatenation only defers into a `Concat` node when the result exceeds
+// `INLINE_CAPACITY` (54 bytes); shorter results are eagerly copied to `Inline`
+// and can't be shared. So these tests use >54-byte operands to force the
+// `Concat` path, then check that flattening a *parent* does not corrupt a
+// child node that is still referenced elsewhere.
+
+/// A `Concat` reused as the left child of another `Concat` must keep its own
+/// value after the parent is flattened. The old `flatten()` destructively
+/// emptied shared inner nodes, so `child` would read back as `""`.
+#[test]
+fn shared_concat_child_survives_parent_flatten() {
+    // 55 bytes → Concat (just over the 54-byte inline boundary).
+    let child = BexStr::concat(BexStr::from("x".repeat(40)), BexStr::from("y".repeat(15)));
+    assert!(
+        matches!(child, BexStr::Concat(_)),
+        "operand must be a Concat"
+    );
+    let expected_child = "x".repeat(40) + &"y".repeat(15);
+
+    // Parent references `child` as its left operand (Arc clone → shared node).
+    let parent = BexStr::concat(child.clone(), BexStr::from("#"));
+
+    // Flatten the parent; this used to empty the shared `child` node.
+    assert_eq!(parent.as_str(), format!("{expected_child}#"));
+
+    // The original child must be intact — both by content and by equality.
+    assert_eq!(child.as_str(), expected_child);
+    assert_eq!(child.len(), 55);
+    assert_eq!(child, BexStr::from(expected_child.as_str()));
+}
+
+/// Equality against a freshly-built literal after a shared flatten — mirrors
+/// the `registry.baml` `t.name == full_name` lookup that produced
+/// "Test not found".
+#[test]
+fn shared_concat_equality_after_parent_flatten() {
+    let name = BexStr::concat(
+        BexStr::from("testset_".repeat(4)),          // 32 bytes
+        BexStr::from("/the_test_name_that_is_long"), // 27 bytes → 59 total
+    );
+    let expected = "testset_".repeat(4) + "/the_test_name_that_is_long";
+
+    // hash_prefix = name + "#", then a `starts_with`-style flatten of it.
+    let hash_prefix = BexStr::concat(name.clone(), BexStr::from("#"));
+    let _ = hash_prefix.as_str(); // force flatten (what starts_with does)
+
+    // name must still compare equal to its literal value.
+    assert_eq!(name, BexStr::from(expected.as_str()));
+    assert!(
+        !name.as_str().is_empty(),
+        "shared name was emptied by flatten"
+    );
+}
+
+/// Two parents sharing one child: flattening the first must not corrupt the
+/// child for the second.
+#[test]
+fn two_parents_share_one_concat_child() {
+    let child = BexStr::concat(BexStr::from("a".repeat(50)), BexStr::from("b".repeat(10)));
+    let expected = "a".repeat(50) + &"b".repeat(10);
+
+    let p1 = BexStr::concat(child.clone(), BexStr::from("-1"));
+    let p2 = BexStr::concat(child.clone(), BexStr::from("-2"));
+
+    assert_eq!(p1.as_str(), format!("{expected}-1"));
+    // Second parent and the child are still correct after p1 flattened.
+    assert_eq!(p2.as_str(), format!("{expected}-2"));
+    assert_eq!(child.as_str(), expected);
+}
+
+/// Nested sharing: a shared grandchild deep in the tree must also survive.
+#[test]
+fn shared_concat_grandchild_survives_flatten() {
+    let leaf = BexStr::concat(BexStr::from("g".repeat(30)), BexStr::from("h".repeat(30)));
+    let expected_leaf = "g".repeat(30) + &"h".repeat(30);
+
+    let mid = BexStr::concat(leaf.clone(), BexStr::from("|mid"));
+    let top = BexStr::concat(mid.clone(), BexStr::from("|top"));
+
+    assert_eq!(top.as_str(), format!("{expected_leaf}|mid|top"));
+    // Both the intermediate and the shared leaf survive.
+    assert_eq!(mid.as_str(), format!("{expected_leaf}|mid"));
+    assert_eq!(leaf.as_str(), expected_leaf);
+}
