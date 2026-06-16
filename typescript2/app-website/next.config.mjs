@@ -48,6 +48,11 @@ const nextConfig = {
   async redirects() {
     return [
       {
+        source: '/learn6',
+        destination: '/baml-intro',
+        permanent: true,
+      },
+      {
         source: '/playground',
         destination: 'https://promptfiddle.com/',
         permanent: false,

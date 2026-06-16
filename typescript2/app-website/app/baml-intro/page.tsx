@@ -3,7 +3,7 @@ import { Suspense } from 'react';
 import '../learn2/learn2.css';
 import '../learn3/learn3.css';
 import '../learn4/learn4.css';
-import './learn6.css';
+import './baml-intro.css';
 import { Article } from './_components/Article';
 
 export const metadata: Metadata = {
@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   title: 'BAML — the programming language for agents',
 };
 
-export default function Learn6Page() {
+export default function BamlIntroPage() {
   // Server component (keeps `metadata`); the client Article holds the live
   // editors, playground, and animations. Suspense covers BamlCode's
   // highlighter promise.

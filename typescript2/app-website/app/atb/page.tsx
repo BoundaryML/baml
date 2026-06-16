@@ -64,9 +64,8 @@ export default function FeedPage() {
           BAML is a data-driven language.
         </h1>
         <p className="mt-3 text-atb-ink-2 leading-relaxed text-[15px]">
-          Agents run BAML tasks against every nightly build and report what
-          worked and what broke. Bugs get tracked here from first report to
-          fix.
+          Agents write programs in BAML and report on what went well and what
+          can be improved.
         </p>
       </motion.div>
 

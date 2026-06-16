@@ -159,6 +159,10 @@ function TryItTabs() {
 
 /* "On this page" rail (top right on wide screens). */
 const TOC: { id: string; label: string; sub?: boolean }[] = [
+  { id: 'workflows', label: 'BAML for AI workflows' },
+  { id: 'wf-llm', label: '1 · Native LLM Functions', sub: true },
+  { id: 'wf-tests', label: '2 · BAML Tests', sub: true },
+  { id: 'wf-metrics', label: '3 · Metrics primitive', sub: true },
   { id: 'types', label: '1 · Type-system' },
   { id: 'namespaces', label: '2 · Namespaces' },
   { id: 'testing', label: '3 · Testing framework' },
@@ -168,10 +172,6 @@ const TOC: { id: string; label: string; sub?: boolean }[] = [
   { id: 'threads', label: '7 · Green threads' },
   { id: 'supply-chain', label: '8 · Supply chain' },
   { id: 'self-improvement', label: '9 · Self-improvement' },
-  { id: 'workflows', label: 'BAML for AI workflows' },
-  { id: 'wf-llm', label: '1 · Native LLM Functions', sub: true },
-  { id: 'wf-tests', label: '2 · BAML Tests', sub: true },
-  { id: 'wf-metrics', label: '3 · Metrics primitive', sub: true },
   { id: 'adoption', label: 'BAML is incrementally adoptable' },
   { id: 'close', label: 'Try it out!' },
 ];
@@ -212,7 +212,7 @@ function TestExampleTabs() {
 }
 
 export function Article() {
-  const [activeId, setActiveId] = useState('types');
+  const [activeId, setActiveId] = useState('workflows');
 
   // Scroll spy for the rail: a band near the top of the viewport decides
   // the current section. Ref callback with cleanup — no useEffect.
@@ -297,7 +297,109 @@ export function Article() {
           <code>any</code>
           {', and more.'}
         </p>
-        <p>{'Here’s a few of the agent-centric language features:'}</p>
+      </section>
+
+      {/* ---- AI workflows ---- */}
+      <Section id="workflows" title="BAML for AI workflows">
+        <p>
+          {'Writing code is one thing, but in the future '}
+          <em>every</em>
+          {
+            ' software program will interact with non-deterministic AI code. Whilst BAML supports writing anything from a web-server to a data-processing library, our main focus is to provide primitives to help teams deal with nondeterminism. To do this we made sure BAML programs are observable, testable, and measurable.'
+          }
+        </p>
+        <InfectionGraph />
+        <p style={{ marginTop: '1.2rem' }}>{'Here are some highlights:'}</p>
+
+        <Sub
+          id="wf-llm"
+          num="1"
+          title="Native LLM Functions — composable building blocks for agents and harnesses"
+        >
+          <p>
+            {
+              'An LLM call in BAML is just a function: the prompt is the body, the return type is the schema. Because it’s a real function, it can be evaluated, optimized, and tracked at runtime by observability platforms.'
+            }
+          </p>
+          <p>
+            {
+              'If you’ve used BAML in the last 2 years, you’ll be happy to hear we still have our error-correcting JSON parser — super useful for working with small language models.'
+            }
+          </p>
+          <p>
+            {
+              'BAML ships with tooling to observe LLM function inputs and outputs, like our workflow visualizer in VSCode. It’s especially helpful when working with multimodal outputs, like images.'
+            }
+          </p>
+          <div className="l6-breakout l6-breakout--xl">
+            <LivePlayground
+              filename="pipeline.baml"
+              initialCode={BAML_IMAGE}
+              initialFunction="illustrate"
+              initialSidebarOpen={false}
+            />
+          </div>
+        </Sub>
+
+        <Sub id="wf-tests" num="2" title="BAML Tests">
+          <p>{'Write tests anywhere, in any file.'}</p>
+          <p>
+            {
+              'Create arbitrary groups and add tests dynamically — generate tests for each item in an array, create tests from a CSV file, or from S3:'
+            }
+          </p>
+          <TestExampleTabs />
+          <p className="l6-dim">
+            {
+              'View tests in the Playground — in case a human needs to see things, we have nice utilities — or just have agents run '
+            }
+            <code>baml test</code>
+            {'.'}
+          </p>
+          <p>
+            {
+              'Create evals — LLM-as-judge, statistical analysis, etc. In other frameworks that’s a YAML schema and a hosted UI. In BAML, it’s all just code. Pass a test when at least N% of runs do, using custom test runners:'
+            }
+          </p>
+          <div className="l6-block">
+            <BamlEditor filename="evals.baml" initialCode={BAML_RUNNER} />
+          </div>
+          <p className="l6-note">
+            {
+              'Custom test runners go further: retries, uploading reports, running things in parallel or synchronously.'
+            }
+          </p>
+        </Sub>
+
+        <Sub
+          id="wf-metrics"
+          num="3"
+          title="Built-in metrics primitive (design stage)"
+        >
+          <p>
+            {
+              'Metrics today live in dashboards, bound to code by strings — rename a function and the metric dies silently. We are designing metric blocks: attach one to a function and it carries typed measurements, wired into a dependency graph that computes as data arrives — even hours later, when a human label shows up.'
+            }
+          </p>
+          <MetricsDag />
+          <div className="l6-block" style={{ marginTop: '1.2rem' }}>
+            <BamlCode
+              code={BAML_METRIC}
+              filename="resume.baml (proposed)"
+              highlightLines={[10, 15]}
+            />
+          </div>
+          <p className="l6-dim">
+            {
+              'Parameter names are the edges of the graph: quality(judge) depends on judge; f1(precision, recall) waits for both. The function call is the root. This is the part we want torn apart — the runtime already records a trace of every call; this design is the layer on top.'
+            }
+          </p>
+        </Sub>
+      </Section>
+
+      {/* ---- language features lead-in ---- */}
+      <section className="l6-section">
+        <p>{'Now, a few of the agent-centric language features underneath:'}</p>
       </section>
 
       {/* ---- 1 · type system ---- */}
@@ -455,7 +557,7 @@ export function Article() {
         <p>
           {'Write tests anywhere, in any file. (More on testing '}
           <a className="l6-link" href="#workflows">
-            below
+            above
           </a>
           {'.)'}
         </p>
@@ -660,104 +762,6 @@ export function Article() {
           }
         </p>
         <SelfImprove />
-      </Section>
-
-      {/* ---- AI workflows ---- */}
-      <Section id="workflows" title="BAML for AI workflows">
-        <p>
-          {'Writing code is one thing, but in the future '}
-          <em>every</em>
-          {
-            ' software program will interact with non-deterministic AI code. Whilst BAML supports writing anything from a web-server to a data-processing library, our main focus is to provide primitives to help teams deal with nondeterminism. To do this we made sure BAML programs are observable, testable, and measurable.'
-          }
-        </p>
-        <InfectionGraph />
-        <p style={{ marginTop: '1.2rem' }}>{'Here are some highlights:'}</p>
-
-        <Sub
-          id="wf-llm"
-          num="1"
-          title="Native LLM Functions — composable building blocks for agents and harnesses"
-        >
-          <p>
-            {
-              'An LLM call in BAML is just a function: the prompt is the body, the return type is the schema. Because it’s a real function, it can be evaluated, optimized, and tracked at runtime by observability platforms.'
-            }
-          </p>
-          <p>
-            {
-              'If you’ve used BAML in the last 2 years, you’ll be happy to hear we still have our error-correcting JSON parser — super useful for working with small language models.'
-            }
-          </p>
-          <p>
-            {
-              'BAML ships with tooling to observe LLM function inputs and outputs, like our workflow visualizer in VSCode. It’s especially helpful when working with multimodal outputs, like images.'
-            }
-          </p>
-          <div className="l6-breakout l6-breakout--xl">
-            <LivePlayground
-              filename="pipeline.baml"
-              initialCode={BAML_IMAGE}
-              initialFunction="illustrate"
-              initialSidebarOpen={false}
-            />
-          </div>
-        </Sub>
-
-        <Sub id="wf-tests" num="2" title="BAML Tests">
-          <p>{'Write tests anywhere, in any file.'}</p>
-          <p>
-            {
-              'Create arbitrary groups and add tests dynamically — generate tests for each item in an array, create tests from a CSV file, or from S3:'
-            }
-          </p>
-          <TestExampleTabs />
-          <p className="l6-dim">
-            {
-              'View tests in the Playground — in case a human needs to see things, we have nice utilities — or just have agents run '
-            }
-            <code>baml test</code>
-            {'.'}
-          </p>
-          <p>
-            {
-              'Create evals — LLM-as-judge, statistical analysis, etc. In other frameworks that’s a YAML schema and a hosted UI. In BAML, it’s all just code. Pass a test when at least N% of runs do, using custom test runners:'
-            }
-          </p>
-          <div className="l6-block">
-            <BamlEditor filename="evals.baml" initialCode={BAML_RUNNER} />
-          </div>
-          <p className="l6-note">
-            {
-              'Custom test runners go further: retries, uploading reports, running things in parallel or synchronously.'
-            }
-          </p>
-        </Sub>
-
-        <Sub
-          id="wf-metrics"
-          num="3"
-          title="Built-in metrics primitive (design stage)"
-        >
-          <p>
-            {
-              'Metrics today live in dashboards, bound to code by strings — rename a function and the metric dies silently. We are designing metric blocks: attach one to a function and it carries typed measurements, wired into a dependency graph that computes as data arrives — even hours later, when a human label shows up.'
-            }
-          </p>
-          <MetricsDag />
-          <div className="l6-block" style={{ marginTop: '1.2rem' }}>
-            <BamlCode
-              code={BAML_METRIC}
-              filename="resume.baml (proposed)"
-              highlightLines={[10, 15]}
-            />
-          </div>
-          <p className="l6-dim">
-            {
-              'Parameter names are the edges of the graph: quality(judge) depends on judge; f1(precision, recall) waits for both. The function call is the root. This is the part we want torn apart — the runtime already records a trace of every call; this design is the layer on top.'
-            }
-          </p>
-        </Sub>
       </Section>
 
       {/* ---- incremental adoption ---- */}
