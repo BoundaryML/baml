@@ -345,7 +345,12 @@ impl LoweringDiagnostic {
             }
             LoweringDiagnostic::EmptyInterpolation { span } => (
                 DiagnosticId::InvalidSyntax,
-                Severity::Error,
+                // Advisory, not fatal: an empty `${}` renders to the empty
+                // string (a valid, if pointless, template). Pre-canary the HIR
+                // pipeline let this through; canary made severity authoritative,
+                // so keep it a warning to preserve the render-empty behavior
+                // (see bex_engine backtick_case_c_empty_interp_renders_empty).
+                Severity::Warning,
                 "empty interpolation ${} has no expression".to_string(),
                 *span,
                 "expected an expression inside ${…}",
