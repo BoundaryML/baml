@@ -2920,6 +2920,52 @@ impl<'db> TypeInferenceBuilder<'db> {
                     );
                     shadowed.truncate(saved_len);
                 }
+                ast::TemplateSegment::CStyleFor {
+                    init,
+                    cond,
+                    body: inner,
+                    ..
+                } => {
+                    // Pull the loop var's pattern + initializer out of the `init`
+                    // `let` (releases the borrow before the collect calls below).
+                    let (init_initializer, init_pattern) = match &body.stmts[*init] {
+                        ast::Stmt::Let {
+                            initializer,
+                            pattern,
+                            ..
+                        } => (*initializer, Some(*pattern)),
+                        _ => (None, None),
+                    };
+                    // `cond` and the initializer may reference outer names.
+                    Self::collect_default_expr_forward_references(
+                        *cond,
+                        body,
+                        later_params,
+                        shadowed,
+                        refs,
+                    );
+                    if let Some(e) = init_initializer {
+                        Self::collect_default_expr_forward_references(
+                            e,
+                            body,
+                            later_params,
+                            shadowed,
+                            refs,
+                        );
+                    }
+                    let saved_len = shadowed.len();
+                    if let Some(p) = init_pattern {
+                        Self::push_pattern_bindings(p, body, shadowed);
+                    }
+                    Self::collect_default_expr_forward_references_in_template_segments(
+                        inner,
+                        body,
+                        later_params,
+                        shadowed,
+                        refs,
+                    );
+                    shadowed.truncate(saved_len);
+                }
                 ast::TemplateSegment::If {
                     branches,
                     else_body,
@@ -8096,6 +8142,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self.collect_throw_facts_from_expr(*collection, body, out);
                     self.collect_throw_facts_from_template_segments(inner, body, out);
                 }
+                ast::TemplateSegment::CStyleFor {
+                    cond,
+                    body: inner,
+                    ..
+                } => {
+                    self.collect_throw_facts_from_expr(*cond, body, out);
+                    self.collect_throw_facts_from_template_segments(inner, body, out);
+                }
                 ast::TemplateSegment::If {
                     branches,
                     else_body,
@@ -9134,7 +9188,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                 ast::TemplateSegment::Interp(expr_id) => {
                     self.check_interp_stringable(*expr_id, body);
                 }
-                ast::TemplateSegment::For { body: inner, .. } => {
+                ast::TemplateSegment::For { body: inner, .. }
+                | ast::TemplateSegment::CStyleFor { body: inner, .. } => {
                     self.check_template_interps_stringable(inner, body);
                 }
                 ast::TemplateSegment::If {

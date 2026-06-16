@@ -2912,6 +2912,12 @@ impl LoweringContext {
                     collection,
                     body,
                 } => self.elaborate_default_for(*binding, *collection, body, span),
+                TemplateSegment::CStyleFor {
+                    init,
+                    cond,
+                    step,
+                    body,
+                } => self.elaborate_default_cstyle_for(*init, *cond, *step, body, span),
                 TemplateSegment::If {
                     branches,
                     else_body,
@@ -3048,6 +3054,85 @@ impl LoweringContext {
         )
     }
 
+    /// Elaborate a C-style `${for (let i = 0; cond; step)}…${endfor}` to an
+    /// accumulator block, mirroring [`Self::elaborate_default_for`] but with the
+    /// host C-style loop shape: `{ let acc = ""; let i = 0; while cond { acc =
+    /// acc + <body>; } after { step }; acc }`. The `init` `let` declares the
+    /// loop variable in scope for `cond`/body/`step` (same as `lower_c_style_for`).
+    fn elaborate_default_cstyle_for(
+        &mut self,
+        init: StmtId,
+        cond: ExprId,
+        step: Option<StmtId>,
+        body: &[TemplateSegment],
+        span: TextRange,
+    ) -> ExprId {
+        let body_string = self.elaborate_default_segments(body, span);
+
+        let after_span = TextRange::empty(span.end());
+        let acc_name = Name::new(" __m3_for");
+        let acc_pat = self.alloc_pattern(
+            Pattern::Bind {
+                name: acc_name.clone(),
+                subpat: None,
+            },
+            span,
+        );
+        let empty_init = self.alloc_expr(Expr::Literal(Literal::String(String::new())), span);
+        let acc_let = self.alloc_stmt(
+            Stmt::Let {
+                pattern: acc_pat,
+                initializer: Some(empty_init),
+                is_watched: false,
+                origin: LetOrigin::Compiler,
+                else_branch: None,
+            },
+            span,
+        );
+
+        let acc_path_lhs = self.alloc_expr(Expr::Path(vec![acc_name.clone()]), after_span);
+        let acc_path_rhs = self.alloc_expr(Expr::Path(vec![acc_name.clone()]), after_span);
+        let concat = self.alloc_expr(
+            Expr::Binary {
+                op: BinaryOp::Add,
+                lhs: acc_path_rhs,
+                rhs: body_string,
+            },
+            after_span,
+        );
+        let assign_stmt = self.alloc_stmt(
+            Stmt::Assign {
+                target: acc_path_lhs,
+                value: concat,
+            },
+            after_span,
+        );
+        let loop_body = self.alloc_expr(
+            Expr::Block {
+                stmts: vec![assign_stmt],
+                tail_expr: None,
+            },
+            after_span,
+        );
+        let while_stmt = self.alloc_stmt(
+            Stmt::While {
+                condition: cond,
+                body: loop_body,
+                after: step,
+                origin: LoopOrigin::For,
+            },
+            after_span,
+        );
+        let acc_tail = self.alloc_expr(Expr::Path(vec![acc_name]), after_span);
+        self.alloc_expr(
+            Expr::Block {
+                stmts: vec![acc_let, init, while_stmt],
+                tail_expr: Some(acc_tail),
+            },
+            span,
+        )
+    }
+
     /// Elaborate a `${if (c)}…${else if}…${else}…${endif}` chain to a host
     /// if-expression whose branch bodies are the concat of their segments.
     fn elaborate_default_if(
@@ -3105,6 +3190,23 @@ impl LoweringContext {
                     .find_map(|t| self.try_lower_bare_token(&t))
             })
             .unwrap_or_else(|| self.alloc_expr(Expr::Missing, span));
+
+        // BEP-049 ergonomic hack: a bare `` prompt`...` `` tag resolves to the
+        // stdlib `baml.llm.prompt`. `prompt` lives in the `baml.llm` namespace
+        // and BAML has no prelude, so the unqualified form (which the BEP §10
+        // examples use) would otherwise be an unresolved name. Rewriting the bare
+        // path here — same `ExprId`, so the source span is preserved — means every
+        // downstream stage (TIR typing/tag-validation, MIR lowering) sees the
+        // qualified tag and the body-lambda bindings (`role`, `ctx`) resolve. A
+        // caller who needs a different `prompt` tag can write it qualified.
+        if matches!(&self.exprs[tag], Expr::Path(segs) if segs.len() == 1 && segs[0].as_str() == "prompt")
+        {
+            self.exprs[tag] = Expr::Path(vec![
+                Name::new("baml"),
+                Name::new("llm"),
+                Name::new("prompt"),
+            ]);
+        }
 
         let segments = backtick_node
             .and_then(BacktickStringLiteral::cast)
@@ -3301,6 +3403,42 @@ impl LoweringContext {
                         },
                         span,
                     ));
+                }
+                TemplateSegment::CStyleFor {
+                    init,
+                    cond,
+                    step,
+                    body,
+                } => {
+                    // { let i = 0; while cond { <walk body> } after { step } }
+                    let mut inner: Vec<StmtId> = Vec::new();
+                    self.elaborate_tagged_walk(body, parts, values, cur, &mut inner, span);
+                    let loop_body = self.alloc_expr(
+                        Expr::Block {
+                            stmts: inner,
+                            tail_expr: None,
+                        },
+                        span,
+                    );
+                    let while_stmt = self.alloc_stmt(
+                        Stmt::While {
+                            condition: *cond,
+                            body: loop_body,
+                            after: *step,
+                            origin: LoopOrigin::For,
+                        },
+                        span,
+                    );
+                    // Wrap `init` + `while` in a block so the loop variable is
+                    // scoped to the loop, not the surrounding flatten body.
+                    let block = self.alloc_expr(
+                        Expr::Block {
+                            stmts: vec![*init, while_stmt],
+                            tail_expr: None,
+                        },
+                        span,
+                    );
+                    stmts.push(self.alloc_stmt(Stmt::Expr(block), span));
                 }
                 TemplateSegment::If {
                     branches,
@@ -3510,6 +3648,50 @@ impl LoweringContext {
         &mut self,
         for_seg: baml_compiler_syntax::BacktickForSegment,
     ) -> Option<TemplateSegment> {
+        // Iterator form has an `in`; C-style (`for (let i = 0; cond; step)`)
+        // does not. The header is the same one the host `for` parses
+        // (`parse_for_header_only`), so we reuse `lower_let_stmt` /
+        // `try_lower_assignment` for the C-style pieces (BEP §4).
+        let is_cstyle = !for_seg
+            .open
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .any(|t| t.kind() == SyntaxKind::KW_IN);
+
+        if is_cstyle {
+            let child_nodes: Vec<SyntaxNode> = for_seg.open.children().collect();
+            // Initializer is a `let` statement (declares the loop variable).
+            let init_node = child_nodes
+                .iter()
+                .find(|n| n.kind() == SyntaxKind::LET_STMT)?;
+            let init = self.lower_let_stmt(init_node, false);
+            // The remaining expression nodes, in order, are [cond, step].
+            let expr_nodes: Vec<&SyntaxNode> = child_nodes
+                .iter()
+                .filter(|n| n.kind() != SyntaxKind::LET_STMT)
+                .collect();
+            let cond = expr_nodes
+                .first()
+                .map(|n| self.lower_expr(n))
+                .unwrap_or_else(|| self.alloc_expr(Expr::Missing, for_seg.open.text_range()));
+            // Step is an assignment (`i += 1`) or a bare expression; absent for
+            // `for (let i = 0; cond; )`.
+            let step = expr_nodes.get(1).map(|n| {
+                let r = n.text_range();
+                self.try_lower_assignment(n).unwrap_or_else(|| {
+                    let e = self.lower_expr(n);
+                    self.alloc_stmt(Stmt::Expr(e), r)
+                })
+            });
+            let body = self.lower_template_segments(for_seg.body);
+            return Some(TemplateSegment::CStyleFor {
+                init,
+                cond,
+                step,
+                body,
+            });
+        }
+
         let mut pattern_node = None;
         let mut collection: Option<ExprId> = None;
         let mut seen_in = false;

@@ -67,6 +67,37 @@ function main() -> baml.llm.PromptAst {
 }
 
 #[tokio::test]
+async fn unqualified_prompt_tag_resolves_to_baml_llm_prompt() {
+    // Ergonomic fallback: bare `prompt`...`` resolves to `baml.llm.prompt`
+    // (no `baml.llm.` qualifier needed). Same assembly as the qualified form.
+    let output = baml_test!(
+        r#"
+function main() -> baml.llm.PromptAst {
+  let name = "World"
+  let cc = baml.llm.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
+  let ctx = baml.llm.Context { client: cc, tags: {} }
+  let render = prompt`${role("system")}You are helpful.${role("user")}Hi ${name}!`
+  render(ctx)
+}
+"#
+    );
+    let ast = match &output.result {
+        Ok(BexExternalValue::Instance { class_name, fields })
+            if class_name == "baml.llm.PromptAst" =>
+        {
+            match fields.get("_data") {
+                Some(BexExternalValue::Adt(BexExternalAdt::PromptAst(ast))) => ast.clone(),
+                other => panic!("expected `_data` to hold a PromptAst ADT, got {other:?}"),
+            }
+        }
+        other => panic!("expected a baml.llm.PromptAst instance, got {other:?}"),
+    };
+    let dbg = format!("{ast:?}");
+    assert!(dbg.contains("\"system\"") && dbg.contains("You are helpful."), "{dbg}");
+    assert!(dbg.contains("\"user\"") && dbg.contains("Hi World!"), "{dbg}");
+}
+
+#[tokio::test]
 async fn prompt_interpolates_ctx_output_format() {
     // BEP-049 M5b: `${ctx.output_format}` renders the return type's schema.
     // `render_output_format(reflect.type_of<Person>())` produces the schema

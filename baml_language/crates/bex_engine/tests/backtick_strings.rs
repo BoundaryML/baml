@@ -1026,6 +1026,57 @@ async fn backtick_m3_for_loop_over_array_literal() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
+async fn backtick_cstyle_for_basic() -> anyhow::Result<()> {
+    // BEP §4: the C-style `for (init; cond; step)` header is accepted in
+    // `${for}` (same headers as the host `for`), not just the iterator form.
+    assert_engine_executes(EngineProgram {
+        source: r#"
+            function main() -> string {
+                `${for (let i = 0; i < 3; i += 1)}[${i}]${endfor}`
+            }
+        "#,
+        entry: "main",
+        expected: Ok(BexExternalValue::String("[0][1][2]".into())),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
+async fn backtick_cstyle_for_bound_by_outer_local() -> anyhow::Result<()> {
+    // The C-style header reads an enclosing local (`n`) in its condition, and
+    // the body interpolates the loop counter.
+    assert_engine_executes(EngineProgram {
+        source: r#"
+            function main() -> string {
+                let n = 4
+                `${for (let i = 0; i < n; i += 1)}${i},${endfor}`
+            }
+        "#,
+        entry: "main",
+        expected: Ok(BexExternalValue::String("0,1,2,3,".into())),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
+async fn backtick_cstyle_for_step_by_two() -> anyhow::Result<()> {
+    // A non-unit step.
+    assert_engine_executes(EngineProgram {
+        source: r#"
+            function main() -> string {
+                `${for (let i = 0; i < 6; i += 2)}${i} ${endfor}`
+            }
+        "#,
+        entry: "main",
+        expected: Ok(BexExternalValue::String("0 2 4 ".into())),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
 async fn backtick_m3_nested_if_in_for() -> anyhow::Result<()> {
     // If-chain inside for-body — both block-tag forms composed.
     // Uses an outer-scope flag so the if condition doesn't have to

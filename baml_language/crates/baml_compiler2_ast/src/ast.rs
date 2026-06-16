@@ -895,10 +895,23 @@ pub enum TemplateSegment {
     /// A `${expr}` interpolation. The wrapped `ExprId` is the lowered
     /// inner expression (already a block expression per BEP §4).
     Interp(ExprId),
-    /// A `${for (let p in c)}...${endfor}` block.
+    /// A `${for (let p in c)}...${endfor}` block (iterator form).
     For {
         binding: PatId,
         collection: ExprId,
+        body: Vec<TemplateSegment>,
+    },
+    /// A C-style `${for (let i = 0; cond; step)}...${endfor}` block (BEP §4 —
+    /// the host `for` headers are reused verbatim, so the template form accepts
+    /// the C-style header too). `init` declares the loop variable (a
+    /// `Stmt::Let`); `step` is the per-iteration update (an assignment stmt),
+    /// absent only for `for (init; cond; )`. Elaborates to the same
+    /// `{ init; while cond { body } after { step } }` shape the host C-style
+    /// `for` lowers to (`lower_c_style_for`).
+    CStyleFor {
+        init: StmtId,
+        cond: ExprId,
+        step: Option<StmtId>,
         body: Vec<TemplateSegment>,
     },
     /// A `${if (c)}...${else if (c)}...${else}...${endif}` chain.

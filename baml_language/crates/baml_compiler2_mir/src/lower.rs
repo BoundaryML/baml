@@ -4567,7 +4567,9 @@ impl LoweringContext<'_> {
                     parts.push(std::mem::take(&mut cur));
                     values.push(*e);
                 }
-                TemplateSegment::For { .. } | TemplateSegment::If { .. } => return None,
+                TemplateSegment::For { .. }
+                | TemplateSegment::CStyleFor { .. }
+                | TemplateSegment::If { .. } => return None,
             }
         }
         parts.push(cur); // trailing part (possibly empty) → parts.len()==values.len()+1

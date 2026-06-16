@@ -206,6 +206,22 @@ function main() -> string {{
 }
 
 #[tokio::test]
+async fn tagged_template_cstyle_for_flattens() {
+    // BEP §4: C-style `${for (init; cond; step)}` also drives the tagged
+    // flatten path (push into parts/values per iteration), like the iterator
+    // form. `RENDER_TAG` only renders string values (§11 preserves raw types),
+    // so stringify the counter explicitly.
+    let output = baml_test!(&format!(
+        r#"{RENDER_TAG}
+function main() -> string {{
+  render`${{for (let i = 0; i < 3; i += 1)}}[${{i.to_string()}}]${{endfor}}`
+}}
+"#
+    ));
+    assert_eq!(output.result, ok_string("[0][1][2]"));
+}
+
+#[tokio::test]
 async fn tagged_template_for_body_interp_with_nested_lambda_capturing_loop_local() {
     // Adversarial: a `${for}` body whose interpolation contains a NESTED lambda
     // that captures BOTH the loop-local (`x`) and an enclosing local (`outer`).
