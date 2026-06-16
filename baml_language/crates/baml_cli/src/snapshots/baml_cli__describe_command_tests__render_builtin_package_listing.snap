@@ -184,9 +184,9 @@ class            media.Image                      <builtin>/baml/ns_media/media.
 function         mock.new                         <builtin>/baml/ns_mock/mock.baml:10
 function         mock.scope                       <builtin>/baml/ns_mock/mock.baml:18
 function         mock.__new                       <builtin>/baml/ns_mock/mock.baml:30
-function         mock.__enter                     <builtin>/baml/ns_mock/mock.baml:37
-function         mock.__exit                      <builtin>/baml/ns_mock/mock.baml:43
-class            mock.Mock                        <builtin>/baml/ns_mock/mock.baml:49
+function         mock.__enter                     <builtin>/baml/ns_mock/mock.baml:39
+function         mock.__exit                      <builtin>/baml/ns_mock/mock.baml:45
+class            mock.Mock                        <builtin>/baml/ns_mock/mock.baml:51
 class            net.TcpStream                    <builtin>/baml/ns_net/net.baml:3
 class            net.TcpListener                  <builtin>/baml/ns_net/net.baml:31
 class            net.UdpSocket                    <builtin>/baml/ns_net/net.baml:53
