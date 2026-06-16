@@ -7,7 +7,7 @@ impl — Rust-style shorthand is not BAML syntax; use `implements`.
 Syntax:
   implements Label for int {
     function label(self) -> string {
-      return self.to_string()
+      return "${self}"
     }
   }
 
