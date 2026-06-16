@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 4198
 ---
 === TIR2 ===
 
@@ -2560,8 +2561,8 @@ function baml.llm.Client.build_attempt(self: baml.llm.Client) -> baml.llm.Orches
   }
 }
 function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner_state: baml.llm.PlannerState) -> baml.llm.OrchestrationStep[] throws never {
-  { : baml.llm.OrchestrationStep[] | never[]
-    match (self.client_type : baml.llm.ClientType) : baml.llm.OrchestrationStep[] | never[]
+  { : baml.llm.OrchestrationStep[]
+    match (self.client_type : baml.llm.ClientType) : baml.llm.OrchestrationStep[]
       ClientType.Primitive =>
         { : baml.llm.OrchestrationStep[]
           let primitive = self.to_primitive_client() : baml.llm.PrimitiveClient
@@ -2580,8 +2581,8 @@ function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner
           steps : baml.llm.OrchestrationStep[]
         }
       ClientType.RoundRobin =>
-        { : never[] | baml.llm.OrchestrationStep[]
-          if (self.sub_clients.length() == 0 : bool) : never[] | baml.llm.OrchestrationStep[]
+        { : baml.llm.OrchestrationStep[]
+          if (self.sub_clients.length() == 0 : bool) : baml.llm.OrchestrationStep[]
             { : never[]
               [] : never[]
             }

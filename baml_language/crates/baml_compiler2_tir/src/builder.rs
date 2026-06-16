@@ -13913,6 +13913,45 @@ impl<'db> TypeInferenceBuilder<'db> {
                 );
             }
         }
+        // Recurse into matching container constructors so a control-flow join of
+        // two lists (or two maps) yields a single element-joined container, not a
+        // union. `if c { xs } else { [] }` joins `string[]` with `never[]` to
+        // `string[]` rather than `string[] | never[]`; the union would lower to a
+        // non-`List` runtime type and mis-dispatch array methods (e.g. `.join`) to
+        // the map implementation, aborting the VM with `expected map, got array`
+        // (B-236). The empty-collection element types are `never`, which join away.
+        match (a, b) {
+            (
+                Ty::List(elem_a, _) | Ty::EvolvingList(elem_a, _),
+                Ty::List(elem_b, _) | Ty::EvolvingList(elem_b, _),
+            ) => {
+                return Ty::List(
+                    Box::new(Self::join_types(elem_a, elem_b)),
+                    TyAttr::default(),
+                );
+            }
+            (
+                Ty::Map {
+                    key: key_a,
+                    value: val_a,
+                    ..
+                }
+                | Ty::EvolvingMap(key_a, val_a, _),
+                Ty::Map {
+                    key: key_b,
+                    value: val_b,
+                    ..
+                }
+                | Ty::EvolvingMap(key_b, val_b, _),
+            ) => {
+                return Ty::Map {
+                    key: Box::new(Self::join_types(key_a, key_b)),
+                    value: Box::new(Self::join_types(val_a, val_b)),
+                    attr: TyAttr::default(),
+                };
+            }
+            _ => {}
+        }
         // Build a flat union, deduplicating members
         let mut members = Vec::new();
         let mut push = |ty: &Ty| {
