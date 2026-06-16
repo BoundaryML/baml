@@ -48,18 +48,10 @@ use tokio_rustls::{
     },
 };
 
-/// Convert a `Duration._nanoseconds` value (carried as a bigint across the
-/// sys-op boundary) into a connection timeout. Zero or negative disables it
-/// (`None`); a value too large for `u64` nanoseconds (~584 years) clamps to the
-/// maximum.
-fn timeout_from_nanos(nanos: &num_bigint::BigInt) -> Option<Duration> {
-    if nanos.sign() != num_bigint::Sign::Plus {
-        return None;
-    }
-    Some(Duration::from_nanos(
-        u64::try_from(nanos).unwrap_or(u64::MAX),
-    ))
-}
+// `timeout_from_nanos` lives in `io_impls` (always compiled) since the net
+// sys-ops use it without the `bundle-http` feature; re-exported here for the
+// HTTP server's own timeout fields.
+use crate::io_impls::timeout_from_nanos;
 
 /// The response body carried by `baml.http.Response._body`.
 ///
