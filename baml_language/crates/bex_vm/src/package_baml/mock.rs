@@ -118,23 +118,31 @@ impl BamlNamespaceMock for PackageBamlImpl {
     }
 
     fn __enter(vm: &mut BexVm, mocks: &Value) -> Result<(), VmRustFnError> {
-        // A `scope` array must be homogeneous: every element is a `Mock`. Reject
-        // a heterogeneous array (e.g. `[m, 42]`) rather than silently dropping
-        // the non-`Mock` elements — `scope_mock_ptrs` filters, so this guard is
-        // what surfaces the mistake.
-        if let Some(ptr) = mocks.as_object_ptr()
-            && let Object::Array(arr) = vm.get_object(ptr)
-        {
-            let has_non_mock = arr.lock().iter().any(|v| {
-                !v.as_object_ptr()
-                    .is_some_and(|p| matches!(vm.get_object(p), Object::Mock(_)))
-            });
-            if has_non_mock {
-                return Err(VmRustFnError::Panic(VmPanic::UserPanic {
-                    message: "baml.mock.scope: every element of a mock array must be a Mock"
-                        .to_string(),
-                }));
+        // The scope argument must be a single `Mock` or an array of `Mock`s.
+        // Reject anything else — a single non-`Mock` value (e.g. `scope(42)`)
+        // or a heterogeneous array (`[m, 42]`) — rather than silently no-oping
+        // (`scope_mock_ptrs` filters non-Mock elements, so this guard is what
+        // surfaces the mistake).
+        let reject = || {
+            Err(VmRustFnError::Panic(VmPanic::UserPanic {
+                message: "baml.mock.scope: expected a Mock or an array of Mock".to_string(),
+            }))
+        };
+        let Some(ptr) = mocks.as_object_ptr() else {
+            return reject();
+        };
+        match vm.get_object(ptr) {
+            Object::Mock(_) => {}
+            Object::Array(arr) => {
+                let has_non_mock = arr.lock().iter().any(|v| {
+                    !v.as_object_ptr()
+                        .is_some_and(|p| matches!(vm.get_object(p), Object::Mock(_)))
+                });
+                if has_non_mock {
+                    return reject();
+                }
             }
+            _ => return reject(),
         }
         // BEP-058: `scope` accepts a single `Mock` or an array of `Mock`s; an
         // array activates each in order, so later elements sit innermost.

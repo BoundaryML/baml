@@ -3130,7 +3130,10 @@ impl BexVm {
     ) -> Option<(HeapPtr, Vec<baml_type::RuntimeTy>)> {
         match self.get_object(callee_ptr) {
             Object::Function(_) => Some((callee_ptr, Vec::new())),
-            Object::Closure(c) => Some((c.function, Vec::new())),
+            // A `g<int>`-style value lowers to a Closure carrying the explicit
+            // type args; preserve them so an indirect call matches a
+            // `FunctionKey::Generic` mock for that specialization.
+            Object::Closure(c) => Some((c.function, c.captured_type_args.to_vec())),
             Object::GenericFunction(gf) => {
                 let inner = self.globals.get(self.proof(), gf.function);
                 Some((inner.as_object_ptr()?, gf.type_args.to_vec()))
@@ -5110,8 +5113,11 @@ impl BexVm {
                     let top = self.stack.ensure_pop();
                     let obj_ptr = self.as_object_ptr(top, ObjectType::Instance)?;
                     // BEP-058: a `Mock` exposes its `call_count` field (the only
-                    // field) backed by the heap object's atomic counter.
+                    // field, index 0) backed by the heap object's atomic counter.
                     if let Object::Mock(mock) = self.get_object(obj_ptr) {
+                        if idx != 0 {
+                            return Err(self.invalid_field_access_error(idx, 1));
+                        }
                         let count = mock.call_count();
                         self.stack
                             .push(Value::try_int(count).unwrap_or(Value::NULL));

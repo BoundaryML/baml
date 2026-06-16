@@ -306,6 +306,32 @@ async fn mock_bare_generic_covers_all_instantiations() {
     assert_eq!(output.result, Ok(BexExternalValue::Int(3)));
 }
 
+/// A generic specialization captured as a *value* (`let h = g<int>`, lowered to a
+/// Closure carrying `captured_type_args`) and called indirectly must still match
+/// the `identity<int>` Generic mock. Regresses dropping the closure's captured
+/// type args in `mock_value_identity` (which made the indirect call miss the key).
+#[tokio::test]
+async fn mock_generic_specialization_via_captured_value_indirect_call() {
+    let output = baml_test!(
+        r#"
+        function identity<T>(x: T) -> T { x }
+
+        function main() -> int {
+            let m = baml.mock.new(identity<int>);
+            m.replace((x: int) -> int { -1 });
+            let g = identity;          // generic function as a value
+            let h = g<int>;            // Closure with captured_type_args = [int]
+            let r = 0;
+            baml.mock.scope(m, () -> void {
+                r = h(5);              // indirect call -> must hit the <int> mock -> -1
+            });
+            r + m.call_count           // -1 + 1 = 0
+        }
+        "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(0)));
+}
+
 // ─── Slice 6: pure spy (no replacement) ───────────────────────────────────────
 
 /// A mock with no `.replace` is a pure spy: the original runs, but calls count.

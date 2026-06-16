@@ -217,8 +217,6 @@ pub(crate) fn lower_generic_param_bounds(
         .collect()
 }
 
-/// Format an f64 as a string suitable for a float literal.
-/// Returns `None` for non-finite values (inf, NaN).
 /// True if `ty` is a literal type, or a union whose members are all literals.
 /// Such a type is too narrow to use as a strict contextual expectation when
 /// forward-inferring a type var across multiple arguments (see the Phase-1
@@ -233,6 +231,8 @@ fn is_literal_or_literal_union(ty: &Ty) -> bool {
     }
 }
 
+/// Format an f64 as a string suitable for a float literal.
+/// Returns `None` for non-finite values (inf, NaN).
 fn format_float(v: f64) -> Option<String> {
     if !v.is_finite() {
         return None;

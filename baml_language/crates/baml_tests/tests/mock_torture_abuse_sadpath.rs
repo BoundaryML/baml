@@ -535,3 +535,29 @@ async fn torture_abuse_sadpath_20_mock_scope_rejected() {
         output.result
     );
 }
+
+/// A single non-`Mock` scope argument (`scope(42)`) must be rejected, not silently
+/// no-op. The array guard catches `[m, 42]`, but a bare non-Mock top-level value
+/// skips `scope_mock_ptrs` (which returns empty) and would otherwise succeed.
+#[tokio::test]
+async fn torture_abuse_sadpath_21_single_non_mock_scope_arg_rejected() {
+    let output = baml_test!(
+        r#"
+        function target() -> int { 1 }
+
+        function main() -> int {
+            let m = baml.mock.new(target);
+            m.replace(() -> int { 5 });
+            baml.mock.scope(42, () -> void {   // 42 is not a Mock
+                let _ = target();
+            });
+            0
+        }
+        "#
+    );
+    assert!(
+        output.result.is_err(),
+        "a single non-Mock scope argument must be rejected, got {:?}",
+        output.result
+    );
+}
