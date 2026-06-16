@@ -575,4 +575,3 @@ async fn torture_interface_18_multi_self_iface_method_not_mockable() {
     );
     assert!(output.result.is_err());
 }
-

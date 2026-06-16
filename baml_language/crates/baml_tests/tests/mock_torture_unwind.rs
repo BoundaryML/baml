@@ -104,10 +104,7 @@ async fn torture_unwind_03_three_nested_scopes_unwind_at_once() {
         }
         "#
     );
-    assert_eq!(
-        output.result,
-        Ok(BexExternalValue::String("Xreal".into()))
-    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("Xreal".into())));
 }
 
 /// The innermost of three nested scopes catches its OWN throw and swallows it.
@@ -321,10 +318,7 @@ async fn torture_unwind_10_replacement_opens_inner_then_throws() {
         }
         "#
     );
-    assert_eq!(
-        output.result,
-        Ok(BexExternalValue::String("Creal".into()))
-    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("Creal".into())));
 }
 
 /// Catch-rethrow chain across scope boundaries: an inner scope catches and
@@ -354,10 +348,7 @@ async fn torture_unwind_11_catch_rethrow_across_scopes() {
         }
         "#
     );
-    assert_eq!(
-        output.result,
-        Ok(BexExternalValue::String("Oreal".into()))
-    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("Oreal".into())));
 }
 
 /// Deep array (4 elements) scope that throws after exercising the innermost:
