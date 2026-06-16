@@ -175,10 +175,6 @@ async fn torture_spawn_05_spawn_inside_spy_original() {
 /// Per the BEP recursion-guard intent this SHOULD terminate (by-name re-entry
 /// steps one down to the real fn), so the predicted value assumes the guard
 /// holds across the boundary. If suppression does not carry, this HANGS.
-// IGNORED: aspirational slice-9 gap — recursion-guard suppression does not yet
-// carry into spawned children, so this infinite-loops. UN-IGNORE once the
-// spawn recursion-guard-across-spawn fix lands.
-#[ignore = "spawn recursion-guard-across-spawn not implemented (BEP-058 slice 9 gap); infinite-loops"]
 #[tokio::test]
 async fn torture_spawn_06_recursion_guard_in_child_via_spawned_delegation() {
     let output = baml_test!(

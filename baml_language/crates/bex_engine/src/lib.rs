@@ -2864,6 +2864,7 @@ impl BexEngine {
             bex_vm_types::FunctionKey,
             Vec<bex_vm_types::HeapPtr>,
         >,
+        parent_mock_suppress: Vec<bex_vm_types::HeapPtr>,
         prof_thread_id: u64,
     ) -> std::pin::Pin<
         Box<dyn std::future::Future<Output = Result<(), EngineError>> + Send + 'static>,
@@ -2879,6 +2880,7 @@ impl BexEngine {
             call_id,
             future_id,
             parent_mock_table,
+            parent_mock_suppress,
             prof_thread_id,
         ))
     }
@@ -2908,6 +2910,7 @@ impl BexEngine {
             bex_vm_types::FunctionKey,
             Vec<bex_vm_types::HeapPtr>,
         >,
+        parent_mock_suppress: Vec<bex_vm_types::HeapPtr>,
         prof_thread_id: u64,
     ) -> Result<(), EngineError> {
         // BEP-034 spawn options: link a user-provided `CancelToken`
@@ -2968,10 +2971,18 @@ impl BexEngine {
         // table — the Mock heap objects (and their atomic call_count) are
         // shared via the heap, while the child's own copy keeps the mocks
         // active for the spawn's lifetime independent of the parent's __exit.
-        // The child starts with an empty mock_suppress: suppression is keyed to
-        // the parent's frame depths and does not carry into the child's fresh
-        // call chain.
         child_vm.mock_table = parent_mock_table;
+        // Carry the recursion guard across the spawn boundary: any mock whose
+        // replacement is currently running in the parent (i.e. is suppressed)
+        // stays suppressed in the child, so a by-name re-entry inside the spawn
+        // body steps one level down instead of re-triggering the same
+        // replacement (which would recurse forever). Parent frame depths don't
+        // map onto the child's fresh frame stack, so seed at depth 0 — active
+        // for the whole child run.
+        child_vm.mock_suppress = parent_mock_suppress
+            .into_iter()
+            .map(|ptr| (ptr, 0))
+            .collect();
         let child_entry_call_id = BexCallId(child_vm.current_call_id());
 
         // Register a new (inactive) permit for the child. `new_permit` only
@@ -3606,6 +3617,11 @@ impl BexEngine {
                     // BEP-058: snapshot the parent's active mocks under the held
                     // permit (no GC can intervene before the child roots them).
                     let parent_mock_table = thread.vm.mock_table.clone();
+                    // The set of mocks whose replacement is currently running
+                    // (suppressed) — carried into the child so the recursion
+                    // guard holds across the spawn boundary.
+                    let parent_mock_suppress: Vec<bex_vm_types::HeapPtr> =
+                        thread.vm.mock_suppress.iter().map(|(p, _)| *p).collect();
 
                     // Each spawned thread gets a child cancel token so parent →
                     // child cascade falls out of the token tree without bespoke
@@ -3665,6 +3681,7 @@ impl BexEngine {
                                 call_id,
                                 future_id,
                                 parent_mock_table,
+                                parent_mock_suppress,
                                 child_prof_thread_id,
                             )
                             .await?;
