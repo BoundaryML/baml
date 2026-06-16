@@ -929,6 +929,134 @@ fn user.Encoder.to_json(self: Encoder) -> baml.json.json {
     }
 }
 
+fn user.RangeCheck.to_string(self: RangeCheck) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: RangeCheck // self // param
+    let _2: type
+
+    bb0: {
+        _2 = load_type(RangeCheck);
+        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.Config.to_string(self: Config) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: Config // self // param
+    let _2: type
+
+    bb0: {
+        _2 = load_type(Config);
+        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.Calculator.to_string(self: Calculator) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: Calculator // self // param
+    let _2: type
+
+    bb0: {
+        _2 = load_type(Calculator);
+        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.Formatter.to_string(self: Formatter) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: Formatter // self // param
+    let _2: type
+
+    bb0: {
+        _2 = load_type(Formatter);
+        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.Employee.to_string(self: Employee) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: Employee // self // param
+    let _2: type
+
+    bb0: {
+        _2 = load_type(Employee);
+        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.Box.to_string(self: Box) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: Box // self // param
+    let _2: type
+
+    bb0: {
+        _2 = load_type(Box<#0>);
+        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.Counter.to_string(self: Counter) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: Counter // self // param
+    let _2: type
+
+    bb0: {
+        _2 = load_type(Counter);
+        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.Encoder.to_string(self: Encoder) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: Encoder // self // param
+    let _2: type
+
+    bb0: {
+        _2 = load_type(Encoder);
+        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn user.Box.unwrap(self: Box) -> T {
     // Locals:
     let _0: T // _0 // return

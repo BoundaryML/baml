@@ -39,6 +39,13 @@ function user.Baz.to_json(self: Baz) -> baml.json.json {
     return
 }
 
+function user.Baz.to_string(self: Baz) -> string {
+    load_type Baz
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function user.Foo(x: int) -> int {
     load_var x
     load_const 1

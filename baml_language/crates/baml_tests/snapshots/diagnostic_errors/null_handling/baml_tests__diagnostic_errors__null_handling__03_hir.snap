@@ -43,14 +43,11 @@ function user.from_json(j: baml.json.json) -> user.Address  [expr] {
 function user.from_json(j: baml.json.json) -> user.Node  [expr] {
   user.Node { value: baml.json.from_json(baml.json.field(j, "value")), next: baml.json.from_json(baml.json.field(j, "next")), children: baml.json.from_json(baml.json.field(j, "children")), labels: baml.json.from_json(baml.json.field(j, "labels")) }
 }
-function user.from_json(j: baml.json.json) -> user.User  [expr] {
-  user.User { id: baml.json.from_json(baml.json.field(j, "id")), profile: baml.json.from_json(baml.json.field(j, "profile")) }
-}
 function user.from_json(j: baml.json.json) -> user.Profile  [expr] {
   user.Profile { name: baml.json.from_json(baml.json.field(j, "name")), address: baml.json.from_json(baml.json.field(j, "address")), scores: baml.json.from_json(baml.json.field(j, "scores")), settings: baml.json.from_json(baml.json.field(j, "settings")) }
 }
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": baml.json.to_json(self.name), "address": baml.json.to_json(self.address), "scores": baml.json.to_json(self.scores), "settings": baml.json.to_json(self.settings) }
+function user.from_json(j: baml.json.json) -> user.User  [expr] {
+  user.User { id: baml.json.from_json(baml.json.field(j, "id")), profile: baml.json.from_json(baml.json.field(j, "profile")) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "street": baml.json.to_json(self.street), "zip": baml.json.to_json(self.zip) }
@@ -59,5 +56,20 @@ function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "value": baml.json.to_json(self.value), "next": baml.json.to_json(self.next), "children": baml.json.to_json(self.children), "labels": baml.json.to_json(self.labels) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "name": baml.json.to_json(self.name), "address": baml.json.to_json(self.address), "scores": baml.json.to_json(self.scores), "settings": baml.json.to_json(self.settings) }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "id": baml.json.to_json(self.id), "profile": baml.json.to_json(self.profile) }
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
 }

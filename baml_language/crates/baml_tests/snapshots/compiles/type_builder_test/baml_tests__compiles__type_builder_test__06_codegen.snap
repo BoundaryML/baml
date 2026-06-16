@@ -181,3 +181,10 @@ function user.TopLevelClass.to_json(self: TopLevelClass) -> baml.json.json {
     alloc_map 1
     return
 }
+
+function user.TopLevelClass.to_string(self: TopLevelClass) -> string {
+    load_type TopLevelClass
+    load_var self
+    call baml.unstable.string
+    return
+}

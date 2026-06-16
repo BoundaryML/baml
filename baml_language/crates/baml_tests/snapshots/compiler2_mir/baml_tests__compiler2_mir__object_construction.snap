@@ -77,6 +77,22 @@ fn user.Point.to_json(self: Point) -> baml.json.json {
     }
 }
 
+fn user.Point.to_string(self: Point) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: Point // self // param
+    let _2: type
+
+    bb0: {
+        _2 = load_type(Point);
+        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn user.f() -> Point {
     // Locals:
     let _0: Point // _0 // return

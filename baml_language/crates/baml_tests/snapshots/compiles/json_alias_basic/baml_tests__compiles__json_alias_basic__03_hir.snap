@@ -38,3 +38,6 @@ function user.from_json(j: baml.json.json) -> user.Wrapper  [expr] {
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "data": baml.json.to_json(self.data) }
 }
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}

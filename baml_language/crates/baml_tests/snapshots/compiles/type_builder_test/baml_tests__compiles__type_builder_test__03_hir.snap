@@ -24,3 +24,6 @@ function user.from_json(j: baml.json.json) -> user.TopLevelClass  [expr] {
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "a": baml.json.to_json(self.a) }
 }
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}

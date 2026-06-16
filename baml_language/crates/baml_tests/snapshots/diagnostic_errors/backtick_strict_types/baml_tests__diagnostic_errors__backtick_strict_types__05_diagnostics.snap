@@ -3,29 +3,19 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] error: cannot interpolate a value of type `int | null` — it may be null; coalesce with `?? "…"` or unwrap it first
-    ╭─[ main.baml:20:12 ]
+    ╭─[ main.baml:23:12 ]
     │
- 20 │     `val: ${x}`
+ 23 │     `val: ${x}`
     │            ─┬─  
     │             ╰─── cannot interpolate a value of type `int | null` — it may be null; coalesce with `?? "…"` or unwrap it first
     │ 
     │ Note: Error code: E0001
 ────╯
 
-  [type] error: cannot interpolate a value of type `FooNoToString` — it has no `to_string` method
-    ╭─[ main.baml:30:12 ]
-    │
- 30 │     `val: ${f}`
-    │            ─┬─  
-    │             ╰─── cannot interpolate a value of type `FooNoToString` — it has no `to_string` method
-    │ 
-    │ Note: Error code: E0001
-────╯
-
   [type] error: cannot interpolate a value of type `int | null` — it may be null; coalesce with `?? "…"` or unwrap it first
-    ╭─[ main.baml:41:14 ]
+    ╭─[ main.baml:34:14 ]
     │
- 41 │     `count: ${c}`
+ 34 │     `count: ${c}`
     │              ─┬─  
     │               ╰─── cannot interpolate a value of type `int | null` — it may be null; coalesce with `?? "…"` or unwrap it first
     │ 

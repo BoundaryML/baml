@@ -23,6 +23,13 @@ function user.A.to_json(self: A) -> baml.json.json {
     return
 }
 
+function user.A.to_string(self: A) -> string {
+    load_type A
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function user.B.from_json(j: baml.json.json) -> B {
     load_var j
     load_const "label"
@@ -48,6 +55,13 @@ function user.B.to_json(self: B) -> baml.json.json {
     call baml.json.to_json
     load_const "label"
     alloc_map 1
+    return
+}
+
+function user.B.to_string(self: B) -> string {
+    load_type B
+    load_var self
+    call baml.unstable.string
     return
 }
 

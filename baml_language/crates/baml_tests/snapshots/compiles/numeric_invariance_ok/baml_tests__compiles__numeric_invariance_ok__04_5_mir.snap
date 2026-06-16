@@ -142,3 +142,19 @@ fn user.BigintCounter.to_json(self: BigintCounter) -> baml.json.json {
         return;
     }
 }
+
+fn user.BigintCounter.to_string(self: BigintCounter) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: BigintCounter // self // param
+    let _2: type
+
+    bb0: {
+        _2 = load_type(BigintCounter);
+        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}

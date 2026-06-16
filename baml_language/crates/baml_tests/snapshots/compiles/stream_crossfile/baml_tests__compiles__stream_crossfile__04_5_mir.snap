@@ -101,6 +101,22 @@ fn user.Education.to_json(self: Education) -> baml.json.json {
     }
 }
 
+fn user.Education.to_string(self: Education) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: Education // self // param
+    let _2: type
+
+    bb0: {
+        _2 = load_type(Education);
+        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn user.Resume.from_json(j: baml.json.json) -> Resume {
     // Locals:
     let _0: Resume // _0 // return
@@ -219,6 +235,22 @@ fn user.Resume.to_json(self: Resume) -> baml.json.json {
     }
 
     bb5: {
+        return;
+    }
+}
+
+fn user.Resume.to_string(self: Resume) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: Resume // self // param
+    let _2: type
+
+    bb0: {
+        _2 = load_type(Resume);
+        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
         return;
     }
 }

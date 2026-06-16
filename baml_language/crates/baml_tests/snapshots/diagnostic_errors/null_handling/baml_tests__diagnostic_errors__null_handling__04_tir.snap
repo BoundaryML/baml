@@ -12,6 +12,9 @@ function user.Address.to_json(self: user.Address) -> baml.json.json throws baml.
 function user.Address.from_json(j: baml.json.json) -> user.Address throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Address { street: baml.json.from_json<string>(baml.json.field(j, "street")), zip: baml.json.from_json<string?>(baml.json.field(j, "zip")) } : user.Address
 }
+function user.Address.to_string(self: user.Address) -> string throws never {
+  baml.unstable.string<T>(self) : string
+}
 class user.Profile {
   name: string
   address: user.Address | null
@@ -24,6 +27,9 @@ function user.Profile.to_json(self: user.Profile) -> baml.json.json throws baml.
 function user.Profile.from_json(j: baml.json.json) -> user.Profile throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Profile { name: baml.json.from_json<string>(baml.json.field(j, "name")), address: baml.json.from_json<Address?>(baml.json.field(j, "address")), scores: baml.json.from_json<int[]?>(baml.json.field(j, "scores")), settings: baml.json.from_json<map<string, string>?>(baml.json.field(j, "settings")) } : user.Profile
 }
+function user.Profile.to_string(self: user.Profile) -> string throws never {
+  baml.unstable.string<T>(self) : string
+}
 class user.User {
   id: int
   profile: user.Profile | null
@@ -33,6 +39,9 @@ function user.User.to_json(self: user.User) -> baml.json.json throws baml.json.J
 }
 function user.User.from_json(j: baml.json.json) -> user.User throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   User { id: baml.json.from_json<int>(baml.json.field(j, "id")), profile: baml.json.from_json<Profile?>(baml.json.field(j, "profile")) } : user.User
+}
+function user.User.to_string(self: user.User) -> string throws never {
+  baml.unstable.string<T>(self) : string
 }
 class user.Node {
   value: int
@@ -45,6 +54,9 @@ function user.Node.to_json(self: user.Node) -> baml.json.json throws baml.json.J
 }
 function user.Node.from_json(j: baml.json.json) -> user.Node throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Node { value: baml.json.from_json<int>(baml.json.field(j, "value")), next: baml.json.from_json<Node?>(baml.json.field(j, "next")), children: baml.json.from_json<Node[]?>(baml.json.field(j, "children")), labels: baml.json.from_json<map<string, Node>?>(baml.json.field(j, "labels")) } : user.Node
+}
+function user.Node.to_string(self: user.Node) -> string throws never {
+  baml.unstable.string<T>(self) : string
 }
 function user.OptionalChaining(user: user.User | null, nonNullUser: user.User, node: user.Node | null) -> string throws never {
   { : never

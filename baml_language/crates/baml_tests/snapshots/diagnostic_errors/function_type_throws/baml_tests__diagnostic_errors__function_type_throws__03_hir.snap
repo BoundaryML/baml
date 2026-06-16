@@ -30,6 +30,9 @@ function user.risky(value: int) -> int  [expr] {
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   baml.json.parse(baml.json.to_string(self))
 }
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
 class user.Worker {
   factor: int
 }
@@ -56,4 +59,7 @@ function user.scale(self: ?, value: int) -> int  [expr] {
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "factor": baml.json.to_json(self.factor) }
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
 }

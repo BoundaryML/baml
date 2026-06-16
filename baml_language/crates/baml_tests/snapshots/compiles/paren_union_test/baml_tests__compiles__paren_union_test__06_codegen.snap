@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 19543
 ---
 function user.Union.from_json(j: baml.json.json) -> Union {
     load_var j
@@ -17,5 +16,12 @@ function user.Union.to_json(self: Union) -> baml.json.json {
     load_var self
     call baml.json.to_string
     call baml.json.parse
+    return
+}
+
+function user.Union.to_string(self: Union) -> string {
+    load_type Union
+    load_var self
+    call baml.unstable.string
     return
 }

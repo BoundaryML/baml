@@ -55,6 +55,22 @@ fn user.Foo.to_json(self: Foo) -> baml.json.json {
     }
 }
 
+fn user.Foo.to_string(self: Foo) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: Foo // self // param
+    let _2: type
+
+    bb0: {
+        _2 = load_type(Foo);
+        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn user.use_method_type_args() -> int {
     // Locals:
     let _0: int // _0 // return

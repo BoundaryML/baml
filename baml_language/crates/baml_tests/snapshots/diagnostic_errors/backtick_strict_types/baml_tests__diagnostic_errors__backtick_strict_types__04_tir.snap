@@ -7,23 +7,7 @@ function user.case_a_null_interp() -> string throws never {
     let x: int? = null : null -> int | null
     `...` : string
   }
-  !! 936..939: cannot interpolate a value of type `int | null` — it may be null; coalesce with `?? "…"` or unwrap it first
-}
-class user.FooNoToString {
-  x: int
-}
-function user.FooNoToString.to_json(self: user.FooNoToString) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "x": baml.json.to_json(self.x) } : map<string, baml.json.json>
-}
-function user.FooNoToString.from_json(j: baml.json.json) -> user.FooNoToString throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  FooNoToString { x: baml.json.from_json<int>(baml.json.field(j, "x")) } : user.FooNoToString
-}
-function user.case_b_class_without_to_string() -> string throws never {
-  { : string
-    let f = FooNoToString { x: 1 } : user.FooNoToString
-    `...` : string
-  }
-  !! 1153..1156: cannot interpolate a value of type `FooNoToString` — it has no `to_string` method
+  !! 1096..1099: cannot interpolate a value of type `int | null` — it may be null; coalesce with `?? "…"` or unwrap it first
 }
 function user.get_count() -> int | null throws never {
   { : 42
@@ -35,8 +19,5 @@ function user.case_e_optional_int_interp() -> string throws never {
     let c = get_count() : int | null
     `...` : string
   }
-  !! 1443..1446: cannot interpolate a value of type `int | null` — it may be null; coalesce with `?? "…"` or unwrap it first
-}
-class user.FooNoToString$stream {
-  x: int | null
+  !! 1386..1389: cannot interpolate a value of type `int | null` — it may be null; coalesce with `?? "…"` or unwrap it first
 }

@@ -80,6 +80,13 @@ function user.IndexUser.to_json(self: IndexUser) -> baml.json.json {
     return
 }
 
+function user.IndexUser.to_string(self: IndexUser) -> string {
+    load_type IndexUser
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function user.Profile.from_json(j: baml.json.json) -> Profile {
     load_var j
     load_const "bio"
@@ -114,6 +121,13 @@ function user.Profile.to_json(self: Profile) -> baml.json.json {
     return
 }
 
+function user.Profile.to_string(self: Profile) -> string {
+    load_type Profile
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function user.Settings.from_json(j: baml.json.json) -> Settings {
     load_var j
     load_const "theme"
@@ -133,6 +147,13 @@ function user.Settings.to_json(self: Settings) -> baml.json.json {
     call baml.json.to_json
     load_const "theme"
     alloc_map 1
+    return
+}
+
+function user.Settings.to_string(self: Settings) -> string {
+    load_type Settings
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -195,5 +216,12 @@ function user.User.to_json(self: User) -> baml.json.json {
     load_const "profile"
     load_const "tags"
     alloc_map 3
+    return
+}
+
+function user.User.to_string(self: User) -> string {
+    load_type User
+    load_var self
+    call baml.unstable.string
     return
 }

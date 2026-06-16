@@ -287,6 +287,54 @@ fn user.Settings.to_json(self: Settings) -> baml.json.json {
     }
 }
 
+fn user.Profile.to_string(self: Profile) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: Profile // self // param
+    let _2: type
+
+    bb0: {
+        _2 = load_type(Profile);
+        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.User.to_string(self: User) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: User // self // param
+    let _2: type
+
+    bb0: {
+        _2 = load_type(User);
+        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.Settings.to_string(self: Settings) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: Settings // self // param
+    let _2: type
+
+    bb0: {
+        _2 = load_type(Settings);
+        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn user.IndexAccess(users: IndexUser[]) -> string {
     // Locals:
     let _0: string // _0 // return
@@ -425,6 +473,22 @@ fn user.IndexUser.to_json(self: IndexUser) -> baml.json.json {
     }
 
     bb4: {
+        return;
+    }
+}
+
+fn user.IndexUser.to_string(self: IndexUser) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: IndexUser // self // param
+    let _2: type
+
+    bb0: {
+        _2 = load_type(IndexUser);
+        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
         return;
     }
 }

@@ -11,6 +11,9 @@ function user.A.to_json(self: user.A) -> baml.json.json throws baml.json.JsonSer
 function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   A { field: baml.json.from_json<string>(baml.json.field(j, "field")) } : user.A
 }
+function user.A.to_string(self: user.A) -> string throws never {
+  baml.unstable.string<T>(self) : string
+}
 class user.A {
   field: string
 }
@@ -19,6 +22,9 @@ function user.A.to_json(self: user.A) -> baml.json.json throws baml.json.JsonSer
 }
 function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   A { field: baml.json.from_json<string>(baml.json.field(j, "field")) } : user.A
+}
+function user.A.to_string(self: user.A) -> string throws never {
+  baml.unstable.string<T>(self) : string
 }
 type user.A = int
 class user.A$stream {

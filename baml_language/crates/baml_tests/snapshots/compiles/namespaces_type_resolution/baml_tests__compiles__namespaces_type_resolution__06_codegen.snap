@@ -35,6 +35,13 @@ function user.Config.to_json(self: Config) -> baml.json.json {
     return
 }
 
+function user.Config.to_string(self: Config) -> string {
+    load_type Config
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function user.Error.from_json(j: baml.json.json) -> Error {
     load_var j
     load_const "code"
@@ -66,6 +73,13 @@ function user.Error.to_json(self: Error) -> baml.json.json {
     load_const "code"
     load_const "message"
     alloc_map 2
+    return
+}
+
+function user.Error.to_string(self: Error) -> string {
+    load_type Error
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -235,6 +249,13 @@ function user.RootWithCrossNsAlias.to_json(self: RootWithCrossNsAlias) -> baml.j
     return
 }
 
+function user.RootWithCrossNsAlias.to_string(self: RootWithCrossNsAlias) -> string {
+    load_type RootWithCrossNsAlias
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function user.RootWithCrossNsFields.from_json(j: baml.json.json) -> RootWithCrossNsFields {
     load_var j
     load_const "own_config"
@@ -326,6 +347,13 @@ function user.RootWithCrossNsFields.to_json(self: RootWithCrossNsFields) -> baml
     load_const "own_status"
     load_const "own_alias"
     alloc_map 7
+    return
+}
+
+function user.RootWithCrossNsFields.to_string(self: RootWithCrossNsFields) -> string {
+    load_type RootWithCrossNsFields
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -589,6 +617,13 @@ function user.auth.Config.to_json(self: auth.Config) -> baml.json.json {
     return
 }
 
+function user.auth.Config.to_string(self: auth.Config) -> string {
+    load_type auth.Config
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function user.auth.Error.from_json(j: baml.json.json) -> auth.Error {
     load_var j
     load_const "realm"
@@ -620,6 +655,13 @@ function user.auth.Error.to_json(self: auth.Error) -> baml.json.json {
     load_const "realm"
     load_const "expired"
     alloc_map 2
+    return
+}
+
+function user.auth.Error.to_string(self: auth.Error) -> string {
+    load_type auth.Error
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -657,6 +699,13 @@ function user.auth.Token.to_json(self: auth.Token) -> baml.json.json {
     return
 }
 
+function user.auth.Token.to_string(self: auth.Token) -> string {
+    load_type auth.Token
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function user.llm.Config.from_json(j: baml.json.json) -> llm.Config {
     load_var j
     load_const "model"
@@ -691,6 +740,13 @@ function user.llm.Config.to_json(self: llm.Config) -> baml.json.json {
     return
 }
 
+function user.llm.Config.to_string(self: llm.Config) -> string {
+    load_type llm.Config
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function user.llm.Error.from_json(j: baml.json.json) -> llm.Error {
     load_var j
     load_const "reason"
@@ -722,6 +778,13 @@ function user.llm.Error.to_json(self: llm.Error) -> baml.json.json {
     load_const "reason"
     load_const "retryable"
     alloc_map 2
+    return
+}
+
+function user.llm.Error.to_string(self: llm.Error) -> string {
+    load_type llm.Error
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -1060,6 +1123,13 @@ function user.llm.LlmWithCrossNsFields.to_json(self: llm.LlmWithCrossNsFields) -
     return
 }
 
+function user.llm.LlmWithCrossNsFields.to_string(self: llm.LlmWithCrossNsFields) -> string {
+    load_type llm.LlmWithCrossNsFields
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function user.llm.LlmWithRootAlias.from_json(j: baml.json.json) -> llm.LlmWithRootAlias {
     load_var j
     load_const "root_alias"
@@ -1091,6 +1161,13 @@ function user.llm.LlmWithRootAlias.to_json(self: llm.LlmWithRootAlias) -> baml.j
     load_const "root_alias"
     load_const "own_alias"
     alloc_map 2
+    return
+}
+
+function user.llm.LlmWithRootAlias.to_string(self: llm.LlmWithRootAlias) -> string {
+    load_type llm.LlmWithRootAlias
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -1128,6 +1205,13 @@ function user.llm.Response.to_json(self: llm.Response) -> baml.json.json {
     return
 }
 
+function user.llm.Response.to_string(self: llm.Response) -> string {
+    load_type llm.Response
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function user.llm.openai.Client.from_json(j: baml.json.json) -> llm.openai.Client {
     load_var j
     load_const "api_key"
@@ -1162,6 +1246,13 @@ function user.llm.openai.Client.to_json(self: llm.openai.Client) -> baml.json.js
     return
 }
 
+function user.llm.openai.Client.to_string(self: llm.openai.Client) -> string {
+    load_type llm.openai.Client
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function user.llm.openai.Error.from_json(j: baml.json.json) -> llm.openai.Error {
     load_var j
     load_const "status_code"
@@ -1193,6 +1284,13 @@ function user.llm.openai.Error.to_json(self: llm.openai.Error) -> baml.json.json
     load_const "status_code"
     load_const "body"
     alloc_map 2
+    return
+}
+
+function user.llm.openai.Error.to_string(self: llm.openai.Error) -> string {
+    load_type llm.openai.Error
+    load_var self
+    call baml.unstable.string
     return
 }
 

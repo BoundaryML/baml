@@ -40,53 +40,6 @@ SOURCE_FILE
               R_BRACE "}"
           BACKTICK "`"
         R_BRACE "}"
-  CLASS_DEF
-    KW_CLASS "class"
-    WORD "FooNoToString"
-    L_BRACE "{"
-    FIELD
-      WORD "x"
-      TYPE_EXPR "int"
-        WORD "int"
-    R_BRACE "}"
-  FUNCTION_DEF
-    KW_FUNCTION "function"
-    WORD "case_b_class_without_to_string"
-    PARAMETER_LIST "()"
-      L_PAREN "("
-      R_PAREN ")"
-    ARROW "->"
-    TYPE_EXPR "string"
-      WORD "string"
-    EXPR_FUNCTION_BODY
-      BLOCK_EXPR
-        L_BRACE "{"
-        LET_STMT
-          PATTERN
-            BINDING_PATTERN "let f"
-              KW_LET "let"
-              WORD "f"
-          EQUALS "="
-          OBJECT_LITERAL
-            WORD "FooNoToString"
-            L_BRACE "{"
-            OBJECT_FIELD "x: 1"
-              WORD "x"
-              COLON ":"
-              INTEGER_LITERAL "1"
-            R_BRACE "}"
-        BACKTICK_STRING_LITERAL
-          BACKTICK "`"
-          WORD "val"
-          COLON ":"
-          BACKTICK_INTERPOLATION
-            DOLLAR "$"
-            BLOCK_EXPR "{f}"
-              L_BRACE "{"
-              WORD "f"
-              R_BRACE "}"
-          BACKTICK "`"
-        R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
     WORD "get_count"

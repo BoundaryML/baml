@@ -32,3 +32,6 @@ function user.from_json(j: baml.json.json) -> user.Union  [expr] {
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   baml.json.parse(baml.json.to_string(self))
 }
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}

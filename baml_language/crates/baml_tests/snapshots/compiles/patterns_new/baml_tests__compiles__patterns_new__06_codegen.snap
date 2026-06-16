@@ -23,6 +23,13 @@ function user.AppError.to_json(self: AppError) -> baml.json.json {
     return
 }
 
+function user.AppError.to_string(self: AppError) -> string {
+    load_type AppError
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function user.PatternBucket.from_json(j: baml.json.json) -> PatternBucket {
     load_var j
     load_const "values"
@@ -45,6 +52,13 @@ function user.PatternBucket.to_json(self: PatternBucket) -> baml.json.json {
     return
 }
 
+function user.PatternBucket.to_string(self: PatternBucket) -> string {
+    load_type PatternBucket
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function user.PatternMatrix.from_json(j: baml.json.json) -> PatternMatrix {
     load_var j
     load_const "rows"
@@ -64,6 +78,13 @@ function user.PatternMatrix.to_json(self: PatternMatrix) -> baml.json.json {
     call baml.json.to_json
     load_const "rows"
     alloc_map 1
+    return
+}
+
+function user.PatternMatrix.to_string(self: PatternMatrix) -> string {
+    load_type PatternMatrix
+    load_var self
+    call baml.unstable.string
     return
 }
 

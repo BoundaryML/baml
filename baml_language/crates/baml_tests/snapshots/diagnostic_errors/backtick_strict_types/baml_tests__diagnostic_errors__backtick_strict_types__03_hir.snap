@@ -2,24 +2,12 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR2 ===
-class user.FooNoToString {
-  x: int
-}
 function user.case_a_null_interp() -> string  [expr] {
   { let x: int? = null } `...`
-}
-function user.case_b_class_without_to_string() -> string  [expr] {
-  { let f = user.FooNoToString { x: 1 } } `...`
 }
 function user.case_e_optional_int_interp() -> string  [expr] {
   { let c = get_count() } `...`
 }
-function user.from_json(j: baml.json.json) -> user.FooNoToString  [expr] {
-  user.FooNoToString { x: baml.json.from_json(baml.json.field(j, "x")) }
-}
 function user.get_count() -> int?  [expr] {
   {  } 42
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "x": baml.json.to_json(self.x) }
 }

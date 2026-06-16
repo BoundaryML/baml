@@ -11,6 +11,9 @@ function user.Box.to_json(self: user.Box) -> baml.json.json throws baml.json.Jso
 function user.Box.from_json(j: baml.json.json) -> user.Box<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Box { value: baml.json.from_json<T>(baml.json.field(j, "value")) } : user.Box<T>
 }
+function user.Box.to_string(self: user.Box) -> string throws never {
+  baml.unstable.string<T>(self) : string
+}
 function user.main() -> int throws never {
   { : T
     let boxed: Box<int> = Box { value: 42 } : user.Box<int>

@@ -42,6 +42,9 @@ function user.WrapNonGeneric.to_json(self: user.WrapNonGeneric) -> baml.json.jso
 function user.WrapNonGeneric.from_json(j: baml.json.json) -> user.WrapNonGeneric throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   WrapNonGeneric { x: baml.json.from_json<int>(baml.json.field(j, "x")) } : user.WrapNonGeneric
 }
+function user.WrapNonGeneric.to_string(self: user.WrapNonGeneric) -> string throws never {
+  baml.unstable.string<T>(self) : string
+}
 function user.unresolved_class_head(v: user.WrapNonGeneric) -> bool throws never {
   { : bool
     v is Frobnitz { x: x } : bool
@@ -56,6 +59,9 @@ function user.WrapGeneric.to_json(self: user.WrapGeneric) -> baml.json.json thro
 }
 function user.WrapGeneric.from_json(j: baml.json.json) -> user.WrapGeneric<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   WrapGeneric { val: baml.json.from_json<T>(baml.json.field(j, "val")) } : user.WrapGeneric<T>
+}
+function user.WrapGeneric.to_string(self: user.WrapGeneric) -> string throws never {
+  baml.unstable.string<T>(self) : string
 }
 function user.unresolved_generic_arg(v: user.WrapGeneric<int>) -> bool throws never {
   { : bool

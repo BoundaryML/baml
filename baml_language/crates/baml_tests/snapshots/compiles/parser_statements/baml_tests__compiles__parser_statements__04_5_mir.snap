@@ -372,6 +372,22 @@ fn user.EdgeFoo.to_json(self: EdgeFoo) -> baml.json.json {
     }
 }
 
+fn user.EdgeFoo.to_string(self: EdgeFoo) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: EdgeFoo // self // param
+    let _2: type
+
+    bb0: {
+        _2 = load_type(EdgeFoo);
+        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn user.break_in_for() -> int {
     // Locals:
     let _0: int // _0 // return
@@ -1291,6 +1307,22 @@ fn user.Point.to_json(self: Point) -> baml.json.json {
     }
 
     bb3: {
+        return;
+    }
+}
+
+fn user.Point.to_string(self: Point) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: Point // self // param
+    let _2: type
+
+    bb0: {
+        _2 = load_type(Point);
+        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
         return;
     }
 }

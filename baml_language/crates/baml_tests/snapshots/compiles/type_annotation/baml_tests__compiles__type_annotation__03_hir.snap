@@ -28,6 +28,12 @@ function user.to_json(self: ?) -> baml.json.json  [expr] {
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "type": baml.json.to_json(self.type), "severity": baml.json.to_json(self.severity) }
 }
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
 function user.test_let_binding(function_name: string) -> string  [expr] {
   { let t: type = baml.llm.get_return_type(function_name); return "ok" }
 }

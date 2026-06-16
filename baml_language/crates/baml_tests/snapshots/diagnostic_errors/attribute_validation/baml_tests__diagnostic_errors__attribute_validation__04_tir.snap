@@ -11,6 +11,9 @@ function user.HasDuplicateDescription.to_json(self: user.HasDuplicateDescription
 function user.HasDuplicateDescription.from_json(j: baml.json.json) -> user.HasDuplicateDescription throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   HasDuplicateDescription { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.HasDuplicateDescription
 }
+function user.HasDuplicateDescription.to_string(self: user.HasDuplicateDescription) -> string throws never {
+  baml.unstable.string<T>(self) : string
+}
 class user.HasDuplicateField {
   name: string
   age: int
@@ -23,6 +26,9 @@ function user.HasDuplicateField.from_json(j: baml.json.json) -> user.HasDuplicat
   HasDuplicateField { name: baml.json.from_json<string>(baml.json.field(j, "name")), age: baml.json.from_json<int>(baml.json.field(j, "age")), name: baml.json.from_json<int>(baml.json.field(j, "name")) } : user.HasDuplicateField
   !! 196..213: type mismatch: expected int, got string
 }
+function user.HasDuplicateField.to_string(self: user.HasDuplicateField) -> string throws never {
+  baml.unstable.string<T>(self) : string
+}
 class user.HasDuplicateFieldAttr {
   name: string @alias("n") @description("Name") @alias("nm")
 }
@@ -31,6 +37,9 @@ function user.HasDuplicateFieldAttr.to_json(self: user.HasDuplicateFieldAttr) ->
 }
 function user.HasDuplicateFieldAttr.from_json(j: baml.json.json) -> user.HasDuplicateFieldAttr throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   HasDuplicateFieldAttr { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.HasDuplicateFieldAttr
+}
+function user.HasDuplicateFieldAttr.to_string(self: user.HasDuplicateFieldAttr) -> string throws never {
+  baml.unstable.string<T>(self) : string
 }
 enum user.HasDuplicateVariant
 enum user.HasDuplicateEnumAttr

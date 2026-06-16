@@ -68,15 +68,94 @@ use crate::ast::{
 /// Protocol, which treats the two contracts as independent and lets a class
 /// override only one (e.g., a custom `from_json` that returns sentinel
 /// instances while keeping the auto-derived structural `to_json`).
-pub(crate) fn maybe_synthesize_json_methods(class: &mut ClassDef) {
+pub(crate) fn maybe_synthesize_derived_methods(class: &mut ClassDef) {
     let span = class.name_span;
     let has_to_json = class.methods.iter().any(|m| m.name.as_str() == "to_json");
     let has_from_json = class.methods.iter().any(|m| m.name.as_str() == "from_json");
+    // `to_string` is magic like `to_json` (BEP-049 §11): every class is
+    // interpolatable in `${…}` without hand-writing a `to_string`. A class that
+    // defines its own `to_string` keeps it.
+    let has_to_string = class.methods.iter().any(|m| m.name.as_str() == "to_string");
     if !has_to_json {
         class.methods.push(synthesize_to_json(class, span));
     }
     if !has_from_json {
         class.methods.push(synthesize_from_json(class, span));
+    }
+    if !has_to_string {
+        class.methods.push(synthesize_to_string(span));
+    }
+}
+
+/// Synthesize `function to_string(self) -> string throws never {
+///     baml.unstable.string(self)
+/// }` — delegates to the universal VM formatter so every class is stringable
+/// (and thus interpolatable) without a hand-written method. Marked
+/// `FunctionOrigin::AutoDerive`; suppressed when the class defines its own.
+fn synthesize_to_string(span: TextRange) -> FunctionDef {
+    let self_param = Param {
+        name: Name::new("self"),
+        type_expr: None,
+        default: None,
+        span,
+        name_span: span,
+    };
+
+    let mut exprs: Arena<Expr> = Arena::new();
+    let mut expr_spans: Arena<TextRange> = Arena::new();
+    let mut alloc = |expr: Expr| -> ExprId {
+        let id = exprs.alloc(expr);
+        expr_spans.alloc(span);
+        id
+    };
+    let self_path = alloc(Expr::Path(vec![Name::new("self")]));
+    let callee = alloc(Expr::Path(vec![
+        Name::new("baml"),
+        Name::new("unstable"),
+        Name::new("string"),
+    ]));
+    let call = alloc(Expr::Call {
+        callee,
+        type_args: vec![],
+        args: vec![CallArg::positional(self_path)],
+    });
+    let body = ExprBody {
+        exprs,
+        stmts: Arena::new(),
+        patterns: Arena::new(),
+        match_arms: Arena::new(),
+        catch_arms: Arena::new(),
+        type_annotations: Arena::new(),
+        root_expr: Some(call),
+    };
+    let source_map = AstSourceMap {
+        expr_spans,
+        stmt_spans: Arena::new(),
+        pattern_spans: Arena::new(),
+        match_arm_spans: Arena::new(),
+        type_annotation_spans: Arena::new(),
+        catch_arm_spans: Arena::new(),
+        member_access_member_spans: std::collections::HashMap::new(),
+        path_segment_spans: std::collections::HashMap::new(),
+        call_arg_label_spans: std::collections::HashMap::new(),
+    };
+
+    FunctionDef {
+        name: Name::new("to_string"),
+        generic_params: vec![],
+        generic_param_bounds: vec![],
+        params: vec![self_param],
+        defaults: FunctionDefaults::empty(),
+        return_type: Some(spanned(TypeExpr::String { attrs: vec![] }, span)),
+        throws: Some(spanned(TypeExpr::Never { attrs: vec![] }, span)),
+        body: Some(FunctionBodyDef::Expr(body, source_map)),
+        declarative_meta: None,
+        origin: FunctionOrigin::AutoDerive,
+        attributes: vec![],
+        docstring: None,
+        is_tagged_template_tag: false,
+        span,
+        name_span: span,
     }
 }
 

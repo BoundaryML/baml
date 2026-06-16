@@ -86,6 +86,9 @@ function user.SearchService.to_json(self: user.SearchService) -> baml.json.json 
 function user.SearchService.from_json(j: baml.json.json) -> user.SearchService throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   SearchService { base: baml.json.from_json<string>(baml.json.field(j, "base")) } : user.SearchService
 }
+function user.SearchService.to_string(self: user.SearchService) -> string throws never {
+  baml.unstable.string<T>(self) : string
+}
 type user.Searcher$stream = unknown
 type user.NarrowSearcher$stream = unknown
 function user.AskDocs$stream(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.llm.Client = TestClient) -> baml.llm.Stream<string | null, string> throws never {

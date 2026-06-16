@@ -107,3 +107,10 @@ function user.Wrapper.to_json(self: Wrapper) -> baml.json.json {
     alloc_map 1
     return
 }
+
+function user.Wrapper.to_string(self: Wrapper) -> string {
+    load_type Wrapper
+    load_var self
+    call baml.unstable.string
+    return
+}

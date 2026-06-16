@@ -23,3 +23,6 @@ function user.from_json(j: baml.json.json) -> user.Resume  [expr] {
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "name": baml.json.to_json(self.name) }
 }
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}

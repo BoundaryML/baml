@@ -23,6 +23,9 @@ function user.pkg.inner.Box.from_json(j: baml.json.json) -> user.pkg.inner.Box<u
 function user.pkg.inner.Box.to_json(self: user.pkg.inner.Box) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
   map { "value": baml.json.to_json(self.value) } : map<string, baml.json.json>
 }
+function user.pkg.inner.Box.to_string(self: user.pkg.inner.Box) -> string throws never {
+  baml.unstable.string<T>(self) : string
+}
 class user.pkg.inner.AutoBox {
   value: T
 }
@@ -31,6 +34,9 @@ function user.pkg.inner.AutoBox.to_json(self: user.pkg.inner.AutoBox) -> baml.js
 }
 function user.pkg.inner.AutoBox.from_json(j: baml.json.json) -> user.pkg.inner.AutoBox<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   AutoBox { value: baml.json.from_json<T>(baml.json.field(j, "value")) } : user.pkg.inner.AutoBox<T>
+}
+function user.pkg.inner.AutoBox.to_string(self: user.pkg.inner.AutoBox) -> string throws never {
+  baml.unstable.string<T>(self) : string
 }
 class user.pkg.inner.Box$stream {
   value: T | null

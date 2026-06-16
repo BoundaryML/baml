@@ -58,6 +58,9 @@ function user.from_json(j: baml.json.json) -> user.Sentiment  [expr] {
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "feeling": baml.json.to_json(self.feeling), "confidence": baml.json.to_json(self.confidence), "reasoning": baml.json.to_json(self.reasoning) }
 }
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
 
 --- captures ---
 lambda (testset) in ?: captures [sentiments]

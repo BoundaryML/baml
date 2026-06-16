@@ -60,11 +60,11 @@ function user.llm.openai.DestructureBareInNamespace(response: user.llm.openai.Re
 function user.llm.openai.from_json(j: baml.json.json) -> user.llm.openai.Response  [expr] {
   user.llm.openai.Response { text: baml.json.from_json(baml.json.field(j, "text")), score: baml.json.from_json(baml.json.field(j, "score")) }
 }
-function user.llm.openai.from_json(j: baml.json.json) -> user.llm.openai.Box<T>  [expr] {
-  user.llm.openai.Box { value: baml.json.from_json(baml.json.field(j, "value")) }
-}
 function user.llm.openai.from_json(j: baml.json.json) -> user.llm.openai.Outer<T>  [expr] {
   user.llm.openai.Outer { inner: baml.json.from_json(baml.json.field(j, "inner")) }
+}
+function user.llm.openai.from_json(j: baml.json.json) -> user.llm.openai.Box<T>  [expr] {
+  user.llm.openai.Box { value: baml.json.from_json(baml.json.field(j, "value")) }
 }
 function user.llm.openai.to_json(self: ?) -> baml.json.json  [expr] {
   map { "value": baml.json.to_json(self.value) }
@@ -74,4 +74,13 @@ function user.llm.openai.to_json(self: ?) -> baml.json.json  [expr] {
 }
 function user.llm.openai.to_json(self: ?) -> baml.json.json  [expr] {
   map { "inner": baml.json.to_json(self.inner) }
+}
+function user.llm.openai.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.llm.openai.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.llm.openai.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
 }

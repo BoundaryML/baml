@@ -91,6 +91,18 @@ function user.to_json(self: ?) -> baml.json.json  [expr] {
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "own_config": baml.json.to_json(self.own_config), "llm_config": baml.json.to_json(self.llm_config), "auth_config": baml.json.to_json(self.auth_config), "llm_response": baml.json.to_json(self.llm_response), "nested_client": baml.json.to_json(self.nested_client), "own_status": baml.json.to_json(self.own_status), "own_alias": baml.json.to_json(self.own_alias) }
 }
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
 class user.auth.Config {
   provider: string
   secret: string
@@ -179,6 +191,15 @@ function user.auth.to_json(self: ?) -> baml.json.json  [expr] {
 }
 function user.auth.to_json(self: ?) -> baml.json.json  [expr] {
   map { "value": baml.json.to_json(self.value), "role": baml.json.to_json(self.role) }
+}
+function user.auth.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.auth.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.auth.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
 }
 class user.llm.Config {
   model: string
@@ -301,6 +322,21 @@ function user.llm.to_json(self: ?) -> baml.json.json  [expr] {
 function user.llm.to_json(self: ?) -> baml.json.json  [expr] {
   map { "text": baml.json.to_json(self.text), "tokens": baml.json.to_json(self.tokens) }
 }
+function user.llm.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.llm.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.llm.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.llm.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.llm.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
 class user.llm.openai.Client {
   api_key: string
   org_id: string
@@ -375,4 +411,10 @@ function user.llm.openai.to_json(self: ?) -> baml.json.json  [expr] {
 }
 function user.llm.openai.to_json(self: ?) -> baml.json.json  [expr] {
   map { "status_code": baml.json.to_json(self.status_code), "body": baml.json.to_json(self.body) }
+}
+function user.llm.openai.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.llm.openai.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
 }

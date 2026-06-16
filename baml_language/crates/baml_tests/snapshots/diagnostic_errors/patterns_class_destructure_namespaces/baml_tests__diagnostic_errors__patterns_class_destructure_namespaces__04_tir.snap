@@ -58,6 +58,9 @@ function user.llm.openai.Box.to_json(self: user.llm.openai.Box) -> baml.json.jso
 function user.llm.openai.Box.from_json(j: baml.json.json) -> user.llm.openai.Box<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Box { value: baml.json.from_json<T>(baml.json.field(j, "value")) } : user.llm.openai.Box<T>
 }
+function user.llm.openai.Box.to_string(self: user.llm.openai.Box) -> string throws never {
+  baml.unstable.string<T>(self) : string
+}
 class user.llm.openai.Response {
   score: int
 }
@@ -66,6 +69,9 @@ function user.llm.openai.Response.to_json(self: user.llm.openai.Response) -> bam
 }
 function user.llm.openai.Response.from_json(j: baml.json.json) -> user.llm.openai.Response throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Response { score: baml.json.from_json<int>(baml.json.field(j, "score")) } : user.llm.openai.Response
+}
+function user.llm.openai.Response.to_string(self: user.llm.openai.Response) -> string throws never {
+  baml.unstable.string<T>(self) : string
 }
 class user.llm.openai.Box$stream {
   value: T | null

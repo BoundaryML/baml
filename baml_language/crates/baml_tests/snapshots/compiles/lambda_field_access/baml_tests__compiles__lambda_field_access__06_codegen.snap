@@ -23,6 +23,13 @@ function user.Inner.to_json(self: Inner) -> baml.json.json {
     return
 }
 
+function user.Inner.to_string(self: Inner) -> string {
+    load_type Inner
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function user.Outer.from_json(j: baml.json.json) -> Outer {
     load_var j
     load_const "inner"
@@ -54,6 +61,13 @@ function user.Outer.to_json(self: Outer) -> baml.json.json {
     load_const "inner"
     load_const "name"
     alloc_map 2
+    return
+}
+
+function user.Outer.to_string(self: Outer) -> string {
+    load_type Outer
+    load_var self
+    call baml.unstable.string
     return
 }
 

@@ -70,6 +70,22 @@ fn user.AppConfig.to_json(self: AppConfig) -> baml.json.json {
     }
 }
 
+fn user.AppConfig.to_string(self: AppConfig) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: AppConfig // self // param
+    let _2: type
+
+    bb0: {
+        _2 = load_type(AppConfig);
+        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn user.llm.openai.OpenAIResponse.from_json(j: baml.json.json) -> llm.openai.OpenAIResponse {
     // Locals:
     let _0: llm.openai.OpenAIResponse // _0 // return
@@ -142,6 +158,22 @@ fn user.llm.openai.OpenAIResponse.to_json(self: llm.openai.OpenAIResponse) -> ba
     }
 
     bb3: {
+        return;
+    }
+}
+
+fn user.llm.openai.OpenAIResponse.to_string(self: llm.openai.OpenAIResponse) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: llm.openai.OpenAIResponse // self // param
+    let _2: type
+
+    bb0: {
+        _2 = load_type(llm.openai.OpenAIResponse);
+        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
         return;
     }
 }

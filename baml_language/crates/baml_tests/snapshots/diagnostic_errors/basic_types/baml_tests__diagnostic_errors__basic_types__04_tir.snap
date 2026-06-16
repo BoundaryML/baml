@@ -17,6 +17,9 @@ function user.FieldAttributes.to_json(self: user.FieldAttributes) -> baml.json.j
 function user.FieldAttributes.from_json(j: baml.json.json) -> user.FieldAttributes throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   FieldAttributes { money: baml.json.from_json<int>(baml.json.field(j, "money")), currency: baml.json.from_json<string>(baml.json.field(j, "currency")), name: baml.json.from_json<string>(baml.json.field(j, "name")), summary: baml.json.from_json<string>(baml.json.field(j, "summary")), details: baml.json.from_json<string?>(baml.json.field(j, "details")), state: baml.json.from_json<string>(baml.json.field(j, "state")), multiple: baml.json.from_json<string?>(baml.json.field(j, "multiple")) } : user.FieldAttributes
 }
+function user.FieldAttributes.to_string(self: user.FieldAttributes) -> string throws never {
+  baml.unstable.string<T>(self) : string
+}
 class user.ClassAttributes {
   name: string
 }
@@ -25,6 +28,9 @@ function user.ClassAttributes.to_json(self: user.ClassAttributes) -> baml.json.j
 }
 function user.ClassAttributes.from_json(j: baml.json.json) -> user.ClassAttributes throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   ClassAttributes { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.ClassAttributes
+}
+function user.ClassAttributes.to_string(self: user.ClassAttributes) -> string throws never {
+  baml.unstable.string<T>(self) : string
 }
 class user.FieldAttributes$stream {
   money: int | null @description("In USD")
@@ -153,6 +159,9 @@ function user.User.to_json(self: user.User) -> baml.json.json throws baml.json.J
 }
 function user.User.from_json(j: baml.json.json) -> user.User throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   User { id: baml.json.from_json<int>(baml.json.field(j, "id")), name: baml.json.from_json<string>(baml.json.field(j, "name")), email: baml.json.from_json<string>(baml.json.field(j, "email")) } : user.User
+}
+function user.User.to_string(self: user.User) -> string throws never {
+  baml.unstable.string<T>(self) : string
 }
 enum user.Status
 type user.Role = "user" | "assistant" | "system"

@@ -52,6 +52,13 @@ function user.EdgeFoo.to_json(self: EdgeFoo) -> baml.json.json {
     return
 }
 
+function user.EdgeFoo.to_string(self: EdgeFoo) -> string {
+    load_type EdgeFoo
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function user.Point.from_json(j: baml.json.json) -> Point {
     load_var j
     load_const "x"
@@ -83,6 +90,13 @@ function user.Point.to_json(self: Point) -> baml.json.json {
     load_const "x"
     load_const "y"
     alloc_map 2
+    return
+}
+
+function user.Point.to_string(self: Point) -> string {
+    load_type Point
+    load_var self
+    call baml.unstable.string
     return
 }
 

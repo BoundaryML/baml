@@ -15,6 +15,9 @@ function user.from_json(j: baml.json.json) -> user.Education  [expr] {
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "school": baml.json.to_json(self.school), "degree": baml.json.to_json(self.degree), "year": baml.json.to_json(self.year) }
 }
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
 class user.Resume {
   name: string
   education: Education[]
@@ -26,4 +29,7 @@ function user.from_json(j: baml.json.json) -> user.Resume  [expr] {
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "name": baml.json.to_json(self.name), "education": baml.json.to_json(self.education), "highest_degree": baml.json.to_json(self.highest_degree), "aliases": baml.json.to_json(self.aliases) }
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
 }

@@ -13,6 +13,9 @@ function user.WithChainedAlias.to_json(self: user.WithChainedAlias) -> baml.json
 function user.WithChainedAlias.from_json(j: baml.json.json) -> user.WithChainedAlias throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   WithChainedAlias { data: baml.json.from_json<MyList | string>(baml.json.field(j, "data")) } : user.WithChainedAlias
 }
+function user.WithChainedAlias.to_string(self: user.WithChainedAlias) -> string throws never {
+  baml.unstable.string<T>(self) : string
+}
 type user.IntList$stream = int[]
 type user.MyList$stream = user.IntList$stream
 class user.WithChainedAlias$stream {

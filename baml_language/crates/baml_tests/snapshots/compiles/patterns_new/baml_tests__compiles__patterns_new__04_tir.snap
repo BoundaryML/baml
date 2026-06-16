@@ -184,6 +184,9 @@ function user.AppError.to_json(self: user.AppError) -> baml.json.json throws bam
 function user.AppError.from_json(j: baml.json.json) -> user.AppError throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   AppError { code: baml.json.from_json<int>(baml.json.field(j, "code")) } : user.AppError
 }
+function user.AppError.to_string(self: user.AppError) -> string throws never {
+  baml.unstable.string<T>(self) : string
+}
 function user.risky_error(mode: int) -> int throws user.AppError | string {
   { : never
     if (mode == 0 : bool) : void
@@ -257,6 +260,9 @@ function user.PatternBucket.to_json(self: user.PatternBucket) -> baml.json.json 
 function user.PatternBucket.from_json(j: baml.json.json) -> user.PatternBucket throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   PatternBucket { values: baml.json.from_json<int[]>(baml.json.field(j, "values")) } : user.PatternBucket
 }
+function user.PatternBucket.to_string(self: user.PatternBucket) -> string throws never {
+  baml.unstable.string<T>(self) : string
+}
 class user.PatternMatrix {
   rows: int[][]
 }
@@ -265,6 +271,9 @@ function user.PatternMatrix.to_json(self: user.PatternMatrix) -> baml.json.json 
 }
 function user.PatternMatrix.from_json(j: baml.json.json) -> user.PatternMatrix throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   PatternMatrix { rows: baml.json.from_json<int[][]>(baml.json.field(j, "rows")) } : user.PatternMatrix
+}
+function user.PatternMatrix.to_string(self: user.PatternMatrix) -> string throws never {
+  baml.unstable.string<T>(self) : string
 }
 type user.Number$stream = int | float
 class user.AppError$stream {

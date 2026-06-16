@@ -17,11 +17,11 @@ class user.WithBlockAttrs {
 function user.from_json(j: baml.json.json) -> user.Config  [expr] {
   user.Config { id: baml.json.from_json(baml.json.field(j, "id")), name: baml.json.from_json(baml.json.field(j, "name")), data: baml.json.from_json(baml.json.field(j, "data")) }
 }
-function user.from_json(j: baml.json.json) -> user.AttrFoo  [expr] {
-  user.AttrFoo { x: baml.json.from_json(baml.json.field(j, "x")) }
-}
 function user.from_json(j: baml.json.json) -> user.WithBlockAttrs  [expr] {
   user.WithBlockAttrs { a: baml.json.from_json(baml.json.field(j, "a")), b: baml.json.from_json(baml.json.field(j, "b")) }
+}
+function user.from_json(j: baml.json.json) -> user.AttrFoo  [expr] {
+  user.AttrFoo { x: baml.json.from_json(baml.json.field(j, "x")) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "x": baml.json.to_json(self.x) }
@@ -31,6 +31,15 @@ function user.to_json(self: ?) -> baml.json.json  [expr] {
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "a": baml.json.to_json(self.a), "b": baml.json.to_json(self.b) }
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
 }
 class user.Bar {
   ref: user.Foo
@@ -56,6 +65,12 @@ function user.to_json(self: ?) -> baml.json.json  [expr] {
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "a": baml.json.to_json(self.a), "b": baml.json.to_json(self.b), "c": baml.json.to_json(self.c), "d": baml.json.to_json(self.d) }
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
 }
 class user.ApiCall {
   request: baml.http.Request
@@ -98,6 +113,18 @@ function user.to_json(self: ?) -> baml.json.json  [expr] {
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "requests": baml.json.to_json(self.requests), "metadata": baml.json.to_json(self.metadata), "maybe_request": baml.json.to_json(self.maybe_request), "union_request": baml.json.to_json(self.union_request) }
 }
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
 class user.Complex {
   color: user.Color
   literal: 5
@@ -125,6 +152,12 @@ function user.to_json(self: ?) -> baml.json.json  [expr] {
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "value": baml.json.to_json(self.value) }
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
 }
 class user.AllDone {
   a: int
@@ -163,26 +196,17 @@ function user.from_json(j: baml.json.json) -> user.EdgeFoo  [expr] {
 function user.from_json(j: baml.json.json) -> user.UnionWithMustExist  [expr] {
   user.UnionWithMustExist { mixed: baml.json.from_json(baml.json.field(j, "mixed")) }
 }
-function user.from_json(j: baml.json.json) -> user.AllDone  [expr] {
-  user.AllDone { a: baml.json.from_json(baml.json.field(j, "a")), b: baml.json.from_json(baml.json.field(j, "b")), c: baml.json.from_json(baml.json.field(j, "c")) }
-}
-function user.from_json(j: baml.json.json) -> user.MustExistClass  [expr] {
-  user.MustExistClass { v: baml.json.from_json(baml.json.field(j, "v")) }
-}
 function user.from_json(j: baml.json.json) -> user.AllMustExist  [expr] {
   user.AllMustExist { a: baml.json.from_json(baml.json.field(j, "a")), b: baml.json.from_json(baml.json.field(j, "b")), c: baml.json.from_json(baml.json.field(j, "c")) }
 }
 function user.from_json(j: baml.json.json) -> user.NeverFields  [expr] {
   user.NeverFields { lit_int: baml.json.from_json(baml.json.field(j, "lit_int")), lit_str: baml.json.from_json(baml.json.field(j, "lit_str")), lit_bool: baml.json.from_json(baml.json.field(j, "lit_bool")) }
 }
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "a": baml.json.to_json(self.a), "b": baml.json.to_json(self.b), "c": baml.json.to_json(self.c) }
+function user.from_json(j: baml.json.json) -> user.AllDone  [expr] {
+  user.AllDone { a: baml.json.from_json(baml.json.field(j, "a")), b: baml.json.from_json(baml.json.field(j, "b")), c: baml.json.from_json(baml.json.field(j, "c")) }
 }
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "v": baml.json.to_json(self.v) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "lit_int": baml.json.to_json(self.lit_int), "lit_str": baml.json.to_json(self.lit_str), "lit_bool": baml.json.to_json(self.lit_bool) }
+function user.from_json(j: baml.json.json) -> user.MustExistClass  [expr] {
+  user.MustExistClass { v: baml.json.from_json(baml.json.field(j, "v")) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "name": baml.json.to_json(self.name), "children": baml.json.to_json(self.children) }
@@ -195,6 +219,36 @@ function user.to_json(self: ?) -> baml.json.json  [expr] {
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "a": baml.json.to_json(self.a), "b": baml.json.to_json(self.b), "c": baml.json.to_json(self.c) }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "lit_int": baml.json.to_json(self.lit_int), "lit_str": baml.json.to_json(self.lit_str), "lit_bool": baml.json.to_json(self.lit_bool) }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "a": baml.json.to_json(self.a), "b": baml.json.to_json(self.b), "c": baml.json.to_json(self.c) }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "v": baml.json.to_json(self.v) }
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
 }
 class user.AllDefaults {
   name: string
@@ -389,6 +443,54 @@ function user.to_json(self: ?) -> baml.json.json  [expr] {
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "strings": baml.json.to_json(self.strings), "ints": baml.json.to_json(self.ints), "classes": baml.json.to_json(self.classes) }
 }
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
 class user.foo.NsClass {
   value: string
 }
@@ -412,6 +514,12 @@ function user.foo.to_json(self: ?) -> baml.json.json  [expr] {
 function user.foo.to_json(self: ?) -> baml.json.json  [expr] {
   map { "value": baml.json.to_json(self.value) }
 }
+function user.foo.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.foo.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
 class user.TopRefToNs {
   ns_class: root.foo.NsClass
   ns_enum: root.foo.NsEnum
@@ -424,4 +532,7 @@ function user.from_json(j: baml.json.json) -> user.TopRefToNs  [expr] {
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "ns_class": baml.json.to_json(self.ns_class), "ns_enum": baml.json.to_json(self.ns_enum), "ns_items": baml.json.to_json(self.ns_items), "ns_map": baml.json.to_json(self.ns_map), "ns_alias": baml.json.to_json(self.ns_alias) }
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
 }

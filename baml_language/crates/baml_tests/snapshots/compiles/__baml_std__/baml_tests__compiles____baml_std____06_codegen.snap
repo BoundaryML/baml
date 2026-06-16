@@ -1031,6 +1031,13 @@ function baml.Array.splice(self: baml.Array<T>, start: int, count: int, replace:
 function baml.Array.to_json(self: baml.Array<T>) -> baml.json.json {
 }
 
+function baml.Array.to_string(self: baml.Array<T>) -> string {
+    load_type #0[]
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.Array.unshift(self: baml.Array<T>, item: T) -> int {
 }
 
@@ -1067,6 +1074,13 @@ function baml.Bigint.random(lower: bigint, upper: bigint) -> bigint {
 }
 
 function baml.Bigint.to_json(self: baml.Bigint) -> baml.json.json {
+}
+
+function baml.Bigint.to_string(self: baml.Bigint) -> string {
+    load_type baml.Bigint
+    load_var self
+    call baml.unstable.string
+    return
 }
 
 function baml.Bool.from_json(j: baml.json.json) -> baml.Bool {
@@ -1430,6 +1444,13 @@ function baml.Map.set(self: baml.Map<K, V>, key: K, value: V) -> V | null {
 function baml.Map.to_json(self: baml.Map<K, V>) -> baml.json.json {
 }
 
+function baml.Map.to_string(self: baml.Map<K, V>) -> string {
+    load_type baml.Map<#0, #1>
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.Map.values(self: baml.Map<K, V>) -> V[] {
 }
 
@@ -1439,6 +1460,13 @@ function baml.Null.from_json(j: baml.json.json) -> baml.Null {
 }
 
 function baml.Null.to_json(self: baml.Null) -> baml.json.json {
+}
+
+function baml.Null.to_string(self: baml.Null) -> string {
+    load_type baml.Null
+    load_var self
+    call baml.unstable.string
+    return
 }
 
 function baml.Sortable$for$T[].sort(self: T[]) -> T[] {
@@ -1615,6 +1643,13 @@ function baml.TaggedString.to_json(self: baml.TaggedString) -> baml.json.json {
     load_var self
     call baml.json.to_string
     call baml.json.parse
+    return
+}
+
+function baml.TaggedString.to_string(self: baml.TaggedString) -> string {
+    load_type baml.TaggedString
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -1817,6 +1852,13 @@ function baml.csv.CsvError.to_json(self: baml.csv.CsvError) -> baml.json.json {
     return
 }
 
+function baml.csv.CsvError.to_string(self: baml.csv.CsvError) -> string {
+    load_type baml.csv.CsvError
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.csv.CsvHeaders.from_json(j: baml.json.json) -> baml.csv.CsvHeaders {
     load_var j
     load_const "names"
@@ -1839,6 +1881,13 @@ function baml.csv.CsvHeaders.to_json(self: baml.csv.CsvHeaders) -> baml.json.jso
     return
 }
 
+function baml.csv.CsvHeaders.to_string(self: baml.csv.CsvHeaders) -> string {
+    load_type baml.csv.CsvHeaders
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.csv.CsvNeedData.from_json(j: baml.json.json) -> baml.csv.CsvNeedData {
     alloc_instance baml.csv.CsvNeedData
     return
@@ -1846,6 +1895,13 @@ function baml.csv.CsvNeedData.from_json(j: baml.json.json) -> baml.csv.CsvNeedDa
 
 function baml.csv.CsvNeedData.to_json(self: baml.csv.CsvNeedData) -> baml.json.json {
     alloc_map 0
+    return
+}
+
+function baml.csv.CsvNeedData.to_string(self: baml.csv.CsvNeedData) -> string {
+    load_type baml.csv.CsvNeedData
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -1892,6 +1948,13 @@ function baml.csv.CsvPosition.to_json(self: baml.csv.CsvPosition) -> baml.json.j
     load_const "line"
     load_const "record"
     alloc_map 3
+    return
+}
+
+function baml.csv.CsvPosition.to_string(self: baml.csv.CsvPosition) -> string {
+    load_type baml.csv.CsvPosition
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -2232,6 +2295,13 @@ function baml.csv.CsvReader.to_json(self: baml.csv.CsvReader) -> baml.json.json 
     return
 }
 
+function baml.csv.CsvReader.to_string(self: baml.csv.CsvReader) -> string {
+    load_type baml.csv.CsvReader
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.csv.CsvRecord.decode(self: baml.csv.CsvRecord) -> T {
     load_type #0
     load_var self
@@ -2281,6 +2351,13 @@ function baml.csv.CsvRecord.to_json(self: baml.csv.CsvRecord) -> baml.json.json 
 }
 
 function baml.csv.CsvRecord.to_map(self: baml.csv.CsvRecord) -> map<string, string> {
+}
+
+function baml.csv.CsvRecord.to_string(self: baml.csv.CsvRecord) -> string {
+    load_type baml.csv.CsvRecord
+    load_var self
+    call baml.unstable.string
+    return
 }
 
 function baml.csv.CsvRows$stream.root.iter.Iterable.iter(self: baml.csv.CsvRows$stream<T>) -> baml.iter.Iterator<Item = T, Error = baml.csv.CsvError | baml.errors.Io> {
@@ -2694,6 +2771,13 @@ function baml.csv.CsvRows.to_json(self: baml.csv.CsvRows<T>) -> baml.json.json {
     return
 }
 
+function baml.csv.CsvRows.to_string(self: baml.csv.CsvRows<T>) -> string {
+    load_type baml.csv.CsvRows<#0>
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.csv.CsvSkip.from_json(j: baml.json.json) -> baml.csv.CsvSkip {
     load_var j
     load_const "error"
@@ -2713,6 +2797,13 @@ function baml.csv.CsvSkip.to_json(self: baml.csv.CsvSkip) -> baml.json.json {
     call baml.json.to_json
     load_const "error"
     alloc_map 1
+    return
+}
+
+function baml.csv.CsvSkip.to_string(self: baml.csv.CsvSkip) -> string {
+    load_type baml.csv.CsvSkip
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -2844,6 +2935,13 @@ function baml.csv.CsvWriter.to_json(self: baml.csv.CsvWriter) -> baml.json.json 
     return
 }
 
+function baml.csv.CsvWriter.to_string(self: baml.csv.CsvWriter) -> string {
+    load_type baml.csv.CsvWriter
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.csv.CsvWriter.write_header(self: baml.csv.CsvWriter, names: string[]) -> null {
     load_var2 1 2
     call baml.csv.CsvWriter._encode_header
@@ -2897,6 +2995,13 @@ function baml.csv.ReaderOptions.to_json(self: baml.csv.ReaderOptions) -> baml.js
     load_var self
     call baml.json.to_string
     call baml.json.parse
+    return
+}
+
+function baml.csv.ReaderOptions.to_string(self: baml.csv.ReaderOptions) -> string {
+    load_type baml.csv.ReaderOptions
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -3027,6 +3132,13 @@ function baml.csv.WriterOptions.to_json(self: baml.csv.WriterOptions) -> baml.js
     load_const "bom"
     load_const "sanitize_formulas"
     alloc_map 10
+    return
+}
+
+function baml.csv.WriterOptions.to_string(self: baml.csv.WriterOptions) -> string {
+    load_type baml.csv.WriterOptions
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -4153,6 +4265,13 @@ function baml.errors.AccessError.to_json(self: baml.errors.AccessError) -> baml.
     return
 }
 
+function baml.errors.AccessError.to_string(self: baml.errors.AccessError) -> string {
+    load_type baml.errors.AccessError
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.errors.CompilationError.from_json(j: baml.json.json) -> baml.errors.CompilationError {
     load_var j
     load_const "message"
@@ -4172,6 +4291,13 @@ function baml.errors.CompilationError.to_json(self: baml.errors.CompilationError
     call baml.json.to_json
     load_const "message"
     alloc_map 1
+    return
+}
+
+function baml.errors.CompilationError.to_string(self: baml.errors.CompilationError) -> string {
+    load_type baml.errors.CompilationError
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -4197,6 +4323,13 @@ function baml.errors.DevOther.to_json(self: baml.errors.DevOther) -> baml.json.j
     return
 }
 
+function baml.errors.DevOther.to_string(self: baml.errors.DevOther) -> string {
+    load_type baml.errors.DevOther
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.errors.GenericSdkError.from_json(j: baml.json.json) -> baml.errors.GenericSdkError {
     load_var j
     load_const "message"
@@ -4219,6 +4352,13 @@ function baml.errors.GenericSdkError.to_json(self: baml.errors.GenericSdkError) 
     return
 }
 
+function baml.errors.GenericSdkError.to_string(self: baml.errors.GenericSdkError) -> string {
+    load_type baml.errors.GenericSdkError
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.errors.HostCallable.from_json(j: baml.json.json) -> baml.errors.HostCallable {
     load_var j
     call baml.json.stringify
@@ -4234,6 +4374,13 @@ function baml.errors.HostCallable.to_json(self: baml.errors.HostCallable) -> bam
     load_var self
     call baml.json.to_string
     call baml.json.parse
+    return
+}
+
+function baml.errors.HostCallable.to_string(self: baml.errors.HostCallable) -> string {
+    load_type baml.errors.HostCallable
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -4259,6 +4406,13 @@ function baml.errors.InvalidArgument.to_json(self: baml.errors.InvalidArgument) 
     return
 }
 
+function baml.errors.InvalidArgument.to_string(self: baml.errors.InvalidArgument) -> string {
+    load_type baml.errors.InvalidArgument
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.errors.Io.from_json(j: baml.json.json) -> baml.errors.Io {
     load_var j
     load_const "message"
@@ -4278,6 +4432,13 @@ function baml.errors.Io.to_json(self: baml.errors.Io) -> baml.json.json {
     call baml.json.to_json
     load_const "message"
     alloc_map 1
+    return
+}
+
+function baml.errors.Io.to_string(self: baml.errors.Io) -> string {
+    load_type baml.errors.Io
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -4303,6 +4464,13 @@ function baml.errors.LlmClient.to_json(self: baml.errors.LlmClient) -> baml.json
     return
 }
 
+function baml.errors.LlmClient.to_string(self: baml.errors.LlmClient) -> string {
+    load_type baml.errors.LlmClient
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.errors.NotImplemented.from_json(j: baml.json.json) -> baml.errors.NotImplemented {
     load_var j
     load_const "message"
@@ -4322,6 +4490,13 @@ function baml.errors.NotImplemented.to_json(self: baml.errors.NotImplemented) ->
     call baml.json.to_json
     load_const "message"
     alloc_map 1
+    return
+}
+
+function baml.errors.NotImplemented.to_string(self: baml.errors.NotImplemented) -> string {
+    load_type baml.errors.NotImplemented
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -4347,6 +4522,13 @@ function baml.errors.ParseError.to_json(self: baml.errors.ParseError) -> baml.js
     return
 }
 
+function baml.errors.ParseError.to_string(self: baml.errors.ParseError) -> string {
+    load_type baml.errors.ParseError
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.errors.RenderPrompt.from_json(j: baml.json.json) -> baml.errors.RenderPrompt {
     load_var j
     load_const "message"
@@ -4366,6 +4548,13 @@ function baml.errors.RenderPrompt.to_json(self: baml.errors.RenderPrompt) -> bam
     call baml.json.to_json
     load_const "message"
     alloc_map 1
+    return
+}
+
+function baml.errors.RenderPrompt.to_string(self: baml.errors.RenderPrompt) -> string {
+    load_type baml.errors.RenderPrompt
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -4412,6 +4601,13 @@ function baml.errors.StackFrame.to_json(self: baml.errors.StackFrame) -> baml.js
     load_const "line"
     load_const "function_name"
     alloc_map 3
+    return
+}
+
+function baml.errors.StackFrame.to_string(self: baml.errors.StackFrame) -> string {
+    load_type baml.errors.StackFrame
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -4474,6 +4670,13 @@ function baml.errors.Timeout.to_json(self: baml.errors.Timeout) -> baml.json.jso
     return
 }
 
+function baml.errors.Timeout.to_string(self: baml.errors.Timeout) -> string {
+    load_type baml.errors.Timeout
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.errors.Unsupported.from_json(j: baml.json.json) -> baml.errors.Unsupported {
     load_var j
     load_const "message"
@@ -4493,6 +4696,13 @@ function baml.errors.Unsupported.to_json(self: baml.errors.Unsupported) -> baml.
     call baml.json.to_json
     load_const "message"
     alloc_map 1
+    return
+}
+
+function baml.errors.Unsupported.to_string(self: baml.errors.Unsupported) -> string {
+    load_type baml.errors.Unsupported
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -4554,6 +4764,13 @@ function baml.fs.DirEntry.to_json(self: baml.fs.DirEntry) -> baml.json.json {
     return
 }
 
+function baml.fs.DirEntry.to_string(self: baml.fs.DirEntry) -> string {
+    load_type baml.fs.DirEntry
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.fs.File.bytes(self: baml.fs.File) -> uint8array {
 }
 
@@ -4590,6 +4807,13 @@ function baml.fs.File.to_json(self: baml.fs.File) -> baml.json.json {
     return
 }
 
+function baml.fs.File.to_string(self: baml.fs.File) -> string {
+    load_type baml.fs.File
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.fs.File.write(self: baml.fs.File, data: string) -> int {
 }
 
@@ -4615,6 +4839,13 @@ function baml.fs.MkdirOptions.to_json(self: baml.fs.MkdirOptions) -> baml.json.j
     call baml.json.to_json
     load_const "recursive"
     alloc_map 1
+    return
+}
+
+function baml.fs.MkdirOptions.to_string(self: baml.fs.MkdirOptions) -> string {
+    load_type baml.fs.MkdirOptions
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -4668,6 +4899,13 @@ function baml.future.AllFailed.to_json(self: baml.future.AllFailed<E>) -> baml.j
     return
 }
 
+function baml.future.AllFailed.to_string(self: baml.future.AllFailed<E>) -> string {
+    load_type baml.future.AllFailed<#0>
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.future.Future.cancel(self: future<T, E>) -> bool {
 }
 
@@ -4695,6 +4933,13 @@ function baml.future.Future.state(self: future<T, E>) -> baml.future.FutureState
 
 function baml.future.Future.to_json(self: future<T, E>) -> baml.json.json {
     alloc_map 0
+    return
+}
+
+function baml.future.Future.to_string(self: future<T, E>) -> string {
+    load_type baml.future.Future<#0, #1>
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -4786,6 +5031,13 @@ function baml.glob.Glob.to_json(self: baml.glob.Glob) -> baml.json.json {
     return
 }
 
+function baml.glob.Glob.to_string(self: baml.glob.Glob) -> string {
+    load_type baml.glob.Glob
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.glob.ScanOptions.from_json(j: baml.json.json) -> baml.glob.ScanOptions {
     load_var j
     load_const "cwd"
@@ -4868,6 +5120,13 @@ function baml.glob.ScanOptions.to_json(self: baml.glob.ScanOptions) -> baml.json
     return
 }
 
+function baml.glob.ScanOptions.to_string(self: baml.glob.ScanOptions) -> string {
+    load_type baml.glob.ScanOptions
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.glob.new(pattern: string) -> baml.glob.Glob {
 }
 
@@ -4878,6 +5137,13 @@ function baml.host.HostValue.from_json(j: baml.json.json) -> baml.host.HostValue
 
 function baml.host.HostValue.to_json(self: baml.host.HostValue) -> baml.json.json {
     alloc_map 0
+    return
+}
+
+function baml.host.HostValue.to_string(self: baml.host.HostValue) -> string {
+    load_type baml.host.HostValue
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -4942,6 +5208,13 @@ function baml.http.Request.to_json(self: baml.http.Request) -> baml.json.json {
     return
 }
 
+function baml.http.Request.to_string(self: baml.http.Request) -> string {
+    load_type baml.http.Request
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.http.Response.bytes(self: baml.http.Response) -> uint8array {
 }
 
@@ -4982,6 +5255,13 @@ function baml.http.Response.to_json(self: baml.http.Response) -> baml.json.json 
     load_var self
     call baml.json.to_string
     call baml.json.parse
+    return
+}
+
+function baml.http.Response.to_string(self: baml.http.Response) -> string {
+    load_type baml.http.Response
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -5070,6 +5350,13 @@ function baml.http.Server.to_json(self: baml.http.Server) -> baml.json.json {
     return
 }
 
+function baml.http.Server.to_string(self: baml.http.Server) -> string {
+    load_type baml.http.Server
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.http.SseStream.close(self: baml.http.SseStream) -> null {
 }
 
@@ -5091,6 +5378,13 @@ function baml.http.SseStream.to_json(self: baml.http.SseStream) -> baml.json.jso
     load_var self
     call baml.json.to_string
     call baml.json.parse
+    return
+}
+
+function baml.http.SseStream.to_string(self: baml.http.SseStream) -> string {
+    load_type baml.http.SseStream
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -5139,6 +5433,13 @@ function baml.http.TlsConfig.to_json(self: baml.http.TlsConfig) -> baml.json.jso
     load_var self
     call baml.json.to_string
     call baml.json.parse
+    return
+}
+
+function baml.http.TlsConfig.to_string(self: baml.http.TlsConfig) -> string {
+    load_type baml.http.TlsConfig
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -5344,6 +5645,13 @@ function baml.iter.ArrayIterator.to_json(self: baml.iter.ArrayIterator<T>) -> ba
     load_const "arr"
     load_const "idx"
     alloc_map 2
+    return
+}
+
+function baml.iter.ArrayIterator.to_string(self: baml.iter.ArrayIterator<T>) -> string {
+    load_type baml.iter.ArrayIterator<#0>
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -6100,6 +6408,13 @@ function baml.iter.Chain.to_json(self: baml.iter.Chain<T, E, E2>) -> baml.json.j
     return
 }
 
+function baml.iter.Chain.to_string(self: baml.iter.Chain<T, E, E2>) -> string {
+    load_type baml.iter.Chain<#0, #1, #2>
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.iter.Done.from_json(j: baml.json.json) -> baml.iter.Done {
     alloc_instance baml.iter.Done
     return
@@ -6107,6 +6422,13 @@ function baml.iter.Done.from_json(j: baml.json.json) -> baml.iter.Done {
 
 function baml.iter.Done.to_json(self: baml.iter.Done) -> baml.json.json {
     alloc_map 0
+    return
+}
+
+function baml.iter.Done.to_string(self: baml.iter.Done) -> string {
+    load_type baml.iter.Done
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -6541,6 +6863,13 @@ function baml.iter.Filter.to_json(self: baml.iter.Filter<T, E, E2>) -> baml.json
     load_var self
     call baml.json.to_string
     call baml.json.parse
+    return
+}
+
+function baml.iter.Filter.to_string(self: baml.iter.Filter<T, E, E2>) -> string {
+    load_type baml.iter.Filter<#0, #1, #2>
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -6985,6 +7314,13 @@ function baml.iter.FilterMap.to_json(self: baml.iter.FilterMap<T, R, E, E2>) -> 
     load_var self
     call baml.json.to_string
     call baml.json.parse
+    return
+}
+
+function baml.iter.FilterMap.to_string(self: baml.iter.FilterMap<T, R, E, E2>) -> string {
+    load_type baml.iter.FilterMap<#0, #1, #2, #3>
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -8609,6 +8945,13 @@ function baml.iter.FlatMap.to_json(self: baml.iter.FlatMap<T, R, E, E2, E3>) -> 
     load_var self
     call baml.json.to_string
     call baml.json.parse
+    return
+}
+
+function baml.iter.FlatMap.to_string(self: baml.iter.FlatMap<T, R, E, E2, E3>) -> string {
+    load_type baml.iter.FlatMap<#0, #1, #2, #3, #4>
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -10247,6 +10590,13 @@ function baml.iter.Flatten.to_json(self: baml.iter.Flatten<I, R, E, E3>) -> baml
     load_const "source"
     load_const "inner"
     alloc_map 2
+    return
+}
+
+function baml.iter.Flatten.to_string(self: baml.iter.Flatten<I, R, E, E3>) -> string {
+    load_type baml.iter.Flatten<#0, #1, #2, #3>
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -12239,6 +12589,13 @@ function baml.iter.Map.to_json(self: baml.iter.Map<T, R, E, E2>) -> baml.json.js
     return
 }
 
+function baml.iter.Map.to_string(self: baml.iter.Map<T, R, E, E2>) -> string {
+    load_type baml.iter.Map<#0, #1, #2, #3>
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.iter.Peekable$stream.Iterable.iter(self: baml.iter.Peekable$stream<T, E>) -> baml.iter.Iterator<Item = T, Error = E> {
     load_var self
     return
@@ -12850,6 +13207,13 @@ function baml.iter.Peekable.to_json(self: baml.iter.Peekable<T, E>) -> baml.json
     return
 }
 
+function baml.iter.Peekable.to_string(self: baml.iter.Peekable<T, E>) -> string {
+    load_type baml.iter.Peekable<#0, #1>
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.iter.Range$stream.Iterable.iter(self: baml.iter.Range$stream) -> baml.iter.Iterator<Item = int, Error = never> {
     load_var self
     return
@@ -12978,6 +13342,13 @@ function baml.iter.Range.to_json(self: baml.iter.Range) -> baml.json.json {
     load_const "max"
     load_const "step"
     alloc_map 3
+    return
+}
+
+function baml.iter.Range.to_string(self: baml.iter.Range) -> string {
+    load_type baml.iter.Range
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -13250,6 +13621,13 @@ function baml.iter.Repeat.to_json(self: baml.iter.Repeat<T>) -> baml.json.json {
 
   L21:
     unreachable
+}
+
+function baml.iter.Repeat.to_string(self: baml.iter.Repeat<T>) -> string {
+    load_type baml.iter.Repeat<#0>
+    load_var self
+    call baml.unstable.string
+    return
 }
 
 function baml.iter.StepBy$stream.Iterable.iter(self: baml.iter.StepBy$stream<T, E>) -> baml.iter.Iterator<Item = T, Error = E> {
@@ -14326,6 +14704,13 @@ function baml.iter.StepBy.to_json(self: baml.iter.StepBy<T, E>) -> baml.json.jso
     return
 }
 
+function baml.iter.StepBy.to_string(self: baml.iter.StepBy<T, E>) -> string {
+    load_type baml.iter.StepBy<#0, #1>
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.iter.flatten(src: baml.iter.Iterator<Item = I, Error = E>) -> baml.iter.Iterator<Item = R, Error = E | E3> {
     load_var src
     alloc_instance baml.iter.Done
@@ -14371,6 +14756,13 @@ function baml.json.JsonDecodeError.to_json(self: baml.json.JsonDecodeError) -> b
     return
 }
 
+function baml.json.JsonDecodeError.to_string(self: baml.json.JsonDecodeError) -> string {
+    load_type baml.json.JsonDecodeError
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.json.JsonParseError.from_json(j: baml.json.json) -> baml.json.JsonParseError {
     load_var j
     load_const "message"
@@ -14390,6 +14782,13 @@ function baml.json.JsonParseError.to_json(self: baml.json.JsonParseError) -> bam
     call baml.json.to_json
     load_const "message"
     alloc_map 1
+    return
+}
+
+function baml.json.JsonParseError.to_string(self: baml.json.JsonParseError) -> string {
+    load_type baml.json.JsonParseError
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -14436,6 +14835,13 @@ function baml.json.JsonSerializationError.to_json(self: baml.json.JsonSerializat
     load_const "path"
     load_const "reason"
     alloc_map 3
+    return
+}
+
+function baml.json.JsonSerializationError.to_string(self: baml.json.JsonSerializationError) -> string {
+    load_type baml.json.JsonSerializationError
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -14503,6 +14909,13 @@ function baml.llm.AnthropicOptions.to_json(self: baml.llm.AnthropicOptions) -> b
     return
 }
 
+function baml.llm.AnthropicOptions.to_string(self: baml.llm.AnthropicOptions) -> string {
+    load_type baml.llm.AnthropicOptions
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.llm.AzureOpenAiOptions.from_json(j: baml.json.json) -> baml.llm.AzureOpenAiOptions {
     load_var j
     load_const "resource_name"
@@ -14558,6 +14971,13 @@ function baml.llm.AzureOpenAiOptions.to_json(self: baml.llm.AzureOpenAiOptions) 
     load_const "api_version"
     load_const "max_tokens"
     alloc_map 4
+    return
+}
+
+function baml.llm.AzureOpenAiOptions.to_string(self: baml.llm.AzureOpenAiOptions) -> string {
+    load_type baml.llm.AzureOpenAiOptions
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -14688,6 +15108,13 @@ function baml.llm.BedrockOptions.to_json(self: baml.llm.BedrockOptions) -> baml.
     load_const "temperature"
     load_const "top_p"
     alloc_map 10
+    return
+}
+
+function baml.llm.BedrockOptions.to_string(self: baml.llm.BedrockOptions) -> string {
+    load_type baml.llm.BedrockOptions
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -16227,6 +16654,13 @@ function baml.llm.Client.to_primitive_client(self: baml.llm.Client) -> baml.llm.
     return
 }
 
+function baml.llm.Client.to_string(self: baml.llm.Client) -> string {
+    load_type baml.llm.Client
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.llm.Context.from_json(j: baml.json.json) -> baml.llm.Context {
     load_var j
     call baml.json.stringify
@@ -16245,6 +16679,13 @@ function baml.llm.Context.to_json(self: baml.llm.Context) -> baml.json.json {
     load_var self
     call baml.json.to_string
     call baml.json.parse
+    return
+}
+
+function baml.llm.Context.to_string(self: baml.llm.Context) -> string {
+    load_type baml.llm.Context
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -16306,6 +16747,13 @@ function baml.llm.ContextClient.to_json(self: baml.llm.ContextClient) -> baml.js
     return
 }
 
+function baml.llm.ContextClient.to_string(self: baml.llm.ContextClient) -> string {
+    load_type baml.llm.ContextClient
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.llm.ExecutionContext.from_json(j: baml.json.json) -> baml.llm.ExecutionContext {
     load_var j
     call baml.json.stringify
@@ -16321,6 +16769,13 @@ function baml.llm.ExecutionContext.to_json(self: baml.llm.ExecutionContext) -> b
     load_var self
     call baml.json.to_string
     call baml.json.parse
+    return
+}
+
+function baml.llm.ExecutionContext.to_string(self: baml.llm.ExecutionContext) -> string {
+    load_type baml.llm.ExecutionContext
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -16382,6 +16837,13 @@ function baml.llm.MediaUrlHandler.to_json(self: baml.llm.MediaUrlHandler) -> bam
     return
 }
 
+function baml.llm.MediaUrlHandler.to_string(self: baml.llm.MediaUrlHandler) -> string {
+    load_type baml.llm.MediaUrlHandler
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.llm.OrchestrationStep.from_json(j: baml.json.json) -> baml.llm.OrchestrationStep {
     load_var j
     load_const "primitive_client"
@@ -16416,6 +16878,13 @@ function baml.llm.OrchestrationStep.to_json(self: baml.llm.OrchestrationStep) ->
     return
 }
 
+function baml.llm.OrchestrationStep.to_string(self: baml.llm.OrchestrationStep) -> string {
+    load_type baml.llm.OrchestrationStep
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.llm.OutputFormat.from_json(j: baml.json.json) -> baml.llm.OutputFormat {
     load_var j
     call baml.json.stringify
@@ -16431,6 +16900,13 @@ function baml.llm.OutputFormat.to_json(self: baml.llm.OutputFormat) -> baml.json
     load_var self
     call baml.json.to_string
     call baml.json.parse
+    return
+}
+
+function baml.llm.OutputFormat.to_string(self: baml.llm.OutputFormat) -> string {
+    load_type baml.llm.OutputFormat
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -16640,6 +17116,13 @@ function baml.llm.PlannerState.to_json(self: baml.llm.PlannerState) -> baml.json
     return
 }
 
+function baml.llm.PlannerState.to_string(self: baml.llm.PlannerState) -> string {
+    load_type baml.llm.PlannerState
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.llm.PrimitiveClient.build_request(self: baml.llm.PrimitiveClient, prompt: baml.llm.PromptAst, return_type: type) -> baml.http.Request {
 }
 
@@ -16704,6 +17187,13 @@ function baml.llm.PrimitiveClient.to_json(self: baml.llm.PrimitiveClient) -> bam
     return
 }
 
+function baml.llm.PrimitiveClient.to_string(self: baml.llm.PrimitiveClient) -> string {
+    load_type baml.llm.PrimitiveClient
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.llm.PrimitiveClient.validate_finish_reason(self: baml.llm.PrimitiveClient, finish_reason: string) -> null {
 }
 
@@ -16725,6 +17215,13 @@ function baml.llm.PrimitiveClientOptions.to_json(self: baml.llm.PrimitiveClientO
     return
 }
 
+function baml.llm.PrimitiveClientOptions.to_string(self: baml.llm.PrimitiveClientOptions) -> string {
+    load_type baml.llm.PrimitiveClientOptions
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.llm.PromptAst.from_json(j: baml.json.json) -> baml.llm.PromptAst {
     load_var j
     call baml.json.stringify
@@ -16740,6 +17237,13 @@ function baml.llm.PromptAst.to_json(self: baml.llm.PromptAst) -> baml.json.json 
     load_var self
     call baml.json.to_string
     call baml.json.parse
+    return
+}
+
+function baml.llm.PromptAst.to_string(self: baml.llm.PromptAst) -> string {
+    load_type baml.llm.PromptAst
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -16801,6 +17305,13 @@ function baml.llm.RetryPolicy.to_json(self: baml.llm.RetryPolicy) -> baml.json.j
     return
 }
 
+function baml.llm.RetryPolicy.to_string(self: baml.llm.RetryPolicy) -> string {
+    load_type baml.llm.RetryPolicy
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.llm.Role.from_json(j: baml.json.json) -> baml.llm.Role {
     load_var j
     call baml.json.stringify
@@ -16816,6 +17327,13 @@ function baml.llm.Role.to_json(self: baml.llm.Role) -> baml.json.json {
     load_var self
     call baml.json.to_string
     call baml.json.parse
+    return
+}
+
+function baml.llm.Role.to_string(self: baml.llm.Role) -> string {
+    load_type baml.llm.Role
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -17012,6 +17530,13 @@ function baml.llm.Stream.to_json(self: baml.llm.Stream<TStream, TFinal>) -> baml
     return
 }
 
+function baml.llm.Stream.to_string(self: baml.llm.Stream<TStream, TFinal>) -> string {
+    load_type baml.llm.Stream<#0, #1>
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.llm.StreamAccumulator.add_events(self: baml.llm.StreamAccumulator, events: string) -> null {
 }
 
@@ -17051,6 +17576,13 @@ function baml.llm.StreamAccumulator.to_json(self: baml.llm.StreamAccumulator) ->
     return
 }
 
+function baml.llm.StreamAccumulator.to_string(self: baml.llm.StreamAccumulator) -> string {
+    load_type baml.llm.StreamAccumulator
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.llm.StreamCache.from_json(j: baml.json.json) -> baml.llm.StreamCache<TStream, TFinal> {
     load_var j
     call baml.json.stringify
@@ -17069,6 +17601,13 @@ function baml.llm.StreamCache.to_json(self: baml.llm.StreamCache<TStream, TFinal
     load_var self
     call baml.json.to_string
     call baml.json.parse
+    return
+}
+
+function baml.llm.StreamCache.to_string(self: baml.llm.StreamCache<TStream, TFinal>) -> string {
+    load_type baml.llm.StreamCache<#0, #1>
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -17127,6 +17666,13 @@ function baml.llm.VertexAiOptions.to_json(self: baml.llm.VertexAiOptions) -> bam
     load_const "location"
     load_const "project_id"
     alloc_map 4
+    return
+}
+
+function baml.llm.VertexAiOptions.to_string(self: baml.llm.VertexAiOptions) -> string {
+    load_type baml.llm.VertexAiOptions
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -17394,6 +17940,13 @@ function baml.media.Audio.mime_type(self: baml.media.Audio) -> string | null {
 function baml.media.Audio.to_json(self: baml.media.Audio) -> baml.json.json {
 }
 
+function baml.media.Audio.to_string(self: baml.media.Audio) -> string {
+    load_type baml.media.Audio
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.media.Audio.url(self: baml.media.Audio) -> string | null {
 }
 
@@ -17426,6 +17979,13 @@ function baml.media.Image.mime_type(self: baml.media.Image) -> string | null {
 }
 
 function baml.media.Image.to_json(self: baml.media.Image) -> baml.json.json {
+}
+
+function baml.media.Image.to_string(self: baml.media.Image) -> string {
+    load_type baml.media.Image
+    load_var self
+    call baml.unstable.string
+    return
 }
 
 function baml.media.Image.url(self: baml.media.Image) -> string | null {
@@ -17462,6 +18022,13 @@ function baml.media.Pdf.mime_type(self: baml.media.Pdf) -> string | null {
 function baml.media.Pdf.to_json(self: baml.media.Pdf) -> baml.json.json {
 }
 
+function baml.media.Pdf.to_string(self: baml.media.Pdf) -> string {
+    load_type baml.media.Pdf
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.media.Pdf.url(self: baml.media.Pdf) -> string | null {
 }
 
@@ -17494,6 +18061,13 @@ function baml.media.Video.mime_type(self: baml.media.Video) -> string | null {
 }
 
 function baml.media.Video.to_json(self: baml.media.Video) -> baml.json.json {
+}
+
+function baml.media.Video.to_string(self: baml.media.Video) -> string {
+    load_type baml.media.Video
+    load_var self
+    call baml.unstable.string
+    return
 }
 
 function baml.media.Video.url(self: baml.media.Video) -> string | null {
@@ -17533,6 +18107,13 @@ function baml.net.Datagram.to_json(self: baml.net.Datagram) -> baml.json.json {
     return
 }
 
+function baml.net.Datagram.to_string(self: baml.net.Datagram) -> string {
+    load_type baml.net.Datagram
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.net.TcpListener.accept(self: baml.net.TcpListener) -> baml.net.TcpStream {
 }
 
@@ -17557,6 +18138,13 @@ function baml.net.TcpListener.to_json(self: baml.net.TcpListener) -> baml.json.j
     load_var self
     call baml.json.to_string
     call baml.json.parse
+    return
+}
+
+function baml.net.TcpListener.to_string(self: baml.net.TcpListener) -> string {
+    load_type baml.net.TcpListener
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -17621,6 +18209,13 @@ function baml.net.TcpStream.to_json(self: baml.net.TcpStream) -> baml.json.json 
     load_var self
     call baml.json.to_string
     call baml.json.parse
+    return
+}
+
+function baml.net.TcpStream.to_string(self: baml.net.TcpStream) -> string {
+    load_type baml.net.TcpStream
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -17707,6 +18302,13 @@ function baml.net.UdpSocket.to_json(self: baml.net.UdpSocket) -> baml.json.json 
     return
 }
 
+function baml.net.UdpSocket.to_string(self: baml.net.UdpSocket) -> string {
+    load_type baml.net.UdpSocket
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.net._timeout_nanos(timeout: baml.time.Duration | null) -> bigint {
     load_var timeout
     load_const null
@@ -17748,6 +18350,13 @@ function baml.panics.AllocFailure.to_json(self: baml.panics.AllocFailure) -> bam
     return
 }
 
+function baml.panics.AllocFailure.to_string(self: baml.panics.AllocFailure) -> string {
+    load_type baml.panics.AllocFailure
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.panics.AssertionFailed.from_json(j: baml.json.json) -> baml.panics.AssertionFailed {
     load_var j
     load_const "message"
@@ -17767,6 +18376,13 @@ function baml.panics.AssertionFailed.to_json(self: baml.panics.AssertionFailed) 
     call baml.json.to_json
     load_const "message"
     alloc_map 1
+    return
+}
+
+function baml.panics.AssertionFailed.to_string(self: baml.panics.AssertionFailed) -> string {
+    load_type baml.panics.AssertionFailed
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -17792,6 +18408,13 @@ function baml.panics.Cancelled.to_json(self: baml.panics.Cancelled) -> baml.json
     return
 }
 
+function baml.panics.Cancelled.to_string(self: baml.panics.Cancelled) -> string {
+    load_type baml.panics.Cancelled
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.panics.DivisionByZero.from_json(j: baml.json.json) -> baml.panics.DivisionByZero {
     load_var j
     load_const "dividend"
@@ -17814,6 +18437,13 @@ function baml.panics.DivisionByZero.to_json(self: baml.panics.DivisionByZero) ->
     return
 }
 
+function baml.panics.DivisionByZero.to_string(self: baml.panics.DivisionByZero) -> string {
+    load_type baml.panics.DivisionByZero
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.panics.Exit.from_json(j: baml.json.json) -> baml.panics.Exit {
     load_var j
     load_const "code"
@@ -17833,6 +18463,13 @@ function baml.panics.Exit.to_json(self: baml.panics.Exit) -> baml.json.json {
     call baml.json.to_json
     load_const "code"
     alloc_map 1
+    return
+}
+
+function baml.panics.Exit.to_string(self: baml.panics.Exit) -> string {
+    load_type baml.panics.Exit
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -17882,6 +18519,13 @@ function baml.panics.HostContractViolation.to_json(self: baml.panics.HostContrac
     return
 }
 
+function baml.panics.HostContractViolation.to_string(self: baml.panics.HostContractViolation) -> string {
+    load_type baml.panics.HostContractViolation
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.panics.HostUnavailable.from_json(j: baml.json.json) -> baml.panics.HostUnavailable {
     load_var j
     load_const "resource"
@@ -17913,6 +18557,13 @@ function baml.panics.HostUnavailable.to_json(self: baml.panics.HostUnavailable) 
     load_const "resource"
     load_const "message"
     alloc_map 2
+    return
+}
+
+function baml.panics.HostUnavailable.to_string(self: baml.panics.HostUnavailable) -> string {
+    load_type baml.panics.HostUnavailable
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -17950,6 +18601,13 @@ function baml.panics.IndexOutOfBounds.to_json(self: baml.panics.IndexOutOfBounds
     return
 }
 
+function baml.panics.IndexOutOfBounds.to_string(self: baml.panics.IndexOutOfBounds) -> string {
+    load_type baml.panics.IndexOutOfBounds
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.panics.InvalidFieldAccess.from_json(j: baml.json.json) -> baml.panics.InvalidFieldAccess {
     load_var j
     load_const "field_index"
@@ -17984,6 +18642,13 @@ function baml.panics.InvalidFieldAccess.to_json(self: baml.panics.InvalidFieldAc
     return
 }
 
+function baml.panics.InvalidFieldAccess.to_string(self: baml.panics.InvalidFieldAccess) -> string {
+    load_type baml.panics.InvalidFieldAccess
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.panics.MapKeyNotFound.from_json(j: baml.json.json) -> baml.panics.MapKeyNotFound {
     load_var j
     load_const "key"
@@ -18003,6 +18668,13 @@ function baml.panics.MapKeyNotFound.to_json(self: baml.panics.MapKeyNotFound) ->
     call baml.json.to_json
     load_const "key"
     alloc_map 1
+    return
+}
+
+function baml.panics.MapKeyNotFound.to_string(self: baml.panics.MapKeyNotFound) -> string {
+    load_type baml.panics.MapKeyNotFound
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -18028,6 +18700,13 @@ function baml.panics.NegativeBitShift.to_json(self: baml.panics.NegativeBitShift
     return
 }
 
+function baml.panics.NegativeBitShift.to_string(self: baml.panics.NegativeBitShift) -> string {
+    load_type baml.panics.NegativeBitShift
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.panics.SdkPanic.from_json(j: baml.json.json) -> baml.panics.SdkPanic {
     load_var j
     load_const "message"
@@ -18047,6 +18726,13 @@ function baml.panics.SdkPanic.to_json(self: baml.panics.SdkPanic) -> baml.json.j
     call baml.json.to_json
     load_const "message"
     alloc_map 1
+    return
+}
+
+function baml.panics.SdkPanic.to_string(self: baml.panics.SdkPanic) -> string {
+    load_type baml.panics.SdkPanic
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -18072,6 +18758,13 @@ function baml.panics.StackOverflow.to_json(self: baml.panics.StackOverflow) -> b
     return
 }
 
+function baml.panics.StackOverflow.to_string(self: baml.panics.StackOverflow) -> string {
+    load_type baml.panics.StackOverflow
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.panics.Unreachable.from_json(j: baml.json.json) -> baml.panics.Unreachable {
     load_var j
     load_const "message"
@@ -18094,6 +18787,13 @@ function baml.panics.Unreachable.to_json(self: baml.panics.Unreachable) -> baml.
     return
 }
 
+function baml.panics.Unreachable.to_string(self: baml.panics.Unreachable) -> string {
+    load_type baml.panics.Unreachable
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.panics.UserPanic.from_json(j: baml.json.json) -> baml.panics.UserPanic {
     load_var j
     load_const "message"
@@ -18113,6 +18813,13 @@ function baml.panics.UserPanic.to_json(self: baml.panics.UserPanic) -> baml.json
     call baml.json.to_json
     load_const "message"
     alloc_map 1
+    return
+}
+
+function baml.panics.UserPanic.to_string(self: baml.panics.UserPanic) -> string {
+    load_type baml.panics.UserPanic
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -18146,6 +18853,13 @@ function baml.spawn.CancelToken.to_json(self: baml.spawn.CancelToken) -> baml.js
     return
 }
 
+function baml.spawn.CancelToken.to_string(self: baml.spawn.CancelToken) -> string {
+    load_type baml.spawn.CancelToken
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.spawn.SpawnParams.from_json(j: baml.json.json) -> baml.spawn.SpawnParams<T, E> {
     load_var j
     call baml.json.stringify
@@ -18161,6 +18875,13 @@ function baml.spawn.SpawnParams.to_json(self: baml.spawn.SpawnParams<T, E>) -> b
     load_var self
     call baml.json.to_string
     call baml.json.parse
+    return
+}
+
+function baml.spawn.SpawnParams.to_string(self: baml.spawn.SpawnParams<T, E>) -> string {
+    load_type baml.spawn.SpawnParams<#0, #1>
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -18200,6 +18921,13 @@ function baml.spawn.TaskGroup.to_json(self: baml.spawn.TaskGroup) -> baml.json.j
     load_var self
     call baml.json.to_string
     call baml.json.parse
+    return
+}
+
+function baml.spawn.TaskGroup.to_string(self: baml.spawn.TaskGroup) -> string {
+    load_type baml.spawn.TaskGroup
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -18255,6 +18983,13 @@ function baml.stream.StreamFinished.to_json(self: baml.stream.StreamFinished) ->
     return
 }
 
+function baml.stream.StreamFinished.to_string(self: baml.stream.StreamFinished) -> string {
+    load_type baml.stream.StreamFinished
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.stream.StreamNoYield.from_json(j: baml.json.json) -> baml.stream.StreamNoYield {
     alloc_instance baml.stream.StreamNoYield
     return
@@ -18262,6 +18997,13 @@ function baml.stream.StreamNoYield.from_json(j: baml.json.json) -> baml.stream.S
 
 function baml.stream.StreamNoYield.to_json(self: baml.stream.StreamNoYield) -> baml.json.json {
     alloc_map 0
+    return
+}
+
+function baml.stream.StreamNoYield.to_string(self: baml.stream.StreamNoYield) -> string {
+    load_type baml.stream.StreamNoYield
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -18323,6 +19065,13 @@ function baml.sys.ProcessOptions.to_json(self: baml.sys.ProcessOptions) -> baml.
     return
 }
 
+function baml.sys.ProcessOptions.to_string(self: baml.sys.ProcessOptions) -> string {
+    load_type baml.sys.ProcessOptions
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.sys.ShellOutput.from_json(j: baml.json.json) -> baml.sys.ShellOutput {
     load_var j
     load_const "stdout"
@@ -18377,6 +19126,13 @@ function baml.sys.ShellOutput.to_json(self: baml.sys.ShellOutput) -> baml.json.j
     return
 }
 
+function baml.sys.ShellOutput.to_string(self: baml.sys.ShellOutput) -> string {
+    load_type baml.sys.ShellOutput
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.sys.argv() -> string[] {
 }
 
@@ -18417,6 +19173,13 @@ function baml.time.AmbiguousTimeError.to_json(self: baml.time.AmbiguousTimeError
     call baml.json.to_json
     load_const "message"
     alloc_map 1
+    return
+}
+
+function baml.time.AmbiguousTimeError.to_string(self: baml.time.AmbiguousTimeError) -> string {
+    load_type baml.time.AmbiguousTimeError
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -18539,6 +19302,13 @@ function baml.time.Duration.to_seconds(self: baml.time.Duration) -> bigint {
     load_field ._nanoseconds
     load_const 1000000000
     div_bigint
+    return
+}
+
+function baml.time.Duration.to_string(self: baml.time.Duration) -> string {
+    load_type baml.time.Duration
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -19482,6 +20252,13 @@ function baml.time.TimeZoneOffset.to_json(self: baml.time.TimeZoneOffset) -> bam
     return
 }
 
+function baml.time.TimeZoneOffset.to_string(self: baml.time.TimeZoneOffset) -> string {
+    load_type baml.time.TimeZoneOffset
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.time.TimeZoneOffset.utc() -> baml.time.TimeZoneOffset {
     load_const 0
     init_instance baml.time.TimeZoneOffset ._nanoseconds
@@ -19507,6 +20284,13 @@ function baml.time.UnknownTimezoneError.to_json(self: baml.time.UnknownTimezoneE
     call baml.json.to_json
     load_const "timezone"
     alloc_map 1
+    return
+}
+
+function baml.time.UnknownTimezoneError.to_string(self: baml.time.UnknownTimezoneError) -> string {
+    load_type baml.time.UnknownTimezoneError
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -20219,6 +21003,13 @@ function baml.toml.Table.to_json(self: baml.toml.Table) -> baml.json.json {
     return
 }
 
+function baml.toml.Table.to_string(self: baml.toml.Table) -> string {
+    load_type baml.toml.Table
+    load_var self
+    call baml.unstable.string
+    return
+}
+
 function baml.toml.TomlParseError.from_json(j: baml.json.json) -> baml.toml.TomlParseError {
     load_var j
     load_const "message"
@@ -20238,6 +21029,13 @@ function baml.toml.TomlParseError.to_json(self: baml.toml.TomlParseError) -> bam
     call baml.json.to_json
     load_const "message"
     alloc_map 1
+    return
+}
+
+function baml.toml.TomlParseError.to_string(self: baml.toml.TomlParseError) -> string {
+    load_type baml.toml.TomlParseError
+    load_var self
+    call baml.unstable.string
     return
 }
 
@@ -20348,6 +21146,13 @@ function baml.yaml.YamlParseError.to_json(self: baml.yaml.YamlParseError) -> bam
     call baml.json.to_json
     load_const "message"
     alloc_map 1
+    return
+}
+
+function baml.yaml.YamlParseError.to_string(self: baml.yaml.YamlParseError) -> string {
+    load_type baml.yaml.YamlParseError
+    load_var self
+    call baml.unstable.string
     return
 }
 

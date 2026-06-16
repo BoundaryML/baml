@@ -1163,9 +1163,9 @@ fn lower_class(
         name_span: name_token.text_range(),
     };
 
-    // Auto-derive `to_json` / `from_json` on every user class. Skipped if the
-    // user already defined either method.
-    crate::auto_derive_json::maybe_synthesize_json_methods(&mut class_def);
+    // Auto-derive `to_json` / `from_json` / `to_string` on every user class.
+    // Each is skipped if the user already defined that method.
+    crate::auto_derive_json::maybe_synthesize_derived_methods(&mut class_def);
 
     Some(class_def)
 }

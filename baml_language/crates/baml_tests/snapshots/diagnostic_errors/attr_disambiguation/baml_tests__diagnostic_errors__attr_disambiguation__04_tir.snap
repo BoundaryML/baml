@@ -17,6 +17,9 @@ function user.GPoint.to_json(self: user.GPoint) -> baml.json.json throws baml.js
 function user.GPoint.from_json(j: baml.json.json) -> user.GPoint throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   GPoint { x: baml.json.from_json<float>(baml.json.field(j, "x")), y: baml.json.from_json<float>(baml.json.field(j, "y")) } : user.GPoint
 }
+function user.GPoint.to_string(self: user.GPoint) -> string throws never {
+  baml.unstable.string<T>(self) : string
+}
 class user.GCoord {
   lat: float
   lng: float
@@ -27,6 +30,9 @@ function user.GCoord.to_json(self: user.GCoord) -> baml.json.json throws baml.js
 function user.GCoord.from_json(j: baml.json.json) -> user.GCoord throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   GCoord { lat: baml.json.from_json<float>(baml.json.field(j, "lat")), lng: baml.json.from_json<float>(baml.json.field(j, "lng")) } : user.GCoord
 }
+function user.GCoord.to_string(self: user.GCoord) -> string throws never {
+  baml.unstable.string<T>(self) : string
+}
 class user.GConfig {
   key: string
   value: string
@@ -36,6 +42,9 @@ function user.GConfig.to_json(self: user.GConfig) -> baml.json.json throws baml.
 }
 function user.GConfig.from_json(j: baml.json.json) -> user.GConfig throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   GConfig { key: baml.json.from_json<string>(baml.json.field(j, "key")), value: baml.json.from_json<string>(baml.json.field(j, "value")) } : user.GConfig
+}
+function user.GConfig.to_string(self: user.GConfig) -> string throws never {
+  baml.unstable.string<T>(self) : string
 }
 class user.GProfile {
   status: user.GStatus
@@ -50,6 +59,9 @@ function user.GProfile.to_json(self: user.GProfile) -> baml.json.json throws bam
 function user.GProfile.from_json(j: baml.json.json) -> user.GProfile throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   GProfile { status: baml.json.from_json<GStatus>(baml.json.field(j, "status")), role: baml.json.from_json<GRole>(baml.json.field(j, "role")), name: baml.json.from_json<string>(baml.json.field(j, "name")), location: baml.json.from_json<GPoint>(baml.json.field(j, "location")), fallback: baml.json.from_json<GCoord>(baml.json.field(j, "fallback")) } : user.GProfile
 }
+function user.GProfile.to_string(self: user.GProfile) -> string throws never {
+  baml.unstable.string<T>(self) : string
+}
 class user.GAliased {
   status: user.GStatus @alias("s")
   role: user.GRole @alias("r")
@@ -61,6 +73,9 @@ function user.GAliased.to_json(self: user.GAliased) -> baml.json.json throws bam
 }
 function user.GAliased.from_json(j: baml.json.json) -> user.GAliased throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   GAliased { status: baml.json.from_json<GStatus>(baml.json.field(j, "status")), role: baml.json.from_json<GRole>(baml.json.field(j, "role")), point: baml.json.from_json<GPoint>(baml.json.field(j, "point")), coord: baml.json.from_json<GCoord>(baml.json.field(j, "coord")) } : user.GAliased
+}
+function user.GAliased.to_string(self: user.GAliased) -> string throws never {
+  baml.unstable.string<T>(self) : string
 }
 class user.GComplex {
   statuses: user.GStatus[]
@@ -76,6 +91,9 @@ function user.GComplex.to_json(self: user.GComplex) -> baml.json.json throws bam
 function user.GComplex.from_json(j: baml.json.json) -> user.GComplex throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   GComplex { statuses: baml.json.from_json<GStatus[]>(baml.json.field(j, "statuses")), maybe_status: baml.json.from_json<GStatus?>(baml.json.field(j, "maybe_status")), role_or_status: baml.json.from_json<GRole | GStatus>(baml.json.field(j, "role_or_status")), points: baml.json.from_json<GPoint[]>(baml.json.field(j, "points")), maybe_point: baml.json.from_json<GPoint?>(baml.json.field(j, "maybe_point")), config_map: baml.json.from_json<map<string, GConfig>>(baml.json.field(j, "config_map")) } : user.GComplex
 }
+function user.GComplex.to_string(self: user.GComplex) -> string throws never {
+  baml.unstable.string<T>(self) : string
+}
 class user.GIncident {
   severity: user.GSeverity
   priority: user.GPriority
@@ -87,6 +105,9 @@ function user.GIncident.to_json(self: user.GIncident) -> baml.json.json throws b
 }
 function user.GIncident.from_json(j: baml.json.json) -> user.GIncident throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   GIncident { severity: baml.json.from_json<GSeverity>(baml.json.field(j, "severity")), priority: baml.json.from_json<GPriority>(baml.json.field(j, "priority")), title: baml.json.from_json<string>(baml.json.field(j, "title")), config: baml.json.from_json<GConfig>(baml.json.field(j, "config")) } : user.GIncident
+}
+function user.GIncident.to_string(self: user.GIncident) -> string throws never {
+  baml.unstable.string<T>(self) : string
 }
 class user.GPoint$stream {
   x: float | null
@@ -137,6 +158,9 @@ function user.MFoo.to_json(self: user.MFoo) -> baml.json.json throws baml.json.J
 function user.MFoo.from_json(j: baml.json.json) -> user.MFoo throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   MFoo { x: baml.json.from_json<int>(baml.json.field(j, "x")) } : user.MFoo
 }
+function user.MFoo.to_string(self: user.MFoo) -> string throws never {
+  baml.unstable.string<T>(self) : string
+}
 class user.OrderingModifiers {
   c1: user.MFoo | null
   c2: user.MFoo | null @alias("c2_alias")
@@ -150,6 +174,9 @@ function user.OrderingModifiers.to_json(self: user.OrderingModifiers) -> baml.js
 }
 function user.OrderingModifiers.from_json(j: baml.json.json) -> user.OrderingModifiers throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   OrderingModifiers { c1: baml.json.from_json<MFoo?>(baml.json.field(j, "c1")), c2: baml.json.from_json<MFoo?>(baml.json.field(j, "c2")), c3: baml.json.from_json<MFoo[]>(baml.json.field(j, "c3")), c4: baml.json.from_json<MFoo[]>(baml.json.field(j, "c4")), c5: baml.json.from_json<MFoo[]?>(baml.json.field(j, "c5")), c6: baml.json.from_json<map<string, MFoo>>(baml.json.field(j, "c6")) } : user.OrderingModifiers
+}
+function user.OrderingModifiers.to_string(self: user.OrderingModifiers) -> string throws never {
+  baml.unstable.string<T>(self) : string
 }
 class user.MFoo$stream {
   x: int | null
@@ -171,6 +198,9 @@ function user.NFoo.to_json(self: user.NFoo) -> baml.json.json throws baml.json.J
 function user.NFoo.from_json(j: baml.json.json) -> user.NFoo throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   NFoo { x: baml.json.from_json<int>(baml.json.field(j, "x")) } : user.NFoo
 }
+function user.NFoo.to_string(self: user.NFoo) -> string throws never {
+  baml.unstable.string<T>(self) : string
+}
 class user.NBar {
   x: int
 }
@@ -179,6 +209,9 @@ function user.NBar.to_json(self: user.NBar) -> baml.json.json throws baml.json.J
 }
 function user.NBar.from_json(j: baml.json.json) -> user.NBar throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   NBar { x: baml.json.from_json<int>(baml.json.field(j, "x")) } : user.NBar
+}
+function user.NBar.to_string(self: user.NBar) -> string throws never {
+  baml.unstable.string<T>(self) : string
 }
 class user.AliasInNestedTypes {
   d1: user.NFoo[] @alias("d1_alias")
@@ -197,6 +230,9 @@ function user.AliasInNestedTypes.to_json(self: user.AliasInNestedTypes) -> baml.
 }
 function user.AliasInNestedTypes.from_json(j: baml.json.json) -> user.AliasInNestedTypes throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   AliasInNestedTypes { d1: baml.json.from_json<NFoo[]>(baml.json.field(j, "d1")), d2: baml.json.from_json<NFoo[]>(baml.json.field(j, "d2")), d3: baml.json.from_json<NFoo[]>(baml.json.field(j, "d3")), d4: baml.json.from_json<map<NFoo, NBar>>(baml.json.field(j, "d4")), d5: baml.json.from_json<map<NFoo, NBar>>(baml.json.field(j, "d5")), d6: baml.json.from_json<(NFoo | NBar)[]>(baml.json.field(j, "d6")), d7: baml.json.from_json<(NFoo | NBar)[]>(baml.json.field(j, "d7")), d8: baml.json.from_json<NFoo[]>(baml.json.field(j, "d8")), d9: baml.json.from_json<NFoo>(baml.json.field(j, "d9")), d10: baml.json.from_json<map<string, map<NFoo, NBar>>>(baml.json.field(j, "d10")) } : user.AliasInNestedTypes
+}
+function user.AliasInNestedTypes.to_string(self: user.AliasInNestedTypes) -> string throws never {
+  baml.unstable.string<T>(self) : string
 }
 class user.NFoo$stream {
   x: int | null
@@ -225,6 +261,9 @@ function user.EFoo.to_json(self: user.EFoo) -> baml.json.json throws baml.json.J
 function user.EFoo.from_json(j: baml.json.json) -> user.EFoo throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   EFoo { x: baml.json.from_json<int>(baml.json.field(j, "x")) } : user.EFoo
 }
+function user.EFoo.to_string(self: user.EFoo) -> string throws never {
+  baml.unstable.string<T>(self) : string
+}
 class user.EA {
   x: int
 }
@@ -233,6 +272,9 @@ function user.EA.to_json(self: user.EA) -> baml.json.json throws baml.json.JsonS
 }
 function user.EA.from_json(j: baml.json.json) -> user.EA throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   EA { x: baml.json.from_json<int>(baml.json.field(j, "x")) } : user.EA
+}
+function user.EA.to_string(self: user.EA) -> string throws never {
+  baml.unstable.string<T>(self) : string
 }
 class user.EB {
   x: int
@@ -243,6 +285,9 @@ function user.EB.to_json(self: user.EB) -> baml.json.json throws baml.json.JsonS
 function user.EB.from_json(j: baml.json.json) -> user.EB throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   EB { x: baml.json.from_json<int>(baml.json.field(j, "x")) } : user.EB
 }
+function user.EB.to_string(self: user.EB) -> string throws never {
+  baml.unstable.string<T>(self) : string
+}
 class user.EC {
   x: int
 }
@@ -251,6 +296,9 @@ function user.EC.to_json(self: user.EC) -> baml.json.json throws baml.json.JsonS
 }
 function user.EC.from_json(j: baml.json.json) -> user.EC throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   EC { x: baml.json.from_json<int>(baml.json.field(j, "x")) } : user.EC
+}
+function user.EC.to_string(self: user.EC) -> string throws never {
+  baml.unstable.string<T>(self) : string
 }
 type user.E1 = user.EFoo
 type user.E2 = user.EFoo
@@ -301,6 +349,9 @@ function user.Fizz.to_json(self: user.Fizz) -> baml.json.json throws baml.json.J
 function user.Fizz.from_json(j: baml.json.json) -> user.Fizz throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Fizz { x: baml.json.from_json<int>(baml.json.field(j, "x")) } : user.Fizz
 }
+function user.Fizz.to_string(self: user.Fizz) -> string throws never {
+  baml.unstable.string<T>(self) : string
+}
 class user.OrderingSimple {
   a1: user.Fizz
   a2: user.Fizz @alias("a2_alias")
@@ -317,6 +368,9 @@ function user.OrderingSimple.to_json(self: user.OrderingSimple) -> baml.json.jso
 }
 function user.OrderingSimple.from_json(j: baml.json.json) -> user.OrderingSimple throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   OrderingSimple { a1: baml.json.from_json<Fizz>(baml.json.field(j, "a1")), a2: baml.json.from_json<Fizz>(baml.json.field(j, "a2")), a3: baml.json.from_json<Fizz>(baml.json.field(j, "a3")), a4: baml.json.from_json<Fizz>(baml.json.field(j, "a4")), a5: baml.json.from_json<Fizz>(baml.json.field(j, "a5")), a6: baml.json.from_json<Fizz>(baml.json.field(j, "a6")), a7: baml.json.from_json<Fizz>(baml.json.field(j, "a7")), a8: baml.json.from_json<Fizz>(baml.json.field(j, "a8")), a9: baml.json.from_json<Fizz>(baml.json.field(j, "a9")) } : user.OrderingSimple
+}
+function user.OrderingSimple.to_string(self: user.OrderingSimple) -> string throws never {
+  baml.unstable.string<T>(self) : string
 }
 class user.Fizz$stream {
   x: int | null
@@ -341,6 +395,9 @@ function user.UA.to_json(self: user.UA) -> baml.json.json throws baml.json.JsonS
 function user.UA.from_json(j: baml.json.json) -> user.UA throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   UA { x: baml.json.from_json<int>(baml.json.field(j, "x")) } : user.UA
 }
+function user.UA.to_string(self: user.UA) -> string throws never {
+  baml.unstable.string<T>(self) : string
+}
 class user.UB {
   x: int
 }
@@ -350,6 +407,9 @@ function user.UB.to_json(self: user.UB) -> baml.json.json throws baml.json.JsonS
 function user.UB.from_json(j: baml.json.json) -> user.UB throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   UB { x: baml.json.from_json<int>(baml.json.field(j, "x")) } : user.UB
 }
+function user.UB.to_string(self: user.UB) -> string throws never {
+  baml.unstable.string<T>(self) : string
+}
 class user.UC {
   x: int
 }
@@ -358,6 +418,9 @@ function user.UC.to_json(self: user.UC) -> baml.json.json throws baml.json.JsonS
 }
 function user.UC.from_json(j: baml.json.json) -> user.UC throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   UC { x: baml.json.from_json<int>(baml.json.field(j, "x")) } : user.UC
+}
+function user.UC.to_string(self: user.UC) -> string throws never {
+  baml.unstable.string<T>(self) : string
 }
 class user.OrderingUnions {
   b1: user.UA | user.UB | user.UC
@@ -380,6 +443,9 @@ function user.OrderingUnions.to_json(self: user.OrderingUnions) -> baml.json.jso
 }
 function user.OrderingUnions.from_json(j: baml.json.json) -> user.OrderingUnions throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   OrderingUnions { b1: baml.json.from_json<UA | UB | UC>(baml.json.field(j, "b1")), b2: baml.json.from_json<UA | UB | UC>(baml.json.field(j, "b2")), b3: baml.json.from_json<UA | UB | UC>(baml.json.field(j, "b3")), b4: baml.json.from_json<UA | UB | UC>(baml.json.field(j, "b4")), b5: baml.json.from_json<UA | UB | UC>(baml.json.field(j, "b5")), b6: baml.json.from_json<UA | UB | UC>(baml.json.field(j, "b6")), b7: baml.json.from_json<UA | UB | UC>(baml.json.field(j, "b7")), b8: baml.json.from_json<UA | UB | UC>(baml.json.field(j, "b8")), b9: baml.json.from_json<UA | UB>(baml.json.field(j, "b9")), b10: baml.json.from_json<UA | UB>(baml.json.field(j, "b10")), b11: baml.json.from_json<UA | UB>(baml.json.field(j, "b11")), b12: baml.json.from_json<UA | UB>(baml.json.field(j, "b12")), b13: baml.json.from_json<UA | UB>(baml.json.field(j, "b13")), b14: baml.json.from_json<UA | UB>(baml.json.field(j, "b14")) } : user.OrderingUnions
+}
+function user.OrderingUnions.to_string(self: user.OrderingUnions) -> string throws never {
+  baml.unstable.string<T>(self) : string
 }
 class user.UA$stream {
   x: int | null

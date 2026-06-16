@@ -11,6 +11,9 @@ function user.Config.to_json(self: user.Config) -> baml.json.json throws baml.js
 function user.Config.from_json(j: baml.json.json) -> user.Config throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Config { key: baml.json.from_json<string>(baml.json.field(j, "key")) } : user.Config
 }
+function user.Config.to_string(self: user.Config) -> string throws never {
+  baml.unstable.string<T>(self) : string
+}
 class user.Config$stream {
   key: string | null
 }
@@ -22,6 +25,9 @@ function user.llm.Response.to_json(self: user.llm.Response) -> baml.json.json th
 }
 function user.llm.Response.from_json(j: baml.json.json) -> user.llm.Response throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Response { text: baml.json.from_json<string>(baml.json.field(j, "text")) } : user.llm.Response
+}
+function user.llm.Response.to_string(self: user.llm.Response) -> string throws never {
+  baml.unstable.string<T>(self) : string
 }
 function user.llm.UseConfig(cfg: unknown) -> user.llm.Response throws never {
   { : user.llm.Response

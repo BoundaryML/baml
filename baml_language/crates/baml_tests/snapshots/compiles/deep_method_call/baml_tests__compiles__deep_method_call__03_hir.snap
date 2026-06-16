@@ -32,3 +32,9 @@ function user.to_json(self: ?) -> baml.json.json  [expr] {
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "label": baml.json.to_json(self.label) }
 }
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}

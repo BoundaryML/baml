@@ -11,6 +11,9 @@ function user.Box.to_json(self: user.Box) -> baml.json.json throws baml.json.Jso
 function user.Box.from_json(j: baml.json.json) -> user.Box<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Box { value: baml.json.from_json<T>(baml.json.field(j, "value")) } : user.Box<T>
 }
+function user.Box.to_string(self: user.Box) -> string throws never {
+  baml.unstable.string<T>(self) : string
+}
 class user.Container {
   inner: user.Box<int>
 }
@@ -19,6 +22,9 @@ function user.Container.to_json(self: user.Container) -> baml.json.json throws b
 }
 function user.Container.from_json(j: baml.json.json) -> user.Container throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Container { inner: baml.json.from_json<Box<int>>(baml.json.field(j, "inner")) } : user.Container
+}
+function user.Container.to_string(self: user.Container) -> string throws never {
+  baml.unstable.string<T>(self) : string
 }
 class user.Box$stream {
   value: T | null

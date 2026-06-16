@@ -33,6 +33,9 @@ function user.Union.to_json(self: user.Union) -> baml.json.json throws baml.json
 function user.Union.from_json(j: baml.json.json) -> user.Union throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.Union
 }
+function user.Union.to_string(self: user.Union) -> string throws never {
+  baml.unstable.string<T>(self) : string
+}
 class user.Union$stream {
   u: user.Union$stream | user.Union$stream | user.Union$stream | user.Union$stream | null
   u_arr: (user.Union$stream | user.Union$stream | user.Union$stream | user.Union$stream)[]

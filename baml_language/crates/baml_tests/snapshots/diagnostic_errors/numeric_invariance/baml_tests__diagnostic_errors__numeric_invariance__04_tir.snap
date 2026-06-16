@@ -106,6 +106,9 @@ function user.BigintHolder.to_json(self: user.BigintHolder) -> baml.json.json th
 function user.BigintHolder.from_json(j: baml.json.json) -> user.BigintHolder throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   BigintHolder { count: baml.json.from_json<bigint>(baml.json.field(j, "count")) } : user.BigintHolder
 }
+function user.BigintHolder.to_string(self: user.BigintHolder) -> string throws never {
+  baml.unstable.string<T>(self) : string
+}
 function user.IntFieldIntoBigintClass() -> user.BigintHolder throws never {
   { : user.BigintHolder
     BigintHolder { count: 1 } : user.BigintHolder

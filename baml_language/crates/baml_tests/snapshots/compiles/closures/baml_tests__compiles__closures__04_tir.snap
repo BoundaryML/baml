@@ -16,6 +16,9 @@ function user.Formatter.to_json(self: user.Formatter) -> baml.json.json throws b
 function user.Formatter.from_json(j: baml.json.json) -> user.Formatter throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Formatter { prefix: baml.json.from_json<string>(baml.json.field(j, "prefix")) } : user.Formatter
 }
+function user.Formatter.to_string(self: user.Formatter) -> string throws never {
+  baml.unstable.string<T>(self) : string
+}
 class user.RangeCheck {
   min: int
   max: int
@@ -31,6 +34,9 @@ function user.RangeCheck.to_json(self: user.RangeCheck) -> baml.json.json throws
 function user.RangeCheck.from_json(j: baml.json.json) -> user.RangeCheck throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   RangeCheck { min: baml.json.from_json<int>(baml.json.field(j, "min")), max: baml.json.from_json<int>(baml.json.field(j, "max")) } : user.RangeCheck
 }
+function user.RangeCheck.to_string(self: user.RangeCheck) -> string throws never {
+  baml.unstable.string<T>(self) : string
+}
 class user.Counter {
   value: int
 }
@@ -45,6 +51,9 @@ function user.Counter.to_json(self: user.Counter) -> baml.json.json throws baml.
 }
 function user.Counter.from_json(j: baml.json.json) -> user.Counter throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Counter { value: baml.json.from_json<int>(baml.json.field(j, "value")) } : user.Counter
+}
+function user.Counter.to_string(self: user.Counter) -> string throws never {
+  baml.unstable.string<T>(self) : string
 }
 class user.Employee {
   first: string
@@ -66,6 +75,9 @@ function user.Employee.to_json(self: user.Employee) -> baml.json.json throws bam
 function user.Employee.from_json(j: baml.json.json) -> user.Employee throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Employee { first: baml.json.from_json<string>(baml.json.field(j, "first")), last: baml.json.from_json<string>(baml.json.field(j, "last")) } : user.Employee
 }
+function user.Employee.to_string(self: user.Employee) -> string throws never {
+  baml.unstable.string<T>(self) : string
+}
 class user.Config {
   encoder: user.Encoder
 }
@@ -74,6 +86,9 @@ function user.Config.to_json(self: user.Config) -> baml.json.json throws baml.js
 }
 function user.Config.from_json(j: baml.json.json) -> user.Config throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Config { encoder: baml.json.from_json<Encoder>(baml.json.field(j, "encoder")) } : user.Config
+}
+function user.Config.to_string(self: user.Config) -> string throws never {
+  baml.unstable.string<T>(self) : string
 }
 class user.Encoder {
   charset: string
@@ -89,6 +104,9 @@ function user.Encoder.to_json(self: user.Encoder) -> baml.json.json throws baml.
 function user.Encoder.from_json(j: baml.json.json) -> user.Encoder throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Encoder { charset: baml.json.from_json<string>(baml.json.field(j, "charset")) } : user.Encoder
 }
+function user.Encoder.to_string(self: user.Encoder) -> string throws never {
+  baml.unstable.string<T>(self) : string
+}
 class user.Box {
   value: T
 }
@@ -102,6 +120,9 @@ function user.Box.to_json(self: user.Box) -> baml.json.json throws baml.json.Jso
 }
 function user.Box.from_json(j: baml.json.json) -> user.Box<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Box { value: baml.json.from_json<T>(baml.json.field(j, "value")) } : user.Box<T>
+}
+function user.Box.to_string(self: user.Box) -> string throws never {
+  baml.unstable.string<T>(self) : string
 }
 class user.Calculator {
   op: string
@@ -123,6 +144,9 @@ function user.Calculator.to_json(self: user.Calculator) -> baml.json.json throws
 }
 function user.Calculator.from_json(j: baml.json.json) -> user.Calculator throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Calculator { op: baml.json.from_json<string>(baml.json.field(j, "op")) } : user.Calculator
+}
+function user.Calculator.to_string(self: user.Calculator) -> string throws never {
+  baml.unstable.string<T>(self) : string
 }
 function user.test_bound_mapper() -> string[] throws never {
   { : string[]

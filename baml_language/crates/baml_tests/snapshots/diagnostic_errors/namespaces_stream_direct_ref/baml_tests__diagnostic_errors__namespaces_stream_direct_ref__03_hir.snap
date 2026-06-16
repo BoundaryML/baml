@@ -36,6 +36,15 @@ function user.to_json(self: ?) -> baml.json.json  [expr] {
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "own_stream": baml.json.to_json(self.own_stream), "llm_stream": baml.json.to_json(self.llm_stream) }
 }
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
 class user.llm.Config {
   model: string
 }
@@ -69,4 +78,13 @@ function user.llm.to_json(self: ?) -> baml.json.json  [expr] {
 }
 function user.llm.to_json(self: ?) -> baml.json.json  [expr] {
   map { "own_stream": baml.json.to_json(self.own_stream), "root_stream": baml.json.to_json(self.root_stream) }
+}
+function user.llm.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.llm.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
+}
+function user.llm.to_string(self: ?) -> string  [expr] {
+  baml.unstable.string(self)
 }

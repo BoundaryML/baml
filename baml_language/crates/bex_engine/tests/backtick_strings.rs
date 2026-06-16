@@ -443,6 +443,31 @@ async fn backtick_case_j_user_class_with_to_string() -> anyhow::Result<()> {
     .await
 }
 
+#[tokio::test]
+async fn backtick_interp_class_without_to_string_auto_derives() -> anyhow::Result<()> {
+    // §11 + magic `to_string`: a class with NO hand-written `to_string` is still
+    // interpolatable — `to_string` is auto-derived (like `to_json`), delegating
+    // to the VM's universal `baml.unstable.string` formatter.
+    assert_engine_executes(EngineProgram {
+        source: r#"
+            class Point {
+                x int
+                y int
+            }
+            function main() -> string {
+                let p = Point { x: 1, y: 2 }
+                `p = ${p}`
+            }
+        "#,
+        entry: "main",
+        expected: Ok(BexExternalValue::String(
+            "p = user.Point {\n    x: 1\n    y: 2\n}".into(),
+        )),
+        ..Default::default()
+    })
+    .await
+}
+
 // (K) Backtick string as the default value of a function parameter.
 #[tokio::test]
 async fn backtick_case_k_default_parameter_value() -> anyhow::Result<()> {
