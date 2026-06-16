@@ -617,6 +617,9 @@ fn run_testset_registry(
                     println!("PASS testing::*");
                 } else {
                     println!("FAIL testing::* [outcome={outcome}]");
+                    // A testset runner can fail the aggregate without marking
+                    // individual children failed; count that runner-level
+                    // verdict as one failure so the CLI exit code reflects it.
                     if report_failed == 0 {
                         *failed += 1;
                         *total += 1;

@@ -434,9 +434,16 @@ async fn collect_tests_fail_fast_stops_after_first_failure() {
 
 #[tokio::test]
 async fn collect_tests_sequential_runs_children_in_source_order() {
+    let tmp = tempfile::tempdir().expect("create temp dir for sequential-order test");
+    let path = tmp
+        .path()
+        .join("sequential_order.txt")
+        .to_string_lossy()
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"");
     let source = r#"
         testset "suite" with testing.Sequential() {
-            let path = "/tmp/baml_collect_tests_sequential_order.txt";
+            let path = "__PATH__";
             baml.fs.write(path, "");
             test "one" {
                 let f = baml.fs.open(path, "a");
@@ -447,9 +454,10 @@ async fn collect_tests_sequential_runs_children_in_source_order() {
                 assert.equal(baml.fs.read(path), "1");
             }
         }
-    "#;
+    "#
+    .replace("__PATH__", &path);
 
-    let engine = make_engine(source);
+    let engine = make_engine(&source);
     let registry = engine
         .collect_tests("user", CallId::next(), CancellationToken::default())
         .await
