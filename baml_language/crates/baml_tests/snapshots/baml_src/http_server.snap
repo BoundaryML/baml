@@ -141,7 +141,8 @@ function http_server.server_bound_method_handler() -> string {
     alloc_map 0
     load_const "there"
     init_instance baml.http.Request .method, .url, .headers, .body
-    sys_op baml.http.send
+    load_const <omitted>
+    call baml.http.send
     store_var resp
     load_var _5
     call baml.future.Future.cancel
@@ -174,7 +175,8 @@ function http_server.server_custom_config() -> int {
     alloc_map 0
     load_const ""
     init_instance baml.http.Request .method, .url, .headers, .body
-    sys_op baml.http.send
+    load_const <omitted>
+    call baml.http.send
     store_var resp
     load_var _4
     call baml.future.Future.cancel
@@ -203,7 +205,8 @@ function http_server.server_isolates_handler_panic() -> bool {
     bin_op +
     load_const "/boom"
     bin_op +
-    sys_op baml.http.fetch
+    load_const <omitted>
+    call baml.http.fetch
     store_var boom
     load_const "http://"
     load_deref ?1
@@ -211,7 +214,8 @@ function http_server.server_isolates_handler_panic() -> bool {
     bin_op +
     load_const "/ok"
     bin_op +
-    sys_op baml.http.fetch
+    load_const <omitted>
+    call baml.http.fetch
     store_var good
     load_var _4
     call baml.future.Future.cancel
@@ -254,7 +258,8 @@ function http_server.server_rejects_oversized_body() -> int {
     alloc_map 0
     load_const "this body is much longer than eight bytes"
     init_instance baml.http.Request .method, .url, .headers, .body
-    sys_op baml.http.send
+    load_const <omitted>
+    call baml.http.send
     store_var resp
     load_var _4
     call baml.future.Future.cancel
@@ -283,7 +288,8 @@ function http_server.server_reserve_after_cancel() -> string {
     bin_op +
     load_const "/"
     bin_op +
-    sys_op baml.http.fetch
+    load_const <omitted>
+    call baml.http.fetch
     sys_op baml.http.Response.text
     store_var served
     load_var _4
@@ -304,7 +310,8 @@ function http_server.server_reserve_after_cancel() -> string {
     bin_op +
     load_const "/"
     bin_op +
-    sys_op baml.http.fetch
+    load_const <omitted>
+    call baml.http.fetch
     sys_op baml.http.Response.text
     store_var served_again
     load_var _14
@@ -337,7 +344,8 @@ function http_server.server_response_headers() -> string | null {
     bin_op +
     load_const "/"
     bin_op +
-    sys_op baml.http.fetch
+    load_const <omitted>
+    call baml.http.fetch
     store_var resp
     load_var _4
     call baml.future.Future.cancel
@@ -379,7 +387,8 @@ function http_server.server_roundtrip() -> string {
     alloc_map 0
     load_const "ping"
     init_instance baml.http.Request .method, .url, .headers, .body
-    sys_op baml.http.send
+    load_const <omitted>
+    call baml.http.send
     sys_op baml.http.Response.text
     store_var body
     load_var _5
@@ -408,7 +417,8 @@ function http_server.server_status_code() -> int {
     bin_op +
     load_const "/"
     bin_op +
-    sys_op baml.http.fetch
+    load_const <omitted>
+    call baml.http.fetch
     store_var resp
     load_var _4
     call baml.future.Future.cancel
@@ -437,7 +447,8 @@ function http_server.server_strips_framing_headers() -> string {
     bin_op +
     load_const "/"
     bin_op +
-    sys_op baml.http.fetch
+    load_const <omitted>
+    call baml.http.fetch
     sys_op baml.http.Response.text
     store_var body
     load_var _4
