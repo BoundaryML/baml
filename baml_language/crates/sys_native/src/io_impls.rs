@@ -1645,6 +1645,98 @@ impl io::IoClassHttpResponse for NativeSysOps {
             message: "Operation not supported on this platform".to_string(),
         })
     }
+
+    #[cfg(feature = "bundle-http")]
+    fn new_streaming(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        status_code: i64,
+        headers: indexmap::IndexMap<String, String>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::http::Response> {
+        SysOpOutput::ok(crate::http_server::build_streaming_response(
+            status_code,
+            headers,
+        ))
+    }
+
+    #[cfg(not(feature = "bundle-http"))]
+    fn new_streaming(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _status_code: i64,
+        _headers: indexmap::IndexMap<String, String>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::http::Response> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    #[cfg(feature = "bundle-http")]
+    fn write(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        response: owned::http::Response,
+        data: Vec<u8>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::async_op(async move {
+            crate::http_server::downcast_body(&response._body)?
+                .write_chunk(data)
+                .await
+                .map_err(VmRustFnError::from)
+        })
+    }
+
+    #[cfg(not(feature = "bundle-http"))]
+    fn write(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _response: owned::http::Response,
+        _data: Vec<u8>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    #[cfg(feature = "bundle-http")]
+    fn end(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        response: owned::http::Response,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::async_op(async move {
+            crate::http_server::downcast_body(&response._body)?
+                .end_stream()
+                .await
+                .map_err(VmRustFnError::from)
+        })
+    }
+
+    #[cfg(not(feature = "bundle-http"))]
+    fn end(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _response: owned::http::Response,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
 }
 
 /// Map a `reqwest` transport error to a category the HTTP ops declare they can
