@@ -7092,6 +7092,8 @@ fn baml.http.Response.bytes = builtin(io)
 
 fn baml.http.SseStream.close = builtin(io)
 
+fn baml.http.Response.end = builtin(io)
+
 fn baml.http.fetch(url: string, timeout: baml.time.Duration | null) -> baml.http.Response {
     // Locals:
     let _0: baml.http.Response // _0 // return
@@ -7231,6 +7233,8 @@ fn baml.http.SseStream.from_json(j: baml.json.json) -> baml.http.SseStream {
 }
 
 fn baml.http.Response.new = builtin(io)
+
+fn baml.http.Response.new_streaming = builtin(io)
 
 fn baml.http.SseStream.next = builtin(io)
 
@@ -7392,6 +7396,8 @@ fn baml.http.SseStream.to_json(self: baml.http.SseStream) -> baml.json.json {
         return;
     }
 }
+
+fn baml.http.Response.write = builtin(io)
 
 fn baml.http.TlsConfig._new = builtin(io)
 
