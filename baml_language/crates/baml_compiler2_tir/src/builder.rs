@@ -11638,7 +11638,21 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // lower it to an `InterfaceMethodRef` value (instead of Null) that
                 // `baml.mock.new` can key on. Bound calls (`d.speak()`) take the
                 // interface-dispatch path and do not consult this resolution.
-                if !bound {
+                //
+                // A multi-`Self` interface method (a non-receiver param typed
+                // `Self`, e.g. `cmp(self, other: Self)`) is not interface-
+                // callable: through a single interface value the other `Self`
+                // can't be pinned to the receiver's concrete type. Give it no
+                // mockable identity so it lowers to a no-identity value that
+                // `baml.mock.new` rejects at runtime (mirrors the bound-call
+                // `InvalidSelfCallThroughInterface` guard above).
+                let multi_self = sig
+                    .params
+                    .iter()
+                    .filter(|param| param.name.as_str() != "self")
+                    .filter_map(|param| param.type_expr.as_ref())
+                    .any(|te| Self::type_expr_contains_self(&te.expr));
+                if !bound && !multi_self {
                     self.resolutions.insert(
                         at,
                         crate::inference::MemberResolution::InterfaceRequiredMethod {

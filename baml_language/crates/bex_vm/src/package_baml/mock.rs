@@ -104,6 +104,14 @@ impl BamlNamespaceMock for PackageBamlImpl {
                 ),
             }));
         }
+        // No stable function identity — a bare lambda, or a non-mockable
+        // interface method (e.g. a multi-`Self` method that can't be dispatched
+        // through an interface value) which lowers to a no-identity value.
+        if name.is_empty() {
+            return Err(VmRustFnError::Panic(VmPanic::UserPanic {
+                message: "cannot mock a value with no stable function identity".to_string(),
+            }));
+        }
         Ok(Value::object(
             vm.tlab.alloc_mock(bex_vm_types::Mock::new(key)),
         ))
