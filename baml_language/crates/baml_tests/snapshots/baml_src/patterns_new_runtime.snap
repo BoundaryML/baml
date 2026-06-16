@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
+assertion_line: 140
 ---
 function patterns_new_runtime.$init_test_ns_patterns_new_runtime_patterns_new_runtime(registry: testing.TestCollector) -> null {
     load_var registry
@@ -4755,7 +4756,7 @@ function patterns_new_runtime.test_for_let_or_six_bindings() -> int {
 function patterns_new_runtime.test_for_nested_rest_irrefutable() -> int {
     load_const 0
     store_var total
-    load_type int[] | never[]
+    load_type int[]
     load_const 1
     alloc_array 1
     load_const 2
@@ -4824,7 +4825,7 @@ function patterns_new_runtime.test_for_nested_rest_irrefutable() -> int {
     load_var _6
     is_type baml.iter.Peekable<...>
     pop_jump_if_false L22
-    load_type int[] | never[]
+    load_type int[]
     load_type never
     load_var _6
     call baml.iter.Peekable.Iterator.next
@@ -4843,7 +4844,7 @@ function patterns_new_runtime.test_for_nested_rest_irrefutable() -> int {
     jump L19
 
   L12:
-    load_type int[] | never[]
+    load_type int[]
     load_type never
     load_type never
     load_var _6
@@ -4857,13 +4858,13 @@ function patterns_new_runtime.test_for_nested_rest_irrefutable() -> int {
     jump L19
 
   L14:
-    load_type int[] | never[]
+    load_type int[]
     load_var _6
     call baml.iter.Repeat.Iterator.next
     jump L19
 
   L15:
-    load_type int[] | never[]
+    load_type int[]
     load_type never
     load_type never
     load_var _6
@@ -4871,14 +4872,14 @@ function patterns_new_runtime.test_for_nested_rest_irrefutable() -> int {
     jump L19
 
   L16:
-    load_type int[] | never[]
+    load_type int[]
     load_type never
     load_var _6
     call baml.iter.StepBy.Iterator.next
     jump L19
 
   L17:
-    load_type int[] | never[]
+    load_type int[]
     load_var _6
     call baml.iter.ArrayIterator.Iterator.next
     jump L19

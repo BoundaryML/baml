@@ -73,3 +73,31 @@ async fn optional_index_with_valid_index_returns_element() {
         output.result
     );
 }
+
+// ============================================================================
+// §3 — if/else joining a concrete list with an empty `[]` else-branch (B-236)
+// ============================================================================
+
+/// The original B-236 repro: `if c { xs } else { [] }` must join `string[]`
+/// with `[]` to `string[]`, not the union `string[] | never[]`. The union
+/// mis-dispatched array methods (`.join`) to the Map impl, aborting the VM with
+/// `expected map, got array`.
+#[tokio::test]
+async fn if_else_concrete_list_with_empty_else_branch_runs() {
+    let output = baml_test!(
+        r#"
+        function f(xs: string[], m: int) -> string {
+            let top = if (m > 0) { xs.slice(0, m) } else { [] };
+            top.join(" ")
+        }
+        function main() -> string {
+            f(["a", "b", "c"], 2)
+        }
+    "#
+    );
+    assert!(
+        matches!(&output.result, Ok(BexExternalValue::String(s)) if s == "a b"),
+        "expected \"a b\", got: {:?}",
+        output.result
+    );
+}
