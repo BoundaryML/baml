@@ -71,7 +71,9 @@ pub fn external_to_outbound(
                 entries: baml_entries,
             }))
         }
-        BexExternalValue::Instance { class_name, fields } => {
+        BexExternalValue::Instance {
+            class_name, fields, ..
+        } => {
             let mut baml_fields = Vec::new();
             for (key, val) in fields {
                 baml_fields.push(BamlOutboundMapEntry {

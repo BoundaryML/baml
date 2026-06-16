@@ -325,6 +325,7 @@ mod tests {
             value: Some(InboundValueVariant::ClassValue(InboundClassValue {
                 name: "baml.errors.HostCallable".to_string(),
                 fields: vec![message_entry],
+                class_ty: None,
             })),
         };
         let encoded = inbound.encode_to_vec();
@@ -346,7 +347,9 @@ mod tests {
                     other => panic!("expected HostThrown payload, got {other:?}"),
                 };
                 match thrown {
-                    BexExternalValue::Instance { class_name, fields } => {
+                    BexExternalValue::Instance {
+                        class_name, fields, ..
+                    } => {
                         assert_eq!(class_name, "baml.errors.HostCallable");
                         match fields.get("message") {
                             Some(BexExternalValue::String(s)) => {

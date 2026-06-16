@@ -121,6 +121,9 @@ export function encodeCallArgs(
   const args: CallFunctionArgsType = {
     kwargs: entries,
     callId,
+    // Generic TypeVar bindings (`type_args`) — unused by this playground
+    // encoder, which only sends positional kwargs.
+    typeArgs: [],
   };
 
   return CallFunctionArgs.encode(args).finish();

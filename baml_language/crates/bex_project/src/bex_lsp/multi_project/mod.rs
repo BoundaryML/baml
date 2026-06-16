@@ -956,7 +956,9 @@ fn bex_value_to_json(v: &bex_engine::BexExternalValue) -> serde_json::Value {
             }
             serde_json::Value::Object(map)
         }
-        bex_engine::BexExternalValue::Instance { class_name, fields } => {
+        bex_engine::BexExternalValue::Instance {
+            class_name, fields, ..
+        } => {
             let mut map = serde_json::Map::new();
             map.insert("$type".to_string(), serde_json::json!(class_name));
             for (k, v) in fields {

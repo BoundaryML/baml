@@ -869,7 +869,10 @@ struct TypeAliasTypePy {
 /// `source_method_root` with the previous one (sync/async/companion
 /// fan-out). The first method also gets `true` — the template emits
 /// the leading blank line unconditionally.
-fn build_method_line_views(methods: &[PyMethodBinding]) -> Vec<MethodLineView> {
+fn build_method_line_views(
+    methods: &[PyMethodBinding],
+    class_generic_params: &[String],
+) -> Vec<MethodLineView> {
     let mut out = Vec::with_capacity(methods.len());
     let mut prev_root: Option<&str> = None;
     for m in methods {
@@ -879,7 +882,7 @@ fn build_method_line_views(methods: &[PyMethodBinding]) -> Vec<MethodLineView> {
             Some(p) => p == root,
         };
         out.push(MethodLineView {
-            line: render_method_binding(m),
+            line: render_method_binding(m, class_generic_params),
             tight_to_prev,
         });
         prev_root = Some(root);
@@ -935,8 +938,8 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
                 bases: render_class_bases(&c.generic_params),
                 docstring,
                 properties,
-                static_methods: build_method_line_views(&c.static_methods),
-                instance_methods: build_method_line_views(&c.instance_methods),
+                static_methods: build_method_line_views(&c.static_methods, &c.generic_params),
+                instance_methods: build_method_line_views(&c.instance_methods, &c.generic_params),
             }
             .render()
             .expect("class_body template should always render");
@@ -1104,8 +1107,11 @@ fn render_factory_binding(f: &crate::emit::function::PyFunction) -> String {
     let (required_params, optional_params) = split_param_names(&f.param_names, &f.arg_defaults, 0);
     let required_params = render_param_list(&required_params);
     let optional_params = optional_param_list_arg(&optional_params);
+    // Free functions have no enclosing class, so only their own `<...>` params
+    // (bound via `_types=`) participate.
+    let generic_kwargs = render_generic_kwargs(&f.generic_params, &[]);
     format!(
-        "{name}{lhs_pad} = _define_function({fqn}, {mode_str} {required_params}{optional_params})",
+        "{name}{lhs_pad} = _define_function({fqn}, {mode_str} {required_params}{optional_params}{generic_kwargs})",
         name = f.py_name,
         fqn = py_string(&f.baml_fqn),
     )
@@ -1114,7 +1120,7 @@ fn render_factory_binding(f: &crate::emit::function::PyFunction) -> String {
 /// One method-binding line, indented for a class body. Mirrors
 /// `render_factory_binding` modulo the factory alias and the
 /// `staticmethod(...)` wrap on statics.
-fn render_method_binding(m: &PyMethodBinding) -> String {
+fn render_method_binding(m: &PyMethodBinding, class_generic_params: &[String]) -> String {
     let (lhs_pad, mode_str) = match m.mode {
         SyncAsync::Sync => ("      ", "\"sync\", "),
         SyncAsync::Async => ("", "\"async\","),
@@ -1123,8 +1129,16 @@ fn render_method_binding(m: &PyMethodBinding) -> String {
     let optional_params = m.optional_names();
     let required_params = render_param_list(&required_params);
     let optional_params = optional_param_list_arg(&optional_params);
+    // Instance methods recover the enclosing class's TypeVars from the `self`
+    // receiver; static methods have no receiver, so only their own `<...>`
+    // params (via `_types=`) bind.
+    let class_type_params: &[String] = match m.kind {
+        MethodKind::Instance => class_generic_params,
+        MethodKind::Static => &[],
+    };
+    let generic_kwargs = render_generic_kwargs(&m.generic_params, class_type_params);
     let inner = format!(
-        "_define_function({fqn}, {mode_str} {required_params}{optional_params})",
+        "_define_function({fqn}, {mode_str} {required_params}{optional_params}{generic_kwargs})",
         fqn = py_string(&m.baml_fqn),
     );
     // `staticmethod(...)` wrap stops Python's descriptor protocol from
@@ -1158,6 +1172,26 @@ fn optional_param_list_arg(names: &[String]) -> String {
     } else {
         format!(", {}", render_param_list(names))
     }
+}
+
+/// Trailing `_define_function` kwargs that turn on host-side `TypeVar` binding:
+/// `type_params` (the callee's own `<...>` params, bound via `_types=`) and
+/// `class_type_params` (the enclosing generic class's params, recovered from
+/// the `self` receiver). Empty string when the callee binds nothing.
+fn render_generic_kwargs(type_params: &[String], class_type_params: &[String]) -> String {
+    let mut s = String::new();
+    if !type_params.is_empty() {
+        write!(s, ", type_params={}", render_param_list(type_params)).unwrap();
+    }
+    if !class_type_params.is_empty() {
+        write!(
+            s,
+            ", class_type_params={}",
+            render_param_list(class_type_params)
+        )
+        .unwrap();
+    }
+    s
 }
 
 fn split_param_names(

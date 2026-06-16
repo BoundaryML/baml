@@ -792,7 +792,9 @@ impl<T> io::IoNamespaceLlm for T {
 /// Role name of an interpolated value if it is a `baml.llm.Role` instance (set
 /// by the in-template `role(...)` constructor), else `None`.
 fn prompt_role_name(v: &BexExternalValue) -> Option<String> {
-    if let BexExternalValue::Instance { class_name, fields } = v
+    if let BexExternalValue::Instance {
+        class_name, fields, ..
+    } = v
         && (class_name == "baml.llm.Role" || class_name.ends_with(".Role"))
         && let Some(BexExternalValue::String(name)) = fields.get("name")
     {

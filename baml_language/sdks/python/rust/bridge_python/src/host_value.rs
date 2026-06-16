@@ -514,6 +514,7 @@ fn build_host_callable_inbound(
         value: Some(InboundValueVariant::ClassValue(InboundClassValue {
             name: "baml.errors.HostCallable".to_string(),
             fields,
+            class_ty: None,
         })),
     }
 }

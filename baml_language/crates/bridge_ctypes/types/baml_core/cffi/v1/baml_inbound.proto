@@ -3,6 +3,8 @@
 syntax = "proto3";
 package baml_core.cffi.v1;
 
+import "baml_core/cffi/v1/baml_type.proto";
+
 option go_package = "./cffi";
 
 // -----------------------------------------------------------------------------
@@ -83,6 +85,10 @@ message InboundValue {
     BamlHandle handle = 10;
     bytes uint8array_value = 11;
     string bigint_value = 12;
+    // A reflected BAML type passed as a value (mirrors a `type`-typed BAML
+    // value, e.g. the result of `reflect.type_of<T>()`). Accepted as an
+    // argument value so the host can pass types as data.
+    Ty ty_value = 13;
   }
   // Absent oneof = null value.
 }
@@ -108,6 +114,13 @@ message InboundMapEntry {
 message InboundClassValue {
   string name = 1;
   repeated InboundMapEntry fields = 2;
+  // For a *generic* class instance, its concrete class type arguments in
+  // declaration (De Bruijn) order — the value-level type channel (a
+  // `GenericBox<int>` instance carries `TyClass{name:"...GenericBox", type_args:[int]}`).
+  // Distinct from `CallFunctionArgs.type_args` (the call-level TypeVar binding
+  // channel). Absent for non-generic classes. The encoder must send fully-bound
+  // args (no lingering TypeVars); the engine rejects unbound args (Phase 3).
+  TyClass class_ty = 3;
 }
 
 message InboundEnumValue {
@@ -119,9 +132,25 @@ message InboundEnumValue {
 // Function call protocol
 // -----------------------------------------------------------------------------
 
+// One explicit `TypeVar` binding for a generic function/method call: the
+// TypeVar name paired with the concrete type it is bound to.
+message TyArg {
+  string type_var = 1;   // TypeVar name, e.g. "T", "A"
+  Ty type_value = 2;     // the concrete binding
+}
+
 message CallFunctionArgs {
   repeated InboundMapEntry kwargs = 1;
   uint64 call_id = 2;
+  // Explicit TypeVar bindings for a generic function/method call. Named and
+  // order-preserving: each entry self-describes its TypeVar, and entries are
+  // sent in De Bruijn order (enclosing class params first — recovered from a
+  // generic receiver's type args — then the callee's own `<...>` params,
+  // `_types=` in Python). The engine maps each named binding onto the entry
+  // frame's `type_args` slot by matching the TypeVar name against the callee's
+  // generic params (see `set_entry_point_with_type_args`). Empty for
+  // non-generic calls.
+  repeated TyArg type_args = 3;
 }
 
 // CallAck is the engine's acknowledgment of an inbound call. It flows

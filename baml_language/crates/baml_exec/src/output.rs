@@ -114,7 +114,9 @@ pub fn format_value(value: &BexExternalValue) -> String {
                 .collect();
             format!("{{{}}}", inner.join(", "))
         }
-        BexExternalValue::Instance { class_name, fields } => {
+        BexExternalValue::Instance {
+            class_name, fields, ..
+        } => {
             let inner: Vec<String> = fields
                 .iter()
                 .map(|(k, v)| format!("{k}: {}", format_value(v)))

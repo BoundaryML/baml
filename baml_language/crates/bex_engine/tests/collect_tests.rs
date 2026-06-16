@@ -207,7 +207,10 @@ async fn collect_tests_run_test_catches_typed_throwing_body() {
         .await
         .expect("run_test should normalize typed body throws into a report");
 
-    let BexExternalValue::Instance { class_name, fields } = report else {
+    let BexExternalValue::Instance {
+        class_name, fields, ..
+    } = report
+    else {
         panic!("expected TestReport instance, got: {report:?}");
     };
     assert_eq!(class_name, "testing.TestReport");
@@ -854,7 +857,10 @@ async fn test_body_let_local_resolves_to_binding() {
 
 /// Extract the `outcome` string from a `testing.TestReport` instance.
 fn report_outcome(report: &BexExternalValue) -> String {
-    let BexExternalValue::Instance { class_name, fields } = report else {
+    let BexExternalValue::Instance {
+        class_name, fields, ..
+    } = report
+    else {
         panic!("expected TestReport instance, got: {report:?}");
     };
     assert_eq!(class_name, "testing.TestReport");

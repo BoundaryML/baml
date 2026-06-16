@@ -362,6 +362,7 @@ mod tests {
             validate_host_return(
                 &BexExternalValue::Instance {
                     class_name: "User".to_string(),
+                    type_args: vec![],
                     fields: IndexMap::new(),
                 },
                 &user,
@@ -373,6 +374,7 @@ mod tests {
             validate_host_return(
                 &BexExternalValue::Instance {
                     class_name: "Other".to_string(),
+                    type_args: vec![],
                     fields: IndexMap::new(),
                 },
                 &user,

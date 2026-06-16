@@ -1,4 +1,5 @@
 from baml_core.cffi.v1 import baml_inbound_pb2 as _baml_inbound_pb2
+from baml_core.cffi.v1 import baml_type_pb2 as _baml_type_pb2
 from google.protobuf.internal import containers as _containers
 from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
 from google.protobuf import descriptor as _descriptor
@@ -54,7 +55,7 @@ class BamlOutboundPanic(_message.Message):
     def __init__(self, value: _Optional[_Union[BamlOutboundValue, _Mapping]] = ..., trace: _Optional[_Iterable[str]] = ..., is_exit_panic: bool = ..., exit_code: _Optional[int] = ...) -> None: ...
 
 class BamlOutboundValue(_message.Message):
-    __slots__ = ("null_value", "string_value", "int_value", "float_value", "bool_value", "class_value", "enum_value", "literal_value", "list_value", "map_value", "union_variant_value", "handle_value", "media_value", "prompt_ast_value", "uint8array_value", "bigint_value")
+    __slots__ = ("null_value", "string_value", "int_value", "float_value", "bool_value", "class_value", "enum_value", "literal_value", "list_value", "map_value", "union_variant_value", "handle_value", "media_value", "prompt_ast_value", "uint8array_value", "bigint_value", "ty_value")
     NULL_VALUE_FIELD_NUMBER: _ClassVar[int]
     STRING_VALUE_FIELD_NUMBER: _ClassVar[int]
     INT_VALUE_FIELD_NUMBER: _ClassVar[int]
@@ -71,6 +72,7 @@ class BamlOutboundValue(_message.Message):
     PROMPT_AST_VALUE_FIELD_NUMBER: _ClassVar[int]
     UINT8ARRAY_VALUE_FIELD_NUMBER: _ClassVar[int]
     BIGINT_VALUE_FIELD_NUMBER: _ClassVar[int]
+    TY_VALUE_FIELD_NUMBER: _ClassVar[int]
     null_value: BamlValueNull
     string_value: str
     int_value: int
@@ -87,7 +89,8 @@ class BamlOutboundValue(_message.Message):
     prompt_ast_value: BamlValuePromptAst
     uint8array_value: bytes
     bigint_value: str
-    def __init__(self, null_value: _Optional[_Union[BamlValueNull, _Mapping]] = ..., string_value: _Optional[str] = ..., int_value: _Optional[int] = ..., float_value: _Optional[float] = ..., bool_value: bool = ..., class_value: _Optional[_Union[BamlValueClass, _Mapping]] = ..., enum_value: _Optional[_Union[BamlValueEnum, _Mapping]] = ..., literal_value: _Optional[_Union[BamlTyLiteral, _Mapping]] = ..., list_value: _Optional[_Union[BamlValueList, _Mapping]] = ..., map_value: _Optional[_Union[BamlValueMap, _Mapping]] = ..., union_variant_value: _Optional[_Union[BamlValueUnionVariant, _Mapping]] = ..., handle_value: _Optional[_Union[BamlOutboundHandle, _Mapping]] = ..., media_value: _Optional[_Union[BamlValueMedia, _Mapping]] = ..., prompt_ast_value: _Optional[_Union[BamlValuePromptAst, _Mapping]] = ..., uint8array_value: _Optional[bytes] = ..., bigint_value: _Optional[str] = ...) -> None: ...
+    ty_value: _baml_type_pb2.Ty
+    def __init__(self, null_value: _Optional[_Union[BamlValueNull, _Mapping]] = ..., string_value: _Optional[str] = ..., int_value: _Optional[int] = ..., float_value: _Optional[float] = ..., bool_value: bool = ..., class_value: _Optional[_Union[BamlValueClass, _Mapping]] = ..., enum_value: _Optional[_Union[BamlValueEnum, _Mapping]] = ..., literal_value: _Optional[_Union[BamlTyLiteral, _Mapping]] = ..., list_value: _Optional[_Union[BamlValueList, _Mapping]] = ..., map_value: _Optional[_Union[BamlValueMap, _Mapping]] = ..., union_variant_value: _Optional[_Union[BamlValueUnionVariant, _Mapping]] = ..., handle_value: _Optional[_Union[BamlOutboundHandle, _Mapping]] = ..., media_value: _Optional[_Union[BamlValueMedia, _Mapping]] = ..., prompt_ast_value: _Optional[_Union[BamlValuePromptAst, _Mapping]] = ..., uint8array_value: _Optional[bytes] = ..., bigint_value: _Optional[str] = ..., ty_value: _Optional[_Union[_baml_type_pb2.Ty, _Mapping]] = ...) -> None: ...
 
 class BamlOutboundHandle(_message.Message):
     __slots__ = ("key", "handle_type", "name")

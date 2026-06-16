@@ -91,6 +91,31 @@ fn guard_template_matches(
     }
 }
 
+/// Lower named host `TypeVar` bindings to the positional De Bruijn `type_args`
+/// vec the VM frame consumes. Each `(name, ty)` is placed at the index of the
+/// matching name in `param_names` (the callee's De Bruijn-ordered generic
+/// params); unbound slots default to the unknown/top type, and names not in
+/// `param_names` are dropped — both rollout-safe.
+///
+/// When `param_names` is empty (no generic params recoverable for this callee,
+/// e.g. a native generic builtin), the bindings are emitted in wire order as a
+/// fallback, matching the host's De Bruijn send order.
+fn lower_named_type_args(
+    param_names: &[String],
+    named_type_args: Vec<(String, baml_type::RuntimeTy)>,
+) -> Vec<baml_type::RuntimeTy> {
+    if param_names.is_empty() {
+        return named_type_args.into_iter().map(|(_, ty)| ty).collect();
+    }
+    let mut positional = vec![baml_type::RuntimeTy::unknown(); param_names.len()];
+    for (name, ty) in named_type_args {
+        if let Some(idx) = param_names.iter().position(|p| *p == name) {
+            positional[idx] = ty;
+        }
+    }
+    positional
+}
+
 /// `unreachable_unchecked()` guarded by a debug-build check.
 ///
 /// Specialized opcodes and frame dispatch rely on the bytecode verifier /
@@ -1716,6 +1741,62 @@ impl BexVm {
                 unreachable!("entry point kind is not directly invokable: {callable_kind:?}");
             }
         }
+    }
+
+    /// Like [`Self::set_entry_point_with_type_args`], but accepts *named*
+    /// `TypeVar` bindings (`(name, type)`) as sent by a host SDK over
+    /// `CallFunctionArgs.type_args`, and lowers them to the positional De Bruijn
+    /// `type_args` slot here — the one place where the callee `HeapPtr` is
+    /// resolved (so its generic-param names are known) and the entry frame is
+    /// built.
+    ///
+    /// Each binding is placed at the index of the matching generic param in the
+    /// callee's De Bruijn-ordered param list (enclosing class params first, then
+    /// the function's own params), recovered from `Function::display_type_params`.
+    /// Unbound slots default to the unknown/top type and unrecognized names are
+    /// ignored — both rollout-safe, mirroring the wire decode default.
+    pub fn set_entry_point_with_named_type_args(
+        &mut self,
+        function: HeapPtr,
+        args: &[Value],
+        named_type_args: Vec<(String, baml_type::RuntimeTy)>,
+    ) {
+        let param_names = self.entry_point_generic_param_names(function);
+        let positional = lower_named_type_args(&param_names, named_type_args);
+        self.set_entry_point_with_type_args(function, args, positional);
+    }
+
+    /// The callee's De Bruijn-ordered generic-param names (bare, bounds
+    /// stripped), recovered from the resolved `Object::Function`. Mirrors the
+    /// `Function`/`Closure`/`GenericFunction` normalization in
+    /// [`Self::set_entry_point_with_type_args`]. Empty when the entry has no
+    /// generic params or its function object can't be resolved.
+    fn entry_point_generic_param_names(&self, function: HeapPtr) -> Vec<String> {
+        let display_type_params = match self.get_object(function) {
+            Object::Function(f) => Some(&f.display_type_params),
+            Object::Closure(closure) => match unsafe { closure.function.get() } {
+                Object::Function(f) => Some(&f.display_type_params),
+                _ => None,
+            },
+            Object::GenericFunction(gf) => {
+                let inner = self.globals.get(self.proof(), gf.function);
+                match inner.as_object_ptr().map(|p| unsafe { p.get() }) {
+                    Some(Object::Function(f)) => Some(&f.display_type_params),
+                    _ => None,
+                }
+            }
+            _ => None,
+        };
+        display_type_params
+            .map(|params| {
+                params
+                    .iter()
+                    // `display_type_params` may render bounds ("T extends Foo");
+                    // the bare TypeVar name is the leading whitespace-free token.
+                    .map(|p| p.split_whitespace().next().unwrap_or(p).to_string())
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     fn global_index_for_function_ptr(&self, function: HeapPtr) -> Option<GlobalIndex> {

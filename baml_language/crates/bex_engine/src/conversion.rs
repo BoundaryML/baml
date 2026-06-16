@@ -190,6 +190,7 @@ impl BexEngine {
 
                 Ok(BexExternalValue::Instance {
                     class_name: class.name.to_string(),
+                    type_args: instance.class_type_args.clone(),
                     fields: fields?,
                 })
             }
@@ -375,8 +376,13 @@ impl BexEngine {
             BexExternalValue::RustData(data) => {
                 Value::object(holder.holder_mut().tlab_mut().alloc_rust_data(data))
             }
-            // Allocate instance by looking up class and converting fields
-            BexExternalValue::Instance { class_name, fields } => {
+            // Allocate instance by looking up class and converting fields.
+            // `type_args` (the wire-supplied class args) are landed into the VM
+            // `Object::Instance::class_type_args` in Phase 3 (the `alloc_instance`
+            // fix); ignored here so Phase 2 stays a pure BEV-carrier change.
+            BexExternalValue::Instance {
+                class_name, fields, ..
+            } => {
                 let class_ptr = self
                     .resolved_class_names
                     .get(&class_name)
@@ -1189,7 +1195,9 @@ impl BexEngine {
             // the declared return type. A host returning a class must encode it
             // as a class value (→ `Instance`), not a plain map.
             RuntimeTy::Class(tn, expected_args, _) => match value {
-                BexExternalValue::Instance { class_name, fields } => {
+                BexExternalValue::Instance {
+                    class_name, fields, ..
+                } => {
                     if !type_name_matches_external_name(class_name, tn) {
                         return Err(format!(
                             "host callable returned an instance of `{class_name}` where class \
@@ -1484,7 +1492,11 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: Value) -> BexExternalValue {
                         })
                         .collect();
 
-                    BexExternalValue::Instance { class_name, fields }
+                    BexExternalValue::Instance {
+                        class_name,
+                        type_args: instance.class_type_args.clone(),
+                        fields,
+                    }
                 }
                 Object::Bigint(bi) => BexExternalValue::Bigint((**bi).clone()),
                 Object::Uint8Array(bytes) => BexExternalValue::Uint8Array(bytes.to_vec()),
@@ -1550,14 +1562,24 @@ pub(crate) fn coerce_arg_to_declared_type(
     match (value, ty) {
         // ── Class / enum naming (incoming only) ──────────────────────────
         (BexExternalValue::Map { entries, .. }, RuntimeTy::Class(type_name, _, _)) => {
+            // A bare map carries no class type args.
             Ok(BexExternalValue::Instance {
                 class_name: type_name.to_string(),
+                type_args: vec![],
                 fields: entries,
             })
         }
-        (BexExternalValue::Instance { fields, .. }, RuntimeTy::Class(type_name, _, _)) => {
+        (
+            BexExternalValue::Instance {
+                fields, type_args, ..
+            },
+            RuntimeTy::Class(type_name, _, _),
+        ) => {
+            // FQN rewrite only — carry the wire-supplied class type args through
+            // unchanged (Phase 3 checks them against `expected_args`).
             Ok(BexExternalValue::Instance {
                 class_name: type_name.to_string(),
+                type_args,
                 fields,
             })
         }

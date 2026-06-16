@@ -466,6 +466,7 @@ fn make_dispatch_error() -> js_sys::Function {
             };
             let inbound = InboundValue {
                 value: Some(InboundVariant::ClassValue(InboundClassValue {
+                    class_ty: None,
                     name: "baml.errors.HostCallable".to_string(),
                     fields: vec![
                         field("message", "test boom"),
