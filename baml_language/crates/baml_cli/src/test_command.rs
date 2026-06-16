@@ -172,6 +172,7 @@ impl TestArgs {
             self.include.iter().map(|s| s.as_str()),
             self.exclude.iter().map(|s| s.as_str()),
         );
+        let has_filters = !self.include.is_empty() || !self.exclude.is_empty();
         let selected: Vec<DiscoveredTest> = discovered
             .into_iter()
             .filter(|t| filter.includes(&t.function_name, &t.test_name))
@@ -201,7 +202,18 @@ impl TestArgs {
         }
 
         // ── 7. Execute ─────────────────────────────────────────────────────
-        let total = selected.len();
+        let aggregate_new_style = !has_filters
+            && selected
+                .iter()
+                .any(|t| matches!(&t.kind, TestKind::Testset { .. }));
+        let mut total = if aggregate_new_style {
+            selected
+                .iter()
+                .filter(|t| matches!(&t.kind, TestKind::Legacy { .. }))
+                .count()
+        } else {
+            selected.len()
+        };
         let mut passed = 0usize;
         let mut failed = 0usize;
 
@@ -222,6 +234,9 @@ impl TestArgs {
                     run_legacy_test(&run_ctx, t, &mut passed, &mut failed);
                 }
                 TestKind::Testset { full_path } => {
+                    if aggregate_new_style {
+                        continue;
+                    }
                     let Some(reg_value) = registry_value.as_ref() else {
                         eprintln!(
                             "FAIL {}::{} - testset registry unavailable",
@@ -233,6 +248,18 @@ impl TestArgs {
                     run_testset_test(&run_ctx, reg_value, full_path, t, &mut passed, &mut failed);
                 }
             }
+        }
+
+        if aggregate_new_style {
+            let Some(reg_value) = registry_value.as_ref() else {
+                eprintln!("FAIL testing::* - testset registry unavailable");
+                failed += 1;
+                total += 1;
+                let summary = format!("{passed} passed, {failed} failed, {total} total");
+                crate::reporter::print_error(format_args!("test failures — {summary}"));
+                return Ok(crate::ExitCode::TestFailure);
+            };
+            run_testset_registry(&run_ctx, reg_value, &mut passed, &mut failed, &mut total);
         }
 
         let summary = format!("{passed} passed, {failed} failed, {total} total");
@@ -563,6 +590,59 @@ fn run_testset_test(
     }
 }
 
+fn run_testset_registry(
+    ctx: &RunCtx,
+    registry: &BexExternalValue,
+    passed: &mut usize,
+    failed: &mut usize,
+    total: &mut usize,
+) {
+    let call_ctx = FunctionCallContextBuilder::new(CallId::next())
+        .with_cancel_token(ctx.cancel.clone())
+        .build();
+    match ctx.rt.block_on(ctx.engine.call_function(
+        "testing.TestRegistry.run_all",
+        vec![registry.clone()],
+        call_ctx,
+        true,
+    )) {
+        Ok(report) => {
+            if let Some((outcome, report_passed, report_failed, report_total)) =
+                extract_testset_summary(&report)
+            {
+                *passed += report_passed;
+                *failed += report_failed;
+                *total += report_total;
+                if outcome == "pass" {
+                    println!("PASS testing::*");
+                } else {
+                    println!("FAIL testing::* [outcome={outcome}]");
+                    if report_failed == 0 {
+                        *failed += 1;
+                        *total += 1;
+                    }
+                }
+            } else {
+                let outcome = extract_outcome(&report).unwrap_or_else(|| "unknown".to_string());
+                *total += 1;
+                if outcome == "pass" {
+                    println!("PASS testing::*");
+                    *passed += 1;
+                } else {
+                    println!("FAIL testing::* [outcome={outcome}]");
+                    *failed += 1;
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("FAIL testing::*");
+            eprintln!("  => {e:?}");
+            *failed += 1;
+            *total += 1;
+        }
+    }
+}
+
 /// Pull `TestReport.outcome` out of the returned value.
 ///
 /// The runtime's `run_test` (baml_std/testing/registry.baml:172) returns a
@@ -576,6 +656,25 @@ fn extract_outcome(value: &BexExternalValue) -> Option<String> {
         }
     }
     None
+}
+
+fn extract_testset_summary(value: &BexExternalValue) -> Option<(String, usize, usize, usize)> {
+    let v = unwrap_union(value);
+    if let BexExternalValue::Instance { class_name, fields } = v {
+        if !class_matches(class_name, "TestSetReport") {
+            return None;
+        }
+        let outcome = fields
+            .get("outcome")
+            .and_then(|v| as_string(unwrap_union(v)))?
+            .to_string();
+        let passed = fields.get("passed").and_then(as_usize)?;
+        let failed = fields.get("failed").and_then(as_usize)?;
+        let total = fields.get("total").and_then(as_usize)?;
+        Some((outcome, passed, failed, total))
+    } else {
+        None
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -596,6 +695,13 @@ fn as_string(value: &BexExternalValue) -> Option<&str> {
     match value {
         BexExternalValue::String(s) => Some(s.as_str()),
         BexExternalValue::Union { value, .. } => as_string(value),
+        _ => None,
+    }
+}
+
+fn as_usize(value: &BexExternalValue) -> Option<usize> {
+    match unwrap_union(value) {
+        BexExternalValue::Int(i) => usize::try_from(*i).ok(),
         _ => None,
     }
 }

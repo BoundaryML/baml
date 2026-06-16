@@ -318,6 +318,102 @@ fn test_no_tests_returns_specific_exit_code() {
     );
 }
 
+#[test]
+fn test_unfiltered_testset_run_honors_pass_rate_runner() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(
+        tmp.path(),
+        r#"
+testset "suite" with testing.PassRate(0.6) {
+  test "one" { assert.is_true(true) }
+  test "two" { assert.is_true(true) }
+  test "three" { assert.is_true(false) }
+}
+"#,
+    );
+
+    let output = run_baml_cli(built, tmp.path(), &["test", "--from", "."]);
+
+    assert!(
+        output.status.success(),
+        "Expected unfiltered `baml test` to honor PassRate and pass, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+}
+
+#[test]
+fn test_filtered_testset_run_executes_leaf_without_parent_runner() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(
+        tmp.path(),
+        r#"
+testset "suite" with testing.PassRate(0.6) {
+  test "one" { assert.is_true(true) }
+  test "two" { assert.is_true(true) }
+  test "three" { assert.is_true(false) }
+}
+"#,
+    );
+
+    let output = run_baml_cli(
+        built,
+        tmp.path(),
+        &["test", "--from", ".", "-i", "suite::three"],
+    );
+
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "Expected filtered failing leaf to bypass parent PassRate and fail, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+}
+
+#[test]
+fn test_unfiltered_testset_run_fails_when_aggregate_outcome_fails() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(
+        tmp.path(),
+        r#"
+function AlwaysFail(children: testing.TestSetChild[]) -> testing.TestSetReport {
+  let report = testing.Sequential()(children)
+  testing.TestSetReport {
+    outcome: "fail",
+    passed: report.passed,
+    failed: 0,
+    total: report.total,
+    results: report.results,
+  }
+}
+
+testset "suite" with AlwaysFail {
+  test "one" { assert.is_true(true) }
+}
+"#,
+    );
+
+    let output = run_baml_cli(built, tmp.path(), &["test", "--from", "."]);
+
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "Expected failing aggregate outcome to fail even with zero failed children, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+}
+
 // ============================================================================
 // Tests for project-less introspection (`baml describe` / `baml grep` /
 // `baml fmt` without a `baml.toml`). The most expensive thing an agent can

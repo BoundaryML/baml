@@ -65,6 +65,15 @@ class TestCollector {
     }
     throw ("TestSet not found: " + name)
   }
+
+  function find_test(self, name: string) -> TestRegistration {
+    for (let t in self.tests) {
+      if (t.name == name) {
+        return t
+      }
+    }
+    throw ("Test not found: " + name)
+  }
 }
 
 // Bridge function for the runtime to invoke a testset collector closure.
@@ -150,22 +159,32 @@ class TestRegistry {
     throw ("Test not found: " + name)
   }
 
+  function run_testset(self, name: string) -> TestSetReport {
+    for (let ts in self.collector.testsets) {
+      if (ts.name == name) {
+        return root.run_testset(root.testset_children(self.expand_testset_registry(ts)), ts.runner)
+      }
+    }
+    for (let k in self.expansions.keys()) {
+      let sub = self.expansions[k]
+      if (name.starts_with(k + "/")) {
+        return sub.run_testset(name)
+      }
+    }
+    throw ("TestSet not found: " + name)
+  }
+
+  function run_all(self) -> TestSetReport {
+    root.run_testset(root.testset_children(self), null)
+  }
+
   // Expand a lazy testset by name. Searches recursively through expanded
   // sub-registries so nested testsets can be expanded too.
   function expand_set(self, name: string) -> SerializedTestDef[] {
     // Try root collector first
     for (let ts in self.collector.testsets) {
       if (ts.name == name) {
-        let start = baml.sys.now_ms()
-        let sub_collector = TestCollector { prefix: name, tests: [], testsets: [] }
-        ts.collector(sub_collector)
-        let elapsed = baml.sys.now_ms() - start
-        let sub_registry = TestRegistry {
-          collector: sub_collector,
-          expansions: {},
-          loading_time_ms: elapsed,
-        }
-        self.expansions.set(name, sub_registry)
+        self.expand_testset_registry(ts)
         return self.serialize()
       }
     }
@@ -178,6 +197,105 @@ class TestRegistry {
     }
     throw ("TestSet not found for expansion: " + name)
   }
+
+  function expand_testset_registry(self, ts: TestSetRegistration) -> TestRegistry {
+    match (self.expansions.get(ts.name)) {
+      let existing: TestRegistry => existing,
+      null => {
+        let start = baml.sys.now_ms()
+        let sub_collector = TestCollector { prefix: ts.name, tests: [], testsets: [] }
+        ts.collector(sub_collector)
+        let elapsed = baml.sys.now_ms() - start
+        let sub_registry = TestRegistry {
+          collector: sub_collector,
+          expansions: {},
+          loading_time_ms: elapsed,
+        }
+        self.expansions.set(ts.name, sub_registry)
+        sub_registry
+      }
+    }
+  }
+}
+
+function testset_children(registry: TestRegistry) -> TestSetChild[] {
+  let children: TestSetChild[] = []
+  for (let t in registry.collector.tests) {
+    children.push(root.test_child(t.name, t.body, t.runner))
+  }
+  for (let ts in registry.collector.testsets) {
+    children.push(root.testset_child(registry, ts))
+  }
+  children
+}
+
+function test_child(name: string, body: TestBody, runner: TestRunner?) -> TestSetChild {
+  TestSetChild {
+    name: name,
+    run: () -> ChildReport { root.run_test(body, runner) },
+  }
+}
+
+function testset_child(registry: TestRegistry, ts: TestSetRegistration) -> TestSetChild {
+  TestSetChild {
+    name: ts.name,
+    run: () -> ChildReport {
+      root.run_testset(root.testset_children(registry.expand_testset_registry(ts)), ts.runner) catch_all (e) {
+        _ => {
+          TestSetReport {
+            outcome: "error",
+            passed: 0,
+            failed: 1,
+            total: 1,
+            results: [],
+          }
+        }
+      }
+    },
+  }
+}
+
+function aggregate_reports(results: ChildReport[]) -> TestSetReport {
+  let passed = 0
+  let failed = 0
+  let has_error = false
+  for (let result in results) {
+    let outcome = match (result) {
+      let report: TestReport => report.outcome,
+      let report: TestSetReport => report.outcome,
+    }
+    if (outcome == "pass") {
+      passed += 1
+    } else {
+      failed += 1
+      if (outcome == "error") {
+        has_error = true
+      } else {
+        null
+      }
+    }
+  }
+  let outcome: Outcome = if (has_error) { "error" } else if (failed == 0) { "pass" } else { "fail" }
+  TestSetReport {
+    outcome: outcome,
+    passed: passed,
+    failed: failed,
+    total: results.length(),
+    results: results,
+  }
+}
+
+function run_children_parallel(children: TestSetChild[]) -> TestSetReport {
+  let futures: baml.future.Future<ChildReport, null>[] = []
+  for (let child in children) {
+    futures.push(spawn {
+      child.run()
+    })
+  }
+  let results = (await baml.future.all_complete(futures)) catch_all (e) {
+    _ => baml.sys.panic("unexpected test child failure")
+  }
+  root.aggregate_reports(results)
 }
 
 // Run a single test with error handling and optional runner middleware.
@@ -188,6 +306,9 @@ function run_test(body: TestBody, runner: TestRunner?) -> TestReport {
       body()
       RunReport { outcome: "pass", duration_ms: 0 }
     } catch_all (e) {
+      baml.panics.Panic => {
+        RunReport { outcome: "fail", duration_ms: 0 }
+      },
       _ => {
         RunReport { outcome: "fail", duration_ms: 0 }
       }
@@ -207,12 +328,9 @@ function run_test(body: TestBody, runner: TestRunner?) -> TestReport {
 }
 
 // Run all children of a testset with optional runner middleware.
-function run_testset(run_children: TestSetReportThunk, runner: TestSetRunner?) -> TestSetReport {
+function run_testset(children: TestSetChild[], runner: TestSetRunner?) -> TestSetReport {
   match (runner) {
-    null => run_children(),
-    let r: TestSetRunner => {
-      let wrapped: TestSetReportThunk = r(run_children)
-      wrapped()
-    }
+    null => root.run_children_parallel(children),
+    let r: TestSetRunner => r(children),
   }
 }

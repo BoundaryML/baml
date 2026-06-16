@@ -19,6 +19,276 @@ fn testing.$invoke_collector(collector: (testing.TestCollector) -> void throws u
     }
 }
 
+fn testing.aggregate_reports(results: (testing.TestReport | testing.TestSetReport)[]) -> testing.TestSetReport {
+    // Locals:
+    let _0: testing.TestSetReport // _0 // return
+    let _1: (testing.TestReport | testing.TestSetReport)[] // results // param
+    let _2: int // passed
+    let _3: int // failed
+    let _4: bool // has_error
+    let _5: baml.iter.Iterator<Item = testing.TestReport | testing.TestSetReport, Error = never>
+    let _6: type
+    let _7: unknown
+    let _8: bool
+    let _9: unknown
+    let _10: bool
+    let _11: type
+    let _12: bool
+    let _13: type
+    let _14: type
+    let _15: bool
+    let _16: type
+    let _17: type
+    let _18: type
+    let _19: bool
+    let _20: type
+    let _21: bool
+    let _22: unknown
+    let _23: bool
+    let _24: type
+    let _25: type
+    let _26: type
+    let _27: bool
+    let _28: unknown
+    let _29: bool
+    let _30: unknown
+    let _31: bool
+    let _32: type
+    let _33: type
+    let _34: bool
+    let _35: testing.TestReport | testing.TestSetReport
+    let _36: testing.TestReport | testing.TestSetReport // result
+    let _37: "pass" | "fail" | "error" // outcome
+    let _38: bool
+    let _39: testing.TestReport // report
+    let _40: testing.TestSetReport // report
+    let _41: bool
+    let _42: "pass" | "fail" | "error"
+    let _43: bool
+    let _44: "pass" | "fail" | "error"
+    let _45: "pass" | "fail" | "error" // outcome
+    let _46: bool
+    let _47: bool
+    let _48: int
+    let _49: "pass" | "fail" | "error"
+    let _50: int
+    let _51: int
+    let _52: int
+
+    bb0: {
+        _2 = const 0_i64;
+        _3 = const 0_i64;
+        _4 = const false;
+        goto -> bb1;
+    }
+
+    bb1: {
+        _6 = load_type(testing.TestReport | testing.TestSetReport);
+        _5 = call const fn baml.iter.Iterable$for$T[].iter<copy _6>(copy _1) -> [bb2];
+    }
+
+    bb2: {
+        _8 = is_type(copy _5, baml.iter.Flatten<_, testing.TestReport | testing.TestSetReport, never, never>);
+        branch copy _8 -> [bb22, bb3];
+    }
+
+    bb3: {
+        _10 = is_type(copy _5, baml.iter.ArrayIterator<testing.TestReport | testing.TestSetReport>);
+        branch copy _10 -> [bb21, bb4];
+    }
+
+    bb4: {
+        _12 = is_type(copy _5, baml.iter.StepBy<testing.TestReport | testing.TestSetReport, never>);
+        branch copy _12 -> [bb20, bb5];
+    }
+
+    bb5: {
+        _15 = is_type(copy _5, baml.iter.Chain<testing.TestReport | testing.TestSetReport, never, never>);
+        branch copy _15 -> [bb19, bb6];
+    }
+
+    bb6: {
+        _19 = is_type(copy _5, baml.iter.Repeat<testing.TestReport | testing.TestSetReport>);
+        branch copy _19 -> [bb18, bb7];
+    }
+
+    bb7: {
+        _21 = is_type(copy _5, baml.iter.Map<_, testing.TestReport | testing.TestSetReport, never, never>);
+        branch copy _21 -> [bb17, bb8];
+    }
+
+    bb8: {
+        _23 = is_type(copy _5, baml.iter.Filter<testing.TestReport | testing.TestSetReport, never, never>);
+        branch copy _23 -> [bb16, bb9];
+    }
+
+    bb9: {
+        _27 = is_type(copy _5, baml.iter.FilterMap<_, testing.TestReport | testing.TestSetReport, never, never>);
+        branch copy _27 -> [bb15, bb10];
+    }
+
+    bb10: {
+        _29 = is_type(copy _5, baml.iter.FlatMap<_, testing.TestReport | testing.TestSetReport, never, never, never>);
+        branch copy _29 -> [bb14, bb11];
+    }
+
+    bb11: {
+        _31 = is_type(copy _5, baml.iter.Peekable<testing.TestReport | testing.TestSetReport, never>);
+        branch copy _31 -> [bb13, bb12];
+    }
+
+    bb12: {
+        unreachable;
+    }
+
+    bb13: {
+        _32 = load_type(testing.TestReport | testing.TestSetReport);
+        _33 = load_type(never);
+        _7 = call const fn baml.iter.Peekable.Iterator.next<copy _32, copy _33>(copy _5) -> [bb23];
+    }
+
+    bb14: {
+        _30 = make_bound_method baml.iter.FlatMap.Iterator.next(copy _5);
+        _7 = call copy _30() -> [bb23];
+    }
+
+    bb15: {
+        _28 = make_bound_method baml.iter.FilterMap.Iterator.next(copy _5);
+        _7 = call copy _28() -> [bb23];
+    }
+
+    bb16: {
+        _24 = load_type(testing.TestReport | testing.TestSetReport);
+        _25 = load_type(never);
+        _26 = load_type(never);
+        _7 = call const fn baml.iter.Filter.Iterator.next<copy _24, copy _25, copy _26>(copy _5) -> [bb23];
+    }
+
+    bb17: {
+        _22 = make_bound_method baml.iter.Map.Iterator.next(copy _5);
+        _7 = call copy _22() -> [bb23];
+    }
+
+    bb18: {
+        _20 = load_type(testing.TestReport | testing.TestSetReport);
+        _7 = call const fn baml.iter.Repeat.Iterator.next<copy _20>(copy _5) -> [bb23];
+    }
+
+    bb19: {
+        _16 = load_type(testing.TestReport | testing.TestSetReport);
+        _17 = load_type(never);
+        _18 = load_type(never);
+        _7 = call const fn baml.iter.Chain.Iterator.next<copy _16, copy _17, copy _18>(copy _5) -> [bb23];
+    }
+
+    bb20: {
+        _13 = load_type(testing.TestReport | testing.TestSetReport);
+        _14 = load_type(never);
+        _7 = call const fn baml.iter.StepBy.Iterator.next<copy _13, copy _14>(copy _5) -> [bb23];
+    }
+
+    bb21: {
+        _11 = load_type(testing.TestReport | testing.TestSetReport);
+        _7 = call const fn baml.iter.ArrayIterator.Iterator.next<copy _11>(copy _5) -> [bb23];
+    }
+
+    bb22: {
+        _9 = make_bound_method baml.iter.Flatten.Iterator.next(copy _5);
+        _7 = call copy _9() -> [bb23];
+    }
+
+    bb23: {
+        _34 = is_type(copy _7, baml.iter.Done);
+        branch copy _34 -> [bb31, bb24];
+    }
+
+    bb24: {
+        _35 = copy _7;
+        fresh_cell(_36);
+        _36 = copy _35;
+        _38 = is_type(copy _36, testing.TestReport);
+        branch copy _38 -> [bb26, bb25];
+    }
+
+    bb25: {
+        _40 = copy _36;
+        _37 = copy _40.0;
+        goto -> bb27;
+    }
+
+    bb26: {
+        _39 = copy _36;
+        _37 = copy _39.0;
+        goto -> bb27;
+    }
+
+    bb27: {
+        _42 = copy _37;
+        _41 = copy _42 == const "pass";
+        branch copy _41 -> [bb30, bb28];
+    }
+
+    bb28: {
+        _3 = copy _3 + const 1_i64;
+        _44 = copy _37;
+        _43 = copy _44 == const "error";
+        branch copy _43 -> [bb29, bb2];
+    }
+
+    bb29: {
+        _4 = const true;
+        goto -> bb2;
+    }
+
+    bb30: {
+        _2 = copy _2 + const 1_i64;
+        goto -> bb2;
+    }
+
+    bb31: {
+        _46 = copy _4;
+        branch copy _46 -> [bb35, bb32];
+    }
+
+    bb32: {
+        _48 = copy _3;
+        _47 = copy _48 == const 0_i64;
+        branch copy _47 -> [bb34, bb33];
+    }
+
+    bb33: {
+        _45 = const "fail";
+        goto -> bb36;
+    }
+
+    bb34: {
+        _45 = const "pass";
+        goto -> bb36;
+    }
+
+    bb35: {
+        _45 = const "error";
+        goto -> bb36;
+    }
+
+    bb36: {
+        _49 = copy _45;
+        _50 = copy _2;
+        _51 = copy _3;
+        _52 = len(_1);
+        goto -> bb37;
+    }
+
+    bb37: {
+        _0 = testing.TestSetReport { copy _49, copy _50, copy _51, copy _52, copy _1 };
+        goto -> bb38;
+    }
+
+    bb38: {
+        return;
+    }
+}
+
 fn testing.TestRegistry.expand_set(self: testing.TestRegistry, name: string) -> (testing.SerializedTest | testing.SerializedTestSet)[] {
     // Locals:
     let _0: (testing.SerializedTest | testing.SerializedTestSet)[] // _0 // return
@@ -59,68 +329,51 @@ fn testing.TestRegistry.expand_set(self: testing.TestRegistry, name: string) -> 
     let _35: testing.TestSetRegistration // ts
     let _36: bool
     let _37: string
-    let _38: int // start
-    let _39: testing.TestCollector // sub_collector
-    let _40: testing.TestRegistration[]
-    let _41: testing.TestSetRegistration[]
-    let _42: void
-    let _43: (testing.TestCollector) -> void throws unknown
-    let _44: testing.TestCollector
-    let _45: int // elapsed
-    let _46: int
-    let _47: int
-    let _48: testing.TestRegistry // sub_registry
-    let _49: testing.TestCollector
-    let _50: map<string, testing.TestRegistry>
-    let _51: int
-    let _52: testing.TestRegistry | null
-    let _53: (map<string, testing.TestRegistry>, string, testing.TestRegistry) -> testing.TestRegistry | null throws never
-    let _54: testing.TestRegistry
+    let _38: testing.TestRegistry
+    let _39: testing.TestSetRegistration
+    let _40: string[]
+    let _41: (map<string, testing.TestRegistry>) -> string[] throws never
+    let _42: type
+    let _43: type
+    let _44: baml.iter.Iterator<Item = string, Error = never>
+    let _45: type
+    let _46: unknown
+    let _47: bool
+    let _48: unknown
+    let _49: bool
+    let _50: type
+    let _51: bool
+    let _52: type
+    let _53: type
+    let _54: bool
     let _55: type
     let _56: type
-    let _57: string[]
-    let _58: (map<string, testing.TestRegistry>) -> string[] throws never
+    let _57: type
+    let _58: bool
     let _59: type
-    let _60: type
-    let _61: baml.iter.Iterator<Item = string, Error = never>
-    let _62: type
-    let _63: unknown
-    let _64: bool
-    let _65: unknown
+    let _60: bool
+    let _61: unknown
+    let _62: bool
+    let _63: type
+    let _64: type
+    let _65: type
     let _66: bool
-    let _67: type
+    let _67: unknown
     let _68: bool
-    let _69: type
-    let _70: type
-    let _71: bool
+    let _69: unknown
+    let _70: bool
+    let _71: type
     let _72: type
-    let _73: type
-    let _74: type
-    let _75: bool
-    let _76: type
-    let _77: bool
-    let _78: unknown
+    let _73: bool
+    let _74: string
+    let _75: string // k
+    let _76: testing.TestRegistry // sub
+    let _77: map<string, testing.TestRegistry>
+    let _78: string
     let _79: bool
-    let _80: type
-    let _81: type
-    let _82: type
-    let _83: bool
-    let _84: unknown
-    let _85: bool
-    let _86: unknown
-    let _87: bool
-    let _88: type
-    let _89: type
-    let _90: bool
-    let _91: string
-    let _92: string // k
-    let _93: testing.TestRegistry // sub
-    let _94: map<string, testing.TestRegistry>
-    let _95: string
-    let _96: bool
-    let _97: string
-    let _98: string
-    let _99: string
+    let _80: string
+    let _81: string
+    let _82: string
 
     bb0: {
         _3 = copy _1.0.2;
@@ -244,7 +497,7 @@ fn testing.TestRegistry.expand_set(self: testing.TestRegistry, name: string) -> 
 
     bb23: {
         _33 = is_type(copy _6, baml.iter.Done);
-        branch copy _33 -> [bb30, bb24];
+        branch copy _33 -> [bb27, bb24];
     }
 
     bb24: {
@@ -257,194 +510,455 @@ fn testing.TestRegistry.expand_set(self: testing.TestRegistry, name: string) -> 
     }
 
     bb25: {
-        _38 = call const fn baml.sys.now_ms() -> [bb26];
+        _39 = copy _35;
+        _38 = call const fn testing.TestRegistry.expand_testset_registry(copy _1, copy _39) -> [bb26];
     }
 
     bb26: {
-        _40 = [];
-        _41 = [];
-        _39 = testing.TestCollector { copy _2, copy _40, copy _41 };
-        _43 = copy _35.1;
-        _44 = copy _39;
-        _42 = call copy _43(copy _44) -> [bb27];
+        _0 = call const fn testing.TestRegistry.serialize(copy _1) -> [bb54];
     }
 
     bb27: {
-        _46 = call const fn baml.sys.now_ms() -> [bb28];
+        _41 = copy _1.1;
+        _42 = load_type(string);
+        _43 = load_type(testing.TestRegistry);
+        _40 = call const fn baml.Map.keys<copy _42, copy _43>(copy _41) -> [bb28];
     }
 
     bb28: {
-        _47 = copy _38;
-        _45 = copy _46 - copy _47;
-        _49 = copy _39;
-        _50 = {  };
-        _51 = copy _45;
-        _48 = testing.TestRegistry { copy _49, copy _50, copy _51 };
-        _53 = copy _1.1;
-        _54 = copy _48;
-        _55 = load_type(string);
-        _56 = load_type(testing.TestRegistry);
-        _52 = call const fn baml.Map.set<copy _55, copy _56>(copy _53, copy _2, copy _54) -> [bb29];
+        _45 = load_type(string);
+        _44 = call const fn baml.iter.Iterable$for$T[].iter<copy _45>(copy _40) -> [bb29];
     }
 
     bb29: {
-        _0 = call const fn testing.TestRegistry.serialize(copy _1) -> [bb57];
+        _47 = is_type(copy _44, baml.iter.Flatten<_, string, never, never>);
+        branch copy _47 -> [bb49, bb30];
     }
 
     bb30: {
-        _58 = copy _1.1;
-        _59 = load_type(string);
-        _60 = load_type(testing.TestRegistry);
-        _57 = call const fn baml.Map.keys<copy _59, copy _60>(copy _58) -> [bb31];
+        _49 = is_type(copy _44, baml.iter.ArrayIterator<string>);
+        branch copy _49 -> [bb48, bb31];
     }
 
     bb31: {
-        _62 = load_type(string);
-        _61 = call const fn baml.iter.Iterable$for$T[].iter<copy _62>(copy _57) -> [bb32];
+        _51 = is_type(copy _44, baml.iter.StepBy<string, never>);
+        branch copy _51 -> [bb47, bb32];
     }
 
     bb32: {
-        _64 = is_type(copy _61, baml.iter.Flatten<_, string, never, never>);
-        branch copy _64 -> [bb52, bb33];
+        _54 = is_type(copy _44, baml.iter.Chain<string, never, never>);
+        branch copy _54 -> [bb46, bb33];
     }
 
     bb33: {
-        _66 = is_type(copy _61, baml.iter.ArrayIterator<string>);
-        branch copy _66 -> [bb51, bb34];
+        _58 = is_type(copy _44, baml.iter.Repeat<string>);
+        branch copy _58 -> [bb45, bb34];
     }
 
     bb34: {
-        _68 = is_type(copy _61, baml.iter.StepBy<string, never>);
-        branch copy _68 -> [bb50, bb35];
+        _60 = is_type(copy _44, baml.iter.Map<_, string, never, never>);
+        branch copy _60 -> [bb44, bb35];
     }
 
     bb35: {
-        _71 = is_type(copy _61, baml.iter.Chain<string, never, never>);
-        branch copy _71 -> [bb49, bb36];
+        _62 = is_type(copy _44, baml.iter.Filter<string, never, never>);
+        branch copy _62 -> [bb43, bb36];
     }
 
     bb36: {
-        _75 = is_type(copy _61, baml.iter.Repeat<string>);
-        branch copy _75 -> [bb48, bb37];
+        _66 = is_type(copy _44, baml.iter.FilterMap<_, string, never, never>);
+        branch copy _66 -> [bb42, bb37];
     }
 
     bb37: {
-        _77 = is_type(copy _61, baml.iter.Map<_, string, never, never>);
-        branch copy _77 -> [bb47, bb38];
+        _68 = is_type(copy _44, baml.iter.FlatMap<_, string, never, never, never>);
+        branch copy _68 -> [bb41, bb38];
     }
 
     bb38: {
-        _79 = is_type(copy _61, baml.iter.Filter<string, never, never>);
-        branch copy _79 -> [bb46, bb39];
+        _70 = is_type(copy _44, baml.iter.Peekable<string, never>);
+        branch copy _70 -> [bb40, bb39];
     }
 
     bb39: {
-        _83 = is_type(copy _61, baml.iter.FilterMap<_, string, never, never>);
-        branch copy _83 -> [bb45, bb40];
-    }
-
-    bb40: {
-        _85 = is_type(copy _61, baml.iter.FlatMap<_, string, never, never, never>);
-        branch copy _85 -> [bb44, bb41];
-    }
-
-    bb41: {
-        _87 = is_type(copy _61, baml.iter.Peekable<string, never>);
-        branch copy _87 -> [bb43, bb42];
-    }
-
-    bb42: {
         unreachable;
     }
 
+    bb40: {
+        _71 = load_type(string);
+        _72 = load_type(never);
+        _46 = call const fn baml.iter.Peekable.Iterator.next<copy _71, copy _72>(copy _44) -> [bb50];
+    }
+
+    bb41: {
+        _69 = make_bound_method baml.iter.FlatMap.Iterator.next(copy _44);
+        _46 = call copy _69() -> [bb50];
+    }
+
+    bb42: {
+        _67 = make_bound_method baml.iter.FilterMap.Iterator.next(copy _44);
+        _46 = call copy _67() -> [bb50];
+    }
+
     bb43: {
-        _88 = load_type(string);
-        _89 = load_type(never);
-        _63 = call const fn baml.iter.Peekable.Iterator.next<copy _88, copy _89>(copy _61) -> [bb53];
+        _63 = load_type(string);
+        _64 = load_type(never);
+        _65 = load_type(never);
+        _46 = call const fn baml.iter.Filter.Iterator.next<copy _63, copy _64, copy _65>(copy _44) -> [bb50];
     }
 
     bb44: {
-        _86 = make_bound_method baml.iter.FlatMap.Iterator.next(copy _61);
-        _63 = call copy _86() -> [bb53];
+        _61 = make_bound_method baml.iter.Map.Iterator.next(copy _44);
+        _46 = call copy _61() -> [bb50];
     }
 
     bb45: {
-        _84 = make_bound_method baml.iter.FilterMap.Iterator.next(copy _61);
-        _63 = call copy _84() -> [bb53];
+        _59 = load_type(string);
+        _46 = call const fn baml.iter.Repeat.Iterator.next<copy _59>(copy _44) -> [bb50];
     }
 
     bb46: {
-        _80 = load_type(string);
-        _81 = load_type(never);
-        _82 = load_type(never);
-        _63 = call const fn baml.iter.Filter.Iterator.next<copy _80, copy _81, copy _82>(copy _61) -> [bb53];
+        _55 = load_type(string);
+        _56 = load_type(never);
+        _57 = load_type(never);
+        _46 = call const fn baml.iter.Chain.Iterator.next<copy _55, copy _56, copy _57>(copy _44) -> [bb50];
     }
 
     bb47: {
-        _78 = make_bound_method baml.iter.Map.Iterator.next(copy _61);
-        _63 = call copy _78() -> [bb53];
+        _52 = load_type(string);
+        _53 = load_type(never);
+        _46 = call const fn baml.iter.StepBy.Iterator.next<copy _52, copy _53>(copy _44) -> [bb50];
     }
 
     bb48: {
-        _76 = load_type(string);
-        _63 = call const fn baml.iter.Repeat.Iterator.next<copy _76>(copy _61) -> [bb53];
+        _50 = load_type(string);
+        _46 = call const fn baml.iter.ArrayIterator.Iterator.next<copy _50>(copy _44) -> [bb50];
     }
 
     bb49: {
-        _72 = load_type(string);
-        _73 = load_type(never);
-        _74 = load_type(never);
-        _63 = call const fn baml.iter.Chain.Iterator.next<copy _72, copy _73, copy _74>(copy _61) -> [bb53];
+        _48 = make_bound_method baml.iter.Flatten.Iterator.next(copy _44);
+        _46 = call copy _48() -> [bb50];
     }
 
     bb50: {
-        _69 = load_type(string);
-        _70 = load_type(never);
-        _63 = call const fn baml.iter.StepBy.Iterator.next<copy _69, copy _70>(copy _61) -> [bb53];
+        _73 = is_type(copy _46, baml.iter.Done);
+        branch copy _73 -> [bb55, bb51];
     }
 
     bb51: {
-        _67 = load_type(string);
-        _63 = call const fn baml.iter.ArrayIterator.Iterator.next<copy _67>(copy _61) -> [bb53];
+        _74 = copy _46;
+        fresh_cell(_75);
+        _75 = copy _74;
+        _77 = copy _1.1;
+        _78 = copy _75;
+        _76 = copy _77[_78];
+        _81 = copy _75;
+        _80 = copy _81 + const "/";
+        _79 = call const fn baml.String.starts_with(copy _2, copy _80) -> [bb52];
     }
 
     bb52: {
-        _65 = make_bound_method baml.iter.Flatten.Iterator.next(copy _61);
-        _63 = call copy _65() -> [bb53];
+        branch copy _79 -> [bb53, bb29];
     }
 
     bb53: {
-        _90 = is_type(copy _63, baml.iter.Done);
-        branch copy _90 -> [bb58, bb54];
+        _0 = call const fn testing.TestRegistry.expand_set(copy _76, copy _2) -> [bb54];
     }
 
     bb54: {
-        _91 = copy _63;
-        fresh_cell(_92);
-        _92 = copy _91;
-        _94 = copy _1.1;
-        _95 = copy _92;
-        _93 = copy _94[_95];
-        _98 = copy _92;
-        _97 = copy _98 + const "/";
-        _96 = call const fn baml.String.starts_with(copy _2, copy _97) -> [bb55];
-    }
-
-    bb55: {
-        branch copy _96 -> [bb56, bb32];
-    }
-
-    bb56: {
-        _0 = call const fn testing.TestRegistry.expand_set(copy _93, copy _2) -> [bb57];
-    }
-
-    bb57: {
         return;
     }
 
-    bb58: {
-        _99 = const "TestSet not found for expansion: " + copy _2;
-        throw copy _99;
+    bb55: {
+        _82 = const "TestSet not found for expansion: " + copy _2;
+        throw copy _82;
+    }
+}
+
+fn testing.TestRegistry.expand_testset_registry(self: testing.TestRegistry, ts: testing.TestSetRegistration) -> testing.TestRegistry {
+    // Locals:
+    let _0: testing.TestRegistry // _0 // return
+    let _1: testing.TestRegistry // self // param
+    let _2: testing.TestSetRegistration // ts // param
+    let _3: testing.TestRegistry | null
+    let _4: (map<string, testing.TestRegistry>, string) -> testing.TestRegistry | null throws never
+    let _5: string
+    let _6: type
+    let _7: type
+    let _8: bool
+    let _9: testing.TestRegistry // existing
+    let _10: int // start
+    let _11: testing.TestCollector // sub_collector
+    let _12: string
+    let _13: testing.TestRegistration[]
+    let _14: testing.TestSetRegistration[]
+    let _15: void
+    let _16: (testing.TestCollector) -> void throws unknown
+    let _17: testing.TestCollector
+    let _18: int // elapsed
+    let _19: int
+    let _20: int
+    let _21: testing.TestRegistry // sub_registry
+    let _22: testing.TestCollector
+    let _23: map<string, testing.TestRegistry>
+    let _24: int
+    let _25: testing.TestRegistry | null
+    let _26: (map<string, testing.TestRegistry>, string, testing.TestRegistry) -> testing.TestRegistry | null throws never
+    let _27: string
+    let _28: testing.TestRegistry
+    let _29: type
+    let _30: type
+
+    bb0: {
+        _4 = copy _1.1;
+        _5 = copy _2.0;
+        _6 = load_type(string);
+        _7 = load_type(testing.TestRegistry);
+        _3 = call const fn baml.Map.get<copy _6, copy _7>(copy _4, copy _5) -> [bb1];
+    }
+
+    bb1: {
+        _8 = is_type(copy _3, testing.TestRegistry);
+        branch copy _8 -> [bb7, bb2];
+    }
+
+    bb2: {
+        _10 = call const fn baml.sys.now_ms() -> [bb3];
+    }
+
+    bb3: {
+        _12 = copy _2.0;
+        _13 = [];
+        _14 = [];
+        _11 = testing.TestCollector { copy _12, copy _13, copy _14 };
+        _16 = copy _2.1;
+        _17 = copy _11;
+        _15 = call copy _16(copy _17) -> [bb4];
+    }
+
+    bb4: {
+        _19 = call const fn baml.sys.now_ms() -> [bb5];
+    }
+
+    bb5: {
+        _20 = copy _10;
+        _18 = copy _19 - copy _20;
+        _22 = copy _11;
+        _23 = {  };
+        _24 = copy _18;
+        _21 = testing.TestRegistry { copy _22, copy _23, copy _24 };
+        _26 = copy _1.1;
+        _27 = copy _2.0;
+        _28 = copy _21;
+        _29 = load_type(string);
+        _30 = load_type(testing.TestRegistry);
+        _25 = call const fn baml.Map.set<copy _29, copy _30>(copy _26, copy _27, copy _28) -> [bb6];
+    }
+
+    bb6: {
+        _0 = copy _21;
+        goto -> bb8;
+    }
+
+    bb7: {
+        _9 = copy _3;
+        _0 = copy _9;
+        goto -> bb8;
+    }
+
+    bb8: {
+        return;
+    }
+}
+
+fn testing.TestCollector.find_test(self: testing.TestCollector, name: string) -> testing.TestRegistration {
+    // Locals:
+    let _0: testing.TestRegistration // _0 // return
+    let _1: testing.TestCollector // self // param
+    let _2: string // name // param
+    let _3: testing.TestRegistration[]
+    let _4: baml.iter.Iterator<Item = testing.TestRegistration, Error = never>
+    let _5: type
+    let _6: unknown
+    let _7: bool
+    let _8: unknown
+    let _9: bool
+    let _10: type
+    let _11: bool
+    let _12: type
+    let _13: type
+    let _14: bool
+    let _15: type
+    let _16: type
+    let _17: type
+    let _18: bool
+    let _19: type
+    let _20: bool
+    let _21: unknown
+    let _22: bool
+    let _23: type
+    let _24: type
+    let _25: type
+    let _26: bool
+    let _27: unknown
+    let _28: bool
+    let _29: unknown
+    let _30: bool
+    let _31: type
+    let _32: type
+    let _33: bool
+    let _34: testing.TestRegistration
+    let _35: testing.TestRegistration // t
+    let _36: bool
+    let _37: string
+    let _38: string
+
+    bb0: {
+        _3 = copy _1.1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        _5 = load_type(testing.TestRegistration);
+        _4 = call const fn baml.iter.Iterable$for$T[].iter<copy _5>(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        _7 = is_type(copy _4, baml.iter.Flatten<_, testing.TestRegistration, never, never>);
+        branch copy _7 -> [bb22, bb3];
+    }
+
+    bb3: {
+        _9 = is_type(copy _4, baml.iter.ArrayIterator<testing.TestRegistration>);
+        branch copy _9 -> [bb21, bb4];
+    }
+
+    bb4: {
+        _11 = is_type(copy _4, baml.iter.StepBy<testing.TestRegistration, never>);
+        branch copy _11 -> [bb20, bb5];
+    }
+
+    bb5: {
+        _14 = is_type(copy _4, baml.iter.Chain<testing.TestRegistration, never, never>);
+        branch copy _14 -> [bb19, bb6];
+    }
+
+    bb6: {
+        _18 = is_type(copy _4, baml.iter.Repeat<testing.TestRegistration>);
+        branch copy _18 -> [bb18, bb7];
+    }
+
+    bb7: {
+        _20 = is_type(copy _4, baml.iter.Map<_, testing.TestRegistration, never, never>);
+        branch copy _20 -> [bb17, bb8];
+    }
+
+    bb8: {
+        _22 = is_type(copy _4, baml.iter.Filter<testing.TestRegistration, never, never>);
+        branch copy _22 -> [bb16, bb9];
+    }
+
+    bb9: {
+        _26 = is_type(copy _4, baml.iter.FilterMap<_, testing.TestRegistration, never, never>);
+        branch copy _26 -> [bb15, bb10];
+    }
+
+    bb10: {
+        _28 = is_type(copy _4, baml.iter.FlatMap<_, testing.TestRegistration, never, never, never>);
+        branch copy _28 -> [bb14, bb11];
+    }
+
+    bb11: {
+        _30 = is_type(copy _4, baml.iter.Peekable<testing.TestRegistration, never>);
+        branch copy _30 -> [bb13, bb12];
+    }
+
+    bb12: {
+        unreachable;
+    }
+
+    bb13: {
+        _31 = load_type(testing.TestRegistration);
+        _32 = load_type(never);
+        _6 = call const fn baml.iter.Peekable.Iterator.next<copy _31, copy _32>(copy _4) -> [bb23];
+    }
+
+    bb14: {
+        _29 = make_bound_method baml.iter.FlatMap.Iterator.next(copy _4);
+        _6 = call copy _29() -> [bb23];
+    }
+
+    bb15: {
+        _27 = make_bound_method baml.iter.FilterMap.Iterator.next(copy _4);
+        _6 = call copy _27() -> [bb23];
+    }
+
+    bb16: {
+        _23 = load_type(testing.TestRegistration);
+        _24 = load_type(never);
+        _25 = load_type(never);
+        _6 = call const fn baml.iter.Filter.Iterator.next<copy _23, copy _24, copy _25>(copy _4) -> [bb23];
+    }
+
+    bb17: {
+        _21 = make_bound_method baml.iter.Map.Iterator.next(copy _4);
+        _6 = call copy _21() -> [bb23];
+    }
+
+    bb18: {
+        _19 = load_type(testing.TestRegistration);
+        _6 = call const fn baml.iter.Repeat.Iterator.next<copy _19>(copy _4) -> [bb23];
+    }
+
+    bb19: {
+        _15 = load_type(testing.TestRegistration);
+        _16 = load_type(never);
+        _17 = load_type(never);
+        _6 = call const fn baml.iter.Chain.Iterator.next<copy _15, copy _16, copy _17>(copy _4) -> [bb23];
+    }
+
+    bb20: {
+        _12 = load_type(testing.TestRegistration);
+        _13 = load_type(never);
+        _6 = call const fn baml.iter.StepBy.Iterator.next<copy _12, copy _13>(copy _4) -> [bb23];
+    }
+
+    bb21: {
+        _10 = load_type(testing.TestRegistration);
+        _6 = call const fn baml.iter.ArrayIterator.Iterator.next<copy _10>(copy _4) -> [bb23];
+    }
+
+    bb22: {
+        _8 = make_bound_method baml.iter.Flatten.Iterator.next(copy _4);
+        _6 = call copy _8() -> [bb23];
+    }
+
+    bb23: {
+        _33 = is_type(copy _6, baml.iter.Done);
+        branch copy _33 -> [bb27, bb24];
+    }
+
+    bb24: {
+        _34 = copy _6;
+        fresh_cell(_35);
+        _35 = copy _34;
+        _37 = copy _35.0;
+        _36 = copy _37 == copy _2;
+        branch copy _36 -> [bb25, bb2];
+    }
+
+    bb25: {
+        _0 = copy _35;
+        goto -> bb26;
+    }
+
+    bb26: {
+        return;
+    }
+
+    bb27: {
+        _38 = const "Test not found: " + copy _2;
+        throw copy _38;
     }
 }
 
@@ -639,6 +1153,108 @@ fn testing.TestCollector.find_testset(self: testing.TestCollector, name: string)
     }
 }
 
+fn testing.TestSetRegistration.from_json(j: baml.json.json) -> testing.TestSetRegistration {
+    // Locals:
+    let _0: testing.TestSetRegistration // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: baml.json.json
+    let _4: type
+    let _5: (testing.TestCollector) -> void throws unknown
+    let _6: baml.json.json
+    let _7: type
+    let _8: ((testing.TestSetChild[]) -> testing.TestSetReport throws never) | null
+    let _9: baml.json.json
+    let _10: type
+
+    bb0: {
+        _3 = call const fn baml.json.field(copy _1, const "name") -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type(string);
+        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        _6 = call const fn baml.json.field(copy _1, const "collector") -> [bb3];
+    }
+
+    bb3: {
+        _7 = load_type((testing.TestCollector) -> void throws unknown);
+        _5 = call const fn baml.json.from_json<copy _7>(copy _6) -> [bb4];
+    }
+
+    bb4: {
+        _9 = call const fn baml.json.field(copy _1, const "runner") -> [bb5];
+    }
+
+    bb5: {
+        _10 = load_type(((testing.TestSetChild[]) -> testing.TestSetReport throws never) | null);
+        _8 = call const fn baml.json.from_json<copy _10>(copy _9) -> [bb6];
+    }
+
+    bb6: {
+        _0 = testing.TestSetRegistration { copy _2, copy _5, copy _8 };
+        goto -> bb7;
+    }
+
+    bb7: {
+        return;
+    }
+}
+
+fn testing.SerializedTestSet.from_json(j: baml.json.json) -> testing.SerializedTestSet {
+    // Locals:
+    let _0: testing.SerializedTestSet // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: baml.json.json
+    let _4: type
+    let _5: (testing.SerializedTest | testing.SerializedTestSet)[]
+    let _6: baml.json.json
+    let _7: type
+    let _8: int
+    let _9: baml.json.json
+    let _10: type
+
+    bb0: {
+        _3 = call const fn baml.json.field(copy _1, const "name") -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type(string);
+        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        _6 = call const fn baml.json.field(copy _1, const "items") -> [bb3];
+    }
+
+    bb3: {
+        _7 = load_type(testing.SerializedTest | testing.SerializedTestSet[]);
+        _5 = call const fn baml.json.from_json<copy _7>(copy _6) -> [bb4];
+    }
+
+    bb4: {
+        _9 = call const fn baml.json.field(copy _1, const "loadingTimeMs") -> [bb5];
+    }
+
+    bb5: {
+        _10 = load_type(int);
+        _8 = call const fn baml.json.from_json<copy _10>(copy _9) -> [bb6];
+    }
+
+    bb6: {
+        _0 = testing.SerializedTestSet { copy _2, copy _5, copy _8 };
+        goto -> bb7;
+    }
+
+    bb7: {
+        return;
+    }
+}
+
 fn testing.TestRegistration.from_json(j: baml.json.json) -> testing.TestRegistration {
     // Locals:
     let _0: testing.TestRegistration // _0 // return
@@ -725,108 +1341,6 @@ fn testing.SerializedTest.from_json(j: baml.json.json) -> testing.SerializedTest
     }
 
     bb5: {
-        return;
-    }
-}
-
-fn testing.TestSetRegistration.from_json(j: baml.json.json) -> testing.TestSetRegistration {
-    // Locals:
-    let _0: testing.TestSetRegistration // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: string
-    let _3: baml.json.json
-    let _4: type
-    let _5: (testing.TestCollector) -> void throws unknown
-    let _6: baml.json.json
-    let _7: type
-    let _8: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never) | null
-    let _9: baml.json.json
-    let _10: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "name") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type(string);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _6 = call const fn baml.json.field(copy _1, const "collector") -> [bb3];
-    }
-
-    bb3: {
-        _7 = load_type((testing.TestCollector) -> void throws unknown);
-        _5 = call const fn baml.json.from_json<copy _7>(copy _6) -> [bb4];
-    }
-
-    bb4: {
-        _9 = call const fn baml.json.field(copy _1, const "runner") -> [bb5];
-    }
-
-    bb5: {
-        _10 = load_type(((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never) | null);
-        _8 = call const fn baml.json.from_json<copy _10>(copy _9) -> [bb6];
-    }
-
-    bb6: {
-        _0 = testing.TestSetRegistration { copy _2, copy _5, copy _8 };
-        goto -> bb7;
-    }
-
-    bb7: {
-        return;
-    }
-}
-
-fn testing.SerializedTestSet.from_json(j: baml.json.json) -> testing.SerializedTestSet {
-    // Locals:
-    let _0: testing.SerializedTestSet // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: string
-    let _3: baml.json.json
-    let _4: type
-    let _5: (testing.SerializedTest | testing.SerializedTestSet)[]
-    let _6: baml.json.json
-    let _7: type
-    let _8: int
-    let _9: baml.json.json
-    let _10: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "name") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type(string);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _6 = call const fn baml.json.field(copy _1, const "items") -> [bb3];
-    }
-
-    bb3: {
-        _7 = load_type(testing.SerializedTest | testing.SerializedTestSet[]);
-        _5 = call const fn baml.json.from_json<copy _7>(copy _6) -> [bb4];
-    }
-
-    bb4: {
-        _9 = call const fn baml.json.field(copy _1, const "loadingTimeMs") -> [bb5];
-    }
-
-    bb5: {
-        _10 = load_type(int);
-        _8 = call const fn baml.json.from_json<copy _10>(copy _9) -> [bb6];
-    }
-
-    bb6: {
-        _0 = testing.SerializedTestSet { copy _2, copy _5, copy _8 };
-        goto -> bb7;
-    }
-
-    bb7: {
         return;
     }
 }
@@ -1252,13 +1766,13 @@ fn testing.TestCollector.register_test(self: testing.TestCollector, name: string
     }
 }
 
-fn testing.TestCollector.register_test_set(self: testing.TestCollector, name: string, collector: (testing.TestCollector) -> void throws unknown, runner: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never) | null) -> void {
+fn testing.TestCollector.register_test_set(self: testing.TestCollector, name: string, collector: (testing.TestCollector) -> void throws unknown, runner: ((testing.TestSetChild[]) -> testing.TestSetReport throws never) | null) -> void {
     // Locals:
     let _0: void // _0 // return
     let _1: testing.TestCollector // self // param
     let _2: string // name // param
     let _3: (testing.TestCollector) -> void throws unknown // collector // param
-    let _4: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never) | null // runner // param
+    let _4: ((testing.TestSetChild[]) -> testing.TestSetReport throws never) | null // runner // param
     let _5: string // full_name
     let _6: bool
     let _7: string
@@ -1531,6 +2045,257 @@ fn testing.TestCollector.register_test_set(self: testing.TestCollector, name: st
     }
 
     bb37: {
+        return;
+    }
+}
+
+fn testing.TestRegistry.run_all(self: testing.TestRegistry) -> testing.TestSetReport {
+    // Locals:
+    let _0: testing.TestSetReport // _0 // return
+    let _1: testing.TestRegistry // self // param
+    let _2: testing.TestSetChild[]
+
+    bb0: {
+        _2 = call const fn testing.testset_children(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn testing.run_testset(copy _2, const null) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn testing.run_children_parallel(children: testing.TestSetChild[]) -> testing.TestSetReport {
+    // Locals:
+    let _0: testing.TestSetReport // _0 // return
+    let _1: testing.TestSetChild[] // children // param
+    let _2: future<testing.TestReport | testing.TestSetReport, null>[] // futures
+    let _3: baml.iter.Iterator<Item = testing.TestSetChild, Error = never>
+    let _4: type
+    let _5: unknown
+    let _6: bool
+    let _7: unknown
+    let _8: bool
+    let _9: type
+    let _10: bool
+    let _11: type
+    let _12: type
+    let _13: bool
+    let _14: type
+    let _15: type
+    let _16: type
+    let _17: bool
+    let _18: type
+    let _19: bool
+    let _20: unknown
+    let _21: bool
+    let _22: type
+    let _23: type
+    let _24: type
+    let _25: bool
+    let _26: unknown
+    let _27: bool
+    let _28: unknown
+    let _29: bool
+    let _30: type
+    let _31: type
+    let _32: bool
+    let _33: testing.TestSetChild
+    let _34: testing.TestSetChild // child [captured]
+    let _35: void
+    let _36: future<testing.TestReport | testing.TestSetReport, null>
+    let _37: null
+    let _38: null
+    let _39: (testing.TestReport | testing.TestSetReport)[] // results
+    let _40: unknown // e
+    let _41: null
+    let _42: future<testing.TestReport | testing.TestSetReport, null>[]
+    let _43: type
+    let _44: type
+    let _45: (testing.TestReport | testing.TestSetReport)[]
+
+    bb0: {
+        _2 = [];
+        goto -> bb1;
+    }
+
+    bb1: {
+        _4 = load_type(testing.TestSetChild);
+        _3 = call const fn baml.iter.Iterable$for$T[].iter<copy _4>(copy _1) -> [bb2];
+    }
+
+    bb2: {
+        _6 = is_type(copy _3, baml.iter.Flatten<_, testing.TestSetChild, never, never>);
+        branch copy _6 -> [bb22, bb3];
+    }
+
+    bb3: {
+        _8 = is_type(copy _3, baml.iter.ArrayIterator<testing.TestSetChild>);
+        branch copy _8 -> [bb21, bb4];
+    }
+
+    bb4: {
+        _10 = is_type(copy _3, baml.iter.StepBy<testing.TestSetChild, never>);
+        branch copy _10 -> [bb20, bb5];
+    }
+
+    bb5: {
+        _13 = is_type(copy _3, baml.iter.Chain<testing.TestSetChild, never, never>);
+        branch copy _13 -> [bb19, bb6];
+    }
+
+    bb6: {
+        _17 = is_type(copy _3, baml.iter.Repeat<testing.TestSetChild>);
+        branch copy _17 -> [bb18, bb7];
+    }
+
+    bb7: {
+        _19 = is_type(copy _3, baml.iter.Map<_, testing.TestSetChild, never, never>);
+        branch copy _19 -> [bb17, bb8];
+    }
+
+    bb8: {
+        _21 = is_type(copy _3, baml.iter.Filter<testing.TestSetChild, never, never>);
+        branch copy _21 -> [bb16, bb9];
+    }
+
+    bb9: {
+        _25 = is_type(copy _3, baml.iter.FilterMap<_, testing.TestSetChild, never, never>);
+        branch copy _25 -> [bb15, bb10];
+    }
+
+    bb10: {
+        _27 = is_type(copy _3, baml.iter.FlatMap<_, testing.TestSetChild, never, never, never>);
+        branch copy _27 -> [bb14, bb11];
+    }
+
+    bb11: {
+        _29 = is_type(copy _3, baml.iter.Peekable<testing.TestSetChild, never>);
+        branch copy _29 -> [bb13, bb12];
+    }
+
+    bb12: {
+        unreachable;
+    }
+
+    bb13: {
+        _30 = load_type(testing.TestSetChild);
+        _31 = load_type(never);
+        _5 = call const fn baml.iter.Peekable.Iterator.next<copy _30, copy _31>(copy _3) -> [bb23];
+    }
+
+    bb14: {
+        _28 = make_bound_method baml.iter.FlatMap.Iterator.next(copy _3);
+        _5 = call copy _28() -> [bb23];
+    }
+
+    bb15: {
+        _26 = make_bound_method baml.iter.FilterMap.Iterator.next(copy _3);
+        _5 = call copy _26() -> [bb23];
+    }
+
+    bb16: {
+        _22 = load_type(testing.TestSetChild);
+        _23 = load_type(never);
+        _24 = load_type(never);
+        _5 = call const fn baml.iter.Filter.Iterator.next<copy _22, copy _23, copy _24>(copy _3) -> [bb23];
+    }
+
+    bb17: {
+        _20 = make_bound_method baml.iter.Map.Iterator.next(copy _3);
+        _5 = call copy _20() -> [bb23];
+    }
+
+    bb18: {
+        _18 = load_type(testing.TestSetChild);
+        _5 = call const fn baml.iter.Repeat.Iterator.next<copy _18>(copy _3) -> [bb23];
+    }
+
+    bb19: {
+        _14 = load_type(testing.TestSetChild);
+        _15 = load_type(never);
+        _16 = load_type(never);
+        _5 = call const fn baml.iter.Chain.Iterator.next<copy _14, copy _15, copy _16>(copy _3) -> [bb23];
+    }
+
+    bb20: {
+        _11 = load_type(testing.TestSetChild);
+        _12 = load_type(never);
+        _5 = call const fn baml.iter.StepBy.Iterator.next<copy _11, copy _12>(copy _3) -> [bb23];
+    }
+
+    bb21: {
+        _9 = load_type(testing.TestSetChild);
+        _5 = call const fn baml.iter.ArrayIterator.Iterator.next<copy _9>(copy _3) -> [bb23];
+    }
+
+    bb22: {
+        _7 = make_bound_method baml.iter.Flatten.Iterator.next(copy _3);
+        _5 = call copy _7() -> [bb23];
+    }
+
+    bb23: {
+        _32 = is_type(copy _5, baml.iter.Done);
+        branch copy _32 -> [bb26, bb24];
+    }
+
+    bb24: {
+        _33 = copy _5;
+        fresh_cell(_34);
+        _34 = copy _33;
+        _37 = make_closure lambda[0](copy _34);
+        _38 = spawn copy _37 name=const null -> bb25;
+    }
+
+    bb25: {
+        _36 = copy _38;
+        _35 = call const fn baml.Array.push(copy _2, copy _36) -> [bb2];
+    }
+
+    bb26: {
+        _42 = copy _2;
+        _43 = load_type(testing.TestReport | testing.TestSetReport);
+        _44 = load_type(null);
+        _41 = call const fn baml.future.all_complete<copy _43, copy _44>(copy _42) -> [bb27, unwind: bb28];
+    }
+
+    bb27: {
+        _39 = await _41 -> [bb30, unwind: bb28];
+    }
+
+    bb28: {
+        throw_if_panic copy _40 -> bb29;
+    }
+
+    bb29: {
+        _39 = call const fn baml.sys.panic(const "unexpected test child failure") -> [bb30];
+    }
+
+    bb30: {
+        _45 = copy _39;
+        _0 = call const fn testing.aggregate_reports(copy _45) -> [bb31];
+    }
+
+    bb31: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(run_children_parallel, 0)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: () -> testing.TestReport | testing.TestSetReport throws never
+
+    bb0: {
+        _1 = copy capture[0].1;
+        _0 = call copy _1() -> [bb1];
+    }
+
+    bb1: {
         return;
     }
 }
@@ -1969,13 +2734,14 @@ fn .<lambda(run_test, 0)>() -> null {
     let _3: unknown // e
     let _4: void
     let _5: () -> void throws unknown
-    let _6: "pass" | "fail" | "error"
-    let _7: testing.RunReport[]
-    let _8: testing.RunReport
-    let _9: "pass" | "fail" | "error"
-    let _10: int
+    let _6: int
+    let _7: "pass" | "fail" | "error"
+    let _8: testing.RunReport[]
+    let _9: testing.RunReport
+    let _10: "pass" | "fail" | "error"
     let _11: int
     let _12: int
+    let _13: int
 
     bb0: {
         _1 = call const fn baml.sys.now_ms() -> [bb1];
@@ -1988,71 +2754,467 @@ fn .<lambda(run_test, 0)>() -> null {
 
     bb2: {
         _2 = testing.RunReport { const "pass", const 0_i64 };
-        goto -> bb5;
+        goto -> bb7;
     }
 
     bb3: {
-        throw_if_panic copy _3 -> bb4;
+        _6 = type_tag(_3);
+        switch copy _6 [DivisionByZero: bb6, IndexOutOfBounds: bb6, InvalidFieldAccess: bb6, MapKeyNotFound: bb6, StackOverflow: bb6, AssertionFailed: bb6, Unreachable: bb6, Cancelled: bb6, UserPanic: bb6, Exit: bb6, AllocFailure: bb6, HostUnavailable: bb6, NegativeBitShift: bb6, SdkPanic: bb6, HostContractViolation: bb6, otherwise: bb4];
     }
 
     bb4: {
-        _2 = testing.RunReport { const "fail", const 0_i64 };
-        goto -> bb5;
+        throw_if_panic copy _3 -> bb5;
     }
 
     bb5: {
-        _6 = copy _2.0;
-        _9 = copy _2.0;
-        _11 = call const fn baml.sys.now_ms() -> [bb6];
+        _2 = testing.RunReport { const "fail", const 0_i64 };
+        goto -> bb7;
     }
 
     bb6: {
-        _12 = copy _1;
-        _10 = copy _11 - copy _12;
-        _8 = testing.RunReport { copy _9, copy _10 };
-        _7 = [copy _8];
-        _0 = testing.TestReport { copy _6, copy _7 };
+        _2 = testing.RunReport { const "fail", const 0_i64 };
         goto -> bb7;
     }
 
     bb7: {
+        _7 = copy _2.0;
+        _10 = copy _2.0;
+        _12 = call const fn baml.sys.now_ms() -> [bb8];
+    }
+
+    bb8: {
+        _13 = copy _1;
+        _11 = copy _12 - copy _13;
+        _9 = testing.RunReport { copy _10, copy _11 };
+        _8 = [copy _9];
+        _0 = testing.TestReport { copy _7, copy _8 };
+        goto -> bb9;
+    }
+
+    bb9: {
         return;
     }
 }
 
-fn testing.run_testset(run_children: () -> testing.TestSetReport throws never, runner: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never) | null) -> testing.TestSetReport {
+fn testing.run_testset(children: testing.TestSetChild[], runner: ((testing.TestSetChild[]) -> testing.TestSetReport throws never) | null) -> testing.TestSetReport {
     // Locals:
     let _0: testing.TestSetReport // _0 // return
-    let _1: () -> testing.TestSetReport throws never // run_children // param
-    let _2: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never) | null // runner // param
+    let _1: testing.TestSetChild[] // children // param
+    let _2: ((testing.TestSetChild[]) -> testing.TestSetReport throws never) | null // runner // param
     let _3: bool
-    let _4: (() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never // r
-    let _5: () -> testing.TestSetReport throws never // wrapped
-    let _6: (() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never
-    let _7: () -> testing.TestSetReport throws never
+    let _4: (testing.TestSetChild[]) -> testing.TestSetReport throws never // r
+    let _5: (testing.TestSetChild[]) -> testing.TestSetReport throws never
 
     bb0: {
         _3 = copy _2 == const null;
-        branch copy _3 -> [bb3, bb1];
+        branch copy _3 -> [bb2, bb1];
     }
 
     bb1: {
         _4 = copy _2;
-        _6 = copy _4;
-        _5 = call copy _6(copy _1) -> [bb2];
+        _5 = copy _4;
+        _0 = call copy _5(copy _1) -> [bb3];
     }
 
     bb2: {
-        _7 = copy _5;
-        _0 = call copy _7() -> [bb4];
+        _0 = call const fn testing.run_children_parallel(copy _1) -> [bb3];
     }
 
     bb3: {
-        _0 = call copy _1() -> [bb4];
+        return;
+    }
+}
+
+fn testing.TestRegistry.run_testset(self: testing.TestRegistry, name: string) -> testing.TestSetReport {
+    // Locals:
+    let _0: testing.TestSetReport // _0 // return
+    let _1: testing.TestRegistry // self // param
+    let _2: string // name // param
+    let _3: testing.TestSetRegistration[]
+    let _4: baml.iter.Iterator<Item = testing.TestSetRegistration, Error = never>
+    let _5: type
+    let _6: unknown
+    let _7: bool
+    let _8: unknown
+    let _9: bool
+    let _10: type
+    let _11: bool
+    let _12: type
+    let _13: type
+    let _14: bool
+    let _15: type
+    let _16: type
+    let _17: type
+    let _18: bool
+    let _19: type
+    let _20: bool
+    let _21: unknown
+    let _22: bool
+    let _23: type
+    let _24: type
+    let _25: type
+    let _26: bool
+    let _27: unknown
+    let _28: bool
+    let _29: unknown
+    let _30: bool
+    let _31: type
+    let _32: type
+    let _33: bool
+    let _34: testing.TestSetRegistration
+    let _35: testing.TestSetRegistration // ts
+    let _36: bool
+    let _37: string
+    let _38: testing.TestSetChild[]
+    let _39: testing.TestRegistry
+    let _40: testing.TestSetRegistration
+    let _41: ((testing.TestSetChild[]) -> testing.TestSetReport throws never) | null
+    let _42: string[]
+    let _43: (map<string, testing.TestRegistry>) -> string[] throws never
+    let _44: type
+    let _45: type
+    let _46: baml.iter.Iterator<Item = string, Error = never>
+    let _47: type
+    let _48: unknown
+    let _49: bool
+    let _50: unknown
+    let _51: bool
+    let _52: type
+    let _53: bool
+    let _54: type
+    let _55: type
+    let _56: bool
+    let _57: type
+    let _58: type
+    let _59: type
+    let _60: bool
+    let _61: type
+    let _62: bool
+    let _63: unknown
+    let _64: bool
+    let _65: type
+    let _66: type
+    let _67: type
+    let _68: bool
+    let _69: unknown
+    let _70: bool
+    let _71: unknown
+    let _72: bool
+    let _73: type
+    let _74: type
+    let _75: bool
+    let _76: string
+    let _77: string // k
+    let _78: testing.TestRegistry // sub
+    let _79: map<string, testing.TestRegistry>
+    let _80: string
+    let _81: bool
+    let _82: string
+    let _83: string
+    let _84: string
+
+    bb0: {
+        _3 = copy _1.0.2;
+        goto -> bb1;
+    }
+
+    bb1: {
+        _5 = load_type(testing.TestSetRegistration);
+        _4 = call const fn baml.iter.Iterable$for$T[].iter<copy _5>(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        _7 = is_type(copy _4, baml.iter.Flatten<_, testing.TestSetRegistration, never, never>);
+        branch copy _7 -> [bb22, bb3];
+    }
+
+    bb3: {
+        _9 = is_type(copy _4, baml.iter.ArrayIterator<testing.TestSetRegistration>);
+        branch copy _9 -> [bb21, bb4];
     }
 
     bb4: {
+        _11 = is_type(copy _4, baml.iter.StepBy<testing.TestSetRegistration, never>);
+        branch copy _11 -> [bb20, bb5];
+    }
+
+    bb5: {
+        _14 = is_type(copy _4, baml.iter.Chain<testing.TestSetRegistration, never, never>);
+        branch copy _14 -> [bb19, bb6];
+    }
+
+    bb6: {
+        _18 = is_type(copy _4, baml.iter.Repeat<testing.TestSetRegistration>);
+        branch copy _18 -> [bb18, bb7];
+    }
+
+    bb7: {
+        _20 = is_type(copy _4, baml.iter.Map<_, testing.TestSetRegistration, never, never>);
+        branch copy _20 -> [bb17, bb8];
+    }
+
+    bb8: {
+        _22 = is_type(copy _4, baml.iter.Filter<testing.TestSetRegistration, never, never>);
+        branch copy _22 -> [bb16, bb9];
+    }
+
+    bb9: {
+        _26 = is_type(copy _4, baml.iter.FilterMap<_, testing.TestSetRegistration, never, never>);
+        branch copy _26 -> [bb15, bb10];
+    }
+
+    bb10: {
+        _28 = is_type(copy _4, baml.iter.FlatMap<_, testing.TestSetRegistration, never, never, never>);
+        branch copy _28 -> [bb14, bb11];
+    }
+
+    bb11: {
+        _30 = is_type(copy _4, baml.iter.Peekable<testing.TestSetRegistration, never>);
+        branch copy _30 -> [bb13, bb12];
+    }
+
+    bb12: {
+        unreachable;
+    }
+
+    bb13: {
+        _31 = load_type(testing.TestSetRegistration);
+        _32 = load_type(never);
+        _6 = call const fn baml.iter.Peekable.Iterator.next<copy _31, copy _32>(copy _4) -> [bb23];
+    }
+
+    bb14: {
+        _29 = make_bound_method baml.iter.FlatMap.Iterator.next(copy _4);
+        _6 = call copy _29() -> [bb23];
+    }
+
+    bb15: {
+        _27 = make_bound_method baml.iter.FilterMap.Iterator.next(copy _4);
+        _6 = call copy _27() -> [bb23];
+    }
+
+    bb16: {
+        _23 = load_type(testing.TestSetRegistration);
+        _24 = load_type(never);
+        _25 = load_type(never);
+        _6 = call const fn baml.iter.Filter.Iterator.next<copy _23, copy _24, copy _25>(copy _4) -> [bb23];
+    }
+
+    bb17: {
+        _21 = make_bound_method baml.iter.Map.Iterator.next(copy _4);
+        _6 = call copy _21() -> [bb23];
+    }
+
+    bb18: {
+        _19 = load_type(testing.TestSetRegistration);
+        _6 = call const fn baml.iter.Repeat.Iterator.next<copy _19>(copy _4) -> [bb23];
+    }
+
+    bb19: {
+        _15 = load_type(testing.TestSetRegistration);
+        _16 = load_type(never);
+        _17 = load_type(never);
+        _6 = call const fn baml.iter.Chain.Iterator.next<copy _15, copy _16, copy _17>(copy _4) -> [bb23];
+    }
+
+    bb20: {
+        _12 = load_type(testing.TestSetRegistration);
+        _13 = load_type(never);
+        _6 = call const fn baml.iter.StepBy.Iterator.next<copy _12, copy _13>(copy _4) -> [bb23];
+    }
+
+    bb21: {
+        _10 = load_type(testing.TestSetRegistration);
+        _6 = call const fn baml.iter.ArrayIterator.Iterator.next<copy _10>(copy _4) -> [bb23];
+    }
+
+    bb22: {
+        _8 = make_bound_method baml.iter.Flatten.Iterator.next(copy _4);
+        _6 = call copy _8() -> [bb23];
+    }
+
+    bb23: {
+        _33 = is_type(copy _6, baml.iter.Done);
+        branch copy _33 -> [bb28, bb24];
+    }
+
+    bb24: {
+        _34 = copy _6;
+        fresh_cell(_35);
+        _35 = copy _34;
+        _37 = copy _35.0;
+        _36 = copy _37 == copy _2;
+        branch copy _36 -> [bb25, bb2];
+    }
+
+    bb25: {
+        _40 = copy _35;
+        _39 = call const fn testing.TestRegistry.expand_testset_registry(copy _1, copy _40) -> [bb26];
+    }
+
+    bb26: {
+        _38 = call const fn testing.testset_children(copy _39) -> [bb27];
+    }
+
+    bb27: {
+        _41 = copy _35.2;
+        _0 = call const fn testing.run_testset(copy _38, copy _41) -> [bb55];
+    }
+
+    bb28: {
+        _43 = copy _1.1;
+        _44 = load_type(string);
+        _45 = load_type(testing.TestRegistry);
+        _42 = call const fn baml.Map.keys<copy _44, copy _45>(copy _43) -> [bb29];
+    }
+
+    bb29: {
+        _47 = load_type(string);
+        _46 = call const fn baml.iter.Iterable$for$T[].iter<copy _47>(copy _42) -> [bb30];
+    }
+
+    bb30: {
+        _49 = is_type(copy _46, baml.iter.Flatten<_, string, never, never>);
+        branch copy _49 -> [bb50, bb31];
+    }
+
+    bb31: {
+        _51 = is_type(copy _46, baml.iter.ArrayIterator<string>);
+        branch copy _51 -> [bb49, bb32];
+    }
+
+    bb32: {
+        _53 = is_type(copy _46, baml.iter.StepBy<string, never>);
+        branch copy _53 -> [bb48, bb33];
+    }
+
+    bb33: {
+        _56 = is_type(copy _46, baml.iter.Chain<string, never, never>);
+        branch copy _56 -> [bb47, bb34];
+    }
+
+    bb34: {
+        _60 = is_type(copy _46, baml.iter.Repeat<string>);
+        branch copy _60 -> [bb46, bb35];
+    }
+
+    bb35: {
+        _62 = is_type(copy _46, baml.iter.Map<_, string, never, never>);
+        branch copy _62 -> [bb45, bb36];
+    }
+
+    bb36: {
+        _64 = is_type(copy _46, baml.iter.Filter<string, never, never>);
+        branch copy _64 -> [bb44, bb37];
+    }
+
+    bb37: {
+        _68 = is_type(copy _46, baml.iter.FilterMap<_, string, never, never>);
+        branch copy _68 -> [bb43, bb38];
+    }
+
+    bb38: {
+        _70 = is_type(copy _46, baml.iter.FlatMap<_, string, never, never, never>);
+        branch copy _70 -> [bb42, bb39];
+    }
+
+    bb39: {
+        _72 = is_type(copy _46, baml.iter.Peekable<string, never>);
+        branch copy _72 -> [bb41, bb40];
+    }
+
+    bb40: {
+        unreachable;
+    }
+
+    bb41: {
+        _73 = load_type(string);
+        _74 = load_type(never);
+        _48 = call const fn baml.iter.Peekable.Iterator.next<copy _73, copy _74>(copy _46) -> [bb51];
+    }
+
+    bb42: {
+        _71 = make_bound_method baml.iter.FlatMap.Iterator.next(copy _46);
+        _48 = call copy _71() -> [bb51];
+    }
+
+    bb43: {
+        _69 = make_bound_method baml.iter.FilterMap.Iterator.next(copy _46);
+        _48 = call copy _69() -> [bb51];
+    }
+
+    bb44: {
+        _65 = load_type(string);
+        _66 = load_type(never);
+        _67 = load_type(never);
+        _48 = call const fn baml.iter.Filter.Iterator.next<copy _65, copy _66, copy _67>(copy _46) -> [bb51];
+    }
+
+    bb45: {
+        _63 = make_bound_method baml.iter.Map.Iterator.next(copy _46);
+        _48 = call copy _63() -> [bb51];
+    }
+
+    bb46: {
+        _61 = load_type(string);
+        _48 = call const fn baml.iter.Repeat.Iterator.next<copy _61>(copy _46) -> [bb51];
+    }
+
+    bb47: {
+        _57 = load_type(string);
+        _58 = load_type(never);
+        _59 = load_type(never);
+        _48 = call const fn baml.iter.Chain.Iterator.next<copy _57, copy _58, copy _59>(copy _46) -> [bb51];
+    }
+
+    bb48: {
+        _54 = load_type(string);
+        _55 = load_type(never);
+        _48 = call const fn baml.iter.StepBy.Iterator.next<copy _54, copy _55>(copy _46) -> [bb51];
+    }
+
+    bb49: {
+        _52 = load_type(string);
+        _48 = call const fn baml.iter.ArrayIterator.Iterator.next<copy _52>(copy _46) -> [bb51];
+    }
+
+    bb50: {
+        _50 = make_bound_method baml.iter.Flatten.Iterator.next(copy _46);
+        _48 = call copy _50() -> [bb51];
+    }
+
+    bb51: {
+        _75 = is_type(copy _48, baml.iter.Done);
+        branch copy _75 -> [bb56, bb52];
+    }
+
+    bb52: {
+        _76 = copy _48;
+        fresh_cell(_77);
+        _77 = copy _76;
+        _79 = copy _1.1;
+        _80 = copy _77;
+        _78 = copy _79[_80];
+        _83 = copy _77;
+        _82 = copy _83 + const "/";
+        _81 = call const fn baml.String.starts_with(copy _2, copy _82) -> [bb53];
+    }
+
+    bb53: {
+        branch copy _81 -> [bb54, bb30];
+    }
+
+    bb54: {
+        _0 = call const fn testing.TestRegistry.run_testset(copy _78, copy _2) -> [bb55];
+    }
+
+    bb55: {
         return;
+    }
+
+    bb56: {
+        _84 = const "TestSet not found: " + copy _2;
+        throw copy _84;
     }
 }
 
@@ -2449,60 +3611,466 @@ fn testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.Serial
     }
 }
 
-fn testing.TestRegistration.to_json(self: testing.TestRegistration) -> baml.json.json {
+fn testing.test_child(name: string, body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never) | null) -> testing.TestSetChild {
     // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: testing.TestRegistration // self // param
-    let _2: string
-    let _3: type
+    let _0: testing.TestSetChild // _0 // return
+    let _1: string // name // param
+    let _2: () -> void throws unknown // body // param [captured]
+    let _3: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never) | null // runner // param [captured]
+    let _4: () -> testing.TestReport | testing.TestSetReport throws never
 
     bb0: {
-        _3 = load_type(testing.TestRegistration);
-        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+        _4 = make_closure lambda[0](copy _2, copy _3);
+        _0 = testing.TestSetChild { copy _1, copy _4 };
+        goto -> bb1;
     }
 
     bb1: {
-        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
-    }
-
-    bb2: {
         return;
     }
 }
 
-fn testing.SerializedTest.to_json(self: testing.SerializedTest) -> baml.json.json {
+// lambda[0]
+fn .<lambda(test_child, 0)>() -> null {
     // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: testing.SerializedTest // self // param
-    let _2: baml.json.json
-    let _3: string
-    let _4: testing.SerializedTest
-    let _5: type
-    let _6: baml.json.json
-    let _7: string
-    let _8: testing.SerializedTest
-    let _9: type
+    let _0: null // _0 // return
+    let _1: () -> void throws unknown
+    let _2: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never) | null
 
     bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _5 = load_type(string);
-        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
+        _1 = copy capture[0];
+        _2 = copy capture[1];
+        _0 = call const fn testing.run_test(copy _1, copy _2) -> [bb1];
     }
 
     bb1: {
-        _8 = copy _1;
-        _7 = copy _8.1;
-        _9 = load_type(string);
-        _6 = call const fn baml.json.to_json<copy _9>(copy _7) -> [bb2];
+        return;
+    }
+}
+
+fn testing.testset_child(registry: testing.TestRegistry, ts: testing.TestSetRegistration) -> testing.TestSetChild {
+    // Locals:
+    let _0: testing.TestSetChild // _0 // return
+    let _1: testing.TestRegistry // registry // param [captured]
+    let _2: testing.TestSetRegistration // ts // param [captured]
+    let _3: string
+    let _4: () -> testing.TestReport | testing.TestSetReport throws never
+
+    bb0: {
+        _3 = copy _2.0;
+        _4 = make_closure lambda[0](copy _1, copy _2);
+        _0 = testing.TestSetChild { copy _3, copy _4 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(testset_child, 0)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: unknown // e
+    let _2: testing.TestSetChild[]
+    let _3: testing.TestRegistry
+    let _4: testing.TestSetRegistration
+    let _5: ((testing.TestSetChild[]) -> testing.TestSetReport throws never) | null
+    let _6: (testing.TestReport | testing.TestSetReport)[]
+
+    bb0: {
+        _4 = copy capture[1];
+        _3 = call const fn testing.TestRegistry.expand_testset_registry(copy capture[0], copy _4) -> [bb1, unwind: bb3];
+    }
+
+    bb1: {
+        _2 = call const fn testing.testset_children(copy _3) -> [bb2, unwind: bb3];
     }
 
     bb2: {
-        _0 = { const "type": copy _2, const "name": copy _6 };
-        goto -> bb3;
+        _5 = copy capture[1].2;
+        _0 = call const fn testing.run_testset(copy _2, copy _5) -> [bb5, unwind: bb3];
     }
 
     bb3: {
+        throw_if_panic copy _1 -> bb4;
+    }
+
+    bb4: {
+        _6 = [];
+        _0 = testing.TestSetReport { const "error", const 0_i64, const 1_i64, const 1_i64, copy _6 };
+        goto -> bb5;
+    }
+
+    bb5: {
+        return;
+    }
+}
+
+fn testing.testset_children(registry: testing.TestRegistry) -> testing.TestSetChild[] {
+    // Locals:
+    let _0: testing.TestSetChild[] // _0 // return
+    let _1: testing.TestRegistry // registry // param
+    let _2: testing.TestSetChild[] // children
+    let _3: testing.TestRegistration[]
+    let _4: baml.iter.Iterator<Item = testing.TestRegistration, Error = never>
+    let _5: type
+    let _6: unknown
+    let _7: bool
+    let _8: unknown
+    let _9: bool
+    let _10: type
+    let _11: bool
+    let _12: type
+    let _13: type
+    let _14: bool
+    let _15: type
+    let _16: type
+    let _17: type
+    let _18: bool
+    let _19: type
+    let _20: bool
+    let _21: unknown
+    let _22: bool
+    let _23: type
+    let _24: type
+    let _25: type
+    let _26: bool
+    let _27: unknown
+    let _28: bool
+    let _29: unknown
+    let _30: bool
+    let _31: type
+    let _32: type
+    let _33: bool
+    let _34: testing.TestRegistration
+    let _35: testing.TestRegistration // t
+    let _36: void
+    let _37: testing.TestSetChild
+    let _38: string
+    let _39: () -> void throws unknown
+    let _40: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never) | null
+    let _41: testing.TestSetRegistration[]
+    let _42: baml.iter.Iterator<Item = testing.TestSetRegistration, Error = never>
+    let _43: type
+    let _44: unknown
+    let _45: bool
+    let _46: unknown
+    let _47: bool
+    let _48: type
+    let _49: bool
+    let _50: type
+    let _51: type
+    let _52: bool
+    let _53: type
+    let _54: type
+    let _55: type
+    let _56: bool
+    let _57: type
+    let _58: bool
+    let _59: unknown
+    let _60: bool
+    let _61: type
+    let _62: type
+    let _63: type
+    let _64: bool
+    let _65: unknown
+    let _66: bool
+    let _67: unknown
+    let _68: bool
+    let _69: type
+    let _70: type
+    let _71: bool
+    let _72: testing.TestSetRegistration
+    let _73: testing.TestSetRegistration // ts
+    let _74: void
+    let _75: testing.TestSetChild
+    let _76: testing.TestSetRegistration
+
+    bb0: {
+        _2 = [];
+        _3 = copy _1.0.1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        _5 = load_type(testing.TestRegistration);
+        _4 = call const fn baml.iter.Iterable$for$T[].iter<copy _5>(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        _7 = is_type(copy _4, baml.iter.Flatten<_, testing.TestRegistration, never, never>);
+        branch copy _7 -> [bb22, bb3];
+    }
+
+    bb3: {
+        _9 = is_type(copy _4, baml.iter.ArrayIterator<testing.TestRegistration>);
+        branch copy _9 -> [bb21, bb4];
+    }
+
+    bb4: {
+        _11 = is_type(copy _4, baml.iter.StepBy<testing.TestRegistration, never>);
+        branch copy _11 -> [bb20, bb5];
+    }
+
+    bb5: {
+        _14 = is_type(copy _4, baml.iter.Chain<testing.TestRegistration, never, never>);
+        branch copy _14 -> [bb19, bb6];
+    }
+
+    bb6: {
+        _18 = is_type(copy _4, baml.iter.Repeat<testing.TestRegistration>);
+        branch copy _18 -> [bb18, bb7];
+    }
+
+    bb7: {
+        _20 = is_type(copy _4, baml.iter.Map<_, testing.TestRegistration, never, never>);
+        branch copy _20 -> [bb17, bb8];
+    }
+
+    bb8: {
+        _22 = is_type(copy _4, baml.iter.Filter<testing.TestRegistration, never, never>);
+        branch copy _22 -> [bb16, bb9];
+    }
+
+    bb9: {
+        _26 = is_type(copy _4, baml.iter.FilterMap<_, testing.TestRegistration, never, never>);
+        branch copy _26 -> [bb15, bb10];
+    }
+
+    bb10: {
+        _28 = is_type(copy _4, baml.iter.FlatMap<_, testing.TestRegistration, never, never, never>);
+        branch copy _28 -> [bb14, bb11];
+    }
+
+    bb11: {
+        _30 = is_type(copy _4, baml.iter.Peekable<testing.TestRegistration, never>);
+        branch copy _30 -> [bb13, bb12];
+    }
+
+    bb12: {
+        unreachable;
+    }
+
+    bb13: {
+        _31 = load_type(testing.TestRegistration);
+        _32 = load_type(never);
+        _6 = call const fn baml.iter.Peekable.Iterator.next<copy _31, copy _32>(copy _4) -> [bb23];
+    }
+
+    bb14: {
+        _29 = make_bound_method baml.iter.FlatMap.Iterator.next(copy _4);
+        _6 = call copy _29() -> [bb23];
+    }
+
+    bb15: {
+        _27 = make_bound_method baml.iter.FilterMap.Iterator.next(copy _4);
+        _6 = call copy _27() -> [bb23];
+    }
+
+    bb16: {
+        _23 = load_type(testing.TestRegistration);
+        _24 = load_type(never);
+        _25 = load_type(never);
+        _6 = call const fn baml.iter.Filter.Iterator.next<copy _23, copy _24, copy _25>(copy _4) -> [bb23];
+    }
+
+    bb17: {
+        _21 = make_bound_method baml.iter.Map.Iterator.next(copy _4);
+        _6 = call copy _21() -> [bb23];
+    }
+
+    bb18: {
+        _19 = load_type(testing.TestRegistration);
+        _6 = call const fn baml.iter.Repeat.Iterator.next<copy _19>(copy _4) -> [bb23];
+    }
+
+    bb19: {
+        _15 = load_type(testing.TestRegistration);
+        _16 = load_type(never);
+        _17 = load_type(never);
+        _6 = call const fn baml.iter.Chain.Iterator.next<copy _15, copy _16, copy _17>(copy _4) -> [bb23];
+    }
+
+    bb20: {
+        _12 = load_type(testing.TestRegistration);
+        _13 = load_type(never);
+        _6 = call const fn baml.iter.StepBy.Iterator.next<copy _12, copy _13>(copy _4) -> [bb23];
+    }
+
+    bb21: {
+        _10 = load_type(testing.TestRegistration);
+        _6 = call const fn baml.iter.ArrayIterator.Iterator.next<copy _10>(copy _4) -> [bb23];
+    }
+
+    bb22: {
+        _8 = make_bound_method baml.iter.Flatten.Iterator.next(copy _4);
+        _6 = call copy _8() -> [bb23];
+    }
+
+    bb23: {
+        _33 = is_type(copy _6, baml.iter.Done);
+        branch copy _33 -> [bb26, bb24];
+    }
+
+    bb24: {
+        _34 = copy _6;
+        fresh_cell(_35);
+        _35 = copy _34;
+        _38 = copy _35.0;
+        _39 = copy _35.1;
+        _40 = copy _35.2;
+        _37 = call const fn testing.test_child(copy _38, copy _39, copy _40) -> [bb25];
+    }
+
+    bb25: {
+        _36 = call const fn baml.Array.push(copy _2, copy _37) -> [bb2];
+    }
+
+    bb26: {
+        _41 = copy _1.0.2;
+        goto -> bb27;
+    }
+
+    bb27: {
+        _43 = load_type(testing.TestSetRegistration);
+        _42 = call const fn baml.iter.Iterable$for$T[].iter<copy _43>(copy _41) -> [bb28];
+    }
+
+    bb28: {
+        _45 = is_type(copy _42, baml.iter.Flatten<_, testing.TestSetRegistration, never, never>);
+        branch copy _45 -> [bb48, bb29];
+    }
+
+    bb29: {
+        _47 = is_type(copy _42, baml.iter.ArrayIterator<testing.TestSetRegistration>);
+        branch copy _47 -> [bb47, bb30];
+    }
+
+    bb30: {
+        _49 = is_type(copy _42, baml.iter.StepBy<testing.TestSetRegistration, never>);
+        branch copy _49 -> [bb46, bb31];
+    }
+
+    bb31: {
+        _52 = is_type(copy _42, baml.iter.Chain<testing.TestSetRegistration, never, never>);
+        branch copy _52 -> [bb45, bb32];
+    }
+
+    bb32: {
+        _56 = is_type(copy _42, baml.iter.Repeat<testing.TestSetRegistration>);
+        branch copy _56 -> [bb44, bb33];
+    }
+
+    bb33: {
+        _58 = is_type(copy _42, baml.iter.Map<_, testing.TestSetRegistration, never, never>);
+        branch copy _58 -> [bb43, bb34];
+    }
+
+    bb34: {
+        _60 = is_type(copy _42, baml.iter.Filter<testing.TestSetRegistration, never, never>);
+        branch copy _60 -> [bb42, bb35];
+    }
+
+    bb35: {
+        _64 = is_type(copy _42, baml.iter.FilterMap<_, testing.TestSetRegistration, never, never>);
+        branch copy _64 -> [bb41, bb36];
+    }
+
+    bb36: {
+        _66 = is_type(copy _42, baml.iter.FlatMap<_, testing.TestSetRegistration, never, never, never>);
+        branch copy _66 -> [bb40, bb37];
+    }
+
+    bb37: {
+        _68 = is_type(copy _42, baml.iter.Peekable<testing.TestSetRegistration, never>);
+        branch copy _68 -> [bb39, bb38];
+    }
+
+    bb38: {
+        unreachable;
+    }
+
+    bb39: {
+        _69 = load_type(testing.TestSetRegistration);
+        _70 = load_type(never);
+        _44 = call const fn baml.iter.Peekable.Iterator.next<copy _69, copy _70>(copy _42) -> [bb49];
+    }
+
+    bb40: {
+        _67 = make_bound_method baml.iter.FlatMap.Iterator.next(copy _42);
+        _44 = call copy _67() -> [bb49];
+    }
+
+    bb41: {
+        _65 = make_bound_method baml.iter.FilterMap.Iterator.next(copy _42);
+        _44 = call copy _65() -> [bb49];
+    }
+
+    bb42: {
+        _61 = load_type(testing.TestSetRegistration);
+        _62 = load_type(never);
+        _63 = load_type(never);
+        _44 = call const fn baml.iter.Filter.Iterator.next<copy _61, copy _62, copy _63>(copy _42) -> [bb49];
+    }
+
+    bb43: {
+        _59 = make_bound_method baml.iter.Map.Iterator.next(copy _42);
+        _44 = call copy _59() -> [bb49];
+    }
+
+    bb44: {
+        _57 = load_type(testing.TestSetRegistration);
+        _44 = call const fn baml.iter.Repeat.Iterator.next<copy _57>(copy _42) -> [bb49];
+    }
+
+    bb45: {
+        _53 = load_type(testing.TestSetRegistration);
+        _54 = load_type(never);
+        _55 = load_type(never);
+        _44 = call const fn baml.iter.Chain.Iterator.next<copy _53, copy _54, copy _55>(copy _42) -> [bb49];
+    }
+
+    bb46: {
+        _50 = load_type(testing.TestSetRegistration);
+        _51 = load_type(never);
+        _44 = call const fn baml.iter.StepBy.Iterator.next<copy _50, copy _51>(copy _42) -> [bb49];
+    }
+
+    bb47: {
+        _48 = load_type(testing.TestSetRegistration);
+        _44 = call const fn baml.iter.ArrayIterator.Iterator.next<copy _48>(copy _42) -> [bb49];
+    }
+
+    bb48: {
+        _46 = make_bound_method baml.iter.Flatten.Iterator.next(copy _42);
+        _44 = call copy _46() -> [bb49];
+    }
+
+    bb49: {
+        _71 = is_type(copy _44, baml.iter.Done);
+        branch copy _71 -> [bb52, bb50];
+    }
+
+    bb50: {
+        _72 = copy _44;
+        fresh_cell(_73);
+        _73 = copy _72;
+        _76 = copy _73;
+        _75 = call const fn testing.testset_child(copy _1, copy _76) -> [bb51];
+    }
+
+    bb51: {
+        _74 = call const fn baml.Array.push(copy _2, copy _75) -> [bb28];
+    }
+
+    bb52: {
+        _0 = copy _2;
+        goto -> bb53;
+    }
+
+    bb53: {
         return;
     }
 }
@@ -2572,6 +4140,64 @@ fn testing.SerializedTestSet.to_json(self: testing.SerializedTestSet) -> baml.js
     }
 
     bb4: {
+        return;
+    }
+}
+
+fn testing.TestRegistration.to_json(self: testing.TestRegistration) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: testing.TestRegistration // self // param
+    let _2: string
+    let _3: type
+
+    bb0: {
+        _3 = load_type(testing.TestRegistration);
+        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn testing.SerializedTest.to_json(self: testing.SerializedTest) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: testing.SerializedTest // self // param
+    let _2: baml.json.json
+    let _3: string
+    let _4: testing.SerializedTest
+    let _5: type
+    let _6: baml.json.json
+    let _7: string
+    let _8: testing.SerializedTest
+    let _9: type
+
+    bb0: {
+        _4 = copy _1;
+        _3 = copy _4.0;
+        _5 = load_type(string);
+        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
+    }
+
+    bb1: {
+        _8 = copy _1;
+        _7 = copy _8.1;
+        _9 = load_type(string);
+        _6 = call const fn baml.json.to_json<copy _9>(copy _7) -> [bb2];
+    }
+
+    bb2: {
+        _0 = { const "type": copy _2, const "name": copy _6 };
+        goto -> bb3;
+    }
+
+    bb3: {
         return;
     }
 }
@@ -2672,6 +4298,1074 @@ fn testing.TestRegistry.to_json(self: testing.TestRegistry) -> baml.json.json {
     }
 }
 
+fn testing.FailFast() -> (testing.TestSetChild[]) -> testing.TestSetReport throws never {
+    // Locals:
+    let _0: (testing.TestSetChild[]) -> testing.TestSetReport throws never // _0 // return
+
+    bb0: {
+        _0 = make_closure lambda[0]();
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(FailFast, 0)>(children: null) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: null // children // param
+
+    bb0: {
+        _0 = call const fn testing.run_children_sequential(copy _1, const true) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn testing.PassRate(threshold: float) -> (testing.TestSetChild[]) -> testing.TestSetReport throws never {
+    // Locals:
+    let _0: (testing.TestSetChild[]) -> testing.TestSetReport throws never // _0 // return
+    let _1: float // threshold // param [captured]
+    let _2: null
+    let _3: bool
+    let _4: bool
+
+    bb0: {
+        _4 = copy _1 < const 0_f64;
+        _3 = short_circuit(||) copy _4 -> [eval: bb1, join: bb2];
+    }
+
+    bb1: {
+        _3 = copy _1 > const 1_f64;
+        goto -> bb2;
+    }
+
+    bb2: {
+        branch copy _3 -> [bb4, bb3];
+    }
+
+    bb3: {
+        _2 = const null;
+        goto -> bb5;
+    }
+
+    bb4: {
+        _2 = call const fn baml.sys.panic(const "testing.PassRate requires 0.0 <= threshold <= 1.0") -> [bb5];
+    }
+
+    bb5: {
+        _0 = make_closure lambda[0](copy _1);
+        goto -> bb6;
+    }
+
+    bb6: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(PassRate, 0)>(children: null) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: null // children // param
+    let _2: testing.TestSetReport // report
+    let _3: "pass" | "fail" | "error" // outcome
+    let _4: bool
+    let _5: int
+    let _6: bool
+    let _7: float
+    let _8: float
+    let _9: int
+    let _10: float
+    let _11: int
+    let _12: float
+    let _13: "pass" | "fail" | "error"
+    let _14: int
+    let _15: int
+    let _16: int
+    let _17: (testing.TestReport | testing.TestSetReport)[]
+
+    bb0: {
+        _2 = call const fn testing.run_children_parallel(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _5 = copy _2.3;
+        _4 = copy _5 == const 0_i64;
+        branch copy _4 -> [bb7, bb2];
+    }
+
+    bb2: {
+        _9 = copy _2.1;
+        _8 = call const fn testing._int_to_float(copy _9) -> [bb3];
+    }
+
+    bb3: {
+        _11 = copy _2.3;
+        _10 = call const fn testing._int_to_float(copy _11) -> [bb4];
+    }
+
+    bb4: {
+        _7 = copy _8 / copy _10;
+        _12 = copy capture[0];
+        _6 = copy _7 >= copy _12;
+        branch copy _6 -> [bb6, bb5];
+    }
+
+    bb5: {
+        _3 = const "fail";
+        goto -> bb8;
+    }
+
+    bb6: {
+        _3 = const "pass";
+        goto -> bb8;
+    }
+
+    bb7: {
+        _3 = const "pass";
+        goto -> bb8;
+    }
+
+    bb8: {
+        _13 = copy _3;
+        _14 = copy _2.1;
+        _15 = copy _2.2;
+        _16 = copy _2.3;
+        _17 = copy _2.4;
+        _0 = testing.TestSetReport { copy _13, copy _14, copy _15, copy _16, copy _17 };
+        goto -> bb9;
+    }
+
+    bb9: {
+        return;
+    }
+}
+
+fn testing.Quorum(n: int, m: int) -> (() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never {
+    // Locals:
+    let _0: (() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never // _0 // return
+    let _1: int // n // param [captured]
+    let _2: int // m // param [captured]
+    let _3: null
+    let _4: bool
+    let _5: bool
+    let _6: bool
+
+    bb0: {
+        _4 = copy _1 <= const 0_i64;
+        branch copy _4 -> [bb6, bb1];
+    }
+
+    bb1: {
+        _6 = copy _2 < const 0_i64;
+        _5 = short_circuit(||) copy _6 -> [eval: bb2, join: bb3];
+    }
+
+    bb2: {
+        _5 = copy _2 > copy _1;
+        goto -> bb3;
+    }
+
+    bb3: {
+        branch copy _5 -> [bb5, bb4];
+    }
+
+    bb4: {
+        _3 = const null;
+        goto -> bb7;
+    }
+
+    bb5: {
+        _3 = call const fn baml.sys.panic(const "testing.Quorum requires 0 <= m <= n") -> [bb7];
+    }
+
+    bb6: {
+        _3 = call const fn baml.sys.panic(const "testing.Quorum requires n > 0") -> [bb7];
+    }
+
+    bb7: {
+        _0 = make_closure lambda[0](copy _1, copy _2);
+        goto -> bb8;
+    }
+
+    bb8: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(Quorum, 0)>(run_once: null) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: null // run_once // param [captured]
+
+    bb0: {
+        _0 = make_closure lambda[0](copy capture[0], copy _1, copy capture[1]);
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(<lambda(Quorum, 0)>, 1)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: testing.RunReport[] // runs
+    let _2: int // passes
+    let _3: int // i
+    let _4: bool
+    let _5: int
+    let _6: int
+    let _7: testing.TestReport // report
+    let _8: () -> testing.TestReport throws never
+    let _9: testing.RunReport[]
+    let _10: baml.iter.Iterator<Item = testing.RunReport, Error = never>
+    let _11: type
+    let _12: unknown
+    let _13: bool
+    let _14: unknown
+    let _15: bool
+    let _16: type
+    let _17: bool
+    let _18: type
+    let _19: type
+    let _20: bool
+    let _21: type
+    let _22: type
+    let _23: type
+    let _24: bool
+    let _25: type
+    let _26: bool
+    let _27: unknown
+    let _28: bool
+    let _29: type
+    let _30: type
+    let _31: type
+    let _32: bool
+    let _33: unknown
+    let _34: bool
+    let _35: unknown
+    let _36: bool
+    let _37: type
+    let _38: type
+    let _39: bool
+    let _40: testing.RunReport
+    let _41: testing.RunReport // run
+    let _42: void
+    let _43: testing.RunReport
+    let _44: bool
+    let _45: "pass" | "fail" | "error"
+    let _46: "pass" | "fail" | "error" // outcome
+    let _47: bool
+    let _48: int
+    let _49: int
+    let _50: "pass" | "fail" | "error"
+    let _51: testing.RunReport[]
+
+    bb0: {
+        _1 = [];
+        _2 = const 0_i64;
+        _3 = const 0_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        _5 = copy _3;
+        _6 = copy capture[0];
+        _4 = copy _5 < copy _6;
+        branch copy _4 -> [bb7, bb2];
+    }
+
+    bb2: {
+        _48 = copy _2;
+        _49 = copy capture[2];
+        _47 = copy _48 >= copy _49;
+        branch copy _47 -> [bb4, bb3];
+    }
+
+    bb3: {
+        _46 = const "fail";
+        goto -> bb5;
+    }
+
+    bb4: {
+        _46 = const "pass";
+        goto -> bb5;
+    }
+
+    bb5: {
+        _50 = copy _46;
+        _51 = copy _1;
+        _0 = testing.TestReport { copy _50, copy _51 };
+        goto -> bb6;
+    }
+
+    bb6: {
+        return;
+    }
+
+    bb7: {
+        _8 = copy capture[1];
+        _7 = call copy _8() -> [bb8];
+    }
+
+    bb8: {
+        _9 = copy _7.1;
+        goto -> bb9;
+    }
+
+    bb9: {
+        _11 = load_type(testing.RunReport);
+        _10 = call const fn baml.iter.Iterable$for$T[].iter<copy _11>(copy _9) -> [bb10];
+    }
+
+    bb10: {
+        _13 = is_type(copy _10, baml.iter.Flatten<_, testing.RunReport, never, never>);
+        branch copy _13 -> [bb30, bb11];
+    }
+
+    bb11: {
+        _15 = is_type(copy _10, baml.iter.ArrayIterator<testing.RunReport>);
+        branch copy _15 -> [bb29, bb12];
+    }
+
+    bb12: {
+        _17 = is_type(copy _10, baml.iter.StepBy<testing.RunReport, never>);
+        branch copy _17 -> [bb28, bb13];
+    }
+
+    bb13: {
+        _20 = is_type(copy _10, baml.iter.Chain<testing.RunReport, never, never>);
+        branch copy _20 -> [bb27, bb14];
+    }
+
+    bb14: {
+        _24 = is_type(copy _10, baml.iter.Repeat<testing.RunReport>);
+        branch copy _24 -> [bb26, bb15];
+    }
+
+    bb15: {
+        _26 = is_type(copy _10, baml.iter.Map<_, testing.RunReport, never, never>);
+        branch copy _26 -> [bb25, bb16];
+    }
+
+    bb16: {
+        _28 = is_type(copy _10, baml.iter.Filter<testing.RunReport, never, never>);
+        branch copy _28 -> [bb24, bb17];
+    }
+
+    bb17: {
+        _32 = is_type(copy _10, baml.iter.FilterMap<_, testing.RunReport, never, never>);
+        branch copy _32 -> [bb23, bb18];
+    }
+
+    bb18: {
+        _34 = is_type(copy _10, baml.iter.FlatMap<_, testing.RunReport, never, never, never>);
+        branch copy _34 -> [bb22, bb19];
+    }
+
+    bb19: {
+        _36 = is_type(copy _10, baml.iter.Peekable<testing.RunReport, never>);
+        branch copy _36 -> [bb21, bb20];
+    }
+
+    bb20: {
+        unreachable;
+    }
+
+    bb21: {
+        _37 = load_type(testing.RunReport);
+        _38 = load_type(never);
+        _12 = call const fn baml.iter.Peekable.Iterator.next<copy _37, copy _38>(copy _10) -> [bb31];
+    }
+
+    bb22: {
+        _35 = make_bound_method baml.iter.FlatMap.Iterator.next(copy _10);
+        _12 = call copy _35() -> [bb31];
+    }
+
+    bb23: {
+        _33 = make_bound_method baml.iter.FilterMap.Iterator.next(copy _10);
+        _12 = call copy _33() -> [bb31];
+    }
+
+    bb24: {
+        _29 = load_type(testing.RunReport);
+        _30 = load_type(never);
+        _31 = load_type(never);
+        _12 = call const fn baml.iter.Filter.Iterator.next<copy _29, copy _30, copy _31>(copy _10) -> [bb31];
+    }
+
+    bb25: {
+        _27 = make_bound_method baml.iter.Map.Iterator.next(copy _10);
+        _12 = call copy _27() -> [bb31];
+    }
+
+    bb26: {
+        _25 = load_type(testing.RunReport);
+        _12 = call const fn baml.iter.Repeat.Iterator.next<copy _25>(copy _10) -> [bb31];
+    }
+
+    bb27: {
+        _21 = load_type(testing.RunReport);
+        _22 = load_type(never);
+        _23 = load_type(never);
+        _12 = call const fn baml.iter.Chain.Iterator.next<copy _21, copy _22, copy _23>(copy _10) -> [bb31];
+    }
+
+    bb28: {
+        _18 = load_type(testing.RunReport);
+        _19 = load_type(never);
+        _12 = call const fn baml.iter.StepBy.Iterator.next<copy _18, copy _19>(copy _10) -> [bb31];
+    }
+
+    bb29: {
+        _16 = load_type(testing.RunReport);
+        _12 = call const fn baml.iter.ArrayIterator.Iterator.next<copy _16>(copy _10) -> [bb31];
+    }
+
+    bb30: {
+        _14 = make_bound_method baml.iter.Flatten.Iterator.next(copy _10);
+        _12 = call copy _14() -> [bb31];
+    }
+
+    bb31: {
+        _39 = is_type(copy _12, baml.iter.Done);
+        branch copy _39 -> [bb33, bb32];
+    }
+
+    bb32: {
+        _40 = copy _12;
+        fresh_cell(_41);
+        _41 = copy _40;
+        _43 = copy _41;
+        _42 = call const fn baml.Array.push(copy _1, copy _43) -> [bb10];
+    }
+
+    bb33: {
+        _45 = copy _7.0;
+        _44 = copy _45 == const "pass";
+        branch copy _44 -> [bb34, bb35];
+    }
+
+    bb34: {
+        _2 = copy _2 + const 1_i64;
+        goto -> bb35;
+    }
+
+    bb35: {
+        _3 = copy _3 + const 1_i64;
+        goto -> bb1;
+    }
+}
+
+fn testing.Retry(max_attempts: int) -> (() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never {
+    // Locals:
+    let _0: (() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never // _0 // return
+    let _1: int // max_attempts // param [captured]
+    let _2: null
+    let _3: bool
+
+    bb0: {
+        _3 = copy _1 <= const 0_i64;
+        branch copy _3 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _2 = const null;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _2 = call const fn baml.sys.panic(const "testing.Retry requires max_attempts > 0") -> [bb3];
+    }
+
+    bb3: {
+        _0 = make_closure lambda[0](copy _1);
+        goto -> bb4;
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(Retry, 0)>(run_once: null) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: null // run_once // param [captured]
+
+    bb0: {
+        _0 = make_closure lambda[0](copy capture[0], copy _1);
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(<lambda(Retry, 0)>, 1)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: testing.RunReport[] // runs
+    let _2: bool // passed
+    let _3: int // attempts
+    let _4: bool
+    let _5: bool
+    let _6: int
+    let _7: int
+    let _8: bool
+    let _9: testing.TestReport // report
+    let _10: () -> testing.TestReport throws never
+    let _11: testing.RunReport[]
+    let _12: baml.iter.Iterator<Item = testing.RunReport, Error = never>
+    let _13: type
+    let _14: unknown
+    let _15: bool
+    let _16: unknown
+    let _17: bool
+    let _18: type
+    let _19: bool
+    let _20: type
+    let _21: type
+    let _22: bool
+    let _23: type
+    let _24: type
+    let _25: type
+    let _26: bool
+    let _27: type
+    let _28: bool
+    let _29: unknown
+    let _30: bool
+    let _31: type
+    let _32: type
+    let _33: type
+    let _34: bool
+    let _35: unknown
+    let _36: bool
+    let _37: unknown
+    let _38: bool
+    let _39: type
+    let _40: type
+    let _41: bool
+    let _42: testing.RunReport
+    let _43: testing.RunReport // run
+    let _44: void
+    let _45: testing.RunReport
+    let _46: bool
+    let _47: "pass" | "fail" | "error"
+    let _48: "pass" | "fail" | "error" // outcome
+    let _49: bool
+    let _50: "pass" | "fail" | "error"
+    let _51: testing.RunReport[]
+
+    bb0: {
+        _1 = [];
+        _2 = const false;
+        _3 = const 0_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        _6 = copy _3;
+        _7 = copy capture[0];
+        _5 = copy _6 < copy _7;
+        _4 = short_circuit(&&) copy _5 -> [eval: bb2, join: bb3];
+    }
+
+    bb2: {
+        _8 = copy _2;
+        _4 = !copy _8;
+        goto -> bb3;
+    }
+
+    bb3: {
+        branch copy _4 -> [bb9, bb4];
+    }
+
+    bb4: {
+        _49 = copy _2;
+        branch copy _49 -> [bb6, bb5];
+    }
+
+    bb5: {
+        _48 = const "fail";
+        goto -> bb7;
+    }
+
+    bb6: {
+        _48 = const "pass";
+        goto -> bb7;
+    }
+
+    bb7: {
+        _50 = copy _48;
+        _51 = copy _1;
+        _0 = testing.TestReport { copy _50, copy _51 };
+        goto -> bb8;
+    }
+
+    bb8: {
+        return;
+    }
+
+    bb9: {
+        _10 = copy capture[1];
+        _9 = call copy _10() -> [bb10];
+    }
+
+    bb10: {
+        _3 = copy _3 + const 1_i64;
+        _11 = copy _9.1;
+        goto -> bb11;
+    }
+
+    bb11: {
+        _13 = load_type(testing.RunReport);
+        _12 = call const fn baml.iter.Iterable$for$T[].iter<copy _13>(copy _11) -> [bb12];
+    }
+
+    bb12: {
+        _15 = is_type(copy _12, baml.iter.Flatten<_, testing.RunReport, never, never>);
+        branch copy _15 -> [bb32, bb13];
+    }
+
+    bb13: {
+        _17 = is_type(copy _12, baml.iter.ArrayIterator<testing.RunReport>);
+        branch copy _17 -> [bb31, bb14];
+    }
+
+    bb14: {
+        _19 = is_type(copy _12, baml.iter.StepBy<testing.RunReport, never>);
+        branch copy _19 -> [bb30, bb15];
+    }
+
+    bb15: {
+        _22 = is_type(copy _12, baml.iter.Chain<testing.RunReport, never, never>);
+        branch copy _22 -> [bb29, bb16];
+    }
+
+    bb16: {
+        _26 = is_type(copy _12, baml.iter.Repeat<testing.RunReport>);
+        branch copy _26 -> [bb28, bb17];
+    }
+
+    bb17: {
+        _28 = is_type(copy _12, baml.iter.Map<_, testing.RunReport, never, never>);
+        branch copy _28 -> [bb27, bb18];
+    }
+
+    bb18: {
+        _30 = is_type(copy _12, baml.iter.Filter<testing.RunReport, never, never>);
+        branch copy _30 -> [bb26, bb19];
+    }
+
+    bb19: {
+        _34 = is_type(copy _12, baml.iter.FilterMap<_, testing.RunReport, never, never>);
+        branch copy _34 -> [bb25, bb20];
+    }
+
+    bb20: {
+        _36 = is_type(copy _12, baml.iter.FlatMap<_, testing.RunReport, never, never, never>);
+        branch copy _36 -> [bb24, bb21];
+    }
+
+    bb21: {
+        _38 = is_type(copy _12, baml.iter.Peekable<testing.RunReport, never>);
+        branch copy _38 -> [bb23, bb22];
+    }
+
+    bb22: {
+        unreachable;
+    }
+
+    bb23: {
+        _39 = load_type(testing.RunReport);
+        _40 = load_type(never);
+        _14 = call const fn baml.iter.Peekable.Iterator.next<copy _39, copy _40>(copy _12) -> [bb33];
+    }
+
+    bb24: {
+        _37 = make_bound_method baml.iter.FlatMap.Iterator.next(copy _12);
+        _14 = call copy _37() -> [bb33];
+    }
+
+    bb25: {
+        _35 = make_bound_method baml.iter.FilterMap.Iterator.next(copy _12);
+        _14 = call copy _35() -> [bb33];
+    }
+
+    bb26: {
+        _31 = load_type(testing.RunReport);
+        _32 = load_type(never);
+        _33 = load_type(never);
+        _14 = call const fn baml.iter.Filter.Iterator.next<copy _31, copy _32, copy _33>(copy _12) -> [bb33];
+    }
+
+    bb27: {
+        _29 = make_bound_method baml.iter.Map.Iterator.next(copy _12);
+        _14 = call copy _29() -> [bb33];
+    }
+
+    bb28: {
+        _27 = load_type(testing.RunReport);
+        _14 = call const fn baml.iter.Repeat.Iterator.next<copy _27>(copy _12) -> [bb33];
+    }
+
+    bb29: {
+        _23 = load_type(testing.RunReport);
+        _24 = load_type(never);
+        _25 = load_type(never);
+        _14 = call const fn baml.iter.Chain.Iterator.next<copy _23, copy _24, copy _25>(copy _12) -> [bb33];
+    }
+
+    bb30: {
+        _20 = load_type(testing.RunReport);
+        _21 = load_type(never);
+        _14 = call const fn baml.iter.StepBy.Iterator.next<copy _20, copy _21>(copy _12) -> [bb33];
+    }
+
+    bb31: {
+        _18 = load_type(testing.RunReport);
+        _14 = call const fn baml.iter.ArrayIterator.Iterator.next<copy _18>(copy _12) -> [bb33];
+    }
+
+    bb32: {
+        _16 = make_bound_method baml.iter.Flatten.Iterator.next(copy _12);
+        _14 = call copy _16() -> [bb33];
+    }
+
+    bb33: {
+        _41 = is_type(copy _14, baml.iter.Done);
+        branch copy _41 -> [bb35, bb34];
+    }
+
+    bb34: {
+        _42 = copy _14;
+        fresh_cell(_43);
+        _43 = copy _42;
+        _45 = copy _43;
+        _44 = call const fn baml.Array.push(copy _1, copy _45) -> [bb12];
+    }
+
+    bb35: {
+        _47 = copy _9.0;
+        _46 = copy _47 == const "pass";
+        branch copy _46 -> [bb36, bb1];
+    }
+
+    bb36: {
+        _2 = const true;
+        goto -> bb1;
+    }
+}
+
+fn testing.Sequential() -> (testing.TestSetChild[]) -> testing.TestSetReport throws never {
+    // Locals:
+    let _0: (testing.TestSetChild[]) -> testing.TestSetReport throws never // _0 // return
+
+    bb0: {
+        _0 = make_closure lambda[0]();
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(Sequential, 0)>(children: null) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: null // children // param
+
+    bb0: {
+        _0 = call const fn testing.run_children_sequential(copy _1, const false) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn testing._int_to_float(value: int) -> float {
+    // Locals:
+    let _0: float // _0 // return
+    let _1: int // value // param
+    let _2: unknown // e
+    let _3: string
+    let _4: type
+
+    bb0: {
+        _4 = load_type(int);
+        _3 = call const fn baml.unstable.string<copy _4>(copy _1) -> [bb1, unwind: bb2];
+    }
+
+    bb1: {
+        _0 = call const fn baml.Float.parse(copy _3) -> [bb4, unwind: bb2];
+    }
+
+    bb2: {
+        throw_if_panic copy _2 -> bb3;
+    }
+
+    bb3: {
+        _0 = call const fn baml.sys.panic(const "failed to convert int to float") -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn testing.run_children_sequential(children: testing.TestSetChild[], fail_fast: bool) -> testing.TestSetReport {
+    // Locals:
+    let _0: testing.TestSetReport // _0 // return
+    let _1: testing.TestSetChild[] // children // param
+    let _2: bool // fail_fast // param
+    let _3: (testing.TestReport | testing.TestSetReport)[] // results
+    let _4: baml.iter.Iterator<Item = testing.TestSetChild, Error = never>
+    let _5: type
+    let _6: unknown
+    let _7: bool
+    let _8: unknown
+    let _9: bool
+    let _10: type
+    let _11: bool
+    let _12: type
+    let _13: type
+    let _14: bool
+    let _15: type
+    let _16: type
+    let _17: type
+    let _18: bool
+    let _19: type
+    let _20: bool
+    let _21: unknown
+    let _22: bool
+    let _23: type
+    let _24: type
+    let _25: type
+    let _26: bool
+    let _27: unknown
+    let _28: bool
+    let _29: unknown
+    let _30: bool
+    let _31: type
+    let _32: type
+    let _33: bool
+    let _34: testing.TestSetChild
+    let _35: testing.TestSetChild // child
+    let _36: testing.TestReport | testing.TestSetReport // report
+    let _37: () -> testing.TestReport | testing.TestSetReport throws never
+    let _38: int
+    let _39: testing.TestReport | testing.TestSetReport
+    let _40: "pass" | "fail" | "error" // outcome
+    let _41: bool
+    let _42: testing.TestReport // r
+    let _43: testing.TestSetReport // r
+    let _44: bool
+    let _45: "pass" | "fail" | "error"
+    let _46: (testing.TestReport | testing.TestSetReport)[]
+    let _47: (testing.TestReport | testing.TestSetReport)[]
+
+    bb0: {
+        _3 = [];
+        goto -> bb1;
+    }
+
+    bb1: {
+        _5 = load_type(testing.TestSetChild);
+        _4 = call const fn baml.iter.Iterable$for$T[].iter<copy _5>(copy _1) -> [bb2];
+    }
+
+    bb2: {
+        _7 = is_type(copy _4, baml.iter.Flatten<_, testing.TestSetChild, never, never>);
+        branch copy _7 -> [bb22, bb3];
+    }
+
+    bb3: {
+        _9 = is_type(copy _4, baml.iter.ArrayIterator<testing.TestSetChild>);
+        branch copy _9 -> [bb21, bb4];
+    }
+
+    bb4: {
+        _11 = is_type(copy _4, baml.iter.StepBy<testing.TestSetChild, never>);
+        branch copy _11 -> [bb20, bb5];
+    }
+
+    bb5: {
+        _14 = is_type(copy _4, baml.iter.Chain<testing.TestSetChild, never, never>);
+        branch copy _14 -> [bb19, bb6];
+    }
+
+    bb6: {
+        _18 = is_type(copy _4, baml.iter.Repeat<testing.TestSetChild>);
+        branch copy _18 -> [bb18, bb7];
+    }
+
+    bb7: {
+        _20 = is_type(copy _4, baml.iter.Map<_, testing.TestSetChild, never, never>);
+        branch copy _20 -> [bb17, bb8];
+    }
+
+    bb8: {
+        _22 = is_type(copy _4, baml.iter.Filter<testing.TestSetChild, never, never>);
+        branch copy _22 -> [bb16, bb9];
+    }
+
+    bb9: {
+        _26 = is_type(copy _4, baml.iter.FilterMap<_, testing.TestSetChild, never, never>);
+        branch copy _26 -> [bb15, bb10];
+    }
+
+    bb10: {
+        _28 = is_type(copy _4, baml.iter.FlatMap<_, testing.TestSetChild, never, never, never>);
+        branch copy _28 -> [bb14, bb11];
+    }
+
+    bb11: {
+        _30 = is_type(copy _4, baml.iter.Peekable<testing.TestSetChild, never>);
+        branch copy _30 -> [bb13, bb12];
+    }
+
+    bb12: {
+        unreachable;
+    }
+
+    bb13: {
+        _31 = load_type(testing.TestSetChild);
+        _32 = load_type(never);
+        _6 = call const fn baml.iter.Peekable.Iterator.next<copy _31, copy _32>(copy _4) -> [bb23];
+    }
+
+    bb14: {
+        _29 = make_bound_method baml.iter.FlatMap.Iterator.next(copy _4);
+        _6 = call copy _29() -> [bb23];
+    }
+
+    bb15: {
+        _27 = make_bound_method baml.iter.FilterMap.Iterator.next(copy _4);
+        _6 = call copy _27() -> [bb23];
+    }
+
+    bb16: {
+        _23 = load_type(testing.TestSetChild);
+        _24 = load_type(never);
+        _25 = load_type(never);
+        _6 = call const fn baml.iter.Filter.Iterator.next<copy _23, copy _24, copy _25>(copy _4) -> [bb23];
+    }
+
+    bb17: {
+        _21 = make_bound_method baml.iter.Map.Iterator.next(copy _4);
+        _6 = call copy _21() -> [bb23];
+    }
+
+    bb18: {
+        _19 = load_type(testing.TestSetChild);
+        _6 = call const fn baml.iter.Repeat.Iterator.next<copy _19>(copy _4) -> [bb23];
+    }
+
+    bb19: {
+        _15 = load_type(testing.TestSetChild);
+        _16 = load_type(never);
+        _17 = load_type(never);
+        _6 = call const fn baml.iter.Chain.Iterator.next<copy _15, copy _16, copy _17>(copy _4) -> [bb23];
+    }
+
+    bb20: {
+        _12 = load_type(testing.TestSetChild);
+        _13 = load_type(never);
+        _6 = call const fn baml.iter.StepBy.Iterator.next<copy _12, copy _13>(copy _4) -> [bb23];
+    }
+
+    bb21: {
+        _10 = load_type(testing.TestSetChild);
+        _6 = call const fn baml.iter.ArrayIterator.Iterator.next<copy _10>(copy _4) -> [bb23];
+    }
+
+    bb22: {
+        _8 = make_bound_method baml.iter.Flatten.Iterator.next(copy _4);
+        _6 = call copy _8() -> [bb23];
+    }
+
+    bb23: {
+        _33 = is_type(copy _6, baml.iter.Done);
+        branch copy _33 -> [bb33, bb24];
+    }
+
+    bb24: {
+        _34 = copy _6;
+        fresh_cell(_35);
+        _35 = copy _34;
+        _37 = copy _35.1;
+        _36 = call copy _37() -> [bb25];
+    }
+
+    bb25: {
+        _39 = copy _36;
+        _38 = call const fn baml.Array.push(copy _3, copy _39) -> [bb26];
+    }
+
+    bb26: {
+        _41 = is_type(copy _36, testing.TestReport);
+        branch copy _41 -> [bb28, bb27];
+    }
+
+    bb27: {
+        _43 = copy _36;
+        _40 = copy _43.0;
+        goto -> bb29;
+    }
+
+    bb28: {
+        _42 = copy _36;
+        _40 = copy _42.0;
+        goto -> bb29;
+    }
+
+    bb29: {
+        _44 = short_circuit(&&) copy _2 -> [eval: bb30, join: bb31];
+    }
+
+    bb30: {
+        _45 = copy _40;
+        _44 = copy _45 != const "pass";
+        goto -> bb31;
+    }
+
+    bb31: {
+        branch copy _44 -> [bb32, bb2];
+    }
+
+    bb32: {
+        _46 = copy _3;
+        _0 = call const fn testing.aggregate_reports(copy _46) -> [bb34];
+    }
+
+    bb33: {
+        _47 = copy _3;
+        _0 = call const fn testing.aggregate_reports(copy _47) -> [bb34];
+    }
+
+    bb34: {
+        return;
+    }
+}
+
 fn testing.RunReport.from_json(j: baml.json.json) -> testing.RunReport {
     // Locals:
     let _0: testing.RunReport // _0 // return
@@ -2711,37 +5405,37 @@ fn testing.RunReport.from_json(j: baml.json.json) -> testing.RunReport {
     }
 }
 
-fn testing.TestReport.from_json(j: baml.json.json) -> testing.TestReport {
+fn testing.TestSetChild.from_json(j: baml.json.json) -> testing.TestSetChild {
     // Locals:
-    let _0: testing.TestReport // _0 // return
+    let _0: testing.TestSetChild // _0 // return
     let _1: baml.json.json // j // param
-    let _2: "pass" | "fail" | "error"
+    let _2: string
     let _3: baml.json.json
     let _4: type
-    let _5: testing.RunReport[]
+    let _5: () -> testing.TestReport | testing.TestSetReport throws never
     let _6: baml.json.json
     let _7: type
 
     bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "outcome") -> [bb1];
+        _3 = call const fn baml.json.field(copy _1, const "name") -> [bb1];
     }
 
     bb1: {
-        _4 = load_type("pass" | "fail" | "error");
+        _4 = load_type(string);
         _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
     }
 
     bb2: {
-        _6 = call const fn baml.json.field(copy _1, const "runs") -> [bb3];
+        _6 = call const fn baml.json.field(copy _1, const "run") -> [bb3];
     }
 
     bb3: {
-        _7 = load_type(testing.RunReport[]);
+        _7 = load_type(() -> testing.TestReport | testing.TestSetReport throws never);
         _5 = call const fn baml.json.from_json<copy _7>(copy _6) -> [bb4];
     }
 
     bb4: {
-        _0 = testing.TestReport { copy _2, copy _5 };
+        _0 = testing.TestSetChild { copy _2, copy _5 };
         goto -> bb5;
     }
 
@@ -2825,6 +5519,45 @@ fn testing.TestSetReport.from_json(j: baml.json.json) -> testing.TestSetReport {
     }
 }
 
+fn testing.TestReport.from_json(j: baml.json.json) -> testing.TestReport {
+    // Locals:
+    let _0: testing.TestReport // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: "pass" | "fail" | "error"
+    let _3: baml.json.json
+    let _4: type
+    let _5: testing.RunReport[]
+    let _6: baml.json.json
+    let _7: type
+
+    bb0: {
+        _3 = call const fn baml.json.field(copy _1, const "outcome") -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type("pass" | "fail" | "error");
+        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        _6 = call const fn baml.json.field(copy _1, const "runs") -> [bb3];
+    }
+
+    bb3: {
+        _7 = load_type(testing.RunReport[]);
+        _5 = call const fn baml.json.from_json<copy _7>(copy _6) -> [bb4];
+    }
+
+    bb4: {
+        _0 = testing.TestReport { copy _2, copy _5 };
+        goto -> bb5;
+    }
+
+    bb5: {
+        return;
+    }
+}
+
 fn testing.TestReport.to_json(self: testing.TestReport) -> baml.json.json {
     // Locals:
     let _0: baml.json.json // _0 // return
@@ -2891,6 +5624,43 @@ fn testing.RunReport.to_json(self: testing.RunReport) -> baml.json.json {
 
     bb2: {
         _0 = { const "outcome": copy _2, const "duration_ms": copy _6 };
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn testing.TestSetChild.to_json(self: testing.TestSetChild) -> baml.json.json {
+    // Locals:
+    let _0: baml.json.json // _0 // return
+    let _1: testing.TestSetChild // self // param
+    let _2: baml.json.json
+    let _3: string
+    let _4: testing.TestSetChild
+    let _5: type
+    let _6: baml.json.json
+    let _7: () -> testing.TestReport | testing.TestSetReport throws never
+    let _8: testing.TestSetChild
+    let _9: type
+
+    bb0: {
+        _4 = copy _1;
+        _3 = copy _4.0;
+        _5 = load_type(string);
+        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
+    }
+
+    bb1: {
+        _8 = copy _1;
+        _7 = copy _8.1;
+        _9 = load_type(() -> testing.TestReport | testing.TestSetReport throws never);
+        _6 = call const fn baml.json.to_json<copy _9>(copy _7) -> [bb2];
+    }
+
+    bb2: {
+        _0 = { const "name": copy _2, const "run": copy _6 };
         goto -> bb3;
     }
 

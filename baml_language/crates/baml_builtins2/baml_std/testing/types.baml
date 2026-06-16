@@ -40,7 +40,14 @@ type TestBody = () -> void throws unknown
 type TestSetBody = (TestCollector) -> void throws unknown
 type TestReportThunk = () -> TestReport throws never
 type TestSetReportThunk = () -> TestSetReport throws never
+type ChildReportThunk = () -> ChildReport throws never
 type TestRunner = (TestReportThunk) -> TestReportThunk throws never
 
-// TestSetRunner wraps "run all children" into a new execution lambda.
-type TestSetRunner = (TestSetReportThunk) -> TestSetReportThunk throws never
+/// A named child of a testset. Runners decide when, and whether, to invoke it.
+class TestSetChild {
+  name string
+  run ChildReportThunk
+}
+
+// TestSetRunner receives lazy children and returns the aggregate report.
+type TestSetRunner = (TestSetChild[]) -> TestSetReport throws never

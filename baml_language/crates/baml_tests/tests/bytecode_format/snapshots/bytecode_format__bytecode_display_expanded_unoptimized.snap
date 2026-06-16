@@ -13,7 +13,7 @@ function assert.contains(haystack: string, needle: string) -> null {
   32   6   jump +3                (to 9)
 
   33   7   load_const 1           ("assertion failed: string does not contain expected substring")
-       8   call 315 ntypeargs=0   (baml.sys.panic)
+       8   call 312 ntypeargs=0   (baml.sys.panic)
        9   return                 
 }
 
@@ -28,7 +28,7 @@ function assert.equal(actual: unknown, expected: unknown) -> null {
   23   5   jump +3                (to 8)
 
   24   6   load_const 1           ("assertion failed: expected equal values")
-       7   call 315 ntypeargs=0   (baml.sys.panic)
+       7   call 312 ntypeargs=0   (baml.sys.panic)
        8   return                 
 }
 
@@ -43,7 +43,7 @@ function assert.is_true(condition: bool) -> null {
   5   5   jump +3                (to 8)
 
   6   6   load_const 1           ("assertion failed: expected true")
-      7   call 315 ntypeargs=0   (baml.sys.panic)
+      7   call 312 ntypeargs=0   (baml.sys.panic)
       8   return                 
 }
 
@@ -59,31 +59,127 @@ function assert.not_null(value: unknown | null) -> null {
   14   6   jump +3                (to 9)
 
   15   7   load_const 1           ("assertion failed: expected non-null value")
-       8   call 315 ntypeargs=0   (baml.sys.panic)
+       8   call 312 ntypeargs=0   (baml.sys.panic)
        9   return                 
 }
 
 function testing.$invoke_collector(collector: (testing.TestCollector) -> void throws unknown, c: testing.TestCollector) -> void {
-  73   0   load_var2 2 1   
+  82   0   load_var2 2 1   
        1   call_indirect   
        2   return          
+}
+
+function testing.FailFast() -> (testing.TestSetChild[]) -> testing.TestSetReport throws never {
+  100   0   make_closure 1655 0   
+        1   store_var 1           (_0)
+        2   load_var 1            (_0)
+        3   return                
+}
+
+function testing.PassRate(threshold: float) -> (testing.TestSetChild[]) -> testing.TestSetReport throws never {
+       0    load_var 1             
+       1    make_cell              
+       2    store_var 1            
+
+  68   3    load_deref 1           
+       4    load_const 0           (0.0)
+       5    cmp_float_op <         
+       6    jump_if_false +2       (to 8)
+       7    jump +5                (to 12)
+       8    pop 1                  
+       9    load_deref 1           
+       10   load_const 1           (1.0)
+       11   cmp_float_op >         
+       12   pop_jump_if_false +4   (to 16)
+
+  69   13   load_const 2           ("testing.PassRate requires 0.0 <= threshold <= 1.0")
+       14   call 312 ntypeargs=0   (baml.sys.panic)
+       15   pop 1                  
+
+  74   16   load_var 1             (threshold)
+       17   make_closure 1666 1    
+       18   store_var 2            (_0)
+       19   load_var 2             (_0)
+       20   return                 
+}
+
+function testing.Quorum(n: int, m: int) -> (() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never {
+       0    load_var 1             
+       1    make_cell              
+       2    store_var 1            
+       3    load_var 2             
+       4    make_cell              
+       5    store_var 2            
+
+  2    6    load_deref 1           
+       7    load_const 0           (0)
+       8    cmp_int_op <=          
+       9    pop_jump_if_false +2   (to 11)
+       10   jump +15               (to 25)
+
+  4    11   load_deref 2           
+       12   load_const 0           (0)
+       13   cmp_int_op <           
+       14   jump_if_false +2       (to 16)
+       15   jump +5                (to 20)
+       16   pop 1                  
+       17   load_deref 2           
+       18   load_deref 1           
+       19   cmp_int_op >           
+       20   pop_jump_if_false +8   (to 28)
+
+  5    21   load_const 1           ("testing.Quorum requires 0 <= m <= n")
+       22   call 312 ntypeargs=0   (baml.sys.panic)
+       23   pop 1                  
+       24   jump +4                (to 28)
+
+  3    25   load_const 2           ("testing.Quorum requires n > 0")
+       26   call 312 ntypeargs=0   (baml.sys.panic)
+       27   pop 1                  
+
+  10   28   load_var2 1 2          
+       29   make_closure 1680 2    
+       30   store_var 3            (_0)
+       31   load_var 3             (_0)
+       32   return                 
+}
+
+function testing.Retry(max_attempts: int) -> (() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never {
+       0    load_var 1             
+       1    make_cell              
+       2    store_var 1            
+
+  35   3    load_deref 1           
+       4    load_const 0           (0)
+       5    cmp_int_op <=          
+       6    pop_jump_if_false +4   (to 10)
+
+  36   7    load_const 1           ("testing.Retry requires max_attempts > 0")
+       8    call 312 ntypeargs=0   (baml.sys.panic)
+       9    pop 1                  
+
+  41   10   load_var 1             (max_attempts)
+       11   make_closure 1673 1    
+       12   store_var 2            (_0)
+       13   load_var 2             (_0)
+       14   return                 
 }
 
 function testing.RunReport.from_json(j: baml.json.json) -> testing.RunReport {
   7   0    load_var 1             (j)
       1    load_const 0           ("outcome")
-      2    call 423 ntypeargs=0   (baml.json.field)
+      2    call 414 ntypeargs=0   (baml.json.field)
       3    store_var 3            (_3)
       4    load_type 1            
       5    load_var 3             (_3)
-      6    call 415 ntypeargs=1   (baml.json.from_json)
+      6    call 406 ntypeargs=1   (baml.json.from_json)
       7    load_var 1             (j)
       8    load_const 2           ("duration_ms")
-      9    call 423 ntypeargs=0   (baml.json.field)
+      9    call 414 ntypeargs=0   (baml.json.field)
       10   store_var 4            (_6)
       11   load_type 3            
       12   load_var 4             (_6)
-      13   call 415 ntypeargs=1   (baml.json.from_json)
+      13   call 406 ntypeargs=1   (baml.json.from_json)
       14   init_instance 0        (testing.RunReport .outcome, .duration_ms)
       15   store_var 2            (_0)
       16   load_var 2             (_0)
@@ -94,11 +190,11 @@ function testing.RunReport.to_json(self: testing.RunReport) -> baml.json.json {
   7   0    load_type 0            
       1    load_var 1             (self)
       2    load_field 0           (outcome)
-      3    call 417 ntypeargs=1   (baml.json.to_json)
+      3    call 408 ntypeargs=1   (baml.json.to_json)
       4    load_type 1            
       5    load_var 1             (self)
       6    load_field 1           (duration_ms)
-      7    call 417 ntypeargs=1   (baml.json.to_json)
+      7    call 408 ntypeargs=1   (baml.json.to_json)
       8    load_const 2           ("outcome")
       9    load_const 3           ("duration_ms")
       10   alloc_map 2            
@@ -107,21 +203,28 @@ function testing.RunReport.to_json(self: testing.RunReport) -> baml.json.json {
       13   return                 
 }
 
+function testing.Sequential() -> (testing.TestSetChild[]) -> testing.TestSetReport throws never {
+  94   0   make_closure 1659 0   
+       1   store_var 1           (_0)
+       2   load_var 1            (_0)
+       3   return                
+}
+
 function testing.SerializedTest.from_json(j: baml.json.json) -> testing.SerializedTest {
-  78   0    load_var 1             (j)
+  87   0    load_var 1             (j)
        1    load_const 0           ("type")
-       2    call 423 ntypeargs=0   (baml.json.field)
+       2    call 414 ntypeargs=0   (baml.json.field)
        3    store_var 3            (_3)
        4    load_type 1            
        5    load_var 3             (_3)
-       6    call 415 ntypeargs=1   (baml.json.from_json)
+       6    call 406 ntypeargs=1   (baml.json.from_json)
        7    load_var 1             (j)
        8    load_const 2           ("name")
-       9    call 423 ntypeargs=0   (baml.json.field)
+       9    call 414 ntypeargs=0   (baml.json.field)
        10   store_var 4            (_6)
        11   load_type 1            
        12   load_var 4             (_6)
-       13   call 415 ntypeargs=1   (baml.json.from_json)
+       13   call 406 ntypeargs=1   (baml.json.from_json)
        14   init_instance 0        (testing.SerializedTest .type, .name)
        15   store_var 2            (_0)
        16   load_var 2             (_0)
@@ -129,14 +232,14 @@ function testing.SerializedTest.from_json(j: baml.json.json) -> testing.Serializ
 }
 
 function testing.SerializedTest.to_json(self: testing.SerializedTest) -> baml.json.json {
-  78   0    load_type 0            
+  87   0    load_type 0            
        1    load_var 1             (self)
        2    load_field 0           (type)
-       3    call 417 ntypeargs=1   (baml.json.to_json)
+       3    call 408 ntypeargs=1   (baml.json.to_json)
        4    load_type 0            
        5    load_var 1             (self)
        6    load_field 1           (name)
-       7    call 417 ntypeargs=1   (baml.json.to_json)
+       7    call 408 ntypeargs=1   (baml.json.to_json)
        8    load_const 1           ("type")
        9    load_const 2           ("name")
        10   alloc_map 2            
@@ -146,27 +249,27 @@ function testing.SerializedTest.to_json(self: testing.SerializedTest) -> baml.js
 }
 
 function testing.SerializedTestSet.from_json(j: baml.json.json) -> testing.SerializedTestSet {
-  83   0    load_var 1             (j)
+  92   0    load_var 1             (j)
        1    load_const 0           ("name")
-       2    call 423 ntypeargs=0   (baml.json.field)
+       2    call 414 ntypeargs=0   (baml.json.field)
        3    store_var 3            (_3)
        4    load_type 1            
        5    load_var 3             (_3)
-       6    call 415 ntypeargs=1   (baml.json.from_json)
+       6    call 406 ntypeargs=1   (baml.json.from_json)
        7    load_var 1             (j)
        8    load_const 2           ("items")
-       9    call 423 ntypeargs=0   (baml.json.field)
+       9    call 414 ntypeargs=0   (baml.json.field)
        10   store_var 4            (_6)
        11   load_type 3            
        12   load_var 4             (_6)
-       13   call 415 ntypeargs=1   (baml.json.from_json)
+       13   call 406 ntypeargs=1   (baml.json.from_json)
        14   load_var 1             (j)
        15   load_const 4           ("loadingTimeMs")
-       16   call 423 ntypeargs=0   (baml.json.field)
+       16   call 414 ntypeargs=0   (baml.json.field)
        17   store_var 5            (_9)
        18   load_type 5            
        19   load_var 5             (_9)
-       20   call 415 ntypeargs=1   (baml.json.from_json)
+       20   call 406 ntypeargs=1   (baml.json.from_json)
        21   init_instance 0        (testing.SerializedTestSet .name, .items, .loadingTimeMs)
        22   store_var 2            (_0)
        23   load_var 2             (_0)
@@ -174,18 +277,18 @@ function testing.SerializedTestSet.from_json(j: baml.json.json) -> testing.Seria
 }
 
 function testing.SerializedTestSet.to_json(self: testing.SerializedTestSet) -> baml.json.json {
-  83   0    load_type 0            
+  92   0    load_type 0            
        1    load_var 1             (self)
        2    load_field 0           (name)
-       3    call 417 ntypeargs=1   (baml.json.to_json)
+       3    call 408 ntypeargs=1   (baml.json.to_json)
        4    load_type 1            
        5    load_var 1             (self)
        6    load_field 1           (items)
-       7    call 417 ntypeargs=1   (baml.json.to_json)
+       7    call 408 ntypeargs=1   (baml.json.to_json)
        8    load_type 2            
        9    load_var 1             (self)
        10   load_field 2           (loadingTimeMs)
-       11   call 417 ntypeargs=1   (baml.json.to_json)
+       11   call 408 ntypeargs=1   (baml.json.to_json)
        12   load_const 3           ("name")
        13   load_const 4           ("items")
        14   load_const 5           ("loadingTimeMs")
@@ -195,13 +298,13 @@ function testing.SerializedTestSet.to_json(self: testing.SerializedTestSet) -> b
        18   return                 
 }
 
-function testing.TestCollector.find_testset(self: testing.TestCollector, name: string) -> testing.TestSetRegistration {
-  61   0     load_var 1               (self)
-       1     load_field 2             (testsets)
+function testing.TestCollector.find_test(self: testing.TestCollector, name: string) -> testing.TestRegistration {
+  70   0     load_var 1               (self)
+       1     load_field 1             (tests)
        2     store_var 4              (_3)
        3     load_type 0              
        4     load_var 4               (_3)
-       5     call 638 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
+       5     call 629 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
        6     store_var 5              (_4)
        7     load_var 5               (_4)
        8     is_type 1                
@@ -245,16 +348,16 @@ function testing.TestCollector.find_testset(self: testing.TestCollector, name: s
        46    load_type 0              
        47    load_type 11             
        48    load_var 5               (_4)
-       49    call 643 ntypeargs=2     (baml.iter.Peekable.Iterator.next)
+       49    call 634 ntypeargs=2     (baml.iter.Peekable.Iterator.next)
        50    store_var 6              (_6)
        51    jump +50                 (to 101)
        52    load_var 5               (_4)
-       53    make_bound_method 674    
+       53    make_bound_method 665    
        54    call_indirect            
        55    store_var 6              (_6)
        56    jump +45                 (to 101)
        57    load_var 5               (_4)
-       58    make_bound_method 687    
+       58    make_bound_method 678    
        59    call_indirect            
        60    store_var 6              (_6)
        61    jump +40                 (to 101)
@@ -262,39 +365,165 @@ function testing.TestCollector.find_testset(self: testing.TestCollector, name: s
        63    load_type 11             
        64    load_type 11             
        65    load_var 5               (_4)
-       66    call 610 ntypeargs=3     (baml.iter.Filter.Iterator.next)
+       66    call 601 ntypeargs=3     (baml.iter.Filter.Iterator.next)
        67    store_var 6              (_6)
        68    jump +33                 (to 101)
        69    load_var 5               (_4)
-       70    make_bound_method 623    
+       70    make_bound_method 614    
        71    call_indirect            
        72    store_var 6              (_6)
        73    jump +28                 (to 101)
        74    load_type 0              
        75    load_var 5               (_4)
-       76    call 637 ntypeargs=1     (baml.iter.Repeat.Iterator.next)
+       76    call 628 ntypeargs=1     (baml.iter.Repeat.Iterator.next)
        77    store_var 6              (_6)
        78    jump +23                 (to 101)
        79    load_type 0              
        80    load_type 11             
        81    load_type 11             
        82    load_var 5               (_4)
-       83    call 613 ntypeargs=3     (baml.iter.Chain.Iterator.next)
+       83    call 604 ntypeargs=3     (baml.iter.Chain.Iterator.next)
        84    store_var 6              (_6)
        85    jump +16                 (to 101)
        86    load_type 0              
        87    load_type 11             
        88    load_var 5               (_4)
-       89    call 627 ntypeargs=2     (baml.iter.StepBy.Iterator.next)
+       89    call 618 ntypeargs=2     (baml.iter.StepBy.Iterator.next)
        90    store_var 6              (_6)
        91    jump +10                 (to 101)
        92    load_type 0              
        93    load_var 5               (_4)
-       94    call 669 ntypeargs=1     (baml.iter.ArrayIterator.Iterator.next)
+       94    call 660 ntypeargs=1     (baml.iter.ArrayIterator.Iterator.next)
        95    store_var 6              (_6)
        96    jump +5                  (to 101)
        97    load_var 5               (_4)
-       98    make_bound_method 658    
+       98    make_bound_method 649    
+       99    call_indirect            
+       100   store_var 6              (_6)
+       101   load_var 6               (_6)
+       102   is_type 12               
+       103   pop_jump_if_false +2     (to 105)
+       104   jump +11                 (to 115)
+       105   load_var 6               (_6)
+       106   store_var_load_var 7     (t)
+
+  71   107   load_field 0             (name)
+       108   load_var 2               (name)
+       109   cmp_op ==                
+       110   pop_jump_if_false -103   (to 7)
+
+  72   111   load_var 7               (t)
+       112   store_var 3              (_0)
+       113   load_var 3               (_0)
+       114   return                   
+
+  75   115   load_const 13            ("Test not found: ")
+       116   load_var 2               (name)
+       117   bin_op +                 
+       118   throw                    
+       119   unreachable              
+}
+
+function testing.TestCollector.find_testset(self: testing.TestCollector, name: string) -> testing.TestSetRegistration {
+  61   0     load_var 1               (self)
+       1     load_field 2             (testsets)
+       2     store_var 4              (_3)
+       3     load_type 0              
+       4     load_var 4               (_3)
+       5     call 629 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
+       6     store_var 5              (_4)
+       7     load_var 5               (_4)
+       8     is_type 1                
+       9     pop_jump_if_false +2     (to 11)
+       10    jump +87                 (to 97)
+       11    load_var 5               (_4)
+       12    is_type 2                
+       13    pop_jump_if_false +2     (to 15)
+       14    jump +78                 (to 92)
+       15    load_var 5               (_4)
+       16    is_type 3                
+       17    pop_jump_if_false +2     (to 19)
+       18    jump +68                 (to 86)
+       19    load_var 5               (_4)
+       20    is_type 4                
+       21    pop_jump_if_false +2     (to 23)
+       22    jump +57                 (to 79)
+       23    load_var 5               (_4)
+       24    is_type 5                
+       25    pop_jump_if_false +2     (to 27)
+       26    jump +48                 (to 74)
+       27    load_var 5               (_4)
+       28    is_type 6                
+       29    pop_jump_if_false +2     (to 31)
+       30    jump +39                 (to 69)
+       31    load_var 5               (_4)
+       32    is_type 7                
+       33    pop_jump_if_false +2     (to 35)
+       34    jump +28                 (to 62)
+       35    load_var 5               (_4)
+       36    is_type 8                
+       37    pop_jump_if_false +2     (to 39)
+       38    jump +19                 (to 57)
+       39    load_var 5               (_4)
+       40    is_type 9                
+       41    pop_jump_if_false +2     (to 43)
+       42    jump +10                 (to 52)
+       43    load_var 5               (_4)
+       44    is_type 10               
+       45    pop_jump_if_false +74    (to 119)
+       46    load_type 0              
+       47    load_type 11             
+       48    load_var 5               (_4)
+       49    call 634 ntypeargs=2     (baml.iter.Peekable.Iterator.next)
+       50    store_var 6              (_6)
+       51    jump +50                 (to 101)
+       52    load_var 5               (_4)
+       53    make_bound_method 665    
+       54    call_indirect            
+       55    store_var 6              (_6)
+       56    jump +45                 (to 101)
+       57    load_var 5               (_4)
+       58    make_bound_method 678    
+       59    call_indirect            
+       60    store_var 6              (_6)
+       61    jump +40                 (to 101)
+       62    load_type 0              
+       63    load_type 11             
+       64    load_type 11             
+       65    load_var 5               (_4)
+       66    call 601 ntypeargs=3     (baml.iter.Filter.Iterator.next)
+       67    store_var 6              (_6)
+       68    jump +33                 (to 101)
+       69    load_var 5               (_4)
+       70    make_bound_method 614    
+       71    call_indirect            
+       72    store_var 6              (_6)
+       73    jump +28                 (to 101)
+       74    load_type 0              
+       75    load_var 5               (_4)
+       76    call 628 ntypeargs=1     (baml.iter.Repeat.Iterator.next)
+       77    store_var 6              (_6)
+       78    jump +23                 (to 101)
+       79    load_type 0              
+       80    load_type 11             
+       81    load_type 11             
+       82    load_var 5               (_4)
+       83    call 604 ntypeargs=3     (baml.iter.Chain.Iterator.next)
+       84    store_var 6              (_6)
+       85    jump +16                 (to 101)
+       86    load_type 0              
+       87    load_type 11             
+       88    load_var 5               (_4)
+       89    call 618 ntypeargs=2     (baml.iter.StepBy.Iterator.next)
+       90    store_var 6              (_6)
+       91    jump +10                 (to 101)
+       92    load_type 0              
+       93    load_var 5               (_4)
+       94    call 660 ntypeargs=1     (baml.iter.ArrayIterator.Iterator.next)
+       95    store_var 6              (_6)
+       96    jump +5                  (to 101)
+       97    load_var 5               (_4)
+       98    make_bound_method 649    
        99    call_indirect            
        100   store_var 6              (_6)
        101   load_var 6               (_6)
@@ -324,25 +553,25 @@ function testing.TestCollector.find_testset(self: testing.TestCollector, name: s
 function testing.TestCollector.from_json(j: baml.json.json) -> testing.TestCollector {
   29   0    load_var 1             (j)
        1    load_const 0           ("prefix")
-       2    call 423 ntypeargs=0   (baml.json.field)
+       2    call 414 ntypeargs=0   (baml.json.field)
        3    store_var 3            (_3)
        4    load_type 1            
        5    load_var 3             (_3)
-       6    call 415 ntypeargs=1   (baml.json.from_json)
+       6    call 406 ntypeargs=1   (baml.json.from_json)
        7    load_var 1             (j)
        8    load_const 2           ("tests")
-       9    call 423 ntypeargs=0   (baml.json.field)
+       9    call 414 ntypeargs=0   (baml.json.field)
        10   store_var 4            (_6)
        11   load_type 3            
        12   load_var 4             (_6)
-       13   call 415 ntypeargs=1   (baml.json.from_json)
+       13   call 406 ntypeargs=1   (baml.json.from_json)
        14   load_var 1             (j)
        15   load_const 4           ("testsets")
-       16   call 423 ntypeargs=0   (baml.json.field)
+       16   call 414 ntypeargs=0   (baml.json.field)
        17   store_var 5            (_9)
        18   load_type 5            
        19   load_var 5             (_9)
-       20   call 415 ntypeargs=1   (baml.json.from_json)
+       20   call 406 ntypeargs=1   (baml.json.from_json)
        21   init_instance 0        (testing.TestCollector .prefix, .tests, .testsets)
        22   store_var 2            (_0)
        23   load_var 2             (_0)
@@ -390,7 +619,7 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
        24    store_var 9              (_13)
        25    load_type 4              
        26    load_var 9               (_13)
-       27    call 638 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
+       27    call 629 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
        28    store_var 10             (_14)
        29    load_var 10              (_14)
        30    is_type 5                
@@ -434,16 +663,16 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
        68    load_type 4              
        69    load_type 15             
        70    load_var 10              (_14)
-       71    call 643 ntypeargs=2     (baml.iter.Peekable.Iterator.next)
+       71    call 634 ntypeargs=2     (baml.iter.Peekable.Iterator.next)
        72    store_var 11             (_16)
        73    jump +50                 (to 123)
        74    load_var 10              (_14)
-       75    make_bound_method 674    
+       75    make_bound_method 665    
        76    call_indirect            
        77    store_var 11             (_16)
        78    jump +45                 (to 123)
        79    load_var 10              (_14)
-       80    make_bound_method 687    
+       80    make_bound_method 678    
        81    call_indirect            
        82    store_var 11             (_16)
        83    jump +40                 (to 123)
@@ -451,39 +680,39 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
        85    load_type 15             
        86    load_type 15             
        87    load_var 10              (_14)
-       88    call 610 ntypeargs=3     (baml.iter.Filter.Iterator.next)
+       88    call 601 ntypeargs=3     (baml.iter.Filter.Iterator.next)
        89    store_var 11             (_16)
        90    jump +33                 (to 123)
        91    load_var 10              (_14)
-       92    make_bound_method 623    
+       92    make_bound_method 614    
        93    call_indirect            
        94    store_var 11             (_16)
        95    jump +28                 (to 123)
        96    load_type 4              
        97    load_var 10              (_14)
-       98    call 637 ntypeargs=1     (baml.iter.Repeat.Iterator.next)
+       98    call 628 ntypeargs=1     (baml.iter.Repeat.Iterator.next)
        99    store_var 11             (_16)
        100   jump +23                 (to 123)
        101   load_type 4              
        102   load_type 15             
        103   load_type 15             
        104   load_var 10              (_14)
-       105   call 613 ntypeargs=3     (baml.iter.Chain.Iterator.next)
+       105   call 604 ntypeargs=3     (baml.iter.Chain.Iterator.next)
        106   store_var 11             (_16)
        107   jump +16                 (to 123)
        108   load_type 4              
        109   load_type 15             
        110   load_var 10              (_14)
-       111   call 627 ntypeargs=2     (baml.iter.StepBy.Iterator.next)
+       111   call 618 ntypeargs=2     (baml.iter.StepBy.Iterator.next)
        112   store_var 11             (_16)
        113   jump +10                 (to 123)
        114   load_type 4              
        115   load_var 10              (_14)
-       116   call 669 ntypeargs=1     (baml.iter.ArrayIterator.Iterator.next)
+       116   call 660 ntypeargs=1     (baml.iter.ArrayIterator.Iterator.next)
        117   store_var 11             (_16)
        118   jump +5                  (to 123)
        119   load_var 10              (_14)
-       120   make_bound_method 658    
+       120   make_bound_method 649    
        121   call_indirect            
        122   store_var 11             (_16)
        123   load_var 11              (_16)
@@ -526,7 +755,7 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
        158   load_var 7               (count)
        159   load_const 17            (1)
        160   add_int                  
-       161   call 530 ntypeargs=1     (baml.unstable.string)
+       161   call 521 ntypeargs=1     (baml.unstable.string)
        162   store_var 15             (_57)
        163   load_var2 14 15          
        164   bin_op +                 
@@ -548,7 +777,7 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
        178   unreachable              
 }
 
-function testing.TestCollector.register_test_set(self: testing.TestCollector, name: string, collector: (testing.TestCollector) -> void throws unknown, runner: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never) | null) -> void {
+function testing.TestCollector.register_test_set(self: testing.TestCollector, name: string, collector: (testing.TestCollector) -> void throws unknown, runner: ((testing.TestSetChild[]) -> testing.TestSetReport throws never) | null) -> void {
   50   0     load_var 1               (self)
        1     load_field 0             (prefix)
        2     load_const 0             ("")
@@ -579,7 +808,7 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
        24    store_var 9              (_13)
        25    load_type 4              
        26    load_var 9               (_13)
-       27    call 638 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
+       27    call 629 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
        28    store_var 10             (_14)
        29    load_var 10              (_14)
        30    is_type 5                
@@ -623,16 +852,16 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
        68    load_type 4              
        69    load_type 15             
        70    load_var 10              (_14)
-       71    call 643 ntypeargs=2     (baml.iter.Peekable.Iterator.next)
+       71    call 634 ntypeargs=2     (baml.iter.Peekable.Iterator.next)
        72    store_var 11             (_16)
        73    jump +50                 (to 123)
        74    load_var 10              (_14)
-       75    make_bound_method 674    
+       75    make_bound_method 665    
        76    call_indirect            
        77    store_var 11             (_16)
        78    jump +45                 (to 123)
        79    load_var 10              (_14)
-       80    make_bound_method 687    
+       80    make_bound_method 678    
        81    call_indirect            
        82    store_var 11             (_16)
        83    jump +40                 (to 123)
@@ -640,39 +869,39 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
        85    load_type 15             
        86    load_type 15             
        87    load_var 10              (_14)
-       88    call 610 ntypeargs=3     (baml.iter.Filter.Iterator.next)
+       88    call 601 ntypeargs=3     (baml.iter.Filter.Iterator.next)
        89    store_var 11             (_16)
        90    jump +33                 (to 123)
        91    load_var 10              (_14)
-       92    make_bound_method 623    
+       92    make_bound_method 614    
        93    call_indirect            
        94    store_var 11             (_16)
        95    jump +28                 (to 123)
        96    load_type 4              
        97    load_var 10              (_14)
-       98    call 637 ntypeargs=1     (baml.iter.Repeat.Iterator.next)
+       98    call 628 ntypeargs=1     (baml.iter.Repeat.Iterator.next)
        99    store_var 11             (_16)
        100   jump +23                 (to 123)
        101   load_type 4              
        102   load_type 15             
        103   load_type 15             
        104   load_var 10              (_14)
-       105   call 613 ntypeargs=3     (baml.iter.Chain.Iterator.next)
+       105   call 604 ntypeargs=3     (baml.iter.Chain.Iterator.next)
        106   store_var 11             (_16)
        107   jump +16                 (to 123)
        108   load_type 4              
        109   load_type 15             
        110   load_var 10              (_14)
-       111   call 627 ntypeargs=2     (baml.iter.StepBy.Iterator.next)
+       111   call 618 ntypeargs=2     (baml.iter.StepBy.Iterator.next)
        112   store_var 11             (_16)
        113   jump +10                 (to 123)
        114   load_type 4              
        115   load_var 10              (_14)
-       116   call 669 ntypeargs=1     (baml.iter.ArrayIterator.Iterator.next)
+       116   call 660 ntypeargs=1     (baml.iter.ArrayIterator.Iterator.next)
        117   store_var 11             (_16)
        118   jump +5                  (to 123)
        119   load_var 10              (_14)
-       120   make_bound_method 658    
+       120   make_bound_method 649    
        121   call_indirect            
        122   store_var 11             (_16)
        123   load_var 11              (_16)
@@ -715,7 +944,7 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
        158   load_var 7               (count)
        159   load_const 17            (1)
        160   add_int                  
-       161   call 530 ntypeargs=1     (baml.unstable.string)
+       161   call 521 ntypeargs=1     (baml.unstable.string)
        162   store_var 15             (_57)
        163   load_var2 14 15          
        164   bin_op +                 
@@ -741,15 +970,15 @@ function testing.TestCollector.to_json(self: testing.TestCollector) -> baml.json
   29   0    load_type 0            
        1    load_var 1             (self)
        2    load_field 0           (prefix)
-       3    call 417 ntypeargs=1   (baml.json.to_json)
+       3    call 408 ntypeargs=1   (baml.json.to_json)
        4    load_type 1            
        5    load_var 1             (self)
        6    load_field 1           (tests)
-       7    call 417 ntypeargs=1   (baml.json.to_json)
+       7    call 408 ntypeargs=1   (baml.json.to_json)
        8    load_type 2            
        9    load_var 1             (self)
        10   load_field 2           (testsets)
-       11   call 417 ntypeargs=1   (baml.json.to_json)
+       11   call 408 ntypeargs=1   (baml.json.to_json)
        12   load_const 3           ("prefix")
        13   load_const 4           ("tests")
        14   load_const 5           ("testsets")
@@ -762,25 +991,25 @@ function testing.TestCollector.to_json(self: testing.TestCollector) -> baml.json
 function testing.TestRegistration.from_json(j: baml.json.json) -> testing.TestRegistration {
   5   0    load_var 1             (j)
       1    load_const 0           ("name")
-      2    call 423 ntypeargs=0   (baml.json.field)
+      2    call 414 ntypeargs=0   (baml.json.field)
       3    store_var 3            (_3)
       4    load_type 1            
       5    load_var 3             (_3)
-      6    call 415 ntypeargs=1   (baml.json.from_json)
+      6    call 406 ntypeargs=1   (baml.json.from_json)
       7    load_var 1             (j)
       8    load_const 2           ("body")
-      9    call 423 ntypeargs=0   (baml.json.field)
+      9    call 414 ntypeargs=0   (baml.json.field)
       10   store_var 4            (_6)
       11   load_type 3            
       12   load_var 4             (_6)
-      13   call 415 ntypeargs=1   (baml.json.from_json)
+      13   call 406 ntypeargs=1   (baml.json.from_json)
       14   load_var 1             (j)
       15   load_const 4           ("runner")
-      16   call 423 ntypeargs=0   (baml.json.field)
+      16   call 414 ntypeargs=0   (baml.json.field)
       17   store_var 5            (_9)
       18   load_type 5            
       19   load_var 5             (_9)
-      20   call 415 ntypeargs=1   (baml.json.from_json)
+      20   call 406 ntypeargs=1   (baml.json.from_json)
       21   init_instance 0        (testing.TestRegistration .name, .body, .runner)
       22   store_var 2            (_0)
       23   load_var 2             (_0)
@@ -790,349 +1019,20 @@ function testing.TestRegistration.from_json(j: baml.json.json) -> testing.TestRe
 function testing.TestRegistration.to_json(self: testing.TestRegistration) -> baml.json.json {
   13   0   load_type 0            
        1   load_var 1             (self)
-       2   call 425 ntypeargs=1   (baml.json.to_string)
-       3   call 420 ntypeargs=0   (baml.json.parse)
+       2   call 416 ntypeargs=1   (baml.json.to_string)
+       3   call 411 ntypeargs=0   (baml.json.parse)
        4   return                 
 }
 
 function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: string) -> (testing.SerializedTest | testing.SerializedTestSet)[] {
-  157   0     load_var 1               (self)
+  185   0     load_var 1               (self)
         1     load_field 0             (collector)
         2     load_field 2             (testsets)
         3     store_var 3              (_3)
 
-  156   4     load_type 0              
+  184   4     load_type 0              
         5     load_var 3               (_3)
-        6     call 638 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
-        7     store_var 4              (_4)
-        8     load_var 4               (_4)
-        9     is_type 1                
-        10    pop_jump_if_false +2     (to 12)
-        11    jump +87                 (to 98)
-        12    load_var 4               (_4)
-        13    is_type 2                
-        14    pop_jump_if_false +2     (to 16)
-        15    jump +78                 (to 93)
-        16    load_var 4               (_4)
-        17    is_type 3                
-        18    pop_jump_if_false +2     (to 20)
-        19    jump +68                 (to 87)
-        20    load_var 4               (_4)
-        21    is_type 4                
-        22    pop_jump_if_false +2     (to 24)
-        23    jump +57                 (to 80)
-        24    load_var 4               (_4)
-        25    is_type 5                
-        26    pop_jump_if_false +2     (to 28)
-        27    jump +48                 (to 75)
-        28    load_var 4               (_4)
-        29    is_type 6                
-        30    pop_jump_if_false +2     (to 32)
-        31    jump +39                 (to 70)
-        32    load_var 4               (_4)
-        33    is_type 7                
-        34    pop_jump_if_false +2     (to 36)
-        35    jump +28                 (to 63)
-        36    load_var 4               (_4)
-        37    is_type 8                
-        38    pop_jump_if_false +2     (to 40)
-        39    jump +19                 (to 58)
-        40    load_var 4               (_4)
-        41    is_type 9                
-        42    pop_jump_if_false +2     (to 44)
-        43    jump +10                 (to 53)
-        44    load_var 4               (_4)
-        45    is_type 10               
-        46    pop_jump_if_false +223   (to 269)
-        47    load_type 0              
-        48    load_type 11             
-        49    load_var 4               (_4)
-        50    call 643 ntypeargs=2     (baml.iter.Peekable.Iterator.next)
-        51    store_var 5              (_6)
-        52    jump +50                 (to 102)
-        53    load_var 4               (_4)
-        54    make_bound_method 674    
-        55    call_indirect            
-        56    store_var 5              (_6)
-        57    jump +45                 (to 102)
-        58    load_var 4               (_4)
-        59    make_bound_method 687    
-        60    call_indirect            
-        61    store_var 5              (_6)
-        62    jump +40                 (to 102)
-        63    load_type 0              
-        64    load_type 11             
-        65    load_type 11             
-        66    load_var 4               (_4)
-        67    call 610 ntypeargs=3     (baml.iter.Filter.Iterator.next)
-        68    store_var 5              (_6)
-        69    jump +33                 (to 102)
-        70    load_var 4               (_4)
-        71    make_bound_method 623    
-        72    call_indirect            
-        73    store_var 5              (_6)
-        74    jump +28                 (to 102)
-        75    load_type 0              
-        76    load_var 4               (_4)
-        77    call 637 ntypeargs=1     (baml.iter.Repeat.Iterator.next)
-        78    store_var 5              (_6)
-        79    jump +23                 (to 102)
-        80    load_type 0              
-        81    load_type 11             
-        82    load_type 11             
-        83    load_var 4               (_4)
-        84    call 613 ntypeargs=3     (baml.iter.Chain.Iterator.next)
-        85    store_var 5              (_6)
-        86    jump +16                 (to 102)
-        87    load_type 0              
-        88    load_type 11             
-        89    load_var 4               (_4)
-        90    call 627 ntypeargs=2     (baml.iter.StepBy.Iterator.next)
-        91    store_var 5              (_6)
-        92    jump +10                 (to 102)
-        93    load_type 0              
-        94    load_var 4               (_4)
-        95    call 669 ntypeargs=1     (baml.iter.ArrayIterator.Iterator.next)
-        96    store_var 5              (_6)
-        97    jump +5                  (to 102)
-        98    load_var 4               (_4)
-        99    make_bound_method 658    
-        100   call_indirect            
-        101   store_var 5              (_6)
-        102   load_var 5               (_6)
-        103   is_type 12               
-        104   pop_jump_if_false +2     (to 106)
-        105   jump +37                 (to 142)
-        106   load_var 5               (_6)
-        107   store_var_load_var 6     (ts)
-
-  158   108   load_field 0             (name)
-        109   load_var 2               (name)
-        110   cmp_op ==                
-        111   pop_jump_if_false -103   (to 8)
-
-  159   112   call 311 ntypeargs=0     (baml.sys.now_ms)
-        113   store_var 7              (start)
-
-  160   114   load_var 2               (name)
-        115   alloc_array 0            
-        116   alloc_array 0            
-        117   init_instance 0          (testing.TestCollector .prefix, .tests, .testsets)
-        118   store_var_load_var 8     (sub_collector)
-
-  161   119   load_var 6               (ts)
-        120   load_field 1             (collector)
-        121   call_indirect            
-        122   pop 1                    
-
-  162   123   call 311 ntypeargs=0     (baml.sys.now_ms)
-        124   load_var 7               (start)
-        125   sub_int                  
-        126   store_var 9              (elapsed)
-
-  164   127   load_var 8               (sub_collector)
-
-  165   128   alloc_map 0              
-
-  166   129   load_var 9               (elapsed)
-        130   init_instance 1          (testing.TestRegistry .collector, .expansions, .loading_time_ms)
-        131   store_var 10             (sub_registry)
-
-  168   132   load_type 13             
-        133   load_type 14             
-        134   load_var 1               (self)
-        135   load_field 1             (expansions)
-        136   load_var2 2 10           
-        137   call 19 ntypeargs=2      (baml.Map.set)
-        138   pop 1                    
-
-  169   139   load_var 1               (self)
-        140   call 852 ntypeargs=0     (testing.TestRegistry.serialize)
-        141   jump +123                (to 264)
-
-  173   142   load_type 13             
-        143   load_type 14             
-        144   load_var 1               (self)
-        145   load_field 1             (expansions)
-        146   call 18 ntypeargs=2      (baml.Map.keys)
-        147   store_var 11             (_57)
-
-  172   148   load_type 13             
-        149   load_var 11              (_57)
-        150   call 638 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
-        151   store_var 12             (_61)
-        152   load_var 12              (_61)
-        153   is_type 15               
-        154   pop_jump_if_false +2     (to 156)
-        155   jump +87                 (to 242)
-        156   load_var 12              (_61)
-        157   is_type 16               
-        158   pop_jump_if_false +2     (to 160)
-        159   jump +78                 (to 237)
-        160   load_var 12              (_61)
-        161   is_type 17               
-        162   pop_jump_if_false +2     (to 164)
-        163   jump +68                 (to 231)
-        164   load_var 12              (_61)
-        165   is_type 18               
-        166   pop_jump_if_false +2     (to 168)
-        167   jump +57                 (to 224)
-        168   load_var 12              (_61)
-        169   is_type 19               
-        170   pop_jump_if_false +2     (to 172)
-        171   jump +48                 (to 219)
-        172   load_var 12              (_61)
-        173   is_type 20               
-        174   pop_jump_if_false +2     (to 176)
-        175   jump +39                 (to 214)
-        176   load_var 12              (_61)
-        177   is_type 21               
-        178   pop_jump_if_false +2     (to 180)
-        179   jump +28                 (to 207)
-        180   load_var 12              (_61)
-        181   is_type 22               
-        182   pop_jump_if_false +2     (to 184)
-        183   jump +19                 (to 202)
-        184   load_var 12              (_61)
-        185   is_type 23               
-        186   pop_jump_if_false +2     (to 188)
-        187   jump +10                 (to 197)
-        188   load_var 12              (_61)
-        189   is_type 24               
-        190   pop_jump_if_false +79    (to 269)
-        191   load_type 13             
-        192   load_type 11             
-        193   load_var 12              (_61)
-        194   call 643 ntypeargs=2     (baml.iter.Peekable.Iterator.next)
-        195   store_var 13             (_63)
-        196   jump +50                 (to 246)
-        197   load_var 12              (_61)
-        198   make_bound_method 674    
-        199   call_indirect            
-        200   store_var 13             (_63)
-        201   jump +45                 (to 246)
-        202   load_var 12              (_61)
-        203   make_bound_method 687    
-        204   call_indirect            
-        205   store_var 13             (_63)
-        206   jump +40                 (to 246)
-        207   load_type 13             
-        208   load_type 11             
-        209   load_type 11             
-        210   load_var 12              (_61)
-        211   call 610 ntypeargs=3     (baml.iter.Filter.Iterator.next)
-        212   store_var 13             (_63)
-        213   jump +33                 (to 246)
-        214   load_var 12              (_61)
-        215   make_bound_method 623    
-        216   call_indirect            
-        217   store_var 13             (_63)
-        218   jump +28                 (to 246)
-        219   load_type 13             
-        220   load_var 12              (_61)
-        221   call 637 ntypeargs=1     (baml.iter.Repeat.Iterator.next)
-        222   store_var 13             (_63)
-        223   jump +23                 (to 246)
-        224   load_type 13             
-        225   load_type 11             
-        226   load_type 11             
-        227   load_var 12              (_61)
-        228   call 613 ntypeargs=3     (baml.iter.Chain.Iterator.next)
-        229   store_var 13             (_63)
-        230   jump +16                 (to 246)
-        231   load_type 13             
-        232   load_type 11             
-        233   load_var 12              (_61)
-        234   call 627 ntypeargs=2     (baml.iter.StepBy.Iterator.next)
-        235   store_var 13             (_63)
-        236   jump +10                 (to 246)
-        237   load_type 13             
-        238   load_var 12              (_61)
-        239   call 669 ntypeargs=1     (baml.iter.ArrayIterator.Iterator.next)
-        240   store_var 13             (_63)
-        241   jump +5                  (to 246)
-        242   load_var 12              (_61)
-        243   make_bound_method 658    
-        244   call_indirect            
-        245   store_var 13             (_63)
-        246   load_var 13              (_63)
-        247   is_type 12               
-        248   pop_jump_if_false +2     (to 250)
-        249   jump +16                 (to 265)
-        250   load_var 13              (_63)
-        251   store_var 14             (k)
-
-  174   252   load_var 1               (self)
-        253   load_field 1             (expansions)
-        254   load_var 14              (k)
-        255   load_map_element         
-        256   store_var 15             (sub)
-
-  175   257   load_var2 2 14           
-        258   load_const 25            ("/")
-        259   bin_op +                 
-        260   call 156 ntypeargs=0     (baml.String.starts_with)
-        261   pop_jump_if_false -109   (to 152)
-
-  176   262   load_var2 15 2           
-        263   call 857 ntypeargs=0     (testing.TestRegistry.expand_set)
-        264   return                   
-
-  179   265   load_const 26            ("TestSet not found for expansion: ")
-        266   load_var 2               (name)
-        267   bin_op +                 
-        268   throw                    
-        269   unreachable              
-}
-
-function testing.TestRegistry.from_json(j: baml.json.json) -> testing.TestRegistry {
-  93   0    load_var 1             (j)
-       1    load_const 0           ("collector")
-       2    call 423 ntypeargs=0   (baml.json.field)
-       3    store_var 3            (_3)
-       4    load_type 1            
-       5    load_var 3             (_3)
-       6    call 415 ntypeargs=1   (baml.json.from_json)
-       7    load_var 1             (j)
-       8    load_const 2           ("expansions")
-       9    call 423 ntypeargs=0   (baml.json.field)
-       10   store_var 4            (_6)
-       11   load_type 3            
-       12   load_var 4             (_6)
-       13   call 415 ntypeargs=1   (baml.json.from_json)
-       14   load_var 1             (j)
-       15   load_const 4           ("loading_time_ms")
-       16   call 423 ntypeargs=0   (baml.json.field)
-       17   store_var 5            (_9)
-       18   load_type 5            
-       19   load_var 5             (_9)
-       20   call 415 ntypeargs=1   (baml.json.from_json)
-       21   init_instance 0        (testing.TestRegistry .collector, .expansions, .loading_time_ms)
-       22   store_var 2            (_0)
-       23   load_var 2             (_0)
-       24   return                 
-}
-
-function testing.TestRegistry.new(collector: testing.TestCollector) -> testing.TestRegistry {
-  99    0   load_var 1        (collector)
-
-  101   1   alloc_map 0       
-        2   load_const 0      (0)
-        3   init_instance 0   (testing.TestRegistry .collector, .expansions, .loading_time_ms)
-        4   store_var 2       (_0)
-        5   load_var 2        (_0)
-        6   return            
-}
-
-function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string) -> testing.TestReport {
-  137   0     load_var 1               (self)
-        1     load_field 0             (collector)
-        2     load_field 1             (tests)
-        3     store_var 3              (_3)
-
-  136   4     load_type 0              
-        5     load_var 3               (_3)
-        6     call 638 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
+        6     call 629 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
         7     store_var 4              (_4)
         8     load_var 4               (_4)
         9     is_type 1                
@@ -1176,16 +1076,16 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
         47    load_type 0              
         48    load_type 11             
         49    load_var 4               (_4)
-        50    call 643 ntypeargs=2     (baml.iter.Peekable.Iterator.next)
+        50    call 634 ntypeargs=2     (baml.iter.Peekable.Iterator.next)
         51    store_var 5              (_6)
         52    jump +50                 (to 102)
         53    load_var 4               (_4)
-        54    make_bound_method 674    
+        54    make_bound_method 665    
         55    call_indirect            
         56    store_var 5              (_6)
         57    jump +45                 (to 102)
         58    load_var 4               (_4)
-        59    make_bound_method 687    
+        59    make_bound_method 678    
         60    call_indirect            
         61    store_var 5              (_6)
         62    jump +40                 (to 102)
@@ -1193,39 +1093,39 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
         64    load_type 11             
         65    load_type 11             
         66    load_var 4               (_4)
-        67    call 610 ntypeargs=3     (baml.iter.Filter.Iterator.next)
+        67    call 601 ntypeargs=3     (baml.iter.Filter.Iterator.next)
         68    store_var 5              (_6)
         69    jump +33                 (to 102)
         70    load_var 4               (_4)
-        71    make_bound_method 623    
+        71    make_bound_method 614    
         72    call_indirect            
         73    store_var 5              (_6)
         74    jump +28                 (to 102)
         75    load_type 0              
         76    load_var 4               (_4)
-        77    call 637 ntypeargs=1     (baml.iter.Repeat.Iterator.next)
+        77    call 628 ntypeargs=1     (baml.iter.Repeat.Iterator.next)
         78    store_var 5              (_6)
         79    jump +23                 (to 102)
         80    load_type 0              
         81    load_type 11             
         82    load_type 11             
         83    load_var 4               (_4)
-        84    call 613 ntypeargs=3     (baml.iter.Chain.Iterator.next)
+        84    call 604 ntypeargs=3     (baml.iter.Chain.Iterator.next)
         85    store_var 5              (_6)
         86    jump +16                 (to 102)
         87    load_type 0              
         88    load_type 11             
         89    load_var 4               (_4)
-        90    call 627 ntypeargs=2     (baml.iter.StepBy.Iterator.next)
+        90    call 618 ntypeargs=2     (baml.iter.StepBy.Iterator.next)
         91    store_var 5              (_6)
         92    jump +10                 (to 102)
         93    load_type 0              
         94    load_var 4               (_4)
-        95    call 669 ntypeargs=1     (baml.iter.ArrayIterator.Iterator.next)
+        95    call 660 ntypeargs=1     (baml.iter.ArrayIterator.Iterator.next)
         96    store_var 5              (_6)
         97    jump +5                  (to 102)
         98    load_var 4               (_4)
-        99    make_bound_method 658    
+        99    make_bound_method 649    
         100   call_indirect            
         101   store_var 5              (_6)
         102   load_var 5               (_6)
@@ -1233,30 +1133,31 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
         104   pop_jump_if_false +2     (to 106)
         105   jump +13                 (to 118)
         106   load_var 5               (_6)
-        107   store_var_load_var 6     (t)
+        107   store_var_load_var 6     (ts)
 
-  138   108   load_field 0             (name)
+  186   108   load_field 0             (name)
         109   load_var 2               (name)
         110   cmp_op ==                
         111   pop_jump_if_false -103   (to 8)
 
-  139   112   load_var 6               (t)
-        113   load_field 1             (body)
-        114   load_var 6               (t)
-        115   load_field 2             (runner)
-        116   call 863 ntypeargs=0     (testing.run_test)
+  187   112   load_var2 1 6            
+        113   call 859 ntypeargs=0     (testing.TestRegistry.expand_testset_registry)
+        114   pop 1                    
+
+  188   115   load_var 1               (self)
+        116   call 848 ntypeargs=0     (testing.TestRegistry.serialize)
         117   jump +123                (to 240)
 
-  143   118   load_type 13             
+  192   118   load_type 13             
         119   load_type 14             
         120   load_var 1               (self)
         121   load_field 1             (expansions)
         122   call 18 ntypeargs=2      (baml.Map.keys)
         123   store_var 7              (_40)
 
-  142   124   load_type 13             
+  191   124   load_type 13             
         125   load_var 7               (_40)
-        126   call 638 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
+        126   call 629 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
         127   store_var 8              (_44)
         128   load_var 8               (_44)
         129   is_type 15               
@@ -1300,16 +1201,16 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
         167   load_type 13             
         168   load_type 11             
         169   load_var 8               (_44)
-        170   call 643 ntypeargs=2     (baml.iter.Peekable.Iterator.next)
+        170   call 634 ntypeargs=2     (baml.iter.Peekable.Iterator.next)
         171   store_var 9              (_46)
         172   jump +50                 (to 222)
         173   load_var 8               (_44)
-        174   make_bound_method 674    
+        174   make_bound_method 665    
         175   call_indirect            
         176   store_var 9              (_46)
         177   jump +45                 (to 222)
         178   load_var 8               (_44)
-        179   make_bound_method 687    
+        179   make_bound_method 678    
         180   call_indirect            
         181   store_var 9              (_46)
         182   jump +40                 (to 222)
@@ -1317,39 +1218,39 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
         184   load_type 11             
         185   load_type 11             
         186   load_var 8               (_44)
-        187   call 610 ntypeargs=3     (baml.iter.Filter.Iterator.next)
+        187   call 601 ntypeargs=3     (baml.iter.Filter.Iterator.next)
         188   store_var 9              (_46)
         189   jump +33                 (to 222)
         190   load_var 8               (_44)
-        191   make_bound_method 623    
+        191   make_bound_method 614    
         192   call_indirect            
         193   store_var 9              (_46)
         194   jump +28                 (to 222)
         195   load_type 13             
         196   load_var 8               (_44)
-        197   call 637 ntypeargs=1     (baml.iter.Repeat.Iterator.next)
+        197   call 628 ntypeargs=1     (baml.iter.Repeat.Iterator.next)
         198   store_var 9              (_46)
         199   jump +23                 (to 222)
         200   load_type 13             
         201   load_type 11             
         202   load_type 11             
         203   load_var 8               (_44)
-        204   call 613 ntypeargs=3     (baml.iter.Chain.Iterator.next)
+        204   call 604 ntypeargs=3     (baml.iter.Chain.Iterator.next)
         205   store_var 9              (_46)
         206   jump +16                 (to 222)
         207   load_type 13             
         208   load_type 11             
         209   load_var 8               (_44)
-        210   call 627 ntypeargs=2     (baml.iter.StepBy.Iterator.next)
+        210   call 618 ntypeargs=2     (baml.iter.StepBy.Iterator.next)
         211   store_var 9              (_46)
         212   jump +10                 (to 222)
         213   load_type 13             
         214   load_var 8               (_44)
-        215   call 669 ntypeargs=1     (baml.iter.ArrayIterator.Iterator.next)
+        215   call 660 ntypeargs=1     (baml.iter.ArrayIterator.Iterator.next)
         216   store_var 9              (_46)
         217   jump +5                  (to 222)
         218   load_var 8               (_44)
-        219   make_bound_method 658    
+        219   make_bound_method 649    
         220   call_indirect            
         221   store_var 9              (_46)
         222   load_var 9               (_46)
@@ -1359,41 +1260,665 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
         226   load_var 9               (_46)
         227   store_var 10             (k)
 
-  144   228   load_var 1               (self)
+  193   228   load_var 1               (self)
         229   load_field 1             (expansions)
         230   load_var 10              (k)
         231   load_map_element         
         232   store_var 11             (sub)
 
-  146   233   load_var2 2 10           
+  194   233   load_var2 2 10           
         234   load_const 25            ("/")
         235   bin_op +                 
         236   call 156 ntypeargs=0     (baml.String.starts_with)
+        237   pop_jump_if_false -109   (to 128)
 
-  145   237   pop_jump_if_false -109   (to 128)
-
-  147   238   load_var2 11 2           
-        239   call 856 ntypeargs=0     (testing.TestRegistry.run_test)
+  195   238   load_var2 11 2           
+        239   call 853 ntypeargs=0     (testing.TestRegistry.expand_set)
         240   return                   
 
-  150   241   load_const 26            ("Test not found: ")
+  198   241   load_const 26            ("TestSet not found for expansion: ")
         242   load_var 2               (name)
         243   bin_op +                 
         244   throw                    
         245   unreachable              
 }
 
+function testing.TestRegistry.expand_testset_registry(self: testing.TestRegistry, ts: testing.TestSetRegistration) -> testing.TestRegistry {
+  202   0    load_type 0            
+        1    load_type 1            
+        2    load_var 1             (self)
+        3    load_field 1           (expansions)
+        4    load_var 2             (ts)
+        5    load_field 0           (name)
+        6    call 49 ntypeargs=2    (baml.Map.get)
+        7    store_var 3            (_3)
+        8    load_var 3             (_3)
+        9    is_type 2              
+        10   pop_jump_if_false +2   (to 12)
+        11   jump +33               (to 44)
+
+  205   12   call 308 ntypeargs=0   (baml.sys.now_ms)
+        13   store_var 5            (start)
+
+  206   14   load_var 2             (ts)
+        15   load_field 0           (name)
+        16   alloc_array 0          
+        17   alloc_array 0          
+        18   init_instance 0        (testing.TestCollector .prefix, .tests, .testsets)
+        19   store_var_load_var 6   (sub_collector)
+
+  207   20   load_var 2             (ts)
+        21   load_field 1           (collector)
+        22   call_indirect          
+        23   pop 1                  
+
+  208   24   call 308 ntypeargs=0   (baml.sys.now_ms)
+        25   load_var 5             (start)
+        26   sub_int                
+        27   store_var 7            (elapsed)
+
+  210   28   load_var 6             (sub_collector)
+
+  211   29   alloc_map 0            
+
+  212   30   load_var 7             (elapsed)
+        31   init_instance 1        (testing.TestRegistry .collector, .expansions, .loading_time_ms)
+        32   store_var 8            (sub_registry)
+
+  214   33   load_type 0            
+        34   load_type 1            
+        35   load_var 1             (self)
+        36   load_field 1           (expansions)
+        37   load_var 2             (ts)
+        38   load_field 0           (name)
+        39   load_var 8             (sub_registry)
+        40   call 19 ntypeargs=2    (baml.Map.set)
+        41   pop 1                  
+
+  215   42   load_var 8             (sub_registry)
+
+  202   43   jump +4                (to 47)
+        44   load_var 3             (_3)
+        45   store_var 4            (existing)
+
+  203   46   load_var 4             (existing)
+        47   return                 
+}
+
+function testing.TestRegistry.from_json(j: baml.json.json) -> testing.TestRegistry {
+  102   0    load_var 1             (j)
+        1    load_const 0           ("collector")
+        2    call 414 ntypeargs=0   (baml.json.field)
+        3    store_var 3            (_3)
+        4    load_type 1            
+        5    load_var 3             (_3)
+        6    call 406 ntypeargs=1   (baml.json.from_json)
+        7    load_var 1             (j)
+        8    load_const 2           ("expansions")
+        9    call 414 ntypeargs=0   (baml.json.field)
+        10   store_var 4            (_6)
+        11   load_type 3            
+        12   load_var 4             (_6)
+        13   call 406 ntypeargs=1   (baml.json.from_json)
+        14   load_var 1             (j)
+        15   load_const 4           ("loading_time_ms")
+        16   call 414 ntypeargs=0   (baml.json.field)
+        17   store_var 5            (_9)
+        18   load_type 5            
+        19   load_var 5             (_9)
+        20   call 406 ntypeargs=1   (baml.json.from_json)
+        21   init_instance 0        (testing.TestRegistry .collector, .expansions, .loading_time_ms)
+        22   store_var 2            (_0)
+        23   load_var 2             (_0)
+        24   return                 
+}
+
+function testing.TestRegistry.new(collector: testing.TestCollector) -> testing.TestRegistry {
+  108   0   load_var 1        (collector)
+
+  110   1   alloc_map 0       
+        2   load_const 0      (0)
+        3   init_instance 0   (testing.TestRegistry .collector, .expansions, .loading_time_ms)
+        4   store_var 2       (_0)
+        5   load_var 2        (_0)
+        6   return            
+}
+
+function testing.TestRegistry.run_all(self: testing.TestRegistry) -> testing.TestSetReport {
+  178   0   load_var 1             (self)
+        1   call 861 ntypeargs=0   (testing.testset_children)
+        2   load_const 0           (null)
+        3   call 844 ntypeargs=0   (testing.run_testset)
+        4   return                 
+}
+
+function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string) -> testing.TestReport {
+  146   0     load_var 1               (self)
+        1     load_field 0             (collector)
+        2     load_field 1             (tests)
+        3     store_var 3              (_3)
+
+  145   4     load_type 0              
+        5     load_var 3               (_3)
+        6     call 629 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
+        7     store_var 4              (_4)
+        8     load_var 4               (_4)
+        9     is_type 1                
+        10    pop_jump_if_false +2     (to 12)
+        11    jump +87                 (to 98)
+        12    load_var 4               (_4)
+        13    is_type 2                
+        14    pop_jump_if_false +2     (to 16)
+        15    jump +78                 (to 93)
+        16    load_var 4               (_4)
+        17    is_type 3                
+        18    pop_jump_if_false +2     (to 20)
+        19    jump +68                 (to 87)
+        20    load_var 4               (_4)
+        21    is_type 4                
+        22    pop_jump_if_false +2     (to 24)
+        23    jump +57                 (to 80)
+        24    load_var 4               (_4)
+        25    is_type 5                
+        26    pop_jump_if_false +2     (to 28)
+        27    jump +48                 (to 75)
+        28    load_var 4               (_4)
+        29    is_type 6                
+        30    pop_jump_if_false +2     (to 32)
+        31    jump +39                 (to 70)
+        32    load_var 4               (_4)
+        33    is_type 7                
+        34    pop_jump_if_false +2     (to 36)
+        35    jump +28                 (to 63)
+        36    load_var 4               (_4)
+        37    is_type 8                
+        38    pop_jump_if_false +2     (to 40)
+        39    jump +19                 (to 58)
+        40    load_var 4               (_4)
+        41    is_type 9                
+        42    pop_jump_if_false +2     (to 44)
+        43    jump +10                 (to 53)
+        44    load_var 4               (_4)
+        45    is_type 10               
+        46    pop_jump_if_false +199   (to 245)
+        47    load_type 0              
+        48    load_type 11             
+        49    load_var 4               (_4)
+        50    call 634 ntypeargs=2     (baml.iter.Peekable.Iterator.next)
+        51    store_var 5              (_6)
+        52    jump +50                 (to 102)
+        53    load_var 4               (_4)
+        54    make_bound_method 665    
+        55    call_indirect            
+        56    store_var 5              (_6)
+        57    jump +45                 (to 102)
+        58    load_var 4               (_4)
+        59    make_bound_method 678    
+        60    call_indirect            
+        61    store_var 5              (_6)
+        62    jump +40                 (to 102)
+        63    load_type 0              
+        64    load_type 11             
+        65    load_type 11             
+        66    load_var 4               (_4)
+        67    call 601 ntypeargs=3     (baml.iter.Filter.Iterator.next)
+        68    store_var 5              (_6)
+        69    jump +33                 (to 102)
+        70    load_var 4               (_4)
+        71    make_bound_method 614    
+        72    call_indirect            
+        73    store_var 5              (_6)
+        74    jump +28                 (to 102)
+        75    load_type 0              
+        76    load_var 4               (_4)
+        77    call 628 ntypeargs=1     (baml.iter.Repeat.Iterator.next)
+        78    store_var 5              (_6)
+        79    jump +23                 (to 102)
+        80    load_type 0              
+        81    load_type 11             
+        82    load_type 11             
+        83    load_var 4               (_4)
+        84    call 604 ntypeargs=3     (baml.iter.Chain.Iterator.next)
+        85    store_var 5              (_6)
+        86    jump +16                 (to 102)
+        87    load_type 0              
+        88    load_type 11             
+        89    load_var 4               (_4)
+        90    call 618 ntypeargs=2     (baml.iter.StepBy.Iterator.next)
+        91    store_var 5              (_6)
+        92    jump +10                 (to 102)
+        93    load_type 0              
+        94    load_var 4               (_4)
+        95    call 660 ntypeargs=1     (baml.iter.ArrayIterator.Iterator.next)
+        96    store_var 5              (_6)
+        97    jump +5                  (to 102)
+        98    load_var 4               (_4)
+        99    make_bound_method 649    
+        100   call_indirect            
+        101   store_var 5              (_6)
+        102   load_var 5               (_6)
+        103   is_type 12               
+        104   pop_jump_if_false +2     (to 106)
+        105   jump +13                 (to 118)
+        106   load_var 5               (_6)
+        107   store_var_load_var 6     (t)
+
+  147   108   load_field 0             (name)
+        109   load_var 2               (name)
+        110   cmp_op ==                
+        111   pop_jump_if_false -103   (to 8)
+
+  148   112   load_var 6               (t)
+        113   load_field 1             (body)
+        114   load_var 6               (t)
+        115   load_field 2             (runner)
+        116   call 871 ntypeargs=0     (testing.run_test)
+        117   jump +123                (to 240)
+
+  152   118   load_type 13             
+        119   load_type 14             
+        120   load_var 1               (self)
+        121   load_field 1             (expansions)
+        122   call 18 ntypeargs=2      (baml.Map.keys)
+        123   store_var 7              (_40)
+
+  151   124   load_type 13             
+        125   load_var 7               (_40)
+        126   call 629 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
+        127   store_var 8              (_44)
+        128   load_var 8               (_44)
+        129   is_type 15               
+        130   pop_jump_if_false +2     (to 132)
+        131   jump +87                 (to 218)
+        132   load_var 8               (_44)
+        133   is_type 16               
+        134   pop_jump_if_false +2     (to 136)
+        135   jump +78                 (to 213)
+        136   load_var 8               (_44)
+        137   is_type 17               
+        138   pop_jump_if_false +2     (to 140)
+        139   jump +68                 (to 207)
+        140   load_var 8               (_44)
+        141   is_type 18               
+        142   pop_jump_if_false +2     (to 144)
+        143   jump +57                 (to 200)
+        144   load_var 8               (_44)
+        145   is_type 19               
+        146   pop_jump_if_false +2     (to 148)
+        147   jump +48                 (to 195)
+        148   load_var 8               (_44)
+        149   is_type 20               
+        150   pop_jump_if_false +2     (to 152)
+        151   jump +39                 (to 190)
+        152   load_var 8               (_44)
+        153   is_type 21               
+        154   pop_jump_if_false +2     (to 156)
+        155   jump +28                 (to 183)
+        156   load_var 8               (_44)
+        157   is_type 22               
+        158   pop_jump_if_false +2     (to 160)
+        159   jump +19                 (to 178)
+        160   load_var 8               (_44)
+        161   is_type 23               
+        162   pop_jump_if_false +2     (to 164)
+        163   jump +10                 (to 173)
+        164   load_var 8               (_44)
+        165   is_type 24               
+        166   pop_jump_if_false +79    (to 245)
+        167   load_type 13             
+        168   load_type 11             
+        169   load_var 8               (_44)
+        170   call 634 ntypeargs=2     (baml.iter.Peekable.Iterator.next)
+        171   store_var 9              (_46)
+        172   jump +50                 (to 222)
+        173   load_var 8               (_44)
+        174   make_bound_method 665    
+        175   call_indirect            
+        176   store_var 9              (_46)
+        177   jump +45                 (to 222)
+        178   load_var 8               (_44)
+        179   make_bound_method 678    
+        180   call_indirect            
+        181   store_var 9              (_46)
+        182   jump +40                 (to 222)
+        183   load_type 13             
+        184   load_type 11             
+        185   load_type 11             
+        186   load_var 8               (_44)
+        187   call 601 ntypeargs=3     (baml.iter.Filter.Iterator.next)
+        188   store_var 9              (_46)
+        189   jump +33                 (to 222)
+        190   load_var 8               (_44)
+        191   make_bound_method 614    
+        192   call_indirect            
+        193   store_var 9              (_46)
+        194   jump +28                 (to 222)
+        195   load_type 13             
+        196   load_var 8               (_44)
+        197   call 628 ntypeargs=1     (baml.iter.Repeat.Iterator.next)
+        198   store_var 9              (_46)
+        199   jump +23                 (to 222)
+        200   load_type 13             
+        201   load_type 11             
+        202   load_type 11             
+        203   load_var 8               (_44)
+        204   call 604 ntypeargs=3     (baml.iter.Chain.Iterator.next)
+        205   store_var 9              (_46)
+        206   jump +16                 (to 222)
+        207   load_type 13             
+        208   load_type 11             
+        209   load_var 8               (_44)
+        210   call 618 ntypeargs=2     (baml.iter.StepBy.Iterator.next)
+        211   store_var 9              (_46)
+        212   jump +10                 (to 222)
+        213   load_type 13             
+        214   load_var 8               (_44)
+        215   call 660 ntypeargs=1     (baml.iter.ArrayIterator.Iterator.next)
+        216   store_var 9              (_46)
+        217   jump +5                  (to 222)
+        218   load_var 8               (_44)
+        219   make_bound_method 649    
+        220   call_indirect            
+        221   store_var 9              (_46)
+        222   load_var 9               (_46)
+        223   is_type 12               
+        224   pop_jump_if_false +2     (to 226)
+        225   jump +16                 (to 241)
+        226   load_var 9               (_46)
+        227   store_var 10             (k)
+
+  153   228   load_var 1               (self)
+        229   load_field 1             (expansions)
+        230   load_var 10              (k)
+        231   load_map_element         
+        232   store_var 11             (sub)
+
+  155   233   load_var2 2 10           
+        234   load_const 25            ("/")
+        235   bin_op +                 
+        236   call 156 ntypeargs=0     (baml.String.starts_with)
+
+  154   237   pop_jump_if_false -109   (to 128)
+
+  156   238   load_var2 11 2           
+        239   call 852 ntypeargs=0     (testing.TestRegistry.run_test)
+        240   return                   
+
+  159   241   load_const 26            ("Test not found: ")
+        242   load_var 2               (name)
+        243   bin_op +                 
+        244   throw                    
+        245   unreachable              
+}
+
+function testing.TestRegistry.run_testset(self: testing.TestRegistry, name: string) -> testing.TestSetReport {
+  163   0     load_var 1               (self)
+        1     load_field 0             (collector)
+        2     load_field 2             (testsets)
+        3     store_var 3              (_3)
+        4     load_type 0              
+        5     load_var 3               (_3)
+        6     call 629 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
+        7     store_var 4              (_4)
+        8     load_var 4               (_4)
+        9     is_type 1                
+        10    pop_jump_if_false +2     (to 12)
+        11    jump +87                 (to 98)
+        12    load_var 4               (_4)
+        13    is_type 2                
+        14    pop_jump_if_false +2     (to 16)
+        15    jump +78                 (to 93)
+        16    load_var 4               (_4)
+        17    is_type 3                
+        18    pop_jump_if_false +2     (to 20)
+        19    jump +68                 (to 87)
+        20    load_var 4               (_4)
+        21    is_type 4                
+        22    pop_jump_if_false +2     (to 24)
+        23    jump +57                 (to 80)
+        24    load_var 4               (_4)
+        25    is_type 5                
+        26    pop_jump_if_false +2     (to 28)
+        27    jump +48                 (to 75)
+        28    load_var 4               (_4)
+        29    is_type 6                
+        30    pop_jump_if_false +2     (to 32)
+        31    jump +39                 (to 70)
+        32    load_var 4               (_4)
+        33    is_type 7                
+        34    pop_jump_if_false +2     (to 36)
+        35    jump +28                 (to 63)
+        36    load_var 4               (_4)
+        37    is_type 8                
+        38    pop_jump_if_false +2     (to 40)
+        39    jump +19                 (to 58)
+        40    load_var 4               (_4)
+        41    is_type 9                
+        42    pop_jump_if_false +2     (to 44)
+        43    jump +10                 (to 53)
+        44    load_var 4               (_4)
+        45    is_type 10               
+        46    pop_jump_if_false +200   (to 246)
+        47    load_type 0              
+        48    load_type 11             
+        49    load_var 4               (_4)
+        50    call 634 ntypeargs=2     (baml.iter.Peekable.Iterator.next)
+        51    store_var 5              (_6)
+        52    jump +50                 (to 102)
+        53    load_var 4               (_4)
+        54    make_bound_method 665    
+        55    call_indirect            
+        56    store_var 5              (_6)
+        57    jump +45                 (to 102)
+        58    load_var 4               (_4)
+        59    make_bound_method 678    
+        60    call_indirect            
+        61    store_var 5              (_6)
+        62    jump +40                 (to 102)
+        63    load_type 0              
+        64    load_type 11             
+        65    load_type 11             
+        66    load_var 4               (_4)
+        67    call 601 ntypeargs=3     (baml.iter.Filter.Iterator.next)
+        68    store_var 5              (_6)
+        69    jump +33                 (to 102)
+        70    load_var 4               (_4)
+        71    make_bound_method 614    
+        72    call_indirect            
+        73    store_var 5              (_6)
+        74    jump +28                 (to 102)
+        75    load_type 0              
+        76    load_var 4               (_4)
+        77    call 628 ntypeargs=1     (baml.iter.Repeat.Iterator.next)
+        78    store_var 5              (_6)
+        79    jump +23                 (to 102)
+        80    load_type 0              
+        81    load_type 11             
+        82    load_type 11             
+        83    load_var 4               (_4)
+        84    call 604 ntypeargs=3     (baml.iter.Chain.Iterator.next)
+        85    store_var 5              (_6)
+        86    jump +16                 (to 102)
+        87    load_type 0              
+        88    load_type 11             
+        89    load_var 4               (_4)
+        90    call 618 ntypeargs=2     (baml.iter.StepBy.Iterator.next)
+        91    store_var 5              (_6)
+        92    jump +10                 (to 102)
+        93    load_type 0              
+        94    load_var 4               (_4)
+        95    call 660 ntypeargs=1     (baml.iter.ArrayIterator.Iterator.next)
+        96    store_var 5              (_6)
+        97    jump +5                  (to 102)
+        98    load_var 4               (_4)
+        99    make_bound_method 649    
+        100   call_indirect            
+        101   store_var 5              (_6)
+        102   load_var 5               (_6)
+        103   is_type 12               
+        104   pop_jump_if_false +2     (to 106)
+        105   jump +14                 (to 119)
+        106   load_var 5               (_6)
+        107   store_var_load_var 6     (ts)
+
+  164   108   load_field 0             (name)
+        109   load_var 2               (name)
+        110   cmp_op ==                
+        111   pop_jump_if_false -103   (to 8)
+
+  165   112   load_var2 1 6            
+        113   call 859 ntypeargs=0     (testing.TestRegistry.expand_testset_registry)
+        114   call 861 ntypeargs=0     (testing.testset_children)
+        115   load_var 6               (ts)
+        116   load_field 2             (runner)
+        117   call 844 ntypeargs=0     (testing.run_testset)
+        118   jump +123                (to 241)
+
+  168   119   load_type 13             
+        120   load_type 14             
+        121   load_var 1               (self)
+        122   load_field 1             (expansions)
+        123   call 18 ntypeargs=2      (baml.Map.keys)
+        124   store_var 7              (_42)
+        125   load_type 13             
+        126   load_var 7               (_42)
+        127   call 629 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
+        128   store_var 8              (_46)
+        129   load_var 8               (_46)
+        130   is_type 15               
+        131   pop_jump_if_false +2     (to 133)
+        132   jump +87                 (to 219)
+        133   load_var 8               (_46)
+        134   is_type 16               
+        135   pop_jump_if_false +2     (to 137)
+        136   jump +78                 (to 214)
+        137   load_var 8               (_46)
+        138   is_type 17               
+        139   pop_jump_if_false +2     (to 141)
+        140   jump +68                 (to 208)
+        141   load_var 8               (_46)
+        142   is_type 18               
+        143   pop_jump_if_false +2     (to 145)
+        144   jump +57                 (to 201)
+        145   load_var 8               (_46)
+        146   is_type 19               
+        147   pop_jump_if_false +2     (to 149)
+        148   jump +48                 (to 196)
+        149   load_var 8               (_46)
+        150   is_type 20               
+        151   pop_jump_if_false +2     (to 153)
+        152   jump +39                 (to 191)
+        153   load_var 8               (_46)
+        154   is_type 21               
+        155   pop_jump_if_false +2     (to 157)
+        156   jump +28                 (to 184)
+        157   load_var 8               (_46)
+        158   is_type 22               
+        159   pop_jump_if_false +2     (to 161)
+        160   jump +19                 (to 179)
+        161   load_var 8               (_46)
+        162   is_type 23               
+        163   pop_jump_if_false +2     (to 165)
+        164   jump +10                 (to 174)
+        165   load_var 8               (_46)
+        166   is_type 24               
+        167   pop_jump_if_false +79    (to 246)
+        168   load_type 13             
+        169   load_type 11             
+        170   load_var 8               (_46)
+        171   call 634 ntypeargs=2     (baml.iter.Peekable.Iterator.next)
+        172   store_var 9              (_48)
+        173   jump +50                 (to 223)
+        174   load_var 8               (_46)
+        175   make_bound_method 665    
+        176   call_indirect            
+        177   store_var 9              (_48)
+        178   jump +45                 (to 223)
+        179   load_var 8               (_46)
+        180   make_bound_method 678    
+        181   call_indirect            
+        182   store_var 9              (_48)
+        183   jump +40                 (to 223)
+        184   load_type 13             
+        185   load_type 11             
+        186   load_type 11             
+        187   load_var 8               (_46)
+        188   call 601 ntypeargs=3     (baml.iter.Filter.Iterator.next)
+        189   store_var 9              (_48)
+        190   jump +33                 (to 223)
+        191   load_var 8               (_46)
+        192   make_bound_method 614    
+        193   call_indirect            
+        194   store_var 9              (_48)
+        195   jump +28                 (to 223)
+        196   load_type 13             
+        197   load_var 8               (_46)
+        198   call 628 ntypeargs=1     (baml.iter.Repeat.Iterator.next)
+        199   store_var 9              (_48)
+        200   jump +23                 (to 223)
+        201   load_type 13             
+        202   load_type 11             
+        203   load_type 11             
+        204   load_var 8               (_46)
+        205   call 604 ntypeargs=3     (baml.iter.Chain.Iterator.next)
+        206   store_var 9              (_48)
+        207   jump +16                 (to 223)
+        208   load_type 13             
+        209   load_type 11             
+        210   load_var 8               (_46)
+        211   call 618 ntypeargs=2     (baml.iter.StepBy.Iterator.next)
+        212   store_var 9              (_48)
+        213   jump +10                 (to 223)
+        214   load_type 13             
+        215   load_var 8               (_46)
+        216   call 660 ntypeargs=1     (baml.iter.ArrayIterator.Iterator.next)
+        217   store_var 9              (_48)
+        218   jump +5                  (to 223)
+        219   load_var 8               (_46)
+        220   make_bound_method 649    
+        221   call_indirect            
+        222   store_var 9              (_48)
+        223   load_var 9               (_48)
+        224   is_type 12               
+        225   pop_jump_if_false +2     (to 227)
+        226   jump +16                 (to 242)
+        227   load_var 9               (_48)
+        228   store_var 10             (k)
+
+  169   229   load_var 1               (self)
+        230   load_field 1             (expansions)
+        231   load_var 10              (k)
+        232   load_map_element         
+        233   store_var 11             (sub)
+
+  170   234   load_var2 2 10           
+        235   load_const 25            ("/")
+        236   bin_op +                 
+        237   call 156 ntypeargs=0     (baml.String.starts_with)
+        238   pop_jump_if_false -109   (to 129)
+
+  171   239   load_var2 11 2           
+        240   call 855 ntypeargs=0     (testing.TestRegistry.run_testset)
+        241   return                   
+
+  174   242   load_const 26            ("TestSet not found: ")
+        243   load_var 2               (name)
+        244   bin_op +                 
+        245   throw                    
+        246   unreachable              
+}
+
 function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.SerializedTest | testing.SerializedTestSet)[] {
-  112   0     alloc_array 0            
+  121   0     alloc_array 0            
         1     store_var 3              (items)
 
-  113   2     load_var 1               (self)
+  122   2     load_var 1               (self)
         3     load_field 0             (collector)
         4     load_field 1             (tests)
         5     store_var 4              (_3)
         6     load_type 0              
         7     load_var 4               (_3)
-        8     call 638 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
+        8     call 629 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
         9     store_var 5              (_4)
         10    load_var 5               (_4)
         11    is_type 1                
@@ -1437,16 +1962,16 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
         49    load_type 0              
         50    load_type 11             
         51    load_var 5               (_4)
-        52    call 643 ntypeargs=2     (baml.iter.Peekable.Iterator.next)
+        52    call 634 ntypeargs=2     (baml.iter.Peekable.Iterator.next)
         53    store_var 6              (_6)
         54    jump +50                 (to 104)
         55    load_var 5               (_4)
-        56    make_bound_method 674    
+        56    make_bound_method 665    
         57    call_indirect            
         58    store_var 6              (_6)
         59    jump +45                 (to 104)
         60    load_var 5               (_4)
-        61    make_bound_method 687    
+        61    make_bound_method 678    
         62    call_indirect            
         63    store_var 6              (_6)
         64    jump +40                 (to 104)
@@ -1454,39 +1979,39 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
         66    load_type 11             
         67    load_type 11             
         68    load_var 5               (_4)
-        69    call 610 ntypeargs=3     (baml.iter.Filter.Iterator.next)
+        69    call 601 ntypeargs=3     (baml.iter.Filter.Iterator.next)
         70    store_var 6              (_6)
         71    jump +33                 (to 104)
         72    load_var 5               (_4)
-        73    make_bound_method 623    
+        73    make_bound_method 614    
         74    call_indirect            
         75    store_var 6              (_6)
         76    jump +28                 (to 104)
         77    load_type 0              
         78    load_var 5               (_4)
-        79    call 637 ntypeargs=1     (baml.iter.Repeat.Iterator.next)
+        79    call 628 ntypeargs=1     (baml.iter.Repeat.Iterator.next)
         80    store_var 6              (_6)
         81    jump +23                 (to 104)
         82    load_type 0              
         83    load_type 11             
         84    load_type 11             
         85    load_var 5               (_4)
-        86    call 613 ntypeargs=3     (baml.iter.Chain.Iterator.next)
+        86    call 604 ntypeargs=3     (baml.iter.Chain.Iterator.next)
         87    store_var 6              (_6)
         88    jump +16                 (to 104)
         89    load_type 0              
         90    load_type 11             
         91    load_var 5               (_4)
-        92    call 627 ntypeargs=2     (baml.iter.StepBy.Iterator.next)
+        92    call 618 ntypeargs=2     (baml.iter.StepBy.Iterator.next)
         93    store_var 6              (_6)
         94    jump +10                 (to 104)
         95    load_type 0              
         96    load_var 5               (_4)
-        97    call 669 ntypeargs=1     (baml.iter.ArrayIterator.Iterator.next)
+        97    call 660 ntypeargs=1     (baml.iter.ArrayIterator.Iterator.next)
         98    store_var 6              (_6)
         99    jump +5                  (to 104)
         100   load_var 5               (_4)
-        101   make_bound_method 658    
+        101   make_bound_method 649    
         102   call_indirect            
         103   store_var 6              (_6)
         104   load_var 6               (_6)
@@ -1496,7 +2021,7 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
         108   load_var 6               (_6)
         109   store_var 7              (t)
 
-  114   110   load_var 3               (items)
+  123   110   load_var 3               (items)
         111   load_const 13            ("test")
         112   load_var 7               (t)
         113   load_field 0             (name)
@@ -1505,13 +2030,13 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
         116   pop 1                    
         117   jump -107                (to 10)
 
-  116   118   load_var 1               (self)
+  125   118   load_var 1               (self)
         119   load_field 0             (collector)
         120   load_field 2             (testsets)
         121   store_var 8              (_39)
         122   load_type 14             
         123   load_var 8               (_39)
-        124   call 638 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
+        124   call 629 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
         125   store_var 9              (_40)
         126   load_var 9               (_40)
         127   is_type 15               
@@ -1555,16 +2080,16 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
         165   load_type 14             
         166   load_type 11             
         167   load_var 9               (_40)
-        168   call 643 ntypeargs=2     (baml.iter.Peekable.Iterator.next)
+        168   call 634 ntypeargs=2     (baml.iter.Peekable.Iterator.next)
         169   store_var 10             (_42)
         170   jump +50                 (to 220)
         171   load_var 9               (_40)
-        172   make_bound_method 674    
+        172   make_bound_method 665    
         173   call_indirect            
         174   store_var 10             (_42)
         175   jump +45                 (to 220)
         176   load_var 9               (_40)
-        177   make_bound_method 687    
+        177   make_bound_method 678    
         178   call_indirect            
         179   store_var 10             (_42)
         180   jump +40                 (to 220)
@@ -1572,39 +2097,39 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
         182   load_type 11             
         183   load_type 11             
         184   load_var 9               (_40)
-        185   call 610 ntypeargs=3     (baml.iter.Filter.Iterator.next)
+        185   call 601 ntypeargs=3     (baml.iter.Filter.Iterator.next)
         186   store_var 10             (_42)
         187   jump +33                 (to 220)
         188   load_var 9               (_40)
-        189   make_bound_method 623    
+        189   make_bound_method 614    
         190   call_indirect            
         191   store_var 10             (_42)
         192   jump +28                 (to 220)
         193   load_type 14             
         194   load_var 9               (_40)
-        195   call 637 ntypeargs=1     (baml.iter.Repeat.Iterator.next)
+        195   call 628 ntypeargs=1     (baml.iter.Repeat.Iterator.next)
         196   store_var 10             (_42)
         197   jump +23                 (to 220)
         198   load_type 14             
         199   load_type 11             
         200   load_type 11             
         201   load_var 9               (_40)
-        202   call 613 ntypeargs=3     (baml.iter.Chain.Iterator.next)
+        202   call 604 ntypeargs=3     (baml.iter.Chain.Iterator.next)
         203   store_var 10             (_42)
         204   jump +16                 (to 220)
         205   load_type 14             
         206   load_type 11             
         207   load_var 9               (_40)
-        208   call 627 ntypeargs=2     (baml.iter.StepBy.Iterator.next)
+        208   call 618 ntypeargs=2     (baml.iter.StepBy.Iterator.next)
         209   store_var 10             (_42)
         210   jump +10                 (to 220)
         211   load_type 14             
         212   load_var 9               (_40)
-        213   call 669 ntypeargs=1     (baml.iter.ArrayIterator.Iterator.next)
+        213   call 660 ntypeargs=1     (baml.iter.ArrayIterator.Iterator.next)
         214   store_var 10             (_42)
         215   jump +5                  (to 220)
         216   load_var 9               (_40)
-        217   make_bound_method 658    
+        217   make_bound_method 649    
         218   call_indirect            
         219   store_var 10             (_42)
         220   load_var 10              (_42)
@@ -1614,7 +2139,7 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
         224   load_var 10              (_42)
         225   store_var 11             (ts)
 
-  117   226   load_type 25             
+  126   226   load_type 25             
         227   load_type 26             
         228   load_var 1               (self)
         229   load_field 1             (expansions)
@@ -1623,12 +2148,12 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
         232   call 49 ntypeargs=2      (baml.Map.get)
         233   store_var 12             (expanded)
 
-  118   234   load_var 12              (expanded)
+  127   234   load_var 12              (expanded)
         235   is_type 27               
         236   pop_jump_if_false +2     (to 238)
         237   jump +9                  (to 246)
 
-  127   238   load_var 3               (items)
+  136   238   load_var 3               (items)
         239   load_const 28            ("lazyTestSet")
         240   load_var 11              (ts)
         241   load_field 0             (name)
@@ -1637,27 +2162,27 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
         244   pop 1                    
         245   jump -119                (to 126)
 
-  118   246   load_var 12              (expanded)
+  127   246   load_var 12              (expanded)
         247   store_var 13             (sub)
 
-  121   248   load_var 11              (ts)
+  130   248   load_var 11              (ts)
         249   load_field 0             (name)
         250   store_var 14             (_81)
 
-  122   251   load_var 13              (sub)
-        252   call 852 ntypeargs=0     (testing.TestRegistry.serialize)
+  131   251   load_var 13              (sub)
+        252   call 848 ntypeargs=0     (testing.TestRegistry.serialize)
         253   store_var 15             (_82)
 
-  120   254   load_var2 3 14           
+  129   254   load_var2 3 14           
         255   load_var2 15 13          
 
-  123   256   load_field 2             (loading_time_ms)
+  132   256   load_field 2             (loading_time_ms)
         257   init_instance 2          (testing.SerializedTestSet .name, .items, .loadingTimeMs)
         258   call 16 ntypeargs=0      (baml.Array.push)
         259   pop 1                    
         260   jump -134                (to 126)
 
-  131   261   load_var 3               (items)
+  140   261   load_var 3               (items)
         262   store_var 2              (_0)
         263   load_var 2               (_0)
         264   return                   
@@ -1665,42 +2190,42 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
 }
 
 function testing.TestRegistry.to_json(self: testing.TestRegistry) -> baml.json.json {
-  93   0    load_type 0            
-       1    load_var 1             (self)
-       2    load_field 0           (collector)
-       3    call 417 ntypeargs=1   (baml.json.to_json)
-       4    load_type 1            
-       5    load_var 1             (self)
-       6    load_field 1           (expansions)
-       7    call 417 ntypeargs=1   (baml.json.to_json)
-       8    load_type 2            
-       9    load_var 1             (self)
-       10   load_field 2           (loading_time_ms)
-       11   call 417 ntypeargs=1   (baml.json.to_json)
-       12   load_const 3           ("collector")
-       13   load_const 4           ("expansions")
-       14   load_const 5           ("loading_time_ms")
-       15   alloc_map 3            
-       16   store_var 2            (_0)
-       17   load_var 2             (_0)
-       18   return                 
+  102   0    load_type 0            
+        1    load_var 1             (self)
+        2    load_field 0           (collector)
+        3    call 408 ntypeargs=1   (baml.json.to_json)
+        4    load_type 1            
+        5    load_var 1             (self)
+        6    load_field 1           (expansions)
+        7    call 408 ntypeargs=1   (baml.json.to_json)
+        8    load_type 2            
+        9    load_var 1             (self)
+        10   load_field 2           (loading_time_ms)
+        11   call 408 ntypeargs=1   (baml.json.to_json)
+        12   load_const 3           ("collector")
+        13   load_const 4           ("expansions")
+        14   load_const 5           ("loading_time_ms")
+        15   alloc_map 3            
+        16   store_var 2            (_0)
+        17   load_var 2             (_0)
+        18   return                 
 }
 
 function testing.TestReport.from_json(j: baml.json.json) -> testing.TestReport {
   18   0    load_var 1             (j)
        1    load_const 0           ("outcome")
-       2    call 423 ntypeargs=0   (baml.json.field)
+       2    call 414 ntypeargs=0   (baml.json.field)
        3    store_var 3            (_3)
        4    load_type 1            
        5    load_var 3             (_3)
-       6    call 415 ntypeargs=1   (baml.json.from_json)
+       6    call 406 ntypeargs=1   (baml.json.from_json)
        7    load_var 1             (j)
        8    load_const 2           ("runs")
-       9    call 423 ntypeargs=0   (baml.json.field)
+       9    call 414 ntypeargs=0   (baml.json.field)
        10   store_var 4            (_6)
        11   load_type 3            
        12   load_var 4             (_6)
-       13   call 415 ntypeargs=1   (baml.json.from_json)
+       13   call 406 ntypeargs=1   (baml.json.from_json)
        14   init_instance 0        (testing.TestReport .outcome, .runs)
        15   store_var 2            (_0)
        16   load_var 2             (_0)
@@ -1711,13 +2236,51 @@ function testing.TestReport.to_json(self: testing.TestReport) -> baml.json.json 
   18   0    load_type 0            
        1    load_var 1             (self)
        2    load_field 0           (outcome)
-       3    call 417 ntypeargs=1   (baml.json.to_json)
+       3    call 408 ntypeargs=1   (baml.json.to_json)
        4    load_type 1            
        5    load_var 1             (self)
        6    load_field 1           (runs)
-       7    call 417 ntypeargs=1   (baml.json.to_json)
+       7    call 408 ntypeargs=1   (baml.json.to_json)
        8    load_const 2           ("outcome")
        9    load_const 3           ("runs")
+       10   alloc_map 2            
+       11   store_var 2            (_0)
+       12   load_var 2             (_0)
+       13   return                 
+}
+
+function testing.TestSetChild.from_json(j: baml.json.json) -> testing.TestSetChild {
+  47   0    load_var 1             (j)
+       1    load_const 0           ("name")
+       2    call 414 ntypeargs=0   (baml.json.field)
+       3    store_var 3            (_3)
+       4    load_type 1            
+       5    load_var 3             (_3)
+       6    call 406 ntypeargs=1   (baml.json.from_json)
+       7    load_var 1             (j)
+       8    load_const 2           ("run")
+       9    call 414 ntypeargs=0   (baml.json.field)
+       10   store_var 4            (_6)
+       11   load_type 3            
+       12   load_var 4             (_6)
+       13   call 406 ntypeargs=1   (baml.json.from_json)
+       14   init_instance 0        (testing.TestSetChild .name, .run)
+       15   store_var 2            (_0)
+       16   load_var 2             (_0)
+       17   return                 
+}
+
+function testing.TestSetChild.to_json(self: testing.TestSetChild) -> baml.json.json {
+  47   0    load_type 0            
+       1    load_var 1             (self)
+       2    load_field 0           (name)
+       3    call 408 ntypeargs=1   (baml.json.to_json)
+       4    load_type 1            
+       5    load_var 1             (self)
+       6    load_field 1           (run)
+       7    call 408 ntypeargs=1   (baml.json.to_json)
+       8    load_const 2           ("name")
+       9    load_const 3           ("run")
        10   alloc_map 2            
        11   store_var 2            (_0)
        12   load_var 2             (_0)
@@ -1727,25 +2290,25 @@ function testing.TestReport.to_json(self: testing.TestReport) -> baml.json.json 
 function testing.TestSetRegistration.from_json(j: baml.json.json) -> testing.TestSetRegistration {
   17   0    load_var 1             (j)
        1    load_const 0           ("name")
-       2    call 423 ntypeargs=0   (baml.json.field)
+       2    call 414 ntypeargs=0   (baml.json.field)
        3    store_var 3            (_3)
        4    load_type 1            
        5    load_var 3             (_3)
-       6    call 415 ntypeargs=1   (baml.json.from_json)
+       6    call 406 ntypeargs=1   (baml.json.from_json)
        7    load_var 1             (j)
        8    load_const 2           ("collector")
-       9    call 423 ntypeargs=0   (baml.json.field)
+       9    call 414 ntypeargs=0   (baml.json.field)
        10   store_var 4            (_6)
        11   load_type 3            
        12   load_var 4             (_6)
-       13   call 415 ntypeargs=1   (baml.json.from_json)
+       13   call 406 ntypeargs=1   (baml.json.from_json)
        14   load_var 1             (j)
        15   load_const 4           ("runner")
-       16   call 423 ntypeargs=0   (baml.json.field)
+       16   call 414 ntypeargs=0   (baml.json.field)
        17   store_var 5            (_9)
        18   load_type 5            
        19   load_var 5             (_9)
-       20   call 415 ntypeargs=1   (baml.json.from_json)
+       20   call 406 ntypeargs=1   (baml.json.from_json)
        21   init_instance 0        (testing.TestSetRegistration .name, .collector, .runner)
        22   store_var 2            (_0)
        23   load_var 2             (_0)
@@ -1755,47 +2318,47 @@ function testing.TestSetRegistration.from_json(j: baml.json.json) -> testing.Tes
 function testing.TestSetRegistration.to_json(self: testing.TestSetRegistration) -> baml.json.json {
   25   0   load_type 0            
        1   load_var 1             (self)
-       2   call 425 ntypeargs=1   (baml.json.to_string)
-       3   call 420 ntypeargs=0   (baml.json.parse)
+       2   call 416 ntypeargs=1   (baml.json.to_string)
+       3   call 411 ntypeargs=0   (baml.json.parse)
        4   return                 
 }
 
 function testing.TestSetReport.from_json(j: baml.json.json) -> testing.TestSetReport {
   25   0    load_var 1             (j)
        1    load_const 0           ("outcome")
-       2    call 423 ntypeargs=0   (baml.json.field)
+       2    call 414 ntypeargs=0   (baml.json.field)
        3    store_var 3            (_3)
        4    load_type 1            
        5    load_var 3             (_3)
-       6    call 415 ntypeargs=1   (baml.json.from_json)
+       6    call 406 ntypeargs=1   (baml.json.from_json)
        7    load_var 1             (j)
        8    load_const 2           ("passed")
-       9    call 423 ntypeargs=0   (baml.json.field)
+       9    call 414 ntypeargs=0   (baml.json.field)
        10   store_var 4            (_6)
        11   load_type 3            
        12   load_var 4             (_6)
-       13   call 415 ntypeargs=1   (baml.json.from_json)
+       13   call 406 ntypeargs=1   (baml.json.from_json)
        14   load_var 1             (j)
        15   load_const 4           ("failed")
-       16   call 423 ntypeargs=0   (baml.json.field)
+       16   call 414 ntypeargs=0   (baml.json.field)
        17   store_var 5            (_9)
        18   load_type 3            
        19   load_var 5             (_9)
-       20   call 415 ntypeargs=1   (baml.json.from_json)
+       20   call 406 ntypeargs=1   (baml.json.from_json)
        21   load_var 1             (j)
        22   load_const 5           ("total")
-       23   call 423 ntypeargs=0   (baml.json.field)
+       23   call 414 ntypeargs=0   (baml.json.field)
        24   store_var 6            (_12)
        25   load_type 3            
        26   load_var 6             (_12)
-       27   call 415 ntypeargs=1   (baml.json.from_json)
+       27   call 406 ntypeargs=1   (baml.json.from_json)
        28   load_var 1             (j)
        29   load_const 6           ("results")
-       30   call 423 ntypeargs=0   (baml.json.field)
+       30   call 414 ntypeargs=0   (baml.json.field)
        31   store_var 7            (_15)
        32   load_type 7            
        33   load_var 7             (_15)
-       34   call 415 ntypeargs=1   (baml.json.from_json)
+       34   call 406 ntypeargs=1   (baml.json.from_json)
        35   init_instance 0        (testing.TestSetReport .outcome, .passed, .failed, .total, .results)
        36   store_var 2            (_0)
        37   load_var 2             (_0)
@@ -1806,23 +2369,23 @@ function testing.TestSetReport.to_json(self: testing.TestSetReport) -> baml.json
   25   0    load_type 0            
        1    load_var 1             (self)
        2    load_field 0           (outcome)
-       3    call 417 ntypeargs=1   (baml.json.to_json)
+       3    call 408 ntypeargs=1   (baml.json.to_json)
        4    load_type 1            
        5    load_var 1             (self)
        6    load_field 1           (passed)
-       7    call 417 ntypeargs=1   (baml.json.to_json)
+       7    call 408 ntypeargs=1   (baml.json.to_json)
        8    load_type 1            
        9    load_var 1             (self)
        10   load_field 2           (failed)
-       11   call 417 ntypeargs=1   (baml.json.to_json)
+       11   call 408 ntypeargs=1   (baml.json.to_json)
        12   load_type 1            
        13   load_var 1             (self)
        14   load_field 3           (total)
-       15   call 417 ntypeargs=1   (baml.json.to_json)
+       15   call 408 ntypeargs=1   (baml.json.to_json)
        16   load_type 2            
        17   load_var 1             (self)
        18   load_field 4           (results)
-       19   call 417 ntypeargs=1   (baml.json.to_json)
+       19   call 408 ntypeargs=1   (baml.json.to_json)
        20   load_const 3           ("outcome")
        21   load_const 4           ("passed")
        22   load_const 5           ("failed")
@@ -1834,16 +2397,523 @@ function testing.TestSetReport.to_json(self: testing.TestSetReport) -> baml.json
        28   return                 
 }
 
+function testing._int_to_float(value: int) -> float {
+  124   0   load_type 0            
+        1   load_var 1             (value)
+        2   call 521 ntypeargs=1   (baml.unstable.string)
+        3   call 127 ntypeargs=0   (baml.Float.parse)
+        4   jump +5                (to 9)
+        5   load_var 2             (e)
+        6   throw_if_panic         
+
+  125   7   load_const 1           ("failed to convert int to float")
+        8   call 312 ntypeargs=0   (baml.sys.panic)
+        9   return                 
+}
+
+function testing.aggregate_reports(results: (testing.TestReport | testing.TestSetReport)[]) -> testing.TestSetReport {
+  259   0     load_const 0             (0)
+        1     store_var 3              (passed)
+
+  260   2     load_const 0             (0)
+        3     store_var 4              (failed)
+
+  261   4     load_const 1             (false)
+        5     store_var 5              (has_error)
+
+  262   6     load_type 2              
+        7     load_var 1               (results)
+        8     call 629 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
+        9     store_var 6              (_5)
+        10    load_var 6               (_5)
+        11    is_type 3                
+        12    pop_jump_if_false +2     (to 14)
+        13    jump +87                 (to 100)
+        14    load_var 6               (_5)
+        15    is_type 4                
+        16    pop_jump_if_false +2     (to 18)
+        17    jump +78                 (to 95)
+        18    load_var 6               (_5)
+        19    is_type 5                
+        20    pop_jump_if_false +2     (to 22)
+        21    jump +68                 (to 89)
+        22    load_var 6               (_5)
+        23    is_type 6                
+        24    pop_jump_if_false +2     (to 26)
+        25    jump +57                 (to 82)
+        26    load_var 6               (_5)
+        27    is_type 7                
+        28    pop_jump_if_false +2     (to 30)
+        29    jump +48                 (to 77)
+        30    load_var 6               (_5)
+        31    is_type 8                
+        32    pop_jump_if_false +2     (to 34)
+        33    jump +39                 (to 72)
+        34    load_var 6               (_5)
+        35    is_type 9                
+        36    pop_jump_if_false +2     (to 38)
+        37    jump +28                 (to 65)
+        38    load_var 6               (_5)
+        39    is_type 10               
+        40    pop_jump_if_false +2     (to 42)
+        41    jump +19                 (to 60)
+        42    load_var 6               (_5)
+        43    is_type 11               
+        44    pop_jump_if_false +2     (to 46)
+        45    jump +10                 (to 55)
+        46    load_var 6               (_5)
+        47    is_type 12               
+        48    pop_jump_if_false +123   (to 171)
+        49    load_type 2              
+        50    load_type 13             
+        51    load_var 6               (_5)
+        52    call 634 ntypeargs=2     (baml.iter.Peekable.Iterator.next)
+        53    store_var 7              (_7)
+        54    jump +50                 (to 104)
+        55    load_var 6               (_5)
+        56    make_bound_method 665    
+        57    call_indirect            
+        58    store_var 7              (_7)
+        59    jump +45                 (to 104)
+        60    load_var 6               (_5)
+        61    make_bound_method 678    
+        62    call_indirect            
+        63    store_var 7              (_7)
+        64    jump +40                 (to 104)
+        65    load_type 2              
+        66    load_type 13             
+        67    load_type 13             
+        68    load_var 6               (_5)
+        69    call 601 ntypeargs=3     (baml.iter.Filter.Iterator.next)
+        70    store_var 7              (_7)
+        71    jump +33                 (to 104)
+        72    load_var 6               (_5)
+        73    make_bound_method 614    
+        74    call_indirect            
+        75    store_var 7              (_7)
+        76    jump +28                 (to 104)
+        77    load_type 2              
+        78    load_var 6               (_5)
+        79    call 628 ntypeargs=1     (baml.iter.Repeat.Iterator.next)
+        80    store_var 7              (_7)
+        81    jump +23                 (to 104)
+        82    load_type 2              
+        83    load_type 13             
+        84    load_type 13             
+        85    load_var 6               (_5)
+        86    call 604 ntypeargs=3     (baml.iter.Chain.Iterator.next)
+        87    store_var 7              (_7)
+        88    jump +16                 (to 104)
+        89    load_type 2              
+        90    load_type 13             
+        91    load_var 6               (_5)
+        92    call 618 ntypeargs=2     (baml.iter.StepBy.Iterator.next)
+        93    store_var 7              (_7)
+        94    jump +10                 (to 104)
+        95    load_type 2              
+        96    load_var 6               (_5)
+        97    call 660 ntypeargs=1     (baml.iter.ArrayIterator.Iterator.next)
+        98    store_var 7              (_7)
+        99    jump +5                  (to 104)
+        100   load_var 6               (_5)
+        101   make_bound_method 649    
+        102   call_indirect            
+        103   store_var 7              (_7)
+        104   load_var 7               (_7)
+        105   is_type 14               
+        106   pop_jump_if_false +2     (to 108)
+        107   jump +38                 (to 145)
+        108   load_var 7               (_7)
+        109   store_var_load_var 8     (result)
+
+  263   110   is_type 15               
+        111   pop_jump_if_false +2     (to 113)
+        112   jump +7                  (to 119)
+        113   load_var 8               (result)
+        114   store_var 11             (report)
+
+  265   115   load_var 11              (report)
+        116   load_field 0             (outcome)
+        117   store_var 9              (outcome)
+
+  263   118   jump +6                  (to 124)
+        119   load_var 8               (result)
+        120   store_var 10             (report)
+
+  264   121   load_var 10              (report)
+        122   load_field 0             (outcome)
+        123   store_var 9              (outcome)
+
+  267   124   load_var 9               (outcome)
+        125   load_const 16            ("pass")
+        126   cmp_op ==                
+        127   pop_jump_if_false +2     (to 129)
+        128   jump +12                 (to 140)
+
+  270   129   load_var 4               (failed)
+        130   load_const 17            (1)
+        131   add_int                  
+        132   store_var 4              (failed)
+
+  271   133   load_var 9               (outcome)
+        134   load_const 18            ("error")
+        135   cmp_op ==                
+        136   pop_jump_if_false -126   (to 10)
+
+  272   137   load_const 19            (true)
+        138   store_var 5              (has_error)
+
+  271   139   jump -129                (to 10)
+
+  268   140   load_var 3               (passed)
+        141   load_const 17            (1)
+        142   add_int                  
+        143   store_var 3              (passed)
+
+  267   144   jump -134                (to 10)
+
+  278   145   load_var 5               (has_error)
+        146   pop_jump_if_false +2     (to 148)
+        147   jump +10                 (to 157)
+        148   load_var 4               (failed)
+        149   load_const 0             (0)
+        150   cmp_int_op ==            
+        151   pop_jump_if_false +2     (to 153)
+        152   jump +3                  (to 155)
+        153   load_const 20            ("fail")
+        154   jump +4                  (to 158)
+        155   load_const 21            ("pass")
+        156   jump +2                  (to 158)
+        157   load_const 22            ("error")
+
+  280   158   store_var 12             (_49)
+
+  281   159   load_var 3               (passed)
+        160   store_var 13             (_50)
+
+  282   161   load_var 4               (failed)
+        162   store_var 14             (_51)
+
+  279   163   load_var2 12 13          
+        164   load_var2 14 1           
+
+  283   165   container_len            
+        166   load_var 1               (results)
+        167   init_instance 0          (testing.TestSetReport .outcome, .passed, .failed, .total, .results)
+        168   store_var 2              (_0)
+        169   load_var 2               (_0)
+        170   return                   
+        171   unreachable              
+}
+
+function testing.run_children_parallel(children: testing.TestSetChild[]) -> testing.TestSetReport {
+        0     load_var 5              
+        1     make_cell               
+        2     store_var 5             
+
+  289   3     alloc_array 0           
+        4     store_var 2             (futures)
+
+  290   5     load_type 0             
+        6     load_var 1              (children)
+        7     call 629 ntypeargs=1    (baml.iter.Iterable$for$T[].iter)
+        8     store_var 3             (_3)
+        9     load_var 3              (_3)
+        10    is_type 1               
+        11    pop_jump_if_false +2    (to 13)
+        12    jump +87                (to 99)
+        13    load_var 3              (_3)
+        14    is_type 2               
+        15    pop_jump_if_false +2    (to 17)
+        16    jump +78                (to 94)
+        17    load_var 3              (_3)
+        18    is_type 3               
+        19    pop_jump_if_false +2    (to 21)
+        20    jump +68                (to 88)
+        21    load_var 3              (_3)
+        22    is_type 4               
+        23    pop_jump_if_false +2    (to 25)
+        24    jump +57                (to 81)
+        25    load_var 3              (_3)
+        26    is_type 5               
+        27    pop_jump_if_false +2    (to 29)
+        28    jump +48                (to 76)
+        29    load_var 3              (_3)
+        30    is_type 6               
+        31    pop_jump_if_false +2    (to 33)
+        32    jump +39                (to 71)
+        33    load_var 3              (_3)
+        34    is_type 7               
+        35    pop_jump_if_false +2    (to 37)
+        36    jump +28                (to 64)
+        37    load_var 3              (_3)
+        38    is_type 8               
+        39    pop_jump_if_false +2    (to 41)
+        40    jump +19                (to 59)
+        41    load_var 3              (_3)
+        42    is_type 9               
+        43    pop_jump_if_false +2    (to 45)
+        44    jump +10                (to 54)
+        45    load_var 3              (_3)
+        46    is_type 10              
+        47    pop_jump_if_false +87   (to 134)
+        48    load_type 0             
+        49    load_type 11            
+        50    load_var 3              (_3)
+        51    call 634 ntypeargs=2    (baml.iter.Peekable.Iterator.next)
+        52    store_var 4             (_5)
+        53    jump +50                (to 103)
+        54    load_var 3              (_3)
+        55    make_bound_method 665   
+        56    call_indirect           
+        57    store_var 4             (_5)
+        58    jump +45                (to 103)
+        59    load_var 3              (_3)
+        60    make_bound_method 678   
+        61    call_indirect           
+        62    store_var 4             (_5)
+        63    jump +40                (to 103)
+        64    load_type 0             
+        65    load_type 11            
+        66    load_type 11            
+        67    load_var 3              (_3)
+        68    call 601 ntypeargs=3    (baml.iter.Filter.Iterator.next)
+        69    store_var 4             (_5)
+        70    jump +33                (to 103)
+        71    load_var 3              (_3)
+        72    make_bound_method 614   
+        73    call_indirect           
+        74    store_var 4             (_5)
+        75    jump +28                (to 103)
+        76    load_type 0             
+        77    load_var 3              (_3)
+        78    call 628 ntypeargs=1    (baml.iter.Repeat.Iterator.next)
+        79    store_var 4             (_5)
+        80    jump +23                (to 103)
+        81    load_type 0             
+        82    load_type 11            
+        83    load_type 11            
+        84    load_var 3              (_3)
+        85    call 604 ntypeargs=3    (baml.iter.Chain.Iterator.next)
+        86    store_var 4             (_5)
+        87    jump +16                (to 103)
+        88    load_type 0             
+        89    load_type 11            
+        90    load_var 3              (_3)
+        91    call 618 ntypeargs=2    (baml.iter.StepBy.Iterator.next)
+        92    store_var 4             (_5)
+        93    jump +10                (to 103)
+        94    load_type 0             
+        95    load_var 3              (_3)
+        96    call 660 ntypeargs=1    (baml.iter.ArrayIterator.Iterator.next)
+        97    store_var 4             (_5)
+        98    jump +5                 (to 103)
+        99    load_var 3              (_3)
+        100   make_bound_method 649   
+        101   call_indirect           
+        102   store_var 4             (_5)
+        103   load_var 4              (_5)
+        104   is_type 12              
+        105   pop_jump_if_false +2    (to 107)
+        106   jump +16                (to 122)
+        107   load_const 13           (null)
+        108   make_cell               
+        109   store_var 5             (child)
+        110   load_var 4              (_5)
+        111   store_deref 5           
+
+  291   112   load_var 5              (child)
+        113   make_closure 1609 1     
+        114   load_const 13           (null)
+        115   load_const 13           (null)
+        116   spawn                   
+        117   store_var 6             (_38)
+        118   load_var2 2 6           
+        119   call 16 ntypeargs=0     (baml.Array.push)
+        120   pop 1                   
+        121   jump -112               (to 9)
+
+  295   122   load_type 14            
+        123   load_type 15            
+        124   load_var 2              (futures)
+        125   call 691 ntypeargs=2    (baml.future.all_complete)
+        126   await                   
+        127   jump +5                 (to 132)
+        128   load_var 7              (e)
+        129   throw_if_panic          
+
+  296   130   load_const 16           ("unexpected test child failure")
+        131   call 312 ntypeargs=0    (baml.sys.panic)
+
+  298   132   call 847 ntypeargs=0    (testing.aggregate_reports)
+        133   return                  
+        134   unreachable             
+}
+
+function testing.run_children_sequential(children: testing.TestSetChild[], fail_fast: bool) -> testing.TestSetReport {
+  106   0     alloc_array 0            
+        1     store_var 3              (results)
+
+  107   2     load_type 0              
+        3     load_var 1               (children)
+        4     call 629 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
+        5     store_var 4              (_4)
+        6     load_var 4               (_4)
+        7     is_type 1                
+        8     pop_jump_if_false +2     (to 10)
+        9     jump +87                 (to 96)
+        10    load_var 4               (_4)
+        11    is_type 2                
+        12    pop_jump_if_false +2     (to 14)
+        13    jump +78                 (to 91)
+        14    load_var 4               (_4)
+        15    is_type 3                
+        16    pop_jump_if_false +2     (to 18)
+        17    jump +68                 (to 85)
+        18    load_var 4               (_4)
+        19    is_type 4                
+        20    pop_jump_if_false +2     (to 22)
+        21    jump +57                 (to 78)
+        22    load_var 4               (_4)
+        23    is_type 5                
+        24    pop_jump_if_false +2     (to 26)
+        25    jump +48                 (to 73)
+        26    load_var 4               (_4)
+        27    is_type 6                
+        28    pop_jump_if_false +2     (to 30)
+        29    jump +39                 (to 68)
+        30    load_var 4               (_4)
+        31    is_type 7                
+        32    pop_jump_if_false +2     (to 34)
+        33    jump +28                 (to 61)
+        34    load_var 4               (_4)
+        35    is_type 8                
+        36    pop_jump_if_false +2     (to 38)
+        37    jump +19                 (to 56)
+        38    load_var 4               (_4)
+        39    is_type 9                
+        40    pop_jump_if_false +2     (to 42)
+        41    jump +10                 (to 51)
+        42    load_var 4               (_4)
+        43    is_type 10               
+        44    pop_jump_if_false +96    (to 140)
+        45    load_type 0              
+        46    load_type 11             
+        47    load_var 4               (_4)
+        48    call 634 ntypeargs=2     (baml.iter.Peekable.Iterator.next)
+        49    store_var 5              (_6)
+        50    jump +50                 (to 100)
+        51    load_var 4               (_4)
+        52    make_bound_method 665    
+        53    call_indirect            
+        54    store_var 5              (_6)
+        55    jump +45                 (to 100)
+        56    load_var 4               (_4)
+        57    make_bound_method 678    
+        58    call_indirect            
+        59    store_var 5              (_6)
+        60    jump +40                 (to 100)
+        61    load_type 0              
+        62    load_type 11             
+        63    load_type 11             
+        64    load_var 4               (_4)
+        65    call 601 ntypeargs=3     (baml.iter.Filter.Iterator.next)
+        66    store_var 5              (_6)
+        67    jump +33                 (to 100)
+        68    load_var 4               (_4)
+        69    make_bound_method 614    
+        70    call_indirect            
+        71    store_var 5              (_6)
+        72    jump +28                 (to 100)
+        73    load_type 0              
+        74    load_var 4               (_4)
+        75    call 628 ntypeargs=1     (baml.iter.Repeat.Iterator.next)
+        76    store_var 5              (_6)
+        77    jump +23                 (to 100)
+        78    load_type 0              
+        79    load_type 11             
+        80    load_type 11             
+        81    load_var 4               (_4)
+        82    call 604 ntypeargs=3     (baml.iter.Chain.Iterator.next)
+        83    store_var 5              (_6)
+        84    jump +16                 (to 100)
+        85    load_type 0              
+        86    load_type 11             
+        87    load_var 4               (_4)
+        88    call 618 ntypeargs=2     (baml.iter.StepBy.Iterator.next)
+        89    store_var 5              (_6)
+        90    jump +10                 (to 100)
+        91    load_type 0              
+        92    load_var 4               (_4)
+        93    call 660 ntypeargs=1     (baml.iter.ArrayIterator.Iterator.next)
+        94    store_var 5              (_6)
+        95    jump +5                  (to 100)
+        96    load_var 4               (_4)
+        97    make_bound_method 649    
+        98    call_indirect            
+        99    store_var 5              (_6)
+        100   load_var 5               (_6)
+        101   is_type 12               
+        102   pop_jump_if_false +2     (to 104)
+        103   jump +34                 (to 137)
+        104   load_var 5               (_6)
+        105   store_var_load_var 6     (child)
+
+  108   106   load_field 1             (run)
+        107   call_indirect            
+        108   store_var 7              (report)
+
+  109   109   load_var2 3 7            
+        110   call 16 ntypeargs=0      (baml.Array.push)
+        111   pop 1                    
+
+  110   112   load_var 7               (report)
+        113   is_type 13               
+        114   pop_jump_if_false +2     (to 116)
+        115   jump +7                  (to 122)
+        116   load_var 7               (report)
+        117   store_var 10             (r)
+
+  112   118   load_var 10              (r)
+        119   load_field 0             (outcome)
+        120   store_var 8              (outcome)
+
+  110   121   jump +6                  (to 127)
+        122   load_var 7               (report)
+        123   store_var 9              (r)
+
+  111   124   load_var 9               (r)
+        125   load_field 0             (outcome)
+        126   store_var 8              (outcome)
+
+  114   127   load_var 2               (fail_fast)
+        128   jump_if_false +5         (to 133)
+        129   pop 1                    
+        130   load_var 8               (outcome)
+        131   load_const 14            ("pass")
+        132   cmp_op !=                
+        133   pop_jump_if_false -127   (to 6)
+
+  115   134   load_var 3               (results)
+        135   call 847 ntypeargs=0     (testing.aggregate_reports)
+        136   jump +3                  (to 139)
+
+  120   137   load_var 3               (results)
+        138   call 847 ntypeargs=0     (testing.aggregate_reports)
+        139   return                   
+        140   unreachable              
+}
+
 function testing.run_test(body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never) | null) -> testing.TestReport {
         0    load_var 1             
         1    make_cell              
         2    store_var 1            
 
-  185   3    load_var 1             (body)
-        4    make_closure 1601 1    
+  303   3    load_var 1             (body)
+        4    make_closure 1645 1    
         5    store_var 3            (base_run)
 
-  200   6    load_var 2             (runner)
+  321   6    load_var 2             (runner)
         7    load_const 0           (null)
         8    cmp_op ==              
         9    pop_jump_if_false +2   (to 11)
@@ -1851,52 +2921,336 @@ function testing.run_test(body: () -> void throws unknown, runner: ((() -> testi
         11   load_var 2             (runner)
         12   store_var 4            (r)
 
-  203   13   load_var2 3 4          
+  324   13   load_var2 3 4          
         14   call_indirect          
 
-  204   15   call_indirect          
+  325   15   call_indirect          
         16   jump +3                (to 19)
 
-  201   17   load_var 3             (base_run)
+  322   17   load_var 3             (base_run)
         18   call_indirect          
         19   return                 
 }
 
-function testing.run_testset(run_children: () -> testing.TestSetReport throws never, runner: ((() -> testing.TestSetReport throws never) -> (() -> testing.TestSetReport throws never) throws never) | null) -> testing.TestSetReport {
-  211   0    load_var 2             (runner)
+function testing.run_testset(children: testing.TestSetChild[], runner: ((testing.TestSetChild[]) -> testing.TestSetReport throws never) | null) -> testing.TestSetReport {
+  332   0    load_var 2             (runner)
         1    load_const 0           (null)
         2    cmp_op ==              
         3    pop_jump_if_false +2   (to 5)
-        4    jump +7                (to 11)
+        4    jump +6                (to 10)
         5    load_var 2             (runner)
         6    store_var 3            (r)
 
-  214   7    load_var2 1 3          
+  334   7    load_var2 1 3          
         8    call_indirect          
+        9    jump +3                (to 12)
 
-  215   9    call_indirect          
-        10   jump +3                (to 13)
+  333   10   load_var 1             (children)
+        11   call 857 ntypeargs=0   (testing.run_children_parallel)
+        12   return                 
+}
 
-  212   11   load_var 1             (run_children)
-        12   call_indirect          
-        13   return                 
+function testing.test_child(name: string, body: () -> void throws unknown, runner: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never) | null) -> testing.TestSetChild {
+        0    load_var 2            
+        1    make_cell             
+        2    store_var 2           
+        3    load_var 3            
+        4    make_cell             
+        5    store_var 3           
+
+  233   6    load_var2 1 2         
+
+  235   7    load_var 3            (runner)
+        8    make_closure 1619 2   
+        9    init_instance 0       (testing.TestSetChild .name, .run)
+        10   store_var 4           (_0)
+        11   load_var 4            (_0)
+        12   return                
+}
+
+function testing.testset_child(registry: testing.TestRegistry, ts: testing.TestSetRegistration) -> testing.TestSetChild {
+        0    load_var 1            
+        1    make_cell             
+        2    store_var 1           
+        3    load_var 2            
+        4    make_cell             
+        5    store_var 2           
+
+  241   6    load_deref 2          
+        7    load_field 0          (name)
+
+  242   8    load_var2 1 2         
+        9    make_closure 1632 2   
+        10   init_instance 0       (testing.TestSetChild .name, .run)
+        11   store_var 3           (_0)
+        12   load_var 3            (_0)
+        13   return                
+}
+
+function testing.testset_children(registry: testing.TestRegistry) -> testing.TestSetChild[] {
+  222   0     alloc_array 0            
+        1     store_var 3              (children)
+
+  223   2     load_var 1               (registry)
+        3     load_field 0             (collector)
+        4     load_field 1             (tests)
+        5     store_var 4              (_3)
+        6     load_type 0              
+        7     load_var 4               (_3)
+        8     call 629 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
+        9     store_var 5              (_4)
+        10    load_var 5               (_4)
+        11    is_type 1                
+        12    pop_jump_if_false +2     (to 14)
+        13    jump +87                 (to 100)
+        14    load_var 5               (_4)
+        15    is_type 2                
+        16    pop_jump_if_false +2     (to 18)
+        17    jump +78                 (to 95)
+        18    load_var 5               (_4)
+        19    is_type 3                
+        20    pop_jump_if_false +2     (to 22)
+        21    jump +68                 (to 89)
+        22    load_var 5               (_4)
+        23    is_type 4                
+        24    pop_jump_if_false +2     (to 26)
+        25    jump +57                 (to 82)
+        26    load_var 5               (_4)
+        27    is_type 5                
+        28    pop_jump_if_false +2     (to 30)
+        29    jump +48                 (to 77)
+        30    load_var 5               (_4)
+        31    is_type 6                
+        32    pop_jump_if_false +2     (to 34)
+        33    jump +39                 (to 72)
+        34    load_var 5               (_4)
+        35    is_type 7                
+        36    pop_jump_if_false +2     (to 38)
+        37    jump +28                 (to 65)
+        38    load_var 5               (_4)
+        39    is_type 8                
+        40    pop_jump_if_false +2     (to 42)
+        41    jump +19                 (to 60)
+        42    load_var 5               (_4)
+        43    is_type 9                
+        44    pop_jump_if_false +2     (to 46)
+        45    jump +10                 (to 55)
+        46    load_var 5               (_4)
+        47    is_type 10               
+        48    pop_jump_if_false +192   (to 240)
+        49    load_type 0              
+        50    load_type 11             
+        51    load_var 5               (_4)
+        52    call 634 ntypeargs=2     (baml.iter.Peekable.Iterator.next)
+        53    store_var 6              (_6)
+        54    jump +50                 (to 104)
+        55    load_var 5               (_4)
+        56    make_bound_method 665    
+        57    call_indirect            
+        58    store_var 6              (_6)
+        59    jump +45                 (to 104)
+        60    load_var 5               (_4)
+        61    make_bound_method 678    
+        62    call_indirect            
+        63    store_var 6              (_6)
+        64    jump +40                 (to 104)
+        65    load_type 0              
+        66    load_type 11             
+        67    load_type 11             
+        68    load_var 5               (_4)
+        69    call 601 ntypeargs=3     (baml.iter.Filter.Iterator.next)
+        70    store_var 6              (_6)
+        71    jump +33                 (to 104)
+        72    load_var 5               (_4)
+        73    make_bound_method 614    
+        74    call_indirect            
+        75    store_var 6              (_6)
+        76    jump +28                 (to 104)
+        77    load_type 0              
+        78    load_var 5               (_4)
+        79    call 628 ntypeargs=1     (baml.iter.Repeat.Iterator.next)
+        80    store_var 6              (_6)
+        81    jump +23                 (to 104)
+        82    load_type 0              
+        83    load_type 11             
+        84    load_type 11             
+        85    load_var 5               (_4)
+        86    call 604 ntypeargs=3     (baml.iter.Chain.Iterator.next)
+        87    store_var 6              (_6)
+        88    jump +16                 (to 104)
+        89    load_type 0              
+        90    load_type 11             
+        91    load_var 5               (_4)
+        92    call 618 ntypeargs=2     (baml.iter.StepBy.Iterator.next)
+        93    store_var 6              (_6)
+        94    jump +10                 (to 104)
+        95    load_type 0              
+        96    load_var 5               (_4)
+        97    call 660 ntypeargs=1     (baml.iter.ArrayIterator.Iterator.next)
+        98    store_var 6              (_6)
+        99    jump +5                  (to 104)
+        100   load_var 5               (_4)
+        101   make_bound_method 649    
+        102   call_indirect            
+        103   store_var 6              (_6)
+        104   load_var 6               (_6)
+        105   is_type 12               
+        106   pop_jump_if_false +2     (to 108)
+        107   jump +14                 (to 121)
+        108   load_var 6               (_6)
+        109   store_var_load_var 7     (t)
+
+  224   110   load_field 0             (name)
+        111   load_var 7               (t)
+        112   load_field 1             (body)
+        113   load_var 7               (t)
+        114   load_field 2             (runner)
+        115   call 862 ntypeargs=0     (testing.test_child)
+        116   store_var 8              (_37)
+        117   load_var2 3 8            
+        118   call 16 ntypeargs=0      (baml.Array.push)
+        119   pop 1                    
+        120   jump -110                (to 10)
+
+  226   121   load_var 1               (registry)
+        122   load_field 0             (collector)
+        123   load_field 2             (testsets)
+        124   store_var 9              (_41)
+        125   load_type 13             
+        126   load_var 9               (_41)
+        127   call 629 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
+        128   store_var 10             (_42)
+        129   load_var 10              (_42)
+        130   is_type 14               
+        131   pop_jump_if_false +2     (to 133)
+        132   jump +87                 (to 219)
+        133   load_var 10              (_42)
+        134   is_type 15               
+        135   pop_jump_if_false +2     (to 137)
+        136   jump +78                 (to 214)
+        137   load_var 10              (_42)
+        138   is_type 16               
+        139   pop_jump_if_false +2     (to 141)
+        140   jump +68                 (to 208)
+        141   load_var 10              (_42)
+        142   is_type 17               
+        143   pop_jump_if_false +2     (to 145)
+        144   jump +57                 (to 201)
+        145   load_var 10              (_42)
+        146   is_type 18               
+        147   pop_jump_if_false +2     (to 149)
+        148   jump +48                 (to 196)
+        149   load_var 10              (_42)
+        150   is_type 19               
+        151   pop_jump_if_false +2     (to 153)
+        152   jump +39                 (to 191)
+        153   load_var 10              (_42)
+        154   is_type 20               
+        155   pop_jump_if_false +2     (to 157)
+        156   jump +28                 (to 184)
+        157   load_var 10              (_42)
+        158   is_type 21               
+        159   pop_jump_if_false +2     (to 161)
+        160   jump +19                 (to 179)
+        161   load_var 10              (_42)
+        162   is_type 22               
+        163   pop_jump_if_false +2     (to 165)
+        164   jump +10                 (to 174)
+        165   load_var 10              (_42)
+        166   is_type 23               
+        167   pop_jump_if_false +73    (to 240)
+        168   load_type 13             
+        169   load_type 11             
+        170   load_var 10              (_42)
+        171   call 634 ntypeargs=2     (baml.iter.Peekable.Iterator.next)
+        172   store_var 11             (_44)
+        173   jump +50                 (to 223)
+        174   load_var 10              (_42)
+        175   make_bound_method 665    
+        176   call_indirect            
+        177   store_var 11             (_44)
+        178   jump +45                 (to 223)
+        179   load_var 10              (_42)
+        180   make_bound_method 678    
+        181   call_indirect            
+        182   store_var 11             (_44)
+        183   jump +40                 (to 223)
+        184   load_type 13             
+        185   load_type 11             
+        186   load_type 11             
+        187   load_var 10              (_42)
+        188   call 601 ntypeargs=3     (baml.iter.Filter.Iterator.next)
+        189   store_var 11             (_44)
+        190   jump +33                 (to 223)
+        191   load_var 10              (_42)
+        192   make_bound_method 614    
+        193   call_indirect            
+        194   store_var 11             (_44)
+        195   jump +28                 (to 223)
+        196   load_type 13             
+        197   load_var 10              (_42)
+        198   call 628 ntypeargs=1     (baml.iter.Repeat.Iterator.next)
+        199   store_var 11             (_44)
+        200   jump +23                 (to 223)
+        201   load_type 13             
+        202   load_type 11             
+        203   load_type 11             
+        204   load_var 10              (_42)
+        205   call 604 ntypeargs=3     (baml.iter.Chain.Iterator.next)
+        206   store_var 11             (_44)
+        207   jump +16                 (to 223)
+        208   load_type 13             
+        209   load_type 11             
+        210   load_var 10              (_42)
+        211   call 618 ntypeargs=2     (baml.iter.StepBy.Iterator.next)
+        212   store_var 11             (_44)
+        213   jump +10                 (to 223)
+        214   load_type 13             
+        215   load_var 10              (_42)
+        216   call 660 ntypeargs=1     (baml.iter.ArrayIterator.Iterator.next)
+        217   store_var 11             (_44)
+        218   jump +5                  (to 223)
+        219   load_var 10              (_42)
+        220   make_bound_method 649    
+        221   call_indirect            
+        222   store_var 11             (_44)
+        223   load_var 11              (_44)
+        224   is_type 12               
+        225   pop_jump_if_false +2     (to 227)
+        226   jump +10                 (to 236)
+        227   load_var 11              (_44)
+        228   store_var 12             (ts)
+
+  227   229   load_var2 1 12           
+        230   call 868 ntypeargs=0     (testing.testset_child)
+        231   store_var 13             (_75)
+        232   load_var2 3 13           
+        233   call 16 ntypeargs=0      (baml.Array.push)
+        234   pop 1                    
+        235   jump -106                (to 129)
+
+  229   236   load_var 3               (children)
+        237   store_var 2              (_0)
+        238   load_var 2               (_0)
+        239   return                   
+        240   unreachable              
 }
 
 function user.ErrorInfo.from_json(j: baml.json.json) -> ErrorInfo {
   26   0    load_var 1             (j)
        1    load_const 0           ("code")
-       2    call 423 ntypeargs=0   (baml.json.field)
+       2    call 414 ntypeargs=0   (baml.json.field)
        3    store_var 3            (_3)
        4    load_type 1            
        5    load_var 3             (_3)
-       6    call 415 ntypeargs=1   (baml.json.from_json)
+       6    call 406 ntypeargs=1   (baml.json.from_json)
        7    load_var 1             (j)
        8    load_const 2           ("message")
-       9    call 423 ntypeargs=0   (baml.json.field)
+       9    call 414 ntypeargs=0   (baml.json.field)
        10   store_var 4            (_6)
        11   load_type 3            
        12   load_var 4             (_6)
-       13   call 415 ntypeargs=1   (baml.json.from_json)
+       13   call 406 ntypeargs=1   (baml.json.from_json)
        14   init_instance 0        (user.ErrorInfo .code, .message)
        15   store_var 2            (_0)
        16   load_var 2             (_0)
@@ -1907,11 +3261,11 @@ function user.ErrorInfo.to_json(self: ErrorInfo) -> baml.json.json {
   26   0    load_type 0            
        1    load_var 1             (self)
        2    load_field 0           (code)
-       3    call 417 ntypeargs=1   (baml.json.to_json)
+       3    call 408 ntypeargs=1   (baml.json.to_json)
        4    load_type 1            
        5    load_var 1             (self)
        6    load_field 1           (message)
-       7    call 417 ntypeargs=1   (baml.json.to_json)
+       7    call 408 ntypeargs=1   (baml.json.to_json)
        8    load_const 2           ("code")
        9    load_const 3           ("message")
        10   alloc_map 2            
@@ -1923,25 +3277,25 @@ function user.ErrorInfo.to_json(self: ErrorInfo) -> baml.json.json {
 function user.Report.from_json(j: baml.json.json) -> Report {
   20   0    load_var 1             (j)
        1    load_const 0           ("score")
-       2    call 423 ntypeargs=0   (baml.json.field)
+       2    call 414 ntypeargs=0   (baml.json.field)
        3    store_var 3            (_3)
        4    load_type 1            
        5    load_var 3             (_3)
-       6    call 415 ntypeargs=1   (baml.json.from_json)
+       6    call 406 ntypeargs=1   (baml.json.from_json)
        7    load_var 1             (j)
        8    load_const 2           ("label")
-       9    call 423 ntypeargs=0   (baml.json.field)
+       9    call 414 ntypeargs=0   (baml.json.field)
        10   store_var 4            (_6)
        11   load_type 3            
        12   load_var 4             (_6)
-       13   call 415 ntypeargs=1   (baml.json.from_json)
+       13   call 406 ntypeargs=1   (baml.json.from_json)
        14   load_var 1             (j)
        15   load_const 4           ("breakdown")
-       16   call 423 ntypeargs=0   (baml.json.field)
+       16   call 414 ntypeargs=0   (baml.json.field)
        17   store_var 5            (_9)
        18   load_type 5            
        19   load_var 5             (_9)
-       20   call 415 ntypeargs=1   (baml.json.from_json)
+       20   call 406 ntypeargs=1   (baml.json.from_json)
        21   init_instance 0        (user.Report .score, .label, .breakdown)
        22   store_var 2            (_0)
        23   load_var 2             (_0)
@@ -1952,15 +3306,15 @@ function user.Report.to_json(self: Report) -> baml.json.json {
   20   0    load_type 0            
        1    load_var 1             (self)
        2    load_field 0           (score)
-       3    call 417 ntypeargs=1   (baml.json.to_json)
+       3    call 408 ntypeargs=1   (baml.json.to_json)
        4    load_type 1            
        5    load_var 1             (self)
        6    load_field 1           (label)
-       7    call 417 ntypeargs=1   (baml.json.to_json)
+       7    call 408 ntypeargs=1   (baml.json.to_json)
        8    load_type 2            
        9    load_var 1             (self)
        10   load_field 2           (breakdown)
-       11   call 417 ntypeargs=1   (baml.json.to_json)
+       11   call 408 ntypeargs=1   (baml.json.to_json)
        12   load_const 3           ("score")
        13   load_const 4           ("label")
        14   load_const 5           ("breakdown")
@@ -1973,25 +3327,25 @@ function user.Report.to_json(self: Report) -> baml.json.json {
 function user.User.from_json(j: baml.json.json) -> User {
   3   0    load_var 1             (j)
       1    load_const 0           ("name")
-      2    call 423 ntypeargs=0   (baml.json.field)
+      2    call 414 ntypeargs=0   (baml.json.field)
       3    store_var 3            (_3)
       4    load_type 1            
       5    load_var 3             (_3)
-      6    call 415 ntypeargs=1   (baml.json.from_json)
+      6    call 406 ntypeargs=1   (baml.json.from_json)
       7    load_var 1             (j)
       8    load_const 2           ("age")
-      9    call 423 ntypeargs=0   (baml.json.field)
+      9    call 414 ntypeargs=0   (baml.json.field)
       10   store_var 4            (_6)
       11   load_type 3            
       12   load_var 4             (_6)
-      13   call 415 ntypeargs=1   (baml.json.from_json)
+      13   call 406 ntypeargs=1   (baml.json.from_json)
       14   load_var 1             (j)
       15   load_const 4           ("role")
-      16   call 423 ntypeargs=0   (baml.json.field)
+      16   call 414 ntypeargs=0   (baml.json.field)
       17   store_var 5            (_9)
       18   load_type 5            
       19   load_var 5             (_9)
-      20   call 415 ntypeargs=1   (baml.json.from_json)
+      20   call 406 ntypeargs=1   (baml.json.from_json)
       21   init_instance 0        (user.User .name, .age, .role)
       22   store_var 2            (_0)
       23   load_var 2             (_0)
@@ -2031,15 +3385,15 @@ function user.User.to_json(self: User) -> baml.json.json {
   3   0    load_type 0            
       1    load_var 1             (self)
       2    load_field 0           (name)
-      3    call 417 ntypeargs=1   (baml.json.to_json)
+      3    call 408 ntypeargs=1   (baml.json.to_json)
       4    load_type 1            
       5    load_var 1             (self)
       6    load_field 1           (age)
-      7    call 417 ntypeargs=1   (baml.json.to_json)
+      7    call 408 ntypeargs=1   (baml.json.to_json)
       8    load_type 2            
       9    load_var 1             (self)
       10   load_field 2           (role)
-      11   call 417 ntypeargs=1   (baml.json.to_json)
+      11   call 408 ntypeargs=1   (baml.json.to_json)
       12   load_const 3           ("name")
       13   load_const 4           ("age")
       14   load_const 5           ("role")

@@ -185,6 +185,59 @@ async fn run_named_test(
         .await
 }
 
+/// Helper: run a named testset via the registry's `run_testset` method.
+async fn run_named_testset(
+    engine: &Arc<BexEngine>,
+    registry: BexExternalValue,
+    name: &str,
+) -> Result<BexExternalValue, bex_engine::EngineError> {
+    engine
+        .call_function(
+            "testing.TestRegistry.run_testset",
+            vec![registry, BexExternalValue::String(name.to_string().into())],
+            bex_engine::FunctionCallContextBuilder::new(CallId::next()).build(),
+            true,
+        )
+        .await
+}
+
+fn unwrap_union(value: &BexExternalValue) -> &BexExternalValue {
+    match value {
+        BexExternalValue::Union { value, .. } => unwrap_union(value),
+        other => other,
+    }
+}
+
+fn field<'a>(value: &'a BexExternalValue, name: &str) -> &'a BexExternalValue {
+    let BexExternalValue::Instance { fields, .. } = unwrap_union(value) else {
+        panic!("expected instance, got: {value:?}");
+    };
+    fields
+        .get(name)
+        .unwrap_or_else(|| panic!("expected field {name:?}, got: {value:?}"))
+}
+
+fn outcome(value: &BexExternalValue) -> &str {
+    match unwrap_union(field(value, "outcome")) {
+        BexExternalValue::String(outcome) => outcome.as_str(),
+        other => panic!("expected string outcome, got: {other:?}"),
+    }
+}
+
+fn int_field(value: &BexExternalValue, name: &str) -> i64 {
+    match unwrap_union(field(value, name)) {
+        BexExternalValue::Int(value) => *value,
+        other => panic!("expected int field {name}, got: {other:?}"),
+    }
+}
+
+fn array_len_field(value: &BexExternalValue, name: &str) -> usize {
+    match unwrap_union(field(value, name)) {
+        BexExternalValue::Array { items, .. } => items.len(),
+        other => panic!("expected array field {name}, got: {other:?}"),
+    }
+}
+
 #[tokio::test]
 async fn collect_tests_run_test_catches_typed_throwing_body() {
     let source = r#"
@@ -227,6 +280,187 @@ async fn collect_tests_run_test_catches_typed_throwing_body() {
         }
         other => panic!("expected runs array field, got: {other:?}"),
     }
+}
+
+#[tokio::test]
+async fn collect_tests_run_test_catches_assertion_panic() {
+    let source = r#"
+        test "assertion becomes failure" {
+            assert.is_true(false)
+        }
+    "#;
+
+    let engine = make_engine(source);
+    let registry = engine
+        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .await
+        .expect("collect_tests should succeed");
+
+    let report = run_named_test(&engine, registry, "assertion becomes failure")
+        .await
+        .expect("run_test should normalize assertion panic into a report");
+
+    assert_eq!(outcome(&report), "fail");
+    assert_eq!(array_len_field(&report, "runs"), 1);
+}
+
+#[tokio::test]
+async fn collect_tests_quorum_runner_passes_and_fails() {
+    let source = r#"
+        testset "suite" {
+            let passing_attempts = 0;
+            test "three of five" with testing.Quorum(5, 3) {
+                passing_attempts += 1
+                assert.is_true(passing_attempts <= 3)
+            }
+
+            let failing_attempts = 0;
+            test "two of five" with testing.Quorum(5, 3) {
+                failing_attempts += 1
+                assert.is_true(failing_attempts <= 2)
+            }
+        }
+    "#;
+
+    let engine = make_engine(source);
+    let registry = engine
+        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .await
+        .expect("collect_tests should succeed");
+    expand_testset(&engine, registry.clone(), "suite")
+        .await
+        .expect("expand_set should succeed");
+
+    let pass_report = run_named_test(&engine, registry.clone(), "suite/three of five")
+        .await
+        .expect("quorum pass should return report");
+    assert_eq!(outcome(&pass_report), "pass");
+    assert_eq!(array_len_field(&pass_report, "runs"), 5);
+
+    let fail_report = run_named_test(&engine, registry, "suite/two of five")
+        .await
+        .expect("quorum fail should return report");
+    assert_eq!(outcome(&fail_report), "fail");
+    assert_eq!(array_len_field(&fail_report, "runs"), 5);
+}
+
+#[tokio::test]
+async fn collect_tests_retry_stops_after_first_success() {
+    let source = r#"
+        testset "suite" {
+            let attempts = 0;
+            test "eventually passes" with testing.Retry(3) {
+                attempts += 1
+                assert.is_true(attempts == 2)
+            }
+        }
+    "#;
+
+    let engine = make_engine(source);
+    let registry = engine
+        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .await
+        .expect("collect_tests should succeed");
+    expand_testset(&engine, registry.clone(), "suite")
+        .await
+        .expect("expand_set should succeed");
+
+    let report = run_named_test(&engine, registry, "suite/eventually passes")
+        .await
+        .expect("retry should return report");
+    assert_eq!(outcome(&report), "pass");
+    assert_eq!(array_len_field(&report, "runs"), 2);
+}
+
+#[tokio::test]
+async fn collect_tests_pass_rate_runner_uses_child_outcomes() {
+    let source = r#"
+        testset "passes" with testing.PassRate(0.6) {
+            test "one" { assert.is_true(true) }
+            test "two" { assert.is_true(true) }
+            test "three" { assert.is_true(false) }
+        }
+
+        testset "fails" with testing.PassRate(0.7) {
+            test "one" { assert.is_true(true) }
+            test "two" { assert.is_true(false) }
+            test "three" { assert.is_true(false) }
+        }
+    "#;
+
+    let engine = make_engine(source);
+    let registry = engine
+        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .await
+        .expect("collect_tests should succeed");
+
+    let pass_report = run_named_testset(&engine, registry.clone(), "passes")
+        .await
+        .expect("pass-rate pass should return report");
+    assert_eq!(outcome(&pass_report), "pass", "{pass_report:?}");
+    assert_eq!(int_field(&pass_report, "passed"), 2);
+    assert_eq!(int_field(&pass_report, "failed"), 1);
+
+    let fail_report = run_named_testset(&engine, registry, "fails")
+        .await
+        .expect("pass-rate fail should return report");
+    assert_eq!(outcome(&fail_report), "fail", "{fail_report:?}");
+    assert_eq!(int_field(&fail_report, "passed"), 1);
+    assert_eq!(int_field(&fail_report, "failed"), 2);
+}
+
+#[tokio::test]
+async fn collect_tests_fail_fast_stops_after_first_failure() {
+    let source = r#"
+        testset "suite" with testing.FailFast() {
+            test "one" { assert.is_true(false) }
+            test "two" { assert.is_true(true) }
+        }
+    "#;
+
+    let engine = make_engine(source);
+    let registry = engine
+        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .await
+        .expect("collect_tests should succeed");
+
+    let report = run_named_testset(&engine, registry, "suite")
+        .await
+        .expect("fail-fast should return report");
+    assert_eq!(outcome(&report), "fail", "{report:?}");
+    assert_eq!(int_field(&report, "total"), 1);
+    assert_eq!(array_len_field(&report, "results"), 1);
+}
+
+#[tokio::test]
+async fn collect_tests_sequential_runs_children_in_source_order() {
+    let source = r#"
+        testset "suite" with testing.Sequential() {
+            let path = "/tmp/baml_collect_tests_sequential_order.txt";
+            baml.fs.write(path, "");
+            test "one" {
+                let f = baml.fs.open(path, "a");
+                f.write("1");
+                f.close();
+            }
+            test "two" {
+                assert.equal(baml.fs.read(path), "1");
+            }
+        }
+    "#;
+
+    let engine = make_engine(source);
+    let registry = engine
+        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .await
+        .expect("collect_tests should succeed");
+
+    let report = run_named_testset(&engine, registry, "suite")
+        .await
+        .expect("sequential should return report");
+    assert_eq!(outcome(&report), "pass", "{report:?}");
+    assert_eq!(int_field(&report, "passed"), 2);
+    assert_eq!(int_field(&report, "failed"), 0);
 }
 
 /// A testset with an inline for loop should expand successfully and find tests.
