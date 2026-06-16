@@ -93,8 +93,14 @@ function main() -> baml.llm.PromptAst {
         other => panic!("expected a baml.llm.PromptAst instance, got {other:?}"),
     };
     let dbg = format!("{ast:?}");
-    assert!(dbg.contains("\"system\"") && dbg.contains("You are helpful."), "{dbg}");
-    assert!(dbg.contains("\"user\"") && dbg.contains("Hi World!"), "{dbg}");
+    assert!(
+        dbg.contains("\"system\"") && dbg.contains("You are helpful."),
+        "{dbg}"
+    );
+    assert!(
+        dbg.contains("\"user\"") && dbg.contains("Hi World!"),
+        "{dbg}"
+    );
 }
 
 #[tokio::test]

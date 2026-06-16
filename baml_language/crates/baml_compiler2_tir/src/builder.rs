@@ -8143,9 +8143,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self.collect_throw_facts_from_template_segments(inner, body, out);
                 }
                 ast::TemplateSegment::CStyleFor {
-                    cond,
-                    body: inner,
-                    ..
+                    cond, body: inner, ..
                 } => {
                     self.collect_throw_facts_from_expr(*cond, body, out);
                     self.collect_throw_facts_from_template_segments(inner, body, out);

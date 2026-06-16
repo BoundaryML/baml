@@ -420,9 +420,7 @@ fn collect_from_template_segments<C: ThrowsAnalysisContext>(
                 collect_from_template_segments(context, inner, body, out);
             }
             ast::TemplateSegment::CStyleFor {
-                cond,
-                body: inner,
-                ..
+                cond, body: inner, ..
             } => {
                 collect_from_expr(context, *cond, body, out);
                 collect_from_template_segments(context, inner, body, out);
