@@ -109,9 +109,13 @@ function setInboundValue(iv: baml_core.cffi.v1.IInboundValue, value: unknown, ct
         iv.handle = { key: value._cloneKeyForWire(), handleType: value.handleType };
     } else if (value instanceof BamlStream) {
         // Stream wrapper → its inner TaggedHeapHandle. Mirrors the BamlHandle
-        // branch above; the engine re-binds it to the heap value on decode.
+        // branch above: the Rust inbound decoder *drains* the handle-table
+        // entry, so send a fresh cloned key — otherwise the engine consumes the
+        // stream's only key and the next `next()`/`final()` call fails with
+        // "Invalid handle key". (`BamlStream._toHandle()` returns the inner
+        // handle without cloning, unlike the media wrappers' `_toHandle`.)
         const h = value._toHandle();
-        iv.handle = { key: h.key, handleType: h.handleType };
+        iv.handle = { key: h._cloneKeyForWire(), handleType: h.handleType };
     } else if (
         value instanceof BamlImage
         || value instanceof BamlAudio
@@ -354,10 +358,17 @@ function decodeValueHolder(
         if (ht === BamlHandleType.ADT_MEDIA_AUDIO) return BamlAudio._fromHandle(handle);
         if (ht === BamlHandleType.ADT_MEDIA_VIDEO) return BamlVideo._fromHandle(handle);
         if (ht === BamlHandleType.ADT_MEDIA_PDF) return BamlPdf._fromHandle(handle);
+        if (ht === BamlHandleType.ADT_TAGGED_HEAP_HANDLE) {
+            // Dispatch via the typemap: every tagged-heap class self-registers
+            // under its engine FQN (codegen emits the entry, e.g.
+            // `baml.llm.Stream → BamlStream`), so any class is reachable without
+            // special-casing here. Mirrors bridge_python's `_decode_handle`
+            // ADT_TAGGED_HEAP_HANDLE arm (sdks/python/.../proto.py).
+            const fqn = holder.handleValue.name?.name ?? '';
+            const Cls = typeMap.getClass(fqn) as { _fromHandle(h: BamlHandle): unknown };
+            return Cls._fromHandle(handle);
+        }
         // ADT_MEDIA_GENERIC has no typed wrapper — stays a bare BamlHandle.
-        // TODO: ADT_TAGGED_HEAP_HANDLE / RustData re-encode (handle-backed
-        // stdlib types like baml.fs.File) needs cross-call handle-lifecycle
-        // work; for now non-media handles decode to a bare BamlHandle.
         return handle;
     }
     // Inline media / prompt AST are not expected on the Node FFI path — they
