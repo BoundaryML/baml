@@ -674,3 +674,45 @@ mod const_format_tests {
         assert_formats_to(source, source);
     }
 }
+
+#[cfg(test)]
+mod map_literal_format_tests {
+    //! Formatter tests for map literals, focused on the empty-map case.
+    //! A non-empty map renders with interior padding (`{ "k": 1 }`), but an
+    //! *empty* map must collapse to `{}` with no padding — the printer used to
+    //! emit `{  }` because it added the leading/trailing space unconditionally.
+
+    use super::*;
+
+    fn assert_formats_to(source: &str, expected: &str) {
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed on map literal");
+        assert_eq!(
+            formatted, expected,
+            "formatter output didn't match expected\n--- got ---\n{formatted}\n--- want ---\n{expected}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    #[test]
+    fn test_empty_map_has_no_interior_padding() {
+        // Regression for B-234: an empty map literal must format as `{}`, not `{  }`.
+        let source = "function f() -> int {\n    {};\n    0\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_non_empty_map_keeps_interior_padding() {
+        // Guard the established behavior: non-empty maps keep `{ ... }` padding.
+        let source = "function f() -> int {\n    { \"a\": 1 };\n    0\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_empty_map_with_block_comment_keeps_padding() {
+        // An interior comment is real content, so the padding stays.
+        let source = "function f() -> int {\n    { /* keep */ };\n    0\n}\n";
+        assert_formats_to(source, source);
+    }
+}
