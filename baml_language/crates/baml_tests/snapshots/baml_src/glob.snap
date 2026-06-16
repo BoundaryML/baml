@@ -87,80 +87,68 @@ function glob.$init_test_ns_glob_glob(registry: testing.TestCollector) -> null {
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "glob_scan_only_files_by_default_length"
+    load_const "glob_scan_only_files_by_default"
     make_closure .<lambda($init_test_ns_glob_glob, 14)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "glob_scan_only_files_by_default_has_file"
+    load_const "glob_scan_options_include_dot_absolute_and_directories"
     make_closure .<lambda($init_test_ns_glob_glob, 15)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "glob_scan_options_include_dot_absolute_and_directories"
+    load_const "glob_scan_matches_dot_slash_pattern_length"
     make_closure .<lambda($init_test_ns_glob_glob, 16)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "glob_scan_matches_dot_slash_pattern_length"
+    load_const "glob_scan_matches_dot_slash_pattern_has_file"
     make_closure .<lambda($init_test_ns_glob_glob, 17)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "glob_scan_matches_dot_slash_pattern_has_file"
+    load_const "glob_scan_matches_absolute_pattern"
     make_closure .<lambda($init_test_ns_glob_glob, 18)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "glob_scan_matches_absolute_pattern"
+    load_const "glob_scan_dot_pattern_matches_only_dot_files_length"
     make_closure .<lambda($init_test_ns_glob_glob, 19)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "glob_scan_dot_pattern_matches_only_dot_files_length"
+    load_const "glob_scan_dot_pattern_matches_only_dot_files_has_hidden"
     make_closure .<lambda($init_test_ns_glob_glob, 20)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "glob_scan_dot_pattern_matches_only_dot_files_has_hidden"
+    load_const "glob_scan_default_prunes_dot_directories"
     make_closure .<lambda($init_test_ns_glob_glob, 21)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "glob_scan_default_prunes_dot_directories_length"
+    load_const "glob_scan_follows_symlinked_directory_when_enabled"
     make_closure .<lambda($init_test_ns_glob_glob, 22)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "glob_scan_default_prunes_dot_directories_has_visible"
+    load_const "glob_scan_skips_broken_symlinks_by_default_length"
     make_closure .<lambda($init_test_ns_glob_glob, 23)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "glob_scan_follows_symlinked_directory_when_enabled"
-    make_closure .<lambda($init_test_ns_glob_glob, 24)>, 0
-    load_const null
-    call testing.TestCollector.register_test
-    pop 1
-    load_var registry
-    load_const "glob_scan_skips_broken_symlinks_by_default_length"
-    make_closure .<lambda($init_test_ns_glob_glob, 25)>, 0
-    load_const null
-    call testing.TestCollector.register_test
-    pop 1
-    load_var registry
     load_const "glob_scan_skips_broken_symlinks_by_default_has_real"
-    make_closure .<lambda($init_test_ns_glob_glob, 26)>, 0
+    make_closure .<lambda($init_test_ns_glob_glob, 24)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
@@ -250,7 +238,7 @@ function glob.glob_matches_negated_pattern_fn() -> bool[] {
     return
 }
 
-function glob.scan_default_prunes_dot_directories() -> string[] {
+function glob.scan_default_prunes_dot_directories_checks() -> bool[] {
     call baml.sys.now_ms
     call baml.json.stringify
     store_var _2
@@ -299,6 +287,11 @@ function glob.scan_default_prunes_dot_directories() -> string[] {
     load_var root
     sys_op baml.glob.Glob.scan
     store_var result
+    load_type string
+    load_var result
+    load_const "visible.txt"
+    call baml.Array.includes
+    store_var _30
     load_const "rm -rf "
     load_var root
     bin_op +
@@ -306,6 +299,11 @@ function glob.scan_default_prunes_dot_directories() -> string[] {
     sys_op baml.sys.shell
     pop 1
     load_var result
+    container_len
+    load_const 1
+    cmp_int_op ==
+    load_var _30
+    alloc_array 2
     return
 }
 
@@ -562,7 +560,7 @@ function glob.scan_matches_dot_slash_pattern() -> string[] {
     return
 }
 
-function glob.scan_only_files_by_default() -> string[] {
+function glob.scan_only_files_by_default_checks() -> bool[] {
     call baml.sys.now_ms
     call baml.json.stringify
     store_var _2
@@ -592,6 +590,11 @@ function glob.scan_only_files_by_default() -> string[] {
     load_var root
     sys_op baml.glob.Glob.scan
     store_var result
+    load_type string
+    load_var result
+    load_const "file.txt"
+    call baml.Array.includes
+    store_var _20
     load_const "rm -rf "
     load_var root
     bin_op +
@@ -599,6 +602,11 @@ function glob.scan_only_files_by_default() -> string[] {
     sys_op baml.sys.shell
     pop 1
     load_var result
+    container_len
+    load_const 1
+    cmp_int_op ==
+    load_var _20
+    alloc_array 2
     return
 }
 
