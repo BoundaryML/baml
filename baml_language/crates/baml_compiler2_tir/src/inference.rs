@@ -679,6 +679,11 @@ pub struct ScopeInference<'db> {
     /// lambda scopes to look up their contextual param types without calling
     /// `infer_scope_types` on intermediate Lambda ancestors (which would cycle).
     nested_lambda_types: FxHashMap<FileScopeId, Ty>,
+    /// Synthetic tagged-template body Lambda scope → its tag's body-lambda
+    /// params (BEP-049 §10). A real lambda nested in the interpolations looks
+    /// these up (via this owning Function/Let scope) to seed params that have no
+    /// HIR binding — see the `ScopeKind::Lambda` arm of `infer_scope_types`.
+    template_body_params: FxHashMap<FileScopeId, Vec<FunctionParamTy>>,
     /// Lambda/function parameter types by index (name, inferred type).
     /// Populated for lambda scopes so LSP can resolve unannotated lambda
     /// parameter types (e.g. `items.map((item) -> { item. })`).
@@ -843,6 +848,13 @@ impl<'db> ScopeInference<'db> {
     /// calling `infer_scope_types` on intermediate Lambda ancestors.
     pub fn nested_lambda_type(&self, fsi: FileScopeId) -> Option<&Ty> {
         self.nested_lambda_types.get(&fsi)
+    }
+
+    /// Look up the tag's body-lambda params recorded for a synthetic
+    /// tagged-template body scope (`is_template_body`). Used by a nested lambda's
+    /// standalone scope inference to seed params that have no HIR binding.
+    pub fn template_body_params(&self, fsi: FileScopeId) -> Option<&[FunctionParamTy]> {
+        self.template_body_params.get(&fsi).map(Vec::as_slice)
     }
 
     /// Look up the binding type for a pattern (the type the variable is bound to,
@@ -1046,6 +1058,33 @@ impl<'db> ScopeInference<'db> {
 ///
 /// Returns `Some((func_def, lambda_body, lambda_source_map, lambda_expr_id))` when
 /// found; `None` otherwise.
+/// Seed a nested lambda's builder with the tag's body-lambda params of any
+/// `is_template_body` ancestor scope (BEP-049 §10). Those params are injected
+/// into the owning scope's locals while typing the tagged-template body, but
+/// have no HIR binding — so the capture seeding above can't reach them, and a
+/// real lambda nested in the interpolations would otherwise report them as
+/// "unresolved name" (and leave them `Unknown`, which MIR forbids).
+/// `owner_inference` is the enclosing Function/Let scope inference, which
+/// recorded them keyed by the template-body scope.
+fn seed_template_body_params(
+    builder: &mut TypeInferenceBuilder<'_>,
+    index: &baml_compiler2_hir::semantic_index::FileSemanticIndex<'_>,
+    lambda_fsi: FileScopeId,
+    owner_inference: &ScopeInference<'_>,
+) {
+    for anc_fsi in index.ancestor_scopes(lambda_fsi) {
+        if index.scopes[anc_fsi.index() as usize].is_template_body
+            && let Some(params) = owner_inference.template_body_params(anc_fsi)
+        {
+            for p in params {
+                if let Some(name) = &p.name {
+                    builder.add_local(name.clone(), p.ty.clone());
+                }
+            }
+        }
+    }
+}
+
 fn find_lambda_by_span<'a>(
     body: &'a ExprBody,
     source_map: &AstSourceMap,
@@ -1100,6 +1139,7 @@ fn infer_scope_types_cycle_initial<'db>(
         path_segment_types: FxHashMap::default(),
         path_member_resolutions: FxHashMap::default(),
         nested_lambda_types: FxHashMap::default(),
+        template_body_params: FxHashMap::default(),
         param_types: Vec::new(),
         call_plans: FxHashMap::default(),
         call_type_instantiations: FxHashMap::default(),
@@ -1894,6 +1934,12 @@ pub fn infer_scope_types<'db>(
                                         func_def,
                                         contextual_param_tys.as_deref(),
                                     );
+                                    seed_template_body_params(
+                                        &mut builder,
+                                        index,
+                                        file_scope,
+                                        parent_inference,
+                                    );
                                     // Infer the lambda body
                                     if let Some(root_expr) = lambda_body.root_expr {
                                         builder.infer_expr(root_expr, lambda_body);
@@ -1967,6 +2013,12 @@ pub fn infer_scope_types<'db>(
                                         &env,
                                         func_def,
                                         contextual_param_tys.as_deref(),
+                                    );
+                                    seed_template_body_params(
+                                        &mut builder,
+                                        index,
+                                        file_scope,
+                                        parent_inference,
                                     );
                                     if let Some(root_expr) = lambda_body.root_expr {
                                         builder.infer_expr(root_expr, lambda_body);
@@ -2151,6 +2203,7 @@ pub fn infer_scope_types<'db>(
         call_type_instantiations,
         function_coercions,
         nested_lambda_types,
+        template_body_params,
         parameter_defaults,
     ) = builder.finish();
 
@@ -2170,6 +2223,7 @@ pub fn infer_scope_types<'db>(
         path_segment_types,
         path_member_resolutions,
         nested_lambda_types,
+        template_body_params,
         param_types,
         call_plans,
         call_type_instantiations,

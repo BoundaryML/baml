@@ -110,6 +110,32 @@ function main() -> string {
     assert_eq!(output.result, ok_string("Hi World!"));
 }
 
+#[tokio::test]
+async fn tagged_template_body_param_captured_by_nested_lambda() {
+    // The body param `name` is referenced from a *nested* lambda inside the
+    // interpolation (`(unused) -> { name }`, immediately invoked). The param is
+    // a MIR-only local with no HIR binding, so neither the nested lambda's
+    // standalone TIR scope inference nor its MIR capture analysis can see it
+    // through the normal paths. Before the fix this failed to compile with
+    // `[E0003] unresolved name: name`.
+    let output = baml_test!(
+        r#"
+//baml:tagged_string
+function fmt(body: (name: string) -> baml.TaggedString) -> string {
+  let t = body("World")
+  match (t.values[0]) {
+    let s: string => t.parts[0] + s + t.parts[1],
+    _ => "?"
+  }
+}
+function main() -> string {
+  fmt`Hi ${((unused: string) -> { name })("z")}!`
+}
+"#
+    );
+    assert_eq!(output.result, ok_string("Hi World!"));
+}
+
 // ─── M4e.1b: ${for}/${if} runtime flattening ──────────────────────────────
 
 /// A generic `//baml:tagged_string` renderer used by the M4e.1b tests below:

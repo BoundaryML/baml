@@ -1699,14 +1699,18 @@ struct LoweringContext<'db> {
     // the body is lowered so it can extend the outer MakeClosure with extra captures.
     transitive_captures_needed: Vec<BindingId>,
 
-    /// Names of the tagged-template body-lambda parameters currently in scope
-    /// (BEP-049 §10 / M4e.1). These are MIR-only locals injected by
-    /// `build_tagged_body_closure` — they have no HIR binding (the tag can't be
-    /// resolved during the HIR walk), so `resolve_name_at_in_scope` returns
-    /// `Unknown` for them. `lower_path_expr` consults this set to resolve them
-    /// from `self.locals` instead of emitting a null placeholder. Saved/restored
-    /// around each closure body so it stays scoped to the right template.
-    tagged_body_param_names: HashSet<Name>,
+    /// The tagged-template body-lambda parameters currently in scope (BEP-049
+    /// §10 / M4e.1), mapped to the synthetic `BindingId::parameter` that
+    /// `build_tagged_body_closure` assigns each. These are MIR-only locals — they
+    /// have no HIR binding (the tag can't be resolved during the HIR walk), so
+    /// `resolve_name_at_in_scope` returns `Unknown` for them. `lower_path_expr`
+    /// consults this map to resolve them: directly from `self.locals` when the
+    /// reference sits in the body closure itself, or — when a *nested* lambda
+    /// inside the interpolations references one — via a transitive capture keyed
+    /// on the stored `BindingId` (HIR can't list it, so the standard capture path
+    /// misses it). Saved/restored around each closure body so it stays scoped to
+    /// the right template.
+    tagged_body_param_bindings: HashMap<Name, BindingId>,
 
     /// Stack of null-exit blocks for active `OptionalChain` scopes.
     /// When an `OptionalFieldAccess`/`OptionalIndex`/`OptionalCall` encounters null,
@@ -2821,7 +2825,7 @@ impl<'db> LoweringContext<'db> {
             lambda_generic_params: Vec::new(),
             capture_indices: None,
             transitive_captures_needed: Vec::new(),
-            tagged_body_param_names: HashSet::new(),
+            tagged_body_param_bindings: HashMap::new(),
             resolved_aliases: &pkg_data.resolved_aliases,
             watched_locals_stack: Vec::new(),
             synthetic_name_counts: HashMap::new(),
@@ -3046,7 +3050,7 @@ impl<'db> LoweringContext<'db> {
             lambda_generic_params: Vec::new(),
             capture_indices: None,
             transitive_captures_needed: Vec::new(),
-            tagged_body_param_names: HashSet::new(),
+            tagged_body_param_bindings: HashMap::new(),
             chain_null_exits: Vec::new(),
             opt,
         }
@@ -3176,6 +3180,30 @@ impl<'db> LoweringContext<'db> {
         self.capture_indices
             .as_ref()
             .and_then(|captures| captures.get(&binding_id).copied())
+    }
+
+    /// Return the current lambda's capture index for `binding_id`, allocating a
+    /// fresh one (and signalling the parent to forward it via
+    /// `transitive_captures_needed`) when it isn't captured yet. Mirrors the
+    /// transitive-capture branch of `lower_lambda`'s capture-operand loop, for
+    /// callers that discover a needed capture while lowering an expression
+    /// (e.g. a tagged-body param referenced from a nested lambda).
+    fn ensure_transitive_capture(&mut self, binding_id: BindingId) -> usize {
+        if let Some(idx) = self
+            .capture_indices
+            .as_ref()
+            .and_then(|m| m.get(&binding_id).copied())
+        {
+            return idx;
+        }
+        let idx = {
+            let ci = self.capture_indices.get_or_insert_with(HashMap::new);
+            let idx = ci.len();
+            ci.insert(binding_id, idx);
+            idx
+        };
+        self.transitive_captures_needed.push(binding_id);
+        idx
     }
 
     /// Emit `unwatch` ops for every watched local at index `[watched_depth..]`
@@ -4681,14 +4709,21 @@ impl LoweringContext<'_> {
         let saved_pending_lambdas = std::mem::take(&mut self.pending_lambdas);
         let saved_capture_indices = self.capture_indices.take();
         let saved_transitive_captures = std::mem::take(&mut self.transitive_captures_needed);
-        let saved_tagged_body_params = std::mem::take(&mut self.tagged_body_param_names);
+        let saved_tagged_body_params = std::mem::take(&mut self.tagged_body_param_bindings);
 
         self.current_scope = lambda_scope_id;
         self.current_metadata_scope = MetadataScope::Body(lambda_scope_id);
         self.capture_indices = Some(lambda_capture_indices);
-        // Body params resolve from `self.locals` (no HIR binding) — record their
-        // names so `lower_path_expr` resolves `${param}` interps to the locals.
-        self.tagged_body_param_names = body_params.iter().map(|(n, _)| n.clone()).collect();
+        // Body params resolve from `self.locals` (no HIR binding) — record each
+        // name with the synthetic `BindingId::parameter` it is given below (same
+        // `self.current_scope` and index order as the declare loop), so
+        // `lower_path_expr` resolves `${param}` interps to the locals and a nested
+        // lambda referencing one can capture it transitively by that BindingId.
+        self.tagged_body_param_bindings = body_params
+            .iter()
+            .enumerate()
+            .map(|(idx, (n, _))| (n.clone(), BindingId::parameter(self.current_scope, idx)))
+            .collect();
 
         let arity = body_params.len();
         self.builder = MirBuilder::new(Name::new(&lambda_name), arity);
@@ -4841,7 +4876,7 @@ impl LoweringContext<'_> {
         self.capture_indices = saved_capture_indices;
         self.pending_lambdas = saved_pending_lambdas;
         self.transitive_captures_needed = saved_transitive_captures;
-        self.tagged_body_param_names = saved_tagged_body_params;
+        self.tagged_body_param_bindings = saved_tagged_body_params;
 
         let mut extended_hir_captures = hir_captures;
         for binding_id in newly_needed_transitive {
@@ -5626,18 +5661,25 @@ impl<'db> LoweringContext<'db> {
                     Rvalue::Use(Operand::Constant(Constant::Function(item))),
                 );
             }
-            ResolvedName::Unknown
-                if self.tagged_body_param_names.contains(name)
-                    && self.locals.contains_key(name) =>
-            {
+            ResolvedName::Unknown if self.tagged_body_param_bindings.contains_key(name) => {
                 // A tagged-template body-lambda parameter (BEP-049 §10 / M4e.1):
-                // a MIR-only local that `build_tagged_body_closure` injects into
-                // `self.locals`. It has no HIR binding (the tag can't be resolved
-                // during the HIR walk), so `resolve_name_at_in_scope` returns
-                // `Unknown`; resolve it as an ordinary local here.
-                let local = self.locals[name];
-                self.builder
-                    .assign(dest, Rvalue::Use(Operand::Copy(Place::Local(local))));
+                // a MIR-only local that `build_tagged_body_closure` injects. It has
+                // no HIR binding (the tag can't be resolved during the HIR walk),
+                // so `resolve_name_at_in_scope` returns `Unknown`.
+                if let Some(&local) = self.locals.get(name) {
+                    // The reference sits directly in the body closure: a plain local.
+                    self.builder
+                        .assign(dest, Rvalue::Use(Operand::Copy(Place::Local(local))));
+                } else {
+                    // Referenced from a nested lambda inside the interpolations —
+                    // the param lives in an enclosing frame. HIR can't list it as a
+                    // capture (no binding), so capture it transitively by its stored
+                    // synthetic BindingId, the same way grandparent locals thread up.
+                    let binding_id = self.tagged_body_param_bindings[name];
+                    let cap_idx = self.ensure_transitive_capture(binding_id);
+                    self.builder
+                        .assign(dest, Rvalue::Use(Operand::Copy(Place::Capture(cap_idx))));
+                }
             }
             ResolvedName::Unknown => {
                 if self

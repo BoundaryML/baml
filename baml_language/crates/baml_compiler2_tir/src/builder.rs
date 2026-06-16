@@ -666,6 +666,15 @@ pub struct TypeInferenceBuilder<'db> {
     /// NOT saved/restored by `infer_lambda_body`, so types from arbitrarily
     /// nested lambdas are visible in the outermost (Function/Let) scope.
     pub nested_lambda_types: FxHashMap<FileScopeId, Ty>,
+    /// Tagged-template body Lambda scope (`is_template_body`) → its tag's
+    /// body-lambda params (BEP-049 §10). These params are injected into
+    /// `self.locals` while typing the desugared `tag_body`, but they have no
+    /// HIR binding (the tag resolves only at TIR time), so a real lambda nested
+    /// inside the interpolations cannot see them when its scope is type-checked
+    /// standalone. Recording them here (like `nested_lambda_types`, bubbling up
+    /// to the owning Function/Let scope) lets that standalone inference seed
+    /// them — see `infer_scope_types`'s `ScopeKind::Lambda` arm.
+    pub template_body_params: FxHashMap<FileScopeId, Vec<FunctionParamTy>>,
     /// Diagnostic-only concrete escaping throws for lambda expressions in the
     /// current scope. Used to explain callback forwarding without affecting
     /// call instantiation or throws checking semantics.
@@ -901,6 +910,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             function_coercions: FxHashMap::default(),
             default_parameter_inference: crate::inference::DefaultParameterInference::empty(),
             nested_lambda_types: FxHashMap::default(),
+            template_body_params: FxHashMap::default(),
             lambda_effective_throws: FxHashMap::default(),
             is_auto_derived_body: false,
         }
@@ -998,6 +1008,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         FxHashMap<ExprId, Vec<Ty>>,
         FxHashMap<ExprId, crate::inference::FunctionCoercion>,
         FxHashMap<FileScopeId, Ty>,
+        FxHashMap<FileScopeId, Vec<FunctionParamTy>>,
         crate::inference::DefaultParameterInference<'db>,
     ) {
         let diagnostics = self.context.finish();
@@ -1016,6 +1027,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             self.call_type_instantiations,
             self.function_coercions,
             self.nested_lambda_types,
+            self.template_body_params,
             self.default_parameter_inference,
         )
     }
@@ -4322,6 +4334,30 @@ impl<'db> TypeInferenceBuilder<'db> {
                         )
                     }
                 };
+
+                // Record the body-lambda params against the synthetic
+                // template-body Lambda scope(s) (range == this tagged-template
+                // expr's span) so a real lambda nested in the interpolations can
+                // seed them when its own scope is type-checked standalone — there
+                // the params have no HIR binding and would otherwise be
+                // "unresolved name". Companion functions (an LLM fn and its
+                // `$stream`) can share the span, so record into every match.
+                if !body_lambda_params.is_empty()
+                    && let Some(sm) = self.body_source_map.as_ref()
+                {
+                    let span = sm.expr_span(expr_id);
+                    let db = self.context.db();
+                    let file = self.context.scope().file(db);
+                    let index = baml_compiler2_ppir::file_semantic_index(db, file);
+                    for (i, scope) in index.scopes.iter().enumerate() {
+                        if scope.is_template_body && scope.range == span {
+                            #[allow(clippy::cast_possible_truncation)]
+                            let fsi = FileScopeId::new(i as u32);
+                            self.template_body_params
+                                .insert(fsi, body_lambda_params.clone());
+                        }
+                    }
+                }
 
                 // Bind the body-lambda params, walk the segments, then restore.
                 // Mirrors `infer_lambda_body`'s param binding (direct insert,

@@ -382,6 +382,7 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
                 _call_type_instantiations,
                 _function_coercions,
                 _call_throws,
+                _template_body_params,
                 _default_parameter_inference,
             ) = builder.finish();
             for tir_diag in type_check_diagnostics.diagnostics {
