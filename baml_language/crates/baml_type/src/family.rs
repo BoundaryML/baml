@@ -251,3 +251,174 @@ ty_family! {
         EvolvingMap(Box<Ty>, Box<Ty>, TyAttr),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use borsh::BorshDeserialize;
+
+    use crate::{
+        ConcreteRealizedTy, ConcreteTy, FunctionParamTy, MediaKind, Name, NotRealizedTy,
+        RealizedTy, RuntimeTy, Ty, TyAttr, TypeName,
+    };
+
+    fn a() -> TyAttr {
+        TyAttr::default()
+    }
+
+    fn qtn(s: &str) -> TypeName {
+        TypeName::local(Name::new(s))
+    }
+
+    /// A deeply-nested type that is realized (no type variables) and has a
+    /// concrete top-level variant, so it is representable in every member.
+    /// Exercises `Map`/`List`/`Union`, the `Function` satellite +
+    /// `Vec<Option<_>>` bound, and the `Interface` `Vec<(Name, _)>` binding.
+    fn deep_concrete() -> Ty {
+        Ty::Map {
+            key: Box::new(Ty::String { attr: a() }),
+            value: Box::new(Ty::Function {
+                generic_params: vec![Name::new("T")],
+                generic_param_bounds: vec![Some(Ty::String { attr: a() }), None],
+                params: vec![
+                    FunctionParamTy::required(Some(Name::new("x")), Ty::Int { attr: a() }),
+                    FunctionParamTy::optional(
+                        Some(Name::new("y")),
+                        Ty::List(Box::new(Ty::Bool { attr: a() }), a()),
+                    ),
+                ],
+                ret: Box::new(Ty::Interface(
+                    qtn("Iterator"),
+                    vec![Ty::Union(
+                        vec![Ty::Int { attr: a() }, Ty::Null { attr: a() }],
+                        a(),
+                    )],
+                    vec![(Name::new("Item"), Ty::String { attr: a() })],
+                    a(),
+                )),
+                throws: Box::new(Ty::Void { attr: a() }),
+                attr: a(),
+            }),
+            attr: a(),
+        }
+    }
+
+    /// A type variable nested inside a concrete container: representable in
+    /// `RuntimeTy` but not `RealizedTy`.
+    fn with_typevar() -> Ty {
+        Ty::List(Box::new(Ty::TypeVar(Name::new("T"), a())), a())
+    }
+
+    /// Widening (`From`) reaches every member above `deep_concrete()`, by ref
+    /// and by owned move, and narrowing inverts it.
+    #[test]
+    fn conversion_matrix_round_trips() {
+        let t = deep_concrete();
+        let rt = RuntimeTy::try_from(&t).unwrap();
+        let rz = RealizedTy::try_from(&t).unwrap();
+        let ct = ConcreteTy::try_from(&rt).unwrap();
+        let crz = ConcreteRealizedTy::try_from(&rz).unwrap();
+
+        // RealizedTy ≤ RuntimeTy ≤ Ty (deep), by ref + owned move.
+        assert_eq!(Ty::from(&rt), t);
+        assert_eq!(Ty::from(rt.clone()), t);
+        assert_eq!(Ty::from(&rz), t);
+        assert_eq!(RuntimeTy::from(&rz), rt);
+        assert_eq!(RuntimeTy::from(rz.clone()), rt);
+
+        // ConcreteTy ≤ RuntimeTy ≤ Ty (ConcreteTy→RuntimeTy is shallow: same child).
+        assert_eq!(RuntimeTy::from(&ct), rt);
+        assert_eq!(RuntimeTy::from(ct.clone()), rt);
+        assert_eq!(Ty::from(&ct), t);
+
+        // ConcreteRealizedTy ≤ {ConcreteTy, RealizedTy, RuntimeTy, Ty}.
+        assert_eq!(RealizedTy::from(&crz), rz);
+        assert_eq!(ConcreteTy::from(&crz), ct);
+        assert_eq!(ConcreteTy::from(crz.clone()), ct);
+        assert_eq!(RuntimeTy::from(&crz), rt);
+        assert_eq!(Ty::from(&crz), t);
+
+        // Narrowing inverts widening for the remaining edges.
+        assert_eq!(ConcreteTy::try_from(&t).unwrap(), ct);
+        assert_eq!(ConcreteRealizedTy::try_from(&rt).unwrap(), crz);
+        assert_eq!(ConcreteRealizedTy::try_from(&ct).unwrap(), crz);
+        assert_eq!(ConcreteRealizedTy::try_from(&t).unwrap(), crz);
+    }
+
+    /// `RealizedTy` deeply rejects type variables (by name); `RuntimeTy` keeps
+    /// them.
+    #[test]
+    fn realized_rejects_type_variables() {
+        let t = with_typevar();
+        assert!(RuntimeTy::try_from(&t).is_ok());
+        assert_eq!(
+            RealizedTy::try_from(&t),
+            Err(NotRealizedTy { variant: "TypeVar" })
+        );
+    }
+
+    /// Borsh serialization round-trips for every member.
+    #[test]
+    fn borsh_round_trips() {
+        let t = deep_concrete();
+        let rt = RuntimeTy::try_from(&t).unwrap();
+        let rz = RealizedTy::try_from(&t).unwrap();
+        let ct = ConcreteTy::try_from(&rt).unwrap();
+        let crz = ConcreteRealizedTy::try_from(&rz).unwrap();
+
+        assert_eq!(Ty::try_from_slice(&borsh::to_vec(&t).unwrap()).unwrap(), t);
+        assert_eq!(
+            RuntimeTy::try_from_slice(&borsh::to_vec(&rt).unwrap()).unwrap(),
+            rt
+        );
+        assert_eq!(
+            RealizedTy::try_from_slice(&borsh::to_vec(&rz).unwrap()).unwrap(),
+            rz
+        );
+        assert_eq!(
+            ConcreteTy::try_from_slice(&borsh::to_vec(&ct).unwrap()).unwrap(),
+            ct
+        );
+        assert_eq!(
+            ConcreteRealizedTy::try_from_slice(&borsh::to_vec(&crz).unwrap()).unwrap(),
+            crz
+        );
+    }
+
+    /// Lock the Borsh wire format: variants are tagged by declaration-order
+    /// index (a leading `u8`). A reorder of the master enum — or a member that
+    /// re-indexes its variants — would change these and break persisted bytes.
+    #[test]
+    fn borsh_discriminants_are_declaration_order() {
+        let tag = |bytes: Vec<u8>| bytes[0];
+        assert_eq!(tag(borsh::to_vec(&Ty::Int { attr: a() }).unwrap()), 0);
+        assert_eq!(
+            tag(borsh::to_vec(&Ty::Media(MediaKind::Image, a())).unwrap()),
+            7
+        );
+        assert_eq!(
+            tag(borsh::to_vec(&Ty::List(Box::new(Ty::Bool { attr: a() }), a())).unwrap()),
+            13
+        );
+        // `EvolvingMap` is the last (33rd) `Ty` variant.
+        assert_eq!(
+            tag(borsh::to_vec(&Ty::EvolvingMap(
+                Box::new(Ty::Never { attr: a() }),
+                Box::new(Ty::Never { attr: a() }),
+                a()
+            ))
+            .unwrap()),
+            32
+        );
+        // `RuntimeTy` keeps `Ty`'s order through the non-`tir` variants.
+        assert_eq!(
+            tag(borsh::to_vec(&RuntimeTy::Int { attr: a() }).unwrap()),
+            0
+        );
+        // `RealizedTy` drops the two `typevar` variants, so its tail shifts up:
+        // `BuiltinUnknown` is 25 here (vs 27 in `Ty`).
+        assert_eq!(
+            tag(borsh::to_vec(&RealizedTy::BuiltinUnknown { attr: a() }).unwrap()),
+            25
+        );
+    }
+}
