@@ -735,7 +735,7 @@ export function Article() {
           }
           <a
             className="l6-link"
-            href="https://bench3-ui.fly.dev/"
+            href="https://new.boundaryml.com/atb"
             rel="noreferrer"
             target="_blank"
           >
@@ -746,7 +746,7 @@ export function Article() {
           }
           <a
             className="l6-link"
-            href="https://bench3-ui.fly.dev/cohorts"
+            href="https://new.boundaryml.com/atb/arena"
             rel="noreferrer"
             target="_blank"
           >

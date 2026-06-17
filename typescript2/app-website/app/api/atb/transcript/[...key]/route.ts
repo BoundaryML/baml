@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// Server-side proxy to the bench3-api blob store: raw Claude Code
+// Server-side proxy to the bammy-service blob store (ATB_SERVICE_URL): raw Claude Code
 // transcripts and skill snapshots live on its volume, bearer-protected.
 // The token never reaches the browser.
 

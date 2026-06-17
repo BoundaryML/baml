@@ -93,7 +93,7 @@ const nextConfig = {
       // function. Vercel handles this rewrite at the edge.
       {
         source: '/api/changelog-feed/:path*',
-        destination: 'https://bench3-ingress.fly.dev/:path*',
+        destination: 'https://bammy-service.fly.dev/:path*',
       },
     ];
   },
