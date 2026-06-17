@@ -297,155 +297,19 @@ function iter_impl_generics_only.iter_chain() -> int[] {
     load_const 4
     alloc_array 2
     call user.iter_impl_generics_only.core.ArrayIterator.new
-    store_var _8
-    load_var a
-    is_type iter_impl_generics_only.core.Flatten<...>
-    pop_jump_if_false L0
-    jump L19
-
-  L0:
-    load_var a
-    is_type iter_impl_generics_only.core.StepBy<...>
-    pop_jump_if_false L1
-    jump L18
-
-  L1:
-    load_var a
-    is_type iter_impl_generics_only.core.Repeat<...>
-    pop_jump_if_false L2
-    jump L17
-
-  L2:
-    load_var a
-    is_type iter_impl_generics_only.core.FlatMap<...>
-    pop_jump_if_false L3
-    jump L16
-
-  L3:
-    load_var a
-    is_type iter_impl_generics_only.core.FilterMap<...>
-    pop_jump_if_false L4
-    jump L15
-
-  L4:
-    load_var a
-    is_type iter_impl_generics_only.core.Range
-    pop_jump_if_false L5
-    jump L14
-
-  L5:
-    load_var a
-    is_type iter_impl_generics_only.core.ArrayIterator<...>
-    pop_jump_if_false L6
-    jump L13
-
-  L6:
-    load_var a
-    is_type iter_impl_generics_only.core.Map<...>
-    pop_jump_if_false L7
-    jump L12
-
-  L7:
-    load_var a
-    is_type iter_impl_generics_only.core.Chain<...>
-    pop_jump_if_false L8
-    jump L11
-
-  L8:
-    load_var a
-    is_type iter_impl_generics_only.core.Filter<...>
-    pop_jump_if_false L9
-    jump L10
-
-  L9:
-    load_var a
-    is_type iter_impl_generics_only.core.Peekable<...>
-    pop_jump_if_false L21
-    load_type int
-    load_type never
+    store_var b
     load_var2 2 3
-    call user.iter_impl_generics_only.core.Iterator.chain
-    jump L20
-
-  L10:
-    load_type int
-    load_type never
-    load_var2 2 3
-    call user.iter_impl_generics_only.core.Iterator.chain
-    jump L20
-
-  L11:
-    load_type int
-    load_type never
-    load_var2 2 3
-    call user.iter_impl_generics_only.core.Iterator.chain
-    jump L20
-
-  L12:
-    load_type int
-    load_type never
-    load_var2 2 3
-    call user.iter_impl_generics_only.core.Iterator.chain
-    jump L20
-
-  L13:
-    load_type int
-    load_type never
-    load_var2 2 3
-    call user.iter_impl_generics_only.core.Iterator.chain
-    jump L20
-
-  L14:
-    load_type int
-    load_type never
-    load_var2 2 3
-    call user.iter_impl_generics_only.core.Iterator.chain
-    jump L20
-
-  L15:
-    load_type int
-    load_type never
-    load_var2 2 3
-    call user.iter_impl_generics_only.core.Iterator.chain
-    jump L20
-
-  L16:
-    load_type int
-    load_type never
-    load_var2 2 3
-    call user.iter_impl_generics_only.core.Iterator.chain
-    jump L20
-
-  L17:
-    load_type int
-    load_type never
-    load_var2 2 3
-    call user.iter_impl_generics_only.core.Iterator.chain
-    jump L20
-
-  L18:
-    load_type int
-    load_type never
-    load_var2 2 3
-    call user.iter_impl_generics_only.core.Iterator.chain
-    jump L20
-
-  L19:
-    load_type int
-    load_type never
-    load_var2 2 3
-    call user.iter_impl_generics_only.core.Iterator.chain
-
-  L20:
+    load_type iter_impl_generics_only.core.Iterator<int, never>
+    load_const "chain"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _7
+    load_var _7
     load_type iter_impl_generics_only.core.Iterator<int, never>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
     store_var _0
     load_var _0
     return
-
-  L21:
-    unreachable
 }
 
 function iter_impl_generics_only.iter_collect() -> int[] {
@@ -455,150 +319,12 @@ function iter_impl_generics_only.iter_collect() -> int[] {
     load_const 7
     alloc_array 3
     call user.iter_impl_generics_only.core.ArrayIterator.new
-    store_var it
-    load_var it
-    is_type iter_impl_generics_only.core.Flatten<...>
-    pop_jump_if_false L0
-    jump L19
-
-  L0:
-    load_var it
-    is_type iter_impl_generics_only.core.StepBy<...>
-    pop_jump_if_false L1
-    jump L18
-
-  L1:
-    load_var it
-    is_type iter_impl_generics_only.core.Repeat<...>
-    pop_jump_if_false L2
-    jump L17
-
-  L2:
-    load_var it
-    is_type iter_impl_generics_only.core.FlatMap<...>
-    pop_jump_if_false L3
-    jump L16
-
-  L3:
-    load_var it
-    is_type iter_impl_generics_only.core.FilterMap<...>
-    pop_jump_if_false L4
-    jump L15
-
-  L4:
-    load_var it
-    is_type iter_impl_generics_only.core.Range
-    pop_jump_if_false L5
-    jump L14
-
-  L5:
-    load_var it
-    is_type iter_impl_generics_only.core.ArrayIterator<...>
-    pop_jump_if_false L6
-    jump L13
-
-  L6:
-    load_var it
-    is_type iter_impl_generics_only.core.Map<...>
-    pop_jump_if_false L7
-    jump L12
-
-  L7:
-    load_var it
-    is_type iter_impl_generics_only.core.Chain<...>
-    pop_jump_if_false L8
-    jump L11
-
-  L8:
-    load_var it
-    is_type iter_impl_generics_only.core.Filter<...>
-    pop_jump_if_false L9
-    jump L10
-
-  L9:
-    load_var it
-    is_type iter_impl_generics_only.core.Peekable<...>
-    pop_jump_if_false L21
-    load_type int
-    load_type never
-    load_var it
-    call user.iter_impl_generics_only.core.Iterator.collect
-    jump L20
-
-  L10:
-    load_type int
-    load_type never
-    load_var it
-    call user.iter_impl_generics_only.core.Iterator.collect
-    jump L20
-
-  L11:
-    load_type int
-    load_type never
-    load_var it
-    call user.iter_impl_generics_only.core.Iterator.collect
-    jump L20
-
-  L12:
-    load_type int
-    load_type never
-    load_var it
-    call user.iter_impl_generics_only.core.Iterator.collect
-    jump L20
-
-  L13:
-    load_type int
-    load_type never
-    load_var it
-    call user.iter_impl_generics_only.core.Iterator.collect
-    jump L20
-
-  L14:
-    load_type int
-    load_type never
-    load_var it
-    call user.iter_impl_generics_only.core.Iterator.collect
-    jump L20
-
-  L15:
-    load_type int
-    load_type never
-    load_var it
-    call user.iter_impl_generics_only.core.Iterator.collect
-    jump L20
-
-  L16:
-    load_type int
-    load_type never
-    load_var it
-    call user.iter_impl_generics_only.core.Iterator.collect
-    jump L20
-
-  L17:
-    load_type int
-    load_type never
-    load_var it
-    call user.iter_impl_generics_only.core.Iterator.collect
-    jump L20
-
-  L18:
-    load_type int
-    load_type never
-    load_var it
-    call user.iter_impl_generics_only.core.Iterator.collect
-    jump L20
-
-  L19:
-    load_type int
-    load_type never
-    load_var it
-    call user.iter_impl_generics_only.core.Iterator.collect
-
-  L20:
+    load_type iter_impl_generics_only.core.Iterator<int, never>
+    load_const "collect"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
-
-  L21:
-    unreachable
 }
 
 function iter_impl_generics_only.iter_count() -> int {
@@ -608,150 +334,12 @@ function iter_impl_generics_only.iter_count() -> int {
     load_const 9
     alloc_array 3
     call user.iter_impl_generics_only.core.ArrayIterator.new
-    store_var it
-    load_var it
-    is_type iter_impl_generics_only.core.Flatten<...>
-    pop_jump_if_false L0
-    jump L19
-
-  L0:
-    load_var it
-    is_type iter_impl_generics_only.core.StepBy<...>
-    pop_jump_if_false L1
-    jump L18
-
-  L1:
-    load_var it
-    is_type iter_impl_generics_only.core.Repeat<...>
-    pop_jump_if_false L2
-    jump L17
-
-  L2:
-    load_var it
-    is_type iter_impl_generics_only.core.FlatMap<...>
-    pop_jump_if_false L3
-    jump L16
-
-  L3:
-    load_var it
-    is_type iter_impl_generics_only.core.FilterMap<...>
-    pop_jump_if_false L4
-    jump L15
-
-  L4:
-    load_var it
-    is_type iter_impl_generics_only.core.Range
-    pop_jump_if_false L5
-    jump L14
-
-  L5:
-    load_var it
-    is_type iter_impl_generics_only.core.ArrayIterator<...>
-    pop_jump_if_false L6
-    jump L13
-
-  L6:
-    load_var it
-    is_type iter_impl_generics_only.core.Map<...>
-    pop_jump_if_false L7
-    jump L12
-
-  L7:
-    load_var it
-    is_type iter_impl_generics_only.core.Chain<...>
-    pop_jump_if_false L8
-    jump L11
-
-  L8:
-    load_var it
-    is_type iter_impl_generics_only.core.Filter<...>
-    pop_jump_if_false L9
-    jump L10
-
-  L9:
-    load_var it
-    is_type iter_impl_generics_only.core.Peekable<...>
-    pop_jump_if_false L21
-    load_type int
-    load_type never
-    load_var it
-    call user.iter_impl_generics_only.core.Iterator.count
-    jump L20
-
-  L10:
-    load_type int
-    load_type never
-    load_var it
-    call user.iter_impl_generics_only.core.Iterator.count
-    jump L20
-
-  L11:
-    load_type int
-    load_type never
-    load_var it
-    call user.iter_impl_generics_only.core.Iterator.count
-    jump L20
-
-  L12:
-    load_type int
-    load_type never
-    load_var it
-    call user.iter_impl_generics_only.core.Iterator.count
-    jump L20
-
-  L13:
-    load_type int
-    load_type never
-    load_var it
-    call user.iter_impl_generics_only.core.Iterator.count
-    jump L20
-
-  L14:
-    load_type int
-    load_type never
-    load_var it
-    call user.iter_impl_generics_only.core.Iterator.count
-    jump L20
-
-  L15:
-    load_type int
-    load_type never
-    load_var it
-    call user.iter_impl_generics_only.core.Iterator.count
-    jump L20
-
-  L16:
-    load_type int
-    load_type never
-    load_var it
-    call user.iter_impl_generics_only.core.Iterator.count
-    jump L20
-
-  L17:
-    load_type int
-    load_type never
-    load_var it
-    call user.iter_impl_generics_only.core.Iterator.count
-    jump L20
-
-  L18:
-    load_type int
-    load_type never
-    load_var it
-    call user.iter_impl_generics_only.core.Iterator.count
-    jump L20
-
-  L19:
-    load_type int
-    load_type never
-    load_var it
-    call user.iter_impl_generics_only.core.Iterator.count
-
-  L20:
+    load_type iter_impl_generics_only.core.Iterator<int, never>
+    load_const "count"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
-
-  L21:
-    unreachable
 }
 
 function iter_impl_generics_only.iter_explicit_map_coerces_to_iterator() -> int[] {
@@ -769,149 +357,12 @@ function iter_impl_generics_only.iter_explicit_map_coerces_to_iterator() -> int[
     load_type never
     load_type never
     init_instance<4> user.iter_impl_generics_only.core.Map .iter, .func
-    store_var_load_var mapped
-    is_type iter_impl_generics_only.core.Flatten<...>
-    pop_jump_if_false L0
-    jump L19
-
-  L0:
-    load_var mapped
-    is_type iter_impl_generics_only.core.StepBy<...>
-    pop_jump_if_false L1
-    jump L18
-
-  L1:
-    load_var mapped
-    is_type iter_impl_generics_only.core.Repeat<...>
-    pop_jump_if_false L2
-    jump L17
-
-  L2:
-    load_var mapped
-    is_type iter_impl_generics_only.core.FlatMap<...>
-    pop_jump_if_false L3
-    jump L16
-
-  L3:
-    load_var mapped
-    is_type iter_impl_generics_only.core.FilterMap<...>
-    pop_jump_if_false L4
-    jump L15
-
-  L4:
-    load_var mapped
-    is_type iter_impl_generics_only.core.Range
-    pop_jump_if_false L5
-    jump L14
-
-  L5:
-    load_var mapped
-    is_type iter_impl_generics_only.core.ArrayIterator<...>
-    pop_jump_if_false L6
-    jump L13
-
-  L6:
-    load_var mapped
-    is_type iter_impl_generics_only.core.Map<...>
-    pop_jump_if_false L7
-    jump L12
-
-  L7:
-    load_var mapped
-    is_type iter_impl_generics_only.core.Chain<...>
-    pop_jump_if_false L8
-    jump L11
-
-  L8:
-    load_var mapped
-    is_type iter_impl_generics_only.core.Filter<...>
-    pop_jump_if_false L9
-    jump L10
-
-  L9:
-    load_var mapped
-    is_type iter_impl_generics_only.core.Peekable<...>
-    pop_jump_if_false L21
-    load_type int
-    load_type never
-    load_var mapped
-    call user.iter_impl_generics_only.core.Iterator.collect
-    jump L20
-
-  L10:
-    load_type int
-    load_type never
-    load_var mapped
-    call user.iter_impl_generics_only.core.Iterator.collect
-    jump L20
-
-  L11:
-    load_type int
-    load_type never
-    load_var mapped
-    call user.iter_impl_generics_only.core.Iterator.collect
-    jump L20
-
-  L12:
-    load_type int
-    load_type never
-    load_var mapped
-    call user.iter_impl_generics_only.core.Iterator.collect
-    jump L20
-
-  L13:
-    load_type int
-    load_type never
-    load_var mapped
-    call user.iter_impl_generics_only.core.Iterator.collect
-    jump L20
-
-  L14:
-    load_type int
-    load_type never
-    load_var mapped
-    call user.iter_impl_generics_only.core.Iterator.collect
-    jump L20
-
-  L15:
-    load_type int
-    load_type never
-    load_var mapped
-    call user.iter_impl_generics_only.core.Iterator.collect
-    jump L20
-
-  L16:
-    load_type int
-    load_type never
-    load_var mapped
-    call user.iter_impl_generics_only.core.Iterator.collect
-    jump L20
-
-  L17:
-    load_type int
-    load_type never
-    load_var mapped
-    call user.iter_impl_generics_only.core.Iterator.collect
-    jump L20
-
-  L18:
-    load_type int
-    load_type never
-    load_var mapped
-    call user.iter_impl_generics_only.core.Iterator.collect
-    jump L20
-
-  L19:
-    load_type int
-    load_type never
-    load_var mapped
-    call user.iter_impl_generics_only.core.Iterator.collect
-
-  L20:
+    load_type iter_impl_generics_only.core.Iterator<int, never>
+    load_const "collect"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
-
-  L21:
-    unreachable
 }
 
 function iter_impl_generics_only.iter_filter() -> int[] {
@@ -923,169 +374,20 @@ function iter_impl_generics_only.iter_filter() -> int[] {
     alloc_array 4
     call user.iter_impl_generics_only.core.ArrayIterator.new
     store_var it
+    load_type never
+    load_var it
     make_closure .<lambda(iter_filter, 0)>, 0
-    store_var _5
-    load_type never
-    store_var _6
-    load_var it
-    is_type iter_impl_generics_only.core.Flatten<...>
-    pop_jump_if_false L0
-    jump L19
-
-  L0:
-    load_var it
-    is_type iter_impl_generics_only.core.StepBy<...>
-    pop_jump_if_false L1
-    jump L18
-
-  L1:
-    load_var it
-    is_type iter_impl_generics_only.core.Repeat<...>
-    pop_jump_if_false L2
-    jump L17
-
-  L2:
-    load_var it
-    is_type iter_impl_generics_only.core.FlatMap<...>
-    pop_jump_if_false L3
-    jump L16
-
-  L3:
-    load_var it
-    is_type iter_impl_generics_only.core.FilterMap<...>
-    pop_jump_if_false L4
-    jump L15
-
-  L4:
-    load_var it
-    is_type iter_impl_generics_only.core.Range
-    pop_jump_if_false L5
-    jump L14
-
-  L5:
-    load_var it
-    is_type iter_impl_generics_only.core.ArrayIterator<...>
-    pop_jump_if_false L6
-    jump L13
-
-  L6:
-    load_var it
-    is_type iter_impl_generics_only.core.Map<...>
-    pop_jump_if_false L7
-    jump L12
-
-  L7:
-    load_var it
-    is_type iter_impl_generics_only.core.Chain<...>
-    pop_jump_if_false L8
-    jump L11
-
-  L8:
-    load_var it
-    is_type iter_impl_generics_only.core.Filter<...>
-    pop_jump_if_false L9
-    jump L10
-
-  L9:
-    load_var it
-    is_type iter_impl_generics_only.core.Peekable<...>
-    pop_jump_if_false L21
-    load_type int
-    load_type never
-    load_var2 4 2
-    load_var _5
-    call user.iter_impl_generics_only.core.Iterator.filter
-    jump L20
-
-  L10:
-    load_type int
-    load_type never
-    load_var2 4 2
-    load_var _5
-    call user.iter_impl_generics_only.core.Iterator.filter
-    jump L20
-
-  L11:
-    load_type int
-    load_type never
-    load_var2 4 2
-    load_var _5
-    call user.iter_impl_generics_only.core.Iterator.filter
-    jump L20
-
-  L12:
-    load_type int
-    load_type never
-    load_var2 4 2
-    load_var _5
-    call user.iter_impl_generics_only.core.Iterator.filter
-    jump L20
-
-  L13:
-    load_type int
-    load_type never
-    load_var2 4 2
-    load_var _5
-    call user.iter_impl_generics_only.core.Iterator.filter
-    jump L20
-
-  L14:
-    load_type int
-    load_type never
-    load_var2 4 2
-    load_var _5
-    call user.iter_impl_generics_only.core.Iterator.filter
-    jump L20
-
-  L15:
-    load_type int
-    load_type never
-    load_var2 4 2
-    load_var _5
-    call user.iter_impl_generics_only.core.Iterator.filter
-    jump L20
-
-  L16:
-    load_type int
-    load_type never
-    load_var2 4 2
-    load_var _5
-    call user.iter_impl_generics_only.core.Iterator.filter
-    jump L20
-
-  L17:
-    load_type int
-    load_type never
-    load_var2 4 2
-    load_var _5
-    call user.iter_impl_generics_only.core.Iterator.filter
-    jump L20
-
-  L18:
-    load_type int
-    load_type never
-    load_var2 4 2
-    load_var _5
-    call user.iter_impl_generics_only.core.Iterator.filter
-    jump L20
-
-  L19:
-    load_type int
-    load_type never
-    load_var2 4 2
-    load_var _5
-    call user.iter_impl_generics_only.core.Iterator.filter
-
-  L20:
+    load_type iter_impl_generics_only.core.Iterator<int, never>
+    load_const "filter"
+    virtual_call nargs=2 ntypeargs=1
+    store_var _4
+    load_var _4
     load_type iter_impl_generics_only.core.Iterator<int, never>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
     store_var _0
     load_var _0
     return
-
-  L21:
-    unreachable
 }
 
 function iter_impl_generics_only.iter_filter_implicit_source() -> int[] {
@@ -1271,171 +573,21 @@ function iter_impl_generics_only.iter_filter_map() -> int[] {
     alloc_array 4
     call user.iter_impl_generics_only.core.ArrayIterator.new
     store_var it
+    load_type int
+    load_type never
+    load_var it
     make_closure .<lambda(iter_filter_map, 0)>, 0
-    store_var _5
-    load_type int
-    store_var _6
-    load_type never
-    store_var _7
-    load_var it
-    is_type iter_impl_generics_only.core.Flatten<...>
-    pop_jump_if_false L0
-    jump L19
-
-  L0:
-    load_var it
-    is_type iter_impl_generics_only.core.StepBy<...>
-    pop_jump_if_false L1
-    jump L18
-
-  L1:
-    load_var it
-    is_type iter_impl_generics_only.core.Repeat<...>
-    pop_jump_if_false L2
-    jump L17
-
-  L2:
-    load_var it
-    is_type iter_impl_generics_only.core.FlatMap<...>
-    pop_jump_if_false L3
-    jump L16
-
-  L3:
-    load_var it
-    is_type iter_impl_generics_only.core.FilterMap<...>
-    pop_jump_if_false L4
-    jump L15
-
-  L4:
-    load_var it
-    is_type iter_impl_generics_only.core.Range
-    pop_jump_if_false L5
-    jump L14
-
-  L5:
-    load_var it
-    is_type iter_impl_generics_only.core.ArrayIterator<...>
-    pop_jump_if_false L6
-    jump L13
-
-  L6:
-    load_var it
-    is_type iter_impl_generics_only.core.Map<...>
-    pop_jump_if_false L7
-    jump L12
-
-  L7:
-    load_var it
-    is_type iter_impl_generics_only.core.Chain<...>
-    pop_jump_if_false L8
-    jump L11
-
-  L8:
-    load_var it
-    is_type iter_impl_generics_only.core.Filter<...>
-    pop_jump_if_false L9
-    jump L10
-
-  L9:
-    load_var it
-    is_type iter_impl_generics_only.core.Peekable<...>
-    pop_jump_if_false L21
-    load_type int
-    load_type never
-    load_var2 4 5
-    load_var2 2 3
-    call user.iter_impl_generics_only.core.Iterator.filter_map
-    jump L20
-
-  L10:
-    load_type int
-    load_type never
-    load_var2 4 5
-    load_var2 2 3
-    call user.iter_impl_generics_only.core.Iterator.filter_map
-    jump L20
-
-  L11:
-    load_type int
-    load_type never
-    load_var2 4 5
-    load_var2 2 3
-    call user.iter_impl_generics_only.core.Iterator.filter_map
-    jump L20
-
-  L12:
-    load_type int
-    load_type never
-    load_var2 4 5
-    load_var2 2 3
-    call user.iter_impl_generics_only.core.Iterator.filter_map
-    jump L20
-
-  L13:
-    load_type int
-    load_type never
-    load_var2 4 5
-    load_var2 2 3
-    call user.iter_impl_generics_only.core.Iterator.filter_map
-    jump L20
-
-  L14:
-    load_type int
-    load_type never
-    load_var2 4 5
-    load_var2 2 3
-    call user.iter_impl_generics_only.core.Iterator.filter_map
-    jump L20
-
-  L15:
-    load_type int
-    load_type never
-    load_var2 4 5
-    load_var2 2 3
-    call user.iter_impl_generics_only.core.Iterator.filter_map
-    jump L20
-
-  L16:
-    load_type int
-    load_type never
-    load_var2 4 5
-    load_var2 2 3
-    call user.iter_impl_generics_only.core.Iterator.filter_map
-    jump L20
-
-  L17:
-    load_type int
-    load_type never
-    load_var2 4 5
-    load_var2 2 3
-    call user.iter_impl_generics_only.core.Iterator.filter_map
-    jump L20
-
-  L18:
-    load_type int
-    load_type never
-    load_var2 4 5
-    load_var2 2 3
-    call user.iter_impl_generics_only.core.Iterator.filter_map
-    jump L20
-
-  L19:
-    load_type int
-    load_type never
-    load_var2 4 5
-    load_var2 2 3
-    call user.iter_impl_generics_only.core.Iterator.filter_map
-
-  L20:
+    load_type iter_impl_generics_only.core.Iterator<int, never>
+    load_const "filter_map"
+    virtual_call nargs=2 ntypeargs=2
+    store_var _4
+    load_var _4
     load_type iter_impl_generics_only.core.Iterator<int, never>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
     store_var _0
     load_var _0
     return
-
-  L21:
-    unreachable
 }
 
 function iter_impl_generics_only.iter_filter_map_implicit_source() -> int[] {
@@ -1621,184 +773,22 @@ function iter_impl_generics_only.iter_flat_map() -> int[] {
     alloc_array 2
     call user.iter_impl_generics_only.core.ArrayIterator.new
     store_var it
+    load_type int
+    load_type never
+    load_type never
+    load_var it
     make_closure .<lambda(iter_flat_map, 0)>, 0
-    store_var _5
-    load_type int
-    store_var _6
-    load_type never
-    store_var _7
-    load_type never
-    store_var _8
-    load_var it
-    is_type iter_impl_generics_only.core.Flatten<...>
-    pop_jump_if_false L0
-    jump L19
-
-  L0:
-    load_var it
-    is_type iter_impl_generics_only.core.StepBy<...>
-    pop_jump_if_false L1
-    jump L18
-
-  L1:
-    load_var it
-    is_type iter_impl_generics_only.core.Repeat<...>
-    pop_jump_if_false L2
-    jump L17
-
-  L2:
-    load_var it
-    is_type iter_impl_generics_only.core.FlatMap<...>
-    pop_jump_if_false L3
-    jump L16
-
-  L3:
-    load_var it
-    is_type iter_impl_generics_only.core.FilterMap<...>
-    pop_jump_if_false L4
-    jump L15
-
-  L4:
-    load_var it
-    is_type iter_impl_generics_only.core.Range
-    pop_jump_if_false L5
-    jump L14
-
-  L5:
-    load_var it
-    is_type iter_impl_generics_only.core.ArrayIterator<...>
-    pop_jump_if_false L6
-    jump L13
-
-  L6:
-    load_var it
-    is_type iter_impl_generics_only.core.Map<...>
-    pop_jump_if_false L7
-    jump L12
-
-  L7:
-    load_var it
-    is_type iter_impl_generics_only.core.Chain<...>
-    pop_jump_if_false L8
-    jump L11
-
-  L8:
-    load_var it
-    is_type iter_impl_generics_only.core.Filter<...>
-    pop_jump_if_false L9
-    jump L10
-
-  L9:
-    load_var it
-    is_type iter_impl_generics_only.core.Peekable<...>
-    pop_jump_if_false L21
-    load_type int
-    load_type never
-    load_var2 4 5
-    load_var2 6 2
-    load_var _5
-    call user.iter_impl_generics_only.core.Iterator.flat_map
-    jump L20
-
-  L10:
-    load_type int
-    load_type never
-    load_var2 4 5
-    load_var2 6 2
-    load_var _5
-    call user.iter_impl_generics_only.core.Iterator.flat_map
-    jump L20
-
-  L11:
-    load_type int
-    load_type never
-    load_var2 4 5
-    load_var2 6 2
-    load_var _5
-    call user.iter_impl_generics_only.core.Iterator.flat_map
-    jump L20
-
-  L12:
-    load_type int
-    load_type never
-    load_var2 4 5
-    load_var2 6 2
-    load_var _5
-    call user.iter_impl_generics_only.core.Iterator.flat_map
-    jump L20
-
-  L13:
-    load_type int
-    load_type never
-    load_var2 4 5
-    load_var2 6 2
-    load_var _5
-    call user.iter_impl_generics_only.core.Iterator.flat_map
-    jump L20
-
-  L14:
-    load_type int
-    load_type never
-    load_var2 4 5
-    load_var2 6 2
-    load_var _5
-    call user.iter_impl_generics_only.core.Iterator.flat_map
-    jump L20
-
-  L15:
-    load_type int
-    load_type never
-    load_var2 4 5
-    load_var2 6 2
-    load_var _5
-    call user.iter_impl_generics_only.core.Iterator.flat_map
-    jump L20
-
-  L16:
-    load_type int
-    load_type never
-    load_var2 4 5
-    load_var2 6 2
-    load_var _5
-    call user.iter_impl_generics_only.core.Iterator.flat_map
-    jump L20
-
-  L17:
-    load_type int
-    load_type never
-    load_var2 4 5
-    load_var2 6 2
-    load_var _5
-    call user.iter_impl_generics_only.core.Iterator.flat_map
-    jump L20
-
-  L18:
-    load_type int
-    load_type never
-    load_var2 4 5
-    load_var2 6 2
-    load_var _5
-    call user.iter_impl_generics_only.core.Iterator.flat_map
-    jump L20
-
-  L19:
-    load_type int
-    load_type never
-    load_var2 4 5
-    load_var2 6 2
-    load_var _5
-    call user.iter_impl_generics_only.core.Iterator.flat_map
-
-  L20:
+    load_type iter_impl_generics_only.core.Iterator<int, never>
+    load_const "flat_map"
+    virtual_call nargs=2 ntypeargs=3
+    store_var _4
+    load_var _4
     load_type iter_impl_generics_only.core.Iterator<int, never>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
     store_var _0
     load_var _0
     return
-
-  L21:
-    unreachable
 }
 
 function iter_impl_generics_only.iter_flat_map_implicit_source() -> int[] {
@@ -2027,171 +1017,21 @@ function iter_impl_generics_only.iter_map() -> int[] {
     alloc_array 3
     call user.iter_impl_generics_only.core.ArrayIterator.new
     store_var it
+    load_type int
+    load_type never
+    load_var it
     make_closure .<lambda(iter_map, 0)>, 0
-    store_var _5
-    load_type int
-    store_var _6
-    load_type never
-    store_var _7
-    load_var it
-    is_type iter_impl_generics_only.core.Flatten<...>
-    pop_jump_if_false L0
-    jump L19
-
-  L0:
-    load_var it
-    is_type iter_impl_generics_only.core.StepBy<...>
-    pop_jump_if_false L1
-    jump L18
-
-  L1:
-    load_var it
-    is_type iter_impl_generics_only.core.Repeat<...>
-    pop_jump_if_false L2
-    jump L17
-
-  L2:
-    load_var it
-    is_type iter_impl_generics_only.core.FlatMap<...>
-    pop_jump_if_false L3
-    jump L16
-
-  L3:
-    load_var it
-    is_type iter_impl_generics_only.core.FilterMap<...>
-    pop_jump_if_false L4
-    jump L15
-
-  L4:
-    load_var it
-    is_type iter_impl_generics_only.core.Range
-    pop_jump_if_false L5
-    jump L14
-
-  L5:
-    load_var it
-    is_type iter_impl_generics_only.core.ArrayIterator<...>
-    pop_jump_if_false L6
-    jump L13
-
-  L6:
-    load_var it
-    is_type iter_impl_generics_only.core.Map<...>
-    pop_jump_if_false L7
-    jump L12
-
-  L7:
-    load_var it
-    is_type iter_impl_generics_only.core.Chain<...>
-    pop_jump_if_false L8
-    jump L11
-
-  L8:
-    load_var it
-    is_type iter_impl_generics_only.core.Filter<...>
-    pop_jump_if_false L9
-    jump L10
-
-  L9:
-    load_var it
-    is_type iter_impl_generics_only.core.Peekable<...>
-    pop_jump_if_false L21
-    load_type int
-    load_type never
-    load_var2 4 5
-    load_var2 2 3
-    call user.iter_impl_generics_only.core.Iterator.map
-    jump L20
-
-  L10:
-    load_type int
-    load_type never
-    load_var2 4 5
-    load_var2 2 3
-    call user.iter_impl_generics_only.core.Iterator.map
-    jump L20
-
-  L11:
-    load_type int
-    load_type never
-    load_var2 4 5
-    load_var2 2 3
-    call user.iter_impl_generics_only.core.Iterator.map
-    jump L20
-
-  L12:
-    load_type int
-    load_type never
-    load_var2 4 5
-    load_var2 2 3
-    call user.iter_impl_generics_only.core.Iterator.map
-    jump L20
-
-  L13:
-    load_type int
-    load_type never
-    load_var2 4 5
-    load_var2 2 3
-    call user.iter_impl_generics_only.core.Iterator.map
-    jump L20
-
-  L14:
-    load_type int
-    load_type never
-    load_var2 4 5
-    load_var2 2 3
-    call user.iter_impl_generics_only.core.Iterator.map
-    jump L20
-
-  L15:
-    load_type int
-    load_type never
-    load_var2 4 5
-    load_var2 2 3
-    call user.iter_impl_generics_only.core.Iterator.map
-    jump L20
-
-  L16:
-    load_type int
-    load_type never
-    load_var2 4 5
-    load_var2 2 3
-    call user.iter_impl_generics_only.core.Iterator.map
-    jump L20
-
-  L17:
-    load_type int
-    load_type never
-    load_var2 4 5
-    load_var2 2 3
-    call user.iter_impl_generics_only.core.Iterator.map
-    jump L20
-
-  L18:
-    load_type int
-    load_type never
-    load_var2 4 5
-    load_var2 2 3
-    call user.iter_impl_generics_only.core.Iterator.map
-    jump L20
-
-  L19:
-    load_type int
-    load_type never
-    load_var2 4 5
-    load_var2 2 3
-    call user.iter_impl_generics_only.core.Iterator.map
-
-  L20:
+    load_type iter_impl_generics_only.core.Iterator<int, never>
+    load_const "map"
+    virtual_call nargs=2 ntypeargs=2
+    store_var _4
+    load_var _4
     load_type iter_impl_generics_only.core.Iterator<int, never>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
     store_var _0
     load_var _0
     return
-
-  L21:
-    unreachable
 }
 
 function iter_impl_generics_only.iter_map_implicit_source() -> int[] {
@@ -3046,177 +1886,17 @@ function iter_impl_generics_only.iter_reduce() -> int {
     alloc_array 4
     call user.iter_impl_generics_only.core.ArrayIterator.new
     store_var it
+    load_type int
+    load_type never
+    load_var it
     make_closure .<lambda(iter_reduce, 0)>, 0
-    store_var _4
-    load_type int
-    store_var _6
-    load_type never
-    store_var _7
-    load_var it
-    is_type iter_impl_generics_only.core.Flatten<...>
-    pop_jump_if_false L0
-    jump L19
-
-  L0:
-    load_var it
-    is_type iter_impl_generics_only.core.StepBy<...>
-    pop_jump_if_false L1
-    jump L18
-
-  L1:
-    load_var it
-    is_type iter_impl_generics_only.core.Repeat<...>
-    pop_jump_if_false L2
-    jump L17
-
-  L2:
-    load_var it
-    is_type iter_impl_generics_only.core.FlatMap<...>
-    pop_jump_if_false L3
-    jump L16
-
-  L3:
-    load_var it
-    is_type iter_impl_generics_only.core.FilterMap<...>
-    pop_jump_if_false L4
-    jump L15
-
-  L4:
-    load_var it
-    is_type iter_impl_generics_only.core.Range
-    pop_jump_if_false L5
-    jump L14
-
-  L5:
-    load_var it
-    is_type iter_impl_generics_only.core.ArrayIterator<...>
-    pop_jump_if_false L6
-    jump L13
-
-  L6:
-    load_var it
-    is_type iter_impl_generics_only.core.Map<...>
-    pop_jump_if_false L7
-    jump L12
-
-  L7:
-    load_var it
-    is_type iter_impl_generics_only.core.Chain<...>
-    pop_jump_if_false L8
-    jump L11
-
-  L8:
-    load_var it
-    is_type iter_impl_generics_only.core.Filter<...>
-    pop_jump_if_false L9
-    jump L10
-
-  L9:
-    load_var it
-    is_type iter_impl_generics_only.core.Peekable<...>
-    pop_jump_if_false L21
-    load_type int
-    load_type never
-    load_var2 3 4
-    load_var2 1 2
     load_const 0
-    call user.iter_impl_generics_only.core.Iterator.reduce
-    jump L20
-
-  L10:
-    load_type int
-    load_type never
-    load_var2 3 4
-    load_var2 1 2
-    load_const 0
-    call user.iter_impl_generics_only.core.Iterator.reduce
-    jump L20
-
-  L11:
-    load_type int
-    load_type never
-    load_var2 3 4
-    load_var2 1 2
-    load_const 0
-    call user.iter_impl_generics_only.core.Iterator.reduce
-    jump L20
-
-  L12:
-    load_type int
-    load_type never
-    load_var2 3 4
-    load_var2 1 2
-    load_const 0
-    call user.iter_impl_generics_only.core.Iterator.reduce
-    jump L20
-
-  L13:
-    load_type int
-    load_type never
-    load_var2 3 4
-    load_var2 1 2
-    load_const 0
-    call user.iter_impl_generics_only.core.Iterator.reduce
-    jump L20
-
-  L14:
-    load_type int
-    load_type never
-    load_var2 3 4
-    load_var2 1 2
-    load_const 0
-    call user.iter_impl_generics_only.core.Iterator.reduce
-    jump L20
-
-  L15:
-    load_type int
-    load_type never
-    load_var2 3 4
-    load_var2 1 2
-    load_const 0
-    call user.iter_impl_generics_only.core.Iterator.reduce
-    jump L20
-
-  L16:
-    load_type int
-    load_type never
-    load_var2 3 4
-    load_var2 1 2
-    load_const 0
-    call user.iter_impl_generics_only.core.Iterator.reduce
-    jump L20
-
-  L17:
-    load_type int
-    load_type never
-    load_var2 3 4
-    load_var2 1 2
-    load_const 0
-    call user.iter_impl_generics_only.core.Iterator.reduce
-    jump L20
-
-  L18:
-    load_type int
-    load_type never
-    load_var2 3 4
-    load_var2 1 2
-    load_const 0
-    call user.iter_impl_generics_only.core.Iterator.reduce
-    jump L20
-
-  L19:
-    load_type int
-    load_type never
-    load_var2 3 4
-    load_var2 1 2
-    load_const 0
-    call user.iter_impl_generics_only.core.Iterator.reduce
-
-  L20:
+    load_type iter_impl_generics_only.core.Iterator<int, never>
+    load_const "reduce"
+    virtual_call nargs=3 ntypeargs=2
+    store_var _0
+    load_var _0
     return
-
-  L21:
-    unreachable
 }
 
 function iter_impl_generics_only.iter_repeat() -> int[] {
@@ -4077,9 +2757,10 @@ function iter_impl_generics_only.out_of_body_inferred_ctor_dispatch() -> int {
     load_type int
     load_const 11
     call user.iter_impl_generics_only.core.OutOfBodyBox.new
-    store_var value
-    load_type int
-    load_var value
-    call user.iter_impl_generics_only.core.OutOfBodyValue<T>$for$OutOfBodyBox<T>.get
+    load_type iter_impl_generics_only.core.OutOfBodyValue<int>
+    load_const "get"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }

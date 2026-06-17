@@ -591,10 +591,10 @@ fn vm_metadata_displays_interface_default_method_self_type() {
         class Widget {
             name: string
 
-            implements Described<string> {}
-
-            function label(self) -> string {
-                return self.name
+            implements Described<string> {
+                function label(self) -> string {
+                    return self.name
+                }
             }
         }
         "#,
@@ -709,9 +709,15 @@ async fn default_method_self_call_yielding_associated_type_runs() {
     );
 }
 
-#[tokio::test]
-async fn default_method_self_call_yielding_associated_type_with_out_of_body_method_runs() {
-    let output = baml_test!(
+#[test]
+fn class_inherent_method_does_not_satisfy_abstract_associated_type_method() {
+    // `Ticket`'s `value` is an inherent method (outside the `implements Describable`
+    // block, which binds only `type Output`), so it does NOT satisfy the abstract
+    // `Describable.value` (BEP-044: only `implements`-block members satisfy a
+    // requirement) → E0113. (Previously the inherent method was wrongly accepted,
+    // and the `describe` default's `self.value()` then `UnresolvedVirtualCall`-ed
+    // at runtime — flakily, via M3 registry-order nondeterminism.)
+    assert_compile_error_code(
         r#"
         interface Describable {
             type Output
@@ -734,17 +740,8 @@ async fn default_method_self_call_yielding_associated_type_with_out_of_body_meth
                 return self.id
             }
         }
-
-        function main() -> string {
-            let ticket = Ticket { id: "A-100" }
-            return ticket.describe()
-        }
-        "#
-    );
-
-    assert_eq!(
-        output.result.unwrap(),
-        BexExternalValue::String("A-100".into())
+        "#,
+        "E0113",
     );
 }
 

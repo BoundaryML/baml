@@ -997,3 +997,27 @@ test "float_eq_subnormal_nonzero" {
 test "float_eq_sum_equals_exact_rounded" {
     assert.is_true(0.1 + 0.2 == 0.30000000000000004)
 }
+
+// ─── NaN ordering (IEEE: every comparison involving NaN is false) ─────────────
+// `float` implements `baml.ops.Compare`, and its ordering must be IEEE — so NaN
+// is unordered: `<` `<=` `>` `>=` are all `false`, even `nan <= nan` / `nan >= nan`
+// (NaN is not even equal to itself). Regression guard for the float `Compare`
+// override (the boolean-derived defaults `gt = !le` would otherwise return `true`).
+test "nan_comparison" {
+    assert.is_true(!(float.nan() < 1.0))
+    assert.is_true(!(1.0 < float.nan()))
+    assert.is_true(!(float.nan() > 1.0))
+    assert.is_true(!(float.nan() < float.nan()))
+    assert.is_true(!(float.nan() <= float.nan()))
+    assert.is_true(!(float.nan() >= float.nan()))
+}
+
+// The same via the `Compare` *method* surface (`lt`/`le`/`gt`/`ge`), which is the
+// override that makes the operator correct.
+test "float_nan_lt_method_is_false" {
+    assert.is_true(!float.nan().lt(1.0))
+}
+
+test "float_nan_ge_method_is_false" {
+    assert.is_true(!float.nan().ge(float.nan()))
+}

@@ -956,9 +956,10 @@ pub enum OpCode {
     AwaitAny,
 
     // ── Appended out of group order to preserve discriminants ──
-    // Virtual interface-method call: u16 nargs (3 bytes). The interface type
-    // (`Object::Type`) and method-name string are popped from the stack below
-    // the args; the callee is resolved at runtime from the receiver's `Self`.
+    // Virtual interface-method call: u16 nargs + u16 ntypeargs (5 bytes). The
+    // interface type (`Object::Type`) and method-name string are pushed above the
+    // args and popped first; the callee is resolved at runtime from the receiver's
+    // `Self`.
     VirtualCall,
 }
 

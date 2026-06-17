@@ -14779,6 +14779,22 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// it). `is_subtype` against the `Compare` existential resolves both concrete impls
     /// (via the registry) and a `T extends Compare` type-variable bound.
     fn type_is_comparable(&self, ty: &Ty) -> bool {
+        // Ordering needs a *single concrete type* — or a bounded type variable /
+        // associated projection, which realizes to exactly one concrete type — that
+        // implements `baml.ops.Compare`. A union or interface-existential is NOT
+        // orderable even when every member / implementor implements `Compare`: the
+        // two operands could hold different concrete types, which exact-type
+        // ordering forbids and the runtime cannot order (`is_subtype(union, I)` is
+        // member-wise true, so it must be excluded here). `T < T` is fine — both
+        // operands share the one type `T` realizes to.
+        //
+        // Normalize first so a structurally-union-but-collapsible spelling like
+        // `int | 99` (a `catch` result widening a literal back into its base) is
+        // recognized as the single concrete type `int`, not rejected as a union.
+        let ty = baml_type::normalize::normalize(ty, &NormalizeCtx(self));
+        if matches!(ty, Ty::Union(..) | Ty::Interface(..) | Ty::Unknown { .. }) {
+            return false;
+        }
         let compare = Ty::Interface(
             crate::ty::QualifiedTypeName::new(
                 Name::new("baml"),
@@ -14789,7 +14805,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             Vec::new(),
             TyAttr::default(),
         );
-        self.is_subtype(ty, &compare)
+        self.is_subtype(&ty, &compare)
     }
 
     fn infer_binary_op(

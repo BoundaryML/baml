@@ -54,7 +54,7 @@ impl BamlClassTypeValue for PackageBamlImpl {
     /// class type or a primitive type).
     ///
     /// Derived from the same per-package `interface_impls` registry as
-    /// [`Self::implements`] (via [`resolve::implementor_entries`]), so the two
+    /// [`Self::implements`] (via `resolve::implementor_entries`), so the two
     /// reflection directions cannot disagree. A generic class is reported by its
     /// base and a blanket impl by every loaded class its bounds admit, so a
     /// specific generic instantiation (`Box<int>`) is not separately enumerable.

@@ -807,13 +807,6 @@ struct MethodSignature {
     throws_te: Option<baml_compiler2_ast::TypeExpr>,
 }
 
-struct ClassMethodSignatureSource<'db> {
-    name: Name,
-    signature: MethodSignature,
-    pkg_items: baml_compiler2_hir::package::PackageItems<'db>,
-    namespace_path: Vec<Name>,
-}
-
 #[derive(Clone, Copy)]
 struct SignatureMatchContext<'a, 'db> {
     db: &'a dyn Db,
@@ -906,80 +899,6 @@ impl MethodSignature {
         let throws_te = orig_throws.map(|te| substitute_type_vars(&te.expr, &scoped_subst));
         Self {
             generic_params: generic_params.to_vec(),
-            generic_param_bounds,
-            params,
-            return_type,
-            throws,
-            param_types,
-            return_te,
-            throws_te,
-        }
-    }
-
-    fn from_hir_function_with_subst(
-        function: &baml_compiler2_hir::item_tree::Function,
-        subst: &std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr>,
-    ) -> Self {
-        let scoped_subst = if function.generic_params.is_empty() {
-            subst.clone()
-        } else {
-            let mut scoped = subst.clone();
-            for param in &function.generic_params {
-                scoped.remove(param);
-            }
-            scoped
-        };
-        let generic_param_bounds = function
-            .generic_param_bounds
-            .iter()
-            .map(|bound| {
-                bound
-                    .as_ref()
-                    .map(|bound| substitute_type_vars(bound, &scoped_subst).to_string())
-            })
-            .collect();
-        let params = function
-            .params
-            .iter()
-            .filter(|p| p.name.as_str() != "self")
-            .map(|p| {
-                let ty_str = p
-                    .type_expr
-                    .as_ref()
-                    .map(|te| substitute_type_vars(&te.expr, &scoped_subst).to_string())
-                    .unwrap_or_else(|| "<unknown>".to_string());
-                (p.name.clone(), ty_str)
-            })
-            .collect();
-        let return_type = function
-            .return_type
-            .as_ref()
-            .map(|te| substitute_type_vars(&te.expr, &scoped_subst).to_string())
-            .unwrap_or_else(|| "<unspecified>".to_string());
-        let throws = function
-            .throws
-            .as_ref()
-            .map(|te| substitute_type_vars(&te.expr, &scoped_subst).to_string());
-        let param_types = function
-            .params
-            .iter()
-            .filter(|p| p.name.as_str() != "self")
-            .map(|p| {
-                p.type_expr
-                    .as_ref()
-                    .map(|te| substitute_type_vars(&te.expr, &scoped_subst))
-            })
-            .collect();
-        let return_te = function
-            .return_type
-            .as_ref()
-            .map(|te| substitute_type_vars(&te.expr, &scoped_subst));
-        let throws_te = function
-            .throws
-            .as_ref()
-            .map(|te| substitute_type_vars(&te.expr, &scoped_subst));
-        Self {
-            generic_params: function.generic_params.clone(),
             generic_param_bounds,
             params,
             return_type,
@@ -3919,60 +3838,6 @@ fn implements_for_target_matches_class(
             .is_some())
 }
 
-fn class_method_signatures_for_implements_target<'db>(
-    ctx: &InterfaceValidationCtx<'db, '_>,
-    target: &baml_compiler2_ast::TypeExpr,
-    target_generic_params: &[Name],
-) -> Vec<ClassMethodSignatureSource<'db>> {
-    use baml_compiler2_hir::contributions::Definition;
-
-    let mut target_diags = Vec::new();
-    let target_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
-        ctx.db,
-        target,
-        ctx.pkg_items,
-        ctx.namespace_path,
-        target_generic_params,
-        &mut target_diags,
-    );
-    let Ty::Class(class_qtn, _, _) = target_ty else {
-        return Vec::new();
-    };
-    let pkg_id = baml_compiler2_hir::package::PackageId::new(ctx.db, class_qtn.package().clone());
-    let pkg_items = baml_compiler2_ppir::package_items(ctx.db, pkg_id);
-    let Some(Definition::Class(class_loc)) =
-        pkg_items.lookup_type(class_qtn.namespace(), class_qtn.name())
-    else {
-        return Vec::new();
-    };
-    let item_tree = baml_compiler2_hir::file_item_tree(ctx.db, class_loc.file(ctx.db));
-    let Some(class_data) = item_tree.classes.get(&class_loc.id(ctx.db)) else {
-        return Vec::new();
-    };
-    let class_pkg_info =
-        baml_compiler2_hir::file_package::file_package(ctx.db, class_loc.file(ctx.db));
-    let mut subst: std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr> =
-        std::collections::HashMap::new();
-    if let baml_compiler2_ast::TypeExpr::Path { generic_args, .. } = target {
-        for (param, arg) in class_data.generic_params.iter().zip(generic_args.iter()) {
-            subst.insert(param.clone(), arg.clone());
-        }
-    }
-
-    class_data
-        .methods
-        .iter()
-        .filter(|method_id| !item_tree.method_to_iface_target.contains_key(method_id))
-        .filter_map(|method_id| item_tree.functions.get(method_id))
-        .map(|method| ClassMethodSignatureSource {
-            name: method.name.clone(),
-            signature: MethodSignature::from_hir_function_with_subst(method, &subst),
-            pkg_items: pkg_items.clone(),
-            namespace_path: class_pkg_info.namespace_path.clone(),
-        })
-        .collect()
-}
-
 fn item_implements_required_parent_for_target(
     ctx: &InterfaceValidationCtx<'_, '_>,
     item: &baml_compiler2_ast::Item,
@@ -4175,21 +4040,149 @@ fn validate_interface_extends_fields(
     }
 }
 
-/// Follow a chain of `Ty::TypeAlias` to its underlying definition, so callers
-/// reason about the concrete type rather than the opaque alias. Bounded to avoid
-/// looping on a (malformed) cyclic alias.
+/// Fully expand every `Ty::TypeAlias` in `ty` — at the top level *and* at every
+/// nesting depth — so callers reason about the concrete type rather than opaque
+/// aliases. Used to build duplicate-`implements` dedup keys: `Container<List<A>>`
+/// and `Container<List<int>>` (where `type A = int`) must produce the same key,
+/// which requires expanding the alias nested inside the `List`, not just a
+/// top-level alias.
+///
+/// Recursive aliases (`type A = List<A>`) survive lowering unexpanded; the
+/// `seen` set guards against looping on those by leaving an already-visited
+/// alias in place once re-encountered along a single chain.
 fn expand_type_alias(ty: &Ty, aliases: &std::collections::HashMap<QualifiedTypeName, Ty>) -> Ty {
-    let mut current = ty.clone();
-    for _ in 0..64 {
-        let Ty::TypeAlias(qtn, _) = &current else {
-            break;
-        };
-        match aliases.get(qtn) {
-            Some(next) => current = next.clone(),
-            None => break,
+    expand_type_alias_rec(ty, aliases, &mut HashSet::new())
+}
+
+/// Recursive worker for [`expand_type_alias`]. `seen` tracks the aliases already
+/// followed along the current chain so a self-referential alias terminates
+/// instead of recursing forever.
+fn expand_type_alias_rec(
+    ty: &Ty,
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    seen: &mut HashSet<QualifiedTypeName>,
+) -> Ty {
+    let recurse =
+        |sub: &Ty, seen: &mut HashSet<QualifiedTypeName>| expand_type_alias_rec(sub, aliases, seen);
+    match ty {
+        // Resolve the alias to its definition, then keep expanding — the
+        // definition may itself be (or contain) further aliases. A repeated
+        // alias on this chain is a cycle: leave it unexpanded and stop.
+        Ty::TypeAlias(qtn, _) => {
+            if !seen.insert(qtn.clone()) {
+                return ty.clone();
+            }
+            let expanded = match aliases.get(qtn) {
+                Some(next) => recurse(next, seen),
+                None => ty.clone(),
+            };
+            seen.remove(qtn);
+            expanded
         }
+
+        // Compound types: rebuild with every sub-type expanded.
+        Ty::Class(name, args, attr) => Ty::Class(
+            name.clone(),
+            args.iter().map(|a| recurse(a, seen)).collect(),
+            attr.clone(),
+        ),
+        Ty::Interface(name, args, assoc, attr) => Ty::Interface(
+            name.clone(),
+            args.iter().map(|a| recurse(a, seen)).collect(),
+            assoc
+                .iter()
+                .map(|(n, t)| (n.clone(), recurse(t, seen)))
+                .collect(),
+            attr.clone(),
+        ),
+        Ty::List(inner, attr) => Ty::List(Box::new(recurse(inner, seen)), attr.clone()),
+        Ty::Map { key, value, attr } => Ty::Map {
+            key: Box::new(recurse(key, seen)),
+            value: Box::new(recurse(value, seen)),
+            attr: attr.clone(),
+        },
+        Ty::Union(members, attr) => Ty::Union(
+            members.iter().map(|m| recurse(m, seen)).collect(),
+            attr.clone(),
+        ),
+        Ty::Function {
+            generic_params,
+            generic_param_bounds,
+            params,
+            ret,
+            throws,
+            attr,
+        } => Ty::Function {
+            generic_params: generic_params.clone(),
+            generic_param_bounds: generic_param_bounds
+                .iter()
+                .map(|b| b.as_ref().map(|t| recurse(t, seen)))
+                .collect(),
+            params: params
+                .iter()
+                .map(|p| baml_compiler2_tir::ty::FunctionParamTy {
+                    name: p.name.clone(),
+                    ty: recurse(&p.ty, seen),
+                    mode: p.mode,
+                })
+                .collect(),
+            ret: Box::new(recurse(ret, seen)),
+            throws: Box::new(recurse(throws, seen)),
+            attr: attr.clone(),
+        },
+        Ty::Future(value, error, attr) => Ty::Future(
+            Box::new(recurse(value, seen)),
+            Box::new(recurse(error, seen)),
+            attr.clone(),
+        ),
+        Ty::WatchAccessor(inner, attr) => {
+            Ty::WatchAccessor(Box::new(recurse(inner, seen)), attr.clone())
+        }
+        Ty::AssociatedTypeProjection {
+            base,
+            interface,
+            member,
+            attr,
+        } => Ty::AssociatedTypeProjection {
+            base: Box::new(recurse(base, seen)),
+            interface: interface.as_ref().map(|i| Box::new(recurse(i, seen))),
+            member: member.clone(),
+            attr: attr.clone(),
+        },
+        Ty::EvolvingList(inner, attr) => {
+            Ty::EvolvingList(Box::new(recurse(inner, seen)), attr.clone())
+        }
+        Ty::EvolvingMap(key, value, attr) => Ty::EvolvingMap(
+            Box::new(recurse(key, seen)),
+            Box::new(recurse(value, seen)),
+            attr.clone(),
+        ),
+
+        // Leaf types: no nested `Ty`, so nothing to expand. Listed exhaustively
+        // (no catch-all) so a future sub-type-carrying variant fails to compile
+        // here rather than silently evading alias expansion.
+        Ty::Int { .. }
+        | Ty::Bigint { .. }
+        | Ty::Float { .. }
+        | Ty::String { .. }
+        | Ty::Bool { .. }
+        | Ty::Null { .. }
+        | Ty::Uint8Array { .. }
+        | Ty::Media(..)
+        | Ty::Literal(..)
+        | Ty::Enum(..)
+        | Ty::EnumVariant(..)
+        | Ty::RustType { .. }
+        | Ty::Type { .. }
+        | Ty::Resource { .. }
+        | Ty::PromptAst { .. }
+        | Ty::Void { .. }
+        | Ty::TypeVar(..)
+        | Ty::BuiltinUnknown { .. }
+        | Ty::Never { .. }
+        | Ty::Unknown { .. }
+        | Ty::Error { .. } => ty.clone(),
     }
-    current
 }
 
 /// Outcome of the BEP-044 orphan-rule check for an out-of-body impl.
@@ -4585,69 +4578,10 @@ fn validate_implements_for<'db>(
         provided_method_names.insert(method.name.clone());
     }
 
-    let target_class_methods = class_method_signatures_for_implements_target(
-        &ctx,
-        &imp.for_target.expr,
-        &generic_param_names,
-    );
-    for source in &target_class_methods {
-        if provided_method_names.contains(&source.name) {
-            continue;
-        }
-        let expected_sig = members
-            .required_methods
-            .iter()
-            .find_map(|(_, name, sig)| {
-                if *name == source.name {
-                    Some(sig.clone())
-                } else {
-                    None
-                }
-            })
-            .or_else(|| {
-                members.default_methods.iter().find_map(|(_, name, sig)| {
-                    if *name == source.name {
-                        Some(sig.clone())
-                    } else {
-                        None
-                    }
-                })
-            });
-        if let Some(expected) = expected_sig
-            && !expected.matches(
-                &source.signature,
-                SignatureMatchContext {
-                    db,
-                    expected_pkg_items: iface_pkg_items,
-                    expected_namespace_path: &iface_namespace_path,
-                    actual_pkg_items: &source.pkg_items,
-                    actual_namespace_path: &source.namespace_path,
-                    aliases,
-                    ignore_param_names: true,
-                    outer_generic_params: &generic_param_names,
-                },
-            )
-        {
-            diagnostics.push(
-                Hir2Diagnostic::InterfaceMethodSignatureMismatch {
-                    class_name: target_name.clone(),
-                    interface_name: iface_display_name.clone(),
-                    method_name: source.name.clone(),
-                    actual: source.signature.render(),
-                    expected: expected.render(),
-                    span: imp.span,
-                }
-                .to_diagnostic(file_id),
-            );
-        }
-    }
-    let target_class_method_names: HashSet<Name> = target_class_methods
-        .iter()
-        .map(|source| source.name.clone())
-        .collect();
     for (origin, req_name, _sig) in &members.required_methods {
-        if provided_method_names.contains(req_name) || target_class_method_names.contains(req_name)
-        {
+        // Only `implements`-block members (+ inherited defaults) satisfy a
+        // requirement; a same-named method on the target class does not (BEP-044).
+        if provided_method_names.contains(req_name) {
             continue;
         }
         if origin.qualified_name != iface_qtn
@@ -4776,9 +4710,6 @@ fn validate_class_implements<'db>(
             );
         }
     }
-
-    // Hoisted: the class's own method set doesn't change across blocks.
-    let class_method_names: HashSet<Name> = class.methods.iter().map(|m| m.name.clone()).collect();
 
     for block in &class.implements {
         let Some(resolved_iface) =
@@ -4988,62 +4919,13 @@ fn validate_class_implements<'db>(
             provided_method_names.insert(m.name.clone());
         }
 
-        for m in &class.methods {
-            if provided_method_names.contains(&m.name) {
-                continue;
-            }
-            let expected_sig = members
-                .required_methods
-                .iter()
-                .find_map(|(_, n, s)| if *n == m.name { Some(s.clone()) } else { None })
-                .or_else(|| {
-                    members.default_methods.iter().find_map(|(_, n, s)| {
-                        if *n == m.name { Some(s.clone()) } else { None }
-                    })
-                });
-            if let Some(expected) = expected_sig {
-                let actual_subst = subst_without_names(&subst, &class.generic_params);
-                let actual = MethodSignature::from_params_and_return_with_subst(
-                    &m.generic_params,
-                    &m.generic_param_bounds,
-                    &m.params,
-                    m.return_type.as_ref(),
-                    m.throws.as_ref(),
-                    &actual_subst,
-                );
-                if !expected.matches(
-                    &actual,
-                    SignatureMatchContext {
-                        db,
-                        expected_pkg_items: iface_pkg_items,
-                        expected_namespace_path: &iface_namespace_path,
-                        actual_pkg_items: pkg_items,
-                        actual_namespace_path: namespace_path,
-                        aliases,
-                        ignore_param_names: true,
-                        outer_generic_params: &class.generic_params,
-                    },
-                ) {
-                    diagnostics.push(
-                        Hir2Diagnostic::InterfaceMethodSignatureMismatch {
-                            class_name: class.name.clone(),
-                            interface_name: iface_display_name.clone(),
-                            method_name: m.name.clone(),
-                            actual: actual.render(),
-                            expected: expected.render(),
-                            span: m.name_span,
-                        }
-                        .to_diagnostic(file_id),
-                    );
-                }
-            }
-        }
-
-        // Check that every required method has a body — either provided here,
-        // by a same-named class method, or by a separate `implements` block
-        // that targets the originating interface.
+        // Check that every required method has a body — provided in this
+        // `implements` block, by an inherited default, or by a separate
+        // `implements` block targeting the originating interface. A class's own
+        // (non-block) method does NOT satisfy a requirement (BEP-044: only
+        // `implements`-block members do); a same-named inherent method is unrelated.
         for (origin, req_name, _sig) in &members.required_methods {
-            if provided_method_names.contains(req_name) || class_method_names.contains(req_name) {
+            if provided_method_names.contains(req_name) {
                 continue;
             }
             // If the method originates from a parent interface that this
@@ -6142,13 +6024,39 @@ fn source_aware_tir_type_error_message(
         }
         TirTypeError::InvalidBinaryOp { op, lhs, rhs } => {
             format!(
-                "operator `{op:?}` cannot be applied to `{}` and `{}`",
+                "operator `{op}` cannot be applied to `{}` and `{}`",
                 ty(lhs),
                 ty(rhs)
             )
         }
         TirTypeError::InvalidUnaryOp { op, operand } => {
-            format!("operator `{op:?}` cannot be applied to `{}`", ty(operand))
+            format!("operator `{op}` cannot be applied to `{}`", ty(operand))
+        }
+        TirTypeError::OrderingDifferentTypes { op, lhs, rhs } => {
+            format!(
+                "cannot order `{}` and `{}` with `{op}`: ordering requires both operands \
+                 to have the same type",
+                ty(lhs),
+                ty(rhs)
+            )
+        }
+        TirTypeError::OrderingRequiresCompare { op, ty: operand_ty } => {
+            format!(
+                "`{}` does not implement `Compare`, so it cannot be ordered with `{op}`",
+                ty(operand_ty)
+            )
+        }
+        TirTypeError::ComparisonAlwaysDisjoint { op, lhs, rhs } => {
+            let always = if matches!(op, baml_compiler2_ast::BinaryOp::Ne) {
+                "true"
+            } else {
+                "false"
+            };
+            format!(
+                "`{}` and `{}` share no value, so this comparison is always {always}",
+                ty(lhs),
+                ty(rhs)
+            )
         }
         TirTypeError::MissingReturn { expected } => {
             format!("missing return value of type {}", ty(expected))

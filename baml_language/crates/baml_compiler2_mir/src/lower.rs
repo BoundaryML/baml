@@ -3517,13 +3517,20 @@ impl<'db> LoweringContext<'db> {
         let ty = self
             .source_param_tir_ty_for_expr(base)
             .or_else(|| self.dispatch_receiver_static_tir_ty(base));
+        ty.as_ref().is_some_and(Self::tir_ty_dispatch_is_virtual)
+    }
+
+    /// Whether a receiver of this resolved static type has a *statically
+    /// undetermined* concrete `Self` — an interface-existential, a (bounded)
+    /// type variable, `Self` inside a default body, or an associated-type
+    /// projection — so the implementation must be resolved at runtime via a
+    /// virtual call rather than the closed-world type-tag switch. A concrete
+    /// `Class` (or any other resolved type) is determined and stays on the
+    /// switch / static path.
+    fn tir_ty_dispatch_is_virtual(ty: &Tir2Ty) -> bool {
         matches!(
-            ty.as_ref(),
-            Some(
-                Tir2Ty::Interface(..)
-                    | Tir2Ty::TypeVar(..)
-                    | Tir2Ty::AssociatedTypeProjection { .. }
-            )
+            ty,
+            Tir2Ty::Interface(..) | Tir2Ty::TypeVar(..) | Tir2Ty::AssociatedTypeProjection { .. }
         )
     }
 
@@ -3805,6 +3812,66 @@ impl<'db> LoweringContext<'db> {
                             .any(|&fn_id| iface_tree[fn_id].name == *method)
                 })
         })
+    }
+
+    /// Whether `iface_tn` declares `method` *directly* — in its own required or
+    /// default methods, not via its `requires` closure. (Unlike
+    /// [`Self::mir_interface_declares_method`], which walks the whole closure.)
+    fn interface_declares_method_directly(&self, iface_tn: &TypeName, method: &Name) -> bool {
+        let pkg_id =
+            baml_compiler2_hir::package::PackageId::new(self.db, iface_tn.package().clone());
+        let pkg_items = baml_compiler2_hir::package::package_items(self.db, pkg_id);
+        let Some(baml_compiler2_hir::contributions::Definition::Interface(loc)) =
+            pkg_items.lookup_type(iface_tn.namespace(), iface_tn.name())
+        else {
+            return false;
+        };
+        let iface_tree = baml_compiler2_hir::file_item_tree(self.db, loc.file(self.db));
+        iface_tree
+            .interfaces
+            .get(&loc.id(self.db))
+            .is_some_and(|iface_data| {
+                iface_data
+                    .required_methods
+                    .iter()
+                    .any(|s| s.name == *method)
+                    || iface_data
+                        .default_methods
+                        .iter()
+                        .any(|&fn_id| iface_tree[fn_id].name == *method)
+            })
+    }
+
+    /// Resolve the interface view that actually *declares* `method`, starting
+    /// from `view`'s interface and walking its `requires` closure.
+    ///
+    /// A method may be declared by a super-interface: `interface B requires A {}`
+    /// with `tag` declared in `A`. A `B` value must implement `A` (the `requires`
+    /// rule), so calling `tag` on a `B` receiver dispatches `<Self as A>::tag` —
+    /// the open-world virtual call must be keyed on the *declaring* interface
+    /// `A`, not the receiver's static interface `B` (the impl registry has no
+    /// `tag` under `(Self, B)`). Coherence makes the concrete `(Self, A)`
+    /// implementation unique.
+    ///
+    /// Prefers `view`'s own interface when it declares the method directly
+    /// (BEP-044 method disambiguation: the receiver's interface picks its own
+    /// version), then the nearest required ancestor. Falls back to `view`
+    /// unchanged when nothing in the closure declares it.
+    fn interface_view_declaring_method(
+        &self,
+        view: &InterfaceTypeView,
+        method: &Name,
+    ) -> InterfaceTypeView {
+        if self.interface_declares_method_directly(&view.0, method) {
+            return view.clone();
+        }
+        self.interface_closure_type_name_views(&view.0, &view.1, &view.2)
+            .and_then(|views| {
+                views
+                    .into_iter()
+                    .find(|(tn, _, _)| self.interface_declares_method_directly(tn, method))
+            })
+            .unwrap_or_else(|| view.clone())
     }
 
     fn expr_ty(&self, expr_id: AstExprId) -> RuntimeTy {
@@ -5791,8 +5858,15 @@ impl LoweringContext<'_> {
             name: Name::new("equals_equals"),
         }));
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
-        // For `!=`, capture the `==` result in a temp and negate it into `dest`.
-        let eq_dest = if matches!(op, AstBinaryOp::Ne) {
+        // The driver call's destination must be a `Place::Local` (the emitter
+        // stores its result with `emit_store_place`, which only handles locals).
+        // Route through a bool temp whenever we must post-process the result —
+        // always for `!=` (we negate into `dest`), and for `==` when `dest` is a
+        // projection/capture (we copy into it after the call). When `op == Eq`
+        // and `dest` is already a local, the call writes straight into it.
+        let is_ne = matches!(op, AstBinaryOp::Ne);
+        let needs_temp = is_ne || !matches!(dest, Place::Local(_));
+        let eq_dest = if needs_temp {
             Place::local(self.builder.temp(RuntimeTy::Bool {
                 attr: TyAttr::default(),
             }))
@@ -5808,7 +5882,9 @@ impl LoweringContext<'_> {
             unwind,
         );
         self.builder.set_current_block(resume);
-        if matches!(op, AstBinaryOp::Ne) {
+        if is_ne {
+            // `assign` handles projection destinations, so negating into `dest`
+            // covers both local and projection cases.
             self.builder.assign(
                 dest,
                 Rvalue::UnaryOp {
@@ -5816,6 +5892,10 @@ impl LoweringContext<'_> {
                     operand: Operand::Copy(eq_dest),
                 },
             );
+        } else if needs_temp {
+            // `op == Eq` with a projection/capture `dest`: copy the temp through.
+            self.builder
+                .assign(dest, Rvalue::Use(Operand::Copy(eq_dest)));
         }
     }
 
@@ -6411,6 +6491,20 @@ impl LoweringContext<'_> {
                         } else {
                             None
                         }
+                    })
+                    // A bounded-type-var function parameter receiver (`a.lt(b)`
+                    // with `a: T extends Compare`) likewise has no recorded
+                    // segment type; its declared type keeps `T` as a `TypeVar`,
+                    // so the dispatch below routes it to a virtual call.
+                    .or_else(|| {
+                        if segments.len() == 2 {
+                            self.binding_id_for_name_at(callee, &segments[0])
+                                .and_then(|bid| {
+                                    self.source_param_tir_ty_for_binding(&segments[0], bid)
+                                })
+                        } else {
+                            None
+                        }
                     });
                 let iface_dispatch_opt: Option<InterfaceTypeView> = if segments.len() == 2 {
                     if let Some(target) = self
@@ -6461,7 +6555,47 @@ impl LoweringContext<'_> {
                         receiver_segments,
                         recv_root_local,
                     );
-                    if self.emit_interface_dispatch_switch(
+                    // A statically-undetermined receiver (a bounded type-var, an
+                    // interface-existential, or `Self` inside a default body)
+                    // resolves open-world at runtime via a virtual call — the same
+                    // routing as the member-access dispatch site
+                    // (`try_lower_interface_dispatch`). `self.<method>()` in an
+                    // interface default body reaches *this* path-callee site, so
+                    // without this gate those defaults fall to the closed-world
+                    // switch and throw `Unreachable` for any implementor not
+                    // visible when the default body was compiled (user/cross-
+                    // package/eval types). Container-backed interfaces stay on the
+                    // switch (their element type is erased at runtime).
+                    if !self.iface_may_be_container_backed(&iface_tn)
+                        && recv_tir_ty
+                            .as_ref()
+                            .is_some_and(Self::tir_ty_dispatch_is_virtual)
+                    {
+                        // Key the call on the interface that *declares* the method
+                        // (which may be a `requires` super-interface of the
+                        // receiver's static interface).
+                        let (decl_tn, decl_args, decl_assoc) = self
+                            .interface_view_declaring_method(
+                                &(
+                                    iface_tn.clone(),
+                                    iface_type_args.clone(),
+                                    iface_assoc.clone(),
+                                ),
+                                &method_name,
+                            );
+                        if self.emit_virtual_call(
+                            recv_local,
+                            &decl_tn,
+                            &decl_args,
+                            &decl_assoc,
+                            &method_name,
+                            expr_id,
+                            args,
+                            &dest,
+                        ) {
+                            return;
+                        }
+                    } else if self.emit_interface_dispatch_switch(
                         InterfaceDispatchCall {
                             expr_id,
                             recv_local,
@@ -8690,44 +8824,25 @@ impl<'db> LoweringContext<'db> {
         // visible when this site was compiled and is therefore unsound for
         // user/cross-package/eval types). A *concrete* container receiver (`int[]`)
         // pins a single static impl below, so it never reaches the virtual call.
-        //
-        // !!!! TODO: remove once we have added type data to array/map
-        // The one exclusion is an interface that can be backed by a *container* at
-        // runtime — it has a `for T[]` / `for map<K,V>` implementor (or a bare
-        // `for T` blanket that matches one), so an interface-existential receiver
-        // may hold an array/map. The virtual call reads `Self` from the receiver
-        // value, but arrays/maps erase their element type
-        // (`value_concrete_runtime_ty` cannot recover `int[]`), so it would hit
-        // that gap. Such interfaces stay on the closed-world switch (which resolves
-        // every implementor visible at the site) until containers carry their
-        // element type at runtime — then this guard can be removed. This is a
-        // container constraint, not an associated-type one: `Iterable` is excluded
-        // because it is `implement<T> Iterable for T[]`, while `Iterator` (also an
-        // associated-type interface, but implemented only by adapter *classes*)
-        // and `Equals`/`Compare`/`Converter` all take the virtual-call path. The
-        // per-method frame seeding inherited defaults need is in place, so those
-        // open-world defaults resolve their associated types correctly.
-        // A container implementor's pattern is a list/map, or a bare type-var
-        // blanket (`for T`) that also matches one. Inlined (not a method) so it is
-        // deleted with the rest of this guard once containers carry their element
-        // type at runtime and the virtual call can resolve a container receiver.
-        let iface_may_be_container_backed = self
-            .interface_type_implementors
-            .get(&iface_tn)
-            .is_some_and(|impls| {
-                impls.iter().any(|imp| {
-                    matches!(
-                        imp.tir_ty,
-                        Tir2Ty::List(..) | Tir2Ty::Map { .. } | Tir2Ty::TypeVar(..)
-                    )
-                })
-            });
-        if !iface_may_be_container_backed && self.dispatch_receiver_is_virtual(base) {
+        // The path-callee dispatch site (`lower_call`) applies the identical
+        // routing; `Self` in a default body reaches *that* site, not this one.
+        if !self.iface_may_be_container_backed(&iface_tn) && self.dispatch_receiver_is_virtual(base)
+        {
+            // Key the call on the interface that *declares* `method` (which may be
+            // a `requires` super-interface of the receiver's static interface).
+            let (decl_tn, decl_args, decl_assoc) = self.interface_view_declaring_method(
+                &(
+                    iface_tn.clone(),
+                    iface_type_args.clone(),
+                    iface_assoc.clone(),
+                ),
+                method,
+            );
             return self.emit_virtual_call(
                 recv_local,
-                &iface_tn,
-                &iface_type_args,
-                &iface_assoc,
+                &decl_tn,
+                &decl_args,
+                &decl_assoc,
                 method,
                 expr_id,
                 args,
@@ -8747,6 +8862,33 @@ impl<'db> LoweringContext<'db> {
             },
             dest,
         )
+    }
+
+    /// Whether `iface_tn` can be backed by a *container* at runtime — it has a
+    /// `for T[]` / `for map<K, V>` implementor, or a bare `for T` blanket that
+    /// also matches one. Such an interface must stay on the closed-world type-tag
+    /// switch rather than a virtual call: the virtual call reads `Self` from the
+    /// receiver value, but arrays/maps erase their element type
+    /// (`value_concrete_runtime_ty` cannot recover `int[]`), so a container
+    /// receiver would hit that gap. This is a *container* constraint, not an
+    /// associated-type one: `Iterable` is excluded because it is
+    /// `implement<T> Iterable for T[]`, while `Iterator` (also associated-type,
+    /// but implemented only by adapter *classes*) and `Equals`/`Compare`/
+    /// `Converter` take the virtual-call path.
+    ///
+    /// !!!! TODO: delete this guard (and route container receivers virtually)
+    /// once arrays/maps carry their element type at runtime.
+    fn iface_may_be_container_backed(&self, iface_tn: &TypeName) -> bool {
+        self.interface_type_implementors
+            .get(iface_tn)
+            .is_some_and(|impls| {
+                impls.iter().any(|imp| {
+                    matches!(
+                        imp.tir_ty,
+                        Tir2Ty::List(..) | Tir2Ty::Map { .. } | Tir2Ty::TypeVar(..)
+                    )
+                })
+            })
     }
 
     /// Emit an open-world [`Terminator::VirtualCall`] dispatching `method` of
@@ -8809,16 +8951,32 @@ impl<'db> LoweringContext<'db> {
         ));
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
         let resume = self.builder.create_block();
+        // `VirtualCall`'s destination must be a `Place::Local`. If the caller
+        // handed us a projection (field/index) or capture, dispatch into a temp
+        // local and assign through to the projection in the resume block —
+        // mirrors how `lower_call`/`lower_await` normalize their destinations.
+        let (call_dest, projection_dest) = match dest {
+            Place::Local(_) => (dest.clone(), None),
+            projection => {
+                let call_ty = self.expr_ty(expr_id);
+                let tmp = self.builder.temp(call_ty);
+                (Place::local(tmp), Some(projection.clone()))
+            }
+        };
         self.builder.virtual_call(
             iface_template,
             method.to_string(),
             all_args,
             ntypeargs,
-            dest.clone(),
+            call_dest.clone(),
             resume,
             unwind,
         );
         self.builder.set_current_block(resume);
+        if let Some(projection) = projection_dest {
+            self.builder
+                .assign(projection, Rvalue::Use(Operand::Copy(call_dest)));
+        }
         true
     }
 

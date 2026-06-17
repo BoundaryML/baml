@@ -1365,7 +1365,18 @@ impl BexVm {
                 let type_args = inst.class_type_args.clone();
                 match self.get_object(inst.class) {
                     Object::Class(class) => {
-                        RuntimeTy::Class(class.name.clone(), type_args, TyAttr::default())
+                        // Media values are `Object::Instance`s of the std media
+                        // classes (`baml.media.{Image,Audio,Video,Pdf}`), but their
+                        // concrete type is the `image`/`audio`/… primitive
+                        // (`RuntimeTy::Media`) — which is how the impl registry keys
+                        // `implement I for image`. Return that, not the class.
+                        if let Some(kind) = crate::package_baml::json::media_kind_from_fqn(
+                            class.name.display_name().as_str(),
+                        ) {
+                            RuntimeTy::Media(kind, TyAttr::default())
+                        } else {
+                            RuntimeTy::Class(class.name.clone(), type_args, TyAttr::default())
+                        }
                     }
                     other => unreachable!(
                         "Instance.class must point to a Class, found {:?}",
@@ -1380,24 +1391,32 @@ impl BexVm {
                     ObjectType::of(other)
                 ),
             },
-            // UNRESOLVED FAILURE CASE — container element-type erasure.
-            // Arrays/maps store only `Vec<Value>` / `IndexMap<Value, Value>` at
-            // runtime (`ArrayContainer = LockedContainer<Vec<Value>>`) with no
-            // element type, so `list<T>` / `map<K, V>` cannot be reconstructed from
-            // the value alone. The operator virtual calls never dispatch on a
-            // container receiver, so this is unreached today — but a virtual call
-            // on a container receiver (general interface dispatch) WILL hit this and
-            // must not silently misresolve. Fixing it requires element-type tagging
-            // on the container and at every allocation site; until then a container
-            // receiver here is a known, loud gap, not undefined behavior.
-            kind @ (Object::Array(_) | Object::Map(_)) => unimplemented!(
-                "virtual dispatch on a {:?} receiver: arrays/maps erase their element \
-                 type at runtime, so the concrete `Self` type cannot be recovered from \
-                 the value (needs runtime element-type tagging)",
+            // A `type` value (e.g. `reflect.type_of<T>()`) — its concrete type is
+            // the `type` primitive, the subject of `implement I for type`.
+            Object::Type(_) => RuntimeTy::Type {
+                attr: TyAttr::default(),
+            },
+            // Unreachable by construction: a container receiver never reaches a
+            // virtual call. Arrays/maps store only `Vec<Value>` /
+            // `IndexMap<Value, Value>` at runtime (`ArrayContainer =
+            // LockedContainer<Vec<Value>>`) with no element type, so `list<T>` /
+            // `map<K, V>` cannot be reconstructed from the value alone — `Self`
+            // would have to be read from a value that does not carry its element
+            // type. MIR lowering routes container-backed interface dispatch to the
+            // closed-world type-tag switch (the `iface_may_be_container_backed`
+            // gate) precisely so the element type comes from static typing rather
+            // than the runtime value, leaving virtual calls (the sole caller of
+            // this function) to receivers that do carry their own concrete type.
+            kind @ (Object::Array(_) | Object::Map(_)) => unreachable!(
+                "container receiver ({:?}) reached a virtual call: arrays/maps are \
+                 routed to closed-world interface-dispatch switches during MIR \
+                 lowering and so never reach virtual dispatch",
                 ObjectType::of(kind)
             ),
-            // Functions/closures/futures/media/etc. are not interface-dispatch
-            // receivers — the type checker never emits a virtual call on them.
+            // Functions/closures/futures are not valid impl subjects, and
+            // `resource`/`prompt_ast` (also impl subjects) have no runtime value
+            // representation — none can be an interface-dispatch receiver, so the
+            // type checker never emits a virtual call on them.
             other => unreachable!(
                 "value of object kind {:?} cannot be a virtual-call receiver",
                 ObjectType::of(other)

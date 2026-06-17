@@ -1730,12 +1730,18 @@ fn return_type_needs_alloc(ty: &BamlType) -> bool {
 /// every parameter (`needs_owned`), and its own `as_*_mut` guard is acquired
 /// last, after the snapshots, so no read guard overlaps it.
 fn reads_multiple_containers(b: &NativeBuiltin) -> bool {
-    let is_container = |ty: &BamlType| {
-        matches!(
-            ty,
-            BamlType::List(_) | BamlType::Map(_, _) | BamlType::Uint8Array
-        )
-    };
+    // A parameter such as `T[]?` still reads a container under its lock, so an
+    // `Optional` wrapper must be seen through. Recursing only collapses the
+    // wrapper — it still resolves to a single leaf container, so this neither
+    // over- nor under-counts. Receivers are never `Optional`, so the
+    // receiver-counting below needs no equivalent.
+    fn contains_container(ty: &BamlType) -> bool {
+        match ty {
+            BamlType::List(_) | BamlType::Map(_, _) | BamlType::Uint8Array => true,
+            BamlType::Optional(inner) => contains_container(inner),
+            _ => false,
+        }
+    }
     let receiver_is_mut = b
         .receiver
         .as_ref()
@@ -1749,7 +1755,11 @@ fn reads_multiple_containers(b: &NativeBuiltin) -> bool {
             .filter(|r| !r.receiver_type.is_static())
             .is_some_and(|r| matches!(r.class_name.as_str(), "Array" | "Map" | "Uint8Array")),
     );
-    let param_containers = b.params.iter().filter(|p| is_container(&p.ty)).count();
+    let param_containers = b
+        .params
+        .iter()
+        .filter(|p| contains_container(&p.ty))
+        .count();
     receiver_containers + param_containers >= 2
 }
 

@@ -15,6 +15,9 @@ use std::sync::{Arc, atomic::AtomicBool};
 use baml_project::testing::compile_source;
 use bex_vm::{BexVm, VmExecState};
 
+/// Cap exec-loop iterations so regressions fail fast instead of hanging CI.
+const MAX_EXEC_CALLS: usize = 256;
+
 /// Compile `src`, run the no-arg `user.<fn_name>`, and return its `bool` result.
 fn run_bool(src: &str, fn_name: &str) -> bool {
     let program = compile_source(src);
@@ -25,13 +28,14 @@ fn run_bool(src: &str, fn_name: &str) -> bool {
         BexVm::from_program(program, Arc::new(AtomicBool::new(false))).expect("from_program");
     let fptr = vm.heap.compile_time_ptr(idx);
     vm.set_entry_point(fptr, &[]);
-    loop {
+    for _ in 0..MAX_EXEC_CALLS {
         match vm.exec().expect("exec") {
             VmExecState::Complete(v) => return v.as_bool().expect("equals returns bool"),
-            VmExecState::EarlyYield => continue,
+            VmExecState::EarlyYield => {}
             other => panic!("unexpected VM state: {other:?}"),
         }
     }
+    panic!("vm did not complete within {MAX_EXEC_CALLS} exec() calls");
 }
 
 // Class instances are built via helper functions (a class literal can't be a

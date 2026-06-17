@@ -560,7 +560,7 @@ fn invalid_binary_op_string_minus_int() {
       { : never
         return "hello" - 5 : unknown
       }
-      !! 28..40: operator `Sub` cannot be applied to `"hello"` and `5`
+      !! 28..40: operator `-` cannot be applied to `"hello"` and `5`
     }
     "#);
 }
@@ -574,7 +574,7 @@ fn invalid_binary_op_bool_add() {
       { : never
         return true + false : unknown
       }
-      !! 29..41: operator `Add` cannot be applied to `true` and `false`
+      !! 29..41: operator `+` cannot be applied to `true` and `false`
     }
     ");
 }
@@ -583,12 +583,12 @@ fn invalid_binary_op_bool_add() {
 fn invalid_binary_op_float_plus_bigint() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "function f() -> bigint { return 1.5 + 100n; }");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> bigint throws never {
       { : never
         return 1.5 + 100n : unknown
       }
-      !! 32..42: operator `Add` cannot be applied to `1.5` and `100n`
+      !! 32..42: operator `+` cannot be applied to `1.5` and `100n`
     }
     ");
 }
@@ -597,12 +597,12 @@ fn invalid_binary_op_float_plus_bigint() {
 fn invalid_binary_op_bigint_plus_float() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "function f() -> bigint { return 100n + 1.5; }");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> bigint throws never {
       { : never
         return 100n + 1.5 : unknown
       }
-      !! 32..42: operator `Add` cannot be applied to `100n` and `1.5`
+      !! 32..42: operator `+` cannot be applied to `100n` and `1.5`
     }
     ");
 }
@@ -616,7 +616,7 @@ fn invalid_binary_op_float_lt_bigint() {
       { : never
         return 1.5 < 100n : bool
       }
-      !! 30..40: cannot order `1.5` and `100n` with `Lt`: ordering requires both operands to have the same type
+      !! 30..40: cannot order `1.5` and `100n` with `<`: ordering requires both operands to have the same type
     }
     ");
 }
@@ -714,7 +714,7 @@ fn aliased_float_plus_bigint_is_rejected() {
     );
     let tir = render_tir(&db, file);
     assert!(
-        tir.contains("operator `Add` cannot be applied"),
+        tir.contains("operator `+` cannot be applied"),
         "expected InvalidBinaryOp diagnostic, got:\n{tir}"
     );
 }
@@ -749,7 +749,7 @@ fn invalid_unary_op_neg_string() {
       { : never
         return Neg "hello" : unknown
       }
-      !! 28..37: operator `Neg` cannot be applied to `"hello"`
+      !! 28..37: operator `-` cannot be applied to `"hello"`
     }
     "#);
 }

@@ -420,7 +420,7 @@ impl fmt::Display for TirTypeError {
             TirTypeError::InvalidBinaryOp { op, lhs, rhs } => {
                 write!(
                     f,
-                    "operator `{op:?}` cannot be applied to `{}` and `{}`",
+                    "operator `{op}` cannot be applied to `{}` and `{}`",
                     lhs.render_user_facing(),
                     rhs.render_user_facing()
                 )
@@ -428,7 +428,7 @@ impl fmt::Display for TirTypeError {
             TirTypeError::OrderingDifferentTypes { op, lhs, rhs } => {
                 write!(
                     f,
-                    "cannot order `{}` and `{}` with `{op:?}`: ordering requires both operands \
+                    "cannot order `{}` and `{}` with `{op}`: ordering requires both operands \
                      to have the same type",
                     lhs.render_user_facing(),
                     rhs.render_user_facing()
@@ -437,7 +437,7 @@ impl fmt::Display for TirTypeError {
             TirTypeError::OrderingRequiresCompare { op, ty } => {
                 write!(
                     f,
-                    "`{}` does not implement `Compare`, so it cannot be ordered with `{op:?}`",
+                    "`{}` does not implement `Compare`, so it cannot be ordered with `{op}`",
                     ty.render_user_facing()
                 )
             }
@@ -457,7 +457,7 @@ impl fmt::Display for TirTypeError {
             TirTypeError::InvalidUnaryOp { op, operand } => {
                 write!(
                     f,
-                    "operator `{op:?}` cannot be applied to `{}`",
+                    "operator `{op}` cannot be applied to `{}`",
                     operand.render_user_facing()
                 )
             }

@@ -530,6 +530,20 @@ fn extract_from_implements_for(
             continue;
         };
 
+        // Merge the `implement` block's generics with method-level generics so a
+        // method type parameter resolves to `BamlType::Generic`, not a `Named`.
+        let method_generics: Vec<String> = method
+            .generic_params
+            .iter()
+            .map(|n| n.as_str().to_string())
+            .collect();
+        let mut all_generics = impl_generics.clone();
+        for g in &method_generics {
+            if !all_generics.contains(g) {
+                all_generics.push(g.clone());
+            }
+        }
+
         let path = format!(
             "{namespace_prefix}.{synthetic_class}.{}",
             method.name.as_str()
@@ -556,9 +570,7 @@ fn extract_from_implements_for(
                 ty: p
                     .type_expr
                     .as_ref()
-                    .map(|te| {
-                        type_expr_to_baml_type_with_self(&te.expr, &impl_generics, &self_baml)
-                    })
+                    .map(|te| type_expr_to_baml_type_with_self(&te.expr, &all_generics, &self_baml))
                     .unwrap_or(BamlType::Named("unknown".to_string())),
             })
             .collect();
@@ -566,7 +578,7 @@ fn extract_from_implements_for(
         let return_type = method
             .return_type
             .as_ref()
-            .map(|te| type_expr_to_baml_type_with_self(&te.expr, &impl_generics, &self_baml))
+            .map(|te| type_expr_to_baml_type_with_self(&te.expr, &all_generics, &self_baml))
             .unwrap_or(BamlType::Null);
 
         let builtin = NativeBuiltin {
@@ -574,7 +586,7 @@ fn extract_from_implements_for(
             fn_name,
             params,
             return_type,
-            generics: impl_generics.clone(),
+            generics: all_generics,
             receiver,
             vm_usage,
             may_yield: false,
@@ -609,20 +621,47 @@ fn receiver_class_for_target(ty: &TypeExpr) -> Option<&'static str> {
     })
 }
 
-/// Like [`type_expr_to_baml_type`] but resolves a bare `Self` path to
-/// `self_baml` (the `for` target of the enclosing `implement` block).
+/// Like [`type_expr_to_baml_type`] but resolves a `Self` path to `self_baml`
+/// (the `for` target of the enclosing `implement` block) at any nesting depth,
+/// e.g. `Self[]`, `Self?`, or `map<K, Self>`.
+///
+/// Container shapes are reconstructed here rather than deferring to
+/// [`type_expr_to_baml_type`], which has no notion of `Self` and would emit
+/// `BamlType::Named("Self")` for a nested occurrence. The container arms mirror
+/// `type_expr_to_baml_type` exactly so the only behavioural difference is the
+/// `Self` substitution. `Self?` parses as `Union(Self, null)`, so the `Union`
+/// arm replicates the single-non-null-variant → `Optional` collapse while
+/// recursing into the variant to catch a nested `Self`.
 fn type_expr_to_baml_type_with_self(
     ty: &TypeExpr,
     generics: &[String],
     self_baml: &BamlType,
 ) -> BamlType {
-    if let TypeExpr::Path { segments, .. } = ty
-        && segments.len() == 1
-        && segments[0].as_str() == "Self"
-    {
-        return self_baml.clone();
+    let recurse = |inner: &TypeExpr| type_expr_to_baml_type_with_self(inner, generics, self_baml);
+    match ty {
+        TypeExpr::Path { segments, .. }
+            if segments.len() == 1 && segments[0].as_str() == "Self" =>
+        {
+            self_baml.clone()
+        }
+        TypeExpr::Optional { inner, .. } => BamlType::Optional(Box::new(recurse(inner))),
+        TypeExpr::List { inner, .. } => BamlType::List(Box::new(recurse(inner))),
+        TypeExpr::Map { key, value, .. } => {
+            BamlType::Map(Box::new(recurse(key)), Box::new(recurse(value)))
+        }
+        TypeExpr::Union { variants, .. } => {
+            let non_null: Vec<_> = variants
+                .iter()
+                .filter(|v| !matches!(v, TypeExpr::Null { .. }))
+                .collect();
+            if non_null.len() == 1 && non_null.len() < variants.len() {
+                BamlType::Optional(Box::new(recurse(non_null[0])))
+            } else {
+                BamlType::Named("union".to_string())
+            }
+        }
+        _ => type_expr_to_baml_type(ty, generics),
     }
-    type_expr_to_baml_type(ty, generics)
 }
 
 /// Returns the pipeline kind if the function body is a Rust builtin, or None otherwise.

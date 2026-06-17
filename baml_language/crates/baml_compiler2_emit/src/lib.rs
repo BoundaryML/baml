@@ -169,9 +169,28 @@ fn build_interface_impls(
         let mut frame: Vec<baml_type::TyTemplate> = interface_args.to_vec();
         if let Some(order) = iface_assoc_order.get(iface_tn) {
             for name in order {
-                if let Some((_, t)) = interface_assoc.iter().find(|(an, _)| an == name) {
-                    frame.push(t.clone());
-                }
+                // One slot per *declared* associated type, in order — so the frame
+                // width is always `interface_args + assoc_count` and the method-level
+                // type args (appended after this frame at the call site) land at the
+                // De Bruijn indices the callee expects. An associated type the impl
+                // leaves to its default is padded with `BuiltinUnknown`, matching the
+                // closed-world switch's `interface_assoc_frame_tys` still-missing
+                // fallback; a short frame would instead shift every later slot and
+                // miscompile the method's own type args.
+                // TODO(M1): for a defaulted assoc *read as a runtime type* in a default
+                // body, complete with the assoc's actual default rather than this
+                // placeholder (needs TyTemplate-space default completion). Currently
+                // unobservable — std defaults read assoc only in `throws` position.
+                let slot = interface_assoc
+                    .iter()
+                    .find(|(an, _)| an == name)
+                    .map(|(_, t)| t.clone())
+                    .unwrap_or_else(|| {
+                        baml_type::TyTemplate::Concrete(baml_type::RuntimeTy::BuiltinUnknown {
+                            attr: TyAttr::default(),
+                        })
+                    });
+                frame.push(slot);
             }
         }
         frame
@@ -439,11 +458,17 @@ fn build_interface_impls(
             // Primary key is the rendered pattern; its `Display` drops module paths,
             // so two distinct same-short-name for-types tie. `{:?}` carries the
             // module-qualified identity and breaks the tie deterministically (rather
-            // than falling back to unordered-map insertion order).
+            // than falling back to unordered-map insertion order). The interface
+            // instantiation (args + associated bindings) is folded in last so the
+            // same for-type implementing one interface at several instantiations
+            // (e.g. `Converter<int>` + `Converter<float>`) orders by content rather
+            // than declaration order.
             rules.sort_by_cached_key(|rule| {
                 (
                     rule.for_ty_pattern.to_string(),
                     format!("{:?}", rule.for_ty_pattern),
+                    format!("{:?}", rule.interface_args),
+                    format!("{:?}", rule.interface_assoc),
                 )
             });
         }

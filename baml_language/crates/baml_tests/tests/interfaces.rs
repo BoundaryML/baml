@@ -488,6 +488,35 @@ fn duplicate_generic_interface_instantiation_via_alias_is_compile_error() {
 }
 
 #[test]
+fn nested_alias_duplicate_implements_is_detected() {
+    // The alias is nested *inside* a list rather than at the top of the type
+    // argument: `Converter<IntList[]>` (where `type IntList = int[]`) realizes to
+    // `Converter<int[][]>`, so the two `implements` are duplicates. Detecting this
+    // requires expanding the alias at every nesting depth when building the dedup
+    // key — expanding only a top-level alias would leave these keys distinct and
+    // miss the duplicate.
+    assert_compile_error_code(
+        r#"
+        interface Converter<T> {
+            function convert(self) -> T
+        }
+
+        type IntList = int[]
+
+        class MultiFormat {
+            implements Converter<IntList[]> {
+                function convert(self) -> int[][] { return [[1]] }
+            }
+            implements Converter<int[][]> {
+                function convert(self) -> int[][] { return [[2]] }
+            }
+        }
+        "#,
+        "E0114",
+    );
+}
+
+#[test]
 fn requires_cycle_is_compile_error() {
     assert_compile_error_code(
         r#"
@@ -3246,7 +3275,13 @@ async fn class_own_method_callable_from_implements_block() {
 }
 
 #[tokio::test]
-async fn class_own_method_overrides_default_for_interface_dispatch() {
+async fn class_inherent_method_does_not_override_interface_default_through_existential() {
+    // `let greeter: Greeter` is `dyn Greeter`: dispatch goes through the
+    // interface, calling `<Person as Greeter>::greet`. `Person`'s `implements
+    // Greeter {}` block is empty, so that resolves to the interface *default*
+    // ("default"). `Person`'s inherent `greet` (outside the impl block) is a
+    // separate method and does NOT override the trait method through `dyn`
+    // dispatch — matching Rust's inherent-vs-trait-method distinction.
     let output = baml_test!(
         r#"
         interface Greeter {
@@ -3274,13 +3309,18 @@ async fn class_own_method_overrides_default_for_interface_dispatch() {
 
     assert_eq!(
         output.result.unwrap(),
-        BexExternalValue::String("Ada".into())
+        BexExternalValue::String("default".into())
     );
 }
 
 #[test]
-fn class_own_method_satisfying_interface_must_match_signature() {
-    assert_compile_error_contains(
+fn class_inherent_method_does_not_satisfy_interface_method() {
+    // `Person`'s `greet` is an inherent method (outside the `implements` block), so
+    // it does NOT satisfy the abstract `Greeter.greet` (BEP-044: only `implements`-
+    // block members satisfy a requirement). The empty block leaves `greet`
+    // unimplemented → E0113 (MissingInterfaceMethod). Its mismatched `-> int`
+    // signature is irrelevant — the inherent method is unrelated to the impl.
+    assert_compile_error_code(
         r#"
         interface Greeter {
             function greet(self) -> string
@@ -3294,7 +3334,7 @@ fn class_own_method_satisfying_interface_must_match_signature() {
             }
         }
         "#,
-        "does not match interface",
+        "E0113",
     );
 }
 
@@ -5222,8 +5262,12 @@ fn all_required_parents_satisfied_is_ok() {
 }
 
 #[test]
-fn in_body_implicit_method_match_ignores_param_names() {
-    assert_zero_compile_errors(
+fn in_body_inherent_method_does_not_implicitly_satisfy_interface() {
+    // `Thing.label` is an inherent method (outside the `implements Label` block),
+    // so it does NOT satisfy the abstract `Label.label` — even though the signatures
+    // match modulo param names. The empty block leaves `label` unimplemented → E0113
+    // (BEP-044: only `implements`-block members satisfy a requirement).
+    assert_compile_error_code(
         r#"
         interface Label {
             function label(self, name: string) -> string
@@ -5237,12 +5281,16 @@ fn in_body_implicit_method_match_ignores_param_names() {
             implements Label {}
         }
         "#,
+        "E0113",
     );
 }
 
 #[test]
-fn out_of_body_implicit_method_match_ignores_param_names() {
-    assert_zero_compile_errors(
+fn out_of_body_inherent_method_does_not_implicitly_satisfy_interface() {
+    // Out-of-body analogue: `Thing.label` is inherent (not in the empty
+    // `implements Label for Thing {}` block), so it does NOT satisfy `Label.label`
+    // → E0113 (BEP-044).
+    assert_compile_error_code(
         r#"
         interface Label {
             function label(self, name: string) -> string
@@ -5256,6 +5304,7 @@ fn out_of_body_implicit_method_match_ignores_param_names() {
 
         implements Label for Thing {}
         "#,
+        "E0113",
     );
 }
 
@@ -5402,7 +5451,10 @@ fn out_of_body_implements_for_class_compiles() {
 }
 
 #[test]
-fn out_of_body_implements_for_qualified_generic_class_uses_class_methods() {
+fn out_of_body_empty_implements_for_generic_class_does_not_satisfy_via_inherent_method() {
+    // `implements Printable for Box<int> {}` is empty, and `Box`'s `label` is an
+    // inherent class method (not an `implements`-block member), so it does NOT
+    // satisfy the abstract `Printable.label` → E0113 (BEP-044).
     let files = &[
         (
             "main.baml",
@@ -5427,12 +5479,15 @@ fn out_of_body_implements_for_qualified_generic_class_uses_class_methods() {
                 "#,
         ),
     ];
-    assert_no_compile_errors_multi(files);
+    assert_compile_error_contains_multi(files, "[E0113]");
 }
 
-#[tokio::test]
-async fn out_of_body_empty_implements_uses_class_method_runtime() {
-    let output = baml_test!(
+#[test]
+fn out_of_body_empty_implements_does_not_satisfy_abstract_via_inherent_method() {
+    // `implements Printable for Box {}` is empty; `Box`'s `label` is an inherent
+    // method, which does NOT satisfy the abstract `Printable.label` (BEP-044: only
+    // `implements`-block members satisfy a requirement) → E0113.
+    assert_compile_error_code(
         r#"
         interface Printable {
             function label(self) -> string
@@ -5447,23 +5502,17 @@ async fn out_of_body_empty_implements_uses_class_method_runtime() {
         }
 
         implements Printable for Box {}
-
-        function main() -> string {
-            let printable: Printable = Box { value: "boxed" }
-            return printable.label()
-        }
-        "#
-    );
-
-    assert_eq!(
-        output.result.unwrap(),
-        BexExternalValue::String("boxed".into())
+        "#,
+        "E0113",
     );
 }
 
 #[test]
-fn out_of_body_empty_implements_class_method_must_match_signature() {
-    assert_compile_error_contains(
+fn out_of_body_empty_implements_inherent_method_with_wrong_sig_does_not_satisfy() {
+    // Even a same-named inherent method with a *mismatched* signature does not
+    // satisfy the abstract `Printable.label`: the inherent method is unrelated to
+    // the impl, so `label` is simply unimplemented → E0113 (not a signature error).
+    assert_compile_error_code(
         r#"
         interface Printable {
             function label(self) -> string
@@ -5477,7 +5526,7 @@ fn out_of_body_empty_implements_class_method_must_match_signature() {
 
         implements Printable for Box {}
         "#,
-        "does not match interface",
+        "E0113",
     );
 }
 
@@ -7616,14 +7665,30 @@ fn shared_var_across_interface_arg_and_for_type_overlaps_e0132() {
 // Two impls whose for-types fail to resolve must not additionally report an
 // overlap — the unresolved-type errors are the only relevant diagnostics. (An
 // unresolved for-type lowers to `Ty::Unknown`, which must never unify.)
+//
+// Asserts both halves so the test can't pass vacuously: the unresolved-type
+// diagnostics (one E0002 per bad target) must be present, and the overlap
+// diagnostic (E0132) must be absent.
 #[test]
 fn malformed_impls_do_not_spuriously_overlap() {
-    assert_no_interface_errors(
+    let errors = collect_compile_errors(
         r#"
         interface Marker {}
         implement Marker for Nonexistent1 {}
         implement Marker for Nonexistent2 {}
         "#,
+    );
+    let unresolved: Vec<_> = errors.iter().filter(|e| e.starts_with("[E0002]")).collect();
+    assert_eq!(
+        unresolved.len(),
+        2,
+        "expected exactly two unresolved-type errors (one per malformed target); got:\n  {}",
+        errors.join("\n  ")
+    );
+    assert!(
+        !errors.iter().any(|e| e.starts_with("[E0132]")),
+        "unresolved for-types must not be reported as an overlap; got:\n  {}",
+        errors.join("\n  ")
     );
 }
 
@@ -11327,8 +11392,8 @@ fn union_fuzz_f04_string_plus_int_is_type_error_not_vm_crash() {
     assert!(
         errors
             .iter()
-            .any(|e| e.starts_with("[E0004]") && e.contains("Add")),
-        "`string + int` must be rejected with an InvalidBinaryOp (E0004) naming `Add` \
+            .any(|e| e.starts_with("[E0004]") && e.contains("operator `+`")),
+        "`string + int` must be rejected with an InvalidBinaryOp (E0004) naming `+` \
          (it used to infer `string` and abort the VM); got:\n  {}",
         errors.join("\n  ")
     );
@@ -11879,3 +11944,78 @@ fn duplicate_implements_differing_only_in_assoc_bindings_is_compile_error() {
         "E0114",
     );
 }
+
+// ── Group AH: comparison operators require a single concrete `Compare` type ──
+// Ordering (`<` `<=` `>` `>=`) is valid only when both operands are the *same
+// concrete type* implementing `baml.ops.Compare` (or the same bounded type-var).
+// A union, an interface-existential, or two different types is a compile error.
+
+#[test]
+fn ordering_on_union_operands_is_rejected() {
+    // `int | string` is member-wise a `Compare` subtype, but it is not a single
+    // concrete type — the two operands could hold different concretes, which the
+    // VM cannot order. (`f(5, "a")` would otherwise abort at runtime.)
+    assert_compile_error_contains(
+        r#"
+        function f(a: int | string, b: int | string) -> bool {
+            a < b
+        }
+        "#,
+        "does not implement `Compare`",
+    );
+}
+
+#[test]
+fn ordering_on_different_concrete_types_is_rejected() {
+    assert_compile_error_contains(
+        r#"
+        function f(a: int, b: string) -> bool {
+            a < b
+        }
+        "#,
+        "ordering requires both operands",
+    );
+}
+
+#[test]
+fn ordering_on_interface_existential_is_rejected() {
+    // Two `baml.ops.Compare` existentials could be different concrete types, so
+    // ordering them is not exact-type and is rejected.
+    assert_compile_error_contains(
+        r#"
+        function f(a: baml.ops.Compare, b: baml.ops.Compare) -> bool {
+            a < b
+        }
+        "#,
+        "does not implement `Compare`",
+    );
+}
+
+#[test]
+fn ordering_diagnostic_renders_operator_symbol() {
+    // The diagnostic prints the operator *symbol* (`<`), not its Debug name (`Lt`).
+    assert_compile_error_contains(
+        r#"
+        function f(a: int, b: string) -> bool {
+            a < b
+        }
+        "#,
+        "with `<`",
+    );
+}
+
+#[test]
+fn ordering_on_same_concrete_primitive_is_ok() {
+    // Guards against over-rejection: `int < int` is the canonical valid case.
+    assert_no_compile_errors(
+        r#"
+        function f(a: int, b: int) -> bool {
+            a < b
+        }
+        "#,
+    );
+}
+
+// (The `int | 99` catch-result ordering — where the union must be normalized to
+// its single concrete base `int` before the union rejection — is exercised at
+// runtime by `baml_src/ns_arrays/sort_comparable.baml`.)

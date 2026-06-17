@@ -2335,13 +2335,18 @@ fn unify_into_at(
     let x = expand_alias_head(&x, aliases);
     let y = expand_alias_head(&y, aliases);
 
-    // The error sentinel never unifies: an unresolved for-type or arg already has
-    // its own diagnostic, so treating it as a common instance would stack a
-    // spurious overlap. The *inhabited* top type `unknown` (`BuiltinUnknown`) is
-    // deliberately not bailed here: it binds an opposing variable (below), and is
-    // otherwise a distinct atomic type compared by equality — `Box<unknown>` is
-    // disjoint from `Box<int>`, exactly how the runtime resolver matches it.
-    if matches!(x, Ty::Unknown { .. }) || matches!(y, Ty::Unknown { .. }) {
+    // The error sentinels never unify: an unresolved for-type or arg (`Unknown`)
+    // or a type that already errored (`Error`) carries its own diagnostic, so
+    // treating it as a common instance would stack a spurious overlap — and
+    // `Error` is "compatible with anything" downstream, which would *admit* a
+    // bogus overlap (the dangerous direction). The *inhabited* top type `unknown`
+    // (`BuiltinUnknown`) is deliberately not bailed here: it binds an opposing
+    // variable (below), and is otherwise a distinct atomic type compared by
+    // equality — `Box<unknown>` is disjoint from `Box<int>`, exactly how the
+    // runtime resolver matches it.
+    if matches!(x, Ty::Unknown { .. } | Ty::Error { .. })
+        || matches!(y, Ty::Unknown { .. } | Ty::Error { .. })
+    {
         return Overlap::No;
     }
 
