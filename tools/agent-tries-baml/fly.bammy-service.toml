@@ -1,0 +1,86 @@
+app            = 'bammy-service'
+primary_region = 'sjc'
+
+# The consolidated service machine: one box runs the combined api+ingress web app
+# plus every claim-loop / sweep as supervised processes (see services/supervisor.py).
+# The only other machine is bammy-proxy (the agent runner); the daily task cron
+# lives on bammy-cron-tasks. Convex Cloud holds the DB + its own reaper crons.
+[build]
+  dockerfile = 'docker/Dockerfile.python'
+
+[processes]
+  app = 'python -m services.supervisor'
+
+[env]
+  INFISICAL_PROJECT_ID = 'bdd280e2-259c-4750-9b16-a8597a67214c'
+  INFISICAL_ENV        = 'prod'
+  INFISICAL_PATH       = '/'
+
+  # --- combined web app (api gateway + ingress webhooks) on one public port ---
+  PORT       = '8080'
+  HOST       = '::'
+  CONVEX_URL = 'https://charming-terrier-498.convex.cloud'
+  BLOB_DIR   = '/data/blobs'
+  # every in-box process (ingress handlers, workers, cron loops) talks to the
+  # local api over loopback.
+  SERVICE_URL = 'http://localhost:8080'
+  UI_BASE_URL = 'https://new.boundaryml.com/atb'
+  BAML_REPO_SLUG = 'BoundaryML/baml'
+  BAML_REF       = 'canary'
+
+  # --- agent runner (separate machine) ---
+  CLAUDE_PROXY_URLS = 'http://bammy-proxy.internal:9090'
+
+  # --- Linear board ---
+  LINEAR_TEAM_ID = '179250f3-902f-491e-94f8-8256292e8386'
+
+  # --- worker / dedup / redraft / cohort / changelog / bug-verify models ---
+  CLAUDE_MODEL       = 'claude-opus-4-8'
+  CLAUDE_MAX_TURNS   = '100'
+  BAML_SKILL_DIR     = '/baml-skill'
+  ATB_SKILL_REPO_URL = 'https://github.com/BoundaryML/baml-skill.git'
+  BAML_DEDUP_MODEL   = 'claude-sonnet-4-6'
+  BAML_REDRAFT_MODEL = 'claude-sonnet-4-6'
+  ARENA_MODEL        = 'claude-sonnet-4-6'
+  CHANGELOG_MODEL      = 'claude-opus-4-8'
+  CHANGELOG_PUBLIC_URL = 'https://new.boundaryml.com/changelog'
+  BUG_VERIFY_MODEL     = 'claude-sonnet-4-6'
+  BUG_VERIFY_BATCH     = '6'
+  BUG_VERIFY_POLL_SECS = '900'
+
+  # --- cursor fix dispatch + tracker ---
+  CURSOR_BRANCH           = 'canary'
+  CURSOR_TRACK_SECS       = '60'
+  CURSOR_REFIX_MODE       = 'new_agent'
+  CURSOR_MAX_FIX_ATTEMPTS = '3'
+  ATB_ARENA_BRANCHES      = 'main'
+
+  # --- cron loops run here (reconcile + changelog poll); the daily task cron is
+  #     on bammy-cron-tasks (CRON_JOBS=tasks) ---
+  CRON_JOBS              = 'loops'
+  COHORT_RECONCILE_SECS  = '30'
+  CHANGELOG_POLL_ENABLED = '1'
+  CHANGELOG_POLL_SECS    = '600'
+  SLACK_RESULTS_CHANNEL  = 'C0B36EDQEN6'
+
+  # --- the supervised process set (claim-based ones may be suffixed :N to scale) ---
+  SUPERVISE = 'web,baml_worker,baml_dedup,baml_redraft,bug_verify,notion_fixer,cohort_compare,changelog_worker,baml_builder,cron'
+  # secrets via Infisical (prefix ATB_): SERVICE_TOKEN, LINEAR_TOKEN, LINEAR_WEBHOOK_SECRET,
+  #   CURSOR_API_KEY, GITHUB_TOKEN, SLACK_BOT_TOKEN, SLACK_SIGNING_SECRET, SLACK_FIX_CHANNEL,
+  #   CLAUDE_PROXY_TOKEN
+
+[http_service]
+  internal_port        = 8080
+  force_https          = true
+  processes            = ['app']
+  auto_stop_machines   = 'off'
+  auto_start_machines  = true
+  min_machines_running = 1
+
+[[mounts]]
+  source      = 'bammy_service_blobs'
+  destination = '/data/blobs'
+
+[[vm]]
+  size   = 'shared-cpu-4x'
+  memory = '4gb'

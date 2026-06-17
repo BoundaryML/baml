@@ -1,0 +1,29 @@
+app            = 'bammy-cron-tasks'
+primary_region = 'sjc'
+
+# The one true cron: a tiny daemon that runs a daily cycle (refresh the nightly
+# baml build, then enqueue curated benchmark task(s)). The high-frequency loops
+# (cohort reconcile, changelog poll) run on bammy-service instead (CRON_JOBS=loops).
+[build]
+  dockerfile = 'docker/Dockerfile.python'
+
+[processes]
+  app = 'python -m services.cron'
+
+[env]
+  INFISICAL_PROJECT_ID = 'bdd280e2-259c-4750-9b16-a8597a67214c'
+  INFISICAL_ENV        = 'prod'
+  INFISICAL_PATH       = '/'
+  SERVICE_URL       = 'http://bammy-service.internal:8080'
+  CLAUDE_PROXY_URLS = 'http://bammy-proxy.internal:9090'
+  CRON_JOBS          = 'tasks'
+  CRON_INTERVAL_SECS = '86400'
+  GENERATE_TASKS     = '1'
+  GEN_TASK_COUNT     = '3'
+  GEN_TASK_MODEL     = 'claude-sonnet-4-6'
+  SLACK_RESULTS_CHANNEL = 'C0B36EDQEN6'
+  # secrets via Infisical: ATB_SERVICE_TOKEN, ATB_GITHUB_TOKEN, ATB_CLAUDE_PROXY_TOKEN
+
+[[vm]]
+  size   = 'shared-cpu-1x'
+  memory = '512mb'

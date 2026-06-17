@@ -8,8 +8,8 @@ primary_region = 'sjc'
 [env]
   PORT          = '9877'
   HOSTNAME      = '0.0.0.0'
-  SERVICE_URL   = 'http://bench3-api.internal:8080'
-  CHANGELOG_API = 'https://bench3-ingress.fly.dev'
+  SERVICE_URL   = 'http://bammy-service.internal:8080'
+  CHANGELOG_API = 'https://bammy-service.fly.dev'
   # secret: SERVICE_TOKEN
 
 [http_service]

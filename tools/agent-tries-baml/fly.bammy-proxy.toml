@@ -1,8 +1,10 @@
-app            = 'bench3-claude-proxy'
+app            = 'bammy-proxy'
 primary_region = 'sjc'
 
-# Claude wrapper. Internal-only (reached at bench3-claude-proxy.internal:9090).
-# OAuth state persists on claude_state; one-time `fly ssh console -C "claude /login"`.
+# Claude wrapper / agent runner. The one component kept on its own machine (heavy
+# `claude -p` + baml compile work, independently scalable). Internal-only, reached
+# at bammy-proxy.internal:9090. OAuth state persists on the claude_state volume;
+# if not using ANTHROPIC_API_KEY, do a one-time `fly ssh console -C "claude /login"`.
 [build]
   dockerfile = 'docker/Dockerfile.claude-proxy'
 
@@ -14,7 +16,7 @@ primary_region = 'sjc'
   HOST              = '::'
   STAGING_ROOT      = '/tmp/staging'
   BAML_CACHE_DIR    = '/var/baml-cache'
-  SERVICE_URL       = 'http://bench3-api.internal:8080'
+  SERVICE_URL       = 'http://bammy-service.internal:8080'
   CLAUDE_AUTH_MODE  = 'auto'
   CLAUDE_INVOCATION_TIMEOUT_SECS = '3600'
   # secrets: CLAUDE_PROXY_TOKEN, SERVICE_TOKEN, (optional ANTHROPIC_API_KEY)
@@ -27,7 +29,7 @@ primary_region = 'sjc'
   min_machines_running = 1
 
 [[mounts]]
-  source      = 'bench3_claude_state'
+  source      = 'bammy_proxy_state'
   destination = '/home/cproxy/.claude'
 
 [[vm]]

@@ -16,11 +16,18 @@ import time
 
 from bench_core.service_client import ServiceClient
 
+from .generator import generate_hard_tasks
 from .reconcile import reconcile_cohorts_once
 
 log = logging.getLogger("cron")
 
 INTERVAL = int(os.environ.get("CRON_INTERVAL_SECS", "86400"))
+# Generate fresh hard tasks via an agent each cycle instead of rotating the static
+# HARD_TASKS list. Falls back to the static rotation if generation is off or fails.
+GENERATE_TASKS = os.environ.get("GENERATE_TASKS", "1") == "1"
+GEN_TASK_COUNT = int(os.environ.get("GEN_TASK_COUNT", "3"))
+# How many recent task prompts to show the generator so it avoids repeating them.
+GEN_RECENT_WINDOW = int(os.environ.get("GEN_RECENT_WINDOW", "40"))
 # The cohort fan-in barrier runs on its own fast cadence (independent of the daily
 # task cycle): it flips skill-arena cohorts pending -> queued once their member runs
 # are all terminal, so a finished arena is compared within ~this many seconds.
@@ -108,16 +115,46 @@ def _tasks() -> list[str]:
     return [HARD_TASKS[idx]]
 
 
-async def _cycle(service: ServiceClient) -> None:
-    """Run one cron cycle: refresh both baml channels, then enqueue the day's task(s).
+async def _cycle_tasks(service: ServiceClient, proxy) -> list[str]:
+    """Pick this cycle's task prompts: agent-generated when enabled, else static.
+
+    With ``GENERATE_TASKS`` on and a proxy available, runs the generator agent
+    (seeded with recent prompts so it doesn't repeat them) and returns its fresh
+    tasks. Falls back to the static rotation (``_tasks``) when generation is off,
+    has no proxy, errors, or returns nothing — so a cycle always enqueues something.
+
+    Args:
+        service: The ServiceClient used to read recent tasks for the avoid-list.
+        proxy: A ProxyClient for the generator agent, or None.
+
+    Returns:
+        The task prompt strings to enqueue this cycle.
+    """
+    if GENERATE_TASKS and proxy is not None:
+        try:
+            recent = await service.list("tasks", limit=GEN_RECENT_WINDOW)
+            recent_prompts = [t.get("prompt", "") for t in recent if t.get("prompt")]
+            generated = await generate_hard_tasks(proxy, recent_prompts, GEN_TASK_COUNT)
+            if generated:
+                return generated
+            log.warning("task-generator returned no tasks; falling back to static rotation")
+        except Exception:  # noqa: BLE001
+            log.exception("task generation failed; falling back to static rotation")
+    return _tasks()
+
+
+async def _cycle(service: ServiceClient, proxy=None) -> None:
+    """Run one cron cycle: refresh both baml channels, then enqueue this cycle's task(s).
 
     Refreshes the nightly and canary channels (each best-effort — a failure is
     logged, not raised, so task enqueue still proceeds), keeping both buckets warm
-    and pruned. Each enqueued task is tagged ``source=cron`` and, when configured,
-    routed to ``SLACK_RESULTS_CHANNEL``.
+    and pruned. Tasks are agent-generated when enabled (else the static rotation);
+    each is tagged ``source=cron`` and, when configured, routed to
+    ``SLACK_RESULTS_CHANNEL``.
 
     Args:
         service: The ServiceClient used to trigger the baml update and create tasks.
+        proxy: A ProxyClient for the task generator, or None to use the static list.
     """
     for channel in ("nightly", "canary"):
         try:
@@ -125,7 +162,7 @@ async def _cycle(service: ServiceClient) -> None:
             log.info("baml update (%s): %s", channel, upd)
         except Exception:  # noqa: BLE001
             log.exception("baml update (%s) failed", channel)
-    for prompt in _tasks():
+    for prompt in await _cycle_tasks(service, proxy):
         doc = {"source": "cron", "prompt": prompt, "status": "queued"}
         if SLACK_RESULTS_CHANNEL:
             doc["slackChannel"] = SLACK_RESULTS_CHANNEL
@@ -133,10 +170,10 @@ async def _cycle(service: ServiceClient) -> None:
         log.info("enqueued cron hard task %s", tid)
 
 
-async def _daily_loop(service: ServiceClient) -> None:
+async def _daily_loop(service: ServiceClient, proxy=None) -> None:
     """Run the daily cycle: one on start, then every ``INTERVAL`` seconds."""
     while True:
-        await _cycle(service)
+        await _cycle(service, proxy)
         await asyncio.sleep(INTERVAL)
 
 
@@ -193,18 +230,42 @@ async def _changelog_poll_loop(service: ServiceClient) -> None:
         await asyncio.sleep(CHANGELOG_POLL_SECS)
 
 
-async def _amain() -> None:
-    """Run the cron service: the daily task cycle, the cohort reconcile sweep,
-    and (when enabled) the changelog release poller.
+# Which loops this process runs. Split so the consolidated bammy-service runs the
+# high-frequency service loops (reconcile + changelog poll) in-process while the
+# true daily cron lives on its own machine (bammy-cron-tasks):
+#   all   - everything (default; standalone bench3-cron / local)
+#   tasks - only the daily task-generation cycle (bammy-cron-tasks)
+#   loops - only the fast service loops: cohort reconcile + changelog poll
+CRON_JOBS = os.environ.get("CRON_JOBS", "all").strip().lower()
 
-    Builds the shared ServiceClient, runs the loops concurrently, and closes the
-    client on exit.
+
+async def _amain() -> None:
+    """Run the cron loops selected by ``CRON_JOBS`` (all | tasks | loops).
+
+    Builds the shared ServiceClient, runs the selected loops concurrently, and
+    closes the client on exit.
     """
     logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
     service = ServiceClient(os.environ["SERVICE_URL"], os.environ.get("ATB_SERVICE_TOKEN", ""))
-    loops = [_daily_loop(service), _reconcile_loop(service)]
-    if CHANGELOG_POLL_ENABLED:
-        loops.append(_changelog_poll_loop(service))
+    want_daily = CRON_JOBS in ("all", "tasks")
+    want_loops = CRON_JOBS in ("all", "loops")
+    # The task generator needs a proxy; the fast service loops don't, so skip it
+    # entirely when this process only runs the loops.
+    proxy = None
+    if want_daily and GENERATE_TASKS:
+        try:
+            from bench_core.proxy_client import ProxyClient
+            proxy = ProxyClient.from_env()
+        except Exception:  # noqa: BLE001
+            log.warning("no claude proxy configured; task generation disabled (static rotation)")
+    loops = []
+    if want_daily:
+        loops.append(_daily_loop(service, proxy))
+    if want_loops:
+        loops.append(_reconcile_loop(service))
+        if CHANGELOG_POLL_ENABLED:
+            loops.append(_changelog_poll_loop(service))
+    log.info("cron: CRON_JOBS=%s -> running %d loop(s)", CRON_JOBS, len(loops))
     try:
         await asyncio.gather(*loops)
     finally:
