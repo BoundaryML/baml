@@ -1885,6 +1885,12 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   const selectedFnInfo = visibleFunctions.find((f) => f.name === selectedFn);
   const canPreviewPrompt = selectedFnInfo?.capabilities?.renderPrompt ?? false;
   const canPreviewCurl = selectedFnInfo?.capabilities?.buildRequest ?? false;
+  // Names of LLM functions — only these have a meaningful raw (un-parsed LLM
+  // output) vs parsed distinction, so the Parsed/Raw toggle is shown only for
+  // them. expr functions just return a structured value (raw == parsed).
+  const llmFunctionNames = new Set(
+    functions.filter((f) => f.kind === 'llm').map((f) => f.name),
+  );
   const latestGraphRunSnapshot = useMemo(
     () =>
       findLatestGraphRunSnapshot(
@@ -2852,6 +2858,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
 
                     {functionRuns.map((run, runIdx) => {
                       const isLatest = runIdx === 0;
+                      const isLlmFunctionRun = llmFunctionNames.has(
+                        run.functionName,
+                      );
                       const statusCls =
                         run.status === 'error'
                           ? 'bg-vsc-red'
@@ -3055,35 +3064,40 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                                   <div className="text-[10px] font-semibold text-vsc-green uppercase tracking-wide">
                                     Result
                                   </div>
-                                  <ToggleGroup
-                                    value={resultModes[run.id] ?? 'parsed'}
-                                    onValueChange={(v) =>
-                                      setResultModes((prev) => ({
-                                        ...prev,
-                                        [run.id]: v as 'parsed' | 'raw',
-                                      }))
-                                    }
-                                    options={[
-                                      { value: 'parsed', label: 'Parsed' },
-                                      { value: 'raw', label: 'Raw' },
-                                    ]}
-                                    size="sm"
-                                  />
+                                  {/* Parsed/Raw only applies to LLM functions,
+                                      where Raw is the un-parsed model output.
+                                      expr functions return a structured value. */}
+                                  {isLlmFunctionRun && (
+                                    <ToggleGroup
+                                      value={resultModes[run.id] ?? 'parsed'}
+                                      onValueChange={(v) =>
+                                        setResultModes((prev) => ({
+                                          ...prev,
+                                          [run.id]: v as 'parsed' | 'raw',
+                                        }))
+                                      }
+                                      options={[
+                                        { value: 'parsed', label: 'Parsed' },
+                                        { value: 'raw', label: 'Raw' },
+                                      ]}
+                                      size="sm"
+                                    />
+                                  )}
                                   <CopyButton
                                     text={stringifyResult(run.result)}
                                     iconSize={11}
                                   />
                                 </div>
-                                {(resultModes[run.id] ?? 'parsed') ===
-                                'parsed' ? (
+                                {isLlmFunctionRun &&
+                                (resultModes[run.id] ?? 'parsed') === 'raw' ? (
+                                  <pre className="whitespace-pre-wrap break-all font-vsc-mono text-[11px] text-vsc-text bg-vsc-bg-secondary p-2 rounded border border-vsc-border max-h-[400px] overflow-auto">
+                                    {stringifyResult(run.result)}
+                                  </pre>
+                                ) : (
                                   <ResultDisplay
                                     result={run.result}
                                     customRenderers={resultRenderers}
                                   />
-                                ) : (
-                                  <pre className="whitespace-pre-wrap break-all font-vsc-mono text-[11px] text-vsc-text bg-vsc-bg-secondary p-2 rounded border border-vsc-border max-h-[400px] overflow-auto">
-                                    {stringifyResult(run.result)}
-                                  </pre>
                                 )}
                               </div>
                             </div>
