@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use baml_base::{Name, TypePath};
-use baml_type::{ResolvedAliases, RuntimeTy, TyAttr, TyTemplate, TypeName};
+use baml_type::{PrimitiveType, ResolvedAliases, RuntimeTy, TyAttr, TyTemplate, TypeName};
 use indexmap::IndexMap;
 
 use crate::{
@@ -9186,7 +9186,85 @@ impl<'db> LoweringContext<'db> {
         let receiver_op = self.lower_to_operand(base);
         let receiver_ty = self.expr_ty(base);
         let recv_local = self.operand_to_local(receiver_op, receiver_ty);
+        // A union whose members all reduce to the SAME runtime primitive — e.g.
+        // `"p" | "q"` from `if`/`match` string arms, or `1 | 2` — has no class
+        // tag to switch on: the receiver IS that primitive. Resolve the method on
+        // its builtin class and emit one direct call. Without this the class-tag
+        // dispatch below finds no candidates and the call falls through to a map
+        // read, faulting in the VM (`expected map, got string`). BEP-049 §4:
+        // inline `${if (c) { "p" } else { "q" }}` must render.
+        if let Some(prim) = Self::union_uniform_primitive(&members)
+            && self.emit_primitive_method_call(recv_local, &prim, method, expr_id, args, dest)
+        {
+            return true;
+        }
         self.emit_union_class_dispatch(recv_local, &members, method, expr_id, args, dest)
+    }
+
+    /// The single primitive every member of a union reduces to, or `None` if the
+    /// members aren't all the same primitive (or any is a class/interface/etc.).
+    fn union_uniform_primitive(members: &[Tir2Ty]) -> Option<PrimitiveType> {
+        let first = Self::member_primitive(members.first()?)?;
+        members
+            .iter()
+            .all(|m| Self::member_primitive(m).as_ref() == Some(&first))
+            .then_some(first)
+    }
+
+    /// The builtin primitive a `Tir2Ty` member denotes (including literals), or
+    /// `None` for non-primitive members.
+    fn member_primitive(ty: &Tir2Ty) -> Option<PrimitiveType> {
+        use baml_base::MediaKind;
+        Some(match ty {
+            Tir2Ty::String { .. } => PrimitiveType::String,
+            Tir2Ty::Int { .. } => PrimitiveType::Int,
+            Tir2Ty::Bigint { .. } => PrimitiveType::Bigint,
+            Tir2Ty::Float { .. } => PrimitiveType::Float,
+            Tir2Ty::Bool { .. } => PrimitiveType::Bool,
+            Tir2Ty::Null { .. } => PrimitiveType::Null,
+            Tir2Ty::Uint8Array { .. } => PrimitiveType::Uint8Array,
+            Tir2Ty::Media(MediaKind::Image, _) => PrimitiveType::Image,
+            Tir2Ty::Media(MediaKind::Audio, _) => PrimitiveType::Audio,
+            Tir2Ty::Media(MediaKind::Video, _) => PrimitiveType::Video,
+            Tir2Ty::Media(MediaKind::Pdf, _) => PrimitiveType::Pdf,
+            Tir2Ty::Literal(lit, _, _) => PrimitiveType::from_literal(lit),
+            _ => return None,
+        })
+    }
+
+    /// Emit a direct call `baml.<Prim>.<method>(recv, args…)` — used when a union
+    /// receiver reduces to a single primitive (no class-tag switch needed).
+    fn emit_primitive_method_call(
+        &mut self,
+        recv_local: Local,
+        prim: &PrimitiveType,
+        method: &Name,
+        expr_id: AstExprId,
+        args: &[AstExprId],
+        dest: &Place,
+    ) -> bool {
+        let path = prim.builtin_class_path();
+        let Some((name, ns)) = path.split_last() else {
+            return false;
+        };
+        let class_tn = QualifiedTypeName::new(
+            Name::new("baml"),
+            ns.iter().map(|s| Name::new(*s)).collect(),
+            Name::new(*name),
+        );
+        let Some(item_ref) = self.class_method_item_ref_by_name(&class_tn, method) else {
+            return false;
+        };
+        let arg_ops = self.lower_call_arg_operands(expr_id, args);
+        let mut all_args = vec![Operand::Copy(Place::Local(recv_local))];
+        all_args.extend(arg_ops);
+        let callee = Operand::Constant(Constant::Function(item_ref));
+        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
+        let bb_join = self.builder.create_block();
+        self.builder
+            .call(callee, all_args, dest.clone(), bb_join, unwind);
+        self.builder.set_current_block(bb_join);
+        true
     }
 
     /// A method call whose receiver is a union that contains at least one

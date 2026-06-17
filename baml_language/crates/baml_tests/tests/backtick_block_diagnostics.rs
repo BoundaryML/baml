@@ -130,6 +130,20 @@ fn for_header_accepts_const_binding() {
 }
 
 #[test]
+fn unresolved_name_in_interp_reports_cleanly() {
+    // BEP §4: a real unresolved name in `${…}` must surface a clean diagnostic,
+    // not slip through as `Ty::Unknown` and ICE at runtime lowering. The
+    // untagged-template desugaring never introduces a fresh name reference, so a
+    // bare unresolved name here is always genuine user code and is retained.
+    let msgs = messages(&untagged("${ nope }"));
+    assert!(
+        msgs.iter()
+            .any(|m| m.contains("nope") || m.to_lowercase().contains("unresolved")),
+        "expected an unresolved-name diagnostic, got: {msgs:#?}"
+    );
+}
+
+#[test]
 fn well_formed_blocks_have_no_structural_diagnostic() {
     // A correctly-closed for/if must NOT trip any structural diagnostic.
     let src = prompt(
@@ -141,5 +155,62 @@ fn well_formed_blocks_have_no_structural_diagnostic() {
             && !m.contains("stray")
             && !m.contains("empty interpolation")),
         "well-formed template should have no structural diagnostics, got: {msgs:#?}"
+    );
+}
+
+fn assert_none(source: &str, forbidden: &str) {
+    let msgs = messages(source);
+    assert!(
+        msgs.iter().all(|m| !m.contains(forbidden)),
+        "expected NO diagnostic containing {forbidden:?}, got: {msgs:#?}\nsource:\n{source}"
+    );
+}
+
+#[test]
+fn unresolved_name_in_interp_reports() {
+    // An unknown name in a `${…}` value segment must produce a name-resolution
+    // diagnostic — not compile silently. Before the fix the untagged template
+    // truncated ALL diagnostics from typing its desugared form (to drop
+    // synthetic `.to_string()` noise), which also swallowed this genuine
+    // `UnresolvedName`; the resulting `Ty::Unknown` then ICEd at MIR runtime
+    // lowering. Now the genuine name error survives the truncation.
+    assert_has(&untagged("${ nope }"), "nope");
+    assert_has(&prompt("${ nope }"), "nope");
+}
+
+#[test]
+fn unresolved_name_in_statement_only_interp_reports() {
+    // The unknown is on the RHS of a `let` inside a side-effect-only
+    // `${ let … }` segment whose binding is read by a later segment. The
+    // spliced statement is typed in the shared concat scope, so the
+    // `UnresolvedName` on `nope` is raised and retained.
+    assert_has(&untagged("${ let a = nope }${a}"), "nope");
+}
+
+#[test]
+fn cross_site_let_has_no_spurious_diagnostic() {
+    // The valid BEP-049 §4 cross-site `let` must type cleanly: no unresolved
+    // name for `w`, and no synthetic `.to_string()` / concat noise leaking out.
+    assert_none(&untagged("${ let w = \"hi\" }${w}"), "nresolved");
+    assert_none(&untagged("${ let w = \"hi\" }${w}"), "cannot be called");
+    assert_none(&untagged("${ let w = \"hi\" }${w}"), "not a function");
+}
+
+#[test]
+fn nullable_interp_still_reports_on_original_span_only() {
+    // Suppression of synthetic noise must remain intact: a nullable interp
+    // surfaces the strict-stringify `… may be null` error from the §11 segment
+    // check (original `${…}` span), NOT the synthetic
+    // `(… ) | null is not a function — it cannot be called` from the elaborated
+    // `a.to_string()`. (Retaining `UnresolvedName` must not re-admit this.)
+    let src = "function G(a: string?) -> string {\n  let s = `${a}`;\n  s\n}\n";
+    let msgs = messages(src);
+    assert!(
+        msgs.iter().any(|m| m.to_lowercase().contains("null")),
+        "expected a may-be-null strict-stringify diagnostic, got: {msgs:#?}"
+    );
+    assert!(
+        msgs.iter().all(|m| !m.contains("it cannot be called")),
+        "synthetic `.to_string()` NotCallable noise must stay suppressed, got: {msgs:#?}"
     );
 }

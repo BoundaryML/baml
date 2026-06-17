@@ -4398,7 +4398,20 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // of comparisons on literal backticks (BEP §9) still fires.
                 let saved = self.context.diagnostic_count();
                 let elaborated_ty = self.infer_expr(*elaborated, body);
-                self.context.truncate_diagnostics(saved);
+                // The elaborated tree wraps each `${expr}` in a synthetic
+                // `.to_string()` and folds the parts with `+` (a side-effect-only
+                // `${ let … }` splices its statements into one shared concat
+                // block). DISCARD the synthetic member/call noise — a nullable or
+                // non-stringable interp makes `expr.to_string()` report
+                // `NotCallable`/`UnresolvedMember` on a synthetic span — but KEEP
+                // genuine `UnresolvedName`s: a name the user wrote (`${ nope }`,
+                // or `nope` on a spliced `let`'s RHS) is never synthesized by the
+                // `.to_string()` wrapping or the accumulator, so retaining it both
+                // surfaces the real error AND stops a `Ty::Unknown` from reaching
+                // MIR (where runtime lowering would ICE). The user-facing
+                // strict-stringify errors still come from the structured
+                // `segments`, anchored on the original `${…}` spans.
+                self.context.retain_user_name_diagnostics(saved);
                 self.check_template_interps_stringable(segments, body);
                 elaborated_ty
             }
@@ -9374,6 +9387,25 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
+    /// Is `expr` a syntactically unit-valued (`Ty::Void`) block tail? An
+    /// `if`/`if let` with no `else`, or a nested block whose own tail is unit.
+    /// Mirrors `elaborate_default_interp`'s predicate in the AST crate so the
+    /// §11 segment check and the elaboration agree on which `${…}` render `""`.
+    fn is_unit_tail(body: &ExprBody, expr: ExprId) -> bool {
+        match &body.exprs[expr] {
+            Expr::If {
+                else_branch: None, ..
+            }
+            | Expr::IfLet {
+                else_branch: None, ..
+            } => true,
+            Expr::Block { tail_expr, .. } => tail_expr
+                .map(|t| Self::is_unit_tail(body, t))
+                .unwrap_or(true),
+            _ => false,
+        }
+    }
+
     /// The per-`${expr}` half of [`check_template_interps_stringable`]. Reads
     /// the recorded type (from typing the elaborated tree) and requires it to
     /// be non-null and expose a `to_string` method.
@@ -9385,16 +9417,19 @@ impl<'db> TypeInferenceBuilder<'db> {
         if matches!(ty, Ty::Unknown { .. } | Ty::Error { .. }) {
             return;
         }
-        // A statement-only block (`${ let x = 1 }`) is unit-valued and renders
-        // as the empty string (BEP §4) — no `to_string` required.
-        if matches!(
-            &body.exprs[expr_id],
-            Expr::Block {
-                tail_expr: None,
-                ..
+        // A unit-valued block (`${ let x = 1 }`, or one whose tail is an
+        // `if`/`if let` with no `else`) renders as the empty string (BEP §4) —
+        // no `to_string` required. Mirrors the widened unit-tail detection in
+        // the untagged-template elaborator (`elaborate_default_interp`); the
+        // recorded type here is the ORIGINAL segment's, typed independently of
+        // the elaborated `""`, so it must apply the same predicate.
+        if let Expr::Block { tail_expr, .. } = &body.exprs[expr_id] {
+            let tail_is_unit = tail_expr
+                .map(|t| Self::is_unit_tail(body, t))
+                .unwrap_or(true);
+            if tail_is_unit {
+                return;
             }
-        ) {
-            return;
         }
         // Nullable values can't be stringified directly — the user must
         // coalesce (`${x ?? "…"}`) or unwrap first. Applies the §7-style
@@ -11348,6 +11383,17 @@ impl<'db> TypeInferenceBuilder<'db> {
             .then(|| Ty::Unknown {
                 attr: TyAttr::default(),
             }),
+            // A union exposes `member` iff EVERY arm does — e.g. an inline
+            // `${if (c) { "pos" } else { "neg" }}` widens to `"pos" | "neg"`,
+            // and both arms resolve `to_string` via the String-literal path
+            // (the real `resolve_member` then dispatches per-arm at the call
+            // site). The probe only needs Some/None; return the first arm's
+            // resolution as a representative type.
+            Ty::Union(members, _) => members
+                .iter()
+                .map(|m| self.try_resolve_member_on_ty(m, member))
+                .collect::<Option<Vec<_>>>()
+                .and_then(|tys| tys.into_iter().next()),
             _ => None,
         }
     }

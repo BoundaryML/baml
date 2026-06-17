@@ -170,14 +170,9 @@ async fn backtick_interpolation_with_loop_in_block_body() -> anyhow::Result<()> 
 
 #[tokio::test]
 async fn backtick_interpolation_with_let_bound_if_else_expression() -> anyhow::Result<()> {
-    // BEP §4 worked example, adapted to use a let inside the interp so the
-    // .to_string() wrap targets a path expression, not a bare if-expr.
-    //
-    // Background: `${if (cond) {...} else {...}}` would directly call
-    // .to_string() on the inline if-expression result, which trips a
-    // pre-existing VM lowering issue ("expected map, got string"). The
-    // BEP-compliant escape hatch is to bind the value first — the block-
-    // expression body grammar lets users do this naturally.
+    // BEP §4 worked example: bind an if-expression's value with a let, then
+    // interpolate it. (The bare `${if …}` form also works now — see
+    // `backtick_inline_if_expression_renders` below.)
     assert_engine_executes(EngineProgram {
         source: r#"
             function main() -> string {
@@ -187,6 +182,90 @@ async fn backtick_interpolation_with_let_bound_if_else_expression() -> anyhow::R
         "#,
         entry: "main",
         expected: Ok(BexExternalValue::String("welcome user".into())),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
+async fn backtick_inline_if_expression_renders() -> anyhow::Result<()> {
+    // BEP §4 README:205 — `${if (cond) { "pos" } else { "neg" }}` is a valid
+    // inline if-EXPRESSION render. A runtime condition keeps the branches as a
+    // literal-union (`"pos" | "neg"`); interpolating it resolves `.to_string()`
+    // through the union (the probe arm) and MIR dispatches it as one direct
+    // primitive call (no class-tag map read).
+    assert_engine_executes(EngineProgram {
+        source: r#"
+            function classify(x: int) -> string {
+                `${if (x > 0) { "pos" } else { "neg" }}`
+            }
+            function main() -> string {
+                classify(5) + "/" + classify(-1)
+            }
+        "#,
+        entry: "main",
+        expected: Ok(BexExternalValue::String("pos/neg".into())),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
+async fn backtick_inline_if_int_union_renders() -> anyhow::Result<()> {
+    // Same as above for an int literal-union (`1 | 2`): the runtime value is an
+    // int, so `${…}` dispatches to `Int.to_string`.
+    assert_engine_executes(EngineProgram {
+        source: r#"
+            function pick(x: int) -> string {
+                `${if (x > 0) { 1 } else { 2 }}`
+            }
+            function main() -> string {
+                pick(5) + "/" + pick(-1)
+            }
+        "#,
+        entry: "main",
+        expected: Ok(BexExternalValue::String("1/2".into())),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
+async fn backtick_cross_site_let_leaks_to_later_segment() -> anyhow::Result<()> {
+    // BEP §4 README:213 — a side-effect-only `${ let … }` defines a binding for
+    // the rest of the template (the `{% set %}` equivalent). The untagged
+    // template lowers into one shared concat scope so the `let` is visible to a
+    // later `${…}`. Previously this compiled clean then ICE'd at runtime lowering
+    // (`Ty::Unknown` for the later reference).
+    assert_engine_executes(EngineProgram {
+        source: r#"
+            function f(items: int[]) -> string {
+                `count: ${ let n = items.length() }${n} items`
+            }
+            function main() -> string {
+                f([1, 2, 3])
+            }
+        "#,
+        entry: "main",
+        expected: Ok(BexExternalValue::String("count: 3 items".into())),
+        ..Default::default()
+    })
+    .await
+}
+
+#[tokio::test]
+async fn backtick_void_tail_renders_empty() -> anyhow::Result<()> {
+    // BEP §4 README:194 — a block whose tail evaluates to unit renders "". An
+    // `if` without `else` is void-typed; it must render "" rather than error on a
+    // missing `to_string`.
+    assert_engine_executes(EngineProgram {
+        source: r#"
+            function main() -> string {
+                `a${ if (false) { "x" } }b`
+            }
+        "#,
+        entry: "main",
+        expected: Ok(BexExternalValue::String("ab".into())),
         ..Default::default()
     })
     .await
@@ -343,6 +422,66 @@ async fn backtick_case_d_statement_only_block_renders_empty() -> anyhow::Result<
         "#,
         entry: "main",
         expected: Ok(BexExternalValue::String("ab".into())),
+        ..Default::default()
+    })
+    .await
+}
+
+// BEP-049 §4 cross-site `let`: a `let` bound in a side-effect-only
+// `${ let … }` segment is visible to a later `${…}` in the same template.
+// The untagged desugaring splices statement-only segments into ONE shared
+// concat scope (like the `${for}` accumulator), rather than confining each to
+// its own block — so `w` resolves across segments. Regression for an ICE
+// ("an error-recovery type reached runtime lowering"): `w` used to fail name
+// resolution, type `Ty::Unknown`, dodge both interp diagnostics, and panic at
+// MIR runtime lowering.
+#[tokio::test]
+async fn backtick_cross_site_let_binds_into_concat_scope() -> anyhow::Result<()> {
+    assert_engine_executes(EngineProgram {
+        source: r#"
+            function main() -> string {
+                `${ let w = "hi" }${w}`
+            }
+        "#,
+        entry: "main",
+        expected: Ok(BexExternalValue::String("hi".into())),
+        ..Default::default()
+    })
+    .await
+}
+
+// Cross-site `let` with surrounding text and a second binding that depends on
+// the first — confirms later segments observe earlier segments' bindings in
+// source order, and that intervening text segments don't break visibility.
+#[tokio::test]
+async fn backtick_cross_site_let_chain_with_text() -> anyhow::Result<()> {
+    assert_engine_executes(EngineProgram {
+        source: r#"
+            function main() -> string {
+                `a${ let x = "X" }b${x}c${ let y = x + "Y" }d${y}e`
+            }
+        "#,
+        entry: "main",
+        expected: Ok(BexExternalValue::String("abXcdXYe".into())),
+        ..Default::default()
+    })
+    .await
+}
+
+// Side-effect evaluation order is preserved when statement-only segments are
+// hoisted into the shared concat block: a `let` reassigned across segments
+// reflects each mutation at the point the next value segment reads it.
+#[tokio::test]
+async fn backtick_cross_site_let_reassign_evaluation_order() -> anyhow::Result<()> {
+    assert_engine_executes(EngineProgram {
+        source: r#"
+            function main() -> string {
+                let n = 0
+                `${ n = n + 1 }${n}-${ n = n + 1 }${n}`
+            }
+        "#,
+        entry: "main",
+        expected: Ok(BexExternalValue::String("1-2".into())),
         ..Default::default()
     })
     .await

@@ -4,15 +4,19 @@
 //! same algorithm and should remain in lockstep until that callsite migrates to
 //! this one.
 //!
-//! Algorithm:
-//! 1. Compute the minimum leading-whitespace count across all non-blank lines.
-//! 2. Strip that many leading bytes from every line that has them; otherwise
-//!    keep the line as-is (its content is whitespace-only).
+//! Algorithm (BEP-049 §12, Kotlin `trimIndent` rule):
+//! 1. Compute the longest common leading-whitespace *prefix* across all non-blank
+//!    lines, compared character-by-character. Tabs and spaces don't mix: a
+//!    tab-indented line and a space-indented line share no common prefix, so the
+//!    strip column drops to zero (§12 Rule 2).
+//! 2. Strip that common prefix from every line that has it; otherwise keep the
+//!    line as-is (its content is whitespace-only).
 //! 3. Trim leading/trailing whitespace from the overall result.
 //!
-//! Used by:
-//! - BEP-049 backtick string literals (multi-line auto-dedent, §12).
-//! - The legacy Jinja prompt pipeline (`sys_llm::preprocess_template`).
+//! Used by BEP-049 backtick string literals (multi-line auto-dedent, §12). The
+//! legacy Jinja prompt pipeline (`sys_llm::preprocess_template`) keeps the older
+//! byte-count-min variant until that path is removed (M6) — they intentionally
+//! diverge on mixed tab/space indentation, which only the new backtick form specs.
 // Walk leading whitespace by *char* so we never split a multi-byte
 // Unicode whitespace codepoint (NBSP U+00A0 = 2 bytes, LINE SEPARATOR
 // U+2028 = 3 bytes, etc.). A naive `line.len() - line.trim_start().len()`
@@ -50,21 +54,39 @@ fn strip_leading_indent(line: &str, target_bytes: usize) -> &str {
     &line[split_at..]
 }
 
+/// Longest common prefix of two strings, ending on a char boundary.
+fn common_prefix<'a>(a: &'a str, b: &str) -> &'a str {
+    let end = a
+        .char_indices()
+        .zip(b.chars())
+        .take_while(|((_, ca), cb)| ca == cb)
+        .map(|((i, ca), _)| i + ca.len_utf8())
+        .last()
+        .unwrap_or(0);
+    &a[..end]
+}
+
 pub fn preprocess_template(template: &str) -> String {
     let lines: Vec<&str> = template.lines().collect();
 
-    let min_indent = lines
-        .iter()
-        .filter(|line| !line.trim().is_empty())
-        .map(|line| leading_whitespace_bytes(line))
-        .min()
-        .unwrap_or(0);
+    // Longest common leading-whitespace *prefix* across non-blank lines, compared
+    // char-by-char (§12 Rule 2: tabs and spaces don't mix). The strip column is
+    // its byte length.
+    let mut common: Option<&str> = None;
+    for line in lines.iter().filter(|line| !line.trim().is_empty()) {
+        let ws = &line[..leading_whitespace_bytes(line)];
+        common = Some(match common {
+            None => ws,
+            Some(prev) => common_prefix(prev, ws),
+        });
+    }
+    let strip = common.map_or(0, str::len);
 
     lines
         .iter()
         .map(|line| {
-            if leading_whitespace_bytes(line) >= min_indent {
-                strip_leading_indent(line, min_indent)
+            if leading_whitespace_bytes(line) >= strip {
+                strip_leading_indent(line, strip)
             } else {
                 line.trim()
             }
@@ -113,6 +135,17 @@ mod tests {
     fn trims_leading_and_trailing() {
         let input = "\n    hello\n    world\n";
         assert_eq!(preprocess_template(input), "hello\nworld");
+    }
+
+    #[test]
+    fn tab_and_space_indent_do_not_mix() {
+        // BEP-049 §12 Rule 2: tabs and spaces don't mix — a tab-indented line and
+        // a four-space-indented line share no common leading-whitespace prefix, so
+        // the strip column is zero. (Byte-count-min would wrongly strip 1, eating a
+        // space from the second line.) The leading tab of line 1 is removed by the
+        // final `.trim()`; line 2 keeps all four spaces.
+        let input = "\t- foo\n    - bar";
+        assert_eq!(preprocess_template(input), "- foo\n    - bar");
     }
 
     #[test]

@@ -446,6 +446,17 @@ struct LoweringContext {
     consumed_generic_args: std::collections::HashSet<TextRange>,
 }
 
+/// The elaborated form of a single `${…}` interpolation in an untagged
+/// backtick template (see [`LoweringContext::elaborate_default_interp`]):
+/// either a *value* to concatenate, or — for a side-effect-only `${ let … }` —
+/// the raw statements it runs (which yield ""). Returning the statements lets
+/// the caller splice them into one enclosing concat scope so a `let` in one
+/// segment is visible to later segments (BEP-049 §4 cross-site `let`).
+enum InterpPart {
+    Value(ExprId),
+    Stmts(Vec<StmtId>),
+}
+
 impl LoweringContext {
     fn new() -> Self {
         Self {
@@ -2900,63 +2911,159 @@ impl LoweringContext {
         if segments.is_empty() {
             return self.alloc_expr(Expr::Literal(Literal::String(String::new())), span);
         }
-        let mut parts: Vec<ExprId> = Vec::with_capacity(segments.len());
+        // Lower each segment to either a *value* part (concatenated with `+`)
+        // or, for a side-effect-only `${ let … }` interpolation, the raw
+        // statements it declares. Hoisting those statements into one enclosing
+        // concat scope (below) — rather than re-wrapping each in its own block —
+        // is what lets a `let` in one segment be seen by a later `${…}` (BEP-049
+        // §4 cross-site `let`), mirroring the single-scope discipline the
+        // `${for}` accumulator already uses.
+        let mut parts: Vec<InterpPart> = Vec::with_capacity(segments.len());
+        let mut any_stmts = false;
         for seg in segments {
             let part = match seg {
-                TemplateSegment::Text(s) => {
-                    self.alloc_expr(Expr::Literal(Literal::String(s.clone())), span)
-                }
+                TemplateSegment::Text(s) => InterpPart::Value(
+                    self.alloc_expr(Expr::Literal(Literal::String(s.clone())), span),
+                ),
                 TemplateSegment::Interp(e) => self.elaborate_default_interp(*e, span),
                 TemplateSegment::For {
                     binding,
                     collection,
                     body,
-                } => self.elaborate_default_for(*binding, *collection, body, span),
+                } => {
+                    InterpPart::Value(self.elaborate_default_for(*binding, *collection, body, span))
+                }
                 TemplateSegment::CStyleFor {
                     init,
                     cond,
                     step,
                     body,
-                } => self.elaborate_default_cstyle_for(*init, *cond, *step, body, span),
+                } => InterpPart::Value(
+                    self.elaborate_default_cstyle_for(*init, *cond, *step, body, span),
+                ),
                 TemplateSegment::If {
                     branches,
                     else_body,
-                } => self.elaborate_default_if(branches, else_body.as_deref(), span),
+                } => InterpPart::Value(self.elaborate_default_if(
+                    branches,
+                    else_body.as_deref(),
+                    span,
+                )),
             };
+            if matches!(part, InterpPart::Stmts(_)) {
+                any_stmts = true;
+            }
             parts.push(part);
         }
-        let mut iter = parts.into_iter();
-        let first = iter.next().expect("non-empty by guard above");
-        iter.fold(first, |acc, next| {
-            self.alloc_expr(
-                Expr::Binary {
-                    op: BinaryOp::Add,
-                    lhs: acc,
-                    rhs: next,
-                },
-                span,
-            )
-        })
+
+        // Fast path: no side-effect-only segment, so there is nothing to hoist.
+        // Keep the plain `+` fold — this preserves `Ty::Literal` for a constant
+        // template (`` `abc` `` infers `Ty::Literal("abc")` so BEP §9 constant
+        // folding still fires).
+        if !any_stmts {
+            let mut iter = parts.into_iter().map(|p| match p {
+                InterpPart::Value(v) => v,
+                InterpPart::Stmts(_) => unreachable!("no Stmts parts when !any_stmts"),
+            });
+            let first = iter.next().expect("non-empty by guard above");
+            return iter.fold(first, |acc, next| {
+                self.alloc_expr(
+                    Expr::Binary {
+                        op: BinaryOp::Add,
+                        lhs: acc,
+                        rhs: next,
+                    },
+                    span,
+                )
+            });
+        }
+
+        // Hoisting path: build `{ let acc = ""; <…>; acc }` where each value
+        // part appends `acc = acc + part` and each side-effect-only segment
+        // splices its statements in directly, so a `let` it binds stays visible
+        // to every later segment. The accumulator name leads with a space so it
+        // is unparseable as a user identifier and can never collide; name
+        // resolution is plain string equality, so the synthesized references
+        // still resolve to it.
+        let after_span = TextRange::empty(span.end());
+        let acc_name = Name::new(" __m3_concat");
+        let acc_pat = self.alloc_pattern(
+            Pattern::Bind {
+                name: acc_name.clone(),
+                subpat: None,
+            },
+            span,
+        );
+        let empty_init = self.alloc_expr(Expr::Literal(Literal::String(String::new())), span);
+        let acc_let = self.alloc_stmt(
+            Stmt::Let {
+                pattern: acc_pat,
+                initializer: Some(empty_init),
+                is_watched: false,
+                origin: LetOrigin::Compiler,
+                else_branch: None,
+            },
+            span,
+        );
+        let mut block_stmts: Vec<StmtId> = vec![acc_let];
+        for part in parts {
+            match part {
+                InterpPart::Value(value) => {
+                    let acc_lhs = self.alloc_expr(Expr::Path(vec![acc_name.clone()]), after_span);
+                    let acc_rhs = self.alloc_expr(Expr::Path(vec![acc_name.clone()]), after_span);
+                    let concat = self.alloc_expr(
+                        Expr::Binary {
+                            op: BinaryOp::Add,
+                            lhs: acc_rhs,
+                            rhs: value,
+                        },
+                        after_span,
+                    );
+                    let assign = self.alloc_stmt(
+                        Stmt::Assign {
+                            target: acc_lhs,
+                            value: concat,
+                        },
+                        after_span,
+                    );
+                    block_stmts.push(assign);
+                }
+                InterpPart::Stmts(stmts) => block_stmts.extend(stmts),
+            }
+        }
+        let acc_tail = self.alloc_expr(Expr::Path(vec![acc_name]), after_span);
+        self.alloc_expr(
+            Expr::Block {
+                stmts: block_stmts,
+                tail_expr: Some(acc_tail),
+            },
+            span,
+        )
     }
 
     /// Elaborate a `${expr}` for the untagged path: wrap the inner block with
-    /// `.to_string()` (BEP §11). A statement-only (unit) block renders `""`
-    /// while still running its statements for their side effects.
-    fn elaborate_default_interp(&mut self, inner: ExprId, span: TextRange) -> ExprId {
-        if let Expr::Block {
-            stmts,
-            tail_expr: None,
-        } = &self.exprs[inner]
-        {
-            let stmts = stmts.clone();
-            let empty = self.alloc_expr(Expr::Literal(Literal::String(String::new())), span);
-            return self.alloc_expr(
-                Expr::Block {
-                    stmts,
-                    tail_expr: Some(empty),
-                },
-                span,
-            );
+    /// `.to_string()` (BEP §11). A statement-only (unit) block — or one whose
+    /// tail is itself a unit-valued expression (e.g. an `if`/`if let` with no
+    /// `else`) — renders `""` while still running its statements and tail for
+    /// their side effects.
+    fn elaborate_default_interp(&mut self, inner: ExprId, span: TextRange) -> InterpPart {
+        if let Expr::Block { stmts, tail_expr } = &self.exprs[inner] {
+            // A block is unit-valued when it has no tail, or its tail is a
+            // syntactically-unit expression. It renders "" but still runs its
+            // statements (and its tail, for side effects). Return the raw
+            // statements so the caller can splice them into the enclosing concat
+            // scope — keeping any `let` they bind visible to later segments
+            // (BEP-049 §4 cross-site `let`), instead of confining them to a
+            // per-segment block.
+            let tail_is_unit = tail_expr.map(|t| self.is_unit_tail(t)).unwrap_or(true);
+            if tail_is_unit {
+                let mut stmts = stmts.clone();
+                if let Some(t) = *tail_expr {
+                    let tail_stmt = self.alloc_stmt(Stmt::Expr(t), span);
+                    stmts.push(tail_stmt);
+                }
+                return InterpPart::Stmts(stmts);
+            }
         }
         let callee = self.alloc_expr(
             Expr::MemberAccess {
@@ -2965,14 +3072,36 @@ impl LoweringContext {
             },
             span,
         );
-        self.alloc_expr(
+        InterpPart::Value(self.alloc_expr(
             Expr::Call {
                 callee,
                 type_args: Vec::new(),
                 args: Vec::new(),
             },
             span,
-        )
+        ))
+    }
+
+    /// Is `expr` a syntactically unit-valued expression when it sits in a
+    /// block's tail position? Only expressions that TIR types as `Ty::Void`
+    /// qualify: an `if`/`if let` with no `else` branch (their missing arm is
+    /// `void`), or a nested block whose own tail is unit. `while`/`for`/
+    /// assignment/`let`/`return`/`throw`/`break`/`continue` are lowered as
+    /// `Stmt`s (never a `tail_expr`), so they're already covered by the
+    /// no-tail case and need not appear here.
+    fn is_unit_tail(&self, expr: ExprId) -> bool {
+        match &self.exprs[expr] {
+            Expr::If {
+                else_branch: None, ..
+            }
+            | Expr::IfLet {
+                else_branch: None, ..
+            } => true,
+            Expr::Block { tail_expr, .. } => {
+                tail_expr.map(|t| self.is_unit_tail(t)).unwrap_or(true)
+            }
+            _ => false,
+        }
     }
 
     /// Elaborate a `${for (p in c)}…${endfor}` to an accumulator block:
