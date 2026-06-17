@@ -1119,6 +1119,17 @@ impl<'db> SemanticIndexBuilder<'db> {
                 });
         }
         for method in &c.methods {
+            // `to_string` is not a magic method: it must be provided by
+            // implementing `baml.ToString`, never declared directly on the
+            // class. (Methods inside `implements I { ... }` blocks live in
+            // `c.implements`, not `c.methods`, so an interface impl is fine.)
+            if method.name.as_str() == "to_string" {
+                self.diagnostics
+                    .push(Hir2Diagnostic::ToStringMustImplementInterface {
+                        class_name: c.name.clone(),
+                        span: method.name_span,
+                    });
+            }
             seen.entry(method.name.clone())
                 .or_default()
                 .push(MemberSite {

@@ -1601,6 +1601,21 @@ function baml.ToString.to_string(self: baml.ToString) -> string {
     return
 }
 
+function baml.TypeValue$stream.baml.ToString.to_string(self: baml.TypeValue$stream) -> string {
+    load_var self
+    call baml.TypeValue._to_string_impl
+    return
+}
+
+function baml.TypeValue._to_string_impl(self: baml.TypeValue) -> string {
+}
+
+function baml.TypeValue.baml.ToString.to_string(self: baml.TypeValue) -> string {
+    load_var self
+    call baml.TypeValue._to_string_impl
+    return
+}
+
 function baml.TypeValue.from_json(j: baml.json.json) -> baml.TypeValue {
     alloc_instance baml.TypeValue
     return
@@ -1620,10 +1635,22 @@ function baml.TypeValue.to_json(self: baml.TypeValue) -> baml.json.json {
     return
 }
 
-function baml.TypeValue.to_string(self: baml.TypeValue) -> string {
+function baml.Uint8Array$stream.baml.ToString.to_string(self: baml.Uint8Array$stream) -> string {
+    load_var self
+    call baml.Uint8Array._to_string_impl
+    return
+}
+
+function baml.Uint8Array._to_string_impl(self: baml.Uint8Array) -> string {
 }
 
 function baml.Uint8Array.at(self: baml.Uint8Array, index: int) -> int | null {
+}
+
+function baml.Uint8Array.baml.ToString.to_string(self: baml.Uint8Array) -> string {
+    load_var self
+    call baml.Uint8Array._to_string_impl
+    return
 }
 
 function baml.Uint8Array.concat(self: baml.Uint8Array, other: uint8array) -> uint8array {
@@ -1674,9 +1701,6 @@ function baml.Uint8Array.to_hex(self: baml.Uint8Array) -> string {
 }
 
 function baml.Uint8Array.to_json(self: baml.Uint8Array) -> baml.json.json {
-}
-
-function baml.Uint8Array.to_string(self: baml.Uint8Array) -> string {
 }
 
 function baml.Uint8Array.zeroes(size: int) -> uint8array {
@@ -4404,6 +4428,21 @@ function baml.errors.StackFrame.to_json(self: baml.errors.StackFrame) -> baml.js
     return
 }
 
+function baml.errors.StackTrace$stream.baml.ToString.to_string(self: baml.errors.StackTrace$stream) -> string {
+    load_var self
+    call baml.errors.StackTrace._to_string_impl
+    return
+}
+
+function baml.errors.StackTrace._to_string_impl(self: baml.errors.StackTrace) -> string {
+}
+
+function baml.errors.StackTrace.baml.ToString.to_string(self: baml.errors.StackTrace) -> string {
+    load_var self
+    call baml.errors.StackTrace._to_string_impl
+    return
+}
+
 function baml.errors.StackTrace.from_json(j: baml.json.json) -> baml.errors.StackTrace {
     load_var j
     load_const "frames"
@@ -4424,9 +4463,6 @@ function baml.errors.StackTrace.to_json(self: baml.errors.StackTrace) -> baml.js
     load_const "frames"
     alloc_map 1
     return
-}
-
-function baml.errors.StackTrace.to_string(self: baml.errors.StackTrace) -> string {
 }
 
 function baml.errors.Timeout.from_json(j: baml.json.json) -> baml.errors.Timeout {
@@ -18262,6 +18298,33 @@ function baml.time.Duration.to_seconds(self: baml.time.Duration) -> bigint {
     return
 }
 
+function baml.time.Instant$stream.baml.ToString.to_string(self: baml.time.Instant$stream) -> string {
+    load_var self
+    call baml.time.Instant._to_string_impl
+    jump L2
+    load_var _
+    is_type baml.errors.InvalidArgument
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _
+    throw
+
+  L1:
+    load_const "Instant.to_string: "
+    load_var _
+    load_field .0
+    bin_op +
+    call baml.sys.panic
+
+  L2:
+    return
+}
+
+function baml.time.Instant._to_string_impl(self: baml.time.Instant) -> string {
+}
+
 function baml.time.Instant.abs_diff(self: baml.time.Instant, other: baml.time.Instant) -> baml.time.Duration {
     load_var self
     load_field ._nanoseconds
@@ -18270,6 +18333,30 @@ function baml.time.Instant.abs_diff(self: baml.time.Instant, other: baml.time.In
     sub_bigint
     call baml.Bigint.abs
     init_instance baml.time.Duration ._nanoseconds
+    return
+}
+
+function baml.time.Instant.baml.ToString.to_string(self: baml.time.Instant) -> string {
+    load_var self
+    call baml.time.Instant._to_string_impl
+    jump L2
+    load_var _
+    is_type baml.errors.InvalidArgument
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _
+    throw
+
+  L1:
+    load_const "Instant.to_string: "
+    load_var _
+    load_field .0
+    bin_op +
+    call baml.sys.panic
+
+  L2:
     return
 }
 
@@ -18405,7 +18492,7 @@ function baml.time.Instant.parse(s: string) -> baml.time.Instant {
 
 function baml.time.Instant.to_json(self: baml.time.Instant) -> string {
     load_var self
-    call baml.time.Instant.to_string
+    call baml.time.Instant._to_string_impl
     jump L2
     load_var _
     is_type baml.errors.InvalidArgument
@@ -18426,9 +18513,6 @@ function baml.time.Instant.to_json(self: baml.time.Instant) -> string {
 
   L2:
     return
-}
-
-function baml.time.Instant.to_string(self: baml.time.Instant) -> string {
 }
 
 function baml.time.Instant.to_timestamp_microseconds(self: baml.time.Instant) -> bigint {
@@ -18461,7 +18545,58 @@ function baml.time.Instant.to_timestamp_seconds(self: baml.time.Instant) -> bigi
     return
 }
 
+function baml.time.PlainDate$stream.baml.ToString.to_string(self: baml.time.PlainDate$stream) -> string {
+    load_var self
+    call baml.time.PlainDate._to_string_impl
+    jump L2
+    load_var _
+    is_type baml.errors.InvalidArgument
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _
+    throw
+
+  L1:
+    load_const "PlainDate.to_string: "
+    load_var _
+    load_field .0
+    bin_op +
+    call baml.sys.panic
+
+  L2:
+    return
+}
+
 function baml.time.PlainDate._to_plain_datetime(self: baml.time.PlainDate, time: baml.time.PlainTime | null) -> baml.time.PlainDateTime {
+}
+
+function baml.time.PlainDate._to_string_impl(self: baml.time.PlainDate) -> string {
+}
+
+function baml.time.PlainDate.baml.ToString.to_string(self: baml.time.PlainDate) -> string {
+    load_var self
+    call baml.time.PlainDate._to_string_impl
+    jump L2
+    load_var _
+    is_type baml.errors.InvalidArgument
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _
+    throw
+
+  L1:
+    load_const "PlainDate.to_string: "
+    load_var _
+    load_field .0
+    bin_op +
+    call baml.sys.panic
+
+  L2:
+    return
 }
 
 function baml.time.PlainDate.day(self: baml.time.PlainDate) -> int {
@@ -18514,7 +18649,7 @@ function baml.time.PlainDate.parse(s: string) -> baml.time.PlainDate {
 
 function baml.time.PlainDate.to_json(self: baml.time.PlainDate) -> string {
     load_var self
-    call baml.time.PlainDate.to_string
+    call baml.time.PlainDate._to_string_impl
     jump L2
     load_var _
     is_type baml.errors.InvalidArgument
@@ -18551,13 +18686,61 @@ function baml.time.PlainDate.to_plain_datetime(self: baml.time.PlainDate, time: 
     return
 }
 
-function baml.time.PlainDate.to_string(self: baml.time.PlainDate) -> string {
-}
-
 function baml.time.PlainDate.year(self: baml.time.PlainDate) -> int {
 }
 
+function baml.time.PlainDateTime$stream.baml.ToString.to_string(self: baml.time.PlainDateTime$stream) -> string {
+    load_var self
+    call baml.time.PlainDateTime._to_string_impl
+    jump L2
+    load_var _
+    is_type baml.errors.InvalidArgument
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _
+    throw
+
+  L1:
+    load_const "PlainDateTime.to_string: "
+    load_var _
+    load_field .0
+    bin_op +
+    call baml.sys.panic
+
+  L2:
+    return
+}
+
 function baml.time.PlainDateTime._from_components(year: int, month: int, day: int, hour: int, minute: int, second: int, millisecond: int, microsecond: int, nanosecond: int) -> baml.time.PlainDateTime {
+}
+
+function baml.time.PlainDateTime._to_string_impl(self: baml.time.PlainDateTime) -> string {
+}
+
+function baml.time.PlainDateTime.baml.ToString.to_string(self: baml.time.PlainDateTime) -> string {
+    load_var self
+    call baml.time.PlainDateTime._to_string_impl
+    jump L2
+    load_var _
+    is_type baml.errors.InvalidArgument
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _
+    throw
+
+  L1:
+    load_const "PlainDateTime.to_string: "
+    load_var _
+    load_field .0
+    bin_op +
+    call baml.sys.panic
+
+  L2:
+    return
 }
 
 function baml.time.PlainDateTime.day(self: baml.time.PlainDateTime) -> int {
@@ -18717,7 +18900,7 @@ function baml.time.PlainDateTime.second(self: baml.time.PlainDateTime) -> int {
 
 function baml.time.PlainDateTime.to_json(self: baml.time.PlainDateTime) -> string {
     load_var self
-    call baml.time.PlainDateTime.to_string
+    call baml.time.PlainDateTime._to_string_impl
     jump L2
     load_var _
     is_type baml.errors.InvalidArgument
@@ -18744,9 +18927,6 @@ function baml.time.PlainDateTime.to_plain_date(self: baml.time.PlainDateTime) ->
 }
 
 function baml.time.PlainDateTime.to_plain_time(self: baml.time.PlainDateTime) -> baml.time.PlainTime {
-}
-
-function baml.time.PlainDateTime.to_string(self: baml.time.PlainDateTime) -> string {
 }
 
 function baml.time.PlainDateTime.to_zoned(self: baml.time.PlainDateTime, timezone: baml.time.TimeZoneOffset | string, disambiguation: "compatible" | "earlier" | "later" | "reject") -> baml.time.ZonedDateTime {
@@ -18892,7 +19072,22 @@ function baml.time.PlainDateTime.to_zoned(self: baml.time.PlainDateTime, timezon
 function baml.time.PlainDateTime.year(self: baml.time.PlainDateTime) -> int {
 }
 
+function baml.time.PlainTime$stream.baml.ToString.to_string(self: baml.time.PlainTime$stream) -> string {
+    load_var self
+    call baml.time.PlainTime._to_string_impl
+    return
+}
+
 function baml.time.PlainTime._from_components(hour: int, minute: int, second: int, millisecond: int, microsecond: int, nanosecond: int) -> baml.time.PlainTime {
+}
+
+function baml.time.PlainTime._to_string_impl(self: baml.time.PlainTime) -> string {
+}
+
+function baml.time.PlainTime.baml.ToString.to_string(self: baml.time.PlainTime) -> string {
+    load_var self
+    call baml.time.PlainTime._to_string_impl
+    return
 }
 
 function baml.time.PlainTime.from_components(hour: int, minute: int, second: int, millisecond: int, microsecond: int, nanosecond: int) -> baml.time.PlainTime {
@@ -19022,17 +19217,187 @@ function baml.time.PlainTime.second(self: baml.time.PlainTime) -> int {
 
 function baml.time.PlainTime.to_json(self: baml.time.PlainTime) -> string {
     load_var self
-    call baml.time.PlainTime.to_string
+    is_type baml.TypeValue
+    pop_jump_if_false L0
+    jump L29
+
+  L0:
+    load_var self
+    is_type baml.TypeValue
+    pop_jump_if_false L1
+    jump L28
+
+  L1:
+    load_var self
+    is_type baml.Uint8Array
+    pop_jump_if_false L2
+    jump L27
+
+  L2:
+    load_var self
+    is_type baml.Uint8Array
+    pop_jump_if_false L3
+    jump L26
+
+  L3:
+    load_var self
+    is_type baml.errors.StackTrace
+    pop_jump_if_false L4
+    jump L25
+
+  L4:
+    load_var self
+    is_type baml.errors.StackTrace
+    pop_jump_if_false L5
+    jump L24
+
+  L5:
+    load_var self
+    is_type baml.time.PlainDateTime
+    pop_jump_if_false L6
+    jump L23
+
+  L6:
+    load_var self
+    is_type baml.time.PlainDateTime
+    pop_jump_if_false L7
+    jump L22
+
+  L7:
+    load_var self
+    is_type baml.time.PlainTime
+    pop_jump_if_false L8
+    jump L21
+
+  L8:
+    load_var self
+    is_type baml.time.PlainTime
+    pop_jump_if_false L9
+    jump L20
+
+  L9:
+    load_var self
+    is_type baml.time.ZonedDateTime
+    pop_jump_if_false L10
+    jump L19
+
+  L10:
+    load_var self
+    is_type baml.time.ZonedDateTime
+    pop_jump_if_false L11
+    jump L18
+
+  L11:
+    load_var self
+    is_type baml.time.Instant
+    pop_jump_if_false L12
+    jump L17
+
+  L12:
+    load_var self
+    is_type baml.time.Instant
+    pop_jump_if_false L13
+    jump L16
+
+  L13:
+    load_var self
+    is_type baml.time.PlainDate
+    pop_jump_if_false L14
+    jump L15
+
+  L14:
+    load_var self
+    is_type baml.time.PlainDate
+    pop_jump_if_false L31
+    load_var self
+    call baml.ToString.to_string
+    jump L30
+
+  L15:
+    load_var self
+    call baml.time.PlainDate.baml.ToString.to_string
+    jump L30
+
+  L16:
+    load_var self
+    call baml.ToString.to_string
+    jump L30
+
+  L17:
+    load_var self
+    call baml.time.Instant.baml.ToString.to_string
+    jump L30
+
+  L18:
+    load_var self
+    call baml.ToString.to_string
+    jump L30
+
+  L19:
+    load_var self
+    call baml.time.ZonedDateTime.baml.ToString.to_string
+    jump L30
+
+  L20:
+    load_var self
+    call baml.ToString.to_string
+    jump L30
+
+  L21:
+    load_var self
+    call baml.time.PlainTime.baml.ToString.to_string
+    jump L30
+
+  L22:
+    load_var self
+    call baml.ToString.to_string
+    jump L30
+
+  L23:
+    load_var self
+    call baml.time.PlainDateTime.baml.ToString.to_string
+    jump L30
+
+  L24:
+    load_var self
+    call baml.ToString.to_string
+    jump L30
+
+  L25:
+    load_var self
+    call baml.errors.StackTrace.baml.ToString.to_string
+    jump L30
+
+  L26:
+    load_var self
+    call baml.ToString.to_string
+    jump L30
+
+  L27:
+    load_var self
+    call baml.Uint8Array.baml.ToString.to_string
+    jump L30
+
+  L28:
+    load_var self
+    call baml.ToString.to_string
+    jump L30
+
+  L29:
+    load_var self
+    call baml.TypeValue.baml.ToString.to_string
+
+  L30:
     return
+
+  L31:
+    unreachable
 }
 
 function baml.time.PlainTime.to_plain_datetime(self: baml.time.PlainTime, date: baml.time.PlainDate) -> baml.time.PlainDateTime {
     load_var2 2 1
     call baml.time.PlainDate.to_plain_datetime
     return
-}
-
-function baml.time.PlainTime.to_string(self: baml.time.PlainTime) -> string {
 }
 
 function baml.time.TimeZoneOffset.from_duration(duration: baml.time.Duration) -> baml.time.TimeZoneOffset {
@@ -19227,6 +19592,47 @@ function baml.time.UnknownTimezoneError.to_json(self: baml.time.UnknownTimezoneE
     call baml.json.to_json
     load_const "timezone"
     alloc_map 1
+    return
+}
+
+function baml.time.ZonedDateTime$stream.baml.ToString.to_string(self: baml.time.ZonedDateTime$stream) -> string {
+    load_var self
+    call baml.time.ZonedDateTime._to_string_impl
+    jump L0
+    load_var _
+    throw_if_panic
+    load_const "ZonedDateTime.to_string: value cannot be formatted (year out of range, unknown timezone, or IO error)"
+    call baml.sys.panic
+
+  L0:
+    return
+}
+
+function baml.time.ZonedDateTime._to_string_impl(self: baml.time.ZonedDateTime) -> string {
+    load_var self
+    load_field ._nanoseconds
+    store_var _2
+    load_var self
+    call baml.time.ZonedDateTime.timezone_offset
+    store_var _4
+    load_var2 2 3
+    load_field ._nanoseconds
+    load_var self
+    load_field ._iana
+    call baml.time._format_zoned
+    return
+}
+
+function baml.time.ZonedDateTime.baml.ToString.to_string(self: baml.time.ZonedDateTime) -> string {
+    load_var self
+    call baml.time.ZonedDateTime._to_string_impl
+    jump L0
+    load_var _
+    throw_if_panic
+    load_const "ZonedDateTime.to_string: value cannot be formatted (year out of range, unknown timezone, or IO error)"
+    call baml.sys.panic
+
+  L0:
     return
 }
 
@@ -19605,7 +20011,7 @@ function baml.time.ZonedDateTime.to_instant(self: baml.time.ZonedDateTime) -> ba
 
 function baml.time.ZonedDateTime.to_json(self: baml.time.ZonedDateTime) -> string {
     load_var self
-    call baml.time.ZonedDateTime.to_string
+    call baml.time.ZonedDateTime._to_string_impl
     jump L6
     load_var _
     is_type baml.errors.InvalidArgument
@@ -19669,21 +20075,6 @@ function baml.time.ZonedDateTime.to_plain(self: baml.time.ZonedDateTime) -> baml
     load_field ._nanoseconds
     add_bigint
     init_instance baml.time.PlainDateTime ._nanoseconds
-    return
-}
-
-function baml.time.ZonedDateTime.to_string(self: baml.time.ZonedDateTime) -> string {
-    load_var self
-    load_field ._nanoseconds
-    store_var _2
-    load_var self
-    call baml.time.ZonedDateTime.timezone_offset
-    store_var _4
-    load_var2 2 3
-    load_field ._nanoseconds
-    load_var self
-    load_field ._iana
-    call baml.time._format_zoned
     return
 }
 

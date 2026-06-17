@@ -13,6 +13,59 @@
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
 
+/// Compile errors raised in the user file, as `[CODE] message`.
+fn compile_errors(source: &str) -> Vec<String> {
+    use baml_compiler_diagnostics::Severity;
+    use baml_project::{collect_diagnostics, testing::setup_test_db};
+    let db = setup_test_db(source);
+    let project = db.get_project().expect("project");
+    let files = db.get_source_files();
+    collect_diagnostics(&db, project, &files)
+        .into_iter()
+        .filter(|d| matches!(d.severity, Severity::Error))
+        .map(|d| format!("[{}] {}", d.code(), d.message))
+        .collect()
+}
+
+#[test]
+fn direct_to_string_method_is_banned() {
+    let errors = compile_errors(
+        r#"
+        class Point {
+            x int
+            function to_string(self) -> string throws never { "p" }
+        }
+    "#,
+    );
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.contains("to_string") && e.contains("baml.ToString")),
+        "expected a to_string ban error recommending baml.ToString; got:\n  {}",
+        errors.join("\n  ")
+    );
+}
+
+#[test]
+fn to_string_via_interface_is_allowed() {
+    // The same method inside an `implements baml.ToString` block is fine.
+    let errors = compile_errors(
+        r#"
+        class Point {
+            x int
+            implements baml.ToString {
+                function to_string(self) -> string throws never { "p" }
+            }
+        }
+    "#,
+    );
+    assert!(
+        !errors.iter().any(|e| e.contains("to_string")),
+        "implementing baml.ToString must not be flagged; got:\n  {}",
+        errors.join("\n  ")
+    );
+}
+
 async fn expect_string(src: &str) -> String {
     let output = baml_test!(src);
     match output.result.unwrap() {
@@ -127,6 +180,27 @@ async fn implementor_with_default_body_matches_nonimplementor() {
     .await;
     assert_eq!(with_default, without);
     assert_eq!(with_default, "Point { x: 1, y: 2 }");
+}
+
+#[tokio::test]
+async fn builtin_instant_dispatches_through_interface() {
+    // `Instant` was migrated from a magic `to_string` method to
+    // `implements baml.ToString`; both a direct call and `string.from` must
+    // dispatch to it (and the formatter is infallible for an in-range value).
+    assert_eq!(
+        expect_string(
+            r#"function main() -> string { return baml.time.Instant.epoch().to_string() }"#
+        )
+        .await,
+        "1970-01-01T00:00:00Z"
+    );
+    assert_eq!(
+        expect_string(
+            r#"function main() -> string { return string.from(baml.time.Instant.epoch()) }"#
+        )
+        .await,
+        "1970-01-01T00:00:00Z"
+    );
 }
 
 #[tokio::test]

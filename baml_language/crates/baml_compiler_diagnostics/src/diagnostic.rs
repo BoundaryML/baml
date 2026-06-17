@@ -278,6 +278,9 @@ pub enum DiagnosticId {
     OverlappingImplements,
     /// An interface `requires` a type that is not an interface (e.g. a class or enum).
     InterfaceRequiresNonInterface,
+    /// A class declares a `to_string` method directly; it must be provided by
+    /// implementing the `baml.ToString` interface instead.
+    ToStringMustImplementInterface,
 }
 
 impl DiagnosticId {
@@ -466,6 +469,7 @@ impl DiagnosticId {
             DiagnosticId::SelfInInterfaceField => "E0136",
             // E0137 is taken by `IrrefutablePatternInWhileLet`; use the next free code.
             DiagnosticId::ImplTargetNotConcrete => "E0138",
+            DiagnosticId::ToStringMustImplementInterface => "E0139",
         }
     }
 }

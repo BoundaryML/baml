@@ -1076,6 +1076,11 @@ function baml.errors.StackTrace.to_json(self: baml.errors.StackTrace) -> baml.js
 function baml.errors.StackTrace.from_json(j: baml.json.json) -> baml.errors.StackTrace throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   StackTrace { frames: baml.json.from_json<StackFrame[]>(baml.json.field(j, "frames")) } : baml.errors.StackTrace
 }
+function baml.errors.StackTrace.to_string(self: baml.errors.StackTrace) -> string throws never {
+  { : string
+    self._to_string_impl() : string
+  }
+}
 class baml.errors.StackFrame$stream {
   file: string | null
   line: int | null
@@ -1083,6 +1088,13 @@ class baml.errors.StackFrame$stream {
 }
 class baml.errors.StackTrace$stream {
   frames: baml.errors.StackFrame$stream[]
+}
+function baml.errors.StackTrace$stream.to_string(self: baml.errors.StackTrace$stream) -> string throws never {
+  { : unknown
+    self._to_string_impl() : unknown
+  }
+  !! 348..363: type `baml.errors.StackTrace$stream` has no member `_to_string_impl`
+  !! 328..334: declared throws is `never`, but this function may also throw `unknown`
 }
 
 --- <builtin>/baml/ns_events/events.baml ---
@@ -3680,7 +3692,7 @@ function baml.time.Instant.from_json(j: baml.json.json) -> baml.time.Instant thr
 }
 function baml.time.Instant.to_json(self: baml.time.Instant) -> string throws baml.json.JsonSerializationError {
   { : string
-    catch (self.to_string() : string) : unknown
+    catch (self._to_string_impl() : string) : unknown
       catch (_)
         root.errors.InvalidArgument { message: message } =>
           throw root.json.JsonSerializationError { message: message, path: "" } : never
@@ -3760,8 +3772,26 @@ function baml.time.Instant.epoch() -> baml.time.Instant throws never {
     Instant { _nanoseconds: 0n } : baml.time.Instant
   }
 }
+function baml.time.Instant.to_string(self: baml.time.Instant) -> string throws never {
+  { : string
+    catch (self._to_string_impl() : string) : unknown
+      catch (_)
+        root.errors.InvalidArgument { message: message } =>
+          root.sys.panic("Instant.to_string: " + message) : never
+  }
+}
 class baml.time.Instant$stream {
   _nanoseconds: bigint | null
+}
+function baml.time.Instant$stream.to_string(self: baml.time.Instant$stream) -> string throws never {
+  { : unknown
+    catch (self._to_string_impl() : unknown) : unknown
+      catch (_)
+        root.errors.InvalidArgument { message: message } =>
+          root.sys.panic("Instant.to_string: " + message) : never
+  }
+  !! 3041..3056: type `baml.time.Instant$stream` has no member `_to_string_impl`
+  !! 3015..3021: declared throws is `never`, but this function may also throw `unknown`
 }
 
 --- <builtin>/baml/ns_time/plaindate.baml ---
@@ -3787,14 +3817,32 @@ function baml.time.PlainDate.from_json(j: baml.json.json) -> baml.time.PlainDate
 }
 function baml.time.PlainDate.to_json(self: baml.time.PlainDate) -> string throws baml.json.JsonSerializationError {
   { : string
-    catch (self.to_string() : string) : unknown
+    catch (self._to_string_impl() : string) : unknown
       catch (_)
         root.errors.InvalidArgument { message: message } =>
           throw root.json.JsonSerializationError { message: message, path: "" } : never
   }
 }
+function baml.time.PlainDate.to_string(self: baml.time.PlainDate) -> string throws never {
+  { : string
+    catch (self._to_string_impl() : string) : unknown
+      catch (_)
+        root.errors.InvalidArgument { message: message } =>
+          root.sys.panic("PlainDate.to_stri..." + message) : never
+  }
+}
 class baml.time.PlainDate$stream {
   _days: int | null
+}
+function baml.time.PlainDate$stream.to_string(self: baml.time.PlainDate$stream) -> string throws never {
+  { : unknown
+    catch (self._to_string_impl() : unknown) : unknown
+      catch (_)
+        root.errors.InvalidArgument { message: message } =>
+          root.sys.panic("PlainDate.to_stri..." + message) : never
+  }
+  !! 1108..1123: type `baml.time.PlainDate$stream` has no member `_to_string_impl`
+  !! 1082..1088: declared throws is `never`, but this function may also throw `unknown`
 }
 
 --- <builtin>/baml/ns_time/plaindatetime.baml ---
@@ -3879,14 +3927,32 @@ function baml.time.PlainDateTime.from_json(j: baml.json.json) -> baml.time.Plain
 }
 function baml.time.PlainDateTime.to_json(self: baml.time.PlainDateTime) -> string throws baml.json.JsonSerializationError {
   { : string
-    catch (self.to_string() : string) : unknown
+    catch (self._to_string_impl() : string) : unknown
       catch (_)
         root.errors.InvalidArgument { message: message } =>
           throw root.json.JsonSerializationError { message: message, path: "" } : never
   }
 }
+function baml.time.PlainDateTime.to_string(self: baml.time.PlainDateTime) -> string throws never {
+  { : string
+    catch (self._to_string_impl() : string) : unknown
+      catch (_)
+        root.errors.InvalidArgument { message: message } =>
+          root.sys.panic("PlainDateTime.to_..." + message) : never
+  }
+}
 class baml.time.PlainDateTime$stream {
   _nanoseconds: bigint | null
+}
+function baml.time.PlainDateTime$stream.to_string(self: baml.time.PlainDateTime$stream) -> string throws never {
+  { : unknown
+    catch (self._to_string_impl() : unknown) : unknown
+      catch (_)
+        root.errors.InvalidArgument { message: message } =>
+          root.sys.panic("PlainDateTime.to_..." + message) : never
+  }
+  !! 2548..2563: type `baml.time.PlainDateTime$stream` has no member `_to_string_impl`
+  !! 2522..2528: declared throws is `never`, but this function may also throw `unknown`
 }
 
 --- <builtin>/baml/ns_time/plaintime.baml ---
@@ -3940,8 +4006,20 @@ function baml.time.PlainTime.to_json(self: baml.time.PlainTime) -> string throws
     self.to_string() : string
   }
 }
+function baml.time.PlainTime.to_string(self: baml.time.PlainTime) -> string throws never {
+  { : string
+    self._to_string_impl() : string
+  }
+}
 class baml.time.PlainTime$stream {
   _nanoseconds: int | null
+}
+function baml.time.PlainTime$stream.to_string(self: baml.time.PlainTime$stream) -> string throws never {
+  { : unknown
+    self._to_string_impl() : unknown
+  }
+  !! 1798..1813: type `baml.time.PlainTime$stream` has no member `_to_string_impl`
+  !! 1772..1778: declared throws is `never`, but this function may also throw `unknown`
 }
 
 --- <builtin>/baml/ns_time/timezone.baml ---
@@ -4067,7 +4145,7 @@ function baml.time.ZonedDateTime.from_components(timezone: baml.time.TimeZoneOff
     PlainDateTime.from_components(year, month, day, hour = hour, minute = minute, second = second, millisecond = millisecond, microsecond = microsecond, nanosecond = nanosecond).to_zoned(timezone, disambiguation = disambiguation) : baml.time.ZonedDateTime
   }
 }
-function baml.time.ZonedDateTime.to_string(self: baml.time.ZonedDateTime) -> string throws baml.errors.InvalidArgument | baml.time.UnknownTimezoneError | baml.errors.Io {
+function baml.time.ZonedDateTime._to_string_impl(self: baml.time.ZonedDateTime) -> string throws baml.errors.InvalidArgument | baml.time.UnknownTimezoneError | baml.errors.Io {
   { : string
     _format_zoned(self._nanoseconds, self.timezone_offset()._nanoseconds, self._iana) : string
   }
@@ -4177,7 +4255,7 @@ function baml.time.ZonedDateTime.from_json(j: baml.json.json) -> baml.time.Zoned
 }
 function baml.time.ZonedDateTime.to_json(self: baml.time.ZonedDateTime) -> string throws baml.json.JsonSerializationError {
   { : string
-    catch (self.to_string() : string) : unknown
+    catch (self._to_string_impl() : string) : unknown
       catch (_)
         root.errors.InvalidArgument { message: message } =>
           throw root.json.JsonSerializationError { message: message, path: "" } : never
@@ -4187,10 +4265,27 @@ function baml.time.ZonedDateTime.to_json(self: baml.time.ZonedDateTime) -> strin
           throw root.json.JsonSerializationError { message: message, path: "" } : never
   }
 }
+function baml.time.ZonedDateTime.to_string(self: baml.time.ZonedDateTime) -> string throws never {
+  { : string
+    catch (self._to_string_impl() : string) : unknown
+      catch (_)
+        _ =>
+          root.sys.panic("ZonedDateTime.to_...") : never
+  }
+}
 class baml.time.ZonedDateTime$stream {
   _nanoseconds: bigint | null
   _offset_ns: int | null
   _iana: string | null
+}
+function baml.time.ZonedDateTime$stream.to_string(self: baml.time.ZonedDateTime$stream) -> string throws never {
+  { : unknown
+    catch (self._to_string_impl() : unknown) : unknown
+      catch (_)
+        _ =>
+          root.sys.panic("ZonedDateTime.to_...") : never
+  }
+  !! 4472..4487: type `baml.time.ZonedDateTime$stream` has no member `_to_string_impl`
 }
 
 --- <builtin>/baml/ns_toml/toml.baml ---
@@ -4327,7 +4422,19 @@ function baml.TypeValue.to_json(self: baml.TypeValue) -> baml.json.json throws b
 function baml.TypeValue.from_json(j: baml.json.json) -> baml.TypeValue throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   TypeValue {  } : baml.TypeValue
 }
+function baml.TypeValue.to_string(self: baml.TypeValue) -> string throws never {
+  { : string
+    self._to_string_impl() : string
+  }
+}
 class baml.TypeValue$stream {
+}
+function baml.TypeValue$stream.to_string(self: baml.TypeValue$stream) -> string throws never {
+  { : unknown
+    self._to_string_impl() : unknown
+  }
+  !! 586..601: type `baml.TypeValue$stream` has no member `_to_string_impl`
+  !! 560..566: declared throws is `never`, but this function may also throw `unknown`
 }
 
 --- <builtin>/baml/uint8array.baml ---
@@ -4336,5 +4443,17 @@ class baml.Uint8Array {
 function baml.Uint8Array.from_json(j: baml.json.json) -> baml.Uint8Array throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Uint8Array {  } : baml.Uint8Array
 }
+function baml.Uint8Array.to_string(self: baml.Uint8Array) -> string throws never {
+  { : string
+    self._to_string_impl() : string
+  }
+}
 class baml.Uint8Array$stream {
+}
+function baml.Uint8Array$stream.to_string(self: baml.Uint8Array$stream) -> string throws never {
+  { : unknown
+    self._to_string_impl() : unknown
+  }
+  !! 4180..4195: type `baml.Uint8Array$stream` has no member `_to_string_impl`
+  !! 4160..4166: declared throws is `never`, but this function may also throw `unknown`
 }

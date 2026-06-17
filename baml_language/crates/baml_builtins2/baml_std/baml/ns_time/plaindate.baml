@@ -22,7 +22,20 @@ class PlainDate {
         $rust_function
     }
     /// Serializes to an ISO 8601 calendar date: `1979-05-27`.
-    function to_string(self) -> string throws root.errors.InvalidArgument {
+    ///
+    /// Panics if the year is outside the 4-digit ISO 8601 range.
+    implements baml.ToString {
+        function to_string(self) -> string throws never {
+            self._to_string_impl() catch (_) {
+                root.errors.InvalidArgument { message } => root.sys.panic("PlainDate.to_string: " + message),
+            }
+        }
+    }
+
+    /// Internal ISO 8601 formatter. Throws `InvalidArgument` when the year is
+    /// out of range; `baml.ToString.to_string` turns that into a panic, while
+    /// `to_json` surfaces it as a `JsonSerializationError`.
+    function _to_string_impl(self) -> string throws root.errors.InvalidArgument {
         $rust_function
     }
 
@@ -61,7 +74,7 @@ class PlainDate {
         }
     }
     function to_json(self) -> string throws root.json.JsonSerializationError {
-        self.to_string() catch (_) {
+        self._to_string_impl() catch (_) {
             root.errors.InvalidArgument { message } => throw root.json.JsonSerializationError { message: message, path: "" },
         }
     }
