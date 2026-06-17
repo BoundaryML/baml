@@ -379,3 +379,33 @@ lto = "fat"
 # The profile that 'cargo dist' will build with.
 [profile.dist]
 inherits = "release"
+
+# Embedded-SDK profiles: identical to `release`, but `panic = "unwind"`.
+#
+# The Python and Node SDKs load the engine as a native library *inside the
+# user's own process* (`baml_py.abi3.so` via PyO3, the `.node` addon via napi).
+# Under `panic = "abort"` (our `release` default, chosen for binary size) a raw
+# Rust panic anywhere in the engine — e.g. a stdlib slice bounds check — calls
+# `process::abort()` and SIGABRTs the *user's* interpreter: their whole server
+# dies, uncatchable even by `except BaseException`.
+#
+# The bridges already have the machinery to contain such a panic — a
+# `catch_unwind` -> `baml.panics.SdkPanic` boundary in `bridge_cffi`, and
+# tokio's per-task isolation in the in-engine HTTP server — but all of it only
+# runs when the stack can *unwind*, which `abort` forbids. Building just these
+# two artifacts with `unwind` turns an engine panic into a catchable
+# `BamlPanic` / JS error instead of killing the host process.
+#
+# `panic` is a whole-artifact setting (it can't be overridden per-crate, and one
+# binary can't mix strategies), so the SDKs need their own profile rather than a
+# package override. maturin (`--profile release-bridge-python`) and napi
+# (`--profile release-bridge-node`) select these at build time. The CLI and wasm
+# stay on `release`/`abort`: each owns its own process and is size-gated, so an
+# abort there is acceptable and the ~+5 MB of unwind tables isn't worth paying.
+[profile.release-bridge-python]
+inherits = "release"
+panic = "unwind"
+
+[profile.release-bridge-node]
+inherits = "release"
+panic = "unwind"
