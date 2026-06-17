@@ -1469,6 +1469,13 @@ function baml.String.char_count(self: baml.String) -> int {
 function baml.String.ends_with(self: baml.String, suffix: string) -> bool {
 }
 
+function baml.String.from(value: T) -> string {
+    load_type #0
+    load_var value
+    call baml._to_string_shim
+    return
+}
+
 function baml.String.from_code_points(unicode: int[]) -> string {
 }
 
@@ -1588,6 +1595,12 @@ function baml.String.trim_end(self: baml.String) -> string {
 function baml.String.trim_start(self: baml.String) -> string {
 }
 
+function baml.ToString.to_string(self: baml.ToString) -> string {
+    load_var self
+    call baml._to_string_default
+    return
+}
+
 function baml.TypeValue.from_json(j: baml.json.json) -> baml.TypeValue {
     alloc_instance baml.TypeValue
     return
@@ -1679,6 +1692,12 @@ function baml._is_primitive_array(arr: T[]) -> bool {
 }
 
 function baml._rust_sort(arr: A) -> A {
+}
+
+function baml._to_string_default(value: T) -> string {
+}
+
+function baml._to_string_shim(value: T) -> string {
 }
 
 function baml.csv.CsvError.from_json(j: baml.json.json) -> baml.csv.CsvError {

@@ -3,6 +3,28 @@
 /// String literals use double quotes: `"hello"`. Multiline strings use the `#"..."#` syntax.
 /// All methods returning a new string do not mutate `self` unless noted otherwise.
 class String {
+  /// Renders any value as a human-readable string.
+  ///
+  /// If `value`'s runtime type implements `baml.ToString`, its `to_string`
+  /// override is used; otherwise a default structural rendering is produced.
+  /// Never throws.
+  ///
+  /// ```
+  /// string.from(42)            // "42"
+  /// string.from(true)          // "true"
+  /// string.from([1, 2, 3])     // "[1, 2, 3]"
+  /// ```
+  ///
+  /// Dispatch is resolved on `value`'s *runtime* class via
+  /// `baml._to_string_shim`, not by a static `match (value) { baml.ToString =>
+  /// ... }`: an interface `match` in this (stdlib) package can only see
+  /// implementors visible here, so it would miss a downstream user
+  /// `implements baml.ToString`. This mirrors why `baml.json.to_json` and
+  /// `Sortable.sort`'s `_compare_shim` resolve on the runtime class too.
+  function from<T>(value: T) -> string throws never {
+    root._to_string_shim(value)
+  }
+
   /// Serializes this string to a JSON value.
   //baml:mut_vm
   function to_json(self) -> baml.json.json throws never {

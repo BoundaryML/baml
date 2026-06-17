@@ -1525,6 +1525,24 @@ fn baml.Array.unshift = builtin(vm)
 
 fn baml.Map.values = builtin(vm)
 
+fn baml._to_string_default = builtin(vm)
+
+fn baml._to_string_shim = builtin(vm)
+
+fn baml.ToString.to_string(self: baml.ToString) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: baml.ToString // self // param
+
+    bb0: {
+        _0 = call const fn baml._to_string_default(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn baml.deep_copy = builtin(vm)
 
 fn baml.deep_equals = builtin(vm)
@@ -23727,6 +23745,22 @@ fn baml.String.char_at = builtin(vm)
 fn baml.String.char_count = builtin(vm)
 
 fn baml.String.ends_with = builtin(vm)
+
+fn baml.String.from(value: T) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: T // value // param
+    let _2: type
+
+    bb0: {
+        _2 = load_type(#0);
+        _0 = call const fn baml._to_string_shim<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
 
 fn baml.String.from_code_points = builtin(vm)
 

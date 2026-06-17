@@ -114,6 +114,13 @@ function baml.values(self: ?) -> V[]  [builtin]
 --- captures ---
 lambda (i, j) in sort_by_key: captures [keys]
 
+--- <builtin>/baml/conversions.baml ---
+function baml._to_string_default(value: T) -> string  [builtin]
+function baml._to_string_shim(value: T) -> string  [builtin]
+function baml.to_string(self: ?) -> string  [expr] {
+  {  } root._to_string_default(self)
+}
+
 --- <builtin>/baml/core.baml ---
 function baml.deep_copy(value: T) -> T  [builtin]
 function baml.deep_equals(a: T, b: T) -> bool  [builtin]
@@ -2200,6 +2207,9 @@ function baml.byte_length(self: ?) -> int  [builtin]
 function baml.char_at(self: ?, index: int) -> string  [builtin]
 function baml.char_count(self: ?) -> int  [builtin]
 function baml.ends_with(self: ?, suffix: string) -> bool  [builtin]
+function baml.from(value: T) -> string  [expr] {
+  {  } root._to_string_shim(value)
+}
 function baml.from_code_points(unicode: int[]) -> string  [builtin]
 function baml.from_json(j: baml.json.json) -> baml.String  [expr] {
   baml.String {  }

@@ -187,6 +187,13 @@ class baml.Array$stream {
 class baml.Map$stream {
 }
 
+--- <builtin>/baml/conversions.baml ---
+function baml.ToString.to_string(self: baml.ToString) -> string throws never {
+  { : string
+    root._to_string_default<T>(self) : string
+  }
+}
+
 --- <builtin>/baml/core.baml ---
 
 --- <builtin>/baml/float.baml ---
@@ -4299,6 +4306,11 @@ class baml.Null$stream {
 
 --- <builtin>/baml/string.baml ---
 class baml.String {
+}
+function baml.String.from<T>(value: T) -> string throws never {
+  { : string
+    root._to_string_shim<T>(value) : string
+  }
 }
 function baml.String.from_json(j: baml.json.json) -> baml.String throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   String {  } : baml.String
