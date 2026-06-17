@@ -15,12 +15,27 @@ class String {
   /// string.from([1, 2, 3])     // "[1, 2, 3]"
   /// ```
   ///
-  /// Dispatch is resolved on `value`'s *runtime* class via
-  /// `baml._to_string_shim`, not by a static `match (value) { baml.ToString =>
-  /// ... }`: an interface `match` in this (stdlib) package can only see
-  /// implementors visible here, so it would miss a downstream user
-  /// `implements baml.ToString`. This mirrors why `baml.json.to_json` and
-  /// `Sortable.sort`'s `_compare_shim` resolve on the runtime class too.
+  /// Ideally this would read:
+  ///
+  /// ```
+  /// if (value is baml.ToString) { value.to_string() }
+  /// else { root._to_string_default(value) }
+  /// ```
+  ///
+  /// but that does not work from the stdlib today. `is <interface>` and
+  /// interface method dispatch are resolved at *compile time* by expanding the
+  /// interface to its known implementor classes, and that implementor set is
+  /// per-package: it is built from the package's dependencies + itself, never
+  /// its dependents. `string.from` lives in the `baml` package, which a user's
+  /// `implements baml.ToString` sits *above*, so from here the implementor set
+  /// for `baml.ToString` is empty — the `is` test folds to constant `false` and
+  /// the override never dispatches. (Same boundary `Sortable.sort`'s
+  /// `_compare_shim` and `baml.json.to_json` work around.)
+  ///
+  /// So dispatch is resolved on `value`'s *runtime* class via
+  /// `baml._to_string_shim` instead. TODO: once Kai's TIR rework lands (it moves
+  /// interface conformance checks to runtime), replace this with the literal
+  /// `is baml.ToString` form above and drop `_to_string_shim`.
   function from<T>(value: T) -> string throws never {
     root._to_string_shim(value)
   }
