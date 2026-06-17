@@ -4606,6 +4606,12 @@ function baml.fs.read_dir(path: string) -> baml.fs.DirEntry[] {
 function baml.fs.remove(path: string) -> null {
 }
 
+function baml.fs.remove_dir(path: string) -> null {
+}
+
+function baml.fs.remove_dir_all(path: string) -> null {
+}
+
 function baml.fs.size(path: string) -> int {
 }
 

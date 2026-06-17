@@ -112,3 +112,18 @@ function read_dir(path: string) -> DirEntry[] throws root.errors.Io {
 function mkdir(path: string, options: MkdirOptions) -> null throws root.errors.Io {
   $rust_io_function
 }
+
+/// Removes the empty directory at `path`. Mirrors Node/Bun `fs.promises.rmdir`.
+/// Throws `Io` if `path` does not exist, is not a directory, or is not empty.
+/// To delete a directory and its contents, use `remove_dir_all`.
+function remove_dir(path: string) -> null throws root.errors.Io {
+  $rust_io_function
+}
+
+/// Recursively removes the directory at `path` and all of its contents.
+/// Mirrors Node/Bun `fs.promises.rm(path, { recursive: true, force: true })`:
+/// it is idempotent, returning successfully when `path` does not exist.
+/// Throws `Io` if `path` exists but cannot be removed.
+function remove_dir_all(path: string) -> null throws root.errors.Io {
+  $rust_io_function
+}

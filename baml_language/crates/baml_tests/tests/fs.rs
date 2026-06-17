@@ -109,6 +109,136 @@ async fn fs_file_invalid_mode() {
 }
 
 #[tokio::test]
+async fn fs_remove_on_directory_suggests_remove_dir() {
+    // baml.fs.remove handles files only. Calling it on a directory must throw
+    // Io with a message that points the caller at baml.fs.remove_dir, rather
+    // than surfacing the raw "Is a directory (os error 21)" OS error.
+    let (_tmp, root) = tmp(indexmap! {});
+    std::fs::create_dir(format!("{root}/a_dir")).unwrap();
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> null {{
+                baml.fs.remove("{root}/a_dir")
+            }}
+        "#
+    ));
+
+    let Err(bex_engine::EngineError::UnhandledThrow { value, .. }) = &output.result else {
+        panic!("expected UnhandledThrow, got: {:?}", output.result);
+    };
+    let bex_external_types::BexExternalValue::Instance { class_name, fields } = value.as_ref()
+    else {
+        panic!("expected exception Instance, got: {value:?}");
+    };
+    assert_eq!(class_name, "baml.errors.Io");
+    let Some(BexExternalValue::String(message)) = fields.get("message") else {
+        panic!("expected `message` String field, got: {fields:?}");
+    };
+    assert!(
+        message.contains("use baml.fs.remove_dir to delete directories"),
+        "unexpected error message: {message}"
+    );
+    // The directory must still exist — remove() must not have deleted it.
+    assert!(std::path::Path::new(&format!("{root}/a_dir")).is_dir());
+}
+
+#[tokio::test]
+async fn fs_remove_dir_removes_empty_directory() {
+    let (_tmp, root) = tmp(indexmap! {});
+    std::fs::create_dir(format!("{root}/empty_dir")).unwrap();
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> bool {{
+                baml.fs.remove_dir("{root}/empty_dir");
+                baml.fs.exists("{root}/empty_dir")
+            }}
+        "#
+    ));
+
+    assert_eq!(output.result.unwrap(), BexExternalValue::Bool(false));
+    assert!(!std::path::Path::new(&format!("{root}/empty_dir")).exists());
+}
+
+#[tokio::test]
+async fn fs_remove_dir_non_empty_errors() {
+    // remove_dir mirrors rmdir: a non-empty directory cannot be removed.
+    let (_tmp, root) = tmp(indexmap! {});
+    std::fs::create_dir(format!("{root}/full_dir")).unwrap();
+    std::fs::write(format!("{root}/full_dir/file.txt"), "data").unwrap();
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> null {{
+                baml.fs.remove_dir("{root}/full_dir")
+            }}
+        "#
+    ));
+
+    assert!(output.result.is_err());
+    // The directory must still exist after the failed removal.
+    assert!(std::path::Path::new(&format!("{root}/full_dir")).is_dir());
+}
+
+#[tokio::test]
+async fn fs_remove_dir_all_removes_tree() {
+    let (_tmp, root) = tmp(indexmap! {});
+    std::fs::create_dir_all(format!("{root}/tree/nested")).unwrap();
+    std::fs::write(format!("{root}/tree/a.txt"), "a").unwrap();
+    std::fs::write(format!("{root}/tree/nested/b.txt"), "b").unwrap();
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> bool {{
+                baml.fs.remove_dir_all("{root}/tree");
+                baml.fs.exists("{root}/tree")
+            }}
+        "#
+    ));
+
+    assert_eq!(output.result.unwrap(), BexExternalValue::Bool(false));
+    assert!(!std::path::Path::new(&format!("{root}/tree")).exists());
+}
+
+#[tokio::test]
+async fn fs_remove_dir_all_idempotent_on_missing() {
+    // Mirrors Bun's rm(path, { recursive: true, force: true }): removing a
+    // path that does not exist succeeds rather than throwing.
+    let (_tmp, root) = tmp(indexmap! {});
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> null {{
+                baml.fs.remove_dir_all("{root}/does_not_exist")
+            }}
+        "#
+    ));
+
+    assert!(
+        output.result.is_ok(),
+        "expected remove_dir_all on a missing path to succeed, got: {:?}",
+        output.result
+    );
+}
+
+#[tokio::test]
+async fn fs_remove_dir_nonexistent_errors() {
+    // remove_dir (non-recursive) is NOT forced: a missing path must error.
+    let (_tmp, root) = tmp(indexmap! {});
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> null {{
+                baml.fs.remove_dir("{root}/no_such_dir")
+            }}
+        "#
+    ));
+
+    assert!(output.result.is_err());
+}
+
+#[tokio::test]
 async fn fs_remove_nonexistent_errors() {
     let (_tmp, root) = tmp(indexmap! {});
 

@@ -93,6 +93,8 @@ namespace baml.fs:
   function read
   function read_dir
   function remove
+  function remove_dir
+  function remove_dir_all
   function size
   function write
   function write_bytes

@@ -90,6 +90,8 @@ class            fs.DirEntry                      <builtin>/baml/ns_fs/fs.baml:9
 class            fs.MkdirOptions                  <builtin>/baml/ns_fs/fs.baml:101
 function         fs.read_dir                      <builtin>/baml/ns_fs/fs.baml:107
 function         fs.mkdir                         <builtin>/baml/ns_fs/fs.baml:112
+function         fs.remove_dir                    <builtin>/baml/ns_fs/fs.baml:119
+function         fs.remove_dir_all                <builtin>/baml/ns_fs/fs.baml:127
 enum             future.FutureState               <builtin>/baml/ns_future/future.baml:21
 class            future.Future                    <builtin>/baml/ns_future/future.baml:28
 function         future.all_complete              <builtin>/baml/ns_future/future.baml:80

@@ -982,6 +982,30 @@ impl io::IoNamespaceFs for DefaultIoOps {
             message: "Operation not supported on this platform".to_string(),
         })
     }
+
+    fn remove_dir(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    fn remove_dir_all(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
 }
 
 impl io::IoClassHttpResponse for DefaultIoOps {

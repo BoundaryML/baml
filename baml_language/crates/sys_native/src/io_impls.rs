@@ -649,7 +649,7 @@ impl io::IoNamespaceFs for NativeSysOps {
             tokio::fs::remove_file(&path)
                 .await
                 .map_err(|e| VmBamlError::Io {
-                    message: format!("Failed to remove file '{path}': {e}"),
+                    message: remove_file_error_message(&path, &e),
                 })
                 .map_err(VmRustFnError::from)
         })
@@ -776,6 +776,61 @@ impl io::IoNamespaceFs for NativeSysOps {
             })
             .map_err(VmRustFnError::from)
         })
+    }
+
+    fn remove_dir(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::async_op(async move {
+            tokio::fs::remove_dir(&path)
+                .await
+                .map_err(|e| VmBamlError::Io {
+                    message: format!("Failed to remove directory '{path}': {e}"),
+                })
+                .map_err(VmRustFnError::from)
+        })
+    }
+
+    fn remove_dir_all(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::async_op(async move {
+            // Mirror Bun's `rm(path, { recursive: true, force: true })`: deleting
+            // a missing path is a no-op rather than an error.
+            match tokio::fs::remove_dir_all(&path).await {
+                Ok(()) => Ok(()),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+                Err(e) => Err(VmRustFnError::from(VmBamlError::Io {
+                    message: format!("Failed to recursively remove directory '{path}': {e}"),
+                })),
+            }
+        })
+    }
+}
+
+/// Builds the error message for a failed `baml.fs.remove` (file removal).
+///
+/// `path` is the target path and `e` is the underlying I/O error. When the OS
+/// reports the path is a directory (`EISDIR`, raw os error 21), the message
+/// points the caller at `baml.fs.remove_dir`, since `remove` only handles files.
+/// All other errors are reported verbatim.
+fn remove_file_error_message(path: &str, e: &std::io::Error) -> String {
+    // `ErrorKind::IsADirectory` is the portable signal; fall back to the raw
+    // POSIX errno (21 = EISDIR) on toolchains/platforms that don't surface it.
+    let is_a_directory =
+        e.kind() == std::io::ErrorKind::IsADirectory || e.raw_os_error() == Some(21);
+    if is_a_directory {
+        format!("Failed to remove file '{path}': use baml.fs.remove_dir to delete directories")
+    } else {
+        format!("Failed to remove file '{path}': {e}")
     }
 }
 

@@ -478,4 +478,88 @@ impl io::IoNamespaceFs for WasmIoFs {
             }
         }
     }
+
+    fn remove_dir(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        match self.vfs().vfs_remove_dir(&path) {
+            Ok(()) => SysOpOutput::ok(()),
+            Err(e) => SysOpOutput::err(js_err(&e)),
+        }
+    }
+
+    fn remove_dir_all(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        // The JS VFS contract has no recursive-remove primitive, so we walk the
+        // tree ourselves: depth-first delete children before the directory.
+        // Mirror Bun's `rm(path, { recursive: true, force: true })` — a missing
+        // path is a no-op rather than an error.
+        match self.vfs().vfs_exists(&path) {
+            Ok(false) => return SysOpOutput::ok(()),
+            Ok(true) => {}
+            Err(e) => return SysOpOutput::err(js_err(&e)),
+        }
+        match self.remove_tree(&path) {
+            Ok(()) => SysOpOutput::ok(()),
+            Err(e) => SysOpOutput::err(e),
+        }
+    }
+}
+
+impl WasmIoFs {
+    /// Recursively removes the filesystem entry at `path` via the JS VFS.
+    ///
+    /// A regular file is removed with `removeFile`; a directory has each of its
+    /// children removed depth-first before the directory itself is removed with
+    /// `removeDir`. Returns `Ok(())` on success or a `VmBamlError::Io` describing
+    /// the first failing VFS call. The caller is responsible for the
+    /// missing-path (`force`) idempotency check before invoking this.
+    fn remove_tree(&self, path: &str) -> Result<(), VmBamlError> {
+        let meta = self.vfs().vfs_metadata(path).map_err(|e| js_err(&e))?;
+        if meta.file_type != "directory" {
+            return self.vfs().vfs_remove_file(path).map_err(|e| js_err(&e));
+        }
+        for name in self.child_names(path)? {
+            self.remove_tree(&join_path(path, &name))?;
+        }
+        self.vfs().vfs_remove_dir(path).map_err(|e| js_err(&e))
+    }
+
+    /// Lists the bare entry names of the directory at `path` via the JS VFS.
+    ///
+    /// Prefers the rich `readDirEntries` callback and falls back to the legacy
+    /// `readDir` (string list) when the host has not implemented it. Returns a
+    /// `VmBamlError::Io`/`ParseError` if the directory cannot be read or an entry
+    /// is not a string.
+    fn child_names(&self, path: &str) -> Result<Vec<String>, VmBamlError> {
+        if let Ok(arr) = self.vfs().vfs_read_dir_entries(path) {
+            let mut names = Vec::with_capacity(arr.length() as usize);
+            for v in arr.iter() {
+                let entry: crate::wasm_fs::WasmVfsDirEntry = serde_wasm_bindgen::from_value(v)
+                    .map_err(|e| VmBamlError::ParseError {
+                        message: format!("readDirEntries returned invalid entry: {e}"),
+                    })?;
+                names.push(entry.name);
+            }
+            return Ok(names);
+        }
+        let arr = self.vfs().vfs_read_dir(path).map_err(|e| js_err(&e))?;
+        let mut names = Vec::with_capacity(arr.length() as usize);
+        for v in arr.iter() {
+            let name = v.as_string().ok_or_else(|| VmBamlError::DevOther {
+                message: "readDir entry is not a string".into(),
+            })?;
+            names.push(name);
+        }
+        Ok(names)
+    }
 }
