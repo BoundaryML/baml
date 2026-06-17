@@ -1053,11 +1053,6 @@ impl<'db> ScopeInference<'db> {
 
 // ── Main Salsa Query: Per-Scope Inference ───────────────────────────────────
 
-/// Search for a `Lambda` expression whose source span matches `target_span` in
-/// `body`/`source_map`, recursively descending into nested lambda bodies.
-///
-/// Returns `Some((func_def, lambda_body, lambda_source_map, lambda_expr_id))` when
-/// found; `None` otherwise.
 /// Seed a nested lambda's builder with the tag's body-lambda params of any
 /// `is_template_body` ancestor scope (BEP-049 §10). Those params are injected
 /// into the owning scope's locals while typing the tagged-template body, but
@@ -1085,6 +1080,11 @@ fn seed_template_body_params(
     }
 }
 
+/// Search for a `Lambda` expression whose source span matches `target_span` in
+/// `body`/`source_map`, recursively descending into nested lambda bodies.
+///
+/// Returns `Some((func_def, lambda_body, lambda_source_map, lambda_expr_id))` when
+/// found; `None` otherwise.
 fn find_lambda_by_span<'a>(
     body: &'a ExprBody,
     source_map: &AstSourceMap,

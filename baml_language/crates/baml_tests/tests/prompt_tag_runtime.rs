@@ -193,3 +193,46 @@ function main() -> baml.llm.PromptAst {
         "rendered schema should list the Person fields: {dbg}"
     );
 }
+
+#[tokio::test]
+async fn prompt_output_format_with_omits_leading_optional_arg() {
+    // Regression: a method io-sysop (`$rust_io_function` instance method) called
+    // with a LATER optional arg provided and an EARLIER one omitted. The call
+    // plan's `param_index` is receiver-relative (self stripped), but the sys-op
+    // default arena is indexed self-inclusive — so the omitted `prefix` read
+    // `self`'s (absent) default → `OmittedArg` → engine panic. Here
+    // `quote_class_fields = true` is provided while `prefix` (and everything
+    // before it) is omitted. Must render the schema, not panic.
+    let output = baml_test!(
+        r#"
+class Person {
+  name string
+  age int
+}
+
+function main() -> baml.llm.PromptAst {
+  let cc = baml.llm.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
+  let rt = reflect.type_of<Person>()
+  let ctx = baml.llm.Context { client: cc, tags: {}, output_format: baml.llm.render_output_format(rt), _output_format: baml.llm.build_output_format(rt) }
+  let render = baml.llm.prompt`${ctx.output_format_with(quote_class_fields = true)}`
+  render(ctx)
+}
+"#
+    );
+    let ast = match &output.result {
+        Ok(BexExternalValue::Instance { class_name, fields })
+            if class_name == "baml.llm.PromptAst" =>
+        {
+            match fields.get("_data") {
+                Some(BexExternalValue::Adt(BexExternalAdt::PromptAst(ast))) => ast.clone(),
+                other => panic!("expected `_data` to hold a PromptAst ADT, got {other:?}"),
+            }
+        }
+        other => panic!("expected a baml.llm.PromptAst instance, got {other:?}"),
+    };
+    let dbg = format!("{ast:?}");
+    assert!(
+        dbg.contains("name") && dbg.contains("age"),
+        "rendered schema should list the Person fields: {dbg}"
+    );
+}

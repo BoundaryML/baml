@@ -6467,11 +6467,21 @@ impl<'db> LoweringContext<'db> {
         // sys_ops have no bytecode body, so they never run the default-parameter
         // prologue that a regular callee would. Leaving `OmittedArg` for a
         // sys_op would reach the engine and panic in `vm_arg_to_bex_value`.
-        let sysop_callee = match &self.body.exprs[expr_id] {
+        let callee_expr = match &self.body.exprs[expr_id] {
             AstExpr::Call { callee, .. } => Some(*callee),
             _ => None,
-        }
-        .and_then(|callee| self.sys_op_callee(callee));
+        };
+        let sysop_callee = callee_expr.and_then(|callee| self.sys_op_callee(callee));
+        // A method-convention sys-op call (e.g. `ctx.output_format_with(...)`) has
+        // a receiver-relative `param_index` — TIR strips `self` via
+        // `skip_self_param` when building the call plan — but the callee's default
+        // arena (`function_parameter_defaults`) is indexed self-inclusive. Shift
+        // omitted-default indices by one to skip `self`; free-function sys-ops have
+        // no `self`, so no shift.
+        let sysop_self_offset = match (sysop_callee, callee_expr) {
+            (Some(_), Some(callee)) if self.callee_uses_method_convention(callee) => 1,
+            _ => 0,
+        };
 
         // Pre-lower each provided arg in source order (the order `args` appear
         // in the call expression). This preserves the original evaluation
@@ -6493,7 +6503,9 @@ impl<'db> LoweringContext<'db> {
                 baml_compiler2_tir::inference::ParamBinding::OmittedDefault {
                     param_index, ..
                 } => match sysop_callee {
-                    Some(callee_loc) => self.sysop_default_operand(callee_loc, param_index),
+                    Some(callee_loc) => {
+                        self.sysop_default_operand(callee_loc, param_index + sysop_self_offset)
+                    }
                     None => Operand::Constant(Constant::OmittedArg),
                 },
             })
@@ -7314,6 +7326,24 @@ impl<'db> LoweringContext<'db> {
         }
 
         self.builder.set_current_block(target);
+    }
+
+    /// Whether `callee` resolves to a `BoundMethod` — i.e. the call uses method
+    /// convention (`self` passed implicitly via the receiver). Mirrors TIR's
+    /// `callee_uses_method_call_convention`, which strips `self` so the call
+    /// plan's `param_index` becomes receiver-relative.
+    fn callee_uses_method_convention(&self, callee: AstExprId) -> bool {
+        use baml_compiler2_tir::inference::MemberResolution;
+        let key = self.expr_metadata_key(callee);
+        matches!(
+            self.resolutions.get(&key),
+            Some(MemberResolution::BoundMethod { .. })
+        ) || matches!(
+            self.path_member_resolutions
+                .get(&key)
+                .and_then(|resolutions| resolutions.last()),
+            Some(MemberResolution::BoundMethod { .. })
+        )
     }
 
     fn sys_op_callee(&self, callee: AstExprId) -> Option<FunctionLoc<'db>> {
