@@ -27,10 +27,12 @@ import type {
   Run,
 } from '../worker-protocol';
 import type { ResultRendererProps } from '../result-renderers';
+import { getChrome } from './constants';
 import { cfgToGraphNodes, graphToReactflow } from './convert';
 import { layoutGraph } from './layout';
 import { kNodeTypes } from './nodes';
 import { kEdgeTypes, ColorfulMarkerDefinitions } from './edges';
+import { GraphThemeContext, useGraphTheme } from './theme';
 import type {
   GraphNode,
   NodeExecutionState,
@@ -207,6 +209,8 @@ function GraphViewInner({
   selectedNodeId,
   onNodeClick,
 }: GraphViewProps) {
+  const theme = useGraphTheme();
+  const chrome = getChrome(theme);
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<WorkflowEdge>([]);
   // The component is remounted (keyed) per function, so the lazy initializer
@@ -230,7 +234,10 @@ function GraphViewInner({
       graphEdges,
     );
     return { graphNodes, rfNodes, rfEdges };
-  }, [graph]);
+    // `theme` is a dep so edge colors (baked in convert via getMarkerColors)
+    // re-resolve when the surface theme flips.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [graph, theme]);
 
   const runtimeInputsRef = useRef({
     graphRuntimeOverlay,
@@ -433,6 +440,7 @@ function GraphViewInner({
   );
 
   return (
+    <GraphThemeContext.Provider value={theme}>
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
       {/* Override @xyflow/react defaults:
             - .react-flow__node-group has a built-in light gray fill + 1px
@@ -485,11 +493,16 @@ function GraphViewInner({
           --xy-controls-box-shadow-default: 0 4px 14px rgba(26, 22, 18, 0.10);
         }
         .react-flow__controls {
-          border: 1px solid rgba(26, 22, 18, 0.14);
           border-radius: 8px;
           overflow: hidden;
           backdrop-filter: blur(8px);
           -webkit-backdrop-filter: blur(8px);
+        }
+        .react-flow.light .react-flow__controls {
+          border: 1px solid rgba(26, 22, 18, 0.14);
+        }
+        .react-flow.dark .react-flow__controls {
+          border: 1px solid rgba(255, 255, 255, 0.12);
         }
         @keyframes baml-graph-spin {
           to { transform: rotate(360deg); }
@@ -517,7 +530,7 @@ function GraphViewInner({
         fitView
         fitViewOptions={{ minZoom: 0.3, maxZoom: 0.85, padding: 0.2 }}
         proOptions={{ hideAttribution: true }}
-        colorMode="light"
+        colorMode={theme}
       >
         <Controls
           position="bottom-left"
@@ -525,7 +538,7 @@ function GraphViewInner({
         />
         <Background
           variant={BackgroundVariant.Dots}
-          color="rgba(42,37,32,0.12)"
+          color={chrome.backgroundDots}
           gap={18}
           size={1}
         />
@@ -552,25 +565,24 @@ function GraphViewInner({
           justifyContent: 'center',
           padding: 0,
           borderRadius: 8,
-          border: '1px solid #D8CFBD',
-          background: 'rgba(255,253,246,0.92)',
+          border: `1px solid ${chrome.button.border}`,
+          background: chrome.button.bg,
           backdropFilter: 'blur(8px)',
           WebkitBackdropFilter: 'blur(8px)',
-          color: '#1A1612',
+          color: chrome.button.text,
           cursor: 'pointer',
           fontSize: 14,
           lineHeight: 1,
-          boxShadow:
-            '0 1px 2px rgba(26,22,18,0.10), inset 0 1px 0 rgba(255,255,255,0.6)',
+          boxShadow: chrome.button.shadow,
           transition: 'background 120ms ease, border-color 120ms ease',
         }}
         onMouseEnter={(e) => {
-          e.currentTarget.style.background = '#F4EEE0';
-          e.currentTarget.style.borderColor = '#C9BFA9';
+          e.currentTarget.style.background = chrome.button.bgHover;
+          e.currentTarget.style.borderColor = chrome.button.borderHover;
         }}
         onMouseLeave={(e) => {
-          e.currentTarget.style.background = 'rgba(255,253,246,0.92)';
-          e.currentTarget.style.borderColor = '#D8CFBD';
+          e.currentTarget.style.background = chrome.button.bg;
+          e.currentTarget.style.borderColor = chrome.button.border;
         }}
         title={`Switch to ${direction === 'horizontal' ? 'vertical' : 'horizontal'} layout`}
         aria-label="Toggle layout direction"
@@ -578,6 +590,7 @@ function GraphViewInner({
         {direction === 'horizontal' ? '\u2195' : '\u2194'}
       </button>
     </div>
+    </GraphThemeContext.Provider>
   );
 }
 
