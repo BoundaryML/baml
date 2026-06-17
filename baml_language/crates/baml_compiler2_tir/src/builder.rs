@@ -13644,22 +13644,22 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.sync_let_binding_type(&name, new_ty);
     }
 
-    /// Try to handle a container mutation method call: `x.push(val)` or `x?.push?.(val)`.
+    /// Try to type-check a mutating builtin collection method before normal
+    /// method resolution.
     ///
-    /// This is the "evolving path" for container mutations — it intercepts
-    /// `.push()` / `.append()` and index assignment *before* normal method
-    /// resolution via `resolve_builtin_method`. See the doc comment on
-    /// `Ty::EvolvingList` for why two paths exist.
+    /// `callee_id` is the expression for a method-like callee such as
+    /// `items.push` or `headers.set`. `args` are the already-lowered call
+    /// argument expression IDs, excluding the receiver. `body` provides the
+    /// expression arena used to inspect and type-check those IDs. The method
+    /// returns the builtin method's result type when it handled the call, or
+    /// `None` when the callee is not a supported collection mutation and should
+    /// fall through to ordinary call checking.
     ///
-    /// If the callee is `base.push(arg)` or `base.append(arg)` where base is a
-    /// local with type `List(T)` or `EvolvingList(T)`:
-    /// - If `T == Never`: first establishment → update local to `[Evolving]List(arg_ty)`
-    /// - If `arg_ty <: T`: ok
-    /// - Otherwise: type error
-    ///
-    /// Returns the inner method result type (e.g. `int` for `Array.push`) if
-    /// handled. Callers own the enclosing expression semantics such as optional
-    /// wrapping, final subtype checks, and recording the call expression type.
+    /// For an unannotated empty collection (`EvolvingList<never>` or
+    /// `EvolvingMap<never, never>`), the first compatible mutation establishes
+    /// the element/key/value type on the local binding. Later incompatible
+    /// mutations report ordinary argument type mismatches. This function does
+    /// not panic; malformed or unsupported callees simply return `None`.
     fn try_container_method_call(
         &mut self,
         callee_id: ExprId,
@@ -13734,6 +13734,90 @@ impl<'db> TypeInferenceBuilder<'db> {
                 };
                 let method_ty = self
                     .resolve_builtin_member(&["Array"], &[effective_elem], &method_name, callee_id)
+                    .unwrap_or(Ty::Unknown {
+                        attr: TyAttr::default(),
+                    });
+                let result = match &method_ty {
+                    Ty::Function { ret, .. } => ret.as_ref().clone(),
+                    _ => Ty::Unknown {
+                        attr: TyAttr::default(),
+                    },
+                };
+                let callee_expr_ty = match &body.exprs[callee_id] {
+                    Expr::OptionalMemberAccess { .. } => Ty::optional(method_ty),
+                    _ => method_ty,
+                };
+
+                self.record_expr_type(base_id, effective_local_ty);
+                self.record_expr_type(callee_id, callee_expr_ty);
+                Some(result)
+            }
+            "set" if args.len() == 2 => {
+                let (key_ty, val_ty, container_attr) = match &local_ty {
+                    Ty::EvolvingMap(key, value, attr) => (key, value, attr.clone()),
+                    _ => return None,
+                };
+
+                let arg_key_ty = self.infer_expr(args[0], body);
+                let arg_val_ty = self.infer_expr(args[1], body);
+                let widened_key = arg_key_ty.widen_fresh();
+                let widened_val = arg_val_ty.widen_fresh();
+
+                let effective_local_ty = if matches!(**key_ty, Ty::Never { .. })
+                    && matches!(**val_ty, Ty::Never { .. })
+                {
+                    let new_ty = Ty::EvolvingMap(
+                        Box::new(widened_key),
+                        Box::new(widened_val),
+                        container_attr,
+                    );
+                    self.assign_local(local_name.clone(), new_ty.clone());
+                    self.sync_let_binding_type(&local_name, new_ty.clone());
+                    new_ty
+                } else {
+                    if !self.is_subtype(&widened_key, key_ty) {
+                        self.context.report(
+                            TirTypeError::TypeMismatch {
+                                expected: *key_ty.clone(),
+                                got: widened_key,
+                            },
+                            args[0],
+                            Vec::new(),
+                        );
+                    }
+                    if !self.is_subtype(&widened_val, val_ty) {
+                        self.context.report(
+                            TirTypeError::TypeMismatch {
+                                expected: *val_ty.clone(),
+                                got: widened_val,
+                            },
+                            args[1],
+                            Vec::new(),
+                        );
+                    }
+                    local_ty.clone()
+                };
+
+                let (effective_key, effective_val) = match &effective_local_ty {
+                    Ty::EvolvingMap(key, value, _) | Ty::Map { key, value, .. } => {
+                        (key.as_ref().clone(), value.as_ref().clone())
+                    }
+                    _ => (
+                        Ty::Unknown {
+                            attr: TyAttr::default(),
+                        },
+                        Ty::Unknown {
+                            attr: TyAttr::default(),
+                        },
+                    ),
+                };
+                let method_ty = self
+                    .resolve_builtin_member(
+                        &["Map"],
+                        &[effective_key, effective_val],
+                        &method_name,
+                        callee_id,
+                    )
                     .unwrap_or(Ty::Unknown {
                         attr: TyAttr::default(),
                     });

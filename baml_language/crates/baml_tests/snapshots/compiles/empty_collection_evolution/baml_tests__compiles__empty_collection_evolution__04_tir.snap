@@ -1,0 +1,18 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+function user.EmptyMapLiteralSetThenGet() -> string throws never {
+  { : string
+    let headers = map {  } : map<never, never> -> map<string, string> (evolving)
+    headers.set("a", "b") : string | null
+    headers.get("a") ?? "" : string
+  }
+}
+function user.EmptyArrayLiteralPushThenRead() -> int throws never {
+  { : int
+    let values = [] : never[] -> int[] (evolving)
+    values.push(1) : int
+    values[0] : int
+  }
+}

@@ -1,0 +1,109 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "EmptyMapLiteralSetThenGet"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          PATTERN
+            BINDING_PATTERN "let headers"
+              KW_LET "let"
+              WORD "headers"
+          EQUALS "="
+          MAP_LITERAL "{}"
+            L_BRACE "{"
+            R_BRACE "}"
+          SEMICOLON ";"
+        CALL_EXPR
+          PATH_EXPR "headers.set"
+            WORD "headers"
+            DOT "."
+            WORD "set"
+          CALL_ARGS
+            L_PAREN "("
+            CALL_ARG
+              STRING_LITERAL "a"
+                QUOTE """
+                WORD "a"
+                QUOTE """
+            COMMA ","
+            CALL_ARG
+              STRING_LITERAL "b"
+                QUOTE """
+                WORD "b"
+                QUOTE """
+            R_PAREN ")"
+        SEMICOLON ";"
+        BINARY_EXPR
+          CALL_EXPR
+            PATH_EXPR "headers.get"
+              WORD "headers"
+              DOT "."
+              WORD "get"
+            CALL_ARGS
+              L_PAREN "("
+              CALL_ARG
+                STRING_LITERAL "a"
+                  QUOTE """
+                  WORD "a"
+                  QUOTE """
+              R_PAREN ")"
+          QUESTION "?"
+          QUESTION "?"
+          STRING_LITERAL ""
+            QUOTE """
+            QUOTE """
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "EmptyArrayLiteralPushThenRead"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          PATTERN
+            BINDING_PATTERN "let values"
+              KW_LET "let"
+              WORD "values"
+          EQUALS "="
+          ARRAY_LITERAL "[]"
+            L_BRACKET "["
+            R_BRACKET "]"
+          SEMICOLON ";"
+        CALL_EXPR
+          PATH_EXPR "values.push"
+            WORD "values"
+            DOT "."
+            WORD "push"
+          CALL_ARGS
+            L_PAREN "("
+            CALL_ARG "1"
+              INTEGER_LITERAL "1"
+            R_PAREN ")"
+        SEMICOLON ";"
+        INDEX_EXPR "values[0]"
+          WORD "values"
+          L_BRACKET "["
+          INTEGER_LITERAL "0"
+          R_BRACKET "]"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

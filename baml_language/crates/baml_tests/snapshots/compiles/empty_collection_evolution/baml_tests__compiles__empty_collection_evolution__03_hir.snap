@@ -1,0 +1,10 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR2 ===
+function user.EmptyArrayLiteralPushThenRead() -> int  [expr] {
+  { let values = []; values.push(1) } values[0]
+}
+function user.EmptyMapLiteralSetThenGet() -> string  [expr] {
+  { let headers = map {  }; headers.set("a", "b") } headers.get("a") NullCoalesce ""
+}

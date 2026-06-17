@@ -1,0 +1,65 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR2 ===
+fn user.EmptyArrayLiteralPushThenRead() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int[] // values
+    let _2: int
+    let _3: int[]
+    let _4: 0
+
+    bb0: {
+        _1 = [];
+        _2 = call const fn baml.Array.push(copy _1, const 1_i64) -> [bb1];
+    }
+
+    bb1: {
+        _3 = copy _1;
+        _4 = const 0_i64;
+        _0 = copy _3[_4];
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.EmptyMapLiteralSetThenGet() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: map<string, string> // headers
+    let _2: string | null
+    let _3: string | null
+    let _4: type
+    let _5: type
+    let _6: bool
+
+    bb0: {
+        _1 = {  };
+        _2 = call const fn baml.Map.set(copy _1, const "a", const "b") -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type(string);
+        _5 = load_type(string);
+        _3 = call const fn baml.Map.get<copy _4, copy _5>(copy _1, const "a") -> [bb2];
+    }
+
+    bb2: {
+        _0 = copy _3;
+        _6 = copy _3 == const null;
+        branch copy _6 -> [bb3, bb4];
+    }
+
+    bb3: {
+        _0 = const "";
+        goto -> bb4;
+    }
+
+    bb4: {
+        return;
+    }
+}

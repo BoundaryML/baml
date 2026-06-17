@@ -1,0 +1,43 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function user.EmptyArrayLiteralPushThenRead() -> int {
+    alloc_array 0
+    store_var values
+    load_var values
+    load_const 1
+    call baml.Array.push
+    pop 1
+    load_var values
+    load_const 0
+    load_array_element
+    return
+}
+
+function user.EmptyMapLiteralSetThenGet() -> string {
+    alloc_map 0
+    store_var headers
+    load_var headers
+    load_const "a"
+    load_const "b"
+    call baml.Map.set
+    pop 1
+    load_type string
+    load_type string
+    load_var headers
+    load_const "a"
+    call baml.Map.get
+    store_var _3
+    load_var _3
+    store_var _0
+    load_var _3
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const ""
+    store_var _0
+
+  L0:
+    load_var _0
+    return
+}
