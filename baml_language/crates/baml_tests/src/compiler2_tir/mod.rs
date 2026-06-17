@@ -737,6 +737,10 @@ pub(crate) mod support {
                 let v = expr_desc(*value, body);
                 writeln!(output, "{pad}{t} {op:?}= {v}").ok();
             }
+            Stmt::Defer { body: defer_body } => {
+                let desc = expr_desc(*defer_body, body);
+                writeln!(output, "{pad}defer {desc}").ok();
+            }
             Stmt::Break => {
                 writeln!(output, "{pad}break").ok();
             }
@@ -893,6 +897,10 @@ pub(crate) mod support {
                 let val_desc = expr_desc(*value, body);
                 let val_ty = expr_ty(inference, *value);
                 writeln!(output, "{pad}{target_desc} {op:?}= {val_desc} : {val_ty}").ok();
+            }
+            Stmt::Defer { body: defer_body } => {
+                let desc = expr_desc(*defer_body, body);
+                writeln!(output, "{pad}defer {desc}").ok();
             }
             Stmt::Break => {
                 writeln!(output, "{pad}break").ok();
@@ -1879,6 +1887,10 @@ pub(crate) mod support {
                     "{} {op:?}= {}",
                     expr_desc_hir(*target, body, prefix, local_type_names),
                     expr_desc_hir(*value, body, prefix, local_type_names)
+                ),
+                Stmt::Defer { body: defer_body } => format!(
+                    "defer {}",
+                    expr_desc_hir(*defer_body, body, prefix, local_type_names)
                 ),
                 Stmt::Break => "break".into(),
                 Stmt::Continue => "continue".into(),
