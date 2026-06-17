@@ -11,26 +11,32 @@ use std::{
     },
 };
 
+use bex_events::run::{HeaderObservation, HostCallId, InMemoryRunStore};
 use bex_heap::BexHeap;
 use parking_lot::Mutex;
 use sys_ops::io::{self, owned};
 use sys_types::{CallId, SysOpContext, SysOpOutput, VmPanic};
 use tokio::sync::broadcast;
 
-use crate::playground_ws::WsOutMessage;
+use crate::{playground_runs::broadcast_run_patch, playground_ws::WsOutMessage};
 
 /// Shared state for the HTTP interceptor.
 pub struct PlaygroundHttpState {
     broadcast_tx: broadcast::Sender<WsOutMessage>,
+    run_store: Arc<InMemoryRunStore>,
     next_fetch_id: AtomicU64,
-    /// Maps response body pointer → (call_id, fetch_id) for response_text tracking.
-    response_to_fetch: Mutex<HashMap<usize, (u64, u64)>>,
+    /// Maps response body pointer → (host_call_id, fetch_id) for response body tracking.
+    response_to_fetch: Mutex<HashMap<usize, (CallId, u64)>>,
 }
 
 impl PlaygroundHttpState {
-    pub fn new(broadcast_tx: broadcast::Sender<WsOutMessage>) -> Self {
+    pub fn new(
+        broadcast_tx: broadcast::Sender<WsOutMessage>,
+        run_store: Arc<InMemoryRunStore>,
+    ) -> Self {
         Self {
             broadcast_tx,
+            run_store,
             next_fetch_id: AtomicU64::new(1),
             response_to_fetch: Mutex::new(HashMap::new()),
         }
@@ -49,6 +55,18 @@ fn extract_headers_as_hashmap(
     headers
         .iter()
         .map(|(k, v)| (k.clone(), v.clone()))
+        .collect()
+}
+
+fn redacted_headers_from_indexmap(
+    headers: &indexmap::IndexMap<String, String>,
+) -> Vec<HeaderObservation> {
+    headers
+        .keys()
+        .map(|name| HeaderObservation {
+            name: name.clone(),
+            value_redacted: true,
+        })
         .collect()
 }
 
@@ -73,11 +91,22 @@ impl io::IoClassHttpResponse for PlaygroundHttp {
         );
 
         match fetch_info {
-            Some((cid, fetch_id)) => match native_result {
+            Some((host_call_id, fetch_id)) => match native_result {
                 SysOpOutput::Async(fut) => SysOpOutput::async_op_with_throw(async move {
                     let text = fut.await?;
+                    if let Some(patch) = state.run_store.ingest_fetch_updated(
+                        &HostCallId::Native(host_call_id),
+                        fetch_id,
+                        None,
+                        None,
+                        Vec::new(),
+                        Some(text.len()),
+                        None,
+                    ) {
+                        broadcast_run_patch(&state.broadcast_tx, &patch);
+                    }
                     let _ = state.broadcast_tx.send(WsOutMessage::FetchLogUpdate {
-                        call_id: cid,
+                        call_id: host_call_id.0,
                         log_id: fetch_id,
                         status: None,
                         duration_ms: None,
@@ -113,11 +142,22 @@ impl io::IoClassHttpResponse for PlaygroundHttp {
         );
 
         match fetch_info {
-            Some((cid, fetch_id)) => match native_result {
+            Some((host_call_id, fetch_id)) => match native_result {
                 SysOpOutput::Async(fut) => SysOpOutput::async_op_with_throw(async move {
                     let bytes = fut.await?;
+                    if let Some(patch) = state.run_store.ingest_fetch_updated(
+                        &HostCallId::Native(host_call_id),
+                        fetch_id,
+                        None,
+                        None,
+                        Vec::new(),
+                        Some(bytes.len()),
+                        None,
+                    ) {
+                        broadcast_run_patch(&state.broadcast_tx, &patch);
+                    }
                     let _ = state.broadcast_tx.send(WsOutMessage::FetchLogUpdate {
-                        call_id: cid,
+                        call_id: host_call_id.0,
                         log_id: fetch_id,
                         status: None,
                         duration_ms: None,
@@ -247,12 +287,22 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
         ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::Response> {
         let state = self.0.clone();
-        let cid = call_id.0;
+        let cid = call_id;
         let fetch_id = state.next_fetch_id.fetch_add(1, Ordering::Relaxed);
         let start = std::time::Instant::now();
 
+        if let Some(patch) = state.run_store.ingest_fetch_started(
+            &HostCallId::Native(cid),
+            fetch_id,
+            request.method.clone(),
+            request.url.clone(),
+            redacted_headers_from_indexmap(&request.headers),
+            Some(request.body.len()),
+        ) {
+            broadcast_run_patch(&state.broadcast_tx, &patch);
+        }
         let _ = state.broadcast_tx.send(WsOutMessage::FetchLogNew {
-            call_id: cid,
+            call_id: cid.0,
             id: fetch_id,
             method: request.method.clone(),
             url: request.url.clone(),
@@ -283,8 +333,19 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
                             .iter()
                             .map(|(k, v)| (k.clone(), v.clone()))
                             .collect();
+                        if let Some(patch) = state.run_store.ingest_fetch_updated(
+                            &HostCallId::Native(cid),
+                            fetch_id,
+                            Some(resp.status_code),
+                            Some(elapsed),
+                            redacted_headers_from_indexmap(&resp.headers),
+                            None,
+                            None,
+                        ) {
+                            broadcast_run_patch(&state.broadcast_tx, &patch);
+                        }
                         let _ = state.broadcast_tx.send(WsOutMessage::FetchLogUpdate {
-                            call_id: cid,
+                            call_id: cid.0,
                             log_id: fetch_id,
                             status: Some(resp.status_code),
                             duration_ms: Some(elapsed),
@@ -294,8 +355,19 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
                         });
                     }
                     Err(e) => {
+                        if let Some(patch) = state.run_store.ingest_fetch_updated(
+                            &HostCallId::Native(cid),
+                            fetch_id,
+                            Some(0),
+                            Some(elapsed),
+                            Vec::new(),
+                            None,
+                            Some(format!("{e}")),
+                        ) {
+                            broadcast_run_patch(&state.broadcast_tx, &patch);
+                        }
                         let _ = state.broadcast_tx.send(WsOutMessage::FetchLogUpdate {
-                            call_id: cid,
+                            call_id: cid.0,
                             log_id: fetch_id,
                             status: Some(0),
                             duration_ms: Some(elapsed),
@@ -320,8 +392,19 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
                             .iter()
                             .map(|(k, v)| (k.clone(), v.clone()))
                             .collect();
+                        if let Some(patch) = state.run_store.ingest_fetch_updated(
+                            &HostCallId::Native(cid),
+                            fetch_id,
+                            Some(resp.status_code),
+                            Some(elapsed),
+                            redacted_headers_from_indexmap(&resp.headers),
+                            None,
+                            None,
+                        ) {
+                            broadcast_run_patch(&state.broadcast_tx, &patch);
+                        }
                         let _ = state.broadcast_tx.send(WsOutMessage::FetchLogUpdate {
-                            call_id: cid,
+                            call_id: cid.0,
                             log_id: fetch_id,
                             status: Some(resp.status_code),
                             duration_ms: Some(elapsed),
@@ -331,8 +414,19 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
                         });
                     }
                     Err(e) => {
+                        if let Some(patch) = state.run_store.ingest_fetch_updated(
+                            &HostCallId::Native(cid),
+                            fetch_id,
+                            Some(0),
+                            Some(elapsed),
+                            Vec::new(),
+                            None,
+                            Some(format!("{e}")),
+                        ) {
+                            broadcast_run_patch(&state.broadcast_tx, &patch);
+                        }
                         let _ = state.broadcast_tx.send(WsOutMessage::FetchLogUpdate {
-                            call_id: cid,
+                            call_id: cid.0,
                             log_id: fetch_id,
                             status: Some(0),
                             duration_ms: Some(elapsed),

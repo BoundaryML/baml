@@ -18,7 +18,7 @@ import {
   FlaskConical,
   Wrench,
 } from 'lucide-react';
-import type { FunctionInfo, RunEntry } from './worker-protocol';
+import type { FunctionInfo } from './worker-protocol';
 
 // ---------------------------------------------------------------------------
 // SerializedTestDef — the proto-decoded shape from TestRegistry.serialize()
@@ -214,8 +214,8 @@ export interface FunctionSidebarProps {
   failedExpands?: Set<string>;
   /** Called when the user clicks retry on a failed testset expansion */
   onRetryExpand?: (name: string) => void;
-  /** The synthetic collection RunEntry (if any) — used to show fetch log count badge */
-  collectionRun?: RunEntry | null;
+  /** Number of debug fetch logs captured while collecting or expanding tests. */
+  collectionLogCount?: number;
   /** True when the main panel is showing the collection view */
   viewingCollection?: boolean;
   /** Called when the user clicks the collection debug icon */
@@ -238,7 +238,7 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
   testRunResults,
   failedExpands,
   onRetryExpand,
-  collectionRun,
+  collectionLogCount,
   viewingCollection,
   onSelectCollectionView,
 }) => {
@@ -359,8 +359,8 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
                   className={`ml-auto h-5 w-5 ${viewingCollection ? 'text-vsc-accent' : 'text-vsc-text-faint hover:text-vsc-text'}`}
                   onClick={onSelectCollectionView}
                   title={
-                    collectionRun && collectionRun.fetchLogs.length > 0
-                      ? `View collection logs (${collectionRun.fetchLogs.length} request${collectionRun.fetchLogs.length !== 1 ? 's' : ''})`
+                    collectionLogCount && collectionLogCount > 0
+                      ? `View collection logs (${collectionLogCount} request${collectionLogCount !== 1 ? 's' : ''})`
                       : 'View collection logs'
                   }
                 >

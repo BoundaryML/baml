@@ -12,8 +12,9 @@
 //! grows losslessly, it never drops). Bounding that race is why the timeout
 //! exists — do not "fix" the race by adding producer-side blocking.
 
-// On wasm32 the consumer-side calls are compiled but unreachable — profiling
-// is forced off there; the deferred cooperative drain would use them.
+// On wasm32 there is no background consumer to wake; cooperative drains call
+// the registry directly. Keep the types compiled so shared ring code stays
+// dual-target without per-call-site cfgs.
 #![cfg_attr(target_arch = "wasm32", allow(dead_code))]
 
 pub(crate) use imp::Wake;

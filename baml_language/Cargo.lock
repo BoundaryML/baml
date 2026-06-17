@@ -1014,6 +1014,7 @@ dependencies = [
  "baml_compiler2_visualization",
  "baml_version",
  "base64",
+ "bex_events",
  "bex_heap",
  "bex_project",
  "bridge_ctypes",
@@ -1233,9 +1234,11 @@ dependencies = [
  "prost",
  "prost-build",
  "protoc-bin-vendored",
+ "serde_json",
  "smallvec",
  "sys_types",
  "uuid",
+ "web-time",
 ]
 
 [[package]]
@@ -1573,6 +1576,8 @@ version = "0.1.0"
 dependencies = [
  "baml_type",
  "baml_version",
+ "base64",
+ "bex_events",
  "bex_heap",
  "bex_project",
  "bridge_ctypes",

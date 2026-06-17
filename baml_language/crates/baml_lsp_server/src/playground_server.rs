@@ -23,6 +23,12 @@ use axum::{
     routing::get,
 };
 use base64::Engine as _;
+use bex_events::run::{
+    AttachRootTraceResult, CancellationState, ExecutionRequest, HostCallId, InMemoryRunStore,
+    ProjectGeneration, ProjectId, RequestId, RunCursor, RunCursorExpiredReason, RunError,
+    RunErrorClass, RunFilter, RunId, RunKind, RunOutcome, RunResult, RunSubscription, RunTarget,
+    RunVisibilityFilter,
+};
 use bex_project::{is_cancelled_engine_error, is_cancelled_runtime_error};
 use futures::{SinkExt, stream::StreamExt};
 use prost::Message;
@@ -31,7 +37,8 @@ use tokio::{net::TcpListener, sync::broadcast};
 use crate::{
     playground_env::PlaygroundEnvState,
     playground_io::PlaygroundIoState,
-    playground_ws::{WsInMessage, WsOutMessage},
+    playground_runs::{patch_to_wire, run_summary_to_wire, run_to_wire},
+    playground_ws::{RunListFilter, RunListKind, RunListVisibility, WsInMessage, WsOutMessage},
 };
 
 fn to_ws_text(msg: &WsOutMessage) -> Option<AxumWsMsg> {
@@ -42,6 +49,184 @@ fn to_ws_text(msg: &WsOutMessage) -> Option<AxumWsMsg> {
             None
         }
     }
+}
+
+fn epoch_ms() -> u64 {
+    let millis = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    u64::try_from(millis).unwrap_or(u64::MAX)
+}
+
+fn broadcast_run_started(
+    broadcast_tx: &broadcast::Sender<WsOutMessage>,
+    run_store: &InMemoryRunStore,
+    run_id: bex_events::run::RunId,
+    request_id: Option<u64>,
+) {
+    if let Some(run) = run_store.snapshot(run_id) {
+        let _ = broadcast_tx.send(WsOutMessage::RunStarted {
+            request_id,
+            run: run_to_wire(&run),
+        });
+    }
+}
+
+fn broadcast_run_patch(
+    broadcast_tx: &broadcast::Sender<WsOutMessage>,
+    patch: &bex_events::run::RunPatch,
+) {
+    let _ = broadcast_tx.send(WsOutMessage::RunPatch {
+        patch: patch_to_wire(patch),
+    });
+}
+
+async fn send_ws(sink: &mut futures::stream::SplitSink<WebSocket, AxumWsMsg>, msg: &WsOutMessage) {
+    if let Some(ws_msg) = to_ws_text(msg) {
+        let _ = sink.send(ws_msg).await;
+    }
+}
+
+#[derive(Clone, Copy)]
+struct FunctionRunClient {
+    request_id: u64,
+}
+
+impl FunctionRunClient {
+    fn request_id(self) -> u64 {
+        self.request_id
+    }
+
+    fn run_started_request_id(self) -> Option<u64> {
+        Some(self.request_id)
+    }
+
+    fn error(self, code: &'static str, message: String) -> WsOutMessage {
+        WsOutMessage::CommandError {
+            request_id: self.request_id,
+            code: code.to_string(),
+            message,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct FunctionRunTarget {
+    call_function_name: String,
+    run_target: RunTarget,
+}
+
+impl FunctionRunTarget {
+    fn function(function_name: String) -> Self {
+        Self {
+            call_function_name: function_name.clone(),
+            run_target: RunTarget::Function { function_name },
+        }
+    }
+
+    fn preview(parent_function_name: String, helper: String, function_name: String) -> Self {
+        Self {
+            call_function_name: function_name,
+            run_target: RunTarget::Preview {
+                parent_function_name,
+                helper,
+            },
+        }
+    }
+}
+
+fn parse_run_id_for_request(request_id: u64, run_id: &str) -> Result<RunId, WsOutMessage> {
+    RunId::from_wire_str(run_id).ok_or_else(|| WsOutMessage::CommandError {
+        request_id,
+        code: "invalidRunId".to_string(),
+        message: format!("Invalid runId: {run_id}"),
+    })
+}
+
+fn cursor_expired_reason_to_wire(reason: RunCursorExpiredReason) -> &'static str {
+    match reason {
+        RunCursorExpiredReason::Expired => "expired",
+        RunCursorExpiredReason::Compacted => "compacted",
+        RunCursorExpiredReason::Unknown => "unknown",
+        RunCursorExpiredReason::Future => "future",
+        RunCursorExpiredReason::Unavailable => "unavailable",
+    }
+}
+
+fn run_filter_from_wire(filter: Option<RunListFilter>) -> RunFilter {
+    let Some(filter) = filter else {
+        return RunFilter::default();
+    };
+    RunFilter {
+        project_id: filter.project_id.map(ProjectId),
+        project_generation: filter.project_generation.map(ProjectGeneration),
+        kinds: filter
+            .kinds
+            .unwrap_or_default()
+            .into_iter()
+            .map(run_kind_from_wire)
+            .collect(),
+        statuses: Vec::new(),
+        call_tree_contains_function: filter.call_tree_contains_function,
+        visibility: filter
+            .visibility
+            .map(run_visibility_from_wire)
+            .unwrap_or_default(),
+    }
+}
+
+fn run_kind_from_wire(kind: RunListKind) -> RunKind {
+    match kind {
+        RunListKind::Function => RunKind::Function,
+        RunListKind::Test => RunKind::Test,
+        RunListKind::Preview => RunKind::Preview,
+        RunListKind::Companion => RunKind::Companion,
+        RunListKind::Internal => RunKind::Internal,
+    }
+}
+
+fn run_visibility_from_wire(visibility: RunListVisibility) -> RunVisibilityFilter {
+    match visibility {
+        RunListVisibility::HistoryOnly => RunVisibilityFilter::HistoryOnly,
+        RunListVisibility::IncludeHidden => RunVisibilityFilter::IncludeHidden,
+        RunListVisibility::AllForDebug => RunVisibilityFilter::AllForDebug,
+    }
+}
+
+fn runtime_error_class(err: &bex_project::RuntimeError) -> RunErrorClass {
+    match err {
+        bex_project::RuntimeError::InvalidArgument { .. } => RunErrorClass::Validation,
+        bex_project::RuntimeError::Access(_) => RunErrorClass::Host,
+        bex_project::RuntimeError::Other(_) | bex_project::RuntimeError::Compilation { .. } => {
+            RunErrorClass::Host
+        }
+        bex_project::RuntimeError::Engine(_) => RunErrorClass::Runtime,
+    }
+}
+
+fn runtime_error_outcome(err: &bex_project::RuntimeError) -> RunOutcome {
+    if is_cancelled_runtime_error(err) {
+        let now = epoch_ms();
+        return RunOutcome::Cancelled(CancellationState {
+            requested_at_ms: now,
+            completed_at_ms: Some(now),
+            reason: Some(format!("{err}")),
+        });
+    }
+    RunOutcome::Failed(RunError {
+        class: runtime_error_class(err),
+        message: format!("{err}"),
+        details: None,
+    })
+}
+
+fn host_error_outcome(message: String) -> RunOutcome {
+    RunOutcome::Failed(RunError {
+        class: RunErrorClass::Host,
+        message,
+        details: None,
+    })
 }
 
 /// Find an available TCP port starting from `base_port`.
@@ -71,6 +256,7 @@ struct WsState {
     broadcast_tx: broadcast::Sender<WsOutMessage>,
     env_state: Arc<PlaygroundEnvState>,
     io_state: Arc<PlaygroundIoState>,
+    run_store: Arc<InMemoryRunStore>,
 }
 
 /// Start the playground server on the given listener.
@@ -80,8 +266,9 @@ pub async fn run(
     broadcast_tx: broadcast::Sender<WsOutMessage>,
     env_state: Arc<PlaygroundEnvState>,
     io_state: Arc<PlaygroundIoState>,
+    run_store: Arc<InMemoryRunStore>,
 ) -> anyhow::Result<()> {
-    let app = build_router(bex, broadcast_tx, env_state, io_state)?;
+    let app = build_router(bex, broadcast_tx, env_state, io_state, run_store)?;
 
     tracing::info!(
         "Playground: http://localhost:{}",
@@ -98,12 +285,14 @@ fn build_router(
     broadcast_tx: broadcast::Sender<WsOutMessage>,
     env_state: Arc<PlaygroundEnvState>,
     io_state: Arc<PlaygroundIoState>,
+    run_store: Arc<InMemoryRunStore>,
 ) -> anyhow::Result<Router> {
     let ws_state = WsState {
         bex,
         broadcast_tx,
         env_state,
         io_state,
+        run_store,
     };
 
     let api = Router::new()
@@ -233,188 +422,558 @@ async fn playground_ws_session(socket: WebSocket, state: WsState) {
     tracing::debug!("Playground WS session ended");
 }
 
-async fn handle_ws_in_message(
-    msg: WsInMessage,
+async fn handle_function_run(
+    client: FunctionRunClient,
+    project: String,
+    target: FunctionRunTarget,
+    args_bytes: String,
+    call_id: sys_types::CallId,
     state: &WsState,
     sink: &mut futures::stream::SplitSink<WebSocket, AxumWsMsg>,
 ) {
-    match msg {
-        WsInMessage::NextFunctionCall { id } => {
-            let msg = WsOutMessage::NextFunctionCallResult {
-                id,
-                call_id: sys_types::CallId::next().0,
-            };
-            if let Some(ws_msg) = to_ws_text(&msg) {
-                let _ = sink.send(ws_msg).await;
-            }
+    let decoded = match base64::engine::general_purpose::STANDARD.decode(&args_bytes) {
+        Ok(d) => d,
+        Err(e) => {
+            send_ws(
+                sink,
+                &client.error("invalidBase64", format!("Invalid base64: {e}")),
+            )
+            .await;
+            return;
         }
-        WsInMessage::CallFunction {
-            id,
-            project,
-            name,
-            args_proto,
-        } => {
-            let decoded = match base64::engine::general_purpose::STANDARD.decode(&args_proto) {
-                Ok(d) => d,
-                Err(e) => {
-                    let err_msg = WsOutMessage::CallFunctionError {
-                        id,
-                        error: format!("Invalid base64: {e}"),
-                        cancelled: None,
-                    };
-                    if let Some(ws_msg) = to_ws_text(&err_msg) {
-                        let _ = sink.send(ws_msg).await;
+    };
+
+    let kwargs = match bridge_ctypes::playground_run_args_to_bex_values(
+        decoded.as_slice(),
+        &bridge_ctypes::HANDLE_TABLE,
+    ) {
+        Ok(k) => k,
+        Err(e) => {
+            send_ws(
+                sink,
+                &client.error(
+                    "invalidArguments",
+                    format!("Failed to convert arguments: {e}"),
+                ),
+            )
+            .await;
+            return;
+        }
+    };
+
+    let broadcast_tx = state.broadcast_tx.clone();
+    let project_generation = state.bex.project_generation(&project).unwrap_or(0);
+    let fs_path = bex_project::FsPath::from_str(project);
+    let function_call_ctx = bex_project::FunctionCallContextBuilder::new(call_id);
+
+    let bex = match state.bex.get_bex_for_project(&fs_path) {
+        Ok(bex) => bex,
+        Err(e) => {
+            send_ws(
+                sink,
+                &client.error(
+                    "projectMissing",
+                    format!("Failed to get Bex for project: {e}"),
+                ),
+            )
+            .await;
+            return;
+        }
+    };
+
+    let run_store = state.run_store.clone();
+    let start = run_store.create_run(
+        ExecutionRequest {
+            project_id: ProjectId(fs_path.as_path().to_string_lossy().to_string()),
+            project_generation: ProjectGeneration(project_generation),
+            target: target.run_target.clone(),
+            args_summary: None,
+            options_summary: None,
+        },
+        RequestId(client.request_id()),
+    );
+    broadcast_run_started(
+        &broadcast_tx,
+        &run_store,
+        start.run_id,
+        client.run_started_request_id(),
+    );
+    if let Some(patch) = run_store.attach_host_call(start.run_id, HostCallId::Native(call_id)) {
+        broadcast_run_patch(&broadcast_tx, &patch);
+    }
+
+    tokio::spawn(async move {
+        let handle_options = bridge_ctypes::CffiHandleTableOptions::for_wire();
+        let function_name = target.call_function_name;
+        match bex
+            .call_function_with_trace(&function_name, kwargs.into(), function_call_ctx.build())
+            .await
+        {
+            Ok(traced) => {
+                match run_store.attach_root_trace(start.run_id, traced.entry_call_ref) {
+                    AttachRootTraceResult::Attached { patches } => {
+                        for patch in patches {
+                            broadcast_run_patch(&broadcast_tx, &patch);
+                        }
                     }
-                    return;
-                }
-            };
-
-            let args = match bridge_ctypes::baml_core::cffi::CallFunctionArgs::decode(
-                decoded.as_slice(),
-            ) {
-                Ok(a) => a,
-                Err(e) => {
-                    let err_msg = WsOutMessage::CallFunctionError {
-                        id,
-                        error: format!("Failed to decode arguments: {e}"),
-                        cancelled: None,
-                    };
-                    if let Some(ws_msg) = to_ws_text(&err_msg) {
-                        let _ = sink.send(ws_msg).await;
+                    AttachRootTraceResult::AlreadyAttached => {}
+                    AttachRootTraceResult::RunMissing => {
+                        tracing::warn!("RunStore missing run {}", start.run_id.to_wire_string());
                     }
-                    return;
-                }
-            };
-
-            let kwargs = match bridge_ctypes::kwargs_to_bex_values(
-                args.kwargs,
-                &bridge_ctypes::HANDLE_TABLE,
-            ) {
-                Ok(k) => k,
-                Err(e) => {
-                    let err_msg = WsOutMessage::CallFunctionError {
-                        id,
-                        error: format!("Failed to convert arguments: {e}"),
-                        cancelled: None,
-                    };
-                    if let Some(ws_msg) = to_ws_text(&err_msg) {
-                        let _ = sink.send(ws_msg).await;
+                    AttachRootTraceResult::Conflict { existing } => {
+                        tracing::warn!(
+                            "RunStore root trace conflict for {}: existing {}",
+                            start.run_id.to_wire_string(),
+                            existing.encode()
+                        );
                     }
-                    return;
                 }
-            };
 
-            let broadcast_tx = state.broadcast_tx.clone();
-            let call_id = sys_types::CallId(args.call_id);
-            let fs_path = bex_project::FsPath::from_str(project);
-
-            let function_call_ctx = bex_project::FunctionCallContextBuilder::new(call_id);
-
-            let bex = match state.bex.get_bex_for_project(&fs_path).map_err(|e| {
-                WsOutMessage::CallFunctionError {
-                    id,
-                    error: format!("Failed to get Bex for project: {e}"),
-                    cancelled: None,
-                }
-            }) {
-                Ok(bex) => bex,
-                Err(e) => {
-                    if let Some(ws_msg) = to_ws_text(&e) {
-                        let _ = sink.send(ws_msg).await;
-                    }
-                    return;
-                }
-            };
-
-            tokio::spawn(async move {
-                let handle_options = bridge_ctypes::CffiHandleTableOptions::for_wire();
-                let out = match bex
-                    .call_function(&name, kwargs.into(), function_call_ctx.build())
-                    .await
-                {
+                match traced.value {
                     Ok(result) => {
                         match bridge_ctypes::external_to_outbound(&result, &handle_options) {
                             Ok(baml_val) => {
                                 let b64 = base64::engine::general_purpose::STANDARD
                                     .encode(baml_val.encode_to_vec());
-                                WsOutMessage::CallFunctionResult { id, result: b64 }
+                                if let Some(patch) = run_store.complete_run(
+                                    start.run_id,
+                                    RunOutcome::Succeeded(RunResult {
+                                        value: Some(b64.clone()),
+                                        renderer_hint: Some("baml.outbound.base64".to_string()),
+                                        supporting_payload_ids: Vec::new(),
+                                    }),
+                                    epoch_ms(),
+                                ) {
+                                    broadcast_run_patch(&broadcast_tx, &patch);
+                                }
                             }
-                            Err(e) => WsOutMessage::CallFunctionError {
-                                id,
-                                error: format!("Failed to encode result: {e}"),
-                                cancelled: None,
-                            },
+                            Err(e) => {
+                                let message = format!("Failed to encode result: {e}");
+                                if let Some(patch) = run_store.complete_run(
+                                    start.run_id,
+                                    host_error_outcome(message.clone()),
+                                    epoch_ms(),
+                                ) {
+                                    broadcast_run_patch(&broadcast_tx, &patch);
+                                }
+                            }
                         }
                     }
                     Err(e) => {
-                        let is_cancelled = is_cancelled_runtime_error(&e);
-                        WsOutMessage::CallFunctionError {
-                            id,
-                            error: format!("{e}"),
-                            cancelled: if is_cancelled { Some(true) } else { None },
+                        if let Some(patch) = run_store.complete_run(
+                            start.run_id,
+                            runtime_error_outcome(&e),
+                            epoch_ms(),
+                        ) {
+                            broadcast_run_patch(&broadcast_tx, &patch);
                         }
                     }
-                };
-                let _ = broadcast_tx.send(out);
-            });
-        }
-
-        WsInMessage::CancelCall { id, project } => {
-            let fs_path = bex_project::FsPath::from_str(project);
-            match state.bex.get_bex_for_project(&fs_path) {
-                Ok(bex) => {
-                    if let Err(e) = bex.cancel_function_call(sys_types::CallId(id)) {
-                        tracing::warn!("cancel_function_call failed: {e}");
-                    }
-                }
-                Err(e) => {
-                    tracing::warn!("CancelCall: no bex for project: {e}");
                 }
             }
-        }
-
-        WsInMessage::CallTestFunction {
-            id,
-            project,
-            generation,
-            test_name,
-        } => {
-            let call_id = sys_types::CallId(id);
-            let ctx = bex_project::FunctionCallContextBuilder::new(call_id).build();
-            let broadcast_tx = state.broadcast_tx.clone();
-            let bex = state.bex.clone();
-
-            tokio::spawn(async move {
-                let out = match bex
-                    .call_test_function(&project, generation, &test_name, ctx)
-                    .await
+            Err(e) => {
+                if let Some(patch) =
+                    run_store.complete_run(start.run_id, runtime_error_outcome(&e), epoch_ms())
                 {
+                    broadcast_run_patch(&broadcast_tx, &patch);
+                }
+            }
+        };
+    });
+}
+
+fn handle_test_run(
+    client: FunctionRunClient,
+    project: String,
+    generation: u64,
+    test_name: String,
+    call_id: sys_types::CallId,
+    state: &WsState,
+) {
+    let ctx = bex_project::FunctionCallContextBuilder::new(call_id).build();
+    let broadcast_tx = state.broadcast_tx.clone();
+    let bex = state.bex.clone();
+    let run_store = state.run_store.clone();
+    let start = run_store.create_run(
+        ExecutionRequest {
+            project_id: ProjectId(project.clone()),
+            project_generation: ProjectGeneration(generation),
+            target: RunTarget::Test {
+                generation: ProjectGeneration(generation),
+                test_name: test_name.clone(),
+            },
+            args_summary: None,
+            options_summary: None,
+        },
+        RequestId(client.request_id()),
+    );
+    broadcast_run_started(
+        &broadcast_tx,
+        &run_store,
+        start.run_id,
+        client.run_started_request_id(),
+    );
+    if let Some(patch) = run_store.attach_host_call(start.run_id, HostCallId::Native(call_id)) {
+        broadcast_run_patch(&broadcast_tx, &patch);
+    }
+
+    tokio::spawn(async move {
+        match bex
+            .call_test_function_with_trace(&project, generation, &test_name, ctx)
+            .await
+        {
+            Ok(traced) => {
+                match run_store.attach_root_trace(start.run_id, traced.entry_call_ref) {
+                    AttachRootTraceResult::Attached { patches } => {
+                        for patch in patches {
+                            broadcast_run_patch(&broadcast_tx, &patch);
+                        }
+                    }
+                    AttachRootTraceResult::AlreadyAttached => {}
+                    AttachRootTraceResult::RunMissing => {
+                        tracing::warn!(
+                            "RunStore missing test run {}",
+                            start.run_id.to_wire_string()
+                        );
+                    }
+                    AttachRootTraceResult::Conflict { existing } => {
+                        tracing::warn!(
+                            "RunStore test root trace conflict for {}: existing {}",
+                            start.run_id.to_wire_string(),
+                            existing.encode()
+                        );
+                    }
+                }
+
+                match traced.value {
                     Ok(result) => {
                         let handle_options = bridge_ctypes::CffiHandleTableOptions::for_wire();
                         match bridge_ctypes::external_to_outbound(&result, &handle_options) {
                             Ok(baml_val) => {
                                 let b64 = base64::engine::general_purpose::STANDARD
                                     .encode(baml_val.encode_to_vec());
-                                WsOutMessage::CallFunctionResult { id, result: b64 }
+                                if let Some(patch) = run_store.complete_run(
+                                    start.run_id,
+                                    RunOutcome::Succeeded(RunResult {
+                                        value: Some(b64.clone()),
+                                        renderer_hint: Some("testReport".to_string()),
+                                        supporting_payload_ids: Vec::new(),
+                                    }),
+                                    epoch_ms(),
+                                ) {
+                                    broadcast_run_patch(&broadcast_tx, &patch);
+                                }
                             }
-                            Err(e) => WsOutMessage::CallFunctionError {
-                                id,
-                                error: format!("Failed to encode result: {e}"),
-                                cancelled: None,
-                            },
+                            Err(e) => {
+                                let message = format!("Failed to encode result: {e}");
+                                if let Some(patch) = run_store.complete_run(
+                                    start.run_id,
+                                    host_error_outcome(message.clone()),
+                                    epoch_ms(),
+                                ) {
+                                    broadcast_run_patch(&broadcast_tx, &patch);
+                                }
+                            }
                         }
                     }
                     Err(e) => {
                         let is_cancelled = is_cancelled_engine_error(&e);
-                        WsOutMessage::CallFunctionError {
-                            id,
-                            error: format!("{e}"),
-                            cancelled: if is_cancelled { Some(true) } else { None },
+                        let outcome = if is_cancelled {
+                            let now = epoch_ms();
+                            RunOutcome::Cancelled(CancellationState {
+                                requested_at_ms: now,
+                                completed_at_ms: Some(now),
+                                reason: Some(format!("{e}")),
+                            })
+                        } else {
+                            RunOutcome::Failed(RunError {
+                                class: RunErrorClass::Runtime,
+                                message: format!("{e}"),
+                                details: None,
+                            })
+                        };
+                        if let Some(patch) =
+                            run_store.complete_run(start.run_id, outcome, epoch_ms())
+                        {
+                            broadcast_run_patch(&broadcast_tx, &patch);
                         }
                     }
+                }
+            }
+            Err(e) => {
+                let is_cancelled = is_cancelled_engine_error(&e);
+                let outcome = if is_cancelled {
+                    let now = epoch_ms();
+                    RunOutcome::Cancelled(CancellationState {
+                        requested_at_ms: now,
+                        completed_at_ms: Some(now),
+                        reason: Some(format!("{e}")),
+                    })
+                } else {
+                    RunOutcome::Failed(RunError {
+                        class: RunErrorClass::Runtime,
+                        message: format!("{e}"),
+                        details: None,
+                    })
                 };
-                let _ = broadcast_tx.send(out);
-            });
+                if let Some(patch) = run_store.complete_run(start.run_id, outcome, epoch_ms()) {
+                    broadcast_run_patch(&broadcast_tx, &patch);
+                }
+            }
+        };
+    });
+}
+
+async fn handle_ws_in_message(
+    msg: WsInMessage,
+    state: &WsState,
+    sink: &mut futures::stream::SplitSink<WebSocket, AxumWsMsg>,
+) {
+    match msg {
+        WsInMessage::StartRun {
+            request_id,
+            project,
+            function_name,
+            args_bytes,
+        } => {
+            handle_function_run(
+                FunctionRunClient { request_id },
+                project,
+                FunctionRunTarget::function(function_name),
+                args_bytes,
+                sys_types::CallId::next(),
+                state,
+                sink,
+            )
+            .await;
+        }
+
+        WsInMessage::StartPreviewRun {
+            request_id,
+            project,
+            parent_function_name,
+            helper,
+            function_name,
+            args_bytes,
+        } => {
+            handle_function_run(
+                FunctionRunClient { request_id },
+                project,
+                FunctionRunTarget::preview(parent_function_name, helper, function_name),
+                args_bytes,
+                sys_types::CallId::next(),
+                state,
+                sink,
+            )
+            .await;
+        }
+
+        WsInMessage::CancelRun { request_id, run_id } => {
+            let run_id = match parse_run_id_for_request(request_id, &run_id) {
+                Ok(run_id) => run_id,
+                Err(msg) => {
+                    send_ws(sink, &msg).await;
+                    return;
+                }
+            };
+            let project_id = state
+                .run_store
+                .snapshot(run_id)
+                .map(|run| run.request.project_id.0);
+
+            let response = match state.run_store.cancel_run(run_id, epoch_ms(), None) {
+                bex_events::run::CancelRunEffect::CancelHostCall {
+                    host_call_id,
+                    patch,
+                } => {
+                    broadcast_run_patch(&state.broadcast_tx, &patch);
+                    state.io_state.cancel_for_host_call(&host_call_id);
+                    state.env_state.cancel_for_host_call(&host_call_id);
+                    match (host_call_id, project_id) {
+                        (HostCallId::Native(call_id), Some(project_id)) => {
+                            let fs_path = bex_project::FsPath::from_str(project_id);
+                            match state.bex.get_bex_for_project(&fs_path) {
+                                Ok(bex) => match bex.cancel_function_call(call_id) {
+                                    Ok(()) => WsOutMessage::CommandAck {
+                                        request_id,
+                                        outcome: "accepted".to_string(),
+                                    },
+                                    Err(e) => WsOutMessage::CommandError {
+                                        request_id,
+                                        code: "hostCancelFailed".to_string(),
+                                        message: format!("{e}"),
+                                    },
+                                },
+                                Err(e) => WsOutMessage::CommandError {
+                                    request_id,
+                                    code: "projectMissing".to_string(),
+                                    message: format!("{e}"),
+                                },
+                            }
+                        }
+                        (other, _) => WsOutMessage::CommandError {
+                            request_id,
+                            code: "unsupportedHostCallId".to_string(),
+                            message: format!(
+                                "cancelRun resolved to unsupported host id: {other:?}"
+                            ),
+                        },
+                    }
+                }
+                bex_events::run::CancelRunEffect::CancelledBeforeHost { patch } => {
+                    broadcast_run_patch(&state.broadcast_tx, &patch);
+                    WsOutMessage::CommandAck {
+                        request_id,
+                        outcome: "accepted".to_string(),
+                    }
+                }
+                bex_events::run::CancelRunEffect::AlreadyTerminal => WsOutMessage::CommandAck {
+                    request_id,
+                    outcome: "alreadyTerminal".to_string(),
+                },
+                bex_events::run::CancelRunEffect::RunMissing => WsOutMessage::CommandError {
+                    request_id,
+                    code: "runMissing".to_string(),
+                    message: "Run not found".to_string(),
+                },
+            };
+            send_ws(sink, &response).await;
+        }
+
+        WsInMessage::ListRuns { request_id, filter } => {
+            let runs = state
+                .run_store
+                .list_runs(run_filter_from_wire(filter))
+                .iter()
+                .map(run_summary_to_wire)
+                .collect();
+            send_ws(sink, &WsOutMessage::RunList { request_id, runs }).await;
+        }
+
+        WsInMessage::Snapshot { request_id, run_id } => {
+            let run_id = match parse_run_id_for_request(request_id, &run_id) {
+                Ok(run_id) => run_id,
+                Err(msg) => {
+                    send_ws(sink, &msg).await;
+                    return;
+                }
+            };
+            match state.run_store.snapshot(run_id) {
+                Some(snapshot) => {
+                    send_ws(
+                        sink,
+                        &WsOutMessage::RunSnapshot {
+                            request_id: Some(request_id),
+                            run_id: run_id.to_wire_string(),
+                            snapshot: run_to_wire(&snapshot),
+                        },
+                    )
+                    .await;
+                }
+                None => {
+                    send_ws(
+                        sink,
+                        &WsOutMessage::CommandError {
+                            request_id,
+                            code: "runMissing".to_string(),
+                            message: "Run not found".to_string(),
+                        },
+                    )
+                    .await;
+                }
+            }
+        }
+
+        WsInMessage::Subscribe {
+            request_id,
+            subscription_id,
+            run_id,
+            after_cursor,
+        } => {
+            let run_id = match parse_run_id_for_request(request_id, &run_id) {
+                Ok(run_id) => run_id,
+                Err(msg) => {
+                    send_ws(sink, &msg).await;
+                    return;
+                }
+            };
+            match state
+                .run_store
+                .subscribe(run_id, after_cursor.map(RunCursor))
+            {
+                RunSubscription::Snapshot { snapshot, patches } => {
+                    send_ws(
+                        sink,
+                        &WsOutMessage::RunSnapshot {
+                            request_id: Some(request_id),
+                            run_id: run_id.to_wire_string(),
+                            snapshot: run_to_wire(&snapshot),
+                        },
+                    )
+                    .await;
+                    for patch in patches {
+                        send_ws(
+                            sink,
+                            &WsOutMessage::RunPatch {
+                                patch: patch_to_wire(&patch),
+                            },
+                        )
+                        .await;
+                    }
+                }
+                RunSubscription::CursorExpired { reason, .. } => {
+                    send_ws(
+                        sink,
+                        &WsOutMessage::RunCursorExpired {
+                            request_id: Some(request_id),
+                            subscription_id: Some(subscription_id),
+                            run_id: run_id.to_wire_string(),
+                            reason: cursor_expired_reason_to_wire(reason).to_string(),
+                        },
+                    )
+                    .await;
+                }
+                RunSubscription::Missing { .. } => {
+                    send_ws(
+                        sink,
+                        &WsOutMessage::CommandError {
+                            request_id,
+                            code: "runMissing".to_string(),
+                            message: "Run not found".to_string(),
+                        },
+                    )
+                    .await;
+                }
+            }
+        }
+
+        WsInMessage::Unsubscribe {
+            request_id,
+            subscription_id: _,
+        } => {
+            send_ws(
+                sink,
+                &WsOutMessage::CommandAck {
+                    request_id,
+                    outcome: "accepted".to_string(),
+                },
+            )
+            .await;
+        }
+
+        WsInMessage::StartTestRun {
+            request_id,
+            project,
+            generation,
+            test_name,
+        } => {
+            handle_test_run(
+                FunctionRunClient { request_id },
+                project,
+                generation,
+                test_name,
+                sys_types::CallId::next(),
+                state,
+            );
         }
 
         WsInMessage::ExpandTestSet {
@@ -425,6 +984,88 @@ async fn handle_ws_in_message(
             state
                 .bex
                 .expand_test_set(&project, generation, &testset_name);
+        }
+
+        WsInMessage::RespondToInput {
+            request_id,
+            run_id,
+            input_request_id,
+            value,
+        } => {
+            let run_id = match parse_run_id_for_request(request_id, &run_id) {
+                Ok(run_id) => run_id,
+                Err(msg) => {
+                    send_ws(sink, &msg).await;
+                    return;
+                }
+            };
+            let input_request_id = match input_request_id.parse::<u64>() {
+                Ok(id) => id,
+                Err(_) => {
+                    send_ws(
+                        sink,
+                        &WsOutMessage::CommandError {
+                            request_id,
+                            code: "invalidInputRequestId".to_string(),
+                            message: format!("Invalid inputRequestId: {input_request_id}"),
+                        },
+                    )
+                    .await;
+                    return;
+                }
+            };
+            let outcome = state
+                .io_state
+                .resolve_for_run(run_id, input_request_id, value);
+            send_ws(
+                sink,
+                &WsOutMessage::CommandAck {
+                    request_id,
+                    outcome: outcome.to_string(),
+                },
+            )
+            .await;
+        }
+
+        WsInMessage::RespondToEnv {
+            request_id,
+            run_id,
+            env_request_id,
+            value,
+        } => {
+            let run_id = match parse_run_id_for_request(request_id, &run_id) {
+                Ok(run_id) => run_id,
+                Err(msg) => {
+                    send_ws(sink, &msg).await;
+                    return;
+                }
+            };
+            let env_request_id = match env_request_id.parse::<u64>() {
+                Ok(id) => id,
+                Err(_) => {
+                    send_ws(
+                        sink,
+                        &WsOutMessage::CommandError {
+                            request_id,
+                            code: "invalidEnvRequestId".to_string(),
+                            message: format!("Invalid envRequestId: {env_request_id}"),
+                        },
+                    )
+                    .await;
+                    return;
+                }
+            };
+            let outcome = state
+                .env_state
+                .resolve_for_run(run_id, env_request_id, value);
+            send_ws(
+                sink,
+                &WsOutMessage::CommandAck {
+                    request_id,
+                    outcome: outcome.to_string(),
+                },
+            )
+            .await;
         }
 
         WsInMessage::EnvVarResponse { id, value, .. } => {

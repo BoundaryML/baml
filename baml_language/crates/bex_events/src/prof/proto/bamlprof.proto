@@ -67,6 +67,14 @@ message CallFunction {
   // is the cross-run key.
   uint32 function_id = 4;
   uint64 timestamp_ns = 5;
+  // Caller-side source span for the invocation that produced this call.
+  // Derived from VM/compiler source maps when available; absent means graph
+  // overlay projection must leave the call unattached rather than guessing by
+  // callee name or timing.
+  optional uint32 call_site_file_id = 6;
+  optional uint32 call_site_start_offset = 7;
+  optional uint32 call_site_end_offset = 8;
+  optional uint32 call_site_line = 9;
 }
 
 // Reserved at M2-M4; the M1 `$id` language surface emits it. Sets the call's
@@ -145,6 +153,10 @@ message EventFileHeaderV1 {
   uint64 tick_ns_numer = 7;
   uint64 tick_ns_denom = 8;
   ClockQuality clock_quality = 9;
+  // Durable source/revision metadata when available. These are artifact
+  // metadata, not playground RunId and not hot-path semantic hashes.
+  optional string source_snapshot_id = 10;
+  optional string revision_id = 11;
 }
 
 // Which hardware source produced event timestamps (header diagnostics).
@@ -184,4 +196,10 @@ message FunctionMetadata {
   uint32 span_end = 5;
   // "bytecode" | "sysop" | "native" (interim provider; M0 finalizes).
   string kind = 6;
+  optional string definition_key = 7;
+  optional string owner_type = 8;
+  optional string parent_function = 9;
+  optional string lambda_path = 10;
+  optional string package_name = 11;
+  repeated string namespace = 12;
 }

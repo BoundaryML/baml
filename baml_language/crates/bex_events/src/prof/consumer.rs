@@ -32,39 +32,28 @@ use std::{
     collections::HashMap,
     io,
     path::PathBuf,
-    sync::{Mutex, OnceLock, mpsc},
+    sync::{OnceLock, mpsc},
     time::{Duration, Instant},
 };
 
-use crate::prof::{
-    EngineProfileMetadata,
-    clock::{self, TickConverter},
-    config::ProfConfig,
-    file::{ProfileWriter, build_header},
-    pb,
-    record::{self, FunctionEndStatus, RawRecord, ThreadEndStatus},
-    registry::Registry,
-    ring::{Ring, RingCtx},
+use crate::{
+    ids::{EngineId, ProcessEuid},
+    prof::{
+        clock::{self, TickConverter},
+        config::ProfConfig,
+        encode::build_header,
+        file::ProfileWriter,
+        metadata, pb, record,
+        registry::Registry,
+        ring::{Ring, RingCtx},
+        transcode::to_disk_event,
+    },
+    run::{ProfileEventSource, RuntimeTarget, profile_event_envelope_from_disk_event},
 };
 
 /// How often the consumer stamps a process-liveness heartbeat into every
 /// open file (MVP: consumer-stamped, v2 §4).
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(1);
-
-fn engine_meta() -> &'static Mutex<HashMap<u64, EngineProfileMetadata>> {
-    static META: OnceLock<Mutex<HashMap<u64, EngineProfileMetadata>>> = OnceLock::new();
-    META.get_or_init(|| Mutex::new(HashMap::new()))
-}
-
-/// Registers an engine's header metadata. Call before (or shortly after) the
-/// engine starts producing: the header is written when the consumer opens
-/// the engine's file, i.e. when its first events are drained.
-pub fn register_engine_metadata(engine_id: u64, meta: EngineProfileMetadata) {
-    engine_meta()
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .insert(engine_id, meta);
-}
 
 pub(crate) enum ControlMsg {
     /// Drain everything currently committed, sync files durably, then ack.
@@ -155,14 +144,17 @@ pub fn flush_and_join(timeout: Duration) -> bool {
 /// Notifies the consumer that an engine was dropped (called from
 /// `BexEngine::drop`): its remaining events are drained, its `.bamlprof` is
 /// synced and closed (freeing the fd and stopping its heartbeats), and its
-/// metadata entry is freed. Non-blocking — safe from `Drop`. A no-op when
-/// profiling never started.
+/// metadata entry is freed. Non-blocking — safe from `Drop`. If profiling
+/// never started, only the shared metadata entry is removed.
 pub fn engine_closed(engine_id: u64) {
     let Some(tx) = CONTROL_TX.get() else {
+        let _ = metadata::remove_engine_metadata(engine_id);
         return;
     };
     if tx.send(ControlMsg::EngineClosed(engine_id)).is_ok() {
         crate::prof::registry::global_ctx().wake().force_wake();
+    } else {
+        let _ = metadata::remove_engine_metadata(engine_id);
     }
 }
 
@@ -275,6 +267,7 @@ impl ConsumerState {
         // so the writer borrow below covers no other `self` access.
         let conv = self.conv.clone();
         let already_reported = self.corrupt_reported;
+        let process_id = self.process_id;
         let Some(writer) = self.writer_for(engine_id) else {
             return;
         };
@@ -285,6 +278,17 @@ impl ConsumerState {
             match rec {
                 Ok(raw) => {
                     let event = to_disk_event(&raw, &conv);
+                    if let Some(envelope) = profile_event_envelope_from_disk_event(
+                        ProfileEventSource::Live {
+                            target: RuntimeTarget::Native,
+                            source_id: "bex-prof-consumer".to_string(),
+                        },
+                        ProcessEuid(process_id),
+                        EngineId(engine_id),
+                        &event,
+                    ) {
+                        crate::run::publish_profile_event(envelope);
+                    }
                     writer.encode_event(&event);
                 }
                 // A committed range that fails to decode is a producer bug:
@@ -316,11 +320,7 @@ impl ConsumerState {
         self.writers
             .entry(engine_id)
             .or_insert_with(|| {
-                let meta = engine_meta()
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .get(&engine_id)
-                    .cloned();
+                let meta = metadata::get_engine_metadata(engine_id);
                 let header = build_header(
                     self.process_id,
                     engine_id,
@@ -399,10 +399,7 @@ impl ConsumerState {
                 writer.path().display()
             ));
         }
-        engine_meta()
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .remove(&engine_id);
+        let _ = metadata::remove_engine_metadata(engine_id);
         self.closed_engines.insert(engine_id);
     }
 
@@ -436,84 +433,6 @@ impl ConsumerState {
     }
 }
 
-/// Transcoding converts raw ticks to nanoseconds (`conv`); everything else
-/// is a pure encoding change — content identical to the ring record, with
-/// the `0 = none` conventions becoming `Option`s (v2 §4).
-fn to_disk_event(raw: &RawRecord<'_>, conv: &TickConverter) -> pb::DiskEventV1 {
-    use pb::disk_event_v1::Event;
-    let event = match *raw {
-        RawRecord::CallFunction {
-            flags: _,
-            thread_id,
-            call_id,
-            parent_call_id,
-            function_id,
-            ts_ticks,
-        } => Event::CallFunction(pb::CallFunction {
-            thread_id: thread_id.0,
-            call_id: call_id.0,
-            parent_call_id: (parent_call_id.0 != 0).then_some(parent_call_id.0),
-            function_id: function_id.0,
-            timestamp_ns: conv.to_ns(ts_ticks),
-        }),
-        RawRecord::EndFunction {
-            status,
-            thread_id,
-            call_id,
-            ts_ticks,
-        } => Event::EndFunction(pb::EndFunction {
-            thread_id: thread_id.0,
-            call_id: call_id.0,
-            status: match status {
-                FunctionEndStatus::Ok => pb::FunctionEndStatus::Ok,
-                FunctionEndStatus::Errored => pb::FunctionEndStatus::Errored,
-                FunctionEndStatus::Cancelled => pb::FunctionEndStatus::Cancelled,
-                FunctionEndStatus::Exited => pb::FunctionEndStatus::Exited,
-            } as i32,
-            timestamp_ns: conv.to_ns(ts_ticks),
-        }),
-        RawRecord::StartThread {
-            flags: _,
-            thread_id,
-            parent_thread_id,
-            parent_call_id,
-            ts_ticks,
-            name,
-        } => Event::StartThread(pb::StartThread {
-            thread_id: thread_id.0,
-            parent_thread_id: (parent_thread_id.0 != 0).then_some(parent_thread_id.0),
-            parent_call_id: (parent_call_id.0 != 0).then_some(parent_call_id.0),
-            name: (!name.is_empty()).then(|| String::from_utf8_lossy(name).into_owned()),
-            timestamp_ns: conv.to_ns(ts_ticks),
-        }),
-        RawRecord::EndThread {
-            status,
-            thread_id,
-            ts_ticks,
-        } => Event::EndThread(pb::EndThread {
-            thread_id: thread_id.0,
-            status: match status {
-                ThreadEndStatus::Completed => pb::ThreadEndStatus::Completed,
-                ThreadEndStatus::Cancelled => pb::ThreadEndStatus::Cancelled,
-                ThreadEndStatus::Errored => pb::ThreadEndStatus::Errored,
-            } as i32,
-            timestamp_ns: conv.to_ns(ts_ticks),
-        }),
-        RawRecord::SetFunctionId {
-            thread_id,
-            call_id,
-            id,
-            ts_ticks,
-        } => Event::SetFunctionId(pb::SetFunctionId {
-            thread_id: thread_id.0,
-            call_id: call_id.0,
-            id: id.to_vec(),
-            timestamp_ns: conv.to_ns(ts_ticks),
-        }),
-    };
-    pb::DiskEventV1 { event: Some(event) }
-}
-
 /// The process UUID, minted once (uuid v4).
 fn process_id() -> [u8; 16] {
     static ID: OnceLock<[u8; 16]> = OnceLock::new();
@@ -539,9 +458,12 @@ mod tests {
     use crate::{
         ids::{BexCallId, BexThreadId, FunctionId},
         prof::{
-            FunctionMetaEntry,
+            EngineProfileMetadata, FunctionMetaEntry,
             file::{header_started_at_epoch_ns, read_bamlprof},
-            record::MAX_RECORD_LEN,
+            record::{
+                CallSiteSourceSpan, FunctionEndStatus, MAX_RECORD_LEN, RawRecord, ThreadEndStatus,
+            },
+            register_engine_metadata,
         },
     };
 
@@ -587,6 +509,8 @@ mod tests {
             ENGINE,
             EngineProfileMetadata {
                 program_id: "test-program".into(),
+                source_snapshot_id: Some("snapshot-1".into()),
+                revision_id: Some("revision-1".into()),
                 functions: vec![FunctionMetaEntry {
                     function_id: 7,
                     fqn: "pkg.main".into(),
@@ -594,6 +518,12 @@ mod tests {
                     span_start: 10,
                     span_end: 90,
                     kind: "bytecode".into(),
+                    definition_key: Some("function:pkg.main".into()),
+                    owner_type: None,
+                    parent_function: None,
+                    lambda_path: None,
+                    package_name: Some("pkg".into()),
+                    namespace: vec!["pkg".into()],
                 }],
             },
         );
@@ -614,6 +544,10 @@ mod tests {
                 parent_call_id: (seq > 1).then_some(seq - 1),
                 function_id: 7,
                 timestamp_ns: seq * 2,
+                call_site_file_id: None,
+                call_site_start_offset: None,
+                call_site_end_offset: None,
+                call_site_line: None,
             }));
         }
         expected.push(Event::SetFunctionId(pb::SetFunctionId {
@@ -661,6 +595,7 @@ mod tests {
                     call_id: BexCallId(seq),
                     parent_call_id: BexCallId(seq - 1),
                     function_id: FunctionId(7),
+                    call_site: None,
                     ts_ticks: seq * 2,
                 });
             }
@@ -715,12 +650,20 @@ mod tests {
         let (header, events) = (contents.header, contents.events);
         assert_eq!(header.engine_id, ENGINE);
         assert_eq!(header.program_id, "test-program");
+        assert_eq!(header.source_snapshot_id.as_deref(), Some("snapshot-1"));
+        assert_eq!(header.revision_id.as_deref(), Some("revision-1"));
         assert_eq!(header.process_id.len(), 16);
         assert!(header_started_at_epoch_ns(&header).is_some());
         let table = header.function_table.expect("function table");
         assert_eq!(table.functions.len(), 1);
         assert_eq!(table.functions[0].fqn, "pkg.main");
         assert_eq!(table.functions[0].function_id, 7);
+        assert_eq!(
+            table.functions[0].definition_key.as_deref(),
+            Some("function:pkg.main")
+        );
+        assert_eq!(table.functions[0].package_name.as_deref(), Some("pkg"));
+        assert_eq!(table.functions[0].namespace, vec!["pkg"]);
 
         let got: Vec<Event> = events
             .into_iter()
@@ -760,13 +703,47 @@ mod tests {
             call_id: BexCallId(1),
             parent_call_id: BexCallId(0),
             function_id: FunctionId(0),
+            call_site: None,
             ts_ticks: 5,
         };
         match to_disk_event(&raw, &TickConverter::identity())
             .event
             .unwrap()
         {
-            Event::CallFunction(cf) => assert_eq!(cf.parent_call_id, None),
+            Event::CallFunction(cf) => {
+                assert_eq!(cf.parent_call_id, None);
+                assert_eq!(cf.call_site_file_id, None);
+                assert_eq!(cf.call_site_start_offset, None);
+                assert_eq!(cf.call_site_end_offset, None);
+                assert_eq!(cf.call_site_line, None);
+            }
+            other => panic!("wrong variant {other:?}"),
+        }
+        let raw = RawRecord::CallFunction {
+            flags: 0,
+            thread_id: BexThreadId(9),
+            call_id: BexCallId(2),
+            parent_call_id: BexCallId(1),
+            function_id: FunctionId(3),
+            call_site: Some(CallSiteSourceSpan {
+                file_id: 0,
+                start_offset: 17,
+                end_offset: 29,
+                line: 5,
+            }),
+            ts_ticks: 6,
+        };
+        match to_disk_event(&raw, &TickConverter::identity())
+            .event
+            .unwrap()
+        {
+            Event::CallFunction(cf) => {
+                assert_eq!(cf.parent_call_id, Some(1));
+                assert_eq!(cf.call_site_file_id, Some(0));
+                assert_eq!(cf.call_site_start_offset, Some(17));
+                assert_eq!(cf.call_site_end_offset, Some(29));
+                assert_eq!(cf.call_site_line, Some(5));
+            }
             other => panic!("wrong variant {other:?}"),
         }
         let raw = RawRecord::EndFunction {
@@ -811,6 +788,7 @@ mod tests {
                 call_id: BexCallId(seq),
                 parent_call_id: BexCallId(seq.saturating_sub(1)),
                 function_id: FunctionId(1),
+                call_site: None,
                 ts_ticks: seq,
             }
             .encode(&mut buf);
@@ -882,6 +860,7 @@ mod tests {
                         call_id: BexCallId(seq + 1),
                         parent_call_id: BexCallId(seq),
                         function_id: FunctionId(1),
+                        call_site: None,
                         ts_ticks: round * per_round + seq,
                     }
                     .encode(&mut buf);

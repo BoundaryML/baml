@@ -580,6 +580,7 @@ impl BexMulitProject {
                     // Serialize the full test tree via TestRegistry.serialize
                     let ctx = bex_engine::FunctionCallContextBuilder::new(call_id)
                         .with_cancel_token(cancel)
+                        .with_profile_enabled(false)
                         .build();
                     match engine
                         .call_function(
@@ -641,7 +642,7 @@ impl BexMulitProject {
         generation: u64,
         test_name: &str,
         ctx: bex_engine::FunctionCallContext,
-    ) -> Result<bex_engine::BexExternalValue, bex_engine::EngineError> {
+    ) -> Result<bex_engine::BexCallResult, bex_engine::EngineError> {
         let (engine, registry_value) = {
             let projects = self.projects.lock().unwrap();
             let project = projects
@@ -677,7 +678,7 @@ impl BexMulitProject {
         log::info!("[call_test_function] test_name={test_name} generation={generation}");
 
         let result = engine
-            .call_function(
+            .call_function_with_trace(
                 "testing.TestRegistry.run_test",
                 vec![
                     registry_value,
@@ -730,6 +731,7 @@ impl BexMulitProject {
         self.spawner.spawn(async move {
             let ctx = bex_engine::FunctionCallContextBuilder::new(call_id)
                 .with_cancel_token(cancel.clone())
+                .with_profile_enabled(false)
                 .build();
 
             // Expand — mutates registry.expansions in-place on the heap
@@ -752,6 +754,7 @@ impl BexMulitProject {
                 let ctx_resend =
                     bex_engine::FunctionCallContextBuilder::new(sys_types::CallId::next())
                         .with_cancel_token(cancel)
+                        .with_profile_enabled(false)
                         .build();
                 let data = match engine
                     .call_function(
@@ -791,6 +794,7 @@ impl BexMulitProject {
             // Re-serialize full state
             let ctx2 = bex_engine::FunctionCallContextBuilder::new(sys_types::CallId::next())
                 .with_cancel_token(cancel)
+                .with_profile_enabled(false)
                 .build();
             match engine
                 .call_function(
@@ -927,6 +931,31 @@ impl super::BexLsp for BexMulitProject {
         None
     }
 
+    fn project_generation(&self, project_root: &str) -> Option<u64> {
+        let projects = self.projects.lock().ok()?;
+        projects
+            .iter()
+            .find(|(path, _)| path.as_path().to_string_lossy() == project_root)
+            .map(|(_, project)| project.project.current_generation())
+    }
+
+    fn control_flow_graph_for_generation(
+        &self,
+        project_root: &str,
+        generation: u64,
+        function_name: &str,
+    ) -> Option<baml_compiler2_visualization::control_flow::ControlFlowGraph> {
+        let projects = self.projects.lock().ok()?;
+        projects
+            .iter()
+            .find(|(path, _)| path.as_path().to_string_lossy() == project_root)
+            .and_then(|(_, project)| {
+                project
+                    .project
+                    .control_flow_graph_for_generation(generation, function_name)
+            })
+    }
+
     fn request_control_flow_graph(&self, function_name: &str) {
         let graph = self.ast_control_flow_graph(function_name);
         let graph = graph.map(|g| {
@@ -1008,6 +1037,18 @@ impl super::BexLsp for BexMulitProject {
         test_name: &str,
         ctx: bex_engine::FunctionCallContext,
     ) -> Result<bex_engine::BexExternalValue, bex_engine::EngineError> {
+        self.call_test_function_impl(project, generation, test_name, ctx)
+            .await
+            .and_then(|result| result.value)
+    }
+
+    async fn call_test_function_with_trace(
+        &self,
+        project: &str,
+        generation: u64,
+        test_name: &str,
+        ctx: bex_engine::FunctionCallContext,
+    ) -> Result<bex_engine::BexCallResult, bex_engine::EngineError> {
         self.call_test_function_impl(project, generation, test_name, ctx)
             .await
     }

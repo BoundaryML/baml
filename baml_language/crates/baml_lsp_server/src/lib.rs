@@ -38,8 +38,10 @@ mod native_vfs;
 pub mod playground_env;
 pub mod playground_http;
 pub mod playground_io;
+pub mod playground_runs;
 pub mod playground_sender;
 pub mod playground_server;
+pub mod playground_session;
 pub mod playground_ws;
 
 use std::sync::Arc;
@@ -47,6 +49,7 @@ use std::sync::Arc;
 use playground_env::{PlaygroundEnv, PlaygroundEnvState};
 use playground_http::{PlaygroundHttp, PlaygroundHttpState};
 use playground_io::{PlaygroundIo, PlaygroundIoState};
+use playground_session::PlaygroundSessionStore;
 use playground_ws::WsOutMessage;
 use tokio::net::TcpListener;
 
@@ -60,10 +63,14 @@ pub fn version() -> &'static str {
 /// (for webview-resolved env vars).
 fn build_playground_sys_ops(
     broadcast_tx: &tokio::sync::broadcast::Sender<WsOutMessage>,
+    run_store: &Arc<bex_events::run::InMemoryRunStore>,
     env_state: &Arc<PlaygroundEnvState>,
     io_state: &Arc<PlaygroundIoState>,
 ) -> sys_ops::SysOps {
-    let http_state = Arc::new(PlaygroundHttpState::new(broadcast_tx.clone()));
+    let http_state = Arc::new(PlaygroundHttpState::new(
+        broadcast_tx.clone(),
+        run_store.clone(),
+    ));
     sys_ops::SysOpsBuilder::new()
         .with_fs::<sys_native::NativeSysOps>()
         .with_sys::<sys_native::NativeSysOps>()
@@ -101,12 +108,25 @@ pub fn run_server(playground_via_browser: bool) -> anyhow::Result<()> {
 
     // Broadcast channel for playground WS messages (fetch logs, env requests, etc.)
     let (broadcast_tx, _) = tokio::sync::broadcast::channel::<WsOutMessage>(64);
-    let env_state = Arc::new(PlaygroundEnvState::new(broadcast_tx.clone()));
-    let io_state = Arc::new(PlaygroundIoState::new(broadcast_tx.clone()));
+    let run_store = Arc::new(bex_events::run::InMemoryRunStore::default());
+    let _profile_observer = bex_events::run::register_profile_observer(Arc::new(
+        playground_runs::RunStoreProfileObserver::new(run_store.clone(), broadcast_tx.clone()),
+    ));
+    let session_store = Arc::new(PlaygroundSessionStore::default());
+    let env_state = Arc::new(PlaygroundEnvState::new(
+        broadcast_tx.clone(),
+        run_store.clone(),
+        session_store,
+    ));
+    let io_state = Arc::new(PlaygroundIoState::new(
+        broadcast_tx.clone(),
+        run_store.clone(),
+    ));
 
     // Build SysOps with playground interception.
     // The factory creates the same ops for every project.
     let broadcast_tx_for_factory = broadcast_tx.clone();
+    let run_store_for_factory = run_store.clone();
     let env_state_for_factory = env_state.clone();
     let io_state_for_factory = io_state.clone();
     #[allow(clippy::type_complexity)]
@@ -114,6 +134,7 @@ pub fn run_server(playground_via_browser: bool) -> anyhow::Result<()> {
         Arc::new(move |_path: &vfs::VfsPath| {
             Arc::new(build_playground_sys_ops(
                 &broadcast_tx_for_factory,
+                &run_store_for_factory,
                 &env_state_for_factory,
                 &io_state_for_factory,
             ))
@@ -158,6 +179,9 @@ pub fn run_server(playground_via_browser: bool) -> anyhow::Result<()> {
         spawner,
     );
     let bex: Arc<dyn bex_project::BexLsp> = Arc::new(bex);
+    run_store.set_graph_runtime_overlay_span_provider(Arc::new(
+        playground_runs::ProjectGraphRuntimeOverlaySpanProvider::new(bex.clone()),
+    ));
 
     // Start playground HTTP/WS server
     if let Some(listener) = playground_listener {
@@ -165,8 +189,10 @@ pub fn run_server(playground_via_browser: bool) -> anyhow::Result<()> {
         let btx = broadcast_tx.clone();
         let es = env_state.clone();
         let ios = io_state.clone();
+        let runs = run_store.clone();
         tokio_runtime.spawn(async move {
-            if let Err(e) = playground_server::run(listener, bex_for_playground, btx, es, ios).await
+            if let Err(e) =
+                playground_server::run(listener, bex_for_playground, btx, es, ios, runs).await
             {
                 tracing::error!("Playground server exited: {e}");
             }

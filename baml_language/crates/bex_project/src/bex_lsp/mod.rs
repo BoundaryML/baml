@@ -162,13 +162,6 @@ pub enum PlaygroundNotification {
         #[serde(skip_serializing_if = "Option::is_none")]
         expand_error: Option<TestExpandError>,
     },
-    /// A runtime event was emitted during execution (protobuf-encoded).
-    #[serde(rename_all = "camelCase")]
-    RuntimeEvent {
-        /// Protobuf-encoded `RuntimeEvent` bytes (decode with `RuntimeEvent.decode()`)
-        data: Vec<u8>,
-        call_id: u64,
-    },
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -199,6 +192,15 @@ pub trait BexLsp: Send + Sync + notification::BexLspNotification + request::BexL
 
     fn ast_control_flow_graph(
         &self,
+        function_name: &str,
+    ) -> Option<baml_compiler2_visualization::control_flow::ControlFlowGraph>;
+
+    fn project_generation(&self, project_root: &str) -> Option<u64>;
+
+    fn control_flow_graph_for_generation(
+        &self,
+        project_root: &str,
+        generation: u64,
         function_name: &str,
     ) -> Option<baml_compiler2_visualization::control_flow::ControlFlowGraph>;
 
@@ -239,6 +241,15 @@ pub trait BexLsp: Send + Sync + notification::BexLspNotification + request::BexL
         test_name: &str,
         ctx: bex_engine::FunctionCallContext,
     ) -> Result<bex_external_types::BexExternalValue, bex_engine::EngineError>;
+
+    /// Run a specific test by name and surface the BEX entry trace identity.
+    async fn call_test_function_with_trace(
+        &self,
+        project: &str,
+        generation: u64,
+        test_name: &str,
+        ctx: bex_engine::FunctionCallContext,
+    ) -> Result<bex_engine::BexCallResult, bex_engine::EngineError>;
 
     /// Expand a lazy test set by name. Fire-and-forget — result comes via a
     /// `TestCollectionResult` playground notification with the full serialized tree.
