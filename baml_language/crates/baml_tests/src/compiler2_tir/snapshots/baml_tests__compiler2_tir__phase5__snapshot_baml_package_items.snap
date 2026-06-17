@@ -115,7 +115,7 @@ namespace baml.host:
   function call_host_value<T, E>
 namespace baml.http:
   class Request { methods: [to_json, from_json, to_string] }
-  class Response { methods: [text, bytes, ok, new, to_json, from_json, to_string] }
+  class Response { methods: [text, bytes, ok, new, new_streaming, write, end, to_json, from_json, to_string] }
   class Server { methods: [bind, serve, _serve, to_json, from_json, to_string] }
   class SseStream { methods: [next, close, to_json, from_json, to_string] }
   class TlsConfig { methods: [new, _new, to_json, from_json, to_string] }

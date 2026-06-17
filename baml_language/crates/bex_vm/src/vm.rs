@@ -6125,7 +6125,6 @@ impl BexVm {
                     let index_value = self.stack.ensure_pop();
                     let array_value = self.stack.ensure_pop();
                     let array_obj_index = self.as_object_ptr(array_value, ObjectType::Array)?;
-                    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
                     let Some(i) = index_value.as_int() else {
                         return Err(VmInternalError::TypeError {
                             expected: bex_vm_types::types::Type::Int,
@@ -6136,26 +6135,25 @@ impl BexVm {
                     // Acquire the array's read lock for the duration of the
                     // bounds-check + element load so it stays atomic against
                     // a racing `push`/grow. Guard drops at the end of the
-                    // inner scope before any `&mut self` call.
-                    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+                    // inner scope before any `&mut self` call. A negative index
+                    // counts from the end; one that still lands outside the
+                    // array reports the original index in the panic.
                     let load_result: Result<Value, (i64, usize)> = {
                         match self.get_object(array_obj_index) {
                             Object::Array(arr) => {
                                 let guard = arr.lock();
                                 let len = guard.len();
-                                if i < 0 || (i as usize) >= len {
-                                    Err((i, len))
-                                } else {
-                                    Ok(guard[i as usize])
+                                match crate::array_index::resolve_index(i, len) {
+                                    Some(idx) => Ok(guard[idx]),
+                                    None => Err((i, len)),
                                 }
                             }
                             Object::Uint8Array(bytes) => {
                                 let guard = bytes.lock();
                                 let len = guard.len();
-                                if i < 0 || (i as usize) >= len {
-                                    Err((i, len))
-                                } else {
-                                    Ok(Value::int(i64::from(guard[i as usize])))
+                                match crate::array_index::resolve_index(i, len) {
+                                    Some(idx) => Ok(Value::int(i64::from(guard[idx]))),
+                                    None => Err((i, len)),
                                 }
                             }
                             other => {
@@ -6220,7 +6218,6 @@ impl BexVm {
                     let index_value = self.stack.ensure_pop();
                     let array_value = self.stack.ensure_pop();
                     let array_object_index = self.as_object_ptr(array_value, ObjectType::Array)?;
-                    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
                     let Some(i) = index_value.as_int() else {
                         return Err(VmInternalError::TypeError {
                             expected: bex_vm_types::types::Type::Int,
@@ -6232,19 +6229,22 @@ impl BexVm {
                         new_value.as_int().map(|v| (v.cast_unsigned() & 0xFF) as u8);
                     // Acquire the array's write lock for bounds-check + old
                     // read + new write atomically. Guard drops at end of
-                    // inner scope before any `&mut self` ops.
-                    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-                    let store_result: Result<Value, (i64, usize)> = {
+                    // inner scope before any `&mut self` ops. A negative index
+                    // counts from the end; the resolved offset flows out for the
+                    // watch path below, while an out-of-range index reports the
+                    // original index in the panic.
+                    let store_result: Result<(Value, usize), (i64, usize)> = {
                         match self.get_object(array_object_index) {
                             Object::Array(arr) => {
                                 let mut guard = arr.lock_mut();
                                 let len = guard.len();
-                                if i < 0 || (i as usize) >= len {
-                                    Err((i, len))
-                                } else {
-                                    let old = guard[i as usize];
-                                    guard[i as usize] = new_value;
-                                    Ok(old)
+                                match crate::array_index::resolve_index(i, len) {
+                                    Some(idx) => {
+                                        let old = guard[idx];
+                                        guard[idx] = new_value;
+                                        Ok((old, idx))
+                                    }
+                                    None => Err((i, len)),
                                 }
                             }
                             Object::Uint8Array(bytes) => {
@@ -6257,12 +6257,13 @@ impl BexVm {
                                 };
                                 let mut guard = bytes.lock_mut();
                                 let len = guard.len();
-                                if i < 0 || (i as usize) >= len {
-                                    Err((i, len))
-                                } else {
-                                    let old = Value::int(i64::from(guard[i as usize]));
-                                    guard[i as usize] = byte_v;
-                                    Ok(old)
+                                match crate::array_index::resolve_index(i, len) {
+                                    Some(idx) => {
+                                        let old = Value::int(i64::from(guard[idx]));
+                                        guard[idx] = byte_v;
+                                        Ok((old, idx))
+                                    }
+                                    None => Err((i, len)),
                                 }
                             }
                             other => {
@@ -6274,7 +6275,7 @@ impl BexVm {
                             }
                         }
                     };
-                    let old_value = match store_result {
+                    let (old_value, index) = match store_result {
                         Ok(v) => v,
                         Err((idx, len)) => {
                             return Err(VmError::Thrown(self.panic_to_exception_value(
@@ -6285,8 +6286,6 @@ impl BexVm {
                             )));
                         }
                     };
-                    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-                    let index = i as usize;
                     let watched_node = NodeId::HeapObject(array_object_index);
                     self.update_watched_node(
                         watched_node,

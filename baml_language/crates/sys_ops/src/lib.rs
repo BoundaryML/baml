@@ -1195,6 +1195,41 @@ impl io::IoClassHttpResponse for DefaultIoOps {
             message: "Operation not supported on this platform".to_string(),
         })
     }
+    fn new_streaming(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _status_code: i64,
+        _headers: indexmap::IndexMap<String, String>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::http::Response> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+    fn write(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _r: io::owned::http::Response,
+        _data: Vec<u8>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+    fn end(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _r: io::owned::http::Response,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
 }
 
 impl io::IoClassHttpTlsConfig for DefaultIoOps {
@@ -1974,6 +2009,24 @@ impl IoSysOpsBuilder {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
                 t.__glue_baml_http_response_new(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_http_response_new_streaming = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_http_response_new_streaming(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_http_response_write = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_http_response_write(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_http_response_end = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_http_response_end(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_http_tlsconfig__new = {

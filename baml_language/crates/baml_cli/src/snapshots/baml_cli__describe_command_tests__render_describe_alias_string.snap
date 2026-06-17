@@ -2,7 +2,7 @@
 source: crates/baml_cli/src/describe_command_tests.rs
 expression: "describe_via_dispatch(&db, \"string\")"
 ---
-class String  (string)  <builtin>/baml/string.baml:5-482
+class String  (string)  <builtin>/baml/string.baml:5-485
 
 /// A UTF-8 encoded string.
 ///
@@ -34,7 +34,7 @@ methods:
   function includes(self, search: string) -> bool  <builtin>/baml/string.baml:106-108
   /// Returns true if the string starts with `prefix`.
   function starts_with(self, prefix: string) -> bool  <builtin>/baml/string.baml:111-113
-  … 58 more lines (re-run with a higher --budget)
+  … 57 more lines (re-run with a higher --budget)
 
 static_methods:
   … 4 more lines (re-run with a higher --budget)

@@ -3800,6 +3800,7 @@ dependencies = [
  "once_cell",
  "pest",
  "pest_derive",
+ "regex",
  "serde",
  "similar",
  "tempfile",
@@ -6458,6 +6459,16 @@ dependencies = [
  "borsh",
  "sdkgen_python_pydantic2",
  "sdkgen_typescript_node",
+]
+
+[[package]]
+name = "sdk_test_llm_recordings"
+version = "0.1.0"
+dependencies = [
+ "baml_tests",
+ "bex_engine",
+ "insta",
+ "tokio",
 ]
 
 [[package]]

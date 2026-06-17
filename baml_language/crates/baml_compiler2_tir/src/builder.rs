@@ -4644,7 +4644,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         index: ExprId,
     ) -> Ty {
         let base_ty = self.infer_expr(base, body);
-        self.infer_expr(index, body);
+        let index_ty = self.infer_expr(index, body);
         let inner = crate::narrowing::remove_null(&base_ty);
         let (resolve_ty, rewrap) = if inner != base_ty
             && !matches!(base_ty, Ty::Unknown { attr: _ } | Ty::Error { attr: _ })
@@ -4666,6 +4666,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         } else {
             (base_ty, false)
         };
+        self.check_index_key_type(&resolve_ty, &index_ty, index, false);
         let elem_ty = match resolve_ty {
             Ty::List(elem_ty, _) | Ty::EvolvingList(elem_ty, _) => *elem_ty,
             Ty::Map {
@@ -4699,6 +4700,60 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
+    /// Validate that `index_ty` is an acceptable subscript for `container`: the
+    /// runtime indexes a list/byte-array by `int` and a map by its key type
+    /// (`string`). There is no key coercion — `list["a"]` or `map[0]` aborts the
+    /// VM at runtime — so reject a mistyped subscript at compile time. A no-op
+    /// for non-containers and for error-recovery index types.
+    fn check_index_key_type(
+        &mut self,
+        container: &Ty,
+        index_ty: &Ty,
+        index_id: ExprId,
+        allow_null: bool,
+    ) {
+        // The runtime has no null subscript (`a[null]` aborts the VM with the
+        // confusing `got any`), so a plain `a[i]` requires a non-null index.
+        // The optional form `a?.[i]` only guards the *base*, but its index is
+        // typically nullable-by-type yet non-null in the narrowed chain context
+        // (e.g. `node?.children?.[node?.value]`); strip null there to avoid a
+        // false positive.
+        let widened = index_ty.clone().widen_fresh();
+        let index_ty = if allow_null {
+            crate::narrowing::remove_null(&widened)
+        } else {
+            widened
+        };
+        if matches!(index_ty, Ty::Unknown { .. } | Ty::Error { .. }) {
+            return;
+        }
+        let expected_key = match container {
+            Ty::List(..) | Ty::EvolvingList(..) | Ty::Uint8Array { .. } => Ty::Int {
+                attr: TyAttr::default(),
+            },
+            // An empty evolving map (`{}`, key `never`) adopts string keys; any
+            // other map carries its declared (string) key type.
+            Ty::Map { key, .. } | Ty::EvolvingMap(key, _, _) => {
+                if matches!(**key, Ty::Never { .. }) {
+                    Ty::string()
+                } else {
+                    (**key).clone()
+                }
+            }
+            _ => return,
+        };
+        if !self.is_subtype(&index_ty, &expected_key) {
+            self.context.report(
+                TirTypeError::TypeMismatch {
+                    expected: expected_key,
+                    got: index_ty,
+                },
+                index_id,
+                Vec::new(),
+            );
+        }
+    }
+
     #[inline(never)]
     fn infer_optional_index_expr(
         &mut self,
@@ -4709,7 +4764,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     ) -> Ty {
         // Optional chaining: a?.[expr] — short-circuits to null if a is null.
         let base_ty = self.infer_expr(base, body);
-        self.infer_expr(index, body);
+        let index_ty = self.infer_expr(index, body);
         let base_info = self.analyze_optional_base(&base_ty);
         // E2: warn if base is not nullable
         if !base_info.is_nullable() && !matches!(base_ty, Ty::Unknown { .. } | Ty::Error { .. }) {
@@ -4728,6 +4783,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 attr: TyAttr::default(),
             }
         } else {
+            self.check_index_key_type(&base_info.inner, &index_ty, index, true);
             let elem_ty = match &base_info.inner {
                 Ty::List(elem_ty, _) | Ty::EvolvingList(elem_ty, _) => elem_ty.as_ref().clone(),
                 Ty::Map {
@@ -6442,6 +6498,29 @@ impl<'db> TypeInferenceBuilder<'db> {
                         }
                     }
                 } else {
+                    // No annotated declared type. Member/index/`$id` targets are
+                    // handled structurally elsewhere; an *unannotated local*,
+                    // though, still carries a flow type in `current_ty` that a
+                    // reassignment must stay compatible with. Without this guard
+                    // `let x = {}; x = []` keeps `x` map-typed while it holds an
+                    // array at runtime, so indexing it aborts the VM with
+                    // "expected map, got array" (B-236).
+                    if let Expr::Path(segments) = &body.exprs[*target]
+                        && segments.len() == 1
+                        && segments[0].as_str() != "$id"
+                        && let Some(current_ty) =
+                            self.locals.get(&segments[0]).map(|b| b.current_ty.clone())
+                        && !self.reassignment_is_compatible(&value_ty, &current_ty)
+                    {
+                        self.context.report(
+                            TirTypeError::TypeMismatch {
+                                expected: current_ty,
+                                got: value_ty.clone(),
+                            },
+                            *value,
+                            Vec::new(),
+                        );
+                    }
                     self.infer_expr(*target, body);
                     self.infer_expr(*value, body);
                 }
@@ -6660,6 +6739,45 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
         }
         None
+    }
+
+    /// Whether reassigning a value of type `value_ty` to an *unannotated* local
+    /// currently typed `current_ty` is sound (B-236).
+    ///
+    /// A concrete local requires the new value to be a subtype — its static
+    /// type and the runtime value must not diverge. An *empty evolving*
+    /// container (`[]` / `{}`, whose element/key/value types are `never`) is
+    /// special: it has not yet committed to an element type, so it may still
+    /// adopt any value of the *same container kind* — `let a = []; a = [1, 2,
+    /// 3]` keeps working — but never across kinds (`let x = {}; x = []` is the
+    /// crash). Cross-kind and unrelated-type reassignments are rejected.
+    fn reassignment_is_compatible(&self, value_ty: &Ty, current_ty: &Ty) -> bool {
+        // Error recovery / a diverging RHS: don't pile on additional errors.
+        if matches!(
+            value_ty,
+            Ty::Unknown { .. } | Ty::Error { .. } | Ty::Never { .. }
+        ) || matches!(current_ty, Ty::Unknown { .. } | Ty::Error { .. })
+        {
+            return true;
+        }
+        if self.is_subtype(value_ty, current_ty) {
+            return true;
+        }
+        match current_ty {
+            // Empty evolving list: accepts any list-shaped value.
+            Ty::List(inner, _) | Ty::EvolvingList(inner, _)
+                if matches!(**inner, Ty::Never { .. }) =>
+            {
+                matches!(value_ty, Ty::List(..) | Ty::EvolvingList(..))
+            }
+            // Empty evolving map: accepts any map-shaped value.
+            Ty::Map { key, value, .. } | Ty::EvolvingMap(key, value, _)
+                if matches!(**key, Ty::Never { .. }) && matches!(**value, Ty::Never { .. }) =>
+            {
+                matches!(value_ty, Ty::Map { .. } | Ty::EvolvingMap(..))
+            }
+            _ => false,
+        }
     }
 
     /// True when `expr` is the bare `$id` special form (the runtime-identity
@@ -14217,6 +14335,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let is_evolving = matches!(local_ty, Ty::EvolvingList(_, _));
                 let container_attr = container_attr.clone();
                 let index_ty = self.infer_expr(index_id, body);
+                self.check_index_key_type(&local_ty, &index_ty, index_id, false);
                 let val_ty = self.infer_expr(value_id, body);
                 let widened_val = val_ty.clone().widen_fresh();
 
@@ -14254,6 +14373,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let is_evolving = matches!(local_ty, Ty::EvolvingMap(_, _, _));
                 let container_attr = container_attr.clone();
                 let index_ty = self.infer_expr(index_id, body);
+                self.check_index_key_type(&local_ty, &index_ty, index_id, false);
                 let value_ty = self.infer_expr(value_id, body);
                 let widened_key = index_ty.clone().widen_fresh();
                 let widened_val = value_ty.clone().widen_fresh();
@@ -14274,27 +14394,16 @@ impl<'db> TypeInferenceBuilder<'db> {
                     };
                     self.assign_local(local_name.clone(), new_ty.clone());
                     self.sync_let_binding_type(&local_name, new_ty);
-                } else {
-                    if !self.is_subtype(&widened_key, key_ty) {
-                        self.context.report(
-                            TirTypeError::TypeMismatch {
-                                expected: *key_ty.clone(),
-                                got: widened_key,
-                            },
-                            index_id,
-                            Vec::new(),
-                        );
-                    }
-                    if !self.is_subtype(&widened_val, val_ty) {
-                        self.context.report(
-                            TirTypeError::TypeMismatch {
-                                expected: *val_ty.clone(),
-                                got: widened_val.clone(),
-                            },
-                            value_id,
-                            Vec::new(),
-                        );
-                    }
+                } else if !self.is_subtype(&widened_val, val_ty) {
+                    // The key was validated by `check_index_key_type` above.
+                    self.context.report(
+                        TirTypeError::TypeMismatch {
+                            expected: *val_ty.clone(),
+                            got: widened_val.clone(),
+                        },
+                        value_id,
+                        Vec::new(),
+                    );
                 }
 
                 self.record_expr_type(base_id, local_ty);

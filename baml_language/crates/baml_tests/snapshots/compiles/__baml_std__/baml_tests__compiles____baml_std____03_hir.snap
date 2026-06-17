@@ -915,6 +915,7 @@ function baml.http._timeout_nanos(timeout: root.time.Duration?) -> bigint  [expr
 }
 function baml.http.bytes(self: ?) -> uint8array  [builtin]
 function baml.http.close(self: ?) -> null  [builtin]
+function baml.http.end(self: ?) -> null  [builtin]
 function baml.http.fetch(url: string, timeout: root.time.Duration? = null) -> baml.http.Response  [expr] {
   {  } _fetch(url, _timeout_nanos(timeout))
 }
@@ -929,6 +930,7 @@ function baml.http.from_json(j: baml.json.json) -> baml.http.SseStream  [expr] {
   baml.json.from_string(baml.json.stringify(j))
 }
 function baml.http.new(status_code: int, headers: map<string, string>, body: uint8array) -> baml.http.Response  [builtin]
+function baml.http.new_streaming(status_code: int, headers: map<string, string>) -> baml.http.Response  [builtin]
 function baml.http.next(self: ?) -> string?  [builtin]
 function baml.http.ok(self: ?) -> bool  [expr] {
   {  } self.status_code Ge 200 And self.status_code Lt 300
@@ -955,6 +957,7 @@ function baml.http.to_string(self: ?) -> string  [expr] {
 function baml.http.to_string(self: ?) -> string  [expr] {
   baml.unstable.string(self)
 }
+function baml.http.write(self: ?, data: uint8array) -> null  [builtin]
 
 --- <builtin>/baml/ns_http/server.baml ---
 class baml.http.Server {

@@ -1859,7 +1859,7 @@ impl BexEngine {
             });
         }
         self.validate_bound_args(function_name, &args)?;
-        let return_type = self
+        let mut return_type = self
             .function_return_type(function_name)
             .unwrap_or(RuntimeTy::Null {
                 attr: baml_type::TyAttr::default(),
@@ -1877,6 +1877,30 @@ impl BexEngine {
             .into_iter()
             .map(|(_, ty, _)| ty.clone())
             .collect();
+
+        // Substitute the declared return type's class type variables from the
+        // receiver's concrete `self`. A generic instance method (`Stream.next`,
+        // `Stream.final`, ...) called by name from the host leaves its return
+        // type with the class's type vars unsubstituted (e.g. `Stream.next`'s
+        // `TStream | StreamFinished`), because the named-entry path seeds no
+        // class type args. The inbound `self` handle carries them concretely, so
+        // zipping the declared `self` type against the actual one recovers the
+        // bindings — without this, a concrete partial (`null | string`, a
+        // `$stream` class) matches no union member and host-return conversion
+        // panics. See bridge-generics/streaming/04.
+        if let (Some(self_declared), Some(BexCallArg::Provided(self_value))) =
+            (param_types.first(), args.first())
+        {
+            if let Some(self_actual) = crate::conversion::tagged_handle_runtime_ty(self_value) {
+                let mut bindings = std::collections::HashMap::new();
+                crate::conversion::collect_type_var_bindings(
+                    self_declared,
+                    self_actual,
+                    &mut bindings,
+                );
+                return_type = crate::conversion::substitute_type_vars(&return_type, &bindings);
+            }
+        }
         let args: Vec<BexCallArg> = args
             .into_iter()
             .enumerate()
@@ -2127,29 +2151,46 @@ impl BexEngine {
         // parameter types (including `self` for methods) for type-directed
         // coercion; lambdas leave it empty (types inferred, not stored), so the
         // real arity comes from `arity` and coercion is best-effort.
-        let (return_type, throws_type, arity, param_types) = match thread.vm.get_object(func_ptr) {
-            Object::Function(func) => {
-                // A value referencing an unresolved native builtin can't be an
-                // entry point (parity with `call_function_bound_args`).
-                if matches!(func.kind, bex_vm_types::FunctionKind::NativeUnresolved) {
-                    return Err(EngineError::NotInvokableAsEntry {
-                        name: func.name.clone(),
-                        kind: format!("{:?}", func.kind),
+        let (mut return_type, throws_type, arity, param_types) =
+            match thread.vm.get_object(func_ptr) {
+                Object::Function(func) => {
+                    // A value referencing an unresolved native builtin can't be an
+                    // entry point (parity with `call_function_bound_args`).
+                    if matches!(func.kind, bex_vm_types::FunctionKind::NativeUnresolved) {
+                        return Err(EngineError::NotInvokableAsEntry {
+                            name: func.name.clone(),
+                            kind: format!("{:?}", func.kind),
+                        });
+                    }
+                    (
+                        func.return_type.clone(),
+                        func.throws_type.clone(),
+                        func.arity,
+                        func.param_types.clone(),
+                    )
+                }
+                _ => {
+                    return Err(EngineError::TypeMismatch {
+                        message: "call_callable: value does not wrap a function".to_string(),
                     });
                 }
-                (
-                    func.return_type.clone(),
-                    func.throws_type.clone(),
-                    func.arity,
-                    func.param_types.clone(),
-                )
+            };
+
+        // For a bound method on a generic class, substitute the declared return
+        // type's class type vars from the receiver's concrete type args (seeded
+        // above from the instance). Mirrors the named-entry path in
+        // `call_function_bound_args`; without it a generic method's `TStream`-like
+        // return arm stays an unsubstituted type var and host-return conversion
+        // panics on a concrete value. See bridge-generics/streaming/04.
+        if receiver.is_some() {
+            if let Some(RuntimeTy::Class(_, declared_args, _)) = param_types.first() {
+                let mut bindings = std::collections::HashMap::new();
+                for (declared, concrete) in declared_args.iter().zip(seed_type_args.iter()) {
+                    crate::conversion::collect_type_var_bindings(declared, concrete, &mut bindings);
+                }
+                return_type = crate::conversion::substitute_type_vars(&return_type, &bindings);
             }
-            _ => {
-                return Err(EngineError::TypeMismatch {
-                    message: "call_callable: value does not wrap a function".to_string(),
-                });
-            }
-        };
+        }
 
         // A bound method's `arity` counts the implicit `self`; callers don't pass
         // it (the receiver is injected below), so the visible arity drops by one.
