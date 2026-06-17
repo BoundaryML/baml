@@ -28,11 +28,28 @@ export default function RunPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const trophy = useDoc<Trophy>("trophies", id);
+  // The dispatch-time Slack link is /runs/<taskId> (no trophy exists yet). db.get(id)
+  // returns whatever document carries that id, so distinguish a finished trophy from
+  // an in-flight task by shape and show the mid-run view instead of choking on a
+  // task's missing metrics.
+  const doc = useDoc<Trophy & Task>("trophies", id);
+  const trophy =
+    doc && (doc as Trophy).outcome !== undefined ? (doc as unknown as Trophy) : null;
+  const inflightTask =
+    doc && (doc as Trophy).outcome === undefined && (doc as Task).prompt !== undefined
+      ? (doc as unknown as Task)
+      : null;
   const task = useDoc<Task>("tasks", trophy?.taskId ?? null);
   const state = useAtbState();
 
-  if (trophy === undefined) return <RunSkeleton />;
+  if (doc === undefined) return <RunSkeleton />;
+  if (inflightTask)
+    return (
+      <InFlightRun
+        task={inflightTask}
+        trophyId={state?.trophies?.find((t) => t.taskId === id)?._id ?? null}
+      />
+    );
   if (trophy === null)
     return (
       <p className="pt-24 text-center text-atb-ink-3">run not found</p>
@@ -264,6 +281,71 @@ function RunSkeleton() {
       <Skeleton className="h-16 w-3/4" />
       <Skeleton className="h-20" />
       <Skeleton className="h-40" />
+    </div>
+  );
+}
+
+// Mid-run view: shown when the URL id is a still-running task (the dispatch-time
+// Slack link) that has not produced a trophy yet. Flips to the finished run as
+// soon as a trophy for this task appears in state.
+function InFlightRun({
+  task,
+  trophyId,
+}: {
+  task: Task;
+  trophyId: string | null;
+}) {
+  return (
+    <div className="pt-12">
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.7, ease: EASE }}
+      >
+        <div className="flex items-center gap-2 text-xs text-atb-ink-3 mb-3">
+          <Link href="/atb/runs" className="hover:text-atb-ink transition-colors">
+            Runs
+          </Link>
+          <span>/</span>
+          <span className="font-atb-mono">{task._id.slice(0, 12)}…</span>
+        </div>
+        <h1 className="font-atb-serif text-2xl sm:text-[1.7rem] font-semibold tracking-tight leading-snug max-w-3xl">
+          {task.prompt}
+        </h1>
+        <div className="flex flex-wrap items-center gap-2.5 mt-4 text-xs">
+          <span className="inline-flex items-center gap-2 rounded-full border border-atb-line bg-atb-ivory px-3 py-1 text-atb-ink-2">
+            <span className="h-2 w-2 rounded-full bg-atb-accent animate-pulse" />
+            {task.status || "running"}
+          </span>
+          {task.source && (
+            <span className="text-atb-ink-3">
+              via <span className="text-atb-ink-2">{task.source}</span>
+            </span>
+          )}
+          <span className="text-atb-ink-3">{wallClock(task.createdAt)}</span>
+        </div>
+      </motion.div>
+
+      <Reveal className="mt-10">
+        <Card className="px-6 py-8 text-center">
+          {trophyId ? (
+            <>
+              <p className="text-atb-ink-2 mb-4">This run has finished.</p>
+              <Link
+                href={`/atb/runs/${trophyId}`}
+                className="text-atb-accent-deep hover:text-atb-accent font-medium"
+              >
+                view the completed run →
+              </Link>
+            </>
+          ) : (
+            <p className="text-atb-ink-3 leading-relaxed max-w-md mx-auto">
+              The agent is working on this task. The report, metrics, findings,
+              and full transcript will appear here once the run completes.
+            </p>
+          )}
+        </Card>
+      </Reveal>
     </div>
   );
 }
