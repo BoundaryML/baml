@@ -959,9 +959,18 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
           );
           const editor = bamlEditor ?? vscode.window.activeTextEditor;
           if (editor) {
-            const position = new vscode.Position(source.line, source.column);
-            editor.selection = new vscode.Selection(position, position);
-            editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
+            // line/column/endLine/endColumn are 0-indexed LSP positions, and
+            // the backend expands end_* so the whole node span can be selected
+            // directly (see SourceSpan in baml_compiler2_visualization).
+            const start = new vscode.Position(source.line, source.column);
+            const end =
+              source.endLine != null && source.endColumn != null
+                ? new vscode.Position(source.endLine, source.endColumn)
+                : start;
+            // anchor=start, active=end → the span is selected with the caret
+            // at its end (kept inside the span for the graph round-trip check).
+            editor.selection = new vscode.Selection(start, end);
+            editor.revealRange(new vscode.Range(start, end), vscode.TextEditorRevealType.InCenter);
           }
         });
 

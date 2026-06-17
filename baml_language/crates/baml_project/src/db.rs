@@ -495,6 +495,20 @@ impl ProjectDatabase {
                                     &source_map,
                                 );
                             }
+                            // The FunctionRoot node has no `source_expr`, so
+                            // `attach_source_spans_to_graph` skips it. Point it at the
+                            // whole function declaration so clicking the root in the
+                            // playground selects the function (mirrors the LLM path above).
+                            if let Some(root_span) =
+                                self.source_span_for_range(source_file, func_data.span)
+                            {
+                                if let Some(root) = graph.nodes.values_mut().find(|node| {
+                                    node.node_type
+                                        == baml_compiler2_visualization::control_flow::NodeType::FunctionRoot
+                                }) {
+                                    root.source_span.get_or_insert(root_span);
+                                }
+                            }
                             self.expand_user_function_calls_in_graph(
                                 &mut graph, expr_body, expanding,
                             );
@@ -1313,6 +1327,17 @@ function Workflow(input: string) -> string {
             matches!(root.node_type, NodeType::FunctionRoot),
             "first node should be FunctionRoot, got {:?}",
             root.node_type
+        );
+        // The root carries the function's declaration span so clicking it in
+        // the playground selects the function (it has no `source_expr`, so this
+        // is attached explicitly rather than via the source map).
+        let root_span = root
+            .source_span
+            .as_ref()
+            .expect("FunctionRoot should have a source span");
+        assert!(
+            root_span.end_offset > root_span.start_offset,
+            "FunctionRoot span should be non-empty"
         );
 
         // There should be at least two HeaderContextEnter nodes.
