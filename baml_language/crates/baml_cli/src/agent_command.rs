@@ -586,17 +586,6 @@ fn write_atomic(path: &Path, content: &str) -> Result<()> {
     Ok(())
 }
 
-/// Print the post-install summary to stdout.
-///
-/// Lists the destination paths for the installed skills and discloses that
-/// skill names are prefixed with `baml-` to avoid registry collisions, so the
-/// difference from upstream skill files is documented rather than silent.
-///
-/// # Parameters
-/// - `root`: the project root the skills were installed under.
-///
-/// # Errors
-/// Returns an error if writing to stdout fails.
 /// Build the post-install summary text shown after a successful install.
 ///
 /// The message lists the destination glob paths and discloses the `baml-`
