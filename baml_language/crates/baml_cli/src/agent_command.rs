@@ -192,7 +192,7 @@ impl AgentInstallArgs {
         };
         let source = load_skills(self)?;
         let reports = if self.check {
-            check_skills(&root, &source.skills)
+            check_skills(&root, &source.skills)?
         } else {
             install_skills(&root, &source.skills)?
         };
@@ -665,13 +665,23 @@ fn replace_frontmatter_name(frontmatter: &str, name: &str) -> Result<String> {
 /// Installs `skills` into every target directory under `root`.
 ///
 /// For each target the per-skill status is computed immediately before
-/// writing, then the skills are installed. Returns one [`TargetReport`] per
-/// target in display order, or an error if any write fails.
+/// writing. Only skills whose status represents a change ([`SkillStatus::Created`]
+/// or [`SkillStatus::Updated`]) are written; skills reported as
+/// [`SkillStatus::Unchanged`] are left untouched so their directories are not
+/// needlessly rewritten or replaced. Returns one [`TargetReport`] per target in
+/// display order, or an error if a status cannot be computed or any write fails.
 fn install_skills(root: &Path, skills: &[Skill]) -> Result<Vec<TargetReport>> {
     let mut reports = Vec::new();
     for target in install_targets() {
-        let statuses = target_statuses(root, &target, skills);
-        install_skills_to(root, Path::new(target.dir_display), skills)?;
+        let statuses = target_statuses(root, &target, skills)?;
+        let changed_skills = skills
+            .iter()
+            .zip(statuses.iter())
+            .filter_map(|(skill, (_, status))| status.is_change().then_some(skill))
+            .collect::<Vec<_>>();
+        if !changed_skills.is_empty() {
+            install_skills_to(root, Path::new(target.dir_display), &changed_skills)?;
+        }
         reports.push(TargetReport {
             label: target.label,
             dir_display: target.dir_display,
@@ -684,14 +694,17 @@ fn install_skills(root: &Path, skills: &[Skill]) -> Result<Vec<TargetReport>> {
 /// Computes the per-target, per-skill status without writing anything.
 ///
 /// Used by `--check` to report what an install would do. Returns one
-/// [`TargetReport`] per target in display order.
-fn check_skills(root: &Path, skills: &[Skill]) -> Vec<TargetReport> {
+/// [`TargetReport`] per target in display order, or an error if any existing
+/// install cannot be inspected.
+fn check_skills(root: &Path, skills: &[Skill]) -> Result<Vec<TargetReport>> {
     install_targets()
         .iter()
-        .map(|target| TargetReport {
-            label: target.label,
-            dir_display: target.dir_display,
-            statuses: target_statuses(root, target, skills),
+        .map(|target| {
+            Ok(TargetReport {
+                label: target.label,
+                dir_display: target.dir_display,
+                statuses: target_statuses(root, target, skills)?,
+            })
         })
         .collect()
 }
@@ -699,22 +712,30 @@ fn check_skills(root: &Path, skills: &[Skill]) -> Vec<TargetReport> {
 /// Computes the [`SkillStatus`] for every skill in a single `target` without
 /// modifying disk.
 ///
-/// Reads each skill's existing `SKILL.md` (treating read failures as absent)
-/// and compares it against the source content. Returns `(name, status)` pairs
-/// in the same order as `skills`.
+/// Reads each skill's existing `SKILL.md` and compares it against the source
+/// content. A missing file (`NotFound`) is treated as absent, but any other I/O
+/// failure (permission denied, invalid UTF-8, etc.) is propagated so the user
+/// learns the existing install could not be inspected. Returns `(name, status)`
+/// pairs in the same order as `skills`.
 fn target_statuses(
     root: &Path,
     target: &InstallTarget,
     skills: &[Skill],
-) -> Vec<(String, SkillStatus)> {
+) -> Result<Vec<(String, SkillStatus)>> {
     let skills_dir = root.join(target.dir_display);
     skills
         .iter()
         .map(|skill| {
             let path = skills_dir.join(&skill.name).join("SKILL.md");
-            let existing = fs::read_to_string(&path).ok();
+            let existing = match fs::read_to_string(&path) {
+                Ok(content) => Some(content),
+                Err(err) if err.kind() == std::io::ErrorKind::NotFound => None,
+                Err(err) => {
+                    return Err(err).with_context(|| format!("failed to read {}", path.display()));
+                }
+            };
             let status = SkillStatus::classify(existing.as_deref(), &skill.content);
-            (skill.name.clone(), status)
+            Ok((skill.name.clone(), status))
         })
         .collect()
 }
@@ -723,9 +744,11 @@ fn target_statuses(
 /// `baml-*` skill directories atomically while preserving unrelated skills.
 ///
 /// `relative_skills_dir` is the per-target relative directory (e.g.
-/// `.claude/skills`). Returns an error if any directory or file operation
-/// fails; partial installs are rolled back per skill where possible.
-fn install_skills_to(root: &Path, relative_skills_dir: &Path, skills: &[Skill]) -> Result<()> {
+/// `.claude/skills`). `skills` are the (already filtered) skills that should be
+/// written; callers typically pass only skills whose status represents a change.
+/// Returns an error if any directory or file operation fails; partial installs
+/// are rolled back per skill where possible.
+fn install_skills_to(root: &Path, relative_skills_dir: &Path, skills: &[&Skill]) -> Result<()> {
     let skills_dir = root.join(relative_skills_dir);
     fs::create_dir_all(&skills_dir)
         .with_context(|| format!("failed to create {}", skills_dir.display()))?;
@@ -1162,7 +1185,7 @@ mod tests {
             },
         ];
 
-        let statuses = target_statuses(root, target, &skills);
+        let statuses = target_statuses(root, target, &skills).unwrap();
 
         assert_eq!(
             statuses,
@@ -1182,7 +1205,7 @@ mod tests {
             content: skill("baml-core"),
         }];
 
-        let reports = check_skills(root, &skills);
+        let reports = check_skills(root, &skills).unwrap();
 
         assert_eq!(reports.len(), 2);
         for report in &reports {
@@ -1219,6 +1242,33 @@ mod tests {
                 .flat_map(|report| &report.statuses)
                 .all(|(_, status)| *status == SkillStatus::Unchanged)
         );
+    }
+
+    #[test]
+    fn reinstall_does_not_rewrite_unchanged_skill_directories() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let skills = vec![Skill {
+            name: "baml-core".to_string(),
+            content: skill("baml-core"),
+        }];
+
+        install_skills(root, &skills).unwrap();
+
+        // Drop a sidecar file inside an installed skill directory. A reinstall
+        // that classifies the skill as `Unchanged` must leave the directory
+        // (and this file) untouched rather than replacing it wholesale.
+        let sidecar = root.join(".claude/skills/baml-core/extra.txt");
+        fs::write(&sidecar, "keep me").unwrap();
+
+        let report = install_skills(root, &skills).unwrap();
+        assert!(
+            report
+                .iter()
+                .flat_map(|report| &report.statuses)
+                .all(|(_, status)| *status == SkillStatus::Unchanged)
+        );
+        assert_eq!(fs::read_to_string(&sidecar).unwrap(), "keep me");
     }
 
     #[test]
