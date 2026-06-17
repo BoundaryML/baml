@@ -58,21 +58,24 @@ fn user.score(query: string, max_results: int, filter: string | null) -> int {
     }
 
     bb4: {
-        _6 = copy _3 == const null;
-        branch copy _6 -> [bb6, bb5];
+        _6 = call const fn baml.ops.equals_equals(copy _3, const null) -> [bb5];
     }
 
     bb5: {
-        _0 = copy _2 + const 1_i64;
-        goto -> bb7;
+        branch copy _6 -> [bb7, bb6];
     }
 
     bb6: {
-        _0 = copy _2;
-        goto -> bb7;
+        _0 = copy _2 + const 1_i64;
+        goto -> bb8;
     }
 
     bb7: {
+        _0 = copy _2;
+        goto -> bb8;
+    }
+
+    bb8: {
         return;
     }
 }
@@ -94,8 +97,7 @@ fn user.is_null(value: int | null) -> bool {
     }
 
     bb2: {
-        _0 = copy _1 == const null;
-        goto -> bb3;
+        _0 = call const fn baml.ops.equals_equals(copy _1, const null) -> [bb3];
     }
 
     bb3: {

@@ -1575,6 +1575,55 @@ function baml.net.write(self: ?, data: uint8array, timeout: root.time.Duration? 
   {  } self._write(data, _timeout_nanos(timeout))
 }
 
+--- <builtin>/baml/ns_ops/comparison.baml ---
+function baml.ops.eq(self: ?, other: Self) -> bool  [builtin]
+function baml.ops.eq(self: ?, other: Self) -> bool  [expr] {
+  {  } true
+}
+function baml.ops.eq(self: ?, other: Self) -> bool  [expr] {
+  {  } baml.ops.equals_equals(self, other)
+}
+function baml.ops.eq(self: ?, other: Self) -> bool  [builtin]
+function baml.ops.eq(self: ?, other: Self) -> bool  [builtin]
+function baml.ops.eq(self: ?, other: Self) -> bool  [expr] {
+  {  } baml.ops.equals_equals(self, other)
+}
+function baml.ops.eq(self: ?, other: Self) -> bool  [builtin]
+function baml.ops.eq(self: ?, other: Self) -> bool  [builtin]
+function baml.ops.eq(self: ?, other: Self) -> bool  [builtin]
+function baml.ops.equals_equals(a: unknown, b: unknown) -> bool  [builtin]
+function baml.ops.ge(self: ?, other: Self) -> bool  [expr] {
+  {  } Not self.lt(other)
+}
+function baml.ops.ge(self: ?, other: Self) -> bool  [builtin]
+function baml.ops.ge(self: ?, other: Self) -> bool  [builtin]
+function baml.ops.gt(self: ?, other: Self) -> bool  [builtin]
+function baml.ops.gt(self: ?, other: Self) -> bool  [expr] {
+  {  } self And Not other
+}
+function baml.ops.gt(self: ?, other: Self) -> bool  [expr] {
+  {  } Not self.le(other)
+}
+function baml.ops.gt(self: ?, other: Self) -> bool  [builtin]
+function baml.ops.le(self: ?, other: Self) -> bool  [builtin]
+function baml.ops.le(self: ?, other: Self) -> bool  [builtin]
+function baml.ops.le(self: ?, other: Self) -> bool  [expr] {
+  {  } self.lt(other) Or self.eq(other)
+}
+function baml.ops.lt(self: ?, other: Self) -> bool  [builtin]
+function baml.ops.lt(self: ?, other: Self) -> bool  [expr] {
+  {  } Not self And other
+}
+function baml.ops.lt(self: ?, other: Self) -> bool  [builtin]
+function baml.ops.lt(self: ?, other: Self) -> bool  [builtin]
+function baml.ops.lt(self: ?, other: Self) -> bool  [builtin]
+function baml.ops.neq(self: ?, other: Self) -> bool  [expr] {
+  {  } Not self.eq(other)
+}
+function baml.ops.neq(self: ?, other: Self) -> bool  [expr] {
+  {  } false
+}
+
 --- <builtin>/baml/ns_panics/panics.baml ---
 class baml.panics.AllocFailure {
   message: string
