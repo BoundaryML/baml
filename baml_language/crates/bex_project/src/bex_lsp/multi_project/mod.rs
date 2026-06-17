@@ -174,6 +174,10 @@ impl BexMulitProject {
                     message: format!("Failed to check if path is a directory: {e}"),
                 })? =>
             {
+                let parent = path.parent();
+                if Self::has_baml_toml(&parent) {
+                    return Ok(parent);
+                }
                 return Ok(path.clone());
             }
             "baml.toml"
@@ -197,6 +201,10 @@ impl BexMulitProject {
                     message: format!("Failed to check if path is a directory: {e}"),
                 })?
             {
+                let owner = parent.parent();
+                if Self::has_baml_toml(&owner) {
+                    return Ok(owner);
+                }
                 return Ok(parent);
             }
 
@@ -259,6 +267,76 @@ impl BexMulitProject {
 
     fn refresh_project(&self, project_root: &vfs::VfsPath, refresh_mode: ProjectRefreshMode) {
         self.refresh_project_async(project_root, refresh_mode);
+    }
+
+    fn has_baml_toml(path: &vfs::VfsPath) -> bool {
+        path.join("baml.toml")
+            .ok()
+            .and_then(|path| path.exists().ok())
+            .unwrap_or(false)
+    }
+
+    fn discover_workspace_projects(&self, workspace_roots: Vec<vfs::VfsPath>) -> Vec<vfs::VfsPath> {
+        *self.workspace_roots.lock().unwrap() = workspace_roots.clone();
+
+        if workspace_roots.is_empty() {
+            tracing::warn!(
+                "No workspace roots provided during initialize — skipping project discovery"
+            );
+            return Vec::new();
+        }
+
+        let mut project_roots = Vec::new();
+        for root in &workspace_roots {
+            if let Ok(true) = root.is_dir() {
+                if Self::has_baml_toml(root) || root.filename().as_str() == "baml_src" {
+                    project_roots.push(root.clone());
+                }
+            } else if let Ok(pr) = Self::get_baml_project_root(root) {
+                project_roots.push(pr);
+            }
+
+            let Ok(dirs) = root.walk_dir() else {
+                tracing::warn!("Failed to walk workspace root: {}", root.as_str());
+                continue;
+            };
+            for entry in dirs.filter_map(Result::ok) {
+                if let Ok(pr) = Self::get_baml_project_root(&entry) {
+                    project_roots.push(pr);
+                }
+            }
+        }
+
+        project_roots.sort_by_key(|path| path.as_str().to_string());
+        project_roots.dedup_by(|a, b| a.as_str() == b.as_str());
+        let manifest_roots = project_roots
+            .iter()
+            .filter(|path| Self::has_baml_toml(path))
+            .map(|path| path.as_str().trim_end_matches('/').to_string())
+            .collect::<Vec<_>>();
+        project_roots.retain(|candidate| {
+            if Self::has_baml_toml(candidate) {
+                return true;
+            }
+            let candidate = candidate.as_str().trim_end_matches('/');
+            !manifest_roots.iter().any(|manifest_root| {
+                candidate != manifest_root
+                    && candidate
+                        .strip_prefix(manifest_root)
+                        .is_some_and(|suffix| suffix.starts_with('/'))
+            })
+        });
+
+        tracing::info!("Discovered {} BAML project(s)", project_roots.len());
+
+        for project_root in &project_roots {
+            let Ok(_) = self.get_or_create_project(project_root.clone()) else {
+                continue;
+            };
+            self.refresh_project(project_root, ProjectRefreshMode::Full);
+        }
+
+        project_roots
     }
 
     fn refresh_project_async(&self, project_root: &vfs::VfsPath, refresh_mode: ProjectRefreshMode) {
@@ -898,6 +976,21 @@ impl super::BexLsp for BexMulitProject {
             }
         }
         names.into_iter().collect()
+    }
+
+    fn initialize_workspace_roots(
+        &self,
+        roots: Vec<std::path::PathBuf>,
+    ) -> Result<Vec<String>, LspError> {
+        let roots = roots
+            .into_iter()
+            .map(|root| self.fs.get_path_from_path(&root, "lsp --workspace"))
+            .collect::<Result<Vec<_>, _>>()?;
+        let projects = self.discover_workspace_projects(roots);
+        Ok(projects
+            .into_iter()
+            .map(|project| project.as_str().to_string())
+            .collect())
     }
 
     fn request_playground_state(&self) {

@@ -44,7 +44,7 @@ pub mod playground_server;
 pub mod playground_session;
 pub mod playground_ws;
 
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use playground_env::{PlaygroundEnv, PlaygroundEnvState};
 use playground_http::{PlaygroundHttp, PlaygroundHttpState};
@@ -89,7 +89,10 @@ fn build_playground_sys_ops(
 /// 3. Creates `bex_project::BexLsp` via `bex_project::new_lsp`
 /// 4. Starts the playground HTTP/WS server
 /// 5. Runs the stdio LSP event loop
-pub fn run_server(playground_via_browser: bool) -> anyhow::Result<()> {
+pub fn run_server(
+    playground_via_browser: bool,
+    workspace_roots: Vec<PathBuf>,
+) -> anyhow::Result<()> {
     // Set up tracing → stderr so vscode-languageclient captures it
     // in the "BAML Language Server" output channel.
     tracing_subscriber::fmt()
@@ -162,19 +165,20 @@ pub fn run_server(playground_via_browser: bool) -> anyhow::Result<()> {
         };
 
     // Playground sender (needs port + lsp_sender for OpenPlayground)
-    let playground_sender = Arc::new(playground_sender::NativePlaygroundSender::new(
-        broadcast_tx.clone(),
-        lsp_sender.clone(),
-        playground_port,
-        playground_via_browser,
-    ));
+    let playground_sender: Arc<dyn bex_project::PlaygroundSender> =
+        Arc::new(playground_sender::NativePlaygroundSender::new(
+            broadcast_tx.clone(),
+            lsp_sender.clone(),
+            playground_port,
+            playground_via_browser,
+        ));
 
     // Create the BexLsp (multi-project LSP)
     let spawner = bex_project::BackgroundSpawner::with_handle(tokio_runtime.handle().clone());
     let bex = bex_project::new_lsp(
         sys_op_factory,
         lsp_sender,
-        playground_sender,
+        playground_sender.clone(),
         baml_vfs,
         spawner,
     );
@@ -197,6 +201,28 @@ pub fn run_server(playground_via_browser: bool) -> anyhow::Result<()> {
                 tracing::error!("Playground server exited: {e}");
             }
         });
+    }
+
+    let has_explicit_workspace_roots = !workspace_roots.is_empty();
+    let explicit_projects = if has_explicit_workspace_roots {
+        bex.initialize_workspace_roots(workspace_roots)?
+    } else {
+        Vec::new()
+    };
+
+    if playground_via_browser && playground_port != 0 {
+        if let Some(project) = explicit_projects.first() {
+            playground_sender.send_playground_notification(
+                bex_project::PlaygroundNotification::OpenPlayground {
+                    project: project.clone(),
+                    function_name: None,
+                    test_name: None,
+                    testset_name: None,
+                },
+            );
+        } else if has_explicit_workspace_roots {
+            tracing::warn!("No BAML projects discovered for explicit workspace roots");
+        }
     }
 
     // Spawn the stdout writer thread.

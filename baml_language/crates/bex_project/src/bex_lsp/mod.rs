@@ -8,6 +8,7 @@ mod multi_project;
 mod protocol;
 
 use async_trait::async_trait;
+use std::{path::PathBuf, sync::Arc};
 
 #[derive(Debug, thiserror::Error)]
 pub enum LspError {
@@ -190,6 +191,10 @@ pub trait BexLsp: Send + Sync + notification::BexLspNotification + request::BexL
 
     fn request_playground_state(&self);
 
+    /// Seed workspace roots when the LSP is launched without an editor client
+    /// that can provide `initialize.workspaceFolders`.
+    fn initialize_workspace_roots(&self, roots: Vec<PathBuf>) -> Result<Vec<String>, LspError>;
+
     fn ast_control_flow_graph(
         &self,
         function_name: &str,
@@ -262,5 +267,4 @@ pub trait BexLsp: Send + Sync + notification::BexLspNotification + request::BexL
     fn resolve_file_id(&self, file_id: u32) -> Option<String>;
 }
 
-use ::std::sync::Arc;
 pub use multi_project::{BackgroundSpawner, LspClientSenderTrait, new_lsp};
