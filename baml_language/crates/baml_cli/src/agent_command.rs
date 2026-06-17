@@ -12,6 +12,10 @@ use clap::Args;
 
 use crate::ExitCode;
 
+/// Upstream `owner/repo` slug that hosts the canonical BAML agent skills.
+const SKILL_REPO: &str = "BoundaryML/baml-skill";
+/// Branch used to resolve and download skills for `--latest`.
+const SKILL_BRANCH: &str = "main";
 const SKILL_SOURCE_URL: &str =
     "https://codeload.github.com/BoundaryML/baml-skill/tar.gz/refs/heads/main";
 const HTTP_TIMEOUT: Duration = Duration::from_secs(60);
@@ -44,12 +48,113 @@ pub(crate) struct AgentInstallArgs {
     /// Install skills from a tar.gz URL, local tar.gz archive, or local directory.
     #[arg(long, value_name = "URL_OR_PATH", conflicts_with = "latest")]
     pub from: Option<String>,
+
+    /// Report what would change without writing any files (dry run).
+    #[arg(long)]
+    pub check: bool,
 }
 
 #[derive(Debug)]
 struct Skill {
     name: String,
     content: String,
+}
+
+/// A resolved set of skills together with provenance for the install summary.
+///
+/// `reference` is a human-readable description of where the skills came from
+/// (a branch, release tag, URL, or local path). `commit` is the upstream
+/// commit SHA when it could be determined (only for `--latest`); it is `None`
+/// otherwise.
+#[derive(Debug)]
+struct SkillSource {
+    reference: String,
+    commit: Option<String>,
+    skills: Vec<Skill>,
+}
+
+/// A destination for installed skills, relative to the install root.
+///
+/// `label` is the agent family shown in the summary and `dir_display` is the
+/// forward-slash relative directory (e.g. `.claude/skills`) used both for
+/// display and to derive the on-disk path.
+struct InstallTarget {
+    label: &'static str,
+    dir_display: &'static str,
+}
+
+/// The outcome of (dry-run) installing a skill into one target directory.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SkillStatus {
+    /// The skill directory did not exist and was (or would be) created.
+    Created,
+    /// The skill existed with different content and was (or would be) refreshed.
+    Updated,
+    /// The on-disk content already matched the source; nothing changed.
+    Unchanged,
+}
+
+/// The per-skill statuses computed for a single install target.
+#[derive(Debug)]
+struct TargetReport {
+    label: &'static str,
+    dir_display: &'static str,
+    statuses: Vec<(String, SkillStatus)>,
+}
+
+impl SkillStatus {
+    /// Classifies the install status by comparing the desired `SKILL.md`
+    /// content with what is currently on disk.
+    ///
+    /// `existing` is the current file content (`None` if the file is absent),
+    /// and `desired` is the content that would be written. Returns
+    /// [`SkillStatus::Created`] when absent, [`SkillStatus::Unchanged`] when
+    /// byte-identical, and [`SkillStatus::Updated`] otherwise.
+    fn classify(existing: Option<&str>, desired: &str) -> SkillStatus {
+        match existing {
+            None => SkillStatus::Created,
+            Some(current) if current == desired => SkillStatus::Unchanged,
+            Some(_) => SkillStatus::Updated,
+        }
+    }
+
+    /// Returns the past-tense label shown after a real install.
+    fn install_label(self) -> &'static str {
+        match self {
+            SkillStatus::Created => "created",
+            SkillStatus::Updated => "updated",
+            SkillStatus::Unchanged => "unchanged (already latest)",
+        }
+    }
+
+    /// Returns the conditional label shown for a `--check` dry run.
+    fn check_label(self) -> &'static str {
+        match self {
+            SkillStatus::Created => "would create",
+            SkillStatus::Updated => "would update",
+            SkillStatus::Unchanged => "up to date",
+        }
+    }
+
+    /// Returns whether this status represents a change to the install tree.
+    fn is_change(self) -> bool {
+        !matches!(self, SkillStatus::Unchanged)
+    }
+}
+
+/// Returns the ordered list of install targets (Claude Code first, then the
+/// shared Codex / OpenCode directory). The order controls the summary layout.
+fn install_targets() -> [InstallTarget; 2] {
+    [
+        InstallTarget {
+            label: "Claude Code",
+            dir_display: ".claude/skills",
+        },
+        InstallTarget {
+            label: "Codex / OpenCode",
+            dir_display: ".agents/skills",
+        },
+    ]
 }
 
 #[derive(Debug)]
@@ -74,44 +179,109 @@ impl AgentArgs {
 }
 
 impl AgentInstallArgs {
+    /// Resolves the install root, loads the requested skills, then either
+    /// installs them or (with `--check`) reports what would change, printing a
+    /// per-skill, per-target status summary and the source ref/commit.
+    ///
+    /// Returns [`ExitCode::Success`] on success, or an error if the root cannot
+    /// be resolved, the skills cannot be loaded, or a write fails.
     pub fn run(&self) -> Result<ExitCode> {
         let root = match &self.dir {
-            Some(dir) => explicit_install_root(dir)?,
+            Some(dir) => explicit_install_root(dir, !self.check)?,
             None => detect_install_root()?,
         };
-        let skills = load_skills(self)?;
-        install_skills(&root, &skills)?;
-        print_success(&root)?;
+        let source = load_skills(self)?;
+        let reports = if self.check {
+            check_skills(&root, &source.skills)
+        } else {
+            install_skills(&root, &source.skills)?
+        };
+        print_report(&root, &source, &reports, self.check)?;
         Ok(ExitCode::Success)
     }
 }
 
-fn load_skills(args: &AgentInstallArgs) -> Result<Vec<Skill>> {
+/// Loads the skills selected by `args` along with their provenance.
+///
+/// Dispatches to `--latest`, `--from <url-or-path>`, or the default versioned
+/// release. Returns the resolved [`SkillSource`], or an error if the source
+/// cannot be fetched, read, or parsed.
+fn load_skills(args: &AgentInstallArgs) -> Result<SkillSource> {
     if args.latest {
-        let archive = fetch_url_bytes(SKILL_SOURCE_URL)?;
-        return skills_from_archive(&archive);
+        return load_latest_skills();
     }
 
     if let Some(source) = &args.from {
-        if is_http_url(source) {
-            let archive = fetch_url_bytes(source)?;
-            return skills_from_archive(&archive);
-        }
-
-        let path = Path::new(source);
-        if path.is_dir() {
-            return skills_from_dir(path);
-        }
-
-        let archive = fs::read(path).with_context(|| {
-            format!(
-                "failed to read BAML agent skills archive {}",
-                path.display()
-            )
-        })?;
-        return skills_from_archive(&archive);
+        return load_skills_from(source);
     }
 
+    load_release_skills()
+}
+
+/// Loads skills from the `main` branch of `BoundaryML/baml-skill`.
+///
+/// Resolves the current commit SHA (best effort) and, when known, downloads
+/// that exact commit so the reported commit matches the installed bytes.
+/// Returns the [`SkillSource`], or an error if the archive cannot be fetched
+/// or parsed.
+fn load_latest_skills() -> Result<SkillSource> {
+    let commit = resolve_latest_commit();
+    let url = match commit.as_deref() {
+        Some(sha) => format!("https://codeload.github.com/{SKILL_REPO}/tar.gz/{sha}"),
+        None => SKILL_SOURCE_URL.to_string(),
+    };
+    let archive = fetch_url_bytes(&url)?;
+    Ok(SkillSource {
+        reference: format!("{SKILL_REPO}@{SKILL_BRANCH}"),
+        commit,
+        skills: skills_from_archive(&archive)?,
+    })
+}
+
+/// Loads skills from a user-supplied `--from` source.
+///
+/// `source` may be an HTTP(S) tar.gz URL, a local directory, or a local
+/// tar.gz archive. Returns the [`SkillSource`] with a `reference` describing
+/// the origin and no commit, or an error if the source cannot be read.
+fn load_skills_from(source: &str) -> Result<SkillSource> {
+    if is_http_url(source) {
+        let archive = fetch_url_bytes(source)?;
+        return Ok(SkillSource {
+            reference: source.to_string(),
+            commit: None,
+            skills: skills_from_archive(&archive)?,
+        });
+    }
+
+    let path = Path::new(source);
+    if path.is_dir() {
+        return Ok(SkillSource {
+            reference: format!("{} (local directory)", path.display()),
+            commit: None,
+            skills: skills_from_dir(path)?,
+        });
+    }
+
+    let archive = fs::read(path).with_context(|| {
+        format!(
+            "failed to read BAML agent skills archive {}",
+            path.display()
+        )
+    })?;
+    Ok(SkillSource {
+        reference: format!("{} (local archive)", path.display()),
+        commit: None,
+        skills: skills_from_archive(&archive)?,
+    })
+}
+
+/// Loads skills from the versioned release asset matching this CLI build.
+///
+/// The version is taken from `BAML_AGENT_SKILLS_RELEASE_VERSION` or the
+/// canonical build version, the archive checksum is verified, and the
+/// [`SkillSource`] is returned. Errors propagate from fetching, checksum
+/// verification, or parsing.
+fn load_release_skills() -> Result<SkillSource> {
     let version = env_var_nonempty("BAML_AGENT_SKILLS_RELEASE_VERSION")
         .unwrap_or_else(|| baml_version::CANONICAL_VERSION.to_string());
     let url = versioned_skill_archive_url(&version);
@@ -119,7 +289,23 @@ fn load_skills(args: &AgentInstallArgs) -> Result<Vec<Skill>> {
     let checksum_text = fetch_url_text(&format!("{url}.sha256"))?;
     baml_release::verify_release_archive_checksum_text(&archive, &url, &checksum_text)
         .context("verifying agent skills archive checksum failed")?;
-    skills_from_archive(&archive)
+    Ok(SkillSource {
+        reference: format!("baml-language-{version} release"),
+        commit: None,
+        skills: skills_from_archive(&archive)?,
+    })
+}
+
+/// Resolves the current commit SHA of the skills repo's `main` branch via the
+/// GitHub API.
+///
+/// This is best effort: any network, HTTP, or JSON failure yields `None` so
+/// installation still proceeds without a verified commit.
+fn resolve_latest_commit() -> Option<String> {
+    let url = format!("https://api.github.com/repos/{SKILL_REPO}/commits/{SKILL_BRANCH}");
+    let text = fetch_url_text(&url).ok()?;
+    let json = serde_json::from_str::<serde_json::Value>(&text).ok()?;
+    json.get("sha")?.as_str().map(str::to_string)
 }
 
 fn is_http_url(value: &str) -> bool {
@@ -190,10 +376,24 @@ fn fetch_url_bytes(url: &str) -> Result<Vec<u8>> {
         .to_vec())
 }
 
-fn explicit_install_root(dir: &Path) -> Result<PathBuf> {
-    fs::create_dir_all(dir).with_context(|| format!("failed to create {}", dir.display()))?;
-    dir.canonicalize()
-        .with_context(|| format!("failed to resolve {}", dir.display()))
+/// Resolves the explicit `--dir` install root to an absolute path.
+///
+/// When `create` is true the directory is created if missing and then
+/// canonicalized. When `create` is false (a `--check` dry run) a missing
+/// directory is left untouched and resolved with [`std::path::absolute`] so
+/// the dry run never writes to disk. Returns an error if creation or
+/// resolution fails.
+fn explicit_install_root(dir: &Path, create: bool) -> Result<PathBuf> {
+    if create {
+        fs::create_dir_all(dir).with_context(|| format!("failed to create {}", dir.display()))?;
+    }
+    match dir.canonicalize() {
+        Ok(path) => Ok(path),
+        Err(_) if !create && !dir.exists() => {
+            std::path::absolute(dir).with_context(|| format!("failed to resolve {}", dir.display()))
+        }
+        Err(err) => Err(err).with_context(|| format!("failed to resolve {}", dir.display())),
+    }
 }
 
 fn detect_install_root() -> Result<PathBuf> {
@@ -462,13 +662,70 @@ fn replace_frontmatter_name(frontmatter: &str, name: &str) -> Result<String> {
     Ok(out)
 }
 
-fn install_skills(root: &Path, skills: &[Skill]) -> Result<()> {
-    install_skills_to(root, Path::new(".agents").join("skills"), skills)?;
-    install_skills_to(root, Path::new(".claude").join("skills"), skills)?;
-    Ok(())
+/// Installs `skills` into every target directory under `root`.
+///
+/// For each target the per-skill status is computed immediately before
+/// writing, then the skills are installed. Returns one [`TargetReport`] per
+/// target in display order, or an error if any write fails.
+fn install_skills(root: &Path, skills: &[Skill]) -> Result<Vec<TargetReport>> {
+    let mut reports = Vec::new();
+    for target in install_targets() {
+        let statuses = target_statuses(root, &target, skills);
+        install_skills_to(root, Path::new(target.dir_display), skills)?;
+        reports.push(TargetReport {
+            label: target.label,
+            dir_display: target.dir_display,
+            statuses,
+        });
+    }
+    Ok(reports)
 }
 
-fn install_skills_to(root: &Path, relative_skills_dir: PathBuf, skills: &[Skill]) -> Result<()> {
+/// Computes the per-target, per-skill status without writing anything.
+///
+/// Used by `--check` to report what an install would do. Returns one
+/// [`TargetReport`] per target in display order.
+fn check_skills(root: &Path, skills: &[Skill]) -> Vec<TargetReport> {
+    install_targets()
+        .iter()
+        .map(|target| TargetReport {
+            label: target.label,
+            dir_display: target.dir_display,
+            statuses: target_statuses(root, target, skills),
+        })
+        .collect()
+}
+
+/// Computes the [`SkillStatus`] for every skill in a single `target` without
+/// modifying disk.
+///
+/// Reads each skill's existing `SKILL.md` (treating read failures as absent)
+/// and compares it against the source content. Returns `(name, status)` pairs
+/// in the same order as `skills`.
+fn target_statuses(
+    root: &Path,
+    target: &InstallTarget,
+    skills: &[Skill],
+) -> Vec<(String, SkillStatus)> {
+    let skills_dir = root.join(target.dir_display);
+    skills
+        .iter()
+        .map(|skill| {
+            let path = skills_dir.join(&skill.name).join("SKILL.md");
+            let existing = fs::read_to_string(&path).ok();
+            let status = SkillStatus::classify(existing.as_deref(), &skill.content);
+            (skill.name.clone(), status)
+        })
+        .collect()
+}
+
+/// Installs every skill into `root/relative_skills_dir`, replacing any existing
+/// `baml-*` skill directories atomically while preserving unrelated skills.
+///
+/// `relative_skills_dir` is the per-target relative directory (e.g.
+/// `.claude/skills`). Returns an error if any directory or file operation
+/// fails; partial installs are rolled back per skill where possible.
+fn install_skills_to(root: &Path, relative_skills_dir: &Path, skills: &[Skill]) -> Result<()> {
     let skills_dir = root.join(relative_skills_dir);
     fs::create_dir_all(&skills_dir)
         .with_context(|| format!("failed to create {}", skills_dir.display()))?;
@@ -577,13 +834,87 @@ fn write_atomic(path: &Path, content: &str) -> Result<()> {
     Ok(())
 }
 
-fn print_success(root: &Path) -> Result<()> {
-    writeln!(
-        std::io::stdout(),
-        "Installed BAML agent skills in {}\n\nClaude Code:\n  .claude/skills/baml-*/SKILL.md\n\nCodex / OpenCode:\n  .agents/skills/baml-*/SKILL.md\n\nRestart any already-running agent session to pick them up.",
-        root.display()
-    )?;
+/// Renders and writes the install (or dry-run) summary to stdout.
+///
+/// Delegates to [`render_report`] and writes the result. Returns an error if
+/// stdout cannot be written.
+fn print_report(
+    root: &Path,
+    source: &SkillSource,
+    reports: &[TargetReport],
+    check: bool,
+) -> Result<()> {
+    let text = render_report(root, source, reports, check);
+    write!(std::io::stdout(), "{text}")?;
     Ok(())
+}
+
+/// Builds the install (or dry-run) summary string.
+///
+/// The summary lists the install root, the source `reference` and resolved
+/// `commit` (when known), a per-skill status line under each target, and a
+/// trailing reminder (real install) or freshness verdict (`--check`). When
+/// `check` is true, conditional ("would create") labels are used and no files
+/// are written by the caller. Returns the rendered text.
+fn render_report(
+    root: &Path,
+    source: &SkillSource,
+    reports: &[TargetReport],
+    check: bool,
+) -> String {
+    use std::fmt::Write as _;
+
+    let mut out = String::new();
+    let header = if check {
+        "Checked BAML agent skills in"
+    } else {
+        "Installed BAML agent skills in"
+    };
+    let _ = writeln!(out, "{header} {}", root.display());
+    match &source.commit {
+        Some(commit) => {
+            let _ = writeln!(out, "Source: {} (commit {commit})", source.reference);
+        }
+        None => {
+            let _ = writeln!(out, "Source: {}", source.reference);
+        }
+    }
+
+    for report in reports {
+        let _ = writeln!(out, "\n{} ({}):", report.label, report.dir_display);
+        for (name, status) in &report.statuses {
+            let label = if check {
+                status.check_label()
+            } else {
+                status.install_label()
+            };
+            let _ = writeln!(out, "  {name}: {label}");
+        }
+    }
+
+    out.push('\n');
+    if check {
+        let changes = reports
+            .iter()
+            .flat_map(|report| &report.statuses)
+            .filter(|(_, status)| status.is_change())
+            .count();
+        if changes == 0 {
+            let _ = writeln!(out, "All BAML agent skills are already up to date.");
+        } else {
+            let _ = writeln!(
+                out,
+                "{changes} skill installation(s) are out of date; run `baml agent install` to apply them."
+            );
+        }
+    } else {
+        let _ = writeln!(
+            out,
+            "Restart any already-running agent session to pick them up."
+        );
+    }
+
+    out
 }
 
 #[cfg(test)]
@@ -778,10 +1109,168 @@ mod tests {
 
         let old = std::env::current_dir().unwrap();
         std::env::set_current_dir(&nested).unwrap();
-        let root = explicit_install_root(&explicit).unwrap();
+        let root = explicit_install_root(&explicit, true).unwrap();
         std::env::set_current_dir(old).unwrap();
 
         assert_eq!(root, explicit.canonicalize().unwrap());
+    }
+
+    #[test]
+    fn check_mode_does_not_create_missing_explicit_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        let missing = tmp.path().join("does-not-exist");
+
+        let root = explicit_install_root(&missing, false).unwrap();
+
+        assert_eq!(root, missing);
+        assert!(!missing.exists());
+    }
+
+    #[test]
+    fn skill_status_classifies_created_updated_and_unchanged() {
+        assert_eq!(SkillStatus::classify(None, "x"), SkillStatus::Created);
+        assert_eq!(
+            SkillStatus::classify(Some("x"), "x"),
+            SkillStatus::Unchanged
+        );
+        assert_eq!(
+            SkillStatus::classify(Some("old"), "new"),
+            SkillStatus::Updated
+        );
+    }
+
+    #[test]
+    fn target_statuses_reflect_disk_state() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let target = &install_targets()[0];
+        let existing = root
+            .join(target.dir_display)
+            .join("baml-core")
+            .join("SKILL.md");
+        fs::create_dir_all(existing.parent().unwrap()).unwrap();
+        fs::write(&existing, skill("baml-core")).unwrap();
+
+        let skills = vec![
+            Skill {
+                name: "baml-core".to_string(),
+                content: skill("baml-core"),
+            },
+            Skill {
+                name: "baml-overview".to_string(),
+                content: skill("baml-overview"),
+            },
+        ];
+
+        let statuses = target_statuses(root, target, &skills);
+
+        assert_eq!(
+            statuses,
+            vec![
+                ("baml-core".to_string(), SkillStatus::Unchanged),
+                ("baml-overview".to_string(), SkillStatus::Created),
+            ]
+        );
+    }
+
+    #[test]
+    fn check_skills_does_not_write_to_disk() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let skills = vec![Skill {
+            name: "baml-core".to_string(),
+            content: skill("baml-core"),
+        }];
+
+        let reports = check_skills(root, &skills);
+
+        assert_eq!(reports.len(), 2);
+        for report in &reports {
+            assert_eq!(
+                report.statuses,
+                vec![("baml-core".to_string(), SkillStatus::Created)]
+            );
+        }
+        assert!(!root.join(".claude").exists());
+        assert!(!root.join(".agents").exists());
+    }
+
+    #[test]
+    fn install_then_reinstall_reports_created_then_unchanged() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let skills = vec![Skill {
+            name: "baml-core".to_string(),
+            content: skill("baml-core"),
+        }];
+
+        let first = install_skills(root, &skills).unwrap();
+        assert!(
+            first
+                .iter()
+                .flat_map(|report| &report.statuses)
+                .all(|(_, status)| *status == SkillStatus::Created)
+        );
+
+        let second = install_skills(root, &skills).unwrap();
+        assert!(
+            second
+                .iter()
+                .flat_map(|report| &report.statuses)
+                .all(|(_, status)| *status == SkillStatus::Unchanged)
+        );
+    }
+
+    #[test]
+    fn render_report_shows_commit_and_statuses() {
+        let source = SkillSource {
+            reference: format!("{SKILL_REPO}@{SKILL_BRANCH}"),
+            commit: Some("0baf1692be0ff85bbe3fc3ecabe84b00a010b020".to_string()),
+            skills: Vec::new(),
+        };
+        let reports = vec![TargetReport {
+            label: "Claude Code",
+            dir_display: ".claude/skills",
+            statuses: vec![
+                ("baml-core".to_string(), SkillStatus::Unchanged),
+                ("baml-overview".to_string(), SkillStatus::Updated),
+            ],
+        }];
+
+        let install = render_report(Path::new("/tmp/staging"), &source, &reports, false);
+        assert!(install.contains("Installed BAML agent skills in /tmp/staging"));
+        assert!(install.contains(
+            "Source: BoundaryML/baml-skill@main (commit 0baf1692be0ff85bbe3fc3ecabe84b00a010b020)"
+        ));
+        assert!(install.contains("Claude Code (.claude/skills):"));
+        assert!(install.contains("baml-core: unchanged (already latest)"));
+        assert!(install.contains("baml-overview: updated"));
+        assert!(install.contains("Restart any already-running agent session"));
+
+        let check = render_report(Path::new("/tmp/staging"), &source, &reports, true);
+        assert!(check.contains("Checked BAML agent skills in /tmp/staging"));
+        assert!(check.contains("baml-core: up to date"));
+        assert!(check.contains("baml-overview: would update"));
+        assert!(check.contains("out of date"));
+    }
+
+    #[test]
+    fn render_report_without_commit_omits_commit_suffix() {
+        let source = SkillSource {
+            reference: "/tmp/skillsrc (local directory)".to_string(),
+            commit: None,
+            skills: Vec::new(),
+        };
+        let reports = vec![TargetReport {
+            label: "Claude Code",
+            dir_display: ".claude/skills",
+            statuses: vec![("baml-core".to_string(), SkillStatus::Unchanged)],
+        }];
+
+        let check = render_report(Path::new("/tmp/staging"), &source, &reports, true);
+        assert!(check.contains("Source: /tmp/skillsrc (local directory)"));
+        assert!(!check.contains("commit"));
+        assert!(check.contains("All BAML agent skills are already up to date."));
     }
 
     fn skill(name: &str) -> String {
