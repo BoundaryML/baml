@@ -37,13 +37,12 @@ methods:
   /// Splits the string into lines, recognizing both `\n` and `\r\n` as line
   function lines(self) -> string[]
   /// Returns the substring between two **character** offsets `[start, end)`.
-  function substring(self, start: int, end: int) -> string throws root.errors.InvalidArgument
+  function substring(self, start: int, end: int) -> string
   /// Replaces the first occurrence of `search` with `replacement`.
   function replace(self, search: string, replacement: string) -> string
   /// Returns the **character index** of the first occurrence of `search`, or
   function index_of(self, search: string) -> int
-  /// Returns the character at the given **codepoint index** as a
-  function char_at(self, index: int) -> string throws root.errors.InvalidArgument
+  function char_at(self, index: int) -> string
   /// Returns a new string that repeats `self` the given number of times.
   function repeat(self, count: int) -> string
   /// Returns true if the string contains the given `substring`.

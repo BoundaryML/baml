@@ -93,8 +93,14 @@ function byte_strings_index_oob() -> int {
     b"a"[5]
 }
 
-function byte_strings_index_neg() -> int {
+// b"a" = [97]; [-1] counts from the end → the last (only) byte.
+function byte_strings_index_neg_in_bounds() -> int {
     b"a"[-1]
+}
+
+// [-2] is past the start of a length-1 array (it normalizes to -1).
+function byte_strings_index_before_start() -> int {
+    b"a"[-2]
 }
 
 // B8. Helper function defined inline alongside main — used by literal_as_call_argument.
@@ -143,8 +149,14 @@ test "at_out_of_bounds" {
     assert.equal(b"abc".at(10), null)
 }
 
+// b"abc" = [97, 98, 99]; .at(-1) counts from the end → the last byte.
 test "at_negative_index" {
-    assert.equal(b"abc".at(-1), null)
+    assert.equal(b"abc".at(-1), 99)
+}
+
+// Past the start (b"abc".at(-4) normalizes to -1) → null, like Array.at.
+test "at_negative_out_of_bounds" {
+    assert.equal(b"abc".at(-4), null)
 }
 
 // ─── B3. Uint8Array.zeroes (literal only) ─────────────────────────────────────
@@ -178,9 +190,15 @@ test "index_out_of_bounds" {
     }
 }
 
-test "index_negative" {
+// [-1] counts from the end and lands in bounds → the last byte (no panic).
+test "index_negative_in_bounds" {
+    assert.equal(byte_strings_index_neg_in_bounds(), 97)
+}
+
+// An index past the start raises IndexOutOfBounds, unlike Array.at.
+test "index_before_start" {
     {
-        byte_strings_index_neg();
+        byte_strings_index_before_start();
         baml.sys.panic("expected throw")
     } catch (e) {
         baml.panics.IndexOutOfBounds => null

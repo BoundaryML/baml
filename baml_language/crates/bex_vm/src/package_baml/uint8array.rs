@@ -3,6 +3,7 @@ use bex_vm_types::Value;
 use super::{BamlClassUint8Array, PackageBamlImpl, json::raise_serialize_no_path};
 use crate::{
     BexVm, VmPanic,
+    array_index::{resolve_index, resolve_slice_bound},
     errors::{VmBamlError, VmRustFnError},
 };
 
@@ -23,10 +24,7 @@ impl BamlClassUint8Array for PackageBamlImpl {
     }
 
     fn at(uint8array: &[u8], index: i64) -> Option<i64> {
-        let Ok(index) = usize::try_from(index) else {
-            return None;
-        };
-        uint8array.get(index).map(|&b| i64::from(b))
+        resolve_index(index, uint8array.len()).map(|i| i64::from(uint8array[i]))
     }
 
     #[allow(clippy::cast_possible_wrap)]
@@ -57,16 +55,10 @@ impl BamlClassUint8Array for PackageBamlImpl {
         uint8array.iter().copied().rev().collect()
     }
 
-    #[allow(
-        clippy::cast_sign_loss,
-        clippy::cast_possible_truncation,
-        clippy::cast_possible_wrap
-    )]
     fn slice(uint8array: &[u8], start: i64, end: i64) -> Vec<u8> {
-        let len = uint8array.len() as i64;
-        let start = start.clamp(0, len);
-        let end = end.clamp(start, len) as usize;
-        let start = start as usize;
+        let start = resolve_slice_bound(start, uint8array.len());
+        // An `end` resolving before `start` yields an empty slice.
+        let end = resolve_slice_bound(end, uint8array.len()).max(start);
         uint8array[start..end].to_vec()
     }
 

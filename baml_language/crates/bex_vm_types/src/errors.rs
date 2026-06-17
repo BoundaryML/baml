@@ -21,7 +21,9 @@ pub enum VmPanic {
     #[error("division by zero: {left:?} / {right:?}")]
     DivisionByZero { left: Value, right: Value },
 
-    #[error("array index out of bounds: {index} of {length}")]
+    // Raised by array/byte-array subscripting and `string.char_at`, so the
+    // message stays generic ("index", not "array index").
+    #[error("index out of bounds: {index} of {length}")]
     IndexOutOfBounds { index: i64, length: usize },
 
     #[error("invalid field access: field {field_index} of {field_count}")]

@@ -423,9 +423,16 @@ test "array_remove_at_out_of_bounds_returns_null_and_keeps_array" {
     assert.is_true(baml.deep_equals(xs, expected))
 }
 
-test "array_remove_at_negative_returns_null_and_keeps_array" {
+test "array_remove_at_negative_counts_from_end" {
     let xs = [10, 20, 30];
-    assert.equal(xs.remove_at(-1), null);
+    assert.equal(xs.remove_at(-1), 30);
+    let expected = [10, 20];
+    assert.is_true(baml.deep_equals(xs, expected))
+}
+
+test "array_remove_at_past_start_returns_null_and_keeps_array" {
+    let xs = [10, 20, 30];
+    assert.equal(xs.remove_at(-4), null);
     let expected = [10, 20, 30];
     assert.is_true(baml.deep_equals(xs, expected))
 }
@@ -525,10 +532,18 @@ test "array_insert_empty_array_at_zero" {
     assert.is_true(baml.deep_equals(xs, expected))
 }
 
-test "array_insert_negative_throws" {
+// idx -1 counts from the end → inserts before the last element.
+test "array_insert_negative_counts_from_end" {
+    let xs = [1, 2, 3];
+    assert.equal(xs.insert(9, -1), 4);
+    let expected = [1, 2, 9, 3];
+    assert.is_true(baml.deep_equals(xs, expected))
+}
+
+test "array_insert_past_start_throws" {
     {
         let xs = [1, 2, 3];
-        xs.insert(0, -1);
+        xs.insert(0, -4);
         baml.sys.panic("expected insert to throw")
     } catch (e) {
         baml.errors.InvalidArgument => null
@@ -595,10 +610,18 @@ test "array_splice_replace_with_longer" {
     assert.is_true(baml.deep_equals(xs, expected))
 }
 
-test "array_splice_negative_start_throws" {
+// start -2 counts from the end → replaces starting at index length - 2.
+test "array_splice_negative_start_counts_from_end" {
+    let xs = [0, 1, 2, 3, 4];
+    xs.splice(-2, 1, [9, 9]);
+    let expected = [0, 1, 2, 9, 9, 4];
+    assert.is_true(baml.deep_equals(xs, expected))
+}
+
+test "array_splice_past_start_throws" {
     {
         let xs = [1, 2, 3];
-        xs.splice(-1, 0, []);
+        xs.splice(-4, 0, []);
         baml.sys.panic("expected splice to throw")
     } catch (e) {
         baml.errors.InvalidArgument => null
@@ -843,4 +866,136 @@ test "array_flat_map_uneven_inner_lengths" {
         }),
         [1, 20, 21, 22, 3]
     ))
+}
+
+// ─── at ────────────────────────────────────────────────────────────────────────
+
+test "array_at_positive" {
+    assert.equal([10, 20, 30].at(0), 10);
+    assert.equal([10, 20, 30].at(2), 30)
+}
+
+// -1 is the last element; -3 is the first.
+test "array_at_negative_counts_from_end" {
+    assert.equal([10, 20, 30].at(-1), 30);
+    assert.equal([10, 20, 30].at(-3), 10)
+}
+
+test "array_at_past_end_is_null" {
+    assert.equal([10, 20, 30].at(3), null);
+    assert.equal([10, 20, 30].at(99), null)
+}
+
+// -4 normalizes to -1, before the start → null (no panic, unlike `[]`).
+test "array_at_past_start_is_null" {
+    assert.equal([10, 20, 30].at(-4), null)
+}
+
+test "array_at_empty_is_null" {
+    let xs: int[] = [];
+    assert.equal(xs.at(0), null);
+    assert.equal(xs.at(-1), null)
+}
+
+// ─── subscript [] read ─────────────────────────────────────────────────────────
+
+// A bare `[...][i]` in a test block is swallowed by the value-boxing path and
+// never throws, so the indexing is wrapped in a function (see the file header).
+function array_index_read(idx: int) -> int {
+    let xs = [10, 20, 30];
+    xs[idx]
+}
+
+test "array_index_read_positive" {
+    assert.equal(array_index_read(0), 10)
+}
+
+// -1 is the last element; -3 is the first.
+test "array_index_read_negative_counts_from_end" {
+    assert.equal(array_index_read(-1), 30);
+    assert.equal(array_index_read(-3), 10)
+}
+
+test "array_index_read_past_end_panics" {
+    {
+        array_index_read(3);
+        baml.sys.panic("expected index out of bounds")
+    } catch (e) {
+        baml.panics.IndexOutOfBounds => null
+    }
+}
+
+// -4 normalizes to -1, before the start → panic (unlike `at`, which is null).
+test "array_index_read_past_start_panics" {
+    {
+        array_index_read(-4);
+        baml.sys.panic("expected index out of bounds")
+    } catch (e) {
+        baml.panics.IndexOutOfBounds => null
+    }
+}
+
+// ─── subscript [] write ────────────────────────────────────────────────────────
+
+function array_index_write(idx: int) -> int[] {
+    let xs = [10, 20, 30];
+    xs[idx] = 99;
+    xs
+}
+
+// Writing through a negative index targets the element counted from the end.
+test "array_index_write_negative_counts_from_end" {
+    assert.is_true(baml.deep_equals(array_index_write(-1), [10, 20, 99]))
+}
+
+test "array_index_write_past_end_panics" {
+    {
+        array_index_write(3);
+        baml.sys.panic("expected index out of bounds")
+    } catch (e) {
+        baml.panics.IndexOutOfBounds => null
+    }
+}
+
+test "array_index_write_past_start_panics" {
+    {
+        array_index_write(-4);
+        baml.sys.panic("expected index out of bounds")
+    } catch (e) {
+        baml.panics.IndexOutOfBounds => null
+    }
+}
+
+// ─── slice ─────────────────────────────────────────────────────────────────────
+
+test "array_slice_basic" {
+    assert.is_true(baml.deep_equals([1, 2, 3, 4].slice(1, 3), [2, 3]))
+}
+
+test "array_slice_negative_start" {
+    assert.is_true(baml.deep_equals([1, 2, 3].slice(-2, 3), [2, 3]))
+}
+
+test "array_slice_negative_end" {
+    assert.is_true(baml.deep_equals([1, 2, 3, 4].slice(0, -1), [1, 2, 3]))
+}
+
+test "array_slice_negative_both" {
+    assert.is_true(baml.deep_equals([1, 2, 3, 4, 5].slice(-3, -1), [3, 4]))
+}
+
+// An `end` that resolves at or before `start` yields an empty array.
+test "array_slice_end_before_start_is_empty" {
+    assert.is_true(baml.deep_equals([1, 2, 3].slice(2, 1), []));
+    assert.is_true(baml.deep_equals([1, 2, 3].slice(-1, -2), []))
+}
+
+// Out-of-range bounds clamp to `[0, length]`.
+test "array_slice_clamps_out_of_range" {
+    assert.is_true(baml.deep_equals([1, 2, 3].slice(-100, 100), [1, 2, 3]))
+}
+
+test "array_slice_empty_array" {
+    let xs: int[] = [];
+    assert.is_true(baml.deep_equals(xs.slice(-1, 5), []))
 }
