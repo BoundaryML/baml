@@ -226,8 +226,13 @@ pub fn package_items<'db>(db: &'db dyn crate::Db, package_id: PackageId<'db>) ->
     PackageItems { namespaces, extra }
 }
 
-/// Declares the packages that `package_id` depends on.
-/// Currently hardcoded: "user" depends on "baml", everything else depends on nothing.
+/// The *direct* dependencies of `package_id` (hardcoded for now).
+///
+/// Note these lists are not uniformly flattened: `testing`/`assert` list `baml`
+/// but not `baml`'s own `log`/`reflect`. Callers that need every package whose
+/// items could be visible from `package_id` (interface coherence,
+/// `type_implements_with_deps`) must use [`package_dependency_closure`], not this
+/// direct list.
 #[salsa::tracked(returns(ref))]
 pub fn package_dependencies<'db>(
     db: &'db dyn crate::Db,
@@ -256,4 +261,34 @@ pub fn package_dependencies<'db>(
             PackageId::new(db, Name::new("reflect")),
         ],
     }
+}
+
+/// The full transitive dependency closure of `package_id` (excluding itself), in
+/// deterministic breadth-first order with duplicates removed.
+///
+/// Unlike [`package_dependencies`] (direct-only, not uniformly flattened), this
+/// is what coherence and membership checks need: every package whose impls could
+/// be visible from `package_id`, regardless of how flat the direct lists happen
+/// to be. The walk is cycle-safe (a `seen` set), though the dependency graph is
+/// currently a DAG.
+#[salsa::tracked(returns(ref))]
+pub fn package_dependency_closure<'db>(
+    db: &'db dyn crate::Db,
+    package_id: PackageId<'db>,
+) -> Vec<PackageId<'db>> {
+    let mut seen: std::collections::HashSet<PackageId<'db>> = std::collections::HashSet::new();
+    let mut order: Vec<PackageId<'db>> = Vec::new();
+    let mut queue: std::collections::VecDeque<PackageId<'db>> =
+        package_dependencies(db, package_id)
+            .iter()
+            .copied()
+            .collect();
+    while let Some(dep) = queue.pop_front() {
+        if dep == package_id || !seen.insert(dep) {
+            continue;
+        }
+        order.push(dep);
+        queue.extend(package_dependencies(db, dep).iter().copied());
+    }
+    order
 }

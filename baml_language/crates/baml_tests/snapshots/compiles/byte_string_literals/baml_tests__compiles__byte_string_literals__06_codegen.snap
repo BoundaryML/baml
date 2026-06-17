@@ -28,7 +28,7 @@ function user.ByteStringEquality() -> bool {
     call baml.deep_copy
     load_const b"\x61\x62\x63"
     call baml.deep_copy
-    cmp_op ==
+    call baml.ops.equals_equals
     return
 }
 

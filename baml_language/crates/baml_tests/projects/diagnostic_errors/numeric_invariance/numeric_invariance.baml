@@ -79,8 +79,10 @@ function OptionalIntLtInt(x: int?, y: int) -> bool {
     x < y
 }
 
-// Float vs bigint equality, even through an Optional, has no sound upcast
-// (the common type `float? | bigint` still pairs float with bigint).
+// Float vs bigint equality, even through an Optional, is always `false`: no
+// `float?` value can equal a `bigint` (they are disjoint — `float? | bigint`
+// only pairs disjoint members). `==`/`!=` are permissive across types, so this
+// is a "comparison is always false" *warning*, not a hard error.
 function OptionalFloatEqBigint(x: float?, y: bigint) -> bool {
     x == y
 }
