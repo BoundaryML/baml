@@ -737,6 +737,130 @@ pub(crate) fn maybe_wrap_union(
     }
 }
 
+/// Recover `TypeVar(name) -> concrete` bindings by walking a declared type and
+/// the matching concrete type in parallel.
+///
+/// Used to recover a generic method's class type arguments from the *actual*
+/// `self` value at a host call: the declared `self` type still mentions the
+/// class's type variables (e.g. `Stream<TStream, TFinal>`), while the inbound
+/// receiver carries them concretely (e.g. `Stream<null | string, string>`).
+/// Zipping the two yields `{TStream -> null | string, TFinal -> string}`, which
+/// [`substitute_type_vars`] then applies to the method's declared return type so
+/// the host-return conversion sees concrete arms instead of bare type variables.
+pub(crate) fn collect_type_var_bindings(
+    declared: &RuntimeTy,
+    concrete: &RuntimeTy,
+    out: &mut std::collections::HashMap<String, RuntimeTy>,
+) {
+    match (declared, concrete) {
+        // A type-var position binds to whatever concrete type sits opposite it.
+        // First binding wins (a type var should be consistent across positions).
+        (RuntimeTy::TypeVar(name, _), _) => {
+            out.entry(name.to_string())
+                .or_insert_with(|| concrete.clone());
+        }
+        (RuntimeTy::Class(_, da, _), RuntimeTy::Class(_, ca, _)) => {
+            for (d, c) in da.iter().zip(ca.iter()) {
+                collect_type_var_bindings(d, c, out);
+            }
+        }
+        (RuntimeTy::List(d, _), RuntimeTy::List(c, _)) => collect_type_var_bindings(d, c, out),
+        (
+            RuntimeTy::Map {
+                key: dk, value: dv, ..
+            },
+            RuntimeTy::Map {
+                key: ck, value: cv, ..
+            },
+        ) => {
+            collect_type_var_bindings(dk, ck, out);
+            collect_type_var_bindings(dv, cv, out);
+        }
+        (RuntimeTy::Union(dm, _), RuntimeTy::Union(cm, _)) => {
+            for (d, c) in dm.iter().zip(cm.iter()) {
+                collect_type_var_bindings(d, c, out);
+            }
+        }
+        (RuntimeTy::Future(dv, de, _), RuntimeTy::Future(cv, ce, _)) => {
+            collect_type_var_bindings(dv, cv, out);
+            collect_type_var_bindings(de, ce, out);
+        }
+        _ => {}
+    }
+}
+
+/// Replace `TypeVar` leaves named in `bindings` with their concrete types,
+/// recursing through container/aggregate positions. Type variables absent from
+/// `bindings` (e.g. a method's own, unbound type params) are left as-is.
+///
+/// This is the fix for the host-driven streaming `TStream`-typevar bug: a
+/// generic method's declared return type (e.g. `Stream.next`'s
+/// `TStream | StreamFinished`) reaches the FFI return conversion with `TStream`
+/// unsubstituted, so a concrete partial value matched no union member and the
+/// conversion panicked. Substituting from the receiver's bound type args (see
+/// [`collect_type_var_bindings`]) makes the concrete arm present.
+pub(crate) fn substitute_type_vars(
+    ty: &RuntimeTy,
+    bindings: &std::collections::HashMap<String, RuntimeTy>,
+) -> RuntimeTy {
+    if bindings.is_empty() {
+        return ty.clone();
+    }
+    match ty {
+        RuntimeTy::TypeVar(name, _) => bindings
+            .get(name.as_str())
+            .cloned()
+            .unwrap_or_else(|| ty.clone()),
+        RuntimeTy::Class(tn, args, attr) => RuntimeTy::Class(
+            tn.clone(),
+            args.iter()
+                .map(|a| substitute_type_vars(a, bindings))
+                .collect(),
+            attr.clone(),
+        ),
+        RuntimeTy::List(inner, attr) => RuntimeTy::List(
+            Box::new(substitute_type_vars(inner, bindings)),
+            attr.clone(),
+        ),
+        RuntimeTy::Map { key, value, attr } => RuntimeTy::Map {
+            key: Box::new(substitute_type_vars(key, bindings)),
+            value: Box::new(substitute_type_vars(value, bindings)),
+            attr: attr.clone(),
+        },
+        RuntimeTy::Union(members, attr) => RuntimeTy::Union(
+            members
+                .iter()
+                .map(|m| substitute_type_vars(m, bindings))
+                .collect(),
+            attr.clone(),
+        ),
+        RuntimeTy::Future(value, error, attr) => RuntimeTy::Future(
+            Box::new(substitute_type_vars(value, bindings)),
+            Box::new(substitute_type_vars(error, bindings)),
+            attr.clone(),
+        ),
+        RuntimeTy::WatchAccessor(inner, attr) => RuntimeTy::WatchAccessor(
+            Box::new(substitute_type_vars(inner, bindings)),
+            attr.clone(),
+        ),
+        // Other positions (leaves, opaque handles, Function/Interface/projection)
+        // don't carry a class's type vars in a host-callable return type, so they
+        // pass through unchanged.
+        _ => ty.clone(),
+    }
+}
+
+/// The concrete `RuntimeTy` carried by a typed heap-handle argument (e.g. a
+/// `Stream` receiver passed as `self`), if any. The handle's `ty` is canonically
+/// `Class { name, args }` with the instance's bound type args — the concrete
+/// side that [`collect_type_var_bindings`] zips against the declared `self` type.
+pub(crate) fn tagged_handle_runtime_ty(value: &BexExternalValue) -> Option<&RuntimeTy> {
+    match value {
+        BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle { ty, .. }) => Some(ty),
+        _ => None,
+    }
+}
+
 /// Peel `Optional` and singleton-`Union` wrappers off `ty`, returning the
 /// underlying `RuntimeTy::Function` if there is one. Returns `None` if the type is
 /// not a function (after peeling).

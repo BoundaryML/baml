@@ -4536,7 +4536,7 @@ impl LoweringContext<'_> {
             }
 
             AstExpr::OptionalIndex { base, index } => {
-                self.lower_optional_index(expr_id, base, index, dest);
+                self.lower_optional_index(base, index, dest);
             }
 
             AstExpr::OptionalCall { callee, args } => {
@@ -4545,7 +4545,7 @@ impl LoweringContext<'_> {
             }
 
             AstExpr::Index { base, index } => {
-                self.lower_index(expr_id, base, index, dest);
+                self.lower_index(base, index, dest);
             }
 
             AstExpr::Block { stmts, tail_expr } => {
@@ -5744,13 +5744,7 @@ impl LoweringContext<'_> {
     }
 
     /// Lower `obj?.[index]` — null-check obj, then index or produce null.
-    fn lower_optional_index(
-        &mut self,
-        expr_id: AstExprId,
-        base: AstExprId,
-        index: AstExprId,
-        dest: Place,
-    ) {
+    fn lower_optional_index(&mut self, base: AstExprId, index: AstExprId, dest: Place) {
         let base_op = self.lower_to_operand(base);
 
         let is_null = Rvalue::BinaryOp {
@@ -5770,7 +5764,7 @@ impl LoweringContext<'_> {
                 .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_access);
 
             self.builder.set_current_block(bb_access);
-            self.lower_index(expr_id, base, index, dest);
+            self.lower_optional_index_access(base, index, dest, bb_null);
         } else {
             let bb_null = self.builder.create_block();
             let bb_join = self.builder.create_block();
@@ -5779,7 +5773,7 @@ impl LoweringContext<'_> {
                 .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_access);
 
             self.builder.set_current_block(bb_access);
-            self.lower_index(expr_id, base, index, dest.clone());
+            self.lower_optional_index_access(base, index, dest.clone(), bb_null);
             if !self.builder.is_current_terminated() {
                 self.builder.goto(bb_join);
             }
@@ -5791,6 +5785,42 @@ impl LoweringContext<'_> {
 
             self.builder.set_current_block(bb_join);
         }
+    }
+
+    /// Lower the access half of `base?.[index]`, with the base already known
+    /// non-null. `?.[]` is the null-safe index operator, so a null *subscript*
+    /// must short-circuit the whole expression to null (via `bb_null`) rather
+    /// than abort the VM — mirroring the base guard. Only a nullable-typed index
+    /// needs the extra check; a non-null index lowers straight to the access.
+    fn lower_optional_index_access(
+        &mut self,
+        base: AstExprId,
+        index: AstExprId,
+        dest: Place,
+        bb_null: BlockId,
+    ) {
+        let base_ty = self.expr_ty(base);
+        let base_op = self.lower_to_operand(base);
+        let index_ty = self.expr_ty(index);
+        // Lower the index once and reuse it for both the null check and the
+        // access, so a side-effectful subscript isn't evaluated twice.
+        let index_op = self.lower_to_operand(index);
+        if index_ty != index_ty.strip_null() {
+            let is_null = Rvalue::BinaryOp {
+                op: BinOp::Eq,
+                left: index_op.clone(),
+                right: Operand::Constant(Constant::Null),
+            };
+            let test_local = self.builder.temp(RuntimeTy::Bool {
+                attr: TyAttr::default(),
+            });
+            self.builder.assign(Place::local(test_local), is_null);
+            let bb_real = self.builder.create_block();
+            self.builder
+                .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_real);
+            self.builder.set_current_block(bb_real);
+        }
+        self.emit_index_access(base_op, &base_ty, index_op, index_ty, dest);
     }
 
     /// Lower `func?.(args)` — null-check callee, then call or produce null.
@@ -8236,12 +8266,25 @@ impl<'db> LoweringContext<'db> {
         (!candidates.is_empty()).then_some(candidates)
     }
 
-    fn lower_index(&mut self, _expr_id: AstExprId, base: AstExprId, index: AstExprId, dest: Place) {
+    fn lower_index(&mut self, base: AstExprId, index: AstExprId, dest: Place) {
         let base_ty = self.expr_ty(base);
         let base_op = self.lower_to_operand(base);
-        let index_op = self.lower_to_operand(index);
         let index_ty = self.expr_ty(index);
+        let index_op = self.lower_to_operand(index);
+        self.emit_index_access(base_op, &base_ty, index_op, index_ty, dest);
+    }
 
+    /// Emit the element read for `base[index]` from already-lowered operands.
+    /// Shared by `lower_index` and `lower_optional_index_access` so a
+    /// side-effectful index expression is evaluated exactly once.
+    fn emit_index_access(
+        &mut self,
+        base_op: Operand,
+        base_ty: &RuntimeTy,
+        index_op: Operand,
+        index_ty: RuntimeTy,
+        dest: Place,
+    ) {
         let base_local = self.operand_to_local(base_op, base_ty.clone());
         let index_local = self.operand_to_local(index_op, index_ty);
 

@@ -48,26 +48,35 @@ function NestedArrayAssignments() -> int {
 //     ╭─[ invalid_assignment_nested_arrays.baml:28:5 ]
 //     │
 //  28 │     d = [3, 4, 5];
-//     │        ─────┬────  
+//     │        ─────┬────
 //     │             ╰────── type mismatch: expected int[][], got int[]
-//     │ 
+//     │
+//     │ Note: Error code: E0001
+// ────╯
+// error: type mismatch: expected int[], got int[][]
+//     ╭─[ invalid_assignment_nested_arrays.baml:32:5 ]
+//     │
+//  32 │     e = [[4, 5], [6, 7]];
+//     │        ────────┬────────
+//     │                ╰────────── type mismatch: expected int[], got int[][]
+//     │
 //     │ Note: Error code: E0001
 // ────╯
 // error: type mismatch: expected string[][], got int[][]
 //     ╭─[ invalid_assignment_nested_arrays.baml:36:5 ]
 //     │
 //  36 │     f = [[1, 2]];
-//     │        ────┬────  
+//     │        ────┬────
 //     │            ╰────── type mismatch: expected string[][], got int[][]
-//     │ 
+//     │
 //     │ Note: Error code: E0001
 // ────╯
 // error: type mismatch: expected Person[][], got Animal[][]
 //     ╭─[ invalid_assignment_nested_arrays.baml:40:5 ]
 //     │
 //  40 │     g = [[Animal { species: "Cat", legs: 4 }]];
-//     │        ───────────────────┬───────────────────  
+//     │        ───────────────────┬───────────────────
 //     │                           ╰───────────────────── type mismatch: expected Person[][], got Animal[][]
-//     │ 
+//     │
 //     │ Note: Error code: E0001
 // ────╯
