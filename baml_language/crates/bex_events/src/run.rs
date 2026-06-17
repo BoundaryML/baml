@@ -13,11 +13,15 @@ use std::{
         Arc, Mutex,
         atomic::{AtomicBool, Ordering},
     },
-    time::{SystemTime, UNIX_EPOCH},
 };
 
 use crate::ids::{BexCallId, BexThreadId, CallRef, EngineId, FunctionId, ProcessEuid, ThreadRef};
 pub use crate::run_wire::{patch_to_wire, run_summary_to_wire, run_to_wire};
+
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::{SystemTime, UNIX_EPOCH};
+#[cfg(target_arch = "wasm32")]
+use web_time::{SystemTime, UNIX_EPOCH};
 
 pub trait ProfileEventObserver: Send + Sync + 'static {
     fn ingest_profile_event(&self, envelope: ProfileEventEnvelope);
