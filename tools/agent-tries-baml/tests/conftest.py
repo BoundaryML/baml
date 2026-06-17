@@ -25,6 +25,9 @@ os.environ.setdefault("SERVICE_URL", "http://localhost:8080")
 os.environ.setdefault("ATB_SERVICE_TOKEN", "devservicetoken")
 os.environ.setdefault("ATB_CLAUDE_PROXY_TOKEN", "devproxytoken")
 os.environ.setdefault("ATB_SLACK_SIGNING_SECRET", "devsigningsecret")
+# notion_fixer freezes CURSOR_API_KEY at import time; set it before any test module
+# imports that service (the bench_stack fixture also sets it for the live drivers).
+os.environ.setdefault("ATB_CURSOR_API_KEY", "devcursorkey")
 
 import shutil
 import socket

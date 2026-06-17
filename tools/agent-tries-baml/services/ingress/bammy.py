@@ -35,7 +35,7 @@ from bench_core.proxy_client import ProxyClient
 from bench_core.schemas import RunAgentRequest
 from bench_core.service_client import ServiceClient
 
-from .handlers import bench, changelog_edit, feedback, posthog_query, promo
+from .handlers import bench, changelog_edit, feedback, github_usage, posthog_query, promo
 
 log = logging.getLogger("uvicorn.error")
 
@@ -61,7 +61,7 @@ You are the router for @bammy, the BAML team's Slack bot. Read one mention
 the bot's capabilities the user wants. Write your decision as a single JSON
 object to a file named `route.json` (raw JSON, no markdown fences) with
 exactly these fields:
-{"intent": "bench"|"changelog_edit"|"changelog_sync"|"promo_claim"|"feedback"|"posthog_query"|"general",
+{"intent": "bench"|"changelog_edit"|"changelog_sync"|"promo_claim"|"feedback"|"posthog_query"|"github_usage"|"general",
  "bench_prompt": str, "version_ref": str, "mode": "revise"|"regenerate",
  "guidance": str, "promo_notes": str, "feedback_text": str, "posthog_question": str,
  "needs_clarification": bool, "clarification_question": str}
@@ -92,6 +92,11 @@ ROUTES
   many signups this week", "query posthog for the top events yesterday",
   "how many users ran baml fmt". Restate the question cleanly in
   `posthog_question` (keep any timeframe / event names the user gave).
+- `github_usage` -> they want to know how BAML is being used on public GitHub:
+  "how is baml being used on github", "@bammy check", "check baml usage", "what
+  are people building with baml", "scan github for baml usage". Triggers a fresh
+  scan of public `.baml` files/repos and posts the report back in this thread.
+  No extra fields needed.
 - `feedback` -> they are reporting an experience with BAML itself (a bug, a
   papercut, praise, a confusing error) and want it logged, not acted on right
   now: "feedback: baml fmt is slow on big files". Restate it in `feedback_text`.
@@ -282,6 +287,8 @@ async def route_mention(service: ServiceClient, event: dict[str, Any], text: str
             await promo.handle(service, _bot_token(), event, intent)
         elif route == "posthog_query":
             await posthog_query.handle(service, _bot_token(), event, intent)
+        elif route == "github_usage":
+            await github_usage.handle(service, _bot_token(), event, intent)
         elif route == "feedback":
             message = (intent.get("feedback_text") or "").strip() or text
             if ctx:

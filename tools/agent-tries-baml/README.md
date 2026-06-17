@@ -25,10 +25,11 @@ the central `api`.**
 
 ![agent-tries-baml pipeline diagram](docs/pipeline.png)
 
-Triggers (Slack `@mention`, cron, bug report, Notion approve) create `tasks`
+Triggers (Slack `@mention`, cron, bug report, Linear approve) create `tasks`
 through the API. `baml-worker` claims a task and writes a `trophy`; `baml-dedup`
-merges its findings into `issues`; `notion-fixer` syncs issues to Notion and
-dispatches Cursor cloud-agent fixes; `baml-builder` keeps the canary `baml`
+merges its findings into `issues`; `notion-fixer` (the board sync + fix
+dispatcher — still named `notion-fixer`, now backed by Linear) syncs issues to
+Linear and dispatches Cursor cloud-agent fixes; `baml-builder` keeps the canary `baml`
 binary registry fresh. The API is the only Convex client; agents reach Anthropic
 only through `claude-proxy`; the Next.js UI reads pipeline state through the API.
 See [`docs/architecture.md`](docs/architecture.md) for the full walkthrough.
@@ -41,10 +42,10 @@ Each variant worker pulls its branch's `SKILL.md` and produces a **held** trophy
 (not deduped). Once every member is terminal, the cohort reconciler (in `cron`)
 flips it `queued`, and `cohort-compare` reads the variant runs, decides which
 skill version served the task best, and emits a single comparison **cohort
-trophy** — which re-enters `dedup → issues → Notion` like any other trophy, so a
+trophy** — which re-enters `dedup → issues → Linear` like any other trophy, so a
 winning variant's advantage becomes an actionable skill improvement. Branches
-default to `ATB_ARENA_BRANCHES`. Deduped `issues` also carry a `Kind`
-(`skill`/`language`) property on their Notion page.
+default to `ATB_ARENA_BRANCHES`. Issues keep their `kind` (`skill`/`language`) in
+Convex; the Linear board is a single flat team (no kind split).
 
 ## Components
 
@@ -55,9 +56,9 @@ default to `ATB_ARENA_BRANCHES`. Deduped `issues` also carry a `Kind`
 | `baml-worker` | Claims `tasks`; runs the agent (official BAML skills installed via `baml agent install`, canary `baml` on `PATH`); the agent self-reports the whole verbose trophy; the worker verifies repros and creates the `trophy`. |
 | `baml-dedup` | Claims `trophies`; authoritative skill/language classifier + cross-run merge; promotes findings/suggestions into `issues`; carries each cited finding's verified repro onto the issue. |
 | `cohort-compare` | Claims ready `cohorts` (skill-arena groups); compares the variant runs (one per baml-skill branch) and emits a single comparison "cohort trophy" that re-enters dedup like any other trophy. |
-| `baml-redraft` | Claims `issues` with `status=redraft`; pulls the reviewer's Notion comments as feedback, runs an agent to rewrite the issue, and re-boards it (`confirmed`) for another review pass. |
-| `notion-fixer` | Two processors over `issues`: pushes confirmed issues to Notion as structured pages incl. a repro code block (`notionSyncStatus` queue) and dispatches `@cursor` fixes on approval (`status` queue). |
-| `ingress` | Public webhooks: `/slack/events`, `/notion/webhook`, `/bug`. Creates `tasks`; reads a page's Notion status to route issues to `approved` (fix) or `redraft`. |
+| `baml-redraft` | Claims `issues` with `status=redraft`; pulls the reviewer's Linear comments as feedback, runs an agent to rewrite the issue, and re-boards it (`confirmed`) for another review pass. |
+| `notion-fixer` | Two processors over `issues` (name is historical; now Linear-backed): `LinearPush` mirrors issues to Linear cards — title, status-group label, and a Markdown body incl. a repro code block (`linearSyncStatus` queue) — and `FixDispatch` dispatches `@cursor` fixes on approval (`status` queue). |
+| `ingress` | Public webhooks: `/slack/events`, `/linear/webhook`, `/bug`. Creates `tasks`; reads an issue's Linear status-group label to route it to `approved` (fix) or `redraft`. |
 | `cron` | Daily driver: refreshes baml (`POST /baml/update`) then enqueues benchmark `tasks`. Also runs the fast cohort fan-in reconciler that flips a skill-arena `cohort` `pending → queued` once its member runs are all terminal. |
 | `baml-builder` | Claims `bamlBuilds`; downloads the prebuilt alpha-channel `baml` release binary for the sha and uploads it to the registry. |
 | `ui` | Next.js dashboard; reads pipeline state through the `api`. |
@@ -67,7 +68,7 @@ default to `ATB_ARENA_BRANCHES`. Deduped `issues` also carry a `Kind`
 
 A run done locally with Claude Code (no proxy) can be pushed into the pipeline.
 The `api` exposes `POST /ingest/run`, which parses a raw Claude Code session
-`.jsonl` into a task + a queued trophy so the full `dedup → issues → Notion`
+`.jsonl` into a task + a queued trophy so the full `dedup → issues → Linear`
 flow runs over it. The helper script reads the newest session under
 `~/.claude/projects` and uploads it:
 
@@ -94,6 +95,6 @@ to attach an agent self-report (summary / findings / filesCreated).
 ```
 convex/           schema.ts  lib.ts  {tasks,trophies,issues,bamlBuilds}.ts  crons.ts  maintenance.ts
 libs/bench_core/  processor  service_client  proxy_client  schemas  prices
-                  slack_client  notion_client  cursor_client  jsonl
+                  slack_client  linear_client  cursor_client  jsonl
 docker/           Dockerfile.python  Dockerfile.claude-proxy
 ```

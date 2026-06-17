@@ -37,7 +37,7 @@ A unit of benchmark work: a prompt to run with the canary baml on `PATH`.
 | `slackChannel` | `string?` | Slack reply routing. |
 | `slackThreadTs` | `string?` | Slack reply routing. |
 | `slackUser` | `string?` | Slack reply routing. |
-| `notionProposerPageId` | `string?` | Notion page that proposed the task. |
+| `notionProposerPageId` | `string?` | DEPRECATED — legacy Notion page that proposed the task (board is now Linear). |
 | `transcriptStorageId` | `string?` | Pointer the `api` resolves to a transcript blob on its own volume. |
 | `rawMetrics` | `any?` | Raw run metrics. |
 | *(+ shared queue fields)* | | |
@@ -102,20 +102,23 @@ A cross-run merged skill/language issue, with two independent queues.
 | `suggestion` | `string?` | Definitive skill/language fix. |
 | `evidence` | `array(any)` | `{trophyId, turnIndex?, callIndex?, note?}` anchors. |
 | `repro` | `string?` | Minimal repro. |
-| `notionPageId` | `string?` | Linked Notion page id. |
+| `linearIssueId` | `string?` | The 1:1 Linear issue this mirrors to. |
+| `linearSyncStatus` | `string?` | `dirty` \| `syncing` \| `synced` (separate sync queue). |
+| `notionPageId` | `string?` | DEPRECATED — legacy Notion page id (Linear replaced Notion). |
+| `notionSyncStatus` | `string?` | DEPRECATED — legacy Notion sync state. |
 | `fixSlackTs` | `string?` | Dispatch reference for the fix (the Cursor cloud-agent id). |
 | `firstSeenAt` | `number` | First observation time. |
 | `lastSeenAt` | `number` | Most recent observation time. |
-| `notionSyncStatus` | `string` | `dirty` \| `syncing` \| `synced` (separate sync queue). |
 | *(+ shared queue fields)* | | |
 
 **Indexes:** `by_status_created` (`status`, `createdAt`) · `by_kind_status`
-(`kind`, `status`) · `by_notion_sync` (`notionSyncStatus`, `lastSeenAt`) ·
-`by_notion_page` (`notionPageId`) · `by_lease` (`status`, `leaseExpiresAt`).
+(`kind`, `status`) · `by_linear_sync` (`linearSyncStatus`, `lastSeenAt`) ·
+`by_linear_issue` (`linearIssueId`) · `by_notion_sync` / `by_notion_page`
+(deprecated) · `by_lease` (`status`, `leaseExpiresAt`).
 
 **Lifecycles:**
 - Bug-fix: `open → confirmed → approved → fixing → closed | rejected`.
-- Notion sync (`notionSyncStatus`): `dirty → syncing → synced`.
+- Linear sync (`linearSyncStatus`): `dirty → syncing → synced`.
 
 ## `bamlBuilds` - version registry + build queue
 

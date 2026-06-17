@@ -147,7 +147,7 @@ async def test_arena_cohort_advances_when_last_member_failed(bench_stack):
 
 
 async def test_fixdispatch_launches_cursor_on_approved_issue(bench_stack):
-    """Approving an issue via /notion/webhook then draining FixDispatch launches Cursor.
+    """Approving an issue via /linear/webhook then draining FixDispatch launches Cursor.
 
     Args:
         bench_stack: Session fixture providing the running api/ingress/proxy URLs.
@@ -155,9 +155,9 @@ async def test_fixdispatch_launches_cursor_on_approved_issue(bench_stack):
     service = _service(bench_stack)
     try:
         async with httpx.AsyncClient(timeout=20.0) as http:
-            iid = await steps.seed_synced_issue(service, kind="skill", page_id="pg-fix-1")
+            iid = await steps.seed_synced_issue(service, kind="skill", linear_id="li-fix-1")
             await steps.approve_issue_via_webhook(
-                http, bench_stack["ingress"], service, iid, page_id="pg-fix-1")
+                http, bench_stack["ingress"], service, iid, linear_id="li-fix-1")
             await steps.run_fixdispatch_assert_launch(service, iid)
     finally:
         await service.aclose()
@@ -172,9 +172,9 @@ async def test_cursor_tracker_advances_tocursor_to_prprep(bench_stack):
     service = _service(bench_stack)
     try:
         async with httpx.AsyncClient(timeout=20.0) as http:
-            iid = await steps.seed_synced_issue(service, kind="language", page_id="pg-track-1")
+            iid = await steps.seed_synced_issue(service, kind="language", linear_id="li-track-1")
             await steps.approve_issue_via_webhook(
-                http, bench_stack["ingress"], service, iid, page_id="pg-track-1")
+                http, bench_stack["ingress"], service, iid, linear_id="li-track-1")
             await steps.run_fixdispatch_assert_launch(service, iid)
             await steps.run_tracker_assert_prprep(service, iid)
     finally:

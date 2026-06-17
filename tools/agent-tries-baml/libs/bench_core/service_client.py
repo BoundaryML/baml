@@ -13,7 +13,7 @@ from typing import Any, AsyncIterator, Optional
 import httpx
 
 # Default claim wiring: most tables are claimed on `status` via the
-# by_status_created index. Issues override this (notion vs fix queues).
+# by_status_created index. Issues override this (linear vs fix queues).
 DEFAULT_INDEX = "by_status_created"
 
 

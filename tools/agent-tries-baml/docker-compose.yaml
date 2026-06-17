@@ -134,7 +134,8 @@ services:
       CLAUDE_PROXY_URLS: http://claude-proxy:9090
       CLAUDE_PROXY_TOKEN: ${CLAUDE_PROXY_TOKEN:-devproxytoken}
       BAML_REDRAFT_MODEL: ${BAML_REDRAFT_MODEL:-claude-sonnet-4-6}
-      NOTION_TOKEN: ${NOTION_TOKEN:-}
+      ATB_LINEAR_TOKEN: ${ATB_LINEAR_TOKEN:-}
+      LINEAR_TEAM_ID: ${LINEAR_TEAM_ID:-179250f3-902f-491e-94f8-8256292e8386}
     depends_on: [api, claude-proxy]
 
   bug-verify:
@@ -147,7 +148,8 @@ services:
       ATB_SERVICE_TOKEN: ${SERVICE_TOKEN:-devservicetoken}
       CLAUDE_PROXY_URLS: http://claude-proxy:9090
       ATB_CLAUDE_PROXY_TOKEN: ${CLAUDE_PROXY_TOKEN:-devproxytoken}
-      ATB_NOTION_TOKEN: ${NOTION_TOKEN:-}
+      ATB_LINEAR_TOKEN: ${ATB_LINEAR_TOKEN:-}
+      LINEAR_TEAM_ID: ${LINEAR_TEAM_ID:-179250f3-902f-491e-94f8-8256292e8386}
       BUG_VERIFY_MODEL: ${BUG_VERIFY_MODEL:-claude-sonnet-4-6}
     depends_on: [api, claude-proxy]
 
@@ -159,17 +161,8 @@ services:
     environment:
       SERVICE_URL: http://api:8080
       SERVICE_TOKEN: ${SERVICE_TOKEN:-devservicetoken}
-      NOTION_TOKEN: ${NOTION_TOKEN:-}
-      NOTION_SKILL_DB_ID: ${NOTION_SKILL_DB_ID:-}
-      NOTION_LANG_DB_ID: ${NOTION_LANG_DB_ID:-}
-      NOTION_PROP_KIND: ${NOTION_PROP_KIND:-Kind}
-      NOTION_STATUS_CONFIRMED: ${NOTION_STATUS_CONFIRMED:-not started}
-      NOTION_STATUS_APPROVED: ${NOTION_STATUS_APPROVED:-approved}
-      NOTION_STATUS_FIXING: ${NOTION_STATUS_FIXING:-to cursor}
-      NOTION_STATUS_PRPREP: ${NOTION_STATUS_PRPREP:-pr prep}
-      NOTION_STATUS_PR_READY: ${NOTION_STATUS_PR_READY:-ready to merge}
-      NOTION_STATUS_NEEDS_HUMAN: ${NOTION_STATUS_NEEDS_HUMAN:-needs human}
-      NOTION_STATUS_MERGED: ${NOTION_STATUS_MERGED:-merged}
+      ATB_LINEAR_TOKEN: ${ATB_LINEAR_TOKEN:-}
+      LINEAR_TEAM_ID: ${LINEAR_TEAM_ID:-179250f3-902f-491e-94f8-8256292e8386}
       SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
       SLACK_FIX_CHANNEL: ${SLACK_FIX_CHANNEL:-}
       CURSOR_API_KEY: ${CURSOR_API_KEY:-}
@@ -197,10 +190,9 @@ services:
       CLAUDE_PROXY_URLS: http://claude-proxy:9090
       CLAUDE_PROXY_TOKEN: ${CLAUDE_PROXY_TOKEN:-devproxytoken}
       ATB_ARENA_BRANCHES: ${ATB_ARENA_BRANCHES:-main}
-      NOTION_VERIFICATION_TOKEN: ${NOTION_VERIFICATION_TOKEN:-}
-      NOTION_TOKEN: ${NOTION_TOKEN:-}
-      NOTION_STATUS_APPROVED: ${NOTION_STATUS_APPROVED:-approved}
-      NOTION_STATUS_REDRAFT: ${NOTION_STATUS_REDRAFT:-redraft}
+      ATB_LINEAR_TOKEN: ${ATB_LINEAR_TOKEN:-}
+      ATB_LINEAR_WEBHOOK_SECRET: ${ATB_LINEAR_WEBHOOK_SECRET:-}
+      LINEAR_TEAM_ID: ${LINEAR_TEAM_ID:-179250f3-902f-491e-94f8-8256292e8386}
     ports:
       - "${INGRESS_PORT:-8081}:8081"
     depends_on: [api]
@@ -218,7 +210,13 @@ services:
       CHANGELOG_POLL_ENABLED: ${CHANGELOG_POLL_ENABLED:-0}
       CHANGELOG_POLL_SECS: ${CHANGELOG_POLL_SECS:-600}
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
-    depends_on: [api]
+      # task generator: an agent invents fresh hard tasks each cycle (vs the static list).
+      CLAUDE_PROXY_URLS: http://claude-proxy:9090
+      CLAUDE_PROXY_TOKEN: ${CLAUDE_PROXY_TOKEN:-devproxytoken}
+      GENERATE_TASKS: ${GENERATE_TASKS:-1}
+      GEN_TASK_COUNT: ${GEN_TASK_COUNT:-3}
+      GEN_TASK_MODEL: ${GEN_TASK_MODEL:-claude-sonnet-4-6}
+    depends_on: [api, claude-proxy]
 
   changelog-worker:
     build: { context: ., dockerfile: docker/Dockerfile.python }

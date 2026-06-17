@@ -23,15 +23,17 @@ network, no stack:
 - `test_health.py` — `/healthz` on api/ingress/claude_proxy
 - `test_proxy_parsing.py` — transcript/turn-log parsing, path-traversal guard
 - `test_cursor_client.py` — Cursor launch + 409 idempotency (respx-mocked)
-- `test_ingress_routing.py` — Slack signature + mention-strip, Notion page-id
-  precedence, UUID toggle (in-memory `FakeService`)
+- `test_linear_client.py` — Linear label-swap, create payload, status mapping,
+  comment pagination, adopt-by-title (respx-mocked)
+- `test_ingress_routing.py` — Slack signature + mention-strip, Linear webhook
+  signature + status-label routing + bot-write loop guard (in-memory `FakeService`)
 - `test_processor_claim.py` — the `Processor` claim loop: claim-until-empty, one
   `process()` per item, and the on-exception "fail on the claim field" path
 
 ### integration / system (the `bench_stack` fixture)
 `tests/conftest.py:bench_stack` (session-scoped) boots **api / ingress /
 fake_proxy** as host `uvicorn` subprocesses and yields their URLs. The tests then
-drive the real processors (`BamlWorker`, `BamlDedup`, `NotionPush`,
+drive the real processors (`BamlWorker`, `BamlDedup`, `LinearPush`,
 `FixDispatch`) in-process against that live api. `tests/fake_proxy.py` stubs the
 Claude agent run and the Cursor endpoint, so there is no `ANTHROPIC_API_KEY`, no
 network, and the runs are deterministic.
@@ -43,7 +45,7 @@ leases, blob writes, ingress webhooks, and processor wiring.
   issue, ingress `/bug` → task, signed `/slack` → task + bad-sig 401, approve
   webhook → FixDispatch → cursor)
 - `test_system_pipeline.py` — one test from `POST /bug` through worker → dedup →
-  notion-push → approve (`/notion/webhook`) → FixDispatch
+  linear-push → approve (`/linear/webhook`) → FixDispatch
 - `tests/pipeline_steps.py` — shared per-hop step helpers, so the per-hop and
   full-flow tests reuse identical assertions
 

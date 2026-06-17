@@ -107,6 +107,10 @@ export default defineSchema({
     // tocursor/prprep using the Cursor + GitHub fields below.
     evidence: v.array(v.any()), // {trophyId, turnIndex?, callIndex?, note?}
     repro: v.optional(v.string()),
+    // ---- Linear board (the human-facing layer; Convex stays source of truth) ----
+    linearIssueId: v.optional(v.string()), // the 1:1 Linear issue this mirrors to
+    linearSyncStatus: v.optional(v.string()), // dirty | syncing | synced
+    // ---- Notion board (DEPRECATED: replaced by Linear; kept optional, no migration) ----
     notionPageId: v.optional(v.string()),
     fixSlackTs: v.optional(v.string()), // FixDispatch idempotency marker / agent ref
     fixThreadTs: v.optional(v.string()), // Slack ts of the dispatch msg; tracker threads under it
@@ -119,6 +123,9 @@ export default defineSchema({
     lastFixedSha: v.optional(v.string()), // PR head sha we last dispatched a fix for
     checkState: v.optional(v.string()), // pending | passing | failing (last observed)
     coderabbitState: v.optional(v.string()), // none | blocking | clear (last observed)
+    // ISO created_at high-water mark of the newest human PR comment we've acted on,
+    // so team-comment pickup is robust even when the 👀 reaction POST is forbidden.
+    lastHumanCommentAt: v.optional(v.string()),
     // ---- bug-verify: re-checks against the newest nightly ----
     verifiedAt: v.optional(v.number()), // last re-check time
     verifyBamlVersion: v.optional(v.string()), // version label last checked against
@@ -126,11 +133,13 @@ export default defineSchema({
     fixedIn: v.optional(v.string()), // version where the repro stopped failing
     firstSeenAt: v.number(),
     lastSeenAt: v.number(),
-    notionSyncStatus: v.string(), // dirty | syncing | synced
+    notionSyncStatus: v.optional(v.string()), // DEPRECATED (Linear replaced Notion)
     ...queueFields,
   })
     .index("by_status_created", ["status", "createdAt"])
     .index("by_kind_status", ["kind", "status"])
+    .index("by_linear_sync", ["linearSyncStatus", "lastSeenAt"])
+    .index("by_linear_issue", ["linearIssueId"])
     .index("by_notion_sync", ["notionSyncStatus", "lastSeenAt"])
     .index("by_notion_page", ["notionPageId"])
     .index("by_lease", ["status", "leaseExpiresAt"]),

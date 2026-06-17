@@ -1,6 +1,6 @@
-"""notion-sync + fixer: two claim loops over the issues table.
+"""linear-sync + fixer: two claim loops over the issues table.
 
-  NotionPush  : claims notionSyncStatus=dirty -> create/patch Notion page -> synced/confirmed
+  LinearPush  : claims linearSyncStatus=dirty -> create/adopt/update Linear issue -> synced/confirmed
   FixDispatch : claims status=approved        -> launch Cursor cloud agent + Slack note
 
 Both reuse the Processor base (the issues table is itself a claimable queue,
@@ -16,7 +16,8 @@ import uuid
 from typing import Any, Optional
 
 from bench_core import cursor_client, slack_client
-from bench_core.notion_client import NotionClient
+from bench_core import linear_client as lc
+from bench_core.linear_client import LinearClient
 from bench_core.processor import Processor
 from bench_core.service_client import ServiceClient
 
@@ -25,9 +26,7 @@ from .tracker import CursorTracker
 
 log = logging.getLogger("notion_fixer")
 
-NOTION_TOKEN = os.environ.get("ATB_NOTION_TOKEN", "")
-NOTION_SKILL_DB_ID = os.environ.get("ATB_NOTION_SKILL_DB_ID", "")
-NOTION_LANG_DB_ID = os.environ.get("ATB_NOTION_LANG_DB_ID", "")
+LINEAR_API_KEY = os.environ.get("ATB_LINEAR_TOKEN", "")
 SLACK_BOT_TOKEN = os.environ.get("ATB_SLACK_BOT_TOKEN", "")
 SLACK_FIX_CHANNEL = os.environ.get("ATB_SLACK_FIX_CHANNEL", "")
 # We launch the fix agent through Cursor's Cloud Agents API directly (a Slack
@@ -36,96 +35,86 @@ SLACK_FIX_CHANNEL = os.environ.get("ATB_SLACK_FIX_CHANNEL", "")
 CURSOR_API_KEY = os.environ.get("ATB_CURSOR_API_KEY", "")
 CURSOR_MODEL = os.environ.get("CURSOR_MODEL") or None
 
-# Notion board status labels. "not started" is the resting state, "approved"
-# and "redraft" are the human-moved triggers, and "to cursor" is set
-# automatically when a Cursor fix agent is spawned for the issue.
-STATUS_CONFIRMED = os.environ.get("NOTION_STATUS_CONFIRMED", "not started")
-STATUS_APPROVED = os.environ.get("NOTION_STATUS_APPROVED", "approved")
-STATUS_FIXING = os.environ.get("NOTION_STATUS_FIXING", "to cursor")
-# Cursor-tracker-driven board labels (PR phase).
-STATUS_PRPREP = os.environ.get("NOTION_STATUS_PRPREP", "pr prep")
-STATUS_PR_READY = os.environ.get("NOTION_STATUS_PR_READY", "ready to merge")
-STATUS_NEEDS_HUMAN = os.environ.get("NOTION_STATUS_NEEDS_HUMAN", "needs human")
-STATUS_MERGED = os.environ.get("NOTION_STATUS_MERGED", "merged")
+# Linear status-group label ids. not-started is the resting state, approved /
+# redraft are the human-moved triggers, and to-cursor is set automatically when a
+# Cursor fix agent is spawned for the issue. (env-overridable via linear_client.)
+STATUS_CONFIRMED = lc.LINEAR_STATUS_NOT_STARTED
+STATUS_APPROVED = lc.LINEAR_STATUS_APPROVED
+STATUS_FIXING = lc.LINEAR_STATUS_TO_CURSOR
 
 
-class NotionPush(Processor):
-    """Claim loop that mirrors dirty issues onto the Notion board.
+class LinearPush(Processor):
+    """Claim loop that mirrors dirty issues onto the Linear board (1:1 with Convex).
 
-    Claims issues with ``notionSyncStatus=dirty`` (into ``syncing``), creates or
-    patches their Notion page, marks them ``synced``, and promotes a freshly
-    boarded ``open`` issue to ``confirmed``. A no-op (marks synced) when Notion is
-    not configured for the issue's kind.
+    Claims issues with ``linearSyncStatus=dirty`` (into ``syncing``), then either
+    adopts an already-imported card by exact title, creates a new card, or
+    re-renders the existing one; records the Linear issue id, marks the row
+    ``synced``, and promotes a freshly boarded ``open`` issue to ``confirmed``. A
+    no-op (marks synced) when no Linear API key is configured.
     """
 
-    role = "notion-push"
+    role = "linear-push"
     table = "issues"
-    claim_field = "notionSyncStatus"
-    claim_index = "by_notion_sync"
+    claim_field = "linearSyncStatus"
+    claim_index = "by_linear_sync"
     claim_value = "dirty"
     claim_into = "syncing"
     lease_ms = 5 * 60 * 1000
 
     def __init__(self, service):
-        """Build the processor and its Notion client.
+        """Build the processor and its Linear client.
 
         Args:
             service: The ServiceClient used for all Convex reads/writes.
         """
         super().__init__(service)
-        self.notion = NotionClient(NOTION_TOKEN) if NOTION_TOKEN else None
-
-    def _db_for(self, kind: str) -> Optional[str]:
-        """Return the Notion database id for an issue kind.
-
-        Args:
-            kind: The issue kind, ``"skill"`` or anything else (language).
-
-        Returns:
-            The configured skill or language database id (may be empty/None).
-        """
-        return NOTION_SKILL_DB_ID if kind == "skill" else NOTION_LANG_DB_ID
+        self.linear = LinearClient(LINEAR_API_KEY) if LINEAR_API_KEY else None
 
     async def process(self, issue: dict[str, Any]) -> None:
-        """Sync one claimed issue to Notion and mark it synced.
+        """Sync one claimed issue to Linear and mark it synced.
 
-        Creates the page (when the issue has no ``notionPageId``) or patches its
-        status, records the page id, flips ``notionSyncStatus`` to ``synced``, and
-        confirms the issue. Marks synced without touching Notion when the kind has
-        no configured database.
+        Resolves the target Linear issue (the stored id, else an adopt-by-title
+        match, else a fresh create), re-renders its title/status/body, records the
+        id, flips ``linearSyncStatus`` to ``synced``, and confirms the issue.
+        Marks synced without touching Linear when no API key is configured.
 
         Args:
             issue: The claimed issue document.
         """
         issue_id = issue["_id"]
-        db_id = self._db_for(issue["kind"])
-        if not self.notion or not db_id:
-            log.info("notion not configured for kind=%s; marking synced (no-op)", issue["kind"])
-            await self.service.update(self.table, issue_id,
-                                      {"notionSyncStatus": "synced"}, )
+        if not self.linear:
+            log.info("linear not configured; marking synced (no-op)")
+            await self.service.update(self.table, issue_id, {"linearSyncStatus": "synced"})
             await self._confirm(issue_id, issue)
             return
 
         links = fixer.evidence_links(issue)
-        page_id = issue.get("notionPageId")
-        if page_id:
+        issue_link = fixer.issue_link(issue)
+        pr_url = issue.get("prUrl")
+        status_label = self._map_status(issue.get("status", "open"))
+        linear_id = issue.get("linearIssueId")
+        # Adopt an already-imported card by exact title before creating a new one,
+        # so the one-time backfill doesn't duplicate the 100 hand-imported cards.
+        if not linear_id:
+            linear_id = await self.linear.find_issue_by_title(issue["title"])
+        if linear_id:
             # Re-render the whole card (title + status + body), so a redrafted
-            # rewrite or an updated description/repro/evidence actually shows on
-            # the page — not just a status change.
-            await self.notion.update_issue_page(
-                page_id, issue["title"], self._map_status(issue.get("status", "open")),
+            # rewrite or an updated description/repro/evidence actually shows —
+            # not just a status change.
+            await self.linear.update_issue(
+                linear_id, issue["title"], status_label,
                 issue.get("description", ""), links,
                 suggestion=issue.get("suggestion"), category=issue.get("category"),
-                repro=issue.get("repro"), kind=issue.get("kind"),
+                repro=issue.get("repro"), issue_link=issue_link, pr_url=pr_url,
             )
         else:
-            page_id = await self.notion.create_issue_page(
-                db_id, issue["title"], STATUS_CONFIRMED, issue.get("description", ""), links,
+            linear_id = await self.linear.create_issue(
+                issue["title"], status_label, issue.get("description", ""), links,
                 suggestion=issue.get("suggestion"), category=issue.get("category"),
-                repro=issue.get("repro"), kind=issue.get("kind"),
+                repro=issue.get("repro"), issue_link=issue_link, pr_url=pr_url,
             )
         await self.service.update(self.table, issue_id,
-                                  {"notionPageId": page_id, "notionSyncStatus": "synced"})
+                                  {"linearIssueId": linear_id, "linearSyncStatus": "synced"})
         await self._confirm(issue_id, issue)
 
     async def _confirm(self, issue_id: str, issue: dict[str, Any]) -> None:
@@ -145,20 +134,24 @@ class NotionPush(Processor):
 
     @staticmethod
     def _map_status(status: str) -> str:
-        """Map an internal issue status to its Notion board status label.
+        """Map an internal issue status to its Linear status-group label id.
+
+        ``redraft`` maps to the redraft label so a re-render mid-redraft doesn't
+        clobber the human's label back to not-started.
 
         Args:
-            status: The internal status (``open``/``confirmed``/``approved``/``fixing``).
+            status: The internal status (``open``/``confirmed``/``approved``/…).
 
         Returns:
-            The configured Notion status label, defaulting to the confirmed label
+            The Linear status-group label id, defaulting to the not-started label
             for any unrecognized status.
         """
         return {"open": STATUS_CONFIRMED, "confirmed": STATUS_CONFIRMED,
                 "approved": STATUS_APPROVED, "dispatching": STATUS_APPROVED,
                 "fixing": STATUS_FIXING, "tocursor": STATUS_FIXING,
-                "prprep": STATUS_PRPREP, "pr_ready": STATUS_PR_READY,
-                "needs_human": STATUS_NEEDS_HUMAN, "closed": STATUS_MERGED,
+                "prprep": lc.LINEAR_STATUS_PR_PREP, "pr_ready": lc.LINEAR_STATUS_READY_TO_MERGE,
+                "needs_human": lc.LINEAR_STATUS_NEEDS_HUMAN, "closed": lc.LINEAR_STATUS_MERGED,
+                "redraft": lc.LINEAR_STATUS_REDRAFT, "redrafting": lc.LINEAR_STATUS_REDRAFT,
                 }.get(status, STATUS_CONFIRMED)
 
 
@@ -167,8 +160,8 @@ class FixDispatch(Processor):
 
     Claims issues with ``status=approved`` (into ``fixing``), launches a Cursor
     cloud agent via the API, records the agent reference on the issue, posts a
-    Slack visibility note linking the agent, and flips its Notion page to the
-    fixing status. A no-op when ``CURSOR_API_KEY`` is not configured.
+    Slack visibility note linking the agent, and flips its Linear card to the
+    to-cursor status. A no-op when ``CURSOR_API_KEY`` is not configured.
     """
 
     role = "fix-dispatch"
@@ -180,13 +173,13 @@ class FixDispatch(Processor):
     lease_ms = 5 * 60 * 1000
 
     def __init__(self, service):
-        """Build the processor and its Notion client.
+        """Build the processor and its Linear client.
 
         Args:
             service: The ServiceClient used for all Convex reads/writes.
         """
         super().__init__(service)
-        self.notion = NotionClient(NOTION_TOKEN) if NOTION_TOKEN else None
+        self.linear = LinearClient(LINEAR_API_KEY) if LINEAR_API_KEY else None
 
     async def process(self, issue: dict[str, Any]) -> None:
         """Dispatch a fix for one claimed approved issue.
@@ -198,27 +191,35 @@ class FixDispatch(Processor):
         issue (``fixSlackTs`` cleared) launches a genuinely new agent. A no-op
         (logs a warning) when no Cursor API key is configured. Otherwise launches a
         Cursor cloud agent, records its reference, posts a (non-triggering) Slack
-        note linking the agent, and flips the Notion page to fixing.
+        note linking the agent, and flips the Linear card to to-cursor.
 
         Args:
             issue: The claimed issue document.
         """
         issue_id = issue["_id"]
-        existing = issue.get("fixSlackTs") or ""
-        # A real dispatch ref (anything but a "pending:" marker) means this issue was
-        # already handed to Cursor. Don't re-launch; just ensure it lands in tocursor
-        # (a crash may have flipped us back to approved before that transition
-        # persisted) so the tracker picks it up, and stop.
-        if existing and not existing.startswith("pending:"):
-            log.info("issue %s already dispatched (ref=%s); ensuring tocursor", issue_id, existing)
-            await self.service.transition(
-                self.table, issue_id, "tocursor",
-                patch={"cursorAgentId": existing, "fixAttempts": issue.get("fixAttempts") or 0},
-            )
-            return
         if not CURSOR_API_KEY:
             log.warning("no CURSOR_API_KEY configured; cannot dispatch issue %s", issue_id)
             return
+        existing = issue.get("fixSlackTs") or ""
+        # A real dispatch ref (not a "pending:" marker) means this issue was already
+        # handed to Cursor. If that agent is still working — or already opened a PR —
+        # don't launch a duplicate: just ensure tocursor so the tracker carries it on.
+        # But if the prior agent is DEAD (terminal/expired with no PR, or unreachable),
+        # this claim is a human RE-APPROVAL of a stalled fix, so fall through and launch
+        # a genuinely fresh agent (clearing the stale ref).
+        if existing and not existing.startswith("pending:"):
+            if await self._prior_dispatch_alive(existing):
+                log.info("issue %s already dispatched (ref=%s, still live); ensuring tocursor",
+                         issue_id, existing)
+                await self.service.transition(
+                    self.table, issue_id, "tocursor",
+                    patch={"cursorAgentId": existing, "fixAttempts": issue.get("fixAttempts") or 0},
+                )
+                return
+            log.info("issue %s prior agent %s is dead with no PR; re-dispatching fresh",
+                     issue_id, existing)
+            existing = ""
+            await self.service.update(self.table, issue_id, {"fixSlackTs": ""})
         repo = fixer.repo_url(issue["kind"])
         branch = fixer.branch_for(issue["kind"])
         # The Cursor agent id (`bc-<uuid>`) must be STABLE within one dispatch but
@@ -274,12 +275,45 @@ class FixDispatch(Processor):
             patch={"cursorAgentId": ref, "fixAttempts": 0, "fixThreadTs": thread_ts},
         )
         log.info("launched cursor agent %s (%s) for issue %s", ref, url, issue_id)
-        if self.notion and issue.get("notionPageId"):
-            await self.notion.set_status(issue["notionPageId"], STATUS_FIXING)
+        # Best-effort board update — a Linear error (e.g. a transient API failure)
+        # must NOT fail the dispatch and orphan a successfully-launched agent.
+        if self.linear and issue.get("linearIssueId"):
+            try:
+                await self.linear.set_status(issue["linearIssueId"], STATUS_FIXING)
+            except Exception:  # noqa: BLE001
+                log.warning("linear set_status failed for %s; dispatch still succeeded", issue_id)
+
+    @staticmethod
+    async def _prior_dispatch_alive(ref: str) -> bool:
+        """Whether a prior fix agent is still worth keeping (vs. re-dispatching).
+
+        Returns True when the agent is still working OR has already opened a PR (so
+        a fresh dispatch would just duplicate it), and False when it is terminal/
+        expired with no PR — or unreachable — meaning a human re-approval should
+        launch a brand-new agent.
+
+        Args:
+            ref: The existing Cursor agent id stored on the issue.
+
+        Returns:
+            True to keep the existing dispatch; False to launch fresh.
+        """
+        try:
+            pr = await cursor_client.pr_for_agent(CURSOR_API_KEY, ref)
+        except Exception:  # noqa: BLE001
+            log.info("prior agent %s unreachable; treating as dead", ref)
+            return False
+        if pr is None:
+            return False
+        if pr.get("prUrl"):
+            return True  # already opened a PR; the tracker carries it to prprep
+        terminal = (pr.get("runStatus") in cursor_client.TERMINAL_RUN_STATUSES
+                    or pr.get("agentStatus") in cursor_client.TERMINAL_RUN_STATUSES)
+        return not terminal
 
 
 async def _amain() -> None:
-    """Run the NotionPush + FixDispatch claim loops and the CursorTracker sweep.
+    """Run the LinearPush + FixDispatch claim loops and the CursorTracker sweep.
 
     Builds the shared ServiceClient, runs all three concurrently (the two claim loops
     plus the tracker that follows dispatched fix agents through to a mergeable PR),
@@ -289,7 +323,7 @@ async def _amain() -> None:
     service = ServiceClient(os.environ["SERVICE_URL"], os.environ.get("ATB_SERVICE_TOKEN", ""))
     try:
         await asyncio.gather(
-            NotionPush(service).run(),
+            LinearPush(service).run(),
             FixDispatch(service).run(),
             CursorTracker(service).run(),
         )

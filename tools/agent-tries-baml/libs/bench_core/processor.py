@@ -61,11 +61,11 @@ class Processor:
         """
         raise NotImplementedError
 
-    # --- claim wiring (overridable for issues' notion/fix queues) ---
+    # --- claim wiring (overridable for issues. linear/fix queues) ---
     async def _claim_one(self) -> Optional[dict[str, Any]]:
         """Claim a single item using the subclass's queue config.
 
-        Override for custom queues (e.g. issues' notion/fix fields).
+        Override for custom queues (e.g. issues. linear/fix fields).
 
         Returns:
             The claimed document, or None when the queue is empty.
@@ -109,7 +109,7 @@ class Processor:
             log.exception("process failed for %s/%s", self.table, item_id)
             try:
                 await self.service.update(self.table, item_id, {"lastError": str(e)[:2000]})
-                # Fail on the SAME field we claimed (so a notionSyncStatus
+                # Fail on the SAME field we claimed (so a linearSyncStatus
                 # queue doesn't corrupt the issue's lifecycle `status`).
                 await self.service.transition(
                     self.table, item_id, "failed", field=self.claim_field

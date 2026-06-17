@@ -193,11 +193,12 @@ async def _ensure_baml(sha: Optional[str]) -> Optional[Path]:
 async def _install_skills(staging: Path, baml_dir: Optional[Path], cell_id: str) -> bool:
     """Install the official BAML agent skills into the staging dir.
 
-    Runs `baml agent install --dir .` with the version-cached baml on PATH, so
-    the agent finds the skills at .claude/skills/baml-* exactly as a real user
-    would after running the command. Degrades to False (run proceeds without
-    skills) rather than failing the run, mirroring how a missing baml binary is
-    handled.
+    Runs `baml agent install --latest --dir .` with the version-cached baml on
+    PATH, so the agent finds the skills at .claude/skills/baml-* exactly as a real
+    user would after running the command. `--latest` pins warm runs to the newest
+    published skill rather than whatever the binary defaults to. Degrades to False
+    (run proceeds without skills) rather than failing the run, mirroring how a
+    missing baml binary is handled.
 
     Args:
         staging: The staging directory the skills are installed into.
@@ -213,7 +214,7 @@ async def _install_skills(staging: Path, baml_dir: Optional[Path], cell_id: str)
         return False
     stdout, stderr, exit_code, timed_out = await runner.run_command(
         cwd=staging,
-        command="baml agent install --dir .",
+        command="baml agent install --latest --dir .",
         baml_bin_dir=baml_dir,
         timeout_secs=SKILL_INSTALL_TIMEOUT_SECS,
     )

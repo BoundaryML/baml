@@ -6,7 +6,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
-UI_BASE_URL = os.environ.get("UI_BASE_URL", "http://localhost:3000")
+UI_BASE_URL = os.environ.get("UI_BASE_URL", "https://new.boundaryml.com/atb")
 # Starting branch per repo: the compiler repo (language issues) ships on canary,
 # the skill repo (skill issues) on main. Cursor verifies the ref exists, so each
 # must match its repo's actual default branch.
@@ -76,9 +76,14 @@ def _pr_instructions() -> str:
         "4. **Verification** — the exact command(s) you ran and the now-passing output "
         "(show that same reproduction succeeding after the change).",
         "",
-        "Give the PR a precise title that names the construct and the behavior "
-        '(e.g. "Add `%` modulo operator for integer arithmetic" — not "Fix bug"). '
-        "Keep the change minimal and scoped to this single issue.",
+        "Give the PR a precise, descriptive title that names the construct and the "
+        'behavior (e.g. "Add `%` modulo operator for integer arithmetic" — NOT "Fix '
+        'bug", and NEVER the auto-generated placeholder "Pull request template"). The '
+        "PR may be opened automatically with a template/placeholder title; if so, you "
+        "MUST overwrite it with your real title — e.g. run "
+        '`gh pr edit --title "<precise title>"` after the PR exists. Do not leave a '
+        "generic or placeholder title. Keep the change minimal and scoped to this "
+        "single issue.",
     ])
 
 
@@ -150,6 +155,31 @@ def _language_verification() -> str:
         "Clippy runs with warnings DENIED in CI, so a single lint fails the build. "
         "Fix lints idiomatically (e.g. use a `for` loop instead of "
         "`while let Some(..) = iter.next()`); do not silence them with `#[allow(...)]`.",
+    ])
+
+
+def _coding_standards() -> str:
+    """Return the code-quality directive requiring docstrings on the diff.
+
+    Reviewers (and CodeRabbit) routinely bounce PRs that add or change public
+    items without documenting them. Requiring a docstring on every new or
+    modified function/method/type — in the language's idiomatic style — keeps the
+    diff self-explanatory and avoids that review round-trip.
+
+    Returns:
+        A multi-line "Code standards" instruction block.
+    """
+    return "\n".join([
+        "## Code standards",
+        "Every function, method, class/struct/enum, and trait you ADD or MODIFY "
+        "must carry a docstring describing what it does — including its parameters, "
+        "return value, and any errors/panics. Always include docstrings; do not "
+        "leave new or changed public items undocumented.",
+        "",
+        "- Use the language's idiomatic style: `///` doc comments in Rust, JSDoc "
+        "`/** ... */` in TypeScript/JavaScript, `\"\"\"docstrings\"\"\"` in Python.",
+        "- Match the surrounding file's existing comment style and density.",
+        "- If you touch an existing function that lacks a docstring, add one.",
     ])
 
 
@@ -256,6 +286,8 @@ def cursor_prompt(issue: dict[str, Any]) -> str:
     # Always prove the bug exists before touching code (and capture the baseline
     # for the Verification section).
     parts += ["", _reproduce_first()]
+    # Require docstrings on everything the agent adds or changes.
+    parts += ["", _coding_standards()]
     if issue.get("kind") != "skill":
         # Language fixes go through the compiler repo's CI (tests + insta
         # snapshots + clippy -D warnings); spell out each gate explicitly.
@@ -297,4 +329,17 @@ def evidence_links(issue: dict[str, Any]) -> list[str]:
             url += f"?call={call}"
         links.append(url)
     return links
+
+
+def issue_link(issue: dict[str, Any]) -> str:
+    """Dashboard URL for an issue's own page (``{UI_BASE_URL}/issues/<id>``).
+
+    Args:
+        issue: The issue document; reads its Convex ``_id``.
+
+    Returns:
+        The issue's dashboard URL, or "" when the issue has no id.
+    """
+    iid = issue.get("_id")
+    return f"{UI_BASE_URL}/issues/{iid}" if iid else ""
 

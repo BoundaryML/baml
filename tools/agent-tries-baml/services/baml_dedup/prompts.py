@@ -52,7 +52,7 @@ improvement proposal. Default "bug".
 suggestion through; sharpen it if several reports agree. Always set it.
 - Titles under 80 chars.
 - Write `description` as rich, well-structured **Markdown** — this becomes the issue body in \
-Notion. Use short paragraphs, `##` subheadings (e.g. What's wrong / Impact / Context), `-` bullet \
+Linear. Use short paragraphs, `##` subheadings (e.g. What's wrong / Impact / Context), `-` bullet \
 lists, `**bold**`, and `` `inline code` `` where they make the issue clearer. Be thorough: explain \
 what is wrong, why it matters, and the conditions under which it shows up. Aim for a real bug report, \
 not one terse line.

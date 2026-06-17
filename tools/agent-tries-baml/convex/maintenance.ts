@@ -14,7 +14,7 @@ const RULES: Array<[string, string, string, string, string]> = [
   // approved. tocursor/prprep are owned by the tracker sweep (no claim/lease).
   ["issues", "status", "dispatching", "approved", "by_lease"],
   ["issues", "status", "redrafting", "redraft", "by_lease"],
-  ["issues", "notionSyncStatus", "syncing", "dirty", "by_notion_sync"],
+  ["issues", "linearSyncStatus", "syncing", "dirty", "by_linear_sync"],
   ["bamlBuilds", "status", "building", "queued", "by_lease"],
   // A crashed CohortCompare requeues its cohort for another compare attempt
   // (the pending -> queued fan-in is owned by the Python reconciler, not the reaper).

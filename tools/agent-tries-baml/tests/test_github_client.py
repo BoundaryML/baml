@@ -82,3 +82,18 @@ def test_failure_summary_includes_checks_and_coderabbit():
     assert "unit-tests" in out and "3 tests failed" in out
     assert "Please handle the None case." in out
     assert "src/x.py" in out and "unused import" in out
+
+
+def test_human_comment_summary_includes_humans_skips_bots():
+    review_comments = [
+        {"user": {"type": "User", "login": "alice"}, "path": "a.rs", "line": 4, "body": "rename this"},
+        {"user": {"type": "Bot", "login": CR}, "path": "a.rs", "line": 9, "body": "nit"},
+    ]
+    issue_comments = [
+        {"user": {"type": "User", "login": "bob"}, "body": "add a test for the empty case"},
+        {"user": {"type": "Bot", "login": "cursor[bot]"}, "body": "opened a PR"},
+    ]
+    out = gh.human_comment_summary(review_comments, issue_comments)
+    assert "@alice" in out and "rename this" in out
+    assert "@bob" in out and "add a test for the empty case" in out
+    assert "nit" not in out and "opened a PR" not in out  # bot comments excluded

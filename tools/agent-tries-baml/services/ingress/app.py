@@ -3,8 +3,8 @@
 Every handler calls the service API (never Convex directly):
   /slack/events  -> the @bammy router (bench tasks, changelog edits, promo
                     codes, feedback — see services/ingress/bammy.py)
-  /notion/webhook -> read the page status and route the issue to approved (fix)
-                     or redraft (human-feedback redraft loop)
+  /linear/webhook -> read the issue's status-group label and route the issue to
+                     approved (fix) or redraft (human-feedback redraft loop)
   /bug           -> create a task (source=bug_report)
   /entries       -> public changelog JSON (consumed by the website build)
   /feedback      -> public, rate-limited feedback intake (`baml feedback` CLI)
@@ -23,8 +23,8 @@ from typing import Any, Optional
 
 from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request, Response
 
+from bench_core import linear_client as lc
 from bench_core import slack_client
-from bench_core.notion_client import NotionClient
 from bench_core.service_client import ServiceClient
 
 from . import bammy
@@ -40,21 +40,23 @@ log = logging.getLogger("uvicorn.error")
 SERVICE_URL = os.environ["SERVICE_URL"]
 SERVICE_TOKEN = os.environ.get("ATB_SERVICE_TOKEN", "")
 SLACK_SIGNING_SECRET = os.environ.get("ATB_SLACK_SIGNING_SECRET", "")
-# When set, /notion/webhook requires a valid X-Notion-Signature over the raw body
-# (HMAC-SHA256 keyed by this token, the value shown in the Notion webhook UI).
-# Left empty, signature verification is skipped (current default behavior).
-NOTION_VERIFICATION_TOKEN = os.environ.get("NOTION_VERIFICATION_TOKEN", "")
-# Integration token used to READ a page's status when routing a webhook (approve
-# vs redraft). Without it, the webhook falls back to the legacy approve-only path.
-NOTION_TOKEN = os.environ.get("ATB_NOTION_TOKEN", "")
-# Notion board status labels the webhook routes on (must match notion_fixer's).
-# Matched case-insensitively, so "Approved" / "approved" both register.
-NOTION_STATUS_APPROVED = os.environ.get("NOTION_STATUS_APPROVED", "approved")
-NOTION_STATUS_REDRAFT = os.environ.get("NOTION_STATUS_REDRAFT", "redraft")
+# When set, /linear/webhook requires a valid Linear-Signature over the raw body
+# (HMAC-SHA256 hex keyed by the webhook signing secret). Left empty, signature
+# verification is skipped (dev only).
+LINEAR_WEBHOOK_SECRET = os.environ.get("ATB_LINEAR_WEBHOOK_SECRET", "")
+# Reject webhooks whose webhookTimestamp is older than this (replay guard), ms.
+LINEAR_WEBHOOK_MAX_SKEW_MS = int(os.environ.get("LINEAR_WEBHOOK_MAX_SKEW_MS", "60000"))
+# Loop/echo prevention is a status-state gate, NOT an actor check: a human-moved
+# label is only honored when the Convex issue sits in a resting state where that
+# move makes sense. Any in-flight/terminal status is ignored, so a duplicate
+# delivery — or a bot write that ever produced these labels — is a safe no-op.
+# This is identity-independent: the bot can share a human's API token without the
+# webhook suppressing that human's own board moves.
+_APPROVE_FROM = {"open", "confirmed", "needs_human", "redraft"}
+_REDRAFT_FROM = {"open", "confirmed", "needs_human", "approved"}
 
 app = FastAPI(title="agent-tries-baml-ingress")
 _service = ServiceClient(SERVICE_URL, SERVICE_TOKEN)
-_notion = NotionClient(NOTION_TOKEN) if NOTION_TOKEN else None
 _seen: "OrderedDict[str, bool]" = OrderedDict()
 _SEEN_CAP = 1024
 
@@ -213,131 +215,108 @@ async def slack_events(request: Request,
     return Response(status_code=200)
 
 
-@app.post("/notion/webhook")
-async def notion_webhook(request: Request,
-                         x_notion_signature: str = Header(default="")) -> Response:
-    """Approve the issue a Notion webhook points at (the fix dispatcher claims it).
+@app.post("/linear/webhook")
+async def linear_webhook(request: Request,
+                         linear_signature: str = Header(default="")) -> Response:
+    """Route a Linear Issue event to approved (fix) or redraft (human-feedback).
 
-    Notion fires when an issue's Status becomes 'approved'. We find the issue by
-    page id and flip it to approved.
+    The request's ``Linear-Signature`` (HMAC-SHA256 hex over the raw body, keyed by
+    ``ATB_LINEAR_WEBHOOK_SECRET``) is verified when a secret is configured. We match
+    the Convex issue by ``linearIssueId`` and read its status-group label: only the
+    two human-moved labels route — ``approved`` -> approved (the fix dispatcher
+    claims it) and ``redraft`` -> redraft (the redraft loop claims it). Every other
+    label (our own to-cursor / pr-prep / merged writes) is a no-op.
 
-    When ``NOTION_VERIFICATION_TOKEN`` is configured, the request's
-    ``X-Notion-Signature`` (``sha256=<hmac>`` over the raw body) is verified first
-    and a mismatch is rejected with 401.
-
-    Notion's integration webhooks put the *page* id under ``entity.id`` (or
-    ``data.id`` for automation webhooks); the top-level ``id`` is the
-    *event/delivery* id, NOT the page - so it must be tried last, never first.
-    Notion is also inconsistent about hyphens in ids, so the alternate
-    hyphenation is retried before giving up.
+    Loop/echo prevention is a status-state gate in ``_route_linear_status`` (only
+    honor a move from a resting status), NOT an actor check — so the bot may share a
+    human's API token without the webhook suppressing that human's own board moves.
 
     Args:
         request: The inbound webhook request (raw body read for verification).
-        x_notion_signature: Notion's ``X-Notion-Signature`` header.
+        linear_signature: Linear's ``Linear-Signature`` header.
 
     Returns:
-        A Response: 200 for the verification handshake or a handled/unmatched
-        event, 401 on a bad signature, 400 when no page id can be found.
+        A Response: 200 for a handled/unmatched/ignored event, 401 on a bad
+        signature, 400 when the payload carries no issue id.
     """
     import json
     raw = await request.body()
-    body = json.loads(raw or b"{}")
 
-    # Subscription verification handshake: Notion sends this once when the webhook
-    # is created and expects a 200. Do not log the token value (it is shown in the
-    # Notion UI; copy it into NOTION_VERIFICATION_TOKEN from there).
-    if "verification_token" in body:
-        log.info("notion webhook: received subscription verification request")
-        return Response(status_code=200)
-
-    # Optional signature verification (no-op unless a token is configured).
-    if NOTION_VERIFICATION_TOKEN:
-        expected = "sha256=" + hmac.new(
-            NOTION_VERIFICATION_TOKEN.encode(), raw, hashlib.sha256
-        ).hexdigest()
-        if not hmac.compare_digest(x_notion_signature, expected):
-            log.warning("notion webhook: bad signature")
+    # Signature verification (no-op unless a secret is configured).
+    if LINEAR_WEBHOOK_SECRET:
+        expected = hmac.new(LINEAR_WEBHOOK_SECRET.encode(), raw, hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(linear_signature, expected):
+            log.warning("linear webhook: bad signature")
             return Response(status_code=401)
 
-    page_id = (
-        body.get("page_id")                       # synthetic / explicit
-        or (body.get("entity") or {}).get("id")   # integration webhook: the page
-        or (body.get("data") or {}).get("id")     # automation webhook: the page
-        or body.get("id")                          # last resort (often the event id)
-    )
-    if not page_id:
-        log.warning("notion webhook: no page id in payload keys=%s", sorted(body.keys()))
+    body = json.loads(raw or b"{}")
+
+    # Replay guard: drop events older than the allowed skew (webhookTimestamp is ms).
+    ts = body.get("webhookTimestamp")
+    if isinstance(ts, (int, float)) and abs(time.time() * 1000 - ts) > LINEAR_WEBHOOK_MAX_SKEW_MS:
+        log.warning("linear webhook: stale webhookTimestamp=%s; ignoring", ts)
+        return Response(status_code=200)
+
+    if body.get("type") != "Issue":
+        log.info("linear webhook: ignored type=%s", body.get("type"))
+        return Response(status_code=200)
+
+    data = body.get("data") or {}
+    linear_id = data.get("id")
+    if not linear_id:
+        log.warning("linear webhook: no issue id in payload keys=%s", sorted(body.keys()))
         return Response(status_code=400)
 
-    rows = await _service.list("issues", field="notionPageId", value=page_id,
-                               index="by_notion_page")
+    rows = await _service.list("issues", field="linearIssueId", value=linear_id,
+                               index="by_linear_issue")
     if not rows:
-        # Notion APIs are inconsistent about hyphens in ids; retry the
-        # alternate form before giving up.
-        alt = _toggle_uuid_hyphens(page_id)
-        if alt != page_id:
-            rows = await _service.list("issues", field="notionPageId", value=alt,
-                                       index="by_notion_page")
-    if not rows:
-        log.warning("notion webhook: no issue matches page %s", page_id)
+        log.warning("linear webhook: no issue matches linear id %s", linear_id)
         return Response(status_code=200)
 
     issue = rows[0]
-    new_status = await _route_notion_status(issue, page_id)
+    new_status = _route_linear_status(issue, data)
     if new_status:
         await _service.update("issues", issue["_id"], {"status": new_status})
-        log.info("notion webhook -> issue %s status=%s (page=%s)", issue["_id"], new_status, page_id)
+        log.info("linear webhook -> issue %s status=%s (linear=%s)",
+                 issue["_id"], new_status, linear_id)
     return Response(status_code=200)
 
 
-async def _route_notion_status(issue: dict[str, Any], page_id: str) -> Optional[str]:
-    """Decide the issue status a Notion webhook should set.
+def _route_linear_status(issue: dict[str, Any], data: dict[str, Any]) -> Optional[str]:
+    """Decide the issue status a Linear webhook should set from its labels.
 
-    Reads the page's current Status (when a Notion token is configured) and maps
-    the approved/redraft labels to their issue lifecycle states. Without a token
-    it preserves the legacy approve-only behavior.
+    Reads the status-group label off the event's ``data`` (``labelIds`` directly,
+    or the ``labels`` array) and maps the two human-moved labels to their issue
+    lifecycle states — but only when the Convex issue currently sits in a resting
+    state where that move is valid (the status-state gate). A move targeting a
+    status the issue has already passed (in-flight dispatch, closed, or already
+    redrafting) is ignored, which is what makes the webhook safe against duplicate
+    deliveries and any echoed bot write without needing an actor check.
 
     Args:
-        issue: The matched issue row (its stored notionPageId is preferred for
-            the status read).
-        page_id: The page id resolved from the webhook payload (fallback).
+        issue: The matched issue row; its current ``status`` gates the transition.
+        data: The webhook event's ``data`` object for the issue.
 
     Returns:
         The target issue status ("approved" or "redraft"), or None to do nothing.
     """
-    if not _notion:
-        return "approved"  # legacy: no Notion read configured, approve as before
-    try:
-        page_status = await _notion.get_status(issue.get("notionPageId") or page_id)
-    except Exception:  # noqa: BLE001
-        log.exception("notion webhook: failed to read status for page %s", page_id)
+    label_ids = data.get("labelIds")
+    if label_ids is None:
+        label_ids = [lbl.get("id") for lbl in (data.get("labels") or [])]
+    cur = issue.get("status")
+    if lc.LINEAR_STATUS_APPROVED in label_ids:
+        if cur in _APPROVE_FROM:
+            return "approved"
+        log.info("linear webhook: approved label but issue %s is %s; no action",
+                 issue.get("_id"), cur)
         return None
-    # Case-insensitive match so "Approved" / "approved" both register.
-    norm = (page_status or "").strip().lower()
-    if norm == NOTION_STATUS_APPROVED.strip().lower():
-        return "approved"
-    if norm == NOTION_STATUS_REDRAFT.strip().lower():
-        return "redraft"
-    log.info("notion webhook: page %s status=%r -> no action", page_id, page_status)
+    if lc.LINEAR_STATUS_REDRAFT in label_ids:
+        if cur in _REDRAFT_FROM:
+            return "redraft"
+        log.info("linear webhook: redraft label but issue %s is %s; no action",
+                 issue.get("_id"), cur)
+        return None
     return None
-
-
-def _toggle_uuid_hyphens(value: str) -> str:
-    """Return the alternate hyphenation of a Notion id.
-
-    Args:
-        value: A Notion id in either 32-char compact or dashed-UUID form.
-
-    Returns:
-        The other form (compact <-> dashed). The value unchanged if it is not a
-        32-character id.
-    """
-    compact = value.replace("-", "")
-    if len(compact) != 32:
-        return value
-    if "-" in value:
-        return compact
-    return f"{compact[:8]}-{compact[8:12]}-{compact[12:16]}-{compact[16:20]}-{compact[20:]}"
 
 
 @app.post("/bug")
@@ -345,8 +324,7 @@ async def bug_trigger(payload: dict) -> dict[str, str]:
     """Create a task from a bug report.
 
     Args:
-        payload: The request body. Requires a non-empty ``prompt``; optional
-            ``notionPageId`` (recorded as the proposer's Notion page).
+        payload: The request body. Requires a non-empty ``prompt``.
 
     Returns:
         A dict ``{"id": <task id>}`` for the created task.
@@ -377,8 +355,7 @@ async def bug_trigger(payload: dict) -> dict[str, str]:
         cid = await _create_cohort(_service, prompt, branches, opts, source="bug_report")
         return {"cohortId": cid}
     tid = await _service.create("tasks", {
-        "source": "bug_report", "prompt": prompt,
-        "notionProposerPageId": payload.get("notionPageId"), "status": "queued",
+        "source": "bug_report", "prompt": prompt, "status": "queued",
         **opts,
     })
     return {"id": tid}

@@ -3,7 +3,7 @@
 A run done locally (no proxy) can be pushed into the pipeline here. We parse the
 raw session transcript exactly as the proxy would (bench_core.transcript), create
 a done task + a queued trophy, and let baml-dedup pick the trophy up so the full
-task -> trophy -> dedup -> issues -> Notion flow runs over it.
+task -> trophy -> dedup -> issues -> Linear flow runs over it.
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ from ..convex_gateway import ConvexGateway
 from .. import blobs
 
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-6")
-UI_BASE_URL = os.environ.get("UI_BASE_URL", "https://bench3-ui.fly.dev")
+UI_BASE_URL = os.environ.get("UI_BASE_URL", "https://new.boundaryml.com/atb")
 
 
 class IngestBody(BaseModel):

@@ -73,7 +73,7 @@ def test_validate_relative_path_rejects_traversal():
 
 
 def test_install_skills_runs_baml_agent_install(tmp_path):
-    """_install_skills runs `baml agent install --dir .` with the cached baml on PATH.
+    """_install_skills runs `baml agent install --latest --dir .` with the cached baml on PATH.
 
     Verifies the happy path (a stub baml that records its argv and exits 0 yields
     True), the failure path (exit 1 yields False), and the no-binary path (None
@@ -95,7 +95,7 @@ def test_install_skills_runs_baml_agent_install(tmp_path):
     baml.chmod(baml.stat().st_mode | stat.S_IXUSR)
 
     assert asyncio.run(_install_skills(staging, bin_dir, "cell-1")) is True
-    assert argv_log.read_text().strip() == "agent install --dir ."
+    assert argv_log.read_text().strip() == "agent install --latest --dir ."
 
     baml.write_text("#!/bin/sh\nexit 1\n")
     assert asyncio.run(_install_skills(staging, bin_dir, "cell-1")) is False

@@ -15,8 +15,8 @@ async def main() -> None:
     """Drive the full task-to-issue pipeline once and assert each stage.
 
     Creates a task, runs BamlWorker (assembles the trophy), BamlDedup (creates the
-    issue), and NotionPush (no-creds sync path), asserting the trophy outcome,
-    findings/suggestions, the deduped issue, and its Notion sync state along the way.
+    issue), and LinearPush (no-creds sync path), asserting the trophy outcome,
+    findings/suggestions, the deduped issue, and its Linear sync state along the way.
 
     Raises:
         AssertionError: If any stage produces an unexpected result.
@@ -63,7 +63,7 @@ async def main() -> None:
         assert mine, "no issue created referencing this trophy"
         iss = mine[0]
         assert iss["kind"] == "language" and iss["status"] == "open"
-        assert iss["notionSyncStatus"] == "dirty"
+        assert iss["linearSyncStatus"] == "dirty"
         assert iss.get("suggestion"), "issue should carry a suggestion"
         assert iss.get("category") == "bug", iss.get("category")
         ev = iss["evidence"][0]
@@ -71,14 +71,14 @@ async def main() -> None:
         print(f"baml-dedup OK: issue kind={iss['kind']} status={iss['status']} "
               f"evidence->trophy={ev['trophyId']==trophy_id} call={ev['call_index']}")
 
-        from services.notion_fixer.__main__ import NotionPush
-        push = NotionPush(service)
+        from services.notion_fixer.__main__ import LinearPush
+        push = LinearPush(service)
         await push._drain()
         iss2 = await service.get("issues", iss["_id"])
-        assert iss2["notionSyncStatus"] == "synced", iss2["notionSyncStatus"]
+        assert iss2["linearSyncStatus"] == "synced", iss2["linearSyncStatus"]
         assert iss2["status"] == "confirmed", iss2["status"]
-        print(f"notion-push OK (no-creds path): issue -> status={iss2['status']} "
-              f"sync={iss2['notionSyncStatus']}")
+        print(f"linear-push OK (no-creds path): issue -> status={iss2['status']} "
+              f"sync={iss2['linearSyncStatus']}")
         print("PIPELINE_OK")
     finally:
         await service.aclose()

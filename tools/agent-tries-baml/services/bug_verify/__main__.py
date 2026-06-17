@@ -9,8 +9,8 @@ agent per issue with that baml pinned on PATH, and:
   from the first evidence run) so the dashboard shows "last verified
   against X".
 - fixed (high confidence only): additionally stamps fixedIn, transitions
-  the issue to ``closed``, marks it notion-dirty for the regular re-sync,
-  flips its Notion page status, and leaves a comment with the evidence.
+  the issue to ``closed``, marks it linear-dirty for the regular re-sync,
+  flips its Linear card status, and leaves a comment with the evidence.
 """
 
 from __future__ import annotations
@@ -25,7 +25,8 @@ import uuid
 from typing import Any, Optional
 
 from bench_core.jsonl import extract_last_json_object
-from bench_core.notion_client import NotionClient
+from bench_core import linear_client as lc
+from bench_core.linear_client import LinearClient
 from bench_core.proxy_client import ProxyClient
 from bench_core.schemas import RunAgentRequest
 from bench_core.service_client import ServiceClient
@@ -41,9 +42,9 @@ BUG_VERIFY_TIMEOUT_SECS = int(os.environ.get("BUG_VERIFY_TIMEOUT_SECS", "900"))
 BUG_VERIFY_BATCH = int(os.environ.get("BUG_VERIFY_BATCH", "6"))
 BUG_VERIFY_POLL_SECS = int(os.environ.get("BUG_VERIFY_POLL_SECS", "900"))
 BAML_CHANNEL = os.environ.get("BAML_CHANNEL", "nightly")
-NOTION_TOKEN = os.environ.get("ATB_NOTION_TOKEN", "")
-# Board label for fixed issues; "merged" matches NotionPush's closed mapping.
-NOTION_STATUS_FIXED = os.environ.get("NOTION_STATUS_FIXED", "merged")
+LINEAR_API_KEY = os.environ.get("ATB_LINEAR_TOKEN", "")
+# Board label for fixed issues; the merged label matches LinearPush's closed mapping.
+LINEAR_STATUS_FIXED = lc.LINEAR_STATUS_MERGED
 
 # Issue lifecycle states worth re-checking (on the board, not yet closed).
 VERIFIABLE_STATUSES = ("open", "confirmed")
@@ -93,7 +94,7 @@ class BugVerify:
         """
         self.service = service
         self.proxy = ProxyClient.from_env()
-        self.notion = NotionClient(NOTION_TOKEN) if NOTION_TOKEN else None
+        self.linear = LinearClient(LINEAR_API_KEY) if LINEAR_API_KEY else None
         self.id = f"{self.role}-{socket.gethostname()}-{os.getpid()}-{uuid.uuid4().hex[:6]}"
 
     # ---- presence (observability only, never load-bearing) ----
@@ -201,7 +202,7 @@ class BugVerify:
             return
 
         evidence = (verdict.get("evidence") or "").strip()
-        patch.update({"fixedIn": label, "notionSyncStatus": "dirty"})
+        patch.update({"fixedIn": label, "linearSyncStatus": "dirty"})
         await self.service.update("issues", issue_id, patch)
         # release_claim=False: the issue is not claimed by us, and another
         # worker may hold a claim on a different queue field.
@@ -209,30 +210,31 @@ class BugVerify:
             "issues", issue_id, "closed", field="status", release_claim=False
         )
         log.info("bug-verify: %s FIXED in %s", issue_id, label)
-        await self._notion_fixed(issue, label, evidence)
+        await self._linear_fixed(issue, label, evidence)
 
-    async def _notion_fixed(self, issue: dict[str, Any], label: str, evidence: str) -> None:
-        """Flip the issue's Notion page to the fixed status and leave evidence.
+    async def _linear_fixed(self, issue: dict[str, Any], label: str, evidence: str) -> None:
+        """Flip the issue's Linear card to the merged status and leave evidence.
 
-        Best-effort: the dirty flag already queues a full NotionPush re-sync,
-        so a Notion failure here never blocks the verdict.
+        Best-effort: the dirty flag already queues a full LinearPush re-sync (which
+        also maps closed -> merged), so a Linear failure here never blocks the
+        verdict — this just surfaces the merge on the board immediately.
 
         Args:
-            issue: The fixed issue (its notionPageId is used when present).
+            issue: The fixed issue (its linearIssueId is used when present).
             label: Version the fix was verified against.
             evidence: The agent's one-paragraph observation.
         """
-        page_id = issue.get("notionPageId")
-        if not self.notion or not page_id:
+        linear_id = issue.get("linearIssueId")
+        if not self.linear or not linear_id:
             return
         try:
-            await self.notion.set_status(page_id, NOTION_STATUS_FIXED)
+            await self.linear.set_status(linear_id, LINEAR_STATUS_FIXED)
             comment = f"Verified fixed in baml {label}."
             if evidence:
                 comment += f" {evidence}"
-            await self.notion.add_comment(page_id, comment)
+            await self.linear.add_comment(linear_id, comment)
         except Exception:  # noqa: BLE001
-            log.exception("bug-verify: notion update failed for page %s", page_id)
+            log.exception("bug-verify: linear update failed for issue %s", linear_id)
 
     async def _broke_in(self, issue: dict[str, Any]) -> Optional[str]:
         """Resolve the version the bug was first observed on, via its evidence.

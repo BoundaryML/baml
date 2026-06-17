@@ -3,7 +3,7 @@
 The CohortCompare agent reads the per-variant run write-ups (one per baml-skill
 branch, all on the SAME task) and produces a single comparison: which skill version
 served the agent best, why, and what concrete skill/language changes the differences
-imply. Those findings flow into the normal dedup -> issues -> Notion pipeline, so a
+imply. Those findings flow into the normal dedup -> issues -> Linear pipeline, so a
 winning variant's advantage becomes an actionable skill improvement.
 """
 

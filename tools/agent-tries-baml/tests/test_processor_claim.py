@@ -118,7 +118,7 @@ class _FailingProcessor(Processor):
 
     role = "test-fail"
     table = "issues"
-    claim_field = "notionSyncStatus"
+    claim_field = "linearSyncStatus"
     claim_value = "dirty"
     claim_into = "syncing"
 
@@ -163,5 +163,5 @@ async def test_run_one_fails_on_claim_field():
     await asyncio.sleep(0)
     assert svc.updates and svc.updates[0][0] == "x"
     assert "boom" in svc.updates[0][1]["lastError"]
-    # failed on the claim field (notionSyncStatus), NOT the lifecycle "status"
-    assert ("x", "failed", "notionSyncStatus") in svc.transitions
+    # failed on the claim field (linearSyncStatus), NOT the lifecycle "status"
+    assert ("x", "failed", "linearSyncStatus") in svc.transitions

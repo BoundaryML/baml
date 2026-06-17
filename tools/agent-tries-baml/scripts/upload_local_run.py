@@ -3,7 +3,7 @@
 
 Reads a Claude Code session `.jsonl` (the newest under ~/.claude/projects by
 default) and POSTs it to the API's /ingest/run endpoint, which creates a task +
-queued trophy so the full dedup -> issues -> Notion pipeline runs over it.
+queued trophy so the full dedup -> issues -> Linear pipeline runs over it.
 
 Usage:
     SERVICE_URL=http://localhost:8080 SERVICE_TOKEN=... \

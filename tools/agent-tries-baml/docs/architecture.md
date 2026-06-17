@@ -18,8 +18,8 @@ only Convex client. Solid arrows are calls through the API; dashed flows
 *Event sources feed `ingress`/`cron`, which create tasks through the API. The API
 is the sole Convex gateway; `baml-worker` and `baml-dedup` run agents through
 `claude-proxy` (which reaches Anthropic and caches the baml binary per sha);
-`baml-builder` pulls baml alpha releases from GitHub; `bug-verify` re-checks open issues against each new nightly (stamping brokeIn/fixedIn, closing fixed ones, and updating their Notion pages); `notion-fixer` syncs issues
-to Notion and Slack; a read-only Next.js UI reads through the API. Convex holds
+`baml-builder` pulls baml alpha releases from GitHub; `bug-verify` re-checks open issues against each new nightly (stamping brokeIn/fixedIn, closing fixed ones, and updating their Linear cards); `notion-fixer` (historical name; now Linear-backed) syncs issues
+to Linear and Slack; a read-only Next.js UI reads through the API. Convex holds
 the `tasks`, `trophies`, `issues`, and `bamlBuilds` queues with their lifecycles.*
 
 **Deployment shape:** always-on (min=1) `api`, `convex`, `claude-proxy`,
@@ -96,7 +96,7 @@ The loop in `Processor.run()` has four moving parts:
 - **Transition / fail.** On success, `process()` transitions the row to its
   terminal/next status. On an unhandled exception, `_run_one()` records
   `lastError` and transitions the row to `failed` **on the same field it was
-  claimed on** - so failing a `notionSyncStatus` queue item never corrupts the
+  claimed on** - so failing a `linearSyncStatus` queue item never corrupts the
   issue's lifecycle `status`.
 - **Poll backstop.** A separate `_poll_backstop()` task calls `_drain()` every
   `poll_backstop_secs` regardless of SSE. If the SSE stream drops, the loop
@@ -137,23 +137,24 @@ open → confirmed → approved → fixing → closed | rejected
 
 `baml-dedup` upserts issues as `open`. The `notion-fixer` fix dispatcher claims
 `status == "approved"` (`approved → fixing`) and dispatches an `@cursor` fix;
-issues end at `closed` or `rejected`. A human (or Notion automation) is what
-moves an issue toward `approved`; `ingress` `/notion/webhook` flips an issue to
-`approved` when its Notion Status changes.
+issues end at `closed` or `rejected`. A human moving the Linear card's status
+label is what drives an issue toward `approved`; `ingress` `/linear/webhook`
+reads the issue's status-group label and flips the issue to `approved` (or
+`redraft`) when a human changes it.
 
-Running *alongside* the lifecycle is a **separate** Notion-sync queue on the
-`notionSyncStatus` field:
+Running *alongside* the lifecycle is a **separate** Linear-sync queue on the
+`linearSyncStatus` field:
 
 ```text
 dirty → syncing → synced
 ```
 
-`baml-dedup` marks an issue `notionSyncStatus = "dirty"` whenever it writes new
-evidence. The `notion-fixer` push processor claims `notionSyncStatus == "dirty"`
-(via the `by_notion_sync` index), creates or patches the Notion page, and sets
-`notionSyncStatus = "synced"`. Keeping this on its own field/index means Notion
-sync and the bug-fix lifecycle never block or corrupt each other - the same row
-is claimable on two axes at once.
+`baml-dedup` marks an issue `linearSyncStatus = "dirty"` whenever it writes new
+evidence. The `notion-fixer` push processor (`LinearPush`) claims
+`linearSyncStatus == "dirty"` (via the `by_linear_sync` index), adopts-by-title /
+creates / re-renders the Linear card, and sets `linearSyncStatus = "synced"`.
+Keeping this on its own field/index means Linear sync and the bug-fix lifecycle
+never block or corrupt each other - the same row is claimable on two axes at once.
 
 ### `bamlBuilds` - `queued → building → ready | failed`
 
@@ -178,7 +179,7 @@ them to `failed`:
 | `tasks` | `status` | `running` | `queued` | `by_lease` |
 | `trophies` | `status` | `deduping` | `queued` | `by_lease` |
 | `issues` | `status` | `fixing` | `approved` | `by_lease` |
-| `issues` | `notionSyncStatus` | `syncing` | `dirty` | `by_notion_sync` |
+| `issues` | `linearSyncStatus` | `syncing` | `dirty` | `by_linear_sync` |
 | `bamlBuilds` | `status` | `building` | `queued` | `by_lease` |
 
 Because the heartbeat keeps pushing `leaseExpiresAt` forward during legitimate

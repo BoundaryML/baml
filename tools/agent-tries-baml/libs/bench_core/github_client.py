@@ -25,6 +25,7 @@ _FAIL_CONCLUSIONS = frozenset(
 )
 
 _PR_URL_RE = re.compile(r"github\.com/([^/]+)/([^/]+)/pull/(\d+)")
+_REPO_URL_RE = re.compile(r"github\.com[/:]([^/]+)/([^/]+?)(?:\.git)?/?$")
 
 
 def _headers() -> dict[str, str]:
@@ -58,6 +59,52 @@ def parse_pr_url(url: str) -> Optional[tuple[str, str, int]]:
 def repo_url_from_pr(owner: str, repo: str) -> str:
     """Return the ``https://github.com/<owner>/<repo>`` URL for a refix agent."""
     return f"https://github.com/{owner}/{repo}"
+
+
+def parse_repo_url(url: str) -> Optional[tuple[str, str]]:
+    """Parse a GitHub repo URL into (owner, repo).
+
+    Args:
+        url: A repo URL like ``https://github.com/owner/repo`` (``.git`` optional).
+
+    Returns:
+        ``(owner, repo)``, or None when the URL isn't a GitHub repo URL.
+    """
+    m = _REPO_URL_RE.search(url or "")
+    if not m:
+        return None
+    return m.group(1), m.group(2)
+
+
+async def open_pr_for_branch(owner: str, repo: str, branch: str, *,
+                             timeout: float = 30.0) -> Optional[dict[str, Any]]:
+    """Find the open PR whose head branch is ``branch`` (``head=owner:branch``).
+
+    Used as a fallback when Cursor's API doesn't surface the PR it opened — the
+    agent's branch is known, so the PR can be looked up directly on GitHub.
+
+    Args:
+        owner: Repo owner (also the head-repo owner for same-repo PRs).
+        repo: Repo name.
+        branch: The PR's head branch.
+        timeout: HTTP timeout in seconds.
+
+    Returns:
+        The first open PR object for that branch (has ``html_url``/``number``), or
+        None when there is none.
+
+    Raises:
+        httpx.HTTPStatusError: On a non-2xx response.
+    """
+    async with httpx.AsyncClient(timeout=timeout) as c:
+        r = await c.get(
+            f"{GITHUB_API_BASE}/repos/{owner}/{repo}/pulls",
+            headers=_headers(),
+            params={"state": "open", "head": f"{owner}:{branch}", "per_page": 5},
+        )
+        r.raise_for_status()
+        prs = r.json() or []
+        return prs[0] if prs else None
 
 
 async def get_pr(owner: str, repo: str, number: int, *, timeout: float = 30.0) -> dict[str, Any]:
@@ -129,6 +176,92 @@ async def pr_review_comments(owner: str, repo: str, number: int, *,
                         headers=_headers(), params={"per_page": 100})
         r.raise_for_status()
         return r.json() or []
+
+
+async def issue_comments(owner: str, repo: str, number: int, *,
+                         timeout: float = 30.0) -> list[dict[str, Any]]:
+    """List a PR's conversation (issue) comments — the top-level review thread.
+
+    A PR's conversation comments live on the issues endpoint (inline diff comments
+    come from :func:`pr_review_comments`). Used to spot human review feedback on a
+    PR that was already marked ready to merge.
+
+    Raises:
+        httpx.HTTPStatusError: On a non-2xx response.
+    """
+    async with httpx.AsyncClient(timeout=timeout) as c:
+        r = await c.get(f"{GITHUB_API_BASE}/repos/{owner}/{repo}/issues/{number}/comments",
+                        headers=_headers(), params={"per_page": 100})
+        r.raise_for_status()
+        return r.json() or []
+
+
+async def add_reaction(owner: str, repo: str, comment_id: int, *, kind: str = "review",
+                       content: str = "eyes", timeout: float = 30.0) -> bool:
+    """React to a PR comment, returning whether the reaction was newly added.
+
+    Posting a reaction is idempotent: GitHub returns 201 when our account's
+    reaction is created and 200 when it already existed. The tracker uses that to
+    mark a comment "seen" exactly once — a fresh 201 means we hadn't processed the
+    comment before. Failures are swallowed (returns False) so a reaction hiccup
+    never stalls the sweep.
+
+    Args:
+        owner: Repo owner.
+        repo: Repo name.
+        comment_id: The comment id to react to.
+        kind: ``"review"`` for an inline diff comment (``/pulls/comments/...``) or
+            ``"issue"`` for a conversation comment (``/issues/comments/...``).
+        content: The reaction emoji name (default ``"eyes"`` → 👀).
+        timeout: HTTP timeout in seconds.
+
+    Returns:
+        True if our reaction was newly created (201), False if it already existed
+        (200) or the request failed.
+    """
+    seg = "issues" if kind == "issue" else "pulls"
+    url = f"{GITHUB_API_BASE}/repos/{owner}/{repo}/{seg}/comments/{comment_id}/reactions"
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as c:
+            r = await c.post(url, headers=_headers(), json={"content": content})
+        return r.status_code == 201
+    except httpx.HTTPError:
+        return False
+
+
+def human_comment_summary(review_comments: list[dict[str, Any]],
+                          issue_comments: list[dict[str, Any]]) -> str:
+    """Assemble the review text handed to a fix agent for human PR feedback.
+
+    Lists each human conversation and inline comment (author + location + body),
+    skipping bot accounts (CodeRabbit, Cursor, etc.) which are handled elsewhere.
+
+    Args:
+        review_comments: The PR's inline review comments.
+        issue_comments: The PR's conversation comments.
+
+    Returns:
+        A Markdown summary (possibly empty when no human comments were found).
+    """
+    lines: list[str] = []
+    humans_inline = [c for c in review_comments
+                     if (c.get("user") or {}).get("type") == "User" and (c.get("body") or "").strip()]
+    humans_convo = [c for c in issue_comments
+                    if (c.get("user") or {}).get("type") == "User" and (c.get("body") or "").strip()]
+    if humans_convo:
+        lines.append("## Reviewer comments")
+        for c in humans_convo:
+            who = (c.get("user") or {}).get("login") or "reviewer"
+            lines.append(f"- **@{who}**: {c['body'].strip()}")
+    if humans_inline:
+        lines.append("\n## Reviewer inline comments")
+        for c in humans_inline:
+            who = (c.get("user") or {}).get("login") or "reviewer"
+            loc = c.get("path") or ""
+            ln = c.get("line") or c.get("original_line")
+            loc = f"`{loc}`:{ln}" if ln is not None else f"`{loc}`"
+            lines.append(f"- **@{who}** {loc} — {c['body'].strip()}")
+    return "\n".join(lines).strip()
 
 
 # ---------- pure decision helpers (no network; unit-tested) ----------

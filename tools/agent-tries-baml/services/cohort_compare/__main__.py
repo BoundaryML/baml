@@ -30,7 +30,7 @@ ARENA_MODEL = os.environ.get("ARENA_MODEL", "claude-sonnet-4-6")
 ARENA_MAX_TURNS = int(os.environ.get("ARENA_MAX_TURNS", "8"))
 ARENA_TIMEOUT_SECS = int(os.environ.get("ARENA_TIMEOUT_SECS", "600"))
 SLACK_BOT_TOKEN = os.environ.get("ATB_SLACK_BOT_TOKEN", "")
-UI_BASE_URL = os.environ.get("UI_BASE_URL", "https://bench3-ui.fly.dev")
+UI_BASE_URL = os.environ.get("UI_BASE_URL", "https://new.boundaryml.com/atb")
 
 
 class CohortCompare(Processor):
@@ -167,7 +167,8 @@ class CohortCompare(Processor):
             return
         branches = ", ".join(cohort.get("skillRefs") or [])
         summary = comp.get("summary") or "Arena complete."
-        link = f"{UI_BASE_URL.rstrip('/')}/cohorts/{cohort['_id']}"
+        # The dashboard exposes cohorts under its /arena route (not /cohorts).
+        link = f"{UI_BASE_URL.rstrip('/')}/arena/{cohort['_id']}"
         text = (f"*Skill arena complete.* {summary}\n"
                 f"variants: {branches}\n"
                 f"<{link}|view comparison>")

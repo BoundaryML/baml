@@ -159,7 +159,7 @@ class BamlDedup(Processor):
                     "evidence": merged,
                     "description": it.get("description", existing["description"]),
                     "lastSeenAt": now,
-                    "notionSyncStatus": "dirty",
+                    "linearSyncStatus": "dirty",
                 }
                 if it.get("suggestion"):
                     patch["suggestion"] = it["suggestion"]
@@ -177,7 +177,7 @@ class BamlDedup(Processor):
             "evidence": evidence,
             "repro": repro,
             "status": "open",
-            "notionSyncStatus": "dirty",
+            "linearSyncStatus": "dirty",
             "firstSeenAt": now,
             "lastSeenAt": now,
         })

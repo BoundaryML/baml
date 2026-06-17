@@ -39,7 +39,7 @@ async def main() -> None:
 
     Exercises ``/bug`` (creates a bug_report task), a signed ``/slack/events``
     app_mention (mention stripped, slack task created), a bad-signature rejection,
-    ``/notion/webhook`` (approves an issue by page id), and then FixDispatch
+    ``/linear/webhook`` (approves an issue by Linear id), and then FixDispatch
     (claims the approved issue to fixing and launches a Cursor cloud agent against
     the fake_proxy stub).
 
@@ -87,18 +87,22 @@ async def _drive(service: ServiceClient) -> None:
         assert r.status_code == 401
         print("ingress /slack bad-signature -> 401 OK")
 
-        # /notion/webhook -> approve an issue
+        # /linear/webhook -> approve an issue
+        from bench_core import linear_client as lc
         now = int(time.time() * 1000)
         iid = await service.create("issues", {
             "kind": "skill", "title": "doc gap", "description": "x", "evidence": [],
-            "status": "confirmed", "notionSyncStatus": "synced",
-            "notionPageId": "pg-1", "firstSeenAt": now, "lastSeenAt": now,
+            "status": "confirmed", "linearSyncStatus": "synced",
+            "linearIssueId": "li-1", "firstSeenAt": now, "lastSeenAt": now,
         })
-        r = await http.post(f"{INGRESS}/notion/webhook", json={"page_id": "pg-1"})
+        r = await http.post(f"{INGRESS}/linear/webhook", json={
+            "type": "Issue", "action": "update", "actor": {"id": "human"},
+            "data": {"id": "li-1", "labelIds": [lc.LINEAR_STATUS_APPROVED]},
+        })
         assert r.status_code == 200
         iss = await service.get("issues", iid)
         assert iss["status"] == "approved", iss["status"]
-        print("ingress /notion/webhook OK -> issue approved")
+        print("ingress /linear/webhook OK -> issue approved")
 
         # FixDispatch claims approved -> fixing and launches a Cursor cloud agent
         # (CURSOR_API_BASE points at fake_proxy's /v1/agents stub).

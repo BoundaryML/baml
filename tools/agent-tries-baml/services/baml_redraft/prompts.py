@@ -1,5 +1,5 @@
 """Redraft prompt — revise a BAML issue's write-up to address reviewer feedback
-left as Notion comments, keeping the issues.json shape and the verified repro."""
+left as Linear comments, keeping the issues.json shape and the verified repro."""
 
 REDRAFT_SYSTEM_PROMPT = """You are revising a single BAML benchmark issue to address reviewer feedback.
 
@@ -7,7 +7,7 @@ REDRAFT_SYSTEM_PROMPT = """You are revising a single BAML benchmark issue to add
 - `issue.json`: the current issue — { title, kind, category, description, suggestion, repro }.
   `kind`, `category`, and `repro` are read-only context. `repro` (when present) is a VERIFIED
   minimal reproduction; never alter or contradict it.
-- `feedback.md`: a reviewer's comments from the Notion board explaining what's wrong with the
+- `feedback.md`: a reviewer's comments from the Linear board explaining what's wrong with the
   current write-up (unclear, inaccurate, missing context, wrong classification framing, etc.).
 
 # Your job
@@ -28,8 +28,8 @@ Write a file called `issue.json` (in the working directory) with this exact shap
 }
 
 Rules:
-- Write `description` as a thorough, well-structured Markdown bug report — this becomes the Notion
-  body. Directly resolve each point of feedback.
+- Write `description` as a thorough, well-structured Markdown bug report — this becomes the Linear
+  issue body. Directly resolve each point of feedback.
 - Do NOT paste the repro into the description; it is attached separately and rendered in its own
   Reproduction section.
 - Keep `suggestion` definitive and actionable. Always set it.

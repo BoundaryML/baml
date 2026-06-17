@@ -3,7 +3,7 @@
 Shared by the public POST /feedback endpoint (the `baml feedback` CLI) and the
 @bammy feedback route. Mirrors the local-run ingest pattern
 (services/api/routers/ingest.py): the queued trophy flows through dedup ->
-issues -> Notion triage like any other run result, so feedback lands on the
+issues -> Linear triage like any other run result, so feedback lands on the
 same issue board with zero extra pipeline.
 
 Two payload shapes from the CLI:

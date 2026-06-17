@@ -11,10 +11,9 @@ poller (no queue claims, so it never disturbs the board lifecycle):
 3. Still broken: stamps `verifiedAt` / `verifyBamlVersion` / `brokeIn`
    (derived from the first evidence run's baml sha).
 4. Fixed (still_broken=false at high confidence only): also stamps
-   `fixedIn`, transitions the issue to `closed`, marks it notion-dirty for
-   the regular re-sync, flips the Notion page status
-   (`NOTION_STATUS_FIXED`, default `merged`), and leaves a comment with
-   the agent's evidence.
+   `fixedIn`, transitions the issue to `closed`, marks it linear-dirty for
+   the regular re-sync, flips the Linear card to the merged status label,
+   and leaves a comment with the agent's evidence.
 
 The /atb dashboard reads `brokeIn` / `fixedIn` / `verifiedAt` directly
 ("broke in X / fixed in Y" chips on the feed and issue pages).
@@ -24,7 +23,7 @@ The /atb dashboard reads `brokeIn` / `fixedIn` / `verifiedAt` directly
 The app `bench3-bug-recheck` exists with `SERVICE_TOKEN` staged ("verify"
 is blocked by Fly's app-name abuse filter, hence "recheck"). It still
 needs the Infisical machine identity (same one every worker uses), which
-carries `ATB_SERVICE_TOKEN` / `ATB_CLAUDE_PROXY_TOKEN` / `ATB_NOTION_TOKEN`:
+carries `ATB_SERVICE_TOKEN` / `ATB_CLAUDE_PROXY_TOKEN` / `ATB_LINEAR_TOKEN`:
 
 ```sh
 fly ssh console -a bench3-baml-dedup -C "sh -c 'env'" \

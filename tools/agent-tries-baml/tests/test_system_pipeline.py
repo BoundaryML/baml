@@ -1,7 +1,7 @@
 """System test: the entire pipeline, end to end.
 
 Starting from the real public entry point (``POST /bug`` to ingress), drives the
-whole chain — worker -> dedup -> notion-push -> approval via ``/notion/webhook`` ->
+whole chain — worker -> dedup -> linear-push -> approval via ``/linear/webhook`` ->
 FixDispatch — and asserts the bug ends up dispatched for a fix. Runs against the
 deterministic ``tests/fake_proxy.py`` stub (no real Claude, no secrets). Marked
 ``system``; self-skips without Docker (see ``bench_stack``).
@@ -21,7 +21,7 @@ pytestmark = pytest.mark.system
 
 
 async def test_full_pipeline_bug_to_fix(bench_stack):
-    """Drive bug -> task -> trophy -> issue -> notion -> approve -> fix end to end.
+    """Drive bug -> task -> trophy -> issue -> linear -> approve -> fix end to end.
 
     Args:
         bench_stack: Session fixture providing the running api/ingress/proxy URLs.
@@ -35,11 +35,11 @@ async def test_full_pipeline_bug_to_fix(bench_stack):
             await steps.run_worker_assert_trophy(service, task_id)
             # 3. dedup classifies the finding into a language issue
             issue = await steps.run_dedup_assert_issue(service)
-            # 4. notion-push (no-creds path) syncs + confirms the issue
-            await steps.run_notion_push_assert_synced(service, issue["_id"])
-            # 5. approval arrives back through the notion webhook
+            # 4. linear-push (no-creds path) syncs + confirms the issue
+            await steps.run_linear_push_assert_synced(service, issue["_id"])
+            # 5. approval arrives back through the linear webhook
             await steps.approve_issue_via_webhook(
-                http, bench_stack["ingress"], service, issue["_id"], page_id="pg-system-1")
+                http, bench_stack["ingress"], service, issue["_id"], linear_id="li-system-1")
             # 6. fix dispatch launches a Cursor cloud agent
             await steps.run_fixdispatch_assert_launch(service, issue["_id"])
     finally:

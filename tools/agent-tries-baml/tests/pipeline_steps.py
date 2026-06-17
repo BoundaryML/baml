@@ -205,8 +205,8 @@ async def run_cohort_compare_assert_trophy(
     return rep
 
 
-async def run_notion_push_assert_synced(service, issue_id: str) -> dict[str, Any]:
-    """Drain NotionPush once (no-creds path) and assert the issue syncs + confirms.
+async def run_linear_push_assert_synced(service, issue_id: str) -> dict[str, Any]:
+    """Drain LinearPush once (no-creds path) and assert the issue syncs + confirms.
 
     Args:
         service: The ServiceClient bound to the running api.
@@ -215,11 +215,11 @@ async def run_notion_push_assert_synced(service, issue_id: str) -> dict[str, Any
     Returns:
         The issue document after the push.
     """
-    from services.notion_fixer.__main__ import NotionPush
+    from services.notion_fixer.__main__ import LinearPush
 
-    await NotionPush(service)._drain()
+    await LinearPush(service)._drain()
     iss = await service.get("issues", issue_id)
-    assert iss["notionSyncStatus"] == "synced", iss["notionSyncStatus"]
+    assert iss["linearSyncStatus"] == "synced", iss["linearSyncStatus"]
     assert iss["status"] == "confirmed", iss["status"]
     return iss
 
@@ -292,13 +292,13 @@ async def post_signed_slack_assert_task(http, ingress_url: str, secret: str, ser
     assert bad.status_code == 401, bad.status_code
 
 
-async def seed_synced_issue(service, *, kind: str = "skill", page_id: str = "pg-1") -> str:
-    """Create a confirmed+synced issue carrying a Notion page id (for the approve path).
+async def seed_synced_issue(service, *, kind: str = "skill", linear_id: str = "li-1") -> str:
+    """Create a confirmed+synced issue carrying a Linear issue id (for the approve path).
 
     Args:
         service: The ServiceClient bound to the running api.
         kind: The issue kind (``skill`` or ``language``).
-        page_id: The Notion page id the webhook will look the issue up by.
+        linear_id: The Linear issue id the webhook will look the issue up by.
 
     Returns:
         The created issue's id.
@@ -306,27 +306,33 @@ async def seed_synced_issue(service, *, kind: str = "skill", page_id: str = "pg-
     now = int(time.time() * 1000)
     return await service.create("issues", {
         "kind": kind, "title": "doc gap", "description": "x", "evidence": [],
-        "status": "confirmed", "notionSyncStatus": "synced",
-        "notionPageId": page_id, "firstSeenAt": now, "lastSeenAt": now,
+        "status": "confirmed", "linearSyncStatus": "synced",
+        "linearIssueId": linear_id, "firstSeenAt": now, "lastSeenAt": now,
     })
 
 
 async def approve_issue_via_webhook(http, ingress_url: str, service, issue_id: str, *,
-                                    page_id: str) -> None:
-    """Approve an issue through ``/notion/webhook``, looked up by its Notion page id.
+                                    linear_id: str) -> None:
+    """Approve an issue through ``/linear/webhook``, matched by its Linear issue id.
 
-    Ensures the issue carries ``page_id`` (patching it when the no-creds push left
-    none), posts the webhook, and asserts the issue flips to ``approved``.
+    Ensures the issue carries ``linear_id`` (patching it when the no-creds push
+    left none), posts an Issue event carrying the approved status-group label, and
+    asserts the issue flips to ``approved``.
 
     Args:
         http: An httpx.AsyncClient.
         ingress_url: The ingress base URL.
         service: The ServiceClient bound to the running api.
         issue_id: The issue to approve.
-        page_id: The unique Notion page id used for the webhook lookup.
+        linear_id: The Linear issue id used for the webhook lookup.
     """
-    await service.update("issues", issue_id, {"notionPageId": page_id})
-    r = await http.post(f"{ingress_url}/notion/webhook", json={"page_id": page_id})
+    from bench_core import linear_client as lc
+
+    await service.update("issues", issue_id, {"linearIssueId": linear_id})
+    r = await http.post(f"{ingress_url}/linear/webhook", json={
+        "type": "Issue", "action": "update", "actor": {"id": "human-reviewer"},
+        "data": {"id": linear_id, "labelIds": [lc.LINEAR_STATUS_APPROVED]},
+    })
     assert r.status_code == 200, r.status_code
     iss = await service.get("issues", issue_id)
     assert iss["status"] == "approved", iss["status"]

@@ -18,14 +18,20 @@ lives in the docstrings themselves.
 - **`extract_first_json_object(s)`** - Parse and return the first top-level JSON object found in a string.
 - **`extract_last_json_object(s)`** - Parse and return the last top-level JSON object found in a string.
 
-### `libs/bench_core/notion_client.py`
+### `libs/bench_core/linear_client.py`
 
-- **`_chunks(text, size)`** - Split text into chunks each no larger than a size limit.
-- **`_paragraph(text)`** - Build a Notion paragraph block wrapping the given text.
-- **`class NotionClient`** - Minimal Notion REST client for creating and updating issue pages.
-    - `__init__(token)` - Build the auth, version, and content-type headers for Notion requests.
-    - `create_issue_page(database_id, title, status_name, body, evidence_links, suggestion, category)` - Create a Notion issue page with a title, status, and chunked body.
-    - `set_status(page_id, status_name)` - Update the Status select property on an existing issue page.
+- **`status_label_name(label_ids)`** - Return the status-group label's human name from a set of label ids.
+- **`issue_body_md(body, evidence_links, suggestion, category, repro, issue_link, pr_url)`** - Build an issue's Markdown description (links, category, repro, suggestion, evidence).
+- **`class LinearClient`** - Minimal Linear GraphQL client for creating and updating issue cards.
+    - `__init__(api_key, team_id)` - Build the auth headers for Linear GraphQL requests.
+    - `create_issue(title, status_label_id, body, evidence_links, ...)` - Create a Linear issue with its initial status-group label.
+    - `update_issue(issue_id, title, status_label_id, body, ...)` - Re-render an issue: title, swapped status label, Markdown body.
+    - `set_status(issue_id, status_label_id)` - Swap the issue's status-group label (read-modify-write; no body rewrite).
+    - `get_status(issue_id)` - Read the issue's current status-group label name.
+    - `get_comments(issue_id)` / `add_comment(issue_id, body_md)` - Read (paginated) / write Markdown comments.
+    - `find_issue_by_title(title)` - Adopt an already-imported card by exact title (None when ambiguous).
+
+> The deprecated `libs/bench_core/notion_client.py` remains in the tree (unimported) for history; Linear is the live board.
 
 ### `libs/bench_core/prices.py`
 
@@ -222,22 +228,23 @@ lives in the docstrings themselves.
 - **`healthz()`** - Liveness probe.
 - **`_create_slack_task(event, text, eid)`** - Create a Slack-sourced task off the request path.
 - **`slack_events(request, background_tasks, x_slack_signature, x_slack_request_timestamp, x_slack_retry_num)`** - Handle the Slack Events API callback (URL verification + app mentions).
-- **`notion_webhook(request, x_notion_signature)`** - Approve the issue a Notion webhook points at (the fix dispatcher claims it).
-- **`_toggle_uuid_hyphens(value)`** - Return the alternate hyphenation of a Notion id.
+- **`linear_webhook(request, linear_signature)`** - Route a Linear Issue event to approved (fix) or redraft, with signature verification + a status-state gate.
+- **`_route_linear_status(issue, data)`** - Map the event's status-group label to approved/redraft, gated on the issue's current resting status (else no-op).
 - **`bug_trigger(payload)`** - Create a task from a bug report.
 
 ### `services/notion_fixer/__main__.py`
 
-- **`class NotionPush`** - Claim loop that mirrors dirty issues onto the Notion board.
-    - `__init__(service)` - Build the processor and its Notion client.
-    - `_db_for(kind)` - Return the Notion database id for an issue kind.
-    - `process(issue)` - Sync one claimed issue to Notion and mark it synced.
+> Module/dir/app name is historical (`notion_fixer` / `bench3-notion-fixer`); it is now Linear-backed.
+
+- **`class LinearPush`** - Claim loop that mirrors dirty issues onto the Linear board (adopt-by-title / create / re-render).
+    - `__init__(service)` - Build the processor and its Linear client.
+    - `process(issue)` - Sync one claimed issue to Linear and mark it synced.
     - `_confirm(issue_id, issue)` - Promote a just-boarded ``open`` issue to ``confirmed``.
-    - `_map_status(status)` - Map an internal issue status to its Notion board status label.
+    - `_map_status(status)` - Map an internal issue status to its Linear status-group label id.
 - **`class FixDispatch`** - Claim loop that dispatches approved issues to Cursor for a fix.
-    - `__init__(service)` - Build the processor and its Notion client.
-    - `process(issue)` - Dispatch a fix for one claimed approved issue.
-- **`_amain()`** - Run the NotionPush and FixDispatch claim loops together until cancelled.
+    - `__init__(service)` - Build the processor and its Linear client.
+    - `process(issue)` - Dispatch a fix for one claimed approved issue (flips the card to to-cursor).
+- **`_amain()`** - Run the LinearPush and FixDispatch claim loops + CursorTracker sweep together until cancelled.
 
 ### `services/notion_fixer/fixer.py`
 
@@ -343,7 +350,7 @@ lives in the docstrings themselves.
 - **`Finding`** - A single skill- or language-level finding surfaced by a run, optionally anchored to a transcript call.
 - **`Trophy`** - A completed run record: its outcome, metrics, report, findings, and full turn log.
 - **`Task`** - A benchmark task queued for an agent to attempt (from Slack, cron, etc.).
-- **`Issue`** - A deduplicated issue aggregated from run findings, tracked through to Notion/Cursor.
+- **`Issue`** - A deduplicated issue aggregated from run findings, tracked through to Linear/Cursor.
 - **`issueStatusLabel`** - Maps an issue's raw status to the label shown in the UI.
 - **`RunRow`** - A flattened run row joining a trophy to its task, sized for the dashboard runs table.
 - **`DashboardData`** - The full payload rendered by the static dashboard: runs, open issues, and headline totals.

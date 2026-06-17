@@ -45,7 +45,7 @@ BAML_BUILD_POLL_SECS = float(os.environ.get("BAML_BUILD_POLL_SECS", "5"))
 # the api's retention so the index range matches what's kept in the bucket.
 BAML_KEEP_RELEASES = int(os.environ.get("BAML_KEEP_RELEASES", "5"))
 SLACK_BOT_TOKEN = os.environ.get("ATB_SLACK_BOT_TOKEN", "")
-UI_BASE_URL = os.environ.get("UI_BASE_URL", "https://bench3-ui.fly.dev")
+UI_BASE_URL = os.environ.get("UI_BASE_URL", "https://new.boundaryml.com/atb")
 BAML_SKILL_PATH = os.environ.get("BAML_SKILL_PATH", "")   # single combined file
 BAML_SKILL_DIR = os.environ.get("BAML_SKILL_DIR", "")     # dir of */SKILL.md (preferred)
 POST_FILE_PATTERNS = ["**/*.baml", "baml_src/**/*.baml", "*.md", "trophy.json"]
@@ -317,8 +317,9 @@ class BamlWorker(Processor):
             mode_note = f"  _({channel} latest)_"
 
         # Slack "on it" ack at pickup time, linking to the task on the dashboard.
+        # The dashboard has no /tasks route; its /runs route resolves a task id too.
         if item.get("slackChannel"):
-            link = f"{UI_BASE_URL.rstrip('/')}/tasks/{task_id}"
+            link = f"{UI_BASE_URL.rstrip('/')}/runs/{task_id}"
             await slack_client.post_message(
                 SLACK_BOT_TOKEN,
                 item["slackChannel"],

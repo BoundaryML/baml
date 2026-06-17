@@ -1,7 +1,7 @@
-"""Unit coverage for the ingress routing logic (the bits most recently fixed):
-Slack signature + mention-strip, the Notion page-id extraction precedence, and the
-UUID-hyphen toggle. The ServiceClient is replaced with an in-memory fake - no backend,
-no secrets.
+"""Unit coverage for the ingress routing logic: Slack signature + mention-strip,
+and the Linear webhook (signature verification, status-group label routing to
+approved/redraft, and the bot-write loop guard). The ServiceClient is replaced
+with an in-memory fake - no backend, no secrets.
 """
 
 import hashlib
@@ -12,10 +12,8 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 
+from bench_core import linear_client as lc
 from services.ingress import app as ing
-
-DASHED = "11111111-2222-3333-4444-555555555555"
-COMPACT = DASHED.replace("-", "")
 
 
 class FakeService:
@@ -108,53 +106,105 @@ def _slack_headers(body: bytes) -> dict:
             "Content-Type": "application/json"}
 
 
-# ---- pure helper ----
+# ---- linear webhook routing ----
 
-def test_toggle_uuid_hyphens_roundtrips():
-    """_toggle_uuid_hyphens converts dashed <-> compact and passes non-UUIDs through."""
-    assert ing._toggle_uuid_hyphens(DASHED) == COMPACT
-    assert ing._toggle_uuid_hyphens(COMPACT) == DASHED
-    assert ing._toggle_uuid_hyphens("not-a-uuid") == "not-a-uuid"
+LINEAR_ID = "li_abc123"
 
 
-# ---- notion webhook page-id extraction ----
+def _issue_event(label_id: str, *, issue_id: str = LINEAR_ID, actor_id: str = "human-1") -> dict:
+    """Build a Linear Issue webhook payload carrying a single status-group label."""
+    return {"type": "Issue", "action": "update", "actor": {"id": actor_id},
+            "data": {"id": issue_id, "labelIds": [label_id]}}
 
-def test_notion_prefers_entity_id_over_event_id(fake_service):
-    """The webhook looks up the page via entity.id, not the top-level event id.
 
-    Args:
-        fake_service: In-memory ServiceClient fake installed on the ingress module.
-    """
+def test_linear_webhook_routes_approved(fake_service):
+    """An approved label on a resting (confirmed) issue flips it to approved."""
+    fake_service.rows = [{"_id": "iss_1", "linearIssueId": LINEAR_ID, "status": "confirmed"}]
     client = TestClient(ing.app)
-    body = {"id": "evt-TOP-LEVEL-EVENT-ID", "type": "page.properties_updated",
-            "entity": {"id": DASHED, "type": "page"}}
-    r = client.post("/notion/webhook", json=body)
+    r = client.post("/linear/webhook", json=_issue_event(lc.LINEAR_STATUS_APPROVED))
     assert r.status_code == 200
-    # the lookup must use the page (entity.id), NOT the top-level event id
-    assert fake_service.listed and fake_service.listed[0][1] == DASHED
+    # looked up by linearIssueId, then flipped to approved
+    assert fake_service.listed and fake_service.listed[0] == ("linearIssueId", LINEAR_ID)
+    assert fake_service.updated == [("iss_1", {"status": "approved"})]
 
 
-def test_notion_verification_handshake_no_lookup(fake_service):
-    """A verification_token handshake returns 200 without touching the issues table.
-
-    Args:
-        fake_service: In-memory ServiceClient fake installed on the ingress module.
-    """
+def test_linear_webhook_routes_redraft(fake_service):
+    """A redraft label on a resting (confirmed) issue flips it to redraft."""
+    fake_service.rows = [{"_id": "iss_1", "linearIssueId": LINEAR_ID, "status": "confirmed"}]
     client = TestClient(ing.app)
-    r = client.post("/notion/webhook", json={"verification_token": "secret_abc"})
+    r = client.post("/linear/webhook", json=_issue_event(lc.LINEAR_STATUS_REDRAFT))
     assert r.status_code == 200
-    assert fake_service.listed == []  # never hit the issues table
+    assert fake_service.updated == [("iss_1", {"status": "redraft"})]
 
 
-def test_notion_no_page_id_is_400(fake_service):
-    """A webhook payload with no resolvable page id returns 400.
-
-    Args:
-        fake_service: In-memory ServiceClient fake installed on the ingress module.
-    """
+def test_linear_webhook_bot_label_is_noop(fake_service):
+    """A bot-written status label (e.g. to-cursor) routes to no-op, never a loop."""
+    fake_service.rows = [{"_id": "iss_1", "linearIssueId": LINEAR_ID, "status": "tocursor"}]
     client = TestClient(ing.app)
-    r = client.post("/notion/webhook", json={"type": "ping"})
+    r = client.post("/linear/webhook", json=_issue_event(lc.LINEAR_STATUS_TO_CURSOR))
+    assert r.status_code == 200
+    assert fake_service.updated == []  # to-cursor is not a human trigger
+
+
+def test_linear_webhook_approved_ignored_when_in_flight(fake_service):
+    """The status-state gate: an approved label is ignored once the issue is past it.
+
+    This is what makes the webhook safe against duplicate deliveries / echoed bot
+    writes WITHOUT an actor check — so the bot may share a human's API token.
+    """
+    fake_service.rows = [{"_id": "iss_1", "linearIssueId": LINEAR_ID, "status": "tocursor"}]
+    client = TestClient(ing.app)
+    r = client.post("/linear/webhook", json=_issue_event(lc.LINEAR_STATUS_APPROVED))
+    assert r.status_code == 200
+    assert fake_service.updated == []  # already dispatched -> no re-dispatch
+
+
+def test_linear_webhook_no_issue_id_is_400(fake_service):
+    """An Issue event with no data.id returns 400."""
+    client = TestClient(ing.app)
+    r = client.post("/linear/webhook", json={"type": "Issue", "data": {}})
     assert r.status_code == 400
+
+
+def test_linear_webhook_unmatched_is_200(fake_service):
+    """An issue we don't mirror (no linearIssueId match) is a 200 no-op."""
+    fake_service.rows = []
+    client = TestClient(ing.app)
+    r = client.post("/linear/webhook", json=_issue_event(lc.LINEAR_STATUS_APPROVED))
+    assert r.status_code == 200
+    assert fake_service.updated == []
+
+
+def test_linear_webhook_non_issue_type_is_200(fake_service):
+    """A non-Issue event (e.g. Comment) is ignored with 200 and no lookup."""
+    client = TestClient(ing.app)
+    r = client.post("/linear/webhook", json={"type": "Comment", "data": {"id": "c1"}})
+    assert r.status_code == 200
+    assert fake_service.listed == []
+
+
+def test_linear_webhook_bad_signature_401(fake_service, monkeypatch):
+    """With a signing secret configured, a bad Linear-Signature is rejected 401."""
+    monkeypatch.setattr(ing, "LINEAR_WEBHOOK_SECRET", "shh")
+    client = TestClient(ing.app)
+    body = json.dumps(_issue_event(lc.LINEAR_STATUS_APPROVED)).encode()
+    r = client.post("/linear/webhook", content=body,
+                    headers={"Linear-Signature": "deadbeef", "Content-Type": "application/json"})
+    assert r.status_code == 401
+    assert fake_service.updated == []
+
+
+def test_linear_webhook_good_signature_routes(fake_service, monkeypatch):
+    """A valid HMAC-SHA256 hex signature over the raw body is accepted and routed."""
+    monkeypatch.setattr(ing, "LINEAR_WEBHOOK_SECRET", "shh")
+    fake_service.rows = [{"_id": "iss_1", "linearIssueId": LINEAR_ID, "status": "confirmed"}]
+    client = TestClient(ing.app)
+    body = json.dumps(_issue_event(lc.LINEAR_STATUS_APPROVED)).encode()
+    sig = hmac.new(b"shh", body, hashlib.sha256).hexdigest()
+    r = client.post("/linear/webhook", content=body,
+                    headers={"Linear-Signature": sig, "Content-Type": "application/json"})
+    assert r.status_code == 200
+    assert fake_service.updated == [("iss_1", {"status": "approved"})]
 
 
 # ---- slack events ----
