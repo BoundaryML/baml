@@ -60,7 +60,7 @@ import {
   type SerializedTestSet,
 } from './FunctionSidebar';
 import { companionFunctionName } from './shared/companion-functions';
-import { createExecutionStore } from './execution-store';
+import { createExecutionStore, type ExecutionStore } from './execution-store';
 import { createRunStoreClient } from './run-store-client';
 import type { ExecutionStoreSnapshot } from './execution-store';
 import {
@@ -589,6 +589,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     () => createExecutionStore(createRunStoreClient(port)),
     [port],
   );
+  const pendingExecutionStoreDisposalsRef = useRef(
+    new Map<ExecutionStore, ReturnType<typeof setTimeout>>(),
+  );
   const [executionSnapshot, setExecutionSnapshot] =
     useState<ExecutionStoreSnapshot>(() => executionStore.getSnapshot());
   const [argsJsonByRunId, setArgsJsonByRunId] = useState<
@@ -600,7 +603,24 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     return executionStore.subscribe(setExecutionSnapshot);
   }, [executionStore]);
 
-  useEffect(() => () => executionStore.dispose(), [executionStore]);
+  useEffect(() => {
+    const pendingDispose =
+      pendingExecutionStoreDisposalsRef.current.get(executionStore);
+    if (pendingDispose) {
+      clearTimeout(pendingDispose);
+      pendingExecutionStoreDisposalsRef.current.delete(executionStore);
+    }
+
+    return () => {
+      // React StrictMode runs effect cleanup+setup once after mount in dev.
+      // Defer disposal so the remount can keep the same render-created store.
+      const timer = setTimeout(() => {
+        pendingExecutionStoreDisposalsRef.current.delete(executionStore);
+        executionStore.dispose();
+      }, 0);
+      pendingExecutionStoreDisposalsRef.current.set(executionStore, timer);
+    };
+  }, [executionStore]);
 
   const [projectRoots, setProjectRoots] = useState<string[]>([]);
   const [projectUpdates, setProjectUpdates] = useState<
@@ -2083,7 +2103,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
           {buildTime}
         </span>
       )}
-
       <Tabs
         value={activeTab}
         onValueChange={(v) => setActiveTab(v as typeof activeTab)}

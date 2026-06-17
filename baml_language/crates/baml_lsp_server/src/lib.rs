@@ -44,8 +44,12 @@ pub mod playground_server;
 pub mod playground_session;
 pub mod playground_ws;
 
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
+use anyhow::Context as _;
 use playground_env::{PlaygroundEnv, PlaygroundEnvState};
 use playground_http::{PlaygroundHttp, PlaygroundHttpState};
 use playground_io::{PlaygroundIo, PlaygroundIoState};
@@ -93,6 +97,8 @@ pub fn run_server(
     playground_via_browser: bool,
     workspace_roots: Vec<PathBuf>,
 ) -> anyhow::Result<()> {
+    let workspace_roots = absolutize_workspace_roots(workspace_roots)?;
+
     // Set up tracing → stderr so vscode-languageclient captures it
     // in the "BAML Language Server" output channel.
     tracing_subscriber::fmt()
@@ -103,6 +109,8 @@ pub fn run_server(
         )
         .with_ansi(false)
         .init();
+
+    apply_single_workspace_cwd(&workspace_roots)?;
 
     tracing::info!("baml-lsp v{} starting", version());
     deadlock_watchdog::spawn();
@@ -283,4 +291,83 @@ pub fn run_server(
 
     tracing::info!("LSP server shutting down");
     Ok(())
+}
+
+fn absolutize_workspace_roots(workspace_roots: Vec<PathBuf>) -> anyhow::Result<Vec<PathBuf>> {
+    if workspace_roots.iter().all(|root| root.is_absolute()) {
+        return Ok(workspace_roots);
+    }
+
+    let cwd = std::env::current_dir().context("Failed to read current directory")?;
+    Ok(workspace_roots
+        .into_iter()
+        .map(|root| {
+            if root.is_absolute() {
+                root
+            } else {
+                cwd.join(root)
+            }
+        })
+        .collect())
+}
+
+fn apply_single_workspace_cwd(workspace_roots: &[PathBuf]) -> anyhow::Result<()> {
+    let [root] = workspace_roots else {
+        return Ok(());
+    };
+
+    let cwd = workspace_cwd(root);
+    std::env::set_current_dir(&cwd)
+        .with_context(|| format!("Failed to set current directory to {}", cwd.display()))?;
+    tracing::info!(
+        "Using {} as standalone LSP current directory",
+        cwd.display()
+    );
+    Ok(())
+}
+
+fn workspace_cwd(root: &Path) -> PathBuf {
+    if root.is_file() {
+        root.parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| root.to_path_buf())
+    } else {
+        root.to_path_buf()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn absolutize_workspace_roots_makes_relative_paths_absolute() {
+        let cwd = std::env::current_dir().expect("cwd should be available");
+        let absolute = cwd.join("already-absolute");
+
+        let roots =
+            absolutize_workspace_roots(vec![PathBuf::from("relative-workspace"), absolute.clone()])
+                .expect("workspace roots should absolutize");
+
+        assert_eq!(roots, vec![cwd.join("relative-workspace"), absolute]);
+    }
+
+    #[test]
+    fn workspace_cwd_uses_file_parent_and_keeps_directories() {
+        let dir = std::env::temp_dir().join(format!(
+            "baml-lsp-workspace-cwd-test-{}",
+            std::process::id()
+        ));
+        let file = dir.join("project.baml");
+
+        std::fs::create_dir_all(&dir).expect("temp dir should be created");
+        std::fs::write(&file, "function Test() -> int { 1 }\n")
+            .expect("temp file should be created");
+
+        assert_eq!(workspace_cwd(&dir), dir);
+        assert_eq!(workspace_cwd(&file), file.parent().unwrap());
+
+        let _ = std::fs::remove_file(&file);
+        let _ = std::fs::remove_dir(&dir);
+    }
 }

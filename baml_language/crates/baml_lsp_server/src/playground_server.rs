@@ -357,6 +357,8 @@ async fn playground_ws_session(socket: WebSocket, state: WsState) {
         return;
     }
 
+    let mut broadcast_rx = state.broadcast_tx.subscribe();
+
     // Send all process env vars so the UI can display them immediately.
     {
         let vars: std::collections::HashMap<String, String> = std::env::vars().collect();
@@ -379,8 +381,6 @@ async fn playground_ws_session(socket: WebSocket, state: WsState) {
 
     // Send current playground state.
     state.bex.request_playground_state();
-
-    let mut broadcast_rx = state.broadcast_tx.subscribe();
 
     loop {
         tokio::select! {

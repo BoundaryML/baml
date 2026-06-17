@@ -210,7 +210,7 @@ export function createExecutionStore(client: RunStoreClient): ExecutionStore {
     dispose() {
       disposed = true;
       for (const handle of subscriptionsByRunId.values()) {
-        void handle.unsubscribe();
+        void handle.unsubscribe().catch(() => {});
       }
       subscriptionsByRunId.clear();
       listeners.clear();
