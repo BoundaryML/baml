@@ -28,10 +28,10 @@ ANTHROPIC_API_KEY=<your-anthropic-api-key>   # required for claude-proxy
 | `GITHUB_TOKEN` | api, baml-builder | GitHub API (resolve/download baml releases); avoids rate limits. |
 | `SLACK_SIGNING_SECRET` | ingress | Verify inbound Slack webhook signatures. |
 | `ATB_LINEAR_WEBHOOK_SECRET` | ingress | When set, verify the `Linear-Signature` (HMAC-SHA256 hex) on `/linear/webhook` (optional). |
-| `SLACK_BOT_TOKEN` | worker, notion-fixer, ingress | Post Slack acks / results / fix notices. |
-| `ATB_LINEAR_TOKEN` | notion-fixer, bug-verify, baml-redraft, ingress | Linear GraphQL API (create/update issue cards, read comments). May be a personal token — the webhook uses a status-state gate, not an actor check. |
-| `LINEAR_TEAM_ID` | notion-fixer, bug-verify, baml-redraft, ingress | The Linear team issues are created under (status-group label ids are baked into `linear_client`, overridable via `LINEAR_STATUS_*`). |
-| `CURSOR_API_KEY` | notion-fixer | Launch Cursor cloud-agent fixes; without it fix dispatch is a no-op. |
+| `SLACK_BOT_TOKEN` | worker, linear-sync, ingress | Post Slack acks / results / fix notices. |
+| `ATB_LINEAR_TOKEN` | linear-sync, bug-verify, baml-redraft, ingress | Linear GraphQL API (create/update issue cards, read comments). May be a personal token — the webhook uses a status-state gate, not an actor check. |
+| `LINEAR_TEAM_ID` | linear-sync, bug-verify, baml-redraft, ingress | The Linear team issues are created under (status-group label ids are baked into `linear_client`, overridable via `LINEAR_STATUS_*`). |
+| `CURSOR_API_KEY` | linear-sync | Launch Cursor cloud-agent fixes; without it fix dispatch is a no-op. |
 
 Every integration degrades gracefully when its variable is absent (Linear/Slack/Cursor
 no-op), so partial configuration is fine for local work.

@@ -16,7 +16,7 @@
 #      then "Reinstall to Workspace". The xoxb token normally survives a
 #      scope reinstall; if Slack does rotate it, update ATB_SLACK_BOT_TOKEN
 #      in Infisical (project bdd280e2-..., env prod) and restart
-#      bench3-{ingress,baml-worker,cohort-compare,notion-fixer,changelog-worker}.
+#      bench3-{ingress,baml-worker,cohort-compare,linear-sync,changelog-worker}.
 #
 # Until the *:history scopes land, everything still works — mid-thread
 # mentions just route without the prior-message context (the fetch fails

@@ -215,7 +215,7 @@ async def run_linear_push_assert_synced(service, issue_id: str) -> dict[str, Any
     Returns:
         The issue document after the push.
     """
-    from services.notion_fixer.__main__ import LinearPush
+    from services.linear_sync.__main__ import LinearPush
 
     await LinearPush(service)._drain()
     iss = await service.get("issues", issue_id)
@@ -350,7 +350,7 @@ async def run_fixdispatch_assert_launch(service, issue_id: str,
     Returns:
         The issue document after dispatch.
     """
-    from services.notion_fixer.__main__ import FixDispatch
+    from services.linear_sync.__main__ import FixDispatch
 
     await FixDispatch(service)._drain()
     iss = await service.get("issues", issue_id)
@@ -375,7 +375,7 @@ async def run_tracker_assert_prprep(service, issue_id: str) -> dict[str, Any]:
     Returns:
         The issue document after tracking.
     """
-    from services.notion_fixer.tracker import CursorTracker
+    from services.linear_sync.tracker import CursorTracker
 
     issue = await service.get("issues", issue_id)
     await CursorTracker(service)._track_one(issue)

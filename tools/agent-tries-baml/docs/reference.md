@@ -232,9 +232,9 @@ lives in the docstrings themselves.
 - **`_route_linear_status(issue, data)`** - Map the event's status-group label to approved/redraft, gated on the issue's current resting status (else no-op).
 - **`bug_trigger(payload)`** - Create a task from a bug report.
 
-### `services/notion_fixer/__main__.py`
+### `services/linear_sync/__main__.py`
 
-> Module/dir/app name is historical (`notion_fixer` / `bench3-notion-fixer`); it is now Linear-backed.
+> The board sync + fix dispatcher. Runs inside `bammy-service` (supervised).
 
 - **`class LinearPush`** - Claim loop that mirrors dirty issues onto the Linear board (adopt-by-title / create / re-render).
     - `__init__(service)` - Build the processor and its Linear client.
@@ -246,7 +246,7 @@ lives in the docstrings themselves.
     - `process(issue)` - Dispatch a fix for one claimed approved issue (flips the card to to-cursor).
 - **`_amain()`** - Run the LinearPush and FixDispatch claim loops + CursorTracker sweep together until cancelled.
 
-### `services/notion_fixer/fixer.py`
+### `services/linear_sync/fixer.py`
 
 - **`choose_repo(kind)`** - Return the GitHub ``org/repo`` that owns issues of this kind.
 - **`repo_url(kind)`** - Return the full GitHub URL for the repo that owns this issue kind.

@@ -25,12 +25,12 @@ async def test_launch_agent_sends_agent_id_and_returns_agent():
     )
     result = await cursor_client.launch_agent(
         "key", "fix it", "https://github.com/o/r", "canary",
-        agent_id="notion-fixer-issue1",
+        agent_id="linear-sync-issue1",
     )
     assert result == {"id": "agent-xyz", "latestRunId": "run-1"}
     assert route.called
     sent = json.loads(route.calls.last.request.content)
-    assert sent["agentId"] == "notion-fixer-issue1"
+    assert sent["agentId"] == "linear-sync-issue1"
 
 
 @respx.mock
@@ -41,9 +41,9 @@ async def test_launch_agent_409_is_already_launched():
     )
     result = await cursor_client.launch_agent(
         "key", "fix it", "https://github.com/o/r", "canary",
-        agent_id="notion-fixer-issue1",
+        agent_id="linear-sync-issue1",
     )
-    assert result == {"id": "notion-fixer-issue1", "alreadyLaunched": True}
+    assert result == {"id": "linear-sync-issue1", "alreadyLaunched": True}
 
 
 @respx.mock
@@ -55,7 +55,7 @@ async def test_launch_agent_409_wrong_error_code_raises():
     with pytest.raises(httpx.HTTPStatusError):
         await cursor_client.launch_agent(
             "key", "fix it", "https://github.com/o/r", "canary",
-            agent_id="notion-fixer-issue1",
+            agent_id="linear-sync-issue1",
         )
 
 
@@ -66,7 +66,7 @@ async def test_launch_agent_non_409_error_still_raises():
     with pytest.raises(httpx.HTTPStatusError):
         await cursor_client.launch_agent(
             "key", "fix it", "https://github.com/o/r", "canary",
-            agent_id="notion-fixer-issue1",
+            agent_id="linear-sync-issue1",
         )
 
 

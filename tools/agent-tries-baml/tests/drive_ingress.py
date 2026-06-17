@@ -11,7 +11,7 @@ import time
 import httpx
 
 from bench_core.service_client import ServiceClient
-from services.notion_fixer.__main__ import FixDispatch
+from services.linear_sync.__main__ import FixDispatch
 
 INGRESS = os.environ["INGRESS_URL"]
 SECRET = os.environ["SLACK_SIGNING_SECRET"]

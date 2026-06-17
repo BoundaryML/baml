@@ -1,5 +1,5 @@
 """Unit tests for FixDispatch's re-dispatch decision
-(``services/notion_fixer/__main__.py`` :meth:`FixDispatch._prior_dispatch_alive`).
+(``services/linear_sync/__main__.py`` :meth:`FixDispatch._prior_dispatch_alive`).
 
 A human re-approving a previously-dispatched issue must launch a FRESH agent when
 the prior one is dead (terminal/expired with no PR), but must NOT duplicate one that
@@ -8,7 +8,7 @@ is still working or has already opened a PR.
 
 from __future__ import annotations
 
-from services.notion_fixer import __main__ as nf
+from services.linear_sync import __main__ as nf
 
 
 def _stub_pr(monkeypatch, value=None, raises=False):

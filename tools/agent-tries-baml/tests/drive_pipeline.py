@@ -71,7 +71,7 @@ async def main() -> None:
         print(f"baml-dedup OK: issue kind={iss['kind']} status={iss['status']} "
               f"evidence->trophy={ev['trophyId']==trophy_id} call={ev['call_index']}")
 
-        from services.notion_fixer.__main__ import LinearPush
+        from services.linear_sync.__main__ import LinearPush
         push = LinearPush(service)
         await push._drain()
         iss2 = await service.get("issues", iss["_id"])

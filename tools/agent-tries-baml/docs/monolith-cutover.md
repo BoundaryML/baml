@@ -87,5 +87,5 @@ fly apps destroy baml-changelog2-mysql -y
 ```
 
 Final fleet: bench3-{api, ingress, cron, changelog-worker, claude-proxy,
-baml-worker, baml-dedup, baml-redraft, cohort-compare, notion-fixer,
+baml-worker, baml-dedup, baml-redraft, cohort-compare, linear-sync,
 baml-builder, ui}.

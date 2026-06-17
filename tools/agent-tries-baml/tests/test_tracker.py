@@ -1,5 +1,5 @@
 """Unit tests for the cursor-tracker state machine
-(``services/notion_fixer/tracker.py``).
+(``services/linear_sync/tracker.py``).
 
 Drives ``CursorTracker._track_one`` against an in-memory fake service with the
 Cursor + GitHub clients stubbed, covering every transition: tocursor->prprep on a
@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-from services.notion_fixer import tracker as T
+from services.linear_sync import tracker as T
 
 CR = "coderabbitai[bot]"
 PR_URL = "https://github.com/o/r/pull/5"

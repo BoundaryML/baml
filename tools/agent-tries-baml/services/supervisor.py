@@ -8,13 +8,13 @@ SIGINT so a Fly machine stop drains cleanly.
 The process set comes from the ``SUPERVISE`` env var: a comma-separated list of
 ``services.<name>`` module names, where an entry may be suffixed ``:N`` to run N
 copies (e.g. ``baml_worker:2``). Claim-based processors (worker, dedup, redraft,
-cohort_compare, changelog_worker, notion_fixer) are safe to run as N copies — the
+cohort_compare, changelog_worker, linear_sync) are safe to run as N copies — the
 Convex lease gives each row to one claimant. Singletons (web, bug_verify, cron)
 must stay at 1.
 
 Example:
     SUPERVISE="web,baml_worker:2,baml_dedup,baml_redraft,bug_verify,\
-notion_fixer,cohort_compare,changelog_worker,baml_builder,cron"
+linear_sync,cohort_compare,changelog_worker,baml_builder,cron"
 """
 
 from __future__ import annotations

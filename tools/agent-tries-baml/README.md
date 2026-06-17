@@ -8,7 +8,7 @@ issue list, and dispatches fixes - all while a dashboard reads live state.
 The system is three things:
 
 - **Python services** - long-lived stateless workers (`baml-worker`,
-  `baml-dedup`, `notion-fixer`, `baml-builder`), the public `ingress` gateway,
+  `baml-dedup`, `linear-sync`, `baml-builder`), the public `ingress` gateway,
   a `cron` driver, the `claude-proxy` agent runner, and a central `api` that is
   the only process allowed to talk to Convex.
 - **Self-hosted Convex** - the database and queue substrate. Six tables
@@ -27,8 +27,8 @@ the central `api`.**
 
 Triggers (Slack `@mention`, cron, bug report, Linear approve) create `tasks`
 through the API. `baml-worker` claims a task and writes a `trophy`; `baml-dedup`
-merges its findings into `issues`; `notion-fixer` (the board sync + fix
-dispatcher — still named `notion-fixer`, now backed by Linear) syncs issues to
+merges its findings into `issues`; `linear-sync` (the board sync + fix
+dispatcher) syncs issues to
 Linear and dispatches Cursor cloud-agent fixes; `baml-builder` keeps the canary `baml`
 binary registry fresh. The API is the only Convex client; agents reach Anthropic
 only through `claude-proxy`; the Next.js UI reads pipeline state through the API.
@@ -57,7 +57,7 @@ Convex; the Linear board is a single flat team (no kind split).
 | `baml-dedup` | Claims `trophies`; authoritative skill/language classifier + cross-run merge; promotes findings/suggestions into `issues`; carries each cited finding's verified repro onto the issue. |
 | `cohort-compare` | Claims ready `cohorts` (skill-arena groups); compares the variant runs (one per baml-skill branch) and emits a single comparison "cohort trophy" that re-enters dedup like any other trophy. |
 | `baml-redraft` | Claims `issues` with `status=redraft`; pulls the reviewer's Linear comments as feedback, runs an agent to rewrite the issue, and re-boards it (`confirmed`) for another review pass. |
-| `notion-fixer` | Two processors over `issues` (name is historical; now Linear-backed): `LinearPush` mirrors issues to Linear cards — title, status-group label, and a Markdown body incl. a repro code block (`linearSyncStatus` queue) — and `FixDispatch` dispatches `@cursor` fixes on approval (`status` queue). |
+| `linear-sync` | Two processors over `issues`: `LinearPush` mirrors issues to Linear cards — title, status-group label, and a Markdown body incl. a repro code block (`linearSyncStatus` queue) — and `FixDispatch` dispatches `@cursor` fixes on approval (`status` queue). |
 | `ingress` | Public webhooks: `/slack/events`, `/linear/webhook`, `/bug`. Creates `tasks`; reads an issue's Linear status-group label to route it to `approved` (fix) or `redraft`. |
 | `cron` | Daily driver: refreshes baml (`POST /baml/update`) then enqueues benchmark `tasks`. Also runs the fast cohort fan-in reconciler that flips a skill-arena `cohort` `pending → queued` once its member runs are all terminal. |
 | `baml-builder` | Claims `bamlBuilds`; downloads the prebuilt alpha-channel `baml` release binary for the sha and uploads it to the registry. |

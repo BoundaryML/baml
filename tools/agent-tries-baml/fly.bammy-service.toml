@@ -64,7 +64,7 @@ primary_region = 'sjc'
   SLACK_RESULTS_CHANNEL  = 'C0B36EDQEN6'
 
   # --- the supervised process set (claim-based ones may be suffixed :N to scale) ---
-  SUPERVISE = 'web,baml_worker,baml_dedup,baml_redraft,bug_verify,notion_fixer,cohort_compare,changelog_worker,baml_builder,cron'
+  SUPERVISE = 'web,baml_worker,baml_dedup,baml_redraft,bug_verify,linear_sync,cohort_compare,changelog_worker,baml_builder,cron'
   # secrets via Infisical (prefix ATB_): SERVICE_TOKEN, LINEAR_TOKEN, LINEAR_WEBHOOK_SECRET,
   #   CURSOR_API_KEY, GITHUB_TOKEN, SLACK_BOT_TOKEN, SLACK_SIGNING_SECRET, SLACK_FIX_CHANNEL,
   #   CLAUDE_PROXY_TOKEN

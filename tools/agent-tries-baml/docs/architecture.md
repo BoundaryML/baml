@@ -18,7 +18,7 @@ only Convex client. Solid arrows are calls through the API; dashed flows
 *Event sources feed `ingress`/`cron`, which create tasks through the API. The API
 is the sole Convex gateway; `baml-worker` and `baml-dedup` run agents through
 `claude-proxy` (which reaches Anthropic and caches the baml binary per sha);
-`baml-builder` pulls baml alpha releases from GitHub; `bug-verify` re-checks open issues against each new nightly (stamping brokeIn/fixedIn, closing fixed ones, and updating their Linear cards); `notion-fixer` (historical name; now Linear-backed) syncs issues
+`baml-builder` pulls baml alpha releases from GitHub; `bug-verify` re-checks open issues against each new nightly (stamping brokeIn/fixedIn, closing fixed ones, and updating their Linear cards); `linear-sync` syncs issues
 to Linear and Slack; a read-only Next.js UI reads through the API. Convex holds
 the `tasks`, `trophies`, `issues`, and `bamlBuilds` queues with their lifecycles.*
 
@@ -135,7 +135,7 @@ The lifecycle status:
 open → confirmed → approved → fixing → closed | rejected
 ```
 
-`baml-dedup` upserts issues as `open`. The `notion-fixer` fix dispatcher claims
+`baml-dedup` upserts issues as `open`. The `linear-sync` fix dispatcher claims
 `status == "approved"` (`approved → fixing`) and dispatches an `@cursor` fix;
 issues end at `closed` or `rejected`. A human moving the Linear card's status
 label is what drives an issue toward `approved`; `ingress` `/linear/webhook`
@@ -150,7 +150,7 @@ dirty → syncing → synced
 ```
 
 `baml-dedup` marks an issue `linearSyncStatus = "dirty"` whenever it writes new
-evidence. The `notion-fixer` push processor (`LinearPush`) claims
+evidence. The `linear-sync` push processor (`LinearPush`) claims
 `linearSyncStatus == "dirty"` (via the `by_linear_sync` index), adopts-by-title /
 creates / re-renders the Linear card, and sets `linearSyncStatus = "synced"`.
 Keeping this on its own field/index means Linear sync and the bug-fix lifecycle

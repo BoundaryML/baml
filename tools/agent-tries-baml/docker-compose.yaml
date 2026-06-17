@@ -153,11 +153,11 @@ services:
       BUG_VERIFY_MODEL: ${BUG_VERIFY_MODEL:-claude-sonnet-4-6}
     depends_on: [api, claude-proxy]
 
-  notion-fixer:
+  linear-sync:
     build: { context: ., dockerfile: docker/Dockerfile.python }
     image: agent-tries-baml-python:dev
     restart: unless-stopped
-    command: ["python", "-m", "services.notion_fixer"]
+    command: ["python", "-m", "services.linear_sync"]
     environment:
       SERVICE_URL: http://api:8080
       SERVICE_TOKEN: ${SERVICE_TOKEN:-devservicetoken}

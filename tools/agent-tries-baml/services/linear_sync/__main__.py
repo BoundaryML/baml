@@ -24,7 +24,7 @@ from bench_core.service_client import ServiceClient
 from . import fixer
 from .tracker import CursorTracker
 
-log = logging.getLogger("notion_fixer")
+log = logging.getLogger("linear_sync")
 
 LINEAR_API_KEY = os.environ.get("ATB_LINEAR_TOKEN", "")
 SLACK_BOT_TOKEN = os.environ.get("ATB_SLACK_BOT_TOKEN", "")

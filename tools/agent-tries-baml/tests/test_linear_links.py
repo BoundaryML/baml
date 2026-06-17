@@ -5,8 +5,8 @@ Convex-status -> Linear status-label mapping (incl. the redraft self-map)."""
 from __future__ import annotations
 
 from bench_core import linear_client as lc
-from services.notion_fixer import fixer
-from services.notion_fixer.__main__ import LinearPush
+from services.linear_sync import fixer
+from services.linear_sync.__main__ import LinearPush
 
 
 def test_issue_link_uses_atb_dashboard():
