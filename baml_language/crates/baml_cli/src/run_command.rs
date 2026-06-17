@@ -19,7 +19,10 @@ use bex_engine::{BexEngine, FunctionCallContextBuilder, UserFunctionInfo};
 use clap::Args;
 use sys_native::{CallId, SysOpsExt};
 
-use crate::{project_load::load_project_from_reporting, reporter::Reporter};
+use crate::{
+    project_load::{load_project_from_reporting, validate_file_from_flags},
+    reporter::Reporter,
+};
 
 // ============================================================================
 // Script expansion types
@@ -315,12 +318,7 @@ impl RunArgs {
         // because clap can't tell "user passed `.`" from "user passed
         // nothing." If `--file` is set and `--from` was left at the
         // default, treat that as fine.
-        if self.file.is_some() && self.from != Path::new(".") {
-            anyhow::bail!(
-                "`--file` and `--from` are mutually exclusive — `--file` already names \
-                 the single source to load."
-            );
-        }
+        validate_file_from_flags(self.file.as_deref(), &self.from)?;
 
         // Expression mode short-circuits before reaching project / file
         // loading, so combining `-e` with surfaces that change *what* is

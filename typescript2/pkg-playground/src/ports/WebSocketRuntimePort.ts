@@ -190,6 +190,7 @@ export class WebSocketRuntimePort implements RuntimePort {
         this.ws!.send(msg);
       }
       this.outQueue = [];
+      this.ws!.send(JSON.stringify({ type: 'requestState' }));
     };
 
     this.ws.onmessage = (event: MessageEvent) => {

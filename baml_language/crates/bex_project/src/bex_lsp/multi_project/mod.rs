@@ -4,7 +4,7 @@ mod notification;
 mod request;
 mod wasm_helpers;
 
-use std::collections::HashMap;
+use std::{collections::HashMap, io::Read};
 
 use ::std::sync::Arc;
 pub use wasm_helpers::BackgroundSpawner;
@@ -247,6 +247,40 @@ impl BexMulitProject {
         &self,
         project_root: &vfs::VfsPath,
     ) -> Result<HashMap<crate::fs::FsPath, String>, LspError> {
+        if project_root
+            .is_file()
+            .map_err(|e| LspError::InvalidVFSPath {
+                path: project_root.clone(),
+                message: format!("Failed to check if path is a file: {e}"),
+            })?
+        {
+            if project_root
+                .extension()
+                .is_some_and(|e| e.as_str() == "baml")
+            {
+                let mut reader =
+                    project_root
+                        .open_file()
+                        .map_err(|e| LspError::InvalidVFSPath {
+                            path: project_root.clone(),
+                            message: format!("Failed to open file: {e}"),
+                        })?;
+                let mut bytes = Vec::new();
+                reader
+                    .read_to_end(&mut bytes)
+                    .map_err(|e| LspError::InvalidVFSPath {
+                        path: project_root.clone(),
+                        message: format!("Failed to read file: {e}"),
+                    })?;
+                let mut files = HashMap::new();
+                files.insert(
+                    crate::fs::FsPath::from_vfs(project_root),
+                    String::from_utf8(bytes).unwrap_or_default(),
+                );
+                return Ok(files);
+            }
+        }
+
         let glob = format!("{}/**/*.baml", project_root.as_str());
         let entries = self
             .fs
@@ -288,6 +322,13 @@ impl BexMulitProject {
 
         let mut project_roots = Vec::new();
         for root in &workspace_roots {
+            if root.is_file().unwrap_or(false)
+                && root.extension().is_some_and(|e| e.as_str() == "baml")
+            {
+                project_roots.push(root.clone());
+                continue;
+            }
+
             if let Ok(true) = root.is_dir() {
                 if Self::has_baml_toml(root) || root.filename().as_str() == "baml_src" {
                     project_roots.push(root.clone());
@@ -956,6 +997,84 @@ fn bex_value_to_json(v: &bex_engine::BexExternalValue) -> serde_json::Value {
     }
 }
 
+fn relative_source_path(project_root: &vfs::VfsPath, path: &crate::fs::FsPath) -> String {
+    let root_path = std::path::Path::new(project_root.as_str());
+    let path = path.as_path();
+    if path == root_path {
+        return path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| path.to_string_lossy().into_owned());
+    }
+    path.strip_prefix(root_path)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .into_owned()
+}
+
+fn resolve_source_path_for_project(
+    project_root: &vfs::VfsPath,
+    path: &str,
+) -> Result<vfs::VfsPath, LspError> {
+    let raw = std::path::Path::new(path);
+    if raw.is_absolute() {
+        return Err(LspError::InvalidVFSPath {
+            path: project_root.clone(),
+            message: format!("Expected a project-relative source path, got {path}"),
+        });
+    }
+
+    if raw
+        .components()
+        .any(|component| !matches!(component, std::path::Component::Normal(_)))
+    {
+        return Err(LspError::InvalidVFSPath {
+            path: project_root.clone(),
+            message: format!("Unsafe relative source path: {path}"),
+        });
+    }
+
+    if project_root.is_file().unwrap_or(false) {
+        return Ok(project_root.clone());
+    }
+
+    project_root
+        .join(path)
+        .map_err(|e| LspError::InvalidVFSPath {
+            path: project_root.clone(),
+            message: format!("Failed to join path: {e}"),
+        })
+}
+
+fn ensure_source_belongs_to_project(
+    project_root: &vfs::VfsPath,
+    source_path: &vfs::VfsPath,
+) -> Result<(), LspError> {
+    if project_root.is_file().unwrap_or(false) {
+        if source_path.as_str() == project_root.as_str() {
+            return Ok(());
+        }
+    } else {
+        let root = project_root.as_str().trim_end_matches('/');
+        let source = source_path.as_str();
+        if source == root
+            || source
+                .strip_prefix(root)
+                .is_some_and(|suffix| suffix.starts_with('/'))
+        {
+            return Ok(());
+        }
+    }
+
+    Err(LspError::InvalidVFSPath {
+        path: source_path.clone(),
+        message: format!(
+            "Source file is outside project root {}",
+            project_root.as_str()
+        ),
+    })
+}
+
 #[async_trait::async_trait]
 impl super::BexLsp for BexMulitProject {
     fn get_bex_for_project(
@@ -976,6 +1095,65 @@ impl super::BexLsp for BexMulitProject {
             }
         }
         names.into_iter().collect()
+    }
+
+    fn playground_source_files(
+        &self,
+        project: &str,
+    ) -> Result<Vec<crate::bex_lsp::PlaygroundSourceFile>, LspError> {
+        let project_root = self
+            .fs
+            .get_path_from_path(std::path::Path::new(project), "playground source files")?;
+        let project_handle = self.get_or_create_project(project_root.clone())?;
+        let mut sources = self.load_project_sources(&project_root)?;
+        {
+            let in_memory_changes = project_handle.in_memory_changes.lock().unwrap();
+            for (path, source) in in_memory_changes.iter() {
+                sources.insert(path.clone(), source.clone());
+            }
+        }
+
+        let mut files = sources
+            .into_iter()
+            .map(|(path, content)| {
+                let relative_path = relative_source_path(&project_root, &path);
+                crate::bex_lsp::PlaygroundSourceFile {
+                    path: path.as_path().to_string_lossy().into_owned(),
+                    relative_path,
+                    content,
+                }
+            })
+            .collect::<Vec<_>>();
+        files.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
+        Ok(files)
+    }
+
+    fn playground_update_source_file(
+        &self,
+        project: &str,
+        path: &str,
+        content: String,
+    ) -> Result<(), LspError> {
+        let project_root = self.fs.get_path_from_path(
+            std::path::Path::new(project),
+            "playground update source file",
+        )?;
+        let source_path = resolve_source_path_for_project(&project_root, path)?;
+        if source_path.extension().is_none_or(|e| e.as_str() != "baml") {
+            return Err(LspError::InvalidVFSPath {
+                path: source_path,
+                message: "Only .baml files can be edited from the playground".to_string(),
+            });
+        }
+        ensure_source_belongs_to_project(&project_root, &source_path)?;
+
+        let project_handle = self.get_or_create_project(project_root.clone())?;
+        let mut in_memory_changes = project_handle.in_memory_changes.lock().unwrap();
+        in_memory_changes.insert(crate::fs::FsPath::from_vfs(&source_path), content);
+        drop(in_memory_changes);
+
+        self.refresh_project(&project_root, ProjectRefreshMode::InMemoryChangesOnly);
+        Ok(())
     }
 
     fn initialize_workspace_roots(

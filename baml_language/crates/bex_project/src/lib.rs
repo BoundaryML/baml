@@ -103,7 +103,7 @@ pub fn new_from_bytecode(bytecode: &[u8], sys_ops: SysOps) -> Result<Arc<dyn Bex
 
 pub use bex_lsp::{
     BackgroundSpawner, BexLsp, FunctionInfo, FunctionKind, FunctionOrigin, LlmCapabilities,
-    LspClientSenderTrait, LspError, PlaygroundNotification, PlaygroundSender, ProjectDiagnostic,
-    ProjectUpdate, TestExpandError, new_lsp,
+    LspClientSenderTrait, LspError, PlaygroundNotification, PlaygroundSender, PlaygroundSourceFile,
+    ProjectDiagnostic, ProjectUpdate, TestExpandError, new_lsp,
 };
 pub use fs::{BamlVFS, BulkReadFileSystem, DefaultBulkReadFileSystem, FsPath};

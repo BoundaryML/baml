@@ -34,6 +34,11 @@ interface OpenPlaygroundMessage {
   };
 }
 
+interface OpenInBrowserMessage {
+  type: 'openInBrowser';
+  project?: string;
+}
+
 function getVsCodeApi() {
   if (vscodeApi !== undefined) return vscodeApi;
   vscodeApi = typeof window.acquireVsCodeApi === 'function'
@@ -44,9 +49,11 @@ function getVsCodeApi() {
 
 const App: React.FC = () => {
   const [port, setPort] = useState<WebSocketRuntimePort | null>(null);
+  const [activeProject, setActiveProject] = useState<string | null>(null);
   const portRef = useRef<WebSocketRuntimePort | null>(null);
   const pendingCursorPositionRef = useRef<CursorPositionMessage['position'] | null>(null);
   const pendingOpenTargetRef = useRef<OpenPlaygroundMessage['target'] | null>(null);
+  const inVsCode = getVsCodeApi() !== null;
 
   useEffect(() => {
     portRef.current = port;
@@ -55,6 +62,7 @@ const App: React.FC = () => {
     if (pendingOpenTargetRef.current) {
       const target = pendingOpenTargetRef.current;
       pendingOpenTargetRef.current = null;
+      setActiveProject(target.project);
       port.dispatchLocalMessage({
         type: 'playgroundNotification',
         notification: {
@@ -106,6 +114,7 @@ const App: React.FC = () => {
     };
 
     const forwardOpenPlayground = (target: OpenPlaygroundMessage['target']) => {
+      setActiveProject(target.project);
       const currentPort = portRef.current;
       if (!currentPort) {
         pendingOpenTargetRef.current = target;
@@ -156,6 +165,23 @@ const App: React.FC = () => {
 
   return (
     <div className="playground-root flex h-full min-h-0 w-full flex-col overflow-hidden">
+      {inVsCode && (
+        <header className="flex h-10 shrink-0 items-center justify-end border-b border-border bg-background px-2">
+          <button
+            type="button"
+            onClick={() => {
+              const message: OpenInBrowserMessage = {
+                type: 'openInBrowser',
+                ...(activeProject ? { project: activeProject } : {}),
+              };
+              getVsCodeApi()?.postMessage(message);
+            }}
+            className="h-7 rounded-md border border-border px-3 text-xs font-medium text-foreground hover:bg-muted"
+          >
+            Open in browser
+          </button>
+        </header>
+      )}
       <ExecutionPanel
         port={port}
         onNavigateToSource={(source: SourceNavigationTarget) => {

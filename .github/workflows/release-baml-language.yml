@@ -187,6 +187,10 @@ jobs:
         with:
           name: baml-vscode-vsix
           path: vsix
+      - uses: actions/download-artifact@v4
+        with:
+          name: baml-playground-dist
+          path: playground-dist
       - name: Stamp version
         run: scripts/baml-language-version stamp --plan release-plan.json
       - name: Setup Rust
@@ -216,10 +220,13 @@ jobs:
           vsix="$(find vsix -maxdepth 1 -name '*.vsix' -print -quit)"
           test -n "$vsix"
           cp "$vsix" "staging/assets/baml-vscode.vsix"
+          mkdir -p "staging/assets/playground"
+          cp -R playground-dist/. "staging/assets/playground/"
           if test -f "staging/bin/baml$suffix"; then
             exit 1
           fi
           test -f "staging/assets/baml-vscode.vsix"
+          test -f "staging/assets/playground/index.html"
           echo "$version" > staging/VERSION
           if [[ "$target" == *windows-msvc ]]; then
             (cd staging && 7z a "../baml-language-$version-$target.zip" .)
@@ -284,6 +291,10 @@ jobs:
         with:
           name: baml-vscode-vsix
           path: typescript2/app-vscode-ext/*.vsix
+      - uses: actions/upload-artifact@v4
+        with:
+          name: baml-playground-dist
+          path: typescript2/app-vscode-webview/dist
 
   build-agent-skills:
     name: Build agent skills

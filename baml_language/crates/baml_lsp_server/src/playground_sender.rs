@@ -5,7 +5,8 @@
 //! that WebSocket clients subscribe to.
 //!
 //! `OpenPlayground` is special: instead of going over WebSocket it either
-//! opens the system browser or sends an LSP notification to the client.
+//! opens the system browser for `baml playground` or sends an LSP
+//! notification to the editor client.
 
 use std::sync::Arc;
 
@@ -17,7 +18,7 @@ pub struct NativePlaygroundSender {
     broadcast_tx: broadcast::Sender<WsOutMessage>,
     lsp_sender: Arc<dyn bex_project::LspClientSenderTrait + Send + Sync>,
     playground_port: u16,
-    playground_via_browser: bool,
+    open_in_browser: bool,
 }
 
 impl NativePlaygroundSender {
@@ -25,13 +26,13 @@ impl NativePlaygroundSender {
         broadcast_tx: broadcast::Sender<WsOutMessage>,
         lsp_sender: Arc<dyn bex_project::LspClientSenderTrait + Send + Sync>,
         playground_port: u16,
-        playground_via_browser: bool,
+        open_in_browser: bool,
     ) -> Self {
         Self {
             broadcast_tx,
             lsp_sender,
             playground_port,
-            playground_via_browser,
+            open_in_browser,
         }
     }
 }
@@ -45,7 +46,7 @@ impl bex_project::PlaygroundSender for NativePlaygroundSender {
             ref testset_name,
         } = notification
         {
-            if self.playground_via_browser {
+            if self.open_in_browser {
                 let url = format!("http://localhost:{}", self.playground_port);
                 if let Err(e) = webbrowser::open(&url) {
                     tracing::error!("Failed to open browser at {}: {}", url, e);

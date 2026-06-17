@@ -542,6 +542,7 @@ fn validate_archive_layout(
             format!("bin/baml-cli{exe_suffix}"),
             format!("bin/baml-pack-host{exe_suffix}"),
             "assets/baml-vscode.vsix".to_string(),
+            "assets/playground/index.html".to_string(),
         ],
         Product::Wrapper => vec![format!("bin/baml{exe_suffix}")],
     };
@@ -556,6 +557,7 @@ fn validate_archive_layout(
             format!("bin/baml-cli{exe_suffix}"),
             format!("bin/baml-pack-host{exe_suffix}"),
             "assets/baml-vscode.vsix".to_string(),
+            "assets/playground/index.html".to_string(),
         ],
     };
     for path in &forbidden {
@@ -795,6 +797,7 @@ mod tests {
                 "bin/baml-cli",
                 "bin/baml-pack-host",
                 "assets/baml-vscode.vsix",
+                "assets/playground/index.html",
                 "bin/baml",
             ] {
                 let bytes = b"fake";

@@ -23,6 +23,7 @@ pub(crate) mod init_command;
 pub(crate) mod lsp;
 pub(crate) mod pack_command;
 pub(crate) mod pack_elf;
+pub(crate) mod playground_command;
 pub(crate) mod project_load;
 pub mod reporter;
 pub(crate) mod run_command;

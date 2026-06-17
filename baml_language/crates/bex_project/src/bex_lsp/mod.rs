@@ -172,6 +172,14 @@ pub struct TestExpandError {
     pub message: String,
 }
 
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlaygroundSourceFile {
+    pub path: String,
+    pub relative_path: String,
+    pub content: String,
+}
+
 pub trait PlaygroundSender: Send + Sync {
     fn send_playground_notification(&self, notification: PlaygroundNotification);
 }
@@ -234,6 +242,18 @@ pub trait BexLsp: Send + Sync + notification::BexLspNotification + request::BexL
 
     /// Collect all unique env var names referenced in BAML source across all projects.
     fn all_env_var_names(&self) -> Vec<String>;
+
+    /// Source files currently visible to the playground for a project.
+    fn playground_source_files(&self, project: &str)
+    -> Result<Vec<PlaygroundSourceFile>, LspError>;
+
+    /// Apply an in-memory source edit from the browser playground.
+    fn playground_update_source_file(
+        &self,
+        project: &str,
+        path: &str,
+        content: String,
+    ) -> Result<(), LspError>;
 
     fn request_collect_tests(&self, project: &str);
 

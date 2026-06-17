@@ -5,11 +5,6 @@ use std::path::PathBuf;
 
 #[derive(Args, Debug)]
 pub struct LanguageServerArgs {
-    /// Open the playground in the system browser instead of sending
-    /// an LSP notification to the client.
-    #[clap(long)]
-    pub playground_via_browser: bool,
-
     /// Workspace root to discover BAML projects from when running the LSP
     /// outside an editor client. May be passed more than once.
     #[clap(long, value_name = "PATH")]
@@ -18,7 +13,7 @@ pub struct LanguageServerArgs {
 
 impl LanguageServerArgs {
     pub fn run(&self) -> Result<()> {
-        run_server(self.playground_via_browser, self.workspace.clone())?;
+        run_server(self.workspace.clone())?;
         Ok(())
     }
 }

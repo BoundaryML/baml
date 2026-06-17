@@ -6,6 +6,74 @@ use baml_workspace::discover_baml_files;
 
 use crate::reporter::Reporter;
 
+/// The source location shape shared by `run`, `pack`, and `playground`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum SourceLocation {
+    /// A strict BAML project root: `from` itself has either `baml.toml` or
+    /// `baml_src/`, and sources are discovered with `load_project_from`.
+    Project { root: PathBuf, files: Vec<PathBuf> },
+    /// A hermetic single-file source selected through `--file`.
+    StandaloneFile { file: PathBuf, root: PathBuf },
+}
+
+/// `--file` and a non-default `--from` both name a source location.
+///
+/// Clap cannot distinguish "the user omitted `--from`" from "the user passed
+/// `--from .`", so this mirrors the existing `run`/`pack` rule: only reject
+/// when `--from` is not the default `.`.
+pub(crate) fn validate_file_from_flags(file: Option<&Path>, from: &Path) -> Result<()> {
+    if file.is_some() && from != Path::new(".") {
+        anyhow::bail!(
+            "`--file` and `--from` are mutually exclusive — `--file` already names \
+             the single source to load."
+        );
+    }
+    Ok(())
+}
+
+/// Resolve the CLI source location exactly like `baml run` project/file mode.
+pub(crate) fn resolve_source_location(
+    from: &Path,
+    file: Option<&Path>,
+    reporter: Option<&Reporter>,
+) -> Result<SourceLocation> {
+    validate_file_from_flags(file, from)?;
+
+    if let Some(file) = file {
+        let canonical = resolve_standalone_file(file)?;
+        let root = canonical
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .to_path_buf();
+        return Ok(SourceLocation::StandaloneFile {
+            file: canonical,
+            root,
+        });
+    }
+
+    let (_db, root, files) = match reporter {
+        Some(reporter) => load_project_from_reporting(from, reporter)?,
+        None => load_project_from(from)?,
+    };
+    Ok(SourceLocation::Project { root, files })
+}
+
+pub(crate) fn resolve_standalone_file(file_path: &Path) -> Result<PathBuf> {
+    let display = file_path.display().to_string();
+    let canonical =
+        std::fs::canonicalize(file_path).with_context(|| format!("File not found: {display}"))?;
+    if !canonical.is_file() {
+        anyhow::bail!("`{}` is not a file.", canonical.display());
+    }
+    if canonical.extension().and_then(|ext| ext.to_str()) != Some("baml") {
+        anyhow::bail!(
+            "`{}` is not a BAML source file. Use a `.baml` file with `--file`.",
+            canonical.display()
+        );
+    }
+    Ok(canonical)
+}
+
 /// Canonicalize `from` and load all discovered `.baml` files into a fresh
 /// [`ProjectDatabase`]. Returns the database, the canonical project root,
 /// and the list of loaded files. Used by the build/execute commands

@@ -8,19 +8,24 @@
 //! **Prod mode** (`BAML_PLAYGROUND_DIR` is set):
 //!   Serves pre-built static assets with SPA fallback.
 
-use std::{net::SocketAddr, sync::Arc};
+use std::{
+    net::SocketAddr,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use axum::{
     Router,
     body::Body,
     extract::{
-        FromRequestParts, State,
+        Path as AxumPath,
+        FromRequestParts, Query, State,
         ws::{Message as AxumWsMsg, WebSocket, WebSocketUpgrade},
     },
     http::{Method, Request, StatusCode, header},
     middleware::{self, Next},
     response::Response,
-    routing::get,
+    routing::{get, get_service},
 };
 use base64::Engine as _;
 use bex_events::run::{
@@ -259,6 +264,31 @@ struct WsState {
     run_store: Arc<InMemoryRunStore>,
 }
 
+#[derive(Debug, serde::Deserialize)]
+struct SourceFilesQuery {
+    project: String,
+}
+
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SourceFilesResponse {
+    project: String,
+    files: Vec<bex_project::PlaygroundSourceFile>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateSourceFileRequest {
+    project: String,
+    path: String,
+    content: String,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct UpdateSourceFileResponse {
+    ok: bool,
+}
+
 /// Start the playground server on the given listener.
 pub async fn run(
     listener: TcpListener,
@@ -267,8 +297,16 @@ pub async fn run(
     env_state: Arc<PlaygroundEnvState>,
     io_state: Arc<PlaygroundIoState>,
     run_store: Arc<InMemoryRunStore>,
+    playground_dir_override: Option<PathBuf>,
 ) -> anyhow::Result<()> {
-    let app = build_router(bex, broadcast_tx, env_state, io_state, run_store)?;
+    let app = build_router(
+        bex,
+        broadcast_tx,
+        env_state,
+        io_state,
+        run_store,
+        playground_dir_override,
+    )?;
 
     tracing::info!(
         "Playground: http://localhost:{}",
@@ -286,6 +324,7 @@ fn build_router(
     env_state: Arc<PlaygroundEnvState>,
     io_state: Arc<PlaygroundIoState>,
     run_store: Arc<InMemoryRunStore>,
+    playground_dir_override: Option<PathBuf>,
 ) -> anyhow::Result<Router> {
     let ws_state = WsState {
         bex,
@@ -297,9 +336,16 @@ fn build_router(
 
     let api = Router::new()
         .route("/api/ws", get(playground_ws_handler))
+        .route(
+            "/api/source-files",
+            get(source_files_handler).put(update_source_file_handler),
+        )
         .with_state(ws_state);
 
-    let fallback = if let Ok(dev_port) = std::env::var("BAML_PLAYGROUND_DEV_PORT") {
+    let fallback = if let Some(dir) = playground_dir_override {
+        tracing::info!("Playground: serving static files from {}", dir.display());
+        static_router(dir.to_string_lossy().into_owned())
+    } else if let Ok(dev_port) = std::env::var("BAML_PLAYGROUND_DEV_PORT") {
         let dev_port: u16 = dev_port
             .parse()
             .map_err(|e| anyhow::anyhow!("Invalid BAML_PLAYGROUND_DEV_PORT: {e}"))?;
@@ -328,6 +374,79 @@ async fn playground_ws_handler(State(state): State<WsState>, ws: WebSocketUpgrad
     ws.on_upgrade(move |socket| playground_ws_session(socket, state))
 }
 
+async fn source_files_handler(
+    State(state): State<WsState>,
+    Query(query): Query<SourceFilesQuery>,
+) -> Response {
+    match state.bex.playground_source_files(&query.project) {
+        Ok(files) => json_response(
+            StatusCode::OK,
+            &SourceFilesResponse {
+                project: query.project,
+                files,
+            },
+        ),
+        Err(error) => text_response(StatusCode::INTERNAL_SERVER_ERROR, error.to_string()),
+    }
+}
+
+async fn update_source_file_handler(
+    State(state): State<WsState>,
+    request: Request<Body>,
+) -> Response {
+    let body = match axum::body::to_bytes(request.into_body(), 1024 * 1024).await {
+        Ok(body) => body,
+        Err(error) => {
+            return text_response(
+                StatusCode::BAD_REQUEST,
+                format!("Failed to read request body: {error}"),
+            );
+        }
+    };
+    let request = match serde_json::from_slice::<UpdateSourceFileRequest>(&body) {
+        Ok(request) => request,
+        Err(error) => {
+            return text_response(
+                StatusCode::BAD_REQUEST,
+                format!("Invalid source file update body: {error}"),
+            );
+        }
+    };
+
+    match state
+        .bex
+        .playground_update_source_file(&request.project, &request.path, request.content)
+    {
+        Ok(()) => {
+            state.bex.request_playground_state();
+            json_response(StatusCode::OK, &UpdateSourceFileResponse { ok: true })
+        }
+        Err(error) => text_response(StatusCode::INTERNAL_SERVER_ERROR, error.to_string()),
+    }
+}
+
+fn json_response<T: serde::Serialize>(status: StatusCode, value: &T) -> Response {
+    match serde_json::to_vec(value) {
+        Ok(body) => Response::builder()
+            .status(status)
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(body))
+            .unwrap_or_else(|_| Response::new(Body::empty())),
+        Err(error) => text_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to serialize response: {error}"),
+        ),
+    }
+}
+
+fn text_response(status: StatusCode, message: String) -> Response {
+    Response::builder()
+        .status(status)
+        .header(header::CONTENT_TYPE, "text/plain; charset=utf-8")
+        .body(Body::from(message))
+        .unwrap_or_else(|_| Response::new(Body::empty()))
+}
+
 async fn playground_ws_session(socket: WebSocket, state: WsState) {
     tracing::info!("Playground: WS session started");
     let (mut sink, mut stream) = socket.split();
@@ -340,6 +459,7 @@ async fn playground_ws_session(socket: WebSocket, state: WsState) {
             "playgroundWebSocket.v1".to_string(),
             "callFunction.v1".to_string(),
             "collectTests.v1".to_string(),
+            "sourceFiles.v1".to_string(),
         ],
     }) {
         if sink.send(hello).await.is_err() {
@@ -1134,14 +1254,28 @@ async fn cors_middleware(req: Request<Body>, next: Next) -> Response {
         return Response::builder()
             .status(StatusCode::NO_CONTENT)
             .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
-            .header(header::ACCESS_CONTROL_ALLOW_METHODS, "GET, POST, OPTIONS")
+            .header(
+                header::ACCESS_CONTROL_ALLOW_METHODS,
+                "GET, PUT, POST, OPTIONS",
+            )
             .header(header::ACCESS_CONTROL_ALLOW_HEADERS, "*")
+            .header(header::CACHE_CONTROL, "no-store, no-cache, must-revalidate")
+            .header(header::PRAGMA, "no-cache")
+            .header(header::EXPIRES, "0")
             .body(Body::empty())
             .unwrap();
     }
     let mut resp = next.run(req).await;
     resp.headers_mut()
         .insert(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*".parse().unwrap());
+    resp.headers_mut().insert(
+        header::CACHE_CONTROL,
+        "no-store, no-cache, must-revalidate".parse().unwrap(),
+    );
+    resp.headers_mut()
+        .insert(header::PRAGMA, "no-cache".parse().unwrap());
+    resp.headers_mut()
+        .insert(header::EXPIRES, "0".parse().unwrap());
     resp
 }
 
@@ -1323,7 +1457,100 @@ async fn proxy_ws(upstream: String, req: Request<Body>) -> Response {
 // ---------------------------------------------------------------------------
 
 fn static_router(dir: String) -> Router {
-    use tower_http::services::{ServeDir, ServeFile};
-    let index = format!("{dir}/index.html");
-    Router::new().fallback_service(ServeDir::new(&dir).not_found_service(ServeFile::new(index)))
+    use tower_http::services::ServeDir;
+    let dir = PathBuf::from(dir);
+    Router::new()
+        .route("/", get(static_index_handler))
+        .route("/index.html", get(static_index_handler))
+        .route("/*path", get(static_path_handler))
+        .fallback_service(get_service(ServeDir::new(dir.clone())))
+        .with_state(dir)
+}
+
+async fn static_index_handler(State(dir): State<PathBuf>) -> Response {
+    serve_static_index(&dir).await
+}
+
+async fn static_path_handler(
+    State(dir): State<PathBuf>,
+    AxumPath(path): AxumPath<String>,
+) -> Response {
+    let request_path = path.trim_start_matches('/');
+    let file_path = dir.join(request_path);
+    if is_existing_file_within_dir(&dir, &file_path) {
+        return match tokio::fs::read(&file_path).await {
+            Ok(bytes) => {
+                let mut builder = Response::builder().status(StatusCode::OK);
+                if let Some(content_type) = content_type_for_path(&file_path) {
+                    builder = builder.header(header::CONTENT_TYPE, content_type);
+                }
+                builder
+                    .body(Body::from(bytes))
+                    .unwrap_or_else(|_| Response::new(Body::empty()))
+            }
+            Err(error) => {
+                return text_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Failed to read static asset: {error}"),
+                );
+            }
+        };
+    }
+    serve_static_index(&dir).await
+}
+
+async fn serve_static_index(dir: &Path) -> Response {
+    let index_path = dir.join("index.html");
+    let version = tokio::fs::metadata(&index_path)
+        .await
+        .ok()
+        .and_then(|metadata| metadata.modified().ok())
+        .and_then(|modified| modified.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|duration| duration.as_millis().to_string())
+        .unwrap_or_else(|| epoch_ms().to_string());
+
+    match tokio::fs::read_to_string(&index_path).await {
+        Ok(html) => {
+            let html = cache_bust_static_asset_urls(&html, &version);
+            Response::builder()
+                .status(StatusCode::OK)
+                .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
+                .body(Body::from(html))
+                .unwrap_or_else(|_| Response::new(Body::empty()))
+        }
+        Err(error) => text_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to read playground index: {error}"),
+        ),
+    }
+}
+
+fn cache_bust_static_asset_urls(html: &str, version: &str) -> String {
+    html.replace("/assets/index.js", &format!("/assets/index.js?v={version}"))
+        .replace("/assets/index.css", &format!("/assets/index.css?v={version}"))
+}
+
+fn is_existing_file_within_dir(dir: &Path, file_path: &Path) -> bool {
+    let Ok(canonical_dir) = dir.canonicalize() else {
+        return false;
+    };
+    let Ok(canonical_file) = file_path.canonicalize() else {
+        return false;
+    };
+    canonical_file.starts_with(canonical_dir) && canonical_file.is_file()
+}
+
+fn content_type_for_path(path: &Path) -> Option<&'static str> {
+    match path.extension().and_then(|ext| ext.to_str()) {
+        Some("css") => Some("text/css; charset=utf-8"),
+        Some("html") => Some("text/html; charset=utf-8"),
+        Some("js") => Some("text/javascript; charset=utf-8"),
+        Some("json") => Some("application/json"),
+        Some("map") => Some("application/json"),
+        Some("svg") => Some("image/svg+xml"),
+        Some("wasm") => Some("application/wasm"),
+        Some("woff") => Some("font/woff"),
+        Some("woff2") => Some("font/woff2"),
+        _ => None,
+    }
 }

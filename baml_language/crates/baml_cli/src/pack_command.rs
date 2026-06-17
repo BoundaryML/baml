@@ -39,7 +39,9 @@ use clap::Args;
 use sys_native::SysOpsExt;
 
 use crate::{
-    commands::release_version, project_load::load_project_from_reporting, reporter::Reporter,
+    commands::release_version,
+    project_load::{load_project_from_reporting, validate_file_from_flags},
+    reporter::Reporter,
 };
 
 /// `baml pack` — compile one or more targets into a standalone executable.
@@ -201,12 +203,7 @@ impl PackArgs {
         // rule as `baml run`. The check is gated on `--from != "."`
         // because clap can't tell "user passed `.`" from "user passed
         // nothing"; `--file` alongside the default `--from` is fine.
-        if self.file.is_some() && self.from != Path::new(".") {
-            anyhow::bail!(
-                "`--file` and `--from` are mutually exclusive — `--file` already names \
-                 the single source to load."
-            );
-        }
+        validate_file_from_flags(self.file.as_deref(), &self.from)?;
         if let Some(target) = self.target.as_deref() {
             if looks_like_path(target) {
                 anyhow::bail!(

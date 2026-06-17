@@ -70,6 +70,10 @@ import {
   runToDisplayRun,
   type RunStoreDisplayRun,
 } from './run-store-projections';
+import {
+  selectDefaultFunctionName,
+  selectMainFunctionName,
+} from './default-function-selection';
 
 registerBuiltinResultRenderers();
 
@@ -276,6 +280,8 @@ export interface ExecutionPanelProps {
   onReload?: () => void;
   /** Called when user clicks an event with source location to jump to that line. */
   onNavigateToSource?: (source: SourceNavigationTarget) => void;
+  /** Called whenever the selected project changes. */
+  onSelectedProjectChange?: (project: string | null) => void;
   /** Tab shown on mount (default 'run'). Embedded views often want 'graph'. */
   initialTab?: 'run' | 'graph' | 'trace' | 'flame' | 'prompt' | 'curl';
   /** Auto-select this function once the project reports it (applied once). */
@@ -577,6 +583,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   resultRenderers,
   onReload,
   onNavigateToSource,
+  onSelectedProjectChange,
   initialTab,
   initialFunctionName,
   initialTestName,
@@ -708,6 +715,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   // CFGs for EVERY function in the project (prefetched) — powers the
   // workflow-root heuristic when a function is picked from the list.
   const workflowCfgCacheRef = useRef<Map<string, ControlFlowGraph>>(new Map());
+  const workflowCfgResponsesRef = useRef<Map<string, ControlFlowGraph | null>>(
+    new Map(),
+  );
   const [workflowCacheVersion, setWorkflowCacheVersion] = useState(0);
   const [activeTab, setActiveTab] = useState<
     'run' | 'graph' | 'trace' | 'flame' | 'prompt' | 'curl'
@@ -794,6 +804,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
       }
     }
   }, [executionSnapshot.runs]);
+
+  useEffect(() => {
+    onSelectedProjectChange?.(selectedProject);
+  }, [onSelectedProjectChange, selectedProject]);
 
   // Ref mirrors for cursor context handler (avoids stale closures in port.onMessage).
   // workflowRouteFor is defined further down (it needs the function list);
@@ -1172,9 +1186,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
               }
               break;
             case 'controlFlowGraphResult':
+              workflowCfgResponsesRef.current.set(n.functionName, n.graph);
+              setWorkflowCacheVersion((v) => v + 1);
               if (n.graph) {
                 workflowCfgCacheRef.current.set(n.functionName, n.graph);
-                setWorkflowCacheVersion((v) => v + 1);
                 // Only the selected function's graph drives the display —
                 // prefetched graphs for other functions just fill the cache.
                 if (n.functionName === selectedFnRef.current) {
@@ -1314,9 +1329,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
           break;
 
         case 'controlFlowGraphResult':
+          workflowCfgResponsesRef.current.set(data.functionName, data.graph);
+          setWorkflowCacheVersion((v) => v + 1);
           if (data.graph) {
             workflowCfgCacheRef.current.set(data.functionName, data.graph);
-            setWorkflowCacheVersion((v) => v + 1);
             if (data.functionName === selectedFnRef.current) {
               setControlFlowGraph(data.graph);
               const pending = pendingHighlightRef.current;
@@ -1928,6 +1944,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
       slot.version = projectUpdateVersion;
       slot.names = new Set();
       workflowCfgCacheRef.current = new Map();
+      workflowCfgResponsesRef.current = new Map();
     }
     for (const name of functionNames) {
       if (slot.names.has(name)) continue;
@@ -2056,6 +2073,67 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     setSelectedFn((prev) => prev ?? match);
   }, [functionNames, initialFunctionName]);
 
+  const defaultSelectionScopeRef = useRef<{
+    project: string | null;
+    update: ProjectUpdate | undefined;
+    applied: boolean;
+  }>({ project: null, update: undefined, applied: false });
+  useEffect(() => {
+    const scope = defaultSelectionScopeRef.current;
+    if (scope.project !== selectedProject || scope.update !== projectUpdateVersion) {
+      defaultSelectionScopeRef.current = {
+        project: selectedProject,
+        update: projectUpdateVersion,
+        applied: false,
+      };
+    }
+
+    const currentScope = defaultSelectionScopeRef.current;
+    if (
+      currentScope.applied ||
+      selectedFn ||
+      !selectedProject ||
+      functionNames.length === 0 ||
+      viewingCollection ||
+      viewingTestRun
+    ) {
+      return;
+    }
+
+    if (initialFunctionName && !appliedInitialFnRef.current) {
+      const initialMatch = functionNames.find(
+        (n) => n === initialFunctionName || n.endsWith(`.${initialFunctionName}`),
+      );
+      if (initialMatch) return;
+    }
+
+    let next = selectMainFunctionName(functionNames);
+    if (!next) {
+      const graphResponses = workflowCfgResponsesRef.current;
+      const hasAllGraphResponses = functionNames.every((name) =>
+        graphResponses.has(name),
+      );
+      if (!hasAllGraphResponses) return;
+      next = selectDefaultFunctionName(functionNames, workflowCfgCacheRef.current);
+    }
+    if (!next) return;
+
+    currentScope.applied = true;
+    setWorkflowContext(null);
+    setSelectedFn(next);
+    setViewingCollection(false);
+    setViewingTestRun(false);
+  }, [
+    functionNames,
+    initialFunctionName,
+    projectUpdateVersion,
+    selectedFn,
+    selectedProject,
+    viewingCollection,
+    viewingTestRun,
+    workflowCacheVersion,
+  ]);
+
   // Reset active tab if current tab is no longer available for the selected function
   useEffect(() => {
     if (activeTab === 'prompt' && !canPreviewPrompt) setActiveTab('run');
@@ -2112,7 +2190,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
       <Tabs
         value={activeTab}
         onValueChange={(v) => setActiveTab(v as typeof activeTab)}
-        className="relative flex-1 flex flex-col min-h-0 gap-0"
+        className="relative flex h-full min-h-0 w-full flex-1 flex-col gap-0 overflow-hidden"
       >
         {/* ──── Combined top bar ──── */}
         <div className="flex items-center gap-1.5 px-2 py-1 shrink-0 border-b border-vsc-border bg-vsc-surface">

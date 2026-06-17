@@ -92,6 +92,9 @@ pub(crate) enum Commands {
     #[command(about = "Run a BAML function or script", disable_help_flag = true)]
     Run(crate::run_command::RunArgs),
 
+    #[command(about = "Open the BAML playground in your browser")]
+    Playground(crate::playground_command::PlaygroundArgs),
+
     #[command(about = "Package a BAML target as a standalone executable")]
     Pack(crate::pack_command::PackArgs),
 
@@ -162,6 +165,7 @@ impl RuntimeCli {
             Commands::New(args) => args.run(),
             Commands::Check(args) => args.run(),
             Commands::Run(args) => args.run(),
+            Commands::Playground(args) => args.run(),
             Commands::Pack(args) => args.run(),
             Commands::Ide(args) => args.run(),
             Commands::Agent(args) => args.run(),
@@ -249,5 +253,20 @@ mod tests {
             help.contains("Project root to check. Defaults to the current directory"),
             "{help}"
         );
+    }
+
+    #[test]
+    fn root_help_lists_playground_command() {
+        let help = help_for(&["baml-cli", "--help"]);
+        assert!(help.contains("playground"), "{help}");
+        assert!(help.contains("Open the BAML playground"), "{help}");
+    }
+
+    #[test]
+    fn playground_help_presents_public_baml_command() {
+        let help = help_for(&["baml-cli", "playground", "--help"]);
+        assert!(help.contains("Usage: baml playground [OPTIONS]"), "{help}");
+        assert!(help.contains("--file <PATH>"), "{help}");
+        assert!(help.contains("--from <FROM>"), "{help}");
     }
 }

@@ -93,9 +93,31 @@ fn build_playground_sys_ops(
 /// 3. Creates `bex_project::BexLsp` via `bex_project::new_lsp`
 /// 4. Starts the playground HTTP/WS server
 /// 5. Runs the stdio LSP event loop
-pub fn run_server(
-    playground_via_browser: bool,
+pub fn run_server(workspace_roots: Vec<PathBuf>) -> anyhow::Result<()> {
+    run_server_inner(PlaygroundOpenTarget::LspClient, workspace_roots, None)
+}
+
+pub fn run_playground_server(
     workspace_roots: Vec<PathBuf>,
+    playground_dir_override: Option<PathBuf>,
+) -> anyhow::Result<()> {
+    run_server_inner(
+        PlaygroundOpenTarget::Browser,
+        workspace_roots,
+        playground_dir_override,
+    )
+}
+
+#[derive(Clone, Copy)]
+enum PlaygroundOpenTarget {
+    LspClient,
+    Browser,
+}
+
+fn run_server_inner(
+    playground_open_target: PlaygroundOpenTarget,
+    workspace_roots: Vec<PathBuf>,
+    playground_dir_override: Option<PathBuf>,
 ) -> anyhow::Result<()> {
     let workspace_roots = absolutize_workspace_roots(workspace_roots)?;
 
@@ -178,7 +200,7 @@ pub fn run_server(
             broadcast_tx.clone(),
             lsp_sender.clone(),
             playground_port,
-            playground_via_browser,
+            matches!(playground_open_target, PlaygroundOpenTarget::Browser),
         ));
 
     // Create the BexLsp (multi-project LSP)
@@ -195,22 +217,6 @@ pub fn run_server(
         playground_runs::ProjectGraphRuntimeOverlaySpanProvider::new(bex.clone()),
     ));
 
-    // Start playground HTTP/WS server
-    if let Some(listener) = playground_listener {
-        let bex_for_playground = bex.clone();
-        let btx = broadcast_tx.clone();
-        let es = env_state.clone();
-        let ios = io_state.clone();
-        let runs = run_store.clone();
-        tokio_runtime.spawn(async move {
-            if let Err(e) =
-                playground_server::run(listener, bex_for_playground, btx, es, ios, runs).await
-            {
-                tracing::error!("Playground server exited: {e}");
-            }
-        });
-    }
-
     let has_explicit_workspace_roots = !workspace_roots.is_empty();
     let explicit_projects = if has_explicit_workspace_roots {
         bex.initialize_workspace_roots(workspace_roots)?
@@ -218,7 +224,7 @@ pub fn run_server(
         Vec::new()
     };
 
-    if playground_via_browser && playground_port != 0 {
+    if matches!(playground_open_target, PlaygroundOpenTarget::Browser) && playground_port != 0 {
         if let Some(project) = explicit_projects.first() {
             playground_sender.send_playground_notification(
                 bex_project::PlaygroundNotification::OpenPlayground {
@@ -231,6 +237,49 @@ pub fn run_server(
         } else if has_explicit_workspace_roots {
             tracing::warn!("No BAML projects discovered for explicit workspace roots");
         }
+    }
+
+    // Start playground HTTP/WS server. In editor/LSP mode it runs in the
+    // background while stdio drives the process. In browser mode it is the
+    // foreground task; otherwise a terminal stdin EOF would shut down the
+    // playground immediately.
+    if let Some(listener) = playground_listener {
+        let bex_for_playground = bex.clone();
+        let btx = broadcast_tx.clone();
+        let es = env_state.clone();
+        let ios = io_state.clone();
+        let runs = run_store.clone();
+        let playground_dir = playground_dir_override.clone();
+
+        if matches!(playground_open_target, PlaygroundOpenTarget::Browser) {
+            return tokio_runtime.block_on(playground_server::run(
+                listener,
+                bex_for_playground,
+                btx,
+                es,
+                ios,
+                runs,
+                playground_dir,
+            ));
+        }
+
+        tokio_runtime.spawn(async move {
+            if let Err(e) = playground_server::run(
+                listener,
+                bex_for_playground,
+                btx,
+                es,
+                ios,
+                runs,
+                playground_dir,
+            )
+            .await
+            {
+                tracing::error!("Playground server exited: {e}");
+            }
+        });
+    } else if matches!(playground_open_target, PlaygroundOpenTarget::Browser) {
+        anyhow::bail!("Could not start playground server");
     }
 
     // Spawn the stdout writer thread.
