@@ -115,10 +115,14 @@ async function buildState(): Promise<AtbState> {
   };
 }
 
-// Module-level cache with stale-while-revalidate: a fresh snapshot is
-// served for TTL_MS; after that the stale one is returned immediately while
-// one background refresh runs. Only the very first request ever blocks.
+// Module-level cache with stale-while-revalidate: a fresh snapshot is served
+// for TTL_MS; after that the stale one is returned immediately while one
+// background refresh runs. Past MAX_STALE_MS the snapshot is no longer trusted
+// — a request blocks on a fresh build and a persistent failure surfaces as a
+// 503/stale-flagged response rather than silently freezing a stale snapshot
+// forever (which is what happened when the Convex URL was misconfigured).
 const TTL_MS = 10_000;
+const MAX_STALE_MS = 60_000;
 let cache: { at: number; state: AtbState } | null = null;
 let inflight: Promise<AtbState> | null = null;
 
@@ -128,6 +132,11 @@ function refresh(): Promise<AtbState> {
       .then((state) => {
         cache = { at: Date.now(), state };
         return state;
+      })
+      .catch((e) => {
+        // Surface the failure so a frozen dashboard is visible in logs.
+        console.error("atb state refresh failed", e);
+        throw e;
       })
       .finally(() => {
         inflight = null;
@@ -140,18 +149,27 @@ export async function GET() {
   if (!CONVEX_URL) {
     return new NextResponse("atb data source not configured", { status: 503 });
   }
-  let state: AtbState;
-  if (cache && Date.now() - cache.at < TTL_MS) {
-    state = cache.state;
-  } else if (cache) {
-    void refresh().catch(() => {});
-    state = cache.state;
-  } else {
-    state = await refresh();
+  const age = cache ? Date.now() - cache.at : Infinity;
+  const fresh = {
+    "Cache-Control": "public, s-maxage=10, stale-while-revalidate=120",
+  };
+  if (cache && age < TTL_MS) {
+    return NextResponse.json(cache.state, { headers: fresh });
   }
-  return NextResponse.json(state, {
-    headers: {
-      "Cache-Control": "public, s-maxage=10, stale-while-revalidate=120",
-    },
-  });
+  if (cache && age < MAX_STALE_MS) {
+    void refresh().catch(() => {}); // serve stale while revalidating
+    return NextResponse.json(cache.state, { headers: fresh });
+  }
+  // No cache, or the cache is too old to trust: block on a fresh build and let
+  // a persistent failure show instead of serving an indefinitely stale snapshot.
+  try {
+    return NextResponse.json(await refresh(), { headers: fresh });
+  } catch {
+    if (cache) {
+      return NextResponse.json(cache.state, {
+        headers: { "Cache-Control": "no-store", "X-Atb-Stale": "true" },
+      });
+    }
+    return new NextResponse("atb data temporarily unavailable", { status: 503 });
+  }
 }
