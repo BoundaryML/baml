@@ -617,6 +617,7 @@ fn run_testset_registry(
                     println!("PASS testing::*");
                 } else {
                     println!("FAIL testing::* [outcome={outcome}]");
+                    print_failed_names(&report);
                     // A testset runner can fail the aggregate without marking
                     // individual children failed; count that runner-level
                     // verdict as one failure so the CLI exit code reflects it.
@@ -633,6 +634,7 @@ fn run_testset_registry(
                     *passed += 1;
                 } else {
                     println!("FAIL testing::* [outcome={outcome}]");
+                    print_failed_names(&report);
                     *failed += 1;
                 }
             }
@@ -678,6 +680,27 @@ fn extract_testset_summary(value: &BexExternalValue) -> Option<(String, usize, u
     } else {
         None
     }
+}
+
+fn print_failed_names(value: &BexExternalValue) {
+    for name in extract_failed_names(value) {
+        println!("  failed: {name}");
+    }
+}
+
+fn extract_failed_names(value: &BexExternalValue) -> Vec<String> {
+    let v = unwrap_union(value);
+    if let BexExternalValue::Instance { fields, .. } = v {
+        if let Some(names) = fields.get("failed_names") {
+            if let BexExternalValue::Array { items, .. } = unwrap_union(names) {
+                return items
+                    .iter()
+                    .filter_map(|item| as_string(unwrap_union(item)).map(str::to_string))
+                    .collect();
+            }
+        }
+    }
+    Vec::new()
 }
 
 // ---------------------------------------------------------------------------

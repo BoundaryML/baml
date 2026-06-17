@@ -85,6 +85,7 @@ function PassRate(threshold: float) -> TestSetRunner {
       passed: report.passed,
       failed: report.failed,
       total: report.total,
+      failed_names: report.failed_names,
       results: report.results,
     }
   }
@@ -103,21 +104,21 @@ function FailFast() -> TestSetRunner {
 }
 
 function run_children_sequential(children: TestSetChild[], fail_fast: bool) -> TestSetReport {
-  let results: ChildReport[] = []
+  let named_results: NamedChildReport[] = []
   for (let child in children) {
     let report = child.run()
-    results.push(report)
+    named_results.push(NamedChildReport { name: child.name, report: report })
     let outcome = match (report) {
       let r: TestReport => r.outcome,
       let r: TestSetReport => r.outcome,
     }
     if (fail_fast && outcome != "pass") {
-      return root.aggregate_reports(results)
+      return root.aggregate_reports(named_results)
     } else {
       null
     }
   }
-  root.aggregate_reports(results)
+  root.aggregate_reports(named_results)
 }
 
 function _int_to_float(value: int) -> float {
