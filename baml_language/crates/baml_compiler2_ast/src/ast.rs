@@ -899,6 +899,15 @@ pub enum Stmt {
     },
     Break,
     Continue,
+    /// `defer { BODY }` (BEP-042). Schedules `body` (an [`Expr::Block`]) to run
+    /// on every exit of the enclosing block — normal completion, `return`,
+    /// `break`/`continue`, and error unwinding — in LIFO order. Block-scoped.
+    /// The body reads the live enclosing scope at exit (it is NOT a closure
+    /// capturing values at the `defer` site). `return`/`break`/`continue` that
+    /// would escape the body are rejected in TIR; `throw` is allowed.
+    Defer {
+        body: ExprId,
+    },
     Assign {
         target: ExprId,
         value: ExprId,

@@ -43,6 +43,7 @@ pub enum SyntaxKind {
     KW_THROWS,
     KW_SPAWN,
     KW_AWAIT,
+    KW_DEFER,
 
     // Other keywords
     KW_WATCH,
@@ -360,6 +361,9 @@ pub enum SyntaxKind {
     CONTINUE_STMT,
     RETURN_STMT,
     THROW_STMT,
+    /// `defer { BODY }` — BEP-042. Runs BODY on every exit of the enclosing
+    /// block. Structure: `KW_DEFER BLOCK_EXPR`.
+    DEFER_STMT,
 
     // Expression components
     CALL_ARGS,
@@ -513,6 +517,7 @@ impl SyntaxKind {
                 | Self::KW_THROWS
                 | Self::KW_SPAWN
                 | Self::KW_AWAIT
+                | Self::KW_DEFER
                 | Self::KW_WATCH
                 | Self::KW_INSTANCEOF
                 | Self::KW_DYNAMIC

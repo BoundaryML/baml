@@ -458,6 +458,12 @@ impl<'db> SemanticIndexBuilder<'db> {
                 self.walk_expr(*target, body, source_map, true);
                 self.walk_expr(*value, body, source_map, true);
             }
+            ast::Stmt::Defer { body: defer_body } => {
+                // The defer body is an inline `Expr::Block` in this same
+                // `ExprBody`; walk it so its references/bindings are recorded.
+                // The block's own push_scope/pop_scope contains inner bindings.
+                self.walk_expr(*defer_body, body, source_map, true)
+            }
             ast::Stmt::Break
             | ast::Stmt::Continue
             | ast::Stmt::Missing

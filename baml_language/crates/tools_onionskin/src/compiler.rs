@@ -2633,6 +2633,20 @@ impl CompilerRunner {
                             writeln!(output, "{line}").ok();
                             output_annotated.push((line, status));
                         }
+                        Stmt::Defer { body: defer_body } => {
+                            let line = format!("{pad}defer");
+                            writeln!(output, "{line}").ok();
+                            output_annotated.push((line, status));
+                            render_expr(
+                                *defer_body,
+                                body,
+                                inference,
+                                indent + 2,
+                                output,
+                                output_annotated,
+                                status,
+                            );
+                        }
                         Stmt::For {
                             binding,
                             collection,
@@ -3319,6 +3333,16 @@ impl CompilerRunner {
                         }
                         Stmt::Continue => {
                             lines.push(plain(format!("{pad}  continue")));
+                        }
+                        Stmt::Defer { body: defer_body } => {
+                            lines.push(plain(format!("{pad}  defer")));
+                            Self::render_expr_to_lines(
+                                *defer_body,
+                                body,
+                                inference,
+                                indent + 2,
+                                lines,
+                            );
                         }
                         Stmt::For {
                             binding,

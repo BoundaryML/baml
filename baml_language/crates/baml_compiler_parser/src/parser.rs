@@ -62,6 +62,7 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::Throws => SyntaxKind::KW_THROWS,
         TokenKind::Spawn => SyntaxKind::KW_SPAWN,
         TokenKind::Await => SyntaxKind::KW_AWAIT,
+        TokenKind::Defer => SyntaxKind::KW_DEFER,
 
         // Literals
         TokenKind::Word => SyntaxKind::WORD,
@@ -3743,6 +3744,8 @@ impl<'a> Parser<'a> {
             self.parse_continue_stmt();
         } else if self.at(TokenKind::Throw) {
             self.parse_throw_stmt();
+        } else if self.at(TokenKind::Defer) {
+            self.parse_defer_stmt();
         } else if self.at(TokenKind::Test) && self.looks_like_test_expr_body() {
             if self.testset_body_depth > 0 {
                 self.parse_test_expr();
@@ -3888,6 +3891,21 @@ impl<'a> Parser<'a> {
             // as one throw statement with catch attached to the throw.
             p.parse_expr();
             p.eat(TokenKind::Semicolon);
+        });
+    }
+
+    /// Parse `defer { body }` (BEP-042). The body is always a brace-delimited
+    /// block; it runs on every exit of the enclosing block (normal completion,
+    /// `return`, `break`/`continue`, and error unwinding) in LIFO order. The
+    /// CST shape is `DEFER_STMT [ KW_DEFER BLOCK_EXPR ]`.
+    fn parse_defer_stmt(&mut self) {
+        self.with_node(SyntaxKind::DEFER_STMT, |p| {
+            p.expect(TokenKind::Defer);
+            if p.at(TokenKind::LBrace) {
+                p.parse_block_expr();
+            } else {
+                p.error_unexpected_token("'{' after defer".to_string());
+            }
         });
     }
 

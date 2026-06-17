@@ -256,6 +256,9 @@ pub enum DiagnosticId {
     /// only be implemented for a concrete type (or a concrete type constructor
     /// such as `T[]` / `map<K, V>`, or a blanket type parameter).
     ImplTargetNotConcrete,
+    /// `return`/`break`/`continue` inside a `defer` body that would escape the
+    /// defer (BEP-042). Only `throw` may leave a defer.
+    DeferControlFlowEscape,
     /// An `implements` block is missing a required interface field.
     MissingInterfaceField,
     /// A class implements an interface that `requires` other interfaces,
@@ -466,6 +469,7 @@ impl DiagnosticId {
             DiagnosticId::SelfInInterfaceField => "E0136",
             // E0137 is taken by `IrrefutablePatternInWhileLet`; use the next free code.
             DiagnosticId::ImplTargetNotConcrete => "E0138",
+            DiagnosticId::DeferControlFlowEscape => "E0139",
         }
     }
 }

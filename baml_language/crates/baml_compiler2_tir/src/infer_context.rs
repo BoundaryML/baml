@@ -154,6 +154,10 @@ pub enum TirTypeError {
     /// loop never exits via pattern failure (an unconditional infinite loop).
     /// Suggest a plain `while`/`loop` instead.
     IrrefutablePatternInWhileLet,
+    /// `return`/`break`/`continue` inside a `defer` body that would escape the
+    /// defer (BEP-042). Only `throw` may leave a defer. `keyword` is the
+    /// offending control-flow keyword.
+    DeferControlFlowEscape { keyword: &'static str },
     /// Catch binding cannot be typed as `any` or `unknown`.
     InvalidCatchBindingType { type_name: String },
     /// Inferred escaping throws are not covered by the declared throws contract.
@@ -538,6 +542,10 @@ impl fmt::Display for TirTypeError {
             TirTypeError::IrrefutablePatternInWhileLet => write!(
                 f,
                 "irrefutable `while let` pattern; the loop never exits by pattern failure — use a plain `while`/`loop` instead"
+            ),
+            TirTypeError::DeferControlFlowEscape { keyword } => write!(
+                f,
+                "`{keyword}` cannot leave a `defer` body; only `throw` may propagate out of a defer"
             ),
             TirTypeError::InvalidCatchBindingType { type_name } => write!(
                 f,

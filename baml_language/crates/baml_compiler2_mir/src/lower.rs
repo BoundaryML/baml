@@ -42,6 +42,10 @@ struct LoopContext {
     break_target: BlockId,
     continue_target: BlockId,
     watched_locals_depth: usize,
+    /// Depth of `defer_stack` at loop entry (BEP-042). `break`/`continue`
+    /// replay the defers declared inside the loop body so far (down to this
+    /// depth) before jumping.
+    defer_depth: usize,
 }
 
 struct CatchContext {
@@ -1669,6 +1673,14 @@ struct LoweringContext<'db> {
 
     watched_locals_stack: Vec<Local>,
 
+    /// Stack of pending `defer` block bodies (BEP-042), parallel to
+    /// `watched_locals_stack`. Each entry is the `AstExprId` of a defer body
+    /// (an inline `Expr::Block`). Pushed by `lower_stmt`; replayed (LIFO,
+    /// re-lowered inline) at every scope exit by `replay_defers_to_depth`.
+    /// Swapped at lambda boundaries so a lambda body never replays the parent's
+    /// defers.
+    defer_stack: Vec<AstExprId>,
+
     // Counter for generating unique synthetic variable names (e.g. __for_idx, __for_idx_1)
     synthetic_name_counts: HashMap<String, usize>,
 
@@ -2025,6 +2037,7 @@ impl<'db> LoweringContext<'db> {
             break_target: bb_exit,
             continue_target: bb_header,
             watched_locals_depth: watched_depth,
+            defer_depth: self.defer_stack.len(),
         });
 
         if !self.builder.is_current_terminated() {
@@ -2814,6 +2827,7 @@ impl<'db> LoweringContext<'db> {
             transitive_captures_needed: Vec::new(),
             resolved_aliases: &pkg_data.resolved_aliases,
             watched_locals_stack: Vec::new(),
+            defer_stack: Vec::new(),
             synthetic_name_counts: HashMap::new(),
             chain_null_exits: Vec::new(),
             opt,
@@ -3031,6 +3045,7 @@ impl<'db> LoweringContext<'db> {
             interface_type_implementors: &pkg_data.interface_type_implementors,
             resolved_aliases: &pkg_data.resolved_aliases,
             watched_locals_stack: Vec::new(),
+            defer_stack: Vec::new(),
             synthetic_name_counts: HashMap::new(),
             pending_lambdas: Vec::new(),
             lambda_generic_params: Vec::new(),
@@ -3187,6 +3202,27 @@ impl<'db> LoweringContext<'db> {
         let watched = self.watched_locals_stack[watched_depth..].to_vec();
         for local in watched.into_iter().rev() {
             self.builder.unwatch(local);
+        }
+    }
+
+    /// Re-lower the `defer` block bodies registered at `[defer_depth..]` of
+    /// `defer_stack`, in reverse declaration order (LIFO) — BEP-042.
+    ///
+    /// Each body is re-lowered INLINE (block-duplication) into a throwaway Void
+    /// temp so it reads the live enclosing locals at THIS exit point, per the
+    /// BEP's "final value" rule. Called before `emit_unwatch_to_depth` at every
+    /// scope exit (a defer body may read a watched local before it is
+    /// unwatched). Like `emit_unwatch_to_depth` it does NOT truncate the stack —
+    /// the owning `lower_scoped_block` truncates; divergent callers leave it
+    /// (a dead block follows). If a replayed body diverges (e.g. `throw`), the
+    /// remaining defers are emitted on the resulting dead block and eliminated.
+    fn replay_defers_to_depth(&mut self, defer_depth: usize) {
+        let defers: Vec<AstExprId> = self.defer_stack[defer_depth..].to_vec();
+        for body in defers.into_iter().rev() {
+            let tmp = self.builder.temp(RuntimeTy::Void {
+                attr: TyAttr::default(),
+            });
+            self.lower_expr(body, Place::local(tmp));
         }
     }
 
@@ -4145,6 +4181,9 @@ impl<'db> LoweringContext<'db> {
         let saved_loop_context = self.loop_context.take();
         let saved_catch_context = self.catch_context.take();
         let saved_watched_locals = std::mem::take(&mut self.watched_locals_stack);
+        // BEP-042: a lambda body is its own cleanup region — reset the defer
+        // stack so it never replays the parent's defers, restore it after.
+        let saved_defer_stack = std::mem::take(&mut self.defer_stack);
         let saved_current_scope = self.current_scope;
         let saved_metadata_scope = self.current_metadata_scope;
         // Extend the enclosing-lambda generic params with this lambda's own
@@ -4297,6 +4336,7 @@ impl<'db> LoweringContext<'db> {
         self.loop_context = saved_loop_context;
         self.catch_context = saved_catch_context;
         self.watched_locals_stack = saved_watched_locals;
+        self.defer_stack = saved_defer_stack;
         self.current_scope = saved_current_scope;
         self.current_metadata_scope = saved_metadata_scope;
         self.lambda_generic_params = saved_lambda_generic_params;
@@ -4399,6 +4439,7 @@ impl LoweringContext<'_> {
     ) {
         let saved_locals = self.locals.clone();
         let watched_depth = self.watched_locals_stack.len();
+        let defer_depth = self.defer_stack.len();
 
         for &stmt_id in stmts {
             self.lower_stmt(stmt_id);
@@ -4418,8 +4459,10 @@ impl LoweringContext<'_> {
         }
 
         if !self.builder.is_current_terminated() {
+            self.replay_defers_to_depth(defer_depth);
             self.emit_unwatch_to_depth(watched_depth);
         }
+        self.defer_stack.truncate(defer_depth);
         self.restore_locals_after_scope(saved_locals, watched_depth);
     }
 
@@ -11034,6 +11077,7 @@ impl LoweringContext<'_> {
                     break_target: bb_exit,
                     continue_target: bb_after,
                     watched_locals_depth: watched_depth,
+                    defer_depth: self.defer_stack.len(),
                 });
 
                 if !self.builder.is_current_terminated() {
@@ -11092,6 +11136,7 @@ impl LoweringContext<'_> {
                     break_target: bb_exit,
                     continue_target: bb_header,
                     watched_locals_depth: watched_depth,
+                    defer_depth: self.defer_stack.len(),
                 });
 
                 if !self.builder.is_current_terminated() {
@@ -11176,9 +11221,10 @@ impl LoweringContext<'_> {
                 if let Some(e) = expr {
                     self.lower_expr(e, Place::local(ret));
                 }
-                // Unwatch all watched locals in this function (the stack is
-                // swapped at lambda boundaries, so depth=0 covers exactly the
-                // current function's watches).
+                // Run all pending defers (LIFO), then unwatch all watched
+                // locals in this function. The stacks are swapped at lambda
+                // boundaries, so depth=0 covers exactly the current function.
+                self.replay_defers_to_depth(0);
                 self.emit_unwatch_to_depth(0);
                 self.builder.goto(self.exit_block);
                 // Create a dead successor block for the builder cursor
@@ -11192,9 +11238,11 @@ impl LoweringContext<'_> {
 
             AstStmt::Throw { value } => {
                 let val_op = self.lower_to_operand(value);
-                // Unwatch all watched locals in this function before throwing,
-                // matching the Return path. Without this, a
-                // `watch let conn = …` followed by a `throw` leaks the watcher.
+                // Run all pending defers (LIFO), then unwatch all watched locals
+                // before throwing, matching the Return path. Without the
+                // unwatch, a `watch let conn = …` followed by a `throw` leaks
+                // the watcher.
+                self.replay_defers_to_depth(0);
                 self.emit_unwatch_to_depth(0);
                 self.builder.throw(val_op);
                 let dead = self.builder.create_block();
@@ -11205,6 +11253,9 @@ impl LoweringContext<'_> {
                 if let Some(ref loop_ctx) = self.loop_context {
                     let target = loop_ctx.break_target;
                     let depth = loop_ctx.watched_locals_depth;
+                    let defer_depth = loop_ctx.defer_depth;
+                    // Run defers declared in the loop body, then unwatch.
+                    self.replay_defers_to_depth(defer_depth);
                     self.emit_unwatch_to_depth(depth);
                     self.builder.goto(target);
                 }
@@ -11216,11 +11267,22 @@ impl LoweringContext<'_> {
                 if let Some(ref loop_ctx) = self.loop_context {
                     let target = loop_ctx.continue_target;
                     let depth = loop_ctx.watched_locals_depth;
+                    let defer_depth = loop_ctx.defer_depth;
+                    // Run defers declared in the loop body, then unwatch.
+                    self.replay_defers_to_depth(defer_depth);
                     self.emit_unwatch_to_depth(depth);
                     self.builder.goto(target);
                 }
                 let dead = self.builder.create_block();
                 self.builder.set_current_block(dead);
+            }
+
+            AstStmt::Defer { body } => {
+                // BEP-042: register the defer body. It emits NO code here; it is
+                // replayed (re-lowered inline, LIFO) at every exit of the
+                // enclosing scope by `replay_defers_to_depth`, and popped when
+                // the enclosing `lower_scoped_block` truncates `defer_stack`.
+                self.defer_stack.push(body);
             }
 
             AstStmt::Assign { target, value } => {

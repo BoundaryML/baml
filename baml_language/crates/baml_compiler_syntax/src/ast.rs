@@ -990,6 +990,7 @@ ast_node!(ReturnStmt, RETURN_STMT);
 ast_node!(ThrowStmt, THROW_STMT);
 ast_node!(BreakStmt, BREAK_STMT);
 ast_node!(ContinueStmt, CONTINUE_STMT);
+ast_node!(DeferStmt, DEFER_STMT);
 ast_node!(PathExpr, PATH_EXPR);
 ast_node!(FieldAccessExpr, FIELD_ACCESS_EXPR);
 ast_node!(UpcastExpr, UPCAST_EXPR);
@@ -2947,7 +2948,10 @@ impl BlockElement {
                 // so check siblings like expressions
                 if matches!(
                     node.kind(),
-                    SyntaxKind::WHILE_STMT | SyntaxKind::WHILE_LET_STMT | SyntaxKind::FOR_EXPR
+                    SyntaxKind::WHILE_STMT
+                        | SyntaxKind::WHILE_LET_STMT
+                        | SyntaxKind::FOR_EXPR
+                        | SyntaxKind::DEFER_STMT
                 ) {
                     return node
                         .siblings_with_tokens(Direction::Next)
@@ -3000,6 +3004,7 @@ impl BlockExpr {
                         | SyntaxKind::BREAK_STMT
                         | SyntaxKind::CONTINUE_STMT
                         | SyntaxKind::THROW_STMT
+                        | SyntaxKind::DEFER_STMT
                         // test/testset declarations inside blocks (dynamic test generation)
                         | SyntaxKind::TEST_EXPR_DEF
                         | SyntaxKind::TESTSET_DEF => Some(BlockElement::Stmt(n)),
