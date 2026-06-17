@@ -204,6 +204,7 @@ export interface FunctionSidebarProps {
    * panel's settings gear menu) — used only for the empty-state message. */
   showInternalFunctions: boolean;
   internalFunctionCount: number;
+  isLoadingProject?: boolean;
   testTree?: any; // SerializedTestDef[] from BAML TestRegistry.serialize()
   selectedFn: string | null;
   onSelectFn: (name: string | null) => void;
@@ -230,6 +231,7 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
   functions,
   showInternalFunctions,
   internalFunctionCount,
+  isLoadingProject = false,
   testTree,
   selectedFn,
   onSelectFn,
@@ -259,7 +261,9 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
     ? testTree
     : [];
   let emptyFunctionMessage = 'No matches';
-  if (functions.length === 0) {
+  if (isLoadingProject) {
+    emptyFunctionMessage = 'Loading project...';
+  } else if (functions.length === 0) {
     emptyFunctionMessage =
       internalFunctionCount > 0 && !showInternalFunctions
         ? 'No user functions'
@@ -297,9 +301,13 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
             />
             <FunctionSquare size={12} />
             <span>Functions</span>
-            <span className="text-vsc-text-faint ml-1">
-              ({filteredFns.length})
-            </span>
+            {isLoadingProject ? (
+              <Loader2 className="ml-1 h-3 w-3 animate-spin text-vsc-text-faint" />
+            ) : (
+              <span className="text-vsc-text-faint ml-1">
+                ({filteredFns.length})
+              </span>
+            )}
           </CollapsibleTrigger>
           <CollapsibleContent>
             {filteredFns.length === 0 && (

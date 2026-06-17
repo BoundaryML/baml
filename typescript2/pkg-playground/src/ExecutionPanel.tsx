@@ -1889,6 +1889,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   const currentUpdate = selectedProject
     ? projectUpdates[selectedProject]
     : undefined;
+  const isLoadingProject = selectedProject != null && currentUpdate == null;
   const functions: FunctionInfo[] = currentUpdate?.functions ?? [];
   const internalFunctionCount = functions.filter(isInternalFunction).length;
   const visibleFunctions = showInternalFunctions
@@ -2478,6 +2479,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                   functions={visibleFunctions}
                   showInternalFunctions={showInternalFunctions}
                   internalFunctionCount={internalFunctionCount}
+                  isLoadingProject={isLoadingProject}
                   testTree={testTree}
                   selectedFn={selectedFn}
                   onSelectFn={(fn) => {
@@ -3188,7 +3190,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
               </>
             ) : (
               <div className="flex-1 flex items-center justify-center text-vsc-text-faint text-xs bg-vsc-bg">
-                {viewingCollection
+                {isLoadingProject
+                  ? 'Loading project...'
+                  : viewingCollection
                   ? 'Collection not yet available — click Refresh'
                   : 'Select a function to run'}
               </div>

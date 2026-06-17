@@ -1462,7 +1462,7 @@ fn static_router(dir: String) -> Router {
     Router::new()
         .route("/", get(static_index_handler))
         .route("/index.html", get(static_index_handler))
-        .route("/*path", get(static_path_handler))
+        .route("/{*path}", get(static_path_handler))
         .fallback_service(get_service(ServeDir::new(dir.clone())))
         .with_state(dir)
 }

@@ -220,5 +220,15 @@
 
   .playground-root {
     @apply border-border outline-ring/50;
+    font-family: var(
+      --vscode-font-family,
+      -apple-system,
+      BlinkMacSystemFont,
+      "Segoe UI",
+      Helvetica,
+      Arial,
+      sans-serif
+    );
+    line-height: 1.4;
   }
 }
