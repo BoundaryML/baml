@@ -217,3 +217,39 @@ function main() -> int | string {
       File "test.baml", line 3, in user.divider
     "#);
 }
+
+// ============================================================================
+// §N+2 — Regression: nested catch routing for cross-frame throws
+// ============================================================================
+
+/// KNOWN BUG (BEP-042 follow-up): a throw propagating out of a CALLED function
+/// is caught by the OUTERMOST enclosing `catch`, not the innermost.
+///
+/// Inline `throw`s route correctly (lowered as a direct jump to the handler),
+/// but a throw that escapes a callee — or a runtime panic — reaches the
+/// caller's exception table, where the VM selects the *first* covering entry
+/// (smallest `start_pc` = the OUTERMOST region) instead of the innermost.
+///
+/// Here `boom()` throws inside `boom`; the inner `catch (e) { _ => 1 }` should
+/// handle it (→ 1), but the throw is mis-routed to the outer `catch` (→ 2).
+///
+/// Fixing the routing (select the innermost / largest-`start_pc` covering
+/// entry) also requires reworking the panic/wildcard `ThrowIfPanic` rethrow:
+/// once panics reach inner wildcard catches, the wildcard must rethrow them to
+/// the outer handler (the `baml_src/ns_exceptions` panic tests depend on the
+/// current routing). Tracked as a dedicated exception-model fix; `#[ignore]`d
+/// until then. Same root cause blocks `defer` running on the call-unwind path.
+#[tokio::test]
+#[ignore = "known bug: cross-frame throw/panic routes to outermost catch, not innermost (BEP-042 follow-up)"]
+async fn nested_catch_inner_catches_callee_throw() {
+    let output = baml_test!(
+        r#"
+function boom() -> void { throw "x" }
+
+function main() -> int {
+  ({ boom(); 0 } catch (e) { _ => 1 }) catch (e2) { _ => 2 }
+}
+"#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(1));
+}
