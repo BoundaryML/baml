@@ -55,7 +55,7 @@
 use baml_base::SourceFile;
 use baml_compiler2_ast::{
     Expr, ExprId, Stmt,
-    ast::{AstSourceMap, DeclarativeMeta, ExprBody, FunctionBodyDef, FunctionOrigin},
+    ast::{AstSourceMap, DeclarativeMeta, ExprBody, FunctionBodyDef, FunctionOrigin, LetOrigin},
 };
 use baml_compiler2_hir::{
     body::FunctionBody,
@@ -172,9 +172,20 @@ fn process_body(
 ) {
     // ── Type hints for let bindings without annotations ───────────────────────
     for (_stmt_id, stmt) in body.stmts.iter() {
-        let Stmt::Let { pattern, .. } = stmt else {
+        let Stmt::Let {
+            pattern, origin, ..
+        } = stmt
+        else {
             continue;
         };
+
+        // Skip compiler-synthesized bindings — e.g. the accumulator a `${…}`
+        // interpolation lowers to (`let " __m3_concat" = ""`). Their spans point
+        // inside the backtick template, so a `: T` hint there is noise the user
+        // never wrote.
+        if matches!(origin, LetOrigin::Compiler) {
+            continue;
+        }
 
         // `let x: T` (Bind with sub-pattern) or a bare type pattern already
         // carries an explicit annotation — skip.
@@ -240,6 +251,15 @@ fn process_body(
                 }
                 let callee_span = source_map.expr_span(*callee);
                 if callee_span.is_empty() {
+                    continue;
+                }
+                // Skip compiler-synthesized wrapping calls — e.g. the
+                // `string.from(${expr})` that `${…}` interpolation lowers to. A
+                // real call's span covers `callee(args…)`, so it is strictly
+                // larger than the callee's; a synthesized wrapper is allocated
+                // with the SAME (template) span for both, so without this every
+                // interpolation would get a spurious `value:` parameter hint.
+                if source_map.expr_span(expr_id) == callee_span {
                     continue;
                 }
 
@@ -429,6 +449,39 @@ function UseEcho() -> string {
                 .iter()
                 .all(|label| !matches!(*label, "client: " | "function_name: " | "args: ")),
             "LLM synthetic call hints should be suppressed, got {labels:?}"
+        );
+    }
+
+    #[test]
+    fn annotations_skip_string_interpolation_synthetic_hints() {
+        let mut builder = ProjectTest::builder();
+        builder.source(
+            "main.baml",
+            r##"
+function Greet(name: string, items: int[]) -> string {
+    let greeting = `Hi ${name}! you have ${items.length()} items`
+    let counted = `count: ${ let n = items.length() }${n} done`
+    greeting + counted
+}
+"##,
+        );
+        let project = builder.build();
+
+        let hints = annotations(&project.db, project.files[0]);
+        let labels: Vec<_> = hints.iter().map(|hint| hint.label.as_str()).collect();
+
+        // `${expr}` lowers to `string.from(expr)`; that synthetic wrapper call
+        // must not produce a `value:` parameter hint on every interpolation.
+        assert!(
+            !labels.contains(&"value: "),
+            "synthesized string.from() interpolation calls should not get parameter hints, got {labels:?}"
+        );
+        // The concat-scope accumulator (`let " __m3_concat" = ""`, origin
+        // Compiler) must not produce a type hint either; real `let` bindings
+        // (`greeting`, `counted`) still do, so the suppression is targeted.
+        assert!(
+            labels.iter().any(|label| label.starts_with(": ")),
+            "real let bindings should still get type hints, got {labels:?}"
         );
     }
 
