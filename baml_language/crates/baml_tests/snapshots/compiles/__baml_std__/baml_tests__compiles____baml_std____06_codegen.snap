@@ -9808,7 +9808,7 @@ function baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: ba
   L2:
     load_var self
     load_field .counter
-    store_var _84
+    store_var _76
     load_var self
     copy 0
     load_field .counter
@@ -9818,14 +9818,14 @@ function baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: ba
     load_type #0
     load_var self
     load_field .sub_clients
-    load_var2 18 1
+    load_var2 16 1
     load_field .sub_clients
     container_len
     mod_int
     load_array_element
     load_var2 2 3
     call baml.llm.Client.execute_oneshot
-    jump L37
+    jump L34
 
   L3:
     load_const "RoundRobin client has no sub-clients"
@@ -9835,153 +9835,153 @@ function baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: ba
   L4:
     load_var self
     load_field .sub_clients
-    store_var _42
+    store_var _34
     load_type baml.llm.Client
-    load_var _42
+    load_var _34
     call baml.iter.Iterable$for$T[].iter
-    store_var _43
+    store_var _35
 
   L5:
-    load_var _43
+    load_var _35
     is_type baml.iter.Flatten<...>
     pop_jump_if_false L6
     jump L23
 
   L6:
-    load_var _43
+    load_var _35
     is_type baml.iter.ArrayIterator<...>
     pop_jump_if_false L7
     jump L22
 
   L7:
-    load_var _43
+    load_var _35
     is_type baml.iter.StepBy<...>
     pop_jump_if_false L8
     jump L21
 
   L8:
-    load_var _43
+    load_var _35
     is_type baml.iter.Chain<...>
     pop_jump_if_false L9
     jump L20
 
   L9:
-    load_var _43
+    load_var _35
     is_type baml.iter.Repeat<...>
     pop_jump_if_false L10
     jump L19
 
   L10:
-    load_var _43
+    load_var _35
     is_type baml.iter.Map<...>
     pop_jump_if_false L11
     jump L18
 
   L11:
-    load_var _43
+    load_var _35
     is_type baml.iter.Filter<...>
     pop_jump_if_false L12
     jump L17
 
   L12:
-    load_var _43
+    load_var _35
     is_type baml.iter.FilterMap<...>
     pop_jump_if_false L13
     jump L16
 
   L13:
-    load_var _43
+    load_var _35
     is_type baml.iter.FlatMap<...>
     pop_jump_if_false L14
     jump L15
 
   L14:
-    load_var _43
+    load_var _35
     is_type baml.iter.Peekable<...>
-    pop_jump_if_false L38
+    pop_jump_if_false L35
     load_type baml.llm.Client
     load_type never
-    load_var _43
+    load_var _35
     call baml.iter.Peekable.Iterator.next
-    store_var _45
+    store_var _37
     jump L24
 
   L15:
-    load_var _43
+    load_var _35
     make_bound_method baml.iter.FlatMap.Iterator.next
     call_indirect
-    store_var _45
+    store_var _37
     jump L24
 
   L16:
-    load_var _43
+    load_var _35
     make_bound_method baml.iter.FilterMap.Iterator.next
     call_indirect
-    store_var _45
+    store_var _37
     jump L24
 
   L17:
     load_type baml.llm.Client
     load_type never
     load_type never
-    load_var _43
+    load_var _35
     call baml.iter.Filter.Iterator.next
-    store_var _45
+    store_var _37
     jump L24
 
   L18:
-    load_var _43
+    load_var _35
     make_bound_method baml.iter.Map.Iterator.next
     call_indirect
-    store_var _45
+    store_var _37
     jump L24
 
   L19:
     load_type baml.llm.Client
-    load_var _43
+    load_var _35
     call baml.iter.Repeat.Iterator.next
-    store_var _45
+    store_var _37
     jump L24
 
   L20:
     load_type baml.llm.Client
     load_type never
     load_type never
-    load_var _43
+    load_var _35
     call baml.iter.Chain.Iterator.next
-    store_var _45
+    store_var _37
     jump L24
 
   L21:
     load_type baml.llm.Client
     load_type never
-    load_var _43
+    load_var _35
     call baml.iter.StepBy.Iterator.next
-    store_var _45
+    store_var _37
     jump L24
 
   L22:
     load_type baml.llm.Client
-    load_var _43
+    load_var _35
     call baml.iter.ArrayIterator.Iterator.next
-    store_var _45
+    store_var _37
     jump L24
 
   L23:
-    load_var _43
+    load_var _35
     make_bound_method baml.iter.Flatten.Iterator.next
     call_indirect
-    store_var _45
+    store_var _37
 
   L24:
-    load_var _45
+    load_var _37
     is_type baml.iter.Done
     pop_jump_if_false L25
     jump L27
 
   L25:
     load_type #0
-    load_var2 16 2
+    load_var2 14 2
     load_var active_delay_ms
     call baml.llm.Client.execute_oneshot
     jump L26
@@ -9990,7 +9990,7 @@ function baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: ba
     jump L5
 
   L26:
-    jump L37
+    jump L34
 
   L27:
     load_const "All orchestration steps failed"
@@ -10003,36 +10003,15 @@ function baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: ba
     store_var primitive
     load_type #0
     store_var return_type
-    load_var context
-    load_field .prompt_closure
-    store_var_load_var _9
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L29
-    jump L30
-
-  L29:
-    load_var2 4 5
-    call baml.llm.build_prompt_context
-    load_var _9
-    call_indirect
-    store_var prompt
-    jump L31
-
-  L30:
     load_var2 4 2
     load_field .jinja_string
     load_var context
     load_field .args
-    load_var return_type
-    sys_op baml.llm.PrimitiveClient.render_prompt
-    store_var prompt
-
-  L31:
-    load_var2 4 6
-    sys_op baml.llm.PrimitiveClient.specialize_prompt
+    load_var2 5 2
+    load_field .prompt_closure
+    call baml.llm.PrimitiveClient.render_specialized_prompt
     store_var specialized
-    load_var2 4 8
+    load_var2 4 6
     load_var return_type
     sys_op baml.llm.PrimitiveClient.build_request
     load_const <omitted>
@@ -10040,61 +10019,61 @@ function baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: ba
     store_var http_response
     load_var http_response
     call baml.http.Response.ok
-    pop_jump_if_false L32
-    jump L35
+    pop_jump_if_false L29
+    jump L32
 
-  L32:
+  L29:
     load_var http_response
     sys_op baml.http.Response.text
     store_var error_body
-    jump L33
+    jump L30
     load_var e
     throw_if_panic
     load_const ""
     store_var error_body
 
-  L33:
+  L30:
     load_var active_delay_ms
     load_const 0
     cmp_int_op >
-    pop_jump_if_false L34
+    pop_jump_if_false L31
     load_var active_delay_ms
     sys_op baml.sys.sleep
     pop 1
 
-  L34:
+  L31:
     load_const "HTTP request failed: "
     load_var error_body
     bin_op +
     init_instance baml.errors.DevOther .message
     throw
 
-  L35:
+  L32:
     load_var http_response
     sys_op baml.http.Response.text
     store_var body
-    load_var2 4 10
+    load_var2 4 8
     load_type #0
     sys_op baml.llm.PrimitiveClient.parse
-    jump L37
+    jump L34
     load_var e
     throw_if_panic
     load_var active_delay_ms
     load_const 0
     cmp_int_op >
-    pop_jump_if_false L36
+    pop_jump_if_false L33
     load_var active_delay_ms
     sys_op baml.sys.sleep
     pop 1
 
-  L36:
+  L33:
     load_var e
     throw
 
-  L37:
+  L34:
     return
 
-  L38:
+  L35:
     unreachable
 }
 
@@ -10128,7 +10107,7 @@ function baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: bam
   L2:
     load_var self
     load_field .counter
-    store_var _74
+    store_var _66
     load_var self
     copy 0
     load_field .counter
@@ -10139,14 +10118,14 @@ function baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: bam
     load_type #1
     load_var self
     load_field .sub_clients
-    load_var2 14 1
+    load_var2 12 1
     load_field .sub_clients
     container_len
     mod_int
     load_array_element
     load_var2 2 3
     call baml.llm.Client.execute_stream
-    jump L32
+    jump L29
 
   L3:
     load_const "RoundRobin client has no sub-clients"
@@ -10156,146 +10135,146 @@ function baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: bam
   L4:
     load_var self
     load_field .sub_clients
-    store_var _31
+    store_var _23
     load_type baml.llm.Client
-    load_var _31
+    load_var _23
     call baml.iter.Iterable$for$T[].iter
-    store_var _32
+    store_var _24
 
   L5:
-    load_var _32
+    load_var _24
     is_type baml.iter.Flatten<...>
     pop_jump_if_false L6
     jump L23
 
   L6:
-    load_var _32
+    load_var _24
     is_type baml.iter.ArrayIterator<...>
     pop_jump_if_false L7
     jump L22
 
   L7:
-    load_var _32
+    load_var _24
     is_type baml.iter.StepBy<...>
     pop_jump_if_false L8
     jump L21
 
   L8:
-    load_var _32
+    load_var _24
     is_type baml.iter.Chain<...>
     pop_jump_if_false L9
     jump L20
 
   L9:
-    load_var _32
+    load_var _24
     is_type baml.iter.Repeat<...>
     pop_jump_if_false L10
     jump L19
 
   L10:
-    load_var _32
+    load_var _24
     is_type baml.iter.Map<...>
     pop_jump_if_false L11
     jump L18
 
   L11:
-    load_var _32
+    load_var _24
     is_type baml.iter.Filter<...>
     pop_jump_if_false L12
     jump L17
 
   L12:
-    load_var _32
+    load_var _24
     is_type baml.iter.FilterMap<...>
     pop_jump_if_false L13
     jump L16
 
   L13:
-    load_var _32
+    load_var _24
     is_type baml.iter.FlatMap<...>
     pop_jump_if_false L14
     jump L15
 
   L14:
-    load_var _32
+    load_var _24
     is_type baml.iter.Peekable<...>
-    pop_jump_if_false L33
+    pop_jump_if_false L30
     load_type baml.llm.Client
     load_type never
-    load_var _32
+    load_var _24
     call baml.iter.Peekable.Iterator.next
-    store_var _34
+    store_var _26
     jump L24
 
   L15:
-    load_var _32
+    load_var _24
     make_bound_method baml.iter.FlatMap.Iterator.next
     call_indirect
-    store_var _34
+    store_var _26
     jump L24
 
   L16:
-    load_var _32
+    load_var _24
     make_bound_method baml.iter.FilterMap.Iterator.next
     call_indirect
-    store_var _34
+    store_var _26
     jump L24
 
   L17:
     load_type baml.llm.Client
     load_type never
     load_type never
-    load_var _32
+    load_var _24
     call baml.iter.Filter.Iterator.next
-    store_var _34
+    store_var _26
     jump L24
 
   L18:
-    load_var _32
+    load_var _24
     make_bound_method baml.iter.Map.Iterator.next
     call_indirect
-    store_var _34
+    store_var _26
     jump L24
 
   L19:
     load_type baml.llm.Client
-    load_var _32
+    load_var _24
     call baml.iter.Repeat.Iterator.next
-    store_var _34
+    store_var _26
     jump L24
 
   L20:
     load_type baml.llm.Client
     load_type never
     load_type never
-    load_var _32
+    load_var _24
     call baml.iter.Chain.Iterator.next
-    store_var _34
+    store_var _26
     jump L24
 
   L21:
     load_type baml.llm.Client
     load_type never
-    load_var _32
+    load_var _24
     call baml.iter.StepBy.Iterator.next
-    store_var _34
+    store_var _26
     jump L24
 
   L22:
     load_type baml.llm.Client
-    load_var _32
+    load_var _24
     call baml.iter.ArrayIterator.Iterator.next
-    store_var _34
+    store_var _26
     jump L24
 
   L23:
-    load_var _32
+    load_var _24
     make_bound_method baml.iter.Flatten.Iterator.next
     call_indirect
-    store_var _34
+    store_var _26
 
   L24:
-    load_var _34
+    load_var _26
     is_type baml.iter.Done
     pop_jump_if_false L25
     jump L27
@@ -10303,7 +10282,7 @@ function baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: bam
   L25:
     load_type #0
     load_type #1
-    load_var2 12 2
+    load_var2 10 2
     load_var active_delay_ms
     call baml.llm.Client.execute_stream
     jump L26
@@ -10312,7 +10291,7 @@ function baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: bam
     jump L5
 
   L26:
-    jump L32
+    jump L29
 
   L27:
     load_const "All orchestration steps failed"
@@ -10327,49 +10306,28 @@ function baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: bam
     load_field .function_name
     sys_op baml.llm.get_return_type
     store_var return_type
-    load_var context
-    load_field .prompt_closure
-    store_var_load_var _10
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L29
-    jump L30
-
-  L29:
-    load_var2 4 5
-    call baml.llm.build_prompt_context
-    load_var _10
-    call_indirect
-    store_var prompt
-    jump L31
-
-  L30:
     load_var2 4 2
     load_field .jinja_string
     load_var context
     load_field .args
-    load_var return_type
-    sys_op baml.llm.PrimitiveClient.render_prompt
-    store_var prompt
-
-  L31:
-    load_var2 4 6
-    sys_op baml.llm.PrimitiveClient.specialize_prompt
+    load_var2 5 2
+    load_field .prompt_closure
+    call baml.llm.PrimitiveClient.render_specialized_prompt
     store_var specialized
-    load_var2 4 8
+    load_var2 4 6
     load_var return_type
     sys_op baml.llm.PrimitiveClient.build_request_stream
     sys_op baml.http.fetch_sse
     store_var sse
     load_type #0
     load_type #1
-    load_var2 1 9
+    load_var2 1 7
     call baml.llm.Client.__make_stream
 
-  L32:
+  L29:
     return
 
-  L33:
+  L30:
     unreachable
 }
 
@@ -11119,6 +11077,33 @@ function baml.llm.PrimitiveClient.parse(self: baml.llm.PrimitiveClient, http_res
 function baml.llm.PrimitiveClient.render_prompt(self: baml.llm.PrimitiveClient, template: string, args: map<string, unknown>, return_type: type) -> baml.llm.PromptAst {
 }
 
+function baml.llm.PrimitiveClient.render_specialized_prompt(self: baml.llm.PrimitiveClient, template: string, args: map<string, unknown>, return_type: type, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.llm.PromptAst {
+    load_var prompt_closure
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var2 1 4
+    call baml.llm.build_prompt_context
+    load_var prompt_closure
+    call_indirect
+    store_var prompt
+    jump L2
+
+  L1:
+    load_var2 1 2
+    load_var2 3 4
+    sys_op baml.llm.PrimitiveClient.render_prompt
+    store_var prompt
+
+  L2:
+    load_var2 1 6
+    sys_op baml.llm.PrimitiveClient.specialize_prompt
+    return
+}
+
 function baml.llm.PrimitiveClient.specialize_prompt(self: baml.llm.PrimitiveClient, prompt: baml.llm.PromptAst) -> baml.llm.PromptAst {
 }
 
@@ -11632,35 +11617,59 @@ function baml.llm.build_prompt_context(primitive: baml.llm.PrimitiveClient, retu
     return
 }
 
-function baml.llm.build_request(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.http.Request {
+function baml.llm.build_request(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.http.Request {
+    load_var prompt_closure
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var prompt_closure
+
+  L0:
     load_var function_name
     sys_op baml.llm.get_return_type
     store_var return_type
     load_var client
     call baml.llm.Client.to_primitive_client
     store_var primitive_client
-    load_var2 1 2
-    load_var args
-    call baml.llm.render_prompt
+    load_var2 2 4
+    call baml.llm.prompt_template_for
+    store_var template
+    load_var2 6 7
+    load_var2 3 5
+    load_var prompt_closure
+    call baml.llm.PrimitiveClient.render_specialized_prompt
     store_var specialized_prompt
-    load_var2 5 6
+    load_var2 6 8
     load_var return_type
     sys_op baml.llm.PrimitiveClient.build_request
     return
 }
 
-function baml.llm.build_request_stream(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.http.Request {
+function baml.llm.build_request_stream(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.http.Request {
+    load_var prompt_closure
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var prompt_closure
+
+  L0:
     load_var function_name
     sys_op baml.llm.get_return_type
     store_var return_type
     load_var client
     call baml.llm.Client.to_primitive_client
     store_var primitive_client
-    load_var2 1 2
-    load_var args
-    call baml.llm.render_prompt
+    load_var2 2 4
+    call baml.llm.prompt_template_for
+    store_var template
+    load_var2 6 7
+    load_var2 3 5
+    load_var prompt_closure
+    call baml.llm.PrimitiveClient.render_specialized_prompt
     store_var specialized_prompt
-    load_var2 5 6
+    load_var2 6 8
     load_var return_type
     sys_op baml.llm.PrimitiveClient.build_request_stream
     return
@@ -11739,25 +11748,50 @@ function baml.llm.prompt(body: ((string) -> baml.llm.Role throws never, baml.llm
     return
 }
 
+function baml.llm.prompt_template_for(function_name: string, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> string {
+    load_var prompt_closure
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const ""
+    jump L2
+
+  L1:
+    load_var function_name
+    sys_op baml.llm.get_jinja_template
+
+  L2:
+    return
+}
+
 function baml.llm.render_output_format(return_type: type) -> string {
 }
 
-function baml.llm.render_prompt(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.llm.PromptAst {
-    load_var function_name
-    sys_op baml.llm.get_jinja_template
-    store_var jinja_string
+function baml.llm.render_prompt(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.llm.PromptAst {
+    load_var prompt_closure
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var prompt_closure
+
+  L0:
     load_var function_name
     sys_op baml.llm.get_return_type
     store_var return_type
     load_var client
     call baml.llm.Client.to_primitive_client
     store_var primitive_client
-    load_var2 6 4
-    load_var2 3 5
-    sys_op baml.llm.PrimitiveClient.render_prompt
-    store_var prompt
+    load_var2 2 4
+    call baml.llm.prompt_template_for
+    store_var template
     load_var2 6 7
-    sys_op baml.llm.PrimitiveClient.specialize_prompt
+    load_var2 3 5
+    load_var prompt_closure
+    call baml.llm.PrimitiveClient.render_specialized_prompt
     return
 }
 

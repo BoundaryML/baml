@@ -911,7 +911,7 @@ fn user.ClassifySentiment$build_request(text: string, client: baml.llm.Client) -
 
     bb2: {
         _4 = { const "text": copy _1 };
-        _0 = call const fn baml.llm.build_request(copy _2, const "ClassifySentiment", copy _4) -> [bb3];
+        _0 = call const fn baml.llm.build_request(copy _2, const "ClassifySentiment", copy _4, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -939,7 +939,7 @@ fn user.ClassifySentiment$build_request_stream(text: string, client: baml.llm.Cl
 
     bb2: {
         _4 = { const "text": copy _1 };
-        _0 = call const fn baml.llm.build_request_stream(copy _2, const "ClassifySentiment", copy _4) -> [bb3];
+        _0 = call const fn baml.llm.build_request_stream(copy _2, const "ClassifySentiment", copy _4, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -967,7 +967,7 @@ fn user.ClassifySentiment$render_prompt(text: string, client: baml.llm.Client) -
 
     bb2: {
         _4 = { const "text": copy _1 };
-        _0 = call const fn baml.llm.render_prompt(copy _2, const "ClassifySentiment", copy _4) -> [bb3];
+        _0 = call const fn baml.llm.render_prompt(copy _2, const "ClassifySentiment", copy _4, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -1025,7 +1025,7 @@ fn user.ClassifySentiment2$build_request(text: string, client: baml.llm.Client) 
 
     bb2: {
         _4 = { const "text": copy _1 };
-        _0 = call const fn baml.llm.build_request(copy _2, const "ClassifySentiment2", copy _4) -> [bb3];
+        _0 = call const fn baml.llm.build_request(copy _2, const "ClassifySentiment2", copy _4, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -1053,7 +1053,7 @@ fn user.ClassifySentiment2$build_request_stream(text: string, client: baml.llm.C
 
     bb2: {
         _4 = { const "text": copy _1 };
-        _0 = call const fn baml.llm.build_request_stream(copy _2, const "ClassifySentiment2", copy _4) -> [bb3];
+        _0 = call const fn baml.llm.build_request_stream(copy _2, const "ClassifySentiment2", copy _4, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -1081,7 +1081,7 @@ fn user.ClassifySentiment2$render_prompt(text: string, client: baml.llm.Client) 
 
     bb2: {
         _4 = { const "text": copy _1 };
-        _0 = call const fn baml.llm.render_prompt(copy _2, const "ClassifySentiment2", copy _4) -> [bb3];
+        _0 = call const fn baml.llm.render_prompt(copy _2, const "ClassifySentiment2", copy _4, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -1214,7 +1214,7 @@ fn user.GenerateTests$build_request(count: int, topic: string, client: baml.llm.
 
     bb2: {
         _5 = { const "count": copy _1, const "topic": copy _2 };
-        _0 = call const fn baml.llm.build_request(copy _3, const "GenerateTests", copy _5) -> [bb3];
+        _0 = call const fn baml.llm.build_request(copy _3, const "GenerateTests", copy _5, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -1243,7 +1243,7 @@ fn user.GenerateTests$build_request_stream(count: int, topic: string, client: ba
 
     bb2: {
         _5 = { const "count": copy _1, const "topic": copy _2 };
-        _0 = call const fn baml.llm.build_request_stream(copy _3, const "GenerateTests", copy _5) -> [bb3];
+        _0 = call const fn baml.llm.build_request_stream(copy _3, const "GenerateTests", copy _5, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -1272,7 +1272,7 @@ fn user.GenerateTests$render_prompt(count: int, topic: string, client: baml.llm.
 
     bb2: {
         _5 = { const "count": copy _1, const "topic": copy _2 };
-        _0 = call const fn baml.llm.render_prompt(copy _3, const "GenerateTests", copy _5) -> [bb3];
+        _0 = call const fn baml.llm.render_prompt(copy _3, const "GenerateTests", copy _5, const <omitted>) -> [bb3];
     }
 
     bb3: {

@@ -1445,6 +1445,15 @@ pub struct LlmBodyDef {
     /// `ExprId` — it's a fully independent arena. `None` for legacy Jinja
     /// `#"..."#` prompts (their `$stream` companion uses the 3-arg Jinja path).
     pub stream_body: Option<(ExprBody, AstSourceMap)>,
+    /// BEP-049 M5: for a new-mode (backtick) prompt, the pre-lowered bodies of
+    /// the `render_prompt` / `build_request` / `build_request_stream` companions,
+    /// keyed by target name. Each is a `<target>(client, fn, args,
+    /// prompt_closure=…)` call carrying the same synthesized prompt closure, so
+    /// the static preview/cURL render through the closure exactly like execution.
+    /// Built in `lower_cst` while the CST backtick is in hand (same reason as
+    /// `stream_body`) and read back by `make_llm_companion`. Empty for legacy
+    /// Jinja `#"..."#` prompts (their companions use the 3-arg Jinja path).
+    pub companion_bodies: Vec<(std::string::String, (ExprBody, AstSourceMap))>,
     pub span: TextRange,
 }
 

@@ -54,7 +54,7 @@ fn user.Fn$build_request(client: baml.llm.Client) -> baml.http.Request {
 
     bb2: {
         _4 = {  };
-        _0 = call const fn baml.llm.build_request(copy _1, const "Fn", copy _4) -> [bb3];
+        _0 = call const fn baml.llm.build_request(copy _1, const "Fn", copy _4, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -83,7 +83,7 @@ fn user.Fn$build_request_stream(client: baml.llm.Client) -> baml.http.Request {
 
     bb2: {
         _4 = {  };
-        _0 = call const fn baml.llm.build_request_stream(copy _1, const "Fn", copy _4) -> [bb3];
+        _0 = call const fn baml.llm.build_request_stream(copy _1, const "Fn", copy _4, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -112,7 +112,7 @@ fn user.Fn$render_prompt(client: baml.llm.Client) -> baml.llm.PromptAst {
 
     bb2: {
         _4 = {  };
-        _0 = call const fn baml.llm.render_prompt(copy _1, const "Fn", copy _4) -> [bb3];
+        _0 = call const fn baml.llm.render_prompt(copy _1, const "Fn", copy _4, const <omitted>) -> [bb3];
     }
 
     bb3: {

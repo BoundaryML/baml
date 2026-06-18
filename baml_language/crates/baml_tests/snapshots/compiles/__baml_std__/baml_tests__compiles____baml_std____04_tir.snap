@@ -2485,28 +2485,38 @@ function baml.llm.PlannerState.to_json(self: baml.llm.PlannerState) -> baml.json
 function baml.llm.PlannerState.from_json(j: baml.json.json) -> baml.llm.PlannerState throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   PlannerState { rr_client_names: baml.json.from_json<string[]>(baml.json.field(j, "rr_client_names")) } : baml.llm.PlannerState
 }
-function baml.llm.render_prompt(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.llm.PromptAst throws never {
-  { : baml.llm.PromptAst
-    let jinja_string = get_jinja_template(function_name) : string
-    let return_type = get_return_type(function_name) : type
-    let primitive_client = client.to_primitive_client() : baml.llm.PrimitiveClient
-    let prompt = primitive_client.render_prompt(jinja_string, args, return_type) : baml.llm.PromptAst
-    primitive_client.specialize_prompt(prompt) : baml.llm.PromptAst
+function baml.llm.prompt_template_for(function_name: string, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> string throws baml.errors.InvalidArgument {
+  { : string | ""
+    match (prompt_closure : ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) : string | ""
+      null =>
+        get_jinja_template(function_name) : string
+      _ =>
+        "" : ""
   }
 }
-function baml.llm.build_request(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.http.Request throws never {
+function baml.llm.render_prompt(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null = null) -> baml.llm.PromptAst throws never {
+  { : baml.llm.PromptAst
+    let return_type = get_return_type(function_name) : type
+    let primitive_client = client.to_primitive_client() : baml.llm.PrimitiveClient
+    let template = prompt_template_for(function_name, prompt_closure) : string
+    primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure) : baml.llm.PromptAst
+  }
+}
+function baml.llm.build_request(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null = null) -> baml.http.Request throws never {
   { : baml.http.Request
     let return_type = get_return_type(function_name) : type
     let primitive_client = client.to_primitive_client() : baml.llm.PrimitiveClient
-    let specialized_prompt = render_prompt(client, function_name, args) : baml.llm.PromptAst
+    let template = prompt_template_for(function_name, prompt_closure) : string
+    let specialized_prompt = primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure) : baml.llm.PromptAst
     primitive_client.build_request(specialized_prompt, return_type) : baml.http.Request
   }
 }
-function baml.llm.build_request_stream(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.http.Request throws never {
+function baml.llm.build_request_stream(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null = null) -> baml.http.Request throws never {
   { : baml.http.Request
     let return_type = get_return_type(function_name) : type
     let primitive_client = client.to_primitive_client() : baml.llm.PrimitiveClient
-    let specialized_prompt = render_prompt(client, function_name, args) : baml.llm.PromptAst
+    let template = prompt_template_for(function_name, prompt_closure) : string
+    let specialized_prompt = primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure) : baml.llm.PromptAst
     primitive_client.build_request_stream(specialized_prompt, return_type) : baml.http.Request
   }
 }
@@ -2779,13 +2789,7 @@ function baml.llm.Client.execute_once_stream<TStream, TFinal>(self: baml.llm.Cli
         { : never
           let primitive = self.to_primitive_client() : baml.llm.PrimitiveClient
           let return_type = get_return_type(context.function_name) : type
-          let prompt = : baml.llm.PromptAst
-            match (context.prompt_closure : ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) : baml.llm.PromptAst
-              null =>
-                primitive.render_prompt(context.jinja_string, context.args, return_type) : baml.llm.PromptAst
-              closure: (Context) -> PromptAst =>
-                closure(build_prompt_context(primitive, return_type)) : baml.llm.PromptAst
-          let specialized = primitive.specialize_prompt(prompt) : baml.llm.PromptAst
+          let specialized = primitive.render_specialized_prompt(context.jinja_string, context.args, return_type, context.prompt_closure) : baml.llm.PromptAst
           let http_request = primitive.build_request_stream(specialized, return_type) : baml.http.Request
           let sse = root.http.fetch_sse(http_request) : baml.http.SseStream
           let stream: Stream<TStream, TFinal> = self.__make_stream(sse) : baml.llm.Stream<TStream, TFinal>
@@ -2881,13 +2885,7 @@ function baml.llm.Client.execute_once_oneshot<T>(self: baml.llm.Client, context:
         { : T
           let primitive = self.to_primitive_client() : baml.llm.PrimitiveClient
           let return_type = reflect.type_of() : type
-          let prompt = : baml.llm.PromptAst
-            match (context.prompt_closure : ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) : baml.llm.PromptAst
-              null =>
-                primitive.render_prompt(context.jinja_string, context.args, return_type) : baml.llm.PromptAst
-              closure: (Context) -> PromptAst =>
-                closure(build_prompt_context(primitive, return_type)) : baml.llm.PromptAst
-          let specialized = primitive.specialize_prompt(prompt) : baml.llm.PromptAst
+          let specialized = primitive.render_specialized_prompt(context.jinja_string, context.args, return_type, context.prompt_closure) : baml.llm.PromptAst
           let http_request = primitive.build_request(specialized, return_type) : baml.http.Request
           let http_response = root.http.send(http_request) : baml.http.Response
           if (http_response.ok() : bool) : T
@@ -3139,6 +3137,17 @@ class baml.llm.PrimitiveClient {
   name: string
   provider: string
   options: baml.llm.PrimitiveClientOptions
+}
+function baml.llm.PrimitiveClient.render_specialized_prompt(self: baml.llm.PrimitiveClient, template: string, args: map<string, unknown>, return_type: type, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.llm.PromptAst throws baml.errors.RenderPrompt | baml.errors.LlmClient {
+  { : baml.llm.PromptAst
+    let prompt = : baml.llm.PromptAst
+      match (prompt_closure : ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) : baml.llm.PromptAst
+        null =>
+          self.render_prompt(template, args, return_type) : baml.llm.PromptAst
+        closure: (Context) -> PromptAst =>
+          closure(build_prompt_context(self, return_type)) : baml.llm.PromptAst
+    self.specialize_prompt(prompt) : baml.llm.PromptAst
+  }
 }
 function baml.llm.PrimitiveClient.to_json(self: baml.llm.PrimitiveClient) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
   map { "name": baml.json.to_json(self.name), "provider": baml.json.to_json(self.provider), "options": baml.json.to_json(self.options) } : map<string, baml.json.json>

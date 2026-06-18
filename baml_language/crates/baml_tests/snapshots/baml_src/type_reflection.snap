@@ -72,6 +72,7 @@ function type_reflection.GetBar$build_request(client: baml.llm.Client) -> baml.h
     load_var client
     load_const "GetBar"
     alloc_map 0
+    load_const <omitted>
     call baml.llm.build_request
     return
 }
@@ -88,6 +89,7 @@ function type_reflection.GetBar$build_request_stream(client: baml.llm.Client) ->
     load_var client
     load_const "GetBar"
     alloc_map 0
+    load_const <omitted>
     call baml.llm.build_request_stream
     return
 }
@@ -136,6 +138,7 @@ function type_reflection.GetBar$render_prompt(client: baml.llm.Client) -> baml.l
     load_var client
     load_const "GetBar"
     alloc_map 0
+    load_const <omitted>
     call baml.llm.render_prompt
     return
 }
@@ -189,6 +192,7 @@ function type_reflection.GetFoo$build_request(client: baml.llm.Client) -> baml.h
     load_var client
     load_const "GetFoo"
     alloc_map 0
+    load_const <omitted>
     call baml.llm.build_request
     return
 }
@@ -205,6 +209,7 @@ function type_reflection.GetFoo$build_request_stream(client: baml.llm.Client) ->
     load_var client
     load_const "GetFoo"
     alloc_map 0
+    load_const <omitted>
     call baml.llm.build_request_stream
     return
 }
@@ -253,6 +258,7 @@ function type_reflection.GetFoo$render_prompt(client: baml.llm.Client) -> baml.l
     load_var client
     load_const "GetFoo"
     alloc_map 0
+    load_const <omitted>
     call baml.llm.render_prompt
     return
 }

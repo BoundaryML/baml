@@ -35,27 +35,39 @@ class PlannerState {
 
 /// Renders the Jinja prompt template for `function_name` with the given `args` using `client`'s configuration.
 /// Returns the specialized `PromptAst` ready to be sent to the LLM provider.
-function render_prompt(client: Client, function_name: string, args: map<string, unknown>) -> PromptAst {
-  let jinja_string = get_jinja_template(function_name);
-  let return_type = get_return_type(function_name);
-  let primitive_client = client.to_primitive_client();
-  let prompt = primitive_client.render_prompt(jinja_string, args, return_type);
-
-  primitive_client.specialize_prompt(prompt)
+/// The Jinja template to render for `function_name`. New-mode (BEP-049 M5)
+/// functions have no template registered — their compiled `prompt`…`` closure
+/// renders the prompt — so only look one up for the legacy `#"..."#` path.
+function prompt_template_for(function_name: string, prompt_closure: ((Context) -> PromptAst)?) -> string throws root.errors.InvalidArgument {
+  match (prompt_closure) {
+    null => get_jinja_template(function_name),
+    _ => "",
+  }
 }
 
-function build_request(client: Client, function_name: string, args: map<string, unknown>) -> root.http.Request {
+function render_prompt(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: ((Context) -> PromptAst)? = null) -> PromptAst {
   let return_type = get_return_type(function_name);
   let primitive_client = client.to_primitive_client();
-  let specialized_prompt = render_prompt(client, function_name, args);
+  let template = prompt_template_for(function_name, prompt_closure);
+  // `render_specialized_prompt` is the same render the orchestrator uses, so the
+  // playground preview/cURL render byte-identically to execution.
+  primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure)
+}
+
+function build_request(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: ((Context) -> PromptAst)? = null) -> root.http.Request {
+  let return_type = get_return_type(function_name);
+  let primitive_client = client.to_primitive_client();
+  let template = prompt_template_for(function_name, prompt_closure);
+  let specialized_prompt = primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure);
 
   primitive_client.build_request(specialized_prompt, return_type)
 }
 
-function build_request_stream(client: Client, function_name: string, args: map<string, unknown>) -> root.http.Request {
+function build_request_stream(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: ((Context) -> PromptAst)? = null) -> root.http.Request {
   let return_type = get_return_type(function_name);
   let primitive_client = client.to_primitive_client();
-  let specialized_prompt = render_prompt(client, function_name, args);
+  let template = prompt_template_for(function_name, prompt_closure);
+  let specialized_prompt = primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure);
 
   primitive_client.build_request_stream(specialized_prompt, return_type)
 }

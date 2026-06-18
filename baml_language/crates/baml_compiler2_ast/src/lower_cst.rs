@@ -379,6 +379,27 @@ fn lower_function(
                     llm_body_def.span,
                 );
             llm_body_def.stream_body = Some((stream_body, stream_sm));
+            // BEP-049 M5: pre-build the render_prompt / build_request /
+            // build_request_stream companion bodies from the same backtick, each
+            // carrying the prompt closure, so the playground preview/cURL render
+            // through the closure exactly like execution. Built here while the CST
+            // is in hand; read back by `make_llm_companion`. Their prompt diags /
+            // `env.X` refs duplicate the oneshot body's — drop them.
+            for target in ["render_prompt", "build_request", "build_request_stream"] {
+                let (c_body, c_sm, _diags, _env_refs) =
+                    lower_expr_body::synthesize_llm_call_with_prompt(
+                        target,
+                        name.as_str(),
+                        &param_names,
+                        client_arg_name,
+                        Vec::new(),
+                        backtick,
+                        llm_body_def.span,
+                    );
+                llm_body_def
+                    .companion_bodies
+                    .push((target.to_string(), (c_body, c_sm)));
+            }
             (body, sm)
         } else {
             synthesize_llm_builtin_call(
@@ -707,6 +728,7 @@ fn lower_llm_body(llm_body: &ast::LlmFunctionBody) -> LlmBodyDef {
         prompt,
         // Filled in by the LLM-function branch once param names are known.
         stream_body: None,
+        companion_bodies: Vec::new(),
         span,
     }
 }

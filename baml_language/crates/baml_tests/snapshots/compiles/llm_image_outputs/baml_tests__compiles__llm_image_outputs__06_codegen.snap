@@ -42,6 +42,7 @@ function user.GenerateImage$build_request(prompt: string, client: baml.llm.Clien
     load_var prompt
     load_const "prompt"
     alloc_map 1
+    load_const <omitted>
     call baml.llm.build_request
     return
 }
@@ -60,6 +61,7 @@ function user.GenerateImage$build_request_stream(prompt: string, client: baml.ll
     load_var prompt
     load_const "prompt"
     alloc_map 1
+    load_const <omitted>
     call baml.llm.build_request_stream
     return
 }
@@ -110,6 +112,7 @@ function user.GenerateImage$render_prompt(prompt: string, client: baml.llm.Clien
     load_var prompt
     load_const "prompt"
     alloc_map 1
+    load_const <omitted>
     call baml.llm.render_prompt
     return
 }
@@ -169,6 +172,7 @@ function user.GenerateImageSet$build_request(prompt: string, client: baml.llm.Cl
     load_var prompt
     load_const "prompt"
     alloc_map 1
+    load_const <omitted>
     call baml.llm.build_request
     return
 }
@@ -187,6 +191,7 @@ function user.GenerateImageSet$build_request_stream(prompt: string, client: baml
     load_var prompt
     load_const "prompt"
     alloc_map 1
+    load_const <omitted>
     call baml.llm.build_request_stream
     return
 }
@@ -237,6 +242,7 @@ function user.GenerateImageSet$render_prompt(prompt: string, client: baml.llm.Cl
     load_var prompt
     load_const "prompt"
     alloc_map 1
+    load_const <omitted>
     call baml.llm.render_prompt
     return
 }
@@ -296,6 +302,7 @@ function user.GenerateMixedImageNarrative$build_request(prompt: string, client: 
     load_var prompt
     load_const "prompt"
     alloc_map 1
+    load_const <omitted>
     call baml.llm.build_request
     return
 }
@@ -314,6 +321,7 @@ function user.GenerateMixedImageNarrative$build_request_stream(prompt: string, c
     load_var prompt
     load_const "prompt"
     alloc_map 1
+    load_const <omitted>
     call baml.llm.build_request_stream
     return
 }
@@ -364,6 +372,7 @@ function user.GenerateMixedImageNarrative$render_prompt(prompt: string, client: 
     load_var prompt
     load_const "prompt"
     alloc_map 1
+    load_const <omitted>
     call baml.llm.render_prompt
     return
 }

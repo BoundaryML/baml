@@ -260,13 +260,10 @@ class Client {
         // the generic schema — the oneshot path renders the specialized one.
         let return_type = get_return_type(context.function_name);
 
-        // New-mode (BEP-049 M5e): same closure-vs-Jinja branch as oneshot,
-        // sharing `build_prompt_context` so the prompt is byte-identical.
-        let prompt = match (context.prompt_closure) {
-          null => primitive.render_prompt(context.jinja_string, context.args, return_type),
-          let closure: (Context) -> PromptAst => closure(build_prompt_context(primitive, return_type)),
-        };
-        let specialized = primitive.specialize_prompt(prompt);
+        // Render + specialize via the shared `render_specialized_prompt` (same
+        // path as oneshot and the static `build_request_stream` companion).
+        let specialized = primitive.render_specialized_prompt(
+          context.jinja_string, context.args, return_type, context.prompt_closure);
 
         let http_request = primitive.build_request_stream(specialized, return_type);
         let sse = root.http.fetch_sse(http_request);
@@ -367,14 +364,11 @@ class Client {
         let primitive = self.to_primitive_client()
         let return_type = reflect.type_of<T>()
 
-        // New-mode (BEP-049 M5e): invoke the compiled prompt closure with a
-        // per-attempt Context; legacy Jinja functions (null closure) render the
-        // stored template. The result feeds the same specialize → request path.
-        let prompt = match (context.prompt_closure) {
-          null => primitive.render_prompt(context.jinja_string, context.args, return_type),
-          let closure: (Context) -> PromptAst => closure(build_prompt_context(primitive, return_type)),
-        }
-        let specialized = primitive.specialize_prompt(prompt)
+        // Render (new-mode closure or legacy Jinja) + specialize via the shared
+        // `render_specialized_prompt`, the same path the static `build_request`
+        // companion uses — so execution and preview never drift.
+        let specialized = primitive.render_specialized_prompt(
+          context.jinja_string, context.args, return_type, context.prompt_closure)
         let http_request = primitive.build_request(specialized, return_type)
         let http_response = root.http.send(http_request)
 
@@ -650,6 +644,28 @@ class PrimitiveClient {
     prompt: PromptAst,
   ) -> PromptAst throws root.errors.RenderPrompt | root.errors.LlmClient {
     $rust_io_function
+  }
+
+  /// BEP-049 M5: turn a function's prompt into a request-ready (specialized)
+  /// `PromptAst`, dispatching on mode. A new-mode `prompt`…`` compiles to a
+  /// `(Context) -> PromptAst` closure rendered against a per-attempt `Context`;
+  /// a legacy `#"..."#` function (null closure) renders the stored Jinja
+  /// `template`. This is the SINGLE source of truth for prompt rendering: the
+  /// orchestrator (`execute_once_oneshot` / `execute_stream`) and the static
+  /// `render_prompt` / `build_request` companions both call it, so the playground
+  /// preview/cURL and actual execution render byte-identically.
+  function render_specialized_prompt(
+    self,
+    template: string,
+    args: map<string, unknown>,
+    return_type: type,
+    prompt_closure: ((Context) -> PromptAst)?,
+  ) -> PromptAst throws root.errors.RenderPrompt | root.errors.LlmClient {
+    let prompt = match (prompt_closure) {
+      null => self.render_prompt(template, args, return_type),
+      let closure: (Context) -> PromptAst => closure(build_prompt_context(self, return_type)),
+    };
+    self.specialize_prompt(prompt)
   }
 
   function build_request(

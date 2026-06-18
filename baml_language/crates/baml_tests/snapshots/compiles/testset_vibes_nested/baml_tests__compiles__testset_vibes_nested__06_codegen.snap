@@ -61,6 +61,7 @@ function user.ClassifySentiment$build_request(text: string, client: baml.llm.Cli
     load_var text
     load_const "text"
     alloc_map 1
+    load_const <omitted>
     call baml.llm.build_request
     return
 }
@@ -79,6 +80,7 @@ function user.ClassifySentiment$build_request_stream(text: string, client: baml.
     load_var text
     load_const "text"
     alloc_map 1
+    load_const <omitted>
     call baml.llm.build_request_stream
     return
 }
@@ -129,6 +131,7 @@ function user.ClassifySentiment$render_prompt(text: string, client: baml.llm.Cli
     load_var text
     load_const "text"
     alloc_map 1
+    load_const <omitted>
     call baml.llm.render_prompt
     return
 }
@@ -188,6 +191,7 @@ function user.ClassifySentiment2$build_request(text: string, client: baml.llm.Cl
     load_var text
     load_const "text"
     alloc_map 1
+    load_const <omitted>
     call baml.llm.build_request
     return
 }
@@ -206,6 +210,7 @@ function user.ClassifySentiment2$build_request_stream(text: string, client: baml
     load_var text
     load_const "text"
     alloc_map 1
+    load_const <omitted>
     call baml.llm.build_request_stream
     return
 }
@@ -256,6 +261,7 @@ function user.ClassifySentiment2$render_prompt(text: string, client: baml.llm.Cl
     load_var text
     load_const "text"
     alloc_map 1
+    load_const <omitted>
     call baml.llm.render_prompt
     return
 }
@@ -372,6 +378,7 @@ function user.GenerateTests$build_request(count: int, topic: string, client: bam
     load_const "count"
     load_const "topic"
     alloc_map 2
+    load_const <omitted>
     call baml.llm.build_request
     return
 }
@@ -391,6 +398,7 @@ function user.GenerateTests$build_request_stream(count: int, topic: string, clie
     load_const "count"
     load_const "topic"
     alloc_map 2
+    load_const <omitted>
     call baml.llm.build_request_stream
     return
 }
@@ -442,6 +450,7 @@ function user.GenerateTests$render_prompt(count: int, topic: string, client: bam
     load_const "count"
     load_const "topic"
     alloc_map 2
+    load_const <omitted>
     call baml.llm.render_prompt
     return
 }

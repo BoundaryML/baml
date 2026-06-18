@@ -69,6 +69,7 @@ function user.TypeBuilderFn$build_request(from_text: string, client: baml.llm.Cl
     load_var from_text
     load_const "from_text"
     alloc_map 1
+    load_const <omitted>
     call baml.llm.build_request
     return
 }
@@ -93,6 +94,7 @@ function user.TypeBuilderFn$build_request_stream(from_text: string, client: baml
     load_var from_text
     load_const "from_text"
     alloc_map 1
+    load_const <omitted>
     call baml.llm.build_request_stream
     return
 }
@@ -161,6 +163,7 @@ function user.TypeBuilderFn$render_prompt(from_text: string, client: baml.llm.Cl
     load_var from_text
     load_const "from_text"
     alloc_map 1
+    load_const <omitted>
     call baml.llm.render_prompt
     return
 }

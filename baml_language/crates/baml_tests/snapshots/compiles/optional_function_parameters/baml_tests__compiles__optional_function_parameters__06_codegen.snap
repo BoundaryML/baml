@@ -80,6 +80,7 @@ function user.AskDocs$build_request(query: string, max_results: int, filter: str
     load_const "max_results"
     load_const "filter"
     alloc_map 3
+    load_const <omitted>
     call baml.llm.build_request
     return
 }
@@ -117,6 +118,7 @@ function user.AskDocs$build_request_stream(query: string, max_results: int, filt
     load_const "max_results"
     load_const "filter"
     alloc_map 3
+    load_const <omitted>
     call baml.llm.build_request_stream
     return
 }
@@ -186,6 +188,7 @@ function user.AskDocs$render_prompt(query: string, max_results: int, filter: str
     load_const "max_results"
     load_const "filter"
     alloc_map 3
+    load_const <omitted>
     call baml.llm.render_prompt
     return
 }

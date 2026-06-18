@@ -182,7 +182,7 @@ namespace baml.llm:
   class OrchestrationStep { methods: [to_json, from_json] }
   class OutputFormat { methods: [to_json, from_json] }
   class PlannerState { methods: [rr_local_offset, rr_pick_index, to_json, from_json] }
-  class PrimitiveClient { methods: [render_prompt, specialize_prompt, build_request, build_request_stream, new_stream_accumulator, validate_finish_reason, parse, to_json, from_json] }
+  class PrimitiveClient { methods: [render_prompt, specialize_prompt, render_specialized_prompt, build_request, build_request_stream, new_stream_accumulator, validate_finish_reason, parse, to_json, from_json] }
   class PrimitiveClientOptions { methods: [to_json, from_json] }
   class PromptAst { methods: [to_json, from_json] }
   class RetryPolicy { methods: [to_json, from_json] }
@@ -205,6 +205,7 @@ namespace baml.llm:
   function make_role
   function parse<TStream, TFinal>
   function prompt
+  function prompt_template_for
   function render_output_format
   function render_prompt
   function stream_llm_function<TStream, TFinal>

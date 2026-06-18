@@ -65,6 +65,7 @@ function user.TestFunc$build_request(input: string, client: baml.llm.Client) -> 
     load_var input
     load_const "input"
     alloc_map 1
+    load_const <omitted>
     call baml.llm.build_request
     return
 }
@@ -83,6 +84,7 @@ function user.TestFunc$build_request_stream(input: string, client: baml.llm.Clie
     load_var input
     load_const "input"
     alloc_map 1
+    load_const <omitted>
     call baml.llm.build_request_stream
     return
 }
@@ -133,6 +135,7 @@ function user.TestFunc$render_prompt(input: string, client: baml.llm.Client) -> 
     load_var input
     load_const "input"
     alloc_map 1
+    load_const <omitted>
     call baml.llm.render_prompt
     return
 }
