@@ -12019,3 +12019,132 @@ fn ordering_on_same_concrete_primitive_is_ok() {
 // (The `int | 99` catch-result ordering — where the union must be normalized to
 // its single concrete base `int` before the union rejection — is exercised at
 // runtime by `baml_src/ns_arrays/sort_comparable.baml`.)
+
+// ── Group AI: arithmetic operators dispatch through the `baml.ops` interfaces ──
+// `+ - * / %` (and unary `-`) are valid iff the operand types implement the
+// matching `baml.ops` interface for the right operand; the result is the impl's
+// `Output`. Unions are valid iff every operand pair is, with the union of their
+// outputs.
+
+#[test]
+fn arithmetic_on_user_type_implementing_add_is_ok() {
+    assert_no_compile_errors(
+        r#"
+        class Vec2 {
+            x: int
+            y: int
+            implements baml.ops.Add<Vec2> {
+                type Output = Vec2
+                function add(self, rhs: Vec2) -> Vec2 throws never {
+                    Vec2 { x: self.x + rhs.x, y: self.y + rhs.y }
+                }
+            }
+        }
+        function f(a: Vec2, b: Vec2) -> Vec2 {
+            a + b
+        }
+        "#,
+    );
+}
+
+#[test]
+fn arithmetic_on_user_type_without_impl_is_rejected() {
+    assert_compile_error_contains(
+        r#"
+        class Vec2 { x: int }
+        function f(a: Vec2, b: Vec2) -> Vec2 {
+            a + b
+        }
+        "#,
+        "cannot be applied",
+    );
+}
+
+#[test]
+fn arithmetic_output_type_is_the_impl_output() {
+    // `Add<int> for Counter` has `Output = int`, so `c + 1` is an `int`.
+    assert_no_compile_errors(
+        r#"
+        class Counter {
+            n: int
+            implements baml.ops.Add<int> {
+                type Output = int
+                function add(self, rhs: int) -> int throws never { self.n + rhs }
+            }
+        }
+        function f(c: Counter) -> int {
+            c + 1
+        }
+        "#,
+    );
+}
+
+#[test]
+fn negate_on_user_type_implementing_negate_is_ok() {
+    assert_no_compile_errors(
+        r#"
+        class Vec2 {
+            x: int
+            implements baml.ops.Negate {
+                function neg(self) -> Vec2 throws never { Vec2 { x: -self.x } }
+            }
+        }
+        function f(a: Vec2) -> Vec2 {
+            -a
+        }
+        "#,
+    );
+}
+
+#[test]
+fn negate_on_user_type_without_impl_is_rejected() {
+    assert_compile_error_contains(
+        r#"
+        class Vec2 { x: int }
+        function f(a: Vec2) -> Vec2 {
+            -a
+        }
+        "#,
+        "cannot be applied",
+    );
+}
+
+#[test]
+fn arithmetic_on_union_all_pairs_valid_is_ok() {
+    // `int | bigint` + `int`: int+int and bigint+int both implement Add, so the
+    // result is `int | bigint`.
+    assert_no_compile_errors(
+        r#"
+        function f(a: int | bigint, b: int) -> int | bigint {
+            a + b
+        }
+        "#,
+    );
+}
+
+#[test]
+fn arithmetic_out_of_body_user_impl_is_ok() {
+    assert_no_compile_errors(
+        r#"
+        class Counter { n: int }
+        implement baml.ops.Add<int> for Counter {
+            type Output = int
+            function add(self, rhs: int) -> int throws never { self.n + rhs }
+        }
+        function f(c: Counter) -> int { c + 1 }
+        "#,
+    );
+}
+
+#[test]
+fn arithmetic_on_interface_existential_is_ok() {
+    // An interface-existential operand (all associated types specified) dispatches
+    // through its pinned `Output`: `Add<int, Output=int> + int` is an `int`.
+    assert_no_compile_errors(
+        r#"
+        function f(x: baml.ops.Add<int, Output = int>, a: int) -> int {
+            x + a
+        }
+        "#,
+    );
+}

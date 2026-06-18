@@ -218,7 +218,125 @@ function operators.$init_test_ns_operators_operators(registry: testing.TestColle
     load_const null
     call testing.TestCollector.register_test
     pop 1
+    load_var registry
+    load_const "operator_add_user_class"
+    make_closure .<lambda($init_test_ns_operators_operators, 36)>, 0
     load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "operator_negate_user_class"
+    make_closure .<lambda($init_test_ns_operators_operators, 37)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "operator_union_dispatch"
+    make_closure .<lambda($init_test_ns_operators_operators, 38)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
+    return
+}
+
+function operators.Feet$stream.baml.ops.Add<int>.add(self: operators.Feet$stream, rhs: int) -> operators.Feet {
+    load_var self
+    load_field .0
+    load_var rhs
+    add_int
+    init_instance user.operators.Feet .v
+    return
+}
+
+function operators.Feet.baml.ops.Add<int>.add(self: operators.Feet, rhs: int) -> operators.Feet {
+    load_var self
+    load_field .0
+    load_var rhs
+    add_int
+    init_instance user.operators.Feet .v
+    return
+}
+
+function operators.Meters$stream.baml.ops.Add<int>.add(self: operators.Meters$stream, rhs: int) -> operators.Meters {
+    load_var self
+    load_field .0
+    load_var rhs
+    add_int
+    init_instance user.operators.Meters .v
+    return
+}
+
+function operators.Meters.baml.ops.Add<int>.add(self: operators.Meters, rhs: int) -> operators.Meters {
+    load_var self
+    load_field .0
+    load_var rhs
+    add_int
+    init_instance user.operators.Meters .v
+    return
+}
+
+function operators.Vec2$stream.baml.ops.Add<Vec2>.add(self: operators.Vec2$stream, rhs: operators.Vec2) -> operators.Vec2 {
+    load_var self
+    load_field .0
+    load_var rhs
+    load_field .x
+    add_int
+    load_var self
+    load_field .1
+    load_var rhs
+    load_field .y
+    add_int
+    init_instance user.operators.Vec2 .x, .y
+    return
+}
+
+function operators.Vec2$stream.baml.ops.Negate.neg(self: operators.Vec2$stream) -> operators.Vec2 {
+    load_var self
+    load_field .0
+    unary_op -
+    load_var self
+    load_field .1
+    unary_op -
+    init_instance user.operators.Vec2 .x, .y
+    return
+}
+
+function operators.Vec2.baml.ops.Add<Vec2>.add(self: operators.Vec2, rhs: operators.Vec2) -> operators.Vec2 {
+    load_var self
+    load_field .0
+    load_var rhs
+    load_field .x
+    add_int
+    load_var self
+    load_field .1
+    load_var rhs
+    load_field .y
+    add_int
+    init_instance user.operators.Vec2 .x, .y
+    return
+}
+
+function operators.Vec2.baml.ops.Negate.neg(self: operators.Vec2) -> operators.Vec2 {
+    load_var self
+    load_field .0
+    unary_op -
+    load_var self
+    load_field .1
+    unary_op -
+    init_instance user.operators.Vec2 .x, .y
+    return
+}
+
+function operators.ops_add_to_unit(u: operators.Meters | operators.Feet, n: int) -> operators.Meters | operators.Feet {
+    load_var2 1 2
+    call baml.ops.__union_add
+    return
+}
+
+function operators.ops_add_vecs(a: operators.Vec2, b: operators.Vec2) -> operators.Vec2 {
+    load_var2 1 2
+    call baml.ops.__union_add
     return
 }
 
@@ -227,6 +345,12 @@ function operators.ops_double_neg_var() -> int {
     unary_op -
     unary_op -
     unary_op -
+    return
+}
+
+function operators.ops_neg_vec(a: operators.Vec2) -> operators.Vec2 {
+    load_var a
+    call baml.ops.__union_neg
     return
 }
 

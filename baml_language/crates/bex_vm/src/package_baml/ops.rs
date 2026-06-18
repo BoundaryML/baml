@@ -157,6 +157,100 @@ impl BamlNamespaceOps for PackageBamlImpl {
     fn equals_equals(vm: &mut BexVm, a: &Value, b: &Value) -> NativeCallResult {
         EqualsDriver::new(*a, *b).drive(vm)
     }
+
+    // Binary-operator dispatch drivers — see [`drive_binary_op`]. The compiler
+    // emits these only when a single `implement` can't be pinned at compile time
+    // (an operand erased to a union / interface-existential / type variable), so
+    // the impl is selected from the operands' runtime types.
+    fn __union_add(vm: &mut BexVm, a: &Value, b: &Value) -> NativeCallResult {
+        drive_binary_op(vm, "Add", "add", *a, *b)
+    }
+    fn __union_sub(vm: &mut BexVm, a: &Value, b: &Value) -> NativeCallResult {
+        drive_binary_op(vm, "Subtract", "sub", *a, *b)
+    }
+    fn __union_mul(vm: &mut BexVm, a: &Value, b: &Value) -> NativeCallResult {
+        drive_binary_op(vm, "Multiply", "mul", *a, *b)
+    }
+    fn __union_div(vm: &mut BexVm, a: &Value, b: &Value) -> NativeCallResult {
+        drive_binary_op(vm, "Divide", "div", *a, *b)
+    }
+    fn __union_rem(vm: &mut BexVm, a: &Value, b: &Value) -> NativeCallResult {
+        drive_binary_op(vm, "Remainder", "rem", *a, *b)
+    }
+    fn __union_neg(vm: &mut BexVm, a: &Value) -> NativeCallResult {
+        // Negation is single dispatch on `a` (`Negate` has no `Rhs`), so the
+        // interface request carries no args.
+        dispatch_op(vm, "Negate", "neg", vec![*a], &[])
+    }
+}
+
+/// Binary operator dispatch: `a OP b` selects `<typeof a as iface<typeof b>>`
+/// and tail-calls its `method(self, rhs)` with `[a, b]`. This is the double
+/// dispatch a single-receiver virtual call cannot express — the impl depends on
+/// *both* operand types.
+fn drive_binary_op(
+    vm: &mut BexVm,
+    iface: &str,
+    method: &str,
+    a: Value,
+    b: Value,
+) -> NativeCallResult {
+    let rhs_ty = vm.value_concrete_runtime_ty(b);
+    dispatch_op(vm, iface, method, vec![a, b], &[rhs_ty])
+}
+
+/// Resolve `<typeof args[0] as baml.ops.<iface><iface_args>>::<method>` from the
+/// receiver's runtime concrete type and the (runtime-derived) interface args,
+/// then tail-call it with `args`. The type checker has already proved the
+/// operand types implement the operator, so a missing impl is an engine
+/// invariant break, surfaced as an internal error.
+fn dispatch_op(
+    vm: &mut BexVm,
+    iface: &str,
+    method: &str,
+    args: Vec<Value>,
+    iface_args: &[RuntimeTy],
+) -> NativeCallResult {
+    let op_qtn = TypeName::new(Name::new("baml"), vec![Name::new("ops")], Name::new(iface));
+    let self_ty = vm.value_concrete_runtime_ty(args[0]);
+    let resolved = resolve::resolve_implements_rule(vm, &self_ty, &op_qtn, iface_args).and_then(
+        |(rule, bound_args)| {
+            let method_impl = rule.methods.get(method)?;
+            let callee = vm.find_function_by_name(&method_impl.fqn)?;
+            Some((
+                callee,
+                resolve::realize_frame(&method_impl.frame, &bound_args),
+            ))
+        },
+    );
+    let Some((callee, type_args)) = resolved else {
+        return NativeCallResult::from(VmInternalError::UnresolvedVirtualCall {
+            method: format!("baml.ops.{iface}.{method}"),
+        });
+    };
+    NativeCallResult::YieldToCall {
+        callee,
+        args,
+        type_args,
+        // The operator's value *is* the impl method's return value — forward it.
+        continuation: Box::new(ForwardResult),
+    }
+}
+
+/// Continuation that returns the callee's result unchanged — the tail-call shape
+/// for [`drive_binary_op`], whose value is exactly the dispatched method's.
+struct ForwardResult;
+
+impl Continuation for ForwardResult {
+    fn call(self: Box<Self>, _vm: &mut BexVm, value: Value) -> NativeCallResult {
+        NativeCallResult::Done(value)
+    }
+
+    fn gc_roots(&self) -> Vec<HeapPtr> {
+        Vec::new()
+    }
+
+    fn apply_forwarding(&mut self, _forwarding: &HashMap<HeapPtr, HeapPtr>) {}
 }
 
 /// Outcome of comparing one popped pair in the [`EqualsDriver`] worklist.

@@ -217,6 +217,12 @@ namespace baml.ops:
   type Negate
   type Remainder
   type Subtract
+  function __union_add
+  function __union_div
+  function __union_mul
+  function __union_neg
+  function __union_rem
+  function __union_sub
   function equals_equals
 namespace baml.panics:
   class AllocFailure { methods: [to_json, from_json] }

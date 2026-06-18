@@ -1328,7 +1328,7 @@ impl BexVm {
     /// returns an "unknown". Primitives map to their kind; an `Instance` carries
     /// its `class_type_args` (so `Box<int>` resolves the `Box` impl at `T = int`);
     /// an enum `Variant` maps to its enum.
-    fn value_concrete_runtime_ty(&self, value: Value) -> baml_type::RuntimeTy {
+    pub(crate) fn value_concrete_runtime_ty(&self, value: Value) -> baml_type::RuntimeTy {
         use baml_type::{RuntimeTy, TyAttr};
         if value.as_int().is_some() {
             return RuntimeTy::Int {

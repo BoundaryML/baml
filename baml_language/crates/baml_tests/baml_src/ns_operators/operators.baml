@@ -211,3 +211,72 @@ test "assign_bitwise_xor" {
     let expected = 9;
     assert.is_true(baml.deep_equals(x, expected))
 }
+
+// ─── Operator dispatch through `baml.ops` interfaces ──────────────────────────
+// User types and unions dispatch `+` / `-` through the matching interface impl,
+// resolved at runtime from the operands' concrete types.
+
+class Vec2 {
+    x int
+    y int
+    implements baml.ops.Add<Vec2> {
+        type Output = Vec2
+        function add(self, rhs: Vec2) -> Vec2 throws never {
+            Vec2 { x: self.x + rhs.x, y: self.y + rhs.y }
+        }
+    }
+    implements baml.ops.Negate {
+        function neg(self) -> Vec2 throws never {
+            Vec2 { x: -self.x, y: -self.y }
+        }
+    }
+}
+
+function ops_add_vecs(a: Vec2, b: Vec2) -> Vec2 {
+    a + b
+}
+
+function ops_neg_vec(a: Vec2) -> Vec2 {
+    -a
+}
+
+test "operator_add_user_class" {
+    assert.is_true(baml.deep_equals(
+        ops_add_vecs(Vec2 { x: 1, y: 2 }, Vec2 { x: 3, y: 4 }),
+        Vec2 { x: 4, y: 6 },
+    ))
+}
+
+test "operator_negate_user_class" {
+    assert.is_true(baml.deep_equals(ops_neg_vec(Vec2 { x: 1, y: -2 }), Vec2 { x: -1, y: 2 }))
+}
+
+// Left operand is a union: the impl is chosen from its runtime concrete type.
+class Meters {
+    v int
+    implements baml.ops.Add<int> {
+        type Output = Meters
+        function add(self, rhs: int) -> Meters throws never {
+            Meters { v: self.v + rhs }
+        }
+    }
+}
+
+class Feet {
+    v int
+    implements baml.ops.Add<int> {
+        type Output = Feet
+        function add(self, rhs: int) -> Feet throws never {
+            Feet { v: self.v + rhs }
+        }
+    }
+}
+
+function ops_add_to_unit(u: Meters | Feet, n: int) -> Meters | Feet {
+    u + n
+}
+
+test "operator_union_dispatch" {
+    assert.is_true(baml.deep_equals(ops_add_to_unit(Meters { v: 1 }, 2), Meters { v: 3 }))
+    assert.is_true(baml.deep_equals(ops_add_to_unit(Feet { v: 10 }, 5), Feet { v: 15 }))
+}

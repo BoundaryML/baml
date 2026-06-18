@@ -199,6 +199,12 @@ interface        ops.Multiply                     <builtin>/baml/ns_ops/math.bam
 interface        ops.Divide                       <builtin>/baml/ns_ops/math.baml:41
 interface        ops.Remainder                    <builtin>/baml/ns_ops/math.baml:47
 interface        ops.Negate                       <builtin>/baml/ns_ops/math.baml:53
+function         ops.__union_add                  <builtin>/baml/ns_ops/math.baml:316
+function         ops.__union_sub                  <builtin>/baml/ns_ops/math.baml:321
+function         ops.__union_mul                  <builtin>/baml/ns_ops/math.baml:326
+function         ops.__union_div                  <builtin>/baml/ns_ops/math.baml:331
+function         ops.__union_rem                  <builtin>/baml/ns_ops/math.baml:336
+function         ops.__union_neg                  <builtin>/baml/ns_ops/math.baml:342
 class            panics.DivisionByZero            <builtin>/baml/ns_panics/panics.baml:2
 class            panics.IndexOutOfBounds          <builtin>/baml/ns_panics/panics.baml:7
 class            panics.InvalidFieldAccess        <builtin>/baml/ns_panics/panics.baml:13

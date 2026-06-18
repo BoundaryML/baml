@@ -4788,7 +4788,7 @@ fn validate_class_implements<'db>(
         // Build a T → concrete-type substitution from the implements target's
         // generic args. `implements Container<int>` gives `{T → int}` so
         // signature comparisons see the concrete shape.
-        let generic_subst: std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr> =
+        let mut generic_subst: std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr> =
             match &block.target.expr {
                 baml_compiler2_ast::TypeExpr::Path { generic_args, .. } => iface
                     .generic_params
@@ -4798,6 +4798,30 @@ fn validate_class_implements<'db>(
                     .collect(),
                 _ => std::collections::HashMap::new(),
             };
+        // `Self` in an in-body `implements` block is the enclosing class (with its
+        // own generic params as args). Seed the subst so the interface's `Self` /
+        // `= Self` associated-type defaults compare against the concrete class —
+        // an impl method may spell its return `-> Counter` where the interface
+        // declares `-> Self` (or `-> Output` defaulting to `Self`), and the two
+        // denote the same type. Mirrors the out-of-body `implement … for …` path.
+        generic_subst.insert(
+            Name::new("Self"),
+            baml_compiler2_ast::TypeExpr::Path {
+                segments: vec![class.name.clone()],
+                generic_args: class
+                    .generic_params
+                    .iter()
+                    .map(|p| baml_compiler2_ast::TypeExpr::Path {
+                        segments: vec![p.clone()],
+                        generic_args: Vec::new(),
+                        associated_type_bindings: Vec::new(),
+                        attrs: Vec::new(),
+                    })
+                    .collect(),
+                associated_type_bindings: Vec::new(),
+                attrs: Vec::new(),
+            },
+        );
         let target_associated_type_bindings = match &block.target.expr {
             baml_compiler2_ast::TypeExpr::Path {
                 associated_type_bindings,

@@ -14912,23 +14912,35 @@ impl<'db> TypeInferenceBuilder<'db> {
                 attr: TyAttr::default(),
             },
 
-            // Arithmetic: result type depends on operands
+            // Arithmetic: valid iff `lhs` implements `baml.ops.{Add,Subtract,…}`
+            // for `rhs`; the result is that impl's `Output` (unioned over operand
+            // alternatives). Primitive numeric promotion and `string` concatenation
+            // stay on the fast classifier (`infer_arithmetic`) — the primitive
+            // interfaces back the same result, and `string`'s concat interface is
+            // deferred — and everything else dispatches through the interface.
             BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => {
                 let result = Self::infer_arithmetic(op, lhs, rhs);
-                if matches!(result, Ty::Unknown { .. })
-                    && !matches!(lhs, Ty::Unknown { .. } | Ty::Error { .. })
-                    && !matches!(rhs, Ty::Unknown { .. } | Ty::Error { .. })
-                {
-                    self.context.report_simple(
-                        TirTypeError::InvalidBinaryOp {
-                            op,
-                            lhs: lhs.clone(),
-                            rhs: rhs.clone(),
-                        },
-                        at,
-                    );
+                if !matches!(result, Ty::Unknown { .. }) {
+                    result
+                } else if let Some(ty) = self.infer_arithmetic_via_interface(op, lhs, rhs) {
+                    ty
+                } else {
+                    if !matches!(lhs, Ty::Unknown { .. } | Ty::Error { .. })
+                        && !matches!(rhs, Ty::Unknown { .. } | Ty::Error { .. })
+                    {
+                        self.context.report_simple(
+                            TirTypeError::InvalidBinaryOp {
+                                op,
+                                lhs: lhs.clone(),
+                                rhs: rhs.clone(),
+                            },
+                            at,
+                        );
+                    }
+                    Ty::Unknown {
+                        attr: TyAttr::default(),
+                    }
                 }
-                result
             }
 
             // Bitwise: result type depends on operands (int or bigint).
@@ -15086,6 +15098,137 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
+    /// The `baml.ops.<Interface>` an arithmetic operator dispatches through, or
+    /// `None` for a non-arithmetic operator.
+    fn arithmetic_interface_qtn(
+        op: baml_compiler2_ast::BinaryOp,
+    ) -> Option<crate::ty::QualifiedTypeName> {
+        use baml_compiler2_ast::BinaryOp;
+        let name = match op {
+            BinaryOp::Add => "Add",
+            BinaryOp::Sub => "Subtract",
+            BinaryOp::Mul => "Multiply",
+            BinaryOp::Div => "Divide",
+            BinaryOp::Mod => "Remainder",
+            _ => return None,
+        };
+        Some(crate::ty::QualifiedTypeName::new(
+            Name::new("baml"),
+            vec![Name::new("ops")],
+            Name::new(name),
+        ))
+    }
+
+    /// Split an operand type into the concrete alternatives an operator must hold
+    /// against. A union contributes each member (every pair must be valid); a
+    /// single type (incl. an interface-existential) is one alternative. Normalized
+    /// first so a collapsible spelling (`int | 99` → `int`) is one alternative.
+    /// `unknown` / error operands yield no members so the caller suppresses
+    /// cascading diagnostics.
+    fn operator_operand_members(&self, ty: &Ty) -> Vec<Ty> {
+        // Widen each alternative to its base (literal → primitive, enum-variant →
+        // enum): impls are keyed on base types, so `c + 1` must request `Add<int>`,
+        // not `Add<1>`.
+        match baml_type::normalize::normalize(ty, &NormalizeCtx(self)) {
+            Ty::Union(members, _) => members.iter().map(Self::widen_literal_base).collect(),
+            Ty::Unknown { .. } | Ty::Error { .. } => Vec::new(),
+            other => vec![Self::widen_literal_base(&other)],
+        }
+    }
+
+    /// For one operand pair, resolve `<l as Iface<r>>::Output` — the result of
+    /// `l OP r` — to its concrete type. A concrete `l` (or an existential whose
+    /// `Output` is specified) yields that `Output`; `None` when `l` does not
+    /// implement `Iface<r>`, which the resolver signals by leaving the projection
+    /// unresolved (so an `l` whose `Output` can't be pinned to a concrete type —
+    /// e.g. an unbounded type variable — is rejected as an invalid pair).
+    fn resolve_operator_output(
+        &self,
+        iface_qtn: &crate::ty::QualifiedTypeName,
+        l: &Ty,
+        r: &Ty,
+    ) -> Option<Ty> {
+        // Resolve `<l as Iface<r>>::Output` directly rather than checking
+        // `is_subtype(l, Iface<r>)` first: the latter fills the interface's
+        // `Output` with its `= Self` default, turning the membership test into a
+        // stricter `Iface<r, Output=Self>` that a concrete impl (`Output = int`,
+        // say) can never satisfy. The projection resolver selects the impl by the
+        // input dimension `(l, r)` only — the right notion here — and leaves the
+        // projection unresolved exactly when no impl applies.
+        let iface = Ty::Interface(
+            iface_qtn.clone(),
+            vec![r.clone()],
+            Vec::new(),
+            TyAttr::default(),
+        );
+        let projection = Ty::AssociatedTypeProjection {
+            base: Box::new(l.clone()),
+            interface: Some(Box::new(iface)),
+            member: Name::new("Output"),
+            attr: TyAttr::default(),
+        };
+        match self.resolve_associated_projections_deep(&projection) {
+            Ty::AssociatedTypeProjection { .. } | Ty::Unknown { .. } | Ty::Error { .. } => None,
+            resolved => Some(resolved),
+        }
+    }
+
+    /// Resolve `lhs OP rhs` through the `baml.ops` arithmetic interfaces: every
+    /// `(L, R)` pair of operand alternatives must satisfy `L extends Iface<R>`,
+    /// and the result is the union of each pair's `Output`. `None` when the
+    /// operator is not arithmetic, an operand has no alternatives (`unknown`), or
+    /// any pair is unimplemented — i.e. the operator is invalid for these types.
+    fn infer_arithmetic_via_interface(
+        &self,
+        op: baml_compiler2_ast::BinaryOp,
+        lhs: &Ty,
+        rhs: &Ty,
+    ) -> Option<Ty> {
+        let iface_qtn = Self::arithmetic_interface_qtn(op)?;
+        let lhs_members = self.operator_operand_members(lhs);
+        let rhs_members = self.operator_operand_members(rhs);
+        if lhs_members.is_empty() || rhs_members.is_empty() {
+            return None;
+        }
+        let mut output: Option<Ty> = None;
+        for l in &lhs_members {
+            for r in &rhs_members {
+                let pair_output = self.resolve_operator_output(&iface_qtn, l, r)?;
+                output = Some(match output {
+                    None => pair_output,
+                    Some(acc) => Self::join_types(&acc, &pair_output),
+                });
+            }
+        }
+        output
+    }
+
+    /// Resolve unary `-operand` through `baml.ops.Negate`: every operand
+    /// alternative must implement `Negate`, whose `neg(self) -> Self` makes the
+    /// result the operand's own type. `None` when an alternative does not
+    /// implement `Negate` (or the operand has none) — i.e. negation is invalid.
+    fn infer_negate_via_interface(&self, operand: &Ty) -> Option<Ty> {
+        let members = self.operator_operand_members(operand);
+        if members.is_empty() {
+            return None;
+        }
+        let negate = Ty::Interface(
+            crate::ty::QualifiedTypeName::new(
+                Name::new("baml"),
+                vec![Name::new("ops")],
+                Name::new("Negate"),
+            ),
+            Vec::new(),
+            Vec::new(),
+            TyAttr::default(),
+        );
+        if members.iter().all(|m| self.is_subtype(m, &negate)) {
+            Some(operand.clone())
+        } else {
+            None
+        }
+    }
+
     /// Returns true if any runtime value of `ty` could be `null` — i.e. the
     /// type is the bare `null` primitive or a union that contains it (a
     /// nullable `T?` lowers to `T | null`).
@@ -15147,20 +15290,27 @@ impl<'db> TypeInferenceBuilder<'db> {
         let operand_attr = operand.attr().clone();
         match op {
             baml_compiler2_ast::UnaryOp::Not => Ty::Bool { attr: operand_attr },
+            // Negation: the primitives stay on the fast path (their `Negate`
+            // impls back the same result); anything else dispatches through
+            // `baml.ops.Negate`, whose `neg(self) -> Self` keeps the operand type.
             baml_compiler2_ast::UnaryOp::Neg => match operand {
                 Ty::Int { attr } => Ty::Int { attr: attr.clone() },
                 Ty::Float { attr } => Ty::Float { attr: attr.clone() },
                 Ty::Bigint { attr } => Ty::Bigint { attr: attr.clone() },
                 Ty::Unknown { attr } | Ty::Error { attr } => Ty::Unknown { attr: attr.clone() },
                 _ => {
-                    self.context.report_simple(
-                        TirTypeError::InvalidUnaryOp {
-                            op,
-                            operand: operand.clone(),
-                        },
-                        at,
-                    );
-                    Ty::Unknown { attr: operand_attr }
+                    if let Some(ty) = self.infer_negate_via_interface(operand) {
+                        ty
+                    } else {
+                        self.context.report_simple(
+                            TirTypeError::InvalidUnaryOp {
+                                op,
+                                operand: operand.clone(),
+                            },
+                            at,
+                        );
+                        Ty::Unknown { attr: operand_attr }
+                    }
                 }
             },
         }
