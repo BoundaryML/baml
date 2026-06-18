@@ -1341,6 +1341,7 @@ mod tests {
     }
 
     #[test]
+    /// Ensures install summaries disclose the `baml-` prefix mapping note.
     fn render_report_discloses_baml_name_prefix_on_install() {
         let source = SkillSource {
             reference: format!("{SKILL_REPO}@{SKILL_BRANCH}"),
