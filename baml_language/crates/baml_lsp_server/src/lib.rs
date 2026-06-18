@@ -226,7 +226,9 @@ fn run_server_inner(
     } else {
         Vec::new()
     };
-    if playground_via_browser && has_explicit_workspace_roots {
+    if matches!(playground_open_target, PlaygroundOpenTarget::Browser)
+        && has_explicit_workspace_roots
+    {
         spawn_standalone_workspace_poller(bex.clone(), workspace_roots.clone())?;
     }
 

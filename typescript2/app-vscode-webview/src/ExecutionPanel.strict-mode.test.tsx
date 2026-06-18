@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   ExecutionPanel,
+  type ControlFlowGraph,
   type RuntimePort,
   type Run,
   type WorkerInMessage,
@@ -96,6 +97,83 @@ describe('ExecutionPanel StrictMode lifecycle', () => {
       screen.queryByText('Press Run to execute ReadNote()'),
     ).not.toBeInTheDocument();
   });
+
+  it('runs the exact namespaced sidebar leaf instead of promoting it to a caller', async () => {
+    const port = new FakeRuntimePort();
+
+    render(<ExecutionPanel port={port} />);
+
+    act(() => {
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'listProjects',
+          projects: ['project'],
+        },
+      });
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'updateProject',
+          project: 'project',
+          update: {
+            isBexCurrent: true,
+            functions: [
+              { name: 'paulo.Hi', kind: 'expr', origin: 'userDefined' },
+              {
+                name: 'paulo.childFunc1',
+                kind: 'expr',
+                origin: 'userDefined',
+              },
+            ],
+            diagnostics: [],
+          },
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(
+        port.sent.filter((msg) => msg.type === 'requestControlFlowGraph'),
+      ).toHaveLength(2);
+    });
+
+    act(() => {
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'controlFlowGraphResult',
+          functionName: 'paulo.Hi',
+          graph: graphFixture('paulo.Hi', ['childFunc1']),
+        },
+      });
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'controlFlowGraphResult',
+          functionName: 'paulo.childFunc1',
+          graph: graphFixture('paulo.childFunc1'),
+        },
+      });
+    });
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Functions (2)' }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'paulo (2)' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'childFunc1' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Run' }));
+
+    await waitFor(() => {
+      expect(
+        port.sent.some(
+          (msg) =>
+            msg.type === 'startRun' &&
+            msg.functionName === 'paulo.childFunc1',
+        ),
+      ).toBe(true);
+    });
+  });
 });
 
 class FakeRuntimePort implements RuntimePort {
@@ -154,5 +232,26 @@ function runFixture(projectId: string, functionName: string): Run {
     payloads: [],
     diagnostics: [],
     cursor: 0,
+  };
+}
+
+function graphFixture(
+  functionName: string,
+  calleeNames: string[] = [],
+): ControlFlowGraph {
+  return {
+    nodes: {
+      '1': {
+        id: 1,
+        parentNodeId: null,
+        logFilterKey: functionName,
+        label: functionName,
+        sourceExpr: null,
+        nodeType: 'functionRoot',
+        calleeNames,
+        isContainer: true,
+      },
+    },
+    edgesBySrc: {},
   };
 }

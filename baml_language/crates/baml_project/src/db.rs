@@ -128,6 +128,25 @@ impl baml_compiler2_emit::Db for ProjectDatabase {}
 impl baml_lsp2_actions::Db for ProjectDatabase {}
 
 impl ProjectDatabase {
+    fn playground_function_name_for_source_file(
+        &self,
+        source_file: SourceFile,
+        name: &baml_db::Name,
+    ) -> String {
+        let package_info = baml_compiler2_hir::file_package::file_package(self, source_file);
+        crate::symbols::playground_function_name(&package_info.namespace_path, name)
+    }
+
+    fn function_name_matches_source_name(
+        &self,
+        source_file: SourceFile,
+        name: &baml_db::Name,
+        target_name: &str,
+    ) -> bool {
+        name.as_str() == target_name
+            || self.playground_function_name_for_source_file(source_file, name) == target_name
+    }
+
     /// Create a new empty database.
     pub fn new() -> Self {
         Self {
@@ -444,8 +463,11 @@ impl ProjectDatabase {
         for source_file in self.file_map.values().copied() {
             let index = baml_compiler2_ppir::file_semantic_index(self, source_file);
             for (local_id, func_data) in &index.item_tree.functions {
-                let func_name = func_data.name.to_string();
-                if func_name != function_name {
+                if !self.function_name_matches_source_name(
+                    source_file,
+                    &func_data.name,
+                    function_name,
+                ) {
                     continue;
                 }
 
@@ -599,7 +621,11 @@ impl ProjectDatabase {
         for source_file in self.file_map.values().copied() {
             let index = baml_compiler2_ppir::file_semantic_index(self, source_file);
             for func_data in index.item_tree.functions.values() {
-                if func_data.name.as_str() != function_name {
+                if !self.function_name_matches_source_name(
+                    source_file,
+                    &func_data.name,
+                    function_name,
+                ) {
                     continue;
                 }
                 let text = source_file.text(self);
@@ -923,14 +949,14 @@ impl ProjectDatabase {
         match def {
             Definition::Function(func_loc) => {
                 let sig = baml_compiler2_ppir::function_signature(self, func_loc);
-                let func_name = sig.name.to_string();
                 let body = baml_compiler2_ppir::function_body(self, func_loc);
                 let is_workflow = matches!(
                     body.as_ref(),
                     baml_compiler2_hir::body::FunctionBody::Expr(_)
                 );
 
-                // Find which workflows call this function
+                let func_name =
+                    self.playground_function_name_for_source_file(func_loc.file(self), &sig.name);
                 let workflow_memberships = self.find_workflow_memberships(&func_name);
 
                 // Find source_expr_id if cursor is inside a function body
@@ -1062,7 +1088,10 @@ impl ProjectDatabase {
             body.as_ref(),
             baml_compiler2_hir::body::FunctionBody::Expr(_)
         );
-        Some((sig.name.to_string(), is_workflow))
+        Some((
+            self.playground_function_name_for_source_file(source_file, &sig.name),
+            is_workflow,
+        ))
     }
 
     /// Find workflows that call the given function by scanning all function bodies.
@@ -1072,8 +1101,11 @@ impl ProjectDatabase {
         for source_file in self.file_map.values().copied() {
             let index = baml_compiler2_ppir::file_semantic_index(self, source_file);
             for (local_id, func_data) in &index.item_tree.functions {
-                let func_name = func_data.name.to_string();
-                if func_name == target_function_name {
+                let func_name =
+                    self.playground_function_name_for_source_file(source_file, &func_data.name);
+                if func_data.name.as_str() == target_function_name
+                    || func_name == target_function_name
+                {
                     continue; // Skip self
                 }
 
@@ -1096,11 +1128,19 @@ impl ProjectDatabase {
     /// Check if an expression body contains a call to a function with the given name.
     fn expr_body_calls_function(body: &baml_compiler2_ast::ExprBody, target_name: &str) -> bool {
         use baml_compiler2_ast::Expr;
+        let target_leaf_name = target_name.rsplit('.').next().unwrap_or(target_name);
         for (_id, expr) in body.exprs.iter() {
             if let Expr::Call { callee, .. } = expr {
                 // Check if the callee is a Path containing the target name
                 if let Expr::Path(segments) = &body.exprs[*callee] {
-                    if segments.len() == 1 && segments[0].as_str() == target_name {
+                    let callee_name = segments
+                        .iter()
+                        .map(|segment| segment.as_str())
+                        .collect::<Vec<_>>()
+                        .join(".");
+                    if callee_name == target_name
+                        || (segments.len() == 1 && segments[0].as_str() == target_leaf_name)
+                    {
                         return true;
                     }
                 }
@@ -1375,6 +1415,29 @@ function Workflow(input: string) -> string {
         // Non-existent function should return None.
         let graph = db.ast_control_flow_graph("DoesNotExist");
         assert!(graph.is_none(), "should return None for unknown function");
+    }
+
+    #[test]
+    fn test_ast_control_flow_graph_accepts_playground_qualified_namespace_name() {
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("/tmp"));
+        db.add_or_update_file(
+            std::path::Path::new("/tmp/ns_demo/workflow.baml"),
+            r#"
+function Workflow(input: string) -> string {
+    input
+}
+"#,
+        );
+
+        assert!(
+            db.ast_control_flow_graph("Workflow").is_some(),
+            "legacy bare lookup should keep working"
+        );
+        assert!(
+            db.ast_control_flow_graph("demo.Workflow").is_some(),
+            "playground-qualified lookup should resolve the namespaced function"
+        );
     }
 
     #[test]

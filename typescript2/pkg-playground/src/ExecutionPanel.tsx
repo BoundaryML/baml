@@ -2435,36 +2435,8 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                     setViewingCollection(false);
                     setViewingTestRun(false);
                     setHighlightedNodeId(null);
-                    if (!fn) {
-                      setWorkflowContext(null);
-                      setSelectedFn(fn);
-                      return;
-                    }
-                    // Workflow heuristic: a helper that lives inside exactly
-                    // one workflow shows that whole workflow (with its call
-                    // site highlighted); an ambiguous one keeps itself
-                    // selected and asks via the picker bar.
-                    const route = workflowRouteFor(fn);
-                    const roots = route.roots;
-                    if (roots.length === 1 && roots[0]) {
-                      const root = roots[0];
-                      const hop = route.firstHop.get(root);
-                      const target = hop ? findCallSiteNode(root, hop) : null;
-                      setWorkflowContext(null);
-                      if (root !== selectedFn) {
-                        pendingHighlightRef.current =
-                          target != null ? { fn: root, nodeId: target } : null;
-                        setSelectedFn(root);
-                      } else if (target != null) {
-                        setHighlightedNodeId(target);
-                      }
-                    } else if (roots.length > 1) {
-                      setSelectedFn(fn);
-                      setWorkflowContext({ functionName: fn, workflows: roots });
-                    } else {
-                      setWorkflowContext(null);
-                      setSelectedFn(fn);
-                    }
+                    setWorkflowContext(null);
+                    setSelectedFn(fn);
                   }}
                   onRefreshTests={handleRefreshTests}
                   onRunTest={handleRunTest}
