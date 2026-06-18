@@ -189,7 +189,7 @@ fn expand_function(
             out.push((
                 leaf.clone(),
                 EmittedSymbol::Function(PyFunction {
-                    py_name,
+                    py_name: escape_python_keyword(py_name),
                     baml_fqn: fqn,
                     mode,
                     param_names: params,
@@ -264,7 +264,7 @@ fn expand_methods(
             (format!("{bare}_async"), SyncAsync::Async),
         ] {
             out.push(PyMethodBinding {
-                py_name,
+                py_name: escape_python_keyword(py_name),
                 baml_fqn: fqn_root.clone(),
                 mode,
                 required_args: required_args.clone(),
@@ -320,6 +320,28 @@ fn bare_callable_name(name: &str) -> String {
         None => name.to_string(),
         Some((parent, "stream")) => format!("{parent}_stream"),
         Some((parent, suffix)) => format!("{parent}__{suffix}"),
+    }
+}
+
+/// Append `_` to a Python hard keyword so it is a usable identifier on the
+/// Python side (`from` → `from_`), generalizing the `assert` → `assert_` rule
+/// in [`crate::routing`] to callable identifiers. Only the rendered Python name
+/// is affected; the runtime BAML FQN (`PyMethodBinding::baml_fqn` /
+/// `PyFunction::baml_fqn`) is built from the raw `Name`, so dispatch still
+/// targets the original `from`. Non-keyword names pass through unchanged.
+pub(crate) fn escape_python_keyword(ident: String) -> String {
+    // Python 3 hard keywords (soft keywords like `match`/`case`/`type` are
+    // valid identifiers and are intentionally excluded).
+    const PYTHON_KEYWORDS: &[&str] = &[
+        "False", "None", "True", "and", "as", "assert", "async", "await", "break", "class",
+        "continue", "def", "del", "elif", "else", "except", "finally", "for", "from", "global",
+        "if", "import", "in", "is", "lambda", "nonlocal", "not", "or", "pass", "raise", "return",
+        "try", "while", "with", "yield",
+    ];
+    if PYTHON_KEYWORDS.contains(&ident.as_str()) {
+        format!("{ident}_")
+    } else {
+        ident
     }
 }
 

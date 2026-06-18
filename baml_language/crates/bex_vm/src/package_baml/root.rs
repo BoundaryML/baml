@@ -138,7 +138,7 @@ impl BamlPackageBaml for PackageBamlImpl {
     /// `baml._to_string_shim(value)` — runtime-class `to_string` dispatch behind
     /// `string.from`. If `value`'s runtime class carries an in-body `to_string`
     /// override, yield to it; otherwise render `value` with the structural
-    /// default. See [`make_to_string_callee`] for why static dispatch can't be
+    /// default. See `make_to_string_callee` for why static dispatch can't be
     /// used here.
     fn _to_string_shim(vm: &mut BexVm, value: &Value) -> NativeCallResult {
         match make_to_string_callee(vm, *value) {
