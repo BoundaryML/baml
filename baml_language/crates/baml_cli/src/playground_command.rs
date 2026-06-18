@@ -85,7 +85,9 @@ fn playground_dir_candidates(bin_dir: &Path) -> Vec<PathBuf> {
 }
 
 fn is_playground_dir(path: &Path) -> bool {
-    path.join("index.html").is_file() && path.join("assets").is_dir()
+    path.join("index.html").is_file()
+        && path.join("assets/index.js").is_file()
+        && path.join("assets/index.css").is_file()
 }
 
 #[cfg(test)]
@@ -160,5 +162,34 @@ mod tests {
             .position(|path| path == &extension)
             .expect("extension dist candidate");
         assert!(webview_pos < extension_pos);
+    }
+
+    #[test]
+    fn installed_toolchain_assets_are_first_candidate() {
+        let bin_dir = Path::new("/tmp/baml-home/toolchains/1.2.3/bin");
+        let candidates = playground_dir_candidates(bin_dir);
+
+        assert_eq!(
+            candidates.first().unwrap(),
+            &Path::new("/tmp/baml-home/toolchains/1.2.3/bin").join("../assets/playground")
+        );
+    }
+
+    #[test]
+    fn playground_dir_requires_static_bundle() {
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path();
+        fs::create_dir(dir.join("assets")).unwrap();
+        fs::write(
+            dir.join("index.html"),
+            "<script src=\"/assets/index.js\"></script>",
+        )
+        .unwrap();
+        fs::write(dir.join("assets/index.js"), "console.log('ok')").unwrap();
+
+        assert!(!is_playground_dir(dir));
+
+        fs::write(dir.join("assets/index.css"), "body{}").unwrap();
+        assert!(is_playground_dir(dir));
     }
 }

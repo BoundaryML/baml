@@ -227,6 +227,8 @@ jobs:
           fi
           test -f "staging/assets/baml-vscode.vsix"
           test -f "staging/assets/playground/index.html"
+          test -f "staging/assets/playground/assets/index.js"
+          test -f "staging/assets/playground/assets/index.css"
           echo "$version" > staging/VERSION
           if [[ "$target" == *windows-msvc ]]; then
             (cd staging && 7z a "../baml-language-$version-$target.zip" .)

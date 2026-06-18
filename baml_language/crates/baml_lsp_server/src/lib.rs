@@ -187,6 +187,13 @@ fn run_server_inner(
     let lsp_sender: Arc<dyn bex_project::LspClientSenderTrait + Send + Sync> =
         Arc::new(native_lsp_sender::NativeLspSender::new(&writer_tx));
 
+    // Browser-mode LSP transport: the standalone playground has no stdio LSP
+    // client, so in browser mode we forward all LSP output (responses +
+    // publishDiagnostics) to the `/api/lsp` WebSocket instead of stdout. A
+    // bridge thread (spawned only in browser mode) drains `writer_rx` into
+    // this broadcast channel.
+    let (lsp_out_tx, _lsp_out_rx) = tokio::sync::broadcast::channel::<lsp_server::Message>(256);
+
     // Pick the playground port early so we can pass it to the sender.
     let (playground_listener, playground_port): (Option<TcpListener>, u16) =
         match tokio_runtime.block_on(playground_server::pick_port(3700, 100)) {
@@ -260,6 +267,18 @@ fn run_server_inner(
         let playground_dir = playground_dir_override.clone();
 
         if matches!(playground_open_target, PlaygroundOpenTarget::Browser) {
+            // No stdio LSP client in browser mode; the stdout writer thread is
+            // never spawned, so `writer_rx` is free for us to drain into the
+            // `/api/lsp` broadcast channel.
+            let lsp_out_tx_bridge = lsp_out_tx.clone();
+            std::thread::Builder::new()
+                .name("lsp-ws-bridge".into())
+                .spawn(move || {
+                    while let Ok(msg) = writer_rx.recv() {
+                        let _ = lsp_out_tx_bridge.send(msg);
+                    }
+                })?;
+
             return tokio_runtime.block_on(playground_server::run(
                 listener,
                 bex_for_playground,
@@ -268,6 +287,7 @@ fn run_server_inner(
                 ios,
                 runs,
                 playground_dir,
+                lsp_out_tx,
             ));
         }
 
@@ -280,6 +300,7 @@ fn run_server_inner(
                 ios,
                 runs,
                 playground_dir,
+                lsp_out_tx,
             )
             .await
             {

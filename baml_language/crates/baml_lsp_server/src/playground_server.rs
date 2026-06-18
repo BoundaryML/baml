@@ -262,6 +262,8 @@ struct WsState {
     env_state: Arc<PlaygroundEnvState>,
     io_state: Arc<PlaygroundIoState>,
     run_store: Arc<InMemoryRunStore>,
+    /// LSP output (responses + publishDiagnostics) destined for `/api/lsp`.
+    lsp_out_tx: broadcast::Sender<lsp_server::Message>,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -290,6 +292,7 @@ struct UpdateSourceFileResponse {
 }
 
 /// Start the playground server on the given listener.
+#[allow(clippy::too_many_arguments)]
 pub async fn run(
     listener: TcpListener,
     bex: Arc<dyn bex_project::BexLsp>,
@@ -298,6 +301,7 @@ pub async fn run(
     io_state: Arc<PlaygroundIoState>,
     run_store: Arc<InMemoryRunStore>,
     playground_dir_override: Option<PathBuf>,
+    lsp_out_tx: broadcast::Sender<lsp_server::Message>,
 ) -> anyhow::Result<()> {
     let app = build_router(
         bex,
@@ -306,6 +310,7 @@ pub async fn run(
         io_state,
         run_store,
         playground_dir_override,
+        lsp_out_tx,
     )?;
 
     tracing::info!(
@@ -318,6 +323,7 @@ pub async fn run(
         .map_err(|e| anyhow::anyhow!("Playground server error: {e}"))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_router(
     bex: Arc<dyn bex_project::BexLsp>,
     broadcast_tx: broadcast::Sender<WsOutMessage>,
@@ -325,6 +331,7 @@ fn build_router(
     io_state: Arc<PlaygroundIoState>,
     run_store: Arc<InMemoryRunStore>,
     playground_dir_override: Option<PathBuf>,
+    lsp_out_tx: broadcast::Sender<lsp_server::Message>,
 ) -> anyhow::Result<Router> {
     let ws_state = WsState {
         bex,
@@ -332,10 +339,12 @@ fn build_router(
         env_state,
         io_state,
         run_store,
+        lsp_out_tx,
     };
 
     let api = Router::new()
         .route("/api/ws", get(playground_ws_handler))
+        .route("/api/lsp", get(lsp_ws_handler))
         .route(
             "/api/source-files",
             get(source_files_handler).put(update_source_file_handler),
@@ -372,6 +381,277 @@ fn build_router(
 async fn playground_ws_handler(State(state): State<WsState>, ws: WebSocketUpgrade) -> Response {
     tracing::info!("Playground: /api/ws upgrade request received");
     ws.on_upgrade(move |socket| playground_ws_session(socket, state))
+}
+
+// ---------------------------------------------------------------------------
+// LSP-over-WebSocket bridge (`/api/lsp`)
+//
+// A browser Monaco language client speaks plain JSON-RPC (one message per WS
+// text frame, no Content-Length framing). We parse each frame into an
+// `lsp_server::Message`, dispatch it to `BexLsp`, and forward the server's
+// output (responses + publishDiagnostics) back over the socket.
+//
+// The browser is a normal LSP client and therefore "owns" the file on disk;
+// since it has no real disk access, this bridge writes edits through to disk
+// on `didSave`, capturing the latest full text from didOpen/didChange.
+// ---------------------------------------------------------------------------
+
+async fn lsp_ws_handler(State(state): State<WsState>, ws: WebSocketUpgrade) -> Response {
+    tracing::info!("Playground: /api/lsp upgrade request received");
+    ws.on_upgrade(move |socket| lsp_ws_session(socket, state))
+}
+
+/// Serialize an `lsp_server::Message` as a JSON-RPC text frame (adds the
+/// `jsonrpc` field that `lsp_server` only writes via its stdio framing).
+fn lsp_message_to_ws_text(msg: &lsp_server::Message) -> Option<AxumWsMsg> {
+    let mut value = match serde_json::to_value(msg) {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::error!("LSP WS: failed to serialize message: {e}");
+            return None;
+        }
+    };
+    if let Some(obj) = value.as_object_mut() {
+        obj.insert(
+            "jsonrpc".to_string(),
+            serde_json::Value::String("2.0".to_string()),
+        );
+    }
+    match serde_json::to_string(&value) {
+        Ok(text) => Some(AxumWsMsg::Text(text.into())),
+        Err(e) => {
+            tracing::error!("LSP WS: failed to stringify message: {e}");
+            None
+        }
+    }
+}
+
+async fn lsp_ws_session(socket: WebSocket, state: WsState) {
+    tracing::info!("Playground: LSP WS session started");
+    let (mut sink, mut stream) = socket.split();
+    let mut lsp_rx = state.lsp_out_tx.subscribe();
+
+    // Dispatch `bex` LSP work (which can recompile the project on every keystroke
+    // via didChange) on a DEDICATED thread instead of the async WS task. Calling
+    // the synchronous, CPU-heavy `bex.handle_*` inline would block this task's
+    // select! — so a save (and its disk write-through) would queue behind the
+    // backlog of didChange recompiles and only land once the user stops typing.
+    // The thread processes messages in order; the WS loop stays responsive.
+    let (dispatch_tx, dispatch_rx) = std::sync::mpsc::channel::<lsp_server::Message>();
+    let bex = state.bex.clone();
+    let _dispatch_thread = std::thread::Builder::new()
+        .name("lsp-ws-dispatch".into())
+        .spawn(move || {
+            while let Ok(msg) = dispatch_rx.recv() {
+                match msg {
+                    lsp_server::Message::Request(req) => bex.handle_request(req),
+                    lsp_server::Message::Notification(notif) => bex.handle_notification(notif),
+                    lsp_server::Message::Response(_) => {}
+                }
+            }
+        });
+
+    // Debounced write-through so edits persist WITHOUT a manual save: didChange
+    // streams the full document on every keystroke; we coalesce and write the
+    // latest text to disk after a short quiet period. (didSave still writes
+    // immediately, below.)
+    let (write_tx, mut write_rx) =
+        tokio::sync::mpsc::unbounded_channel::<(String, String)>();
+    tokio::spawn(async move {
+        let debounce = std::time::Duration::from_millis(700);
+        let mut latest: std::collections::HashMap<String, String> =
+            std::collections::HashMap::new();
+        loop {
+            // Wait for the first pending change (or exit when the session ends).
+            match write_rx.recv().await {
+                Some((uri, text)) => {
+                    latest.insert(uri, text);
+                }
+                None => break,
+            }
+            // Coalesce further changes until the edit stream goes quiet.
+            let flush = loop {
+                match tokio::time::timeout(debounce, write_rx.recv()).await {
+                    Ok(Some((uri, text))) => {
+                        latest.insert(uri, text);
+                    }
+                    Ok(None) => break true,  // channel closed: flush then exit
+                    Err(_) => break false,   // quiet period elapsed: flush
+                }
+            };
+            for (uri, text) in latest.drain() {
+                write_lsp_document_to_disk(&uri, &text);
+            }
+            if flush {
+                break;
+            }
+        }
+    });
+
+    // Latest full text per document URI, captured from didOpen/didChange so we
+    // can write it through to disk on didSave.
+    let mut pending_text: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
+
+    loop {
+        tokio::select! {
+            client_msg = stream.next() => {
+                match client_msg {
+                    Some(Ok(AxumWsMsg::Text(text))) => {
+                        let text_str: &str = &text;
+                        handle_lsp_client_text(text_str, &dispatch_tx, &write_tx, &mut sink, &mut pending_text).await;
+                    }
+                    Some(Ok(AxumWsMsg::Close(_))) | None => break,
+                    _ => {}
+                }
+            }
+            out_msg = lsp_rx.recv() => {
+                match out_msg {
+                    Ok(msg) => {
+                        if let Some(ws_msg) = lsp_message_to_ws_text(&msg)
+                            && sink.send(ws_msg).await.is_err()
+                        {
+                            break;
+                        }
+                    }
+                    Err(broadcast::error::RecvError::Lagged(n)) => {
+                        tracing::warn!("LSP WS: broadcast lagged by {n} messages");
+                    }
+                    Err(broadcast::error::RecvError::Closed) => break,
+                }
+            }
+        }
+    }
+
+    // Dropping `dispatch_tx` ends the dispatch thread (its recv() returns Err).
+    drop(dispatch_tx);
+    tracing::debug!("LSP WS session ended");
+}
+
+async fn handle_lsp_client_text(
+    text: &str,
+    dispatch_tx: &std::sync::mpsc::Sender<lsp_server::Message>,
+    write_tx: &tokio::sync::mpsc::UnboundedSender<(String, String)>,
+    sink: &mut futures::stream::SplitSink<WebSocket, AxumWsMsg>,
+    pending_text: &mut std::collections::HashMap<String, String>,
+) {
+    let msg = match serde_json::from_str::<lsp_server::Message>(text) {
+        Ok(m) => m,
+        Err(e) => {
+            tracing::warn!("LSP WS: invalid JSON-RPC message: {e}");
+            return;
+        }
+    };
+
+    match msg {
+        lsp_server::Message::Request(req) => {
+            // Mirror the stdio loop: answer `shutdown` directly without
+            // dispatching it into BexLsp.
+            if req.method == "shutdown" {
+                let response = lsp_server::Response {
+                    id: req.id,
+                    result: Some(serde_json::Value::Null),
+                    error: None,
+                };
+                if let Some(ws_msg) = lsp_message_to_ws_text(&lsp_server::Message::Response(response))
+                {
+                    let _ = sink.send(ws_msg).await;
+                }
+                return;
+            }
+            let _ = dispatch_tx.send(lsp_server::Message::Request(req));
+        }
+        lsp_server::Message::Notification(notif) => {
+            if notif.method == "exit" {
+                return;
+            }
+            // Capture text and persist to disk RIGHT HERE on the WS read loop —
+            // not on the dispatch thread — so persistence is immediate and
+            // independent of the recompile backlog. `pending_text` already holds
+            // the latest didChange text because messages are read in order.
+            // didSave writes immediately; didChange schedules a debounced write.
+            // BexLsp still sees the notification (via the dispatch thread).
+            track_and_persist_lsp_notification(&notif, pending_text, write_tx);
+            let _ = dispatch_tx.send(lsp_server::Message::Notification(notif));
+        }
+        lsp_server::Message::Response(_) => {
+            // Responses to server-initiated requests; the stdio loop ignores
+            // these as well.
+        }
+    }
+}
+
+/// Track the latest document text and, on save, write it through to disk.
+fn track_and_persist_lsp_notification(
+    notif: &lsp_server::Notification,
+    pending_text: &mut std::collections::HashMap<String, String>,
+    write_tx: &tokio::sync::mpsc::UnboundedSender<(String, String)>,
+) {
+    let uri = notif
+        .params
+        .pointer("/textDocument/uri")
+        .and_then(serde_json::Value::as_str);
+
+    match notif.method.as_str() {
+        "textDocument/didOpen" => {
+            if let (Some(uri), Some(text)) = (
+                uri,
+                notif
+                    .params
+                    .pointer("/textDocument/text")
+                    .and_then(serde_json::Value::as_str),
+            ) {
+                pending_text.insert(uri.to_string(), text.to_string());
+            }
+        }
+        "textDocument/didChange" => {
+            // FULL sync mode: a single change event carries the whole document.
+            if let (Some(uri), Some(text)) = (
+                uri,
+                notif
+                    .params
+                    .pointer("/contentChanges/0/text")
+                    .and_then(serde_json::Value::as_str),
+            ) {
+                pending_text.insert(uri.to_string(), text.to_string());
+                // Schedule a debounced write so the edit persists without a save.
+                let _ = write_tx.send((uri.to_string(), text.to_string()));
+            }
+        }
+        "textDocument/didSave" => {
+            if let Some(uri) = uri {
+                let text = notif
+                    .params
+                    .pointer("/text")
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::to_string)
+                    .or_else(|| pending_text.get(uri).cloned());
+                if let Some(text) = text {
+                    write_lsp_document_to_disk(uri, &text);
+                }
+            }
+        }
+        "textDocument/didClose" => {
+            if let Some(uri) = uri {
+                pending_text.remove(uri);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn write_lsp_document_to_disk(uri: &str, text: &str) {
+    let Some(path) = lsp_types::Url::parse(uri)
+        .ok()
+        .and_then(|u| u.to_file_path().ok())
+    else {
+        tracing::warn!("LSP WS: cannot resolve file path for uri {uri}");
+        return;
+    };
+    match std::fs::write(&path, text) {
+        Ok(()) => tracing::debug!("LSP WS: wrote {} ({} bytes)", path.display(), text.len()),
+        Err(e) => tracing::warn!("LSP WS: failed to write {}: {e}", path.display()),
+    }
 }
 
 async fn source_files_handler(
@@ -1526,11 +1806,21 @@ async fn serve_static_index(dir: &Path) -> Response {
 }
 
 fn cache_bust_static_asset_urls(html: &str, version: &str) -> String {
-    html.replace("/assets/index.js", &format!("/assets/index.js?v={version}"))
-        .replace(
-            "/assets/index.css",
-            &format!("/assets/index.css?v={version}"),
-        )
+    // NOTE: deliberately do NOT cache-bust /assets/index.js. It is an ES module
+    // entry that code-split chunks import via a bare relative path
+    // (`import ... from "./index.js"`). Rewriting the HTML's reference to
+    // `index.js?v=…` makes the browser load the entry under TWO different URLs
+    // (`index.js?v=…` from the HTML and `index.js` from the chunk imports), so
+    // it evaluates the module twice — producing two instances of every
+    // singleton it holds (e.g. two React copies → "invalid hook call" the
+    // moment a lazy-loaded view mounts). The `no-store, no-cache` headers set
+    // by `cors_middleware` already prevent stale caching, so the entry doesn't
+    // need a query buster. The CSS link is only referenced from the HTML (never
+    // re-imported by a chunk), so busting it is safe.
+    html.replace(
+        "/assets/index.css",
+        &format!("/assets/index.css?v={version}"),
+    )
 }
 
 fn is_existing_file_within_dir(dir: &Path, file_path: &Path) -> bool {

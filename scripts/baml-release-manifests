@@ -73,7 +73,12 @@ def main() -> None:
 
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / "version").mkdir(parents=True, exist_ok=True)
-    released_at = dt.datetime.now(dt.UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    released_at = (
+        dt.datetime.now(dt.timezone.utc)
+        .replace(microsecond=0)
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
 
     vsix = next(args.vsix_dir.glob("*.vsix"), None)
     if vsix is None:

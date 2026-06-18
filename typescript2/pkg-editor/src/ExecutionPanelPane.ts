@@ -6,7 +6,7 @@
  *
  * Usage (in MonacoEditor.tsx after apiWrapper.start()):
  *   1. Call registerExecutionPanelPane() once
- *   2. Call setRuntimePort(port) when the worker is ready
+ *   2. Call setRuntimePort(port) when the backend is connected
  *   3. The command "baml.openPlayground" or setRuntimePort both open the tab
  */
 
@@ -30,7 +30,7 @@ let currentConnectionVersion = 0;
 /** Incremented when port changes on restart so ExecutionPanel remounts and requests state. */
 let portKey = 0;
 const portChangeListeners = new Set<(port: RuntimePort) => void>();
-/** Callback to reload the WASM worker (set by MonacoEditor). */
+/** Callback to reload the backend connection (set by MonacoEditor). */
 let reloadCallback: (() => void) | null = null;
 /** Callback to navigate to a source location (set by MonacoEditor). */
 let navigateToSource: ((source: SourceNavigationTarget) => void) | null = null;
@@ -213,8 +213,8 @@ export function setRuntimePort(port: RuntimePort, options?: SetRuntimePortOption
 }
 
 /**
- * Set the callback to reload/restart the WASM worker.
- * Called from MonacoEditor after worker setup.
+ * Set the callback to reload/restart the backend connection.
+ * Called from MonacoEditor after backend setup.
  */
 export function setReloadCallback(cb: () => void): void {
   reloadCallback = cb;
@@ -226,4 +226,9 @@ export function setReloadCallback(cb: () => void): void {
  */
 export function setNavigateToSource(cb: (source: SourceNavigationTarget) => void): void {
   navigateToSource = cb;
+}
+
+/** Latest runtime port, if any (used by tests/consumers). */
+export function getCurrentPort(): RuntimePort | null {
+  return currentPort;
 }
