@@ -442,8 +442,22 @@ export function decodeOutboundValue(data) {
  * the original error/panic, so a decode failure degrades to an undefined value
  * (the formatted message and className are still surfaced).
  */
+/**
+ * Peel any `union_variant_value` wrapper(s) so a metadata read sees the inner
+ * value. The engine wraps a thrown value in `union_variant_value` when the
+ * function declares a multi-member `throws` union; `decodeValueHolder` already
+ * unwraps this for the value itself (see the `unionVariantValue` arm), so the
+ * FQN read below must match or `className` is lost for union throws.
+ */
+function unwrapUnionVariant(holder) {
+    let h = holder;
+    while (h?.unionVariantValue?.value) {
+        h = h.unionVariantValue.value;
+    }
+    return h;
+}
 function decodeThrown(holder) {
-    const className = holder?.classValue?.name?.name ?? undefined;
+    const className = unwrapUnionVariant(holder)?.classValue?.name?.name ?? undefined;
     let value;
     try {
         value = holder ? decodeValueHolder(holder, getTypeMap()) : undefined;
