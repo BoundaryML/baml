@@ -469,45 +469,12 @@ async fn lsp_ws_session(socket: WebSocket, state: WsState) {
             }
         });
 
-    // Debounced write-through so edits persist WITHOUT a manual save: didChange
-    // streams the full document on every keystroke; we coalesce and write the
-    // latest text to disk after a short quiet period. (didSave still writes
-    // immediately, below.)
-    let (write_tx, mut write_rx) =
-        tokio::sync::mpsc::unbounded_channel::<(String, String)>();
-    tokio::spawn(async move {
-        let debounce = std::time::Duration::from_millis(700);
-        let mut latest: std::collections::HashMap<String, String> =
-            std::collections::HashMap::new();
-        loop {
-            // Wait for the first pending change (or exit when the session ends).
-            match write_rx.recv().await {
-                Some((uri, text)) => {
-                    latest.insert(uri, text);
-                }
-                None => break,
-            }
-            // Coalesce further changes until the edit stream goes quiet.
-            let flush = loop {
-                match tokio::time::timeout(debounce, write_rx.recv()).await {
-                    Ok(Some((uri, text))) => {
-                        latest.insert(uri, text);
-                    }
-                    Ok(None) => break true,  // channel closed: flush then exit
-                    Err(_) => break false,   // quiet period elapsed: flush
-                }
-            };
-            for (uri, text) in latest.drain() {
-                write_lsp_document_to_disk(&uri, &text);
-            }
-            if flush {
-                break;
-            }
-        }
-    });
-
     // Latest full text per document URI, captured from didOpen/didChange so we
-    // can write it through to disk on didSave.
+    // can write it through to disk on didSave. Disk writes happen ONLY on an
+    // explicit save (Cmd+S → didSave) — never on didChange — so the browser and
+    // any other editor (e.g. VS Code) don't race to write the same file. The
+    // disk watcher still pushes external edits to the browser live; applying one
+    // fires a didChange that is NOT written back, so there's no edit loop.
     let mut pending_text: std::collections::HashMap<String, String> =
         std::collections::HashMap::new();
 
@@ -517,7 +484,7 @@ async fn lsp_ws_session(socket: WebSocket, state: WsState) {
                 match client_msg {
                     Some(Ok(AxumWsMsg::Text(text))) => {
                         let text_str: &str = &text;
-                        handle_lsp_client_text(text_str, &dispatch_tx, &write_tx, &state.doc_mirror, &mut sink, &mut pending_text).await;
+                        handle_lsp_client_text(text_str, &dispatch_tx, &state.doc_mirror, &mut sink, &mut pending_text).await;
                     }
                     Some(Ok(AxumWsMsg::Close(_))) | None => break,
                     _ => {}
@@ -549,7 +516,6 @@ async fn lsp_ws_session(socket: WebSocket, state: WsState) {
 async fn handle_lsp_client_text(
     text: &str,
     dispatch_tx: &std::sync::mpsc::Sender<lsp_server::Message>,
-    write_tx: &tokio::sync::mpsc::UnboundedSender<(String, String)>,
     doc_mirror: &DocMirror,
     sink: &mut futures::stream::SplitSink<WebSocket, AxumWsMsg>,
     pending_text: &mut std::collections::HashMap<String, String>,
@@ -584,13 +550,12 @@ async fn handle_lsp_client_text(
             if notif.method == "exit" {
                 return;
             }
-            // Capture text and persist to disk RIGHT HERE on the WS read loop —
-            // not on the dispatch thread — so persistence is immediate and
-            // independent of the recompile backlog. `pending_text` already holds
-            // the latest didChange text because messages are read in order.
-            // didSave writes immediately; didChange schedules a debounced write.
-            // BexLsp still sees the notification (via the dispatch thread).
-            track_and_persist_lsp_notification(&notif, pending_text, write_tx, doc_mirror);
+            // Capture the latest text and, on an explicit save (didSave), write
+            // it through to disk RIGHT HERE on the WS read loop — not the dispatch
+            // thread — so the save is immediate and independent of the recompile
+            // backlog. didChange never writes to disk. BexLsp still sees the
+            // notification (via the dispatch thread) for live diagnostics.
+            track_and_persist_lsp_notification(&notif, pending_text, doc_mirror);
             let _ = dispatch_tx.send(lsp_server::Message::Notification(notif));
         }
         lsp_server::Message::Response(_) => {
@@ -604,7 +569,6 @@ async fn handle_lsp_client_text(
 fn track_and_persist_lsp_notification(
     notif: &lsp_server::Notification,
     pending_text: &mut std::collections::HashMap<String, String>,
-    write_tx: &tokio::sync::mpsc::UnboundedSender<(String, String)>,
     doc_mirror: &DocMirror,
 ) {
     let uri = notif
@@ -635,11 +599,10 @@ fn track_and_persist_lsp_notification(
                     .and_then(serde_json::Value::as_str),
             ) {
                 pending_text.insert(uri.to_string(), text.to_string());
-                // Record what the browser now has so the disk watcher won't echo
-                // the upcoming write-through back as an "external" change.
+                // Record what the browser now has so the disk watcher won't bounce
+                // the user's own save back as an "external" change. NB: no disk
+                // write here — edits persist only on an explicit save (didSave).
                 update_doc_mirror(doc_mirror, uri, text);
-                // Schedule a debounced write so the edit persists without a save.
-                let _ = write_tx.send((uri.to_string(), text.to_string()));
             }
         }
         "textDocument/didSave" => {

@@ -56,6 +56,7 @@ const App: React.FC = () => {
   const [port, setPort] = useState<WebSocketRuntimePort | null>(null);
   const [activeProject, setActiveProject] = useState<string | null>(null);
   const [showEditor, setShowEditor] = useState(false);
+  const [editorHasUnsaved, setEditorHasUnsaved] = useState(false);
   // Once the Monaco editor has been opened we keep it MOUNTED (just hidden via
   // CSS when toggled off). monaco-vscode-api can only initialize once per page,
   // so unmounting + remounting it on toggle would throw "Cannot register two
@@ -211,22 +212,42 @@ const App: React.FC = () => {
     <div className="playground-root flex h-full min-h-0 w-full flex-col overflow-hidden">
       {(inVsCode || canShowEditor) && (
         <header className="flex h-10 shrink-0 items-center justify-end gap-2 border-b border-border bg-background px-2">
-          {canShowEditor && (
-            <button
-              type="button"
-              onClick={() => setShowEditor((v) => !v)}
-              disabled={!showEditor && activeProject === null}
-              title={
-                activeProject === null
-                  ? 'Waiting for a BAML project to load…'
-                  : showEditor
-                    ? 'Hide the code editor'
-                    : 'Open the code editor alongside the playground'
+          {editorActive && (
+            <span
+              className={
+                'flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold ' +
+                (editorHasUnsaved
+                  ? 'bg-amber-500 text-black'
+                  : 'bg-emerald-600/90 text-white')
               }
-              className="h-7 rounded-md border border-border px-3 text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+              title={
+                editorHasUnsaved
+                  ? 'You have unsaved changes. Press ⌘S / Ctrl+S to write them to disk.'
+                  : 'All changes saved to disk.'
+              }
             >
-              {showEditor ? 'Playground only' : 'Open editor'}
-            </button>
+              <span className={'inline-block h-2 w-2 rounded-full ' + (editorHasUnsaved ? 'bg-black/80' : 'bg-white/90')} />
+              {editorHasUnsaved ? 'Unsaved — ⌘S to save' : 'All saved'}
+            </span>
+          )}
+          {canShowEditor && (
+            <>
+              <button
+                type="button"
+                onClick={() => setShowEditor((v) => !v)}
+                disabled={!showEditor && activeProject === null}
+                title={
+                  activeProject === null
+                    ? 'Waiting for a BAML project to load…'
+                    : showEditor
+                      ? 'Hide the code editor'
+                      : 'Open the code editor alongside the playground'
+                }
+                className="h-7 rounded-md border border-border px-3 text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {showEditor ? 'Playground only' : 'Open editor'}
+              </button>
+            </>
           )}
           {inVsCode && (
             <button
@@ -259,7 +280,7 @@ const App: React.FC = () => {
               </div>
             }
           >
-            <RemoteEditorView project={activeProject!} />
+            <RemoteEditorView project={activeProject!} onUnsavedChange={setEditorHasUnsaved} />
           </Suspense>
         </div>
       )}

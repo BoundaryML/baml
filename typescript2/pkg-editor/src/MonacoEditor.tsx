@@ -58,6 +58,16 @@ export interface MonacoEditorProps {
    * manual-save semantics (the worker backend persists via onFilesChange).
    */
   autoSaveDelayMs?: number;
+  /**
+   * Track unsaved-edit state (for save-on-disk backends). When enabled, the
+   * editor watches edit/save events and reports whether any file has edits not
+   * yet written to disk via {@link onUnsavedChange}. (monaco's own dirty-dot
+   * isn't reliably surfaced in this workbench's layout, so the host renders the
+   * indicator itself — e.g. in a toolbar.)
+   */
+  showSaveHint?: boolean;
+  /** Called with true/false as the unsaved-edits state changes (needs showSaveHint). */
+  onUnsavedChange?: (hasUnsaved: boolean) => void;
 }
 
 function createWorkspaceContent(workspacePath: string): string {
@@ -132,7 +142,14 @@ const EditorSkeleton: FC<{ height: string }> = ({ height }) => (
 // Component
 // ---------------------------------------------------------------------------
 
-export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, backend, workspaceRoot = '/workspace', height = '100%', onBlobUrlsChange, autoSaveDelayMs }) => {
+export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, backend, workspaceRoot = '/workspace', height = '100%', onBlobUrlsChange, autoSaveDelayMs, showSaveHint, onUnsavedChange }) => {
+  /** Marks a file (by uri string) as saved/clean — set by the save-hint setup so
+   *  the disk-change handler can clear externally-applied edits from the hint. */
+  const markFileSavedRef = useRef<(uriString: string) => void>(() => {});
+  /** Set of file uris with edits not yet saved to disk. */
+  const unsavedFilesRef = useRef<Set<string>>(new Set());
+  const onUnsavedChangeRef = useRef(onUnsavedChange);
+  onUnsavedChangeRef.current = onUnsavedChange;
   const containerRef = useRef<HTMLDivElement>(null);
   const onFilesChangeRef = useRef(onFilesChange);
   const onBlobUrlsChangeRef = useRef(onBlobUrlsChange);
@@ -701,6 +718,36 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
       // Workbench ready — editor is visible, hide skeleton
       setReady(true);
 
+      // ── Unsaved-changes indicator ────────────────────────────────────
+      // For save-on-disk backends, drive a React-rendered badge (below) while
+      // there are edits not yet written to disk. We track this from edit/save
+      // events — monaco's own dirty-dot isn't surfaced in this workbench's
+      // layout (no visible status bar). Externally-applied edits (pushed from
+      // disk) are cleared via markFileSavedRef so they don't read as "unsaved".
+      if (showSaveHint) {
+        const refresh = () => onUnsavedChangeRef.current?.(unsavedFilesRef.current.size > 0);
+        const onChange = vscode.workspace.onDidChangeTextDocument((e) => {
+          if (e.document.uri.path.endsWith('.baml')) {
+            unsavedFilesRef.current.add(e.document.uri.toString());
+            refresh();
+          }
+        });
+        const onSave = vscode.workspace.onDidSaveTextDocument((doc) => {
+          unsavedFilesRef.current.delete(doc.uri.toString());
+          refresh();
+        });
+        markFileSavedRef.current = (uriString: string) => {
+          unsavedFilesRef.current.delete(uriString);
+          refresh();
+        };
+        disposables.push({
+          dispose: () => {
+            onChange.dispose();
+            onSave.dispose();
+          },
+        });
+      }
+
       // ── Track live file state ────────────────────────────────────────
       // Single mutable map for all files (text + media).
       // Text files store raw content, media files store data URLs.
@@ -853,12 +900,10 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
         // VS Code). The server already does echo-avoidance, so this won't fire
         // for the browser's own write-throughs.
         const lspClient = lcWrapper.getLanguageClient();
-        console.log('[baml disk-sync] handler registration; client =', lspClient ? 'present' : 'MISSING');
         if (lspClient) {
           const diskChangeSub = lspClient.onNotification(
             'baml/fileChangedOnDisk',
             async (params: { uri: string; text: string }) => {
-              console.log('[baml disk-sync] received notification for', params.uri, 'len', params.text?.length);
               if (disposed) return;
               try {
                 const fileUri = vscode.Uri.parse(params.uri);
@@ -866,20 +911,8 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
                 const openDoc = vscode.workspace.textDocuments.find(
                   (d) => d.uri.toString() === target,
                 );
-                console.log('[baml disk-sync] target', target, 'open?', !!openDoc,
-                  'openDocs', vscode.workspace.textDocuments.map((d) => d.uri.toString()));
                 if (openDoc) {
-                  // Skip only if already current. NOTE: we deliberately do NOT
-                  // skip on `isDirty`. With the remote backend the document is
-                  // perpetually "dirty" (it's persisted by the server's debounced
-                  // write-through, not monaco's own save, so the dirty flag never
-                  // clears) — so dirty is not a reliable conflict signal. The
-                  // server's echo-avoidance guarantees this only fires for genuine
-                  // external edits, and disk is the source of truth here.
-                  if (openDoc.getText() === params.text) {
-                    console.log('[baml disk-sync] skip (unchanged)');
-                    return;
-                  }
+                  if (openDoc.getText() === params.text) return; // already current
                   const lastLine = Math.max(openDoc.lineCount - 1, 0);
                   const end = openDoc.lineAt(lastLine).range.end;
                   const edit = new vscode.WorkspaceEdit();
@@ -888,8 +921,7 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
                     new vscode.Range(new vscode.Position(0, 0), end),
                     params.text,
                   );
-                  const ok = await vscode.workspace.applyEdit(edit);
-                  console.log('[baml disk-sync] applyEdit ->', ok);
+                  await vscode.workspace.applyEdit(edit);
                 } else {
                   // Not open: refresh the in-memory FS so the file tree and the
                   // next open show the current content.
@@ -898,10 +930,12 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
                     encoder.encode(params.text),
                     { create: true, overwrite: true, unlock: false, atomic: false },
                   );
-                  console.log('[baml disk-sync] wrote FS provider (file not open)');
                 }
+                // The applyEdit above counts as a text change; clear it from the
+                // unsaved indicator since this content came FROM disk.
+                markFileSavedRef.current(target);
               } catch (err) {
-                console.error('[baml disk-sync] applying external file change failed:', err);
+                console.error('[MonacoEditor] applying external file change failed:', err);
               }
             },
           );

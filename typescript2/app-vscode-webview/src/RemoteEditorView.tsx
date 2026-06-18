@@ -34,9 +34,11 @@ interface SourceFilesResponse {
 export interface RemoteEditorViewProps {
   /** Absolute path to the BAML project root (as reported by the playground). */
   project: string;
+  /** Reports whether the editor has edits not yet saved to disk. */
+  onUnsavedChange?: (hasUnsaved: boolean) => void;
 }
 
-const RemoteEditorView: React.FC<RemoteEditorViewProps> = ({ project }) => {
+const RemoteEditorView: React.FC<RemoteEditorViewProps> = ({ project, onUnsavedChange }) => {
   const [files, setFiles] = useState<Record<string, string> | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -84,14 +86,16 @@ const RemoteEditorView: React.FC<RemoteEditorViewProps> = ({ project }) => {
   return (
     <MonacoEditor
       files={files}
-      // The server owns the files on disk; edits stream to it via the language
-      // client (didChange/didSave). Nothing to persist on the client side.
+      // The server owns the files on disk. Edits live in the browser until you
+      // save — Cmd+S → the language client's didSave → the server writes to
+      // disk. Manual save (no auto-save) keeps the browser and another editor
+      // (e.g. VS Code) from racing to write the same file. External edits still
+      // flow into the browser live via the server's disk watcher.
       onFilesChange={() => {}}
       backend={backend}
       workspaceRoot={project}
-      // Auto-save so edits flow to the server (and through to disk) without a
-      // manual Cmd+S.
-      autoSaveDelayMs={800}
+      showSaveHint
+      onUnsavedChange={onUnsavedChange}
       height="100%"
     />
   );
