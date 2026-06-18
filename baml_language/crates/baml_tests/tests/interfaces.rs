@@ -12148,3 +12148,25 @@ fn arithmetic_on_interface_existential_is_ok() {
         "#,
     );
 }
+
+#[test]
+fn arithmetic_on_userclass_interface_existential_is_ok() {
+    // A user class as the interface arg must satisfy `Rhs extends Concrete` via
+    // the stdlib's blanket `Concrete` impl (which lives in the baml package, not
+    // the user's) — the bound is an implements check across both packages.
+    assert_no_compile_errors(
+        r#"
+        class B { v: int }
+        class A {
+            v: int
+            implements baml.ops.Add<A> {
+                type Output = B
+                function add(self, rhs: A) -> B throws never { B { v: self.v + rhs.v } }
+            }
+        }
+        function f(x: baml.ops.Add<A, Output = B>, a: A) -> B {
+            x + a
+        }
+        "#,
+    );
+}

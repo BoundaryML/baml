@@ -14209,20 +14209,35 @@ impl<'db> TypeInferenceBuilder<'db> {
             && !matches!(sub, Ty::Interface(..))
         {
             let db = self.context.db();
-            let registry_pkg = self.registry_package_for_interface_check(sub, iface_qtn);
-            let registry = crate::interfaces::package_implements_registry(db, registry_pkg);
             let requested_iface_ty = Ty::Interface(
                 iface_qtn.clone(),
                 iface_args.clone(),
                 associated_bindings.clone(),
                 TyAttr::default(),
             );
-            return registry.type_implements_interface_via_rule(
-                sub,
-                &requested_iface_ty,
-                &self.aliases,
-                |actual, bound| self.is_subtype(actual, bound),
-            );
+            // `sub <: interface` is the nominal *implements* relation. By the
+            // orphan rule an impl lives in the implementing type's package or the
+            // interface's package — a blanket impl (e.g. the stdlib's
+            // `implement<T> Concrete for T`) lives with the interface even when it
+            // matches a foreign type — so consult both, mirroring the runtime
+            // resolver's `candidate_rules`. The type's package is checked first
+            // (the common case: an in-body `implements`). A single-package lookup
+            // would miss, e.g., a user class against the stdlib's `Concrete`.
+            let type_pkg = self.registry_package_for_interface_check(sub, iface_qtn);
+            let iface_pkg = self.package_id_for_qtn(iface_qtn);
+            let mut pkgs = vec![type_pkg];
+            if iface_pkg != type_pkg {
+                pkgs.push(iface_pkg);
+            }
+            return pkgs.into_iter().any(|pkg| {
+                crate::interfaces::package_implements_registry(db, pkg)
+                    .type_implements_interface_via_rule(
+                        sub,
+                        &requested_iface_ty,
+                        &self.aliases,
+                        |actual, bound| self.is_subtype(actual, bound),
+                    )
+            });
         }
         // BEP-044 interface-to-interface subtyping: `Interface A <: Interface B`
         // iff A == B or A requires B (transitively). Two unrelated interfaces
