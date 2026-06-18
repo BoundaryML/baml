@@ -482,6 +482,14 @@ fn install_skills_to(root: &Path, relative_skills_dir: PathBuf, skills: &[Skill]
     fs::create_dir_all(&skills_dir)
         .with_context(|| format!("failed to create {}", skills_dir.display()))?;
 
+    let skills_to_install = skills
+        .iter()
+        .filter(|skill| skill_needs_install(&skills_dir, skill))
+        .collect::<Result<Vec<_>>>()?;
+    if skills_to_install.is_empty() {
+        return Ok(());
+    }
+
     let tmp_dir = skills_dir.join(format!(".baml-agent-install-{}", std::process::id()));
     if tmp_dir.exists() {
         fs::remove_dir_all(&tmp_dir)
@@ -491,14 +499,14 @@ fn install_skills_to(root: &Path, relative_skills_dir: PathBuf, skills: &[Skill]
         .with_context(|| format!("failed to create {}", tmp_dir.display()))?;
 
     let result = (|| -> Result<()> {
-        for skill in skills {
+        for skill in &skills_to_install {
             let skill_dir = tmp_dir.join(&skill.name);
             fs::create_dir_all(&skill_dir)
                 .with_context(|| format!("failed to create {}", skill_dir.display()))?;
             write_atomic(&skill_dir.join("SKILL.md"), &skill.content)?;
         }
 
-        for skill in skills {
+        for skill in &skills_to_install {
             replace_skill_dir(&skills_dir, &tmp_dir, skill)?;
         }
         Ok(())
@@ -511,6 +519,15 @@ fn install_skills_to(root: &Path, relative_skills_dir: PathBuf, skills: &[Skill]
             Err(err).context("failed to clean up temporary BAML agent skill directory")
         }
         (Ok(()), _) => Ok(()),
+    }
+}
+
+fn skill_needs_install(skills_dir: &Path, skill: &Skill) -> Result<bool> {
+    let path = skills_dir.join(&skill.name).join("SKILL.md");
+    match fs::read_to_string(&path) {
+        Ok(existing) => Ok(existing != skill.content),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(true),
+        Err(err) => Err(err).with_context(|| format!("failed to read {}", path.display())),
     }
 }
 
@@ -827,6 +844,47 @@ mod tests {
             "{message}"
         );
         assert!(message.contains("Installed BAML agent skills in /tmp/project"));
+    }
+
+    #[test]
+    fn reinstall_does_not_replace_unchanged_skill_directory() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let skills = vec![Skill {
+            name: "baml-core".to_string(),
+            content: skill("baml-core"),
+        }];
+
+        install_skills(root, &skills).unwrap();
+        let sidecar = root.join(".agents/skills/baml-core/extra.txt");
+        fs::write(&sidecar, "keep").unwrap();
+
+        install_skills(root, &skills).unwrap();
+
+        assert_eq!(fs::read_to_string(&sidecar).unwrap(), "keep");
+    }
+
+    #[test]
+    fn install_reports_existing_skill_read_errors() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let skill_path = root.join(".agents/skills/baml-core/SKILL.md");
+        fs::create_dir_all(skill_path.parent().unwrap()).unwrap();
+        fs::write(&skill_path, &[0xff, 0xfe]).unwrap();
+
+        let err = format!(
+            "{:#}",
+            install_skills(
+                root,
+                &[Skill {
+                    name: "baml-core".to_string(),
+                    content: skill("baml-core"),
+                }]
+            )
+            .unwrap_err()
+        );
+        assert!(err.contains("failed to read"), "{err}");
+        assert!(err.contains(".agents/skills/baml-core/SKILL.md"), "{err}");
     }
 
     fn skill(name: &str) -> String {
