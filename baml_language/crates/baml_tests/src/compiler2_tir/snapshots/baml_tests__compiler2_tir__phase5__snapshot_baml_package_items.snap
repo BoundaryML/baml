@@ -12,13 +12,16 @@ namespace baml:
   class Map<K, V> { methods: [length, has, keys, values, set, get, to_json, delete, get_or_insert, clear, from_json] }
   class Null { methods: [to_json, from_json] }
   type Sortable
-  class String { methods: [to_json, length, char_count, byte_length, to_lower_case, to_upper_case, trim, trim_start, trim_end, includes, starts_with, ends_with, split, lines, substring, replace, index_of, char_at, repeat, matches, replace_all, is_numeric, is_alphabetic, is_alphanumeric, is_uppercase, is_lowercase, is_whitespace, is_control, is_graphic, is_ascii, is_ascii_numeric, is_ascii_alphabetic, is_ascii_alphanumeric, is_ascii_uppercase, is_ascii_lowercase, is_ascii_whitespace, is_ascii_control, is_ascii_graphic, is_ascii_hex, to_utf8, from_utf8, from_code_points, from_json] }
-  class TypeValue { methods: [to_string, implements, implemented_by, implementors, to_json, from_json] }
-  class Uint8Array { methods: [to_json, length, at, push, pop, concat, includes, reverse, slice, zeroes, from_array, to_array, from_hex, to_hex, from_base64, to_base64, to_string, sort, from_json] }
+  class String { methods: [from, to_json, length, char_count, byte_length, to_lower_case, to_upper_case, trim, trim_start, trim_end, includes, starts_with, ends_with, split, lines, substring, replace, index_of, char_at, repeat, matches, replace_all, is_numeric, is_alphabetic, is_alphanumeric, is_uppercase, is_lowercase, is_whitespace, is_control, is_graphic, is_ascii, is_ascii_numeric, is_ascii_alphabetic, is_ascii_alphanumeric, is_ascii_uppercase, is_ascii_lowercase, is_ascii_whitespace, is_ascii_control, is_ascii_graphic, is_ascii_hex, to_utf8, from_utf8, from_code_points, from_json] }
+  type ToString
+  class TypeValue { methods: [_to_string_impl, implements, implemented_by, implementors, to_json, from_json, to_string] }
+  class Uint8Array { methods: [to_json, length, at, push, pop, concat, includes, reverse, slice, zeroes, from_array, to_array, from_hex, to_hex, from_base64, to_base64, _to_string_impl, sort, from_json, to_string] }
   function _compare_shim<T>
   function _float_total_cmp
   function _is_primitive_array<T>
   function _rust_sort<A>
+  function _to_string_default<T>
+  function _to_string_shim<T>
   function deep_copy<T>
   function deep_equals<T>
 namespace baml.csv:
@@ -79,7 +82,7 @@ namespace baml.errors:
   class ParseError { methods: [to_json, from_json] }
   class RenderPrompt { methods: [to_json, from_json] }
   class StackFrame { methods: [to_json, from_json] }
-  class StackTrace { methods: [to_string, to_json, from_json] }
+  class StackTrace { methods: [_to_string_impl, to_json, from_json, to_string] }
   class Timeout { methods: [to_json, from_json] }
   class Unsupported { methods: [to_json, from_json] }
 namespace baml.events:
@@ -250,13 +253,13 @@ namespace baml.time:
   class AmbiguousTimeError { methods: [to_json, from_json] }
   type Disambiguation
   class Duration { methods: [abs, from_nanoseconds, from_microseconds, from_milliseconds, from_seconds, from_minutes, from_hours, to_nanoseconds, to_microseconds, to_milliseconds, to_seconds, to_minutes, to_hours, to_json, from_json] }
-  class Instant { methods: [now, elapsed, parse, to_string, from_json, to_json, max, min, abs_diff, from_timestamp_nanoseconds, from_timestamp_microseconds, from_timestamp_milliseconds, from_timestamp_seconds, to_timestamp_nanoseconds, to_timestamp_microseconds, to_timestamp_milliseconds, to_timestamp_seconds, epoch] }
-  class PlainDate { methods: [from_components, parse, to_string, to_plain_datetime, _to_plain_datetime, year, month, day, from_json, to_json] }
-  class PlainDateTime { methods: [from_components, _from_components, parse, to_string, to_zoned, max, min, to_plain_date, to_plain_time, year, month, day, hour, minute, second, millisecond, from_json, to_json] }
-  class PlainTime { methods: [from_components, _from_components, parse, to_string, to_plain_datetime, hour, minute, second, millisecond, from_json, to_json] }
+  class Instant { methods: [now, elapsed, parse, _to_string_impl, from_json, to_json, max, min, abs_diff, from_timestamp_nanoseconds, from_timestamp_microseconds, from_timestamp_milliseconds, from_timestamp_seconds, to_timestamp_nanoseconds, to_timestamp_microseconds, to_timestamp_milliseconds, to_timestamp_seconds, epoch, to_string] }
+  class PlainDate { methods: [from_components, parse, _to_string_impl, to_plain_datetime, _to_plain_datetime, year, month, day, from_json, to_json, to_string] }
+  class PlainDateTime { methods: [from_components, _from_components, parse, _to_string_impl, to_zoned, max, min, to_plain_date, to_plain_time, year, month, day, hour, minute, second, millisecond, from_json, to_json, to_string] }
+  class PlainTime { methods: [from_components, _from_components, parse, _to_string_impl, to_plain_datetime, hour, minute, second, millisecond, from_json, to_json, to_string] }
   class TimeZoneOffset { methods: [utc, new, from_timezone, local, from_duration, to_duration, hours, minutes, to_json, from_json] }
   class UnknownTimezoneError { methods: [to_json, from_json] }
-  class ZonedDateTime { methods: [now, now_in, from_instant, to_instant, from_components, parse, to_string, max, min, with_timezone, timezone, timezone_offset, to_plain, year, month, day, hour, minute, second, millisecond, from_json, to_json] }
+  class ZonedDateTime { methods: [now, now_in, from_instant, to_instant, from_components, parse, _to_string_impl, max, min, with_timezone, timezone, timezone_offset, to_plain, year, month, day, hour, minute, second, millisecond, from_json, to_json, to_string] }
   function _format_zoned
   function _tz_offset_at
   function _tz_to_instant

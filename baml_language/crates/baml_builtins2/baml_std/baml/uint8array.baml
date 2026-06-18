@@ -116,7 +116,13 @@ class Uint8Array {
 
   /// Decodes the bytes as a UTF-8 string.
   /// Invalid UTF-8 sequences are replaced with U+FFFD (replacement character).
-  function to_string(self) -> string throws never {
+  implements baml.ToString {
+    function to_string(self) -> string throws never {
+      self._to_string_impl()
+    }
+  }
+
+  function _to_string_impl(self) -> string throws never {
     $rust_function
   }
 
