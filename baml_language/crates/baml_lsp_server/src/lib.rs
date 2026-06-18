@@ -194,6 +194,13 @@ fn run_server_inner(
     // this broadcast channel.
     let (lsp_out_tx, _lsp_out_rx) = tokio::sync::broadcast::channel::<lsp_server::Message>(256);
 
+    // Mirror of the content the browser editor currently has per file. Shared
+    // between the `/api/lsp` bridge (writes it on didOpen/didChange) and the disk
+    // watcher (reads it to avoid echoing the browser's own write-throughs back as
+    // external changes).
+    let doc_mirror: playground_server::DocMirror =
+        Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
+
     // Pick the playground port early so we can pass it to the sender.
     let (playground_listener, playground_port): (Option<TcpListener>, u16) =
         match tokio_runtime.block_on(playground_server::pick_port(3700, 100)) {
@@ -279,6 +286,15 @@ fn run_server_inner(
                     }
                 })?;
 
+            // Watch the workspace for external edits (e.g. from another editor)
+            // and push them to the browser editor over `/api/lsp`. Held until the
+            // server task returns so watching continues for the session lifetime.
+            let _disk_watcher = playground_server::spawn_disk_watcher(
+                &workspace_roots,
+                lsp_out_tx.clone(),
+                doc_mirror.clone(),
+            );
+
             return tokio_runtime.block_on(playground_server::run(
                 listener,
                 bex_for_playground,
@@ -288,6 +304,7 @@ fn run_server_inner(
                 runs,
                 playground_dir,
                 lsp_out_tx,
+                doc_mirror,
             ));
         }
 
@@ -301,6 +318,7 @@ fn run_server_inner(
                 runs,
                 playground_dir,
                 lsp_out_tx,
+                doc_mirror,
             )
             .await
             {

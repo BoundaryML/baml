@@ -847,6 +847,67 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
           { dispose: () => conn.dispose() },
         );
 
+        // Live-apply external on-disk edits the server pushes (remote backend
+        // only — the worker backend's in-browser LSP never sends this), so the
+        // editor stays in sync when files change underneath it (e.g. edited in
+        // VS Code). The server already does echo-avoidance, so this won't fire
+        // for the browser's own write-throughs.
+        const lspClient = lcWrapper.getLanguageClient();
+        console.log('[baml disk-sync] handler registration; client =', lspClient ? 'present' : 'MISSING');
+        if (lspClient) {
+          const diskChangeSub = lspClient.onNotification(
+            'baml/fileChangedOnDisk',
+            async (params: { uri: string; text: string }) => {
+              console.log('[baml disk-sync] received notification for', params.uri, 'len', params.text?.length);
+              if (disposed) return;
+              try {
+                const fileUri = vscode.Uri.parse(params.uri);
+                const target = fileUri.toString();
+                const openDoc = vscode.workspace.textDocuments.find(
+                  (d) => d.uri.toString() === target,
+                );
+                console.log('[baml disk-sync] target', target, 'open?', !!openDoc,
+                  'openDocs', vscode.workspace.textDocuments.map((d) => d.uri.toString()));
+                if (openDoc) {
+                  // Skip only if already current. NOTE: we deliberately do NOT
+                  // skip on `isDirty`. With the remote backend the document is
+                  // perpetually "dirty" (it's persisted by the server's debounced
+                  // write-through, not monaco's own save, so the dirty flag never
+                  // clears) — so dirty is not a reliable conflict signal. The
+                  // server's echo-avoidance guarantees this only fires for genuine
+                  // external edits, and disk is the source of truth here.
+                  if (openDoc.getText() === params.text) {
+                    console.log('[baml disk-sync] skip (unchanged)');
+                    return;
+                  }
+                  const lastLine = Math.max(openDoc.lineCount - 1, 0);
+                  const end = openDoc.lineAt(lastLine).range.end;
+                  const edit = new vscode.WorkspaceEdit();
+                  edit.replace(
+                    fileUri,
+                    new vscode.Range(new vscode.Position(0, 0), end),
+                    params.text,
+                  );
+                  const ok = await vscode.workspace.applyEdit(edit);
+                  console.log('[baml disk-sync] applyEdit ->', ok);
+                } else {
+                  // Not open: refresh the in-memory FS so the file tree and the
+                  // next open show the current content.
+                  await fileSystemProvider.writeFile(
+                    fileUri,
+                    encoder.encode(params.text),
+                    { create: true, overwrite: true, unlock: false, atomic: false },
+                  );
+                  console.log('[baml disk-sync] wrote FS provider (file not open)');
+                }
+              } catch (err) {
+                console.error('[baml disk-sync] applying external file change failed:', err);
+              }
+            },
+          );
+          connDisposablesRef.current.push({ dispose: () => diskChangeSub.dispose() });
+        }
+
         const { setRuntimePort, setReloadCallback, setNavigateToSource } = await import('./ExecutionPanelPane');
 
         setRuntimePort(conn.runtimePort, { connectionVersion: connectionVersionRef.current });

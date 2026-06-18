@@ -255,6 +255,18 @@ pub async fn pick_port(base_port: u16, max_attempts: u16) -> anyhow::Result<(Tcp
 // Shared state for Axum handlers
 // ---------------------------------------------------------------------------
 
+/// Per-file mirror of the content the BROWSER currently has (set from
+/// didOpen/didChange). The disk watcher consults it to avoid echoing the
+/// browser's own write-throughs back as "external" changes — only content that
+/// differs from the mirror is pushed to the browser. Shared between the `/api/lsp`
+/// bridge (writer) and the disk watcher (reader). Keyed by canonical path.
+pub type DocMirror = Arc<std::sync::Mutex<std::collections::HashMap<PathBuf, String>>>;
+
+/// Custom LSP notification used to push external on-disk edits to the browser
+/// editor so it can refresh its model. Not part of the LSP spec; the browser
+/// registers a handler for this method.
+const DISK_CHANGE_NOTIFICATION: &str = "baml/fileChangedOnDisk";
+
 #[derive(Clone)]
 struct WsState {
     bex: Arc<dyn bex_project::BexLsp>,
@@ -264,6 +276,8 @@ struct WsState {
     run_store: Arc<InMemoryRunStore>,
     /// LSP output (responses + publishDiagnostics) destined for `/api/lsp`.
     lsp_out_tx: broadcast::Sender<lsp_server::Message>,
+    /// What the browser currently has per file (for disk-watcher echo avoidance).
+    doc_mirror: DocMirror,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -302,6 +316,7 @@ pub async fn run(
     run_store: Arc<InMemoryRunStore>,
     playground_dir_override: Option<PathBuf>,
     lsp_out_tx: broadcast::Sender<lsp_server::Message>,
+    doc_mirror: DocMirror,
 ) -> anyhow::Result<()> {
     let app = build_router(
         bex,
@@ -311,6 +326,7 @@ pub async fn run(
         run_store,
         playground_dir_override,
         lsp_out_tx,
+        doc_mirror,
     )?;
 
     tracing::info!(
@@ -332,6 +348,7 @@ fn build_router(
     run_store: Arc<InMemoryRunStore>,
     playground_dir_override: Option<PathBuf>,
     lsp_out_tx: broadcast::Sender<lsp_server::Message>,
+    doc_mirror: DocMirror,
 ) -> anyhow::Result<Router> {
     let ws_state = WsState {
         bex,
@@ -340,6 +357,7 @@ fn build_router(
         io_state,
         run_store,
         lsp_out_tx,
+        doc_mirror,
     };
 
     let api = Router::new()
@@ -499,7 +517,7 @@ async fn lsp_ws_session(socket: WebSocket, state: WsState) {
                 match client_msg {
                     Some(Ok(AxumWsMsg::Text(text))) => {
                         let text_str: &str = &text;
-                        handle_lsp_client_text(text_str, &dispatch_tx, &write_tx, &mut sink, &mut pending_text).await;
+                        handle_lsp_client_text(text_str, &dispatch_tx, &write_tx, &state.doc_mirror, &mut sink, &mut pending_text).await;
                     }
                     Some(Ok(AxumWsMsg::Close(_))) | None => break,
                     _ => {}
@@ -532,6 +550,7 @@ async fn handle_lsp_client_text(
     text: &str,
     dispatch_tx: &std::sync::mpsc::Sender<lsp_server::Message>,
     write_tx: &tokio::sync::mpsc::UnboundedSender<(String, String)>,
+    doc_mirror: &DocMirror,
     sink: &mut futures::stream::SplitSink<WebSocket, AxumWsMsg>,
     pending_text: &mut std::collections::HashMap<String, String>,
 ) {
@@ -571,7 +590,7 @@ async fn handle_lsp_client_text(
             // the latest didChange text because messages are read in order.
             // didSave writes immediately; didChange schedules a debounced write.
             // BexLsp still sees the notification (via the dispatch thread).
-            track_and_persist_lsp_notification(&notif, pending_text, write_tx);
+            track_and_persist_lsp_notification(&notif, pending_text, write_tx, doc_mirror);
             let _ = dispatch_tx.send(lsp_server::Message::Notification(notif));
         }
         lsp_server::Message::Response(_) => {
@@ -586,6 +605,7 @@ fn track_and_persist_lsp_notification(
     notif: &lsp_server::Notification,
     pending_text: &mut std::collections::HashMap<String, String>,
     write_tx: &tokio::sync::mpsc::UnboundedSender<(String, String)>,
+    doc_mirror: &DocMirror,
 ) {
     let uri = notif
         .params
@@ -602,6 +622,7 @@ fn track_and_persist_lsp_notification(
                     .and_then(serde_json::Value::as_str),
             ) {
                 pending_text.insert(uri.to_string(), text.to_string());
+                update_doc_mirror(doc_mirror, uri, text);
             }
         }
         "textDocument/didChange" => {
@@ -614,6 +635,9 @@ fn track_and_persist_lsp_notification(
                     .and_then(serde_json::Value::as_str),
             ) {
                 pending_text.insert(uri.to_string(), text.to_string());
+                // Record what the browser now has so the disk watcher won't echo
+                // the upcoming write-through back as an "external" change.
+                update_doc_mirror(doc_mirror, uri, text);
                 // Schedule a debounced write so the edit persists without a save.
                 let _ = write_tx.send((uri.to_string(), text.to_string()));
             }
@@ -652,6 +676,88 @@ fn write_lsp_document_to_disk(uri: &str, text: &str) {
         Ok(()) => tracing::debug!("LSP WS: wrote {} ({} bytes)", path.display(), text.len()),
         Err(e) => tracing::warn!("LSP WS: failed to write {}: {e}", path.display()),
     }
+}
+
+/// Resolve a `file://` URI to a canonical path (the key form used by the disk
+/// watcher), so the browser's content and the watcher's reads compare equal.
+fn uri_to_canonical_path(uri: &str) -> Option<PathBuf> {
+    let path = lsp_types::Url::parse(uri).ok()?.to_file_path().ok()?;
+    Some(std::fs::canonicalize(&path).unwrap_or(path))
+}
+
+/// Record the content the browser now has for `uri` (used for echo avoidance).
+fn update_doc_mirror(doc_mirror: &DocMirror, uri: &str, text: &str) {
+    if let Some(path) = uri_to_canonical_path(uri)
+        && let Ok(mut mirror) = doc_mirror.lock()
+    {
+        mirror.insert(path, text.to_string());
+    }
+}
+
+/// Watch `roots` for external `.baml` edits and push them to the browser editor
+/// over `/api/lsp` (as a `baml/fileChangedOnDisk` notification). Echo avoidance:
+/// a change whose content already matches `doc_mirror` (what the browser has, or
+/// just wrote through) is NOT pushed back. The returned watcher must be kept
+/// alive for as long as watching should continue.
+pub fn spawn_disk_watcher(
+    roots: &[PathBuf],
+    lsp_out_tx: broadcast::Sender<lsp_server::Message>,
+    doc_mirror: DocMirror,
+) -> Option<notify::RecommendedWatcher> {
+    use notify::{EventKind, RecursiveMode, Watcher};
+
+    let handler = move |res: notify::Result<notify::Event>| {
+        let Ok(event) = res else { return };
+        if !matches!(event.kind, EventKind::Modify(_) | EventKind::Create(_)) {
+            return;
+        }
+        for path in event.paths {
+            if path.extension().and_then(|e| e.to_str()) != Some("baml") {
+                continue;
+            }
+            let canonical = std::fs::canonicalize(&path).unwrap_or(path);
+            let Ok(content) = std::fs::read_to_string(&canonical) else {
+                continue;
+            };
+            {
+                let Ok(mut mirror) = doc_mirror.lock() else {
+                    continue;
+                };
+                if mirror.get(&canonical).map(String::as_str) == Some(content.as_str()) {
+                    // The browser already has this content (it wrote it). No echo.
+                    continue;
+                }
+                mirror.insert(canonical.clone(), content.clone());
+            }
+            let Ok(url) = lsp_types::Url::from_file_path(&canonical) else {
+                continue;
+            };
+            let notif = lsp_server::Notification {
+                method: DISK_CHANGE_NOTIFICATION.to_string(),
+                params: serde_json::json!({ "uri": url.to_string(), "text": content }),
+            };
+            let _ = lsp_out_tx.send(lsp_server::Message::Notification(notif));
+            tracing::debug!(
+                "Disk watcher: pushed external change for {}",
+                canonical.display()
+            );
+        }
+    };
+
+    let mut watcher = match notify::recommended_watcher(handler) {
+        Ok(w) => w,
+        Err(e) => {
+            tracing::warn!("Disk watcher: failed to initialize: {e}");
+            return None;
+        }
+    };
+    for root in roots {
+        match watcher.watch(root, RecursiveMode::Recursive) {
+            Ok(()) => tracing::info!("Disk watcher: watching {}", root.display()),
+            Err(e) => tracing::warn!("Disk watcher: failed to watch {}: {e}", root.display()),
+        }
+    }
+    Some(watcher)
 }
 
 async fn source_files_handler(

@@ -1023,6 +1023,7 @@ dependencies = [
  "indexmap",
  "lsp-server",
  "lsp-types",
+ "notify",
  "num-bigint",
  "parking_lot",
  "prost",
