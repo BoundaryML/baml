@@ -542,6 +542,37 @@ pub enum Instruction {
     /// Arity is read from the runtime callee function object.
     CallIndirect,
 
+    /// Virtual interface-method call: resolve the callee at runtime from the
+    /// receiver's concrete `Self` type, then call it. The callee is *not* a
+    /// statically-known function — it is `<Self as I>::method`, where `Self` is
+    /// read from the receiver and `(Self, I)` uniquely identify one `implements`
+    /// block (coherence). Open-world: handles user / cross-package / runtime
+    /// types that a compile-time type-tag switch cannot enumerate.
+    ///
+    /// Stack layout (top-of-stack on the right), mirroring `Call`'s
+    /// type-args-below-value-args order:
+    ///
+    /// ```text
+    /// [m_targ_0, ..., m_targ_{ntypeargs-1}, val_arg_0 (receiver), ..., val_arg_{nargs-1}, iface_type, method_name]
+    /// ```
+    ///
+    /// The VM pops `method_name` (a `String`) and `iface_type` (an `Object::Type`
+    /// holding the — possibly parameterized — interface), then the `ntypeargs`
+    /// method-level type args (sitting below the value args, as in `Call`),
+    /// leaving the `nargs` value args (receiver first). It reads `Self` from the
+    /// receiver's runtime concrete type, resolves `<Self as iface_type>::method_name`,
+    /// and calls it like `Call`, seeding `frame.type_args` with the resolved impl's
+    /// type args (its own generics, or the interface's args + associated types for
+    /// an inherited default) followed by these method-level type args. `nargs` is
+    /// the resolved method's arity.
+    VirtualCall {
+        /// Number of value arguments (including the receiver as the first).
+        nargs: u16,
+        /// Number of leading method-level type arguments (`Object::Type` values),
+        /// below the value args. Zero for a non-generic method.
+        ntypeargs: u16,
+    },
+
     /// Throw the value on top of the stack.
     ///
     /// Stack: `[error_value]` -> `[]` (control transfers to unwind handler or caller)
@@ -923,6 +954,13 @@ pub enum OpCode {
     // ── Unit op appended out of group order to preserve discriminants ──
     // BEP-034 `baml.future.__await_any`: no operands (1 byte), like `Await`.
     AwaitAny,
+
+    // ── Appended out of group order to preserve discriminants ──
+    // Virtual interface-method call: u16 nargs + u16 ntypeargs (5 bytes). The
+    // interface type (`Object::Type`) and method-name string are pushed above the
+    // args and popped first; the callee is resolved at runtime from the receiver's
+    // `Self`.
+    VirtualCall,
 }
 
 impl OpCode {
@@ -1041,7 +1079,8 @@ impl OpCode {
             | Self::CaptureRef
             | Self::Jump
             | Self::PopJumpIfFalse
-            | Self::JumpIfFalse => 5,
+            | Self::JumpIfFalse
+            | Self::VirtualCall => 5,
 
             // 3-byte: opcode + u16
             Self::MakeGenericFunctionFromValue => 3,
@@ -1184,6 +1223,7 @@ impl TryFrom<u8> for OpCode {
             }
             x if x == Self::LoadVar2 as u8 => Ok(Self::LoadVar2),
             x if x == Self::StoreVar2 as u8 => Ok(Self::StoreVar2),
+            x if x == Self::VirtualCall as u8 => Ok(Self::VirtualCall),
             _ => Err(byte),
         }
     }
@@ -1195,6 +1235,7 @@ impl std::fmt::Display for OpCode {
             Self::Return => "RETURN",
             Self::Await => "AWAIT",
             Self::AwaitAny => "AWAIT_ANY",
+            Self::VirtualCall => "VIRTUAL_CALL",
             Self::Throw => "THROW",
             Self::LoadArrayElement => "LOAD_ARRAY_ELEMENT",
             Self::LoadMapElement => "LOAD_MAP_ELEMENT",
@@ -1488,6 +1529,9 @@ impl std::fmt::Display for Instruction {
                 write!(f, "MAKE_GENERIC_FUNCTION_FROM_VALUE ntypeargs={ntypeargs}")
             }
             Instruction::CallIndirect => f.write_str("CALL_INDIRECT"),
+            Instruction::VirtualCall { nargs, ntypeargs } => {
+                write!(f, "VIRTUAL_CALL nargs={nargs} ntypeargs={ntypeargs}")
+            }
             Instruction::Throw => f.write_str("THROW"),
 
             Instruction::Return => f.write_str("RETURN"),
@@ -2022,6 +2066,12 @@ impl Bytecode {
                     code.extend_from_slice(&ntypeargs.to_le_bytes());
                 }
 
+                // ── VirtualCall: u16 nargs, u16 ntypeargs ────────────
+                Instruction::VirtualCall { nargs, ntypeargs } => {
+                    code.extend_from_slice(&nargs.to_le_bytes());
+                    code.extend_from_slice(&ntypeargs.to_le_bytes());
+                }
+
                 // ── ObjectIndex operand → u32 ───────────────────────
                 Instruction::AllocVariant(o) => {
                     code.extend_from_slice(
@@ -2346,6 +2396,7 @@ impl Bytecode {
             Instruction::MakeGenericFunctionFromValue { .. } => {
                 OpCode::MakeGenericFunctionFromValue
             }
+            Instruction::VirtualCall { .. } => OpCode::VirtualCall,
         }
     }
 }

@@ -240,7 +240,7 @@ function reflect_type_of_generic.described_type_eq_concrete_fn() -> bool {
     load_type reflect_type_of_generic.User
     call user.reflect_type_of_generic.described_type
     load_type reflect_type_of_generic.User
-    cmp_op ==
+    call baml.ops.equals_equals
     return
 }
 
@@ -248,7 +248,7 @@ function reflect_type_of_generic.described_type_neq_different_fn() -> bool {
     load_type int
     call user.reflect_type_of_generic.described_type
     load_type reflect_type_of_generic.User
-    cmp_op ==
+    call baml.ops.equals_equals
     return
 }
 
@@ -262,7 +262,7 @@ function reflect_type_of_generic.fwd_int_neq_user_fn() -> bool {
     load_type int
     call user.reflect_type_of_generic.fwd
     load_type reflect_type_of_generic.User
-    cmp_op ==
+    call baml.ops.equals_equals
     return
 }
 
@@ -270,7 +270,7 @@ function reflect_type_of_generic.fwd_user_eq_reflect_type_of_user_fn() -> bool {
     load_type reflect_type_of_generic.User
     call user.reflect_type_of_generic.fwd
     load_type reflect_type_of_generic.User
-    cmp_op ==
+    call baml.ops.equals_equals
     return
 }
 
@@ -331,7 +331,7 @@ function reflect_type_of_generic.three_level_forwarding_eq_concrete_fn() -> bool
     load_type reflect_type_of_generic.User
     call user.reflect_type_of_generic.level3
     load_type reflect_type_of_generic.User
-    cmp_op ==
+    call baml.ops.equals_equals
     return
 }
 

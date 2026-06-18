@@ -1981,10 +1981,10 @@ function baml.iter.ArrayIterator$stream.next(self: baml.iter.ArrayIterator$strea
       value: T =>
         value : T
   }
-  !! 4259..4288: operator `Ge` cannot be applied to `int | null` and `int`
-  !! 4259..4288: operator `Ge` cannot be applied to `int | null` and `int`
+  !! 4259..4288: cannot order `int | null` and `int` with `>=`: ordering requires both operands to have the same type
+  !! 4259..4288: cannot order `int | null` and `int` with `>=`: ordering requires both operands to have the same type
   !! 4353..4361: type mismatch: expected int, got int | null
-  !! 4363..4378: operator `Add` cannot be applied to `int | null` and `1`
+  !! 4363..4378: operator `+` cannot be applied to `int | null` and `1`
 }
 class baml.iter.Range$stream {
   i: int | null
@@ -2010,8 +2010,8 @@ function baml.iter.Range$stream.next(self: baml.iter.Range$stream) -> int | baml
         Done {  } : baml.iter.Done
       }
   }
-  !! 4916..4933: operator `Lt` cannot be applied to `int | null` and `int | null`
-  !! 4962..4977: operator `Add` cannot be applied to `int | null` and `int | null`
+  !! 4916..4933: `int | null` does not implement `Compare`, so it cannot be ordered with `<`
+  !! 4962..4977: operator `+` cannot be applied to `int | null` and `int | null`
   !! 5000..5003: type mismatch: expected int | baml.iter.Done, got int | null
 }
 class baml.iter.Repeat$stream {
@@ -2041,10 +2041,10 @@ function baml.iter.Repeat$stream.next(self: baml.iter.Repeat$stream) -> unknown 
           Done {  } : baml.iter.Done
         }
   }
-  !! 5500..5514: operator `Lt` cannot be applied to `int | null` and `0`
+  !! 5500..5514: cannot order `int | null` and `0` with `<`: ordering requires both operands to have the same type
   !! 5517..5536: type mismatch: expected T | baml.iter.Done, got T | null
-  !! 5554..5568: operator `Gt` cannot be applied to `int | null` and `0`
-  !! 5571..5590: operator `Sub` cannot be applied to `int | null` and `1`
+  !! 5554..5568: cannot order `int | null` and `0` with `>`: ordering requires both operands to have the same type
+  !! 5571..5590: operator `-` cannot be applied to `int | null` and `1`
   !! 5596..5615: type mismatch: expected T | baml.iter.Done, got T | null
 }
 class baml.iter.Map$stream {
@@ -2305,7 +2305,7 @@ function baml.iter.StepBy$stream.next(self: baml.iter.StepBy$stream) -> unknown 
   }
   !! 10598..10615: did you mean `self.source?.next`? `self.source.next` does not handle the case when `self.source` is null
   !! 10598..10617: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
-  !! 10652..10663: operator `Sub` cannot be applied to `int | null` and `1`
+  !! 10652..10663: operator `-` cannot be applied to `int | null` and `1`
   !! 10690..10706: did you mean `self.source?.next`? `self.source.next` does not handle the case when `self.source` is null
   !! 10690..10708: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
   !! 10794..10817: did you mean `self.source?.next`? `self.source.next` does not handle the case when `self.source` is null
@@ -3256,6 +3256,58 @@ class baml.net.UdpSocket$stream {
 class baml.net.Datagram$stream {
   data: uint8array
   addr: string | null
+}
+
+--- <builtin>/baml/ns_ops/comparison.baml ---
+function baml.ops.Equals.neq(self: baml.ops.Equals, other: unknown) -> bool throws never {
+  { : bool
+    Not self.eq(other) : bool
+  }
+}
+function baml.ops.Compare.le(self: baml.ops.Compare, other: unknown) -> bool throws never {
+  { : bool
+    self.lt(other) || self.eq(other) : bool
+  }
+}
+function baml.ops.Compare.gt(self: baml.ops.Compare, other: unknown) -> bool throws never {
+  { : bool
+    Not self.le(other) : bool
+  }
+}
+function baml.ops.Compare.ge(self: baml.ops.Compare, other: unknown) -> bool throws never {
+  { : bool
+    Not self.lt(other) : bool
+  }
+}
+function baml.ops.lt(self: unknown, other: unknown) -> bool throws never {
+  { : bool
+    Not self && other : bool
+  }
+}
+function baml.ops.gt(self: unknown, other: unknown) -> bool throws never {
+  { : bool
+    self && Not other : bool
+  }
+}
+function baml.ops.eq(self: unknown, other: unknown) -> bool throws never {
+  { : true
+    true : true
+  }
+}
+function baml.ops.neq(self: unknown, other: unknown) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.ops.eq(self: unknown, other: unknown) -> bool throws never {
+  { : bool
+    baml.ops.equals_equals(self, other) : bool
+  }
+}
+function baml.ops.eq(self: unknown, other: unknown) -> bool throws never {
+  { : bool
+    baml.ops.equals_equals(self, other) : bool
+  }
 }
 
 --- <builtin>/baml/ns_panics/panics.baml ---

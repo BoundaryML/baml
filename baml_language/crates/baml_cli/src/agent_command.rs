@@ -32,7 +32,16 @@ pub(crate) enum AgentCommand {
     Install(AgentInstallArgs),
 }
 
+/// Install or refresh the latest BAML agent skills in this project.
+///
+/// On install, each skill's `name:` frontmatter field is prefixed with `baml-`
+/// (so upstream `core` is installed as `baml-core`). This namespaces the skills
+/// to avoid collisions in the agent skill registry, and is the only difference
+/// from the upstream skill files.
 #[derive(Args, Clone, Debug)]
+#[command(
+    after_long_help = "Note: skill names are prefixed with 'baml-' on install to avoid registry collisions (e.g. upstream 'core' becomes 'baml-core')."
+)]
 pub(crate) struct AgentInstallArgs {
     /// Directory where project-local agent skills should be installed.
     ///
@@ -876,7 +885,10 @@ fn print_report(
 ///
 /// The summary lists the install root, the source `reference` and resolved
 /// `commit` (when known), a per-skill status line under each target, and a
-/// trailing reminder (real install) or freshness verdict (`--check`). When
+/// trailing reminder (real install) or freshness verdict (`--check`).
+///
+/// Successful install summaries also disclose the `baml-` skill name-prefix
+/// mapping so users can reconcile installed names with upstream names. When
 /// `check` is true, conditional ("would create") labels are used and no files
 /// are written by the caller. Returns the rendered text.
 fn render_report(
@@ -931,6 +943,11 @@ fn render_report(
             );
         }
     } else {
+        let _ = writeln!(
+            out,
+            "Note: skill names are prefixed with 'baml-' on install to avoid registry collisions (e.g. upstream 'core' becomes 'baml-core')."
+        );
+        out.push('\n');
         let _ = writeln!(
             out,
             "Restart any already-running agent session to pick them up."
@@ -1321,6 +1338,28 @@ mod tests {
         assert!(check.contains("Source: /tmp/skillsrc (local directory)"));
         assert!(!check.contains("commit"));
         assert!(check.contains("All BAML agent skills are already up to date."));
+    }
+
+    #[test]
+    fn render_report_discloses_baml_name_prefix_on_install() {
+        let source = SkillSource {
+            reference: format!("{SKILL_REPO}@{SKILL_BRANCH}"),
+            commit: Some("0baf1692be0ff85bbe3fc3ecabe84b00a010b020".to_string()),
+            skills: Vec::new(),
+        };
+        let reports = vec![TargetReport {
+            label: "Claude Code",
+            dir_display: ".claude/skills",
+            statuses: vec![("baml-core".to_string(), SkillStatus::Created)],
+        }];
+        let install = render_report(Path::new("/tmp/project"), &source, &reports, false);
+        assert!(
+            install.contains(
+                "skill names are prefixed with 'baml-' on install to avoid registry collisions"
+            ),
+            "{install}"
+        );
+        assert!(install.contains("Installed BAML agent skills in /tmp/project"));
     }
 
     fn skill(name: &str) -> String {
