@@ -9,3 +9,13 @@ function deep_copy<T>(value: T) -> T throws never {
 function deep_equals<T>(a: T, b: T) -> bool throws never {
   $rust_function
 }
+
+/// Implemented by all concrete types.
+/// Can be used to check or bound a type to only include concrete types.
+interface Concrete {
+
+}
+
+implement<T> Concrete for T {
+
+}

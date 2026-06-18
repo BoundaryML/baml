@@ -10,6 +10,8 @@
 //! - `math` — `BamlNamespaceMath` (trunc)
 //! - `media` — `BamlClassMedia{Pdf,Audio,Video,Image}` + `BamlNamespaceMedia`
 //! - `ops` — `BamlClassOps*` (`Equals`/`Compare` for primitives + containers)
+//! - `ops_math` — `BamlClassOps*` (`Add`/`Subtract`/`Multiply`/`Divide`/
+//!   `Remainder`/`Negate` for the numeric primitives)
 //! - `unstable` — `BamlNamespaceUnstable` (string)
 //! - `root` — `BamlPackageBaml` (`deep_copy`, `deep_equals`, and the
 //!   `Sortable.sort` shims `_compare_shim` / `_is_primitive_array` /
@@ -32,6 +34,7 @@ mod map;
 mod math;
 mod media;
 mod ops;
+mod ops_math;
 mod primitives;
 mod resolve;
 pub(crate) use resolve::{realize_frame, resolve_implements_rule};

@@ -14,6 +14,7 @@ class            Array                            <builtin>/baml/containers.baml
 class            Map                              <builtin>/baml/containers.baml:463
 function         deep_copy                        <builtin>/baml/core.baml:3
 function         deep_equals                      <builtin>/baml/core.baml:9
+interface        Concrete                         <builtin>/baml/core.baml:15
 class            Float                            <builtin>/baml/float.baml:2
 class            Int                              <builtin>/baml/int.baml:2
 class            Null                             <builtin>/baml/null.baml:2
@@ -192,6 +193,12 @@ class            net.Datagram                     <builtin>/baml/ns_net/net.baml
 interface        ops.Equals                       <builtin>/baml/ns_ops/comparison.baml:1
 interface        ops.Compare                      <builtin>/baml/ns_ops/comparison.baml:8
 function         ops.equals_equals                <builtin>/baml/ns_ops/comparison.baml:34
+interface        ops.Add                          <builtin>/baml/ns_ops/math.baml:23
+interface        ops.Subtract                     <builtin>/baml/ns_ops/math.baml:29
+interface        ops.Multiply                     <builtin>/baml/ns_ops/math.baml:35
+interface        ops.Divide                       <builtin>/baml/ns_ops/math.baml:41
+interface        ops.Remainder                    <builtin>/baml/ns_ops/math.baml:47
+interface        ops.Negate                       <builtin>/baml/ns_ops/math.baml:53
 class            panics.DivisionByZero            <builtin>/baml/ns_panics/panics.baml:2
 class            panics.IndexOutOfBounds          <builtin>/baml/ns_panics/panics.baml:7
 class            panics.InvalidFieldAccess        <builtin>/baml/ns_panics/panics.baml:13

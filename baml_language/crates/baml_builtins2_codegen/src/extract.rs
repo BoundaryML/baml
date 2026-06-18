@@ -156,6 +156,7 @@ pub fn extract_native_builtins()
                     extract_from_implements_for(
                         impl_def,
                         &namespace_prefix,
+                        &cst_root,
                         &path,
                         &mut vm_builtins,
                         &mut io_builtins,
@@ -495,6 +496,7 @@ fn extract_from_free_function(
 fn extract_from_implements_for(
     impl_def: &ImplementsForDef,
     namespace_prefix: &str,
+    cst_root: &SyntaxNode,
     source_file: &str,
     vm_builtins: &mut Vec<NativeBuiltin>,
     io_builtins: &mut Vec<NativeBuiltin>,
@@ -519,8 +521,9 @@ fn extract_from_implements_for(
     let self_baml = type_expr_to_baml_type(&impl_def.for_target.expr, &impl_generics);
 
     // Container element comparison reads heap values, so it needs a `&BexVm`;
-    // scalar comparisons operate on `Copy`/`Arc` receivers and need no VM.
-    let vm_usage = match recv_class {
+    // scalar comparisons operate on `Copy`/`Arc` receivers and need no VM. A
+    // method-level `//baml:vm` / `//baml:mut_vm` directive overrides this default.
+    let default_vm_usage = match recv_class {
         "Array" | "Map" => VmUsage::Ref,
         _ => VmUsage::None,
     };
@@ -549,6 +552,35 @@ fn extract_from_implements_for(
             method.name.as_str()
         );
         let fn_name = path_to_fn_name(&path);
+
+        // Scan the method's `//baml:` directives, scoped to this exact method by
+        // its `name_span` (the method names `add` / `div` / … collide across
+        // `implement` blocks, so a name-keyed lookup would be ambiguous). The
+        // `implement` blocks have no `//baml:mut_self` (the receiver is always
+        // `&self`), so only VM-access, yielding, and fallibility are scanned.
+        let has_vm = impl_method_has_directive(cst_root, method, "//baml:vm");
+        let has_mut_vm = impl_method_has_directive(cst_root, method, "//baml:mut_vm");
+        let may_yield = impl_method_has_directive(cst_root, method, "//baml:may_yield");
+        let fallible = impl_method_has_directive(cst_root, method, "//baml:fallible");
+
+        assert!(
+            !(has_vm && has_mut_vm),
+            "baml codegen error: {path} has both //baml:vm and //baml:mut_vm \
+             -- these are mutually exclusive"
+        );
+        assert!(
+            !may_yield || has_mut_vm,
+            "baml codegen error: {path} has //baml:may_yield without //baml:mut_vm \
+             -- yielding methods require mutable VM access"
+        );
+
+        let vm_usage = if has_mut_vm {
+            VmUsage::MutRef
+        } else if has_vm {
+            VmUsage::Ref
+        } else {
+            default_vm_usage
+        };
 
         let receiver = Some(Receiver {
             class_name: recv_class.to_string(),
@@ -589,8 +621,8 @@ fn extract_from_implements_for(
             generics: all_generics,
             receiver,
             vm_usage,
-            may_yield: false,
-            fallible: false,
+            may_yield,
+            fallible,
             pipeline,
             throws: extract_throws(method),
             source_file: source_file.to_string(),
@@ -854,6 +886,30 @@ fn has_method_directive(
             if function_node_has_leading_directive(&func_node, directive) {
                 return true;
             }
+        }
+    }
+    false
+}
+
+/// Check if an `implement`-block method has the given `directive` comment before
+/// its `function` keyword in the CST.
+///
+/// Unlike [`has_method_directive`], the lookup is scoped to a single method by
+/// its `name_span` rather than by `(class_name, method_name)`: the method names
+/// in `implement` blocks (`add`, `div`, `eq`, …) repeat across every block, so a
+/// name-keyed search would match the wrong block. Exactly one `FUNCTION_DEF`
+/// node contains the method's name token, so containment uniquely identifies it.
+/// Offsets are compared as raw `u32`s so the match does not depend on the
+/// `text_size` version the AST and CST crates each resolve.
+fn impl_method_has_directive(cst_root: &SyntaxNode, method: &FunctionDef, directive: &str) -> bool {
+    let name_start = u32::from(method.name_span.start());
+    for node in cst_root.descendants() {
+        if node.kind() != SyntaxKind::FUNCTION_DEF {
+            continue;
+        }
+        let range = node.text_range();
+        if u32::from(range.start()) <= name_start && name_start < u32::from(range.end()) {
+            return function_node_has_leading_directive(&node, directive);
         }
     }
     false

@@ -4443,7 +4443,7 @@ fn validate_implements_for<'db>(
         baml_compiler2_hir::package::PackageId::new(db, iface_pkg_info.package.clone());
     let iface_pkg_items = baml_compiler2_hir::package::package_items(db, iface_pkg_id);
     let iface_namespace_path = iface_pkg_info.namespace_path;
-    let generic_subst: std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr> =
+    let mut generic_subst: std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr> =
         match &imp.interface_target.expr {
             baml_compiler2_ast::TypeExpr::Path { generic_args, .. } => iface
                 .generic_params
@@ -4453,6 +4453,13 @@ fn validate_implements_for<'db>(
                 .collect(),
             _ => std::collections::HashMap::new(),
         };
+    // Resolve `Self` to the `for` target so the interface's `Self`/associated-type
+    // spellings and the impl's concrete spellings compare by the type they denote,
+    // not syntactically: an impl may write `-> int` where the interface declares
+    // `-> Self` (or `-> Output` defaulting to `Self`), and the two are the same
+    // type. This also resolves an associated type's `= Self` default (e.g.
+    // `Add.Output`) to the concrete `for` target.
+    generic_subst.insert(Name::new("Self"), imp.for_target.expr.clone());
     let target_associated_type_bindings = match &imp.interface_target.expr {
         baml_compiler2_ast::TypeExpr::Path {
             associated_type_bindings,
