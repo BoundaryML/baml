@@ -482,10 +482,12 @@ fn install_skills_to(root: &Path, relative_skills_dir: PathBuf, skills: &[Skill]
     fs::create_dir_all(&skills_dir)
         .with_context(|| format!("failed to create {}", skills_dir.display()))?;
 
-    let skills_to_install = skills
-        .iter()
-        .filter(|skill| skill_needs_install(&skills_dir, skill))
-        .collect::<Result<Vec<_>>>()?;
+    let mut skills_to_install = Vec::new();
+    for skill in skills {
+        if skill_needs_install(&skills_dir, skill)? {
+            skills_to_install.push(skill);
+        }
+    }
     if skills_to_install.is_empty() {
         return Ok(());
     }
