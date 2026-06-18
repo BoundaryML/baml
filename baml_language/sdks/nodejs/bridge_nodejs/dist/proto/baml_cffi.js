@@ -10159,6 +10159,533 @@ export const baml_core = $root.baml_core = (() => {
                 return BamlTy;
             })();
 
+            v1.BamlToHostCall = (function() {
+
+                /**
+                 * Properties of a BamlToHostCall.
+                 * @memberof baml_core.cffi.v1
+                 * @interface IBamlToHostCall
+                 * @property {Array.<baml_core.cffi.v1.IBamlToHostArg>|null} [args] BamlToHostCall args
+                 */
+
+                /**
+                 * Constructs a new BamlToHostCall.
+                 * @memberof baml_core.cffi.v1
+                 * @classdesc Represents a BamlToHostCall.
+                 * @implements IBamlToHostCall
+                 * @constructor
+                 * @param {baml_core.cffi.v1.IBamlToHostCall=} [properties] Properties to set
+                 */
+                function BamlToHostCall(properties) {
+                    this.args = [];
+                    if (properties)
+                        for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                                this[keys[i]] = properties[keys[i]];
+                }
+
+                /**
+                 * BamlToHostCall args.
+                 * @member {Array.<baml_core.cffi.v1.IBamlToHostArg>} args
+                 * @memberof baml_core.cffi.v1.BamlToHostCall
+                 * @instance
+                 */
+                BamlToHostCall.prototype.args = $util.emptyArray;
+
+                /**
+                 * Creates a new BamlToHostCall instance using the specified properties.
+                 * @function create
+                 * @memberof baml_core.cffi.v1.BamlToHostCall
+                 * @static
+                 * @param {baml_core.cffi.v1.IBamlToHostCall=} [properties] Properties to set
+                 * @returns {baml_core.cffi.v1.BamlToHostCall} BamlToHostCall instance
+                 */
+                BamlToHostCall.create = function create(properties) {
+                    return new BamlToHostCall(properties);
+                };
+
+                /**
+                 * Encodes the specified BamlToHostCall message. Does not implicitly {@link baml_core.cffi.v1.BamlToHostCall.verify|verify} messages.
+                 * @function encode
+                 * @memberof baml_core.cffi.v1.BamlToHostCall
+                 * @static
+                 * @param {baml_core.cffi.v1.IBamlToHostCall} message BamlToHostCall message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                BamlToHostCall.encode = function encode(message, writer, q) {
+                    if (!writer)
+                        writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
+                    if (message.args != null && message.args.length)
+                        for (let i = 0; i < message.args.length; ++i)
+                            $root.baml_core.cffi.v1.BamlToHostArg.encode(message.args[i], writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
+                    return writer;
+                };
+
+                /**
+                 * Encodes the specified BamlToHostCall message, length delimited. Does not implicitly {@link baml_core.cffi.v1.BamlToHostCall.verify|verify} messages.
+                 * @function encodeDelimited
+                 * @memberof baml_core.cffi.v1.BamlToHostCall
+                 * @static
+                 * @param {baml_core.cffi.v1.IBamlToHostCall} message BamlToHostCall message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                BamlToHostCall.encodeDelimited = function encodeDelimited(message, writer) {
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                };
+
+                /**
+                 * Decodes a BamlToHostCall message from the specified reader or buffer.
+                 * @function decode
+                 * @memberof baml_core.cffi.v1.BamlToHostCall
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @param {number} [length] Message length if known beforehand
+                 * @returns {baml_core.cffi.v1.BamlToHostCall} BamlToHostCall
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                BamlToHostCall.decode = function decode(reader, length, error, long) {
+                    if (!(reader instanceof $Reader))
+                        reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
+                    let end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlToHostCall();
+                    while (reader.pos < end) {
+                        let tag = reader.uint32();
+                        if (tag === error)
+                            break;
+                        switch (tag >>> 3) {
+                        case 1: {
+                                if (!(message.args && message.args.length))
+                                    message.args = [];
+                                message.args.push($root.baml_core.cffi.v1.BamlToHostArg.decode(reader, reader.uint32(), undefined, long + 1));
+                                break;
+                            }
+                        default:
+                            reader.skipType(tag & 7, long);
+                            break;
+                        }
+                    }
+                    return message;
+                };
+
+                /**
+                 * Decodes a BamlToHostCall message from the specified reader or buffer, length delimited.
+                 * @function decodeDelimited
+                 * @memberof baml_core.cffi.v1.BamlToHostCall
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @returns {baml_core.cffi.v1.BamlToHostCall} BamlToHostCall
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                BamlToHostCall.decodeDelimited = function decodeDelimited(reader) {
+                    if (!(reader instanceof $Reader))
+                        reader = new $Reader(reader);
+                    return this.decode(reader, reader.uint32());
+                };
+
+                /**
+                 * Verifies a BamlToHostCall message.
+                 * @function verify
+                 * @memberof baml_core.cffi.v1.BamlToHostCall
+                 * @static
+                 * @param {Object.<string,*>} message Plain object to verify
+                 * @returns {string|null} `null` if valid, otherwise the reason why it is not
+                 */
+                BamlToHostCall.verify = function verify(message, long) {
+                    if (typeof message !== "object" || message === null)
+                        return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
+                    if (message.args != null && message.hasOwnProperty("args")) {
+                        if (!Array.isArray(message.args))
+                            return "args: array expected";
+                        for (let i = 0; i < message.args.length; ++i) {
+                            let error = $root.baml_core.cffi.v1.BamlToHostArg.verify(message.args[i], long + 1);
+                            if (error)
+                                return "args." + error;
+                        }
+                    }
+                    return null;
+                };
+
+                /**
+                 * Creates a BamlToHostCall message from a plain object. Also converts values to their respective internal types.
+                 * @function fromObject
+                 * @memberof baml_core.cffi.v1.BamlToHostCall
+                 * @static
+                 * @param {Object.<string,*>} object Plain object
+                 * @returns {baml_core.cffi.v1.BamlToHostCall} BamlToHostCall
+                 */
+                BamlToHostCall.fromObject = function fromObject(object, long) {
+                    if (object instanceof $root.baml_core.cffi.v1.BamlToHostCall)
+                        return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlToHostCall: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
+                    let message = new $root.baml_core.cffi.v1.BamlToHostCall();
+                    if (object.args) {
+                        if (!Array.isArray(object.args))
+                            throw TypeError(".baml_core.cffi.v1.BamlToHostCall.args: array expected");
+                        message.args = [];
+                        for (let i = 0; i < object.args.length; ++i) {
+                            if (!$util.isObject(object.args[i]))
+                                throw TypeError(".baml_core.cffi.v1.BamlToHostCall.args: object expected");
+                            message.args[i] = $root.baml_core.cffi.v1.BamlToHostArg.fromObject(object.args[i], long + 1);
+                        }
+                    }
+                    return message;
+                };
+
+                /**
+                 * Creates a plain object from a BamlToHostCall message. Also converts values to other types if specified.
+                 * @function toObject
+                 * @memberof baml_core.cffi.v1.BamlToHostCall
+                 * @static
+                 * @param {baml_core.cffi.v1.BamlToHostCall} message BamlToHostCall
+                 * @param {$protobuf.IConversionOptions} [options] Conversion options
+                 * @returns {Object.<string,*>} Plain object
+                 */
+                BamlToHostCall.toObject = function toObject(message, options, q) {
+                    if (!options)
+                        options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
+                    let object = {};
+                    if (options.arrays || options.defaults)
+                        object.args = [];
+                    if (message.args && message.args.length) {
+                        object.args = [];
+                        for (let j = 0; j < message.args.length; ++j)
+                            object.args[j] = $root.baml_core.cffi.v1.BamlToHostArg.toObject(message.args[j], options, q + 1);
+                    }
+                    return object;
+                };
+
+                /**
+                 * Converts this BamlToHostCall to JSON.
+                 * @function toJSON
+                 * @memberof baml_core.cffi.v1.BamlToHostCall
+                 * @instance
+                 * @returns {Object.<string,*>} JSON object
+                 */
+                BamlToHostCall.prototype.toJSON = function toJSON() {
+                    return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+                };
+
+                /**
+                 * Gets the default type url for BamlToHostCall
+                 * @function getTypeUrl
+                 * @memberof baml_core.cffi.v1.BamlToHostCall
+                 * @static
+                 * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns {string} The default type url
+                 */
+                BamlToHostCall.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                    if (typeUrlPrefix === undefined) {
+                        typeUrlPrefix = "type.googleapis.com";
+                    }
+                    return typeUrlPrefix + "/baml_core.cffi.v1.BamlToHostCall";
+                };
+
+                return BamlToHostCall;
+            })();
+
+            v1.BamlToHostArg = (function() {
+
+                /**
+                 * Properties of a BamlToHostArg.
+                 * @memberof baml_core.cffi.v1
+                 * @interface IBamlToHostArg
+                 * @property {baml_core.cffi.v1.IBamlOutboundValue|null} [value] BamlToHostArg value
+                 * @property {string|null} [argName] BamlToHostArg argName
+                 * @property {boolean|null} [isOptionalArg] BamlToHostArg isOptionalArg
+                 */
+
+                /**
+                 * Constructs a new BamlToHostArg.
+                 * @memberof baml_core.cffi.v1
+                 * @classdesc Represents a BamlToHostArg.
+                 * @implements IBamlToHostArg
+                 * @constructor
+                 * @param {baml_core.cffi.v1.IBamlToHostArg=} [properties] Properties to set
+                 */
+                function BamlToHostArg(properties) {
+                    if (properties)
+                        for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                                this[keys[i]] = properties[keys[i]];
+                }
+
+                /**
+                 * BamlToHostArg value.
+                 * @member {baml_core.cffi.v1.IBamlOutboundValue|null|undefined} value
+                 * @memberof baml_core.cffi.v1.BamlToHostArg
+                 * @instance
+                 */
+                BamlToHostArg.prototype.value = null;
+
+                /**
+                 * BamlToHostArg argName.
+                 * @member {string} argName
+                 * @memberof baml_core.cffi.v1.BamlToHostArg
+                 * @instance
+                 */
+                BamlToHostArg.prototype.argName = "";
+
+                /**
+                 * BamlToHostArg isOptionalArg.
+                 * @member {boolean} isOptionalArg
+                 * @memberof baml_core.cffi.v1.BamlToHostArg
+                 * @instance
+                 */
+                BamlToHostArg.prototype.isOptionalArg = false;
+
+                /**
+                 * Creates a new BamlToHostArg instance using the specified properties.
+                 * @function create
+                 * @memberof baml_core.cffi.v1.BamlToHostArg
+                 * @static
+                 * @param {baml_core.cffi.v1.IBamlToHostArg=} [properties] Properties to set
+                 * @returns {baml_core.cffi.v1.BamlToHostArg} BamlToHostArg instance
+                 */
+                BamlToHostArg.create = function create(properties) {
+                    return new BamlToHostArg(properties);
+                };
+
+                /**
+                 * Encodes the specified BamlToHostArg message. Does not implicitly {@link baml_core.cffi.v1.BamlToHostArg.verify|verify} messages.
+                 * @function encode
+                 * @memberof baml_core.cffi.v1.BamlToHostArg
+                 * @static
+                 * @param {baml_core.cffi.v1.IBamlToHostArg} message BamlToHostArg message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                BamlToHostArg.encode = function encode(message, writer, q) {
+                    if (!writer)
+                        writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
+                    if (message.value != null && Object.hasOwnProperty.call(message, "value"))
+                        $root.baml_core.cffi.v1.BamlOutboundValue.encode(message.value, writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
+                    if (message.argName != null && Object.hasOwnProperty.call(message, "argName"))
+                        writer.uint32(/* id 2, wireType 2 =*/18).string(message.argName);
+                    if (message.isOptionalArg != null && Object.hasOwnProperty.call(message, "isOptionalArg"))
+                        writer.uint32(/* id 3, wireType 0 =*/24).bool(message.isOptionalArg);
+                    return writer;
+                };
+
+                /**
+                 * Encodes the specified BamlToHostArg message, length delimited. Does not implicitly {@link baml_core.cffi.v1.BamlToHostArg.verify|verify} messages.
+                 * @function encodeDelimited
+                 * @memberof baml_core.cffi.v1.BamlToHostArg
+                 * @static
+                 * @param {baml_core.cffi.v1.IBamlToHostArg} message BamlToHostArg message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                BamlToHostArg.encodeDelimited = function encodeDelimited(message, writer) {
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                };
+
+                /**
+                 * Decodes a BamlToHostArg message from the specified reader or buffer.
+                 * @function decode
+                 * @memberof baml_core.cffi.v1.BamlToHostArg
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @param {number} [length] Message length if known beforehand
+                 * @returns {baml_core.cffi.v1.BamlToHostArg} BamlToHostArg
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                BamlToHostArg.decode = function decode(reader, length, error, long) {
+                    if (!(reader instanceof $Reader))
+                        reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
+                    let end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_core.cffi.v1.BamlToHostArg();
+                    while (reader.pos < end) {
+                        let tag = reader.uint32();
+                        if (tag === error)
+                            break;
+                        switch (tag >>> 3) {
+                        case 1: {
+                                message.value = $root.baml_core.cffi.v1.BamlOutboundValue.decode(reader, reader.uint32(), undefined, long + 1);
+                                break;
+                            }
+                        case 2: {
+                                message.argName = reader.string();
+                                break;
+                            }
+                        case 3: {
+                                message.isOptionalArg = reader.bool();
+                                break;
+                            }
+                        default:
+                            reader.skipType(tag & 7, long);
+                            break;
+                        }
+                    }
+                    return message;
+                };
+
+                /**
+                 * Decodes a BamlToHostArg message from the specified reader or buffer, length delimited.
+                 * @function decodeDelimited
+                 * @memberof baml_core.cffi.v1.BamlToHostArg
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @returns {baml_core.cffi.v1.BamlToHostArg} BamlToHostArg
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                BamlToHostArg.decodeDelimited = function decodeDelimited(reader) {
+                    if (!(reader instanceof $Reader))
+                        reader = new $Reader(reader);
+                    return this.decode(reader, reader.uint32());
+                };
+
+                /**
+                 * Verifies a BamlToHostArg message.
+                 * @function verify
+                 * @memberof baml_core.cffi.v1.BamlToHostArg
+                 * @static
+                 * @param {Object.<string,*>} message Plain object to verify
+                 * @returns {string|null} `null` if valid, otherwise the reason why it is not
+                 */
+                BamlToHostArg.verify = function verify(message, long) {
+                    if (typeof message !== "object" || message === null)
+                        return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
+                    if (message.value != null && message.hasOwnProperty("value")) {
+                        let error = $root.baml_core.cffi.v1.BamlOutboundValue.verify(message.value, long + 1);
+                        if (error)
+                            return "value." + error;
+                    }
+                    if (message.argName != null && message.hasOwnProperty("argName"))
+                        if (!$util.isString(message.argName))
+                            return "argName: string expected";
+                    if (message.isOptionalArg != null && message.hasOwnProperty("isOptionalArg"))
+                        if (typeof message.isOptionalArg !== "boolean")
+                            return "isOptionalArg: boolean expected";
+                    return null;
+                };
+
+                /**
+                 * Creates a BamlToHostArg message from a plain object. Also converts values to their respective internal types.
+                 * @function fromObject
+                 * @memberof baml_core.cffi.v1.BamlToHostArg
+                 * @static
+                 * @param {Object.<string,*>} object Plain object
+                 * @returns {baml_core.cffi.v1.BamlToHostArg} BamlToHostArg
+                 */
+                BamlToHostArg.fromObject = function fromObject(object, long) {
+                    if (object instanceof $root.baml_core.cffi.v1.BamlToHostArg)
+                        return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_core.cffi.v1.BamlToHostArg: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
+                    let message = new $root.baml_core.cffi.v1.BamlToHostArg();
+                    if (object.value != null) {
+                        if (!$util.isObject(object.value))
+                            throw TypeError(".baml_core.cffi.v1.BamlToHostArg.value: object expected");
+                        message.value = $root.baml_core.cffi.v1.BamlOutboundValue.fromObject(object.value, long + 1);
+                    }
+                    if (object.argName != null)
+                        message.argName = String(object.argName);
+                    if (object.isOptionalArg != null)
+                        message.isOptionalArg = Boolean(object.isOptionalArg);
+                    return message;
+                };
+
+                /**
+                 * Creates a plain object from a BamlToHostArg message. Also converts values to other types if specified.
+                 * @function toObject
+                 * @memberof baml_core.cffi.v1.BamlToHostArg
+                 * @static
+                 * @param {baml_core.cffi.v1.BamlToHostArg} message BamlToHostArg
+                 * @param {$protobuf.IConversionOptions} [options] Conversion options
+                 * @returns {Object.<string,*>} Plain object
+                 */
+                BamlToHostArg.toObject = function toObject(message, options, q) {
+                    if (!options)
+                        options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
+                    let object = {};
+                    if (options.defaults) {
+                        object.value = null;
+                        object.argName = "";
+                        object.isOptionalArg = false;
+                    }
+                    if (message.value != null && message.hasOwnProperty("value"))
+                        object.value = $root.baml_core.cffi.v1.BamlOutboundValue.toObject(message.value, options, q + 1);
+                    if (message.argName != null && message.hasOwnProperty("argName"))
+                        object.argName = message.argName;
+                    if (message.isOptionalArg != null && message.hasOwnProperty("isOptionalArg"))
+                        object.isOptionalArg = message.isOptionalArg;
+                    return object;
+                };
+
+                /**
+                 * Converts this BamlToHostArg to JSON.
+                 * @function toJSON
+                 * @memberof baml_core.cffi.v1.BamlToHostArg
+                 * @instance
+                 * @returns {Object.<string,*>} JSON object
+                 */
+                BamlToHostArg.prototype.toJSON = function toJSON() {
+                    return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+                };
+
+                /**
+                 * Gets the default type url for BamlToHostArg
+                 * @function getTypeUrl
+                 * @memberof baml_core.cffi.v1.BamlToHostArg
+                 * @static
+                 * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns {string} The default type url
+                 */
+                BamlToHostArg.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                    if (typeUrlPrefix === undefined) {
+                        typeUrlPrefix = "type.googleapis.com";
+                    }
+                    return typeUrlPrefix + "/baml_core.cffi.v1.BamlToHostArg";
+                };
+
+                return BamlToHostArg;
+            })();
+
             v1.BamlTyString = (function() {
 
                 /**

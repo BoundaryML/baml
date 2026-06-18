@@ -6501,6 +6501,7 @@ dependencies = [
  "askama",
  "baml_base",
  "baml_codegen_types",
+ "indexmap",
  "pretty_assertions",
 ]
 

@@ -105,8 +105,8 @@ function         future.any                       <builtin>/baml/ns_future/futur
 class            glob.ScanOptions                 <builtin>/baml/ns_glob/glob.baml:2
 class            glob.Glob                        <builtin>/baml/ns_glob/glob.baml:18
 function         glob.new                         <builtin>/baml/ns_glob/glob.baml:34
-function         host.call_host_value             <builtin>/baml/ns_host/host.baml:13
-class            host.HostValue                   <builtin>/baml/ns_host/host.baml:20
+function         host.call_host_value             <builtin>/baml/ns_host/host.baml:20
+class            host.HostValue                   <builtin>/baml/ns_host/host.baml:27
 class            http.Request                     <builtin>/baml/ns_http/http.baml:8
 class            http.Response                    <builtin>/baml/ns_http/http.baml:16
 class            http.SseStream                   <builtin>/baml/ns_http/http.baml:94
