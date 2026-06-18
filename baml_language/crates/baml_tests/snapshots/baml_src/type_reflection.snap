@@ -333,7 +333,7 @@ function type_reflection.eq_type_values_different_fn() -> bool {
     sys_op baml.llm.get_return_type
     store_var b
     load_var2 1 2
-    cmp_op ==
+    call baml.ops.equals_equals
     return
 }
 
@@ -345,7 +345,7 @@ function type_reflection.eq_type_values_same_fn() -> bool {
     sys_op baml.llm.get_return_type
     store_var b
     load_var2 1 2
-    cmp_op ==
+    call baml.ops.equals_equals
     return
 }
 
@@ -357,7 +357,8 @@ function type_reflection.neq_type_values_different_fn() -> bool {
     sys_op baml.llm.get_return_type
     store_var b
     load_var2 1 2
-    cmp_op !=
+    call baml.ops.equals_equals
+    unary_op !
     return
 }
 
@@ -369,6 +370,7 @@ function type_reflection.neq_type_values_same_fn() -> bool {
     sys_op baml.llm.get_return_type
     store_var b
     load_var2 1 2
-    cmp_op !=
+    call baml.ops.equals_equals
+    unary_op !
     return
 }

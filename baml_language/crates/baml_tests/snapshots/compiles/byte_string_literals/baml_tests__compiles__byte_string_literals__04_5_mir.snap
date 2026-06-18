@@ -63,8 +63,7 @@ fn user.ByteStringEquality() -> bool {
     bb0: {
         _1 = b"<3 bytes>";
         _2 = b"<3 bytes>";
-        _0 = copy _1 == copy _2;
-        goto -> bb1;
+        _0 = call const fn baml.ops.equals_equals(copy _1, copy _2) -> [bb1];
     }
 
     bb1: {

@@ -519,6 +519,69 @@ struct OptionalCallContext<'a> {
     is_method_call: bool,
 }
 
+/// Adapter exposing a [`TypeInferenceBuilder`]'s registries to the canonical
+/// type algebra in [`baml_type::normalize`].
+///
+/// The algebra owns the structural reasoning (union absorption, recursion,
+/// variance); this supplies the nominal facts it cannot derive on its own. Each
+/// method delegates to the builder's existing resolution paths so the canonical
+/// checker agrees with the builder's own `is_subtype`/`types_equivalent` on the
+/// facts they share. Bound obligations inside `implements_interface` are proven
+/// by the builder's `is_subtype` (the oracle boundary), not re-derived here.
+struct NormalizeCtx<'a, 'db>(&'a TypeInferenceBuilder<'db>);
+
+impl baml_type::normalize::TypeContext for NormalizeCtx<'_, '_> {
+    fn alias_def(&self, name: &crate::ty::QualifiedTypeName) -> Option<Ty> {
+        self.0.aliases.get(name).cloned()
+    }
+
+    fn implements_interface(&self, concrete: &Ty, interface: &Ty) -> bool {
+        let Ty::Interface(iface_qtn, ..) = interface else {
+            return false;
+        };
+        let b = self.0;
+        let db = b.context.db();
+        let registry_pkg = b.registry_package_for_interface_check(concrete, iface_qtn);
+        let registry = crate::interfaces::package_implements_registry(db, registry_pkg);
+        registry.type_implements_interface_via_rule(
+            concrete,
+            interface,
+            &b.aliases,
+            |actual, bound| b.is_subtype(actual, bound),
+        )
+    }
+
+    fn type_var_bound(&self, name: &Name) -> Option<Ty> {
+        self.0.generic_param_bounds.get(name).cloned()
+    }
+
+    fn interface_requires(&self, sub: &Ty, sup: &Ty) -> bool {
+        let (
+            Ty::Interface(a_qtn, a_args, a_bindings, _),
+            Ty::Interface(b_qtn, b_args, b_bindings, _),
+        ) = (sub, sup)
+        else {
+            return false;
+        };
+        // Interface *equality* is the normalizer's job (structural reflexivity);
+        // this method answers only the proper-requirement case.
+        if a_qtn == b_qtn {
+            return false;
+        }
+        let b = self.0;
+        let registry = crate::interfaces::package_implements_registry(b.context.db(), b.package_id);
+        if registry.interface_requires(a_qtn, b_qtn) && b_args.is_empty() && b_bindings.is_empty() {
+            return true;
+        }
+        b.interface_requires_instantiation(a_qtn, a_args, a_bindings, b_qtn, b_args, b_bindings)
+    }
+
+    fn enum_variants(&self, name: &crate::ty::QualifiedTypeName) -> Option<Vec<Name>> {
+        let variants = self.0.lookup_enum_variants(name);
+        (!variants.is_empty()).then_some(variants)
+    }
+}
+
 /// Per-scope inference builder.
 ///
 /// Created at the start of `infer_scope_types`, discarded when done.
@@ -15290,6 +15353,56 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
+    /// Widen a top-level literal / enum-variant type to its base (`1` → `int`,
+    /// `Color.Red` → `Color`), leaving everything else unchanged. Comparison validity is
+    /// a property of the base type, not the singleton, so the operator checks normalize
+    /// here first.
+    fn widen_literal_base(ty: &Ty) -> Ty {
+        use baml_base::Literal;
+        match ty {
+            Ty::Literal(Literal::Int(_), _, attr) => Ty::Int { attr: attr.clone() },
+            Ty::Literal(Literal::Bigint(_), _, attr) => Ty::Bigint { attr: attr.clone() },
+            Ty::Literal(Literal::Float(_), _, attr) => Ty::Float { attr: attr.clone() },
+            Ty::Literal(Literal::String(_), _, attr) => Ty::String { attr: attr.clone() },
+            Ty::Literal(Literal::Bool(_), _, attr) => Ty::Bool { attr: attr.clone() },
+            Ty::EnumVariant(name, _, attr) => Ty::Enum(name.clone(), attr.clone()),
+            other => other.clone(),
+        }
+    }
+
+    /// Whether `ty` implements `baml.ops.Compare` (so `<` `<=` `>` `>=` are defined for
+    /// it). `is_subtype` against the `Compare` existential resolves both concrete impls
+    /// (via the registry) and a `T extends Compare` type-variable bound.
+    fn type_is_comparable(&self, ty: &Ty) -> bool {
+        // Ordering needs a *single concrete type* — or a bounded type variable /
+        // associated projection, which realizes to exactly one concrete type — that
+        // implements `baml.ops.Compare`. A union or interface-existential is NOT
+        // orderable even when every member / implementor implements `Compare`: the
+        // two operands could hold different concrete types, which exact-type
+        // ordering forbids and the runtime cannot order (`is_subtype(union, I)` is
+        // member-wise true, so it must be excluded here). `T < T` is fine — both
+        // operands share the one type `T` realizes to.
+        //
+        // Normalize first so a structurally-union-but-collapsible spelling like
+        // `int | 99` (a `catch` result widening a literal back into its base) is
+        // recognized as the single concrete type `int`, not rejected as a union.
+        let ty = baml_type::normalize::normalize(ty, &NormalizeCtx(self));
+        if matches!(ty, Ty::Union(..) | Ty::Interface(..) | Ty::Unknown { .. }) {
+            return false;
+        }
+        let compare = Ty::Interface(
+            crate::ty::QualifiedTypeName::new(
+                Name::new("baml"),
+                vec![Name::new("ops")],
+                Name::new("Compare"),
+            ),
+            Vec::new(),
+            Vec::new(),
+            TyAttr::default(),
+        );
+        self.is_subtype(&ty, &compare)
+    }
+
     fn infer_binary_op(
         &mut self,
         op: baml_compiler2_ast::BinaryOp,
@@ -15303,7 +15416,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             return folded;
         }
         // Peel type aliases once at the entry so downstream classifiers
-        // (`infer_arithmetic`, `infer_bitwise`, `is_float_bigint_mix`) only
+        // (`infer_arithmetic`, `infer_bitwise`, and the comparison helpers) only
         // need to recognise the underlying primitive shapes. Mirrors how
         // `is_subtype` and other type-aware sites expand at their entry.
         let expanded_lhs = self.expand_alias_chains(lhs.clone());
@@ -15311,53 +15424,78 @@ impl<'db> TypeInferenceBuilder<'db> {
         let lhs = &expanded_lhs;
         let rhs = &expanded_rhs;
         match op {
-            // Equality (`==`, `!=`): permissive — any two operands are
-            // accepted and the result is `bool`. This intentionally allows
-            // `x == null` (the canonical null check), `int? == int`
-            // (nullable equality), and numeric cross-type comparisons like
-            // `int == float`. The only rejected pairing is float-vs-bigint:
-            // a `bigint` beyond f64's exactly-representable range cannot be
-            // compared to a `float` without precision loss, so
-            // `is_float_bigint_mix` flags it (matching arithmetic/ordering).
+            // Equality (`==`, `!=`): valid for *any* pair of operands, result `bool`.
+            // This allows `x == null` (the canonical null check), nullable equality, and
+            // erased comparisons (`unknown`, unions, interfaces). It only *warns* when
+            // the operand types are provably disjoint — no value of one can equal a value
+            // of the other — so the comparison is a constant; the `equals_equals`
+            // lowering makes the runtime (concrete-type equality) agree.
             BinaryOp::Eq | BinaryOp::Ne => {
-                if Self::is_float_bigint_mix(lhs, rhs)
-                    && !matches!(lhs, Ty::Unknown { .. } | Ty::Error { .. })
-                    && !matches!(rhs, Ty::Unknown { .. } | Ty::Error { .. })
-                {
-                    self.context.report_simple(
-                        TirTypeError::InvalidBinaryOp {
-                            op,
-                            lhs: lhs.clone(),
-                            rhs: rhs.clone(),
-                        },
-                        at,
-                    );
-                }
-                Ty::Bool {
-                    attr: TyAttr::default(),
+                // When the operand types are provably disjoint (no shared value) or
+                // provably the same single value, `==` is a constant — fold the result
+                // to a `bool` literal so the static type agrees with the
+                // `equals_equals` runtime. Disjoint operands (`Some(false)`) also warn
+                // (the comparison is pointless); a provably-equal pair does not.
+                match baml_type::normalize::constant_equality(lhs, rhs, &NormalizeCtx(self)) {
+                    Some(eq) => {
+                        if !eq {
+                            self.context.report_warning_simple(
+                                TirTypeError::ComparisonAlwaysDisjoint {
+                                    op,
+                                    lhs: lhs.clone(),
+                                    rhs: rhs.clone(),
+                                },
+                                at,
+                            );
+                        }
+                        let value = if matches!(op, BinaryOp::Eq) { eq } else { !eq };
+                        Ty::Literal(
+                            crate::ty::LiteralValue::Bool(value),
+                            crate::ty::Freshness::Fresh,
+                            TyAttr::default(),
+                        )
+                    }
+                    None => Ty::Bool {
+                        attr: TyAttr::default(),
+                    },
                 }
             }
 
-            // Ordering (`<`, `<=`, `>`, `>=`): unlike equality, there is no
-            // meaningful ordering between `null` and a real value. Reject
-            // any operand that could be null (Optional / Union containing
-            // `null` / bare `null`) before the float-bigint mix check.
+            // Ordering (`<`, `<=`, `>`, `>=`): exact-type — both operands must have the
+            // *same* type (subtyping is not enough; only `==` spans types/subtypes), and
+            // that type must implement `baml.ops.Compare`. Operands are widened
+            // (literal→base, enum-variant→enum) first so `x < 5` compares `int` to `int`;
+            // "same type" is `types_equivalent` — the current-context invariant equality
+            // (alias-resolving, union-order-insensitive, attr-tolerant), distinct from the
+            // coherence unifier's "possible-worlds" view. So `int < float`, `Dog < Animal`,
+            // and `int < int?` are all errors even when subtype-related. Error-recovery
+            // operands are skipped to avoid cascading diagnostics.
             BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => {
-                let invalid_null = (Self::may_be_null(lhs) || Self::may_be_null(rhs))
-                    && !matches!(lhs, Ty::Unknown { .. } | Ty::Error { .. })
-                    && !matches!(rhs, Ty::Unknown { .. } | Ty::Error { .. });
-                let invalid_mix = Self::is_float_bigint_mix(lhs, rhs)
-                    && !matches!(lhs, Ty::Unknown { .. } | Ty::Error { .. })
-                    && !matches!(rhs, Ty::Unknown { .. } | Ty::Error { .. });
-                if invalid_null || invalid_mix {
-                    self.context.report_simple(
-                        TirTypeError::InvalidBinaryOp {
-                            op,
-                            lhs: lhs.clone(),
-                            rhs: rhs.clone(),
-                        },
-                        at,
-                    );
+                if !matches!(lhs, Ty::Unknown { .. } | Ty::Error { .. })
+                    && !matches!(rhs, Ty::Unknown { .. } | Ty::Error { .. })
+                {
+                    let lhs_base = Self::widen_literal_base(lhs);
+                    let rhs_base = Self::widen_literal_base(rhs);
+                    // Exact-type equality via the canonical algebra, so equivalent
+                    // spellings agree — e.g. a `catch` result typed `int | 99`
+                    // canonicalizes to `int`, matching `int` on the other side.
+                    let same_type =
+                        baml_type::normalize::equivalent(&lhs_base, &rhs_base, &NormalizeCtx(self));
+                    if !same_type {
+                        self.context.report_simple(
+                            TirTypeError::OrderingDifferentTypes {
+                                op,
+                                lhs: lhs.clone(),
+                                rhs: rhs.clone(),
+                            },
+                            at,
+                        );
+                    } else if !self.type_is_comparable(&lhs_base) {
+                        self.context.report_simple(
+                            TirTypeError::OrderingRequiresCompare { op, ty: lhs_base },
+                            at,
+                        );
+                    }
                 }
                 Ty::Bool {
                     attr: TyAttr::default(),
@@ -15523,7 +15661,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // non-object primitive (int/float/bigint/bool/null) has no object
                 // representation and aborts at runtime. So `string + int` must be
                 // a type error here rather than inferring `string` and crashing
-                // the VM (F4), while `string + uint8array` stays valid.
+                // the VM, while `string + uint8array` stays valid.
                 if matches!(op, baml_compiler2_ast::BinaryOp::Add)
                     && !Self::is_non_object_primitive(lhs)
                     && !Self::is_non_object_primitive(rhs)
@@ -15547,66 +15685,6 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// type is the bare `null` primitive or a union that contains it (a
     /// nullable `T?` lowers to `T | null`).
     ///
-    /// Used by the ordering arms of [`infer_binary_op`] to reject operands
-    /// whose runtime value might be `null`. Arithmetic / bitwise rely on
-    /// their respective `base_ty` classifiers (which return `None` for
-    /// `null` and short-circuit via the catch-all to `Unknown`),
-    /// so they do not need this helper.
-    fn may_be_null(ty: &Ty) -> bool {
-        match ty {
-            Ty::Null { .. } => true,
-            Ty::Union(members, _) => members.iter().any(Self::may_be_null),
-            _ => false,
-        }
-    }
-
-    /// Returns true if the common upcast of `lhs` and `rhs` would contain
-    /// both `float` and `bigint`, which has no sound comparison (bigint
-    /// values past 2^53 don't round-trip through f64).
-    ///
-    /// Models the "is there a valid common type for these two values?"
-    /// question used by the equality and ordering arms of
-    /// [`infer_binary_op`]. `int? == int` upcasts both sides to `int?` and
-    /// is fine; `float? == bigint` upcasts to `float | null | bigint`,
-    /// which still pairs float with bigint inside the upcast — so even
-    /// though only one runtime branch realizes the bad pairing, the type
-    /// itself is unsound.
-    ///
-    /// Note this is conservative for a single union that already contains
-    /// both: `(float | bigint) == (float | bigint)` (and even `x == x` for
-    /// such an `x`) is rejected, because the type admits a float-vs-bigint
-    /// pairing even though any one concrete value is only ever one
-    /// representation. Narrow the operand first if you hit this.
-    fn is_float_bigint_mix(lhs: &Ty, rhs: &Ty) -> bool {
-        /// `(could_be_float, could_be_bigint)` for a primitive/literal/union
-        /// type — i.e. the set of primitive shapes any runtime branch could
-        /// carry. A nullable `T | null` is unwrapped through its members here
-        /// because this helper asks about the *upcast* type, not about whether
-        /// the operand itself is a valid scalar (the latter check belongs at
-        /// the operator's arm entry, e.g. ordering rejecting nullable operands
-        /// via `may_be_null`).
-        fn shape(ty: &Ty) -> (bool, bool) {
-            match ty {
-                Ty::Float { .. } | Ty::Literal(baml_base::Literal::Float(_), _, _) => (true, false),
-                Ty::Bigint { .. } | Ty::Literal(baml_base::Literal::Bigint(_), _, _) => {
-                    (false, true)
-                }
-                Ty::Union(members, _) => members.iter().fold((false, false), |(f, b), m| {
-                    let (mf, mb) = shape(m);
-                    (f || mf, b || mb)
-                }),
-                _ => (false, false),
-            }
-        }
-        let (lhs_float, lhs_bigint) = shape(lhs);
-        let (rhs_float, rhs_bigint) = shape(rhs);
-        // The upcast of the two operands contains both `float` and `bigint`
-        // iff either side could be float **and** either side could be bigint.
-        // (A single side containing both — e.g. `float | bigint` — is just as
-        // unsound as the classic cross-side case `float vs bigint`.)
-        (lhs_float || rhs_float) && (lhs_bigint || rhs_bigint)
-    }
-
     /// Determine the result type of a bitwise operation.
     ///
     /// `(int, int) -> int`, `(bigint, bigint) -> bigint`, `(int, bigint) -> bigint`.

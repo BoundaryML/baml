@@ -2090,6 +2090,35 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 }
             }
 
+            Terminator::VirtualCall {
+                iface,
+                method,
+                args,
+                ntypeargs,
+                destination,
+                target,
+                unwind: _,
+            } => {
+                // Push the method type args then the value args (receiver first),
+                // then the interface type, then the method name — the layout
+                // `OpCode::VirtualCall` expects: it pops the method name, then the
+                // interface, then the `ntypeargs` method type args, then reads the
+                // receiver (first value arg) to resolve the impl at runtime.
+                unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
+                let iface_const = self.add_constant(ConstValue::Type(iface.clone()));
+                let inst = self.emit(Instruction::LoadType(iface_const));
+                self.set_operand(inst, OperandMeta::Const(iface.to_string()));
+                self.emit_constant(&Constant::String(method.clone()));
+                let nargs = args.len() - ntypeargs;
+                let inst = self.emit(Instruction::VirtualCall {
+                    nargs: u16::try_from(nargs).expect("nargs fits in u16"),
+                    ntypeargs: u16::try_from(*ntypeargs).expect("ntypeargs fits in u16"),
+                });
+                self.set_operand(inst, OperandMeta::Callable(method.clone()));
+                self.emit_store_place(destination);
+                self.emit_jump_unless_fallthrough(*target);
+            }
+
             Terminator::Unreachable => {
                 // Emit an instruction that will panic at runtime if reached.
                 // This should never happen - if it does, there's a bug in the

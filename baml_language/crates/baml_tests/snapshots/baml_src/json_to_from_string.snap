@@ -279,7 +279,7 @@ function json_to_from_string.enum_variant_roundtrip_eq() -> bool {
     call baml.json.from_string
     load_const user.json_to_from_string.Color.Blue
     alloc_variant user.json_to_from_string.Color
-    cmp_op ==
+    call baml.ops.equals_equals
     return
 }
 
@@ -418,7 +418,7 @@ function json_to_from_string.optional_field_decode_missing_is_null() -> bool {
     call baml.json.from_string
     load_field .nickname
     load_const null
-    cmp_op ==
+    call baml.ops.equals_equals
     return
 }
 

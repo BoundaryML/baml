@@ -9,6 +9,7 @@
 //! - `map` — `BamlClassMap` (length, has, keys, values, ...)
 //! - `math` — `BamlNamespaceMath` (trunc)
 //! - `media` — `BamlClassMedia{Pdf,Audio,Video,Image}` + `BamlNamespaceMedia`
+//! - `ops` — `BamlClassOps*` (`Equals`/`Compare` for primitives + containers)
 //! - `unstable` — `BamlNamespaceUnstable` (string)
 //! - `root` — `BamlPackageBaml` (`deep_copy`, `deep_equals`, and the
 //!   `Sortable.sort` shims `_compare_shim` / `_is_primitive_array` /
@@ -30,7 +31,10 @@ pub mod json;
 mod map;
 mod math;
 mod media;
+mod ops;
 mod primitives;
+mod resolve;
+pub(crate) use resolve::{realize_frame, resolve_implements_rule};
 mod root;
 mod spawn;
 mod stack_trace;
@@ -120,6 +124,11 @@ pub trait Continuation: Send {
 #[allow(
     unused_variables,
     unsafe_code,
+    // Synthetic `implement Interface for Type` names aren't strict Rust
+    // casing: trait names like `BamlClassOpsEquals_for_int` aren't
+    // UpperCamelCase, and dispatch methods like
+    // `__dispatch_ops_equals_for_map_k__v_` (from `map<K, V>`) aren't snake_case.
+    non_camel_case_types,
     clippy::wildcard_imports,
     clippy::pub_underscore_fields,
     clippy::used_underscore_binding,

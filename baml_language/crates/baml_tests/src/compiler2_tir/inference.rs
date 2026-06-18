@@ -4,10 +4,10 @@ use baml_base::Name;
 use baml_compiler2_hir::{package::PackageId, scope::ScopeKind};
 use baml_compiler2_tir::{
     inference::infer_scope_types,
-    interfaces::package_implements_registry,
+    interfaces::{package_implements_registry, type_implements_with_deps},
     package_interface::{ExportedType, package_interface, package_resolution_context},
     resolve::{ResolvedName, resolve_name_at_in_scope},
-    ty::{FunctionParamMode, QualifiedTypeName, Ty},
+    ty::{FunctionParamMode, QualifiedTypeName, Ty, TyAttr},
 };
 use text_size::TextSize;
 
@@ -553,6 +553,46 @@ implements ToJson for Dog {
         registry.implements(&dog, &to_json),
         "out-of-body implementation in another file should register Dog <: ToJson"
     );
+}
+
+/// The builtin `Equals`/`Compare` impls for primitives live in the `baml`
+/// package, so a user-package query only finds them through the dependency
+/// registries. `type_implements_with_deps` must bridge that gap (a bare
+/// per-package lookup would miss them).
+#[test]
+fn builtin_equals_compare_visible_from_user_package() {
+    let mut db = make_db();
+    // A user file so the `user` package exists; `Bare` implements nothing.
+    db.add_file("main.baml", "class Bare { x: int }");
+    let user_pkg = PackageId::new(&db, Name::new("user"));
+
+    let equals = QualifiedTypeName::new(
+        Name::new("baml"),
+        vec![Name::new("ops")],
+        Name::new("Equals"),
+    );
+    let compare = QualifiedTypeName::new(
+        Name::new("baml"),
+        vec![Name::new("ops")],
+        Name::new("Compare"),
+    );
+    let int_ty = Ty::int();
+    let u8_ty = Ty::uint8array();
+    let bare = Ty::Class(
+        QualifiedTypeName::new(Name::new("user"), vec![], Name::new("Bare")),
+        vec![],
+        TyAttr::default(),
+    );
+
+    // int implements both Equals and Compare (impls in `baml`).
+    assert!(type_implements_with_deps(&db, user_pkg, &int_ty, &equals));
+    assert!(type_implements_with_deps(&db, user_pkg, &int_ty, &compare));
+    // uint8array implements Equals but not Compare.
+    assert!(type_implements_with_deps(&db, user_pkg, &u8_ty, &equals));
+    assert!(!type_implements_with_deps(&db, user_pkg, &u8_ty, &compare));
+    // A class with no `implements` satisfies neither.
+    assert!(!type_implements_with_deps(&db, user_pkg, &bare, &equals));
+    assert!(!type_implements_with_deps(&db, user_pkg, &bare, &compare));
 }
 
 #[test]

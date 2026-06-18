@@ -254,7 +254,7 @@ function user.HostEntry(query: string, max_results: int, filter: string | null) 
   L1:
     load_var filter
     load_const null
-    cmp_op ==
+    call baml.ops.equals_equals
     pop_jump_if_false L2
     jump L3
 

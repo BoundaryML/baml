@@ -2195,11 +2195,11 @@ function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bo
   !! 3915..3929: type mismatch: expected "hello", got "bye"
   !! 3933..3943: unreachable arm
   !! 3958..3965: unreachable arm
-  !! 8438..8443: operator `Mul` cannot be applied to `bool` and `bool`
-  !! 8446..8451: operator `Mul` cannot be applied to `int` and `bool`
-  !! 8474..8479: operator `Mul` cannot be applied to `bool` and `bool`
-  !! 8486..8491: operator `Mul` cannot be applied to `int` and `bool`
-  !! 8498..8503: operator `Mul` cannot be applied to `bool` and `int`
+  !! 8438..8443: operator `*` cannot be applied to `bool` and `bool`
+  !! 8446..8451: operator `*` cannot be applied to `int` and `bool`
+  !! 8474..8479: operator `*` cannot be applied to `bool` and `bool`
+  !! 8486..8491: operator `*` cannot be applied to `int` and `bool`
+  !! 8498..8503: operator `*` cannot be applied to `bool` and `int`
   !! 10691..10814: non-exhaustive match on `int`; missing: _
   !! 10814..10938: non-exhaustive match on `int`; missing: _
   !! 10938..11058: non-exhaustive match on `int`; missing: _
