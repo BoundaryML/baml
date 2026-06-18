@@ -116,7 +116,7 @@ macro_rules! verifier_unreachable {
 use ::bex_heap::TlabHolder;
 use ::bex_vm_types::{
     EarlyYieldCheck, RootHaver,
-    types::{ErrorClass, FutureId, InterfaceImplementors},
+    types::{ErrorClass, FutureId, InterfaceImplsByPackage},
 };
 use ::core::any::TypeId;
 #[cfg(not(target_arch = "wasm32"))]
@@ -312,7 +312,7 @@ mod tests {
             id_overrides: Vec::new(),
             argv: Arc::from([]),
             pending_call_type_args: Vec::new(),
-            interface_implementors: Arc::new(indexmap::IndexMap::new()),
+            interface_impls: Arc::new(indexmap::IndexMap::new()),
         }
     }
 
@@ -756,11 +756,12 @@ pub struct BexVm {
     /// even if the inner callback uses different ones.
     pending_call_type_args: Vec<baml_type::RuntimeTy>,
 
-    /// Per-program interface implementation registry (BEP-044). Used by the
-    /// `type.implements()` / `type.implementors()` / `type.implemented_by()`
-    /// reflection methods. Shared `Arc` so spawned VMs (lambdas, futures)
-    /// don't duplicate the map.
-    pub interface_implementors: Arc<InterfaceImplementors>,
+    /// Per-program interface implementation registry (BEP-044), consulted by the
+    /// runtime resolver (`resolve_interface_method`) to dispatch an interface
+    /// method on a value's concrete type and by the `type.implements()` /
+    /// `type.implementors()` / `type.implemented_by()` reflection methods. Shared
+    /// `Arc` so spawned VMs (lambdas, futures) don't duplicate the map.
+    pub interface_impls: Arc<InterfaceImplsByPackage>,
 }
 
 /// VM execution state.
@@ -906,8 +907,9 @@ pub struct BytecodeProgram {
     pub test_cases: Vec<bex_vm_types::TestCase>,
     /// Recursive type alias definitions for output format rendering.
     pub recursive_type_alias_defs: indexmap::IndexMap<baml_type::TypeName, baml_type::RuntimeTy>,
-    /// Interface → implementors registry (BEP-044) for runtime reflection.
-    pub interface_implementors: InterfaceImplementors,
+    /// Runtime interface-impl registry (BEP-044) for the interface-method
+    /// resolver and `type` reflection.
+    pub interface_impls: InterfaceImplsByPackage,
 }
 
 /// Convert a compiled `Program` to a `BytecodeProgram` with native functions attached.
@@ -966,7 +968,7 @@ pub fn convert_program(program: bex_vm_types::Program) -> Result<BytecodeProgram
         client_metadata: program.client_metadata,
         test_cases: program.test_cases,
         recursive_type_alias_defs: program.recursive_type_alias_defs,
-        interface_implementors: program.interface_implementors,
+        interface_impls: program.interface_impls,
     })
 }
 
@@ -1094,7 +1096,7 @@ impl BexVm {
         resolved_class_names: HashMap<String, HeapPtr>,
         #[cfg(not(target_arch = "wasm32"))] park_requested: Arc<AtomicBool>,
         argv: Arc<[String]>,
-        interface_implementors: Arc<InterfaceImplementors>,
+        interface_impls: Arc<InterfaceImplsByPackage>,
     ) -> Self {
         // Defer the first TLAB chunk reservation until the first `tlab.alloc`,
         // which the engine reaches only after the VM has been registered as a
@@ -1153,7 +1155,7 @@ impl BexVm {
             id_overrides: Vec::new(),
             argv,
             pending_call_type_args: Vec::new(),
-            interface_implementors,
+            interface_impls,
         }
     }
 
@@ -1318,6 +1320,108 @@ impl BexVm {
     /// Get type of a value.
     pub fn type_of(&self, value: &Value) -> Type {
         Type::of(value, |ptr| ObjectType::of(self.get_object(ptr)))
+    }
+
+    /// The full concrete `RuntimeTy` of a value — its runtime `Self` for a virtual
+    /// interface call. Total: every value realizes to exactly one concrete type
+    /// (the coherence in [`crate::package_baml`] relies on this), so this never
+    /// returns an "unknown". Primitives map to their kind; an `Instance` carries
+    /// its `class_type_args` (so `Box<int>` resolves the `Box` impl at `T = int`);
+    /// an enum `Variant` maps to its enum.
+    fn value_concrete_runtime_ty(&self, value: Value) -> baml_type::RuntimeTy {
+        use baml_type::{RuntimeTy, TyAttr};
+        if value.as_int().is_some() {
+            return RuntimeTy::Int {
+                attr: TyAttr::default(),
+            };
+        }
+        if value.as_bool().is_some() {
+            return RuntimeTy::Bool {
+                attr: TyAttr::default(),
+            };
+        }
+        if value.is_null() {
+            return RuntimeTy::Null {
+                attr: TyAttr::default(),
+            };
+        }
+        let ptr = value
+            .as_object_ptr()
+            .unwrap_or_else(|| unreachable!("value is neither a primitive nor a heap object"));
+        match self.get_object(ptr) {
+            Object::Float(_) => RuntimeTy::Float {
+                attr: TyAttr::default(),
+            },
+            Object::Bigint(_) => RuntimeTy::Bigint {
+                attr: TyAttr::default(),
+            },
+            Object::String(_) => RuntimeTy::String {
+                attr: TyAttr::default(),
+            },
+            Object::Uint8Array(_) => RuntimeTy::Uint8Array {
+                attr: TyAttr::default(),
+            },
+            Object::Instance(inst) => {
+                let type_args = inst.class_type_args.clone();
+                match self.get_object(inst.class) {
+                    Object::Class(class) => {
+                        // Media values are `Object::Instance`s of the std media
+                        // classes (`baml.media.{Image,Audio,Video,Pdf}`), but their
+                        // concrete type is the `image`/`audio`/… primitive
+                        // (`RuntimeTy::Media`) — which is how the impl registry keys
+                        // `implement I for image`. Return that, not the class.
+                        if let Some(kind) = crate::package_baml::json::media_kind_from_fqn(
+                            class.name.display_name().as_str(),
+                        ) {
+                            RuntimeTy::Media(kind, TyAttr::default())
+                        } else {
+                            RuntimeTy::Class(class.name.clone(), type_args, TyAttr::default())
+                        }
+                    }
+                    other => unreachable!(
+                        "Instance.class must point to a Class, found {:?}",
+                        ObjectType::of(other)
+                    ),
+                }
+            }
+            Object::Variant(v) => match self.get_object(v.enm) {
+                Object::Enum(e) => RuntimeTy::Enum(e.name.clone(), TyAttr::default()),
+                other => unreachable!(
+                    "Variant.enm must point to an Enum, found {:?}",
+                    ObjectType::of(other)
+                ),
+            },
+            // A `type` value (e.g. `reflect.type_of<T>()`) — its concrete type is
+            // the `type` primitive, the subject of `implement I for type`.
+            Object::Type(_) => RuntimeTy::Type {
+                attr: TyAttr::default(),
+            },
+            // Unreachable by construction: a container receiver never reaches a
+            // virtual call. Arrays/maps store only `Vec<Value>` /
+            // `IndexMap<Value, Value>` at runtime (`ArrayContainer =
+            // LockedContainer<Vec<Value>>`) with no element type, so `list<T>` /
+            // `map<K, V>` cannot be reconstructed from the value alone — `Self`
+            // would have to be read from a value that does not carry its element
+            // type. MIR lowering routes container-backed interface dispatch to the
+            // closed-world type-tag switch (the `iface_may_be_container_backed`
+            // gate) precisely so the element type comes from static typing rather
+            // than the runtime value, leaving virtual calls (the sole caller of
+            // this function) to receivers that do carry their own concrete type.
+            kind @ (Object::Array(_) | Object::Map(_)) => unreachable!(
+                "container receiver ({:?}) reached a virtual call: arrays/maps are \
+                 routed to closed-world interface-dispatch switches during MIR \
+                 lowering and so never reach virtual dispatch",
+                ObjectType::of(kind)
+            ),
+            // Functions/closures/futures are not valid impl subjects, and
+            // `resource`/`prompt_ast` (also impl subjects) have no runtime value
+            // representation — none can be an interface-dispatch receiver, so the
+            // type checker never emits a virtual call on them.
+            other => unreachable!(
+                "value of object kind {:?} cannot be a virtual-call receiver",
+                ObjectType::of(other)
+            ),
+        }
     }
 
     /// Get mutable string from a Value.
@@ -1485,7 +1589,7 @@ impl BexVm {
                 .map(|(name, idx)| (name, heap.compile_time_ptr(idx.into_raw()))),
         );
 
-        let interface_implementors = Arc::new(bytecode.interface_implementors);
+        let interface_impls = Arc::new(bytecode.interface_impls);
 
         Ok(Self::new(
             heap,
@@ -1494,7 +1598,7 @@ impl BexVm {
             #[cfg(not(target_arch = "wasm32"))]
             park_requested,
             Arc::from(Vec::<String>::new()),
-            interface_implementors,
+            interface_impls,
         ))
     }
 
@@ -5272,6 +5376,146 @@ impl BexVm {
                         callee_ptr,
                         locals_offset,
                         arg_count,
+                        frame_idx,
+                        function,
+                    );
+                    self.pending_call_type_args = prev_pending;
+                    if !type_args.is_empty() && self.frames.len() > frames_before {
+                        if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(*frame_idx) {
+                            bf.type_args.extend(type_args);
+                        }
+                    }
+                    return result;
+                }
+
+                // ── VirtualCall ───────────────────────────────────────────────
+                // Open-world interface dispatch: resolve the method at runtime
+                // from the receiver's concrete `Self` type, then take the shared
+                // frame-push call path (mirrors `Call`). Stack layout (top last):
+                // `[arg_0 (receiver), …, arg_{nargs-1}, iface_type, method_name]`.
+                OpCode::VirtualCall => {
+                    let nargs = read_u16_unchecked(code, pc) as usize;
+                    let ntypeargs = read_u16_unchecked(code, pc) as usize;
+
+                    // Pop the method name (top) then the interface type.
+                    let method_value = self.stack.ensure_pop();
+                    let method_name = self.as_string(&method_value)?.to_string();
+                    let iface_value = self.stack.ensure_pop();
+                    let (iface_qtn, iface_args) = {
+                        let iface_ptr = self.as_object_ptr(iface_value, ObjectType::Type)?;
+                        match self.get_object(iface_ptr) {
+                            // The interface's input args select among a type's impls
+                            // of the same interface at several instantiations (e.g.
+                            // `Converter<int>` + `Converter<float>`); non-generic
+                            // interfaces carry none and resolve by name + `Self`.
+                            // Associated types are outputs, not part of the key.
+                            Object::Type(ty) => match ty.as_ref() {
+                                baml_type::RuntimeTy::Interface(qtn, args, _assoc, _attr) => {
+                                    (qtn.clone(), args.clone())
+                                }
+                                other => unreachable!(
+                                    "VirtualCall interface operand must be an Interface type, found {other:?}"
+                                ),
+                            },
+                            other => unreachable!(
+                                "as_object_ptr(Type) guarantees a Type object, found {:?}",
+                                ObjectType::of(other)
+                            ),
+                        }
+                    };
+
+                    // Extract the `ntypeargs` method-level type args (sitting below
+                    // the value args, as in `Call`) and remove them, leaving the
+                    // `nargs` value args (receiver first).
+                    let method_type_args: Vec<baml_type::RuntimeTy> = if ntypeargs > 0 {
+                        let total_needed = nargs + ntypeargs;
+                        let base = self
+                            .stack
+                            .len()
+                            .checked_sub(total_needed)
+                            .ok_or(VmInternalError::NotEnoughItemsOnStack(total_needed))?;
+                        let mut collected = Vec::with_capacity(ntypeargs);
+                        for slot in base..(base + ntypeargs) {
+                            let v = self.stack[StackIndex::from_raw(slot)];
+                            let ptr = self.as_object_ptr(v, ObjectType::Type)?;
+                            let Object::Type(ty) = self.get_object(ptr) else {
+                                unreachable!("as_object_ptr guarantees Type variant");
+                            };
+                            collected.push(*ty.clone());
+                        }
+                        for _ in 0..ntypeargs {
+                            self.stack.remove(base);
+                        }
+                        collected
+                    } else {
+                        vec![]
+                    };
+
+                    let args_offset = self
+                        .stack
+                        .len()
+                        .checked_sub(nargs)
+                        .ok_or(VmInternalError::NotEnoughItemsOnStack(nargs))?;
+                    // `Self` is the receiver's runtime concrete type; coherence makes
+                    // `(Self, iface<args>)` resolve to at most one impl. Off that rule
+                    // the method is `rule.methods[name]`. `nargs` equals the method's
+                    // arity — the interface fixes the parameter count, so every impl
+                    // agrees. The rule borrows `self`; scope it so the borrow ends
+                    // before the `&mut self` call below.
+                    let receiver = self.stack[StackIndex::from_raw(args_offset)];
+                    let self_ty = self.value_concrete_runtime_ty(receiver);
+                    let (callee_ptr, type_args) = {
+                        let (rule, bound_args) = crate::package_baml::resolve_implements_rule(
+                            self,
+                            &self_ty,
+                            &iface_qtn,
+                            &iface_args,
+                        )
+                        .ok_or_else(|| {
+                            VmInternalError::UnresolvedVirtualCall {
+                                method: method_name.clone(),
+                            }
+                        })?;
+                        let method = rule.methods.get(method_name.as_str()).ok_or_else(|| {
+                            VmInternalError::UnresolvedVirtualCall {
+                                method: method_name.clone(),
+                            }
+                        })?;
+                        let callee = self.find_function_by_name(&method.fqn).ok_or_else(|| {
+                            VmInternalError::UnresolvedVirtualCall {
+                                method: method_name.clone(),
+                            }
+                        })?;
+                        // Seed the callee frame: the impl's frame realized against
+                        // its bound args (the impl's own generics for an impl method,
+                        // or the interface's args + associated types for an inherited
+                        // default), then the method-level type args — matching the
+                        // callee's De Bruijn layout `[owner… ++ method…]`.
+                        let mut frame =
+                            crate::package_baml::realize_frame(&method.frame, &bound_args);
+                        frame.extend(method_type_args);
+                        (callee, frame)
+                    };
+
+                    let locals_offset = StackIndex::from_raw(args_offset);
+
+                    // Save pc as return address before pushing the new frame.
+                    let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
+                        verifier_unreachable!()
+                    };
+                    bf.instruction_ptr = *pc;
+
+                    // Seed the callee frame's `type_args` with the impl's type args
+                    // (e.g. `Box<int>` → `[int]`), exactly as `Call` does. Stash them
+                    // into `pending_call_type_args` first so a native callee can read
+                    // them via `current_call_type_args()`.
+                    let frames_before = self.frames.len();
+                    let prev_pending =
+                        std::mem::replace(&mut self.pending_call_type_args, type_args.clone());
+                    let result = self.execute_call_from_locals_offset(
+                        callee_ptr,
+                        locals_offset,
+                        nargs,
                         frame_idx,
                         function,
                     );

@@ -41,22 +41,27 @@ fn assert.equal(actual: unknown, expected: unknown) -> null {
     let _1: unknown // actual // param
     let _2: unknown // expected // param
     let _3: bool
+    let _4: bool
 
     bb0: {
-        _3 = copy _1 != copy _2;
-        branch copy _3 -> [bb2, bb1];
+        _4 = call const fn baml.ops.equals_equals(copy _1, copy _2) -> [bb1];
     }
 
     bb1: {
-        _0 = const null;
-        goto -> bb3;
+        _3 = !copy _4;
+        branch copy _3 -> [bb3, bb2];
     }
 
     bb2: {
-        _0 = call const fn baml.sys.panic(const "assertion failed: expected equal values") -> [bb3];
+        _0 = const null;
+        goto -> bb4;
     }
 
     bb3: {
+        _0 = call const fn baml.sys.panic(const "assertion failed: expected equal values") -> [bb4];
+    }
+
+    bb4: {
         return;
     }
 }
@@ -93,20 +98,23 @@ fn assert.not_null(value: unknown | null) -> null {
     let _2: bool
 
     bb0: {
-        _2 = copy _1 == const null;
-        branch copy _2 -> [bb2, bb1];
+        _2 = call const fn baml.ops.equals_equals(copy _1, const null) -> [bb1];
     }
 
     bb1: {
-        _0 = const null;
-        goto -> bb3;
+        branch copy _2 -> [bb3, bb2];
     }
 
     bb2: {
-        _0 = call const fn baml.sys.panic(const "assertion failed: expected non-null value") -> [bb3];
+        _0 = const null;
+        goto -> bb4;
     }
 
     bb3: {
+        _0 = call const fn baml.sys.panic(const "assertion failed: expected non-null value") -> [bb4];
+    }
+
+    bb4: {
         return;
     }
 }

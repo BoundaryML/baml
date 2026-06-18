@@ -1197,6 +1197,16 @@ pub enum UnaryOp {
     Neg,
 }
 
+impl std::fmt::Display for UnaryOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            UnaryOp::Not => "!",
+            UnaryOp::Neg => "-",
+        };
+        write!(f, "{s}")
+    }
+}
+
 /// Compound assignment operators.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AssignOp {

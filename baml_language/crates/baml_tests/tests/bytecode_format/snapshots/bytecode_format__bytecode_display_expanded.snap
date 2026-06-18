@@ -19,17 +19,18 @@ function assert.contains(haystack: string, needle: string) -> null {
 
 function assert.equal(actual: unknown, expected: unknown) -> null {
   23   0   load_var2 1 2          
-       1   cmp_op !=              
-       2   pop_jump_if_false +2   (to 4)
-       3   jump +3                (to 6)
+       1   call 883 ntypeargs=0   (baml.ops.equals_equals)
+       2   unary_op !             
+       3   pop_jump_if_false +2   (to 5)
+       4   jump +3                (to 7)
 
-  26   4   load_const 0           (null)
+  26   5   load_const 0           (null)
 
-  23   5   jump +3                (to 8)
+  23   6   jump +3                (to 9)
 
-  24   6   load_const 1           ("assertion failed: expected equal values")
-       7   call 328 ntypeargs=0   (baml.sys.panic)
-       8   return                 
+  24   7   load_const 1           ("assertion failed: expected equal values")
+       8   call 328 ntypeargs=0   (baml.sys.panic)
+       9   return                 
 }
 
 function assert.is_true(condition: bool) -> null {
@@ -50,7 +51,7 @@ function assert.is_true(condition: bool) -> null {
 function assert.not_null(value: unknown | null) -> null {
   14   0   load_var 1             (value)
        1   load_const 0           (null)
-       2   cmp_op ==              
+       2   call 883 ntypeargs=0   (baml.ops.equals_equals)
        3   pop_jump_if_false +2   (to 5)
        4   jump +3                (to 7)
 
@@ -917,7 +918,7 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
         135   pop 1                    
 
   169   136   load_var 1               (self)
-        137   call 875 ntypeargs=0     (testing.TestRegistry.serialize)
+        137   call 902 ntypeargs=0     (testing.TestRegistry.serialize)
         138   jump +123                (to 261)
 
   173   139   load_type 13             
@@ -1045,7 +1046,7 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
         258   pop_jump_if_false -109   (to 149)
 
   176   259   load_var2 14 2           
-        260   call 880 ntypeargs=0     (testing.TestRegistry.expand_set)
+        260   call 907 ntypeargs=0     (testing.TestRegistry.expand_set)
         261   return                   
 
   179   262   load_const 26            ("TestSet not found for expansion: ")
@@ -1210,7 +1211,7 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
         113   load_field 1             (body)
         114   load_var 6               (t)
         115   load_field 2             (runner)
-        116   call 886 ntypeargs=0     (testing.run_test)
+        116   call 913 ntypeargs=0     (testing.run_test)
         117   jump +123                (to 240)
 
   143   118   load_type 13             
@@ -1339,7 +1340,7 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
   145   237   pop_jump_if_false -109   (to 128)
 
   147   238   load_var2 11 2           
-        239   call 879 ntypeargs=0     (testing.TestRegistry.run_test)
+        239   call 906 ntypeargs=0     (testing.TestRegistry.run_test)
         240   return                   
 
   150   241   load_const 26            ("Test not found: ")
@@ -1610,7 +1611,7 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
         248   store_var 12             (_81)
 
   122   249   load_var 11              (sub)
-        250   call 875 ntypeargs=0     (testing.TestRegistry.serialize)
+        250   call 902 ntypeargs=0     (testing.TestRegistry.serialize)
         251   store_var 13             (_82)
 
   120   252   load_var2 2 12           
@@ -1791,7 +1792,7 @@ function testing.run_test(body: () -> void throws unknown, runner: ((() -> testi
         2    store_var 1            
 
   185   3    load_var 1             (body)
-        4    make_closure 1632 1    
+        4    make_closure 1700 1    
         5    store_var 3            (base_run)
 
   200   6    load_var 2             (runner)

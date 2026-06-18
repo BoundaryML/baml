@@ -560,7 +560,7 @@ fn invalid_binary_op_string_minus_int() {
       { : never
         return "hello" - 5 : unknown
       }
-      !! 28..40: operator `Sub` cannot be applied to `"hello"` and `5`
+      !! 28..40: operator `-` cannot be applied to `"hello"` and `5`
     }
     "#);
 }
@@ -574,7 +574,7 @@ fn invalid_binary_op_bool_add() {
       { : never
         return true + false : unknown
       }
-      !! 29..41: operator `Add` cannot be applied to `true` and `false`
+      !! 29..41: operator `+` cannot be applied to `true` and `false`
     }
     ");
 }
@@ -583,12 +583,12 @@ fn invalid_binary_op_bool_add() {
 fn invalid_binary_op_float_plus_bigint() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "function f() -> bigint { return 1.5 + 100n; }");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> bigint throws never {
       { : never
         return 1.5 + 100n : unknown
       }
-      !! 32..42: operator `Add` cannot be applied to `1.5` and `100n`
+      !! 32..42: operator `+` cannot be applied to `1.5` and `100n`
     }
     ");
 }
@@ -597,12 +597,12 @@ fn invalid_binary_op_float_plus_bigint() {
 fn invalid_binary_op_bigint_plus_float() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "function f() -> bigint { return 100n + 1.5; }");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> bigint throws never {
       { : never
         return 100n + 1.5 : unknown
       }
-      !! 32..42: operator `Add` cannot be applied to `100n` and `1.5`
+      !! 32..42: operator `+` cannot be applied to `100n` and `1.5`
     }
     ");
 }
@@ -611,28 +611,96 @@ fn invalid_binary_op_bigint_plus_float() {
 fn invalid_binary_op_float_lt_bigint() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "function f() -> bool { return 1.5 < 100n; }");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> bool throws never {
       { : never
         return 1.5 < 100n : bool
       }
-      !! 30..40: operator `Lt` cannot be applied to `1.5` and `100n`
+      !! 30..40: cannot order `1.5` and `100n` with `<`: ordering requires both operands to have the same type
     }
     ");
 }
 
 #[test]
-fn invalid_binary_op_bigint_eq_float() {
+fn bigint_eq_float_permitted() {
+    // `==` is valid for any operand pair, so `bigint == float` type-checks to `bool` with
+    // no diagnostic. The always-false lint (a warning on provably-disjoint operands) lands
+    // with `==` lowering in Phase 3B, where it matches the concrete-equality runtime.
     let mut db = make_db();
     let file = db.add_file("test.baml", "function f() -> bool { return 100n == 1.5; }");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> bool throws never {
       { : never
         return 100n == 1.5 : bool
       }
-      !! 30..41: operator `Eq` cannot be applied to `100n` and `1.5`
     }
     ");
+}
+
+#[test]
+fn ordering_unrelated_classes_is_error() {
+    // `<` `>` `<=` `>=` are exact-type; two different classes can't be ordered.
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        "class Dog { name string }\nclass Cat { name string }\n\
+         function f(a: Dog, b: Cat) -> bool { return a < b; }",
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("cannot order `Dog` and `Cat`"),
+        "expected OrderingDifferentTypes, got:\n{tir}"
+    );
+}
+
+#[test]
+fn ordering_subtype_related_is_error() {
+    // Exact-type: even though `int <: int?`, ordering requires the *same* type — only
+    // `==` may span a subtype relationship.
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        "function f(a: int, b: int?) -> bool { return a < b; }",
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("ordering requires both operands to have the same type"),
+        "expected OrderingDifferentTypes, got:\n{tir}"
+    );
+}
+
+#[test]
+fn ordering_non_compare_class_is_error() {
+    // A common type is found (both `Widget`), but `Widget` does not implement `Compare`,
+    // so it has no ordering.
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        "class Widget { id int }\n\
+         function f(a: Widget, b: Widget) -> bool { return a < b; }",
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("`Widget` does not implement `Compare`"),
+        "expected OrderingRequiresCompare, got:\n{tir}"
+    );
+}
+
+#[test]
+fn equality_disjoint_types_warns_always_false() {
+    // `==` is valid for any pair, but provably-disjoint operands (here `int` vs
+    // `string` — distinct concrete types) make it always false, so it warns
+    // (`ComparisonAlwaysDisjoint`) rather than erroring.
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        "function f(a: int, b: string) -> bool { return a == b; }",
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("share no value, so this comparison is always false"),
+        "expected ComparisonAlwaysDisjoint warning, got:\n{tir}"
+    );
 }
 
 #[test]
@@ -646,7 +714,7 @@ fn aliased_float_plus_bigint_is_rejected() {
     );
     let tir = render_tir(&db, file);
     assert!(
-        tir.contains("operator `Add` cannot be applied"),
+        tir.contains("operator `+` cannot be applied"),
         "expected InvalidBinaryOp diagnostic, got:\n{tir}"
     );
 }
@@ -681,7 +749,7 @@ fn invalid_unary_op_neg_string() {
       { : never
         return Neg "hello" : unknown
       }
-      !! 28..37: operator `Neg` cannot be applied to `"hello"`
+      !! 28..37: operator `-` cannot be applied to `"hello"`
     }
     "#);
 }

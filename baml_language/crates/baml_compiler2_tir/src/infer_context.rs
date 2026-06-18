@@ -66,6 +66,29 @@ pub enum TirTypeError {
         lhs: Ty,
         rhs: Ty,
     },
+    /// Ordering (`<` `<=` `>` `>=`) between two different types. Ordering is exact-type:
+    /// both operands must have the same type (subtyping is not enough — only `==` spans
+    /// types), so this fires even when one operand is a subtype of the other.
+    OrderingDifferentTypes {
+        op: baml_compiler2_ast::BinaryOp,
+        lhs: Ty,
+        rhs: Ty,
+    },
+    /// Ordering (`<` `<=` `>` `>=`) on a common type that does not implement
+    /// `baml.ops.Compare`, so no ordering is defined for it.
+    OrderingRequiresCompare {
+        op: baml_compiler2_ast::BinaryOp,
+        ty: Ty,
+    },
+    /// An equality (`==` / `!=`) whose operand types are provably disjoint — no
+    /// value of one can ever equal a value of the other — so the result is a
+    /// constant (`==` always `false`, `!=` always `true`). A warning, not an
+    /// error: the comparison is valid, just pointless.
+    ComparisonAlwaysDisjoint {
+        op: baml_compiler2_ast::BinaryOp,
+        lhs: Ty,
+        rhs: Ty,
+    },
     /// Invalid operand type for a unary operator (e.g. `-"hello"`).
     InvalidUnaryOp {
         op: baml_compiler2_ast::UnaryOp,
@@ -397,7 +420,36 @@ impl fmt::Display for TirTypeError {
             TirTypeError::InvalidBinaryOp { op, lhs, rhs } => {
                 write!(
                     f,
-                    "operator `{op:?}` cannot be applied to `{}` and `{}`",
+                    "operator `{op}` cannot be applied to `{}` and `{}`",
+                    lhs.render_user_facing(),
+                    rhs.render_user_facing()
+                )
+            }
+            TirTypeError::OrderingDifferentTypes { op, lhs, rhs } => {
+                write!(
+                    f,
+                    "cannot order `{}` and `{}` with `{op}`: ordering requires both operands \
+                     to have the same type",
+                    lhs.render_user_facing(),
+                    rhs.render_user_facing()
+                )
+            }
+            TirTypeError::OrderingRequiresCompare { op, ty } => {
+                write!(
+                    f,
+                    "`{}` does not implement `Compare`, so it cannot be ordered with `{op}`",
+                    ty.render_user_facing()
+                )
+            }
+            TirTypeError::ComparisonAlwaysDisjoint { op, lhs, rhs } => {
+                let always = if matches!(op, baml_compiler2_ast::BinaryOp::Ne) {
+                    "true"
+                } else {
+                    "false"
+                };
+                write!(
+                    f,
+                    "`{}` and `{}` share no value, so this comparison is always {always}",
                     lhs.render_user_facing(),
                     rhs.render_user_facing()
                 )
@@ -405,7 +457,7 @@ impl fmt::Display for TirTypeError {
             TirTypeError::InvalidUnaryOp { op, operand } => {
                 write!(
                     f,
-                    "operator `{op:?}` cannot be applied to `{}`",
+                    "operator `{op}` cannot be applied to `{}`",
                     operand.render_user_facing()
                 )
             }

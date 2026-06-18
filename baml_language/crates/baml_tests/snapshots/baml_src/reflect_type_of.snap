@@ -147,7 +147,7 @@ function reflect_type_of.type_of_array_to_string_fn() -> string {
 function reflect_type_of.type_of_assign_and_compare_fn() -> bool {
     load_type reflect_type_of.User
     load_type reflect_type_of.User
-    cmp_op ==
+    call baml.ops.equals_equals
     return
 }
 

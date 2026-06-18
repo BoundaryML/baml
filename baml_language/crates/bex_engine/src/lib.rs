@@ -84,7 +84,7 @@ use ::bex_heap::{HeapPermit as _, Tlab};
 // Re-export event types for callers.
 use ::bex_vm_types::{
     RootHaver,
-    types::{FutureId, InterfaceImplementors},
+    types::{FutureId, InterfaceImplsByPackage},
 };
 use ::core::sync::atomic::AtomicBool;
 use async_trait::async_trait;
@@ -620,10 +620,11 @@ pub struct BexEngine {
 
     futures: FutureManager,
 
-    /// Per-program interface implementors registry (BEP-044), kept here so
-    /// every spawned VM (including post-`$init` workers) sees the same map
-    /// without cloning the underlying `IndexMap`.
-    interface_implementors: Arc<InterfaceImplementors>,
+    /// Per-program interface-impl registry (BEP-044), kept here so every spawned
+    /// VM (including post-`$init` workers) sees the same map without cloning the
+    /// underlying `IndexMap`. Drives the interface-method resolver and `type`
+    /// reflection.
+    interface_impls: Arc<InterfaceImplsByPackage>,
 
     /// Snapshot of the `BAML_PROFILE` master switch, taken once at
     /// construction (the config is read-once per process). Gates every
@@ -1258,8 +1259,8 @@ impl BexEngine {
         #[cfg(not(target_arch = "wasm32"))]
         let park_requested = Arc::new(AtomicBool::new(false));
 
-        let interface_implementors: Arc<InterfaceImplementors> =
-            Arc::new(bytecode.interface_implementors.clone());
+        let interface_impls: Arc<InterfaceImplsByPackage> =
+            Arc::new(bytecode.interface_impls.clone());
 
         // Run $init for each package in dependency order.
         // $init evaluates top-level let-binding initializers and stores their
@@ -1278,7 +1279,7 @@ impl BexEngine {
                     #[cfg(not(target_arch = "wasm32"))]
                     Arc::clone(&park_requested),
                     Arc::clone(&argv),
-                    Arc::clone(&interface_implementors),
+                    Arc::clone(&interface_impls),
                 );
                 vm.set_entry_point(*init_ptr, &[]);
                 // Drive the VM to completion. $init only contains synchronous
@@ -1405,7 +1406,7 @@ impl BexEngine {
             park_requested,
             active_calls: Mutex::new(HashMap::new()),
             futures: FutureManager::new(futures_permit),
-            interface_implementors,
+            interface_impls,
             prof_enabled,
         })
     }
@@ -1976,7 +1977,7 @@ impl BexEngine {
             #[cfg(not(target_arch = "wasm32"))]
             Arc::clone(&self.park_requested),
             Arc::clone(&self.argv),
-            Arc::clone(&self.interface_implementors),
+            Arc::clone(&self.interface_impls),
         );
         // BEP-034: wrap the root VM in a `BexThread` from the outset so the
         // permit's `RootHaver` is the thread (delegating to the inner VM).
@@ -2984,7 +2985,7 @@ impl BexEngine {
             #[cfg(not(target_arch = "wasm32"))]
             Arc::clone(&self.park_requested),
             Arc::clone(&self.argv),
-            Arc::clone(&self.interface_implementors),
+            Arc::clone(&self.interface_impls),
         );
         child_vm.prof_thread_id = prof_thread_id;
         child_vm.bex_ref_seed = Some((self.process_euid, self.engine_id));

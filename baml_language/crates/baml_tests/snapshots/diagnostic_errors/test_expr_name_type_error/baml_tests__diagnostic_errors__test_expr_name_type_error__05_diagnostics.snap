@@ -1,14 +1,13 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 48781
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] error: operator `Add` cannot be applied to `"a"` and `1`
+  [type] error: operator `+` cannot be applied to `"a"` and `1`
    ╭─[ main.baml:3:5 ]
    │
  3 │ test "a" + 1 {
    │     ────┬───  
-   │         ╰───── operator `Add` cannot be applied to `"a"` and `1`
+   │         ╰───── operator `+` cannot be applied to `"a"` and `1`
    │ 
    │ Note: Error code: E0004
 ───╯
