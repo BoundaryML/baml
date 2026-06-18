@@ -114,6 +114,13 @@ function baml.values(self: ?) -> V[]  [builtin]
 --- captures ---
 lambda (i, j) in sort_by_key: captures [keys]
 
+--- <builtin>/baml/conversions.baml ---
+function baml._to_string_default(value: T) -> string  [builtin]
+function baml._to_string_shim(value: T) -> string  [builtin]
+function baml.to_string(self: ?) -> string  [expr] {
+  {  } root._to_string_default(self)
+}
+
 --- <builtin>/baml/core.baml ---
 function baml.deep_copy(value: T) -> T  [builtin]
 function baml.deep_equals(a: T, b: T) -> bool  [builtin]
@@ -617,6 +624,7 @@ class baml.errors.StackFrame {
 class baml.errors.StackTrace {
   frames: baml.errors.StackFrame[]
 }
+function baml.errors._to_string_impl(self: ?) -> string  [builtin]
 function baml.errors.from_json(j: baml.json.json) -> baml.errors.StackFrame  [expr] {
   baml.errors.StackFrame { file: baml.json.from_json(baml.json.field(j, "file")), line: baml.json.from_json(baml.json.field(j, "line")), function_name: baml.json.from_json(baml.json.field(j, "function_name")) }
 }
@@ -629,7 +637,9 @@ function baml.errors.to_json(self: ?) -> baml.json.json  [expr] {
 function baml.errors.to_json(self: ?) -> baml.json.json  [expr] {
   map { "file": baml.json.to_json(self.file), "line": baml.json.to_json(self.line), "function_name": baml.json.to_json(self.function_name) }
 }
-function baml.errors.to_string(self: ?) -> string  [builtin]
+function baml.errors.to_string(self: ?) -> string  [expr] {
+  {  } self._to_string_impl()
+}
 
 --- <builtin>/baml/ns_events/events.baml ---
 
@@ -1926,6 +1936,7 @@ function baml.time.to_seconds(self: ?) -> bigint  [expr] {
 class baml.time.Instant {
   _nanoseconds: bigint
 }
+function baml.time._to_string_impl(self: ?) -> string  [builtin]
 function baml.time.abs_diff(self: ?, other: baml.time.Instant) -> Duration  [expr] {
   {  } Duration { _nanoseconds: self._nanoseconds Sub other._nanoseconds.abs() }
 }
@@ -1959,9 +1970,11 @@ function baml.time.min(self: ?, other: baml.time.Instant) -> baml.time.Instant  
 function baml.time.now() -> baml.time.Instant  [builtin]
 function baml.time.parse(s: string) -> baml.time.Instant  [builtin]
 function baml.time.to_json(self: ?) -> string  [expr] {
-  {  } self.to_string() catch (_) { root.errors.InvalidArgument { message: message } => throw root.json.JsonSerializationError { message: message, path: "" } }
+  {  } self._to_string_impl() catch (_) { root.errors.InvalidArgument { message: message } => throw root.json.JsonSerializationError { message: message, path: "" } }
 }
-function baml.time.to_string(self: ?) -> string  [builtin]
+function baml.time.to_string(self: ?) -> string  [expr] {
+  {  } self._to_string_impl() catch (_) { root.errors.InvalidArgument { message: message } => root.sys.panic("Instant.to_string: " Add message) }
+}
 function baml.time.to_timestamp_microseconds(self: ?) -> bigint  [expr] {
   {  } self._nanoseconds Div 1000
 }
@@ -1980,6 +1993,7 @@ class baml.time.PlainDate {
   _days: int
 }
 function baml.time._to_plain_datetime(self: ?, time: PlainTime?) -> PlainDateTime  [builtin]
+function baml.time._to_string_impl(self: ?) -> string  [builtin]
 function baml.time.day(self: ?) -> int  [builtin]
 function baml.time.from_components(year: int, month: int, day: int) -> baml.time.PlainDate  [builtin]
 function baml.time.from_json(j: baml.json.json) -> baml.time.PlainDate  [expr] {
@@ -1988,12 +2002,14 @@ function baml.time.from_json(j: baml.json.json) -> baml.time.PlainDate  [expr] {
 function baml.time.month(self: ?) -> int  [builtin]
 function baml.time.parse(s: string) -> baml.time.PlainDate  [builtin]
 function baml.time.to_json(self: ?) -> string  [expr] {
-  {  } self.to_string() catch (_) { root.errors.InvalidArgument { message: message } => throw root.json.JsonSerializationError { message: message, path: "" } }
+  {  } self._to_string_impl() catch (_) { root.errors.InvalidArgument { message: message } => throw root.json.JsonSerializationError { message: message, path: "" } }
 }
 function baml.time.to_plain_datetime(self: ?, time: PlainTime? = null) -> PlainDateTime  [expr] {
   {  } self._to_plain_datetime(time)
 }
-function baml.time.to_string(self: ?) -> string  [builtin]
+function baml.time.to_string(self: ?) -> string  [expr] {
+  {  } self._to_string_impl() catch (_) { root.errors.InvalidArgument { message: message } => root.sys.panic("PlainDate.to_stri..." Add message) }
+}
 function baml.time.year(self: ?) -> int  [builtin]
 
 --- <builtin>/baml/ns_time/plaindatetime.baml ---
@@ -2001,6 +2017,7 @@ class baml.time.PlainDateTime {
   _nanoseconds: bigint
 }
 function baml.time._from_components(year: int, month: int, day: int, hour: int, minute: int, second: int, millisecond: int, microsecond: int, nanosecond: int) -> baml.time.PlainDateTime  [builtin]
+function baml.time._to_string_impl(self: ?) -> string  [builtin]
 function baml.time.day(self: ?) -> int  [builtin]
 function baml.time.from_components(year: int, month: int, day: int, hour: int = 0, minute: int = 0, second: int = 0, millisecond: int = 0, microsecond: int = 0, nanosecond: int = 0) -> baml.time.PlainDateTime  [expr] {
   {  } PlainDateTime._from_components(year, month, day, hour, minute, second, millisecond, microsecond, nanosecond)
@@ -2021,11 +2038,13 @@ function baml.time.month(self: ?) -> int  [builtin]
 function baml.time.parse(s: string) -> baml.time.PlainDateTime  [builtin]
 function baml.time.second(self: ?) -> int  [builtin]
 function baml.time.to_json(self: ?) -> string  [expr] {
-  {  } self.to_string() catch (_) { root.errors.InvalidArgument { message: message } => throw root.json.JsonSerializationError { message: message, path: "" } }
+  {  } self._to_string_impl() catch (_) { root.errors.InvalidArgument { message: message } => throw root.json.JsonSerializationError { message: message, path: "" } }
 }
 function baml.time.to_plain_date(self: ?) -> PlainDate  [builtin]
 function baml.time.to_plain_time(self: ?) -> PlainTime  [builtin]
-function baml.time.to_string(self: ?) -> string  [builtin]
+function baml.time.to_string(self: ?) -> string  [expr] {
+  {  } self._to_string_impl() catch (_) { root.errors.InvalidArgument { message: message } => root.sys.panic("PlainDateTime.to_..." Add message) }
+}
 function baml.time.to_zoned(self: ?, timezone: TimeZoneOffset | string, disambiguation: Disambiguation = "compatible") -> ZonedDateTime  [expr] {
   {  } match (timezone) { TimeZoneOffset => ZonedDateTime { _nanoseconds: self._nanoseconds Sub timezone._nanoseconds, _offset_ns: timezone._nanoseconds, _iana: null }, string => if (disambiguation Eq "reject") {  } match (_tz_to_instant(timezone, self._nanoseconds, "earlier")) { null => throw UnknownTimezoneError { timezone: timezone }, earlier => match (_tz_to_instant(timezone, self._nanoseconds, "later")) { null => throw UnknownTimezoneError { timezone: timezone }, later => if (earlier Eq later) {  } ZonedDateTime { _nanoseconds: earlier NullCoalesce 0n, _offset_ns: null, _iana: timezone } else { throw AmbiguousTimeError { message: "wall-clock time i..." Add timezone } } } } else {  } match (_tz_to_instant(timezone, self._nanoseconds, disambiguation)) { null => throw UnknownTimezoneError { timezone: timezone }, resolved => ZonedDateTime { _nanoseconds: resolved NullCoalesce 0n, _offset_ns: null, _iana: timezone } } }
 }
@@ -2036,6 +2055,7 @@ class baml.time.PlainTime {
   _nanoseconds: int
 }
 function baml.time._from_components(hour: int, minute: int, second: int, millisecond: int, microsecond: int, nanosecond: int) -> baml.time.PlainTime  [builtin]
+function baml.time._to_string_impl(self: ?) -> string  [builtin]
 function baml.time.from_components(hour: int, minute: int = 0, second: int = 0, millisecond: int = 0, microsecond: int = 0, nanosecond: int = 0) -> baml.time.PlainTime  [expr] {
   {  } PlainTime._from_components(hour, minute, second, millisecond, microsecond, nanosecond)
 }
@@ -2061,7 +2081,9 @@ function baml.time.to_json(self: ?) -> string  [expr] {
 function baml.time.to_plain_datetime(self: ?, date: PlainDate) -> PlainDateTime  [expr] {
   {  } date.to_plain_datetime(time = self)
 }
-function baml.time.to_string(self: ?) -> string  [builtin]
+function baml.time.to_string(self: ?) -> string  [expr] {
+  {  } self._to_string_impl()
+}
 
 --- <builtin>/baml/ns_time/timezone.baml ---
 class baml.time.AmbiguousTimeError {
@@ -2125,6 +2147,9 @@ class baml.time.ZonedDateTime {
   _iana: string?
 }
 function baml.time._format_zoned(epoch_ns: bigint, offset_ns: int, iana: string?) -> string  [builtin]
+function baml.time._to_string_impl(self: ?) -> string  [expr] {
+  {  } _format_zoned(self._nanoseconds, self.timezone_offset()._nanoseconds, self._iana)
+}
 function baml.time.day(self: ?) -> int  [expr] {
   {  } self.to_plain().day()
 }
@@ -2175,13 +2200,13 @@ function baml.time.to_instant(self: ?) -> Instant  [expr] {
   {  } Instant { _nanoseconds: self._nanoseconds }
 }
 function baml.time.to_json(self: ?) -> string  [expr] {
-  {  } self.to_string() catch (_) { root.errors.InvalidArgument { message: message } => throw root.json.JsonSerializationError { message: message, path: "" }, UnknownTimezoneError { timezone: timezone } => throw root.json.JsonSerializationError { message: "unknown timezone: " Add timezone, path: "" }, root.errors.Io { message: message } => throw root.json.JsonSerializationError { message: message, path: "" } }
+  {  } self._to_string_impl() catch (_) { root.errors.InvalidArgument { message: message } => throw root.json.JsonSerializationError { message: message, path: "" }, UnknownTimezoneError { timezone: timezone } => throw root.json.JsonSerializationError { message: "unknown timezone: " Add timezone, path: "" }, root.errors.Io { message: message } => throw root.json.JsonSerializationError { message: message, path: "" } }
 }
 function baml.time.to_plain(self: ?) -> PlainDateTime  [expr] {
   {  } PlainDateTime { _nanoseconds: self._nanoseconds Add self.timezone_offset()._nanoseconds }
 }
 function baml.time.to_string(self: ?) -> string  [expr] {
-  {  } _format_zoned(self._nanoseconds, self.timezone_offset()._nanoseconds, self._iana)
+  {  } self._to_string_impl() catch (_) { _ => root.sys.panic("ZonedDateTime.to_...") }
 }
 function baml.time.with_timezone(self: ?, timezone: TimeZoneOffset | string) -> baml.time.ZonedDateTime  [expr] {
   {  } ZonedDateTime.from_instant(self.to_instant(), timezone)
@@ -2251,6 +2276,9 @@ function baml.byte_length(self: ?) -> int  [builtin]
 function baml.char_at(self: ?, index: int) -> string  [builtin]
 function baml.char_count(self: ?) -> int  [builtin]
 function baml.ends_with(self: ?, suffix: string) -> bool  [builtin]
+function baml.from(value: T) -> string  [expr] {
+  {  } root._to_string_shim(value)
+}
 function baml.from_code_points(unicode: int[]) -> string  [builtin]
 function baml.from_json(j: baml.json.json) -> baml.String  [expr] {
   baml.String {  }
@@ -2296,6 +2324,7 @@ function baml.trim_start(self: ?) -> string  [builtin]
 --- <builtin>/baml/type_class.baml ---
 class baml.TypeValue {
 }
+function baml._to_string_impl(self: ?) -> string  [builtin]
 function baml.from_json(j: baml.json.json) -> baml.TypeValue  [expr] {
   baml.TypeValue {  }
 }
@@ -2305,11 +2334,14 @@ function baml.implements(self: ?, other: type) -> bool  [builtin]
 function baml.to_json(self: ?) -> baml.json.json  [expr] {
   map {  }
 }
-function baml.to_string(self: ?) -> string  [builtin]
+function baml.to_string(self: ?) -> string  [expr] {
+  {  } self._to_string_impl()
+}
 
 --- <builtin>/baml/uint8array.baml ---
 class baml.Uint8Array {
 }
+function baml._to_string_impl(self: ?) -> string  [builtin]
 function baml.at(self: ?, index: int) -> int?  [builtin]
 function baml.concat(self: ?, other: uint8array) -> uint8array  [builtin]
 function baml.from_array(array: int[]) -> uint8array  [builtin]
@@ -2329,5 +2361,7 @@ function baml.to_array(self: ?) -> int[]  [builtin]
 function baml.to_base64(self: ?) -> string  [builtin]
 function baml.to_hex(self: ?) -> string  [builtin]
 function baml.to_json(self: ?) -> baml.json.json  [builtin]
-function baml.to_string(self: ?) -> string  [builtin]
+function baml.to_string(self: ?) -> string  [expr] {
+  {  } self._to_string_impl()
+}
 function baml.zeroes(size: int) -> uint8array  [builtin]

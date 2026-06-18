@@ -42,7 +42,13 @@ class PlainTime {
     }
     /// Serializes to an ISO 8601 time-of-day: `07:32:00`. Sub-second
     /// precision is supported; trailing subsecond zeros are truncated.
-    function to_string(self) -> string throws never {
+    implements baml.ToString {
+        function to_string(self) -> string throws never {
+            self._to_string_impl()
+        }
+    }
+
+    function _to_string_impl(self) -> string throws never {
         $rust_function
     }
 

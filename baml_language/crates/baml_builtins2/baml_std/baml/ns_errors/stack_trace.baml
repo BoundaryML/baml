@@ -9,8 +9,14 @@ class StackFrame {
 class StackTrace {
   frames StackFrame[]
 
+  implements baml.ToString {
+    function to_string(self) -> string throws never {
+      self._to_string_impl()
+    }
+  }
+
   //baml:vm
-  function to_string(self) -> string throws never {
+  function _to_string_impl(self) -> string throws never {
     $rust_function
   }
 }

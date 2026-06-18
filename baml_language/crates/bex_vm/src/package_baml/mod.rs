@@ -283,6 +283,38 @@ pub(super) fn make_compare_callee(vm: &mut BexVm, v: Value) -> Result<HeapPtr, V
     }))
 }
 
+/// For a value `v` whose runtime class implements `baml.ToString` with an
+/// in-body override, resolve that `to_string` and return a
+/// `BoundMethod { to_string, receiver: v }`. Returns `Ok(None)` when the
+/// runtime class has no in-body override (e.g. an `implements baml.ToString {}`
+/// block inheriting the structural default body, or a non-instance value) — the
+/// caller then renders `v` with the structural default.
+///
+/// User in-body impls register as `{class_fqn}.baml.ToString.to_string`,
+/// matching `make_compare_callee`'s `{class_fqn}.baml.Comparable.compare`. Used
+/// by the native `baml._to_string_shim` (`root.rs`) backing `string.from`.
+pub(super) fn make_to_string_callee(vm: &mut BexVm, v: Value) -> Option<HeapPtr> {
+    use bex_vm_types::ValueKind;
+    let fqn = match v.kind() {
+        ValueKind::Object(ptr) => match vm.get_object(ptr) {
+            Object::Instance(inst) => match vm.get_object(inst.class) {
+                Object::Class(c) => c.name.render_dotted(false),
+                _ => return None,
+            },
+            _ => return None,
+        },
+        _ => return None,
+    };
+
+    let fn_name = format!("{fqn}.baml.ToString.to_string");
+    let fn_ptr = vm.find_function_by_name(&fn_name)?;
+
+    Some(vm.alloc_bound_method(bex_vm_types::BoundMethod {
+        function: fn_ptr,
+        receiver: v,
+    }))
+}
+
 // =============================================================================
 // Public module-level function wrappers
 //
