@@ -13152,8 +13152,22 @@ function baml.time.Duration.abs(self: baml.time.Duration) -> baml.time.Duration 
 
 function baml.time.Duration.from_hours(h: int | bigint) -> baml.time.Duration {
     load_var h
-    call baml.time._duration_amount_to_bigint
+    is_type bigint
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0n
+    load_var h
+    add_bigint
     store_var _3
+    jump L2
+
+  L1:
+    load_var h
+    store_var _3
+
+  L2:
     load_var _3
     load_const 3600000000000n
     mul_bigint
@@ -13175,8 +13189,22 @@ function baml.time.Duration.from_json(j: baml.json.json) -> baml.time.Duration {
 
 function baml.time.Duration.from_microseconds(us: int | bigint) -> baml.time.Duration {
     load_var us
-    call baml.time._duration_amount_to_bigint
+    is_type bigint
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0n
+    load_var us
+    add_bigint
     store_var _3
+    jump L2
+
+  L1:
+    load_var us
+    store_var _3
+
+  L2:
     load_var _3
     load_const 1000n
     mul_bigint
@@ -13186,8 +13214,22 @@ function baml.time.Duration.from_microseconds(us: int | bigint) -> baml.time.Dur
 
 function baml.time.Duration.from_milliseconds(ms: int | bigint) -> baml.time.Duration {
     load_var ms
-    call baml.time._duration_amount_to_bigint
+    is_type bigint
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0n
+    load_var ms
+    add_bigint
     store_var _3
+    jump L2
+
+  L1:
+    load_var ms
+    store_var _3
+
+  L2:
     load_var _3
     load_const 1000000n
     mul_bigint
@@ -13197,8 +13239,22 @@ function baml.time.Duration.from_milliseconds(ms: int | bigint) -> baml.time.Dur
 
 function baml.time.Duration.from_minutes(m: int | bigint) -> baml.time.Duration {
     load_var m
-    call baml.time._duration_amount_to_bigint
+    is_type bigint
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0n
+    load_var m
+    add_bigint
     store_var _3
+    jump L2
+
+  L1:
+    load_var m
+    store_var _3
+
+  L2:
     load_var _3
     load_const 60000000000n
     mul_bigint
@@ -13208,15 +13264,42 @@ function baml.time.Duration.from_minutes(m: int | bigint) -> baml.time.Duration 
 
 function baml.time.Duration.from_nanoseconds(ns: int | bigint) -> baml.time.Duration {
     load_var ns
-    call baml.time._duration_amount_to_bigint
+    is_type bigint
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0n
+    load_var ns
+    add_bigint
+    jump L2
+
+  L1:
+    load_var ns
+
+  L2:
     init_instance baml.time.Duration ._nanoseconds
     return
 }
 
 function baml.time.Duration.from_seconds(s: int | bigint) -> baml.time.Duration {
     load_var s
-    call baml.time._duration_amount_to_bigint
+    is_type bigint
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0n
+    load_var s
+    add_bigint
     store_var _3
+    jump L2
+
+  L1:
+    load_var s
+    store_var _3
+
+  L2:
     load_var _3
     load_const 1000000000n
     mul_bigint
@@ -15072,25 +15155,6 @@ function baml.time.ZonedDateTime.year(self: baml.time.ZonedDateTime) -> int {
     load_var self
     call baml.time.ZonedDateTime.to_plain
     call baml.time.PlainDateTime.year
-    return
-}
-
-function baml.time._duration_amount_to_bigint(amount: int | bigint) -> bigint {
-    load_var amount
-    is_type bigint
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const 0n
-    load_var amount
-    add_bigint
-    jump L2
-
-  L1:
-    load_var amount
-
-  L2:
     return
 }
 

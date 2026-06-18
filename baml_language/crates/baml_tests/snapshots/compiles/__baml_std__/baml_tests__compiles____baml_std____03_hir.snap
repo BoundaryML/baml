@@ -1960,32 +1960,29 @@ function baml.sys.to_json(self: ?) -> baml.json.json  [expr] {
 class baml.time.Duration {
   _nanoseconds: bigint
 }
-function baml.time._duration_amount_to_bigint(amount: int | bigint) -> bigint  [expr] {
-  {  } match (amount) { value: bigint => value, value: int => 0n Add value }
-}
 function baml.time.abs(self: ?) -> baml.time.Duration  [expr] {
   {  } baml.time.Duration { _nanoseconds: self._nanoseconds.abs() }
 }
 function baml.time.from_hours(h: int | bigint) -> baml.time.Duration  [expr] {
-  {  } baml.time.Duration { _nanoseconds: _duration_amount_to_bigint(h) Mul 3600000000000n }
+  {  } baml.time.Duration { _nanoseconds: match (h) { value: bigint => value, value: int => 0n Add value } Mul 3600000000000n }
 }
 function baml.time.from_json(j: baml.json.json) -> baml.time.Duration  [expr] {
   baml.time.Duration { _nanoseconds: baml.json.from_json(baml.json.field(j, "_nanoseconds")) }
 }
 function baml.time.from_microseconds(us: int | bigint) -> baml.time.Duration  [expr] {
-  {  } baml.time.Duration { _nanoseconds: _duration_amount_to_bigint(us) Mul 1000n }
+  {  } baml.time.Duration { _nanoseconds: match (us) { value: bigint => value, value: int => 0n Add value } Mul 1000n }
 }
 function baml.time.from_milliseconds(ms: int | bigint) -> baml.time.Duration  [expr] {
-  {  } baml.time.Duration { _nanoseconds: _duration_amount_to_bigint(ms) Mul 1000000n }
+  {  } baml.time.Duration { _nanoseconds: match (ms) { value: bigint => value, value: int => 0n Add value } Mul 1000000n }
 }
 function baml.time.from_minutes(m: int | bigint) -> baml.time.Duration  [expr] {
-  {  } baml.time.Duration { _nanoseconds: _duration_amount_to_bigint(m) Mul 60000000000n }
+  {  } baml.time.Duration { _nanoseconds: match (m) { value: bigint => value, value: int => 0n Add value } Mul 60000000000n }
 }
 function baml.time.from_nanoseconds(ns: int | bigint) -> baml.time.Duration  [expr] {
-  {  } baml.time.Duration { _nanoseconds: _duration_amount_to_bigint(ns) }
+  {  } baml.time.Duration { _nanoseconds: match (ns) { value: bigint => value, value: int => 0n Add value } }
 }
 function baml.time.from_seconds(s: int | bigint) -> baml.time.Duration  [expr] {
-  {  } baml.time.Duration { _nanoseconds: _duration_amount_to_bigint(s) Mul 1000000000n }
+  {  } baml.time.Duration { _nanoseconds: match (s) { value: bigint => value, value: int => 0n Add value } Mul 1000000000n }
 }
 function baml.time.to_hours(self: ?) -> bigint  [expr] {
   {  } self._nanoseconds Div 3600000000000

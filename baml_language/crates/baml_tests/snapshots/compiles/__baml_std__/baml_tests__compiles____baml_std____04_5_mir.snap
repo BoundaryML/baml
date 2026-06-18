@@ -17957,38 +17957,6 @@ fn baml.sys.ProcessOptions.to_json(self: baml.sys.ProcessOptions) -> baml.json.j
     }
 }
 
-fn baml.time._duration_amount_to_bigint(amount: int | bigint) -> bigint {
-    // Locals:
-    let _0: bigint // _0 // return
-    let _1: int | bigint // amount // param
-    let _2: bool
-    let _3: bigint // value
-    let _4: int // value
-    let _5: int
-
-    bb0: {
-        _2 = is_type(copy _1, bigint);
-        branch copy _2 -> [bb2, bb1];
-    }
-
-    bb1: {
-        _4 = copy _1;
-        _5 = copy _4;
-        _0 = const 0n + copy _5;
-        goto -> bb3;
-    }
-
-    bb2: {
-        _3 = copy _1;
-        _0 = copy _3;
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
 fn baml.time.Duration.abs(self: baml.time.Duration) -> baml.time.Duration {
     // Locals:
     let _0: baml.time.Duration // _0 // return
@@ -18017,18 +17985,36 @@ fn baml.time.Duration.from_hours(h: int | bigint) -> baml.time.Duration {
     let _1: int | bigint // h // param
     let _2: bigint
     let _3: bigint
+    let _4: bool
+    let _5: bigint // value
+    let _6: int // value
+    let _7: int
 
     bb0: {
-        _3 = call const fn baml.time._duration_amount_to_bigint(copy _1) -> [bb1];
+        _4 = is_type(copy _1, bigint);
+        branch copy _4 -> [bb2, bb1];
     }
 
     bb1: {
-        _2 = copy _3 * const 3600000000000n;
-        _0 = baml.time.Duration { copy _2 };
-        goto -> bb2;
+        _6 = copy _1;
+        _7 = copy _6;
+        _3 = const 0n + copy _7;
+        goto -> bb3;
     }
 
     bb2: {
+        _5 = copy _1;
+        _3 = copy _5;
+        goto -> bb3;
+    }
+
+    bb3: {
+        _2 = copy _3 * const 3600000000000n;
+        _0 = baml.time.Duration { copy _2 };
+        goto -> bb4;
+    }
+
+    bb4: {
         return;
     }
 }
@@ -18066,18 +18052,36 @@ fn baml.time.Duration.from_microseconds(us: int | bigint) -> baml.time.Duration 
     let _1: int | bigint // us // param
     let _2: bigint
     let _3: bigint
+    let _4: bool
+    let _5: bigint // value
+    let _6: int // value
+    let _7: int
 
     bb0: {
-        _3 = call const fn baml.time._duration_amount_to_bigint(copy _1) -> [bb1];
+        _4 = is_type(copy _1, bigint);
+        branch copy _4 -> [bb2, bb1];
     }
 
     bb1: {
-        _2 = copy _3 * const 1000n;
-        _0 = baml.time.Duration { copy _2 };
-        goto -> bb2;
+        _6 = copy _1;
+        _7 = copy _6;
+        _3 = const 0n + copy _7;
+        goto -> bb3;
     }
 
     bb2: {
+        _5 = copy _1;
+        _3 = copy _5;
+        goto -> bb3;
+    }
+
+    bb3: {
+        _2 = copy _3 * const 1000n;
+        _0 = baml.time.Duration { copy _2 };
+        goto -> bb4;
+    }
+
+    bb4: {
         return;
     }
 }
@@ -18088,18 +18092,36 @@ fn baml.time.Duration.from_milliseconds(ms: int | bigint) -> baml.time.Duration 
     let _1: int | bigint // ms // param
     let _2: bigint
     let _3: bigint
+    let _4: bool
+    let _5: bigint // value
+    let _6: int // value
+    let _7: int
 
     bb0: {
-        _3 = call const fn baml.time._duration_amount_to_bigint(copy _1) -> [bb1];
+        _4 = is_type(copy _1, bigint);
+        branch copy _4 -> [bb2, bb1];
     }
 
     bb1: {
-        _2 = copy _3 * const 1000000n;
-        _0 = baml.time.Duration { copy _2 };
-        goto -> bb2;
+        _6 = copy _1;
+        _7 = copy _6;
+        _3 = const 0n + copy _7;
+        goto -> bb3;
     }
 
     bb2: {
+        _5 = copy _1;
+        _3 = copy _5;
+        goto -> bb3;
+    }
+
+    bb3: {
+        _2 = copy _3 * const 1000000n;
+        _0 = baml.time.Duration { copy _2 };
+        goto -> bb4;
+    }
+
+    bb4: {
         return;
     }
 }
@@ -18110,18 +18132,36 @@ fn baml.time.Duration.from_minutes(m: int | bigint) -> baml.time.Duration {
     let _1: int | bigint // m // param
     let _2: bigint
     let _3: bigint
+    let _4: bool
+    let _5: bigint // value
+    let _6: int // value
+    let _7: int
 
     bb0: {
-        _3 = call const fn baml.time._duration_amount_to_bigint(copy _1) -> [bb1];
+        _4 = is_type(copy _1, bigint);
+        branch copy _4 -> [bb2, bb1];
     }
 
     bb1: {
-        _2 = copy _3 * const 60000000000n;
-        _0 = baml.time.Duration { copy _2 };
-        goto -> bb2;
+        _6 = copy _1;
+        _7 = copy _6;
+        _3 = const 0n + copy _7;
+        goto -> bb3;
     }
 
     bb2: {
+        _5 = copy _1;
+        _3 = copy _5;
+        goto -> bb3;
+    }
+
+    bb3: {
+        _2 = copy _3 * const 60000000000n;
+        _0 = baml.time.Duration { copy _2 };
+        goto -> bb4;
+    }
+
+    bb4: {
         return;
     }
 }
@@ -18131,17 +18171,35 @@ fn baml.time.Duration.from_nanoseconds(ns: int | bigint) -> baml.time.Duration {
     let _0: baml.time.Duration // _0 // return
     let _1: int | bigint // ns // param
     let _2: bigint
+    let _3: bool
+    let _4: bigint // value
+    let _5: int // value
+    let _6: int
 
     bb0: {
-        _2 = call const fn baml.time._duration_amount_to_bigint(copy _1) -> [bb1];
+        _3 = is_type(copy _1, bigint);
+        branch copy _3 -> [bb2, bb1];
     }
 
     bb1: {
-        _0 = baml.time.Duration { copy _2 };
-        goto -> bb2;
+        _5 = copy _1;
+        _6 = copy _5;
+        _2 = const 0n + copy _6;
+        goto -> bb3;
     }
 
     bb2: {
+        _4 = copy _1;
+        _2 = copy _4;
+        goto -> bb3;
+    }
+
+    bb3: {
+        _0 = baml.time.Duration { copy _2 };
+        goto -> bb4;
+    }
+
+    bb4: {
         return;
     }
 }
@@ -18152,18 +18210,36 @@ fn baml.time.Duration.from_seconds(s: int | bigint) -> baml.time.Duration {
     let _1: int | bigint // s // param
     let _2: bigint
     let _3: bigint
+    let _4: bool
+    let _5: bigint // value
+    let _6: int // value
+    let _7: int
 
     bb0: {
-        _3 = call const fn baml.time._duration_amount_to_bigint(copy _1) -> [bb1];
+        _4 = is_type(copy _1, bigint);
+        branch copy _4 -> [bb2, bb1];
     }
 
     bb1: {
-        _2 = copy _3 * const 1000000000n;
-        _0 = baml.time.Duration { copy _2 };
-        goto -> bb2;
+        _6 = copy _1;
+        _7 = copy _6;
+        _3 = const 0n + copy _7;
+        goto -> bb3;
     }
 
     bb2: {
+        _5 = copy _1;
+        _3 = copy _5;
+        goto -> bb3;
+    }
+
+    bb3: {
+        _2 = copy _3 * const 1000000000n;
+        _0 = baml.time.Duration { copy _2 };
+        goto -> bb4;
+    }
+
+    bb4: {
         return;
     }
 }

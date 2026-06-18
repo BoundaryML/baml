@@ -3773,15 +3773,6 @@ class baml.sys.ShellOutput$stream {
 }
 
 --- <builtin>/baml/ns_time/duration.baml ---
-function baml.time._duration_amount_to_bigint(amount: int | bigint) -> bigint throws never {
-  { : bigint
-    match (amount : int | bigint) : bigint
-      value: bigint =>
-        value : bigint
-      value: int =>
-        0n + value : bigint
-  }
-}
 class baml.time.Duration {
   _nanoseconds: bigint
 }
@@ -3792,32 +3783,32 @@ function baml.time.Duration.abs(self: baml.time.Duration) -> baml.time.Duration 
 }
 function baml.time.Duration.from_nanoseconds(ns: int | bigint) -> baml.time.Duration throws never {
   { : baml.time.Duration
-    Duration { _nanoseconds: _duration_amount_to_bigint(ns) } : baml.time.Duration
+    Duration { _nanoseconds: match (ns) { value: bigint => value, value: int => 0n + value } } : baml.time.Duration
   }
 }
 function baml.time.Duration.from_microseconds(us: int | bigint) -> baml.time.Duration throws never {
   { : baml.time.Duration
-    Duration { _nanoseconds: _duration_amount_to_bigint(us) * 1000n } : baml.time.Duration
+    Duration { _nanoseconds: match (us) { value: bigint => value, value: int => 0n + value } * 1000n } : baml.time.Duration
   }
 }
 function baml.time.Duration.from_milliseconds(ms: int | bigint) -> baml.time.Duration throws never {
   { : baml.time.Duration
-    Duration { _nanoseconds: _duration_amount_to_bigint(ms) * 1000000n } : baml.time.Duration
+    Duration { _nanoseconds: match (ms) { value: bigint => value, value: int => 0n + value } * 1000000n } : baml.time.Duration
   }
 }
 function baml.time.Duration.from_seconds(s: int | bigint) -> baml.time.Duration throws never {
   { : baml.time.Duration
-    Duration { _nanoseconds: _duration_amount_to_bigint(s) * 1000000000n } : baml.time.Duration
+    Duration { _nanoseconds: match (s) { value: bigint => value, value: int => 0n + value } * 1000000000n } : baml.time.Duration
   }
 }
 function baml.time.Duration.from_minutes(m: int | bigint) -> baml.time.Duration throws never {
   { : baml.time.Duration
-    Duration { _nanoseconds: _duration_amount_to_bigint(m) * 60000000000n } : baml.time.Duration
+    Duration { _nanoseconds: match (m) { value: bigint => value, value: int => 0n + value } * 60000000000n } : baml.time.Duration
   }
 }
 function baml.time.Duration.from_hours(h: int | bigint) -> baml.time.Duration throws never {
   { : baml.time.Duration
-    Duration { _nanoseconds: _duration_amount_to_bigint(h) * 3600000000000n } : baml.time.Duration
+    Duration { _nanoseconds: match (h) { value: bigint => value, value: int => 0n + value } * 3600000000000n } : baml.time.Duration
   }
 }
 function baml.time.Duration.to_nanoseconds(self: baml.time.Duration) -> bigint throws never {

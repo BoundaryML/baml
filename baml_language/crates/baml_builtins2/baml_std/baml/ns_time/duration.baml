@@ -1,10 +1,3 @@
-function _duration_amount_to_bigint(amount: int | bigint) -> bigint throws never {
-    match (amount) {
-        let value: bigint => value,
-        let value: int => 0n + value,
-    }
-}
-
 /// Represents a non-localized timespan.
 ///
 /// May be negative: while `Instant` represents absolute points in time, a `Duration` represents the difference between two `Instant`s.
@@ -17,22 +10,22 @@ class Duration {
     }
 
     function from_nanoseconds(ns: int | bigint) -> Duration throws never {
-        Duration { _nanoseconds: _duration_amount_to_bigint(ns) }
+        Duration { _nanoseconds: match (ns) { let value: bigint => value, let value: int => 0n + value } }
     }
     function from_microseconds(us: int | bigint) -> Duration throws never {
-        Duration { _nanoseconds: _duration_amount_to_bigint(us) * 1000n }
+        Duration { _nanoseconds: match (us) { let value: bigint => value, let value: int => 0n + value } * 1000n }
     }
     function from_milliseconds(ms: int | bigint) -> Duration throws never {
-        Duration { _nanoseconds: _duration_amount_to_bigint(ms) * 1000000n }
+        Duration { _nanoseconds: match (ms) { let value: bigint => value, let value: int => 0n + value } * 1000000n }
     }
     function from_seconds(s: int | bigint) -> Duration throws never {
-        Duration { _nanoseconds: _duration_amount_to_bigint(s) * 1000000000n }
+        Duration { _nanoseconds: match (s) { let value: bigint => value, let value: int => 0n + value } * 1000000000n }
     }
     function from_minutes(m: int | bigint) -> Duration throws never {
-        Duration { _nanoseconds: _duration_amount_to_bigint(m) * 60000000000n }
+        Duration { _nanoseconds: match (m) { let value: bigint => value, let value: int => 0n + value } * 60000000000n }
     }
     function from_hours(h: int | bigint) -> Duration throws never {
-        Duration { _nanoseconds: _duration_amount_to_bigint(h) * 3600000000000n }
+        Duration { _nanoseconds: match (h) { let value: bigint => value, let value: int => 0n + value } * 3600000000000n }
     }
 
     /// Returns the number of nanoseconds in `self`.
