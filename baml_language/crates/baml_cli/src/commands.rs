@@ -111,12 +111,24 @@ pub(crate) enum Commands {
 }
 
 impl RuntimeCli {
-    /// Parse CLI arguments, unhiding all subcommands if the BAML_INTERNAL environment variable is set.
+    /// Parse CLI arguments and optionally unhide internal subcommands.
+    ///
+    /// Parameters:
+    /// - `argv`: Raw process argument vector (`argv[0]` program name followed by CLI tokens).
+    ///
+    /// Returns:
+    /// - A fully parsed [`RuntimeCli`] value.
+    ///
+    /// Errors/Panics:
+    /// - Does not return recoverable errors. On parse failures this calls clap's
+    ///   `err.exit()` and terminates the process, matching normal CLI behavior.
+    /// - Does not panic.
     ///
     /// This should be used for CLI invocations instead of `RuntimeCli::parse_from`.
     pub fn parse_from_smart(argv: Vec<String>) -> Self {
         use clap::FromArgMatches;
 
+        let argv = normalize_run_expression_argv(argv);
         let mut command = RuntimeCli::command();
 
         if baml_internal_env_is_truthy() {
@@ -179,6 +191,115 @@ impl RuntimeCli {
             Commands::Format(args) => args.run(),
         }
     }
+}
+
+/// Rewrite `baml run -e` argv so the expression consumes the remaining tail.
+///
+/// Parameters:
+/// - `argv`: Raw process argument vector.
+///
+/// Returns:
+/// - A normalized argument vector where `run -e ...` / `run --expression ...`
+///   becomes a single `--expression=<joined expression>` token and everything
+///   after the expression flag is treated as expression source text.
+///
+/// Errors/Panics:
+/// - Does not return errors.
+/// - Does not panic.
+fn normalize_run_expression_argv(argv: Vec<String>) -> Vec<String> {
+    let Some(run_index) = find_run_subcommand_index(&argv) else {
+        return argv;
+    };
+    let run_args = &argv[run_index + 1..];
+    let Some((flag_offset, expression_parts)) = extract_run_expression_parts(run_args) else {
+        return argv;
+    };
+
+    if expression_parts.is_empty() {
+        return argv;
+    }
+
+    let expression = expression_parts.join(" ");
+    let expression_flag_index = run_index + 1 + flag_offset;
+    let mut normalized = argv[..expression_flag_index].to_vec();
+    normalized.push(format!("--expression={expression}"));
+    normalized
+}
+
+/// Find the `run` subcommand index while honoring top-level global flags.
+///
+/// Parameters:
+/// - `argv`: Raw process argument vector.
+///
+/// Returns:
+/// - `Some(index)` when the command resolves to `run`, else `None`.
+///
+/// Errors/Panics:
+/// - Does not return errors.
+/// - Does not panic.
+fn find_run_subcommand_index(argv: &[String]) -> Option<usize> {
+    let mut i = 1;
+    while i < argv.len() {
+        let token = argv[i].as_str();
+        if token == "run" {
+            return Some(i);
+        }
+        if token == "--features" {
+            i += 2;
+            continue;
+        }
+        if token.starts_with("--features=") {
+            i += 1;
+            continue;
+        }
+        if token.starts_with('-') {
+            i += 1;
+            continue;
+        }
+        return None;
+    }
+    None
+}
+
+/// Extract expression tokens for `run -e` / `run --expression` forms.
+///
+/// Parameters:
+/// - `run_args`: Tokens after the `run` subcommand.
+///
+/// Returns:
+/// - `Some((flag_offset, parts))` where `flag_offset` is the expression flag's
+///   position within `run_args` and `parts` is the expression token list after
+///   removing a leading compatibility `--` separator.
+/// - `None` when no expression flag is present.
+///
+/// Errors/Panics:
+/// - Does not return errors.
+/// - Does not panic.
+fn extract_run_expression_parts(run_args: &[String]) -> Option<(usize, Vec<String>)> {
+    let mut i = 0;
+    while i < run_args.len() {
+        let token = run_args[i].as_str();
+        let mut parts = if token == "-e" || token == "--expression" {
+            run_args[i + 1..].to_vec()
+        } else if let Some(value) = token.strip_prefix("--expression=") {
+            let mut parts = vec![value.to_string()];
+            parts.extend_from_slice(&run_args[i + 1..]);
+            parts
+        } else if token.starts_with("-e") && token != "-e" {
+            let mut parts = vec![token[2..].to_string()];
+            parts.extend_from_slice(&run_args[i + 1..]);
+            parts
+        } else {
+            i += 1;
+            continue;
+        };
+
+        if parts.first().is_some_and(|value| value == "--") {
+            parts.remove(0);
+        }
+        return Some((i, parts));
+    }
+    None
 }
 
 fn baml_internal_env_is_truthy() -> bool {
@@ -249,5 +370,40 @@ mod tests {
             help.contains("Project root to check. Defaults to the current directory"),
             "{help}"
         );
+    }
+
+    /// `run -e` should consume all remaining tokens as expression source.
+    #[test]
+    fn run_expression_consumes_remaining_tokens() {
+        let cli = RuntimeCli::parse_from_smart(vec![
+            "baml-cli".into(),
+            "run".into(),
+            "-e".into(),
+            "-7".into(),
+            "%".into(),
+            "3".into(),
+        ]);
+        let Commands::Run(args) = cli.command else {
+            panic!("expected run command");
+        };
+        assert_eq!(args.expression.as_deref(), Some("-7 % 3"));
+    }
+
+    /// Legacy `-e -- ...` still works after expression-tail normalization.
+    #[test]
+    fn run_expression_compat_separator_is_ignored() {
+        let cli = RuntimeCli::parse_from_smart(vec![
+            "baml-cli".into(),
+            "run".into(),
+            "-e".into(),
+            "--".into(),
+            "-7".into(),
+            "%".into(),
+            "3".into(),
+        ]);
+        let Commands::Run(args) = cli.command else {
+            panic!("expected run command");
+        };
+        assert_eq!(args.expression.as_deref(), Some("-7 % 3"));
     }
 }
