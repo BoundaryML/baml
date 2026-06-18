@@ -382,6 +382,7 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
                 _call_type_instantiations,
                 _function_coercions,
                 _call_throws,
+                _template_body_params,
                 _default_parameter_inference,
             ) = builder.finish();
             for tir_diag in type_check_diagnostics.diagnostics {
@@ -6202,6 +6203,12 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::SuggestNullCoalesce { .. } => DiagnosticId::InvalidOperator,
         TirTypeError::NullCoalesceWithNull { .. } => DiagnosticId::InvalidOperator,
         TirTypeError::NullableMemberAccess { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::TaggedTagNotAFunction { .. } => DiagnosticId::NotCallable,
+        TirTypeError::TaggedTagNotMarked { .. } | TirTypeError::TaggedTagBadBodyParam { .. } => {
+            DiagnosticId::TypeMismatch
+        }
+        TirTypeError::InterpolatedValueMaybeNull { .. }
+        | TirTypeError::TypeNotInterpolatable { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::AmbiguousInterfaceMethod { .. } => DiagnosticId::AmbiguousInterfaceMethod,
         TirTypeError::AmbiguousInterfaceField { .. } => DiagnosticId::AmbiguousInterfaceField,
         TirTypeError::InterfaceFieldRequiresProjection { .. } => DiagnosticId::NoSuchField,

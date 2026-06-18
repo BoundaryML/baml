@@ -21,6 +21,7 @@ function user.ExtractAny(client: baml.llm.Client) -> baml.json.json {
     load_var client
     load_const "ExtractAny"
     alloc_map 0
+    load_const <omitted>
     call baml.llm.call_llm_function
     return
 }
@@ -37,6 +38,7 @@ function user.ExtractAny$build_request(client: baml.llm.Client) -> baml.http.Req
     load_var client
     load_const "ExtractAny"
     alloc_map 0
+    load_const <omitted>
     call baml.llm.build_request
     return
 }
@@ -53,6 +55,7 @@ function user.ExtractAny$build_request_stream(client: baml.llm.Client) -> baml.h
     load_var client
     load_const "ExtractAny"
     alloc_map 0
+    load_const <omitted>
     call baml.llm.build_request_stream
     return
 }
@@ -101,6 +104,7 @@ function user.ExtractAny$render_prompt(client: baml.llm.Client) -> baml.llm.Prom
     load_var client
     load_const "ExtractAny"
     alloc_map 0
+    load_const <omitted>
     call baml.llm.render_prompt
     return
 }
@@ -119,6 +123,7 @@ function user.ExtractAny$stream(client: baml.llm.Client) -> baml.llm.Stream<baml
     load_var client
     load_const "ExtractAny"
     alloc_map 0
+    load_const <omitted>
     call baml.llm.stream_llm_function
     return
 }

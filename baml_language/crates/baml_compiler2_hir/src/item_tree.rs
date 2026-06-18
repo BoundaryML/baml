@@ -82,6 +82,10 @@ pub struct Function {
     pub origin: ast::FunctionOrigin,
     /// Joined `///` doc-comment lines preceding this declaration.
     pub docstring: Option<String>,
+    /// BEP-049 §10: set when the fn def had a `//baml:tagged_string` marker.
+    /// Mirrors `ast::FunctionDef::is_tagged_template_tag` so TIR can validate
+    /// tagged-template tags without re-reading the CST.
+    pub is_tagged_template_tag: bool,
     /// Full source span of the function.
     pub span: TextRange,
 }
@@ -464,6 +468,7 @@ impl ItemTree {
                 declarative_meta: f.declarative_meta.clone(),
                 origin: f.origin,
                 docstring: f.docstring.clone(),
+                is_tagged_template_tag: f.is_tagged_template_tag,
                 span: f.span,
             },
         );

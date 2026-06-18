@@ -604,17 +604,16 @@ fn extract_schema_attrs(
     let mut skip = false;
     for attr in attrs {
         match attr.name.as_str() {
-            "description" | "alias" => {
-                if attr.args.len() == 1 {
-                    let raw = attr.args[0].value.as_str();
-                    let value = parse_string_attr_value(raw);
-                    if attr.name.as_str() == "description" {
-                        description = value;
-                    } else {
-                        alias = value;
-                    }
+            "description" | "alias" if attr.args.len() == 1 => {
+                let raw = attr.args[0].value.as_str();
+                let value = parse_string_attr_value(raw);
+                if attr.name.as_str() == "description" {
+                    description = value;
+                } else {
+                    alias = value;
                 }
             }
+            "description" | "alias" => {}
             "skip" => {
                 skip = true;
             }
@@ -1074,9 +1073,27 @@ pub fn generate_project_bytecode_with_opt(
             if let Some(baml_compiler2_ast::DeclarativeMeta::Llm(llm_meta)) =
                 &func_data.declarative_meta
             {
-                if let (Some(client), Some(prompt)) = (&llm_meta.client, &llm_meta.prompt) {
+                // NOTE (canary merge): canary removed the runtime `Function.stream_return_type`
+                // field and its plumbing (the pre-existing streaming infra from PRs #3362/#3755).
+                // The stream return type is now carried by the synthesized `$stream` companion's
+                // own `return_type` (see ppir's `companion_stream_return_type`), so the old
+                // emit-side pre-computation block was dropped. BEP-049 M5e stream-path rendering
+                // of `ctx.output_format` should be re-verified against canary's streaming.
+                if let Some(client) = &llm_meta.client {
+                    // New-mode (BEP-049 M5) functions have no Jinja `prompt`
+                    // text — the compiled closure renders it — but they still
+                    // need a registry entry so `get_return_type` /
+                    // `get_stream_return_type` (used by `__make_stream` and the
+                    // streaming `Context`) resolve by name. The empty template
+                    // is never read for them (their `prompt_closure` is non-null,
+                    // so the Jinja `get_jinja_template` branch is skipped).
+                    let prompt_template = llm_meta
+                        .prompt
+                        .as_ref()
+                        .map(|p| p.text.clone())
+                        .unwrap_or_default();
                     compiled_fn.body_meta = Some(FunctionMeta::Llm {
-                        prompt_template: prompt.text.clone(),
+                        prompt_template,
                         client: client.to_string(),
                     });
                 }
@@ -2604,6 +2621,7 @@ mod tests {
             declarative_meta: None,
             origin: ast::FunctionOrigin::UserDefined,
             docstring: None,
+            is_tagged_template_tag: false,
             span: baml_base::Span::fake().range,
         };
         let parameter_defaults = baml_compiler2_hir::signature::FunctionParameterDefaults {

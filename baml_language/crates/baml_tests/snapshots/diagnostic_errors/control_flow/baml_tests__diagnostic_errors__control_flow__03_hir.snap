@@ -6,7 +6,7 @@ function user.ElseIfChain(x: int) -> string  [expr] {
   {  } if (x Eq 1) { // [1] Case one } "one" else if (x Eq 2) { // [1] Case two } "two" else if (x Eq 3) { // [1] Case three } "three" else { // [1] Default case } "other"
 }
 function user.Headers() -> string  [expr] {
-  { // [1] Setup; let x = 1; // [2] Configuration; let y = 2; // [1] Processing; let z = x Add y } z.to_string()
+  { // [1] Setup; let x = 1; // [2] Configuration; let y = 2; // [1] Processing; let z = x Add y } z.to_string_BAML_NOT_A_METHOD()
 }
 function user.IfElseWithHeaders(flag: bool) -> string  [expr] {
   { // [1] Check flag } if (flag) { // [1] True branch } "yes" else { // [1] False branch } "no"

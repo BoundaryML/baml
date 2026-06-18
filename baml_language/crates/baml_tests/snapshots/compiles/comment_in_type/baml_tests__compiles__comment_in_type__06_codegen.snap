@@ -21,6 +21,7 @@ function user.CommentAfterArrow(client: baml.llm.Client) -> string {
     load_var client
     load_const "CommentAfterArrow"
     alloc_map 0
+    load_const <omitted>
     call baml.llm.call_llm_function
     return
 }
@@ -37,6 +38,7 @@ function user.CommentAfterArrow$build_request(client: baml.llm.Client) -> baml.h
     load_var client
     load_const "CommentAfterArrow"
     alloc_map 0
+    load_const <omitted>
     call baml.llm.build_request
     return
 }
@@ -53,6 +55,7 @@ function user.CommentAfterArrow$build_request_stream(client: baml.llm.Client) ->
     load_var client
     load_const "CommentAfterArrow"
     alloc_map 0
+    load_const <omitted>
     call baml.llm.build_request_stream
     return
 }
@@ -101,6 +104,7 @@ function user.CommentAfterArrow$render_prompt(client: baml.llm.Client) -> baml.l
     load_var client
     load_const "CommentAfterArrow"
     alloc_map 0
+    load_const <omitted>
     call baml.llm.render_prompt
     return
 }
@@ -119,6 +123,7 @@ function user.CommentAfterArrow$stream(client: baml.llm.Client) -> baml.llm.Stre
     load_var client
     load_const "CommentAfterArrow"
     alloc_map 0
+    load_const <omitted>
     call baml.llm.stream_llm_function
     return
 }
@@ -139,6 +144,7 @@ function user.FunctionWithComments(a: string, b: int, client: baml.llm.Client) -
     load_const "a"
     load_const "b"
     alloc_map 2
+    load_const <omitted>
     call baml.llm.call_llm_function
     return
 }
@@ -158,6 +164,7 @@ function user.FunctionWithComments$build_request(a: string, b: int, client: baml
     load_const "a"
     load_const "b"
     alloc_map 2
+    load_const <omitted>
     call baml.llm.build_request
     return
 }
@@ -177,6 +184,7 @@ function user.FunctionWithComments$build_request_stream(a: string, b: int, clien
     load_const "a"
     load_const "b"
     alloc_map 2
+    load_const <omitted>
     call baml.llm.build_request_stream
     return
 }
@@ -228,6 +236,7 @@ function user.FunctionWithComments$render_prompt(a: string, b: int, client: baml
     load_const "a"
     load_const "b"
     alloc_map 2
+    load_const <omitted>
     call baml.llm.render_prompt
     return
 }
@@ -249,6 +258,7 @@ function user.FunctionWithComments$stream(a: string, b: int, client: baml.llm.Cl
     load_const "a"
     load_const "b"
     alloc_map 2
+    load_const <omitted>
     call baml.llm.stream_llm_function
     return
 }

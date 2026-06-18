@@ -47,7 +47,7 @@ fn user.AskDocs(query: string, max_results: int, filter: string, client: baml.ll
     bb6: {
         _8 = { const "query": copy _1, const "max_results": copy _2, const "filter": copy _3 };
         _9 = load_type(string);
-        _0 = call const fn baml.llm.call_llm_function<copy _9>(copy _4, const "AskDocs", copy _8) -> [bb7];
+        _0 = call const fn baml.llm.call_llm_function<copy _9>(copy _4, const "AskDocs", copy _8, const <omitted>) -> [bb7];
     }
 
     bb7: {
@@ -98,7 +98,7 @@ fn user.AskDocs$build_request(query: string, max_results: int, filter: string, c
 
     bb6: {
         _8 = { const "query": copy _1, const "max_results": copy _2, const "filter": copy _3 };
-        _0 = call const fn baml.llm.build_request(copy _4, const "AskDocs", copy _8) -> [bb7];
+        _0 = call const fn baml.llm.build_request(copy _4, const "AskDocs", copy _8, const <omitted>) -> [bb7];
     }
 
     bb7: {
@@ -149,7 +149,7 @@ fn user.AskDocs$build_request_stream(query: string, max_results: int, filter: st
 
     bb6: {
         _8 = { const "query": copy _1, const "max_results": copy _2, const "filter": copy _3 };
-        _0 = call const fn baml.llm.build_request_stream(copy _4, const "AskDocs", copy _8) -> [bb7];
+        _0 = call const fn baml.llm.build_request_stream(copy _4, const "AskDocs", copy _8, const <omitted>) -> [bb7];
     }
 
     bb7: {
@@ -200,7 +200,7 @@ fn user.AskDocs$render_prompt(query: string, max_results: int, filter: string, c
 
     bb6: {
         _8 = { const "query": copy _1, const "max_results": copy _2, const "filter": copy _3 };
-        _0 = call const fn baml.llm.render_prompt(copy _4, const "AskDocs", copy _8) -> [bb7];
+        _0 = call const fn baml.llm.render_prompt(copy _4, const "AskDocs", copy _8, const <omitted>) -> [bb7];
     }
 
     bb7: {

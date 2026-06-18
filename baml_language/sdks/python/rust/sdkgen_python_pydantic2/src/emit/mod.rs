@@ -189,7 +189,7 @@ fn expand_function(
             out.push((
                 leaf.clone(),
                 EmittedSymbol::Function(PyFunction {
-                    py_name,
+                    py_name: escape_python_keyword(py_name),
                     baml_fqn: fqn,
                     mode,
                     param_names: params,
@@ -264,7 +264,7 @@ fn expand_methods(
             (format!("{bare}_async"), SyncAsync::Async),
         ] {
             out.push(PyMethodBinding {
-                py_name,
+                py_name: escape_python_keyword(py_name),
                 baml_fqn: fqn_root.clone(),
                 mode,
                 required_args: required_args.clone(),
@@ -323,6 +323,28 @@ fn bare_callable_name(name: &str) -> String {
     }
 }
 
+/// Append `_` to a Python hard keyword so it is a usable identifier on the
+/// Python side (`from` → `from_`), generalizing the `assert` → `assert_` rule
+/// in [`crate::routing`] to callable identifiers. Only the rendered Python name
+/// is affected; the runtime BAML FQN (`PyMethodBinding::baml_fqn` /
+/// `PyFunction::baml_fqn`) is built from the raw `Name`, so dispatch still
+/// targets the original `from`. Non-keyword names pass through unchanged.
+pub(crate) fn escape_python_keyword(ident: String) -> String {
+    // Python 3 hard keywords (soft keywords like `match`/`case`/`type` are
+    // valid identifiers and are intentionally excluded).
+    const PYTHON_KEYWORDS: &[&str] = &[
+        "False", "None", "True", "and", "as", "assert", "async", "await", "break", "class",
+        "continue", "def", "del", "elif", "else", "except", "finally", "for", "from", "global",
+        "if", "import", "in", "is", "lambda", "nonlocal", "not", "or", "pass", "raise", "return",
+        "try", "while", "with", "yield",
+    ];
+    if PYTHON_KEYWORDS.contains(&ident.as_str()) {
+        format!("{ident}_")
+    } else {
+        ident
+    }
+}
+
 /// Shared fan-out for free functions and methods. Calls `emit` twice:
 /// once for the sync binding and once for the async binding. Companions
 /// arrive as their own callable; the suffix-aware `bare` value is
@@ -373,4 +395,28 @@ fn expand_callable<F>(
 
 fn origin_key(origin: &baml_codegen_types::Origin) -> SortKey {
     (origin.source_file_path.clone(), origin.span_start)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::escape_python_keyword;
+
+    #[test]
+    fn keyword_identifiers_get_a_trailing_underscore() {
+        // The case that motivated this: `string.from` must not emit `def from`.
+        assert_eq!(escape_python_keyword("from".into()), "from_");
+        assert_eq!(escape_python_keyword("class".into()), "class_");
+        assert_eq!(escape_python_keyword("lambda".into()), "lambda_");
+    }
+
+    #[test]
+    fn non_keywords_pass_through_unchanged() {
+        assert_eq!(escape_python_keyword("to_json".into()), "to_json");
+        assert_eq!(escape_python_keyword("length".into()), "length");
+        // Already-suffixed async sibling of `from` is a valid identifier.
+        assert_eq!(escape_python_keyword("from_async".into()), "from_async");
+        // Soft keywords are valid identifiers and must not be escaped.
+        assert_eq!(escape_python_keyword("match".into()), "match");
+        assert_eq!(escape_python_keyword("type".into()), "type");
+    }
 }

@@ -161,7 +161,7 @@ impl BamlClassUint8Array for PackageBamlImpl {
         bex_str::BexStr::from(base64::engine::general_purpose::STANDARD.encode(uint8array))
     }
 
-    fn to_string(uint8array: &[u8]) -> bex_str::BexStr {
+    fn _to_string_impl(uint8array: &[u8]) -> bex_str::BexStr {
         bex_str::BexStr::from(String::from_utf8_lossy(uint8array).into_owned())
     }
 

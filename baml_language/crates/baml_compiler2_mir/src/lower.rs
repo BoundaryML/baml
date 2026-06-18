@@ -1784,6 +1784,19 @@ struct LoweringContext<'db> {
     // the body is lowered so it can extend the outer MakeClosure with extra captures.
     transitive_captures_needed: Vec<BindingId>,
 
+    /// The tagged-template body-lambda parameters currently in scope (BEP-049
+    /// §10 / M4e.1), mapped to the synthetic `BindingId::parameter` that
+    /// `build_tagged_body_closure` assigns each. These are MIR-only locals — they
+    /// have no HIR binding (the tag can't be resolved during the HIR walk), so
+    /// `resolve_name_at_in_scope` returns `Unknown` for them. `lower_path_expr`
+    /// consults this map to resolve them: directly from `self.locals` when the
+    /// reference sits in the body closure itself, or — when a *nested* lambda
+    /// inside the interpolations references one — via a transitive capture keyed
+    /// on the stored `BindingId` (HIR can't list it, so the standard capture path
+    /// misses it). Saved/restored around each closure body so it stays scoped to
+    /// the right template.
+    tagged_body_param_bindings: HashMap<Name, BindingId>,
+
     /// Stack of null-exit blocks for active `OptionalChain` scopes.
     /// When an `OptionalFieldAccess`/`OptionalIndex`/`OptionalCall` encounters null,
     /// it jumps to the top of this stack instead of creating its own null block.
@@ -2897,6 +2910,7 @@ impl<'db> LoweringContext<'db> {
             lambda_generic_params: Vec::new(),
             capture_indices: None,
             transitive_captures_needed: Vec::new(),
+            tagged_body_param_bindings: HashMap::new(),
             resolved_aliases: &pkg_data.resolved_aliases,
             watched_locals_stack: Vec::new(),
             synthetic_name_counts: HashMap::new(),
@@ -3121,6 +3135,7 @@ impl<'db> LoweringContext<'db> {
             lambda_generic_params: Vec::new(),
             capture_indices: None,
             transitive_captures_needed: Vec::new(),
+            tagged_body_param_bindings: HashMap::new(),
             chain_null_exits: Vec::new(),
             opt,
         }
@@ -3250,6 +3265,30 @@ impl<'db> LoweringContext<'db> {
         self.capture_indices
             .as_ref()
             .and_then(|captures| captures.get(&binding_id).copied())
+    }
+
+    /// Return the current lambda's capture index for `binding_id`, allocating a
+    /// fresh one (and signalling the parent to forward it via
+    /// `transitive_captures_needed`) when it isn't captured yet. Mirrors the
+    /// transitive-capture branch of `lower_lambda`'s capture-operand loop, for
+    /// callers that discover a needed capture while lowering an expression
+    /// (e.g. a tagged-body param referenced from a nested lambda).
+    fn ensure_transitive_capture(&mut self, binding_id: BindingId) -> usize {
+        if let Some(idx) = self
+            .capture_indices
+            .as_ref()
+            .and_then(|m| m.get(&binding_id).copied())
+        {
+            return idx;
+        }
+        let idx = {
+            let ci = self.capture_indices.get_or_insert_with(HashMap::new);
+            let idx = ci.len();
+            ci.insert(binding_id, idx);
+            idx
+        };
+        self.transitive_captures_needed.push(binding_id);
+        idx
     }
 
     /// Emit `unwatch` ops for every watched local at index `[watched_depth..]`
@@ -4687,6 +4726,514 @@ impl<'db> LoweringContext<'db> {
     }
 }
 
+// ─── 3.1b: Tagged-template lowering (BEP-049 §10 / M4e.1) ─────────────────────
+
+impl LoweringContext<'_> {
+    /// Lower a tagged template (a `TAGGED_TEMPLATE_EXPR`) to a
+    /// `tag(body = <closure>)` call, where the closure builds a
+    /// `baml.TaggedString { parts, values }` from the template segments.
+    ///
+    /// The closure is hand-rolled (there is no AST `Expr::Lambda`): HIR
+    /// registered a `ScopeKind::Lambda` spanning the tagged-template expr so
+    /// captures are computed; we replicate `lower_lambda`'s skeleton but supply
+    /// the body params (from the tag's `body: (...) -> baml.TaggedString`
+    /// signature) and the array-builder body ourselves. The interpolation
+    /// expressions live in the *current* `ExprBody`, so unlike `lower_lambda`
+    /// we do NOT swap `self.body`/`self.source_map`.
+    fn lower_tagged_template(
+        &mut self,
+        expr_id: AstExprId,
+        tag: AstExprId,
+        body: AstExprId,
+        segments: &[baml_compiler2_ast::TemplateSegment],
+        dest: Place,
+    ) {
+        use baml_compiler2_tir::{
+            inference::MemberResolution, lower_type_expr::lower_type_expr_in_ns,
+        };
+
+        // ── Resolve the tag function. TIR (M4d.3) already validated it is a
+        //    //baml:tagged_string fn whose first param is
+        //    `body: (...) -> baml.TaggedString`; resolve again for its ItemRef
+        //    + signature (the body-lambda param names/types). ──
+        let tag_span_start = self
+            .source_map
+            .as_ref()
+            .map(|sm| sm.expr_span(tag).start())
+            .unwrap_or_default();
+        // Prefer the resolution TIR recorded for the tag expression. A qualified
+        // tag like `baml.llm.prompt` is a multi-segment path whose `func_loc`
+        // lives in `resolutions` (`infer_multi_segment_path`); resolving only
+        // the bare last segment (`prompt`) in the user's scope would miss it.
+        // Fall back to bare-name resolution for unqualified, in-file tags.
+        let tag_func_loc = self
+            .resolutions
+            .get(&self.expr_metadata_key(tag))
+            .and_then(|r| match r {
+                MemberResolution::Free { func_loc }
+                | MemberResolution::UnboundMethod { func_loc, .. }
+                | MemberResolution::InterfaceDefaultMethod { func_loc, .. } => Some(*func_loc),
+                _ => None,
+            })
+            .or_else(|| {
+                let tag_name = match &self.body.exprs[tag] {
+                    AstExpr::Path(segs) => segs.last().cloned(),
+                    _ => None,
+                };
+                match tag_name.as_ref().map(|n| {
+                    resolve_name_at_in_scope(
+                        self.db,
+                        self.file,
+                        tag_span_start,
+                        n,
+                        self.scope_func_name.as_ref(),
+                    )
+                }) {
+                    Some(
+                        ResolvedName::Item(Definition::Function(fl))
+                        | ResolvedName::Builtin(Definition::Function(fl)),
+                    ) => Some(fl),
+                    _ => None,
+                }
+            });
+        let Some(tag_func_loc) = tag_func_loc else {
+            // Unreachable in well-typed programs (TIR rejects non-function
+            // tags); guard so codegen never proceeds on a malformed tag.
+            self.emit_panic_call("tagged-template tag did not resolve to a function", expr_id);
+            return;
+        };
+        let tag_item_ref = def_to_item_ref(self.db, Definition::Function(tag_func_loc));
+
+        // ── Body-lambda params + closure type from the tag's `body` param. ──
+        let tag_sig = baml_compiler2_ppir::function_signature(self.db, tag_func_loc);
+        let tag_pkg_info = file_package(self.db, tag_func_loc.file(self.db));
+        let tag_pkg_id = PackageId::new(self.db, tag_pkg_info.package.clone());
+        let tag_pkg_items = package_items(self.db, tag_pkg_id);
+        let mut body_params: Vec<(Name, RuntimeTy)> = Vec::new();
+        let closure_ty = match tag_sig.params.first().map(|p| &p.ty) {
+            Some(body_te @ baml_compiler2_ast::TypeExpr::Function { params, .. }) => {
+                for (i, p) in params.iter().enumerate() {
+                    let name = p
+                        .name
+                        .clone()
+                        .unwrap_or_else(|| Name::new(format!("__arg{i}")));
+                    let mut diags = Vec::new();
+                    let tir_ty = lower_type_expr_in_ns(
+                        self.db,
+                        &p.ty,
+                        tag_pkg_items,
+                        &tag_pkg_info.namespace_path,
+                        &[],
+                        &mut diags,
+                    );
+                    body_params.push((name, self.resolved_aliases.convert(&tir_ty)));
+                }
+                let mut diags = Vec::new();
+                let tir_ty = lower_type_expr_in_ns(
+                    self.db,
+                    body_te,
+                    tag_pkg_items,
+                    &tag_pkg_info.namespace_path,
+                    &[],
+                    &mut diags,
+                );
+                self.resolved_aliases.convert(&tir_ty)
+            }
+            _ => RuntimeTy::Null {
+                attr: TyAttr::default(),
+            },
+        };
+
+        // ── Static segment layout (text + interp only) → fixed-array fast path
+        //    (M4e.1a). `None` ⇒ a `${for}`/`${if}` block is present, so the
+        //    closure body lowers the desugared `body` flatten block instead
+        //    (M4e.1b). ──
+        let static_layout = Self::collect_static_tagged_segments(segments);
+
+        // ── Hand-roll the body closure → an Operand. ──
+        let closure_op =
+            self.build_tagged_body_closure(expr_id, body, &body_params, closure_ty, static_layout);
+
+        // ── Emit `tag(closure)` → dest. The result is the template's value. ──
+        let callee = Operand::Constant(Constant::Function(tag_item_ref));
+        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
+        let target = self.builder.create_block();
+        match &dest {
+            Place::Local(_) => {
+                self.builder
+                    .call(callee, vec![closure_op], dest, target, unwind);
+                self.builder.set_current_block(target);
+            }
+            _ => {
+                let ty = self.expr_ty(expr_id);
+                let tmp = self.builder.temp(ty);
+                self.builder
+                    .call(callee, vec![closure_op], Place::local(tmp), target, unwind);
+                self.builder.set_current_block(target);
+                self.builder
+                    .assign(dest, Rvalue::Use(Operand::Copy(Place::local(tmp))));
+            }
+        }
+    }
+
+    /// Flatten text/interpolation segments into `(parts, value_exprs)` honoring
+    /// `parts.len() == value_exprs.len() + 1`. Returns `None` if any
+    /// `${for}`/`${if}` block is present (M4e.1b handles those at runtime).
+    fn collect_static_tagged_segments(
+        segments: &[baml_compiler2_ast::TemplateSegment],
+    ) -> Option<(Vec<String>, Vec<AstExprId>)> {
+        use baml_compiler2_ast::TemplateSegment;
+        let mut parts: Vec<String> = Vec::new();
+        let mut values: Vec<AstExprId> = Vec::new();
+        let mut cur = String::new();
+        for seg in segments {
+            match seg {
+                TemplateSegment::Text(s) => cur.push_str(s),
+                TemplateSegment::Interp(e) => {
+                    // Close the current literal part, then record the value.
+                    parts.push(std::mem::take(&mut cur));
+                    values.push(*e);
+                }
+                TemplateSegment::For { .. }
+                | TemplateSegment::CStyleFor { .. }
+                | TemplateSegment::If { .. } => return None,
+            }
+        }
+        parts.push(cur); // trailing part (possibly empty) → parts.len()==values.len()+1
+        Some((parts, values))
+    }
+
+    /// Hand-roll the tagged-template body closure, returning the closure value.
+    /// Replicates `lower_lambda`'s state-save / param-decl / build / capture /
+    /// `MakeClosure` skeleton, replacing the AST-body lowering with the
+    /// array-builder (`static_layout`). `self.body`/`self.source_map` are NOT
+    /// swapped — the interpolation exprs live in the current `ExprBody`.
+    #[allow(clippy::cast_possible_truncation)]
+    fn build_tagged_body_closure(
+        &mut self,
+        expr_id: AstExprId,
+        body: AstExprId,
+        body_params: &[(Name, RuntimeTy)],
+        closure_ty: RuntimeTy,
+        static_layout: Option<(Vec<String>, Vec<AstExprId>)>,
+    ) -> Operand {
+        let parent_name = self.builder.name().to_string();
+        let idx = {
+            let c = self
+                .synthetic_name_counts
+                .entry("__tagged".to_string())
+                .or_insert(0);
+            let i = *c;
+            *c += 1;
+            i
+        };
+        let lambda_name = format!("<tagged({parent_name}, {idx})>");
+
+        // Find the HIR Lambda scope registered for this tagged template (its
+        // span == the tagged-template expr span; see HIR walk_tagged_template_body).
+        let lambda_scope_id: FileScopeId = if let Some(ref sm) = self.source_map {
+            let span = sm.expr_span(expr_id);
+            let index = file_semantic_index(self.db, self.file);
+            // Two functions can carry a tagged template at the *same* source
+            // span — notably a new-mode LLM function and its `$stream`
+            // companion, both synthesized from the one `prompt`…`` at
+            // `llm_body_def.span`. A bare range match would pick whichever
+            // lambda scope appears first in the file (the oneshot body's),
+            // binding the companion's `${param}` interps to the *other*
+            // function's captures. Disambiguate by preferring the lambda scope
+            // nested within the function currently being lowered; fall back to
+            // the first range match.
+            let current_descendants = index
+                .scopes
+                .get(self.current_scope.index() as usize)
+                .map(|s| s.descendants.clone());
+            let is_in_current_fn = |id: FileScopeId| {
+                current_descendants
+                    .as_ref()
+                    .is_some_and(|d| id.index() >= d.start.index() && id.index() < d.end.index())
+            };
+            let mut first = None;
+            let mut scoped = None;
+            for (i, scope) in index.scopes.iter().enumerate() {
+                if scope.kind == baml_compiler2_hir::scope::ScopeKind::Lambda && scope.range == span
+                {
+                    let id = FileScopeId::new(i as u32);
+                    if first.is_none() {
+                        first = Some(id);
+                    }
+                    if is_in_current_fn(id) {
+                        scoped = Some(id);
+                        break;
+                    }
+                }
+            }
+            let found = scoped.or(first);
+            debug_assert!(
+                found.is_some(),
+                "no HIR Lambda scope for tagged template at {span:?}"
+            );
+            found.unwrap_or(self.current_scope)
+        } else {
+            self.current_scope
+        };
+
+        let hir_captures: Vec<(Name, BindingId)> = {
+            let index = file_semantic_index(self.db, self.file);
+            index
+                .scope_bindings
+                .get(lambda_scope_id.index() as usize)
+                .map(|sb| sb.captures.clone())
+                .unwrap_or_default()
+        };
+        let lambda_capture_indices: HashMap<BindingId, usize> = hir_captures
+            .iter()
+            .enumerate()
+            .map(|(i, (_, binding_id))| (*binding_id, i))
+            .collect();
+
+        // Save parent state. NOTE: body/source_map are intentionally NOT saved
+        // — the interpolation exprs live in the current (enclosing) ExprBody.
+        let saved_builder = std::mem::replace(
+            &mut self.builder,
+            MirBuilder::new(Name::new(&lambda_name), 0),
+        );
+        let saved_locals = std::mem::take(&mut self.locals);
+        let saved_binding_locals = std::mem::take(&mut self.binding_locals);
+        let saved_exit_block = self.exit_block;
+        let saved_loop_context = self.loop_context.take();
+        let saved_catch_context = self.catch_context.take();
+        let saved_watched_locals = std::mem::take(&mut self.watched_locals_stack);
+        let saved_current_scope = self.current_scope;
+        let saved_metadata_scope = self.current_metadata_scope;
+        let saved_pending_lambdas = std::mem::take(&mut self.pending_lambdas);
+        let saved_capture_indices = self.capture_indices.take();
+        let saved_transitive_captures = std::mem::take(&mut self.transitive_captures_needed);
+        let saved_tagged_body_params = std::mem::take(&mut self.tagged_body_param_bindings);
+
+        self.current_scope = lambda_scope_id;
+        self.current_metadata_scope = MetadataScope::Body(lambda_scope_id);
+        self.capture_indices = Some(lambda_capture_indices);
+        // Body params resolve from `self.locals` (no HIR binding) — record each
+        // name with the synthetic `BindingId::parameter` it is given below (same
+        // `self.current_scope` and index order as the declare loop), so
+        // `lower_path_expr` resolves `${param}` interps to the locals and a nested
+        // lambda referencing one can capture it transitively by that BindingId.
+        self.tagged_body_param_bindings = body_params
+            .iter()
+            .enumerate()
+            .map(|(idx, (n, _))| (n.clone(), BindingId::parameter(self.current_scope, idx)))
+            .collect();
+
+        let arity = body_params.len();
+        self.builder = MirBuilder::new(Name::new(&lambda_name), arity);
+
+        // Return place _0.
+        let ret = self.builder.declare_local(
+            Some(Name::new("_0")),
+            RuntimeTy::Null {
+                attr: TyAttr::default(),
+            },
+            None,
+            false,
+        );
+
+        // Body params _1..=_n (the tag supplies their values when it calls body).
+        for (param_idx, (name, ty)) in body_params.iter().enumerate() {
+            let local = self
+                .builder
+                .declare_local(Some(name.clone()), ty.clone(), None, false);
+            self.locals.insert(name.clone(), local);
+            self.binding_locals
+                .insert(BindingId::parameter(self.current_scope, param_idx), local);
+        }
+
+        let entry = self.builder.create_block();
+        let exit_blk = self.builder.create_block();
+        self.exit_block = exit_blk;
+        self.builder.set_current_block(entry);
+
+        // ── Body: construct `baml.TaggedString { parts, values }`. ──
+        match static_layout {
+            Some((parts, value_exprs)) => {
+                let parts_ops: Vec<Operand> = parts
+                    .into_iter()
+                    .map(|s| Operand::Constant(Constant::String(s)))
+                    .collect();
+                let parts_local = self.builder.declare_local(
+                    Some(Name::new("__tt_parts")),
+                    RuntimeTy::List(
+                        Box::new(RuntimeTy::String {
+                            attr: TyAttr::default(),
+                        }),
+                        TyAttr::default(),
+                    ),
+                    None,
+                    false,
+                );
+                self.builder
+                    .assign(Place::local(parts_local), Rvalue::Array(parts_ops));
+
+                // Interps lower in the closure scope (body-param refs →
+                // Place::Local, enclosing-local refs → Place::Capture), but
+                // their TIR types/resolutions were inferred INLINE in the
+                // enclosing body — keyed under the enclosing `MetadataScope`,
+                // not this synthetic lambda scope. Restore it so member/method
+                // resolution lookups hit the recorded entries (otherwise a
+                // method call `${ctx.m()}` misses its resolution and falls back
+                // to a map-element access → runtime `expected Map, got Instance`).
+                // Mirrors the `None` (dynamic-layout) arm below.
+                let prev_metadata_scope = self.current_metadata_scope;
+                self.current_metadata_scope = saved_metadata_scope;
+                let value_ops: Vec<Operand> = value_exprs
+                    .iter()
+                    .map(|&e| self.lower_to_operand(e))
+                    .collect();
+                self.current_metadata_scope = prev_metadata_scope;
+                let values_local = self.builder.declare_local(
+                    Some(Name::new("__tt_values")),
+                    RuntimeTy::List(
+                        Box::new(RuntimeTy::BuiltinUnknown {
+                            attr: TyAttr::default(),
+                        }),
+                        TyAttr::default(),
+                    ),
+                    None,
+                    false,
+                );
+                self.builder
+                    .assign(Place::local(values_local), Rvalue::Array(value_ops));
+
+                self.builder.assign(
+                    Place::local(ret),
+                    Rvalue::Aggregate {
+                        kind: AggregateKind::Class {
+                            name: "baml.TaggedString".to_string(),
+                            type_arg_templates: vec![],
+                        },
+                        fields: vec![
+                            Operand::Copy(Place::local(parts_local)),
+                            Operand::Copy(Place::local(values_local)),
+                        ],
+                    },
+                );
+            }
+            None => {
+                // M4e.1b: a `${for}`/`${if}` block is present, so lengths are
+                // data-dependent. Lower the desugared `body` flatten block
+                // (built at AST lowering, type-checked by TIR): it builds
+                // `baml.TaggedString { parts, values }` via empty lists + `push`
+                // in real loops/branches. Body-param and capture references
+                // inside resolve through the closure scope / capture indices
+                // set up above (those don't use the metadata scope).
+                //
+                // The flatten block's exprs were inferred INLINE in the
+                // enclosing function (the tag isn't a real `Expr::Lambda`), so
+                // their TIR types/resolutions are keyed under the enclosing
+                // body's `MetadataScope` — not this synthetic lambda scope.
+                // Temporarily restore it so `expr_ty`/resolution lookups (e.g.
+                // resolving `parts.push(...)` to `Array.push` rather than a
+                // map-element access) hit the recorded entries.
+                let prev_metadata_scope = self.current_metadata_scope;
+                self.current_metadata_scope = saved_metadata_scope;
+                self.lower_expr(body, Place::local(ret));
+                self.current_metadata_scope = prev_metadata_scope;
+            }
+        }
+
+        if !self.builder.is_current_terminated() {
+            self.builder.goto(self.exit_block);
+        }
+        self.builder.set_current_block(self.exit_block);
+        self.builder.return_();
+
+        self.mark_captured_locals_in_scope_tree(lambda_scope_id);
+
+        let nested_lambdas = std::mem::take(&mut self.pending_lambdas);
+        let dummy = MirBuilder::new(Name::new("_dummy"), 0);
+        let lambda_builder = std::mem::replace(&mut self.builder, dummy);
+        let mut lambda_mir = lambda_builder.build();
+        optimize::optimize_function(&mut lambda_mir);
+        lambda_mir.item_ref = ItemRef::Free {
+            package: Name::new(""),
+            namespace: vec![],
+            name: Name::new(&lambda_name),
+        };
+        lambda_mir.lambdas = nested_lambdas;
+
+        let newly_needed_transitive = std::mem::take(&mut self.transitive_captures_needed);
+
+        // Restore parent state.
+        self.builder = saved_builder;
+        self.locals = saved_locals;
+        self.binding_locals = saved_binding_locals;
+        self.exit_block = saved_exit_block;
+        self.loop_context = saved_loop_context;
+        self.catch_context = saved_catch_context;
+        self.watched_locals_stack = saved_watched_locals;
+        self.current_scope = saved_current_scope;
+        self.current_metadata_scope = saved_metadata_scope;
+        self.capture_indices = saved_capture_indices;
+        self.pending_lambdas = saved_pending_lambdas;
+        self.transitive_captures_needed = saved_transitive_captures;
+        self.tagged_body_param_bindings = saved_tagged_body_params;
+
+        let mut extended_hir_captures = hir_captures;
+        for binding_id in newly_needed_transitive {
+            if !extended_hir_captures
+                .iter()
+                .any(|(_, existing)| *existing == binding_id)
+            {
+                extended_hir_captures.push((Name::new("_capture"), binding_id));
+            }
+        }
+
+        let mut capture_operands: Vec<Operand> = Vec::with_capacity(extended_hir_captures.len());
+        for (_, binding_id) in &extended_hir_captures {
+            if let Some(&local) = self.binding_locals.get(binding_id) {
+                self.builder.local_decl_mut(local).is_captured = true;
+                capture_operands.push(Operand::Copy(Place::Local(local)));
+            } else if let Some(cap_idx) = self
+                .capture_indices
+                .as_ref()
+                .and_then(|m| m.get(binding_id))
+                .copied()
+            {
+                capture_operands.push(Operand::Copy(Place::Capture(cap_idx)));
+            } else {
+                let new_idx = {
+                    let ci = self.capture_indices.get_or_insert_with(HashMap::new);
+                    let idx = ci.len();
+                    ci.insert(*binding_id, idx);
+                    idx
+                };
+                self.transitive_captures_needed.push(*binding_id);
+                capture_operands.push(Operand::Copy(Place::Capture(new_idx)));
+            }
+        }
+
+        let lambda_pending_idx = self.pending_lambdas.len();
+        self.pending_lambdas.push(lambda_mir);
+
+        let enclosing_params = self.enclosing_generic_params();
+        let type_arg_templates: Vec<TyTemplate> = enclosing_params
+            .iter()
+            .enumerate()
+            .map(|(n, _)| TyTemplate::TypeArgRef(n as u32))
+            .collect();
+
+        let closure_local = self.builder.temp(closure_ty);
+        self.builder.assign(
+            Place::local(closure_local),
+            Rvalue::MakeClosure {
+                lambda_idx: lambda_pending_idx,
+                captures: capture_operands,
+                type_arg_templates,
+            },
+        );
+        Operand::Copy(Place::Local(closure_local))
+    }
+}
+
 // ─── 3.2: Core lower_expr dispatch ───────────────────────────────────────────
 
 impl LoweringContext<'_> {
@@ -4925,6 +5472,18 @@ impl LoweringContext<'_> {
             AstExpr::Missing => {
                 self.emit_panic_call("parse error", expr_id);
             }
+
+            AstExpr::Template { tag, segments } => match tag {
+                baml_compiler2_ast::TemplateTag::Custom { tag, body } => {
+                    self.lower_tagged_template(expr_id, tag, body, &segments, dest);
+                }
+                // Untagged (BEP §11): the value is the desugared `elaborated`
+                // concat (built at AST lowering and type-checked by TIR). Lower
+                // it directly — the structured `segments` were diagnostics-only.
+                baml_compiler2_ast::TemplateTag::Default { elaborated } => {
+                    self.lower_expr(elaborated, dest);
+                }
+            },
 
             AstExpr::Spawn {
                 name,
@@ -5401,14 +5960,35 @@ impl<'db> LoweringContext<'db> {
                     Rvalue::Use(Operand::Constant(Constant::Function(item))),
                 );
             }
+            ResolvedName::Unknown if self.tagged_body_param_bindings.contains_key(name) => {
+                // A tagged-template body-lambda parameter (BEP-049 §10 / M4e.1):
+                // a MIR-only local that `build_tagged_body_closure` injects. It has
+                // no HIR binding (the tag can't be resolved during the HIR walk),
+                // so `resolve_name_at_in_scope` returns `Unknown`.
+                if let Some(&local) = self.locals.get(name) {
+                    // The reference sits directly in the body closure: a plain local.
+                    self.builder
+                        .assign(dest, Rvalue::Use(Operand::Copy(Place::Local(local))));
+                } else {
+                    // Referenced from a nested lambda inside the interpolations —
+                    // the param lives in an enclosing frame. HIR can't list it as a
+                    // capture (no binding), so capture it transitively by its stored
+                    // synthetic BindingId, the same way grandparent locals thread up.
+                    let binding_id = self.tagged_body_param_bindings[name];
+                    let cap_idx = self.ensure_transitive_capture(binding_id);
+                    self.builder
+                        .assign(dest, Rvalue::Use(Operand::Copy(Place::Capture(cap_idx))));
+                }
+            }
             ResolvedName::Unknown => {
-                // If TIR recorded a type for this expr, it was handled as a package
-                // path intermediate (e.g. `baml` in `baml.HttpMethod.Get`). Emit a
-                // null placeholder — the outer FieldAccess will produce the real value.
                 if self
                     .expr_types
                     .contains_key(&self.expr_metadata_key(expr_id))
                 {
+                    // If TIR recorded a type for this expr, it was handled as a
+                    // package path intermediate (e.g. `baml` in
+                    // `baml.HttpMethod.Get`). Emit a null placeholder — the outer
+                    // FieldAccess will produce the real value.
                     self.builder
                         .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
                 } else {
@@ -6295,7 +6875,7 @@ impl LoweringContext<'_> {
 
 // ─── 3.5: Call lowering with builtin detection ────────────────────────────────
 
-impl LoweringContext<'_> {
+impl<'db> LoweringContext<'db> {
     fn lower_call_arg_operands(&mut self, expr_id: AstExprId, args: &[AstExprId]) -> Vec<Operand> {
         let Some(plan) = self
             .call_plans
@@ -6305,6 +6885,27 @@ impl LoweringContext<'_> {
             // No call plan: lower each arg in order (the type checker would
             // have already flagged any mismatch).
             return args.iter().map(|&a| self.lower_to_operand(a)).collect();
+        };
+
+        // If this call targets a sys_op (`$rust_io_function`), an omitted
+        // defaulted param must be materialized to its declared default HERE:
+        // sys_ops have no bytecode body, so they never run the default-parameter
+        // prologue that a regular callee would. Leaving `OmittedArg` for a
+        // sys_op would reach the engine and panic in `vm_arg_to_bex_value`.
+        let callee_expr = match &self.body.exprs[expr_id] {
+            AstExpr::Call { callee, .. } => Some(*callee),
+            _ => None,
+        };
+        let sysop_callee = callee_expr.and_then(|callee| self.sys_op_callee(callee));
+        // A method-convention sys-op call (e.g. `ctx.output_format_with(...)`) has
+        // a receiver-relative `param_index` — TIR strips `self` via
+        // `skip_self_param` when building the call plan — but the callee's default
+        // arena (`function_parameter_defaults`) is indexed self-inclusive. Shift
+        // omitted-default indices by one to skip `self`; free-function sys-ops have
+        // no `self`, so no shift.
+        let sysop_self_offset = match (sysop_callee, callee_expr) {
+            (Some(_), Some(callee)) if self.callee_uses_method_convention(callee) => 1,
+            _ => 0,
         };
 
         // Pre-lower each provided arg in source order (the order `args` appear
@@ -6324,11 +6925,37 @@ impl LoweringContext<'_> {
                 baml_compiler2_tir::inference::ParamBinding::Provided { arg, .. } => lowered_args
                     .remove(&arg)
                     .expect("call plan referenced an argument outside the call expression"),
-                baml_compiler2_tir::inference::ParamBinding::OmittedDefault { .. } => {
-                    Operand::Constant(Constant::OmittedArg)
-                }
+                baml_compiler2_tir::inference::ParamBinding::OmittedDefault {
+                    param_index, ..
+                } => match sysop_callee {
+                    Some(callee_loc) => {
+                        self.sysop_default_operand(callee_loc, param_index + sysop_self_offset)
+                    }
+                    None => Operand::Constant(Constant::OmittedArg),
+                },
             })
             .collect()
+    }
+
+    /// Materialize a sys-op parameter's omitted default as a constant operand.
+    /// `$rust_io_function` callees have no bytecode body — and thus no
+    /// default-parameter prologue — so their omitted defaults must be folded at
+    /// the call site. The default is read from the CALLEE's own defaults arena
+    /// (correct cross-file/cross-package, where the caller's TIR tables don't
+    /// cover the callee). Sys-op defaults are constant literals today; a
+    /// non-constant default falls back to `OmittedArg` rather than mis-evaluate.
+    fn sysop_default_operand(&self, callee_loc: FunctionLoc<'db>, param_index: usize) -> Operand {
+        let defaults = baml_compiler2_ppir::function_parameter_defaults(self.db, callee_loc);
+        let constant = defaults
+            .param_default(param_index)
+            .map(|d| d.expr.expr())
+            .map(|id| match &defaults.defaults.exprs.exprs[id] {
+                AstExpr::Null => Constant::Null,
+                AstExpr::Literal(lit) => Self::lower_literal(lit),
+                _ => Constant::OmittedArg,
+            })
+            .unwrap_or(Constant::OmittedArg);
+        Operand::Constant(constant)
     }
 
     fn lower_call(
@@ -7180,13 +7807,121 @@ impl LoweringContext<'_> {
         self.builder.set_current_block(target);
     }
 
-    /// True when the callee is the BEP-034 `baml.future.__await_any`
+    /// Whether `callee` resolves to a `BoundMethod` — i.e. the call uses method
+    /// convention (`self` passed implicitly via the receiver). Mirrors TIR's
+    /// `callee_uses_method_call_convention`, which strips `self` so the call
+    /// plan's `param_index` becomes receiver-relative.
+    fn callee_uses_method_convention(&self, callee: AstExprId) -> bool {
+        use baml_compiler2_tir::inference::MemberResolution;
+        let key = self.expr_metadata_key(callee);
+        matches!(
+            self.resolutions.get(&key),
+            Some(MemberResolution::BoundMethod { .. })
+        ) || matches!(
+            self.path_member_resolutions
+                .get(&key)
+                .and_then(|resolutions| resolutions.last()),
+            Some(MemberResolution::BoundMethod { .. })
+        )
+    }
+
+    fn sys_op_callee(&self, callee: AstExprId) -> Option<FunctionLoc<'db>> {
+        use baml_compiler2_ast::BuiltinKind;
+
+        // ── Path callee (single- or multi-segment) ─────────────────────────────
+        if let AstExpr::Path(segments) = &self.body.exprs[callee] {
+            let func_loc = if segments.len() == 1 {
+                let span_start = self
+                    .source_map
+                    .as_ref()
+                    .map(|sm| sm.expr_span(callee).start())
+                    .unwrap_or_default();
+                let resolved = resolve_name_at_in_scope(
+                    self.db,
+                    self.file,
+                    span_start,
+                    &segments[0],
+                    self.scope_func_name.as_ref(),
+                );
+                match resolved {
+                    ResolvedName::Builtin(Definition::Function(fl)) => Some(fl),
+                    ResolvedName::Item(Definition::Function(fl)) => Some(fl),
+                    _ => None,
+                }
+            } else {
+                // Multi-segment: check path_member_resolutions first (local-rooted paths
+                // like `file.read_string`), then fall back to flat resolutions (package paths).
+                // The last resolution in path_member_resolutions is the final-segment resolution.
+                use baml_compiler2_tir::inference::MemberResolution;
+                let from_pmr = self
+                    .path_member_resolutions
+                    .get(&self.expr_metadata_key(callee))
+                    .and_then(|resolutions| resolutions.last())
+                    .and_then(|res| match res {
+                        MemberResolution::Free { func_loc } => Some(*func_loc),
+                        MemberResolution::BoundMethod { func_loc, .. }
+                        | MemberResolution::UnboundMethod { func_loc, .. }
+                        | MemberResolution::InterfaceDefaultMethod { func_loc, .. } => {
+                            Some(*func_loc)
+                        }
+                        MemberResolution::Field { .. } | MemberResolution::Variant { .. } => None,
+                    });
+                if from_pmr.is_some() {
+                    from_pmr
+                } else {
+                    self.resolutions
+                        .get(&self.expr_metadata_key(callee))
+                        .and_then(|res| match res {
+                            MemberResolution::Free { func_loc } => Some(*func_loc),
+                            MemberResolution::BoundMethod { func_loc, .. }
+                            | MemberResolution::UnboundMethod { func_loc, .. }
+                            | MemberResolution::InterfaceDefaultMethod { func_loc, .. } => {
+                                Some(*func_loc)
+                            }
+                            MemberResolution::Field { .. } | MemberResolution::Variant { .. } => {
+                                None
+                            }
+                        })
+                }
+            };
+            if let Some(fl) = func_loc {
+                let body = baml_compiler2_ppir::function_body(self.db, fl);
+                if let FunctionBody::Builtin(BuiltinKind::Io) = body.as_ref() {
+                    return Some(fl);
+                }
+            }
+        }
+
+        // ── NEW: MemberAccess callee (e.g. f.read, sock.recv) ──────────────────
+        if let AstExpr::MemberAccess { .. } = &self.body.exprs[callee] {
+            use baml_compiler2_tir::inference::MemberResolution;
+            if let Some(resolution) = self.resolutions.get(&self.expr_metadata_key(callee)) {
+                let func_loc = match resolution {
+                    MemberResolution::BoundMethod { func_loc, .. }
+                    | MemberResolution::UnboundMethod { func_loc, .. }
+                    | MemberResolution::InterfaceDefaultMethod { func_loc, .. } => Some(*func_loc),
+                    MemberResolution::Free { func_loc } => Some(*func_loc),
+                    MemberResolution::Field { .. } | MemberResolution::Variant { .. } => None,
+                };
+                if let Some(fl) = func_loc {
+                    let body = baml_compiler2_ppir::function_body(self.db, fl);
+                    if let FunctionBody::Builtin(BuiltinKind::Io) = body.as_ref() {
+                        return Some(fl);
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
     fn check_await_any(&self, callee: AstExprId) -> bool {
         matches!(
             self.callee_builtin_kind(callee),
             Some(baml_compiler2_ast::BuiltinKind::AwaitAny)
         )
     }
+
     fn callee_builtin_kind(&self, callee: AstExprId) -> Option<baml_compiler2_ast::BuiltinKind> {
         // ── Path callee (single- or multi-segment) ─────────────────────────────
         if let AstExpr::Path(segments) = &self.body.exprs[callee] {
@@ -7364,6 +8099,7 @@ impl LoweringContext<'_> {
 
         None
     }
+
     fn synthetic_type_arg_count_for_sys_op(
         &self,
         func_loc: baml_compiler2_hir::loc::FunctionLoc<'_>,

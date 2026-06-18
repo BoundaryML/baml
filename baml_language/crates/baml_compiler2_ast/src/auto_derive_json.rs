@@ -68,7 +68,7 @@ use crate::ast::{
 /// Protocol, which treats the two contracts as independent and lets a class
 /// override only one (e.g., a custom `from_json` that returns sentinel
 /// instances while keeping the auto-derived structural `to_json`).
-pub(crate) fn maybe_synthesize_json_methods(class: &mut ClassDef) {
+pub(crate) fn maybe_synthesize_derived_methods(class: &mut ClassDef) {
     let span = class.name_span;
     let has_to_json = class.methods.iter().any(|m| m.name.as_str() == "to_json");
     let has_from_json = class.methods.iter().any(|m| m.name.as_str() == "from_json");
@@ -78,6 +78,11 @@ pub(crate) fn maybe_synthesize_json_methods(class: &mut ClassDef) {
     if !has_from_json {
         class.methods.push(synthesize_from_json(class, span));
     }
+    // NB: `to_string` is intentionally NOT auto-derived. Canary's `baml.ToString`
+    // interface owns user-facing stringification; `${…}` interpolation renders
+    // via `string.from(value)` (the universal driver), so no per-class method is
+    // synthesized — and a synthesized one would trip the HIR rule that forbids a
+    // direct `to_string` method (`ToStringMustImplementInterface`).
 }
 
 /// Build a `TypeExpr::Path` referencing the class itself with its own generic
@@ -166,6 +171,7 @@ fn synthesize_to_json(class: &ClassDef, span: TextRange) -> FunctionDef {
         origin: FunctionOrigin::AutoDerive,
         attributes: vec![],
         docstring: None,
+        is_tagged_template_tag: false,
         span,
         name_span: span,
     }
@@ -206,6 +212,7 @@ fn synthesize_from_json(class: &ClassDef, span: TextRange) -> FunctionDef {
         origin: FunctionOrigin::AutoDerive,
         attributes: vec![],
         docstring: None,
+        is_tagged_template_tag: false,
         span,
         name_span: span,
     }

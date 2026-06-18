@@ -517,6 +517,16 @@ impl ExprBody {
                 )
             }
             Expr::OptionalChain { expr } => self.display_expr_inner(*expr, depth + 1),
+            Expr::Block {
+                tail_expr: Some(tail),
+                ..
+            } => self.display_expr_inner(*tail, depth + 1),
+            Expr::Template { tag, .. } => match tag {
+                TemplateTag::Default { .. } => "`…`".to_string(),
+                TemplateTag::Custom { tag, .. } => {
+                    format!("{}`…`", self.display_expr_inner(*tag, depth + 1))
+                }
+            },
             Expr::Literal(lit) => lit.to_string(),
             Expr::Null => "null".to_string(),
             _ => "...".to_string(),
@@ -816,7 +826,105 @@ pub enum Expr {
     OptionalChain {
         expr: ExprId,
     },
+    /// Backtick template literal site (BEP-049). Held as a first-class HIR
+    /// node through TIR so type checking applies template-aware rules with
+    /// errors pointing at the original `${…}` spans, and MIR owns the
+    /// lowering. The `tag` discriminates the two BEP forms:
+    ///
+    /// - [`TemplateTag::Default`] — an untagged `` `…` `` literal (§11):
+    ///   each `${expr}` is implicitly `.to_string()`-coerced (strict — a
+    ///   nullable / non-stringable value is a compile error), and the whole
+    ///   template evaluates to `string`. MIR lowers it to a concat chain.
+    /// - [`TemplateTag::Custom`] — a tagged `` tag`…` `` literal (§10): the
+    ///   tag's body parameter brings extra bindings into scope, values are
+    ///   passed to the tag *verbatim* with their original types, and the
+    ///   result is the tag fn's return type. MIR lowers it to
+    ///   `tag(body = (...) -> TaggedString { TaggedString { parts, values } })`.
+    Template {
+        /// Which BEP form this is — see [`TemplateTag`].
+        tag: TemplateTag,
+        /// Structured template body. Mirrors `BacktickSegment` from the
+        /// CST but each interp/condition/collection is already a lowered
+        /// `ExprId`, and for-bindings are lowered `PatId`s. Lets TIR walk
+        /// the tree without re-touching the CST. Interp payloads are the
+        /// *raw* inner expressions (no `.to_string()` wrapping); coercion
+        /// is MIR's job for the `Default` form.
+        segments: Vec<TemplateSegment>,
+    },
     Missing,
+}
+
+/// Which BEP-049 backtick form an [`Expr::Template`] is, plus the per-form
+/// payload needed to realize it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TemplateTag {
+    /// Untagged `` `…` `` (BEP §11): implicit per-value `.to_string()`,
+    /// result type `string`.
+    ///
+    /// `elaborated` is the desugared realization — a left-folded `+` concat
+    /// of the segments (text literals, `${expr}.to_string()`, `${for}`
+    /// accumulator blocks, `${if}` chains), built from the *same* lowered
+    /// `ExprId`s the `segments` hold. TIR types this for codegen and HIR/MIR
+    /// consume it directly; the structured `segments` exist only so TIR can
+    /// emit per-`${…}` strict-stringify diagnostics (BEP §11) on the original
+    /// spans rather than on the synthetic `.to_string()` calls.
+    Default { elaborated: ExprId },
+    /// Tagged `` tag`…` `` (BEP §10): `tag` is the tag expression — usually a
+    /// bare identifier referring to a fn marked `//baml:tagged_string`. Stored
+    /// as an `ExprId` so paths and future curry forms compose without grammar
+    /// changes. Values pass to the tag verbatim with their original types.
+    ///
+    /// `body` is the desugared closure body the tag is invoked with — a block
+    /// that flattens the segments into `baml.TaggedString { parts, values }`
+    /// (text runs concatenated into `parts`, each `${expr}` pushed raw into
+    /// `values`, with `${for}`/`${if}` driving runtime array growth). Built
+    /// from the *same* lowered `ExprId`s the `segments` hold. TIR types it (so
+    /// MIR has the `push`/aggregate resolutions) and MIR lowers it as the
+    /// hand-rolled `body` closure — except when the template is purely static
+    /// (text + interp, no `${for}`/`${if}`), where MIR keeps a fixed-array
+    /// fast-path off `segments` instead.
+    Custom { tag: ExprId, body: ExprId },
+}
+
+/// One segment of an [`Expr::Template`] body. Parallel to `BacktickSegment`
+/// in the CST layer, but every sub-expression is already lowered.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TemplateSegment {
+    /// Literal text between interpolations / block tags.
+    Text(std::string::String),
+    /// A `${expr}` interpolation. The wrapped `ExprId` is the lowered
+    /// inner expression (already a block expression per BEP §4).
+    Interp(ExprId),
+    /// A `${for (let p in c)}...${endfor}` block (iterator form).
+    For {
+        binding: PatId,
+        collection: ExprId,
+        body: Vec<TemplateSegment>,
+    },
+    /// A C-style `${for (let i = 0; cond; step)}...${endfor}` block (BEP §4 —
+    /// the host `for` headers are reused verbatim, so the template form accepts
+    /// the C-style header too). `init` declares the loop variable (a
+    /// `Stmt::Let`); `step` is the per-iteration update (an assignment stmt),
+    /// absent only for `for (init; cond; )`. Elaborates to the same
+    /// `{ init; while cond { body } after { step } }` shape the host C-style
+    /// `for` lowers to (`lower_c_style_for`).
+    CStyleFor {
+        init: StmtId,
+        cond: ExprId,
+        step: Option<StmtId>,
+        body: Vec<TemplateSegment>,
+    },
+    /// A `${if (c)}...${else if (c)}...${else}...${endif}` chain.
+    If {
+        branches: Vec<TemplateIfBranch>,
+        else_body: Option<Vec<TemplateSegment>>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TemplateIfBranch {
+    pub condition: ExprId,
+    pub body: Vec<TemplateSegment>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1270,6 +1378,11 @@ pub struct FunctionDef {
     pub attributes: Vec<RawAttribute>,
     /// Joined `///` doc-comment lines preceding this declaration.
     pub docstring: Option<std::string::String>,
+    /// True when this fn is preceded by a `//baml:tagged_string` marker
+    /// comment. BEP-049 §10: such fns are callable as tagged template
+    /// tags (a tag name immediately followed by a backtick literal), and
+    /// their first parameter must be `body: (...) -> TaggedString`.
+    pub is_tagged_template_tag: bool,
     pub span: TextRange,
     pub name_span: TextRange,
 }
@@ -1322,6 +1435,25 @@ pub enum BuiltinKind {
 pub struct LlmBodyDef {
     pub client: Option<Name>,
     pub prompt: Option<RawPrompt>,
+    /// BEP-049 M5e: for a new-mode (backtick) prompt, the pre-lowered body of
+    /// the `$stream` companion — a `stream_llm_function(...)` call whose 4th
+    /// argument is the synthesized prompt closure. Built in `lower_cst` while
+    /// the CST backtick literal is still in hand (the AST must stay CST-free for
+    /// Salsa: a rowan node is `!Send`), and consumed by PPIR when it
+    /// materializes the `$stream` companion. The closure must capture the
+    /// companion's params, so it can't be shared with the oneshot body by
+    /// `ExprId` — it's a fully independent arena. `None` for legacy Jinja
+    /// `#"..."#` prompts (their `$stream` companion uses the 3-arg Jinja path).
+    pub stream_body: Option<(ExprBody, AstSourceMap)>,
+    /// BEP-049 M5: for a new-mode (backtick) prompt, the pre-lowered bodies of
+    /// the `render_prompt` / `build_request` / `build_request_stream` companions,
+    /// keyed by target name. Each is a `<target>(client, fn, args,
+    /// prompt_closure=…)` call carrying the same synthesized prompt closure, so
+    /// the static preview/cURL render through the closure exactly like execution.
+    /// Built in `lower_cst` while the CST backtick is in hand (same reason as
+    /// `stream_body`) and read back by `make_llm_companion`. Empty for legacy
+    /// Jinja `#"..."#` prompts (their companions use the 3-arg Jinja path).
+    pub companion_bodies: Vec<(std::string::String, (ExprBody, AstSourceMap))>,
     pub span: TextRange,
 }
 

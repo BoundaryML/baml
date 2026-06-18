@@ -1,8 +1,9 @@
 use std::{collections::HashMap, sync::Arc};
 
+use bex_heap::TlabHolder;
 use bex_vm_types::{
     FutureRead, HeapPtr, ValueKind,
-    types::{Instance, Object, Value},
+    types::{AtomicValueSlot, Instance, Object, Value},
 };
 use indexmap::IndexMap;
 
@@ -12,7 +13,7 @@ use super::{
         NaturalDomain, compare_natural_values, is_primitive_array_values,
         validate_natural_order_with_vm,
     },
-    make_compare_callee,
+    make_compare_callee, make_to_string_callee,
 };
 use crate::BexVm;
 
@@ -119,10 +120,46 @@ impl BamlPackageBaml for PackageBamlImpl {
             continuation: Box::new(PassThroughContinuation),
         }
     }
+
+    /// `baml._to_string_default(value)` — the default-rendering fallback behind
+    /// `string.from`, used for values whose runtime type does not implement
+    /// `baml.ToString`. Primitives render naturally; containers and class
+    /// instances render structurally (nested strings are quoted). Total — the
+    /// `string.from` contract is `throws never`, so this cannot fail.
+    ///
+    /// This is a *structural* walker: nested values are NOT routed back through
+    /// `baml.ToString`, so a nested type's own `to_string` is not honored here.
+    /// (A YieldToCall-based recursive dispatch would be needed for that; out of
+    /// scope for the string proof-of-concept.)
+    fn _to_string_default(vm: &BexVm, value: &Value) -> bex_str::BexStr {
+        bex_str::BexStr::from(to_string_default_recursive(vm, *value, false))
+    }
+
+    /// `baml._to_string_shim(value)` — runtime-class `to_string` dispatch behind
+    /// `string.from`. If `value`'s runtime class carries an in-body `to_string`
+    /// override, yield to it; otherwise render `value` with the structural
+    /// default. See `make_to_string_callee` for why static dispatch can't be
+    /// used here.
+    fn _to_string_shim(vm: &mut BexVm, value: &Value) -> NativeCallResult {
+        match make_to_string_callee(vm, *value) {
+            Some(callee) => NativeCallResult::YieldToCall {
+                callee,
+                args: vec![],
+                type_args: vec![],
+                continuation: Box::new(PassThroughContinuation),
+            },
+            None => {
+                // No in-body override (default-body implementor) → structural.
+                let rendered = to_string_default_recursive(vm, *value, false);
+                NativeCallResult::Done(Value::object(vm.alloc_string(rendered)))
+            }
+        }
+    }
 }
 
-/// Returns the callee's result unchanged. Used by `_compare_shim`, whose only
-/// job is to dispatch one `compare` call and surface its value.
+/// Returns the callee's result unchanged. Used by `_compare_shim` and
+/// `_to_string_shim`, whose only job is to dispatch one call and surface its
+/// value.
 struct PassThroughContinuation;
 
 impl Continuation for PassThroughContinuation {
@@ -133,6 +170,131 @@ impl Continuation for PassThroughContinuation {
         Vec::new()
     }
     fn apply_forwarding(&mut self, _forwarding: &HashMap<HeapPtr, HeapPtr>) {}
+}
+
+/// Owned snapshot of a heap object, captured so the recursive walker never
+/// holds a heap borrow or a container lock across a recursive call (mirrors the
+/// snapshot-before-recurse discipline in `deep_equals_recursive`).
+enum DisplaySnap {
+    /// A finished leaf rendering (`5.0`, `null`, an enum variant name, ...).
+    Leaf(String),
+    /// A string's contents — quoted when nested, bare at top level.
+    Str(String),
+    /// An array (or `uint8array`) — elements rendered as `[a, b, c]`.
+    Seq(Vec<Value>),
+    /// A map — entries rendered as `{k: v, ...}` (keys are always strings).
+    Entries(Vec<(String, Value)>),
+    /// A class instance — `ClassName { field: value, ... }`.
+    Instance(String, Vec<(String, Value)>),
+}
+
+/// Default human-readable rendering used by `string.from`'s `_` arm. Structural
+/// and total: every value type renders to *something* and nothing throws.
+fn to_string_default_recursive(vm: &BexVm, value: Value, nested: bool) -> String {
+    let ptr = match value.kind() {
+        ValueKind::Null => return "null".to_string(),
+        ValueKind::Int(i) => return i.to_string(),
+        ValueKind::Bool(b) => return b.to_string(),
+        ValueKind::OmittedArg => return String::new(),
+        ValueKind::Object(ptr) => ptr,
+    };
+
+    // Capture an owned snapshot, dropping the heap borrow / container lock
+    // before recursing.
+    let snap = match vm.get_object(ptr) {
+        Object::String(s) => DisplaySnap::Str(s.as_str().to_string()),
+        Object::Float(f) => DisplaySnap::Leaf(bex_vm_types::format_float(*f)),
+        Object::Bigint(b) => DisplaySnap::Leaf(b.to_string()),
+        Object::Array(values) => DisplaySnap::Seq(values.to_vec()),
+        Object::Uint8Array(bytes) => {
+            let rendered = bytes
+                .to_vec()
+                .iter()
+                .map(u8::to_string)
+                .collect::<Vec<_>>()
+                .join(", ");
+            DisplaySnap::Leaf(format!("[{rendered}]"))
+        }
+        Object::Map(map) => DisplaySnap::Entries(
+            map.to_index_map()
+                .into_iter()
+                .map(|(k, v)| (k.as_str().to_string(), v))
+                .collect(),
+        ),
+        Object::Instance(inst) => {
+            let field_values: Vec<Value> = inst.fields.iter().map(AtomicValueSlot::load).collect();
+            let (class_name, field_names) = match vm.get_object(inst.class) {
+                Object::Class(class) => (
+                    class.name.name().to_string(),
+                    class
+                        .fields
+                        .iter()
+                        .map(|f| f.name.clone())
+                        .collect::<Vec<_>>(),
+                ),
+                _ => (String::new(), Vec::new()),
+            };
+            let paired = field_values
+                .into_iter()
+                .enumerate()
+                .map(|(i, v)| {
+                    let name = field_names.get(i).cloned().unwrap_or_else(|| i.to_string());
+                    (name, v)
+                })
+                .collect();
+            DisplaySnap::Instance(class_name, paired)
+        }
+        Object::Variant(var) => {
+            let name = match vm.get_object(var.enm) {
+                Object::Enum(enm) => enm
+                    .variants
+                    .get(var.index)
+                    .map(|v| v.name.clone())
+                    .unwrap_or_default(),
+                _ => String::new(),
+            };
+            DisplaySnap::Leaf(name)
+        }
+        other => DisplaySnap::Leaf(other.to_string()),
+    };
+
+    match snap {
+        DisplaySnap::Leaf(s) => s,
+        DisplaySnap::Str(s) => {
+            if nested {
+                format!("{s:?}")
+            } else {
+                s
+            }
+        }
+        DisplaySnap::Seq(values) => {
+            let parts: Vec<String> = values
+                .iter()
+                .map(|v| to_string_default_recursive(vm, *v, true))
+                .collect();
+            format!("[{}]", parts.join(", "))
+        }
+        DisplaySnap::Entries(entries) => {
+            let parts: Vec<String> = entries
+                .iter()
+                .map(|(k, v)| format!("{k}: {}", to_string_default_recursive(vm, *v, true)))
+                .collect();
+            format!("{{{}}}", parts.join(", "))
+        }
+        DisplaySnap::Instance(class_name, paired) => {
+            if paired.is_empty() {
+                class_name
+            } else {
+                let parts: Vec<String> = paired
+                    .iter()
+                    .map(|(name, v)| {
+                        format!("{name}: {}", to_string_default_recursive(vm, *v, true))
+                    })
+                    .collect();
+                format!("{class_name} {{ {} }}", parts.join(", "))
+            }
+        }
+    }
 }
 
 fn deep_copy_value_recursive(
