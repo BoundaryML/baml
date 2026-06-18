@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildExecutionProfileProjection,
+  executionProfileColorKey,
+  executionProfileSearchFunctionKeys,
+  filterExecutionProfileProjection,
   runToDisplayRun,
-  runToFlamegraphRows,
   runToTraceRows,
 } from './run-store-projections';
 import type { Run } from './worker-protocol';
@@ -196,7 +199,7 @@ describe('run-store-projections', () => {
     ]);
   });
 
-  it('projects flamegraph rows from RunStore call edges and timestamps', () => {
+  it('projects profile blocks from RunStore call edges and timestamps', () => {
     const run = runFixture({
       rootCallNodeId: 'root',
       calls: [
@@ -230,9 +233,10 @@ describe('run-store-projections', () => {
       ],
     });
 
-    expect(runToFlamegraphRows(run)).toEqual([
+    expect(buildExecutionProfileProjection(run).blocks).toEqual([
       expect.objectContaining({
         id: 'root',
+        threadId: 'thread',
         depth: 0,
         durationMs: 200,
         selfMs: 90,
@@ -241,6 +245,7 @@ describe('run-store-projections', () => {
       }),
       expect.objectContaining({
         id: 'child-a',
+        threadId: 'thread',
         depth: 1,
         functionName: 'user.ChildA',
         durationMs: 50,
@@ -249,6 +254,7 @@ describe('run-store-projections', () => {
       }),
       expect.objectContaining({
         id: 'child-b',
+        threadId: 'thread',
         depth: 1,
         functionName: 'user.ChildB',
         durationMs: 60,
@@ -256,6 +262,225 @@ describe('run-store-projections', () => {
         spanWidthPct: 30,
       }),
     ]);
+  });
+
+  it('projects spawned thread roots under their parent call stack', () => {
+    const run = runFixture({
+      rootCallNodeId: 'root',
+      threads: [
+        threadFixture({
+          id: 'main-thread',
+          callNodeIds: ['root'],
+        }),
+        threadFixture({
+          id: 'branch-thread',
+          parentThreadId: 'main-thread',
+          parentCallNodeId: 'root',
+          callNodeIds: ['branch', 'leaf'],
+        }),
+      ],
+      calls: [
+        callFixture({
+          id: 'root',
+          threadId: 'main-thread',
+          functionName: 'user.FlameGraphFanoutDemo',
+          startedAtNs: '100000000',
+          endedAtNs: '500000000',
+        }),
+        callFixture({
+          id: 'branch',
+          threadId: 'branch-thread',
+          parentId: null,
+          functionId: 2,
+          functionName: 'user.fg_branch',
+          startedAtNs: '150000000',
+          endedAtNs: '450000000',
+        }),
+        callFixture({
+          id: 'leaf',
+          threadId: 'branch-thread',
+          parentId: 'branch',
+          functionId: 3,
+          functionName: 'user.fg_leaf_sleep',
+          startedAtNs: '200000000',
+          endedAtNs: '300000000',
+        }),
+      ],
+    });
+
+    expect(runToTraceRows(run)).toEqual([
+      expect.objectContaining({ id: 'root', depth: 0 }),
+      expect.objectContaining({ id: 'branch', depth: 1 }),
+      expect.objectContaining({ id: 'leaf', depth: 2 }),
+    ]);
+    expect(buildExecutionProfileProjection(run).blocks).toEqual([
+      expect.objectContaining({
+        id: 'root',
+        threadId: 'main-thread',
+        depth: 0,
+        selfMs: 100,
+      }),
+      expect.objectContaining({
+        id: 'branch',
+        threadId: 'branch-thread',
+        depth: 1,
+        selfMs: 200,
+      }),
+      expect.objectContaining({
+        id: 'leaf',
+        threadId: 'branch-thread',
+        depth: 2,
+        selfMs: 100,
+      }),
+    ]);
+  });
+
+  it('aggregates execution profile rows by function', () => {
+    const projection = buildExecutionProfileProjection(
+      runFixture({
+        rootCallNodeId: 'root',
+        calls: [
+          callFixture({
+            id: 'root',
+            functionName: 'user.Main',
+            startedAtNs: '0',
+            endedAtNs: '400000000',
+          }),
+          callFixture({
+            id: 'work-a',
+            parentId: 'root',
+            functionName: 'user.Work',
+            startedAtNs: '50000000',
+            endedAtNs: '150000000',
+          }),
+          callFixture({
+            id: 'work-b',
+            parentId: 'root',
+            functionName: 'user.Work',
+            startedAtNs: '200000000',
+            endedAtNs: '300000000',
+          }),
+        ],
+      }),
+    );
+
+    expect(projection.functionRows).toEqual([
+      expect.objectContaining({
+        functionName: 'user.Main',
+        callCount: 1,
+        selfMs: 200,
+        totalMs: 400,
+      }),
+      expect.objectContaining({
+        functionName: 'user.Work',
+        callCount: 2,
+        selfMs: 200,
+        totalMs: 200,
+      }),
+    ]);
+  });
+
+  it('finds search matches without filtering profile blocks', () => {
+    const projection = buildExecutionProfileProjection(
+      runFixture({
+        calls: [
+          callFixture({
+            id: 'left',
+            functionName: 'user.LeftBranch',
+            startedAtNs: '0',
+            endedAtNs: '100000000',
+          }),
+          callFixture({
+            id: 'right',
+            functionName: 'user.RightBranch',
+            startedAtNs: '100000000',
+            endedAtNs: '200000000',
+          }),
+        ],
+      }),
+    );
+
+    const visible = filterExecutionProfileProjection(projection, {
+      includeSystemCalls: true,
+    });
+
+    expect(visible.blocks.map((block) => block.id)).toEqual(['left', 'right']);
+    expect(executionProfileSearchFunctionKeys(visible, 'left')).toEqual([
+      'user:user.LeftBranch',
+    ]);
+  });
+
+  it('hides system frames and reparents visible descendants', () => {
+    const projection = buildExecutionProfileProjection(
+      runFixture({
+        rootCallNodeId: 'root',
+        calls: [
+          callFixture({
+            id: 'root',
+            functionName: 'user.Main',
+            startedAtNs: '0',
+            endedAtNs: '400000000',
+          }),
+          callFixture({
+            id: 'system',
+            parentId: 'root',
+            functionName: 'baml.sys.sleep',
+            functionOrigin: 'builtin',
+            startedAtNs: '50000000',
+            endedAtNs: '350000000',
+          }),
+          callFixture({
+            id: 'leaf',
+            parentId: 'system',
+            functionName: 'user.Leaf',
+            startedAtNs: '100000000',
+            endedAtNs: '200000000',
+          }),
+        ],
+      }),
+    );
+
+    const withSystem = filterExecutionProfileProjection(projection, {
+      includeSystemCalls: true,
+    });
+    const withoutSystem = filterExecutionProfileProjection(projection, {
+      includeSystemCalls: false,
+    });
+
+    expect(withSystem.blocks.find((block) => block.id === 'leaf')).toEqual(
+      expect.objectContaining({ parentId: 'system', depth: 2 }),
+    );
+    expect(withoutSystem.blocks.map((block) => block.id)).toEqual([
+      'root',
+      'leaf',
+    ]);
+    expect(withoutSystem.blocks.find((block) => block.id === 'leaf')).toEqual(
+      expect.objectContaining({ parentId: 'root', depth: 1 }),
+    );
+    expect(withoutSystem.blocks.find((block) => block.id === 'root')).toEqual(
+      expect.objectContaining({ selfMs: 300 }),
+    );
+  });
+
+  it('exposes stable execution profile color keys', () => {
+    const projection = buildExecutionProfileProjection(
+      runFixture({
+        calls: [
+          callFixture({
+            id: 'call',
+            threadId: 'thread-a',
+            functionName: 'user.Main',
+          }),
+        ],
+      }),
+    );
+    const block = projection.blocks[0];
+
+    expect(executionProfileColorKey(block, 'function')).toBe(
+      block.functionKey,
+    );
+    expect(executionProfileColorKey(block, 'origin')).toBe('user');
+    expect(executionProfileColorKey(block, 'thread')).toBe('thread-a');
   });
 });
 
@@ -312,6 +537,22 @@ function payloadFixture(
       policyId: null,
     },
     body: null,
+    ...overrides,
+  };
+}
+
+function threadFixture(
+  overrides: Partial<Run['threads'][number]>,
+): Run['threads'][number] {
+  return {
+    id: 'thread',
+    parentThreadId: null,
+    parentCallNodeId: null,
+    name: null,
+    startedAtNs: '0',
+    endedAtNs: '0',
+    status: 'completed',
+    callNodeIds: [],
     ...overrides,
   };
 }

@@ -435,8 +435,7 @@ impl ConsumerState {
 
 /// The process UUID, minted once (uuid v4).
 fn process_id() -> [u8; 16] {
-    static ID: OnceLock<[u8; 16]> = OnceLock::new();
-    *ID.get_or_init(|| *uuid::Uuid::new_v4().as_bytes())
+    ProcessEuid::current().0
 }
 
 /// Consumer-side diagnostics. The consumer must never panic (it would die
@@ -478,6 +477,11 @@ mod tests {
 
     fn leak<T>(value: T) -> &'static T {
         Box::leak(Box::new(value))
+    }
+
+    #[test]
+    fn consumer_process_id_matches_runtime_process_euid() {
+        assert_eq!(process_id(), ProcessEuid::current().0);
     }
 
     /// The PR3 gate: a fake producer pushes a known sequence of raw records

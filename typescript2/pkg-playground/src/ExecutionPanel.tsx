@@ -65,7 +65,6 @@ import { createRunStoreClient } from './run-store-client';
 import type { ExecutionStoreSnapshot } from './execution-store';
 import {
   decodeRunResultValue,
-  runToFlamegraphRows,
   runToTraceRows,
   runToDisplayRun,
   type RunStoreDisplayRun,
@@ -74,6 +73,7 @@ import {
   selectDefaultFunctionName,
   selectMainFunctionName,
 } from './default-function-selection';
+import { ExecutionProfileView } from './ExecutionProfileView';
 
 registerBuiltinResultRenderers();
 
@@ -514,57 +514,6 @@ const TraceTimelineView: FC<{ run: Run | undefined }> = ({ run }) => {
             </div>
             <div className="text-[10px] text-vsc-text-faint">
               {formatTraceMs(row.durationMs)}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-const FlamegraphView: FC<{ run: Run | undefined }> = ({ run }) => {
-  const rows = runToFlamegraphRows(run);
-  if (rows.length === 0) {
-    return (
-      <div className="flex-1 flex items-center justify-center text-vsc-text-faint text-xs bg-vsc-bg">
-        No profile yet
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex-1 overflow-auto bg-vsc-bg font-vsc-mono text-xs">
-      <div className="min-w-[620px] p-2">
-        {rows.map((row) => (
-          <div
-            key={row.id}
-            className="grid grid-cols-[minmax(260px,1fr)_72px_72px] gap-2 items-center border-b border-vsc-border-subtle py-1"
-          >
-            <div className="relative h-5 rounded bg-vsc-surface overflow-hidden">
-              <div
-                className={cn(
-                  'absolute top-0 bottom-0 rounded opacity-70',
-                  traceStatusClass(row.status),
-                )}
-                style={{
-                  left: `${row.spanLeftPct}%`,
-                  width: `${row.spanWidthPct}%`,
-                }}
-              />
-              <div
-                className="absolute inset-0 flex items-center min-w-0 px-1.5"
-                style={{ paddingLeft: 6 + Math.min(row.depth, 14) * 12 }}
-              >
-                <span className="truncate text-vsc-text">
-                  {row.functionName}
-                </span>
-              </div>
-            </div>
-            <div className="text-[10px] text-vsc-text-faint">
-              {formatTraceMs(row.durationMs)}
-            </div>
-            <div className="text-[10px] text-vsc-text-faint">
-              {formatTraceMs(row.selfMs)}
             </div>
           </div>
         ))}
@@ -2790,7 +2739,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                   className="flex-1 min-h-0 mt-0 flex flex-col"
                   style={{ minHeight: 300 }}
                 >
-                  <FlamegraphView run={latestGraphRunSnapshot} />
+                  {activeTab === 'flame' && (
+                    <ExecutionProfileView run={latestGraphRunSnapshot} />
+                  )}
                 </TabsContent>
 
                 {/* Prompt preview */}

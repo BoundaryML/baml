@@ -45,8 +45,11 @@ pub mod playground_session;
 pub mod playground_ws;
 
 use std::{
+    collections::BTreeMap,
+    fs,
     path::{Path, PathBuf},
     sync::Arc,
+    time::{Duration, UNIX_EPOCH},
 };
 
 use anyhow::Context as _;
@@ -219,10 +222,13 @@ fn run_server_inner(
 
     let has_explicit_workspace_roots = !workspace_roots.is_empty();
     let explicit_projects = if has_explicit_workspace_roots {
-        bex.initialize_workspace_roots(workspace_roots)?
+        bex.initialize_workspace_roots(workspace_roots.clone())?
     } else {
         Vec::new()
     };
+    if playground_via_browser && has_explicit_workspace_roots {
+        spawn_standalone_workspace_poller(bex.clone(), workspace_roots.clone())?;
+    }
 
     if matches!(playground_open_target, PlaygroundOpenTarget::Browser) && playground_port != 0 {
         if let Some(project) = explicit_projects.first() {
@@ -385,6 +391,102 @@ fn workspace_cwd(root: &Path) -> PathBuf {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct WorkspaceSignature {
+    files: BTreeMap<PathBuf, FileSignature>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct FileSignature {
+    len: u64,
+    modified_ns: Option<u128>,
+}
+
+fn spawn_standalone_workspace_poller(
+    bex: Arc<dyn bex_project::BexLsp>,
+    workspace_roots: Vec<PathBuf>,
+) -> anyhow::Result<()> {
+    std::thread::Builder::new()
+        .name("playground-workspace-poller".to_string())
+        .spawn(move || {
+            let mut last_signature = workspace_signature(&workspace_roots);
+            loop {
+                std::thread::sleep(Duration::from_secs(1));
+                let next_signature = workspace_signature(&workspace_roots);
+                if next_signature == last_signature {
+                    continue;
+                }
+                last_signature = next_signature;
+                tracing::info!("Detected standalone workspace file change; refreshing playground");
+                if let Err(err) = bex.initialize_workspace_roots(workspace_roots.clone()) {
+                    tracing::warn!("Failed to refresh standalone playground workspace: {err}");
+                }
+            }
+        })?;
+    Ok(())
+}
+
+fn workspace_signature(workspace_roots: &[PathBuf]) -> WorkspaceSignature {
+    let mut files = BTreeMap::new();
+    for root in workspace_roots {
+        collect_workspace_signature(root, &mut files);
+    }
+    WorkspaceSignature { files }
+}
+
+fn collect_workspace_signature(path: &Path, files: &mut BTreeMap<PathBuf, FileSignature>) {
+    let Ok(metadata) = fs::metadata(path) else {
+        return;
+    };
+    if metadata.is_file() {
+        if watches_standalone_workspace_file(path) {
+            files.insert(path.to_path_buf(), file_signature(&metadata));
+        }
+        return;
+    }
+    if !metadata.is_dir() || should_skip_poll_dir(path) {
+        return;
+    }
+    let Ok(entries) = fs::read_dir(path) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        collect_workspace_signature(&entry.path(), files);
+    }
+}
+
+fn watches_standalone_workspace_file(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name == "baml.toml")
+        || path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .is_some_and(|extension| extension == "baml")
+}
+
+fn should_skip_poll_dir(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| {
+            matches!(
+                name,
+                ".baml" | ".git" | ".next" | ".turbo" | "dist" | "node_modules" | "target"
+            )
+        })
+}
+
+fn file_signature(metadata: &fs::Metadata) -> FileSignature {
+    FileSignature {
+        len: metadata.len(),
+        modified_ns: metadata
+            .modified()
+            .ok()
+            .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
+            .map(|duration| duration.as_nanos()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -418,5 +520,19 @@ mod tests {
 
         let _ = std::fs::remove_file(&file);
         let _ = std::fs::remove_dir(&dir);
+    }
+
+    #[test]
+    fn standalone_workspace_poller_watches_sources_and_skips_generated_dirs() {
+        assert!(watches_standalone_workspace_file(Path::new("baml.toml")));
+        assert!(watches_standalone_workspace_file(Path::new(
+            "baml_src/main.baml"
+        )));
+        assert!(!watches_standalone_workspace_file(Path::new(
+            ".baml/profiles/run.bamlprof"
+        )));
+        assert!(should_skip_poll_dir(Path::new(".baml")));
+        assert!(should_skip_poll_dir(Path::new("target")));
+        assert!(!should_skip_poll_dir(Path::new("baml_src")));
     }
 }
