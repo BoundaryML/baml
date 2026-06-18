@@ -1759,9 +1759,21 @@ impl IoSysOpsBuilder {
             })
         };
         self.inner.baml_fs_mkdir = {
-            let t = instance;
+            let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
                 t.__glue_baml_fs_mkdir(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_fs_remove_dir = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_remove_dir(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_fs_remove_dir_all = {
+            let t = instance;
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_remove_dir_all(heap, permit, args, ctx, call_id)
             })
         };
         self

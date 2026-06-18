@@ -222,6 +222,24 @@ async fn fs_remove_dir_all_idempotent_on_missing() {
     );
 }
 
+/// `remove_dir_all` should also remove regular files, matching Bun's `rm -rf`.
+#[tokio::test]
+async fn fs_remove_dir_all_removes_file_target() {
+    let (_tmp, root) = tmp(indexmap! { "single.txt" => "data" });
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> bool {{
+                baml.fs.remove_dir_all("{root}/single.txt");
+                baml.fs.exists("{root}/single.txt")
+            }}
+        "#
+    ));
+
+    assert_eq!(output.result.unwrap(), BexExternalValue::Bool(false));
+    assert!(!std::path::Path::new(&format!("{root}/single.txt")).exists());
+}
+
 #[tokio::test]
 async fn fs_remove_dir_nonexistent_errors() {
     // remove_dir (non-recursive) is NOT forced: a missing path must error.

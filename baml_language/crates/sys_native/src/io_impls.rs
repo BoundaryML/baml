@@ -795,6 +795,10 @@ impl io::IoNamespaceFs for NativeSysOps {
         })
     }
 
+    /// Removes a path recursively with Bun parity (`rm -rf` semantics).
+    ///
+    /// Missing paths are treated as success, directories are removed
+    /// recursively, and non-directory targets are removed as files.
     fn remove_dir_all(
         &self,
         _heap: &Arc<BexHeap>,
@@ -803,14 +807,26 @@ impl io::IoNamespaceFs for NativeSysOps {
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
         SysOpOutput::async_op(async move {
-            // Mirror Bun's `rm(path, { recursive: true, force: true })`: deleting
-            // a missing path is a no-op rather than an error.
-            match tokio::fs::remove_dir_all(&path).await {
-                Ok(()) => Ok(()),
+            // Mirror Bun's `rm(path, { recursive: true, force: true })`.
+            match tokio::fs::symlink_metadata(&path).await {
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
                 Err(e) => Err(VmRustFnError::from(VmBamlError::Io {
-                    message: format!("Failed to recursively remove directory '{path}': {e}"),
+                    message: format!("Failed to stat '{path}': {e}"),
                 })),
+                Ok(meta) if meta.file_type().is_dir() => {
+                    tokio::fs::remove_dir_all(&path).await.map_err(|e| {
+                        VmRustFnError::from(VmBamlError::Io {
+                            message: format!(
+                                "Failed to recursively remove directory '{path}': {e}"
+                            ),
+                        })
+                    })
+                }
+                Ok(_) => tokio::fs::remove_file(&path).await.map_err(|e| {
+                    VmRustFnError::from(VmBamlError::Io {
+                        message: format!("Failed to remove '{path}': {e}"),
+                    })
+                }),
             }
         })
     }
