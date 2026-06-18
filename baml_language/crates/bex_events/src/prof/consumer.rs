@@ -30,8 +30,9 @@
 
 use std::{
     collections::HashMap,
-    io,
-    path::PathBuf,
+    fs::{self, OpenOptions},
+    io::{self, Write},
+    path::{Path, PathBuf},
     sync::{OnceLock, mpsc},
     time::{Duration, Instant},
 };
@@ -211,6 +212,10 @@ pub(crate) fn consumer_main(control: &mpsc::Receiver<ControlMsg>, env: &Consumer
 
 struct ConsumerState {
     dir: PathBuf,
+    /// False only when `.baml` artifact hygiene setup failed. In that case we
+    /// keep draining safe by dropping profile records instead of creating
+    /// unignored files in a user's repo.
+    profile_writes_enabled: bool,
     /// Tick→ns conversion for every disk timestamp (events + heartbeats).
     conv: TickConverter,
     /// `None` = opening or writing failed permanently (already reported).
@@ -228,8 +233,19 @@ struct ConsumerState {
 
 impl ConsumerState {
     fn new(dir: PathBuf, conv: TickConverter) -> ConsumerState {
+        let profile_writes_enabled = match ensure_profile_dir_ignored(&dir) {
+            Ok(_) => true,
+            Err(err) => {
+                report(format_args!(
+                    "cannot prepare .baml/.gitignore for profile dir {}; disabling .bamlprof persistence: {err}",
+                    dir.display()
+                ));
+                false
+            }
+        };
         ConsumerState {
             dir,
+            profile_writes_enabled,
             conv,
             writers: HashMap::new(),
             closed_engines: std::collections::HashSet::new(),
@@ -317,6 +333,9 @@ impl ConsumerState {
     }
 
     fn writer_for(&mut self, engine_id: u64) -> Option<&mut ProfileWriter> {
+        if !self.profile_writes_enabled {
+            return None;
+        }
         self.writers
             .entry(engine_id)
             .or_insert_with(|| {
@@ -433,6 +452,62 @@ impl ConsumerState {
     }
 }
 
+fn ensure_profile_dir_ignored(profile_dir: &Path) -> io::Result<bool> {
+    let Some(baml_dir) = nearest_baml_dir(profile_dir) else {
+        return Ok(false);
+    };
+
+    fs::create_dir_all(&baml_dir)?;
+    let ignore_path = baml_dir.join(".gitignore");
+    match OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&ignore_path)
+    {
+        Ok(mut file) => {
+            file.write_all(b"*\n")?;
+            Ok(true)
+        }
+        Err(err) if err.kind() == io::ErrorKind::AlreadyExists => {
+            let contents = fs::read(&ignore_path)?;
+            if has_standalone_star_line(&contents) {
+                return Ok(true);
+            }
+
+            let mut file = OpenOptions::new().append(true).open(&ignore_path)?;
+            if contents.is_empty() || contents.ends_with(b"\n") {
+                file.write_all(b"*\n")?;
+            } else {
+                file.write_all(b"\n*\n")?;
+            }
+            Ok(true)
+        }
+        Err(err) => Err(err),
+    }
+}
+
+fn nearest_baml_dir(path: &Path) -> Option<PathBuf> {
+    path.ancestors()
+        .find(|ancestor| ancestor.file_name().is_some_and(|name| name == ".baml"))
+        .map(Path::to_path_buf)
+}
+
+fn has_standalone_star_line(contents: &[u8]) -> bool {
+    contents
+        .split(|byte| *byte == b'\n')
+        .any(|line| trim_ascii_space_and_cr(line) == b"*")
+}
+
+fn trim_ascii_space_and_cr(mut bytes: &[u8]) -> &[u8] {
+    while matches!(bytes.first(), Some(b' ' | b'\t' | b'\r')) {
+        bytes = &bytes[1..];
+    }
+    while matches!(bytes.last(), Some(b' ' | b'\t' | b'\r')) {
+        bytes = &bytes[..bytes.len() - 1];
+    }
+    bytes
+}
+
 /// The process UUID, minted once (uuid v4).
 fn process_id() -> [u8; 16] {
     ProcessEuid::current().0
@@ -482,6 +557,105 @@ mod tests {
     #[test]
     fn consumer_process_id_matches_runtime_process_euid() {
         assert_eq!(process_id(), ProcessEuid::current().0);
+    }
+
+    #[test]
+    fn profile_dir_ignore_marker_created_for_baml_artifact_dir() {
+        let root = temp_dir("ignore-create");
+        let profile_dir = root.join("project/.baml/profiles");
+
+        assert!(ensure_profile_dir_ignored(&profile_dir).unwrap());
+        assert_eq!(
+            std::fs::read(root.join("project/.baml/.gitignore")).unwrap(),
+            b"*\n"
+        );
+        assert!(
+            !profile_dir.exists(),
+            "profile dir creation remains ProfileWriter's responsibility"
+        );
+
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn profile_dir_ignore_marker_appends_without_deleting_existing_rules() {
+        let root = temp_dir("ignore-append");
+        let baml_dir = root.join("project/.baml");
+        let profile_dir = baml_dir.join("profiles");
+        std::fs::create_dir_all(&baml_dir).unwrap();
+        std::fs::write(baml_dir.join(".gitignore"), b"# keep this\n!.keep\n").unwrap();
+
+        assert!(ensure_profile_dir_ignored(&profile_dir).unwrap());
+        assert_eq!(
+            std::fs::read(baml_dir.join(".gitignore")).unwrap(),
+            b"# keep this\n!.keep\n*\n"
+        );
+
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn profile_dir_ignore_marker_does_not_duplicate_standalone_star() {
+        let root = temp_dir("ignore-existing");
+        let baml_dir = root.join("project/.baml");
+        let profile_dir = baml_dir.join("profiles");
+        let original = b"# keep this\n  * \r\n!.keep\n";
+        std::fs::create_dir_all(&baml_dir).unwrap();
+        std::fs::write(baml_dir.join(".gitignore"), original).unwrap();
+
+        assert!(ensure_profile_dir_ignored(&profile_dir).unwrap());
+        assert_eq!(
+            std::fs::read(baml_dir.join(".gitignore")).unwrap(),
+            original
+        );
+
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn profile_dir_ignore_marker_ignores_custom_dirs_outside_baml() {
+        let root = temp_dir("ignore-custom");
+        let profile_dir = root.join("profiles");
+
+        assert!(!ensure_profile_dir_ignored(&profile_dir).unwrap());
+        assert!(
+            !root.exists(),
+            "custom dirs outside .baml remain user-managed"
+        );
+
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn consumer_state_prepares_baml_ignore_marker_before_writer_creation() {
+        let root = temp_dir("state-ignore");
+        let profile_dir = root.join("project/.baml/profiles");
+
+        let state = ConsumerState::new(profile_dir.clone(), TickConverter::identity());
+        assert!(state.profile_writes_enabled);
+        assert_eq!(
+            std::fs::read(root.join("project/.baml/.gitignore")).unwrap(),
+            b"*\n"
+        );
+        assert!(
+            !profile_dir.exists(),
+            "ConsumerState setup must not create profile files or the profiles dir"
+        );
+
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn consumer_state_disables_profile_writes_when_ignore_marker_fails() {
+        let root = temp_dir("state-ignore-fail");
+        let baml_dir = root.join("project/.baml");
+        let profile_dir = baml_dir.join("profiles");
+        std::fs::create_dir_all(baml_dir.join(".gitignore")).unwrap();
+
+        let state = ConsumerState::new(profile_dir, TickConverter::identity());
+        assert!(!state.profile_writes_enabled);
+
+        std::fs::remove_dir_all(&root).ok();
     }
 
     /// The PR3 gate: a fake producer pushes a known sequence of raw records
