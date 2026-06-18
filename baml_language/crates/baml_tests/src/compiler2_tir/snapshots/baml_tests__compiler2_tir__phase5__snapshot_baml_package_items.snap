@@ -13,6 +13,7 @@ namespace baml:
   class Null { methods: [to_json, from_json] }
   type Sortable
   class String { methods: [from, to_json, length, char_count, byte_length, to_lower_case, to_upper_case, trim, trim_start, trim_end, includes, starts_with, ends_with, split, lines, substring, replace, index_of, char_at, repeat, matches, replace_all, is_numeric, is_alphabetic, is_alphanumeric, is_uppercase, is_lowercase, is_whitespace, is_control, is_graphic, is_ascii, is_ascii_numeric, is_ascii_alphabetic, is_ascii_alphanumeric, is_ascii_uppercase, is_ascii_lowercase, is_ascii_whitespace, is_ascii_control, is_ascii_graphic, is_ascii_hex, to_utf8, from_utf8, from_code_points, from_json] }
+  class TaggedString { methods: [to_json, from_json] }
   type ToString
   class TypeValue { methods: [_to_string_impl, implements, implemented_by, implementors, to_json, from_json, to_string] }
   class Uint8Array { methods: [to_json, length, at, push, pop, concat, includes, reverse, slice, zeroes, from_array, to_array, from_hex, to_hex, from_base64, to_base64, _to_string_impl, sort, from_json, to_string] }
@@ -174,27 +175,38 @@ namespace baml.llm:
   class BedrockOptions { methods: [to_json, from_json] }
   class Client { methods: [to_primitive_client, get_constructor, build_attempt, build_attempt_with_state, build_plan, build_plan_with_state, execute_stream, execute_once_stream, __make_stream, execute_oneshot, execute_once_oneshot, to_json, from_json] }
   enum ClientType
+  class Context { methods: [output_format_with, to_json, from_json] }
+  class ContextClient { methods: [to_json, from_json] }
   class ExecutionContext { methods: [to_json, from_json] }
   class MediaUrlHandler { methods: [to_json, from_json] }
   class OrchestrationStep { methods: [to_json, from_json] }
+  class OutputFormat { methods: [to_json, from_json] }
   class PlannerState { methods: [rr_local_offset, rr_pick_index, to_json, from_json] }
-  class PrimitiveClient { methods: [render_prompt, specialize_prompt, build_request, build_request_stream, new_stream_accumulator, validate_finish_reason, parse, to_json, from_json] }
+  class PrimitiveClient { methods: [render_prompt, specialize_prompt, render_specialized_prompt, build_request, build_request_stream, new_stream_accumulator, validate_finish_reason, parse, to_json, from_json] }
   class PrimitiveClientOptions { methods: [to_json, from_json] }
   class PromptAst { methods: [to_json, from_json] }
   class RetryPolicy { methods: [to_json, from_json] }
+  class Role { methods: [to_json, from_json] }
   class Stream<TStream, TFinal> { methods: [next, final, to_json, from_json] }
   class StreamAccumulator { methods: [add_events, content, is_done, model, finish_reason, input_tokens, output_tokens, to_json, from_json] }
   class StreamCache<TStream, TFinal> { methods: [new, to_json, from_json] }
   class VertexAiOptions { methods: [to_json, from_json] }
   function __sap_parse_final<TStream, TFinal>
   function __sap_parse_partial<TStream, TFinal>
+  function assemble_prompt_ast
+  function build_output_format
+  function build_prompt_context
   function build_request
   function build_request_stream
   function call_llm_function<T>
   function from_shorthand
   function get_jinja_template
   function get_return_type
+  function make_role
   function parse<TStream, TFinal>
+  function prompt
+  function prompt_template_for
+  function render_output_format
   function render_prompt
   function stream_llm_function<TStream, TFinal>
 namespace baml.math:

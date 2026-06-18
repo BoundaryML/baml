@@ -322,7 +322,7 @@ fn lower_function(
         });
 
     let (body, declarative_meta) = if let Some(llm) = func.llm_body() {
-        let llm_body_def = lower_llm_body(&llm);
+        let mut llm_body_def = lower_llm_body(&llm);
         reject_reserved_llm_client_params(&mut params, name.as_str(), diags);
         let client_name = llm_body_def.client.as_ref().map(|n| n.as_str().to_string());
         if let Some(client_name) = client_name.as_deref() {
@@ -344,14 +344,73 @@ fn lower_function(
             .as_ref()
             .map(|rt| vec![rt.expr.clone()])
             .unwrap_or_default();
-        let (expr_body, source_map) = synthesize_llm_builtin_call(
-            "call_llm_function",
-            name.as_str(),
-            &param_names,
-            client_arg_name,
-            call_type_args,
-            llm_body_def.span,
-        );
+        // New-mode (BEP-049 M5f): a backtick prompt compiles to a `prompt`…``
+        // closure passed as the 4th arg to `call_llm_function`; the orchestrator
+        // invokes it per attempt. Legacy `#"..."#` Jinja prompts keep the 3-arg
+        // path (the closure defaults to `null`, so the Jinja render runs).
+        let prompt_backtick = llm.prompt_field().and_then(|pf| pf.backtick_string());
+        let (expr_body, source_map) = if let Some(backtick) = &prompt_backtick {
+            let (body, sm, mut closure_diags, mut closure_env_refs) =
+                lower_expr_body::synthesize_llm_call_with_prompt(
+                    "call_llm_function",
+                    name.as_str(),
+                    &param_names,
+                    client_arg_name,
+                    call_type_args,
+                    backtick,
+                    llm_body_def.span,
+                );
+            diags.append(&mut closure_diags);
+            env_var_refs.append(&mut closure_env_refs);
+            // BEP-049 M5e: pre-build the streaming companion's body from the
+            // same backtick now, while the CST is in hand, and stash it for
+            // PPIR (which materializes the `$stream` companion but no longer has
+            // the CST). The closure captures this function's params, so it's a
+            // separate arena from the oneshot body above. Its prompt diagnostics
+            // / `env.X` refs duplicate the oneshot body's — drop them.
+            let (stream_body, stream_sm, _diags, _env_refs) =
+                lower_expr_body::synthesize_llm_call_with_prompt(
+                    "stream_llm_function",
+                    name.as_str(),
+                    &param_names,
+                    client_arg_name,
+                    Vec::new(),
+                    backtick,
+                    llm_body_def.span,
+                );
+            llm_body_def.stream_body = Some((stream_body, stream_sm));
+            // BEP-049 M5: pre-build the render_prompt / build_request /
+            // build_request_stream companion bodies from the same backtick, each
+            // carrying the prompt closure, so the playground preview/cURL render
+            // through the closure exactly like execution. Built here while the CST
+            // is in hand; read back by `make_llm_companion`. Their prompt diags /
+            // `env.X` refs duplicate the oneshot body's — drop them.
+            for target in ["render_prompt", "build_request", "build_request_stream"] {
+                let (c_body, c_sm, _diags, _env_refs) =
+                    lower_expr_body::synthesize_llm_call_with_prompt(
+                        target,
+                        name.as_str(),
+                        &param_names,
+                        client_arg_name,
+                        Vec::new(),
+                        backtick,
+                        llm_body_def.span,
+                    );
+                llm_body_def
+                    .companion_bodies
+                    .push((target.to_string(), (c_body, c_sm)));
+            }
+            (body, sm)
+        } else {
+            synthesize_llm_builtin_call(
+                "call_llm_function",
+                name.as_str(),
+                &param_names,
+                client_arg_name,
+                call_type_args,
+                llm_body_def.span,
+            )
+        };
         (
             Some(FunctionBodyDef::Expr(expr_body, source_map)),
             Some(DeclarativeMeta::Llm(llm_body_def)),
@@ -372,6 +431,7 @@ fn lower_function(
 
     let attributes = lower_attributes_from_node(node);
     let docstring = crate::docstring::extract_docstring(node);
+    let is_tagged_template_tag = crate::docstring::has_baml_marker(node, "tagged_string");
 
     Some(FunctionDef {
         name,
@@ -386,6 +446,7 @@ fn lower_function(
         origin: crate::ast::FunctionOrigin::UserDefined,
         attributes,
         docstring,
+        is_tagged_template_tag,
         span: node.text_range(),
         name_span,
     })
@@ -665,6 +726,9 @@ fn lower_llm_body(llm_body: &ast::LlmFunctionBody) -> LlmBodyDef {
     LlmBodyDef {
         client,
         prompt,
+        // Filled in by the LLM-function branch once param names are known.
+        stream_body: None,
+        companion_bodies: Vec::new(),
         span,
     }
 }
@@ -1121,9 +1185,9 @@ fn lower_class(
         name_span: name_token.text_range(),
     };
 
-    // Auto-derive `to_json` / `from_json` on every user class. Skipped if the
-    // user already defined either method.
-    crate::auto_derive_json::maybe_synthesize_json_methods(&mut class_def);
+    // Auto-derive `to_json` / `from_json` / `to_string` on every user class.
+    // Each is skipped if the user already defined that method.
+    crate::auto_derive_json::maybe_synthesize_derived_methods(&mut class_def);
 
     Some(class_def)
 }
@@ -1955,6 +2019,7 @@ fn synthesize_init_test_function(
         origin: crate::ast::FunctionOrigin::Internal,
         attributes: vec![],
         docstring: None,
+        is_tagged_template_tag: false,
         span,
         name_span: span,
     }
@@ -1997,6 +2062,7 @@ fn synthesize_register_call(
                 origin: crate::ast::FunctionOrigin::Internal,
                 attributes: vec![],
                 docstring: None,
+                is_tagged_template_tag: false,
                 span,
                 name_span: span,
             };
@@ -2082,6 +2148,7 @@ fn synthesize_register_call(
                 origin: crate::ast::FunctionOrigin::Internal,
                 attributes: vec![],
                 docstring: None,
+                is_tagged_template_tag: false,
                 span,
                 name_span: span,
             };
@@ -2795,6 +2862,7 @@ fn synthesize_client_new_companion(
         origin: crate::ast::FunctionOrigin::Internal,
         attributes: vec![],
         docstring: None,
+        is_tagged_template_tag: false,
         span,
         name_span: name_token.text_range(),
     }

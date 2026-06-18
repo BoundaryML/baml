@@ -199,6 +199,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             name,
             range,
             descendants: id.next()..id.next(), // empty initially; filled on pop
+            is_template_body: false,
         });
         self.scope_bindings.push(ScopeBindings::new());
         self.scope_stack.push(id);
@@ -561,6 +562,28 @@ impl<'db> SemanticIndexBuilder<'db> {
                 self.walk_expr(*lhs, body, source_map, true);
                 self.walk_expr(*rhs, body, source_map, true);
             }
+            ast::Expr::Template { tag, .. } => match tag {
+                // Tagged (`Custom`): the tag is an ordinary value reference in
+                // the ENCLOSING scope, and the template body is its own lambda
+                // scope so references to enclosing locals inside `${...}` are
+                // computed as captures (BEP-049 §10 — MIR hand-rolls the body
+                // closure off these captures).
+                ast::TemplateTag::Custom {
+                    tag,
+                    body: flatten_body,
+                } => {
+                    self.walk_expr(*tag, body, source_map, true);
+                    self.walk_template_lambda_body(expr_id, *flatten_body, body, source_map);
+                }
+                // Untagged (`Default`): no closure. The template is realized by
+                // the desugared `elaborated` concat in the ENCLOSING scope, so
+                // we walk that directly — it contains the same `${…}` exprs and
+                // any `${for}` bindings (in normal loop scopes), with no capture
+                // boundary. The structured `segments` are diagnostics-only.
+                ast::TemplateTag::Default { elaborated } => {
+                    self.walk_expr(*elaborated, body, source_map, true);
+                }
+            },
             ast::Expr::Unary { expr, .. } | ast::Expr::OptionalChain { expr } => {
                 self.walk_expr(*expr, body, source_map, true);
             }
@@ -623,6 +646,82 @@ impl<'db> SemanticIndexBuilder<'db> {
             | ast::Expr::Lambda(_)
             | ast::Expr::Missing => {}
         }
+    }
+
+    /// Walk a *tagged* template's segments inside a fresh `ScopeKind::Lambda`
+    /// scope spanning the whole template expression (BEP-049 §10). This makes
+    /// the body a capture boundary: interpolation references to enclosing
+    /// locals are recorded as captures (consumed by MIR when it hand-rolls the
+    /// body closure). Untagged templates do NOT use this — they walk segments
+    /// inline (no closure, no captures).
+    ///
+    /// The lambda's parameters (the tag's `body: (...) -> baml.TaggedString`
+    /// params) are NOT registered here: the tag is a cross-file item whose
+    /// signature cannot be resolved during the semantic-index walk (it would
+    /// cycle `file_semantic_index` -> `package_items`), so MIR (and TIR) inject
+    /// the params instead. `${for}` bindings still nest in their own block
+    /// scopes via `walk_template_segment`.
+    fn walk_template_lambda_body(
+        &mut self,
+        expr_id: ast::ExprId,
+        flatten_body: ast::ExprId,
+        body: &ast::ExprBody,
+        source_map: &ast::AstSourceMap,
+    ) {
+        // The enclosing real lambda (if any) — captured BEFORE we push the
+        // template's synthetic lambda. See the transitive-capture propagation
+        // at the end of this function.
+        let enclosing_lambda = self.lambda_stack.last().copied();
+
+        self.push_scope(ScopeKind::Lambda, None, source_map.expr_span(expr_id));
+        let scope_id = self.current_scope_id();
+        // Mark this as a synthetic template body: it is a Lambda scope for
+        // capture-analysis purposes, but TIR types its body inline in the
+        // enclosing scope, so `inference_owner_scope` must climb past it.
+        self.scopes[scope_id.index() as usize].is_template_body = true;
+        self.lambda_stack.push(scope_id);
+        // Walk the desugared flatten block's CONTENTS inline in THIS synthetic
+        // Lambda scope: its `${…}` exprs referencing enclosing locals become
+        // captures, its synthetic accumulator `let`s register as lambda-locals,
+        // and any `${for}` binding nests in a child block scope. The Lambda scope
+        // range stays == the template-expr span, which MIR matches to find these
+        // captures.
+        //
+        // `push_block_scope = false` keeps a block body's contents in this scope
+        // (no child block scope) while still recording the block's own `ExprId`
+        // in `expr_scopes`, so MIR/TIR scope lookups for the synthetic body
+        // resolve. For a non-block body this matches the old `walk_expr(.., true)`
+        // — `push_block_scope` is consulted only for `Expr::Block`.
+        self.walk_expr(flatten_body, body, source_map, false);
+        self.analyze_lambda_captures(scope_id, body, source_map);
+
+        // BEP-049 §10 — transitive capture through a *synthetic* lambda. When a
+        // tagged template sits inside a user lambda `f`, every var the template
+        // body captures from *beyond* `f` must also be captured BY `f`: TIR types
+        // the template body inline in `f`'s scope, and MIR forwards the template
+        // closure's captures up through `f`. A real nested lambda gets this for
+        // free (its references attribute to it AND its captures thread up); the
+        // template's references attribute only to *this* synthetic lambda, so we
+        // re-record each capture as a reference owned by `f`. Without this, `f`
+        // never learns it must capture the var → TIR reports it unresolved
+        // (`[E0003]`) and MIR cannot forward it.
+        if let Some(enclosing) = enclosing_lambda {
+            let at = source_map.expr_span(expr_id).start();
+            let captures = self.scope_bindings[scope_id.index() as usize]
+                .captures
+                .clone();
+            for (name, _binding) in captures {
+                self.path_root_references.push(PathRootReference {
+                    name,
+                    use_scope: enclosing,
+                    use_offset: at,
+                    owner_lambda: Some(enclosing),
+                });
+            }
+        }
+
+        self.lambda_stack.pop();
+        self.pop_scope();
     }
 
     fn register_local_pattern(
