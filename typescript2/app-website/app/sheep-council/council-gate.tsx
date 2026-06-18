@@ -10,7 +10,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { api } from '@/convex/_generated/api';
 
-type Submission = { address: string; discord: string; email: string };
+type Submission = {
+  address: string;
+  discord: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+};
 type Persist = (args: Submission) => Promise<unknown>;
 // Validates the password SERVER-SIDE (Convex `council.checkPassword`). The
 // secret lives only in the Convex deployment env, never in the client bundle.
@@ -25,6 +31,18 @@ const FIELDS: {
   type: string;
   hint?: string;
 }[] = [
+  {
+    key: 'firstName',
+    label: 'First name',
+    placeholder: 'First name',
+    type: 'text',
+  },
+  {
+    key: 'lastName',
+    label: 'Last name',
+    placeholder: 'Last name',
+    type: 'text',
+  },
   { key: 'discord', label: 'Discord', placeholder: 'username', type: 'text' },
   {
     key: 'email',
@@ -203,6 +221,8 @@ function Council({
     address: '',
     discord: '',
     email: '',
+    firstName: '',
+    lastName: '',
   });
   const [submitted, setSubmitted] = useState(false);
   const [sending, setSending] = useState(false);
@@ -258,6 +278,8 @@ function Council({
           address: form.address,
           discord: form.discord,
           email: form.email,
+          firstName: form.firstName,
+          lastName: form.lastName,
         });
       }
       setSubmitted(true);

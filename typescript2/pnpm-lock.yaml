@@ -502,6 +502,9 @@ importers:
       convex:
         specifier: ^1.40.0
         version: 1.41.0(react@19.2.3)
+      convex-helpers:
+        specifier: ^0.1.119
+        version: 0.1.119(@standard-schema/spec@1.1.0)(convex@1.41.0(react@19.2.3))(hono@4.12.23)(react@19.2.3)(typescript@5.8.3)(zod@4.0.10)
       cytoscape:
         specifier: ^3.33.4
         version: 3.34.0
@@ -5342,6 +5345,28 @@ packages:
 
   convert-source-map@2.0.0:
     resolution: {integrity: sha512-Kvp459HrV2FEJ1CAsi1Ku+MY3kasH19TFykTz2xWmMeq6bk2NU3XXvfJ+Q61m0xktWwt+1HSYf3JZsTms3aRJg==}
+
+  convex-helpers@0.1.119:
+    resolution: {integrity: sha512-fGNK9KAlBLk8Un729ZXBqD9S5jy910nxSrH6PloIL/Gl6TalFJvjN8+xCCwahlox8Ft+bb54SSg9MbcrsQb98w==}
+    hasBin: true
+    peerDependencies:
+      '@standard-schema/spec': ^1.0.0
+      convex: ^1.32.0
+      hono: ^4.0.5
+      react: ^17.0.2 || ^18.0.0 || ^19.0.0
+      typescript: ^5.5 || ^6.0.0
+      zod: ^3.25.0 || ^4.0.0
+    peerDependenciesMeta:
+      '@standard-schema/spec':
+        optional: true
+      hono:
+        optional: true
+      react:
+        optional: true
+      typescript:
+        optional: true
+      zod:
+        optional: true
 
   convex@1.41.0:
     resolution: {integrity: sha512-euxVf6yfpB7/VGKOobkLgjpbJidsUgW+b0ezonEyCUPqlpHFwR4/yIiI1hjjErzraiw91GxrtxpXQClMLNqU+w==}
@@ -14647,6 +14672,16 @@ snapshots:
   content-type@2.0.0: {}
 
   convert-source-map@2.0.0: {}
+
+  convex-helpers@0.1.119(@standard-schema/spec@1.1.0)(convex@1.41.0(react@19.2.3))(hono@4.12.23)(react@19.2.3)(typescript@5.8.3)(zod@4.0.10):
+    dependencies:
+      convex: 1.41.0(react@19.2.3)
+    optionalDependencies:
+      '@standard-schema/spec': 1.1.0
+      hono: 4.12.23
+      react: 19.2.3
+      typescript: 5.8.3
+      zod: 4.0.10
 
   convex@1.41.0(react@19.2.3):
     dependencies:
