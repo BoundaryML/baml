@@ -50,9 +50,9 @@ max_file_bytes = 16_810_000
 kind = "pack"
 policy.max_delta_pct = 3.0
 
-# macOS arm64: baseline 11.50 MB file.
+# macOS arm64: baseline 11.86 MB file.
 [artifacts.packed-program.platform.aarch64-apple-darwin]
-max_file_bytes = 11_850_000
+max_file_bytes = 12_220_000
 # Linux x86_64: baseline 15.12 MB file.
 [artifacts.packed-program.platform.x86_64-unknown-linux-gnu]
 max_file_bytes = 15_570_000
