@@ -310,8 +310,8 @@ impl BexMulitProject {
             .unwrap_or(false)
     }
 
-    fn discover_workspace_projects(&self, workspace_roots: Vec<vfs::VfsPath>) -> Vec<vfs::VfsPath> {
-        *self.workspace_roots.lock().unwrap() = workspace_roots.clone();
+    fn discover_workspace_projects(&self, workspace_roots: &[vfs::VfsPath]) -> Vec<vfs::VfsPath> {
+        workspace_roots.clone_into(&mut self.workspace_roots.lock().unwrap());
 
         if workspace_roots.is_empty() {
             tracing::warn!(
@@ -321,7 +321,7 @@ impl BexMulitProject {
         }
 
         let mut project_roots = Vec::new();
-        for root in &workspace_roots {
+        for root in workspace_roots {
             if root.is_file().unwrap_or(false)
                 && root.extension().is_some_and(|e| e.as_str() == "baml")
             {
@@ -1164,7 +1164,7 @@ impl super::BexLsp for BexMulitProject {
             .into_iter()
             .map(|root| self.fs.get_path_from_path(&root, "lsp --workspace"))
             .collect::<Result<Vec<_>, _>>()?;
-        let projects = self.discover_workspace_projects(roots);
+        let projects = self.discover_workspace_projects(&roots);
         Ok(projects
             .into_iter()
             .map(|project| project.as_str().to_string())

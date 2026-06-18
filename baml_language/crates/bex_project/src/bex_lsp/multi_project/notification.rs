@@ -24,7 +24,7 @@ impl BexLspNotification for BexMulitProject {
         _params: lsp_notification_params!("initialized"),
     ) -> Result<(), LspError> {
         let workspace_roots = self.workspace_roots.lock().unwrap().clone();
-        self.discover_workspace_projects(workspace_roots);
+        self.discover_workspace_projects(&workspace_roots);
 
         Ok(())
     }

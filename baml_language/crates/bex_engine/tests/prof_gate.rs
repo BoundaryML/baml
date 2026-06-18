@@ -491,7 +491,7 @@ async fn reconstruction_smoke() {
     assert_balance(&header, &events);
 
     let contents = bex_events::prof::file::BamlprofContents {
-        header: header.clone(),
+        header,
         events: events
             .iter()
             .cloned()

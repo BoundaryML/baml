@@ -162,6 +162,9 @@ pub fn enable_wasm_cooperative_profile() {
     WASM_COOPERATIVE_PROFILE_ENABLED.store(true, Ordering::Relaxed);
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+pub fn enable_wasm_cooperative_profile() {}
+
 #[cfg(target_arch = "wasm32")]
 fn wasm_cooperative_profile_enabled() -> bool {
     WASM_COOPERATIVE_PROFILE_ENABLED.load(Ordering::Relaxed)

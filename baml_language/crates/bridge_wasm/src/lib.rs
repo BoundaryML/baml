@@ -243,6 +243,7 @@ impl std::panic::UnwindSafe for BamlWasmRuntime {}
 impl std::panic::RefUnwindSafe for BamlWasmRuntime {}
 
 #[wasm_bindgen]
+#[allow(clippy::needless_pass_by_value)]
 impl BamlWasmRuntime {
     /// Create a new BAML runtime.
     ///
@@ -674,7 +675,7 @@ impl BamlWasmRuntime {
     pub fn list_runs(&self, request_id: u32) {
         let runs = self
             .run_store
-            .list_runs(RunFilter::default())
+            .list_runs(&RunFilter::default())
             .into_iter()
             .map(|summary| run_summary_to_wire(&summary))
             .collect();
@@ -950,6 +951,7 @@ fn next_wasm_call_id() -> Result<sys_types::CallId, JsError> {
     Ok(sys_types::CallId(call_id))
 }
 
+#[allow(clippy::needless_pass_by_value)]
 fn send_wasm_notification(
     callback: &send_wrapper::SendWrapper<Function>,
     notification: wasm_playground::PlaygroundNotification,
@@ -1125,7 +1127,7 @@ fn drain_wasm_profiles(
         send_wasm_notification(
             callback,
             wasm_playground::PlaygroundNotification::ProfileArtifactChunk {
-                run_id: run_id.map(|id| id.to_wire_string()),
+                run_id: run_id.map(RunId::to_wire_string),
                 engine_id: chunk.engine_id.0,
                 process_id: hex_process_id(chunk.process_euid.0),
                 bytes_base64: base64::engine::general_purpose::STANDARD.encode(chunk.bytes),

@@ -1,7 +1,8 @@
+use std::path::PathBuf;
+
 use anyhow::Result;
 use baml_lsp_server::run_server;
 use clap::Args;
-use std::path::PathBuf;
 
 #[derive(Args, Debug)]
 pub struct LanguageServerArgs {

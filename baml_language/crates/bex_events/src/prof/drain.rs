@@ -339,7 +339,6 @@ impl CooperativeProfileDrain {
     }
 }
 
-#[cfg(target_arch = "wasm32")]
 pub fn drain_global_until_idle(
     drain: &mut CooperativeProfileDrain,
     max_sweeps: usize,

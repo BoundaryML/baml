@@ -200,7 +200,7 @@ pub fn kwargs_to_bex_values(
 ///
 /// The envelope is a sequence of length-delimited `InboundMapEntry` records.
 /// It deliberately does not reuse `CallFunctionArgs`, because that CFFI
-/// request type also carries a host call id. RunStore adapters allocate host
+/// request type also carries a host call id. `RunStore` adapters allocate host
 /// plumbing separately after the run identity exists.
 pub fn playground_run_args_to_bex_values(
     mut bytes: &[u8],

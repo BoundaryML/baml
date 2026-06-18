@@ -1135,7 +1135,7 @@ impl ProjectDatabase {
                 if let Expr::Path(segments) = &body.exprs[*callee] {
                     let callee_name = segments
                         .iter()
-                        .map(|segment| segment.as_str())
+                        .map(AsRef::<str>::as_ref)
                         .collect::<Vec<_>>()
                         .join(".");
                     if callee_name == target_name

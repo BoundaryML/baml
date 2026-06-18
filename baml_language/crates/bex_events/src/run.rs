@@ -6,6 +6,8 @@
 //! reconstructs thread/call projections from those identities plus explicit
 //! parent edges.
 
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::{SystemTime, UNIX_EPOCH};
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     panic::AssertUnwindSafe,
@@ -15,13 +17,11 @@ use std::{
     },
 };
 
-use crate::ids::{BexCallId, BexThreadId, CallRef, EngineId, FunctionId, ProcessEuid, ThreadRef};
-pub use crate::run_wire::{patch_to_wire, run_summary_to_wire, run_to_wire};
-
-#[cfg(not(target_arch = "wasm32"))]
-use std::time::{SystemTime, UNIX_EPOCH};
 #[cfg(target_arch = "wasm32")]
 use web_time::{SystemTime, UNIX_EPOCH};
+
+use crate::ids::{BexCallId, BexThreadId, CallRef, EngineId, FunctionId, ProcessEuid, ThreadRef};
+pub use crate::run_wire::{patch_to_wire, run_summary_to_wire, run_to_wire};
 
 pub trait ProfileEventObserver: Send + Sync + 'static {
     fn ingest_profile_event(&self, envelope: ProfileEventEnvelope);
@@ -42,7 +42,7 @@ where
 }
 
 #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
-pub(crate) fn publish_profile_event(envelope: ProfileEventEnvelope) {
+pub(crate) fn publish_profile_event(envelope: &ProfileEventEnvelope) {
     let observers = profile_observers()
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -718,6 +718,7 @@ impl Default for RunRetentionPolicy {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[allow(clippy::large_enum_variant)]
 pub enum RunSubscription {
     Snapshot {
         snapshot: Run,
@@ -924,14 +925,14 @@ impl InMemoryRunStore {
     }
 
     #[must_use]
-    pub fn list_runs(&self, filter: RunFilter) -> Vec<RunSummary> {
+    pub fn list_runs(&self, filter: &RunFilter) -> Vec<RunSummary> {
         let mut runs: Vec<_> = self
             .inner
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .runs
             .values()
-            .filter(|record| run_matches_filter(&record.run, &filter))
+            .filter(|record| run_matches_filter(&record.run, filter))
             .map(|record| summarize_run(&record.run))
             .collect();
         runs.sort_by_key(|summary| std::cmp::Reverse(summary.created_at_ms));
@@ -1220,6 +1221,7 @@ impl InMemoryRunStore {
         Some(push_payload_patch(record, &retention, payload, None))
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn ingest_fetch_updated(
         &self,
         host_call_id: &HostCallId,
@@ -1940,7 +1942,7 @@ fn run_matches_filter(run: &Run, filter: &RunFilter) -> bool {
         ) => scope_id == run_scope,
         (RunVisibilityFilter::Scope { .. }, _) => false,
         (RunVisibilityFilter::IncludeHidden, RunVisibility::DebugOnly) => false,
-        (RunVisibilityFilter::IncludeHidden, _) | (RunVisibilityFilter::AllForDebug, _) => true,
+        (RunVisibilityFilter::IncludeHidden | RunVisibilityFilter::AllForDebug, _) => true,
     }
 }
 
@@ -1948,7 +1950,7 @@ fn summarize_run(run: &Run) -> RunSummary {
     let mut touched = Vec::<FunctionName>::new();
     match &run.target {
         RunTarget::Function { function_name } | RunTarget::Companion { function_name, .. } => {
-            touched.push(function_name.clone())
+            touched.push(function_name.clone());
         }
         RunTarget::Preview {
             parent_function_name,
@@ -2183,8 +2185,8 @@ fn recompute_record_profile(
         .map(run_diagnostic_from_reconstruction)
         .collect::<Vec<_>>();
     record.run.root_call_node_id = root_call_node_id;
-    record.run.calls = reconstructed.calls.clone();
-    record.run.threads = reconstructed.threads.clone();
+    record.run.calls.clone_from(&reconstructed.calls);
+    record.run.threads.clone_from(&reconstructed.threads);
     let graph_runtime_overlay =
         build_graph_runtime_overlay(&record.run, graph_overlay_span_provider);
     record.run.graph_runtime_overlay = Some(graph_runtime_overlay.clone());
@@ -3694,13 +3696,13 @@ mod tests {
             },
         );
 
-        let all = store.list_runs(RunFilter::default());
+        let all = store.list_runs(&RunFilter::default());
         assert_eq!(
             all.iter().map(|summary| summary.run_id).collect::<Vec<_>>(),
             vec![other.run_id, main.run_id]
         );
 
-        let summaries = store.list_runs(RunFilter {
+        let summaries = store.list_runs(&RunFilter {
             project_id: Some(ProjectId("project".to_string())),
             project_generation: Some(ProjectGeneration(1)),
             kinds: vec![RunKind::Function],
@@ -3713,7 +3715,7 @@ mod tests {
         assert_eq!(summaries[0].run_id, main.run_id);
         assert_eq!(summaries[0].touched_functions, vec!["main"]);
 
-        let wrong_generation = store.list_runs(RunFilter {
+        let wrong_generation = store.list_runs(&RunFilter {
             project_id: Some(ProjectId("project".to_string())),
             project_generation: Some(ProjectGeneration(2)),
             call_tree_contains_function: Some("main".to_string()),
@@ -3844,7 +3846,7 @@ mod tests {
             })
         );
 
-        let summaries = store.list_runs(RunFilter {
+        let summaries = store.list_runs(&RunFilter {
             call_tree_contains_function: Some("user.child".to_string()),
             visibility: RunVisibilityFilter::HistoryOnly,
             ..RunFilter::default()
@@ -4556,7 +4558,7 @@ mod tests {
                 40,
             ),
         ] {
-            publish_profile_event(event);
+            publish_profile_event(&event);
         }
 
         let AttachRootTraceResult::Attached { patches } =

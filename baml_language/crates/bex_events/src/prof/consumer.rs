@@ -287,7 +287,7 @@ impl ConsumerState {
                         EngineId(engine_id),
                         &event,
                     ) {
-                        crate::run::publish_profile_event(envelope);
+                        crate::run::publish_profile_event(&envelope);
                     }
                     writer.encode_event(&event);
                 }

@@ -15,32 +15,6 @@ struct RetainedCfgSnapshots {
         HashMap<u64, HashMap<String, baml_compiler2_visualization::control_flow::ControlFlowGraph>>,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn retained_cfg_snapshots_evict_oldest_generation() {
-        let mut snapshots = RetainedCfgSnapshots::default();
-        for generation in 1..=(RETAINED_CFG_GENERATIONS as u64 + 1) {
-            snapshots.insert(
-                generation,
-                HashMap::from([(
-                    "Workflow".to_string(),
-                    baml_compiler2_visualization::control_flow::ControlFlowGraph::default(),
-                )]),
-            );
-        }
-
-        assert!(snapshots.graph(1, "Workflow").is_none());
-        assert!(
-            snapshots
-                .graph(RETAINED_CFG_GENERATIONS as u64 + 1, "Workflow")
-                .is_some()
-        );
-    }
-}
-
 impl RetainedCfgSnapshots {
     fn insert(
         &mut self,
@@ -299,5 +273,31 @@ impl BexProject {
         self.set_current_bex(runtime, cfg_snapshot);
         log::info!("update_bex: success");
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn retained_cfg_snapshots_evict_oldest_generation() {
+        let mut snapshots = RetainedCfgSnapshots::default();
+        for generation in 1..=(RETAINED_CFG_GENERATIONS as u64 + 1) {
+            snapshots.insert(
+                generation,
+                HashMap::from([(
+                    "Workflow".to_string(),
+                    baml_compiler2_visualization::control_flow::ControlFlowGraph::default(),
+                )]),
+            );
+        }
+
+        assert!(snapshots.graph(1, "Workflow").is_none());
+        assert!(
+            snapshots
+                .graph(RETAINED_CFG_GENERATIONS as u64 + 1, "Workflow")
+                .is_some()
+        );
     }
 }

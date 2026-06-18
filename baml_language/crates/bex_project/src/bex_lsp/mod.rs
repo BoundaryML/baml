@@ -7,8 +7,9 @@ mod request;
 mod multi_project;
 mod protocol;
 
-use async_trait::async_trait;
 use std::{path::PathBuf, sync::Arc};
+
+use async_trait::async_trait;
 
 #[derive(Debug, thiserror::Error)]
 pub enum LspError {

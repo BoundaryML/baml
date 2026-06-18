@@ -69,11 +69,13 @@ impl IoNamespaceEnv for WasmEnv {
         let env_fn = self.env_fn().clone();
         let request_id = self.next_request_id.fetch_add(1, Ordering::Relaxed);
         let host_call_id = crate::wasm_host_call_id(call_id);
+        #[allow(clippy::cast_precision_loss)]
+        let js_request_id = wasm_bindgen::JsValue::from_f64(request_id as f64);
         let result = env_fn
             .call2(
                 &wasm_bindgen::JsValue::NULL,
                 &key.clone().into(),
-                &wasm_bindgen::JsValue::from_f64(request_id as f64),
+                &js_request_id,
             )
             .map_err(|e| {
                 let msg = e.as_string().unwrap_or_else(|| format!("{e:?}"));

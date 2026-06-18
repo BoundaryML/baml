@@ -99,7 +99,7 @@ fn target_to_wire(target: &RunTarget) -> Value {
             function_name,
         } => json!({
             "kind": "companion",
-            "parentRunId": parent_run_id.map(|id| id.to_wire_string()),
+            "parentRunId": parent_run_id.map(super::run::RunId::to_wire_string),
             "functionName": function_name,
         }),
         RunTarget::Internal { name } => json!({ "kind": "internal", "name": name }),

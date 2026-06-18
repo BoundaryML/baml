@@ -18,8 +18,7 @@ use axum::{
     Router,
     body::Body,
     extract::{
-        Path as AxumPath,
-        FromRequestParts, Query, State,
+        FromRequestParts, Path as AxumPath, Query, State,
         ws::{Message as AxumWsMsg, WebSocket, WebSocketUpgrade},
     },
     http::{Method, Request, StatusCode, header},
@@ -141,6 +140,7 @@ impl FunctionRunTarget {
     }
 }
 
+#[allow(clippy::result_large_err)]
 fn parse_run_id_for_request(request_id: u64, run_id: &str) -> Result<RunId, WsOutMessage> {
     RunId::from_wire_str(run_id).ok_or_else(|| WsOutMessage::CommandError {
         request_id,
@@ -962,7 +962,7 @@ async fn handle_ws_in_message(
         WsInMessage::ListRuns { request_id, filter } => {
             let runs = state
                 .run_store
-                .list_runs(run_filter_from_wire(filter))
+                .list_runs(&run_filter_from_wire(filter))
                 .iter()
                 .map(run_summary_to_wire)
                 .collect();
@@ -1527,7 +1527,10 @@ async fn serve_static_index(dir: &Path) -> Response {
 
 fn cache_bust_static_asset_urls(html: &str, version: &str) -> String {
     html.replace("/assets/index.js", &format!("/assets/index.js?v={version}"))
-        .replace("/assets/index.css", &format!("/assets/index.css?v={version}"))
+        .replace(
+            "/assets/index.css",
+            &format!("/assets/index.css?v={version}"),
+        )
 }
 
 fn is_existing_file_within_dir(dir: &Path, file_path: &Path) -> bool {

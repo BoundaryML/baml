@@ -58,7 +58,7 @@ const CALL_SITE_FILE_ID_NONE: u32 = u32::MAX;
 ///
 /// This is the raw source-map projection from the VM: file id plus byte offsets
 /// and the 1-indexed line cached in the bytecode line table. File path and
-/// retained source text remain ProjectStore concerns.
+/// retained source text remain `ProjectStore` concerns.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CallSiteSourceSpan {
     pub file_id: u32,

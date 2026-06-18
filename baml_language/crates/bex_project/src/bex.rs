@@ -35,7 +35,7 @@ pub trait Bex: Send + Sync {
 
     /// Run-vocabulary alias for the traced function entry path. `call_ctx`
     /// carries adapter-owned host plumbing; durable run identity stays in
-    /// RunStore.
+    /// `RunStore`.
     async fn start_run(
         self: Arc<Self>,
         function_name: &str,
@@ -49,7 +49,7 @@ pub trait Bex: Send + Sync {
     fn cancel_function_call(&self, call_id: CallId) -> Result<(), RuntimeError>;
 
     /// Run-vocabulary alias for host-call cancellation. The parameter is still
-    /// the adapter-owned HostCallId backing value, not a RunId.
+    /// the adapter-owned `HostCallId` backing value, not a `RunId`.
     fn cancel_run(&self, host_call_id: CallId) -> Result<(), RuntimeError> {
         self.cancel_function_call(host_call_id)
     }

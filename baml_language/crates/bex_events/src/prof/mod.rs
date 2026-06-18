@@ -34,7 +34,7 @@ pub mod clock;
 pub mod config;
 #[cfg(all(not(target_arch = "wasm32"), not(baml_loom)))]
 pub(crate) mod consumer;
-#[cfg(all(not(baml_loom), any(target_arch = "wasm32", test)))]
+#[cfg(not(baml_loom))]
 pub mod drain;
 pub mod encode;
 #[cfg(not(target_arch = "wasm32"))]
@@ -62,12 +62,10 @@ pub mod pb {
 #[cfg(test)]
 mod concurrency_tests;
 
-pub use config::ProfConfig;
-#[cfg(target_arch = "wasm32")]
-pub use config::enable_wasm_cooperative_profile;
+pub use config::{ProfConfig, enable_wasm_cooperative_profile};
 #[cfg(all(not(target_arch = "wasm32"), not(baml_loom)))]
 pub use consumer::{engine_closed, flush_and_join};
-#[cfg(all(not(baml_loom), target_arch = "wasm32"))]
+#[cfg(not(baml_loom))]
 pub use drain::{CooperativeProfileDrain, CooperativeProfileDrainOptions};
 pub use metadata::register_engine_metadata;
 #[cfg(not(baml_loom))]

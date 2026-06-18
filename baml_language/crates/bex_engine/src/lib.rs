@@ -1860,8 +1860,8 @@ impl BexEngine {
     }
 
     /// Run-vocabulary alias for the traced function entry path. The
-    /// `FunctionCallContext` still carries host-call plumbing; RunStore owns
-    /// the durable RunId outside the engine.
+    /// `FunctionCallContext` still carries host-call plumbing; `RunStore` owns
+    /// the durable `RunId` outside the engine.
     pub async fn start_run(
         self: &Arc<Self>,
         function_name: &str,
@@ -2309,7 +2309,7 @@ impl BexEngine {
     }
 
     /// Run-vocabulary alias for host-call cancellation. The parameter is the
-    /// adapter-owned host call id backing value, not a RunId.
+    /// adapter-owned host call id backing value, not a `RunId`.
     pub fn cancel_run(&self, host_call_id: CallId) -> Result<(), EngineError> {
         self.cancel_function_call(host_call_id)
     }

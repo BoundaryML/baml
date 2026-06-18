@@ -79,7 +79,7 @@ impl IoNamespaceIo for WasmIo {
         if let Some(host_call_id) = &host_call_id
             && let Some(patch) =
                 self.run_store
-                    .ingest_input_requested(host_call_id, request_id, prompt.clone())
+                    .ingest_input_requested(host_call_id, request_id, prompt)
         {
             crate::send_run_patch(&self.notification_callback, &patch);
         }
