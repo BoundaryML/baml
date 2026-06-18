@@ -396,3 +396,27 @@ fn expand_callable<F>(
 fn origin_key(origin: &baml_codegen_types::Origin) -> SortKey {
     (origin.source_file_path.clone(), origin.span_start)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::escape_python_keyword;
+
+    #[test]
+    fn keyword_identifiers_get_a_trailing_underscore() {
+        // The case that motivated this: `string.from` must not emit `def from`.
+        assert_eq!(escape_python_keyword("from".into()), "from_");
+        assert_eq!(escape_python_keyword("class".into()), "class_");
+        assert_eq!(escape_python_keyword("lambda".into()), "lambda_");
+    }
+
+    #[test]
+    fn non_keywords_pass_through_unchanged() {
+        assert_eq!(escape_python_keyword("to_json".into()), "to_json");
+        assert_eq!(escape_python_keyword("length".into()), "length");
+        // Already-suffixed async sibling of `from` is a valid identifier.
+        assert_eq!(escape_python_keyword("from_async".into()), "from_async");
+        // Soft keywords are valid identifiers and must not be escaped.
+        assert_eq!(escape_python_keyword("match".into()), "match");
+        assert_eq!(escape_python_keyword("type".into()), "type");
+    }
+}
