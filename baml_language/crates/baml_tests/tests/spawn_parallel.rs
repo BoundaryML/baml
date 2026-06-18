@@ -66,7 +66,7 @@ async fn sys_sleep_accepts_time_duration() {
     let program = compile_source_with_opt(
         r#"
         function main() -> int {
-            baml.sys.sleep(baml.time.Duration.from_milliseconds(0n));
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(0));
             42
         }
         "#,

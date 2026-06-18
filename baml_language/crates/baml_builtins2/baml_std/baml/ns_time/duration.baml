@@ -1,3 +1,10 @@
+function _duration_amount_to_bigint(amount: int | bigint) -> bigint throws never {
+    match (amount) {
+        let value: bigint => value,
+        let value: int => 0n + value,
+    }
+}
+
 /// Represents a non-localized timespan.
 ///
 /// May be negative: while `Instant` represents absolute points in time, a `Duration` represents the difference between two `Instant`s.
@@ -9,23 +16,23 @@ class Duration {
         Duration { _nanoseconds: self._nanoseconds.abs() }
     }
 
-    function from_nanoseconds(ns: bigint) -> Duration throws never {
-        Duration { _nanoseconds: ns }
+    function from_nanoseconds(ns: int | bigint) -> Duration throws never {
+        Duration { _nanoseconds: _duration_amount_to_bigint(ns) }
     }
-    function from_microseconds(us: bigint) -> Duration throws never {
-        Duration { _nanoseconds: us * 1000 }
+    function from_microseconds(us: int | bigint) -> Duration throws never {
+        Duration { _nanoseconds: _duration_amount_to_bigint(us) * 1000n }
     }
-    function from_milliseconds(ms: bigint) -> Duration throws never {
-        Duration { _nanoseconds: ms * 1000000 }
+    function from_milliseconds(ms: int | bigint) -> Duration throws never {
+        Duration { _nanoseconds: _duration_amount_to_bigint(ms) * 1000000n }
     }
-    function from_seconds(s: bigint) -> Duration throws never {
-        Duration { _nanoseconds: s * 1000000000 }
+    function from_seconds(s: int | bigint) -> Duration throws never {
+        Duration { _nanoseconds: _duration_amount_to_bigint(s) * 1000000000n }
     }
-    function from_minutes(m: bigint) -> Duration throws never {
-        Duration { _nanoseconds: m * 60000000000 }
+    function from_minutes(m: int | bigint) -> Duration throws never {
+        Duration { _nanoseconds: _duration_amount_to_bigint(m) * 60000000000n }
     }
-    function from_hours(h: bigint) -> Duration throws never {
-        Duration { _nanoseconds: h * 3600000000000 }
+    function from_hours(h: int | bigint) -> Duration throws never {
+        Duration { _nanoseconds: _duration_amount_to_bigint(h) * 3600000000000n }
     }
 
     /// Returns the number of nanoseconds in `self`.
