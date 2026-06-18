@@ -623,7 +623,13 @@ fn byte_offset_of_nth_codepoint(bytes: &[u8], n: usize) -> usize {
         let word = u64::from_ne_bytes(bytes[i..i + 8].try_into().unwrap());
         let hi = word & 0x8080_8080_8080_8080;
         let lo = word & 0x4040_4040_4040_4040;
-        let cont_mask = hi & !lo;
+        // A continuation byte is `10xxxxxx`: bit 7 set, bit 6 clear. We read
+        // only bit 7 below (`>> 7`), so the bit-6 information has to be shifted
+        // up into the bit-7 lane — `!(lo << 1)` clears bit 7 for multibyte
+        // *leading* bytes (`11xxxxxx`), leaving only true continuations.
+        // (`hi & !lo` left bit 7 untouched, counting every multibyte lead as a
+        // continuation and undercounting codepoint starts by one per char.)
+        let cont_mask = hi & !(lo << 1);
         let num_leading = 8 - (cont_mask >> 7).count_ones() as usize;
 
         if remaining <= num_leading {
