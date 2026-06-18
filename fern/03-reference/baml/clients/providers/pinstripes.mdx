@@ -1,0 +1,43 @@
+---
+title: Pinstripes
+---
+
+[Pinstripes](https://pinstripes.io) is an OpenAI-compatible inference API. You can use it with the [`openai-generic`](/ref/llm-client-providers/openai-generic) provider.
+
+```baml BAML
+client<llm> MyClient {
+  provider "openai-generic"
+  options {
+    base_url "https://pinstripes.io/v1"
+    api_key env.PINSTRIPES_API_KEY
+    model "ps/qwen3-35b"
+  }
+}
+```
+
+## Available models
+
+| Model | Price |
+|---|---|
+| `ps/deepseek-v4-flash` | $0.10/M tokens |
+| `ps/glm-4.5-air` | $0.125/M tokens |
+| `ps/qwen3-35b` | $0.14/M tokens |
+| `ps/minimax-m2.7` | $0.255/M tokens |
+
+## BAML-specific request `options`
+
+<ParamField path="base_url" type="string">
+  **Default: `https://pinstripes.io/v1`**
+</ParamField>
+
+<ParamField path="api_key" type="string">
+  Your Pinstripes API key.
+
+  **Default: `env.PINSTRIPES_API_KEY`**
+</ParamField>
+
+<ParamField path="model" type="string" required>
+  The model to use, in Pinstripes' `ps/<model-name>` format.
+</ParamField>
+
+For all other options (`temperature`, `max_tokens`, `headers`, etc.), see [`openai-generic`](/ref/llm-client-providers/openai-generic) and the [Pinstripes documentation](https://pinstripes.io).

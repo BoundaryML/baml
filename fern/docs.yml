@@ -848,6 +848,9 @@ navigation:
           - page: "vLLM (openai-generic)"
             slug: vllm
             path: 03-reference/baml/clients/providers/vllm.mdx
+          - page: "Pinstripes (openai-generic)"
+            slug: pinstripes
+            path: 03-reference/baml/clients/providers/pinstripes.mdx
       - section: LLM Client Strategies
         contents:
           - page: "Timeout Configuration"
