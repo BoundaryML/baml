@@ -2802,7 +2802,7 @@ function baml.llm.Client.execute_once_oneshot<T>(self: baml.llm.Client, context:
                       { : never
                         if (active_delay_ms > 0 : bool) : void
                           { : null
-                            root.sys.sleep(active_delay_ms) : null
+                            root.sys.sleep(root.time.Duration.from_nanoseconds(active_delay_ms * 1000000n)) : null
                           }
                         throw e : baml.errors.LlmClient
                       }
@@ -2819,7 +2819,7 @@ function baml.llm.Client.execute_once_oneshot<T>(self: baml.llm.Client, context:
                       }
               if (active_delay_ms > 0 : bool) : void
                 { : null
-                  root.sys.sleep(active_delay_ms) : null
+                  root.sys.sleep(root.time.Duration.from_nanoseconds(active_delay_ms * 1000000n)) : null
                 }
               throw root.errors.DevOther { message: "HTTP request fail..." + error_body } : baml.errors.DevOther
             }

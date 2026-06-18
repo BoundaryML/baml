@@ -19,7 +19,7 @@ async fn spawn_three_sleeps_runs_in_parallel() {
     let program = compile_source_with_opt(
         r#"
         function nap() -> int {
-            baml.sys.sleep(200);
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(200n));
             1
         }
         function main() -> int {
@@ -59,4 +59,32 @@ async fn spawn_three_sleeps_runs_in_parallel() {
         "expected parallel execution (~200ms); got {}ms",
         elapsed.as_millis(),
     );
+}
+
+#[tokio::test]
+async fn sys_sleep_accepts_time_duration() {
+    let program = compile_source_with_opt(
+        r#"
+        function main() -> int {
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(0n));
+            42
+        }
+        "#,
+        OptLevel::One,
+    );
+    let engine = Arc::new(
+        BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("engine"),
+    );
+
+    let result = engine
+        .call_function_bound_args(
+            "user.main",
+            Vec::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+
+    assert_eq!(result, Ok(BexExternalValue::Int(42)));
 }

@@ -2,7 +2,9 @@ use std::sync::Arc;
 
 use js_sys::{Function, Promise, Reflect, Uint8Array};
 use sys_ops::io::{self, IoNamespaceSys};
-use sys_types::{BexHeap, CallId, SysOpContext, SysOpOutput, VmBamlError, VmRustFnError};
+use sys_types::{
+    BexExternalValue, BexHeap, CallId, SysOpContext, SysOpOutput, VmBamlError, VmRustFnError,
+};
 use wasm_bindgen::{JsCast, prelude::*};
 use wasm_bindgen_futures::JsFuture;
 
@@ -170,10 +172,13 @@ impl IoNamespaceSys for WasmSys {
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        delay_ms: i64,
+        delay: BexExternalValue,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        let millis = i32::try_from(delay_ms.clamp(0, i64::from(i32::MAX))).unwrap_or(i32::MAX);
+        let millis = match sleep_millis_from_delay(delay) {
+            Ok(millis) => millis,
+            Err(err) => return SysOpOutput::err(err),
+        };
         let promise = js_sys::Promise::new(&mut |resolve, _reject| {
             set_timeout(&resolve, millis);
         });
@@ -181,5 +186,39 @@ impl IoNamespaceSys for WasmSys {
             let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
             Ok(())
         }))
+    }
+}
+
+fn sleep_millis_from_delay(delay: BexExternalValue) -> Result<i32, VmRustFnError> {
+    match delay {
+        BexExternalValue::Instance {
+            class_name,
+            mut fields,
+        } if class_name == "baml.time.Duration" => {
+            let Some(nanos) = fields.swap_remove("_nanoseconds") else {
+                return Err(VmRustFnError::from(VmBamlError::Io {
+                    message: "sleep delay is missing Duration._nanoseconds".to_string(),
+                }));
+            };
+            let BexExternalValue::Bigint(nanos) = nanos else {
+                return Err(VmRustFnError::from(VmBamlError::Io {
+                    message: "sleep delay Duration._nanoseconds is not a bigint".to_string(),
+                }));
+            };
+            if nanos.sign() == num_bigint::Sign::Plus {
+                let nanos = u64::try_from(&nanos).unwrap_or(u64::MAX);
+                let rounded_millis = nanos.saturating_add(999_999) / 1_000_000;
+                Ok(i32::try_from(rounded_millis).unwrap_or(i32::MAX))
+            } else {
+                Ok(0)
+            }
+        }
+        BexExternalValue::Union { value, .. } => sleep_millis_from_delay(*value),
+        other => Err(VmRustFnError::from(VmBamlError::Io {
+            message: format!(
+                "sleep delay must be baml.time.Duration, got {}",
+                other.type_name()
+            ),
+        })),
     }
 }
