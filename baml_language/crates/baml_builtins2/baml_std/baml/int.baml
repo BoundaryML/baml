@@ -4,20 +4,6 @@ class Int {
   function to_json(self) -> baml.json.json throws never {
     $rust_function
   }
-
-  /// Returns the base-10 decimal representation of `self` as a string.
-  /// Used by BEP-049 backtick-string interpolation (§11) to implicitly
-  /// convert integer values appearing in `${...}`.
-  ///
-  /// # Examples
-  /// ```
-  /// (42).to_string()    // "42"
-  /// (-7).to_string()    // "-7"
-  /// (0).to_string()     // "0"
-  /// ```
-  function to_string(self) -> string throws never {
-    $rust_function
-  }
   // ─── Comparisons / clamping ───────────────────────────────────────────────
 
   /// Returns the absolute value of `self`.

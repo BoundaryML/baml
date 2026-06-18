@@ -9501,16 +9501,12 @@ impl<'db> TypeInferenceBuilder<'db> {
         if inner != ty {
             self.context
                 .report_simple(TirTypeError::InterpolatedValueMaybeNull { ty }, expr_id);
-            return;
         }
-        // Otherwise the value must expose a `to_string` method.
-        if self
-            .try_resolve_member_on_ty(&ty, &Name::new("to_string"))
-            .is_none()
-        {
-            self.context
-                .report_simple(TirTypeError::TypeNotInterpolatable { ty }, expr_id);
-        }
+        // No `to_string` requirement: a non-null value renders via
+        // `string.from(...)` (BEP-049 §11), which is total — it dispatches the
+        // `baml.ToString` override when the value's runtime class implements it
+        // and otherwise falls back to a structural rendering, so every type is
+        // interpolatable.
     }
 
     /// Resolve a member access on a known base type.
@@ -11446,11 +11442,10 @@ impl<'db> TypeInferenceBuilder<'db> {
             .then(|| Ty::Unknown {
                 attr: TyAttr::default(),
             }),
-            // A union exposes `member` iff EVERY arm does — e.g. an inline
-            // `${if (c) { "pos" } else { "neg" }}` widens to `"pos" | "neg"`,
-            // and both arms resolve `to_string` via the String-literal path
-            // (the real `resolve_member` then dispatches per-arm at the call
-            // site). The probe only needs Some/None; return the first arm's
+            // A union exposes `member` iff EVERY arm does (BEP-044 union member
+            // access — e.g. a field shared across all variants of `A | B | C`).
+            // The real `resolve_member` dispatches per-arm at the call site; this
+            // read-only probe only needs Some/None, so return the first arm's
             // resolution as a representative type.
             Ty::Union(members, _) => members
                 .iter()

@@ -23,13 +23,6 @@ function user.Resume.to_json(self: Resume) -> baml.json.json {
     return
 }
 
-function user.Resume.to_string(self: Resume) -> string {
-    load_type Resume
-    load_var self
-    call baml.unstable.string
-    return
-}
-
 function user.TypeBuilderFn(from_text: string, client: baml.llm.Client) -> Resume {
     load_var client
     load_const <omitted>

@@ -15,9 +15,6 @@ function user.from_json(j: baml.json.json) -> user.Config  [expr] {
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "key": baml.json.to_json(self.key), "model": baml.json.to_json(self.model) }
 }
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
 class user.llm.Response {
   text: string
   model: string
@@ -30,7 +27,4 @@ function user.llm.from_json(j: baml.json.json) -> user.llm.Response  [expr] {
 }
 function user.llm.to_json(self: ?) -> baml.json.json  [expr] {
   map { "text": baml.json.to_json(self.text), "model": baml.json.to_json(self.model) }
-}
-function user.llm.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
 }

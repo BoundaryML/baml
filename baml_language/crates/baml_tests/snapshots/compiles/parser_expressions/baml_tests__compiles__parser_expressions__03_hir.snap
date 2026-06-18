@@ -38,15 +38,6 @@ function user.to_json(self: ?) -> baml.json.json  [expr] {
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "theme": baml.json.to_json(self.theme) }
 }
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
 class user.IndexUser {
   name: string
   age: int
@@ -60,9 +51,6 @@ function user.from_json(j: baml.json.json) -> user.IndexUser  [expr] {
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "name": baml.json.to_json(self.name), "age": baml.json.to_json(self.age), "tags": baml.json.to_json(self.tags) }
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
 }
 function user.TestPrecedence() -> bool  [expr] {
   { let a = 2 Add 3 Mul 4; let c = 2 Mul 3 Add 4; let b = a Gt 10 Add 2; let d = true Or false And false; return d }

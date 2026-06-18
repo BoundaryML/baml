@@ -12,9 +12,6 @@ function user.TreeNode.to_json(self: user.TreeNode) -> baml.json.json throws bam
 function user.TreeNode.from_json(j: baml.json.json) -> user.TreeNode throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   TreeNode { value: baml.json.from_json<string>(baml.json.field(j, "value")), children: baml.json.from_json<TreeNode[]>(baml.json.field(j, "children")) } : user.TreeNode
 }
-function user.TreeNode.to_string(self: user.TreeNode) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.TreeNode$stream {
   value: string | null
   children: user.TreeNode$stream[]

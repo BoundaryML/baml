@@ -12,9 +12,6 @@ function user.Address.to_json(self: user.Address) -> baml.json.json throws baml.
 function user.Address.from_json(j: baml.json.json) -> user.Address throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Address { street: baml.json.from_json<string>(baml.json.field(j, "street")), zip: baml.json.from_json<string?>(baml.json.field(j, "zip")) } : user.Address
 }
-function user.Address.to_string(self: user.Address) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.Profile {
   name: string
   address: user.Address | null
@@ -27,9 +24,6 @@ function user.Profile.to_json(self: user.Profile) -> baml.json.json throws baml.
 function user.Profile.from_json(j: baml.json.json) -> user.Profile throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Profile { name: baml.json.from_json<string>(baml.json.field(j, "name")), address: baml.json.from_json<Address?>(baml.json.field(j, "address")), scores: baml.json.from_json<int[]?>(baml.json.field(j, "scores")), settings: baml.json.from_json<map<string, string>?>(baml.json.field(j, "settings")) } : user.Profile
 }
-function user.Profile.to_string(self: user.Profile) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.User {
   id: int
   profile: user.Profile | null
@@ -39,9 +33,6 @@ function user.User.to_json(self: user.User) -> baml.json.json throws baml.json.J
 }
 function user.User.from_json(j: baml.json.json) -> user.User throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   User { id: baml.json.from_json<int>(baml.json.field(j, "id")), profile: baml.json.from_json<Profile?>(baml.json.field(j, "profile")) } : user.User
-}
-function user.User.to_string(self: user.User) -> string throws never {
-  baml.unstable.string<T>(self) : string
 }
 class user.Node {
   value: int
@@ -54,9 +45,6 @@ function user.Node.to_json(self: user.Node) -> baml.json.json throws baml.json.J
 }
 function user.Node.from_json(j: baml.json.json) -> user.Node throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Node { value: baml.json.from_json<int>(baml.json.field(j, "value")), next: baml.json.from_json<Node?>(baml.json.field(j, "next")), children: baml.json.from_json<Node[]?>(baml.json.field(j, "children")), labels: baml.json.from_json<map<string, Node>?>(baml.json.field(j, "labels")) } : user.Node
-}
-function user.Node.to_string(self: user.Node) -> string throws never {
-  baml.unstable.string<T>(self) : string
 }
 function user.OptionalChaining(user: user.User | null, nonNullUser: user.User, node: user.Node | null) -> string throws never {
   { : never
@@ -105,7 +93,8 @@ function user.OptionalIndex(node: user.Node | null, items: int[] | null, lookup:
     return b1 ?? 0 : unknown
   }
   !! 3611..3634: did you mean `items?.[0]?.to_string`? `items?.[0].to_string` does not handle the case when `items?.[0]` is null
-  !! 3611..3636: `((self: baml.Int) -> string throws never) | null` is not a function — it cannot be called
+  !! 3625..3634: type `int` has no member `to_string`
+  !! 3611..3636: `unknown | null` is not a function — it cannot be called
   !! 3926..3943: did you mean `nonNullItems[0]`? `nonNullItems?.[0]` is unnecessary, because `nonNullItems` cannot be null
   ?? 4309..4390: unreachable code: 1 statement(s) after diverging statement
 }
@@ -159,7 +148,8 @@ function user.Combined(user: user.User | null, node: user.Node | null, items: in
     node?.children?.[node?.value ?? 0]?.next?.value = node?.value ?? 0 : unknown
     return e3 : unknown
   }
-  !! 8111..8153: `((self: baml.Int) -> string throws never) | null` is not a function — it cannot be called
+  !! 8142..8151: type `int` has no member `to_string`
+  !! 8111..8153: `unknown | null` is not a function — it cannot be called
   !! 8080..8175: did you mean `user?.profile?.name ?? node?.labels?.["name"]?.value.to_string()`? `user?.profile?.name ?? node?.labels?.["name"]?.value.to_string() ?? "fallback"` is unnecessary, because `user?.profile?.name ?? node?.labels?.["name"]?.value.to_string()` cannot be null
   ?? 8369..8478: unreachable code: 6 statement(s) after diverging statement
 }

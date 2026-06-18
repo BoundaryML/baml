@@ -109,19 +109,3 @@ fn user.User.to_json(self: User) -> baml.json.json {
         return;
     }
 }
-
-fn user.User.to_string(self: User) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: User // self // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(User);
-        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}

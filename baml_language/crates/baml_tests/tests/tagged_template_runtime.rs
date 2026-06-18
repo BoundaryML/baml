@@ -236,11 +236,11 @@ async fn tagged_template_cstyle_for_flattens() {
     // BEP §4: C-style `${for (init; cond; step)}` also drives the tagged
     // flatten path (push into parts/values per iteration), like the iterator
     // form. `RENDER_TAG` only renders string values (§11 preserves raw types),
-    // so stringify the counter explicitly.
+    // so stringify the counter explicitly via `string.from`.
     let output = baml_test!(&format!(
         r#"{RENDER_TAG}
 function main() -> string {{
-  render`${{for (let i = 0; i < 3; i += 1)}}[${{i.to_string()}}]${{endfor}}`
+  render`${{for (let i = 0; i < 3; i += 1)}}[${{string.from(i)}}]${{endfor}}`
 }}
 "#
     ));

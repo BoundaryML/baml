@@ -11,9 +11,6 @@ function user.Address.to_json(self: user.Address) -> baml.json.json throws baml.
 function user.Address.from_json(j: baml.json.json) -> user.Address throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Address { zip: baml.json.from_json<int>(baml.json.field(j, "zip")) } : user.Address
 }
-function user.Address.to_string(self: user.Address) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.Person {
   age: int
   flexible_age: int | string
@@ -25,9 +22,6 @@ function user.Person.to_json(self: user.Person) -> baml.json.json throws baml.js
 function user.Person.from_json(j: baml.json.json) -> user.Person throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Person { age: baml.json.from_json<int>(baml.json.field(j, "age")), flexible_age: baml.json.from_json<int | string>(baml.json.field(j, "flexible_age")), address: baml.json.from_json<Address>(baml.json.field(j, "address")) } : user.Person
 }
-function user.Person.to_string(self: user.Person) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.SameNameInner {
   field: int
 }
@@ -36,9 +30,6 @@ function user.SameNameInner.to_json(self: user.SameNameInner) -> baml.json.json 
 }
 function user.SameNameInner.from_json(j: baml.json.json) -> user.SameNameInner throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   SameNameInner { field: baml.json.from_json<int>(baml.json.field(j, "field")) } : user.SameNameInner
-}
-function user.SameNameInner.to_string(self: user.SameNameInner) -> string throws never {
-  baml.unstable.string<T>(self) : string
 }
 class user.SameNameOuter {
   field: user.SameNameInner
@@ -50,9 +41,6 @@ function user.SameNameOuter.to_json(self: user.SameNameOuter) -> baml.json.json 
 function user.SameNameOuter.from_json(j: baml.json.json) -> user.SameNameOuter throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   SameNameOuter { field: baml.json.from_json<SameNameInner>(baml.json.field(j, "field")), other: baml.json.from_json<SameNameInner>(baml.json.field(j, "other")) } : user.SameNameOuter
 }
-function user.SameNameOuter.to_string(self: user.SameNameOuter) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.Box {
   value: T
 }
@@ -61,9 +49,6 @@ function user.Box.to_json(self: user.Box) -> baml.json.json throws baml.json.Jso
 }
 function user.Box.from_json(j: baml.json.json) -> user.Box<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Box { value: baml.json.from_json<T>(baml.json.field(j, "value")) } : user.Box<T>
-}
-function user.Box.to_string(self: user.Box) -> string throws never {
-  baml.unstable.string<T>(self) : string
 }
 function user.class_destructure_unknown_field_in_let() -> int throws never {
   { : 0
@@ -182,9 +167,6 @@ function user.OptionalPerson.to_json(self: user.OptionalPerson) -> baml.json.jso
 function user.OptionalPerson.from_json(j: baml.json.json) -> user.OptionalPerson throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   OptionalPerson { age: baml.json.from_json<int?>(baml.json.field(j, "age")) } : user.OptionalPerson
 }
-function user.OptionalPerson.to_string(self: user.OptionalPerson) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 function user.let_top_level_class_narrows_union_scrutinee_is_refutable(v: user.Person | int) -> int throws never {
   { : int
     let Person { age: age } = v : user.Person | int -> user.Person
@@ -256,9 +238,6 @@ function user.Admin.to_json(self: user.Admin) -> baml.json.json throws baml.json
 }
 function user.Admin.from_json(j: baml.json.json) -> user.Admin throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Admin { age: baml.json.from_json<string>(baml.json.field(j, "age")) } : user.Admin
-}
-function user.Admin.to_string(self: user.Admin) -> string throws never {
-  baml.unstable.string<T>(self) : string
 }
 function user.class_destructure_or_pattern_must_bind_same_names(v: user.Person | int) -> int throws never {
   { : int

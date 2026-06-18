@@ -151,38 +151,6 @@ fn user.RiskFactor.to_json(self: RiskFactor) -> baml.json.json {
     }
 }
 
-fn user.MetaField.to_string(self: MetaField) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: MetaField // self // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(MetaField);
-        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.RiskFactor.to_string(self: RiskFactor) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: RiskFactor // self // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(RiskFactor);
-        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn user.test_let_binding(function_name: string) -> string {
     // Locals:
     let _0: string // _0 // return

@@ -11,9 +11,6 @@ function user.llm.Response.to_json(self: user.llm.Response) -> baml.json.json th
 function user.llm.Response.from_json(j: baml.json.json) -> user.llm.Response throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Response { text: baml.json.from_json<string>(baml.json.field(j, "text")) } : user.llm.Response
 }
-function user.llm.Response.to_string(self: user.llm.Response) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.llm.Response$stream {
   text: string | null
 }
@@ -26,9 +23,6 @@ function user.llm.Response.to_json(self: user.llm.Response) -> baml.json.json th
 }
 function user.llm.Response.from_json(j: baml.json.json) -> user.llm.Response throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Response { body: baml.json.from_json<string>(baml.json.field(j, "body")), status: baml.json.from_json<int>(baml.json.field(j, "status")) } : user.llm.Response
-}
-function user.llm.Response.to_string(self: user.llm.Response) -> string throws never {
-  baml.unstable.string<T>(self) : string
 }
 class user.llm.Response$stream {
   body: string | null

@@ -55,7 +55,7 @@ function shell.exec_echo_fn() -> bool {
     load_const null
     sys_op baml.sys.exec
     load_field .stdout
-    call baml.Uint8Array.to_string
+    call baml.Uint8Array.baml.ToString.to_string
     load_const "Hello From Exec!"
     call baml.String.includes
     return
@@ -66,7 +66,7 @@ function shell.shell_echo_fn() -> bool {
     load_const null
     sys_op baml.sys.shell
     load_field .stdout
-    call baml.Uint8Array.to_string
+    call baml.Uint8Array.baml.ToString.to_string
     load_const "hello_from_shell"
     call baml.String.includes
     return
@@ -101,7 +101,7 @@ function shell.shell_stdout_bytes_fn() -> bool {
     load_const null
     sys_op baml.sys.shell
     load_field .stdout
-    call baml.Uint8Array.to_string
+    call baml.Uint8Array.baml.ToString.to_string
     load_const "hello"
     call baml.String.includes
     return
@@ -112,7 +112,7 @@ function shell.shell_with_variable_fn() -> bool {
     load_const null
     sys_op baml.sys.shell
     load_field .stdout
-    call baml.Uint8Array.to_string
+    call baml.Uint8Array.baml.ToString.to_string
     load_const "dynamic_value"
     call baml.String.includes
     return

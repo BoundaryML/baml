@@ -378,13 +378,6 @@ function user.SearchService.to_json(self: SearchService) -> baml.json.json {
     return
 }
 
-function user.SearchService.to_string(self: SearchService) -> string {
-    load_type SearchService
-    load_var self
-    call baml.unstable.string
-    return
-}
-
 function user.TestClient$new() -> null {
     load_const "TestClient"
     load_const "openai"

@@ -42,13 +42,6 @@ function user.Foo.to_json(self: Foo) -> baml.json.json {
     return
 }
 
-function user.Foo.to_string(self: Foo) -> string {
-    load_type Foo
-    load_var self
-    call baml.unstable.string
-    return
-}
-
 function user.HasWith.from_json(j: baml.json.json) -> HasWith {
     load_var j
     load_const "with"
@@ -68,13 +61,6 @@ function user.HasWith.to_json(self: HasWith) -> baml.json.json {
     call baml.json.to_json
     load_const "with"
     alloc_map 1
-    return
-}
-
-function user.HasWith.to_string(self: HasWith) -> string {
-    load_type HasWith
-    load_var self
-    call baml.unstable.string
     return
 }
 

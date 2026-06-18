@@ -43,19 +43,3 @@ fn user.Union.to_json(self: Union) -> baml.json.json {
         return;
     }
 }
-
-fn user.Union.to_string(self: Union) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: Union // self // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(Union);
-        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}

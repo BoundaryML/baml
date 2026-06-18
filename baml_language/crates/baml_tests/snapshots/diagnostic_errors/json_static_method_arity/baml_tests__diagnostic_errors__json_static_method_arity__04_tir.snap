@@ -13,9 +13,6 @@ function user.Box.from_json(j: baml.json.json) -> user.Box<unknown> throws baml.
 function user.Box.to_json(self: user.Box) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
   map { "value": baml.json.to_json(self.value) } : map<string, baml.json.json>
 }
-function user.Box.to_string(self: user.Box) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 function user.bad_missing(j: baml.json.json) -> user.Box<int> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   { : user.Box<int>
     Box.from_json(j) : user.Box<int>

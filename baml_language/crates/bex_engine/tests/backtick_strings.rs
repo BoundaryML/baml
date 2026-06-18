@@ -559,15 +559,18 @@ async fn backtick_case_i_multi_tick_with_interpolation() -> anyhow::Result<()> {
     .await
 }
 
-// (J) Custom class WITH a `to_string` method — implicit dispatch should hit it.
+// (J) Custom class controlling its rendering via `implements baml.ToString` —
+// `${p}` renders through `string.from`, which dispatches to the override.
 #[tokio::test]
 async fn backtick_case_j_user_class_with_to_string() -> anyhow::Result<()> {
     assert_engine_executes(EngineProgram {
         source: r#"
             class Person {
                 name string
-                function to_string(self) -> string {
-                    self.name
+                implements baml.ToString {
+                    function to_string(self) -> string throws never {
+                        self.name
+                    }
                 }
             }
             function main() -> string {
@@ -583,10 +586,10 @@ async fn backtick_case_j_user_class_with_to_string() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn backtick_interp_class_without_to_string_auto_derives() -> anyhow::Result<()> {
-    // §11 + magic `to_string`: a class with NO hand-written `to_string` is still
-    // interpolatable — `to_string` is auto-derived (like `to_json`), delegating
-    // to the VM's universal `baml.unstable.string` formatter.
+async fn backtick_interp_class_without_to_string_renders_structurally() -> anyhow::Result<()> {
+    // §11: a class that does NOT implement `baml.ToString` is still
+    // interpolatable — `${p}` renders via `string.from`, which falls back to a
+    // structural rendering of the instance.
     assert_engine_executes(EngineProgram {
         source: r#"
             class Point {
@@ -599,9 +602,7 @@ async fn backtick_interp_class_without_to_string_auto_derives() -> anyhow::Resul
             }
         "#,
         entry: "main",
-        expected: Ok(BexExternalValue::String(
-            "p = user.Point {\n    x: 1\n    y: 2\n}".into(),
-        )),
+        expected: Ok(BexExternalValue::String("p = Point { x: 1, y: 2 }".into())),
         ..Default::default()
     })
     .await

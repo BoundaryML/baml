@@ -97,13 +97,15 @@ fn user.BacktickInterpBlockBody(items: int[]) -> string {
     let _4: int // first
     let _5: int[]
     let _6: 0
+    let _7: type
 
     bb0: {
         _5 = copy _1;
         _6 = const 0_i64;
         _4 = copy _5[_6];
         _3 = copy _4;
-        _2 = call const fn baml.Int.to_string(copy _3) -> [bb1];
+        _7 = load_type(int);
+        _2 = call const fn baml.String.from<copy _7>(copy _3) -> [bb1];
     }
 
     bb1: {
@@ -121,9 +123,11 @@ fn user.BacktickInterpBool(b: bool) -> string {
     let _0: string // _0 // return
     let _1: bool // b // param
     let _2: string
+    let _3: type
 
     bb0: {
-        _2 = call const fn baml.Bool.to_string(copy _1) -> [bb1];
+        _3 = load_type(bool);
+        _2 = call const fn baml.String.from<copy _3>(copy _1) -> [bb1];
     }
 
     bb1: {
@@ -141,13 +145,15 @@ fn user.BacktickInterpCallsFn() -> string {
     let _0: string // _0 // return
     let _1: string
     let _2: string
+    let _3: type
 
     bb0: {
         _2 = call const fn user.bangs(const 3_i64) -> [bb1];
     }
 
     bb1: {
-        _1 = call const fn baml.String.to_string(copy _2) -> [bb2];
+        _3 = load_type(string);
+        _1 = call const fn baml.String.from<copy _3>(copy _2) -> [bb2];
     }
 
     bb2: {
@@ -165,9 +171,11 @@ fn user.BacktickInterpFloat(x: float) -> string {
     let _0: string // _0 // return
     let _1: float // x // param
     let _2: string
+    let _3: type
 
     bb0: {
-        _2 = call const fn baml.Float.to_string(copy _1) -> [bb1];
+        _3 = load_type(float);
+        _2 = call const fn baml.String.from<copy _3>(copy _1) -> [bb1];
     }
 
     bb1: {
@@ -185,9 +193,11 @@ fn user.BacktickInterpInt(n: int) -> string {
     let _0: string // _0 // return
     let _1: int // n // param
     let _2: string
+    let _3: type
 
     bb0: {
-        _2 = call const fn baml.Int.to_string(copy _1) -> [bb1];
+        _3 = load_type(int);
+        _2 = call const fn baml.String.from<copy _3>(copy _1) -> [bb1];
     }
 
     bb1: {
@@ -208,20 +218,24 @@ fn user.BacktickInterpMultiline(name: string, count: int) -> string {
     let _3: string
     let _4: string
     let _5: string
-    let _6: string
+    let _6: type
+    let _7: string
+    let _8: type
 
     bb0: {
-        _5 = call const fn baml.String.to_string(copy _1) -> [bb1];
+        _6 = load_type(string);
+        _5 = call const fn baml.String.from<copy _6>(copy _1) -> [bb1];
     }
 
     bb1: {
         _4 = const "name:  " + copy _5;
         _3 = copy _4 + const "\ncount: ";
-        _6 = call const fn baml.Int.to_string(copy _2) -> [bb2];
+        _8 = load_type(int);
+        _7 = call const fn baml.String.from<copy _8>(copy _2) -> [bb2];
     }
 
     bb2: {
-        _0 = copy _3 + copy _6;
+        _0 = copy _3 + copy _7;
         goto -> bb3;
     }
 
@@ -237,19 +251,23 @@ fn user.BacktickInterpMultiple(first: string, last: string) -> string {
     let _2: string // last // param
     let _3: string
     let _4: string
-    let _5: string
+    let _5: type
+    let _6: string
+    let _7: type
 
     bb0: {
-        _4 = call const fn baml.String.to_string(copy _1) -> [bb1];
+        _5 = load_type(string);
+        _4 = call const fn baml.String.from<copy _5>(copy _1) -> [bb1];
     }
 
     bb1: {
         _3 = copy _4 + const " ";
-        _5 = call const fn baml.String.to_string(copy _2) -> [bb2];
+        _7 = load_type(string);
+        _6 = call const fn baml.String.from<copy _7>(copy _2) -> [bb2];
     }
 
     bb2: {
-        _0 = copy _3 + copy _5;
+        _0 = copy _3 + copy _6;
         goto -> bb3;
     }
 
@@ -264,9 +282,11 @@ fn user.BacktickInterpSimple(name: string) -> string {
     let _1: string // name // param
     let _2: string
     let _3: string
+    let _4: type
 
     bb0: {
-        _3 = call const fn baml.String.to_string(copy _1) -> [bb1];
+        _4 = load_type(string);
+        _3 = call const fn baml.String.from<copy _4>(copy _1) -> [bb1];
     }
 
     bb1: {
@@ -335,6 +355,7 @@ fn user.BacktickM3ForLoop(xs: string[]) -> string {
     let _37: string
     let _38: string
     let _39: string
+    let _40: type
 
     bb0: {
         _2 = const "";
@@ -467,7 +488,8 @@ fn user.BacktickM3ForLoop(xs: string[]) -> string {
         _34 = copy _33;
         _35 = copy _2;
         _39 = copy _34;
-        _38 = call const fn baml.String.to_string(copy _39) -> [bb25];
+        _40 = load_type(string);
+        _38 = call const fn baml.String.from<copy _40>(copy _39) -> [bb25];
     }
 
     bb25: {

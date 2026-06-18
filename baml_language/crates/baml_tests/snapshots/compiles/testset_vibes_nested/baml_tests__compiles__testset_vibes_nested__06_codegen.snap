@@ -513,10 +513,3 @@ function user.Sentiment.to_json(self: Sentiment) -> baml.json.json {
     alloc_map 3
     return
 }
-
-function user.Sentiment.to_string(self: Sentiment) -> string {
-    load_type Sentiment
-    load_var self
-    call baml.unstable.string
-    return
-}

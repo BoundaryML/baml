@@ -139,35 +139,3 @@ fn user.pkg.inner.Box.to_json(self: pkg.inner.Box) -> baml.json.json {
         return;
     }
 }
-
-fn user.pkg.inner.AutoBox.to_string(self: pkg.inner.AutoBox) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: pkg.inner.AutoBox // self // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(pkg.inner.AutoBox<#0>);
-        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.pkg.inner.Box.to_string(self: pkg.inner.Box) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: pkg.inner.Box // self // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(pkg.inner.Box<#0>);
-        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}

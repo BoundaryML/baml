@@ -1,4 +1,3 @@
-use bex_str::BexStr;
 use bex_vm_types::Value;
 
 use super::{BamlClassInt, PackageBamlImpl};
@@ -9,9 +8,6 @@ impl BamlClassInt for PackageBamlImpl {
         Value::int(int)
     }
 
-    fn to_string(int: i64) -> BexStr {
-        BexStr::from(int.to_string())
-    }
     // ── Comparisons / clamping ────────────────────────────────────────────────
 
     fn abs(int: i64) -> Result<i64, VmRustFnError> {

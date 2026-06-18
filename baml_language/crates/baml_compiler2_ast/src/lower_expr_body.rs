@@ -3043,18 +3043,20 @@ impl LoweringContext {
                 return InterpPart::Stmts(stmts);
             }
         }
+        // Render the value via `string.from(...)` — BAML's universal renderer
+        // (BEP-049 §11). It dispatches `to_string` on the value's runtime class
+        // when that class implements `baml.ToString`, otherwise falls back to a
+        // structural rendering, so any `${expr}` renders without the type having
+        // to opt into the interface.
         let callee = self.alloc_expr(
-            Expr::MemberAccess {
-                base: inner,
-                member: Name::new("to_string"),
-            },
+            Expr::Path(vec![Name::new("string"), Name::new("from")]),
             span,
         );
         InterpPart::Value(self.alloc_expr(
             Expr::Call {
                 callee,
                 type_args: Vec::new(),
-                args: Vec::new(),
+                args: vec![CallArg::positional(inner)],
             },
             span,
         ))

@@ -687,9 +687,6 @@ function f(u: MaybeUser) -> string? {
     function user.User.from_json(j: baml.json.json) -> user.User throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       User { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.User
     }
-    function user.User.to_string(self: user.User) -> string throws never {
-      baml.unstable.string<T>(self) : string
-    }
     type user.MaybeUser = user.User | null
     function user.f(u: user.MaybeUser) -> string | null throws never {
       { : never

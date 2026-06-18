@@ -11,9 +11,6 @@ function user.from_json(j: baml.json.json) -> user.Foo  [expr] {
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "tag": baml.json.to_json(self.tag) }
 }
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
 function user.use_method_type_args() -> int  [expr] {
   { let f = user.Foo { tag: "x" }; let v: int = f.zero() NullCoalesce 5 } v
 }

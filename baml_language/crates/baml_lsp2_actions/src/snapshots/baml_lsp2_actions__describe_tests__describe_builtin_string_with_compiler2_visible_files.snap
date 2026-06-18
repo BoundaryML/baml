@@ -10,8 +10,6 @@ class String  (string)  string.baml:5
 shape: class String {}
 methods:
   function to_json(self) -> json
-  /// Returns `self` unchanged. Provided so BEP-049 backtick-string
-  function to_string(self) -> string
   /// Returns the number of **Unicode code points** (characters) in the string.
   function length(self) -> int
   /// Alias for `length()`.
@@ -90,6 +88,8 @@ methods:
   /// Returns the string encoded as a `uint8array` of UTF-8 bytes.
   function to_utf8(self) -> uint8array
 static_methods:
+  /// Renders any value as a human-readable string.
+  function from(value: T) -> string
   /// Decodes a `uint8array` of UTF-8 bytes into a string.
   function from_utf8(utf8: uint8array) -> string throws root.errors.InvalidArgument
   /// Builds a string from an array of Unicode code points.

@@ -53,9 +53,6 @@ function user.sub_assign() -> int  [expr] {
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "x": baml.json.to_json(self.x) }
 }
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
 function user.break_in_for() -> int  [expr] {
   { { let i = 0; while i Lt 10 { break } }; return 1 }
 }
@@ -101,9 +98,6 @@ function user.let_statements() -> int  [expr] {
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "x": baml.json.to_json(self.x), "y": baml.json.to_json(self.y) }
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
 }
 function user.nested_while_loop() -> int  [expr] {
   { let i = 0; while i Lt 10 { let j = 0; while j Lt 10 { j = j Add 1 } }; return i }

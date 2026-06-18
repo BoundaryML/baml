@@ -18,10 +18,3 @@ function user.Union.to_json(self: Union) -> baml.json.json {
     call baml.json.parse
     return
 }
-
-function user.Union.to_string(self: Union) -> string {
-    load_type Union
-    load_var self
-    call baml.unstable.string
-    return
-}

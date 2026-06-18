@@ -23,13 +23,6 @@ function user.Foo.to_json(self: Foo) -> baml.json.json {
     return
 }
 
-function user.Foo.to_string(self: Foo) -> string {
-    load_type Foo
-    load_var self
-    call baml.unstable.string
-    return
-}
-
 function user.Foo.zero(self: Foo) -> T | null {
     load_const null
     return

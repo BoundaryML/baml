@@ -35,13 +35,6 @@ function user.User.to_json(self: User) -> baml.json.json {
     return
 }
 
-function user.User.to_string(self: User) -> string {
-    load_type User
-    load_var self
-    call baml.unstable.string
-    return
-}
-
 function user.deserialize_user(s: string) -> User {
     load_type User
     load_var s

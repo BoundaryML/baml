@@ -1340,54 +1340,6 @@ fn user.PatternMatrix.to_json(self: PatternMatrix) -> baml.json.json {
     }
 }
 
-fn user.PatternBucket.to_string(self: PatternBucket) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: PatternBucket // self // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(PatternBucket);
-        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.AppError.to_string(self: AppError) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: AppError // self // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(AppError);
-        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.PatternMatrix.to_string(self: PatternMatrix) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: PatternMatrix // self // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(PatternMatrix);
-        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn user.unwrap_curried(f: ((int) -> ((int) -> ((int) -> int throws never) throws never) throws never) | ((string) -> ((string) -> string throws never) throws never)) -> int {
     // Locals:
     let _0: int // _0 // return

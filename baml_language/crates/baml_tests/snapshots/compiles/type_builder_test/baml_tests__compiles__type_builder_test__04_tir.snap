@@ -23,9 +23,6 @@ function user.TopLevelClass.to_json(self: user.TopLevelClass) -> baml.json.json 
 function user.TopLevelClass.from_json(j: baml.json.json) -> user.TopLevelClass throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   TopLevelClass { a: baml.json.from_json<string>(baml.json.field(j, "a")) } : user.TopLevelClass
 }
-function user.TopLevelClass.to_string(self: user.TopLevelClass) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 enum user.TopLevelEnum
 function user.Fn$stream(client: baml.llm.Client = ...) -> baml.llm.Stream<string | null, string> throws never {
   baml.llm.stream_llm_function(client, "Fn", map {  }) : baml.llm.Stream<string | null, string>

@@ -23,13 +23,6 @@ function user.Config.to_json(self: Config) -> baml.json.json {
     return
 }
 
-function user.Config.to_string(self: Config) -> string {
-    load_type Config
-    load_var self
-    call baml.unstable.string
-    return
-}
-
 function user.llm.Response.from_json(j: baml.json.json) -> llm.Response {
     load_var j
     load_const "text"
@@ -49,13 +42,6 @@ function user.llm.Response.to_json(self: llm.Response) -> baml.json.json {
     call baml.json.to_json
     load_const "text"
     alloc_map 1
-    return
-}
-
-function user.llm.Response.to_string(self: llm.Response) -> string {
-    load_type llm.Response
-    load_var self
-    call baml.unstable.string
     return
 }
 

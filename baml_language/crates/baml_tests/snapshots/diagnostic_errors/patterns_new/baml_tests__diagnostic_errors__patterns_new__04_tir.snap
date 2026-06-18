@@ -56,9 +56,6 @@ function user.Team.to_json(self: user.Team) -> baml.json.json throws baml.json.J
 function user.Team.from_json(j: baml.json.json) -> user.Team throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Team { scores: baml.json.from_json<int[]>(baml.json.field(j, "scores")) } : user.Team
 }
-function user.Team.to_string(self: user.Team) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 function user.refutable_let_empty_array(xs: int[]) -> int throws never {
   { : 1
     let [] = xs : int[]
@@ -114,9 +111,6 @@ function user.Bag.to_json(self: user.Bag) -> baml.json.json throws baml.json.Jso
 function user.Bag.from_json(j: baml.json.json) -> user.Bag throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Bag { contents: baml.json.from_json<int>(baml.json.field(j, "contents")) } : user.Bag
 }
-function user.Bag.to_string(self: user.Bag) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 function user.class_destructure_unreachable_after_bare(b: user.Bag) -> int throws never {
   { : 1 | 2
     match (b : user.Bag) : 1 | 2
@@ -135,9 +129,6 @@ function user.Mixed.to_json(self: user.Mixed) -> baml.json.json throws baml.json
 }
 function user.Mixed.from_json(j: baml.json.json) -> user.Mixed throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Mixed { value: baml.json.from_json<int | float | bool>(baml.json.field(j, "value")) } : user.Mixed
-}
-function user.Mixed.to_string(self: user.Mixed) -> string throws never {
-  baml.unstable.string<T>(self) : string
 }
 function user.class_destructure_field_union_missing_int(m: user.Mixed) -> int throws never {
   { : 1 | 2
@@ -158,9 +149,6 @@ function user.Pair.to_json(self: user.Pair) -> baml.json.json throws baml.json.J
 }
 function user.Pair.from_json(j: baml.json.json) -> user.Pair throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Pair { kind: baml.json.from_json<int | bool>(baml.json.field(j, "kind")), payload: baml.json.from_json<int | string>(baml.json.field(j, "payload")) } : user.Pair
-}
-function user.Pair.to_string(self: user.Pair) -> string throws never {
-  baml.unstable.string<T>(self) : string
 }
 function user.class_destructure_two_field_union_missing_combination(p: user.Pair) -> int throws never {
   { : 1 | 2 | 3
@@ -213,9 +201,6 @@ function user.Flagged.to_json(self: user.Flagged) -> baml.json.json throws baml.
 function user.Flagged.from_json(j: baml.json.json) -> user.Flagged throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Flagged { flag: baml.json.from_json<bool>(baml.json.field(j, "flag")), note: baml.json.from_json<string>(baml.json.field(j, "note")) } : user.Flagged
 }
-function user.Flagged.to_string(self: user.Flagged) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 function user.class_field_bool_narrowing_missing_true(f: user.Flagged) -> int throws never {
   { : 1 | 2
     match (f : user.Flagged) : 1 | 2
@@ -235,9 +220,6 @@ function user.Box2.to_json(self: user.Box2) -> baml.json.json throws baml.json.J
 }
 function user.Box2.from_json(j: baml.json.json) -> user.Box2 throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Box2 { first: baml.json.from_json<bool>(baml.json.field(j, "first")), second: baml.json.from_json<int[]?>(baml.json.field(j, "second")) } : user.Box2
-}
-function user.Box2.to_string(self: user.Box2) -> string throws never {
-  baml.unstable.string<T>(self) : string
 }
 function user.nested_class_optional_missing_combination(b: user.Box2) -> int throws never {
   { : 1 | 2 | 3
@@ -268,9 +250,6 @@ function user.IntPair.to_json(self: user.IntPair) -> baml.json.json throws baml.
 }
 function user.IntPair.from_json(j: baml.json.json) -> user.IntPair throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   IntPair { a: baml.json.from_json<int>(baml.json.field(j, "a")), b: baml.json.from_json<int>(baml.json.field(j, "b")) } : user.IntPair
-}
-function user.IntPair.to_string(self: user.IntPair) -> string throws never {
-  baml.unstable.string<T>(self) : string
 }
 function user.or_pattern_two_field_non_exhaustive(p: user.IntPair) -> int throws never {
   { : 1

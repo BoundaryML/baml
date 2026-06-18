@@ -19,11 +19,11 @@ enum user.HasDuplicateVariantAttr {ACTIVE, INACTIVE}
 function user.from_json(j: baml.json.json) -> user.HasDuplicateDescription  [expr] {
   user.HasDuplicateDescription { name: baml.json.from_json(baml.json.field(j, "name")) }
 }
-function user.from_json(j: baml.json.json) -> user.HasDuplicateFieldAttr  [expr] {
-  user.HasDuplicateFieldAttr { name: baml.json.from_json(baml.json.field(j, "name")) }
-}
 function user.from_json(j: baml.json.json) -> user.HasDuplicateField  [expr] {
   user.HasDuplicateField { name: baml.json.from_json(baml.json.field(j, "name")), age: baml.json.from_json(baml.json.field(j, "age")), name: baml.json.from_json(baml.json.field(j, "name")) }
+}
+function user.from_json(j: baml.json.json) -> user.HasDuplicateFieldAttr  [expr] {
+  user.HasDuplicateFieldAttr { name: baml.json.from_json(baml.json.field(j, "name")) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "name": baml.json.to_json(self.name), "age": baml.json.to_json(self.age), "name": baml.json.to_json(self.name) }
@@ -33,13 +33,4 @@ function user.to_json(self: ?) -> baml.json.json  [expr] {
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "name": baml.json.to_json(self.name) }
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
 }

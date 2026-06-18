@@ -11,9 +11,6 @@ function user.Wrapper.to_json(self: user.Wrapper) -> baml.json.json throws baml.
 function user.Wrapper.from_json(j: baml.json.json) -> user.Wrapper throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Wrapper { data: baml.json.from_json<baml.json.json>(baml.json.field(j, "data")) } : user.Wrapper
 }
-function user.Wrapper.to_string(self: user.Wrapper) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 function user.MakeWrapper() -> user.Wrapper throws never {
   { : user.Wrapper
     Wrapper { data: null } : user.Wrapper

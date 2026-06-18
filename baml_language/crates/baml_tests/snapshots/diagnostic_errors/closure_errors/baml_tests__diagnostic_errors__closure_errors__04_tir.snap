@@ -16,9 +16,6 @@ function user.Formatter.to_json(self: user.Formatter) -> baml.json.json throws b
 function user.Formatter.from_json(j: baml.json.json) -> user.Formatter throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Formatter { prefix: baml.json.from_json<string>(baml.json.field(j, "prefix")) } : user.Formatter
 }
-function user.Formatter.to_string(self: user.Formatter) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.Counter {
   value: int
 }
@@ -34,9 +31,6 @@ function user.Counter.to_json(self: user.Counter) -> baml.json.json throws baml.
 function user.Counter.from_json(j: baml.json.json) -> user.Counter throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Counter { value: baml.json.from_json<int>(baml.json.field(j, "value")) } : user.Counter
 }
-function user.Counter.to_string(self: user.Counter) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.Employee {
   first: string
   last: string
@@ -51,9 +45,6 @@ function user.Employee.to_json(self: user.Employee) -> baml.json.json throws bam
 }
 function user.Employee.from_json(j: baml.json.json) -> user.Employee throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Employee { first: baml.json.from_json<string>(baml.json.field(j, "first")), last: baml.json.from_json<string>(baml.json.field(j, "last")) } : user.Employee
-}
-function user.Employee.to_string(self: user.Employee) -> string throws never {
-  baml.unstable.string<T>(self) : string
 }
 function user.test_err_extra_arg() -> string throws never {
   { : string

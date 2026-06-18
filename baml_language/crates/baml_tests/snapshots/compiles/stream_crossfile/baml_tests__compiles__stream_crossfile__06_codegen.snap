@@ -47,13 +47,6 @@ function user.Education.to_json(self: Education) -> baml.json.json {
     return
 }
 
-function user.Education.to_string(self: Education) -> string {
-    load_type Education
-    load_var self
-    call baml.unstable.string
-    return
-}
-
 function user.Resume.from_json(j: baml.json.json) -> Resume {
     load_var j
     load_const "name"
@@ -109,12 +102,5 @@ function user.Resume.to_json(self: Resume) -> baml.json.json {
     load_const "highest_degree"
     load_const "aliases"
     alloc_map 4
-    return
-}
-
-function user.Resume.to_string(self: Resume) -> string {
-    load_type Resume
-    load_var self
-    call baml.unstable.string
     return
 }

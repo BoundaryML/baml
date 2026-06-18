@@ -51,14 +51,26 @@ function user.create(value: T) -> user.Factory<T>  [expr] {
 function user.from_json(j: baml.json.json) -> user.Foo<T>  [expr] {
   user.Foo { value: baml.json.from_json(baml.json.field(j, "value")) }
 }
+function user.from_json(j: baml.json.json) -> user.Wrapper<T>  [expr] {
+  user.Wrapper { data: baml.json.from_json(baml.json.field(j, "data")) }
+}
 function user.from_json(j: baml.json.json) -> user.Holder<T>  [expr] {
   user.Holder { data: baml.json.from_json(baml.json.field(j, "data")) }
+}
+function user.from_json(j: baml.json.json) -> user.Container<T>  [expr] {
+  user.Container { inner: baml.json.from_json(baml.json.field(j, "inner")) }
 }
 function user.from_json(j: baml.json.json) -> user.Stack<T>  [expr] {
   user.Stack { items: baml.json.from_json(baml.json.field(j, "items")) }
 }
+function user.from_json(j: baml.json.json) -> user.Box<T>  [expr] {
+  user.Box { value: baml.json.from_json(baml.json.field(j, "value")) }
+}
 function user.from_json(j: baml.json.json) -> user.Maker<T>  [expr] {
   user.Maker { data: baml.json.from_json(baml.json.field(j, "data")) }
+}
+function user.from_json(j: baml.json.json) -> user.Plain  [expr] {
+  user.Plain { name: baml.json.from_json(baml.json.field(j, "name")) }
 }
 function user.from_json(j: baml.json.json) -> user.MaybeBox<T>  [expr] {
   user.MaybeBox { value: baml.json.from_json(baml.json.field(j, "value")) }
@@ -66,23 +78,11 @@ function user.from_json(j: baml.json.json) -> user.MaybeBox<T>  [expr] {
 function user.from_json(j: baml.json.json) -> user.Pair<A, B>  [expr] {
   user.Pair { first: baml.json.from_json(baml.json.field(j, "first")), second: baml.json.from_json(baml.json.field(j, "second")) }
 }
-function user.from_json(j: baml.json.json) -> user.Factory<T>  [expr] {
-  user.Factory { data: baml.json.from_json(baml.json.field(j, "data")) }
-}
-function user.from_json(j: baml.json.json) -> user.Wrapper<T>  [expr] {
-  user.Wrapper { data: baml.json.from_json(baml.json.field(j, "data")) }
-}
-function user.from_json(j: baml.json.json) -> user.Container<T>  [expr] {
-  user.Container { inner: baml.json.from_json(baml.json.field(j, "inner")) }
-}
-function user.from_json(j: baml.json.json) -> user.Box<T>  [expr] {
-  user.Box { value: baml.json.from_json(baml.json.field(j, "value")) }
-}
-function user.from_json(j: baml.json.json) -> user.Plain  [expr] {
-  user.Plain { name: baml.json.from_json(baml.json.field(j, "name")) }
-}
 function user.from_json(j: baml.json.json) -> user.Shadow<T>  [expr] {
   user.Shadow { value: baml.json.from_json(baml.json.field(j, "value")) }
+}
+function user.from_json(j: baml.json.json) -> user.Factory<T>  [expr] {
+  user.Factory { data: baml.json.from_json(baml.json.field(j, "data")) }
 }
 function user.from_string(params: string) -> user.Maker<T>  [expr] {
   {  } user.Maker { data: params }
@@ -118,22 +118,10 @@ function user.swap(self: ?) -> user.Pair<B, A>  [expr] {
   {  } user.Pair { first: self.second, second: self.first }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "value": baml.json.to_json(self.value) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "data": baml.json.to_json(self.data) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "items": baml.json.to_json(self.items) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "data": baml.json.to_json(self.data) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "value": baml.json.to_json(self.value) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "first": baml.json.to_json(self.first), "second": baml.json.to_json(self.second) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "data": baml.json.to_json(self.data) }
@@ -145,7 +133,13 @@ function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "inner": baml.json.to_json(self.inner) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "items": baml.json.to_json(self.items) }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "value": baml.json.to_json(self.value) }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "data": baml.json.to_json(self.data) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "name": baml.json.to_json(self.name) }
@@ -153,41 +147,11 @@ function user.to_json(self: ?) -> baml.json.json  [expr] {
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "value": baml.json.to_json(self.value) }
 }
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "first": baml.json.to_json(self.first), "second": baml.json.to_json(self.second) }
 }
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "value": baml.json.to_json(self.value) }
 }
 function user.unwrap(self: ?) -> T  [expr] {
   {  } self.inner.get()
@@ -248,7 +212,4 @@ function user.from_json(j: baml.json.json) -> user.Todo  [expr] {
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "id": baml.json.to_json(self.id), "title": baml.json.to_json(self.title), "completed": baml.json.to_json(self.completed), "userId": baml.json.to_json(self.userId) }
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
 }

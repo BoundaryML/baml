@@ -14,9 +14,6 @@ function user.reflect_type_to_int() -> int  [expr] {
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "name": baml.json.to_json(self.name) }
 }
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
 function user.too_many_type_args() -> type  [expr] {
   {  } reflect.type_of()
 }

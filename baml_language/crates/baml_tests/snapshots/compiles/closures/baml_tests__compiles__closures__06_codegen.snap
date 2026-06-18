@@ -24,13 +24,6 @@ function user.Box.to_json(self: Box<T>) -> baml.json.json {
     return
 }
 
-function user.Box.to_string(self: Box<T>) -> string {
-    load_type Box<#0>
-    load_var self
-    call baml.unstable.string
-    return
-}
-
 function user.Box.unwrap(self: Box<T>) -> T {
     load_var self
     load_field .value
@@ -80,13 +73,6 @@ function user.Calculator.to_json(self: Calculator) -> baml.json.json {
     return
 }
 
-function user.Calculator.to_string(self: Calculator) -> string {
-    load_type Calculator
-    load_var self
-    call baml.unstable.string
-    return
-}
-
 function user.Config.from_json(j: baml.json.json) -> Config {
     load_var j
     load_const "encoder"
@@ -106,13 +92,6 @@ function user.Config.to_json(self: Config) -> baml.json.json {
     call baml.json.to_json
     load_const "encoder"
     alloc_map 1
-    return
-}
-
-function user.Config.to_string(self: Config) -> string {
-    load_type Config
-    load_var self
-    call baml.unstable.string
     return
 }
 
@@ -147,13 +126,6 @@ function user.Counter.to_json(self: Counter) -> baml.json.json {
     call baml.json.to_json
     load_const "value"
     alloc_map 1
-    return
-}
-
-function user.Counter.to_string(self: Counter) -> string {
-    load_type Counter
-    load_var self
-    call baml.unstable.string
     return
 }
 
@@ -212,13 +184,6 @@ function user.Employee.to_json(self: Employee) -> baml.json.json {
     return
 }
 
-function user.Employee.to_string(self: Employee) -> string {
-    load_type Employee
-    load_var self
-    call baml.unstable.string
-    return
-}
-
 function user.Encoder.encode(self: Encoder, data: string) -> string {
     load_const "["
     load_var self
@@ -253,13 +218,6 @@ function user.Encoder.to_json(self: Encoder) -> baml.json.json {
     return
 }
 
-function user.Encoder.to_string(self: Encoder) -> string {
-    load_type Encoder
-    load_var self
-    call baml.unstable.string
-    return
-}
-
 function user.Formatter.format(self: Formatter, text: string) -> string {
     load_var self
     load_field .prefix
@@ -287,13 +245,6 @@ function user.Formatter.to_json(self: Formatter) -> baml.json.json {
     call baml.json.to_json
     load_const "prefix"
     alloc_map 1
-    return
-}
-
-function user.Formatter.to_string(self: Formatter) -> string {
-    load_type Formatter
-    load_var self
-    call baml.unstable.string
     return
 }
 
@@ -342,13 +293,6 @@ function user.RangeCheck.to_json(self: RangeCheck) -> baml.json.json {
     load_const "min"
     load_const "max"
     alloc_map 2
-    return
-}
-
-function user.RangeCheck.to_string(self: RangeCheck) -> string {
-    load_type RangeCheck
-    load_var self
-    call baml.unstable.string
     return
 }
 

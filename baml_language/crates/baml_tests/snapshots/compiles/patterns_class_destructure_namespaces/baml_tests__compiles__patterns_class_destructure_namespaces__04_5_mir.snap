@@ -396,33 +396,6 @@ fn user.llm.openai.Response.from_json(j: baml.json.json) -> llm.openai.Response 
     }
 }
 
-fn user.llm.openai.Outer.from_json(j: baml.json.json) -> llm.openai.Outer<T> {
-    // Locals:
-    let _0: llm.openai.Outer<T> // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: llm.openai.Box<T>
-    let _3: baml.json.json
-    let _4: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "inner") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type(llm.openai.Box<#0>);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _0 = user.llm.openai.Outer<#0> { copy _2 };
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
 fn user.llm.openai.Box.from_json(j: baml.json.json) -> llm.openai.Box<T> {
     // Locals:
     let _0: llm.openai.Box<T> // _0 // return
@@ -442,6 +415,33 @@ fn user.llm.openai.Box.from_json(j: baml.json.json) -> llm.openai.Box<T> {
 
     bb2: {
         _0 = user.llm.openai.Box<#0> { copy _2 };
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn user.llm.openai.Outer.from_json(j: baml.json.json) -> llm.openai.Outer<T> {
+    // Locals:
+    let _0: llm.openai.Outer<T> // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: llm.openai.Box<T>
+    let _3: baml.json.json
+    let _4: type
+
+    bb0: {
+        _3 = call const fn baml.json.field(copy _1, const "inner") -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type(llm.openai.Box<#0>);
+        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        _0 = user.llm.openai.Outer<#0> { copy _2 };
         goto -> bb3;
     }
 
@@ -535,54 +535,6 @@ fn user.llm.openai.Outer.to_json(self: llm.openai.Outer) -> baml.json.json {
     }
 
     bb2: {
-        return;
-    }
-}
-
-fn user.llm.openai.Box.to_string(self: llm.openai.Box) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: llm.openai.Box // self // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(llm.openai.Box<#0>);
-        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.llm.openai.Response.to_string(self: llm.openai.Response) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: llm.openai.Response // self // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(llm.openai.Response);
-        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.llm.openai.Outer.to_string(self: llm.openai.Outer) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: llm.openai.Outer // self // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(llm.openai.Outer<#0>);
-        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
         return;
     }
 }

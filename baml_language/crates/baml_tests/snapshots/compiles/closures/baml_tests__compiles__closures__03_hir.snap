@@ -133,30 +133,6 @@ function user.to_json(self: ?) -> baml.json.json  [expr] {
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "charset": baml.json.to_json(self.charset) }
 }
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
 function user.unwrap(self: ?) -> T  [expr] {
   {  } self.value
 }

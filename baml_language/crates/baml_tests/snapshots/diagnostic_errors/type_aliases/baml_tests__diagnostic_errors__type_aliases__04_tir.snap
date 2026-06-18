@@ -34,9 +34,6 @@ function user.NotJSON.to_json(self: user.NotJSON) -> baml.json.json throws baml.
 function user.NotJSON.from_json(j: baml.json.json) -> user.NotJSON throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   NotJSON { inner: baml.json.from_json<name>(baml.json.field(j, "inner")) } : user.NotJSON
 }
-function user.NotJSON.to_string(self: user.NotJSON) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 function user.EchoJSON(i: user.JSON) -> user.JSON throws never {
   { : user.NotJSON
     NotJSON { inner: "Whoops" } : user.NotJSON

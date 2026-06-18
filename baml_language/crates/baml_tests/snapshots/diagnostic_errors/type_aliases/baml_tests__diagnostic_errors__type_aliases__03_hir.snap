@@ -30,6 +30,3 @@ function user.from_json(j: baml.json.json) -> user.NotJSON  [expr] {
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "inner": baml.json.to_json(self.inner) }
 }
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}

@@ -11,9 +11,6 @@ function user.Foo.to_json(self: user.Foo) -> baml.json.json throws baml.json.Jso
 function user.Foo.from_json(j: baml.json.json) -> user.Foo throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Foo { x: baml.json.from_json<int>(baml.json.field(j, "x")) } : user.Foo
 }
-function user.Foo.to_string(self: user.Foo) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 function user.make_foo() -> user.Foo throws never {
   { : user.Foo
     Foo { x: 1 } : user.Foo
@@ -33,9 +30,6 @@ function user.HasWith.to_json(self: user.HasWith) -> baml.json.json throws baml.
 }
 function user.HasWith.from_json(j: baml.json.json) -> user.HasWith throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   HasWith { with: baml.json.from_json<int>(baml.json.field(j, "with")) } : user.HasWith
-}
-function user.HasWith.to_string(self: user.HasWith) -> string throws never {
-  baml.unstable.string<T>(self) : string
 }
 function user.$init_test_main(registry: testing.TestCollector) -> ? throws never {
   { : null

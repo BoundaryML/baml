@@ -11,9 +11,6 @@ function user.MyRunner.to_json(self: user.MyRunner) -> baml.json.json throws bam
 function user.MyRunner.from_json(j: baml.json.json) -> user.MyRunner throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   MyRunner { threshold: baml.json.from_json<float>(baml.json.field(j, "threshold")) } : user.MyRunner
 }
-function user.MyRunner.to_string(self: user.MyRunner) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 function user.$init_test_main(registry: testing.TestCollector) -> ? throws never {
   { : null
     registry.register_test("simple runner", () -> void { ... }, my_runner) : void

@@ -11,9 +11,6 @@ function user.WithEnum.to_json(self: user.WithEnum) -> baml.json.json throws bam
 function user.WithEnum.from_json(j: baml.json.json) -> user.WithEnum throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   WithEnum { status: baml.json.from_json<Status>(baml.json.field(j, "status")) } : user.WithEnum
 }
-function user.WithEnum.to_string(self: user.WithEnum) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.WithEnum$stream {
   status: user.Status | null
 }

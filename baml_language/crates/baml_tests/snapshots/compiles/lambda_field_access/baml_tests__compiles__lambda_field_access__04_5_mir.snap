@@ -381,35 +381,3 @@ fn user.Inner.to_json(self: Inner) -> baml.json.json {
         return;
     }
 }
-
-fn user.Outer.to_string(self: Outer) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: Outer // self // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(Outer);
-        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.Inner.to_string(self: Inner) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: Inner // self // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(Inner);
-        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}

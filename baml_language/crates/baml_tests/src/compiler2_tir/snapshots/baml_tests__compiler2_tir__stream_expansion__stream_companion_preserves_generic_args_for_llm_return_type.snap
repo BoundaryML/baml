@@ -11,9 +11,6 @@ function user.Box.to_json(self: user.Box) -> baml.json.json throws baml.json.Jso
 function user.Box.from_json(j: baml.json.json) -> user.Box<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Box { value: baml.json.from_json<T>(baml.json.field(j, "value")) } : user.Box<T>
 }
-function user.Box.to_string(self: user.Box) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 function user.Dummy$new() -> ? throws never {
   baml.llm.PrimitiveClient { name: "Dummy", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
 }

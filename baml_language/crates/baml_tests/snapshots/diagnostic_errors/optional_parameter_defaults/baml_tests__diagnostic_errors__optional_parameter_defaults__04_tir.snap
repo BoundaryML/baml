@@ -81,9 +81,6 @@ function user.Counter.to_json(self: user.Counter) -> baml.json.json throws baml.
 function user.Counter.from_json(j: baml.json.json) -> user.Counter throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Counter { value: baml.json.from_json<int>(baml.json.field(j, "value")) } : user.Counter
 }
-function user.Counter.to_string(self: user.Counter) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 function user.LambdaDefault() -> int throws never {
   { : int
     let f = : (x: int) -> int throws never

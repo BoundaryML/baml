@@ -44,17 +44,26 @@ function user.from_json(j: baml.json.json) -> user.ChainUser  [expr] {
 function user.from_json(j: baml.json.json) -> user.ChainPreferences  [expr] {
   user.ChainPreferences { color: baml.json.from_json(baml.json.field(j, "color")), font: baml.json.from_json(baml.json.field(j, "font")), size: baml.json.from_json(baml.json.field(j, "size")) }
 }
+function user.from_json(j: baml.json.json) -> user.ChainSettings  [expr] {
+  user.ChainSettings { theme: baml.json.from_json(baml.json.field(j, "theme")), notifications: baml.json.from_json(baml.json.field(j, "notifications")), preferences: baml.json.from_json(baml.json.field(j, "preferences")) }
+}
+function user.from_json(j: baml.json.json) -> user.ChainMetadata  [expr] {
+  user.ChainMetadata { created_at: baml.json.from_json(baml.json.field(j, "created_at")), tags: baml.json.from_json(baml.json.field(j, "tags")) }
+}
 function user.from_json(j: baml.json.json) -> user.ChainProfile  [expr] {
   user.ChainProfile { bio: baml.json.from_json(baml.json.field(j, "bio")), settings: baml.json.from_json(baml.json.field(j, "settings")), items: baml.json.from_json(baml.json.field(j, "items")) }
 }
 function user.from_json(j: baml.json.json) -> user.ChainItem  [expr] {
   user.ChainItem { label: baml.json.from_json(baml.json.field(j, "label")), value: baml.json.from_json(baml.json.field(j, "value")), metadata: baml.json.from_json(baml.json.field(j, "metadata")) }
 }
-function user.from_json(j: baml.json.json) -> user.ChainSettings  [expr] {
-  user.ChainSettings { theme: baml.json.from_json(baml.json.field(j, "theme")), notifications: baml.json.from_json(baml.json.field(j, "notifications")), preferences: baml.json.from_json(baml.json.field(j, "preferences")) }
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "bio": baml.json.to_json(self.bio), "settings": baml.json.to_json(self.settings), "items": baml.json.to_json(self.items) }
 }
-function user.from_json(j: baml.json.json) -> user.ChainMetadata  [expr] {
-  user.ChainMetadata { created_at: baml.json.from_json(baml.json.field(j, "created_at")), tags: baml.json.from_json(baml.json.field(j, "tags")) }
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "created_at": baml.json.to_json(self.created_at), "tags": baml.json.to_json(self.tags) }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "label": baml.json.to_json(self.label), "value": baml.json.to_json(self.value), "metadata": baml.json.to_json(self.metadata) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "name": baml.json.to_json(self.name), "profile": baml.json.to_json(self.profile), "tags": baml.json.to_json(self.tags), "scores": baml.json.to_json(self.scores) }
@@ -63,34 +72,7 @@ function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "color": baml.json.to_json(self.color), "font": baml.json.to_json(self.font), "size": baml.json.to_json(self.size) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "bio": baml.json.to_json(self.bio), "settings": baml.json.to_json(self.settings), "items": baml.json.to_json(self.items) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "label": baml.json.to_json(self.label), "value": baml.json.to_json(self.value), "metadata": baml.json.to_json(self.metadata) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "theme": baml.json.to_json(self.theme), "notifications": baml.json.to_json(self.notifications), "preferences": baml.json.to_json(self.preferences) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "created_at": baml.json.to_json(self.created_at), "tags": baml.json.to_json(self.tags) }
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
 }
 class user.A {
   x: int
@@ -277,62 +259,11 @@ function user.from_json(j: baml.json.json) -> user.TriviaClass  [expr] {
 function user.from_json(j: baml.json.json) -> user.SingleFieldComma  [expr] {
   user.SingleFieldComma { name: baml.json.from_json(baml.json.field(j, "name")) }
 }
-function user.from_json(j: baml.json.json) -> user.ManyFields  [expr] {
-  user.ManyFields { field1: baml.json.from_json(baml.json.field(j, "field1")), field2: baml.json.from_json(baml.json.field(j, "field2")), field3: baml.json.from_json(baml.json.field(j, "field3")), field4: baml.json.from_json(baml.json.field(j, "field4")), field5: baml.json.from_json(baml.json.field(j, "field5")), field6: baml.json.from_json(baml.json.field(j, "field6")), field7: baml.json.from_json(baml.json.field(j, "field7")), field8: baml.json.from_json(baml.json.field(j, "field8")), field9: baml.json.from_json(baml.json.field(j, "field9")), field10: baml.json.from_json(baml.json.field(j, "field10")) }
-}
-function user.from_json(j: baml.json.json) -> user.MultiBlockAttr  [expr] {
-  user.MultiBlockAttr { name: baml.json.from_json(baml.json.field(j, "name")) }
-}
-function user.from_json(j: baml.json.json) -> user.FieldsAndMethods  [expr] {
-  user.FieldsAndMethods { name: baml.json.from_json(baml.json.field(j, "name")), age: baml.json.from_json(baml.json.field(j, "age")), active: baml.json.from_json(baml.json.field(j, "active")) }
-}
-function user.from_json(j: baml.json.json) -> user.ExtraWhitespace  [expr] {
-  user.ExtraWhitespace { name: baml.json.from_json(baml.json.field(j, "name")), age: baml.json.from_json(baml.json.field(j, "age")) }
-}
-function user.from_json(j: baml.json.json) -> user.DynamicClass  [expr] {
-  user.DynamicClass { name: baml.json.from_json(baml.json.field(j, "name")) }
-}
-function user.from_json(j: baml.json.json) -> user.MixedDelimiters  [expr] {
-  user.MixedDelimiters { a: baml.json.from_json(baml.json.field(j, "a")), b: baml.json.from_json(baml.json.field(j, "b")), c: baml.json.from_json(baml.json.field(j, "c")), d: baml.json.from_json(baml.json.field(j, "d")) }
-}
-function user.from_json(j: baml.json.json) -> user.AttributeVariety  [expr] {
-  user.AttributeVariety { a: baml.json.from_json(baml.json.field(j, "a")), b: baml.json.from_json(baml.json.field(j, "b")), c: baml.json.from_json(baml.json.field(j, "c")), d: baml.json.from_json(baml.json.field(j, "d")), e: baml.json.from_json(baml.json.field(j, "e")), f: baml.json.from_json(baml.json.field(j, "f")) }
-}
-function user.from_json(j: baml.json.json) -> user.TypeVariety  [expr] {
-  baml.json.from_string(baml.json.stringify(j))
-}
-function user.from_json(j: baml.json.json) -> user.TrailingSemicolons  [expr] {
-  user.TrailingSemicolons { name: baml.json.from_json(baml.json.field(j, "name")), age: baml.json.from_json(baml.json.field(j, "age")), active: baml.json.from_json(baml.json.field(j, "active")) }
-}
-function user.from_json(j: baml.json.json) -> user.ThisIsAnExtremelyLongClassNameThatDefinitelyExceedsTheOneHundredCharacterLineLimitAllByItself  [expr] {
-  user.ThisIsAnExtremelyLongClassNameThatDefinitelyExceedsTheOneHundredCharacterLineLimitAllByItself { x: baml.json.from_json(baml.json.field(j, "x")) }
-}
-function user.from_json(j: baml.json.json) -> user.LongFieldTypes  [expr] {
-  baml.json.from_string(baml.json.stringify(j))
-}
-function user.from_json(j: baml.json.json) -> user.TrailingCommas  [expr] {
-  user.TrailingCommas { name: baml.json.from_json(baml.json.field(j, "name")), age: baml.json.from_json(baml.json.field(j, "age")), active: baml.json.from_json(baml.json.field(j, "active")) }
-}
-function user.from_json(j: baml.json.json) -> user.A  [expr] {
-  user.A { x: baml.json.from_json(baml.json.field(j, "x")) }
-}
-function user.from_json(j: baml.json.json) -> user.LongAttrField  [expr] {
-  user.LongAttrField { name: baml.json.from_json(baml.json.field(j, "name")), data: baml.json.from_json(baml.json.field(j, "data")), config: baml.json.from_json(baml.json.field(j, "config")) }
-}
-function user.from_json(j: baml.json.json) -> user.DeepLevel3  [expr] {
-  user.DeepLevel3 { data: baml.json.from_json(baml.json.field(j, "data")), nested: baml.json.from_json(baml.json.field(j, "nested")) }
-}
-function user.from_json(j: baml.json.json) -> user.TriviaMultiAttrBlock  [expr] {
-  user.TriviaMultiAttrBlock { name: baml.json.from_json(baml.json.field(j, "name")) }
-}
-function user.from_json(j: baml.json.json) -> user.MultiAttrField  [expr] {
-  user.MultiAttrField { name: baml.json.from_json(baml.json.field(j, "name")), summary: baml.json.from_json(baml.json.field(j, "summary")) }
-}
-function user.from_json(j: baml.json.json) -> user.DeepLevel2  [expr] {
-  user.DeepLevel2 { level3: baml.json.from_json(baml.json.field(j, "level3")), value: baml.json.from_json(baml.json.field(j, "value")) }
-}
 function user.from_json(j: baml.json.json) -> user.TriviaMultiAttr  [expr] {
   user.TriviaMultiAttr { name: baml.json.from_json(baml.json.field(j, "name")) }
+}
+function user.from_json(j: baml.json.json) -> user.ManyFields  [expr] {
+  user.ManyFields { field1: baml.json.from_json(baml.json.field(j, "field1")), field2: baml.json.from_json(baml.json.field(j, "field2")), field3: baml.json.from_json(baml.json.field(j, "field3")), field4: baml.json.from_json(baml.json.field(j, "field4")), field5: baml.json.from_json(baml.json.field(j, "field5")), field6: baml.json.from_json(baml.json.field(j, "field6")), field7: baml.json.from_json(baml.json.field(j, "field7")), field8: baml.json.from_json(baml.json.field(j, "field8")), field9: baml.json.from_json(baml.json.field(j, "field9")), field10: baml.json.from_json(baml.json.field(j, "field10")) }
 }
 function user.from_json(j: baml.json.json) -> user.SingleAttrField  [expr] {
   user.SingleAttrField { name: baml.json.from_json(baml.json.field(j, "name")) }
@@ -340,8 +271,17 @@ function user.from_json(j: baml.json.json) -> user.SingleAttrField  [expr] {
 function user.from_json(j: baml.json.json) -> user.DeepLevel1  [expr] {
   user.DeepLevel1 { level2: baml.json.from_json(baml.json.field(j, "level2")), items: baml.json.from_json(baml.json.field(j, "items")), mapping: baml.json.from_json(baml.json.field(j, "mapping")) }
 }
+function user.from_json(j: baml.json.json) -> user.MultiBlockAttr  [expr] {
+  user.MultiBlockAttr { name: baml.json.from_json(baml.json.field(j, "name")) }
+}
+function user.from_json(j: baml.json.json) -> user.FieldsAndMethods  [expr] {
+  user.FieldsAndMethods { name: baml.json.from_json(baml.json.field(j, "name")), age: baml.json.from_json(baml.json.field(j, "age")), active: baml.json.from_json(baml.json.field(j, "active")) }
+}
 function user.from_json(j: baml.json.json) -> user.TriviaLongFieldTypeBlock  [expr] {
   user.TriviaLongFieldTypeBlock { data: baml.json.from_json(baml.json.field(j, "data")) }
+}
+function user.from_json(j: baml.json.json) -> user.ExtraWhitespace  [expr] {
+  user.ExtraWhitespace { name: baml.json.from_json(baml.json.field(j, "name")), age: baml.json.from_json(baml.json.field(j, "age")) }
 }
 function user.from_json(j: baml.json.json) -> user.ColonFields  [expr] {
   user.ColonFields { name: baml.json.from_json(baml.json.field(j, "name")), age: baml.json.from_json(baml.json.field(j, "age")) }
@@ -349,11 +289,20 @@ function user.from_json(j: baml.json.json) -> user.ColonFields  [expr] {
 function user.from_json(j: baml.json.json) -> user.DeepOuter  [expr] {
   user.DeepOuter { level1: baml.json.from_json(baml.json.field(j, "level1")) }
 }
+function user.from_json(j: baml.json.json) -> user.DynamicClass  [expr] {
+  user.DynamicClass { name: baml.json.from_json(baml.json.field(j, "name")) }
+}
+function user.from_json(j: baml.json.json) -> user.MixedDelimiters  [expr] {
+  user.MixedDelimiters { a: baml.json.from_json(baml.json.field(j, "a")), b: baml.json.from_json(baml.json.field(j, "b")), c: baml.json.from_json(baml.json.field(j, "c")), d: baml.json.from_json(baml.json.field(j, "d")) }
+}
 function user.from_json(j: baml.json.json) -> user.TriviaLongFieldType  [expr] {
   user.TriviaLongFieldType { data: baml.json.from_json(baml.json.field(j, "data")) }
 }
 function user.from_json(j: baml.json.json) -> user.SemicolonTrivia  [expr] {
   user.SemicolonTrivia { name: baml.json.from_json(baml.json.field(j, "name")), age: baml.json.from_json(baml.json.field(j, "age")) }
+}
+function user.from_json(j: baml.json.json) -> user.AttributeVariety  [expr] {
+  user.AttributeVariety { a: baml.json.from_json(baml.json.field(j, "a")), b: baml.json.from_json(baml.json.field(j, "b")), c: baml.json.from_json(baml.json.field(j, "c")), d: baml.json.from_json(baml.json.field(j, "d")), e: baml.json.from_json(baml.json.field(j, "e")), f: baml.json.from_json(baml.json.field(j, "f")) }
 }
 function user.from_json(j: baml.json.json) -> user.MultiField  [expr] {
   user.MultiField { name: baml.json.from_json(baml.json.field(j, "name")), age: baml.json.from_json(baml.json.field(j, "age")), active: baml.json.from_json(baml.json.field(j, "active")) }
@@ -361,11 +310,20 @@ function user.from_json(j: baml.json.json) -> user.MultiField  [expr] {
 function user.from_json(j: baml.json.json) -> user.WithLongMethod  [expr] {
   user.WithLongMethod { name: baml.json.from_json(baml.json.field(j, "name")) }
 }
+function user.from_json(j: baml.json.json) -> user.TypeVariety  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function user.from_json(j: baml.json.json) -> user.TrailingSemicolons  [expr] {
+  user.TrailingSemicolons { name: baml.json.from_json(baml.json.field(j, "name")), age: baml.json.from_json(baml.json.field(j, "age")), active: baml.json.from_json(baml.json.field(j, "active")) }
+}
 function user.from_json(j: baml.json.json) -> user.TriviaFieldAttrsBlock  [expr] {
   user.TriviaFieldAttrsBlock { name: baml.json.from_json(baml.json.field(j, "name")) }
 }
 function user.from_json(j: baml.json.json) -> user.AttrsWithDelimiters  [expr] {
   user.AttrsWithDelimiters { name: baml.json.from_json(baml.json.field(j, "name")), age: baml.json.from_json(baml.json.field(j, "age")), active: baml.json.from_json(baml.json.field(j, "active")) }
+}
+function user.from_json(j: baml.json.json) -> user.ThisIsAnExtremelyLongClassNameThatDefinitelyExceedsTheOneHundredCharacterLineLimitAllByItself  [expr] {
+  user.ThisIsAnExtremelyLongClassNameThatDefinitelyExceedsTheOneHundredCharacterLineLimitAllByItself { x: baml.json.from_json(baml.json.field(j, "x")) }
 }
 function user.from_json(j: baml.json.json) -> user.SingleField  [expr] {
   user.SingleField { name: baml.json.from_json(baml.json.field(j, "name")) }
@@ -373,11 +331,20 @@ function user.from_json(j: baml.json.json) -> user.SingleField  [expr] {
 function user.from_json(j: baml.json.json) -> user.WithMethod  [expr] {
   user.WithMethod { name: baml.json.from_json(baml.json.field(j, "name")) }
 }
+function user.from_json(j: baml.json.json) -> user.LongFieldTypes  [expr] {
+  baml.json.from_string(baml.json.stringify(j))
+}
+function user.from_json(j: baml.json.json) -> user.TrailingCommas  [expr] {
+  user.TrailingCommas { name: baml.json.from_json(baml.json.field(j, "name")), age: baml.json.from_json(baml.json.field(j, "age")), active: baml.json.from_json(baml.json.field(j, "active")) }
+}
 function user.from_json(j: baml.json.json) -> user.TriviaFieldAttrs  [expr] {
   user.TriviaFieldAttrs { name: baml.json.from_json(baml.json.field(j, "name")) }
 }
 function user.from_json(j: baml.json.json) -> user.NoColonDelimiters  [expr] {
   user.NoColonDelimiters { name: baml.json.from_json(baml.json.field(j, "name")), age: baml.json.from_json(baml.json.field(j, "age")), active: baml.json.from_json(baml.json.field(j, "active")) }
+}
+function user.from_json(j: baml.json.json) -> user.A  [expr] {
+  user.A { x: baml.json.from_json(baml.json.field(j, "x")) }
 }
 function user.from_json(j: baml.json.json) -> user.EmptyClass  [expr] {
   user.EmptyClass {  }
@@ -385,14 +352,29 @@ function user.from_json(j: baml.json.json) -> user.EmptyClass  [expr] {
 function user.from_json(j: baml.json.json) -> user.InnerNested  [expr] {
   user.InnerNested { value: baml.json.from_json(baml.json.field(j, "value")) }
 }
+function user.from_json(j: baml.json.json) -> user.LongAttrField  [expr] {
+  user.LongAttrField { name: baml.json.from_json(baml.json.field(j, "name")), data: baml.json.from_json(baml.json.field(j, "data")), config: baml.json.from_json(baml.json.field(j, "config")) }
+}
+function user.from_json(j: baml.json.json) -> user.DeepLevel3  [expr] {
+  user.DeepLevel3 { data: baml.json.from_json(baml.json.field(j, "data")), nested: baml.json.from_json(baml.json.field(j, "nested")) }
+}
 function user.from_json(j: baml.json.json) -> user.TriviaClassBlock  [expr] {
   user.TriviaClassBlock { name: baml.json.from_json(baml.json.field(j, "name")) }
 }
 function user.from_json(j: baml.json.json) -> user.SingleFieldSemicolon  [expr] {
   user.SingleFieldSemicolon { name: baml.json.from_json(baml.json.field(j, "name")) }
 }
+function user.from_json(j: baml.json.json) -> user.TriviaMultiAttrBlock  [expr] {
+  user.TriviaMultiAttrBlock { name: baml.json.from_json(baml.json.field(j, "name")) }
+}
 function user.from_json(j: baml.json.json) -> user.Outer  [expr] {
   user.Outer { inner: baml.json.from_json(baml.json.field(j, "inner")), list: baml.json.from_json(baml.json.field(j, "list")), optional: baml.json.from_json(baml.json.field(j, "optional")), mapping: baml.json.from_json(baml.json.field(j, "mapping")) }
+}
+function user.from_json(j: baml.json.json) -> user.MultiAttrField  [expr] {
+  user.MultiAttrField { name: baml.json.from_json(baml.json.field(j, "name")), summary: baml.json.from_json(baml.json.field(j, "summary")) }
+}
+function user.from_json(j: baml.json.json) -> user.DeepLevel2  [expr] {
+  user.DeepLevel2 { level3: baml.json.from_json(baml.json.field(j, "level3")), value: baml.json.from_json(baml.json.field(j, "value")) }
 }
 function user.greet() -> string  [expr] {
   {  } "hello"
@@ -413,66 +395,6 @@ function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "name": baml.json.to_json(self.name) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "level2": baml.json.to_json(self.level2), "items": baml.json.to_json(self.items), "mapping": baml.json.to_json(self.mapping) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "data": baml.json.to_json(self.data) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": baml.json.to_json(self.name), "age": baml.json.to_json(self.age) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "level1": baml.json.to_json(self.level1) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "data": baml.json.to_json(self.data) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": baml.json.to_json(self.name), "age": baml.json.to_json(self.age) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": baml.json.to_json(self.name), "age": baml.json.to_json(self.age), "active": baml.json.to_json(self.active) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": baml.json.to_json(self.name) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": baml.json.to_json(self.name) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": baml.json.to_json(self.name), "age": baml.json.to_json(self.age), "active": baml.json.to_json(self.active) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": baml.json.to_json(self.name) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": baml.json.to_json(self.name) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": baml.json.to_json(self.name) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": baml.json.to_json(self.name), "age": baml.json.to_json(self.age), "active": baml.json.to_json(self.active) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map {  }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "value": baml.json.to_json(self.value) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": baml.json.to_json(self.name) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": baml.json.to_json(self.name) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "inner": baml.json.to_json(self.inner), "list": baml.json.to_json(self.list), "optional": baml.json.to_json(self.optional), "mapping": baml.json.to_json(self.mapping) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": baml.json.to_json(self.name) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "name": baml.json.to_json(self.name) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
@@ -482,10 +404,25 @@ function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "name": baml.json.to_json(self.name) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "level2": baml.json.to_json(self.level2), "items": baml.json.to_json(self.items), "mapping": baml.json.to_json(self.mapping) }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "name": baml.json.to_json(self.name) }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "name": baml.json.to_json(self.name), "age": baml.json.to_json(self.age), "active": baml.json.to_json(self.active) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "data": baml.json.to_json(self.data) }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "name": baml.json.to_json(self.name), "age": baml.json.to_json(self.age) }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "name": baml.json.to_json(self.name), "age": baml.json.to_json(self.age) }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "level1": baml.json.to_json(self.level1) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "name": baml.json.to_json(self.name) }
@@ -494,10 +431,28 @@ function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "a": baml.json.to_json(self.a), "b": baml.json.to_json(self.b), "c": baml.json.to_json(self.c), "d": baml.json.to_json(self.d) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "data": baml.json.to_json(self.data) }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "name": baml.json.to_json(self.name), "age": baml.json.to_json(self.age) }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "a": baml.json.to_json(self.a), "b": baml.json.to_json(self.b), "c": baml.json.to_json(self.c), "d": baml.json.to_json(self.d), "e": baml.json.to_json(self.e), "f": baml.json.to_json(self.f) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "name": baml.json.to_json(self.name), "age": baml.json.to_json(self.age), "active": baml.json.to_json(self.active) }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "name": baml.json.to_json(self.name) }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
   baml.json.parse(baml.json.to_string(self))
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "name": baml.json.to_json(self.name), "age": baml.json.to_json(self.age), "active": baml.json.to_json(self.active) }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "name": baml.json.to_json(self.name) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "name": baml.json.to_json(self.name), "age": baml.json.to_json(self.age), "active": baml.json.to_json(self.active) }
@@ -506,13 +461,31 @@ function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "x": baml.json.to_json(self.x) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "name": baml.json.to_json(self.name) }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "name": baml.json.to_json(self.name) }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
   baml.json.parse(baml.json.to_string(self))
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "name": baml.json.to_json(self.name), "age": baml.json.to_json(self.age), "active": baml.json.to_json(self.active) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "name": baml.json.to_json(self.name) }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "name": baml.json.to_json(self.name), "age": baml.json.to_json(self.age), "active": baml.json.to_json(self.active) }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "x": baml.json.to_json(self.x) }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map {  }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "value": baml.json.to_json(self.value) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "name": baml.json.to_json(self.name), "data": baml.json.to_json(self.data), "config": baml.json.to_json(self.config) }
@@ -524,130 +497,16 @@ function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "name": baml.json.to_json(self.name) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "name": baml.json.to_json(self.name) }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "name": baml.json.to_json(self.name) }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "inner": baml.json.to_json(self.inner), "list": baml.json.to_json(self.list), "optional": baml.json.to_json(self.optional), "mapping": baml.json.to_json(self.mapping) }
+}
+function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "name": baml.json.to_json(self.name), "summary": baml.json.to_json(self.summary) }
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
 }
 function user.ArrayConfigClient$new() -> ?  [expr] {
   baml.llm.PrimitiveClient { name: "ArrayConfigClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "stop_sequences": ["END", "STOP", "DONE"] } } }
@@ -958,11 +817,11 @@ function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bo
 function user.from_json(j: baml.json.json) -> user.MatchSuccess  [expr] {
   user.MatchSuccess { data: baml.json.from_json(baml.json.field(j, "data")) }
 }
-function user.from_json(j: baml.json.json) -> user.ArrayPatternTriviaBox  [expr] {
-  user.ArrayPatternTriviaBox { values: baml.json.from_json(baml.json.field(j, "values")) }
-}
 function user.from_json(j: baml.json.json) -> user.MatchFailure  [expr] {
   user.MatchFailure { reason: baml.json.from_json(baml.json.field(j, "reason")) }
+}
+function user.from_json(j: baml.json.json) -> user.ArrayPatternTriviaBox  [expr] {
+  user.ArrayPatternTriviaBox { values: baml.json.from_json(baml.json.field(j, "values")) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "reason": baml.json.to_json(self.reason) }
@@ -972,15 +831,6 @@ function user.to_json(self: ?) -> baml.json.json  [expr] {
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "values": baml.json.to_json(self.values) }
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
 }
 class user.OtherPoint {
   x: int
@@ -1001,11 +851,11 @@ function user.OtherExprs(a: int, b: int) -> int  [expr] {
 function user.from_json(j: baml.json.json) -> user.OtherPoint  [expr] {
   user.OtherPoint { x: baml.json.from_json(baml.json.field(j, "x")), y: baml.json.from_json(baml.json.field(j, "y")) }
 }
-function user.from_json(j: baml.json.json) -> user.OtherTriple  [expr] {
-  user.OtherTriple { a: baml.json.from_json(baml.json.field(j, "a")), b: baml.json.from_json(baml.json.field(j, "b")), c: baml.json.from_json(baml.json.field(j, "c")) }
-}
 function user.from_json(j: baml.json.json) -> user.OtherVec  [expr] {
   user.OtherVec { p: baml.json.from_json(baml.json.field(j, "p")), q: baml.json.from_json(baml.json.field(j, "q")) }
+}
+function user.from_json(j: baml.json.json) -> user.OtherTriple  [expr] {
+  user.OtherTriple { a: baml.json.from_json(baml.json.field(j, "a")), b: baml.json.from_json(baml.json.field(j, "b")), c: baml.json.from_json(baml.json.field(j, "c")) }
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "p": baml.json.to_json(self.p), "q": baml.json.to_json(self.q) }
@@ -1015,15 +865,6 @@ function user.to_json(self: ?) -> baml.json.json  [expr] {
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "a": baml.json.to_json(self.a), "b": baml.json.to_json(self.b), "c": baml.json.to_json(self.c) }
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
 }
 class user.TypeAliasFailure {
   reason: string
@@ -1102,10 +943,4 @@ function user.to_json(self: ?) -> baml.json.json  [expr] {
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "data": baml.json.to_json(self.data) }
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
 }

@@ -117,9 +117,6 @@ fn class_field_access() {
     function user.Foo.from_json(j: baml.json.json) -> user.Foo throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       Foo { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.Foo
     }
-    function user.Foo.to_string(self: user.Foo) -> string throws never {
-      baml.unstable.string<T>(self) : string
-    }
     function user.f(x: user.Foo) -> string throws never {
       { : never
         return x.name : string
@@ -162,9 +159,6 @@ fn unresolved_field() {
     function user.Foo.from_json(j: baml.json.json) -> user.Foo throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       Foo { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.Foo
     }
-    function user.Foo.to_string(self: user.Foo) -> string throws never {
-      baml.unstable.string<T>(self) : string
-    }
     function user.f(x: user.Foo) -> string throws never {
       { : never
         return x.missing : unknown
@@ -202,9 +196,6 @@ function f(data: Data) -> string {
     function user.Data.from_json(j: baml.json.json) -> user.Data throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       Data { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.Data
     }
-    function user.Data.to_string(self: user.Data) -> string throws never {
-      baml.unstable.string<T>(self) : string
-    }
     function user.f(data: user.Data) -> string throws never {
       { : never
         return data.inner.foo : unknown
@@ -241,9 +232,6 @@ function f(s: Sentiment) -> string {
     }
     function user.Sentiment.from_json(j: baml.json.json) -> user.Sentiment throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       Sentiment { feeling: baml.json.from_json<string>(baml.json.field(j, "feeling")) } : user.Sentiment
-    }
-    function user.Sentiment.to_string(self: user.Sentiment) -> string throws never {
-      baml.unstable.string<T>(self) : string
     }
     function user.f(s: user.Sentiment) -> string throws never {
       { : never
@@ -330,9 +318,6 @@ fn resolve_class_fields_query() {
     function user.Point.from_json(j: baml.json.json) -> user.Point throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       Point { x: baml.json.from_json<int>(baml.json.field(j, "x")), y: baml.json.from_json<float>(baml.json.field(j, "y")), label: baml.json.from_json<string>(baml.json.field(j, "label")) } : user.Point
     }
-    function user.Point.to_string(self: user.Point) -> string throws never {
-      baml.unstable.string<T>(self) : string
-    }
     class user.Point$stream {
       x: int | null
       y: float | null
@@ -368,9 +353,6 @@ fn class_field_bigint() {
     }
     function user.Foo.from_json(j: baml.json.json) -> user.Foo throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       Foo { x: baml.json.from_json<bigint>(baml.json.field(j, "x")) } : user.Foo
-    }
-    function user.Foo.to_string(self: user.Foo) -> string throws never {
-      baml.unstable.string<T>(self) : string
     }
     class user.Foo$stream {
       x: bigint | null

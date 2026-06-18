@@ -668,70 +668,6 @@ fn user.RootWithCrossNsFields.to_json(self: RootWithCrossNsFields) -> baml.json.
     }
 }
 
-fn user.Error.to_string(self: Error) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: Error // self // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(Error);
-        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.RootWithCrossNsFields.to_string(self: RootWithCrossNsFields) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: RootWithCrossNsFields // self // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(RootWithCrossNsFields);
-        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.Config.to_string(self: Config) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: Config // self // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(Config);
-        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.RootWithCrossNsAlias.to_string(self: RootWithCrossNsAlias) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: RootWithCrossNsAlias // self // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(RootWithCrossNsAlias);
-        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn user.auth.AuthAliasParam(t: auth.Token) -> string {
     // Locals:
     let _0: string // _0 // return
@@ -1330,54 +1266,6 @@ fn user.auth.Token.to_json(self: auth.Token) -> baml.json.json {
     }
 
     bb3: {
-        return;
-    }
-}
-
-fn user.auth.Error.to_string(self: auth.Error) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: auth.Error // self // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(auth.Error);
-        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.auth.Token.to_string(self: auth.Token) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: auth.Token // self // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(auth.Token);
-        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.auth.Config.to_string(self: auth.Config) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: auth.Config // self // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(auth.Config);
-        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
         return;
     }
 }
@@ -2298,86 +2186,6 @@ fn user.llm.Response.to_json(self: llm.Response) -> baml.json.json {
     }
 }
 
-fn user.llm.Error.to_string(self: llm.Error) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: llm.Error // self // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(llm.Error);
-        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.llm.LlmWithRootAlias.to_string(self: llm.LlmWithRootAlias) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: llm.LlmWithRootAlias // self // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(llm.LlmWithRootAlias);
-        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.llm.Config.to_string(self: llm.Config) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: llm.Config // self // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(llm.Config);
-        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.llm.LlmWithCrossNsFields.to_string(self: llm.LlmWithCrossNsFields) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: llm.LlmWithCrossNsFields // self // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(llm.LlmWithCrossNsFields);
-        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.llm.Response.to_string(self: llm.Response) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: llm.Response // self // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(llm.Response);
-        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn user.llm.openai.OpenAIConstruct(key: string) -> llm.openai.Client {
     // Locals:
     let _0: llm.openai.Client // _0 // return
@@ -2914,38 +2722,6 @@ fn user.llm.openai.Error.to_json(self: llm.openai.Error) -> baml.json.json {
     }
 
     bb3: {
-        return;
-    }
-}
-
-fn user.llm.openai.Error.to_string(self: llm.openai.Error) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: llm.openai.Error // self // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(llm.openai.Error);
-        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.llm.openai.Client.to_string(self: llm.openai.Client) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: llm.openai.Client // self // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(llm.openai.Client);
-        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
         return;
     }
 }

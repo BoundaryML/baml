@@ -23,13 +23,6 @@ function user.Person.to_json(self: Person) -> baml.json.json {
     return
 }
 
-function user.Person.to_string(self: Person) -> string {
-    load_type Person
-    load_var self
-    call baml.unstable.string
-    return
-}
-
 function user.reflect_array() -> type {
     load_type #0[]
     return

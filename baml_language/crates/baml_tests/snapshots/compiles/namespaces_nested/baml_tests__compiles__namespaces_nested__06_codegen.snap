@@ -23,13 +23,6 @@ function user.AppConfig.to_json(self: AppConfig) -> baml.json.json {
     return
 }
 
-function user.AppConfig.to_string(self: AppConfig) -> string {
-    load_type AppConfig
-    load_var self
-    call baml.unstable.string
-    return
-}
-
 function user.CallOpenAI(cfg: AppConfig) -> llm.openai.OpenAIResponse {
     load_const "response"
     load_const "gpt-4"
@@ -68,12 +61,5 @@ function user.llm.openai.OpenAIResponse.to_json(self: llm.openai.OpenAIResponse)
     load_const "text"
     load_const "model"
     alloc_map 2
-    return
-}
-
-function user.llm.openai.OpenAIResponse.to_string(self: llm.openai.OpenAIResponse) -> string {
-    load_type llm.openai.OpenAIResponse
-    load_var self
-    call baml.unstable.string
     return
 }

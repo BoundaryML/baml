@@ -26,12 +26,6 @@ function user.to_json(self: ?) -> baml.json.json  [expr] {
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "money": baml.json.to_json(self.money), "currency": baml.json.to_json(self.currency), "name": baml.json.to_json(self.name), "summary": baml.json.to_json(self.summary), "details": baml.json.to_json(self.details), "state": baml.json.to_json(self.state), "multiple": baml.json.to_json(self.multiple) }
 }
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
 function user.GetMixedList(client: baml.llm.Client = GPT4) -> int | string[]  [llm] {
   baml.llm.call_llm_function(client, "GetMixedList", map {  })
 }
@@ -101,7 +95,4 @@ function user.from_json(j: baml.json.json) -> user.User  [expr] {
 }
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "id": baml.json.to_json(self.id), "name": baml.json.to_json(self.name), "email": baml.json.to_json(self.email) }
-}
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
 }

@@ -55,22 +55,6 @@ fn user.foo.to_json(self: foo) -> baml.json.json {
     }
 }
 
-fn user.foo.to_string(self: foo) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: foo // self // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(foo);
-        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn user.foo.Bar.from_json(j: baml.json.json) -> foo.Bar {
     // Locals:
     let _0: foo.Bar // _0 // return
@@ -120,22 +104,6 @@ fn user.foo.Bar.to_json(self: foo.Bar) -> baml.json.json {
     }
 
     bb2: {
-        return;
-    }
-}
-
-fn user.foo.Bar.to_string(self: foo.Bar) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: foo.Bar // self // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(foo.Bar);
-        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
         return;
     }
 }

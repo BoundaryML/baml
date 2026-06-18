@@ -12,9 +12,6 @@ function user.WithNotNull.to_json(self: user.WithNotNull) -> baml.json.json thro
 function user.WithNotNull.from_json(j: baml.json.json) -> user.WithNotNull throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   WithNotNull { gpa: baml.json.from_json<float>(baml.json.field(j, "gpa")), name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.WithNotNull
 }
-function user.WithNotNull.to_string(self: user.WithNotNull) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.WithNotNull$stream {
   gpa: float | null
   name: string | null

@@ -116,13 +116,6 @@ function testing.RunReport.to_json(self: testing.RunReport) -> baml.json.json {
     return
 }
 
-function testing.RunReport.to_string(self: testing.RunReport) -> string {
-    load_type testing.RunReport
-    load_var self
-    call baml.unstable.string
-    return
-}
-
 function testing.SerializedTest.from_json(j: baml.json.json) -> testing.SerializedTest {
     load_var j
     load_const "type"
@@ -154,13 +147,6 @@ function testing.SerializedTest.to_json(self: testing.SerializedTest) -> baml.js
     load_const "type"
     load_const "name"
     alloc_map 2
-    return
-}
-
-function testing.SerializedTest.to_string(self: testing.SerializedTest) -> string {
-    load_type testing.SerializedTest
-    load_var self
-    call baml.unstable.string
     return
 }
 
@@ -207,13 +193,6 @@ function testing.SerializedTestSet.to_json(self: testing.SerializedTestSet) -> b
     load_const "items"
     load_const "loadingTimeMs"
     alloc_map 3
-    return
-}
-
-function testing.SerializedTestSet.to_string(self: testing.SerializedTestSet) -> string {
-    load_type testing.SerializedTestSet
-    load_var self
-    call baml.unstable.string
     return
 }
 
@@ -922,13 +901,6 @@ function testing.TestCollector.to_json(self: testing.TestCollector) -> baml.json
     return
 }
 
-function testing.TestCollector.to_string(self: testing.TestCollector) -> string {
-    load_type testing.TestCollector
-    load_var self
-    call baml.unstable.string
-    return
-}
-
 function testing.TestRegistration.from_json(j: baml.json.json) -> testing.TestRegistration {
     load_var j
     load_const "name"
@@ -960,13 +932,6 @@ function testing.TestRegistration.to_json(self: testing.TestRegistration) -> bam
     load_var self
     call baml.json.to_string
     call baml.json.parse
-    return
-}
-
-function testing.TestRegistration.to_string(self: testing.TestRegistration) -> string {
-    load_type testing.TestRegistration
-    load_var self
-    call baml.unstable.string
     return
 }
 
@@ -2086,13 +2051,6 @@ function testing.TestRegistry.to_json(self: testing.TestRegistry) -> baml.json.j
     return
 }
 
-function testing.TestRegistry.to_string(self: testing.TestRegistry) -> string {
-    load_type testing.TestRegistry
-    load_var self
-    call baml.unstable.string
-    return
-}
-
 function testing.TestReport.from_json(j: baml.json.json) -> testing.TestReport {
     load_var j
     load_const "outcome"
@@ -2127,13 +2085,6 @@ function testing.TestReport.to_json(self: testing.TestReport) -> baml.json.json 
     return
 }
 
-function testing.TestReport.to_string(self: testing.TestReport) -> string {
-    load_type testing.TestReport
-    load_var self
-    call baml.unstable.string
-    return
-}
-
 function testing.TestSetRegistration.from_json(j: baml.json.json) -> testing.TestSetRegistration {
     load_var j
     load_const "name"
@@ -2165,13 +2116,6 @@ function testing.TestSetRegistration.to_json(self: testing.TestSetRegistration) 
     load_var self
     call baml.json.to_string
     call baml.json.parse
-    return
-}
-
-function testing.TestSetRegistration.to_string(self: testing.TestSetRegistration) -> string {
-    load_type testing.TestSetRegistration
-    load_var self
-    call baml.unstable.string
     return
 }
 
@@ -2242,13 +2186,6 @@ function testing.TestSetReport.to_json(self: testing.TestSetReport) -> baml.json
     load_const "total"
     load_const "results"
     alloc_map 5
-    return
-}
-
-function testing.TestSetReport.to_string(self: testing.TestSetReport) -> string {
-    load_type testing.TestSetReport
-    load_var self
-    call baml.unstable.string
     return
 }
 
@@ -2334,13 +2271,6 @@ function user.ErrorInfo.to_json(self: ErrorInfo) -> baml.json.json {
     return
 }
 
-function user.ErrorInfo.to_string(self: ErrorInfo) -> string {
-    load_type ErrorInfo
-    load_var self
-    call baml.unstable.string
-    return
-}
-
 function user.Report.from_json(j: baml.json.json) -> Report {
     load_var j
     load_const "score"
@@ -2384,13 +2314,6 @@ function user.Report.to_json(self: Report) -> baml.json.json {
     load_const "label"
     load_const "breakdown"
     alloc_map 3
-    return
-}
-
-function user.Report.to_string(self: Report) -> string {
-    load_type Report
-    load_var self
-    call baml.unstable.string
     return
 }
 
@@ -2459,13 +2382,6 @@ function user.User.to_json(self: User) -> baml.json.json {
     load_const "age"
     load_const "role"
     alloc_map 3
-    return
-}
-
-function user.User.to_string(self: User) -> string {
-    load_type User
-    load_var self
-    call baml.unstable.string
     return
 }
 

@@ -11,9 +11,6 @@ function user.Config.to_json(self: user.Config) -> baml.json.json throws baml.js
 function user.Config.from_json(j: baml.json.json) -> user.Config throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Config { key: baml.json.from_json<string>(baml.json.field(j, "key")) } : user.Config
 }
-function user.Config.to_string(self: user.Config) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.Response {
   text: string
 }
@@ -22,9 +19,6 @@ function user.Response.to_json(self: user.Response) -> baml.json.json throws bam
 }
 function user.Response.from_json(j: baml.json.json) -> user.Response throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Response { text: baml.json.from_json<string>(baml.json.field(j, "text")) } : user.Response
-}
-function user.Response.to_string(self: user.Response) -> string throws never {
-  baml.unstable.string<T>(self) : string
 }
 function user.RootUsesOwnStream(c: user.Config$stream) -> string throws never {
   { : string | null
@@ -48,9 +42,6 @@ function user.RootWithStreamFields.to_json(self: user.RootWithStreamFields) -> b
 function user.RootWithStreamFields.from_json(j: baml.json.json) -> user.RootWithStreamFields throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   RootWithStreamFields { own_stream: baml.json.from_json<Config$stream>(baml.json.field(j, "own_stream")), llm_stream: baml.json.from_json<root.llm.Config$stream>(baml.json.field(j, "llm_stream")) } : user.RootWithStreamFields
 }
-function user.RootWithStreamFields.to_string(self: user.RootWithStreamFields) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.Config$stream {
   key: string | null
 }
@@ -70,9 +61,6 @@ function user.llm.Config.to_json(self: user.llm.Config) -> baml.json.json throws
 function user.llm.Config.from_json(j: baml.json.json) -> user.llm.Config throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Config { model: baml.json.from_json<string>(baml.json.field(j, "model")) } : user.llm.Config
 }
-function user.llm.Config.to_string(self: user.llm.Config) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.llm.Response {
   text: string
 }
@@ -81,9 +69,6 @@ function user.llm.Response.to_json(self: user.llm.Response) -> baml.json.json th
 }
 function user.llm.Response.from_json(j: baml.json.json) -> user.llm.Response throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Response { text: baml.json.from_json<string>(baml.json.field(j, "text")) } : user.llm.Response
-}
-function user.llm.Response.to_string(self: user.llm.Response) -> string throws never {
-  baml.unstable.string<T>(self) : string
 }
 function user.llm.LlmUsesOwnStream(r: user.llm.Response$stream) -> string throws never {
   { : string | null
@@ -106,9 +91,6 @@ function user.llm.LlmWithStreamFields.to_json(self: user.llm.LlmWithStreamFields
 }
 function user.llm.LlmWithStreamFields.from_json(j: baml.json.json) -> user.llm.LlmWithStreamFields throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   LlmWithStreamFields { own_stream: baml.json.from_json<Response$stream>(baml.json.field(j, "own_stream")), root_stream: baml.json.from_json<root.Config$stream>(baml.json.field(j, "root_stream")) } : user.llm.LlmWithStreamFields
-}
-function user.llm.LlmWithStreamFields.to_string(self: user.llm.LlmWithStreamFields) -> string throws never {
-  baml.unstable.string<T>(self) : string
 }
 class user.llm.Config$stream {
   model: string | null

@@ -11,9 +11,6 @@ function user.from_json(j: baml.json.json) -> user.foo  [expr] {
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "x": baml.json.to_json(self.x) }
 }
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
 class user.foo.Bar {
   y: string
 }
@@ -22,7 +19,4 @@ function user.foo.from_json(j: baml.json.json) -> user.foo.Bar  [expr] {
 }
 function user.foo.to_json(self: ?) -> baml.json.json  [expr] {
   map { "y": baml.json.to_json(self.y) }
-}
-function user.foo.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
 }

@@ -221,19 +221,3 @@ fn user.Wrapper.to_json(self: Wrapper) -> baml.json.json {
         return;
     }
 }
-
-fn user.Wrapper.to_string(self: Wrapper) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: Wrapper // self // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(Wrapper);
-        _0 = call const fn baml.unstable.string<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}

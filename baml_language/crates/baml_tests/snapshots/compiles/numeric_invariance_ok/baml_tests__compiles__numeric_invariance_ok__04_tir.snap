@@ -38,9 +38,6 @@ function user.BigintCounter.to_json(self: user.BigintCounter) -> baml.json.json 
 function user.BigintCounter.from_json(j: baml.json.json) -> user.BigintCounter throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   BigintCounter { count: baml.json.from_json<bigint>(baml.json.field(j, "count")) } : user.BigintCounter
 }
-function user.BigintCounter.to_string(self: user.BigintCounter) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 function user.BigintFieldOk() -> user.BigintCounter throws never {
   { : user.BigintCounter
     BigintCounter { count: 1n } : user.BigintCounter

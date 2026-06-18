@@ -12,9 +12,6 @@ function user.Config.to_json(self: user.Config) -> baml.json.json throws baml.js
 function user.Config.from_json(j: baml.json.json) -> user.Config throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Config { key: baml.json.from_json<string>(baml.json.field(j, "key")), model: baml.json.from_json<string>(baml.json.field(j, "model")) } : user.Config
 }
-function user.Config.to_string(self: user.Config) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 function user.GetResponse(cfg: user.Config) -> user.llm.Response throws never {
   { : user.llm.Response
     root.llm.Response { text: "hello", model: cfg.model } : user.llm.Response
@@ -33,9 +30,6 @@ function user.llm.Response.to_json(self: user.llm.Response) -> baml.json.json th
 }
 function user.llm.Response.from_json(j: baml.json.json) -> user.llm.Response throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Response { text: baml.json.from_json<string>(baml.json.field(j, "text")), model: baml.json.from_json<string>(baml.json.field(j, "model")) } : user.llm.Response
-}
-function user.llm.Response.to_string(self: user.llm.Response) -> string throws never {
-  baml.unstable.string<T>(self) : string
 }
 function user.llm.MakeResponse(cfg: user.Config) -> user.llm.Response throws never {
   { : user.llm.Response

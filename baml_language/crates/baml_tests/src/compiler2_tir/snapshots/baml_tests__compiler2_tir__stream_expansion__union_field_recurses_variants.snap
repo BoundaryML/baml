@@ -11,9 +11,6 @@ function user.Inner.to_json(self: user.Inner) -> baml.json.json throws baml.json
 function user.Inner.from_json(j: baml.json.json) -> user.Inner throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Inner { value: baml.json.from_json<string>(baml.json.field(j, "value")) } : user.Inner
 }
-function user.Inner.to_string(self: user.Inner) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.WithUnions {
   simple: int | string
   with_class: user.Inner | string
@@ -24,9 +21,6 @@ function user.WithUnions.to_json(self: user.WithUnions) -> baml.json.json throws
 }
 function user.WithUnions.from_json(j: baml.json.json) -> user.WithUnions throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   WithUnions { simple: baml.json.from_json<int | string>(baml.json.field(j, "simple")), with_class: baml.json.from_json<Inner | string>(baml.json.field(j, "with_class")), mixed: baml.json.from_json<int | Inner>(baml.json.field(j, "mixed")) } : user.WithUnions
-}
-function user.WithUnions.to_string(self: user.WithUnions) -> string throws never {
-  baml.unstable.string<T>(self) : string
 }
 class user.Inner$stream {
   value: string | null

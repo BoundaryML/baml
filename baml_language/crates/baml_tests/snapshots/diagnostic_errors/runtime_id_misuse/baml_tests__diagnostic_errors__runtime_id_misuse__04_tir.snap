@@ -68,9 +68,6 @@ function user.WithId.to_json(self: user.WithId) -> baml.json.json throws baml.js
 function user.WithId.from_json(j: baml.json.json) -> user.WithId throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   WithId { field_id: baml.json.from_json<string>(baml.json.field(j, "field_id")), $id: baml.json.from_json<string>(baml.json.field(j, "$id")) } : user.WithId
 }
-function user.WithId.to_string(self: user.WithId) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 function user.shorthand_destructure(w: user.WithId) -> string throws never {
   { : "x"
     let WithId { $id: $id } = w : user.WithId

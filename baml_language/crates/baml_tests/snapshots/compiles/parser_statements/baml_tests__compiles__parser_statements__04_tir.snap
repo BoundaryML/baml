@@ -99,9 +99,6 @@ function user.EdgeFoo.to_json(self: user.EdgeFoo) -> baml.json.json throws baml.
 function user.EdgeFoo.from_json(j: baml.json.json) -> user.EdgeFoo throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   EdgeFoo { x: baml.json.from_json<int>(baml.json.field(j, "x")) } : user.EdgeFoo
 }
-function user.EdgeFoo.to_string(self: user.EdgeFoo) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 function user.edge_type_then_object() -> int throws never {
   { : int
     EdgeFoo { x: 1 }.x : int
@@ -277,9 +274,6 @@ function user.Point.to_json(self: user.Point) -> baml.json.json throws baml.json
 }
 function user.Point.from_json(j: baml.json.json) -> user.Point throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Point { x: baml.json.from_json<int>(baml.json.field(j, "x")), y: baml.json.from_json<int>(baml.json.field(j, "y")) } : user.Point
-}
-function user.Point.to_string(self: user.Point) -> string throws never {
-  baml.unstable.string<T>(self) : string
 }
 class user.Point$stream {
   x: int | null

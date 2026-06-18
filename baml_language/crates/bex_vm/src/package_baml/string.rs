@@ -17,13 +17,6 @@ impl BamlClassString for PackageBamlImpl {
         Value::object(vm.alloc_string(string.clone()))
     }
 
-    fn to_string(string: &BexStr) -> BexStr {
-        // No-op: `string.to_string()` returns the input unchanged. Exists
-        // so BEP-049 backtick interpolation can unconditionally wrap each
-        // `${...}` with `.to_string()` without special-casing strings.
-        string.clone()
-    }
-
     #[allow(clippy::cast_possible_wrap)]
     fn length(string: &BexStr) -> i64 {
         string.char_count() as i64

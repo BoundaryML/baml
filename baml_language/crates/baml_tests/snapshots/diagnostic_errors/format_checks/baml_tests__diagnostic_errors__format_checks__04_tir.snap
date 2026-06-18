@@ -86,9 +86,6 @@ function user.ChainUser.to_json(self: user.ChainUser) -> baml.json.json throws b
 function user.ChainUser.from_json(j: baml.json.json) -> user.ChainUser throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   ChainUser { name: baml.json.from_json<string>(baml.json.field(j, "name")), profile: baml.json.from_json<ChainProfile>(baml.json.field(j, "profile")), tags: baml.json.from_json<string[]>(baml.json.field(j, "tags")), scores: baml.json.from_json<int[][]>(baml.json.field(j, "scores")) } : user.ChainUser
 }
-function user.ChainUser.to_string(self: user.ChainUser) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.ChainProfile {
   bio: string
   settings: user.ChainSettings
@@ -99,9 +96,6 @@ function user.ChainProfile.to_json(self: user.ChainProfile) -> baml.json.json th
 }
 function user.ChainProfile.from_json(j: baml.json.json) -> user.ChainProfile throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   ChainProfile { bio: baml.json.from_json<string>(baml.json.field(j, "bio")), settings: baml.json.from_json<ChainSettings>(baml.json.field(j, "settings")), items: baml.json.from_json<ChainItem[]>(baml.json.field(j, "items")) } : user.ChainProfile
-}
-function user.ChainProfile.to_string(self: user.ChainProfile) -> string throws never {
-  baml.unstable.string<T>(self) : string
 }
 class user.ChainSettings {
   theme: string
@@ -114,9 +108,6 @@ function user.ChainSettings.to_json(self: user.ChainSettings) -> baml.json.json 
 function user.ChainSettings.from_json(j: baml.json.json) -> user.ChainSettings throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   ChainSettings { theme: baml.json.from_json<string>(baml.json.field(j, "theme")), notifications: baml.json.from_json<bool>(baml.json.field(j, "notifications")), preferences: baml.json.from_json<ChainPreferences>(baml.json.field(j, "preferences")) } : user.ChainSettings
 }
-function user.ChainSettings.to_string(self: user.ChainSettings) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.ChainPreferences {
   color: string
   font: string
@@ -127,9 +118,6 @@ function user.ChainPreferences.to_json(self: user.ChainPreferences) -> baml.json
 }
 function user.ChainPreferences.from_json(j: baml.json.json) -> user.ChainPreferences throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   ChainPreferences { color: baml.json.from_json<string>(baml.json.field(j, "color")), font: baml.json.from_json<string>(baml.json.field(j, "font")), size: baml.json.from_json<int>(baml.json.field(j, "size")) } : user.ChainPreferences
-}
-function user.ChainPreferences.to_string(self: user.ChainPreferences) -> string throws never {
-  baml.unstable.string<T>(self) : string
 }
 class user.ChainItem {
   label: string
@@ -142,9 +130,6 @@ function user.ChainItem.to_json(self: user.ChainItem) -> baml.json.json throws b
 function user.ChainItem.from_json(j: baml.json.json) -> user.ChainItem throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   ChainItem { label: baml.json.from_json<string>(baml.json.field(j, "label")), value: baml.json.from_json<int>(baml.json.field(j, "value")), metadata: baml.json.from_json<ChainMetadata>(baml.json.field(j, "metadata")) } : user.ChainItem
 }
-function user.ChainItem.to_string(self: user.ChainItem) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.ChainMetadata {
   created_at: string
   tags: string[]
@@ -154,9 +139,6 @@ function user.ChainMetadata.to_json(self: user.ChainMetadata) -> baml.json.json 
 }
 function user.ChainMetadata.from_json(j: baml.json.json) -> user.ChainMetadata throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   ChainMetadata { created_at: baml.json.from_json<string>(baml.json.field(j, "created_at")), tags: baml.json.from_json<string[]>(baml.json.field(j, "tags")) } : user.ChainMetadata
-}
-function user.ChainMetadata.to_string(self: user.ChainMetadata) -> string throws never {
-  baml.unstable.string<T>(self) : string
 }
 function user.ChainExprs(user: user.ChainUser, items: user.ChainItem[], m: map<string, int>) -> string throws never {
   { : string
@@ -265,9 +247,6 @@ function user.EmptyClass.to_json(self: user.EmptyClass) -> baml.json.json throws
 function user.EmptyClass.from_json(j: baml.json.json) -> user.EmptyClass throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   EmptyClass {  } : user.EmptyClass
 }
-function user.EmptyClass.to_string(self: user.EmptyClass) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.SingleField {
   name: string
 }
@@ -276,9 +255,6 @@ function user.SingleField.to_json(self: user.SingleField) -> baml.json.json thro
 }
 function user.SingleField.from_json(j: baml.json.json) -> user.SingleField throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   SingleField { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.SingleField
-}
-function user.SingleField.to_string(self: user.SingleField) -> string throws never {
-  baml.unstable.string<T>(self) : string
 }
 class user.MultiField {
   name: string
@@ -291,9 +267,6 @@ function user.MultiField.to_json(self: user.MultiField) -> baml.json.json throws
 function user.MultiField.from_json(j: baml.json.json) -> user.MultiField throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   MultiField { name: baml.json.from_json<string>(baml.json.field(j, "name")), age: baml.json.from_json<int>(baml.json.field(j, "age")), active: baml.json.from_json<bool>(baml.json.field(j, "active")) } : user.MultiField
 }
-function user.MultiField.to_string(self: user.MultiField) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.ColonFields {
   name: string
   age: int
@@ -304,9 +277,6 @@ function user.ColonFields.to_json(self: user.ColonFields) -> baml.json.json thro
 function user.ColonFields.from_json(j: baml.json.json) -> user.ColonFields throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   ColonFields { name: baml.json.from_json<string>(baml.json.field(j, "name")), age: baml.json.from_json<int>(baml.json.field(j, "age")) } : user.ColonFields
 }
-function user.ColonFields.to_string(self: user.ColonFields) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.SingleAttrField {
   name: string @description("The user's name")
 }
@@ -315,9 +285,6 @@ function user.SingleAttrField.to_json(self: user.SingleAttrField) -> baml.json.j
 }
 function user.SingleAttrField.from_json(j: baml.json.json) -> user.SingleAttrField throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   SingleAttrField { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.SingleAttrField
-}
-function user.SingleAttrField.to_string(self: user.SingleAttrField) -> string throws never {
-  baml.unstable.string<T>(self) : string
 }
 class user.MultiAttrField {
   name: string @description("The user's name") @alias("user_name")
@@ -328,9 +295,6 @@ function user.MultiAttrField.to_json(self: user.MultiAttrField) -> baml.json.jso
 }
 function user.MultiAttrField.from_json(j: baml.json.json) -> user.MultiAttrField throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   MultiAttrField { name: baml.json.from_json<string>(baml.json.field(j, "name")), summary: baml.json.from_json<string?>(baml.json.field(j, "summary")) } : user.MultiAttrField
-}
-function user.MultiAttrField.to_string(self: user.MultiAttrField) -> string throws never {
-  baml.unstable.string<T>(self) : string
 }
 class user.LongAttrField {
   name: string @description("This is an extremely long description attribute value that should push the field definition well past the default line width limit of one hundred columns")
@@ -343,9 +307,6 @@ function user.LongAttrField.to_json(self: user.LongAttrField) -> baml.json.json 
 function user.LongAttrField.from_json(j: baml.json.json) -> user.LongAttrField throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   LongAttrField { name: baml.json.from_json<string>(baml.json.field(j, "name")), data: baml.json.from_json<map<string, int | string | bool>>(baml.json.field(j, "data")), config: baml.json.from_json<map<string, map<string, int | string | bool | null>>>(baml.json.field(j, "config")) } : user.LongAttrField
 }
-function user.LongAttrField.to_string(self: user.LongAttrField) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.LongFieldTypes {
   very_long_field_name_that_takes_up_space: int | string | bool | float | null | int[] | string[]
   another_long_field: map<string, map<string, map<string, int | string | bool | float | null>>>
@@ -357,9 +318,6 @@ function user.LongFieldTypes.to_json(self: user.LongFieldTypes) -> baml.json.jso
 }
 function user.LongFieldTypes.from_json(j: baml.json.json) -> user.LongFieldTypes throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.LongFieldTypes
-}
-function user.LongFieldTypes.to_string(self: user.LongFieldTypes) -> string throws never {
-  baml.unstable.string<T>(self) : string
 }
 class user.TypeVariety {
   simple: string
@@ -382,9 +340,6 @@ function user.TypeVariety.to_json(self: user.TypeVariety) -> baml.json.json thro
 function user.TypeVariety.from_json(j: baml.json.json) -> user.TypeVariety throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.TypeVariety
 }
-function user.TypeVariety.to_string(self: user.TypeVariety) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.DynamicClass {
   name: string
 }
@@ -393,9 +348,6 @@ function user.DynamicClass.to_json(self: user.DynamicClass) -> baml.json.json th
 }
 function user.DynamicClass.from_json(j: baml.json.json) -> user.DynamicClass throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   DynamicClass { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.DynamicClass
-}
-function user.DynamicClass.to_string(self: user.DynamicClass) -> string throws never {
-  baml.unstable.string<T>(self) : string
 }
 class user.MultiBlockAttr {
   name: string
@@ -406,9 +358,6 @@ function user.MultiBlockAttr.to_json(self: user.MultiBlockAttr) -> baml.json.jso
 function user.MultiBlockAttr.from_json(j: baml.json.json) -> user.MultiBlockAttr throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   MultiBlockAttr { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.MultiBlockAttr
 }
-function user.MultiBlockAttr.to_string(self: user.MultiBlockAttr) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.TriviaClass {
   name: string
 }
@@ -417,9 +366,6 @@ function user.TriviaClass.to_json(self: user.TriviaClass) -> baml.json.json thro
 }
 function user.TriviaClass.from_json(j: baml.json.json) -> user.TriviaClass throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   TriviaClass { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.TriviaClass
-}
-function user.TriviaClass.to_string(self: user.TriviaClass) -> string throws never {
-  baml.unstable.string<T>(self) : string
 }
 class user.TriviaClassBlock {
   name: string
@@ -430,9 +376,6 @@ function user.TriviaClassBlock.to_json(self: user.TriviaClassBlock) -> baml.json
 function user.TriviaClassBlock.from_json(j: baml.json.json) -> user.TriviaClassBlock throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   TriviaClassBlock { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.TriviaClassBlock
 }
-function user.TriviaClassBlock.to_string(self: user.TriviaClassBlock) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.TriviaFieldAttrs {
   name: string @description("the name")
 }
@@ -441,9 +384,6 @@ function user.TriviaFieldAttrs.to_json(self: user.TriviaFieldAttrs) -> baml.json
 }
 function user.TriviaFieldAttrs.from_json(j: baml.json.json) -> user.TriviaFieldAttrs throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   TriviaFieldAttrs { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.TriviaFieldAttrs
-}
-function user.TriviaFieldAttrs.to_string(self: user.TriviaFieldAttrs) -> string throws never {
-  baml.unstable.string<T>(self) : string
 }
 class user.TriviaFieldAttrsBlock {
   name: string @description("the name")
@@ -454,9 +394,6 @@ function user.TriviaFieldAttrsBlock.to_json(self: user.TriviaFieldAttrsBlock) ->
 function user.TriviaFieldAttrsBlock.from_json(j: baml.json.json) -> user.TriviaFieldAttrsBlock throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   TriviaFieldAttrsBlock { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.TriviaFieldAttrsBlock
 }
-function user.TriviaFieldAttrsBlock.to_string(self: user.TriviaFieldAttrsBlock) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.TriviaLongFieldType {
   data: map<string, int | string | bool | float | null> @description("a long description")
 }
@@ -465,9 +402,6 @@ function user.TriviaLongFieldType.to_json(self: user.TriviaLongFieldType) -> bam
 }
 function user.TriviaLongFieldType.from_json(j: baml.json.json) -> user.TriviaLongFieldType throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   TriviaLongFieldType { data: baml.json.from_json<map<string, int | string | bool | float | null>>(baml.json.field(j, "data")) } : user.TriviaLongFieldType
-}
-function user.TriviaLongFieldType.to_string(self: user.TriviaLongFieldType) -> string throws never {
-  baml.unstable.string<T>(self) : string
 }
 class user.TriviaLongFieldTypeBlock {
   data: map<string, int | string | bool | float | null> @description("a long description")
@@ -478,9 +412,6 @@ function user.TriviaLongFieldTypeBlock.to_json(self: user.TriviaLongFieldTypeBlo
 function user.TriviaLongFieldTypeBlock.from_json(j: baml.json.json) -> user.TriviaLongFieldTypeBlock throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   TriviaLongFieldTypeBlock { data: baml.json.from_json<map<string, int | string | bool | float | null>>(baml.json.field(j, "data")) } : user.TriviaLongFieldTypeBlock
 }
-function user.TriviaLongFieldTypeBlock.to_string(self: user.TriviaLongFieldTypeBlock) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.TriviaMultiAttr {
   name: string @description("name") @alias("user_name")
 }
@@ -489,9 +420,6 @@ function user.TriviaMultiAttr.to_json(self: user.TriviaMultiAttr) -> baml.json.j
 }
 function user.TriviaMultiAttr.from_json(j: baml.json.json) -> user.TriviaMultiAttr throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   TriviaMultiAttr { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.TriviaMultiAttr
-}
-function user.TriviaMultiAttr.to_string(self: user.TriviaMultiAttr) -> string throws never {
-  baml.unstable.string<T>(self) : string
 }
 class user.TriviaMultiAttrBlock {
   name: string @description("name") @alias("user_name")
@@ -502,9 +430,6 @@ function user.TriviaMultiAttrBlock.to_json(self: user.TriviaMultiAttrBlock) -> b
 function user.TriviaMultiAttrBlock.from_json(j: baml.json.json) -> user.TriviaMultiAttrBlock throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   TriviaMultiAttrBlock { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.TriviaMultiAttrBlock
 }
-function user.TriviaMultiAttrBlock.to_string(self: user.TriviaMultiAttrBlock) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.A {
   x: int
 }
@@ -514,9 +439,6 @@ function user.A.to_json(self: user.A) -> baml.json.json throws baml.json.JsonSer
 function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   A { x: baml.json.from_json<int>(baml.json.field(j, "x")) } : user.A
 }
-function user.A.to_string(self: user.A) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.ThisIsAnExtremelyLongClassNameThatDefinitelyExceedsTheOneHundredCharacterLineLimitAllByItself {
   x: int
 }
@@ -525,9 +447,6 @@ function user.ThisIsAnExtremelyLongClassNameThatDefinitelyExceedsTheOneHundredCh
 }
 function user.ThisIsAnExtremelyLongClassNameThatDefinitelyExceedsTheOneHundredCharacterLineLimitAllByItself.from_json(j: baml.json.json) -> user.ThisIsAnExtremelyLongClassNameThatDefinitelyExceedsTheOneHundredCharacterLineLimitAllByItself throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   ThisIsAnExtremelyLongClassNameThatDefinitelyExceedsTheOneHundredCharacterLineLimitAllByItself { x: baml.json.from_json<int>(baml.json.field(j, "x")) } : user.ThisIsAnExtremelyLongClassNameThatDefinitelyExceedsTheOneHundredCharacterLineLimitAllByItself
-}
-function user.ThisIsAnExtremelyLongClassNameThatDefinitelyExceedsTheOneHundredCharacterLineLimitAllByItself.to_string(self: user.ThisIsAnExtremelyLongClassNameThatDefinitelyExceedsTheOneHundredCharacterLineLimitAllByItself) -> string throws never {
-  baml.unstable.string<T>(self) : string
 }
 class user.AttributeVariety {
   a: string @skip
@@ -543,9 +462,6 @@ function user.AttributeVariety.to_json(self: user.AttributeVariety) -> baml.json
 function user.AttributeVariety.from_json(j: baml.json.json) -> user.AttributeVariety throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   AttributeVariety { a: baml.json.from_json<string>(baml.json.field(j, "a")), b: baml.json.from_json<string>(baml.json.field(j, "b")), c: baml.json.from_json<string>(baml.json.field(j, "c")), d: baml.json.from_json<string>(baml.json.field(j, "d")), e: baml.json.from_json<string>(baml.json.field(j, "e")), f: baml.json.from_json<string>(baml.json.field(j, "f")) } : user.AttributeVariety
 }
-function user.AttributeVariety.to_string(self: user.AttributeVariety) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.ExtraWhitespace {
   name: string @description("name") @alias("n")
   age: int
@@ -555,9 +471,6 @@ function user.ExtraWhitespace.to_json(self: user.ExtraWhitespace) -> baml.json.j
 }
 function user.ExtraWhitespace.from_json(j: baml.json.json) -> user.ExtraWhitespace throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   ExtraWhitespace { name: baml.json.from_json<string>(baml.json.field(j, "name")), age: baml.json.from_json<int>(baml.json.field(j, "age")) } : user.ExtraWhitespace
-}
-function user.ExtraWhitespace.to_string(self: user.ExtraWhitespace) -> string throws never {
-  baml.unstable.string<T>(self) : string
 }
 class user.ManyFields {
   field1: int
@@ -577,9 +490,6 @@ function user.ManyFields.to_json(self: user.ManyFields) -> baml.json.json throws
 function user.ManyFields.from_json(j: baml.json.json) -> user.ManyFields throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   ManyFields { field1: baml.json.from_json<int>(baml.json.field(j, "field1")), field2: baml.json.from_json<int>(baml.json.field(j, "field2")), field3: baml.json.from_json<int>(baml.json.field(j, "field3")), field4: baml.json.from_json<int>(baml.json.field(j, "field4")), field5: baml.json.from_json<int>(baml.json.field(j, "field5")), field6: baml.json.from_json<int>(baml.json.field(j, "field6")), field7: baml.json.from_json<int>(baml.json.field(j, "field7")), field8: baml.json.from_json<int>(baml.json.field(j, "field8")), field9: baml.json.from_json<int>(baml.json.field(j, "field9")), field10: baml.json.from_json<int>(baml.json.field(j, "field10")) } : user.ManyFields
 }
-function user.ManyFields.to_string(self: user.ManyFields) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.Outer {
   inner: user.InnerNested
   list: user.InnerNested[]
@@ -592,9 +502,6 @@ function user.Outer.to_json(self: user.Outer) -> baml.json.json throws baml.json
 function user.Outer.from_json(j: baml.json.json) -> user.Outer throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Outer { inner: baml.json.from_json<InnerNested>(baml.json.field(j, "inner")), list: baml.json.from_json<InnerNested[]>(baml.json.field(j, "list")), optional: baml.json.from_json<InnerNested?>(baml.json.field(j, "optional")), mapping: baml.json.from_json<map<string, InnerNested>>(baml.json.field(j, "mapping")) } : user.Outer
 }
-function user.Outer.to_string(self: user.Outer) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.InnerNested {
   value: int
 }
@@ -603,9 +510,6 @@ function user.InnerNested.to_json(self: user.InnerNested) -> baml.json.json thro
 }
 function user.InnerNested.from_json(j: baml.json.json) -> user.InnerNested throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   InnerNested { value: baml.json.from_json<int>(baml.json.field(j, "value")) } : user.InnerNested
-}
-function user.InnerNested.to_string(self: user.InnerNested) -> string throws never {
-  baml.unstable.string<T>(self) : string
 }
 class user.WithMethod {
   name: string
@@ -621,9 +525,6 @@ function user.WithMethod.to_json(self: user.WithMethod) -> baml.json.json throws
 function user.WithMethod.from_json(j: baml.json.json) -> user.WithMethod throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   WithMethod { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.WithMethod
 }
-function user.WithMethod.to_string(self: user.WithMethod) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.WithLongMethod {
   name: string
 }
@@ -638,9 +539,6 @@ function user.WithLongMethod.to_json(self: user.WithLongMethod) -> baml.json.jso
 function user.WithLongMethod.from_json(j: baml.json.json) -> user.WithLongMethod throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   WithLongMethod { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.WithLongMethod
 }
-function user.WithLongMethod.to_string(self: user.WithLongMethod) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.DeepOuter {
   level1: user.DeepLevel1
 }
@@ -649,9 +547,6 @@ function user.DeepOuter.to_json(self: user.DeepOuter) -> baml.json.json throws b
 }
 function user.DeepOuter.from_json(j: baml.json.json) -> user.DeepOuter throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   DeepOuter { level1: baml.json.from_json<DeepLevel1>(baml.json.field(j, "level1")) } : user.DeepOuter
-}
-function user.DeepOuter.to_string(self: user.DeepOuter) -> string throws never {
-  baml.unstable.string<T>(self) : string
 }
 class user.DeepLevel1 {
   level2: user.DeepLevel2
@@ -664,9 +559,6 @@ function user.DeepLevel1.to_json(self: user.DeepLevel1) -> baml.json.json throws
 function user.DeepLevel1.from_json(j: baml.json.json) -> user.DeepLevel1 throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   DeepLevel1 { level2: baml.json.from_json<DeepLevel2>(baml.json.field(j, "level2")), items: baml.json.from_json<DeepLevel2[]>(baml.json.field(j, "items")), mapping: baml.json.from_json<map<string, DeepLevel2>>(baml.json.field(j, "mapping")) } : user.DeepLevel1
 }
-function user.DeepLevel1.to_string(self: user.DeepLevel1) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.DeepLevel2 {
   level3: user.DeepLevel3
   value: int | string | bool | float | null
@@ -677,9 +569,6 @@ function user.DeepLevel2.to_json(self: user.DeepLevel2) -> baml.json.json throws
 function user.DeepLevel2.from_json(j: baml.json.json) -> user.DeepLevel2 throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   DeepLevel2 { level3: baml.json.from_json<DeepLevel3>(baml.json.field(j, "level3")), value: baml.json.from_json<int | string | bool | float | null>(baml.json.field(j, "value")) } : user.DeepLevel2
 }
-function user.DeepLevel2.to_string(self: user.DeepLevel2) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.DeepLevel3 {
   data: string
   nested: map<string, map<string, int>>
@@ -689,9 +578,6 @@ function user.DeepLevel3.to_json(self: user.DeepLevel3) -> baml.json.json throws
 }
 function user.DeepLevel3.from_json(j: baml.json.json) -> user.DeepLevel3 throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   DeepLevel3 { data: baml.json.from_json<string>(baml.json.field(j, "data")), nested: baml.json.from_json<map<string, map<string, int>>>(baml.json.field(j, "nested")) } : user.DeepLevel3
-}
-function user.DeepLevel3.to_string(self: user.DeepLevel3) -> string throws never {
-  baml.unstable.string<T>(self) : string
 }
 class user.TrailingCommas {
   name: string
@@ -704,9 +590,6 @@ function user.TrailingCommas.to_json(self: user.TrailingCommas) -> baml.json.jso
 function user.TrailingCommas.from_json(j: baml.json.json) -> user.TrailingCommas throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   TrailingCommas { name: baml.json.from_json<string>(baml.json.field(j, "name")), age: baml.json.from_json<int>(baml.json.field(j, "age")), active: baml.json.from_json<bool>(baml.json.field(j, "active")) } : user.TrailingCommas
 }
-function user.TrailingCommas.to_string(self: user.TrailingCommas) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.TrailingSemicolons {
   name: string
   age: int
@@ -717,9 +600,6 @@ function user.TrailingSemicolons.to_json(self: user.TrailingSemicolons) -> baml.
 }
 function user.TrailingSemicolons.from_json(j: baml.json.json) -> user.TrailingSemicolons throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   TrailingSemicolons { name: baml.json.from_json<string>(baml.json.field(j, "name")), age: baml.json.from_json<int>(baml.json.field(j, "age")), active: baml.json.from_json<bool>(baml.json.field(j, "active")) } : user.TrailingSemicolons
-}
-function user.TrailingSemicolons.to_string(self: user.TrailingSemicolons) -> string throws never {
-  baml.unstable.string<T>(self) : string
 }
 class user.MixedDelimiters {
   a: string
@@ -732,9 +612,6 @@ function user.MixedDelimiters.to_json(self: user.MixedDelimiters) -> baml.json.j
 }
 function user.MixedDelimiters.from_json(j: baml.json.json) -> user.MixedDelimiters throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   MixedDelimiters { a: baml.json.from_json<string>(baml.json.field(j, "a")), b: baml.json.from_json<int>(baml.json.field(j, "b")), c: baml.json.from_json<bool>(baml.json.field(j, "c")), d: baml.json.from_json<float>(baml.json.field(j, "d")) } : user.MixedDelimiters
-}
-function user.MixedDelimiters.to_string(self: user.MixedDelimiters) -> string throws never {
-  baml.unstable.string<T>(self) : string
 }
 class user.FieldsAndMethods {
   name: string
@@ -752,9 +629,6 @@ function user.FieldsAndMethods.to_json(self: user.FieldsAndMethods) -> baml.json
 function user.FieldsAndMethods.from_json(j: baml.json.json) -> user.FieldsAndMethods throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   FieldsAndMethods { name: baml.json.from_json<string>(baml.json.field(j, "name")), age: baml.json.from_json<int>(baml.json.field(j, "age")), active: baml.json.from_json<bool>(baml.json.field(j, "active")) } : user.FieldsAndMethods
 }
-function user.FieldsAndMethods.to_string(self: user.FieldsAndMethods) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.SingleFieldComma {
   name: string
 }
@@ -764,9 +638,6 @@ function user.SingleFieldComma.to_json(self: user.SingleFieldComma) -> baml.json
 function user.SingleFieldComma.from_json(j: baml.json.json) -> user.SingleFieldComma throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   SingleFieldComma { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.SingleFieldComma
 }
-function user.SingleFieldComma.to_string(self: user.SingleFieldComma) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.SingleFieldSemicolon {
   name: string
 }
@@ -775,9 +646,6 @@ function user.SingleFieldSemicolon.to_json(self: user.SingleFieldSemicolon) -> b
 }
 function user.SingleFieldSemicolon.from_json(j: baml.json.json) -> user.SingleFieldSemicolon throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   SingleFieldSemicolon { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.SingleFieldSemicolon
-}
-function user.SingleFieldSemicolon.to_string(self: user.SingleFieldSemicolon) -> string throws never {
-  baml.unstable.string<T>(self) : string
 }
 class user.NoColonDelimiters {
   name: string
@@ -790,9 +658,6 @@ function user.NoColonDelimiters.to_json(self: user.NoColonDelimiters) -> baml.js
 function user.NoColonDelimiters.from_json(j: baml.json.json) -> user.NoColonDelimiters throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   NoColonDelimiters { name: baml.json.from_json<string>(baml.json.field(j, "name")), age: baml.json.from_json<int>(baml.json.field(j, "age")), active: baml.json.from_json<bool>(baml.json.field(j, "active")) } : user.NoColonDelimiters
 }
-function user.NoColonDelimiters.to_string(self: user.NoColonDelimiters) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.AttrsWithDelimiters {
   name: string @description("name")
   age: int @alias("user_age")
@@ -804,9 +669,6 @@ function user.AttrsWithDelimiters.to_json(self: user.AttrsWithDelimiters) -> bam
 function user.AttrsWithDelimiters.from_json(j: baml.json.json) -> user.AttrsWithDelimiters throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   AttrsWithDelimiters { name: baml.json.from_json<string>(baml.json.field(j, "name")), age: baml.json.from_json<int>(baml.json.field(j, "age")), active: baml.json.from_json<bool>(baml.json.field(j, "active")) } : user.AttrsWithDelimiters
 }
-function user.AttrsWithDelimiters.to_string(self: user.AttrsWithDelimiters) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.SemicolonTrivia {
   name: string
   age: int
@@ -816,9 +678,6 @@ function user.SemicolonTrivia.to_json(self: user.SemicolonTrivia) -> baml.json.j
 }
 function user.SemicolonTrivia.from_json(j: baml.json.json) -> user.SemicolonTrivia throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   SemicolonTrivia { name: baml.json.from_json<string>(baml.json.field(j, "name")), age: baml.json.from_json<int>(baml.json.field(j, "age")) } : user.SemicolonTrivia
-}
-function user.SemicolonTrivia.to_string(self: user.SemicolonTrivia) -> string throws never {
-  baml.unstable.string<T>(self) : string
 }
 class user.EmptyClass$stream {
 }
@@ -1887,9 +1746,6 @@ function user.MatchSuccess.to_json(self: user.MatchSuccess) -> baml.json.json th
 function user.MatchSuccess.from_json(j: baml.json.json) -> user.MatchSuccess throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   MatchSuccess { data: baml.json.from_json<string>(baml.json.field(j, "data")) } : user.MatchSuccess
 }
-function user.MatchSuccess.to_string(self: user.MatchSuccess) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.MatchFailure {
   reason: string
 }
@@ -1899,9 +1755,6 @@ function user.MatchFailure.to_json(self: user.MatchFailure) -> baml.json.json th
 function user.MatchFailure.from_json(j: baml.json.json) -> user.MatchFailure throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   MatchFailure { reason: baml.json.from_json<string>(baml.json.field(j, "reason")) } : user.MatchFailure
 }
-function user.MatchFailure.to_string(self: user.MatchFailure) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.ArrayPatternTriviaBox {
   values: int[]
 }
@@ -1910,9 +1763,6 @@ function user.ArrayPatternTriviaBox.to_json(self: user.ArrayPatternTriviaBox) ->
 }
 function user.ArrayPatternTriviaBox.from_json(j: baml.json.json) -> user.ArrayPatternTriviaBox throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   ArrayPatternTriviaBox { values: baml.json.from_json<int[]>(baml.json.field(j, "values")) } : user.ArrayPatternTriviaBox
-}
-function user.ArrayPatternTriviaBox.to_string(self: user.ArrayPatternTriviaBox) -> string throws never {
-  baml.unstable.string<T>(self) : string
 }
 enum user.MatchStatus
 type user.MatchResult = user.MatchSuccess | user.MatchFailure
@@ -2227,9 +2077,6 @@ function user.OtherPoint.to_json(self: user.OtherPoint) -> baml.json.json throws
 function user.OtherPoint.from_json(j: baml.json.json) -> user.OtherPoint throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   OtherPoint { x: baml.json.from_json<int>(baml.json.field(j, "x")), y: baml.json.from_json<int>(baml.json.field(j, "y")) } : user.OtherPoint
 }
-function user.OtherPoint.to_string(self: user.OtherPoint) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.OtherVec {
   p: user.OtherPoint
   q: user.OtherPoint
@@ -2239,9 +2086,6 @@ function user.OtherVec.to_json(self: user.OtherVec) -> baml.json.json throws bam
 }
 function user.OtherVec.from_json(j: baml.json.json) -> user.OtherVec throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   OtherVec { p: baml.json.from_json<OtherPoint>(baml.json.field(j, "p")), q: baml.json.from_json<OtherPoint>(baml.json.field(j, "q")) } : user.OtherVec
-}
-function user.OtherVec.to_string(self: user.OtherVec) -> string throws never {
-  baml.unstable.string<T>(self) : string
 }
 class user.OtherTriple {
   a: user.OtherVec
@@ -2253,9 +2097,6 @@ function user.OtherTriple.to_json(self: user.OtherTriple) -> baml.json.json thro
 }
 function user.OtherTriple.from_json(j: baml.json.json) -> user.OtherTriple throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   OtherTriple { a: baml.json.from_json<OtherVec>(baml.json.field(j, "a")), b: baml.json.from_json<OtherVec>(baml.json.field(j, "b")), c: baml.json.from_json<OtherVec>(baml.json.field(j, "c")) } : user.OtherTriple
-}
-function user.OtherTriple.to_string(self: user.OtherTriple) -> string throws never {
-  baml.unstable.string<T>(self) : string
 }
 function user.OtherExprs(a: int, b: int) -> int throws never {
   { : int
@@ -2426,9 +2267,6 @@ function user.TypeAliasSuccess.to_json(self: user.TypeAliasSuccess) -> baml.json
 function user.TypeAliasSuccess.from_json(j: baml.json.json) -> user.TypeAliasSuccess throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   TypeAliasSuccess { data: baml.json.from_json<string>(baml.json.field(j, "data")) } : user.TypeAliasSuccess
 }
-function user.TypeAliasSuccess.to_string(self: user.TypeAliasSuccess) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.TypeAliasFailure {
   reason: string
 }
@@ -2437,9 +2275,6 @@ function user.TypeAliasFailure.to_json(self: user.TypeAliasFailure) -> baml.json
 }
 function user.TypeAliasFailure.from_json(j: baml.json.json) -> user.TypeAliasFailure throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   TypeAliasFailure { reason: baml.json.from_json<string>(baml.json.field(j, "reason")) } : user.TypeAliasFailure
-}
-function user.TypeAliasFailure.to_string(self: user.TypeAliasFailure) -> string throws never {
-  baml.unstable.string<T>(self) : string
 }
 type user.Result = user.TypeAliasSuccess | user.TypeAliasFailure
 type user.MaybeResult = user.Result | null

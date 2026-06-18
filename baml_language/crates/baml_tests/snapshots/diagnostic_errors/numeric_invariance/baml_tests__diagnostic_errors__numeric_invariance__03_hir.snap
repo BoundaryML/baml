@@ -62,6 +62,3 @@ function user.from_json(j: baml.json.json) -> user.BigintHolder  [expr] {
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "count": baml.json.to_json(self.count) }
 }
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}

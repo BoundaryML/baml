@@ -236,7 +236,7 @@ function inferred_generic_type_args.Cat.Animal.speak(self: inferred_generic_type
 
 function inferred_generic_type_args.Counter.element_type(self: inferred_generic_type_args.Counter<T>) -> string {
     load_type #0
-    call baml.TypeValue.to_string
+    call baml.TypeValue.baml.ToString.to_string
     return
 }
 
@@ -347,7 +347,7 @@ function inferred_generic_type_args.LoneIter.NextIter<T, never>.next2(self: infe
 
 function inferred_generic_type_args.Named.tname(self: inferred_generic_type_args.Named<T>) -> string {
     load_type #0
-    call baml.TypeValue.to_string
+    call baml.TypeValue.baml.ToString.to_string
     return
 }
 
@@ -415,13 +415,13 @@ function inferred_generic_type_args.PlainThing.Describable.describe(self: inferr
 
 function inferred_generic_type_args.ProbeA$stream.TypeProbe.seen(self: inferred_generic_type_args.ProbeA$stream, value: U) -> string {
     load_type #0
-    call baml.TypeValue.to_string
+    call baml.TypeValue.baml.ToString.to_string
     return
 }
 
 function inferred_generic_type_args.ProbeA.TypeProbe.seen(self: inferred_generic_type_args.ProbeA, value: U) -> string {
     load_type #0
-    call baml.TypeValue.to_string
+    call baml.TypeValue.baml.ToString.to_string
     return
 }
 
@@ -492,13 +492,13 @@ function inferred_generic_type_args.StrCounter.Counter<T>.describe(self: inferre
 
 function inferred_generic_type_args.TypedBox$stream.Describable.describe(self: inferred_generic_type_args.TypedBox$stream<T>) -> string {
     load_type #0
-    call baml.TypeValue.to_string
+    call baml.TypeValue.baml.ToString.to_string
     return
 }
 
 function inferred_generic_type_args.TypedBox.Describable.describe(self: inferred_generic_type_args.TypedBox<T>) -> string {
     load_type #0
-    call baml.TypeValue.to_string
+    call baml.TypeValue.baml.ToString.to_string
     return
 }
 
@@ -550,7 +550,7 @@ function inferred_generic_type_args.default_method_typevar_name() -> string {
 
 function inferred_generic_type_args.echo_type(a: T) -> string {
     load_type #0
-    call baml.TypeValue.to_string
+    call baml.TypeValue.baml.ToString.to_string
     return
 }
 
@@ -566,7 +566,7 @@ function inferred_generic_type_args.free_fn_inferred_t() -> string {
 
 function inferred_generic_type_args.free_fn_tname(a: T[]) -> string {
     load_type #0
-    call baml.TypeValue.to_string
+    call baml.TypeValue.baml.ToString.to_string
     return
 }
 

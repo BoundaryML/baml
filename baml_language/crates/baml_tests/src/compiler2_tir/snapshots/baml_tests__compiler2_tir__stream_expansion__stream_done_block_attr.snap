@@ -12,9 +12,6 @@ function user.AtomicPoint.to_json(self: user.AtomicPoint) -> baml.json.json thro
 function user.AtomicPoint.from_json(j: baml.json.json) -> user.AtomicPoint throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   AtomicPoint { x: baml.json.from_json<float>(baml.json.field(j, "x")), y: baml.json.from_json<float>(baml.json.field(j, "y")) } : user.AtomicPoint
 }
-function user.AtomicPoint.to_string(self: user.AtomicPoint) -> string throws never {
-  baml.unstable.string<T>(self) : string
-}
 class user.AtomicPoint$stream {
   x: float | null
   y: float | null

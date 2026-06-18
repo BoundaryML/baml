@@ -3,16 +3,46 @@
 /// String literals use double quotes: `"hello"`. Multiline strings use the `#"..."#` syntax.
 /// All methods returning a new string do not mutate `self` unless noted otherwise.
 class String {
+  /// Renders any value as a human-readable string.
+  ///
+  /// If `value`'s runtime type implements `baml.ToString`, its `to_string`
+  /// override is used; otherwise a default structural rendering is produced.
+  /// Never throws.
+  ///
+  /// ```
+  /// string.from(42)            // "42"
+  /// string.from(true)          // "true"
+  /// string.from([1, 2, 3])     // "[1, 2, 3]"
+  /// ```
+  ///
+  /// Ideally this would read:
+  ///
+  /// ```
+  /// if (value is baml.ToString) { value.to_string() }
+  /// else { root._to_string_default(value) }
+  /// ```
+  ///
+  /// but that does not work from the stdlib today. `is <interface>` and
+  /// interface method dispatch are resolved at *compile time* by expanding the
+  /// interface to its known implementor classes, and that implementor set is
+  /// per-package: it is built from the package's dependencies + itself, never
+  /// its dependents. `string.from` lives in the `baml` package, which a user's
+  /// `implements baml.ToString` sits *above*, so from here the implementor set
+  /// for `baml.ToString` is empty — the `is` test folds to constant `false` and
+  /// the override never dispatches. (Same boundary `Sortable.sort`'s
+  /// `_compare_shim` and `baml.json.to_json` work around.)
+  ///
+  /// So dispatch is resolved on `value`'s *runtime* class via
+  /// `baml._to_string_shim` instead. TODO: once Kai's TIR rework lands (it moves
+  /// interface conformance checks to runtime), replace this with the literal
+  /// `is baml.ToString` form above and drop `_to_string_shim`.
+  function from<T>(value: T) -> string throws never {
+    root._to_string_shim(value)
+  }
+
   /// Serializes this string to a JSON value.
   //baml:mut_vm
   function to_json(self) -> baml.json.json throws never {
-    $rust_function
-  }
-
-  /// Returns `self` unchanged. Provided so BEP-049 backtick-string
-  /// interpolation (§11) can unconditionally wrap each `${...}` value
-  /// with `.to_string()` without special-casing strings.
-  function to_string(self) -> string throws never {
     $rust_function
   }
 

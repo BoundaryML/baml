@@ -45,6 +45,3 @@ function user.takes_int(x: int) -> int  [expr] {
 function user.to_json(self: ?) -> baml.json.json  [expr] {
   map { "field_id": baml.json.to_json(self.field_id), "$id": baml.json.to_json(self.$id) }
 }
-function user.to_string(self: ?) -> string  [expr] {
-  baml.unstable.string(self)
-}
