@@ -535,45 +535,56 @@ impl baml_type::normalize::TypeContext for NormalizeCtx<'_, '_> {
         self.0.aliases.get(name).cloned()
     }
 
-    fn implements_interface(&self, concrete: &Ty, interface: &Ty) -> bool {
-        let Ty::Interface(iface_qtn, ..) = interface else {
-            return false;
-        };
+    fn implements_interface(&self, concrete: &Ty, interface: &baml_type::Interface) -> bool {
         let b = self.0;
         let db = b.context.db();
-        let registry_pkg = b.registry_package_for_interface_check(concrete, iface_qtn);
+        let registry_pkg = b.registry_package_for_interface_check(concrete, &interface.name);
         let registry = crate::interfaces::package_implements_registry(db, registry_pkg);
+        // The registry matcher keys off the interface *existential* `Ty`; rebuild
+        // it from the constraint (a lossless add of default attributes).
         registry.type_implements_interface_via_rule(
             concrete,
-            interface,
+            &interface.to_ty(),
             &b.aliases,
             |actual, bound| b.is_subtype(actual, bound),
         )
     }
 
-    fn type_var_bound(&self, name: &Name) -> Option<Ty> {
-        self.0.generic_param_bounds.get(name).cloned()
+    fn type_var_bound(&self, name: &Name) -> Vec<baml_type::Interface> {
+        // A type variable's bound is a conjunction of interfaces. The bound side
+        // table currently holds a single lowered bound `Ty` per var (the AST
+        // surfaces only the first interface of an `A & B` bound today); widen it
+        // to the constraint list, dropping any non-interface bound.
+        self.0
+            .generic_param_bounds
+            .get(name)
+            .and_then(Ty::as_interface)
+            .into_iter()
+            .collect()
     }
 
-    fn interface_requires(&self, sub: &Ty, sup: &Ty) -> bool {
-        let (
-            Ty::Interface(a_qtn, a_args, a_bindings, _),
-            Ty::Interface(b_qtn, b_args, b_bindings, _),
-        ) = (sub, sup)
-        else {
-            return false;
-        };
+    fn interface_requires(&self, sub: &baml_type::Interface, sup: &baml_type::Interface) -> bool {
         // Interface *equality* is the normalizer's job (structural reflexivity);
         // this method answers only the proper-requirement case.
-        if a_qtn == b_qtn {
+        if sub.name == sup.name {
             return false;
         }
         let b = self.0;
         let registry = crate::interfaces::package_implements_registry(b.context.db(), b.package_id);
-        if registry.interface_requires(a_qtn, b_qtn) && b_args.is_empty() && b_bindings.is_empty() {
+        if registry.interface_requires(&sub.name, &sup.name)
+            && sup.generics.is_empty()
+            && sup.associated_types.is_empty()
+        {
             return true;
         }
-        b.interface_requires_instantiation(a_qtn, a_args, a_bindings, b_qtn, b_args, b_bindings)
+        b.interface_requires_instantiation(
+            &sub.name,
+            &sub.generics,
+            &sub.associated_types,
+            &sup.name,
+            &sup.generics,
+            &sup.associated_types,
+        )
     }
 
     fn enum_variants(&self, name: &crate::ty::QualifiedTypeName) -> Option<Vec<Name>> {

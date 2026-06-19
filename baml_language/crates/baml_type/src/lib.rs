@@ -424,6 +424,22 @@ impl Ty {
         Ty::TypeVar(Name::new(name), TyAttr::default())
     }
 
+    /// View this type as an [`Interface`] constraint when it is an interface
+    /// existential ([`Ty::Interface`]); `None` for any other type. Attributes
+    /// are dropped — the constraint is identity data (name, generic arguments,
+    /// associated-type bindings), not SAP metadata. The inverse of
+    /// [`Interface::to_ty`].
+    pub fn as_interface(&self) -> Option<Interface> {
+        match self {
+            Ty::Interface(name, generics, associated_types, _) => Some(Interface {
+                name: name.clone(),
+                generics: generics.clone(),
+                associated_types: associated_types.clone(),
+            }),
+            _ => None,
+        }
+    }
+
     // --- Opaque leaf-type constructors (default TyAttr) ---
 
     /// Opaque resource handle type (file, socket, HTTP response body).
@@ -886,6 +902,24 @@ impl TyRenderStrategy for CanonicalTyRender {
         } else {
             name.to_string()
         }
+    }
+}
+
+impl Interface {
+    /// The interface *existential* type ([`Ty::Interface`]) denoted by this
+    /// constraint, with default attributes. The inverse of
+    /// [`Ty::as_interface`].
+    ///
+    /// A constraint may pin only some associated types whereas a fully-specified
+    /// existential pins all of them; this lifts the constraint verbatim, so the
+    /// result carries exactly the bindings the constraint holds.
+    pub fn to_ty(&self) -> Ty {
+        Ty::Interface(
+            self.name.clone(),
+            self.generics.clone(),
+            self.associated_types.clone(),
+            TyAttr::default(),
+        )
     }
 }
 

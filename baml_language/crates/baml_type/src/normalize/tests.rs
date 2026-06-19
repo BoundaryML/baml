@@ -17,7 +17,8 @@ struct Ctx {
     prim_impls: Vec<(&'static str, QualifiedTypeName)>,
     /// `(interface head, required interface head)` direct requirements.
     requires: Vec<(QualifiedTypeName, QualifiedTypeName)>,
-    var_bounds: HashMap<Name, Ty>,
+    /// Conjunction (`T: A + B`) bounds per type variable.
+    var_bounds: HashMap<Name, Vec<Ty>>,
     enums: HashMap<QualifiedTypeName, Vec<Name>>,
 }
 
@@ -46,31 +47,32 @@ impl TypeContext for Ctx {
         self.aliases.get(name).cloned()
     }
 
-    fn implements_interface(&self, concrete: &Ty, interface: &Ty) -> bool {
-        let Some(iface) = nominal_head(interface) else {
-            return false;
-        };
+    fn implements_interface(&self, concrete: &Ty, interface: &Interface) -> bool {
+        let iface = &interface.name;
         if let Some(c) = nominal_head(concrete) {
-            return self.impls.iter().any(|(cc, ii)| *cc == c && *ii == iface);
+            return self.impls.iter().any(|(cc, ii)| *cc == c && ii == iface);
         }
         if let Some(p) = primitive_name(concrete) {
             return self
                 .prim_impls
                 .iter()
-                .any(|(pp, ii)| *pp == p && *ii == iface);
+                .any(|(pp, ii)| *pp == p && ii == iface);
         }
         false
     }
 
-    fn type_var_bound(&self, name: &Name) -> Option<Ty> {
-        self.var_bounds.get(name).cloned()
+    fn type_var_bound(&self, name: &Name) -> Vec<Interface> {
+        self.var_bounds
+            .get(name)
+            .into_iter()
+            .flatten()
+            .filter_map(Ty::as_interface)
+            .collect()
     }
 
-    fn interface_requires(&self, sub: &Ty, sup: &Ty) -> bool {
-        let (Some(a), Some(b)) = (nominal_head(sub), nominal_head(sup)) else {
-            return false;
-        };
-        a == b || self.requires.iter().any(|(x, y)| *x == a && *y == b)
+    fn interface_requires(&self, sub: &Interface, sup: &Interface) -> bool {
+        let (a, b) = (&sub.name, &sup.name);
+        a == b || self.requires.iter().any(|(x, y)| x == a && y == b)
     }
 
     fn enum_variants(&self, name: &QualifiedTypeName) -> Option<Vec<Name>> {
@@ -274,7 +276,7 @@ fn interface_requires_absorption() {
 #[test]
 fn type_var_bound_absorption() {
     let mut ctx = Ctx::default();
-    ctx.var_bounds.insert(Name::new("T"), iface("Animal"));
+    ctx.var_bounds.insert(Name::new("T"), vec![iface("Animal")]);
 
     assert!(is_subtype(&typevar("T"), &iface("Animal"), &ctx));
     // `T | Animal == Animal` when `T: Animal`.
@@ -285,6 +287,36 @@ fn type_var_bound_absorption() {
     ));
     // A different type variable is not absorbed and not equivalent.
     assert!(!equivalent(&typevar("T"), &typevar("U"), &ctx));
+}
+
+#[test]
+fn type_var_conjunction_bound() {
+    // `T: Animal + Compare` (a Rust-style `+` conjunction), and `Compare`
+    // transitively requires `Equals`.
+    let mut ctx = Ctx::default();
+    ctx.var_bounds
+        .insert(Name::new("T"), vec![iface("Animal"), iface("Compare")]);
+    ctx.requires.push((qtn("Compare"), qtn("Equals")));
+
+    // Each conjunct is provable on its own…
+    assert!(is_subtype(&typevar("T"), &iface("Animal"), &ctx));
+    assert!(is_subtype(&typevar("T"), &iface("Compare"), &ctx));
+    // …including transitively through a conjunct's `requires`.
+    assert!(is_subtype(&typevar("T"), &iface("Equals"), &ctx));
+    // An interface that no conjunct provides is not a supertype.
+    assert!(!is_subtype(&typevar("T"), &iface("Serialize"), &ctx));
+
+    // Union absorption follows the same per-conjunct rule.
+    assert!(equivalent(
+        &union(vec![typevar("T"), iface("Equals")]),
+        &iface("Equals"),
+        &ctx,
+    ));
+    assert!(!equivalent(
+        &union(vec![typevar("T"), iface("Serialize")]),
+        &iface("Serialize"),
+        &ctx,
+    ));
 }
 
 // ── invariant generics ───────────────────────────────────────────────────--
