@@ -128,7 +128,6 @@ impl RuntimeCli {
     pub fn parse_from_smart(argv: Vec<String>) -> Self {
         use clap::FromArgMatches;
 
-        let argv = normalize_run_expression_argv(argv);
         let mut command = RuntimeCli::command();
 
         if baml_internal_env_is_truthy() {
@@ -191,105 +190,6 @@ impl RuntimeCli {
             Commands::Format(args) => args.run(),
         }
     }
-}
-
-/// Rewrite legacy `baml run -e -- ...` argv into a single expression value.
-///
-/// Parameters:
-/// - `argv`: Raw process argument vector.
-///
-/// Returns:
-/// - A normalized argument vector when the compatibility separator form is
-///   used (`run -e -- ...` or `run --expression -- ...`), where the expression
-///   tail becomes `--expression=<joined expression>`.
-/// - The original argument vector for all other forms.
-///
-/// Errors/Panics:
-/// - Does not return errors.
-/// - Does not panic.
-fn normalize_run_expression_argv(argv: Vec<String>) -> Vec<String> {
-    let Some(run_index) = find_run_subcommand_index(&argv) else {
-        return argv;
-    };
-    let run_args = &argv[run_index + 1..];
-    let Some((flag_offset, expression_parts)) = extract_run_expression_compat_parts(run_args)
-    else {
-        return argv;
-    };
-
-    if expression_parts.is_empty() {
-        return argv;
-    }
-
-    let expression = expression_parts.join(" ");
-    let expression_flag_index = run_index + 1 + flag_offset;
-    let mut normalized = argv[..expression_flag_index].to_vec();
-    normalized.push(format!("--expression={expression}"));
-    normalized
-}
-
-/// Find the `run` subcommand index while honoring top-level global flags.
-///
-/// Parameters:
-/// - `argv`: Raw process argument vector.
-///
-/// Returns:
-/// - `Some(index)` when the command resolves to `run`, else `None`.
-///
-/// Errors/Panics:
-/// - Does not return errors.
-/// - Does not panic.
-fn find_run_subcommand_index(argv: &[String]) -> Option<usize> {
-    let mut i = 1;
-    while i < argv.len() {
-        let token = argv[i].as_str();
-        if token == "run" {
-            return Some(i);
-        }
-        if token == "--features" {
-            i += 2;
-            continue;
-        }
-        if token.starts_with("--features=") {
-            i += 1;
-            continue;
-        }
-        if token.starts_with('-') {
-            i += 1;
-            continue;
-        }
-        return None;
-    }
-    None
-}
-
-/// Extract expression tokens for the compatibility `run -e -- ...` form.
-///
-/// Parameters:
-/// - `run_args`: Tokens after the `run` subcommand.
-///
-/// Returns:
-/// - `Some((flag_offset, parts))` where `flag_offset` is the expression flag's
-///   position within `run_args` and `parts` is the expression token list after
-///   the compatibility `--` separator.
-/// - `None` when no compatibility separator form is present.
-///
-/// Errors/Panics:
-/// - Does not return errors.
-/// - Does not panic.
-fn extract_run_expression_compat_parts(run_args: &[String]) -> Option<(usize, Vec<String>)> {
-    let mut i = 0;
-    while i < run_args.len() {
-        let token = run_args[i].as_str();
-        if token == "-e" || token == "--expression" {
-            if run_args.get(i + 1).is_some_and(|next| next == "--") {
-                return Some((i, run_args[i + 2..].to_vec()));
-            }
-            return None;
-        }
-        i += 1;
-    }
-    None
 }
 
 fn baml_internal_env_is_truthy() -> bool {
@@ -378,23 +278,5 @@ mod tests {
         };
         assert_eq!(args.expression.as_deref(), Some("-7 % 3"));
         assert_eq!(args.from, std::path::PathBuf::from("project"));
-    }
-
-    /// Legacy `-e -- ...` still works after expression-tail normalization.
-    #[test]
-    fn run_expression_compat_separator_is_ignored() {
-        let cli = RuntimeCli::parse_from_smart(vec![
-            "baml-cli".into(),
-            "run".into(),
-            "-e".into(),
-            "--".into(),
-            "-7".into(),
-            "%".into(),
-            "3".into(),
-        ]);
-        let Commands::Run(args) = cli.command else {
-            panic!("expected run command");
-        };
-        assert_eq!(args.expression.as_deref(), Some("-7 % 3"));
     }
 }
