@@ -193,15 +193,16 @@ impl RuntimeCli {
     }
 }
 
-/// Rewrite `baml run -e` argv so the expression consumes the remaining tail.
+/// Rewrite legacy `baml run -e -- ...` argv into a single expression value.
 ///
 /// Parameters:
 /// - `argv`: Raw process argument vector.
 ///
 /// Returns:
-/// - A normalized argument vector where `run -e ...` / `run --expression ...`
-///   becomes a single `--expression=<joined expression>` token and everything
-///   after the expression flag is treated as expression source text.
+/// - A normalized argument vector when the compatibility separator form is
+///   used (`run -e -- ...` or `run --expression -- ...`), where the expression
+///   tail becomes `--expression=<joined expression>`.
+/// - The original argument vector for all other forms.
 ///
 /// Errors/Panics:
 /// - Does not return errors.
@@ -211,7 +212,8 @@ fn normalize_run_expression_argv(argv: Vec<String>) -> Vec<String> {
         return argv;
     };
     let run_args = &argv[run_index + 1..];
-    let Some((flag_offset, expression_parts)) = extract_run_expression_parts(run_args) else {
+    let Some((flag_offset, expression_parts)) = extract_run_expression_compat_parts(run_args)
+    else {
         return argv;
     };
 
@@ -261,7 +263,7 @@ fn find_run_subcommand_index(argv: &[String]) -> Option<usize> {
     None
 }
 
-/// Extract expression tokens for `run -e` / `run --expression` forms.
+/// Extract expression tokens for the compatibility `run -e -- ...` form.
 ///
 /// Parameters:
 /// - `run_args`: Tokens after the `run` subcommand.
@@ -269,35 +271,23 @@ fn find_run_subcommand_index(argv: &[String]) -> Option<usize> {
 /// Returns:
 /// - `Some((flag_offset, parts))` where `flag_offset` is the expression flag's
 ///   position within `run_args` and `parts` is the expression token list after
-///   removing a leading compatibility `--` separator.
-/// - `None` when no expression flag is present.
+///   the compatibility `--` separator.
+/// - `None` when no compatibility separator form is present.
 ///
 /// Errors/Panics:
 /// - Does not return errors.
 /// - Does not panic.
-fn extract_run_expression_parts(run_args: &[String]) -> Option<(usize, Vec<String>)> {
+fn extract_run_expression_compat_parts(run_args: &[String]) -> Option<(usize, Vec<String>)> {
     let mut i = 0;
     while i < run_args.len() {
         let token = run_args[i].as_str();
-        let mut parts = if token == "-e" || token == "--expression" {
-            run_args[i + 1..].to_vec()
-        } else if let Some(value) = token.strip_prefix("--expression=") {
-            let mut parts = vec![value.to_string()];
-            parts.extend_from_slice(&run_args[i + 1..]);
-            parts
-        } else if token.starts_with("-e") && token != "-e" {
-            let mut parts = vec![token[2..].to_string()];
-            parts.extend_from_slice(&run_args[i + 1..]);
-            parts
-        } else {
-            i += 1;
-            continue;
-        };
-
-        if parts.first().is_some_and(|value| value == "--") {
-            parts.remove(0);
+        if token == "-e" || token == "--expression" {
+            if run_args.get(i + 1).is_some_and(|next| next == "--") {
+                return Some((i, run_args[i + 2..].to_vec()));
+            }
+            return None;
         }
-        return Some((i, parts));
+        i += 1;
     }
     None
 }
@@ -372,21 +362,22 @@ mod tests {
         );
     }
 
-    /// `run -e` should consume all remaining tokens as expression source.
+    /// `run -e` accepts hyphen-prefixed values without consuming run flags.
     #[test]
-    fn run_expression_consumes_remaining_tokens() {
+    fn run_expression_accepts_hyphen_prefixed_value_and_preserves_run_flags() {
         let cli = RuntimeCli::parse_from_smart(vec![
             "baml-cli".into(),
             "run".into(),
             "-e".into(),
-            "-7".into(),
-            "%".into(),
-            "3".into(),
+            "-7 % 3".into(),
+            "--from".into(),
+            "project".into(),
         ]);
         let Commands::Run(args) = cli.command else {
             panic!("expected run command");
         };
         assert_eq!(args.expression.as_deref(), Some("-7 % 3"));
+        assert_eq!(args.from, std::path::PathBuf::from("project"));
     }
 
     /// Legacy `-e -- ...` still works after expression-tail normalization.
