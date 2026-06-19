@@ -1116,15 +1116,49 @@ impl io::IoNamespaceSys for NativeSysOps {
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        ms: i64,
+        delay: BexExternalValue,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        #[allow(clippy::cast_sign_loss)]
-        let millis = ms.max(0) as u64;
+        let nanos = match sleep_nanos_from_delay(delay) {
+            Ok(nanos) => nanos,
+            Err(err) => return SysOpOutput::err(err),
+        };
         SysOpOutput::async_op(async move {
-            tokio::time::sleep(std::time::Duration::from_millis(millis)).await;
+            tokio::time::sleep(std::time::Duration::from_nanos(nanos)).await;
             Ok(())
         })
+    }
+}
+
+fn sleep_nanos_from_delay(delay: BexExternalValue) -> Result<u64, VmRustFnError> {
+    match delay {
+        BexExternalValue::Instance {
+            class_name,
+            mut fields,
+        } if class_name == "baml.time.Duration" => {
+            let Some(nanos) = fields.swap_remove("_nanoseconds") else {
+                return Err(VmRustFnError::from(VmBamlError::Io {
+                    message: "sleep delay is missing Duration._nanoseconds".to_string(),
+                }));
+            };
+            let BexExternalValue::Bigint(nanos) = nanos else {
+                return Err(VmRustFnError::from(VmBamlError::Io {
+                    message: "sleep delay Duration._nanoseconds is not a bigint".to_string(),
+                }));
+            };
+            if nanos.sign() == num_bigint::Sign::Plus {
+                Ok(u64::try_from(&nanos).unwrap_or(u64::MAX))
+            } else {
+                Ok(0)
+            }
+        }
+        BexExternalValue::Union { value, .. } => sleep_nanos_from_delay(*value),
+        other => Err(VmRustFnError::from(VmBamlError::Io {
+            message: format!(
+                "sleep delay must be baml.time.Duration, got {}",
+                other.type_name()
+            ),
+        })),
     }
 }
 

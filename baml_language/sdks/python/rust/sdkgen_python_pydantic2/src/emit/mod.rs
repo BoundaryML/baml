@@ -315,7 +315,7 @@ fn split_arguments(arguments: &[FunctionArgument]) -> (Vec<RequiredArg>, Vec<Opt
 /// - `foo$stream` → `foo_stream` (only companion that uses single
 ///   underscore — matches the longstanding free-function rule).
 /// - `foo$<other>` → `foo__<other>`.
-fn bare_callable_name(name: &str) -> String {
+pub(crate) fn bare_callable_name(name: &str) -> String {
     match name.split_once('$') {
         None => name.to_string(),
         Some((parent, "stream")) => format!("{parent}_stream"),
