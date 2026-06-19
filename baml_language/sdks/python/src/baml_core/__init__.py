@@ -259,28 +259,50 @@ def _build_kwargs(
 
 
 def _resolve_types_kwarg(types_kwarg: Any, type_params: List[str]) -> List[Any]:
-    """Map the user-facing `_types=` value onto the callee's own generic
-    params, in declaration order. Accepts a single type (one param only), a
-    positional tuple/list, or a `{param_name: type}` mapping. Missing entries
-    are left unbound (`None` → unknown)."""
-    n = len(type_params)
-    if types_kwarg is None:
-        return [None] * n
-    if isinstance(types_kwarg, dict):
-        return [types_kwarg.get(name) for name in type_params]
-    if isinstance(types_kwarg, (list, tuple)):
-        vals = list(types_kwarg)
-        if len(vals) != n:
+    """Map the user-facing `_types=` value onto the callee's own generic params,
+    in declaration order.
+
+    `_types=` is a `{param_name: type}` dict and is **required iff** the callee
+    declares its own generic params (`type_params`); it is the *only* accepted
+    shape (the legacy single-type / positional tuple/list forms are gone — one
+    name-keyed shape keeps binding unambiguous and matches the named `TyArg`
+    wire). Class type params (bound from a generic receiver) are *not* part of
+    `_types=`.
+    """
+    if not type_params:
+        # No own generic params: `_types=` must not be supplied. (Class type
+        # params, if any, ride the receiver instance, not `_types=`.)
+        if types_kwarg is not None:
             raise TypeError(
-                f"_types= expected {n} type(s) for {type_params!r}, got {len(vals)}"
+                "_types= is not accepted here: this function/method declares no "
+                "generic type parameters of its own"
             )
-        return vals
-    if n == 1:
-        return [types_kwarg]
-    raise TypeError(
-        f"_types= for multiple type params {type_params!r} must be a "
-        "tuple/list (positional) or a {name: type} mapping"
-    )
+        return []
+    example = f"{{{type_params[0]!r}: int}}"
+    if types_kwarg is None:
+        raise TypeError(
+            f"_types= is required for this generic call: bind every type parameter "
+            f"in {type_params!r} with a dict, e.g. _types={example}"
+        )
+    if not isinstance(types_kwarg, dict):
+        raise TypeError(
+            f"_types= must be a dict mapping type-parameter names to types "
+            f"(e.g. _types={example}); got {type(types_kwarg).__name__}. The "
+            f"single-type and positional tuple/list forms are no longer accepted."
+        )
+    missing = [n for n in type_params if n not in types_kwarg]
+    if missing:
+        raise TypeError(
+            f"_types= is missing binding(s) for {missing!r}: every type parameter "
+            f"in {type_params!r} must be bound."
+        )
+    extra = [k for k in types_kwarg if k not in type_params]
+    if extra:
+        raise TypeError(
+            f"_types= has unknown type parameter(s) {extra!r}; expected exactly "
+            f"{type_params!r}."
+        )
+    return [types_kwarg[name] for name in type_params]
 
 
 def _build_type_args(

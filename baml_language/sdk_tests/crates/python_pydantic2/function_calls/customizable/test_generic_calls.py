@@ -34,6 +34,8 @@ from baml_sdk.generic_tests import (
     wrap,
     parse_as,
     consume_int_wrapper,
+    one_type_arg,
+    two_type_args,
 )
 
 # xfail reason for the variant that can't produce the right answer yet.
@@ -55,16 +57,16 @@ TAG_OR_VALUE = (
 
 
 def test_identity_explicit():
-    assert identity(5, _types=int) == 5
-    assert identity("hi", _types=str) == "hi"
+    assert identity(5, _types={"T": int}) == 5
+    assert identity("hi", _types={"T": str}) == "hi"
     pair = StringIntPair(my_string="a", my_int=1)
-    assert identity(pair, _types=StringIntPair) == pair
+    assert identity(pair, _types={"T": StringIntPair}) == pair
 
 
 async def test_identity_async_explicit():
     from baml_sdk.generic_tests import identity_async
 
-    assert await identity_async(7, _types=int) == 7
+    assert await identity_async(7, _types={"T": int}) == 7
 
 
 # --- tag_or_value<T>(x: T | string | null) -> T? : TypeVar in a union -------
@@ -73,21 +75,56 @@ async def test_identity_async_explicit():
 @pytest.mark.xfail(reason=TAG_OR_VALUE, strict=True)
 def test_tag_or_value_explicit():
     pair = StringIntPair(my_string="b", my_int=2)
-    assert tag_or_value(pair, _types=StringIntPair) == pair
-    assert tag_or_value("plain", _types=StringIntPair) is None
-    assert tag_or_value(None, _types=StringIntPair) is None
+    assert tag_or_value(pair, _types={"T": StringIntPair}) == pair
+    assert tag_or_value("plain", _types={"T": StringIntPair}) is None
+    assert tag_or_value(None, _types={"T": StringIntPair}) is None
 
 
 # --- make_triple<A, B, C>(...) -> GenericTriple<A, B, C> : multiple TypeVars -
 
 
 def test_make_triple_explicit():
-    # A=int, B=str, C=bool, in declaration order (positional tuple form).
-    t = make_triple(1, ["a", "b"], {"k": True}, _types=(int, str, bool))
+    # A=int, B=str, C=bool, bound by name via the `_types=` dict.
+    t = make_triple(1, ["a", "b"], {"k": True}, _types={"A": int, "B": str, "C": bool})
     assert isinstance(t, GenericTriple)
     assert t.first == 1
     assert t.second == ["a", "b"]
     assert t.third == {"k": True}
+
+
+# --- one_type_arg<T>() / two_type_args<A,B>() : return-position-only TypeVars -
+# No argument carries `T`; the binding can only come from `_types=`. The
+# cleanest proof the inbound path does not rely on argument inference.
+
+
+def test_one_type_arg_explicit():
+    assert one_type_arg(_types={"T": int}) == "int"
+    assert one_type_arg(_types={"T": str}) == "string"
+    # Nested generic binding must encode fully (base class + concrete arg).
+    nested = one_type_arg(_types={"T": GenericBox[int]})
+    assert "GenericBox" in nested and "int" in nested
+
+
+def test_two_type_args_explicit():
+    assert two_type_args(_types={"A": int, "B": str}) == "int | string"
+
+
+def test_generic_free_fn_requires_types():
+    # `_types=` is required for a generic free function: omitting it (or
+    # binding only some params) is a hard error, not silent inference.
+    with pytest.raises(TypeError):
+        one_type_arg()
+    with pytest.raises(TypeError):
+        two_type_args(_types={"A": int})  # missing B
+
+
+def test_generic_free_fn_rejects_non_dict_types():
+    # The dict is the only accepted `_types=` shape — the legacy single-type
+    # and positional tuple/list forms are gone.
+    with pytest.raises(TypeError):
+        one_type_arg(_types=int)
+    with pytest.raises(TypeError):
+        make_triple(1, ["a"], {"k": True}, _types=(int, str, bool))
 
 
 # ===========================================================================
@@ -122,7 +159,7 @@ def test_genericbox_get_explicit():
 def test_genericbox_pair_with_explicit():
     # `T` from `GenericBox[int]` (receiver), `U` from `_types=str` (method var).
     b = GenericBox[int](value=5)
-    assert b.pair_with("hello world", _types=str) == "int | string"
+    assert b.pair_with("hello world", _types={"U": str}) == "int | string"
 
 
 # --- extract<A, B, C, D>(a: GenericPair<GenericPair<A,B>, GenericPair<C,D>>) --
@@ -137,7 +174,7 @@ def _nested_pair():
 
 
 def test_extract_explicit():
-    assert extract(_nested_pair(), _types=(int, str, bool, float)) == (
+    assert extract(_nested_pair(), _types={"A": int, "B": str, "C": bool, "D": float}) == (
         "int | string | bool | float"
     )
 
@@ -152,9 +189,9 @@ def test_extract_explicit():
 
 def test_parse_as_explicit():
     # `T` bound by the host via `_types=` (Python surface for `$types`).
-    pair = parse_as('{"my_string": "x", "my_int": 3}', _types=StringIntPair)
+    pair = parse_as('{"my_string": "x", "my_int": 3}', _types={"T": StringIntPair})
     assert pair == StringIntPair(my_string="x", my_int=3)
-    assert parse_as("42", _types=int) == 42
+    assert parse_as("42", _types={"T": int}) == 42
 
 
 # ===========================================================================
@@ -166,10 +203,10 @@ def test_parse_as_explicit():
 
 
 def test_second_of_explicit():
-    assert second_of(GenericPair[int, str](first=1, second="hi"), _types=str) == "hi"
+    assert second_of(GenericPair[int, str](first=1, second="hi"), _types={"T": str}) == "hi"
     pair = StringIntPair(my_string="z", my_int=9)
     p = GenericPair[int, StringIntPair](first=0, second=pair)
-    assert second_of(p, _types=StringIntPair) == pair
+    assert second_of(p, _types={"T": StringIntPair}) == pair
 
 
 # --- list_head<T>(list: GenericRecursive<T>) -> T : recursive generic arg ----
@@ -180,15 +217,15 @@ def _recursive_list():
 
 
 def test_list_head_explicit():
-    assert list_head(_recursive_list(), _types=int) == 7
+    assert list_head(_recursive_list(), _types={"T": int}) == 7
 
 
 # --- choose<T>(left: T, right: T) -> T : unification across two args ---------
 
 
 def test_choose_explicit():
-    assert choose(1, 2, _types=int) == 1
-    assert choose("a", "b", _types=str) == "a"
+    assert choose(1, 2, _types={"T": int}) == 1
+    assert choose("a", "b", _types={"T": str}) == "a"
 
 
 # --- read_items<T>(shape: ContainerShapes<T>) -> T[] : one T, many fields ----
@@ -205,7 +242,7 @@ def _container_shape():
 
 
 def test_read_items_explicit():
-    assert read_items(_container_shape(), _types=int) == [1, 2, 3]
+    assert read_items(_container_shape(), _types={"T": int}) == [1, 2, 3]
 
 
 # ===========================================================================
@@ -217,6 +254,6 @@ def test_read_items_explicit():
 
 
 def test_wrap_explicit():
-    w = wrap(5, _types=int)
+    w = wrap(5, _types={"T": int})
     assert isinstance(w, GenericBox)
     assert w.value == 5

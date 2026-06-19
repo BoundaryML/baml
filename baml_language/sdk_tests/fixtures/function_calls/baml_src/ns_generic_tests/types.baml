@@ -81,6 +81,21 @@ function identity<T>(x: T) -> T {
 }
 
 // ---------------------------------------------------------------------------
+// Return-position-only TypeVars with NO argument to infer from: the binding
+// can only come from the host's explicit `_types=`. The cleanest proof the
+// inbound path doesn't rely on argument inference. `T` (and `A`/`B`) appear
+// solely in the body via `reflect.type_of`, never in a parameter.
+// ---------------------------------------------------------------------------
+
+function one_type_arg<T>() -> string {
+  reflect.type_of<T>().to_string()
+}
+
+function two_type_args<A, B>() -> string {
+  reflect.type_of<A | B>().to_string()
+}
+
+// ---------------------------------------------------------------------------
 // Partially-bound generic-class param `GenericPair<int, T>`: `first` is pinned
 // to `int`, so `T` binds from the second component only.
 // ---------------------------------------------------------------------------

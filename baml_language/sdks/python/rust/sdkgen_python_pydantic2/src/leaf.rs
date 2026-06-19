@@ -1652,7 +1652,22 @@ fn render_function_signature_pyi(f: &PyFunction, ctx: &TranslateCtx) -> String {
     } else {
         ""
     };
-    let typed_params = render_typed_params(&f.param_names, &f.arg_tys, &f.arg_defaults, ctx);
+    let mut typed_params = render_typed_params(&f.param_names, &f.arg_tys, &f.arg_defaults, ctx);
+    // A generic free function requires the caller to bind every TypeVar via a
+    // keyword-only `_types=` dict (the runtime enforces this; the stub mirrors
+    // it so type checkers flag a missing/positional binding). Methods get their
+    // own surface in 01pt5.
+    if !f.generic_params.is_empty() {
+        let has_kwonly_marker = f.arg_defaults.iter().any(Option::is_some);
+        if has_kwonly_marker {
+            // optionals already introduced a `*` keyword-only marker.
+            typed_params.push_str(", _types: dict[str, type]");
+        } else if typed_params.is_empty() {
+            typed_params.push_str("*, _types: dict[str, type]");
+        } else {
+            typed_params.push_str(", *, _types: dict[str, type]");
+        }
+    }
     let ret_py = translate_ty(&f.return_ty, ctx);
     // 32d: append the `Raises:` block to the stub docstring (a no-op when the
     // function throws nothing; flips `: ...` into a docstring body when it
