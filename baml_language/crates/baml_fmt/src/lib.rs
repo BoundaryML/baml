@@ -78,6 +78,103 @@ pub enum FormatterError {
 }
 
 #[cfg(test)]
+mod line_width_format_tests {
+    //! Regression tests for the single-line/multi-line decision honoring the
+    //! configured line width even when a same-line *prefix* has already been
+    //! printed (e.g. `let x = `, a call's callee, a `: T` type annotation).
+    //!
+    //! Previously the width budget handed to a child expression ignored the
+    //! prefix already on the line, so over-long lines slipped through
+    //! un-wrapped. The fix clamps the single-line budget to the space actually
+    //! remaining on the line — which must *not* tip over into over-splitting
+    //! lines that genuinely fit.
+
+    use super::*;
+
+    fn line_lengths(s: &str) -> Vec<usize> {
+        s.lines().map(str::len).collect()
+    }
+
+    /// A bare call whose arguments push the line past the 100-column limit must
+    /// wrap, even though the callee + args measured in isolation each "fit".
+    #[test]
+    fn overlong_bare_call_wraps() {
+        let source = "function f() -> int {\n    foo_bar_baz(argument_one, argument_two, argument_three, argument_four, argument_five, arg_sixxxxxxxxxxxxx)\n    0\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert!(
+            formatted.contains("foo_bar_baz(\n"),
+            "expected the over-long call to wrap its arguments; got:\n{formatted}"
+        );
+        assert!(
+            line_lengths(&formatted)
+                .iter()
+                .all(|&len| len <= options.line_width),
+            "no line should exceed the width limit; got:\n{formatted}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    /// `let NAME = call(...)` must account for the `let NAME = ` prefix when
+    /// deciding whether the initializer fits on the line.
+    #[test]
+    fn overlong_let_initializer_wraps() {
+        let source = "function f() -> int {\n    let value = compute_something(with_a_long_argument_name, and_another_long_argument_name_here_xxxxxxxxxxxx)\n    0\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert!(
+            formatted.contains("compute_something(\n"),
+            "expected the over-long let initializer to wrap; got:\n{formatted}"
+        );
+        assert!(
+            line_lengths(&formatted)
+                .iter()
+                .all(|&len| len <= options.line_width),
+            "no line should exceed the width limit; got:\n{formatted}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    /// A call that lands exactly on (or under) the limit must stay on one line —
+    /// the clamp must never over-split content that fits.
+    #[test]
+    fn call_that_fits_is_not_oversplit() {
+        // The call statement (with trailing `;`) is exactly 100 columns wide.
+        let source = "function f() -> int {\n    foo_bar_baz(argument_one, argument_two, argument_three, argument_four, argument_five, arg_sixx)\n    0\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert!(
+            formatted.contains(
+                "foo_bar_baz(argument_one, argument_two, argument_three, argument_four, argument_five, arg_sixx);"
+            ),
+            "a call that fits within the limit must not be split; got:\n{formatted}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    /// A short value initializer that *together with* its prefix overflows the
+    /// line must wrap the value onto its own line. (Here the type-annotation
+    /// prefix alone is unavoidably long, so the opening `= {` line can still
+    /// exceed the limit — what matters is that the prefix length is taken into
+    /// account at all, so the value expands instead of trailing off the line.)
+    #[test]
+    fn short_value_after_long_prefix_wraps_value() {
+        let source = "function f() -> int {\n    let very_long_variable_name_for_testing_wrapping: map<string, int | string | bool | float | null> = { \"key\": 42 }\n    0\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert!(
+            formatted.contains("= {\n") && formatted.contains("\"key\": 42,\n"),
+            "expected the value to expand onto its own line; got:\n{formatted}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+}
+
+#[cfg(test)]
 mod lambda_format_tests {
     use super::*;
 

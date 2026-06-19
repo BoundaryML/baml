@@ -299,7 +299,9 @@ function LoopStmts(items: int[], flag: bool) -> int {
     /* 1 for leading */
     for ( /* 4 open paren trailing */
         /* 5 init leading */
-        let /* 6 let trailing */ extremely_long_loop_counter_variable = /* 9 equals trailing *//* 10 init value leading */a * a + result * result/* 11 init value trailing */; /* 12 semi1 trailing */
+        let /* 6 let trailing */ extremely_long_loop_counter_variable = /* 9 equals trailing *//* 10 init value leading */a
+            * a
+            + result * result/* 11 init value trailing */; /* 12 semi1 trailing */
         /* 13 condition leading */
         extremely_long_loop_counter_variable < 1000000 && flag && a > 0/* 14 condition trailing */; /* 15 semi2 trailing */
         /* 16 update leading */
@@ -480,7 +482,9 @@ function LoopStmts(items: int[], flag: bool) -> int {
     let complex_init = a + result;
 
     // ===== Long let with type annotation exceeding limit =====
-    let very_long_variable_name_for_testing_wrapping: map<string, int | string | bool | float | null> = { "key": 42 };
+    let very_long_variable_name_for_testing_wrapping: map<string, int | string | bool | float | null> = {
+        "key": 42,
+    };
 
     // ===== Very long let with expression exceeding limit =====
     let another_extremely_long_variable_name = a * a
@@ -494,7 +498,9 @@ function LoopStmts(items: int[], flag: bool) -> int {
         + result * a * result;
 
     // ===== Long let with nested generic type exceeding limit =====
-    let deeply_typed: map<string, map<string, map<string, int | string | bool>>> = { "outer": { "inner": { "deep": 42 } } };
+    let deeply_typed: map<string, map<string, map<string, int | string | bool>>> = {
+        "outer": { "inner": { "deep": 42 } },
+    };
 
     // ===== Trivia on let statement (line comments) =====
     // 1 let keyword leading
@@ -506,13 +512,17 @@ function LoopStmts(items: int[], flag: bool) -> int {
 
     // ===== Trivia on wrapping let with long type (line comments) =====
     // 1 let leading
-    let very_long_variable_name_for_testing_wrapping: map<string, int | string | bool | float | null> = { "key": 42 }; // 13 semicolon trailing
+    let very_long_variable_name_for_testing_wrapping: map<string, int | string | bool | float | null> = {
+        "key": 42,
+    }; // 13 semicolon trailing
 
     ///////////////////
 
     // ===== Trivia on wrapping let with long type (block comments) =====
     /* 1 let leading */
-    let /* 2 let trailing */ very_long_variable_name_for_testing_wrapping /* 4 name trailing */ /* 5 colon leading */: /* 6 colon trailing */ /* 7 type leading */ map<string, int | string | bool | float | null> = /* 10 equals trailing *//* 11 value leading */{ "key": 42 }/* 12 value trailing */; /* 13 semicolon trailing */
+    let /* 2 let trailing */ very_long_variable_name_for_testing_wrapping /* 4 name trailing */ /* 5 colon leading */: /* 6 colon trailing */ /* 7 type leading */ map<string, int | string | bool | float | null> = /* 10 equals trailing *//* 11 value leading */{
+        "key": 42,
+    }/* 12 value trailing */; /* 13 semicolon trailing */
 
     ///////////////////
 
@@ -532,7 +542,8 @@ function LoopStmts(items: int[], flag: bool) -> int {
 
     // ===== Trivia on wrapping let with long expression (block comments) =====
     /* 1 let leading */
-    let /* 2 let trailing */ another_extremely_long_variable_name = /* 6 equals trailing *//* 7 value leading */a * a
+    let /* 2 let trailing */ another_extremely_long_variable_name = /* 6 equals trailing *//* 7 value leading */a
+        * a
         + result * result
         + a * result
         + a

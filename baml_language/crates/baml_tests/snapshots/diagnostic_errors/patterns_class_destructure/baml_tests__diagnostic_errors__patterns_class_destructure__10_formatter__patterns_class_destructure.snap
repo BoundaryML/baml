@@ -36,7 +36,11 @@ function class_destructure_unknown_field_in_let() -> int {
 }
 
 function class_destructure_duplicate_field_key_in_let() -> int {
-    let Person { age: let first, age: let second } = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } };
+    let Person { age: let first, age: let second } = Person {
+        age: 1,
+        flexible_age: 2,
+        address: Address { zip: 3 },
+    };
     first + second
 }
 
@@ -47,22 +51,36 @@ function class_destructure_duplicate_field_key_with_wildcards() -> int {
 }
 
 function class_destructure_duplicate_binding_name_across_fields() -> int {
-    let Person { age, flexible_age: let age } = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } };
+    let Person { age, flexible_age: let age } = Person {
+        age: 1,
+        flexible_age: 2,
+        address: Address { zip: 3 },
+    };
     0
 }
 
 function nested_class_destructure_duplicate_binding_name_in_field_chain() -> int {
-    let SameNameOuter { field: let field: SameNameInner { field } } = SameNameOuter { field: SameNameInner { field: 1 }, other: SameNameInner { field: 2 } };
+    let SameNameOuter { field: let field: SameNameInner { field } } = SameNameOuter {
+        field: SameNameInner { field: 1 },
+        other: SameNameInner { field: 2 },
+    };
     0
 }
 
 function nested_class_destructure_duplicate_binding_name_across_nested_fields() -> int {
-    let SameNameOuter { field: SameNameInner { field }, other: SameNameInner { field } } = SameNameOuter { field: SameNameInner { field: 1 }, other: SameNameInner { field: 2 } };
+    let SameNameOuter { field: SameNameInner { field }, other: SameNameInner { field } } = SameNameOuter {
+        field: SameNameInner { field: 1 },
+        other: SameNameInner { field: 2 },
+    };
     0
 }
 
 function nested_class_destructure_unknown_field_in_let() -> int {
-    let Person { address: Address { missing } } = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } };
+    let Person { address: Address { missing } } = Person {
+        age: 1,
+        flexible_age: 2,
+        address: Address { zip: 3 },
+    };
     0
 }
 
@@ -134,7 +152,11 @@ function for_top_level_class_narrows_union_element_is_refutable() -> int {
 }
 
 function let_class_field_type_narrower_than_field_is_refutable() -> int {
-    let Person { flexible_age: int } = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } };
+    let Person { flexible_age: int } = Person {
+        age: 1,
+        flexible_age: 2,
+        address: Address { zip: 3 },
+    };
     1
 }
 
@@ -144,7 +166,11 @@ function let_class_field_literal_narrower_than_field_is_refutable() -> int {
 }
 
 function nested_class_field_type_narrower_than_field_is_refutable() -> int {
-    let Person { address: Address { zip: 1 } } = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } };
+    let Person { address: Address { zip: 1 } } = Person {
+        age: 1,
+        flexible_age: 2,
+        address: Address { zip: 3 },
+    };
     1
 }
 
@@ -213,7 +239,11 @@ function nested_class_destructure_field_pattern_type_mismatch() -> int {
 }
 
 function class_destructure_unknown_renamed_field_span() -> int {
-    let Person { missing: let renamed } = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } };
+    let Person { missing: let renamed } = Person {
+        age: 1,
+        flexible_age: 2,
+        address: Address { zip: 3 },
+    };
     renamed
 }
 

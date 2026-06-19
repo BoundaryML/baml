@@ -685,8 +685,12 @@ impl ParenExpr {
 
 impl Printable for ParenExpr {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let single_line_shape = Shape {
+            width: printer.clamp_single_line_width(shape.width),
+            ..shape
+        };
         printer
-            .try_sub_printer(|p| self.try_print_single_line(&shape, p))
+            .try_sub_printer(|p| self.try_print_single_line(&single_line_shape, p))
             .unwrap_or_else(|| self.print_multi_line(shape, printer))
     }
     fn leftmost_token(&self) -> TextRange {
@@ -936,8 +940,12 @@ impl BinaryExpr {
 
 impl Printable for BinaryExpr {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let single_line_shape = Shape {
+            width: printer.clamp_single_line_width(shape.width),
+            ..shape
+        };
         printer
-            .try_sub_printer(|p| self.try_print_single_line(&shape, p))
+            .try_sub_printer(|p| self.try_print_single_line(&single_line_shape, p))
             .unwrap_or_else(|| self.print_multi_line(shape, printer))
     }
     fn leftmost_token(&self) -> TextRange {
@@ -2558,8 +2566,12 @@ impl CallArgs {
 
 impl Printable for CallArgs {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let single_line_shape = Shape {
+            width: printer.clamp_single_line_width(shape.width),
+            ..shape
+        };
         printer
-            .try_sub_printer(|p| self.try_print_single_line(&shape, p))
+            .try_sub_printer(|p| self.try_print_single_line(&single_line_shape, p))
             .unwrap_or_else(|| self.print_multi_line(shape, printer))
     }
     fn leftmost_token(&self) -> TextRange {
@@ -2650,8 +2662,12 @@ impl PrintMultiLine for IndexArgs<'_> {
 
 impl Printable for IndexArgs<'_> {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let single_line_shape = Shape {
+            width: printer.clamp_single_line_width(shape.width),
+            ..shape
+        };
         printer
-            .try_sub_printer(|p| self.try_print_single_line(&shape, p))
+            .try_sub_printer(|p| self.try_print_single_line(&single_line_shape, p))
             .unwrap_or_else(|| self.print_multi_line(shape, printer))
     }
     fn leftmost_token(&self) -> TextRange {
@@ -2761,8 +2777,12 @@ impl IndexExpr {
 impl Printable for IndexExpr {
     /// The main way to call this should be through [`PrintChain`]
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let single_line_shape = Shape {
+            width: printer.clamp_single_line_width(shape.width),
+            ..shape
+        };
         printer
-            .try_sub_printer(|p| self.try_print_single_line(&shape, p))
+            .try_sub_printer(|p| self.try_print_single_line(&single_line_shape, p))
             .unwrap_or_else(|| self.print_multi_line(shape, printer))
     }
     fn leftmost_token(&self) -> TextRange {
@@ -3396,8 +3416,12 @@ impl ArrayInitializer {
 
 impl Printable for ArrayInitializer {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let single_line_shape = Shape {
+            width: printer.clamp_single_line_width(shape.width),
+            ..shape
+        };
         printer
-            .try_sub_printer(|p| self.try_print_single_line(&shape, p))
+            .try_sub_printer(|p| self.try_print_single_line(&single_line_shape, p))
             .unwrap_or_else(|| self.print_multi_line(shape, printer))
     }
     fn leftmost_token(&self) -> TextRange {
@@ -3620,8 +3644,12 @@ impl ObjectInitializer {
 
 impl Printable for ObjectInitializer {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let single_line_shape = Shape {
+            width: printer.clamp_single_line_width(shape.width),
+            ..shape
+        };
         printer
-            .try_sub_printer(|p| self.try_print_single_line(&shape, p))
+            .try_sub_printer(|p| self.try_print_single_line(&single_line_shape, p))
             .unwrap_or_else(|| self.print_multi_line(shape, printer))
     }
     fn leftmost_token(&self) -> TextRange {
@@ -3865,8 +3893,12 @@ impl MapLiteral {
 
 impl Printable for MapLiteral {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let single_line_shape = Shape {
+            width: printer.clamp_single_line_width(shape.width),
+            ..shape
+        };
         printer
-            .try_sub_printer(|p| self.try_print_single_line(&shape, p))
+            .try_sub_printer(|p| self.try_print_single_line(&single_line_shape, p))
             .unwrap_or_else(|| self.print_multi_line(shape, printer))
     }
     fn leftmost_token(&self) -> TextRange {
@@ -4866,8 +4898,12 @@ impl PrintChain<'_> {
 
 impl Printable for PrintChain<'_> {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let single_line_shape = Shape {
+            width: printer.clamp_single_line_width(shape.width),
+            ..shape
+        };
         printer
-            .try_sub_printer(|p| self.try_print_single_line(&shape, p))
+            .try_sub_printer(|p| self.try_print_single_line(&single_line_shape, p))
             .unwrap_or_else(|| self.print_multi_line(shape, printer))
     }
     fn leftmost_token(&self) -> TextRange {

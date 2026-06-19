@@ -357,6 +357,35 @@ impl<'a> Printer<'a> {
             .saturating_sub(self.current_line_len())
     }
 
+    /// Clamps a requested single-line width budget to the space actually
+    /// remaining on the current line.
+    ///
+    /// `Shape::width` is nominally the content budget excluding base
+    /// indentation, but parents routinely print a same-line prefix (`let x = `,
+    /// a call's callee, a binary operator's left-hand side, …) and then hand
+    /// the child the *unreduced* budget. Measuring the child against that stale
+    /// budget lets over-long lines slip through un-wrapped. Clamping to the real
+    /// remaining width accounts for whatever has already been emitted on the
+    /// line, so the single-line/multi-line decision reflects the actual layout.
+    ///
+    /// This can only ever *shrink* the budget down to the true remaining space,
+    /// so it fixes under-splitting (over-long lines) without ever introducing
+    /// over-splitting: when the requested width already fits the line, it is
+    /// returned unchanged.
+    ///
+    /// The sentinel `usize::MAX` (see [`Shape::unlimited_single_line`]) is
+    /// preserved untouched: it marks a nested measurement where the caller does
+    /// its own width accounting against the full output, so it must not be
+    /// clamped to the (meaningless) current line of a scratch sub-printer.
+    #[must_use]
+    pub fn clamp_single_line_width(&self, width: usize) -> usize {
+        if width == usize::MAX {
+            usize::MAX
+        } else {
+            width.min(self.current_line_remaining_width())
+        }
+    }
+
     /// The current length of the output.
     #[must_use]
     pub const fn len(&self) -> usize {

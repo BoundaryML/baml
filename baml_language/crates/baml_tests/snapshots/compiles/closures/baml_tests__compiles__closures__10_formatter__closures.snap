@@ -73,7 +73,10 @@ function test_bound_mapper() -> string[] {
 
 // Test 2: Unbound method in map
 function test_unbound_in_map() -> string[] {
-    let employees = [Employee { first: "Alice", last: "Smith" }, Employee { first: "Bob", last: "Jones" }];
+    let employees = [
+        Employee { first: "Alice", last: "Smith" },
+        Employee { first: "Bob", last: "Jones" },
+    ];
     employees.map(Employee.full_name)
 }
 
