@@ -6,6 +6,7 @@
 
 import atexit
 import asyncio
+import functools
 from typing import Any, Callable, Dict, List, Literal, Optional, Sequence
 
 from .baml_py import (
@@ -349,6 +350,69 @@ def _build_type_args(
     return wire
 
 
+class _GenericCallable(staticmethod):
+    """Subscriptable wrapper for a generic free function / method (Phase 6).
+
+    `fn[X, Y](...)` is pure sugar for `fn(..., _types={p0: X, p1: Y})`, where
+    `p0, p1, …` are the callee's OWN generic params (`type_param_names`, in
+    declaration order). The subscript binds them positionally; the resulting
+    partial delegates to the same `_types=`-based call path as Phase 4/5, so the
+    two forms produce identical wire payloads. The explicit `_types=` form keeps
+    working via `__call__` (subscript is sugar, not a replacement).
+
+    It subclasses `staticmethod` for two reasons: (1) Pydantic ignores
+    `staticmethod` attributes, so a generic *instance* method bound bare in a
+    generated `pydantic.BaseModel` class body isn't mistaken for a model field;
+    (2) it carries the wrapped callable in `__func__`. The overridden `__get__`
+    *does* bind the receiver (unlike a plain `staticmethod`) so a generic
+    instance method works as `k.method(...)` / `k.method[U](...)`. A true static
+    method is wrapped by codegen in an outer `staticmethod(...)`, whose `__get__`
+    returns this object unbound — so no receiver is injected there.
+    """
+
+    def __new__(cls, call: Callable[..., Any], type_param_names: List[str]):
+        return super().__new__(cls, call)
+
+    def __init__(self, call: Callable[..., Any], type_param_names: List[str]) -> None:
+        super().__init__(call)
+        self._type_param_names = type_param_names
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        return self.__func__(*args, **kwargs)
+
+    def __getitem__(self, key: Any) -> Callable[..., Any]:
+        types = key if isinstance(key, tuple) else (key,)
+        if len(types) != len(self._type_param_names):
+            raise TypeError(
+                f"expected {len(self._type_param_names)} type argument(s) for "
+                f"{self._type_param_names!r}, got {len(types)}"
+            )
+        bound = dict(zip(self._type_param_names, types))
+        return functools.partial(self.__func__, _types=bound)
+
+    def __get__(self, obj: Any, objtype: Any = None) -> "_GenericCallable":
+        # Unbound access (`Cls.method`) returns the wrapper itself; bound access
+        # (`inst.method`) pre-binds the receiver so the subscript/`__call__`
+        # forms both forward `self` like an ordinary bound method.
+        if obj is None:
+            return self
+        return _GenericCallable(
+            functools.partial(self.__func__, obj), self._type_param_names
+        )
+
+
+def _maybe_generic_callable(
+    call: Callable[..., Any], own_type_params: List[str]
+) -> Callable[..., Any]:
+    """Wrap `call` so it accepts the `fn[...]` subscript form when the callee
+    declares its OWN generic params; otherwise return it unchanged (non-generic
+    functions and methods whose only TypeVars ride the receiver stay plain
+    callables, avoiding any behavior change)."""
+    if own_type_params:
+        return _GenericCallable(call, own_type_params)
+    return call
+
+
 def define_function(
     baml_fqn: str,
     mode: Mode,
@@ -406,7 +470,7 @@ def define_function(
             finally:
                 _detach_call_ctx(call_ctx, call_id)
             return decode_call_result(result_bytes)
-        return _sync
+        return _maybe_generic_callable(_sync, type_param_names)
     elif mode == "async":
         async def _async(*args: Any, **kwargs: Any) -> Any:
             call_ctx = kwargs.pop("_ctx", None)
@@ -432,7 +496,7 @@ def define_function(
             finally:
                 _detach_call_ctx(call_ctx, call_id)
             return _decode_call_result_async(result_bytes)
-        return _async
+        return _maybe_generic_callable(_async, type_param_names)
     else:
         raise ValueError(f"mode must be 'sync' or 'async', got {mode!r}")
 

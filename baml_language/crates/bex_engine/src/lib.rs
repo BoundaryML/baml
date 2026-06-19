@@ -1840,7 +1840,6 @@ impl BexEngine {
             cancel,
             profile_enabled,
             type_args,
-            named_type_args,
         }: FunctionCallContext,
         copy_objects: bool,
     ) -> Result<BexCallResult, EngineError> {
@@ -1856,7 +1855,6 @@ impl BexEngine {
                 cancel,
                 profile_enabled,
                 type_args,
-                named_type_args,
             },
             copy_objects,
         )
@@ -1898,7 +1896,6 @@ impl BexEngine {
             cancel,
             profile_enabled,
             type_args,
-            named_type_args,
         }: FunctionCallContext,
         copy_objects: bool,
     ) -> Result<BexCallResult, EngineError> {
@@ -1950,7 +1947,7 @@ impl BexEngine {
         //       the inbound `self` handle carries them concretely, so zipping the
         //       declared `self` against the actual recovers the bindings. See
         //       bridge-generics/streaming/04.
-        //   (b) the host's explicit `_types=` bindings (`named_type_args`) — the
+        //   (b) the host's explicit `_types=` bindings (`type_args`) — the
         //       single inbound channel for call-level TypeVar bindings; these
         //       win on conflict.
         let mut bindings: std::collections::HashMap<String, RuntimeTy> =
@@ -1966,7 +1963,7 @@ impl BexEngine {
                 );
             }
         }
-        for (name, ty) in &named_type_args {
+        for (name, ty) in &type_args {
             bindings.insert(name.clone(), ty.clone());
         }
 
@@ -1990,12 +1987,11 @@ impl BexEngine {
                 .any(crate::conversion::contains_type_var);
 
         // Strict generic handling (substitution + full-binding enforcement +
-        // structural arg check) applies only to the *named* binding channel
-        // (host SDK `_types=`). The legacy *positional* `type_args` channel
-        // (BEP-039 / native `$rust_function` generics consumed positionally via
-        // `current_call_type_args()`) keeps the permissive path — its bindings
-        // are lowered positionally in `set_entry_point`, not name-resolved here.
-        let strict_generics = callee_is_generic && type_args.is_empty();
+        // structural arg check) applies to every generic call: all call-level
+        // TypeVar bindings now arrive through the single named `type_args`
+        // channel, and a generic callee with no bindings is rejected by the
+        // full-binding enforcement below.
+        let strict_generics = callee_is_generic;
         // Full-binding enforcement + per-arg structural check are scoped to
         // *free* generic functions in Phase 3. Instance methods (a `self`
         // receiver carrying class TypeVars) are Phase 5; they keep the
@@ -2099,17 +2095,18 @@ impl BexEngine {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        // `function_index` is the entry function's `HeapPtr`; `type_args` are the
-        // explicit BEP-039 type args from the host (closures/bound methods instead
-        // seed their captured/class type args — see `call_callable`).
-        // `named_type_args` (host SDK calls) take precedence and are lowered to
-        // positional De Bruijn slots inside `set_entry_point_with_type_args`.
+        // `function_index` is the entry function's `HeapPtr`. The call's named
+        // `type_args` are lowered to positional De Bruijn slots against the
+        // callee's generic params inside `set_entry_point_with_named_type_args`.
+        // The positional `run_entry_point` channel is left empty here; only the
+        // closure/bound-method path (`call_callable`) seeds it, with class/
+        // captured type args it already holds positionally.
         self.run_entry_point(
             thread,
             function_index,
             vm_args,
-            type_args,
-            named_type_args,
+            Vec::new(),
+            type_args.into_iter().collect(),
             return_type,
             throws_type,
             host_call_id,
@@ -2298,7 +2295,6 @@ impl BexEngine {
             cancel,
             profile_enabled,
             type_args: _,
-            named_type_args: _,
         }: FunctionCallContext,
         copy_objects: bool,
     ) -> Result<BexCallResult, EngineError> {

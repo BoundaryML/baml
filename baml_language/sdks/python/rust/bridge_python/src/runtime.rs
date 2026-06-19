@@ -138,7 +138,7 @@ impl BamlRuntime {
             let bytes = match prepared {
                 Ok((runtime, decoded)) => {
                     let call_ctx = bridge_cffi::function_call_context_builder(decoded.call_id)
-                        .with_named_type_args(decoded.named_type_args)
+                        .with_type_args(decoded.named_type_args.into_iter().collect())
                         .build();
                     bridge_cffi::call_and_encode(runtime, function_name, decoded.kwargs, call_ctx)
                         .await
@@ -186,7 +186,7 @@ impl BamlRuntime {
         // stability but no longer wired into the call context.
         let _ = (&ctx, &collectors);
         let call_ctx = bridge_cffi::function_call_context_builder(decoded.call_id)
-            .with_named_type_args(decoded.named_type_args)
+            .with_type_args(decoded.named_type_args.into_iter().collect())
             .build();
 
         // Same shared call_and_encode as the async + C-ABI paths — returns the

@@ -184,7 +184,8 @@ fn call_function_inner(
     let named_type_args = bridge_ctypes::proto_ty_args_to_named(&args.type_args)?;
     let kwargs = kwargs_to_bex_values(args.kwargs, &HANDLE_TABLE)?;
 
-    let call_ctx = function_call_context_builder(call_id).with_named_type_args(named_type_args);
+    let call_ctx = function_call_context_builder(call_id)
+        .with_type_args(named_type_args.into_iter().collect());
 
     get_tokio_runtime()?.spawn(async move {
         // `call_and_encode` already wraps the engine call in its own

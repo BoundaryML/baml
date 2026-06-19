@@ -5,8 +5,7 @@ must be bound from the call. Cases use the *explicit* variant: the caller
 specifies the bindings — `_types=` for a function's / method's own TypeVars,
 and a parameterized `GenericBox[int]` receiver for a generic class's TypeVars
 (recovered host-side from the Pydantic generic metadata). This is the path the
-bridge implements, so these pass — except `tag_or_value`, whose baml body is
-still a null-returning stub.
+bridge implements, so these pass.
 
 (The *inference* variant — bare calls with no caller-specified bindings, which
 depend on the not-yet-landed inbound-inference phase — is intentionally not
@@ -39,15 +38,6 @@ from baml_sdk.generic_tests import (
     two_type_args,
 )
 
-# xfail reason for the variant that can't produce the right answer yet.
-TAG_OR_VALUE = (
-    "bridge-generics2: `tag_or_value` must discriminate whether `x` bound to "
-    "`T` vs. the string/null arms, which needs a `let v: T` match arm (rejected "
-    "today as an unreachable arm; see baml-runtime-type-tests-limits). Its baml "
-    "body is a null-returning stub, so it fails — even `_types=` binds "
-    "`T` but the stub still returns null."
-)
-
 
 # ===========================================================================
 # basic cases, free functions
@@ -73,12 +63,13 @@ async def test_identity_async_explicit():
 # --- tag_or_value<T>(x: T | string | null) -> T? : TypeVar in a union -------
 
 
-@pytest.mark.xfail(reason=TAG_OR_VALUE, strict=True)
 def test_tag_or_value_explicit():
+    # `tag_or_value` reflects its bound `T` back as a string; `x` must inhabit
+    # the substituted `T | string | null`. Proves `T` is bound from `_types=`.
+    assert tag_or_value(5, _types={"T": int}) == "int"
+    assert tag_or_value("plain", _types={"T": str}) == "string"
     pair = StringIntPair(my_string="b", my_int=2)
-    assert tag_or_value(pair, _types={"T": StringIntPair}) == pair
-    assert tag_or_value("plain", _types={"T": StringIntPair}) is None
-    assert tag_or_value(None, _types={"T": StringIntPair}) is None
+    assert "StringIntPair" in tag_or_value(pair, _types={"T": StringIntPair})
 
 
 # --- make_triple<A, B, C>(...) -> GenericTriple<A, B, C> : multiple TypeVars -
@@ -113,19 +104,37 @@ def test_two_type_args_explicit():
 def test_generic_free_fn_requires_types():
     # `_types=` is required for a generic free function: omitting it (or
     # binding only some params) is a hard error, not silent inference.
-    with pytest.raises(TypeError):
+    with pytest.raises(TypeError) as exc:
         one_type_arg()
-    with pytest.raises(TypeError):
+    assert str(exc.value) == (
+        "_types= is required for this generic call: bind every type parameter "
+        "in ['T'] with a dict, e.g. _types={'T': int}"
+    )
+    with pytest.raises(TypeError) as exc:
         two_type_args(_types={"A": int})  # missing B
+    assert str(exc.value) == (
+        "_types= is missing binding(s) for ['B']: every type parameter in "
+        "['A', 'B'] must be bound."
+    )
 
 
 def test_generic_free_fn_rejects_non_dict_types():
     # The dict is the only accepted `_types=` shape — the legacy single-type
     # and positional tuple/list forms are gone.
-    with pytest.raises(TypeError):
+    with pytest.raises(TypeError) as exc:
         one_type_arg(_types=int)
-    with pytest.raises(TypeError):
+    assert str(exc.value) == (
+        "_types= must be a dict mapping type-parameter names to types "
+        "(e.g. _types={'T': int}); got type. The single-type and positional "
+        "tuple/list forms are no longer accepted."
+    )
+    with pytest.raises(TypeError) as exc:
         make_triple(1, ["a"], {"k": True}, _types=(int, str, bool))
+    assert str(exc.value) == (
+        "_types= must be a dict mapping type-parameter names to types "
+        "(e.g. _types={'A': int}); got tuple. The single-type and positional "
+        "tuple/list forms are no longer accepted."
+    )
 
 
 # ===========================================================================
@@ -176,8 +185,12 @@ def test_genericbox_new_static_explicit():
 
 def test_generic_static_requires_types():
     # A generic static method requires `_types=` (no receiver to recover from).
-    with pytest.raises(TypeError):
+    with pytest.raises(TypeError) as exc:
         GenericBox.new(value=5)
+    assert str(exc.value) == (
+        "_types= is required for this generic call: bind every type parameter "
+        "in ['V'] with a dict, e.g. _types={'V': int}"
+    )
 
 
 # --- NamedStatic<A,B,C>.make<D,E> : static TypeVar names DIFFER from the class -
@@ -197,8 +210,56 @@ def test_named_static_distinct_typevar_names():
 def test_instance_method_unparameterized_receiver_raises():
     # `GenericBox(value=5)` (no `[int]`) carries no concrete class type args, so
     # `pair_with`'s class `T` can't be recovered host-side.
-    with pytest.raises((TypeError, Exception)):
+    with pytest.raises(TypeError) as exc:
         GenericBox(value=5).pair_with("x", _types={"U": str})
+    assert str(exc.value) == (
+        "_types= on a generic method requires a Pydantic generic receiver so "
+        "the class type args can be recovered"
+    )
+
+
+# ===========================================================================
+# Phase 6: ergonomic subscript syntax — `fn[T1, T2](...)` sugar for
+# `fn(..., _types={...})`. Pure front-end desugaring; identical behavior.
+# ===========================================================================
+
+
+def test_subscript_free_function_single():
+    assert one_type_arg[int]() == "int"
+    assert one_type_arg[str]() == "string"
+    nested = one_type_arg[GenericBox[int]]()
+    assert "GenericBox" in nested and "int" in nested
+
+
+def test_subscript_free_function_multiple():
+    assert two_type_args[int, str]() == "int | string"
+
+
+def test_subscript_equivalent_to_types_kwarg():
+    # Subscript is pure sugar: same result as the explicit `_types=` form.
+    assert identity[int](5) == identity(5, _types={"T": int})
+    assert two_type_args[int, str]() == two_type_args(_types={"A": int, "B": str})
+
+
+def test_subscript_wrong_arity_raises():
+    with pytest.raises(TypeError) as exc:
+        two_type_args[int]()  # needs two type args
+    assert str(exc.value) == "expected 2 type argument(s) for ['A', 'B'], got 1"
+
+
+def test_subscript_static_method():
+    box = GenericBox.new[int](value=5)
+    assert isinstance(box, GenericBox)
+    assert box.value == 5
+
+
+def test_subscript_instance_method():
+    b = GenericBox[int](value=5)
+    assert b.pair_with[str]("hello world") == "int | string"
+
+
+def test_subscript_named_static_distinct_names():
+    assert NamedStatic.make[int, str](1, "x") == "int | string"
 
 
 # --- extract<A, B, C, D>(a: GenericPair<GenericPair<A,B>, GenericPair<C,D>>) --

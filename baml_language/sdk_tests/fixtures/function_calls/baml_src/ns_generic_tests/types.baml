@@ -127,19 +127,14 @@ function second_of<T>(p: GenericPair<int, T>) -> T {
 }
 
 // ---------------------------------------------------------------------------
-// TypeVar fused into a union argument: `T` is fused into a union with concrete
-// arms. The function returns `x` when it bound to `T`, else null.
-//
-// The intended body discriminates with a TypeVar match arm:
-//     match (x) { let s: string => null, null => null, let v: T => v }
-// but a bare-TypeVar arm is rejected today as an unreachable arm (type-tests
-// on `T` fold to false — see baml-runtime-type-tests-limits). So this ships
-// as a null-returning stub: it compiles, and the host tests stay xfailed
-// until BOTH inbound inference and TypeVar match-arms land.
+// TypeVar fused into a union argument: `T` appears as an arm of the parameter's
+// union (`T | string | null`). The binding for `T` can only come from the
+// caller's explicit `_types=`; the body reflects it back as a string so the
+// host can assert which type `T` was bound to.
 // ---------------------------------------------------------------------------
 
-function tag_or_value<T>(x: T | string | null) -> T? {
-  null
+function tag_or_value<T>(x: T | string | null) -> string {
+  reflect.type_of<T>().to_string()
 }
 
 // ---------------------------------------------------------------------------

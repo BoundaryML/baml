@@ -1480,14 +1480,16 @@ async fn host_callable_with_generic_return_is_rejected() {
                 BexExternalValue::HostValue(Arc::clone(&arc)),
                 BexExternalValue::Int(1),
             ],
-            FunctionCallContextBuilder::new(sys_types::CallId::next())
-                .with_type_args(vec![baml_type::RuntimeTy::int()])
-                .build(),
+            // No `_types=` bindings: `T` is left unbound. The generic return
+            // can't be validated, so the call is rejected before the host
+            // callable is bound (full-binding enforcement, lib.rs).
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
             true,
         )
         .await;
 
-    // Bind-time rejection: the generic/erased return type can't be validated.
+    // Rejection: an unbound generic (its erased return can't be validated)
+    // fails up front.
     assert!(
         matches!(result, Err(EngineError::TypeMismatch { .. })),
         "a generic-return host callable must be rejected at bind, got {result:?}"

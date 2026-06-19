@@ -46,7 +46,7 @@ async fn call_named(
             function,
             args,
             FunctionCallContextBuilder::new(sys_types::CallId::next())
-                .with_named_type_args(named_type_args)
+                .with_type_args(named_type_args.into_iter().collect())
                 .build(),
             true,
         )

@@ -359,3 +359,48 @@ def test_resolve_types_empty_params_rejects_types_kwarg():
     assert _resolve_types_kwarg(None, []) == []
     with pytest.raises(TypeError):
         _resolve_types_kwarg({"T": int}, [])  # no own params to bind
+
+
+# ---------------------------------------------------------------------------
+# Phase 6: `fn[...]` subscript desugars to the `_types={...}` dict form
+# ---------------------------------------------------------------------------
+
+from baml_core import _GenericCallable  # noqa: E402
+
+
+def test_generic_callable_subscript_desugars_to_types_dict():
+    captured = {}
+
+    def fake_call(*args, **kwargs):
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        return "ok"
+
+    fn = _GenericCallable(fake_call, ["A", "B"])
+    # Multiple type args bind positionally by declaration order.
+    assert fn[int, str]() == "ok"
+    assert captured["kwargs"]["_types"] == {"A": int, "B": str}
+
+    # Single type arg (non-tuple subscript).
+    one = _GenericCallable(fake_call, ["T"])
+    one[bool]()
+    assert captured["kwargs"]["_types"] == {"T": bool}
+
+
+def test_generic_callable_subscript_arity_mismatch_raises():
+    fn = _GenericCallable(lambda **k: None, ["A", "B"])
+    import pytest
+
+    with pytest.raises(TypeError):
+        fn[int]()  # needs two
+
+
+def test_generic_callable_explicit_types_still_works():
+    captured = {}
+
+    def fake_call(**kwargs):
+        captured.update(kwargs)
+
+    fn = _GenericCallable(fake_call, ["T"])
+    fn(_types={"T": int})
+    assert captured["_types"] == {"T": int}
