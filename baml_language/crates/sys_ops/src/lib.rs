@@ -1589,7 +1589,7 @@ impl io::IoNamespaceSys for DefaultIoOps {
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
-        _ms: i64,
+        _delay: BexExternalValue,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
         SysOpOutput::err(VmBamlError::Unsupported {

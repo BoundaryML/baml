@@ -9808,7 +9808,7 @@ function baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: ba
   L2:
     load_var self
     load_field .counter
-    store_var _76
+    store_var _80
     load_var self
     copy 0
     load_field .counter
@@ -9835,146 +9835,146 @@ function baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: ba
   L4:
     load_var self
     load_field .sub_clients
-    store_var _34
+    store_var _38
     load_type baml.llm.Client
-    load_var _34
+    load_var _38
     call baml.iter.Iterable$for$T[].iter
-    store_var _35
+    store_var _39
 
   L5:
-    load_var _35
+    load_var _39
     is_type baml.iter.Flatten<...>
     pop_jump_if_false L6
     jump L23
 
   L6:
-    load_var _35
+    load_var _39
     is_type baml.iter.ArrayIterator<...>
     pop_jump_if_false L7
     jump L22
 
   L7:
-    load_var _35
+    load_var _39
     is_type baml.iter.StepBy<...>
     pop_jump_if_false L8
     jump L21
 
   L8:
-    load_var _35
+    load_var _39
     is_type baml.iter.Chain<...>
     pop_jump_if_false L9
     jump L20
 
   L9:
-    load_var _35
+    load_var _39
     is_type baml.iter.Repeat<...>
     pop_jump_if_false L10
     jump L19
 
   L10:
-    load_var _35
+    load_var _39
     is_type baml.iter.Map<...>
     pop_jump_if_false L11
     jump L18
 
   L11:
-    load_var _35
+    load_var _39
     is_type baml.iter.Filter<...>
     pop_jump_if_false L12
     jump L17
 
   L12:
-    load_var _35
+    load_var _39
     is_type baml.iter.FilterMap<...>
     pop_jump_if_false L13
     jump L16
 
   L13:
-    load_var _35
+    load_var _39
     is_type baml.iter.FlatMap<...>
     pop_jump_if_false L14
     jump L15
 
   L14:
-    load_var _35
+    load_var _39
     is_type baml.iter.Peekable<...>
     pop_jump_if_false L35
     load_type baml.llm.Client
     load_type never
-    load_var _35
+    load_var _39
     call baml.iter.Peekable.Iterator.next
-    store_var _37
+    store_var _41
     jump L24
 
   L15:
-    load_var _35
+    load_var _39
     make_bound_method baml.iter.FlatMap.Iterator.next
     call_indirect
-    store_var _37
+    store_var _41
     jump L24
 
   L16:
-    load_var _35
+    load_var _39
     make_bound_method baml.iter.FilterMap.Iterator.next
     call_indirect
-    store_var _37
+    store_var _41
     jump L24
 
   L17:
     load_type baml.llm.Client
     load_type never
     load_type never
-    load_var _35
+    load_var _39
     call baml.iter.Filter.Iterator.next
-    store_var _37
+    store_var _41
     jump L24
 
   L18:
-    load_var _35
+    load_var _39
     make_bound_method baml.iter.Map.Iterator.next
     call_indirect
-    store_var _37
+    store_var _41
     jump L24
 
   L19:
     load_type baml.llm.Client
-    load_var _35
+    load_var _39
     call baml.iter.Repeat.Iterator.next
-    store_var _37
+    store_var _41
     jump L24
 
   L20:
     load_type baml.llm.Client
     load_type never
     load_type never
-    load_var _35
+    load_var _39
     call baml.iter.Chain.Iterator.next
-    store_var _37
+    store_var _41
     jump L24
 
   L21:
     load_type baml.llm.Client
     load_type never
-    load_var _35
+    load_var _39
     call baml.iter.StepBy.Iterator.next
-    store_var _37
+    store_var _41
     jump L24
 
   L22:
     load_type baml.llm.Client
-    load_var _35
+    load_var _39
     call baml.iter.ArrayIterator.Iterator.next
-    store_var _37
+    store_var _41
     jump L24
 
   L23:
-    load_var _35
+    load_var _39
     make_bound_method baml.iter.Flatten.Iterator.next
     call_indirect
-    store_var _37
+    store_var _41
 
   L24:
-    load_var _37
+    load_var _41
     is_type baml.iter.Done
     pop_jump_if_false L25
     jump L27
@@ -10038,6 +10038,9 @@ function baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: ba
     cmp_int_op >
     pop_jump_if_false L31
     load_var active_delay_ms
+    load_const 1000000n
+    mul_bigint
+    call baml.time.Duration.from_nanoseconds
     sys_op baml.sys.sleep
     pop 1
 
@@ -10063,6 +10066,9 @@ function baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: ba
     cmp_int_op >
     pop_jump_if_false L33
     load_var active_delay_ms
+    load_const 1000000n
+    mul_bigint
+    call baml.time.Duration.from_nanoseconds
     sys_op baml.sys.sleep
     pop 1
 
@@ -13111,7 +13117,7 @@ function baml.sys.panic(message: string) -> never {
 function baml.sys.shell(command: string, options: baml.sys.ProcessOptions | null) -> baml.sys.ShellOutput {
 }
 
-function baml.sys.sleep(ms: int) -> null {
+function baml.sys.sleep(delay: baml.time.Duration) -> null {
 }
 
 function baml.time.AmbiguousTimeError.from_json(j: baml.json.json) -> baml.time.AmbiguousTimeError {
@@ -13144,9 +13150,26 @@ function baml.time.Duration.abs(self: baml.time.Duration) -> baml.time.Duration 
     return
 }
 
-function baml.time.Duration.from_hours(h: bigint) -> baml.time.Duration {
+function baml.time.Duration.from_hours(h: int | bigint) -> baml.time.Duration {
     load_var h
-    load_const 3600000000000
+    is_type bigint
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0n
+    load_var h
+    add_bigint
+    store_var _3
+    jump L2
+
+  L1:
+    load_var h
+    store_var _3
+
+  L2:
+    load_var _3
+    load_const 3600000000000n
     mul_bigint
     init_instance baml.time.Duration ._nanoseconds
     return
@@ -13164,39 +13187,121 @@ function baml.time.Duration.from_json(j: baml.json.json) -> baml.time.Duration {
     return
 }
 
-function baml.time.Duration.from_microseconds(us: bigint) -> baml.time.Duration {
+function baml.time.Duration.from_microseconds(us: int | bigint) -> baml.time.Duration {
     load_var us
-    load_const 1000
+    is_type bigint
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0n
+    load_var us
+    add_bigint
+    store_var _3
+    jump L2
+
+  L1:
+    load_var us
+    store_var _3
+
+  L2:
+    load_var _3
+    load_const 1000n
     mul_bigint
     init_instance baml.time.Duration ._nanoseconds
     return
 }
 
-function baml.time.Duration.from_milliseconds(ms: bigint) -> baml.time.Duration {
+function baml.time.Duration.from_milliseconds(ms: int | bigint) -> baml.time.Duration {
     load_var ms
-    load_const 1000000
+    is_type bigint
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0n
+    load_var ms
+    add_bigint
+    store_var _3
+    jump L2
+
+  L1:
+    load_var ms
+    store_var _3
+
+  L2:
+    load_var _3
+    load_const 1000000n
     mul_bigint
     init_instance baml.time.Duration ._nanoseconds
     return
 }
 
-function baml.time.Duration.from_minutes(m: bigint) -> baml.time.Duration {
+function baml.time.Duration.from_minutes(m: int | bigint) -> baml.time.Duration {
     load_var m
-    load_const 60000000000
+    is_type bigint
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0n
+    load_var m
+    add_bigint
+    store_var _3
+    jump L2
+
+  L1:
+    load_var m
+    store_var _3
+
+  L2:
+    load_var _3
+    load_const 60000000000n
     mul_bigint
     init_instance baml.time.Duration ._nanoseconds
     return
 }
 
-function baml.time.Duration.from_nanoseconds(ns: bigint) -> baml.time.Duration {
+function baml.time.Duration.from_nanoseconds(ns: int | bigint) -> baml.time.Duration {
     load_var ns
+    is_type bigint
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0n
+    load_var ns
+    add_bigint
+    jump L2
+
+  L1:
+    load_var ns
+
+  L2:
     init_instance baml.time.Duration ._nanoseconds
     return
 }
 
-function baml.time.Duration.from_seconds(s: bigint) -> baml.time.Duration {
+function baml.time.Duration.from_seconds(s: int | bigint) -> baml.time.Duration {
     load_var s
-    load_const 1000000000
+    is_type bigint
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0n
+    load_var s
+    add_bigint
+    store_var _3
+    jump L2
+
+  L1:
+    load_var s
+    store_var _3
+
+  L2:
+    load_var _3
+    load_const 1000000000n
     mul_bigint
     init_instance baml.time.Duration ._nanoseconds
     return

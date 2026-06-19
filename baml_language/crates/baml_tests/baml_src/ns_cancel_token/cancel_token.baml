@@ -12,7 +12,7 @@
 function await_token_cancelled_catches() -> int {
     let tok = baml.spawn.CancelToken.new();
     let f = spawn with baml.spawn.options(cancel = tok) {
-        baml.sys.sleep(60000);
+        baml.sys.sleep(baml.time.Duration.from_milliseconds(60000n));
         42
     };
     let _ = tok.cancel();

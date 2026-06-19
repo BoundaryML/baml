@@ -2014,6 +2014,14 @@ pub struct HostClosure {
     /// off the eval stack — host closures don't wrap an `Object::Function`,
     /// so there is no `arity` field to read from there.
     pub arity: usize,
+    /// The callable's declared parameters (names + required/optional mode),
+    /// captured at bind time from the `RuntimeTy::Function`. When the VM
+    /// dispatches the call (`host_closure_call_sysop`) it uses these to split
+    /// the args into a positional list (required) and a name→value map (supplied
+    /// optionals, omitted ones dropped), so each bridge can apply its calling
+    /// convention (e.g. TypeScript's trailing `$opts`) without the callee type
+    /// on the wire. `Box`-ed to keep `Object` within its size budget.
+    pub params: Box<Vec<baml_type::RuntimeFunctionParamTy>>,
 }
 
 /// A mutable cell wrapping a single captured value.

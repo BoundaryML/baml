@@ -2898,7 +2898,7 @@ function baml.llm.Client.execute_once_oneshot<T>(self: baml.llm.Client, context:
                       { : never
                         if (active_delay_ms > 0 : bool) : void
                           { : null
-                            root.sys.sleep(active_delay_ms) : null
+                            root.sys.sleep(root.time.Duration.from_nanoseconds(active_delay_ms * 1000000n)) : null
                           }
                         throw e : baml.errors.LlmClient
                       }
@@ -2915,7 +2915,7 @@ function baml.llm.Client.execute_once_oneshot<T>(self: baml.llm.Client, context:
                       }
               if (active_delay_ms > 0 : bool) : void
                 { : null
-                  root.sys.sleep(active_delay_ms) : null
+                  root.sys.sleep(root.time.Duration.from_nanoseconds(active_delay_ms * 1000000n)) : null
                 }
               throw root.errors.DevOther { message: "HTTP request fail..." + error_body } : baml.errors.DevOther
             }
@@ -3781,34 +3781,34 @@ function baml.time.Duration.abs(self: baml.time.Duration) -> baml.time.Duration 
     Duration { _nanoseconds: self._nanoseconds.abs() } : baml.time.Duration
   }
 }
-function baml.time.Duration.from_nanoseconds(ns: bigint) -> baml.time.Duration throws never {
+function baml.time.Duration.from_nanoseconds(ns: int | bigint) -> baml.time.Duration throws never {
   { : baml.time.Duration
-    Duration { _nanoseconds: ns } : baml.time.Duration
+    Duration { _nanoseconds: match (ns) { value: bigint => value, value: int => 0n + value } } : baml.time.Duration
   }
 }
-function baml.time.Duration.from_microseconds(us: bigint) -> baml.time.Duration throws never {
+function baml.time.Duration.from_microseconds(us: int | bigint) -> baml.time.Duration throws never {
   { : baml.time.Duration
-    Duration { _nanoseconds: us * 1000 } : baml.time.Duration
+    Duration { _nanoseconds: match (us) { value: bigint => value, value: int => 0n + value } * 1000n } : baml.time.Duration
   }
 }
-function baml.time.Duration.from_milliseconds(ms: bigint) -> baml.time.Duration throws never {
+function baml.time.Duration.from_milliseconds(ms: int | bigint) -> baml.time.Duration throws never {
   { : baml.time.Duration
-    Duration { _nanoseconds: ms * 1000000 } : baml.time.Duration
+    Duration { _nanoseconds: match (ms) { value: bigint => value, value: int => 0n + value } * 1000000n } : baml.time.Duration
   }
 }
-function baml.time.Duration.from_seconds(s: bigint) -> baml.time.Duration throws never {
+function baml.time.Duration.from_seconds(s: int | bigint) -> baml.time.Duration throws never {
   { : baml.time.Duration
-    Duration { _nanoseconds: s * 1000000000 } : baml.time.Duration
+    Duration { _nanoseconds: match (s) { value: bigint => value, value: int => 0n + value } * 1000000000n } : baml.time.Duration
   }
 }
-function baml.time.Duration.from_minutes(m: bigint) -> baml.time.Duration throws never {
+function baml.time.Duration.from_minutes(m: int | bigint) -> baml.time.Duration throws never {
   { : baml.time.Duration
-    Duration { _nanoseconds: m * 60000000000 } : baml.time.Duration
+    Duration { _nanoseconds: match (m) { value: bigint => value, value: int => 0n + value } * 60000000000n } : baml.time.Duration
   }
 }
-function baml.time.Duration.from_hours(h: bigint) -> baml.time.Duration throws never {
+function baml.time.Duration.from_hours(h: int | bigint) -> baml.time.Duration throws never {
   { : baml.time.Duration
-    Duration { _nanoseconds: h * 3600000000000 } : baml.time.Duration
+    Duration { _nanoseconds: match (h) { value: bigint => value, value: int => 0n + value } * 3600000000000n } : baml.time.Duration
   }
 }
 function baml.time.Duration.to_nanoseconds(self: baml.time.Duration) -> bigint throws never {

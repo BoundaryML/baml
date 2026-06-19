@@ -4,5 +4,6 @@ expression: output
 ---
 function         is_true                          <builtin>/assert/assert.baml:4
 function         not_null                         <builtin>/assert/assert.baml:13
-function         equal                            <builtin>/assert/assert.baml:22
-function         contains                         <builtin>/assert/assert.baml:31
+function         format_operand                   <builtin>/assert/assert.baml:31
+function         equal                            <builtin>/assert/assert.baml:36
+function         contains                         <builtin>/assert/assert.baml:50

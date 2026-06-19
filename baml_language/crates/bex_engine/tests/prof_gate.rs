@@ -404,7 +404,7 @@ async fn sysop_pair_emitted() {
     init_prof_env();
     let source = r#"
         function sy_wait() -> int {
-            baml.sys.sleep(2);
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(2n));
             7
         }
         function main() -> int { sy_wait() }
@@ -795,7 +795,7 @@ async fn root_cancellation_ends_thread_cancelled() {
         function rcx_pin() -> int { 1 }
         function main() -> int {
             rcx_pin();
-            baml.sys.sleep(5000);
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(5000n));
             2
         }
     "#;
@@ -856,7 +856,7 @@ async fn spawned_child_cancellation_ends_child_cancelled() {
             scc_pin();
             let tok = baml.spawn.CancelToken.new();
             let f = spawn with baml.spawn.options(cancel = tok) {
-                baml.sys.sleep(10000);
+                baml.sys.sleep(baml.time.Duration.from_milliseconds(10000n));
                 42
             };
             let _ = tok.cancel();
@@ -924,7 +924,7 @@ async fn unobserved_child_error_drains_parent_frames() {
     let source = r#"
         function uce_pin() -> int { 0 }
         function uce_bad() -> int throws string { throw "boom" }
-        function uce_other() -> int { baml.sys.sleep(50); 1 }
+        function uce_other() -> int { baml.sys.sleep(baml.time.Duration.from_milliseconds(50n)); 1 }
         function main() -> int {
             uce_pin();
             spawn { uce_bad() };
@@ -1393,7 +1393,7 @@ async fn dropped_call_future_truncates_stream_by_policy() {
         function dft_pin() -> int { 0 }
         function main() -> int {
             dft_pin();
-            baml.sys.sleep(400);
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(400n));
             1
         }
     "#;

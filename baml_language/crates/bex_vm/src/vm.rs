@@ -3289,7 +3289,7 @@ impl BexVm {
     /// Sys-op arg layout (mirrors the codegen-generated glue for
     /// `baml.host.call_host_value` in `sys_ops/.../io_generated.rs`):
     ///   args\[0\] = `handle`     (`Object::HostClosure` → `BexExternalValue::HostValue`)
-    ///   args\[1\] = `args_array` (`Object::Array<Value>`)
+    ///   args\[1\] = `args_pack`  (`Object::Array` of `[positional: Object::Array, optional: Object::Map]`)
     ///   args\[2\] = `ret_ty`     (`Object::Type<RuntimeTy>`) — `type_arg_0` (`T`)
     ///   args\[3\] = `throws_ty`  (`Object::Type<RuntimeTy>`) — `type_arg_1` (`E`)
     ///
@@ -3305,11 +3305,12 @@ impl BexVm {
         // Read arity + return/throws types out of the closure, then drop the
         // borrow before allocating (a TLAB allocation may move/collect heap
         // objects).
-        let (arity, ret_ty, throws_ty) = match self.get_object(closure_ptr) {
+        let (arity, ret_ty, throws_ty, params) = match self.get_object(closure_ptr) {
             Object::HostClosure(hc) => (
                 hc.arity,
                 hc.ret_ty.as_ref().clone(),
                 hc.throws_ty.as_ref().clone(),
+                hc.params.as_ref().clone(),
             ),
             // Every caller gates on `Object::HostClosure` before calling.
             _ => unreachable!("host_closure_call_sysop requires an Object::HostClosure"),
@@ -3320,7 +3321,37 @@ impl BexVm {
             "HostClosure call: drained {} args but declared arity is {arity}",
             user_args.len(),
         );
-        let args_array_ptr = self.tlab.alloc(Object::Array(user_args.into()));
+        // Split the positional call args by the callable's declared params:
+        // required (leading) args stay positional; supplied optionals are
+        // collected into a name→value map. An omitted optional (the `OmittedArg`
+        // sentinel) is dropped — it can't cross the host boundary, and dropping
+        // it lets the host's own language-level default apply. The two halves
+        // ride as a `[positional_array, optional_map]` pack so the bridge can
+        // apply its calling convention (TS `$opts`, Python kwargs) without the
+        // callee type on the wire.
+        let mut positional: Vec<Value> = Vec::new();
+        let mut optional: IndexMap<bex_vm_types::BexStr, Value> = IndexMap::new();
+        for (i, val) in user_args.into_iter().enumerate() {
+            match params.get(i) {
+                Some(p) if p.is_optional() => {
+                    if val.is_omitted() {
+                        continue;
+                    }
+                    let name = p
+                        .name
+                        .as_ref()
+                        .map(|n| n.as_str().to_string())
+                        .unwrap_or_else(|| format!("arg{i}"));
+                    optional.insert(bex_vm_types::BexStr::from(name), val);
+                }
+                _ => positional.push(val),
+            }
+        }
+        let positional_ptr = self.tlab.alloc(Object::Array(positional.into()));
+        let optional_ptr = self.tlab.alloc(Object::Map(optional.into()));
+        let args_array_ptr = self.tlab.alloc(Object::Array(
+            vec![Value::object(positional_ptr), Value::object(optional_ptr)].into(),
+        ));
         let ret_ty_ptr = self.tlab.alloc(Object::Type(Box::new(ret_ty)));
         let throws_ty_ptr = self.tlab.alloc(Object::Type(Box::new(throws_ty)));
         // PR4b: host-closure calls ride the sys-op pair too. No Function
