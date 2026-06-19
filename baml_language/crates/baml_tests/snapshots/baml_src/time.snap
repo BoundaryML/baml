@@ -230,8 +230,14 @@ function time.$init_test_ns_time_time(registry: testing.TestCollector) -> null {
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "duration_since_is_nonnegative_for_past_instant"
+    load_const "duration_constructors_accept_int_and_bigint"
     make_closure .<lambda($init_test_ns_time_time, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "duration_since_is_nonnegative_for_past_instant"
+    make_closure .<lambda($init_test_ns_time_time, 11)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1

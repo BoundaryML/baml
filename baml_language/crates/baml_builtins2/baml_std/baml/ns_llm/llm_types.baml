@@ -377,7 +377,7 @@ class Client {
           let result: T = primitive.parse<T>(body) catch (e) {
             _ => {
               if (active_delay_ms > 0) {
-                root.sys.sleep(active_delay_ms)
+                root.sys.sleep(root.time.Duration.from_nanoseconds(active_delay_ms * 1000000n))
               }
               throw e;
             }
@@ -388,7 +388,7 @@ class Client {
             _ => { "" }
           };
           if (active_delay_ms > 0) {
-            root.sys.sleep(active_delay_ms)
+            root.sys.sleep(root.time.Duration.from_nanoseconds(active_delay_ms * 1000000n))
           }
           throw root.errors.DevOther { message: "HTTP request failed: " + error_body };
         }

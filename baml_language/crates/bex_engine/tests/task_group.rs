@@ -53,7 +53,7 @@ async fn run_main(source: &str) -> Result<BexExternalValue, EngineError> {
 async fn task_group_caps_active_and_queues_rest() {
     let source = r#"
         function block() -> int {
-            baml.sys.sleep(5000);
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(5000n));
             1
         }
         function main() -> int {
@@ -101,7 +101,7 @@ async fn task_group_cancel_cancels_members() {
         function main() -> int {
             let g = baml.spawn.TaskGroup.new(5);
             let f = spawn with baml.spawn.options(group = g) {
-                baml.sys.sleep(10000);
+                baml.sys.sleep(baml.time.Duration.from_milliseconds(10000n));
                 42
             };
             let _ = g.cancel();
@@ -135,7 +135,7 @@ async fn task_group_cancel_pending_only() {
             let g = baml.spawn.TaskGroup.new(1);
             let active = spawn with baml.spawn.options(group = g) { 7 };
             let queued = spawn with baml.spawn.options(group = g) {
-                baml.sys.sleep(10000);
+                baml.sys.sleep(baml.time.Duration.from_milliseconds(10000n));
                 1
             };
             let signalled = g.cancel(active = false);
@@ -174,7 +174,7 @@ async fn task_group_set_limit_updates_limit() {
 async fn task_group_limit_three_runs_concurrently() {
     let source = r#"
         function work() -> int {
-            baml.sys.sleep(200);
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(200n));
             1
         }
         function main() -> int {
@@ -220,7 +220,7 @@ async fn task_group_limit_three_runs_concurrently() {
 async fn task_group_limit_one_serializes() {
     let source = r#"
         function work() -> int {
-            baml.sys.sleep(200);
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(200n));
             1
         }
         function main() -> int {
@@ -262,15 +262,15 @@ async fn task_group_limit_one_serializes() {
 #[tokio::test]
 async fn set_limit_increase_admits_multiple_queued() {
     let source = r#"
-        function work() -> int { baml.sys.sleep(500); 1 }
+        function work() -> int { baml.sys.sleep(baml.time.Duration.from_milliseconds(500n)); 1 }
         function main() -> int {
             let g = baml.spawn.TaskGroup.new(0);
             let a = spawn with baml.spawn.options(group = g) { work() };
             let b = spawn with baml.spawn.options(group = g) { work() };
             let c = spawn with baml.spawn.options(group = g) { work() };
-            baml.sys.sleep(50);
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(50n));
             g.set_limit(3);
-            baml.sys.sleep(100);
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(100n));
             let active = g.active_count();
             g.cancel();
             active
