@@ -591,12 +591,12 @@ impl AstSourceMap {
         self.synthetic_exprs.contains(&id)
     }
 
-    /// Whether `id` names a compiler-synthesized statement (see `synthetic_exprs`).
+    /// Whether `id` names a compiler-synthesized statement (see `synthetic_stmts`).
     pub fn is_synthetic_stmt(&self, id: StmtId) -> bool {
         self.synthetic_stmts.contains(&id)
     }
 
-    /// Whether `id` names a compiler-synthesized pattern (see `synthetic_exprs`).
+    /// Whether `id` names a compiler-synthesized pattern (see `synthetic_patterns`).
     pub fn is_synthetic_pattern(&self, id: PatId) -> bool {
         self.synthetic_patterns.contains(&id)
     }
