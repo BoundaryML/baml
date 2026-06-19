@@ -164,7 +164,7 @@ pub struct RunArgs {
     #[arg(long, short = 'h')]
     pub help: bool,
 
-    /// Project search starting point. Ignored when `--file` is set.
+    /// Project search starting point. Mutually exclusive with `--file`.
     #[arg(long, value_name = "PATH")]
     pub from: Option<PathBuf>,
 

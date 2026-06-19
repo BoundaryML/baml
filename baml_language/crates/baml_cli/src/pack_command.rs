@@ -86,7 +86,7 @@ pub struct PackArgs {
     #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
     pub output_format: OutputFormat,
 
-    /// Project search starting point. Ignored when `--file` is set.
+    /// Project search starting point. Mutually exclusive with `--file`.
     #[arg(long, value_name = "PATH")]
     pub from: Option<PathBuf>,
 
