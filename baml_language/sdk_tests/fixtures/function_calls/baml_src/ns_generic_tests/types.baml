@@ -36,6 +36,28 @@ class GenericBox<T> {
   function pair_with<U>(self, other: U) -> string {
     reflect.type_of<T | U>().to_string()
   }
+
+  // Static constructor (no `self`): binds its OWN `V` via the caller's
+  // `_types=`, with no class type args (the receiver doesn't exist yet). The
+  // host sends only `{V}`. Constructs a `GenericBox<V>`. (The compiler requires
+  // the static's type param to differ from the class param `T`, §179.)
+  function new<V>(value: V) -> GenericBox<V> {
+    GenericBox<V> { value: value }
+  }
+}
+
+// Static method whose TypeVar names differ from the enclosing class's params
+// (class `<A, B, C>`, static `make<D, E>`). Proves the named `TyArg` wire slots
+// each binding by name into the static frame's own params (`[D, E]`), with no
+// phantom class params — the case the named wire exists for (01pt5).
+class NamedStatic<A, B, C> {
+  first A
+  second B
+  third C
+
+  function make<D, E>(d: D, e: E) -> string {
+    reflect.type_of<D | E>().to_string()
+  }
 }
 
 class GenericPair<A, B> {

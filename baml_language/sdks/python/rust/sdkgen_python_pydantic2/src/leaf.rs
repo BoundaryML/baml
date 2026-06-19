@@ -1463,7 +1463,21 @@ fn render_method_block_pyi(m: &PyMethodBinding, ctx: &TranslateCtx) -> String {
     } else {
         ""
     };
-    let typed_params = render_method_params_pyi(m, ctx);
+    let mut typed_params = render_method_params_pyi(m, ctx);
+    // A method with its OWN generic params (`pair_with<U>`, static `new<T>`)
+    // requires the caller to bind them via a keyword-only `_types=` dict (the
+    // class's TypeVars ride the receiver, not `_types=`). Mirror the runtime
+    // requirement in the stub. Instance methods always have a `self` param, and
+    // statics with own generics always have at least one value param, so
+    // `typed_params` is never empty here.
+    if !m.generic_params.is_empty() {
+        if m.optional_args.is_empty() {
+            typed_params.push_str(", *, _types: dict[str, type]");
+        } else {
+            // optionals already introduced the `*` keyword-only marker.
+            typed_params.push_str(", _types: dict[str, type]");
+        }
+    }
     let ret_py = translate_ty(&m.return_ty, ctx);
     // 32d: methods carry their `Raises:` block in the `.pyi` only (no runtime
     // `.py` __doc__ trailer for methods). No-op when the method throws nothing.

@@ -23,6 +23,7 @@ from baml_sdk.generic_tests import (
     GenericBox,
     GenericRecursive,
     ContainerShapes,
+    NamedStatic,
     identity,
     second_of,
     tag_or_value,
@@ -160,6 +161,44 @@ def test_genericbox_pair_with_explicit():
     # `T` from `GenericBox[int]` (receiver), `U` from `_types=str` (method var).
     b = GenericBox[int](value=5)
     assert b.pair_with("hello world", _types={"U": str}) == "int | string"
+
+
+# --- GenericBox<T>.new<T>(value: T) -> GenericBox<T> : generic STATIC method ---
+# No receiver, so only the static's own `T` is bound (via `_types=`); no class
+# type args ride along.
+
+
+def test_genericbox_new_static_explicit():
+    box = GenericBox.new(value=5, _types={"V": int})
+    assert isinstance(box, GenericBox)
+    assert box.value == 5
+
+
+def test_generic_static_requires_types():
+    # A generic static method requires `_types=` (no receiver to recover from).
+    with pytest.raises(TypeError):
+        GenericBox.new(value=5)
+
+
+# --- NamedStatic<A,B,C>.make<D,E> : static TypeVar names DIFFER from the class -
+# Proves the named `TyArg` wire slots each binding by TypeVar *name* into the
+# static frame's own params (`[D, E]`) — no phantom class params. This is the
+# case the named wire exists for (01pt5).
+
+
+def test_named_static_distinct_typevar_names():
+    assert NamedStatic.make(1, "x", _types={"D": int, "E": str}) == "int | string"
+
+
+# --- Negative: an instance method needing class args on an UN-parameterized
+# receiver must raise (the class TypeVars can't be recovered).
+
+
+def test_instance_method_unparameterized_receiver_raises():
+    # `GenericBox(value=5)` (no `[int]`) carries no concrete class type args, so
+    # `pair_with`'s class `T` can't be recovered host-side.
+    with pytest.raises((TypeError, Exception)):
+        GenericBox(value=5).pair_with("x", _types={"U": str})
 
 
 # --- extract<A, B, C, D>(a: GenericPair<GenericPair<A,B>, GenericPair<C,D>>) --

@@ -2018,16 +2018,26 @@ impl BexEngine {
             //   (2) no TypeVar survives substitution in the params/return —
             //       catches a param/return type var the bindings didn't cover.
             if enforce_full_binding {
-                let unbound = declared_generic_params
-                    .iter()
-                    .find(|p| !bindings.contains_key(p.as_str()))
-                    .cloned()
-                    .or_else(|| {
-                        substituted
-                            .iter()
-                            .chain(std::iter::once(&return_type))
-                            .find_map(crate::conversion::first_unbound_type_var)
-                    });
+                // Check (1) — declared-param completeness — applies to *free
+                // functions* only. A static method's `display_type_params`
+                // include the enclosing class params (which a static never
+                // binds), so demanding them is wrong; its own params are still
+                // covered by check (2) since they appear in its signature.
+                let missing_declared = if self.is_class_method(function_name) {
+                    None
+                } else {
+                    declared_generic_params
+                        .iter()
+                        .find(|p| !bindings.contains_key(p.as_str()))
+                        .cloned()
+                };
+                // Check (2) — no TypeVar survives substitution in params/return.
+                let unbound = missing_declared.or_else(|| {
+                    substituted
+                        .iter()
+                        .chain(std::iter::once(&return_type))
+                        .find_map(crate::conversion::first_unbound_type_var)
+                });
                 if let Some(name) = unbound {
                     return Err(EngineError::TypeMismatch {
                         message: format!(
@@ -2617,6 +2627,30 @@ impl BexEngine {
                 .collect(),
             _ => vec![],
         }
+    }
+
+    /// Whether `function_name` resolves to a method on a class (its FQN's parent
+    /// segment names a registered class), as opposed to a free function. Used to
+    /// scope generic full-binding enforcement: a method's `display_type_params`
+    /// are De Bruijn-ordered as *class params first, then the method's own*, and
+    /// for a **static** method the class params are never bound (no receiver) —
+    /// so the "every declared generic param bound" check would wrongly demand
+    /// them. Free functions have no such prefix.
+    fn is_class_method(&self, function_name: &str) -> bool {
+        let Some(resolved) = self.resolve_function_name(function_name) else {
+            return false;
+        };
+        let Some(idx) = resolved.rfind('.') else {
+            return false;
+        };
+        let parent = &resolved[..idx];
+        self.resolved_class_names.contains_key(parent)
+            || self
+                .resolved_class_names
+                .contains_key(&format!("user.{parent}"))
+            || parent
+                .strip_prefix("user.")
+                .is_some_and(|p| self.resolved_class_names.contains_key(p))
     }
 
     /// Check if a function exists by name (tries exact then "user." prefix).
