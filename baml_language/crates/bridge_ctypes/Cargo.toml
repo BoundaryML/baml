@@ -9,7 +9,9 @@ license.workspace = true
 doctest = false
 
 [dependencies]
+base64 = { workspace = true }
 baml_type = { workspace = true }
+bex_events = { workspace = true }
 bex_project = { workspace = true }
 indexmap = { workspace = true }
 num-bigint = { workspace = true }

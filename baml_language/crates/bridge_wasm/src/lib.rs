@@ -65,17 +65,17 @@ use bex_events::{
         AttachRootTraceResult, CancellationState, EnvResolutionStatus, ExecutionRequest,
         HostCallId, InMemoryRunStore, ProjectGeneration, ProjectId, RequestId, RunCursor,
         RunCursorExpiredReason, RunDiagnostic, RunError, RunErrorClass, RunFilter, RunId, RunKind,
-        RunOutcome, RunRequestState, RunResult, RunSubscription, RunTarget, RunVisibilityFilter,
+        RunOutcome, RunRequestState, RunSubscription, RunTarget, RunVisibilityFilter,
         RuntimeTarget, StartedHostRun, patch_to_wire, run_summary_to_wire, run_to_wire,
     },
 };
+use bridge_ctypes::encoded_success_outcome;
 pub use bridge_ctypes::{
     HANDLE_TABLE, baml_core, external_to_outbound, playground_run_args_to_bex_values,
 };
 pub use error::BridgeError;
 pub use host_value::{complete_host_call, register_host_callable};
 use js_sys::Function;
-use prost::Message;
 use serde::Deserialize;
 use wasm_bindgen::prelude::*;
 pub use wasm_lsp::LspNotification;
@@ -1083,24 +1083,6 @@ fn complete_wasm_run(
     }
 }
 
-fn encoded_success_outcome(
-    result: &bex_heap::BexExternalValue,
-    renderer_hint: &'static str,
-) -> RunOutcome {
-    let handle_options = bridge_ctypes::CffiHandleTableOptions::for_wire();
-    match external_to_outbound(result, &handle_options) {
-        Ok(baml_val) => {
-            let b64 = base64::engine::general_purpose::STANDARD.encode(baml_val.encode_to_vec());
-            RunOutcome::Succeeded(RunResult {
-                value: Some(b64),
-                renderer_hint: Some(renderer_hint.to_string()),
-                supporting_payload_ids: Vec::new(),
-            })
-        }
-        Err(e) => host_error_outcome(format!("Failed to encode result: {e}")),
-    }
-}
-
 fn drain_wasm_profiles(
     callback: &send_wrapper::SendWrapper<Function>,
     run_store: &InMemoryRunStore,
@@ -1182,12 +1164,4 @@ fn runtime_error_outcome(error: &impl std::fmt::Display) -> RunOutcome {
             details: None,
         })
     }
-}
-
-fn host_error_outcome(message: String) -> RunOutcome {
-    RunOutcome::Failed(RunError {
-        class: RunErrorClass::Host,
-        message,
-        details: None,
-    })
 }

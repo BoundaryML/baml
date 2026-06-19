@@ -30,12 +30,12 @@ use base64::Engine as _;
 use bex_events::run::{
     AttachRootTraceResult, CancellationState, ExecutionRequest, HostCallId, InMemoryRunStore,
     ProjectGeneration, ProjectId, RequestId, RunCursor, RunCursorExpiredReason, RunError,
-    RunErrorClass, RunFilter, RunId, RunKind, RunOutcome, RunResult, RunSubscription, RunTarget,
+    RunErrorClass, RunFilter, RunId, RunKind, RunOutcome, RunSubscription, RunTarget,
     RunVisibilityFilter, StartedHostRun,
 };
 use bex_project::{is_cancelled_engine_error, is_cancelled_runtime_error};
+use bridge_ctypes::encoded_success_outcome;
 use futures::{SinkExt, stream::StreamExt};
-use prost::Message;
 use tokio::{net::TcpListener, sync::broadcast};
 
 use crate::{
@@ -122,24 +122,6 @@ fn broadcast_root_trace_attachment(
                 existing.encode()
             );
         }
-    }
-}
-
-fn encoded_success_outcome(
-    result: &bex_heap::BexExternalValue,
-    renderer_hint: &'static str,
-) -> RunOutcome {
-    let handle_options = bridge_ctypes::CffiHandleTableOptions::for_wire();
-    match bridge_ctypes::external_to_outbound(result, &handle_options) {
-        Ok(baml_val) => {
-            let b64 = base64::engine::general_purpose::STANDARD.encode(baml_val.encode_to_vec());
-            RunOutcome::Succeeded(RunResult {
-                value: Some(b64),
-                renderer_hint: Some(renderer_hint.to_string()),
-                supporting_payload_ids: Vec::new(),
-            })
-        }
-        Err(e) => host_error_outcome(format!("Failed to encode result: {e}")),
     }
 }
 
@@ -306,14 +288,6 @@ fn runtime_error_outcome(err: &bex_project::RuntimeError) -> RunOutcome {
     RunOutcome::Failed(RunError {
         class: runtime_error_class(err),
         message: format!("{err}"),
-        details: None,
-    })
-}
-
-fn host_error_outcome(message: String) -> RunOutcome {
-    RunOutcome::Failed(RunError {
-        class: RunErrorClass::Host,
-        message,
         details: None,
     })
 }
