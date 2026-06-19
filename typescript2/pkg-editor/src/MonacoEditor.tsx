@@ -24,6 +24,16 @@ import type { Dimension } from '@codingame/monaco-vscode-api/vscode/vs/base/brow
 import { isMediaPath, mimeFromPath, toDataUrl, fromDataUrl } from './media';
 import type { EditorBackend, EditorConnection, WorkbenchHandle } from './backend';
 
+declare const __DEV__: boolean | undefined;
+declare const process: { env: { NODE_ENV?: string } } | undefined;
+
+function isDevelopmentBuild(): boolean {
+  if (typeof __DEV__ !== 'undefined') {
+    return __DEV__;
+  }
+  return typeof process !== 'undefined' && process.env.NODE_ENV === 'development';
+}
+
 // ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
@@ -1029,7 +1039,7 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const isDev = process.env.NODE_ENV === "development";
+  const isDev = isDevelopmentBuild();
 
   return (
     <div className="w-full relative overflow-hidden" style={{ height }}>
