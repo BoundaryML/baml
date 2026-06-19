@@ -15,10 +15,6 @@
 // the class-typed streaming bug (bridge-generics/streaming, doc 00).
 //
 // Run: cargo nextest run -p sdk_test_typescript_node llm_functions::vitest
-//
-// Skipped on Windows: the replay server's SSE chunk pacing drains too fast
-// there, so `next()` collapses many partials into one and the `>= 10 partials`
-// asserts flake. Tracked in Linear B-315; remove the skip once that's fixed.
 
 import { describe, it, expect } from "vitest";
 
@@ -31,10 +27,7 @@ import { withReplayServer } from "./replay_harness.js";
 
 const T = 30_000;
 
-// See header comment: streaming replay flakes on Windows pending investigation.
-const SKIP_ON_WINDOWS = process.platform === "win32";
-
-describe.skipIf(SKIP_ON_WINDOWS)("streaming e2e — string-typed T", () => {
+describe("streaming e2e — string-typed T", () => {
   it(
     "next() yields >= 10 partials and drains to StreamFinished",
     { timeout: T },
@@ -86,7 +79,7 @@ describe.skipIf(SKIP_ON_WINDOWS)("streaming e2e — string-typed T", () => {
   );
 });
 
-describe.skipIf(SKIP_ON_WINDOWS)("streaming e2e — class-typed T", () => {
+describe("streaming e2e — class-typed T", () => {
   it(
     "next() yields >= 10 doc partials; final() is a typed StreamingDoc",
     { timeout: T },
