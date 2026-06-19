@@ -1,0 +1,5 @@
+# 25 — Cascaded voice pipelines + unified voice abstraction
+
+This scenario builds a voice agent two ways and asks whether the proposed model holds. The **cascaded** way (Pipecat) wires three independent single-capability providers — STT (`Deepgram`/`Whisper`), an LLM (any `Provider`), and TTS (`ElevenLabs`/`Cartesia`) — into one `CascadedVoice` combinator that `implements Realtime`, owning the VAD/barge-in/transcript-stitching glue. The **unified** way (Mastra) exposes one voice object with `listen()`/`speak()`/`connect()` verbs, modeled here as net-new `SttProvider`/`TtsProvider` capability interfaces plus a `CompositeVoice` combinator that mixes an input provider and an output provider. Swapping any stage is a field swap, and the cascaded↔single-STS (`NovaSonic`) fork is a one-line client change behind the same `.live(args, io)` companion — at the cost of a real net-new audio layer and a sharpened version of Open Question 1 (combinators whose forced `call<T>` is a stub or a throw).
+
+Background: background/04-realtime-and-transports.md → ## ◆ Cascaded voice pipelines

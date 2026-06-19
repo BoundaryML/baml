@@ -1,0 +1,5 @@
+# Scenario 29 — Reliability
+
+Reliability — surviving transient failures — is pure orchestration that *wraps* a provider, so it maps directly onto the proposal's combinator layer: the old `ClientType` retry/fallback loop becomes three plain classes (`Retry`, `Fallback`, `RoundRobin`) that `implements Provider` and forward capabilities by runtime `match`. The interesting work is the **typed throws channel**: a `FailureKind` taxonomy (transient / permanent / context-length / content-filter) lets the retry loop decide what's worth retrying, honor `Retry-After`, and refuse to fall a malformed-schema or content-filtered call through to another model. `service_tier` dissolves into a provider field (OpenAI `flex`/`priority`, Anthropic `auto`). The model strains on two points the scenario surfaces openly: `RoundRobin` needs cross-call mutable state that a pure `client → Provider` function can't hold, and a server-stateful `previous_response_id` chain breaks silently under fallback with no compile-time guard.
+
+Background: background/05-cross-cutting.md → ## ★ Reliability

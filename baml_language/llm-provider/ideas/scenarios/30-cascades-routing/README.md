@@ -1,0 +1,5 @@
+# Model cascades & semantic routing
+
+Cost-driven model selection: handle most requests on a cheap tier and reach an expensive one only for the hard cases. This folder shows three shapes in the proposed model — a **cheap-first cascade** that escalates on a confidence signal (`Cascade`), a **judge-gated** escalation where a separate billed model scores the cheap output (`JudgeGated`), and **semantic/classifier routing** that picks the tier per request. The headline result is that routing is *just* `client`-as-a- function (a function returning a `Provider` chosen per request) and cascades are ordinary `Fallback`-style combinators; the headline tension is that the confidence signal differs per backend (OpenAI has logprobs, Anthropic does not), so a cascade can compile, read identically, and silently never escalate — see `evaluation.md`. `implement.baml` is the library code (providers, the `ConfidenceProvider` capability, the combinators); `usage.baml` is what an app author writes.
+
+Background: background/05-cross-cutting.md → ## ◆ Model cascades & semantic routing

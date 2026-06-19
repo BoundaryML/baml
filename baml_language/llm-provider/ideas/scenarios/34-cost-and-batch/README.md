@@ -1,0 +1,5 @@
+# 34 — Cost & tokens + batch / async inference
+
+This scenario stresses the proposal on metering and money. The base `Provider.call<T> -> T` has nowhere to put usage, so we add a `Metering` capability returning a `Metered<T>` (value + normalized `Usage`), with each provider mapping its own wire dialect (OpenAI `prompt/completion`, Anthropic `input/output` + cache itemization, reasoning hidden-but-billed) into one canonical shape. A `Budget` combinator wraps a `Provider` and sums usage across a fan-out tree against a price matrix whose `PricingMode` makes batch/flex/priority a multiplier — but the running total needs mutable host state the `client` sugar can't hold, so budgeting is a hand-threaded function. Batch (submit → poll → download, ~50% off, separate rate pool, unordered results rejoined by `custom_id`) becomes its own server-authoritative lifecycle capability, reusing the background-jobs handle pattern. `implement.baml` is the library code, `usage.baml` the app code (OpenAI + Anthropic, to show portability and its leaks), and `evaluation.md` is the adversarial read.
+
+Background: background/05-cross-cutting.md → ## ★ Cost & tokens

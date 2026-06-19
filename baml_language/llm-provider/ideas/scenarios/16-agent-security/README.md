@@ -1,0 +1,5 @@
+# 16 — The agent security threat model (lethal trifecta)
+
+This scenario models defending an agent against an actual attacker: indirect prompt injection and MCP tool poisoning, where a third party plants instructions in the data the agent reads and turns the agent's own privileges against it. No provider marks content untrusted, so we add a `Tainted<T>` provenance wrapper, a `Provenance` capability that lets a `Tools` provider label tool results by source, and combinators that break the lethal trifecta: `Quarantined` (a provider with `Tools` *subtracted* — the dual-LLM/quarantine pattern as a type fact) and a `GatedContext` dispatcher that does output-URL allowlisting, viral taint tracking, and a provenance-aware approval gate that fires only on "tainted input + dangerous tool." `implement.baml` is the library code; `usage.baml` wires it for an OpenAI (id-based) and a Gemini (name-based) agent to prove portability; `evaluation.md` stresses where the model cannot give a compile-time guarantee.
+
+Background: background/02-tools-and-agents.md → ## 7. ▲ The agent security threat model

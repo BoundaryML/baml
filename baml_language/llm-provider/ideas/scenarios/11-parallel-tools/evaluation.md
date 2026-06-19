@@ -1,0 +1,42 @@
+# Evaluation — Parallel tool calls
+
+Adversarial read of whether the proposed model expresses "run the tool calls a turn emitted concurrently and feed all results back together."
+
+## (a) What the proposal reuses unchanged
+
+The big claim of §7 is that *dispatch policy lives above the `ToolCall`/`ToolResult` seam, and wire threading lives below it.* Parallel tool calls is the cleanest possible confirmation:
+
+- **`Tools` (begin/step/submit) is untouched.** The providers in `implement.baml` are copied from scenario 09 with no change to their tool loop. Anthropic still re-orders by `pending_ids`; Gemini still synthesizes ids for same-function fan-out. Parallelism happens entirely between `step` returning `ToolCalls` and `submit` receiving `ToolResult[]`. The provider is a spectator.
+- **`run_tools` (the default loop in `_conventions.md`) is untouched.** It still calls `ctx.dispatch(calls.calls)` verbatim. We never override `run_tools` for this scenario — unlike scenario 10 (bounded loops), which had to. Parallelism is *below* `run_tools`, inside the one method it already delegated to.
+- **The `ToolCall.id` correlation contract carries the determinism.** Because the loop never interprets `id`, the dispatcher can run calls in any order and stamp results with the original id; the provider re-keys (OpenAI/Anthropic by id, Anthropic additionally by recorded position, Gemini by synthetic id→name). The proposal's "id is OPAQUE to the loop" line is exactly what lets the writer emit in call order while work runs out of order.
+- **Combinators compose orthogonally.** `ResilientTools()` (fallback) and `parallel_ctx()` (dispatch) coexist with zero coupling — client returns a `Provider`, ctx carries dispatch policy. Two independent axes, as the proposal's §6 combinator story predicts.
+
+## (b) Net-new surface it must add (each tied to a primitive)
+
+1. **`Tool.effect: ToolEffect` annotation** — tied to the `Tool` primitive (proposal §7 "Net-new flags"). The background is explicit: *"there is no standard tool metadata that marks a tool read-only,"* so no dispatcher can decide what is safe to fan out. We add the missing metadata as a field on `Tool`, defaulting to `Write` (safe). This is genuinely new surface on a type the proposal already flagged as new.
+
+2. **`Dispatcher` interface + `ExecutionContext.dispatch` delegating to it** — tied to `ExecutionContext.dispatch` (proposal §7: "ExecutionContext needs a `dispatch`"). The proposal gave `dispatch` as a *fixed method*. To make parallel/sequential/effect-aware/limited pluggable without touching providers, `dispatch` must become a strategy object. This is a small generalization of an already-net-new method, not a new concept — but it IS new surface.
+
+3. **Host concurrency primitives** — `baml.async.gather` (run-all, order- preserving, per-task failure capture), `gather_until_error` (stop-on-first- error with cancellation), and `Semaphore` (rate-limit caps). Tied to the host boundary (`$rust_io_function`, like `PrimitiveClient`). BAML has **no concurrency surface today at all** — this is the largest net-new ask, and it is a runtime/host capability, not a type-system one. The proposal's model has nowhere to "hide" this: parallelism is irreducibly a host concern.
+
+4. **`Settled<T>` and the slot-array helpers** — tied to `gather`'s signature. Run-all needs a per-task ok/failure union; we model it as a record rather than a throwing call, because the whole point is *not* to propagate one failure.
+
+## (c) Where it is awkward, leaky, or unresolved
+
+- **Run-all returns; stop-on-first-error THROWS — asymmetric seam.** A `Dispatcher` returns `ToolResult[]`. Run-all always can (a failure is just an error result). Stop-on-first-error *cannot* produce a per-call result array when it aborts — so `StopOnFirstErrorDispatch.dispatch` throws instead. That means the two policies have visibly different control-flow contracts through the same interface method, and the app's call site needs a `catch` for one but not the other (see `run_strict_pipeline` vs `run_research_parallel` in `usage.baml`). The interface type doesn't capture this; it's a runtime convention. Mildly leaky.
+
+- **Effect-gating is sequencing, not a real gate — the proposal cannot express the actual requirement.** The background asks for *"charge only if the email succeeds."* `EffectAwareDispatch` can only *sequence* writes in relative order; it has no cross-call transactionality, no rollback, no "commit B iff A succeeded." Expressing a true gate would need the model to NOT emit both calls in one turn (a model-side control), or a dispatcher that can abort-and-undo — neither of which the `ToolCall`/`ToolResult` seam can represent, because a result must be produced for every call the model emitted or the wire protocol breaks. **This is a plain limitation: the seam guarantees one result per call, which is structurally incompatible with "don't run the second call."** Honest verdict: unsupported at the dispatch layer; it belongs to a different control (turn-shaping / approval), out of scope here.
+
+- **No compile-time guarantee that a fanned-out tool is actually read-only.** `Tool.effect` is an author assertion. Nothing checks that the `search_web` handler is pure. This is the same runtime-promise posture the proposal accepts everywhere (capability is a runtime `match`, not a static type), so it is consistent — but a reviewer should note the safety property is unenforced.
+
+- **Open Question #5 (capability `match` over an interface-existential) is load- bearing here.** `EffectAwareDispatch` doesn't match on capabilities, but the whole scenario assumes `match (reg.effect_of(c)) { ToolEffect::ReadOnly => ...}` and the combinator forwarding from scenario 09 (`let tp: Tools => ...`) work at runtime. If value-level reflection can't test interface membership at runtime, the `Fallback`-over-`Tools` composition in `run_resilient` doesn't hold. We depend on #5 resolving "yes."
+
+- **Open Question #7 (host-backed bodies) is stressed harder than elsewhere.** The concurrency primitives (`gather`, `Semaphore.acquire_run`) are `$rust_io_function` bodies that take BAML closures (`(() -> T)[]`) and run them concurrently on the host. That requires the host bridge to (a) accept first-class BAML closures and (b) drive them under an async runtime. The proposal's #7 only asks "is an `implements` block with native bodies the supported bridge boundary?" — this scenario needs a *stronger* yes: native bodies that *schedule BAML callbacks concurrently*. If closures can't cross the host boundary, `gather` collapses to sequential and the scenario is unsupported. This is the sharpest unresolved dependency.
+
+- **Cache stability is defended by convention, not by the type.** The "single writer emits in input order" discipline lives inside each `dispatch` body and inside Anthropic's `submit` re-order. Nothing in the `Dispatcher` interface *forces* a strategy to preserve order; a careless third-party dispatcher that pushed results as they resolved would silently defeat prompt caching and break Anthropic positional matching. The proposal gives no place to encode "must be order-preserving" as a contract.
+
+## (d) Verdict
+
+**Workable-with-additions.**
+
+The proposal's central bet — that dispatch policy is separable from wire threading at the `ToolCall`/`ToolResult` seam — pays off almost perfectly for parallelism: not one line of provider or `run_tools` code changes, and the four strategies plus the rate limiter all slot in as `Dispatcher` implementations behind the single `ctx.dispatch` call the proposal already specified. That is a strong result. The additions are real but bounded and well-localized: a `Tool.effect` field (filling a gap the background itself names), a `Dispatcher` strategy generalization of an already-net-new method, and — the big one — a host concurrency surface BAML entirely lacks today, which depends on Open Question #7 resolving in a stronger form (native bodies that schedule BAML closures concurrently). The model also cannot express the genuinely cross-call requirement ("charge only if email succeeds"): the seam's "one result per emitted call" invariant is structurally incompatible with it, so that requirement is honestly out of scope rather than awkwardly forced. Net: the interface model absorbs parallel dispatch cleanly; the cost is entirely in new host primitives and one unenforceable safety annotation.

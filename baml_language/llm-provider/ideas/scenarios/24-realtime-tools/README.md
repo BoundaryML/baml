@@ -1,0 +1,5 @@
+# 24 · Tools in a realtime session
+
+A voice agent needs to call a function (look up the weather, hit the calendar) and keep talking naturally while the tool runs. Unlike the synchronous chat tool loop (scenario 09), the tool call arrives as an **event** on the duplex `Channel`, the model's response is **not paused**, and there is **no synchronous return slot**: you emit a `function_call_output` event carrying the server's `call_id`, then *separately* ask the model to continue. This scenario shows the proposal absorbing that by adding a `RealtimeTools` capability that `requires Realtime` (deliberately *not* the request/response `Tools` seam), with two providers whose continuation shapes diverge — OpenAI Realtime's two-event splice (`function_call_output` + `response.create`) vs Gemini Live's single implicit `toolResponse` — plus the ordering-with-audio, latency-as-dead-air, and server-authoritative-state stresses the model handles only partially.
+
+Background: background/04-realtime-and-transports.md → ## ◆ Tools in a realtime session

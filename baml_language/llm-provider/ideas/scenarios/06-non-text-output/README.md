@@ -1,0 +1,5 @@
+# 06 · Non-text output (image / speech / transcription)
+
+This scenario stresses the proposed `Provider` model against output that is *not* a string: generated images, synthesized speech, and transcription. It shows the two real-world shapes that have to coexist — a **dedicated, output-specialized endpoint** (`GptImage` parses raw bytes, no SAP; `GptTts` reads an audio body; `GptStt` inverts modality back to text) versus **in-conversation generation as a built-in tool** (`Gpt55` returns a mixed-modality reply with text *and* image items, billing two cost meters). The library code introduces the net-new pieces the proposal lacks — a `Media` result type (mime + data/URL), a `Usage` record with both meters, and `baml.media.*` host decoders — then proves which parts of the spine (the `Body`-associated `HttpProvider` codec, `Streaming`, combinators, the `client` sugar) carry over unchanged, and exactly where the dedicated-vs-in-conversation split leaks through the `-> T` return type.
+
+Background: background/01-single-turn.md → ## ◆ Non-text output

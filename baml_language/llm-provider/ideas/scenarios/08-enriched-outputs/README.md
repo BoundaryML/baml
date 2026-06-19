@@ -1,0 +1,5 @@
+# Scenario 08 — Enriched outputs: logprobs, citations, grounding
+
+This scenario stresses the proposal against output enrichment that is **binary and provider-bound**: features one provider exposes and another simply cannot. Logprobs exist on OpenAI and Gemini but **never** on Anthropic; "sourced answers" exist on all three but as three different objects — Anthropic per-document citation spans, Gemini grounding metadata, OpenAI tool annotations — with no shared citation type. We model each as its own capability `interface … requires Provider` (`Scored`, `Citable`, `Grounded`, `Annotated`) with **no honest fallback**: a provider either implements the block or omits it, and the matching companion (`.logprobs` / `.cited` / `.grounded` / `.annotated`) errors when it's absent. `implement.baml` is the std-lib provider and combinator code; `usage.baml` is the app code (including the hand-written normalization an app must own because the std lib refuses to unify what providers don't); `evaluation.md` is the adversarial read, centered on Open Questions #1 and #5.
+
+Background: background/01-single-turn.md → ## ◆ Logprobs / token probabilities

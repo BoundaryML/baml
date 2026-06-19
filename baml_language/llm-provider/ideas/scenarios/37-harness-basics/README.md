@@ -1,0 +1,5 @@
+# 37 — What a harness is + driving it
+
+A harness (Claude Code, Pi, Flue) is the payoff of the base-`Provider` model: it implements `Provider.call` directly over a *subprocess* — no `HttpProvider`, no `build_request` — and adds `Realtime` for the long-lived steerable session. The one-shot entry point (Python `query()`) is `Provider.call`; the stateful, driven session (TS `query()` → `Query`) is `Realtime.run(prompt, io)`, where the caller hands in a `Channel` and *drives* the harness rather than calling it. The whole control plane — interrupt / setModel / setPermissionMode / rewindFiles / steer / followUp / stopTask — is modeled as a closed `OutEvent`/`InEvent` union sent over that one channel, not as a method per verb; `sandbox`/`permission_mode`/`model` are bound config fields. `implement.baml` builds the providers, the `ControlPlane` capability, and a `GuardedChannel`; `usage.baml` shows the config-only clients, the `.live` companion, a full driver loop, and two divergent harnesses (Claude Code with rewind, Pi without); `evaluation.md` stresses it.
+
+Background: background/06-harnesses.md → ## 2. ★ Driving a harness

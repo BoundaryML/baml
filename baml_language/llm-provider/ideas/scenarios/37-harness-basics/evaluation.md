@@ -1,0 +1,46 @@
+# Evaluation — What a harness is + driving it
+
+Adversarial read of whether the proposed `Provider`/capability model expresses a *driven* subprocess harness (Claude Code / Pi / Flue) cleanly.
+
+Background: `background/06-harnesses.md → ## 2. ★ Driving a harness`.
+
+---
+
+## (a) What the proposal reuses unchanged
+
+- **`Provider` as the base, no `HttpProvider`.** This is the scenario the base model was designed for, and it lands. `ClaudeCode` implements `Provider.call` directly with a `$rust_io_function` body; transport is a subprocess. Nothing in the spine assumes HTTP, so "a harness is a `Provider` with no `HttpProvider`" is true with zero new surface. (Proposal §1, §8.)
+- **`Realtime` for the steerable session.** The canonical `Realtime.run(prompt, io) -> Transcript` *is* the stateful entry point. The caller hands in the `Channel` (pass-in); the provider drives it. The one-shot/stateful split from the SDK table (`query()` vs `ClaudeSDKClient`) maps exactly onto `Provider.call` vs `Realtime.run`. No new method shapes.
+- **`client → function ... -> Provider` sugar.** `CodeAgent()` is config-only; `sandbox`/`permission_mode`/`model` are ordinary bound fields, exactly like `model` on a chat client. Dynamic selection (`Coder(trust)`) is a plain `if`.
+- **Combinator forwarding.** `ResilientCoder()` = `CodeAgent().fallback_to(PiCoder()).with_retry(2)` works because `Fallback` forwards `Realtime` by runtime delegation (§6). A harness composes like any other provider.
+- **The capability `match` for `.live`.** `Build`'s desugaring is the verbatim `Foo$live` pattern from §5 — `match (p) { let r: Realtime => ..., _ => throw }`. No honest fallback for a session, exactly as the proposal says.
+- **`Tools` for host-owned dispatch.** `BuildWithMyTools` reuses `run_tools<T>`/`begin`/`step`/`submit` unchanged; the harness's subprocess loop *is* the opaque `Transcript`, and `ToolCall.id` stays opaque.
+
+## (b) Net-new surface it must add (each tied to a primitive)
+
+1. **Concrete `InEvent`/`OutEvent` unions** (`implement.baml` §2) — tied to the canonical `Channel` interface. `Channel` is in the cheat-sheet, but its `InEvent`/`OutEvent` are abstract there. A harness must *instantiate* them with the real control-plane vocabulary (`Steer`, `FollowUp`, `Interrupt`, `SetModel`, `SetPermMode`, `RewindFiles`, `StopTask`, `EndSession` / `TextDelta`, `TurnDone`, `RewindResult`, …). This is the central modeling claim: **the control plane is data over one duplex method, not a method per verb.** Without it, `Realtime` would have to grow `interrupt()`, `setModel()`, `rewindFiles()` … and stop being one interface.
+2. **`Sandbox` / `PermissionMode` enums** — tied to "options dissolve into provider fields" (§4). These are bespoke `ClaudeCode` fields. Trivial, but net-new types.
+3. **`ControlPlane` capability** (`interface ControlPlane requires Realtime`) — tied to the capability-interface primitive. Net-new because plain `Realtime` can't say *which* OutEvents a provider honors, and a voice model and a coding harness are both `Realtime`. `supported_verbs() -> type[]` uses the first-class `type` + `reflect.type_of`. This is the harness analogue of the `Tool { parameters: type }` net-new flag in §7.
+4. **`GuardedChannel`** — a `Channel`-shaped combinator. Net-new but built entirely from existing primitives (`reflect.type_of_value` + the membership check). It is the driver-side enforcement that an OutEvent is in the negotiated verb set before it hits the subprocess.
+5. **`reflect.type_of_value(data) -> type`** — a value→type reflection used by `GuardedChannel.send`. The cheat-sheet lists `reflect.type_of<T>()` (static) and `TypeValue.implements`; runtime *value* reflection is implied by the capability `match` (Open Q5) but is here used on a closed data union, not an interface. Flagged as a host primitive the proposal must confirm.
+
+## (c) Where it is awkward, leaky, or unresolved
+
+- **Open Q1 (does every capability `requires Provider`?) — the one-shot is honest here, but barely.** `ClaudeCode.call<T>` spawning a *fresh* subprocess and parsing a final answer is a real, useful one-shot (it's literally Python's `query()`). So Q1 resolves cleanly *for harnesses*. The awkwardness: `call` and `run` share almost no implementation — one is stateless spawn-and-die, the other is a long-lived pump — yet `Realtime requires Provider` forces both onto one class. Fine, but it means "this provider's `.call` and its `.live` are nearly unrelated programs," which is not obvious from the type.
+
+- **Open Q2 (how does `io` surface at the call?) — the leak is real.** The proposal says `io` "appears only on the capability companion, never the plain `Foo(args)` call." But a harness driver is *mostly* `io` manipulation — see `DriveBuild`, where the entire body is `io.on`/`io.send` and `r.run` is the last line. The `client`-sugar function (`Build`) can declare `io: Channel` in its signature, but then the interesting logic (negotiation, the steer/rewind sequence) does **not** live in the generated companion at all — it lives in a hand-written `DriveBuild`. So for harnesses the `.live` companion is a thin shell and the real program is the driver loop the author writes by hand. The sugar buys less here than for chat/voice. Q2's "acceptable as-is" is true but hollow for this scenario.
+
+- **Open Q3 (the request side is HTTP-specific) — confirmed, and it's the clean part.** A harness sidesteps `HttpProvider` entirely; there is no `build_request`. So "HTTP is a capability, not the base" is exactly right and this scenario is the proof. No new request-side associated type is needed *for the harness* — but note the harness's "request" (the subprocess spawn spec: argv, env, sandbox flags) is fully hidden inside `$rust_io_function` with no analogue to `Inspectable`. You cannot preview what a harness will run.
+
+- **Open Q5 (capability `match` over an existential) — stretched.** The scenario leans on it twice: once for `Realtime` membership (canonical) and once, harder, in `GuardedChannel.send`, which matches a *data value* against a set of `type` values. That needs value-level reflection (`type_of_value`) and `type` equality (`ty == allowed`). The proposal only commits to interface-membership `match`; equality of reified `type` values for closed unions is an extra ask.
+
+- **Open Q7 (host-backed bodies) — load-bearing and unresolved in detail.** Every interesting method here is `$rust_io_function`: `call`, `run`, and the three `Tools` methods. The proposal asks "is an `implements` block with native bodies the supported bridge boundary?" — for harnesses the answer must be yes or the whole scenario is vapor. The subtle part the proposal does NOT address: `run`'s host body has to land mid-flight `Steer`/`Interrupt`/`SetModel` at a safe boundary (background §2 "What's hard"). That race lives entirely below the BAML seam, which is correct, but it means the *honesty* of "the control plane is just messages" depends on a host implementation BAML can't constrain.
+
+- **Server-authoritative / hidden state — plainly unsupported at the type level.** Two things the model cannot express:
+  1. **Compile-time guarantee that a verb is supported.** `supported_verbs()` is a *runtime* list; `GuardedChannel` rejects unsupported verbs at runtime (`throw baml.errors.Io`). There is no way to make "this harness supports `RewindFiles`" part of the type — and worse, even within one provider it's *data-dependent* (`ClaudeCode` in `Local` sandbox drops rewind). No type system could capture that; it is inherently runtime. The proposal's "drop the sugar for compile-time precision" escape hatch does **not** help, since the variability is in a *field value*, not the static type.
+  2. **Session identity / "continue" state.** The background flags folding stateless+stateful into one entry with a `continue` flag as "leaky." Our model avoids the flag (two distinct entry points: `call` vs `run`), which is a genuine win — but it also means there is no first-class *session handle*. `run` owns the session for its whole duration; you cannot get a session, stash it, and resume it across separate top-level calls. The handle the TS SDK returns (a `Query` you hold) has no representation; you hold the `Channel` instead, and only for the lifetime of one `run`.
+
+## (d) Verdict
+
+**Workable-with-additions.**
+
+The base-`Provider`-with-no-`HttpProvider` claim is the cleanest thing in the whole proposal: a harness genuinely *is* a `Provider`, the one-shot/stateful split falls out of `call` vs `Realtime.run`, and combinators compose harnesses for free. The decisive modeling bet — **control plane as a closed `OutEvent`/`InEvent` union over the single handed-in `Channel`, rather than a method per verb** — pays off and keeps `Realtime` from metastasizing. The additions it forces are modest and principled (concrete event unions, a `ControlPlane` capability advertising verbs via first-class `type`, a guard combinator). What it cannot do is give any *compile-time* guarantee about the control surface — verb support is runtime, sometimes field-dependent — and it has no first-class resumable session handle (you hold the `Channel` for one `run`, not a `Query` you can stash). For driving a harness those are acceptable limitations, not blockers; hence Workable-with-additions rather than Clean.

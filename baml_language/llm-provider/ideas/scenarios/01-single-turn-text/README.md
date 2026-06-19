@@ -1,0 +1,5 @@
+# Scenario 01 — Plain text in / text out
+
+The irreducible case: send some text, get text back. This scenario stress-tests the proposal's base method `Provider.call<T>(prompt) -> T` against three real providers (Anthropic, OpenAI Chat, Gemini) and the divergences the background documents — the system prompt living in three different places (in-array message, top-level `system` string, top-level `system_instruction` object), the assistant-vs-`model` role split, sampling params / `max_tokens` / usage modeled as plain provider fields, and the fact that a refusal is not the answer but arrives in a separate channel. `implement.baml` is the std-lib provider/codec code; `usage.baml` is the one-line-per-provider app surface; `evaluation.md` argues that the happy path is clean but that **usage** and **refusal** don't fit `call<T> -> T` and force net-new surface (a `Metered` capability, a `Refused` typed error, and a readable view over the opaque `PromptAst`).
+
+Background: background/01-single-turn.md → ## ★ Plain text in / text out

@@ -1,0 +1,5 @@
+# 19 — Fork / branch a conversation
+
+"Git for conversations": take a session at some point in its history and explore a different continuation without destroying the original. This scenario models a conversation as a provider-owned, opaque `Session` capability and branching as a separate `Branching` capability (`fork(s, at?)`) that `requires Session` — so a session that *can't* fork (OpenAI Agents `Session`, Vercel) simply doesn't implement it. The three real-world encodings are made concrete inside the provider bodies behind one `fork` seam: **copy-the-prefix** (Claude Agent SDK, new id), **point-at-parent** (Pi's DAG, shared prefix + a tree-shaped `NodeStore`), and **emergent-from-ids** (OpenAI Responses, where branching just falls out of reusing a prior `previous_response_id` — and where the bytes are server-authoritative, so `copy_out` honestly throws). Fork-at-tail vs fork-anywhere is one `at: Cursor?` parameter, and the awkward parts (un-typeable "forks anywhere", un-ownable server branches, combinators that don't compose with stateful sessions) are stressed in `evaluation.md`.
+
+Background: background/03-state-sessions-memory.md → ## 3. ◆ Fork / branch
