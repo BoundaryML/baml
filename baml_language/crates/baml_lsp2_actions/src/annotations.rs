@@ -472,9 +472,10 @@ function Greet(name: string, items: int[]) -> string {
             !labels.contains(&"value: "),
             "synthesized string.from() interpolation calls should not get parameter hints, got {labels:?}"
         );
-        // The concat-scope accumulator (`let " __m3_concat" = ""`, origin
-        // Compiler) must not produce a type hint either; real `let` bindings
-        // (`greeting`, `counted`) still do, so the suppression is targeted.
+        // The concat-scope accumulator (`let " __m3_concat" = ""`, a
+        // compiler-synthesized binding) must not produce a type hint either;
+        // real `let` bindings (`greeting`, `counted`) still do, so the
+        // suppression is targeted.
         assert!(
             labels.iter().any(|label| label.starts_with(": ")),
             "real let bindings should still get type hints, got {labels:?}"

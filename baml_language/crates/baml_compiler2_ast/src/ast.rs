@@ -1257,7 +1257,6 @@ pub type Literal = baml_base::Literal;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LetOrigin {
     Source,
-    Compiler,
     Client,
     RetryPolicy,
 }
