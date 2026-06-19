@@ -16,8 +16,8 @@ client<llm> TestClient {
 function ExtractAny() -> json {
     client: TestClient
     prompt: #"
-        Return whatever JSON you like.
+      Return whatever JSON you like.
 
-        {{ ctx.output_format }}
+      {{ ctx.output_format }}
     "#
 }

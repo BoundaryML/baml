@@ -12,10 +12,8 @@ client<llm> MyClient {
         key2: "some random value",
         hello: "world",
         thing: "hello",
-        block_string: #"
-            hello there my frien
-            d
-        "#,
+        block_string: #"hello there my frien
+                d"#,
         inline_raw_string: #"inline "raw" string,,"#,
         "string key": "value with spaces",
         booleanValue: true,
@@ -49,8 +47,8 @@ client<llm> MyClient {
             },
         ],
         block_string: #"
-            hello there my friend
-            {# a comment in a prompt #}
-        "#,
+      hello there my friend
+      {# a comment in a prompt #}
+    "#,
     },
 }
