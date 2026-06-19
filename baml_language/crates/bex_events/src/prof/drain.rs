@@ -258,8 +258,11 @@ impl CooperativeProfileDrain {
             });
             return;
         }
-        engine.header_written = true;
-        self.write_chunk(engine_id, &chunk, output, touched_engines);
+        if self.write_chunk(engine_id, &chunk, output, touched_engines)
+            && let Some(engine) = self.engines.get_mut(&engine_id)
+        {
+            engine.header_written = true;
+        }
     }
 
     fn write_chunk(
@@ -268,9 +271,9 @@ impl CooperativeProfileDrain {
         chunk: &[u8],
         output: &mut CooperativeProfileDrainOutput,
         touched_engines: &mut HashSet<u64>,
-    ) {
+    ) -> bool {
         let Some(engine) = self.engines.get_mut(&engine_id) else {
-            return;
+            return false;
         };
         let before = engine.sink.stats();
         let retained_chunk_len = before.max_bytes.map_or(chunk.len(), |max_bytes| {
@@ -284,7 +287,7 @@ impl CooperativeProfileDrain {
                 code: "ProfileArtifactWriteFailed",
                 message: format!("failed to write .bamlprof bytes for engine {engine_id}: {err}"),
             });
-            return;
+            return false;
         }
         touched_engines.insert(engine_id);
         let stats = engine.sink.stats();
@@ -307,6 +310,7 @@ impl CooperativeProfileDrain {
                 ),
             });
         }
+        true
     }
 
     fn artifact_snapshots(&mut self, engine_ids: &HashSet<u64>) -> Vec<ProfileArtifactSnapshot> {

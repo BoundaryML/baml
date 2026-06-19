@@ -64,9 +64,9 @@ use bex_events::{
     run::{
         AttachRootTraceResult, CancellationState, EnvResolutionStatus, ExecutionRequest,
         HostCallId, InMemoryRunStore, ProjectGeneration, ProjectId, RequestId, RunCursor,
-        RunCursorExpiredReason, RunDiagnostic, RunError, RunErrorClass, RunFilter, RunId,
-        RunOutcome, RunRequestState, RunResult, RunSubscription, RunTarget, RuntimeTarget,
-        patch_to_wire, run_summary_to_wire, run_to_wire,
+        RunCursorExpiredReason, RunDiagnostic, RunError, RunErrorClass, RunFilter, RunId, RunKind,
+        RunOutcome, RunRequestState, RunResult, RunSubscription, RunTarget, RunVisibilityFilter,
+        RuntimeTarget, patch_to_wire, run_summary_to_wire, run_to_wire,
     },
 };
 pub use bridge_ctypes::{
@@ -76,12 +76,74 @@ pub use error::BridgeError;
 pub use host_value::{complete_host_call, register_host_callable};
 use js_sys::Function;
 use prost::Message;
+use serde::Deserialize;
 use wasm_bindgen::prelude::*;
 pub use wasm_lsp::LspNotification;
 
 static LOGGER_INIT: std::sync::Once = std::sync::Once::new();
 const WASM_PROFILE_ARTIFACT_MAX_BYTES: usize = 64 * 1024 * 1024;
 const WASM_PROFILE_DRAIN_MAX_SWEEPS: usize = 1024;
+
+#[derive(Debug, Deserialize)]
+struct WasmRunListFilter {
+    #[serde(rename = "projectId")]
+    project_id: Option<String>,
+    #[serde(rename = "projectGeneration")]
+    project_generation: Option<u64>,
+    kinds: Option<Vec<WasmRunListKind>>,
+    #[serde(rename = "callTreeContainsFunction")]
+    call_tree_contains_function: Option<String>,
+    visibility: Option<WasmRunListVisibility>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum WasmRunListKind {
+    Function,
+    Test,
+    Preview,
+    Companion,
+    Internal,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum WasmRunListVisibility {
+    HistoryOnly,
+    IncludeHidden,
+    AllForDebug,
+}
+
+fn run_filter_from_js(filter: JsValue) -> Result<RunFilter, String> {
+    if filter.is_undefined() || filter.is_null() {
+        return Ok(RunFilter::default());
+    }
+    let filter: WasmRunListFilter =
+        serde_wasm_bindgen::from_value(filter).map_err(|err| err.to_string())?;
+    Ok(RunFilter {
+        project_id: filter.project_id.map(ProjectId),
+        project_generation: filter.project_generation.map(ProjectGeneration),
+        kinds: filter
+            .kinds
+            .unwrap_or_default()
+            .into_iter()
+            .map(|kind| match kind {
+                WasmRunListKind::Function => RunKind::Function,
+                WasmRunListKind::Test => RunKind::Test,
+                WasmRunListKind::Preview => RunKind::Preview,
+                WasmRunListKind::Companion => RunKind::Companion,
+                WasmRunListKind::Internal => RunKind::Internal,
+            })
+            .collect(),
+        statuses: Vec::new(),
+        call_tree_contains_function: filter.call_tree_contains_function,
+        visibility: match filter.visibility {
+            Some(WasmRunListVisibility::HistoryOnly) | None => RunVisibilityFilter::HistoryOnly,
+            Some(WasmRunListVisibility::IncludeHidden) => RunVisibilityFilter::IncludeHidden,
+            Some(WasmRunListVisibility::AllForDebug) => RunVisibilityFilter::AllForDebug,
+        },
+    })
+}
 
 /// Initialize the WASM module with panic hook (auto-called by wasm-bindgen).
 #[wasm_bindgen(start)]
@@ -672,10 +734,22 @@ impl BamlWasmRuntime {
     }
 
     #[wasm_bindgen(js_name = listRuns)]
-    pub fn list_runs(&self, request_id: u32) {
+    pub fn list_runs(&self, request_id: u32, filter: JsValue) {
+        let filter = match run_filter_from_js(filter) {
+            Ok(filter) => filter,
+            Err(error) => {
+                send_command_error(
+                    &self.playground_callback,
+                    u64::from(request_id),
+                    "invalidRunListFilter",
+                    format!("Invalid run list filter: {error}"),
+                );
+                return;
+            }
+        };
         let runs = self
             .run_store
-            .list_runs(&RunFilter::default())
+            .list_runs(&filter)
             .into_iter()
             .map(|summary| run_summary_to_wire(&summary))
             .collect();

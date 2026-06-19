@@ -146,24 +146,42 @@ function projectKeyForPath(projectPath: string): string {
   }
 }
 
+function isPowerShellShell(): boolean {
+  if (process.platform !== 'win32') {
+    return false;
+  }
+  const shell = vscode.env.shell.toLowerCase();
+  return shell.includes('powershell') || /(^|[\\/])pwsh(?:\.exe)?$/.test(shell);
+}
+
 function shellQuote(value: string): string {
   if (process.platform === 'win32') {
-    return `"${value.replace(/"/g, '\\"')}"`;
+    if (isPowerShellShell()) {
+      return `'${value.replace(/'/g, "''")}'`;
+    }
+    return `"${value.replace(/"/g, '""')}"`;
   }
   return `'${value.replace(/'/g, "'\\''")}'`;
 }
 
 function playgroundCommandForPath(projectPath?: string): { command: string; cwd?: string } {
-  const bin = shellQuote(wrapperPath);
+  const bin = `${isPowerShellShell() ? '& ' : ''}${shellQuote(wrapperPath)}`;
   if (!projectPath) {
     return { command: `${bin} playground` };
   }
 
   try {
-    if (fs.statSync(projectPath).isFile()) {
+    const stat = fs.statSync(projectPath);
+    if (stat.isFile()) {
       return {
         command: `${bin} playground --file ${shellQuote(projectPath)}`,
         cwd: path.dirname(projectPath),
+      };
+    }
+    if (stat.isDirectory()) {
+      return {
+        command: `${bin} playground --from ${shellQuote(projectPath)}`,
+        cwd: projectPath,
       };
     }
   } catch {
@@ -172,7 +190,6 @@ function playgroundCommandForPath(projectPath?: string): { command: string; cwd?
 
   return {
     command: `${bin} playground --from ${shellQuote(projectPath)}`,
-    cwd: projectPath,
   };
 }
 

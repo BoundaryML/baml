@@ -22,7 +22,8 @@ import '@b/pkg-editor/views-workbench.css';
 
 interface SourceFile {
   path: string;
-  relativePath: string;
+  relativePath?: string;
+  relative_path?: string;
   content: string;
 }
 
@@ -58,7 +59,13 @@ const RemoteEditorView: React.FC<RemoteEditorViewProps> = ({ project, onUnsavedC
         const data = (await res.json()) as SourceFilesResponse;
         if (cancelled) return;
         const map: Record<string, string> = {};
-        for (const f of data.files) map[f.relativePath] = f.content;
+        for (const f of data.files) {
+          const relativePath = f.relativePath ?? f.relative_path;
+          if (!relativePath) {
+            throw new Error('Invalid source file payload: missing relative path');
+          }
+          map[relativePath] = f.content;
+        }
         setFiles(map);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));

@@ -654,14 +654,13 @@ impl ProjectDatabase {
             let Expr::Path(segments) = &body.exprs[*callee] else {
                 continue;
             };
-            if segments.len() != 1 {
-                continue;
-            }
 
-            calls.push((
-                expr_id.into_raw().into_u32(),
-                segments[0].as_str().to_string(),
-            ));
+            let callee_name = segments
+                .iter()
+                .map(AsRef::<str>::as_ref)
+                .collect::<Vec<_>>()
+                .join(".");
+            calls.push((expr_id.into_raw().into_u32(), callee_name));
         }
         calls
     }

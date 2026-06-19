@@ -630,11 +630,12 @@ impl BexMulitProject {
             (engine, project.project.test_state())
         };
 
-        // Bump generation, cancel in-flight tasks, and clear stale registry
+        // Cancel in-flight collection tasks and clear stale registry. The
+        // generation tracks compiled project snapshots and is bumped only when a
+        // new BexEngine/CFG snapshot is installed.
         let (generation, cancel) = {
             let mut state = test_state.lock().unwrap();
             state.cancel.cancel();
-            state.generation += 1;
             state.cancel = sys_types::CancellationToken::new();
             state.registry = None;
             (state.generation, state.cancel.clone())
@@ -1138,7 +1139,13 @@ impl super::BexLsp for BexMulitProject {
             std::path::Path::new(project),
             "playground update source file",
         )?;
-        let source_path = resolve_source_path_for_project(&project_root, path)?;
+        let raw_path = std::path::Path::new(path);
+        let source_path = if raw_path.is_absolute() {
+            self.fs
+                .get_path_from_path(raw_path, "playground update source file path")?
+        } else {
+            resolve_source_path_for_project(&project_root, path)?
+        };
         if source_path.extension().is_none_or(|e| e.as_str() != "baml") {
             return Err(LspError::InvalidVFSPath {
                 path: source_path,

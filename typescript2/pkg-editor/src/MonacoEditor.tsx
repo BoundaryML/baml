@@ -153,6 +153,7 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
   const containerRef = useRef<HTMLDivElement>(null);
   const onFilesChangeRef = useRef(onFilesChange);
   const onBlobUrlsChangeRef = useRef(onBlobUrlsChange);
+  const blobUrlsRef = useRef<Record<string, string>>({});
   const backendRef = useRef(backend);
   const filesRef = useRef(files);
   const [ready, setReady] = useState(false);
@@ -323,6 +324,7 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
       // Media files (images, etc.) are decoded from data URLs and also get blob URLs.
       const allFiles = filesRef.current;
       const blobUrlMap: Record<string, string> = {};
+      blobUrlsRef.current = blobUrlMap;
 
       for (const [filename, content] of Object.entries(allFiles)) {
         const absPath = filename.startsWith(rootPrefix) ? filename : `${rootPrefix}${filename}`;
@@ -1010,6 +1012,11 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
       restartRef.current = null;
       disposed = true;
       currentConnRef.current = null;
+      for (const url of Object.values(blobUrlsRef.current)) {
+        URL.revokeObjectURL(url);
+      }
+      blobUrlsRef.current = {};
+      onBlobUrlsChangeRef.current?.({});
       const toDispose = connDisposablesRef.current;
       connDisposablesRef.current = [];
       for (const d of toDispose) {

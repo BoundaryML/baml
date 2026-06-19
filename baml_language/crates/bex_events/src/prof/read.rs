@@ -36,13 +36,26 @@ pub fn read_bamlprof_from_bytes(bytes: &[u8]) -> io::Result<BamlprofContents> {
     let mut truncated = false;
 
     while !buf.is_empty() {
-        match pb::DiskEventV1::decode_length_delimited(&mut buf) {
-            Ok(event) => events.push(event),
-            Err(_) => {
-                truncated = true;
-                break;
+        let delimiter_len = buf.len();
+        let frame_len = match prost::encoding::decode_length_delimiter(&mut buf) {
+            Ok(frame_len) => frame_len,
+            Err(err) => {
+                if delimiter_len < 10 {
+                    truncated = true;
+                    break;
+                }
+                return Err(io::Error::new(io::ErrorKind::InvalidData, err));
             }
+        };
+        if buf.len() < frame_len {
+            truncated = true;
+            break;
         }
+        let (frame, rest) = buf.split_at(frame_len);
+        let event = pb::DiskEventV1::decode(frame)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        events.push(event);
+        buf = rest;
     }
 
     Ok(BamlprofContents {
@@ -167,5 +180,31 @@ mod tests {
         assert_eq!(parsed.header.engine_id, header.engine_id);
         assert_eq!(parsed.events, events);
         assert!(!parsed.truncated);
+    }
+
+    #[test]
+    fn trailing_partial_event_frame_is_reported_as_truncated() {
+        let header = fixed_header();
+        let mut bytes = Vec::new();
+        encode_length_delimited_message(&mut bytes, &header).unwrap();
+        bytes.push(0x80);
+
+        let parsed = super::read_bamlprof_from_bytes(&bytes).unwrap();
+        assert!(parsed.truncated);
+        assert!(parsed.events.is_empty());
+    }
+
+    #[test]
+    fn malformed_complete_event_frame_is_invalid_data() {
+        let header = fixed_header();
+        let mut bytes = Vec::new();
+        encode_length_delimited_message(&mut bytes, &header).unwrap();
+        bytes.extend_from_slice(&[1, 0]);
+
+        let error = match super::read_bamlprof_from_bytes(&bytes) {
+            Ok(_) => panic!("malformed event frame should fail"),
+            Err(error) => error,
+        };
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
     }
 }

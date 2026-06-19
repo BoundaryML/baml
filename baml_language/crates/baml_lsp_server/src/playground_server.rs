@@ -21,7 +21,7 @@ use axum::{
         FromRequestParts, Path as AxumPath, Query, State,
         ws::{Message as AxumWsMsg, WebSocket, WebSocketUpgrade},
     },
-    http::{Method, Request, StatusCode, header},
+    http::{HeaderValue, Method, Request, StatusCode, Uri, header},
     middleware::{self, Next},
     response::Response,
     routing::{get, get_service},
@@ -278,6 +278,68 @@ struct WsState {
     lsp_out_tx: broadcast::Sender<lsp_server::Message>,
     /// What the browser currently has per file (for disk-watcher echo avoidance).
     doc_mirror: DocMirror,
+    /// Workspace roots that browser-mode LSP saves are allowed to write under.
+    workspace_roots: Arc<Vec<PathBuf>>,
+}
+
+#[derive(Clone, Debug)]
+struct PlaygroundAccessGuard {
+    allowed_origins: Arc<Vec<String>>,
+}
+
+impl PlaygroundAccessGuard {
+    fn for_listener_addr(addr: SocketAddr) -> Self {
+        let port = addr.port();
+        Self {
+            allowed_origins: Arc::new(vec![
+                format!("http://localhost:{port}"),
+                format!("http://127.0.0.1:{port}"),
+                format!("http://[::1]:{port}"),
+            ]),
+        }
+    }
+
+    fn is_allowed_origin(&self, origin: Option<&HeaderValue>) -> bool {
+        let Some(origin) = origin else {
+            return true;
+        };
+        let Ok(origin) = origin.to_str() else {
+            return false;
+        };
+        self.allowed_origins
+            .iter()
+            .any(|allowed| origin.eq_ignore_ascii_case(allowed))
+            || is_vscode_webview_origin(origin)
+    }
+
+    fn cors_origin(&self, origin: Option<&HeaderValue>) -> Option<HeaderValue> {
+        let origin = origin?;
+        if self.is_allowed_origin(Some(origin)) {
+            Some(origin.clone())
+        } else {
+            None
+        }
+    }
+}
+
+fn is_vscode_webview_origin(origin: &str) -> bool {
+    if origin
+        .get(..17)
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("vscode-webview://"))
+    {
+        return true;
+    }
+    let Ok(uri) = origin.parse::<Uri>() else {
+        return false;
+    };
+    if uri.scheme_str() != Some("https") {
+        return false;
+    }
+    let Some(host) = uri.host() else {
+        return false;
+    };
+    host.eq_ignore_ascii_case("vscode-cdn.net")
+        || host.to_ascii_lowercase().ends_with(".vscode-cdn.net")
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -317,7 +379,10 @@ pub async fn run(
     playground_dir_override: Option<PathBuf>,
     lsp_out_tx: broadcast::Sender<lsp_server::Message>,
     doc_mirror: DocMirror,
+    workspace_roots: Vec<PathBuf>,
 ) -> anyhow::Result<()> {
+    let local_addr = listener.local_addr()?;
+    let access_guard = PlaygroundAccessGuard::for_listener_addr(local_addr);
     let app = build_router(
         bex,
         broadcast_tx,
@@ -327,12 +392,11 @@ pub async fn run(
         playground_dir_override,
         lsp_out_tx,
         doc_mirror,
+        Arc::new(workspace_roots),
+        access_guard,
     )?;
 
-    tracing::info!(
-        "Playground: http://localhost:{}",
-        listener.local_addr()?.port()
-    );
+    tracing::info!("Playground: http://localhost:{}", local_addr.port());
 
     axum::serve(listener, app)
         .await
@@ -349,6 +413,8 @@ fn build_router(
     playground_dir_override: Option<PathBuf>,
     lsp_out_tx: broadcast::Sender<lsp_server::Message>,
     doc_mirror: DocMirror,
+    workspace_roots: Arc<Vec<PathBuf>>,
+    access_guard: PlaygroundAccessGuard,
 ) -> anyhow::Result<Router> {
     let ws_state = WsState {
         bex,
@@ -358,6 +424,7 @@ fn build_router(
         run_store,
         lsp_out_tx,
         doc_mirror,
+        workspace_roots,
     };
 
     let api = Router::new()
@@ -367,7 +434,11 @@ fn build_router(
             "/api/source-files",
             get(source_files_handler).put(update_source_file_handler),
         )
-        .with_state(ws_state);
+        .with_state(ws_state)
+        .layer(middleware::from_fn_with_state(
+            access_guard,
+            api_guard_middleware,
+        ));
 
     let fallback = if let Some(dir) = playground_dir_override {
         tracing::info!("Playground: serving static files from {}", dir.display());
@@ -387,9 +458,7 @@ fn build_router(
         )
     };
 
-    Ok(api
-        .fallback_service(fallback)
-        .layer(middleware::from_fn(cors_middleware)))
+    Ok(api.fallback_service(fallback))
 }
 
 // ---------------------------------------------------------------------------
@@ -484,7 +553,14 @@ async fn lsp_ws_session(socket: WebSocket, state: WsState) {
                 match client_msg {
                     Some(Ok(AxumWsMsg::Text(text))) => {
                         let text_str: &str = &text;
-                        handle_lsp_client_text(text_str, &dispatch_tx, &state.doc_mirror, &mut sink, &mut pending_text).await;
+                        handle_lsp_client_text(
+                            text_str,
+                            &dispatch_tx,
+                            &state.doc_mirror,
+                            &state.workspace_roots,
+                            &mut sink,
+                            &mut pending_text,
+                        ).await;
                     }
                     Some(Ok(AxumWsMsg::Close(_))) | None => break,
                     _ => {}
@@ -517,6 +593,7 @@ async fn handle_lsp_client_text(
     text: &str,
     dispatch_tx: &std::sync::mpsc::Sender<lsp_server::Message>,
     doc_mirror: &DocMirror,
+    workspace_roots: &[PathBuf],
     sink: &mut futures::stream::SplitSink<WebSocket, AxumWsMsg>,
     pending_text: &mut std::collections::HashMap<String, String>,
 ) {
@@ -538,7 +615,8 @@ async fn handle_lsp_client_text(
                     result: Some(serde_json::Value::Null),
                     error: None,
                 };
-                if let Some(ws_msg) = lsp_message_to_ws_text(&lsp_server::Message::Response(response))
+                if let Some(ws_msg) =
+                    lsp_message_to_ws_text(&lsp_server::Message::Response(response))
                 {
                     let _ = sink.send(ws_msg).await;
                 }
@@ -555,7 +633,7 @@ async fn handle_lsp_client_text(
             // thread — so the save is immediate and independent of the recompile
             // backlog. didChange never writes to disk. BexLsp still sees the
             // notification (via the dispatch thread) for live diagnostics.
-            track_and_persist_lsp_notification(&notif, pending_text, doc_mirror);
+            track_and_persist_lsp_notification(&notif, pending_text, doc_mirror, workspace_roots);
             let _ = dispatch_tx.send(lsp_server::Message::Notification(notif));
         }
         lsp_server::Message::Response(_) => {
@@ -570,6 +648,7 @@ fn track_and_persist_lsp_notification(
     notif: &lsp_server::Notification,
     pending_text: &mut std::collections::HashMap<String, String>,
     doc_mirror: &DocMirror,
+    workspace_roots: &[PathBuf],
 ) {
     let uri = notif
         .params
@@ -614,7 +693,7 @@ fn track_and_persist_lsp_notification(
                     .map(str::to_string)
                     .or_else(|| pending_text.get(uri).cloned());
                 if let Some(text) = text {
-                    write_lsp_document_to_disk(uri, &text);
+                    write_lsp_document_to_disk(uri, &text, workspace_roots);
                 }
             }
         }
@@ -627,7 +706,7 @@ fn track_and_persist_lsp_notification(
     }
 }
 
-fn write_lsp_document_to_disk(uri: &str, text: &str) {
+fn write_lsp_document_to_disk(uri: &str, text: &str, workspace_roots: &[PathBuf]) {
     let Some(path) = lsp_types::Url::parse(uri)
         .ok()
         .and_then(|u| u.to_file_path().ok())
@@ -635,10 +714,52 @@ fn write_lsp_document_to_disk(uri: &str, text: &str) {
         tracing::warn!("LSP WS: cannot resolve file path for uri {uri}");
         return;
     };
+    if path.extension().and_then(|e| e.to_str()) != Some("baml") {
+        tracing::warn!(
+            "LSP WS: refusing to write non-BAML document {}",
+            path.display()
+        );
+        return;
+    }
+    let Some(path) = allowed_lsp_save_path(&path, workspace_roots) else {
+        tracing::warn!(
+            "LSP WS: refusing to write {} outside configured workspace roots",
+            path.display()
+        );
+        return;
+    };
     match std::fs::write(&path, text) {
         Ok(()) => tracing::debug!("LSP WS: wrote {} ({} bytes)", path.display(), text.len()),
         Err(e) => tracing::warn!("LSP WS: failed to write {}: {e}", path.display()),
     }
+}
+
+fn allowed_lsp_save_path(path: &Path, workspace_roots: &[PathBuf]) -> Option<PathBuf> {
+    let candidate = canonicalize_existing_or_parent(path)?;
+    for root in workspace_roots {
+        let Ok(root) = std::fs::canonicalize(root) else {
+            continue;
+        };
+        if root.is_file() {
+            if candidate == root {
+                return Some(candidate);
+            }
+            continue;
+        }
+        if candidate == root || candidate.starts_with(&root) {
+            return Some(candidate);
+        }
+    }
+    None
+}
+
+fn canonicalize_existing_or_parent(path: &Path) -> Option<PathBuf> {
+    if let Ok(canonical) = std::fs::canonicalize(path) {
+        return Some(canonical);
+    }
+    let parent = path.parent()?;
+    let file_name = path.file_name()?;
+    Some(std::fs::canonicalize(parent).ok()?.join(file_name))
 }
 
 /// Resolve a `file://` URI to a canonical path (the key form used by the disk
@@ -1598,11 +1719,19 @@ async fn handle_ws_in_message(
 // CORS middleware
 // ---------------------------------------------------------------------------
 
-async fn cors_middleware(req: Request<Body>, next: Next) -> Response {
+async fn api_guard_middleware(
+    State(access_guard): State<PlaygroundAccessGuard>,
+    req: Request<Body>,
+    next: Next,
+) -> Response {
+    let origin = req.headers().get(header::ORIGIN).cloned();
+    if !access_guard.is_allowed_origin(origin.as_ref()) {
+        return text_response(StatusCode::FORBIDDEN, "Forbidden origin".to_string());
+    }
+
     if req.method() == Method::OPTIONS {
-        return Response::builder()
+        let mut response = Response::builder()
             .status(StatusCode::NO_CONTENT)
-            .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
             .header(
                 header::ACCESS_CONTROL_ALLOW_METHODS,
                 "GET, PUT, POST, OPTIONS",
@@ -1613,19 +1742,34 @@ async fn cors_middleware(req: Request<Body>, next: Next) -> Response {
             .header(header::EXPIRES, "0")
             .body(Body::empty())
             .unwrap();
+        apply_api_response_headers(&access_guard, origin.as_ref(), &mut response);
+        return response;
     }
+
     let mut resp = next.run(req).await;
-    resp.headers_mut()
-        .insert(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*".parse().unwrap());
+    apply_api_response_headers(&access_guard, origin.as_ref(), &mut resp);
+    resp
+}
+
+fn apply_api_response_headers(
+    access_guard: &PlaygroundAccessGuard,
+    origin: Option<&HeaderValue>,
+    resp: &mut Response,
+) {
+    if let Some(origin) = access_guard.cors_origin(origin) {
+        resp.headers_mut()
+            .insert(header::ACCESS_CONTROL_ALLOW_ORIGIN, origin);
+        resp.headers_mut()
+            .insert(header::VARY, HeaderValue::from_static("Origin"));
+    }
     resp.headers_mut().insert(
         header::CACHE_CONTROL,
-        "no-store, no-cache, must-revalidate".parse().unwrap(),
+        HeaderValue::from_static("no-store, no-cache, must-revalidate"),
     );
     resp.headers_mut()
-        .insert(header::PRAGMA, "no-cache".parse().unwrap());
+        .insert(header::PRAGMA, HeaderValue::from_static("no-cache"));
     resp.headers_mut()
-        .insert(header::EXPIRES, "0".parse().unwrap());
-    resp
+        .insert(header::EXPIRES, HeaderValue::from_static("0"));
 }
 
 // ---------------------------------------------------------------------------
@@ -1914,5 +2058,62 @@ fn content_type_for_path(path: &Path) -> Option<&'static str> {
         Some("woff") => Some("font/woff"),
         Some("woff2") => Some("font/woff2"),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn unique_temp_dir(name: &str) -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "{name}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ))
+    }
+
+    #[test]
+    fn playground_access_guard_accepts_localhost_and_vscode_origins_only() {
+        let guard =
+            PlaygroundAccessGuard::for_listener_addr(SocketAddr::from(([127, 0, 0, 1], 3700)));
+        assert!(guard.is_allowed_origin(None));
+        assert!(guard.is_allowed_origin(Some(&HeaderValue::from_static("http://localhost:3700"))));
+        assert!(
+            guard.is_allowed_origin(Some(&HeaderValue::from_static("vscode-webview://abc123")))
+        );
+        assert!(guard.is_allowed_origin(Some(&HeaderValue::from_static(
+            "https://abc123.vscode-cdn.net"
+        ))));
+        assert!(!guard.is_allowed_origin(Some(&HeaderValue::from_static("https://example.com"))));
+        assert!(!guard.is_allowed_origin(Some(&HeaderValue::from_static(
+            "https://vscode-cdn.net.example.com"
+        ))));
+    }
+
+    #[test]
+    fn lsp_save_path_must_stay_under_workspace_roots() {
+        let root = unique_temp_dir("baml-lsp-save-root");
+        let outside = unique_temp_dir("baml-lsp-save-outside");
+        std::fs::create_dir_all(&root).expect("root should be created");
+        std::fs::create_dir_all(&outside).expect("outside should be created");
+        let inside_file = root.join("main.baml");
+        let outside_file = outside.join("main.baml");
+        std::fs::write(&inside_file, "function Test() -> int { 1 }\n")
+            .expect("inside file should be created");
+        std::fs::write(&outside_file, "function Test() -> int { 2 }\n")
+            .expect("outside file should be created");
+
+        assert!(allowed_lsp_save_path(&inside_file, std::slice::from_ref(&root)).is_some());
+        assert!(allowed_lsp_save_path(&outside_file, std::slice::from_ref(&root)).is_none());
+        assert!(
+            allowed_lsp_save_path(&root.join("new.baml"), std::slice::from_ref(&root)).is_some()
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+        let _ = std::fs::remove_dir_all(&outside);
     }
 }

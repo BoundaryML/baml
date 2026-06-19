@@ -2,7 +2,7 @@ use serde_json::{Value, json};
 
 use crate::run::{
     CallNode, CallStatus, DiagnosticSeverity, EnvResolutionStatus, PayloadBody, PayloadBodyState,
-    PayloadEvent, PayloadKind, Run, RunDiagnostic, RunOutcome, RunPatch, RunPatchChange,
+    PayloadEvent, PayloadId, PayloadKind, Run, RunDiagnostic, RunOutcome, RunPatch, RunPatchChange,
     RunRequestState, RunStatus, RunSummary, RunTarget, RunVisibility, ThreadNode, ThreadStatus,
 };
 
@@ -29,7 +29,7 @@ pub fn run_to_wire(run: &Run) -> Value {
         "result": run.result.as_ref().map(|result| json!({
             "value": result.value,
             "rendererHint": result.renderer_hint,
-            "supportingPayloadIds": result.supporting_payload_ids.iter().map(|id| id.0.to_string()).collect::<Vec<_>>(),
+            "supportingPayloadIds": result.supporting_payload_ids.iter().copied().map(payload_id_to_wire).collect::<Vec<_>>(),
         })),
         "error": run.error.as_ref().map(|error| json!({
             "class": format!("{:?}", error.class),
@@ -170,7 +170,7 @@ fn call_to_wire(call: &CallNode) -> Value {
         "startedAtNs": call.started_at_ns.map(|value| value.to_string()),
         "endedAtNs": call.ended_at_ns.map(|value| value.to_string()),
         "status": call_status_to_wire(call.status),
-        "payloadIds": call.payload_ids.iter().map(|id| id.0.to_string()).collect::<Vec<_>>(),
+        "payloadIds": call.payload_ids.iter().copied().map(payload_id_to_wire).collect::<Vec<_>>(),
     })
 }
 
@@ -232,8 +232,12 @@ trait PayloadWireExt {
 
 impl PayloadWireExt for PayloadEvent {
     fn payload_id_wire(&self) -> String {
-        format!("payload_{}", self.id.0)
+        payload_id_to_wire(self.id)
     }
+}
+
+fn payload_id_to_wire(id: PayloadId) -> String {
+    format!("payload_{}", id.0)
 }
 
 fn payload_kind_to_wire(kind: &PayloadKind) -> Value {
@@ -322,7 +326,7 @@ fn diagnostic_to_wire(diagnostic: &RunDiagnostic) -> Value {
         "code": diagnostic.code,
         "message": diagnostic.message,
         "callNodeId": diagnostic.call_node_id.map(call_node_id_to_wire),
-        "payloadId": diagnostic.payload_id.map(|id| id.0.to_string()),
+        "payloadId": diagnostic.payload_id.map(payload_id_to_wire),
     })
 }
 
@@ -333,7 +337,7 @@ fn outcome_to_wire(outcome: &RunOutcome) -> Value {
             "result": {
                 "value": result.value,
                 "rendererHint": result.renderer_hint,
-                "supportingPayloadIds": result.supporting_payload_ids.iter().map(|id| id.0.to_string()).collect::<Vec<_>>(),
+                "supportingPayloadIds": result.supporting_payload_ids.iter().copied().map(payload_id_to_wire).collect::<Vec<_>>(),
             },
         }),
         RunOutcome::Failed(error) => json!({

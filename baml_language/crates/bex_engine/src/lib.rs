@@ -2166,12 +2166,11 @@ impl BexEngine {
         }: FunctionCallContext,
         copy_objects: bool,
     ) -> Result<BexCallResult, EngineError> {
+        let (_call_guard, cancel) =
+            ActiveCallGuard::register(Arc::clone(self), host_call_id, cancel)?;
         if cancel.is_cancelled() {
             return Err(cancelled_unhandled_throw());
         }
-
-        let _call_guard =
-            ActiveCallGuard::register(Arc::clone(self), host_call_id, cancel.clone())?;
         let mut thread = self.new_root_thread(cancel.clone(), profile_enabled).await;
 
         // Resolve the handle to the live heap object. The handle keeps it rooted.

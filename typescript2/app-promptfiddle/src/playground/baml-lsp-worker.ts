@@ -566,8 +566,9 @@ self.onmessage = async (event: MessageEvent) => {
       lsp_send_response: (response: LspResponse) => {
         response = mapsToRecordsDeep(response);
         console.log("send_response", response);
-        let resolver = requestPromises.get(response.id);
+        const resolver = requestPromises.get(response.id);
         if (resolver) {
+          requestPromises.delete(response.id);
           resolver(response);
         }
       },
@@ -839,7 +840,7 @@ self.onmessage = async (event: MessageEvent) => {
         const rt = runtimeForCommand(msg.requestId, "wasmRuntimeNotReady");
         if (!rt) return;
         try {
-          rt.listRuns(msg.requestId);
+          rt.listRuns(msg.requestId, msg.filter);
         } catch (e) {
           postOut({
             type: "commandError",

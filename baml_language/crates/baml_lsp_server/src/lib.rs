@@ -305,9 +305,11 @@ fn run_server_inner(
                 playground_dir,
                 lsp_out_tx,
                 doc_mirror,
+                workspace_roots.clone(),
             ));
         }
 
+        let workspace_roots_for_server = workspace_roots.clone();
         tokio_runtime.spawn(async move {
             if let Err(e) = playground_server::run(
                 listener,
@@ -319,6 +321,7 @@ fn run_server_inner(
                 playground_dir,
                 lsp_out_tx,
                 doc_mirror,
+                workspace_roots_for_server,
             )
             .await
             {
@@ -476,9 +479,12 @@ fn workspace_signature(workspace_roots: &[PathBuf]) -> WorkspaceSignature {
 }
 
 fn collect_workspace_signature(path: &Path, files: &mut BTreeMap<PathBuf, FileSignature>) {
-    let Ok(metadata) = fs::metadata(path) else {
+    let Ok(metadata) = fs::symlink_metadata(path) else {
         return;
     };
+    if metadata.file_type().is_symlink() {
+        return;
+    }
     if metadata.is_file() {
         if watches_standalone_workspace_file(path) {
             files.insert(path.to_path_buf(), file_signature(&metadata));
@@ -575,5 +581,31 @@ mod tests {
         assert!(should_skip_poll_dir(Path::new(".baml")));
         assert!(should_skip_poll_dir(Path::new("target")));
         assert!(!should_skip_poll_dir(Path::new("baml_src")));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn workspace_signature_skips_symlink_cycles() {
+        let root = std::env::temp_dir().join(format!(
+            "baml-lsp-signature-symlink-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let nested = root.join("nested");
+        std::fs::create_dir_all(&nested).expect("temp dir should be created");
+        std::fs::write(root.join("main.baml"), "function Test() -> int { 1 }\n")
+            .expect("temp file should be created");
+        std::os::unix::fs::symlink(&root, nested.join("loop"))
+            .expect("symlink loop should be created");
+
+        let signature = workspace_signature(std::slice::from_ref(&root));
+        assert_eq!(signature.files.len(), 1);
+        assert!(signature.files.contains_key(&root.join("main.baml")));
+
+        let _ = std::fs::remove_file(nested.join("loop"));
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

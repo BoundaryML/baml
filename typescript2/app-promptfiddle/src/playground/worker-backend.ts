@@ -54,6 +54,13 @@ export function createWorkerBackend(): EditorBackend {
       });
 
       // ── VFS mutations from the WASM runtime (worker → main) ────────────
+      let vfsQueue: Promise<void> = Promise.resolve();
+      const enqueueVfs = (op: () => Promise<void>) => {
+        vfsQueue = vfsQueue.then(op).catch((err) => {
+          console.error('[worker-backend] failed to apply VFS event:', err);
+        });
+      };
+
       const onVfsChange = (event: MessageEvent) => {
         if (handle.isDisposed()) return;
         const data = event.data;
@@ -63,7 +70,7 @@ export function createWorkerBackend(): EditorBackend {
           const absPath = `/workspace/${relPath}`;
           const isMedia = isMediaPath(relPath);
           const bytes = isMedia ? fromDataUrl(content) : handle.encoder.encode(content);
-          void (async () => {
+          enqueueVfs(async () => {
             const parts = absPath.split('/');
             for (let i = 2; i < parts.length; i++) {
               const parentPath = parts.slice(0, i).join('/');
@@ -75,17 +82,19 @@ export function createWorkerBackend(): EditorBackend {
               { create: true, overwrite: true, unlock: false, atomic: false },
             );
             if (isMedia) handle.updateBlobUrl(relPath, bytes);
-          })();
-          handle.notifyFilesChanged();
+            handle.notifyFilesChanged();
+          });
         } else if (data?.type === 'vfsFileDeleted') {
           const { path: relPath } = data as { path: string };
           delete handle.liveFiles[relPath];
           const absPath = `/workspace/${relPath}`;
-          void Promise.resolve(
-            handle.fileSystemProvider.delete(vscode.Uri.file(absPath), { recursive: false, useTrash: false, atomic: false }),
-          ).catch(() => {});
-          if (isMediaPath(relPath)) handle.removeBlobUrl(relPath);
-          handle.notifyFilesChanged();
+          enqueueVfs(async () => {
+            await Promise.resolve(
+              handle.fileSystemProvider.delete(vscode.Uri.file(absPath), { recursive: false, useTrash: false, atomic: false }),
+            ).catch(() => {});
+            if (isMediaPath(relPath)) handle.removeBlobUrl(relPath);
+            handle.notifyFilesChanged();
+          });
         }
       };
       worker.addEventListener('message', onVfsChange);
