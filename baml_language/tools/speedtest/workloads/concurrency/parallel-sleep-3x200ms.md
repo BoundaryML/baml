@@ -3,7 +3,7 @@
 ## BAML
 ```baml
 function nap() -> int {
-  baml.sys.sleep(200) catch (e) { let e => 0 };
+  baml.sys.sleep(baml.time.Duration.from_milliseconds(200n)) catch (e) { let e => 0 };
   1
 }
 function main() -> int {

@@ -295,7 +295,8 @@ function http_server.server_reserve_after_cancel() -> string {
     load_var _4
     call baml.future.Future.cancel
     pop 1
-    load_const 100
+    load_const 100n
+    call baml.time.Duration.from_milliseconds
     sys_op baml.sys.sleep
     pop 1
     load_var server
@@ -303,7 +304,7 @@ function http_server.server_reserve_after_cancel() -> string {
     load_const null
     load_const null
     spawn
-    store_var _14
+    store_var _15
     load_const "http://"
     load_deref ?1
     load_field .addr
@@ -314,7 +315,7 @@ function http_server.server_reserve_after_cancel() -> string {
     call baml.http.fetch
     sys_op baml.http.Response.text
     store_var served_again
-    load_var _14
+    load_var _15
     call baml.future.Future.cancel
     pop 1
     load_var served
