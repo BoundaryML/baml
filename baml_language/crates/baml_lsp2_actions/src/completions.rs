@@ -1552,7 +1552,7 @@ fn completions_for_value_position(
                         baml_compiler2_ast::ast::LetOrigin::RetryPolicy => {
                             (CompletionKind::RetryPolicy, "retry_policy".to_string())
                         }
-                        _ => continue,
+                        baml_compiler2_ast::ast::LetOrigin::Source => continue,
                     }
                 }
                 _ => continue,

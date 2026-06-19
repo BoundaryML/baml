@@ -475,6 +475,71 @@ function Search(query: string, max_results: int = 10) -> int {
     }
 
     #[test]
+    fn ast_tagged_template_body_marked_synthetic() {
+        // The desugared closure body of a tagged template is compiler-generated,
+        // so every node it allocates is recorded in the source map's synthetic
+        // sets — while the user-written tag expr and `${…}` interp expressions
+        // (reused from `segments`) stay non-synthetic. This is what lets inlay
+        // hints skip the `__tt_*` accumulators / `.push(...)` calls robustly,
+        // independent of their (incidental) empty spans / type annotations.
+        use crate::ast::{TemplateSegment, TemplateTag};
+        let source = r#"
+function Demo(items: string[]) -> string {
+  sql`a ${1} ${for (let x in items)}${x},${endfor}`
+}
+"#;
+        let function = first_function(parse_and_lower(source));
+        let Some(FunctionBodyDef::Expr(body, source_map)) = &function.body else {
+            panic!("expected expression body");
+        };
+        let root = body.root_expr.expect("expected body root expression");
+        let Expr::Block {
+            tail_expr: Some(tail),
+            ..
+        } = &body.exprs[root]
+        else {
+            panic!("expected block root");
+        };
+        let Expr::Template {
+            tag: TemplateTag::Custom { tag, body: tbody },
+            segments,
+        } = &body.exprs[*tail]
+        else {
+            panic!("expected Custom Template tail");
+        };
+
+        // The elaborated closure body block and all of its statements are synthetic.
+        assert!(
+            source_map.is_synthetic_expr(*tbody),
+            "tagged-template body block should be marked synthetic"
+        );
+        let Expr::Block { stmts, .. } = &body.exprs[*tbody] else {
+            panic!("tagged body should be a block");
+        };
+        assert!(
+            !stmts.is_empty() && stmts.iter().all(|s| source_map.is_synthetic_stmt(*s)),
+            "every statement in the tagged-template body should be marked synthetic"
+        );
+
+        // The tag expr and the user's `${…}` interp expression stay non-synthetic.
+        assert!(
+            !source_map.is_synthetic_expr(*tag),
+            "user-written tag expr must not be marked synthetic"
+        );
+        let interp = segments
+            .iter()
+            .find_map(|s| match s {
+                TemplateSegment::Interp(e) => Some(*e),
+                _ => None,
+            })
+            .expect("expected a top-level ${…} interp segment");
+        assert!(
+            !source_map.is_synthetic_expr(interp),
+            "user ${{…}} interpolation expression must stay non-synthetic"
+        );
+    }
+
+    #[test]
     fn ast_tagged_template_lowers_to_template_expr() {
         // BEP-049 §10. `tag`...`` lowers to a first-class `Expr::Template`
         // with `TemplateTag::Custom`, PRESERVING segment structure (text /
