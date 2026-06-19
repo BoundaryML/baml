@@ -6,7 +6,7 @@
 //! CST `Option` handling in one layer so everything downstream gets clean
 //! typed data and can be constructed directly in tests without parsing.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use baml_base::{Name, TypePath};
 use la_arena::{Arena, Idx};
@@ -553,6 +553,19 @@ pub struct AstSourceMap {
     /// For labeled call arguments, the span of the label name keyed by
     /// `(call_expr_id, argument_expr_id)`.
     pub call_arg_label_spans: HashMap<(ExprId, ExprId), TextRange>,
+
+    /// Ids of compiler-synthesized nodes — desugarings that have no
+    /// user-written source of their own (e.g. the `string.from(${…})` wrapper
+    /// and the concat accumulator that backtick interpolation lowers to). Their
+    /// spans still point at the originating source (the `${…}` template) so
+    /// diagnostics land sensibly, but consumers like inlay hints use these sets
+    /// to tell "the user wrote this" from "the compiler generated it" — a
+    /// uniform replacement for fragile structural heuristics (e.g. comparing a
+    /// call's span to its callee's). Populated at the `alloc_*` chokepoints
+    /// during lowering, via a scoped "synthesizing" flag.
+    pub synthetic_exprs: HashSet<ExprId>,
+    pub synthetic_stmts: HashSet<StmtId>,
+    pub synthetic_patterns: HashSet<PatId>,
 }
 
 impl AstSourceMap {
@@ -567,7 +580,25 @@ impl AstSourceMap {
             member_access_member_spans: HashMap::new(),
             path_segment_spans: HashMap::new(),
             call_arg_label_spans: HashMap::new(),
+            synthetic_exprs: HashSet::new(),
+            synthetic_stmts: HashSet::new(),
+            synthetic_patterns: HashSet::new(),
         }
+    }
+
+    /// Whether `id` names a compiler-synthesized expression (see `synthetic_exprs`).
+    pub fn is_synthetic_expr(&self, id: ExprId) -> bool {
+        self.synthetic_exprs.contains(&id)
+    }
+
+    /// Whether `id` names a compiler-synthesized statement (see `synthetic_stmts`).
+    pub fn is_synthetic_stmt(&self, id: StmtId) -> bool {
+        self.synthetic_stmts.contains(&id)
+    }
+
+    /// Whether `id` names a compiler-synthesized pattern (see `synthetic_patterns`).
+    pub fn is_synthetic_pattern(&self, id: PatId) -> bool {
+        self.synthetic_patterns.contains(&id)
     }
 
     /// Look up the source span of a statement by its `StmtId`.
@@ -1226,7 +1257,6 @@ pub type Literal = baml_base::Literal;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LetOrigin {
     Source,
-    Compiler,
     Client,
     RetryPolicy,
 }

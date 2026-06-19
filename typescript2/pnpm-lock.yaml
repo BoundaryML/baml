@@ -27,6 +27,9 @@ importers:
       '@b/bridge_wasm':
         specifier: link:../pkg-playground/wasm
         version: link:../pkg-playground/wasm
+      '@b/pkg-grammar':
+        specifier: workspace:*
+        version: link:../pkg-grammar
       '@b/pkg-playground':
         specifier: workspace:*
         version: link:../pkg-playground
@@ -225,6 +228,9 @@ importers:
         specifier: ^9.0.0
         version: 9.0.1
     devDependencies:
+      '@b/pkg-grammar':
+        specifier: workspace:*
+        version: link:../pkg-grammar
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.3
@@ -304,6 +310,8 @@ importers:
       vitest:
         specifier: ^4.0.16
         version: 4.0.16(@types/node@24.12.4)(@vitest/browser-playwright@4.0.16)(jiti@2.6.1)(jsdom@25.0.1)(lightningcss@1.32.0)(msw@2.14.6(@types/node@24.12.4)(typescript@5.9.3))(yaml@2.8.3)
+
+  pkg-grammar: {}
 
   pkg-playground:
     dependencies:

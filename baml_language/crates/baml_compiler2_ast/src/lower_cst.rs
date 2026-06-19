@@ -849,14 +849,7 @@ pub fn synthesize_llm_builtin_call(
 
     let source_map = AstSourceMap {
         expr_spans,
-        stmt_spans: Arena::new(),
-        pattern_spans: Arena::new(),
-        match_arm_spans: Arena::new(),
-        type_annotation_spans: Arena::new(),
-        catch_arm_spans: Arena::new(),
-        member_access_member_spans: std::collections::HashMap::new(),
-        path_segment_spans: std::collections::HashMap::new(),
-        call_arg_label_spans: std::collections::HashMap::new(),
+        ..Default::default()
     };
 
     (body, source_map)
@@ -915,14 +908,7 @@ pub(crate) fn synthesize_llm_parse_call(
 
     let source_map = AstSourceMap {
         expr_spans,
-        stmt_spans: Arena::new(),
-        pattern_spans: Arena::new(),
-        match_arm_spans: Arena::new(),
-        type_annotation_spans: Arena::new(),
-        catch_arm_spans: Arena::new(),
-        member_access_member_spans: std::collections::HashMap::new(),
-        path_segment_spans: std::collections::HashMap::new(),
-        call_arg_label_spans: std::collections::HashMap::new(),
+        ..Default::default()
     };
 
     (body, source_map)
@@ -1010,14 +996,7 @@ pub fn synthesize_llm_make_stream_call(
 
     let source_map = AstSourceMap {
         expr_spans,
-        stmt_spans: Arena::new(),
-        pattern_spans: Arena::new(),
-        match_arm_spans: Arena::new(),
-        type_annotation_spans: Arena::new(),
-        catch_arm_spans: Arena::new(),
-        member_access_member_spans: std::collections::HashMap::new(),
-        path_segment_spans: std::collections::HashMap::new(),
-        call_arg_label_spans: std::collections::HashMap::new(),
+        ..Default::default()
     };
 
     (body, source_map)
@@ -2331,14 +2310,7 @@ fn synthesize_retry_policy_let(
     };
     let source_map = AstSourceMap {
         expr_spans,
-        stmt_spans: la_arena::Arena::new(),
-        pattern_spans: la_arena::Arena::new(),
-        match_arm_spans: la_arena::Arena::new(),
-        type_annotation_spans: la_arena::Arena::new(),
-        catch_arm_spans: la_arena::Arena::new(),
-        member_access_member_spans: std::collections::HashMap::new(),
-        path_segment_spans: std::collections::HashMap::new(),
-        call_arg_label_spans: std::collections::HashMap::new(),
+        ..Default::default()
     };
 
     Some(Item::Let(LetDef {
@@ -2576,14 +2548,7 @@ fn synthesize_client_let(
     };
     let source_map = AstSourceMap {
         expr_spans,
-        stmt_spans: la_arena::Arena::new(),
-        pattern_spans: la_arena::Arena::new(),
-        match_arm_spans: la_arena::Arena::new(),
-        type_annotation_spans: la_arena::Arena::new(),
-        catch_arm_spans: la_arena::Arena::new(),
-        member_access_member_spans: std::collections::HashMap::new(),
-        path_segment_spans: std::collections::HashMap::new(),
-        call_arg_label_spans: std::collections::HashMap::new(),
+        ..Default::default()
     };
 
     Item::Let(LetDef {
@@ -2838,14 +2803,7 @@ fn synthesize_client_new_companion(
     };
     let source_map = AstSourceMap {
         expr_spans,
-        stmt_spans: la_arena::Arena::new(),
-        pattern_spans: la_arena::Arena::new(),
-        match_arm_spans: la_arena::Arena::new(),
-        type_annotation_spans: la_arena::Arena::new(),
-        catch_arm_spans: la_arena::Arena::new(),
-        member_access_member_spans: std::collections::HashMap::new(),
-        path_segment_spans: std::collections::HashMap::new(),
-        call_arg_label_spans: std::collections::HashMap::new(),
+        ..Default::default()
     };
 
     let func_name = format!("{client_name}$new");
