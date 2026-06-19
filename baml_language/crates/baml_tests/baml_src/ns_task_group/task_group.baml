@@ -10,10 +10,10 @@
 // tears the parked sleeps down.
 function caps_active_and_queues_rest() -> int {
     let g = baml.spawn.TaskGroup.new(2);
-    let a = spawn with baml.spawn.options(group = g) { baml.sys.sleep(5000); 1 };
-    let b = spawn with baml.spawn.options(group = g) { baml.sys.sleep(5000); 1 };
-    let c = spawn with baml.spawn.options(group = g) { baml.sys.sleep(5000); 1 };
-    let d = spawn with baml.spawn.options(group = g) { baml.sys.sleep(5000); 1 };
+    let a = spawn with baml.spawn.options(group = g) { baml.sys.sleep(baml.time.Duration.from_milliseconds(5000n)); 1 };
+    let b = spawn with baml.spawn.options(group = g) { baml.sys.sleep(baml.time.Duration.from_milliseconds(5000n)); 1 };
+    let c = spawn with baml.spawn.options(group = g) { baml.sys.sleep(baml.time.Duration.from_milliseconds(5000n)); 1 };
+    let d = spawn with baml.spawn.options(group = g) { baml.sys.sleep(baml.time.Duration.from_milliseconds(5000n)); 1 };
     let snapshot = g.active_count() * 100 + g.queued_count();
     let _ = g.cancel();
     snapshot
@@ -42,7 +42,7 @@ test "queues_excess_and_all_complete" {
 // re-throws `Cancelled`, which is catchable.
 function group_cancel_cancels_member() -> int {
     let g = baml.spawn.TaskGroup.new(5);
-    let f = spawn with baml.spawn.options(group = g) { baml.sys.sleep(10000); 42 };
+    let f = spawn with baml.spawn.options(group = g) { baml.sys.sleep(baml.time.Duration.from_milliseconds(10000n)); 42 };
     let _ = g.cancel();
     (await f) catch (e) { baml.panics.Cancelled => 0 }
 }

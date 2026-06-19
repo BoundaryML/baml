@@ -1,6 +1,6 @@
-use bex_vm_types::types::{InterfaceAssociatedBindings, InterfaceImplementorEntry, Object, Value};
+use bex_vm_types::types::{InterfaceImplementorEntry, Object, Value};
 
-use super::{BamlClassTypeValue, PackageBamlImpl};
+use super::{BamlClassTypeValue, PackageBamlImpl, resolve};
 use crate::BexVm;
 
 impl BamlClassTypeValue for PackageBamlImpl {
@@ -12,7 +12,7 @@ impl BamlClassTypeValue for PackageBamlImpl {
     /// This identity guarantee makes the result usable as a stable key in
     /// `map<string, V>` until generic-K interfaces enable a real
     /// `map<type, V>`.
-    fn to_string(vm: &BexVm, self_value: &Value) -> bex_str::BexStr {
+    fn _to_string_impl(vm: &BexVm, self_value: &Value) -> bex_str::BexStr {
         let Some(ptr) = self_value.as_object_ptr() else {
             return bex_str::BexStr::from("<type: ?>");
         };
@@ -24,31 +24,22 @@ impl BamlClassTypeValue for PackageBamlImpl {
 
     /// BEP-044: `class_t.implements(iface_t)`.
     ///
-    /// Looks `class_t`'s `TypeName` up in the program's interface→implementors
-    /// table under the key `iface_t`. The table is populated at codegen time
-    /// with the transitive `extends`/`implements` closure, so transitive
-    /// satisfaction is a single hash lookup.
+    /// Selects over the per-package `interface_impls` registry: an impl applies
+    /// when its `for_ty_pattern` matches `class_t` (with bounds satisfied) and its
+    /// implemented-interface args / associated bindings match the requested
+    /// instantiation. The orphan rule localizes the candidates to `class_t`'s
+    /// package and the interface's package; bound obligations recurse the same
+    /// way. Because the compiler (E0125) forces a class to implement every
+    /// interface in its `requires` closure, "direct impl" already covers
+    /// transitive satisfaction.
     fn implements(vm: &BexVm, self_value: &Value, other: &Value) -> bool {
-        let Some(class_name) = ty_name(vm, *self_value) else {
+        let Some(self_ty) = type_value_ty(vm, *self_value) else {
             return false;
         };
         let Some((iface_name, iface_args, iface_assoc)) = ty_name_args_and_assoc(vm, *other) else {
             return false;
         };
-        // BEP-044: a generic interface request (`Box<string>`) must match only
-        // implementors recorded at those exact type args. An interface request
-        // with no args (`Box` / a non-generic interface) matches any.
-        vm.interface_implementors
-            .get(&iface_name)
-            .is_some_and(|impls| {
-                impls.iter().any(|(impl_class, impl_args, impl_assoc)| {
-                    *impl_class == class_name
-                        && (iface_args.is_empty()
-                            || impl_args.is_empty()
-                            || ty_args_equivalent(impl_args, &iface_args))
-                        && associated_bindings_equivalent(impl_assoc, &iface_assoc)
-                })
-            })
+        resolve::type_implements(vm, &self_ty, &iface_name, &iface_args, &iface_assoc)
     }
 
     /// BEP-044: `iface_t.implemented_by(class_t)` — same answer as
@@ -58,10 +49,15 @@ impl BamlClassTypeValue for PackageBamlImpl {
     }
 
     /// BEP-044: `iface_t.implementors()` returns the concrete classes that
-    /// nominally satisfy this interface, in stable declaration order.
-    /// Returns `[]` when `self_value` is not an interface (e.g. a class type,
-    /// a primitive type, or a `type` value for a generic instantiation that
-    /// the codegen pass didn't enumerate).
+    /// nominally satisfy this interface, in deterministic lexicographic order by
+    /// qualified name. Returns `[]` when `self_value` is not an interface (e.g. a
+    /// class type or a primitive type).
+    ///
+    /// Derived from the same per-package `interface_impls` registry as
+    /// [`Self::implements`] (via `resolve::implementor_entries`), so the two
+    /// reflection directions cannot disagree. A generic class is reported by its
+    /// base and a blanket impl by every loaded class its bounds admit, so a
+    /// specific generic instantiation (`Box<int>`) is not separately enumerable.
     ///
     /// Returns a raw `Vec<Value>`; the codegen glue wraps it into an
     /// `Object::Array` allocation. The element `Object::Type` values are
@@ -71,111 +67,33 @@ impl BamlClassTypeValue for PackageBamlImpl {
         else {
             return Vec::new();
         };
-        let Some(entries) = vm.interface_implementors.get(&iface_name).cloned() else {
-            return Vec::new();
-        };
-        entries
+        resolve::implementor_entries(vm, &iface_name)
             .into_iter()
             // Keep only implementors recorded at the requested instantiation
-            // (any, when the request or implementor entry carries no type args).
+            // (any, when the request or implementor entry carries no type args /
+            // associated bindings) — args and assoc handled symmetrically.
             .filter(|(_, impl_args, impl_assoc)| {
                 (iface_args.is_empty()
                     || impl_args.is_empty()
-                    || ty_args_equivalent(impl_args, &iface_args))
-                    && associated_bindings_equivalent(impl_assoc, &iface_assoc)
+                    || resolve::ty_args_equivalent(impl_args, &iface_args))
+                    && (impl_assoc.is_empty()
+                        || resolve::associated_bindings_equivalent(impl_assoc, &iface_assoc))
             })
-            .map(|(name, _, _)| {
-                let ty =
-                    baml_type::RuntimeTy::Class(name, Vec::new(), baml_type::TyAttr::default());
-                Value::object(vm.tlab.alloc(Object::Type(Box::new(ty))))
-            })
+            .map(|(ty, _, _)| Value::object(vm.tlab.alloc(Object::Type(Box::new(ty)))))
             .collect()
     }
 }
 
-/// Compare two generic-argument lists for *semantic* equivalence. Union
-/// arguments are compared as unordered sets, so `Box<int | string>` and
-/// `Box<string | int>` are the same instantiation (union member order is
-/// semantically irrelevant — the type checker already treats `int | string`
-/// and `string | int` as identical). Falls back to structural `==` for
-/// non-union leaves.
-fn ty_args_equivalent(a: &[baml_type::RuntimeTy], b: &[baml_type::RuntimeTy]) -> bool {
-    a.len() == b.len() && a.iter().zip(b.iter()).all(|(x, y)| ty_equivalent(x, y))
-}
-
-fn ty_equivalent(a: &baml_type::RuntimeTy, b: &baml_type::RuntimeTy) -> bool {
-    use baml_type::RuntimeTy;
-    match (a, b) {
-        // Order-insensitive comparison of union members via a one-to-one
-        // matching: each `a` member must pair with a *distinct* equivalent `b`
-        // member. A plain `all(|x| any(|y| ...))` would wrongly accept
-        // `int | int` as equivalent to `int | string` (both members of the left
-        // match the single `int` on the right), so consume each matched member.
-        (RuntimeTy::Union(am, _), RuntimeTy::Union(bm, _)) => {
-            if am.len() != bm.len() {
-                return false;
-            }
-            let mut used = vec![false; bm.len()];
-            'next_a: for x in am {
-                for (j, y) in bm.iter().enumerate() {
-                    if !used[j] && ty_equivalent(x, y) {
-                        used[j] = true;
-                        continue 'next_a;
-                    }
-                }
-                return false;
-            }
-            true
-        }
-        // Recurse into nested generic instantiations (`Box<Slot<int | string>>`).
-        (RuntimeTy::Class(an, aa, _), RuntimeTy::Class(bn, ba, _)) => {
-            an == bn && ty_args_equivalent(aa, ba)
-        }
-        (RuntimeTy::Interface(an, aa, ab, _), RuntimeTy::Interface(bn, ba, bb, _)) => {
-            an == bn && ty_args_equivalent(aa, ba) && associated_bindings_exactly_equivalent(ab, bb)
-        }
-        // Recurse through container/optional wrappers so a union nested inside
-        // them is still compared order-insensitively (`Box<(int | string)?>` ==
-        // `Box<(string | int)?>`); otherwise the wrapper would fall to the
-        // structural `==` below and defeat the union-set comparison.
-        (RuntimeTy::List(ai, _), RuntimeTy::List(bi, _)) => ty_equivalent(ai, bi),
-        (
-            RuntimeTy::Map {
-                key: ak, value: av, ..
-            },
-            RuntimeTy::Map {
-                key: bk, value: bv, ..
-            },
-        ) => ty_equivalent(ak, bk) && ty_equivalent(av, bv),
-        _ => a == b,
+/// The concrete `RuntimeTy` wrapped by a `type` value (class, enum, interface,
+/// primitive, container, …), or `None` if `value` isn't a `type`.
+fn type_value_ty(vm: &BexVm, value: Value) -> Option<baml_type::RuntimeTy> {
+    match vm.get_object(value.as_object_ptr()?) {
+        Object::Type(ty) => Some(ty.as_ref().clone()),
+        _ => None,
     }
 }
 
-fn associated_bindings_equivalent(
-    impl_bindings: &InterfaceAssociatedBindings,
-    requested_bindings: &InterfaceAssociatedBindings,
-) -> bool {
-    requested_bindings.is_empty()
-        || requested_bindings
-            .iter()
-            .all(|(requested_name, requested_ty)| {
-                impl_bindings
-                    .iter()
-                    .find(|(impl_name, _)| impl_name == requested_name)
-                    .is_some_and(|(_, impl_ty)| ty_equivalent(impl_ty, requested_ty))
-            })
-}
-
-fn associated_bindings_exactly_equivalent(
-    a: &InterfaceAssociatedBindings,
-    b: &InterfaceAssociatedBindings,
-) -> bool {
-    a.len() == b.len()
-        && associated_bindings_equivalent(a, b)
-        && associated_bindings_equivalent(b, a)
-}
-
-/// Like [`ty_name`] but also returns the type's generic arguments (e.g.
+/// Returns the type's base name plus its generic arguments (e.g.
 /// `[string]` for `Box<string>`). Used by reflection to discriminate generic
 /// interface instantiations.
 fn ty_name_args_and_assoc(vm: &BexVm, value: Value) -> Option<InterfaceImplementorEntry> {
@@ -195,11 +113,12 @@ fn ty_name_args_and_assoc(vm: &BexVm, value: Value) -> Option<InterfaceImplement
     }
 }
 
-/// BEP-044 wf3 #G19: a synthetic `TypeName` for a primitive type so an
-/// out-of-body `implements I for int` is visible to reflection
-/// (`reflect.type_of<int>().implements(...)` / `I.implementors()`). Must match
-/// the naming used by `baml_compiler2_emit`'s Pass 7.6 when it bakes the
-/// implementor table.
+/// BEP-044 wf3 #G19: a synthetic `TypeName` for a primitive type, so reflection on a
+/// primitive type value (`reflect.type_of<int>()`) has a name to key by, the way
+/// non-primitive types carry their own `TypeName`. Impl *matching* for primitives is
+/// structural — the registry bakes their for-types as `Concrete(RuntimeTy::Int { .. })`
+/// etc. (`baml_compiler2_mir`'s `tir2_to_template`), matched by `resolve::match_template`
+/// — so this is a reflection key, never compared against a baked pattern.
 fn primitive_type_name(ty: &baml_type::RuntimeTy) -> Option<baml_type::TypeName> {
     let name = match ty {
         baml_type::RuntimeTy::Int { .. } => "int",
@@ -213,22 +132,4 @@ fn primitive_type_name(ty: &baml_type::RuntimeTy) -> Option<baml_type::TypeName>
     Some(baml_type::QualifiedTypeName::local(baml_type::Name::new(
         name,
     )))
-}
-
-/// Project a `Value::Object(Object::Type)` to its underlying `TypeName`,
-/// when the wrapped `RuntimeTy` is name-bearing (class, enum, interface — all of
-/// which round-trip through `RuntimeTy::Class` at the runtime layer; see
-/// `baml_compiler2_mir/src/lower.rs`). Returns `None` for primitive types,
-/// containers, and anything else without a stable name.
-fn ty_name(vm: &BexVm, value: Value) -> Option<baml_type::TypeName> {
-    let ptr = value.as_object_ptr()?;
-    let Object::Type(ty) = vm.get_object(ptr) else {
-        return None;
-    };
-    match ty.as_ref() {
-        baml_type::RuntimeTy::Class(name, _, _)
-        | baml_type::RuntimeTy::Interface(name, _, _, _)
-        | baml_type::RuntimeTy::Enum(name, _) => Some(name.clone()),
-        other => primitive_type_name(other),
-    }
 }

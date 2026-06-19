@@ -22,6 +22,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@b/pkg-grammar": "workspace:*",
     "@b/pkg-playground": "workspace:*",
     "@codingame/monaco-vscode-api": "^25.1.2",
     "@codingame/monaco-vscode-environment-service-override": "^25.1.2",

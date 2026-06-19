@@ -27,7 +27,7 @@ async fn parent_throw_cancels_running_children() {
         function main() -> int throws baml.errors.Io {
             // Spawn a long-running child. The cascade should fire its
             // cancel token when main throws below.
-            let _ = spawn { baml.sys.sleep(60000); 42 };
+            let _ = spawn { baml.sys.sleep(baml.time.Duration.from_milliseconds(60000n)); 42 };
             throw baml.errors.Io { message: "parent boom" }
         }
         "#,

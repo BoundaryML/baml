@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 38208
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] error: type `string` has no member `len`
@@ -482,52 +481,52 @@ assertion_line: 38208
      │ Note: Error code: E0063
 ─────╯
 
-  [type] error: operator `Mul` cannot be applied to `bool` and `bool`
+  [type] error: operator `*` cannot be applied to `bool` and `bool`
      ╭─[ match_exprs.baml:311:20 ]
      │
  311 │     match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
      │                    ──┬──  
-     │                      ╰──── operator `Mul` cannot be applied to `bool` and `bool`
+     │                      ╰──── operator `*` cannot be applied to `bool` and `bool`
      │ 
      │ Note: Error code: E0004
 ─────╯
 
-  [type] error: operator `Mul` cannot be applied to `int` and `bool`
+  [type] error: operator `*` cannot be applied to `int` and `bool`
      ╭─[ match_exprs.baml:311:28 ]
      │
  311 │     match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
      │                            ──┬──  
-     │                              ╰──── operator `Mul` cannot be applied to `int` and `bool`
+     │                              ╰──── operator `*` cannot be applied to `int` and `bool`
      │ 
      │ Note: Error code: E0004
 ─────╯
 
-  [type] error: operator `Mul` cannot be applied to `bool` and `bool`
+  [type] error: operator `*` cannot be applied to `bool` and `bool`
      ╭─[ match_exprs.baml:311:56 ]
      │
  311 │     match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
      │                                                        ──┬──  
-     │                                                          ╰──── operator `Mul` cannot be applied to `bool` and `bool`
+     │                                                          ╰──── operator `*` cannot be applied to `bool` and `bool`
      │ 
      │ Note: Error code: E0004
 ─────╯
 
-  [type] error: operator `Mul` cannot be applied to `int` and `bool`
+  [type] error: operator `*` cannot be applied to `int` and `bool`
      ╭─[ match_exprs.baml:311:68 ]
      │
  311 │     match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
      │                                                                    ──┬──  
-     │                                                                      ╰──── operator `Mul` cannot be applied to `int` and `bool`
+     │                                                                      ╰──── operator `*` cannot be applied to `int` and `bool`
      │ 
      │ Note: Error code: E0004
 ─────╯
 
-  [type] error: operator `Mul` cannot be applied to `bool` and `int`
+  [type] error: operator `*` cannot be applied to `bool` and `int`
      ╭─[ match_exprs.baml:311:80 ]
      │
  311 │     match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
      │                                                                                ──┬──  
-     │                                                                                  ╰──── operator `Mul` cannot be applied to `bool` and `int`
+     │                                                                                  ╰──── operator `*` cannot be applied to `bool` and `int`
      │ 
      │ Note: Error code: E0004
 ─────╯

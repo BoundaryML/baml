@@ -136,7 +136,7 @@ pub struct RunArgs {
 
     /// Evaluate a BAML expression. Use -e @file to read from a file, -e - for stdin.
     /// Mutually exclusive with positional `<TARGET>` and `-f`.
-    #[arg(short = 'e', long = "expression")]
+    #[arg(short = 'e', long = "expression", allow_hyphen_values = true)]
     pub expression: Option<String>,
 
     /// Standalone single-file source. Loads only this file (no project

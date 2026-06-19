@@ -22,6 +22,9 @@ from baml_sdk.baml import BamlError
 from baml_sdk.host_callable_tests import (
     Person,
     ValidationError,
+    call_callback_with_optional_args_all_set,
+    call_callback_with_optional_args_all_unset,
+    call_callback_with_optional_args_partially_set,
     call_int_callback,
     call_repeatedly,
     call_with_callback,
@@ -339,3 +342,50 @@ def test_call_with_throwing_in_baml_catches_host_callable_error():
 
     result = call_with_throwing(callback=cb, x=1)
     assert result == "caught:RuntimeError"
+
+
+# ---------------------------------------------------------------------------
+# Optional args × host callables (the combination).
+#
+# A host callable whose *own* type carries optional parameters
+# (`(x: int, y?: int, z?: int) -> int`). Defaults aren't allowed inside a
+# callable type — only the `?` optional marker — so the host's own
+# language-level default is the only source of a value when BAML omits the arg.
+# `y` and `z` cross the boundary by name, so each can be supplied or omitted
+# independently; an omitted optional is dropped before dispatch and the host's
+# default fills it. The callback returns `x*100 + y*10 + z` so each test can read
+# off exactly which optionals were delivered.
+# ---------------------------------------------------------------------------
+
+
+def optional_args_cb(x: int, y: int = 8, z: int = 9) -> int:
+    return x * 100 + y * 10 + z
+
+
+def test_optional_args_all_unset_apply_host_defaults():
+    """`callback(x)` supplies neither optional. Both are dropped before dispatch,
+    so the Python callback runs with only `x` and its own defaults fill `y`/`z`
+    (8 and 9), yielding `5*100 + 8*10 + 9 = 589`."""
+    assert call_callback_with_optional_args_all_unset(
+        callback=optional_args_cb, x=5
+    ) == [589]
+
+
+def test_optional_args_partially_set_deliver_by_name():
+    """Two calls each supplying exactly one optional by name:
+    `callback(x, y = 2)` (→ `500 + 20 + 9 = 529`) then `callback(x, z = 3)`
+    (→ `500 + 80 + 3 = 583`). Optionals cross by name, so each supplied value is
+    delivered as a keyword and the omitted one falls back to the host default
+    (`y`→8, `z`→9) — including the case where the *leading* optional `y` is
+    skipped while `z` is supplied."""
+    assert call_callback_with_optional_args_partially_set(
+        callback=optional_args_cb, x=5
+    ) == [529, 583]
+
+
+def test_optional_args_all_set_deliver_both():
+    """`callback(x, y = 2, z = 3)` supplies both optionals; both arrive by name
+    and override the host defaults, yielding `500 + 20 + 3 = 523`."""
+    assert call_callback_with_optional_args_all_set(
+        callback=optional_args_cb, x=5
+    ) == [523]

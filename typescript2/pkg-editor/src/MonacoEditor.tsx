@@ -229,8 +229,8 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
         import('@codingame/monaco-vscode-secret-storage-service-override'),
         import('@codingame/monaco-vscode-storage-service-override'),
         import('vscode'),
-        import('./baml.tmLanguage.json'),
-        import('./jinja.tmLanguage.json'),
+        import('@b/pkg-grammar/baml.tmLanguage.json'),
+        import('@b/pkg-grammar/jinja.tmLanguage.json'),
       ]);
 
       if (disposed || !containerRef.current) return;

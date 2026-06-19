@@ -19,8 +19,8 @@ use base64::Engine;
 use bridge_wasm::{
     BamlWasmRuntime, LspNotification,
     baml_core::cffi::{
-        BamlHandle, BamlHandleType, BamlOutboundValue, InboundClassValue, InboundMapEntry,
-        InboundValue, baml_outbound_value::Value as OutboundValue,
+        BamlHandle, BamlHandleType, BamlOutboundValue, BamlToHostCall, InboundClassValue,
+        InboundMapEntry, InboundValue, baml_outbound_value::Value as OutboundValue,
         inbound_map_entry::Key as MapKeyVariant, inbound_value::Value as InboundVariant,
     },
 };
@@ -370,18 +370,20 @@ fn get_string(value: &JsValue, key: &str) -> Option<String> {
 // Closure-backed `host_dispatch` helpers
 // ---------------------------------------------------------------------------
 
-/// Decode the first int arg from a `BamlOutboundValue` list.
+/// Decode the first int arg's value from a `BamlToHostCall`.
 fn decode_first_int(args_bytes: &[u8]) -> i64 {
-    let outer = BamlOutboundValue::decode(args_bytes).expect("decode args");
-    match outer.value {
-        Some(OutboundValue::ListValue(list)) => match list.items.into_iter().next() {
-            Some(item) => match item.value {
-                Some(OutboundValue::IntValue(i)) => i,
-                other => panic!("expected first arg to be int, got {other:?}"),
-            },
-            None => panic!("empty args list"),
+    let to_host_call = BamlToHostCall::decode(args_bytes).expect("decode to-host call");
+    match to_host_call
+        .args
+        .into_iter()
+        .next()
+        .and_then(|arg| arg.value)
+    {
+        Some(item) => match item.value {
+            Some(OutboundValue::IntValue(i)) => i,
+            other => panic!("expected first arg to be int, got {other:?}"),
         },
-        other => panic!("expected outer list, got {other:?}"),
+        None => panic!("empty args"),
     }
 }
 

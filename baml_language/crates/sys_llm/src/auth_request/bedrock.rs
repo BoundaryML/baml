@@ -71,7 +71,8 @@ impl CredentialIo for BamlCredentialIo {
         };
         let resp = self
             .io
-            .http_send(request)
+            // Unbounded, as before: `0n` -> no deadline.
+            .http__send(request, std::sync::Arc::new(num_bigint::BigInt::from(0i64)))
             .await
             .map_err(|e| ConfigError::Io(e.to_string()))?;
         let body = self
@@ -267,9 +268,10 @@ mod tests {
     struct StubIo;
 
     impl RuntimeIo for StubIo {
-        fn http_send(
+        fn http__send(
             &self,
             _request: sys_types::generated::owned::http::Request,
+            _timeout_nanos: std::sync::Arc<num_bigint::BigInt>,
         ) -> Pin<
             Box<
                 dyn Future<
@@ -337,9 +339,10 @@ mod tests {
     }
 
     impl RuntimeIo for MockHttpIo {
-        fn http_send(
+        fn http__send(
             &self,
             _request: sys_types::generated::owned::http::Request,
+            _timeout_nanos: std::sync::Arc<num_bigint::BigInt>,
         ) -> Pin<
             Box<
                 dyn Future<
@@ -418,9 +421,10 @@ mod tests {
     impl<F: Fn(String) -> Option<String> + Send + Sync + UnwindSafe + RefUnwindSafe> RuntimeIo
         for EnvIo<F>
     {
-        fn http_send(
+        fn http__send(
             &self,
             _request: sys_types::generated::owned::http::Request,
+            _timeout_nanos: std::sync::Arc<num_bigint::BigInt>,
         ) -> Pin<
             Box<
                 dyn Future<
@@ -492,9 +496,10 @@ mod tests {
     where
         E: Fn(String) -> Option<String> + Send + Sync + UnwindSafe + RefUnwindSafe,
     {
-        fn http_send(
+        fn http__send(
             &self,
             _request: sys_types::generated::owned::http::Request,
+            _timeout_nanos: std::sync::Arc<num_bigint::BigInt>,
         ) -> Pin<
             Box<
                 dyn Future<
@@ -579,9 +584,10 @@ mod tests {
     where
         E: Fn(String) -> Option<String> + Send + Sync + UnwindSafe + RefUnwindSafe,
     {
-        fn http_send(
+        fn http__send(
             &self,
             _request: sys_types::generated::owned::http::Request,
+            _timeout_nanos: std::sync::Arc<num_bigint::BigInt>,
         ) -> Pin<
             Box<
                 dyn Future<

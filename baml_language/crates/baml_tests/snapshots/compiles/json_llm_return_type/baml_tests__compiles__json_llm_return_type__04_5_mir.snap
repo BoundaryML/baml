@@ -23,7 +23,7 @@ fn user.ExtractAny(client: baml.llm.Client) -> baml.json.json {
     bb2: {
         _3 = {  };
         _4 = load_type(baml.json.json);
-        _0 = call const fn baml.llm.call_llm_function<copy _4>(copy _1, const "ExtractAny", copy _3) -> [bb3];
+        _0 = call const fn baml.llm.call_llm_function<copy _4>(copy _1, const "ExtractAny", copy _3, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -50,7 +50,7 @@ fn user.ExtractAny$build_request(client: baml.llm.Client) -> baml.http.Request {
 
     bb2: {
         _3 = {  };
-        _0 = call const fn baml.llm.build_request(copy _1, const "ExtractAny", copy _3) -> [bb3];
+        _0 = call const fn baml.llm.build_request(copy _1, const "ExtractAny", copy _3, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -77,7 +77,7 @@ fn user.ExtractAny$build_request_stream(client: baml.llm.Client) -> baml.http.Re
 
     bb2: {
         _3 = {  };
-        _0 = call const fn baml.llm.build_request_stream(copy _1, const "ExtractAny", copy _3) -> [bb3];
+        _0 = call const fn baml.llm.build_request_stream(copy _1, const "ExtractAny", copy _3, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -104,7 +104,7 @@ fn user.ExtractAny$render_prompt(client: baml.llm.Client) -> baml.llm.PromptAst 
 
     bb2: {
         _3 = {  };
-        _0 = call const fn baml.llm.render_prompt(copy _1, const "ExtractAny", copy _3) -> [bb3];
+        _0 = call const fn baml.llm.render_prompt(copy _1, const "ExtractAny", copy _3, const <omitted>) -> [bb3];
     }
 
     bb3: {

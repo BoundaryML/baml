@@ -114,7 +114,18 @@ pub(crate) enum Commands {
 }
 
 impl RuntimeCli {
-    /// Parse CLI arguments, unhiding all subcommands if the BAML_INTERNAL environment variable is set.
+    /// Parse CLI arguments and optionally unhide internal subcommands.
+    ///
+    /// Parameters:
+    /// - `argv`: Raw process argument vector (`argv[0]` program name followed by CLI tokens).
+    ///
+    /// Returns:
+    /// - A fully parsed [`RuntimeCli`] value.
+    ///
+    /// Errors/Panics:
+    /// - Does not return recoverable errors. On parse failures this calls clap's
+    ///   `err.exit()` and terminates the process, matching normal CLI behavior.
+    /// - Does not panic.
     ///
     /// This should be used for CLI invocations instead of `RuntimeCli::parse_from`.
     pub fn parse_from_smart(argv: Vec<String>) -> Self {
@@ -268,5 +279,23 @@ mod tests {
         assert!(help.contains("Usage: baml playground [OPTIONS]"), "{help}");
         assert!(help.contains("--file <PATH>"), "{help}");
         assert!(help.contains("--from <PATH>"), "{help}");
+    }
+
+    /// `run -e` accepts hyphen-prefixed values without consuming run flags.
+    #[test]
+    fn run_expression_accepts_hyphen_prefixed_value_and_preserves_run_flags() {
+        let cli = RuntimeCli::parse_from_smart(vec![
+            "baml-cli".into(),
+            "run".into(),
+            "-e".into(),
+            "-7 % 3".into(),
+            "--from".into(),
+            "project".into(),
+        ]);
+        let Commands::Run(args) = cli.command else {
+            panic!("expected run command");
+        };
+        assert_eq!(args.expression.as_deref(), Some("-7 % 3"));
+        assert_eq!(args.from, Some(std::path::PathBuf::from("project")));
     }
 }

@@ -626,7 +626,25 @@ fn to_pascal_case(s: &str) -> String {
     }
 }
 
+/// Replace characters that are illegal in Rust identifiers with `_`. Synthetic
+/// class names for `implement Interface for Type` blocks (e.g. `Equals$for$int`,
+/// `Equals$for$map<K, V>`) contain `$`, `<`, `>`, `[`, `]`, `,`, and spaces; the
+/// runtime dispatch still matches on the original (unsanitized) string, only the
+/// generated Rust identifiers are sanitized.
+fn sanitize_ident(name: &str) -> String {
+    name.chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect()
+}
+
 fn class_trait_name(namespace_prefix: &str, class_name: &str) -> String {
+    let class_name = sanitize_ident(class_name);
     if namespace_prefix.is_empty() {
         format!("BamlClass{class_name}")
     } else {
@@ -636,7 +654,7 @@ fn class_trait_name(namespace_prefix: &str, class_name: &str) -> String {
 }
 
 fn class_dispatch_name(namespace_prefix: &str, class_name: &str) -> String {
-    let class_lower = class_name.to_lowercase();
+    let class_lower = sanitize_ident(&class_name.to_lowercase());
     if namespace_prefix.is_empty() {
         format!("__dispatch_{class_lower}")
     } else {
@@ -976,7 +994,15 @@ fn emit_glue_method(out: &mut String, method_name: &str, b: &NativeBuiltin) {
     // other extraction paths (the media-class path uses `needs_owned` for
     // its own reasons and switching it on here would break the receiver
     // shape).
-    let arraymap_needs_owned = needs_owned || return_type_needs_alloc(&b.return_type);
+    //
+    // Also force the owned path when the method reads two or more containers
+    // (e.g. `T[].eq(self, other: T[])`): the container lock is a
+    // non-reentrant exclusive spin-lock, so holding overlapping read guards
+    // deadlocks the moment two operands alias the same heap container
+    // (`a.eq(a)`), and recursion that re-locks a held container would too.
+    // Snapshotting to owned values releases each lock before the next acquire.
+    let arraymap_needs_owned =
+        needs_owned || return_type_needs_alloc(&b.return_type) || reads_multiple_containers(b);
 
     writeln!(
         out,
@@ -1688,6 +1714,53 @@ fn return_type_needs_alloc(ty: &BamlType) -> bool {
         | BamlType::Media(_)
         | BamlType::RustType => false,
     }
+}
+
+/// Returns `true` if this builtin reads two or more heap containers
+/// (`Array` / `Map` / `Uint8Array`) via shared receiver/parameter access.
+///
+/// The per-container lock ([`bex_vm_types::lazy_biased_mutex`]) is a
+/// non-reentrant exclusive spin-lock with no shared-read mode, so two
+/// `vm.as_array(..)` guards held at once deadlock the instant the operands
+/// alias the same container (the natural `a.eq(a)` call). When this returns
+/// `true` the glue takes the owned-snapshot path, releasing each container's
+/// lock before acquiring the next.
+///
+/// A mutating receiver is excluded: it already forces the owned path for
+/// every parameter (`needs_owned`), and its own `as_*_mut` guard is acquired
+/// last, after the snapshots, so no read guard overlaps it.
+fn reads_multiple_containers(b: &NativeBuiltin) -> bool {
+    // A parameter such as `T[]?` still reads a container under its lock, so an
+    // `Optional` wrapper must be seen through. Recursing only collapses the
+    // wrapper — it still resolves to a single leaf container, so this neither
+    // over- nor under-counts. Receivers are never `Optional`, so the
+    // receiver-counting below needs no equivalent.
+    fn contains_container(ty: &BamlType) -> bool {
+        match ty {
+            BamlType::List(_) | BamlType::Map(_, _) | BamlType::Uint8Array => true,
+            BamlType::Optional(inner) => contains_container(inner),
+            _ => false,
+        }
+    }
+    let receiver_is_mut = b
+        .receiver
+        .as_ref()
+        .is_some_and(|r| r.receiver_type.is_mut());
+    if receiver_is_mut {
+        return false;
+    }
+    let receiver_containers = usize::from(
+        b.receiver
+            .as_ref()
+            .filter(|r| !r.receiver_type.is_static())
+            .is_some_and(|r| matches!(r.class_name.as_str(), "Array" | "Map" | "Uint8Array")),
+    );
+    let param_containers = b
+        .params
+        .iter()
+        .filter(|p| contains_container(&p.ty))
+        .count();
+    receiver_containers + param_containers >= 2
 }
 
 /// Emit a Rust expression that converts a native method's return value into a

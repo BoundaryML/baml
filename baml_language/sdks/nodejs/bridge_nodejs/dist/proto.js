@@ -19,6 +19,7 @@ import { getTypeMap } from './typemap.js';
 const CallFunctionArgs = baml_core.cffi.v1.CallFunctionArgs;
 const BamlOutboundValue = baml_core.cffi.v1.BamlOutboundValue;
 const BamlOutboundResult = baml_core.cffi.v1.BamlOutboundResult;
+const BamlToHostCall = baml_core.cffi.v1.BamlToHostCall;
 const InboundValue = baml_core.cffi.v1.InboundValue;
 const InboundClassValue = baml_core.cffi.v1.InboundClassValue;
 const InboundMapEntry = baml_core.cffi.v1.InboundMapEntry;
@@ -81,9 +82,13 @@ function setInboundValue(iv, value, ctx) {
     }
     else if (value instanceof BamlStream) {
         // Stream wrapper → its inner TaggedHeapHandle. Mirrors the BamlHandle
-        // branch above; the engine re-binds it to the heap value on decode.
+        // branch above: the Rust inbound decoder *drains* the handle-table
+        // entry, so send a fresh cloned key — otherwise the engine consumes the
+        // stream's only key and the next `next()`/`final()` call fails with
+        // "Invalid handle key". (`BamlStream._toHandle()` returns the inner
+        // handle without cloning, unlike the media wrappers' `_toHandle`.)
         const h = value._toHandle();
-        iv.handle = { key: h.key, handleType: h.handleType };
+        iv.handle = { key: h._cloneKeyForWire(), handleType: h.handleType };
     }
     else if (value instanceof BamlImage
         || value instanceof BamlAudio
@@ -329,10 +334,17 @@ function decodeValueHolder(holder, typeMap) {
             return BamlVideo._fromHandle(handle);
         if (ht === BamlHandleType.ADT_MEDIA_PDF)
             return BamlPdf._fromHandle(handle);
+        if (ht === BamlHandleType.ADT_TAGGED_HEAP_HANDLE) {
+            // Dispatch via the typemap: every tagged-heap class self-registers
+            // under its engine FQN (codegen emits the entry, e.g.
+            // `baml.llm.Stream → BamlStream`), so any class is reachable without
+            // special-casing here. Mirrors bridge_python's `_decode_handle`
+            // ADT_TAGGED_HEAP_HANDLE arm (sdks/python/.../proto.py).
+            const fqn = holder.handleValue.name?.name ?? '';
+            const Cls = typeMap.getClass(fqn);
+            return Cls._fromHandle(handle);
+        }
         // ADT_MEDIA_GENERIC has no typed wrapper — stays a bare BamlHandle.
-        // TODO: ADT_TAGGED_HEAP_HANDLE / RustData re-encode (handle-backed
-        // stdlib types like baml.fs.File) needs cross-call handle-lifecycle
-        // work; for now non-media handles decode to a bare BamlHandle.
         return handle;
     }
     // Inline media / prompt AST are not expected on the Node FFI path — they
@@ -418,6 +430,47 @@ function decodeEnum(enumValue, typeMap) {
 export function decodeOutboundValue(data) {
     const msg = BamlOutboundValue.decode(data instanceof Buffer ? data : Buffer.from(data));
     return decodeValueHolder(msg, getTypeMap());
+}
+/**
+ * Decode the engine→host `BamlToHostCall`. The engine has already resolved the
+ * call against the callee's declared params and dropped omitted optionals, so
+ * `args` is a flat, declared-order list of the supplied args. Partition it back
+ * into the required positional run and the supplied optionals (keyed by
+ * `argName`) using each arg's `isOptionalArg` flag.
+ */
+function decodeHostCall(data) {
+    const msg = BamlToHostCall.decode(data instanceof Buffer ? data : Buffer.from(data));
+    const typeMap = getTypeMap();
+    const positional = [];
+    const optional = {};
+    for (const arg of msg.args ?? []) {
+        const value = arg.value ? decodeValueHolder(arg.value, typeMap) : undefined;
+        if (arg.isOptionalArg) {
+            optional[arg.argName ?? ''] = value;
+        }
+        else {
+            positional.push(value);
+        }
+    }
+    return { positional, optional };
+}
+/**
+ * Reshape the split args into the TypeScript calling convention the callback's
+ * generated type advertises: the required args stay positional and the supplied
+ * optionals are passed as a single trailing `$opts` object — exactly mirroring
+ * how a BAML function is *called* from TypeScript.
+ *
+ * The `$opts` object is appended only when at least one optional was supplied.
+ * With none supplied (or a callback with no optional params at all) the args
+ * stay purely positional — the correct shape for a callback declared without an
+ * `$opts` object, and the shape that lets the callback's own defaults fill any
+ * omitted optionals.
+ */
+function reshapeHostArgs(positional, optional) {
+    if (Object.keys(optional).length === 0) {
+        return positional;
+    }
+    return [...positional, optional];
 }
 /**
  * Decode the thrown value off the wire holder. Returns the fully decoded BAML
@@ -547,13 +600,12 @@ function makeHostCallableDispatch(userFn) {
         try {
             let args;
             try {
-                // Host-callable args arrive as a bare list-shaped
-                // BamlOutboundValue, not the call-result envelope.
-                const decoded = decodeOutboundValue(argsBytes);
-                if (!Array.isArray(decoded)) {
-                    throw new TypeError(`host-callable args decoded to a non-list value (got ${typeof decoded})`);
-                }
-                args = decoded;
+                // Host-callable args arrive as a `BamlToHostCall` with a flat
+                // `args` list. Partition it into the positional run and the
+                // supplied optionals, then reshape into the `$opts` calling
+                // convention the callback's type advertises.
+                const { positional, optional } = decodeHostCall(argsBytes);
+                args = reshapeHostArgs(positional, optional);
             }
             catch (err) {
                 sendHostCallableError(callId, err);

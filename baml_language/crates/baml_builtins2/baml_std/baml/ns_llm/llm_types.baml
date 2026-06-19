@@ -2,6 +2,77 @@ class PromptAst {
   _data $rust_type
 }
 
+/// BEP-049 §10 (M5b.2). Opaque handle to a prebuilt output-format schema (the
+/// rust `OutputFormatContent` for a return type). Carried on `Context` so
+/// `ctx.output_format_with(...)` can re-render the schema with caller options
+/// without rebuilding it. Built by `build_output_format(return_type)`.
+class OutputFormat {
+  _data $rust_type
+}
+
+/// BEP-049 §10. A typed chat-role marker produced by the in-template `role(...)`
+/// constructor (e.g. `${role("system")}`). When a `prompt` tag assembles a
+/// `PromptAst`, each `Role` value in the template's `values` array starts a new
+/// message — replacing the magic-delimiter role mechanism of the Jinja path.
+class Role {
+  /// The role name, e.g. "system", "user", "assistant".
+  name string
+  /// Provider-specific per-message metadata (e.g. cache_control). Opaque to the
+  /// type system; interpreted during `PromptAst` assembly / specialization.
+  metadata map<string, unknown>
+}
+
+/// BEP-049 §10. The resolved-client view exposed to a `prompt` tag body as
+/// `ctx.client`. Flattened to mirror the runtime `RenderContextClient` the
+/// orchestrator already assembles for the current attempt (sys_llm), so
+/// `${ctx.client.provider}` etc. read the chosen client's fields directly.
+class ContextClient {
+  name string
+  provider string
+  default_role string
+  allowed_roles string[]
+}
+
+/// BEP-049 §10. Per-render context passed to a `prompt` tag body as `ctx`.
+/// Carries the same per-attempt data BAML's Jinja runtime injects today
+/// (client info, runtime tags, output-format schema), resolved AFTER the
+/// orchestrator picks the client for this attempt — preserving lazy eval.
+///
+/// `output_format` is the default-rendered schema string for the call's return
+/// type — the dominant `${ctx.output_format}` usage, byte-equivalent to Jinja's
+/// `{{ ctx.output_format }}`. `output_format_with(...)` re-renders the schema
+/// with caller options (the rare `{{ ctx.output_format(...) }}` form), backed by
+/// the opaque `_output_format` handle. The orchestrator populates both once the
+/// client is chosen.
+class Context {
+  /// The client chosen for this attempt.
+  client ContextClient
+  /// Runtime tags for this call.
+  tags map<string, unknown>
+  /// The return type's schema, rendered with default options.
+  output_format string
+  /// Opaque handle to the return type's prebuilt output-format schema, backing
+  /// `output_format_with(...)`.
+  _output_format OutputFormat
+
+  /// BEP-049 §10 (M5b.2). Render the return type's schema with custom options —
+  /// the parameterized form of `output_format`. Each option defaults to `null`
+  /// (auto); a supplied value overrides that aspect of the rendering.
+  function output_format_with(
+    self,
+    prefix: string? = null,
+    or_splitter: string? = null,
+    enum_value_prefix: string? = null,
+    hoisted_class_prefix: string? = null,
+    always_hoist_enums: bool? = null,
+    quote_class_fields: bool? = null,
+    hoist_classes: string[]? = null,
+    map_style: string? = null,
+  ) -> string throws never {
+    $rust_io_function
+  }
+}
+
 /// The routing strategy of an LLM client.
 enum ClientType {
   Primitive
@@ -176,10 +247,23 @@ class Client {
     match (self.client_type) {
       ClientType.Primitive => {
         let primitive = self.to_primitive_client();
-        let return_type = reflect.type_of<TFinal>();
+        // On the stream path `reflect.type_of<TFinal>()` is `BuiltinUnknown`:
+        // the `$stream` companion calls this without explicit type-args and
+        // inferred type-args don't reach MIR (see `__make_stream`'s registry
+        // fallback). Resolve the real return type from the registry by name and
+        // use it for the whole attempt — the Jinja template may render
+        // `{{ ctx.output_format }}`, the closure's `${ctx.output_format}` needs
+        // it, and `build_request_stream` keys provider config off it. (The
+        // oneshot path instead uses `reflect.type_of<T>()`, which DOES reach
+        // MIR there.) Caveat: for a *generic* streaming function the registry
+        // holds the unspecialized return type, so `${ctx.output_format}` renders
+        // the generic schema — the oneshot path renders the specialized one.
+        let return_type = get_return_type(context.function_name);
 
-        let prompt = primitive.render_prompt(context.jinja_string, context.args, return_type);
-        let specialized = primitive.specialize_prompt(prompt);
+        // Render + specialize via the shared `render_specialized_prompt` (same
+        // path as oneshot and the static `build_request_stream` companion).
+        let specialized = primitive.render_specialized_prompt(
+          context.jinja_string, context.args, return_type, context.prompt_closure);
 
         let http_request = primitive.build_request_stream(specialized, return_type);
         let sse = root.http.fetch_sse(http_request);
@@ -280,8 +364,11 @@ class Client {
         let primitive = self.to_primitive_client()
         let return_type = reflect.type_of<T>()
 
-        let prompt = primitive.render_prompt(context.jinja_string, context.args, return_type)
-        let specialized = primitive.specialize_prompt(prompt)
+        // Render (new-mode closure or legacy Jinja) + specialize via the shared
+        // `render_specialized_prompt`, the same path the static `build_request`
+        // companion uses — so execution and preview never drift.
+        let specialized = primitive.render_specialized_prompt(
+          context.jinja_string, context.args, return_type, context.prompt_closure)
         let http_request = primitive.build_request(specialized, return_type)
         let http_response = root.http.send(http_request)
 
@@ -290,7 +377,7 @@ class Client {
           let result: T = primitive.parse<T>(body) catch (e) {
             _ => {
               if (active_delay_ms > 0) {
-                root.sys.sleep(active_delay_ms)
+                root.sys.sleep(root.time.Duration.from_nanoseconds(active_delay_ms * 1000000n))
               }
               throw e;
             }
@@ -301,7 +388,7 @@ class Client {
             _ => { "" }
           };
           if (active_delay_ms > 0) {
-            root.sys.sleep(active_delay_ms)
+            root.sys.sleep(root.time.Duration.from_nanoseconds(active_delay_ms * 1000000n))
           }
           throw root.errors.DevOther { message: "HTTP request failed: " + error_body };
         }
@@ -559,6 +646,28 @@ class PrimitiveClient {
     $rust_io_function
   }
 
+  /// BEP-049 M5: turn a function's prompt into a request-ready (specialized)
+  /// `PromptAst`, dispatching on mode. A new-mode `prompt`…`` compiles to a
+  /// `(Context) -> PromptAst` closure rendered against a per-attempt `Context`;
+  /// a legacy `#"..."#` function (null closure) renders the stored Jinja
+  /// `template`. This is the SINGLE source of truth for prompt rendering: the
+  /// orchestrator (`execute_once_oneshot` / `execute_stream`) and the static
+  /// `render_prompt` / `build_request` companions both call it, so the playground
+  /// preview/cURL and actual execution render byte-identically.
+  function render_specialized_prompt(
+    self,
+    template: string,
+    args: map<string, unknown>,
+    return_type: type,
+    prompt_closure: ((Context) -> PromptAst)?,
+  ) -> PromptAst throws root.errors.RenderPrompt | root.errors.LlmClient {
+    let prompt = match (prompt_closure) {
+      null => self.render_prompt(template, args, return_type),
+      let closure: (Context) -> PromptAst => closure(build_prompt_context(self, return_type)),
+    };
+    self.specialize_prompt(prompt)
+  }
+
   function build_request(
     self,
     prompt: PromptAst,
@@ -608,6 +717,74 @@ function from_shorthand(
 
 function get_jinja_template(function_name: string) -> string throws root.errors.InvalidArgument {
   $rust_io_function
+}
+
+/// BEP-049 §10 (M5d). Assemble a `PromptAst` from a tagged template's flattened
+/// `parts`/`values`. A `Role` value (from `${role("system")}`) starts a new chat
+/// message; strings — and other scalar values via their string form — accumulate
+/// into the current message's content. With no `Role` values the whole template
+/// becomes a single `PromptAst::Simple`. This replaces the magic-delimiter role
+/// mechanism of the Jinja path with direct structural assembly.
+function assemble_prompt_ast(parts: string[], values: unknown[]) -> PromptAst throws never {
+  $rust_io_function
+}
+
+/// BEP-049 §10 (M5b). Render `return_type`'s schema with default options — the
+/// string `ctx.output_format` exposes to a `prompt` body. The orchestrator
+/// calls this with the call's return type to populate `Context.output_format`,
+/// producing output byte-equivalent to the legacy Jinja `{{ ctx.output_format }}`.
+function render_output_format(return_type: type) -> string throws never {
+  $rust_io_function
+}
+
+/// BEP-049 §10 (M5b.2). Build the opaque output-format schema handle for
+/// `return_type`, for `Context._output_format`. The orchestrator builds this
+/// once per attempt; `ctx.output_format_with(...)` renders it with options.
+function build_output_format(return_type: type) -> OutputFormat throws never {
+  $rust_io_function
+}
+
+/// BEP-049 §10 (M5e). Assemble the per-attempt `Context` a `prompt`…`` closure
+/// is invoked with: the chosen primitive client's view (`ctx.client.*`) plus the
+/// return type's output-format schema. Built AFTER the orchestrator picks the
+/// client for this attempt, so `${if (ctx.client.provider == ...)}` and
+/// `${ctx.output_format}` see the live client/type. Shared by oneshot + stream.
+function build_prompt_context(primitive: PrimitiveClient, return_type: type) -> Context throws never {
+  Context {
+    client: ContextClient {
+      name: primitive.name,
+      provider: primitive.provider,
+      default_role: primitive.options.default_role ?? "system",
+      allowed_roles: primitive.options.allowed_roles ?? [],
+    },
+    tags: {},
+    output_format: render_output_format(return_type),
+    _output_format: build_output_format(return_type),
+  }
+}
+
+/// The `role(...)` constructor passed into a `prompt` body lambda. Builds a
+/// typed `Role` marker; `prompt` threads this in as the body's `role` parameter.
+function make_role(name: string) -> Role throws never {
+  Role { name: name, metadata: {} }
+}
+
+/// BEP-049 §10. The built-in `prompt` tag: `` prompt`...` `` evaluates to a
+/// `(Context) -> PromptAst` closure that the LLM orchestrator invokes after it
+/// has resolved the client for the current attempt (lazy per-attempt eval).
+///
+/// The body lambda receives `role` (a `Role` constructor) and `ctx` (per-render
+/// `Context`); `${role("user")}` markers split the rendered template into chat
+/// messages. `ctx.output_format` schema injection lands in a later slice.
+//baml:tagged_string
+function prompt(
+  body: (role: (string) -> Role, ctx: Context) -> baml.TaggedString throws never,
+) -> (Context) -> PromptAst throws never {
+  let render = (ctx: Context) -> {
+    let t = body(make_role, ctx)
+    assemble_prompt_ast(t.parts, t.values)
+  }
+  render
 }
 
 function get_return_type(function_name: string) -> type throws root.errors.InvalidArgument {

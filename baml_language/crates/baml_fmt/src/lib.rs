@@ -210,6 +210,52 @@ implements<T extends Named> Printable for Box<T> {
 }
 
 #[cfg(test)]
+mod backtick_format_tests {
+    use super::*;
+
+    /// BEP-049: backtick string literals must round-trip through the formatter
+    /// verbatim — no re-indenting, no escape re-emission, no delimiter rewrite.
+    /// Richer formatting can land later when there's real corpus.
+    #[test]
+    fn backtick_one_liner_round_trips() {
+        let source = "function Demo() -> string {\n    `hello ${name} world`\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert!(
+            formatted.contains("`hello ${name} world`"),
+            "got: {formatted}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second);
+    }
+
+    #[test]
+    fn backtick_multi_tick_ladder_round_trips() {
+        let source = "function Demo() -> string {\n    ``inline `code` here``\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert!(
+            formatted.contains("``inline `code` here``"),
+            "got: {formatted}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second);
+    }
+
+    #[test]
+    fn backtick_multiline_round_trips() {
+        let source =
+            "function Demo() -> string {\n    `\n        line one\n        line two\n    `\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert!(formatted.contains("line one"));
+        assert!(formatted.contains("line two"));
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second);
+    }
+}
+
+#[cfg(test)]
 mod pattern_format_tests {
     use super::*;
 
@@ -671,6 +717,48 @@ mod const_format_tests {
     #[test]
     fn test_while_const_array_keyword_trailing_trivia_preserved() {
         let source = "function f(xs: int[]) -> int {\n    while const /*keep*/ [x] = xs {\n        break;\n    }\n    0\n}\n";
+        assert_formats_to(source, source);
+    }
+}
+
+#[cfg(test)]
+mod map_literal_format_tests {
+    //! Formatter tests for map literals, focused on the empty-map case.
+    //! A non-empty map renders with interior padding (`{ "k": 1 }`), but an
+    //! *empty* map must collapse to `{}` with no padding — the printer used to
+    //! emit `{  }` because it added the leading/trailing space unconditionally.
+
+    use super::*;
+
+    fn assert_formats_to(source: &str, expected: &str) {
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed on map literal");
+        assert_eq!(
+            formatted, expected,
+            "formatter output didn't match expected\n--- got ---\n{formatted}\n--- want ---\n{expected}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    #[test]
+    fn test_empty_map_has_no_interior_padding() {
+        // Regression for B-234: an empty map literal must format as `{}`, not `{  }`.
+        let source = "function f() -> int {\n    {};\n    0\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_non_empty_map_keeps_interior_padding() {
+        // Guard the established behavior: non-empty maps keep `{ ... }` padding.
+        let source = "function f() -> int {\n    { \"a\": 1 };\n    0\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_empty_map_with_block_comment_keeps_padding() {
+        // An interior comment is real content, so the padding stays.
+        let source = "function f() -> int {\n    { /* keep */ };\n    0\n}\n";
         assert_formats_to(source, source);
     }
 }

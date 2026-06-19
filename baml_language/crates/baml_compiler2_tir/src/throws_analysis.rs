@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 
 use baml_base::Name;
-use baml_compiler2_ast::{Expr, ExprBody, ExprId, Stmt, StmtId};
+use baml_compiler2_ast::{self as ast, Expr, ExprBody, ExprId, Stmt, StmtId};
 
 use crate::{
     throw_inference::flatten_ty_to_facts,
@@ -202,9 +202,10 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
                 collect_from_expr(context, arg.expr, body, out);
             }
             // When the callee is an `OptionalMemberAccess` (`obj?.method`), the
-            // inferred callee type is `Ty::Optional(Ty::Function { ... })`.
+            // inferred callee type is a nullable `Union([Ty::Function { ... }, Null])`
+            // (the post-`Ty::Optional`-removal encoding).
             // `instantiated_callee_throws` only handles `Ty::Function`, so we
-            // must strip the optional wrapper to get the actual throws.  This
+            // must strip the nullable wrapper to get the actual throws.  This
             // mirrors the type-inference fast-path in `builder.rs` that routes
             // `Call { callee: OptionalMemberAccess }` through
             // `finalize_optional_callee_call`.
@@ -380,6 +381,15 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
                 _ => {}
             }
         }
+        Expr::Template { tag, segments } => {
+            if let ast::TemplateTag::Custom { tag, .. } = tag {
+                collect_from_expr(context, *tag, body, out);
+                // A tagged template invokes the tag fn, so its declared `throws`
+                // escape just like a direct call's would.
+                collect_callee_escaping_throws(context, *tag, &[], body, false, out);
+            }
+            collect_from_template_segments(context, segments, body, out);
+        }
         Expr::GenericApply { base, .. } => {
             collect_from_expr(context, *base, body, out);
         }
@@ -389,5 +399,56 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
         | Expr::Null
         | Expr::Path(_)
         | Expr::Missing => {}
+    }
+}
+
+/// Recursive walk of a template segment tree collecting throw facts from
+/// each interp/condition/iter expression and any nested for/if bodies.
+fn collect_from_template_segments<C: ThrowsAnalysisContext>(
+    context: &C,
+    segments: &[ast::TemplateSegment],
+    body: &ExprBody,
+    out: &mut BTreeSet<Ty>,
+) {
+    for seg in segments {
+        match seg {
+            ast::TemplateSegment::Text(_) => {}
+            ast::TemplateSegment::Interp(e) => collect_from_expr(context, *e, body, out),
+            ast::TemplateSegment::For {
+                collection,
+                body: inner,
+                ..
+            } => {
+                collect_from_expr(context, *collection, body, out);
+                collect_from_template_segments(context, inner, body, out);
+            }
+            ast::TemplateSegment::CStyleFor {
+                init,
+                cond,
+                step,
+                body: inner,
+            } => {
+                // `init`/`step` are statements (the `let` and the assignment) that
+                // can throw, so traverse them alongside `cond` and the body.
+                collect_from_stmt(context, *init, body, out);
+                collect_from_expr(context, *cond, body, out);
+                if let Some(step_stmt) = step {
+                    collect_from_stmt(context, *step_stmt, body, out);
+                }
+                collect_from_template_segments(context, inner, body, out);
+            }
+            ast::TemplateSegment::If {
+                branches,
+                else_body,
+            } => {
+                for branch in branches {
+                    collect_from_expr(context, branch.condition, body, out);
+                    collect_from_template_segments(context, &branch.body, body, out);
+                }
+                if let Some(eb) = else_body {
+                    collect_from_template_segments(context, eb, body, out);
+                }
+            }
+        }
     }
 }

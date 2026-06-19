@@ -24,10 +24,10 @@ use std::{
 };
 
 use bytes::Bytes;
-use http_body_util::{BodyExt, Full, LengthLimitError, Limited};
+use http_body_util::{BodyExt, Full, LengthLimitError, Limited, StreamBody, combinators::BoxBody};
 use hyper::{
     Request as HyperRequest, Response as HyperResponse,
-    body::Incoming,
+    body::{Frame, Incoming},
     header::{HeaderName, HeaderValue},
     service::service_fn,
 };
@@ -48,18 +48,10 @@ use tokio_rustls::{
     },
 };
 
-/// Convert a `Duration._nanoseconds` value (carried as a bigint across the
-/// sys-op boundary) into a connection timeout. Zero or negative disables it
-/// (`None`); a value too large for `u64` nanoseconds (~584 years) clamps to the
-/// maximum.
-fn timeout_from_nanos(nanos: &num_bigint::BigInt) -> Option<Duration> {
-    if nanos.sign() != num_bigint::Sign::Plus {
-        return None;
-    }
-    Some(Duration::from_nanos(
-        u64::try_from(nanos).unwrap_or(u64::MAX),
-    ))
-}
+// `timeout_from_nanos` lives in `io_impls` (always compiled) since the net
+// sys-ops use it without the `bundle-http` feature; re-exported here for the
+// HTTP server's own timeout fields.
+use crate::io_impls::timeout_from_nanos;
 
 /// The response body carried by `baml.http.Response._body`.
 ///
@@ -73,6 +65,20 @@ pub(crate) enum HttpBody {
     Client(tokio::sync::Mutex<Option<reqwest::Response>>),
     /// A fully-buffered body.
     Bytes(Bytes),
+    /// A server response body written incrementally by the handler via
+    /// `Response.write` / `Response.end` (built by `Response.new_streaming`).
+    Streaming(StreamingBody),
+}
+
+/// Backs an [`HttpBody::Streaming`] body. The `sender` side is driven by
+/// `Response.write`/`end`; the `receiver` side is taken once by the response
+/// writer ([`wire_response`]) and drained by hyper as chunked frames. The
+/// channel is bounded at one in-flight chunk so `write` backpressures until the
+/// previous chunk has been handed to the connection — giving real-time streaming
+/// rather than a buffer that flushes all at once.
+pub(crate) struct StreamingBody {
+    sender: tokio::sync::Mutex<Option<tokio::sync::mpsc::Sender<Bytes>>>,
+    receiver: tokio::sync::Mutex<Option<tokio::sync::mpsc::Receiver<Bytes>>>,
 }
 
 impl HttpBody {
@@ -91,7 +97,51 @@ impl HttpBody {
                     message: format!("failed to read response body: {e}"),
                 })
             }
+            HttpBody::Streaming(_) => Err(VmBamlError::Io {
+                message: "a streaming response body cannot be read with bytes()/text(); \
+                          it is written with write()/end()"
+                    .to_string(),
+            }),
         }
+    }
+
+    /// Write one chunk to a streaming body, blocking (via the bounded channel)
+    /// until the connection has accepted the previous chunk. Errors if this is
+    /// not a streaming body, it has been ended, or the client hung up.
+    pub(crate) async fn write_chunk(&self, data: Vec<u8>) -> Result<(), VmBamlError> {
+        let HttpBody::Streaming(s) = self else {
+            return Err(VmBamlError::Io {
+                message: "Response.write requires a response built with Response.new_streaming"
+                    .to_string(),
+            });
+        };
+        // Clone the sender out so the `send().await` (which may suspend on
+        // backpressure) does not hold the sender lock.
+        let sender = s.sender.lock().await.clone();
+        match sender {
+            Some(tx) => tx
+                .send(Bytes::from(data))
+                .await
+                .map_err(|_| VmBamlError::Io {
+                    message: "streaming response could not be written: the client has hung up"
+                        .to_string(),
+                }),
+            None => Err(VmBamlError::Io {
+                message: "streaming response has already been ended".to_string(),
+            }),
+        }
+    }
+
+    /// End a streaming body, closing the channel so hyper completes the chunked
+    /// response. A no-op on an already-ended or non-streaming body.
+    pub(crate) async fn end_stream(&self) -> Result<(), VmBamlError> {
+        if let HttpBody::Streaming(s) = self {
+            // Dropping the stored sender closes the channel once no `write` is
+            // in flight (writes hold only transient clones), so the receiver
+            // sees end-of-stream.
+            s.sender.lock().await.take();
+        }
+        Ok(())
     }
 
     /// Consume the body and decode it as text. For a client response this honors
@@ -108,6 +158,11 @@ impl HttpBody {
                     message: format!("failed to read response body: {e}"),
                 })
             }
+            HttpBody::Streaming(_) => Err(VmBamlError::Io {
+                message: "a streaming response body cannot be read with bytes()/text(); \
+                          it is written with write()/end()"
+                    .to_string(),
+            }),
         }
     }
 
@@ -135,6 +190,11 @@ pub(crate) fn downcast_body(
             message: "invalid HTTP response body handle".to_string(),
         })
 }
+
+/// The response body type written to the wire. Boxed so a handler's response
+/// can be either fully buffered ([`Full`]) or incrementally streamed
+/// ([`StreamBody`], for [`HttpBody::Streaming`]).
+type WireBody = BoxBody<Bytes, Infallible>;
 
 /// A plaintext or TLS connection, unified so hyper can serve either.
 enum MaybeTlsStream {
@@ -445,7 +505,7 @@ async fn serve_connection<S>(
 ) where
     S: hyper::service::Service<
             HyperRequest<Incoming>,
-            Response = HyperResponse<Full<Bytes>>,
+            Response = HyperResponse<WireBody>,
             Error = Infallible,
         > + Send
         + 'static,
@@ -483,7 +543,7 @@ async fn handle_request(
     spawner: Arc<dyn VmSpawner>,
     cancel: CancellationToken,
     max_body_size: usize,
-) -> HyperResponse<Full<Bytes>> {
+) -> HyperResponse<WireBody> {
     let request = match to_baml_request(req, max_body_size).await {
         Ok(request) => request,
         Err(BadRequest::TooLarge) => return status_response(413, "payload too large"),
@@ -591,7 +651,7 @@ fn is_reserved_response_header(name: &HeaderName) -> bool {
 }
 
 /// Turn the handler's `Response` (a `BexExternalValue`) into a hyper response.
-async fn wire_response(value: BexExternalValue) -> Result<HyperResponse<Full<Bytes>>, VmBamlError> {
+async fn wire_response(value: BexExternalValue) -> Result<HyperResponse<WireBody>, VmBamlError> {
     let response =
         owned::http::Response::from_external(value).map_err(|e| VmBamlError::DevOther {
             message: format!("handler returned an invalid Response: {e}"),
@@ -602,7 +662,32 @@ async fn wire_response(value: BexExternalValue) -> Result<HyperResponse<Full<Byt
         .ok()
         .filter(|s| (100..=599).contains(s))
         .unwrap_or(500);
-    let body = downcast_body(&response._body)?.read_bytes().await?;
+
+    // A streaming response (`Response.new_streaming`) hands the body to hyper as
+    // a frame stream drained from the `write`/`end` channel; everything else
+    // is fully buffered. hyper frames a frame-stream body with chunked
+    // transfer-encoding and flushes each frame, so partial writes reach the
+    // client incrementally.
+    let body_handle = downcast_body(&response._body)?;
+    let wire_body = match &*body_handle {
+        HttpBody::Streaming(s) => {
+            let rx = s
+                .receiver
+                .lock()
+                .await
+                .take()
+                .ok_or_else(|| VmBamlError::Io {
+                    message: "streaming response body has already been served".to_string(),
+                })?;
+            let frames = futures::stream::unfold(rx, |mut rx| async move {
+                rx.recv()
+                    .await
+                    .map(|chunk| (Ok::<_, Infallible>(Frame::data(chunk)), rx))
+            });
+            StreamBody::new(frames).boxed()
+        }
+        _ => Full::new(body_handle.read_bytes().await?).boxed(),
+    };
 
     let mut builder = HyperResponse::builder().status(status);
     for (name, value) in &response.headers {
@@ -619,19 +704,19 @@ async fn wire_response(value: BexExternalValue) -> Result<HyperResponse<Full<Byt
     }
     // A builder error (e.g. a malformed status that slipped through) → 500, not
     // a silent empty 200.
-    Ok(match builder.body(Full::new(body)) {
+    Ok(match builder.body(wire_body) {
         Ok(resp) => resp,
         Err(_) => status_response(500, "invalid response"),
     })
 }
 
 /// A small plaintext response for internal/handler error conditions.
-fn status_response(status: u16, message: &str) -> HyperResponse<Full<Bytes>> {
+fn status_response(status: u16, message: &str) -> HyperResponse<WireBody> {
     HyperResponse::builder()
         .status(status)
         .header(hyper::header::CONTENT_TYPE, "text/plain; charset=utf-8")
-        .body(Full::new(Bytes::copy_from_slice(message.as_bytes())))
-        .unwrap_or_else(|_| HyperResponse::new(Full::new(Bytes::new())))
+        .body(Full::new(Bytes::copy_from_slice(message.as_bytes())).boxed())
+        .unwrap_or_else(|_| HyperResponse::new(Full::new(Bytes::new()).boxed()))
 }
 
 // ============================================================================
@@ -694,5 +779,24 @@ pub(crate) fn build_response(
         headers,
         url: String::new(),
         _body: Arc::new(HttpBody::Bytes(Bytes::from(body))) as Arc<dyn Any + Send + Sync>,
+    }
+}
+
+/// Build a streaming `Response`, used by `Response.new_streaming`. The body is
+/// produced later by `Response.write`/`end` and drained by the wire writer
+/// over a one-deep channel (see [`StreamingBody`]).
+pub(crate) fn build_streaming_response(
+    status_code: i64,
+    headers: IndexMap<String, String>,
+) -> owned::http::Response {
+    let (tx, rx) = tokio::sync::mpsc::channel::<Bytes>(1);
+    owned::http::Response {
+        status_code,
+        headers,
+        url: String::new(),
+        _body: Arc::new(HttpBody::Streaming(StreamingBody {
+            sender: tokio::sync::Mutex::new(Some(tx)),
+            receiver: tokio::sync::Mutex::new(Some(rx)),
+        })) as Arc<dyn Any + Send + Sync>,
     }
 }

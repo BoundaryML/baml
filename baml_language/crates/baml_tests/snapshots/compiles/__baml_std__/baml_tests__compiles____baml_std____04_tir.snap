@@ -187,7 +187,28 @@ class baml.Array$stream {
 class baml.Map$stream {
 }
 
+--- <builtin>/baml/conversions.baml ---
+function baml.ToString.to_string(self: baml.ToString) -> string throws never {
+  { : string
+    root._to_string_default<T>(self) : string
+  }
+}
+
 --- <builtin>/baml/core.baml ---
+class baml.TaggedString {
+  parts: string[]
+  values: unknown[]
+}
+function baml.TaggedString.to_json(self: baml.TaggedString) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<TaggedString>(self)) : baml.json.json
+}
+function baml.TaggedString.from_json(j: baml.json.json) -> baml.TaggedString throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : baml.TaggedString
+}
+class baml.TaggedString$stream {
+  parts: string[]
+  values: unknown[]
+}
 
 --- <builtin>/baml/float.baml ---
 class baml.Float {
@@ -1069,6 +1090,11 @@ function baml.errors.StackTrace.to_json(self: baml.errors.StackTrace) -> baml.js
 function baml.errors.StackTrace.from_json(j: baml.json.json) -> baml.errors.StackTrace throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   StackTrace { frames: baml.json.from_json<StackFrame[]>(baml.json.field(j, "frames")) } : baml.errors.StackTrace
 }
+function baml.errors.StackTrace.to_string(self: baml.errors.StackTrace) -> string throws never {
+  { : string
+    self._to_string_impl() : string
+  }
+}
 class baml.errors.StackFrame$stream {
   file: string | null
   line: int | null
@@ -1076,6 +1102,13 @@ class baml.errors.StackFrame$stream {
 }
 class baml.errors.StackTrace$stream {
   frames: baml.errors.StackFrame$stream[]
+}
+function baml.errors.StackTrace$stream.to_string(self: baml.errors.StackTrace$stream) -> string throws never {
+  { : unknown
+    self._to_string_impl() : unknown
+  }
+  !! 348..363: type `baml.errors.StackTrace$stream` has no member `_to_string_impl`
+  !! 328..334: declared throws is `never`, but this function may also throw `unknown`
 }
 
 --- <builtin>/baml/ns_events/events.baml ---
@@ -1274,6 +1307,25 @@ function baml.http.SseStream.to_json(self: baml.http.SseStream) -> baml.json.jso
 }
 function baml.http.SseStream.from_json(j: baml.json.json) -> baml.http.SseStream throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : baml.http.SseStream
+}
+function baml.http._timeout_nanos(timeout: baml.time.Duration | null) -> bigint throws never {
+  { : 0n | bigint
+    match (timeout : baml.time.Duration | null) : 0n | bigint
+      null =>
+        0n : 0n
+      t: root.time.Duration =>
+        t.to_nanoseconds() : bigint
+  }
+}
+function baml.http.fetch(url: string, timeout: baml.time.Duration | null = null) -> baml.http.Response throws baml.errors.Io | baml.errors.Timeout {
+  { : baml.http.Response
+    _fetch(url, _timeout_nanos(timeout)) : baml.http.Response
+  }
+}
+function baml.http.send(request: baml.http.Request, timeout: baml.time.Duration | null = null) -> baml.http.Response throws baml.errors.Io | baml.errors.Timeout {
+  { : baml.http.Response
+    _send(request, _timeout_nanos(timeout)) : baml.http.Response
+  }
 }
 class baml.http.Request$stream {
   method: string | null
@@ -1962,10 +2014,10 @@ function baml.iter.ArrayIterator$stream.next(self: baml.iter.ArrayIterator$strea
       value: T =>
         value : T
   }
-  !! 4259..4288: operator `Ge` cannot be applied to `int | null` and `int`
-  !! 4259..4288: operator `Ge` cannot be applied to `int | null` and `int`
+  !! 4259..4288: cannot order `int | null` and `int` with `>=`: ordering requires both operands to have the same type
+  !! 4259..4288: cannot order `int | null` and `int` with `>=`: ordering requires both operands to have the same type
   !! 4353..4361: type mismatch: expected int, got int | null
-  !! 4363..4378: operator `Add` cannot be applied to `int | null` and `1`
+  !! 4363..4378: operator `+` cannot be applied to `int | null` and `1`
 }
 class baml.iter.Range$stream {
   i: int | null
@@ -1991,8 +2043,8 @@ function baml.iter.Range$stream.next(self: baml.iter.Range$stream) -> int | baml
         Done {  } : baml.iter.Done
       }
   }
-  !! 4916..4933: operator `Lt` cannot be applied to `int | null` and `int | null`
-  !! 4962..4977: operator `Add` cannot be applied to `int | null` and `int | null`
+  !! 4916..4933: `int | null` does not implement `Compare`, so it cannot be ordered with `<`
+  !! 4962..4977: operator `+` cannot be applied to `int | null` and `int | null`
   !! 5000..5003: type mismatch: expected int | baml.iter.Done, got int | null
 }
 class baml.iter.Repeat$stream {
@@ -2022,10 +2074,10 @@ function baml.iter.Repeat$stream.next(self: baml.iter.Repeat$stream) -> unknown 
           Done {  } : baml.iter.Done
         }
   }
-  !! 5500..5514: operator `Lt` cannot be applied to `int | null` and `0`
+  !! 5500..5514: cannot order `int | null` and `0` with `<`: ordering requires both operands to have the same type
   !! 5517..5536: type mismatch: expected T | baml.iter.Done, got T | null
-  !! 5554..5568: operator `Gt` cannot be applied to `int | null` and `0`
-  !! 5571..5590: operator `Sub` cannot be applied to `int | null` and `1`
+  !! 5554..5568: cannot order `int | null` and `0` with `>`: ordering requires both operands to have the same type
+  !! 5571..5590: operator `-` cannot be applied to `int | null` and `1`
   !! 5596..5615: type mismatch: expected T | baml.iter.Done, got T | null
 }
 class baml.iter.Map$stream {
@@ -2286,7 +2338,7 @@ function baml.iter.StepBy$stream.next(self: baml.iter.StepBy$stream) -> unknown 
   }
   !! 10598..10615: did you mean `self.source?.next`? `self.source.next` does not handle the case when `self.source` is null
   !! 10598..10617: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
-  !! 10652..10663: operator `Sub` cannot be applied to `int | null` and `1`
+  !! 10652..10663: operator `-` cannot be applied to `int | null` and `1`
   !! 10690..10706: did you mean `self.source?.next`? `self.source.next` does not handle the case when `self.source` is null
   !! 10690..10708: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
   !! 10794..10817: did you mean `self.source?.next`? `self.source.next` does not handle the case when `self.source` is null
@@ -2396,6 +2448,7 @@ class baml.llm.ExecutionContext {
   jinja_string: string
   args: map<string, unknown>
   function_name: string
+  prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null
 }
 function baml.llm.ExecutionContext.to_json(self: baml.llm.ExecutionContext) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
   baml.json.parse(baml.json.to_string<ExecutionContext>(self)) : baml.json.json
@@ -2432,28 +2485,38 @@ function baml.llm.PlannerState.to_json(self: baml.llm.PlannerState) -> baml.json
 function baml.llm.PlannerState.from_json(j: baml.json.json) -> baml.llm.PlannerState throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   PlannerState { rr_client_names: baml.json.from_json<string[]>(baml.json.field(j, "rr_client_names")) } : baml.llm.PlannerState
 }
-function baml.llm.render_prompt(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.llm.PromptAst throws never {
-  { : baml.llm.PromptAst
-    let jinja_string = get_jinja_template(function_name) : string
-    let return_type = get_return_type(function_name) : type
-    let primitive_client = client.to_primitive_client() : baml.llm.PrimitiveClient
-    let prompt = primitive_client.render_prompt(jinja_string, args, return_type) : baml.llm.PromptAst
-    primitive_client.specialize_prompt(prompt) : baml.llm.PromptAst
+function baml.llm.prompt_template_for(function_name: string, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> string throws baml.errors.InvalidArgument {
+  { : string | ""
+    match (prompt_closure : ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) : string | ""
+      null =>
+        get_jinja_template(function_name) : string
+      _ =>
+        "" : ""
   }
 }
-function baml.llm.build_request(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.http.Request throws never {
+function baml.llm.render_prompt(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null = null) -> baml.llm.PromptAst throws never {
+  { : baml.llm.PromptAst
+    let return_type = get_return_type(function_name) : type
+    let primitive_client = client.to_primitive_client() : baml.llm.PrimitiveClient
+    let template = prompt_template_for(function_name, prompt_closure) : string
+    primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure) : baml.llm.PromptAst
+  }
+}
+function baml.llm.build_request(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null = null) -> baml.http.Request throws never {
   { : baml.http.Request
     let return_type = get_return_type(function_name) : type
     let primitive_client = client.to_primitive_client() : baml.llm.PrimitiveClient
-    let specialized_prompt = render_prompt(client, function_name, args) : baml.llm.PromptAst
+    let template = prompt_template_for(function_name, prompt_closure) : string
+    let specialized_prompt = primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure) : baml.llm.PromptAst
     primitive_client.build_request(specialized_prompt, return_type) : baml.http.Request
   }
 }
-function baml.llm.build_request_stream(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.http.Request throws never {
+function baml.llm.build_request_stream(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null = null) -> baml.http.Request throws never {
   { : baml.http.Request
     let return_type = get_return_type(function_name) : type
     let primitive_client = client.to_primitive_client() : baml.llm.PrimitiveClient
-    let specialized_prompt = render_prompt(client, function_name, args) : baml.llm.PromptAst
+    let template = prompt_template_for(function_name, prompt_closure) : string
+    let specialized_prompt = primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure) : baml.llm.PromptAst
     primitive_client.build_request_stream(specialized_prompt, return_type) : baml.http.Request
   }
 }
@@ -2463,18 +2526,28 @@ function baml.llm.parse<TStream, TFinal>(json: string) -> TFinal throws never {
     __sap_parse_final<TFinal>(json, cache) : TFinal
   }
 }
-function baml.llm.call_llm_function<T>(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> T throws never {
+function baml.llm.call_llm_function<T>(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null = null) -> T throws never {
   { : T
-    let jinja_string = get_jinja_template(function_name) : string
-    let context = ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name } : baml.llm.ExecutionContext
+    let jinja_string = : string | "" -> string
+      match (prompt_closure : ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) : string | ""
+        null =>
+          get_jinja_template(function_name) : string
+        _ =>
+          "" : ""
+    let context = ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name, prompt_closure: prompt_closure } : baml.llm.ExecutionContext
     let result: T = client.execute_oneshot<T>(context, 0) : T
     result : T
   }
 }
-function baml.llm.stream_llm_function<TStream, TFinal>(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.llm.Stream<TStream, TFinal> throws never {
+function baml.llm.stream_llm_function<TStream, TFinal>(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null = null) -> baml.llm.Stream<TStream, TFinal> throws never {
   { : baml.llm.Stream<TStream, TFinal>
-    let jinja_string = get_jinja_template(function_name) : string
-    let context = ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name } : baml.llm.ExecutionContext
+    let jinja_string = : string | "" -> string
+      match (prompt_closure : ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) : string | ""
+        null =>
+          get_jinja_template(function_name) : string
+        _ =>
+          "" : ""
+    let context = ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name, prompt_closure: prompt_closure } : baml.llm.ExecutionContext
     let result: Stream<TStream, TFinal> = client.execute_stream(context, 0) : baml.llm.Stream<TStream, TFinal>
     result : baml.llm.Stream<TStream, TFinal>
   }
@@ -2487,6 +2560,7 @@ class baml.llm.ExecutionContext$stream {
   jinja_string: string | null
   args: map<string, unknown>
   function_name: string | null
+  prompt_closure: unknown | null
 }
 class baml.llm.PlannerState$stream {
   rr_client_names: string[]
@@ -2501,6 +2575,49 @@ function baml.llm.PromptAst.to_json(self: baml.llm.PromptAst) -> baml.json.json 
 }
 function baml.llm.PromptAst.from_json(j: baml.json.json) -> baml.llm.PromptAst throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : baml.llm.PromptAst
+}
+class baml.llm.OutputFormat {
+  _data: $rust_type
+}
+function baml.llm.OutputFormat.to_json(self: baml.llm.OutputFormat) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<OutputFormat>(self)) : baml.json.json
+}
+function baml.llm.OutputFormat.from_json(j: baml.json.json) -> baml.llm.OutputFormat throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : baml.llm.OutputFormat
+}
+class baml.llm.Role {
+  name: string
+  metadata: map<string, unknown>
+}
+function baml.llm.Role.to_json(self: baml.llm.Role) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<Role>(self)) : baml.json.json
+}
+function baml.llm.Role.from_json(j: baml.json.json) -> baml.llm.Role throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : baml.llm.Role
+}
+class baml.llm.ContextClient {
+  name: string
+  provider: string
+  default_role: string
+  allowed_roles: string[]
+}
+function baml.llm.ContextClient.to_json(self: baml.llm.ContextClient) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "name": baml.json.to_json(self.name), "provider": baml.json.to_json(self.provider), "default_role": baml.json.to_json(self.default_role), "allowed_roles": baml.json.to_json(self.allowed_roles) } : map<string, baml.json.json>
+}
+function baml.llm.ContextClient.from_json(j: baml.json.json) -> baml.llm.ContextClient throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  ContextClient { name: baml.json.from_json<string>(baml.json.field(j, "name")), provider: baml.json.from_json<string>(baml.json.field(j, "provider")), default_role: baml.json.from_json<string>(baml.json.field(j, "default_role")), allowed_roles: baml.json.from_json<string[]>(baml.json.field(j, "allowed_roles")) } : baml.llm.ContextClient
+}
+class baml.llm.Context {
+  client: baml.llm.ContextClient
+  tags: map<string, unknown>
+  output_format: string
+  _output_format: baml.llm.OutputFormat
+}
+function baml.llm.Context.to_json(self: baml.llm.Context) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  baml.json.parse(baml.json.to_string<Context>(self)) : baml.json.json
+}
+function baml.llm.Context.from_json(j: baml.json.json) -> baml.llm.Context throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  baml.json.from_string<T>(baml.json.stringify(j)) : baml.llm.Context
 }
 enum baml.llm.ClientType
 class baml.llm.RetryPolicy {
@@ -2671,9 +2788,8 @@ function baml.llm.Client.execute_once_stream<TStream, TFinal>(self: baml.llm.Cli
       ClientType.Primitive =>
         { : never
           let primitive = self.to_primitive_client() : baml.llm.PrimitiveClient
-          let return_type = reflect.type_of() : type
-          let prompt = primitive.render_prompt(context.jinja_string, context.args, return_type) : baml.llm.PromptAst
-          let specialized = primitive.specialize_prompt(prompt) : baml.llm.PromptAst
+          let return_type = get_return_type(context.function_name) : type
+          let specialized = primitive.render_specialized_prompt(context.jinja_string, context.args, return_type, context.prompt_closure) : baml.llm.PromptAst
           let http_request = primitive.build_request_stream(specialized, return_type) : baml.http.Request
           let sse = root.http.fetch_sse(http_request) : baml.http.SseStream
           let stream: Stream<TStream, TFinal> = self.__make_stream(sse) : baml.llm.Stream<TStream, TFinal>
@@ -2769,8 +2885,7 @@ function baml.llm.Client.execute_once_oneshot<T>(self: baml.llm.Client, context:
         { : T
           let primitive = self.to_primitive_client() : baml.llm.PrimitiveClient
           let return_type = reflect.type_of() : type
-          let prompt = primitive.render_prompt(context.jinja_string, context.args, return_type) : baml.llm.PromptAst
-          let specialized = primitive.specialize_prompt(prompt) : baml.llm.PromptAst
+          let specialized = primitive.render_specialized_prompt(context.jinja_string, context.args, return_type, context.prompt_closure) : baml.llm.PromptAst
           let http_request = primitive.build_request(specialized, return_type) : baml.http.Request
           let http_response = root.http.send(http_request) : baml.http.Response
           if (http_response.ok() : bool) : T
@@ -2783,7 +2898,7 @@ function baml.llm.Client.execute_once_oneshot<T>(self: baml.llm.Client, context:
                       { : never
                         if (active_delay_ms > 0 : bool) : void
                           { : null
-                            root.sys.sleep(active_delay_ms) : null
+                            root.sys.sleep(root.time.Duration.from_nanoseconds(active_delay_ms * 1000000n)) : null
                           }
                         throw e : baml.errors.LlmClient
                       }
@@ -2800,7 +2915,7 @@ function baml.llm.Client.execute_once_oneshot<T>(self: baml.llm.Client, context:
                       }
               if (active_delay_ms > 0 : bool) : void
                 { : null
-                  root.sys.sleep(active_delay_ms) : null
+                  root.sys.sleep(root.time.Duration.from_nanoseconds(active_delay_ms * 1000000n)) : null
                 }
               throw root.errors.DevOther { message: "HTTP request fail..." + error_body } : baml.errors.DevOther
             }
@@ -3023,14 +3138,67 @@ class baml.llm.PrimitiveClient {
   provider: string
   options: baml.llm.PrimitiveClientOptions
 }
+function baml.llm.PrimitiveClient.render_specialized_prompt(self: baml.llm.PrimitiveClient, template: string, args: map<string, unknown>, return_type: type, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.llm.PromptAst throws baml.errors.RenderPrompt | baml.errors.LlmClient {
+  { : baml.llm.PromptAst
+    let prompt = : baml.llm.PromptAst
+      match (prompt_closure : ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) : baml.llm.PromptAst
+        null =>
+          self.render_prompt(template, args, return_type) : baml.llm.PromptAst
+        closure: (Context) -> PromptAst =>
+          closure(build_prompt_context(self, return_type)) : baml.llm.PromptAst
+    self.specialize_prompt(prompt) : baml.llm.PromptAst
+  }
+}
 function baml.llm.PrimitiveClient.to_json(self: baml.llm.PrimitiveClient) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
   map { "name": baml.json.to_json(self.name), "provider": baml.json.to_json(self.provider), "options": baml.json.to_json(self.options) } : map<string, baml.json.json>
 }
 function baml.llm.PrimitiveClient.from_json(j: baml.json.json) -> baml.llm.PrimitiveClient throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   PrimitiveClient { name: baml.json.from_json<string>(baml.json.field(j, "name")), provider: baml.json.from_json<string>(baml.json.field(j, "provider")), options: baml.json.from_json<PrimitiveClientOptions>(baml.json.field(j, "options")) } : baml.llm.PrimitiveClient
 }
+function baml.llm.build_prompt_context(primitive: baml.llm.PrimitiveClient, return_type: type) -> baml.llm.Context throws never {
+  { : baml.llm.Context
+    Context { client: ContextClient { name: primitive.name, provider: primitive.provider, default_role: primitive.options.default_role ?? "system", allowed_roles: primitive.options.allowed_roles ?? [] }, tags: map {  }, output_format: render_output_format(return_type), _output_format: build_output_format(return_type) } : baml.llm.Context
+  }
+}
+function baml.llm.make_role(name: string) -> baml.llm.Role throws never {
+  { : baml.llm.Role
+    Role { name: name, metadata: map {  } } : baml.llm.Role
+  }
+}
+function baml.llm.prompt(body: (role: (string) -> baml.llm.Role throws never, ctx: baml.llm.Context) -> baml.TaggedString throws never) -> (baml.llm.Context) -> baml.llm.PromptAst throws never throws never {
+  { : (ctx: baml.llm.Context) -> baml.llm.PromptAst throws never
+    let render = : (ctx: baml.llm.Context) -> baml.llm.PromptAst throws never
+      (ctx: Context) -> { ... } : (ctx: baml.llm.Context) -> baml.llm.PromptAst throws never
+        {
+          let t = body(make_role, ctx)
+          assemble_prompt_ast(t.parts, t.values)
+        }
+    render : (ctx: baml.llm.Context) -> baml.llm.PromptAst throws never
+  }
+}
+lambda baml.llm.prompt {
+}
 class baml.llm.PromptAst$stream {
   _data: $rust_type
+}
+class baml.llm.OutputFormat$stream {
+  _data: $rust_type
+}
+class baml.llm.Role$stream {
+  name: string | null
+  metadata: map<string, unknown>
+}
+class baml.llm.ContextClient$stream {
+  name: string | null
+  provider: string | null
+  default_role: string | null
+  allowed_roles: string[]
+}
+class baml.llm.Context$stream {
+  client: baml.llm.ContextClient$stream | null
+  tags: map<string, unknown>
+  output_format: string | null
+  _output_format: baml.llm.OutputFormat$stream | null
 }
 class baml.llm.RetryPolicy$stream {
   max_retries: int | null
@@ -3154,8 +3322,32 @@ class baml.media.Image$stream {
 }
 
 --- <builtin>/baml/ns_net/net.baml ---
+function baml.net._timeout_nanos(timeout: baml.time.Duration | null) -> bigint throws never {
+  { : 0n | bigint
+    match (timeout : baml.time.Duration | null) : 0n | bigint
+      null =>
+        0n : 0n
+      t: root.time.Duration =>
+        t.to_nanoseconds() : bigint
+  }
+}
 class baml.net.TcpStream {
   _handle: $rust_type
+}
+function baml.net.TcpStream.connect(addr: string, timeout: baml.time.Duration | null = null) -> baml.net.TcpStream throws baml.errors.Io | baml.errors.Timeout {
+  { : baml.net.TcpStream
+    TcpStream._connect(addr, _timeout_nanos(timeout)) : baml.net.TcpStream
+  }
+}
+function baml.net.TcpStream.read(self: baml.net.TcpStream, timeout: baml.time.Duration | null = null) -> uint8array throws baml.errors.Io | baml.errors.Timeout {
+  { : uint8array
+    self._read(_timeout_nanos(timeout)) : uint8array
+  }
+}
+function baml.net.TcpStream.write(self: baml.net.TcpStream, data: uint8array, timeout: baml.time.Duration | null = null) -> null throws baml.errors.Io | baml.errors.Timeout {
+  { : null
+    self._write(data, _timeout_nanos(timeout)) : null
+  }
 }
 function baml.net.TcpStream.to_json(self: baml.net.TcpStream) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
   baml.json.parse(baml.json.to_string<TcpStream>(self)) : baml.json.json
@@ -3174,6 +3366,16 @@ function baml.net.TcpListener.from_json(j: baml.json.json) -> baml.net.TcpListen
 }
 class baml.net.UdpSocket {
   _handle: $rust_type
+}
+function baml.net.UdpSocket.send_to(self: baml.net.UdpSocket, data: uint8array, addr: string, timeout: baml.time.Duration | null = null) -> int throws baml.errors.Io | baml.errors.Timeout {
+  { : int
+    self._send_to(data, addr, _timeout_nanos(timeout)) : int
+  }
+}
+function baml.net.UdpSocket.recv_from(self: baml.net.UdpSocket, timeout: baml.time.Duration | null = null) -> baml.net.Datagram throws baml.errors.Io | baml.errors.Timeout {
+  { : baml.net.Datagram
+    self._recv_from(_timeout_nanos(timeout)) : baml.net.Datagram
+  }
 }
 function baml.net.UdpSocket.to_json(self: baml.net.UdpSocket) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
   baml.json.parse(baml.json.to_string<UdpSocket>(self)) : baml.json.json
@@ -3203,6 +3405,58 @@ class baml.net.UdpSocket$stream {
 class baml.net.Datagram$stream {
   data: uint8array
   addr: string | null
+}
+
+--- <builtin>/baml/ns_ops/comparison.baml ---
+function baml.ops.Equals.neq(self: baml.ops.Equals, other: unknown) -> bool throws never {
+  { : bool
+    Not self.eq(other) : bool
+  }
+}
+function baml.ops.Compare.le(self: baml.ops.Compare, other: unknown) -> bool throws never {
+  { : bool
+    self.lt(other) || self.eq(other) : bool
+  }
+}
+function baml.ops.Compare.gt(self: baml.ops.Compare, other: unknown) -> bool throws never {
+  { : bool
+    Not self.le(other) : bool
+  }
+}
+function baml.ops.Compare.ge(self: baml.ops.Compare, other: unknown) -> bool throws never {
+  { : bool
+    Not self.lt(other) : bool
+  }
+}
+function baml.ops.lt(self: unknown, other: unknown) -> bool throws never {
+  { : bool
+    Not self && other : bool
+  }
+}
+function baml.ops.gt(self: unknown, other: unknown) -> bool throws never {
+  { : bool
+    self && Not other : bool
+  }
+}
+function baml.ops.eq(self: unknown, other: unknown) -> bool throws never {
+  { : true
+    true : true
+  }
+}
+function baml.ops.neq(self: unknown, other: unknown) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.ops.eq(self: unknown, other: unknown) -> bool throws never {
+  { : bool
+    baml.ops.equals_equals(self, other) : bool
+  }
+}
+function baml.ops.eq(self: unknown, other: unknown) -> bool throws never {
+  { : bool
+    baml.ops.equals_equals(self, other) : bool
+  }
 }
 
 --- <builtin>/baml/ns_panics/panics.baml ---
@@ -3527,34 +3781,34 @@ function baml.time.Duration.abs(self: baml.time.Duration) -> baml.time.Duration 
     Duration { _nanoseconds: self._nanoseconds.abs() } : baml.time.Duration
   }
 }
-function baml.time.Duration.from_nanoseconds(ns: bigint) -> baml.time.Duration throws never {
+function baml.time.Duration.from_nanoseconds(ns: int | bigint) -> baml.time.Duration throws never {
   { : baml.time.Duration
-    Duration { _nanoseconds: ns } : baml.time.Duration
+    Duration { _nanoseconds: match (ns) { value: bigint => value, value: int => 0n + value } } : baml.time.Duration
   }
 }
-function baml.time.Duration.from_microseconds(us: bigint) -> baml.time.Duration throws never {
+function baml.time.Duration.from_microseconds(us: int | bigint) -> baml.time.Duration throws never {
   { : baml.time.Duration
-    Duration { _nanoseconds: us * 1000 } : baml.time.Duration
+    Duration { _nanoseconds: match (us) { value: bigint => value, value: int => 0n + value } * 1000n } : baml.time.Duration
   }
 }
-function baml.time.Duration.from_milliseconds(ms: bigint) -> baml.time.Duration throws never {
+function baml.time.Duration.from_milliseconds(ms: int | bigint) -> baml.time.Duration throws never {
   { : baml.time.Duration
-    Duration { _nanoseconds: ms * 1000000 } : baml.time.Duration
+    Duration { _nanoseconds: match (ms) { value: bigint => value, value: int => 0n + value } * 1000000n } : baml.time.Duration
   }
 }
-function baml.time.Duration.from_seconds(s: bigint) -> baml.time.Duration throws never {
+function baml.time.Duration.from_seconds(s: int | bigint) -> baml.time.Duration throws never {
   { : baml.time.Duration
-    Duration { _nanoseconds: s * 1000000000 } : baml.time.Duration
+    Duration { _nanoseconds: match (s) { value: bigint => value, value: int => 0n + value } * 1000000000n } : baml.time.Duration
   }
 }
-function baml.time.Duration.from_minutes(m: bigint) -> baml.time.Duration throws never {
+function baml.time.Duration.from_minutes(m: int | bigint) -> baml.time.Duration throws never {
   { : baml.time.Duration
-    Duration { _nanoseconds: m * 60000000000 } : baml.time.Duration
+    Duration { _nanoseconds: match (m) { value: bigint => value, value: int => 0n + value } * 60000000000n } : baml.time.Duration
   }
 }
-function baml.time.Duration.from_hours(h: bigint) -> baml.time.Duration throws never {
+function baml.time.Duration.from_hours(h: int | bigint) -> baml.time.Duration throws never {
   { : baml.time.Duration
-    Duration { _nanoseconds: h * 3600000000000 } : baml.time.Duration
+    Duration { _nanoseconds: match (h) { value: bigint => value, value: int => 0n + value } * 3600000000000n } : baml.time.Duration
   }
 }
 function baml.time.Duration.to_nanoseconds(self: baml.time.Duration) -> bigint throws never {
@@ -3620,7 +3874,7 @@ function baml.time.Instant.from_json(j: baml.json.json) -> baml.time.Instant thr
 }
 function baml.time.Instant.to_json(self: baml.time.Instant) -> string throws baml.json.JsonSerializationError {
   { : string
-    catch (self.to_string() : string) : unknown
+    catch (self._to_string_impl() : string) : unknown
       catch (_)
         root.errors.InvalidArgument { message: message } =>
           throw root.json.JsonSerializationError { message: message, path: "" } : never
@@ -3700,8 +3954,26 @@ function baml.time.Instant.epoch() -> baml.time.Instant throws never {
     Instant { _nanoseconds: 0n } : baml.time.Instant
   }
 }
+function baml.time.Instant.to_string(self: baml.time.Instant) -> string throws never {
+  { : string
+    catch (self._to_string_impl() : string) : unknown
+      catch (_)
+        root.errors.InvalidArgument { message: message } =>
+          root.sys.panic("Instant.to_string: " + message) : never
+  }
+}
 class baml.time.Instant$stream {
   _nanoseconds: bigint | null
+}
+function baml.time.Instant$stream.to_string(self: baml.time.Instant$stream) -> string throws never {
+  { : unknown
+    catch (self._to_string_impl() : unknown) : unknown
+      catch (_)
+        root.errors.InvalidArgument { message: message } =>
+          root.sys.panic("Instant.to_string: " + message) : never
+  }
+  !! 3041..3056: type `baml.time.Instant$stream` has no member `_to_string_impl`
+  !! 3015..3021: declared throws is `never`, but this function may also throw `unknown`
 }
 
 --- <builtin>/baml/ns_time/plaindate.baml ---
@@ -3727,14 +3999,32 @@ function baml.time.PlainDate.from_json(j: baml.json.json) -> baml.time.PlainDate
 }
 function baml.time.PlainDate.to_json(self: baml.time.PlainDate) -> string throws baml.json.JsonSerializationError {
   { : string
-    catch (self.to_string() : string) : unknown
+    catch (self._to_string_impl() : string) : unknown
       catch (_)
         root.errors.InvalidArgument { message: message } =>
           throw root.json.JsonSerializationError { message: message, path: "" } : never
   }
 }
+function baml.time.PlainDate.to_string(self: baml.time.PlainDate) -> string throws never {
+  { : string
+    catch (self._to_string_impl() : string) : unknown
+      catch (_)
+        root.errors.InvalidArgument { message: message } =>
+          root.sys.panic("PlainDate.to_stri..." + message) : never
+  }
+}
 class baml.time.PlainDate$stream {
   _days: int | null
+}
+function baml.time.PlainDate$stream.to_string(self: baml.time.PlainDate$stream) -> string throws never {
+  { : unknown
+    catch (self._to_string_impl() : unknown) : unknown
+      catch (_)
+        root.errors.InvalidArgument { message: message } =>
+          root.sys.panic("PlainDate.to_stri..." + message) : never
+  }
+  !! 1108..1123: type `baml.time.PlainDate$stream` has no member `_to_string_impl`
+  !! 1082..1088: declared throws is `never`, but this function may also throw `unknown`
 }
 
 --- <builtin>/baml/ns_time/plaindatetime.baml ---
@@ -3819,14 +4109,32 @@ function baml.time.PlainDateTime.from_json(j: baml.json.json) -> baml.time.Plain
 }
 function baml.time.PlainDateTime.to_json(self: baml.time.PlainDateTime) -> string throws baml.json.JsonSerializationError {
   { : string
-    catch (self.to_string() : string) : unknown
+    catch (self._to_string_impl() : string) : unknown
       catch (_)
         root.errors.InvalidArgument { message: message } =>
           throw root.json.JsonSerializationError { message: message, path: "" } : never
   }
 }
+function baml.time.PlainDateTime.to_string(self: baml.time.PlainDateTime) -> string throws never {
+  { : string
+    catch (self._to_string_impl() : string) : unknown
+      catch (_)
+        root.errors.InvalidArgument { message: message } =>
+          root.sys.panic("PlainDateTime.to_..." + message) : never
+  }
+}
 class baml.time.PlainDateTime$stream {
   _nanoseconds: bigint | null
+}
+function baml.time.PlainDateTime$stream.to_string(self: baml.time.PlainDateTime$stream) -> string throws never {
+  { : unknown
+    catch (self._to_string_impl() : unknown) : unknown
+      catch (_)
+        root.errors.InvalidArgument { message: message } =>
+          root.sys.panic("PlainDateTime.to_..." + message) : never
+  }
+  !! 2548..2563: type `baml.time.PlainDateTime$stream` has no member `_to_string_impl`
+  !! 2522..2528: declared throws is `never`, but this function may also throw `unknown`
 }
 
 --- <builtin>/baml/ns_time/plaintime.baml ---
@@ -3880,8 +4188,20 @@ function baml.time.PlainTime.to_json(self: baml.time.PlainTime) -> string throws
     self.to_string() : string
   }
 }
+function baml.time.PlainTime.to_string(self: baml.time.PlainTime) -> string throws never {
+  { : string
+    self._to_string_impl() : string
+  }
+}
 class baml.time.PlainTime$stream {
   _nanoseconds: int | null
+}
+function baml.time.PlainTime$stream.to_string(self: baml.time.PlainTime$stream) -> string throws never {
+  { : unknown
+    self._to_string_impl() : unknown
+  }
+  !! 1798..1813: type `baml.time.PlainTime$stream` has no member `_to_string_impl`
+  !! 1772..1778: declared throws is `never`, but this function may also throw `unknown`
 }
 
 --- <builtin>/baml/ns_time/timezone.baml ---
@@ -4007,7 +4327,7 @@ function baml.time.ZonedDateTime.from_components(timezone: baml.time.TimeZoneOff
     PlainDateTime.from_components(year, month, day, hour = hour, minute = minute, second = second, millisecond = millisecond, microsecond = microsecond, nanosecond = nanosecond).to_zoned(timezone, disambiguation = disambiguation) : baml.time.ZonedDateTime
   }
 }
-function baml.time.ZonedDateTime.to_string(self: baml.time.ZonedDateTime) -> string throws baml.errors.InvalidArgument | baml.time.UnknownTimezoneError | baml.errors.Io {
+function baml.time.ZonedDateTime._to_string_impl(self: baml.time.ZonedDateTime) -> string throws baml.errors.InvalidArgument | baml.time.UnknownTimezoneError | baml.errors.Io {
   { : string
     _format_zoned(self._nanoseconds, self.timezone_offset()._nanoseconds, self._iana) : string
   }
@@ -4117,7 +4437,7 @@ function baml.time.ZonedDateTime.from_json(j: baml.json.json) -> baml.time.Zoned
 }
 function baml.time.ZonedDateTime.to_json(self: baml.time.ZonedDateTime) -> string throws baml.json.JsonSerializationError {
   { : string
-    catch (self.to_string() : string) : unknown
+    catch (self._to_string_impl() : string) : unknown
       catch (_)
         root.errors.InvalidArgument { message: message } =>
           throw root.json.JsonSerializationError { message: message, path: "" } : never
@@ -4127,10 +4447,27 @@ function baml.time.ZonedDateTime.to_json(self: baml.time.ZonedDateTime) -> strin
           throw root.json.JsonSerializationError { message: message, path: "" } : never
   }
 }
+function baml.time.ZonedDateTime.to_string(self: baml.time.ZonedDateTime) -> string throws never {
+  { : string
+    catch (self._to_string_impl() : string) : unknown
+      catch (_)
+        _ =>
+          root.sys.panic("ZonedDateTime.to_...") : never
+  }
+}
 class baml.time.ZonedDateTime$stream {
   _nanoseconds: bigint | null
   _offset_ns: int | null
   _iana: string | null
+}
+function baml.time.ZonedDateTime$stream.to_string(self: baml.time.ZonedDateTime$stream) -> string throws never {
+  { : unknown
+    catch (self._to_string_impl() : unknown) : unknown
+      catch (_)
+        _ =>
+          root.sys.panic("ZonedDateTime.to_...") : never
+  }
+  !! 4472..4487: type `baml.time.ZonedDateTime$stream` has no member `_to_string_impl`
 }
 
 --- <builtin>/baml/ns_toml/toml.baml ---
@@ -4247,6 +4584,11 @@ class baml.Null$stream {
 --- <builtin>/baml/string.baml ---
 class baml.String {
 }
+function baml.String.from<T>(value: T) -> string throws never {
+  { : string
+    root._to_string_shim<T>(value) : string
+  }
+}
 function baml.String.from_json(j: baml.json.json) -> baml.String throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   String {  } : baml.String
 }
@@ -4262,7 +4604,19 @@ function baml.TypeValue.to_json(self: baml.TypeValue) -> baml.json.json throws b
 function baml.TypeValue.from_json(j: baml.json.json) -> baml.TypeValue throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   TypeValue {  } : baml.TypeValue
 }
+function baml.TypeValue.to_string(self: baml.TypeValue) -> string throws never {
+  { : string
+    self._to_string_impl() : string
+  }
+}
 class baml.TypeValue$stream {
+}
+function baml.TypeValue$stream.to_string(self: baml.TypeValue$stream) -> string throws never {
+  { : unknown
+    self._to_string_impl() : unknown
+  }
+  !! 586..601: type `baml.TypeValue$stream` has no member `_to_string_impl`
+  !! 560..566: declared throws is `never`, but this function may also throw `unknown`
 }
 
 --- <builtin>/baml/uint8array.baml ---
@@ -4271,5 +4625,17 @@ class baml.Uint8Array {
 function baml.Uint8Array.from_json(j: baml.json.json) -> baml.Uint8Array throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Uint8Array {  } : baml.Uint8Array
 }
+function baml.Uint8Array.to_string(self: baml.Uint8Array) -> string throws never {
+  { : string
+    self._to_string_impl() : string
+  }
+}
 class baml.Uint8Array$stream {
+}
+function baml.Uint8Array$stream.to_string(self: baml.Uint8Array$stream) -> string throws never {
+  { : unknown
+    self._to_string_impl() : unknown
+  }
+  !! 4180..4195: type `baml.Uint8Array$stream` has no member `_to_string_impl`
+  !! 4160..4166: declared throws is `never`, but this function may also throw `unknown`
 }

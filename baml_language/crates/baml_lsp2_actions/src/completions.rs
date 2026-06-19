@@ -279,7 +279,9 @@ fn detect_context(
         let kind = current.kind();
 
         match kind {
-            // Inside a TYPE_EXPR node → type position.
+            // Inside a TYPE_EXPR node → type position. For PARAMETER /
+            // FIELD, only treat as type position if we're specifically in
+            // the type-annotation part (not the name part).
             SyntaxKind::TYPE_EXPR
             | SyntaxKind::UNION_TYPE
             | SyntaxKind::OPTIONAL_TYPE
@@ -287,12 +289,10 @@ fn detect_context(
             | SyntaxKind::MAP_TYPE
             | SyntaxKind::FUNCTION_TYPE
             | SyntaxKind::PARAMETER
-            | SyntaxKind::FIELD => {
-                // Only treat as type position if we're in the type annotation part,
-                // not the name part. Check if any ancestor is specifically TYPE_EXPR.
-                if is_in_type_annotation(&current) {
-                    return CompletionContext::TypePosition;
-                }
+            | SyntaxKind::FIELD
+                if is_in_type_annotation(&current) =>
+            {
+                return CompletionContext::TypePosition;
             }
 
             // Inside an expression function body → value position.
@@ -1552,7 +1552,7 @@ fn completions_for_value_position(
                         baml_compiler2_ast::ast::LetOrigin::RetryPolicy => {
                             (CompletionKind::RetryPolicy, "retry_policy".to_string())
                         }
-                        _ => continue,
+                        baml_compiler2_ast::ast::LetOrigin::Source => continue,
                     }
                 }
                 _ => continue,

@@ -187,6 +187,47 @@ impl io::IoClassHttpResponse for PlaygroundHttp {
             message: "Operation not supported on this platform".to_string(),
         })
     }
+
+    fn new_streaming(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _status_code: i64,
+        _headers: indexmap::IndexMap<String, String>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::http::Response> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    fn write(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _response: owned::http::Response,
+        _data: Vec<u8>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    fn end(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _response: owned::http::Response,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
 }
 
 // The HTTP server primitives are not available in the playground proxy.
@@ -279,11 +320,12 @@ impl io::IoClassHttpSseStream for PlaygroundHttp {
 }
 
 impl io::IoNamespaceHttp for PlaygroundHttp {
-    fn send(
+    fn _send(
         &self,
         heap: &Arc<BexHeap>,
         call_id: CallId,
         request: owned::http::Request,
+        timeout_nanos: Arc<num_bigint::BigInt>,
         ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::Response> {
         let state = self.0.clone();
@@ -310,11 +352,12 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
             request_body: request.body.clone(),
         });
 
-        let native_result = <sys_native::NativeSysOps as io::IoNamespaceHttp>::send(
+        let native_result = <sys_native::NativeSysOps as io::IoNamespaceHttp>::_send(
             &sys_native::NativeSysOps,
             heap,
             call_id,
             request,
+            timeout_nanos,
             ctx,
         );
 
@@ -441,11 +484,12 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
         }
     }
 
-    fn fetch(
+    fn _fetch(
         &self,
         heap: &Arc<BexHeap>,
         call_id: CallId,
         url: String,
+        timeout_nanos: Arc<num_bigint::BigInt>,
         ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::Response> {
         let req = owned::http::Request {
@@ -454,7 +498,7 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
             headers: indexmap::IndexMap::new(),
             body: String::new(),
         };
-        self.send(heap, call_id, req, ctx)
+        self._send(heap, call_id, req, timeout_nanos, ctx)
     }
 
     fn fetch_sse(

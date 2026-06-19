@@ -915,6 +915,7 @@ dependencies = [
 name = "baml_compiler_syntax"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_base",
  "rowan 0.16.1",
 ]
 
@@ -1145,8 +1146,17 @@ name = "baml_type"
 version = "0.0.0-beta"
 dependencies = [
  "baml_base",
+ "baml_type_macros",
  "borsh",
- "subenum",
+]
+
+[[package]]
+name = "baml_type_macros"
+version = "0.0.0-beta"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -3806,6 +3816,7 @@ dependencies = [
  "once_cell",
  "pest",
  "pest_derive",
+ "regex",
  "serde",
  "similar",
  "tempfile",
@@ -6467,6 +6478,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "sdk_test_llm_recordings"
+version = "0.1.0"
+dependencies = [
+ "baml_tests",
+ "bex_engine",
+ "insta",
+ "tokio",
+]
+
+[[package]]
 name = "sdk_test_python_pydantic2"
 version = "0.1.0"
 dependencies = [
@@ -6496,6 +6517,7 @@ dependencies = [
  "askama",
  "baml_base",
  "baml_codegen_types",
+ "indexmap",
  "pretty_assertions",
 ]
 
@@ -6965,18 +6987,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "subenum"
-version = "1.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5eee3fb942ed39f3971438fcc7e05e20717e599e14c5c7cb50edd0df2a44b274"
-dependencies = [
- "heck 0.5.0",
- "proc-macro2",
- "quote",
- "syn 2.0.117",
-]
-
-[[package]]
 name = "subtle"
 version = "2.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7074,6 +7084,7 @@ dependencies = [
  "indexmap",
  "infer",
  "minijinja",
+ "num-bigint",
  "rsa",
  "rustls",
  "serde",

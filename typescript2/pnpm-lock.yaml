@@ -228,6 +228,9 @@ importers:
         specifier: ^9.0.0
         version: 9.0.1
     devDependencies:
+      '@b/pkg-grammar':
+        specifier: workspace:*
+        version: link:../pkg-grammar
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.3
@@ -373,6 +376,9 @@ importers:
 
   pkg-editor:
     dependencies:
+      '@b/pkg-grammar':
+        specifier: workspace:*
+        version: link:../pkg-grammar
       '@b/pkg-playground':
         specifier: workspace:*
         version: link:../pkg-playground
@@ -452,6 +458,8 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+
+  pkg-grammar: {}
 
   pkg-playground:
     dependencies:
