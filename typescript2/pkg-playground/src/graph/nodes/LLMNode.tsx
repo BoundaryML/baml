@@ -1,12 +1,8 @@
 import { type NodeProps } from '@xyflow/react';
 import { Sparkles } from 'lucide-react';
 import { type ComponentType, memo } from 'react';
-import {
-  nodeBackground,
-  nodeShadow,
-  selectionRing,
-  stateColors,
-} from '../constants';
+import { getChrome, nodeBackground, nodeShadow, stateStyle } from '../constants';
+import { useGraphThemeContext } from '../theme';
 import type { WorkflowNodeData } from '../types';
 import { NodeHandles } from './NodeHandles';
 import { NodeOutputPreview } from './NodeOutputPreview';
@@ -15,13 +11,16 @@ export const LLMNode: ComponentType<NodeProps> = memo(({ data }) => {
   const d = data as WorkflowNodeData;
   const isHighlighted = d.selected;
   const isRunning = d.executionState === 'running';
+  const theme = useGraphThemeContext();
+  const chrome = getChrome(theme);
+  const llm = chrome.llm;
   // LLM nodes use a violet accent regardless of state — domain signal first,
   // execution state communicated through the gradient + border tint.
-  const base = stateColors[d.executionState] ?? stateColors['not-started'];
+  const base = stateStyle(theme, d.executionState);
   const colors = {
     ...base,
-    accent: '#6D28D9',
-    border: isHighlighted ? selectionRing.color : 'rgba(109,40,217,0.40)',
+    accent: llm.accent,
+    border: isHighlighted ? chrome.selectionRing.color : llm.border,
   };
 
   return (
@@ -34,9 +33,9 @@ export const LLMNode: ComponentType<NodeProps> = memo(({ data }) => {
           gap: 4,
           padding: '7px 11px 8px 9px',
           borderRadius: 8,
-          background: nodeBackground(colors),
+          background: nodeBackground(colors, theme),
           border: `1px solid ${colors.border}`,
-          boxShadow: nodeShadow(colors, !!isHighlighted),
+          boxShadow: nodeShadow(colors, !!isHighlighted, theme),
           width: '100%',
           height: '100%',
           boxSizing: 'border-box',
@@ -57,9 +56,9 @@ export const LLMNode: ComponentType<NodeProps> = memo(({ data }) => {
               fontSize: 9,
               fontWeight: 700,
               letterSpacing: '0.06em',
-              background: 'rgba(109,40,217,0.10)',
-              color: '#6D28D9',
-              boxShadow: 'inset 0 0 0 1px rgba(109,40,217,0.30)',
+              background: llm.chipBg,
+              color: llm.chipText,
+              boxShadow: `inset 0 0 0 1px ${llm.chipRing}`,
             }}
           >
             <Sparkles

@@ -575,6 +575,7 @@ mod stress {
                             call_id: BexCallId(seq),
                             parent_call_id: BexCallId(seq.saturating_sub(1)),
                             function_id: FunctionId(u32::try_from(engine).unwrap()),
+                            call_site: None,
                             ts_ticks: seq,
                         }
                         .encode(&mut buf);

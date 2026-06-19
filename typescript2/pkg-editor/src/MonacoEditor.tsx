@@ -6,55 +6,32 @@
  *   Workbench (fast): Init VS Code API wrapper + create editor with text.
  *                     The user sees the editor with their code right away.
  *
- *   Worker + LSP (async): Spawn WASM worker, start language client, open Explorer.
- *                         LSP features (hover, diagnostics, completions) light up
- *                         once the worker is ready.
+ *   Backend (async): Connect the injected {@link EditorBackend} — start the
+ *                    language client and open the Playground pane. Language
+ *                    features (hover, diagnostics, completions) light up once
+ *                    the backend is connected.
+ *
+ * The backend is the only thing that differs between deployments:
+ *   - app-promptfiddle injects a WASM-worker backend (LSP + runtime in-browser).
+ *   - baml-cli playground injects a remote backend (LSP + runtime over a
+ *     WebSocket to a real server). See `@b/pkg-editor/remote`.
  */
 
 import { useEffect, useRef, useState, type FC } from 'react';
-import { useSetAtom } from 'jotai';
 import './views-workbench.css';
 import { type IFileWriteOptions } from '@codingame/monaco-vscode-files-service-override';
-import { blobUrlsAtom } from './PlaygroundProvider';
 import type { Dimension } from '@codingame/monaco-vscode-api/vscode/vs/base/browser/dom';
-import type { DecorationOptions, TextEditor } from 'vscode';
+import { isMediaPath, mimeFromPath, toDataUrl, fromDataUrl } from './media';
+import type { EditorBackend, EditorConnection, WorkbenchHandle } from './backend';
 
-// ---------------------------------------------------------------------------
-// Media file helpers
-// ---------------------------------------------------------------------------
+declare const __DEV__: boolean | undefined;
+declare const process: { env: { NODE_ENV?: string } } | undefined;
 
-const MIME_TYPES: Record<string, string> = {
-  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
-  svg: 'image/svg+xml', webp: 'image/webp', ico: 'image/x-icon', bmp: 'image/bmp',
-  mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg',
-  mp4: 'video/mp4', webm: 'video/webm',
-  pdf: 'application/pdf',
-};
-
-function mimeFromPath(path: string): string {
-  const ext = path.split('.').pop()?.toLowerCase() ?? '';
-  return MIME_TYPES[ext] ?? 'application/octet-stream';
-}
-
-function isMediaPath(filename: string): boolean {
-  const ext = filename.split('.').pop()?.toLowerCase() ?? '';
-  return ext in MIME_TYPES;
-}
-
-/** Encode binary data as a data URL. */
-function toDataUrl(data: Uint8Array, mime: string): string {
-  let binary = '';
-  for (const byte of data) binary += String.fromCharCode(byte);
-  return `data:${mime};base64,${btoa(binary)}`;
-}
-
-/** Decode a data URL back to binary. */
-function fromDataUrl(dataUrl: string): Uint8Array {
-  const base64 = dataUrl.split(',')[1] ?? '';
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes;
+function isDevelopmentBuild(): boolean {
+  if (typeof __DEV__ !== 'undefined') {
+    return __DEV__;
+  }
+  return typeof process !== 'undefined' && process.env.NODE_ENV === 'development';
 }
 
 // ---------------------------------------------------------------------------
@@ -70,19 +47,42 @@ export interface MonacoEditorProps {
   files: Record<string, string>;
   /** Called whenever any file changes, is created, or deleted. */
   onFilesChange: (files: Record<string, string>) => void;
+  /** Provides the LSP transport + runtime (worker or remote). */
+  backend: EditorBackend;
+  /**
+   * Absolute path the in-memory workspace is rooted at. Defaults to
+   * '/workspace' (synthetic, for the WASM worker). For a remote server that
+   * operates on real on-disk files, pass the real project root so the editor's
+   * file URIs (`file://<root>/<rel>`) match the URIs the server emits in
+   * diagnostics — no URI translation required.
+   */
+  workspaceRoot?: string;
   /** CSS height for the container. Defaults to '100%'. */
   height?: string;
-  /** Called when the worker is ready — exposes the Worker so SplitPreview can send RPC messages. */
-  onWorkerReady?: (worker: Worker) => void;
+  /** Notified with the latest map of media filename → blob: URL. */
+  onBlobUrlsChange?: (urls: Record<string, string>) => void;
+  /**
+   * If set, enables VS Code's `afterDelay` auto-save with this debounce (ms),
+   * so edits persist without an explicit Cmd+S. The remote backend uses this so
+   * edits flow to the server (and through to disk) automatically. Omit to keep
+   * manual-save semantics (the worker backend persists via onFilesChange).
+   */
+  autoSaveDelayMs?: number;
+  /**
+   * Track unsaved-edit state (for save-on-disk backends). When enabled, the
+   * editor watches edit/save events and reports whether any file has edits not
+   * yet written to disk via {@link onUnsavedChange}. (monaco's own dirty-dot
+   * isn't reliably surfaced in this workbench's layout, so the host renders the
+   * indicator itself — e.g. in a toolbar.)
+   */
+  showSaveHint?: boolean;
+  /** Called with true/false as the unsaved-edits state changes (needs showSaveHint). */
+  onUnsavedChange?: (hasUnsaved: boolean) => void;
 }
 
 function createWorkspaceContent(workspacePath: string): string {
   return JSON.stringify({ folders: [{ path: workspacePath }] }, null, 2);
 }
-
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
 // Loading skeleton — matches "Default Dark Modern" so the transition is smooth.
@@ -148,30 +148,43 @@ const EditorSkeleton: FC<{ height: string }> = ({ height }) => (
   </div>
 );
 
-export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, height = '100%', onWorkerReady }) => {
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
+
+export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, backend, workspaceRoot = '/workspace', height = '100%', onBlobUrlsChange, autoSaveDelayMs, showSaveHint, onUnsavedChange }) => {
+  /** Marks a file (by uri string) as saved/clean — set by the save-hint setup so
+   *  the disk-change handler can clear externally-applied edits from the hint. */
+  const markFileSavedRef = useRef<(uriString: string) => void>(() => {});
+  /** Set of file uris with edits not yet saved to disk. */
+  const unsavedFilesRef = useRef<Set<string>>(new Set());
+  const onUnsavedChangeRef = useRef(onUnsavedChange);
+  onUnsavedChangeRef.current = onUnsavedChange;
   const containerRef = useRef<HTMLDivElement>(null);
   const onFilesChangeRef = useRef(onFilesChange);
-  const onWorkerReadyRef = useRef(onWorkerReady);
+  const onBlobUrlsChangeRef = useRef(onBlobUrlsChange);
+  const blobUrlsRef = useRef<Record<string, string>>({});
+  const backendRef = useRef(backend);
   const filesRef = useRef(files);
   const [ready, setReady] = useState(false);
-  const [workerVersion, setWorkerVersion] = useState(0);
-  const [wasmBuildTime, setWasmBuildTime] = useState<number | null>(null);
+  const [connectionCount, setConnectionCount] = useState(0);
   const [mounted, setMounted] = useState(false);
-  const workerRef = useRef<Worker | null>(null);
-  const workerLspDisposablesRef = useRef<Array<{ dispose: () => void }>>([]);
-  const workbenchContextRef = useRef<Record<string, unknown> | null>(null);
-  /** Increments each time we connect worker+LSP; used as React key to force ExecutionPanel remount. */
+  /** Active backend connection (LSP transport + runtime). */
+  const currentConnRef = useRef<EditorConnection | null>(null);
+  /** Disposables tied to the current connection (language client + connection). */
+  const connDisposablesRef = useRef<Array<{ dispose: () => void | Promise<void> }>>([]);
+  /** Increments each time we connect; used as React key to force ExecutionPanel remount. */
   const connectionVersionRef = useRef(0);
-  /** Callback to restart the worker; set once connectWorkerAndLsp is defined. */
-  const restartWorkerRef = useRef<(() => void) | null>(null);
-  const setBlobUrls = useSetAtom(blobUrlsAtom);
+  /** Callback to restart the connection; set once `connect` is defined. */
+  const restartRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
   onFilesChangeRef.current = onFilesChange;
-  onWorkerReadyRef.current = onWorkerReady;
+  onBlobUrlsChangeRef.current = onBlobUrlsChange;
+  backendRef.current = backend;
   filesRef.current = files;
 
   useEffect(() => {
@@ -179,7 +192,6 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
 
     let disposed = false;
     const disposables: Array<{ dispose: () => void }> = [];
-    let worker: Worker | null = null;
 
     (async () => {
       // ════════════════════════════════════════════════════════════════
@@ -233,9 +245,14 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
 
       if (disposed || !containerRef.current) return;
 
+      // Workspace root (absolute path the in-memory FS is rooted at).
+      const root = (workspaceRoot.replace(/\/+$/, '') || '') || '/workspace';
+      const rootPrefix = `${root}/`;
+      const workspaceConfigPath = `${root}.code-workspace`;
+
       // Set up in-memory filesystem
-      const workspaceFolderUri = vscode.Uri.file('/workspace');
-      const workspaceFileUri = vscode.Uri.file('/workspace.code-workspace');
+      const workspaceFolderUri = vscode.Uri.file(root);
+      const workspaceFileUri = vscode.Uri.file(workspaceConfigPath);
 
       const { InMemoryFileSystemProvider, registerFileSystemOverlay, FileChangeType } = filesOverride;
       const rawFs = new InMemoryFileSystemProvider();
@@ -243,9 +260,9 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
       const decoder = new TextDecoder();
       const writeOpts: IFileWriteOptions = { atomic: false, unlock: false, create: true, overwrite: true };
 
-      // Sandbox: only allow operations inside /workspace (plus the workspace config file).
-      const WORKSPACE_ROOT = '/workspace';
-      const WORKSPACE_CONFIG = '/workspace.code-workspace';
+      // Sandbox: only allow operations inside the workspace root (plus its config file).
+      const WORKSPACE_ROOT = root;
+      const WORKSPACE_CONFIG = workspaceConfigPath;
 
       /** Returns true if the path is inside /workspace or is the workspace config file. */
       const isAllowedPath = (uri: { path: string }): boolean => {
@@ -299,16 +316,28 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
         },
       });
 
-      // Create workspace directory
-      await fileSystemProvider.mkdir(workspaceFolderUri);
+      // Create the workspace directory and ALL its ancestors. When rooted at a
+      // real on-disk path (e.g. /Users/me/project/baml_src), the ancestors
+      // (/Users, /Users/me, …) live OUTSIDE the sandbox, so we must use the raw
+      // (un-proxied) provider — the sandbox proxy only permits paths inside the
+      // root and would reject creating the chain that leads to it.
+      {
+        const rootParts = root.split('/');
+        for (let i = 2; i <= rootParts.length; i++) {
+          const dir = rootParts.slice(0, i).join('/');
+          if (!dir) continue;
+          try { await rawFs.mkdir(vscode.Uri.file(dir)); } catch { /* already exists */ }
+        }
+      }
 
       // Write ALL persisted files to the in-memory FS.
       // Media files (images, etc.) are decoded from data URLs and also get blob URLs.
       const allFiles = filesRef.current;
       const blobUrlMap: Record<string, string> = {};
+      blobUrlsRef.current = blobUrlMap;
 
       for (const [filename, content] of Object.entries(allFiles)) {
-        const absPath = filename.startsWith('/workspace/') ? filename : `/workspace/${filename}`;
+        const absPath = filename.startsWith(rootPrefix) ? filename : `${rootPrefix}${filename}`;
         const parts = absPath.split('/');
         for (let i = 2; i < parts.length; i++) {
           const parentPath = parts.slice(0, i).join('/');
@@ -326,15 +355,17 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
           await fileSystemProvider.writeFile(vscode.Uri.file(absPath), encoder.encode(content), writeOpts);
         }
       }
-      setBlobUrls({ ...blobUrlMap });
+      onBlobUrlsChangeRef.current?.({ ...blobUrlMap });
 
       // Write workspace config
       await fileSystemProvider.writeFile(
         workspaceFileUri,
-        encoder.encode(createWorkspaceContent('/workspace')),
+        encoder.encode(createWorkspaceContent(root)),
         writeOpts,
       );
       registerFileSystemOverlay(1, fileSystemProvider);
+
+      const windowLabel = backendRef.current.windowLabel ?? 'BAML Playground';
 
       // Init VS Code API wrapper and start the workbench
       const apiWrapper = new MonacoVscodeApiWrapper({
@@ -347,7 +378,7 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
         },
         workspaceConfig: {
           enableWorkspaceTrust: true,
-          windowIndicator: { label: 'BAML Playground — Edit, compile, and run BAML in the browser', tooltip: '', command: '' },
+          windowIndicator: { label: windowLabel, tooltip: '', command: '' },
           workspaceProvider: {
             trusted: true,
             async open() { return true; },
@@ -378,8 +409,8 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
         },
         monacoWorkerFactory: () => {
           // Custom worker factory — the `new URL(..., import.meta.url)` patterns
-          // must be in OUR source code (not node_modules) so the bundler can
-          // resolve them at build time into proper asset URLs.
+          // must be in OUR source code (the consuming app transpiles pkg-editor)
+          // so the bundler can resolve them at build time into proper asset URLs.
           // eslint-disable-next-line react-hooks/rules-of-hooks -- not a React hook
           useWorkerFactory({
             workerLoaders: {
@@ -407,6 +438,9 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
             'editor.tabSize': 2,
             'editor.renderLineHighlight': 'line',
             'editor.padding.top': 12,
+            ...(autoSaveDelayMs != null
+              ? { 'files.autoSave': 'afterDelay', 'files.autoSaveDelay': autoSaveDelayMs }
+              : {}),
           }),
         },
         extensions: [{
@@ -524,7 +558,7 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
 
         const IMAGE_PANE_ID = 'baml.imagePreview';
         const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico']);
-        const WORKSPACE_PREFIX = '/workspace/';
+        const WORKSPACE_PREFIX = rootPrefix;
 
         class ImagePreviewInput extends SimpleEditorInput {
           constructor(uri: any) {
@@ -682,7 +716,7 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
       const fileNames = Object.keys(allFiles).filter(f => !isMediaPath(f));
       const firstFileIndex = fileNames.findIndex(path => path.endsWith('main.baml'));
       const firstFile = firstFileIndex !== -1 ? fileNames[firstFileIndex] : fileNames[0];
-      const firstFileUri = vscode.Uri.file(`/workspace/${firstFile}`);
+      const firstFileUri = vscode.Uri.file(`${rootPrefix}${firstFile}`);
 
       // Open the document and show it in the editor
       await vscode.workspace.openTextDocument(firstFileUri);
@@ -696,36 +730,64 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
       // Workbench ready — editor is visible, hide skeleton
       setReady(true);
 
+      // ── Unsaved-changes indicator ────────────────────────────────────
+      // For save-on-disk backends, drive a React-rendered badge (below) while
+      // there are edits not yet written to disk. We track this from edit/save
+      // events — monaco's own dirty-dot isn't surfaced in this workbench's
+      // layout (no visible status bar). Externally-applied edits (pushed from
+      // disk) are cleared via markFileSavedRef so they don't read as "unsaved".
+      if (showSaveHint) {
+        const refresh = () => onUnsavedChangeRef.current?.(unsavedFilesRef.current.size > 0);
+        const onChange = vscode.workspace.onDidChangeTextDocument((e) => {
+          if (e.document.uri.path.endsWith('.baml')) {
+            unsavedFilesRef.current.add(e.document.uri.toString());
+            refresh();
+          }
+        });
+        const onSave = vscode.workspace.onDidSaveTextDocument((doc) => {
+          unsavedFilesRef.current.delete(doc.uri.toString());
+          refresh();
+        });
+        markFileSavedRef.current = (uriString: string) => {
+          unsavedFilesRef.current.delete(uriString);
+          refresh();
+        };
+        disposables.push({
+          dispose: () => {
+            onChange.dispose();
+            onSave.dispose();
+          },
+        });
+      }
+
       // ── Track live file state ────────────────────────────────────────
       // Single mutable map for all files (text + media).
       // Text files store raw content, media files store data URLs.
       const liveFiles: Record<string, string> = { ...allFiles };
 
-      /** Helper: extract just the filename from a vscode Uri under /workspace/ */
+      /** Helper: extract the workspace-relative filename from a vscode Uri. */
       const uriToFilename = (uri: { path: string }): string | null => {
-        const prefix = '/workspace/';
-        if (uri.path.startsWith(prefix)) {
-          return uri.path.slice(prefix.length);
+        if (uri.path.startsWith(rootPrefix)) {
+          return uri.path.slice(rootPrefix.length);
         }
         return null;
       };
 
-      /** Notify parent of the latest file state and push to worker VFS. */
+      /** Notify parent of the latest file state and push to the active backend. */
       const pushUpdate = () => {
-        onFilesChangeRef.current({ ...liveFiles });
-        if (workerRef.current) {
-          workerRef.current.postMessage({ type: 'filesChanged', files: { ...liveFiles } });
-        }
+        const snapshot = { ...liveFiles };
+        onFilesChangeRef.current(snapshot);
+        currentConnRef.current?.onFilesChanged?.(snapshot);
       };
 
-      /** Create a blob URL for a media file and update the atom. */
+      /** Create a blob URL for a media file and notify the host. */
       const updateBlobUrl = (filename: string, bytes: Uint8Array) => {
         if (blobUrlMap[filename]) {
           URL.revokeObjectURL(blobUrlMap[filename]);
         }
         const mime = mimeFromPath(filename);
         blobUrlMap[filename] = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: mime }));
-        setBlobUrls({ ...blobUrlMap });
+        onBlobUrlsChangeRef.current?.({ ...blobUrlMap });
       };
 
       /** Remove a blob URL for a deleted media file. */
@@ -733,7 +795,7 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
         if (blobUrlMap[filename]) {
           URL.revokeObjectURL(blobUrlMap[filename]);
           delete blobUrlMap[filename];
-          setBlobUrls({ ...blobUrlMap });
+          onBlobUrlsChangeRef.current?.({ ...blobUrlMap });
         }
       };
 
@@ -757,12 +819,8 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
         cursorDebounceTimer = setTimeout(() => {
           const pos = e.selections[0]?.active;
           if (!pos) return;
-          workerRef.current?.postMessage({
-            type: 'cursorPosition',
-            file: filename,
-            line: pos.line,        // VS Code API is 0-indexed, matches lsp_types::Position
-            column: pos.character,  // VS Code API is 0-indexed, matches lsp_types::Position
-          });
+          // VS Code API positions are 0-indexed, matching lsp_types::Position.
+          currentConnRef.current?.onCursorMoved?.(filename, pos.line, pos.character);
         }, 50);
       });
       disposables.push({ dispose: () => { clearTimeout(cursorDebounceTimer); cursorSubscription.dispose(); } });
@@ -783,7 +841,7 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
             if (isMedia) removeBlobUrl(filename);
             pushUpdate();
           } else if (event.type === FileChangeType.UPDATED || event.type === FileChangeType.ADDED) {
-            const fileUri = vscode.Uri.file(`/workspace/${filename}`);
+            const fileUri = vscode.Uri.file(`${rootPrefix}${filename}`);
             fileSystemProvider.readFile(fileUri).then((bytes: Uint8Array) => {
               if (disposed) return;
               if (isMedia) {
@@ -804,280 +862,137 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
       // Our openEditor decorator (above) routes image files to the image
       // preview pane, so both drag-drop and the Upload button just work.
 
-      // Store workbench context so worker+LSP (and restart) can use it without re-running workbench setup.
-      workbenchContextRef.current = {
+      // Handle given to backends so they can reflect server/worker-side
+      // changes back into the editor without re-running workbench setup.
+      const handle: WorkbenchHandle = {
+        vscode,
         liveFiles,
         fileSystemProvider,
         encoder,
         decoder,
-        blobUrlMap,
         updateBlobUrl,
         removeBlobUrl,
-        vscode,
-        allFiles,
+        notifyFilesChanged: (files) => onFilesChangeRef.current(files ?? { ...liveFiles }),
+        isDisposed: () => disposed,
       };
 
       // ════════════════════════════════════════════════════════════════
-      // Worker + LSP — connect WASM worker and language client (re-run on restart)
+      // Backend — connect LSP transport + runtime (re-run on reload)
       // ════════════════════════════════════════════════════════════════
 
-      const connectWorkerAndLsp = async () => {
-        const ctx = workbenchContextRef.current;
-        if (!ctx || disposed) return;
-        const {
-          liveFiles: lf,
-          fileSystemProvider: fsp,
-          encoder: enc,
-          decoder: dec,
-          blobUrlMap: blobs,
-          updateBlobUrl: updBlob,
-          removeBlobUrl: remBlob,
-          vscode: vs,
-          allFiles: af,
-        } = ctx as {
-          liveFiles: Record<string, string>;
-          fileSystemProvider: { mkdir: (u: unknown) => Promise<void>; writeFile: (u: unknown, c: unknown, o: unknown) => Promise<void>; delete: (u: unknown, o: unknown) => Promise<void> };
-          encoder: TextEncoder;
-          decoder: TextDecoder;
-          blobUrlMap: Record<string, string>;
-          updateBlobUrl: (filename: string, bytes: Uint8Array) => void;
-          removeBlobUrl: (filename: string) => void;
-          vscode: typeof import("vscode");
-          allFiles: Record<string, string>;
-        };
-        const workerLspDisposables = workerLspDisposablesRef.current;
-
-        const { LanguageClientWrapper } = await import('monaco-languageclient/lcwrapper');
-        const { BrowserMessageReader, BrowserMessageWriter } = await import('vscode-languageclient/browser');
-
+      const connect = async () => {
         if (disposed) return;
 
-        // Spawn worker — WASM loads inside the worker, doesn't block main thread
-        worker = new Worker(
-          new URL('./baml-lsp-worker.ts', import.meta.url),
-          { type: 'module', name: 'BAML Worker' },
-        );
-        workerRef.current = worker;
+        const { LanguageClientWrapper } = await import('monaco-languageclient/lcwrapper');
+        if (disposed) return;
 
-      // Listen for the 'ready' message IMMEDIATELY — before any awaits —
-      // so we don't miss it if WASM loads fast (e.g. from cache).
-      const workerReadyPromise = new Promise<void>((resolve) => {
-        const onMsg = (event: MessageEvent) => {
-          if (event.data?.type === 'ready') {
-            worker!.removeEventListener('message', onMsg);
-            resolve();
-          }
-        };
-        worker!.addEventListener('message', onMsg);
-      });
-
-        // Listen for VFS mutations from the WASM runtime (worker → main).
-        const onVfsChange = (event: MessageEvent) => {
-          if (disposed) return;
-          const data = event.data;
-          if (data?.type === 'vfsFileChanged') {
-            const { path: relPath, content } = data as { path: string; content: string };
-            lf[relPath] = content;
-            const absPath = `/workspace/${relPath}`;
-            const isMedia = isMediaPath(relPath);
-            const bytes = isMedia ? fromDataUrl(content) : enc.encode(content);
-            (async () => {
-              const parts = absPath.split('/');
-              for (let i = 2; i < parts.length; i++) {
-                const parentPath = parts.slice(0, i).join('/');
-                try { await fsp.mkdir(vs.Uri.file(parentPath)); } catch { /* exists */ }
-              }
-              await fsp.writeFile(vs.Uri.file(absPath), bytes, { create: true, overwrite: true, unlock: false, atomic: false });
-              if (isMedia) updBlob(relPath, bytes);
-            })();
-            onFilesChangeRef.current({ ...lf });
-          } else if (data?.type === 'vfsFileDeleted') {
-            const { path: relPath } = data as { path: string };
-            delete lf[relPath];
-            const absPath = `/workspace/${relPath}`;
-            fsp.delete(vs.Uri.file(absPath), { recursive: false, useTrash: false, atomic: false }).catch(() => {});
-            if (isMediaPath(relPath)) remBlob(relPath);
-            onFilesChangeRef.current({ ...lf });
-          } else if (data?.type === 'buildTime') {
-            const { value } = data as { value: string };
-            setWasmBuildTime(Number(value) || null);
-          }
-        };
-        worker!.addEventListener('message', onVfsChange);
-        workerLspDisposables.push({ dispose: () => worker?.removeEventListener('message', onVfsChange) });
-
-        const channel = new MessageChannel();
-        worker.postMessage(
-          {
-            port: channel.port2,
-            initialFiles: { ...lf },
-            rootPath: '/workspace',
-          },
-          [channel.port2],
-        );
-
-        const reader = new BrowserMessageReader(channel.port1);
-        const writer = new BrowserMessageWriter(channel.port1);
-
-        if (disposed) { worker.terminate(); return; }
+        const conn = await backendRef.current.connect(handle);
+        if (disposed) { await conn.dispose(); return; }
+        currentConnRef.current = conn;
 
         const lcWrapper = new LanguageClientWrapper({
           languageId: 'baml',
           clientOptions: {
             documentSelector: ['baml'],
           },
-          connection: {
-            options: { $type: 'WorkerDirect', worker, messagePort: channel.port1 },
-            messageTransports: { reader, writer },
-          },
+          connection: conn.lcConnection,
         });
 
         await lcWrapper.start();
-        if (disposed) { worker.terminate(); return; }
-        workerLspDisposables.push({ dispose: () => lcWrapper.dispose() });
+        if (disposed) { await lcWrapper.dispose(); await conn.dispose(); return; }
 
-        await workerReadyPromise;
-        if (disposed) { worker.terminate(); return; }
+        connDisposablesRef.current.push(
+          { dispose: () => lcWrapper.dispose() },
+          { dispose: () => conn.dispose() },
+        );
+
+        // Live-apply external on-disk edits the server pushes (remote backend
+        // only — the worker backend's in-browser LSP never sends this), so the
+        // editor stays in sync when files change underneath it (e.g. edited in
+        // VS Code). The server already does echo-avoidance, so this won't fire
+        // for the browser's own write-throughs.
+        const lspClient = lcWrapper.getLanguageClient();
+        if (lspClient) {
+          const diskChangeSub = lspClient.onNotification(
+            'baml/fileChangedOnDisk',
+            async (params: { uri: string; text: string }) => {
+              if (disposed) return;
+              try {
+                const fileUri = vscode.Uri.parse(params.uri);
+                const target = fileUri.toString();
+                const openDoc = vscode.workspace.textDocuments.find(
+                  (d) => d.uri.toString() === target,
+                );
+                if (openDoc) {
+                  if (openDoc.getText() === params.text) return; // already current
+                  const lastLine = Math.max(openDoc.lineCount - 1, 0);
+                  const end = openDoc.lineAt(lastLine).range.end;
+                  const edit = new vscode.WorkspaceEdit();
+                  edit.replace(
+                    fileUri,
+                    new vscode.Range(new vscode.Position(0, 0), end),
+                    params.text,
+                  );
+                  await vscode.workspace.applyEdit(edit);
+                } else {
+                  // Not open: refresh the in-memory FS so the file tree and the
+                  // next open show the current content.
+                  await fileSystemProvider.writeFile(
+                    fileUri,
+                    encoder.encode(params.text),
+                    { create: true, overwrite: true, unlock: false, atomic: false },
+                  );
+                }
+                // The applyEdit above counts as a text change; clear it from the
+                // unsaved indicator since this content came FROM disk.
+                markFileSavedRef.current(target);
+              } catch (err) {
+                console.error('[MonacoEditor] applying external file change failed:', err);
+              }
+            },
+          );
+          connDisposablesRef.current.push({ dispose: () => diskChangeSub.dispose() });
+        }
 
         const { setRuntimePort, setReloadCallback, setNavigateToSource } = await import('./ExecutionPanelPane');
-        const { WorkerRuntimePort } = await import('@b/pkg-playground');
-        const vscode = await import('vscode');
 
-        const runtimePort = new WorkerRuntimePort(worker!);
-        workerLspDisposables.push(runtimePort);
-        onWorkerReadyRef.current?.(worker!);
-        setRuntimePort(runtimePort, { connectionVersion: connectionVersionRef.current });
-        setReloadCallback(() => restartWorkerRef.current?.());
+        setRuntimePort(conn.runtimePort, { connectionVersion: connectionVersionRef.current });
+        setReloadCallback(() => restartRef.current?.());
         setNavigateToSource((source) => {
-          // Find a visible BAML editor to navigate to.
-          // NOTE: The WASM runtime exposes runtime.resolveFileId(fileId) which returns the
-          // full file path. To use it from here, we'd need to add RPC from main thread → worker.
-          // For now, we search visible BAML editors as a fallback since promptfiddle typically
-          // has a single .baml file open.
+          // Find a visible BAML editor to navigate to. promptfiddle typically
+          // has a single .baml file open; this also covers multi-file projects
+          // where the target file is currently visible.
           const bamlEditor = vscode.window.visibleTextEditors.find(
-            (e) => e.document.uri.path.endsWith('.baml') || e.document.languageId === 'baml'
+            (ed) => ed.document.uri.path.endsWith('.baml') || ed.document.languageId === 'baml'
           );
           const editor = bamlEditor ?? vscode.window.activeTextEditor;
           if (editor) {
-            const position = new vscode.Position(source.line, source.column);
-            editor.selection = new vscode.Selection(position, position);
-            editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
+            // line/column/endLine/endColumn are 0-indexed LSP positions, and
+            // the backend expands end_* so the whole node span can be selected
+            // directly (see SourceSpan in baml_compiler2_visualization).
+            const start = new vscode.Position(source.line, source.column);
+            const end =
+              source.endLine != null && source.endColumn != null
+                ? new vscode.Position(source.endLine, source.endColumn)
+                : start;
+            // anchor=start, active=end → the span is selected with the caret
+            // at its end (kept inside the span for the graph round-trip check).
+            editor.selection = new vscode.Selection(start, end);
+            editor.revealRange(new vscode.Range(start, end), vscode.TextEditorRevealType.InCenter);
           }
         });
-
-        // ── Log decorations (inline display like ErrorLens) ───────────────
-        // Create decoration types for each log level with inline after-text
-        let lastDecoratedEditor: TextEditor | undefined;
-        const logDecorationTypes = {
-          debug: vscode.window.createTextEditorDecorationType({
-            after: { color: '#888888', margin: '0 0 0 1em' },
-            isWholeLine: true,
-          }),
-          info: vscode.window.createTextEditorDecorationType({
-            after: { color: '#3794ff', margin: '0 0 0 1em' },
-            isWholeLine: true,
-          }),
-          warn: vscode.window.createTextEditorDecorationType({
-            after: { color: '#cca700', margin: '0 0 0 1em' },
-            isWholeLine: true,
-          }),
-          error: vscode.window.createTextEditorDecorationType({
-            after: { color: '#f14c4c', margin: '0 0 0 1em' },
-            isWholeLine: true,
-          }),
-        };
-        workerLspDisposables.push(
-          { dispose: () => logDecorationTypes.debug.dispose() },
-          { dispose: () => logDecorationTypes.info.dispose() },
-          { dispose: () => logDecorationTypes.warn.dispose() },
-          { dispose: () => logDecorationTypes.error.dispose() },
-        );
-
-        // Apply log decorations to the active editor
-        const applyLogDecorations = (decorations: Array<{ line: number; level: string; message: string; count: number }>) => {
-          try {
-            // Try activeTextEditor first, fall back to visibleTextEditors
-            let editor = vscode.window.activeTextEditor;
-
-            if (!editor) {
-              // Find a BAML editor from visible editors
-              editor = vscode.window.visibleTextEditors.find(e => e.document.uri.path.endsWith('.baml'));
-            }
-
-            if (!editor) {
-              return;
-            }
-
-            // Track this editor so we can clear its decorations later
-            lastDecoratedEditor = editor;
-
-            // Group decorations by level
-            const byLevel: Record<string, DecorationOptions[]> = {
-              debug: [], info: [], warn: [], error: [],
-            };
-
-            for (const dec of decorations) {
-              const level = dec.level as keyof typeof byLevel;
-              if (!(level in byLevel)) continue;
-
-              const line = dec.line - 1; // Convert to 0-indexed
-              if (line < 0) continue;
-
-              const countSuffix = dec.count > 1 ? ` ×${dec.count}` : '';
-              const text = `  // ${dec.level}: ${dec.message}${countSuffix}`;
-
-              byLevel[level].push({
-                range: new vscode.Range(line, 0, line, 0),
-                renderOptions: {
-                  after: { contentText: text },
-                },
-              });
-            }
-
-            // Apply decorations for each level
-            editor.setDecorations(logDecorationTypes.debug, byLevel.debug);
-            editor.setDecorations(logDecorationTypes.info, byLevel.info);
-            editor.setDecorations(logDecorationTypes.warn, byLevel.warn);
-            editor.setDecorations(logDecorationTypes.error, byLevel.error);
-          } catch {
-            // Silently ignore decoration errors
-          }
-        };
-
-        // Clear all log decorations on the editor that received them
-        const clearLogDecorations = () => {
-          if (!lastDecoratedEditor) return;
-          lastDecoratedEditor.setDecorations(logDecorationTypes.debug, []);
-          lastDecoratedEditor.setDecorations(logDecorationTypes.info, []);
-          lastDecoratedEditor.setDecorations(logDecorationTypes.warn, []);
-          lastDecoratedEditor.setDecorations(logDecorationTypes.error, []);
-          lastDecoratedEditor = undefined;
-        };
-
-        // Listen for log decoration messages from the worker
-        const onLogDecorations = (event: MessageEvent) => {
-          if (disposed) return;
-          const data = event.data;
-          if (data?.type === 'logDecorations') {
-            applyLogDecorations(data.decorations);
-          } else if (data?.type === 'clearLogDecorations') {
-            clearLogDecorations();
-          }
-        };
-        worker!.addEventListener('message', onLogDecorations);
-        workerLspDisposables.push({ dispose: () => worker?.removeEventListener('message', onLogDecorations) });
 
         connectionVersionRef.current += 1;
       };
 
-      await connectWorkerAndLsp();
+      await connect();
 
-      restartWorkerRef.current = () => {
+      restartRef.current = () => {
         void (async () => {
-          const w = workerRef.current;
-          // Dispose LSP and worker, then reconnect.
-          const toDispose = workerLspDisposablesRef.current;
-          workerLspDisposablesRef.current = [];
+          // Dispose the current connection (language client + transports), then reconnect.
+          const toDispose = connDisposablesRef.current;
+          connDisposablesRef.current = [];
+          currentConnRef.current = null;
           for (const d of toDispose) {
             try {
               const r = d.dispose();
@@ -1088,23 +1003,13 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
               /* no-op */
             }
           }
-          if (w) {
-            try {
-              w.postMessage({ type: "dispose" });
-            } catch {
-              /* worker may already be terminated */
-            }
-            w.terminate();
-          }
-          workerRef.current = null;
-          setWasmBuildTime(null);
           // Yield before reconnecting so disposal side-effects settle.
           await new Promise((resolve) => setTimeout(resolve, 0));
           try {
-            await connectWorkerAndLsp();
-            setWorkerVersion((v) => v + 1);
+            await connect();
+            setConnectionCount((v) => v + 1);
           } catch (err: unknown) {
-            console.error('[MonacoEditor] Restart failed:', err);
+            console.error('[MonacoEditor] Reconnect failed:', err);
           }
         })();
       };
@@ -1112,29 +1017,29 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
       console.error('[MonacoEditor] Init failed:', err);
     });
 
-    // ── Cleanup (unmount only; restart only disposes worker+LSP) ──────
+    // ── Cleanup (unmount only) ──────────────────────────────────────
     return () => {
-      restartWorkerRef.current = null;
+      restartRef.current = null;
       disposed = true;
-      workbenchContextRef.current = null;
-      workerRef.current = null;
-      setWasmBuildTime(null);
-      for (const d of workerLspDisposablesRef.current) {
-        try { d.dispose(); } catch { /* no-op */ }
+      currentConnRef.current = null;
+      for (const url of Object.values(blobUrlsRef.current)) {
+        URL.revokeObjectURL(url);
       }
-      workerLspDisposablesRef.current = [];
+      blobUrlsRef.current = {};
+      onBlobUrlsChangeRef.current?.({});
+      const toDispose = connDisposablesRef.current;
+      connDisposablesRef.current = [];
+      for (const d of toDispose) {
+        try { void d.dispose(); } catch { /* no-op */ }
+      }
       for (const d of disposables) {
         try { d.dispose(); } catch { /* no-op */ }
-      }
-      if (worker) {
-        worker.terminate();
-        worker = null;
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const isDev = process.env.NODE_ENV === "development";
+  const isDev = isDevelopmentBuild();
 
   return (
     <div className="w-full relative overflow-hidden" style={{ height }}>
@@ -1146,34 +1051,16 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
       )}
       {/* Actual workbench mounts here */}
       <div ref={containerRef} className="nokey w-full h-full relative overflow-hidden" />
-      {/* Dev-only: restart button + worker info (client-only to avoid hydration mismatch) */}
-      {mounted && isDev && (
+      {/* Dev-only: reload button (client-only to avoid hydration mismatch) */}
+      {mounted && isDev && backend.supportsReload && (
         <button
           type="button"
-          onClick={() => restartWorkerRef.current?.()}
-          className="absolute bottom-2 right-2 z-10 flex flex-col gap-0.5 rounded px-2 py-1 font-mono text-xs text-neutral-400 bg-black/50 border border-neutral-700 text-left cursor-pointer hover:bg-black/70 hover:border-neutral-600 transition-colors"
-          title="Click to restart the BAML worker (loads fresh WASM)."
+          onClick={() => restartRef.current?.()}
+          className="absolute bottom-2 right-2 z-10 flex items-center gap-2 rounded px-2 py-1 font-mono text-xs text-neutral-400 bg-black/50 border border-neutral-700 text-left cursor-pointer hover:bg-black/70 hover:border-neutral-600 transition-colors"
+          title="Click to reconnect the BAML backend (loads fresh WASM)."
         >
-          <div className="flex items-center gap-2">
-            <span>Worker v{workerVersion}</span>
-            <span className="text-sky-400/80" title="Connection version (port identity)">
-              port:{connectionVersionRef.current}
-            </span>
-          </div>
-          {wasmBuildTime != null && (() => {
-            const d = new Date(wasmBuildTime * 1000);
-            const abs = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-            const delta = Math.floor(Date.now() / 1000) - wasmBuildTime;
-            const rel = delta < 60 ? `${delta}s ago`
-              : delta < 3600 ? `${Math.floor(delta / 60)}m ago`
-              : delta < 86400 ? `${Math.floor(delta / 3600)}h ago`
-              : `${Math.floor(delta / 86400)}d ago`;
-            return (
-              <span className="truncate max-w-[250px]">
-                Built: {abs} ({rel})
-              </span>
-            );
-          })()}
+          <span>Reconnect</span>
+          <span className="text-sky-400/80" title="Connection count">#{connectionCount}</span>
         </button>
       )}
     </div>

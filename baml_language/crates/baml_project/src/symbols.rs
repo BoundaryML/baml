@@ -109,7 +109,7 @@ pub fn list_functions_with_metadata(db: &ProjectDatabase) -> Vec<FunctionSymbol>
     let pkg_id = PackageId::new(db, Name::new("user"));
     let pkg = package_items(db, pkg_id);
     let mut result = Vec::new();
-    for ns_items in pkg.namespaces.values() {
+    for (namespace_path, ns_items) in &pkg.namespaces {
         for (name, defn) in &ns_items.values {
             if let Definition::Function(func_loc) = defn {
                 let item_tree = file_item_tree(db, func_loc.file(db));
@@ -132,7 +132,7 @@ pub fn list_functions_with_metadata(db: &ProjectDatabase) -> Vec<FunctionSymbol>
                 let is_sub_function = name.as_str().contains('$');
 
                 result.push(FunctionSymbol {
-                    name: name.to_string(),
+                    name: playground_function_name(namespace_path, name),
                     origin: func.origin.into(),
                     is_llm,
                     client_name,
@@ -143,6 +143,19 @@ pub fn list_functions_with_metadata(db: &ProjectDatabase) -> Vec<FunctionSymbol>
     }
     result.sort_by(|a, b| a.name.cmp(&b.name));
     result
+}
+
+/// Function names exposed to the playground preserve source namespaces so the
+/// UI can group them. Root-level functions keep their historical bare names.
+pub(crate) fn playground_function_name(namespace_path: &[Name], name: &Name) -> String {
+    if namespace_path.is_empty() {
+        return name.to_string();
+    }
+
+    let mut parts = Vec::with_capacity(namespace_path.len() + 1);
+    parts.extend(namespace_path.iter().map(ToString::to_string));
+    parts.push(name.to_string());
+    parts.join(".")
 }
 
 /// List tests with full metadata for the playground.
@@ -176,4 +189,46 @@ pub fn list_tests_with_metadata(db: &ProjectDatabase) -> Vec<TestSymbol> {
     }
     result.sort_by(|a, b| a.name.cmp(&b.name));
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_db() -> ProjectDatabase {
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("/tmp"));
+        db
+    }
+
+    #[test]
+    fn playground_function_metadata_preserves_namespace_paths() {
+        let mut db = make_db();
+        db.add_or_update_file(
+            std::path::Path::new("/tmp/main.baml"),
+            "function RootMain() -> int { 1 }",
+        );
+        db.add_or_update_file(
+            std::path::Path::new("/tmp/ns_demo/demo.baml"),
+            "function DemoFunc() -> int { 2 }",
+        );
+        db.add_or_update_file(
+            std::path::Path::new("/tmp/ns_demo/ns_inner/inner.baml"),
+            "function InnerFunc() -> int { 3 }",
+        );
+
+        let names = list_functions_with_metadata(&db)
+            .into_iter()
+            .map(|function| function.name)
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            names,
+            vec![
+                "RootMain".to_string(),
+                "demo.DemoFunc".to_string(),
+                "demo.inner.InnerFunc".to_string(),
+            ]
+        );
+    }
 }

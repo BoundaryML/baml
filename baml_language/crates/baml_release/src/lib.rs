@@ -542,6 +542,9 @@ fn validate_archive_layout(
             format!("bin/baml-cli{exe_suffix}"),
             format!("bin/baml-pack-host{exe_suffix}"),
             "assets/baml-vscode.vsix".to_string(),
+            "assets/playground/index.html".to_string(),
+            "assets/playground/assets/index.js".to_string(),
+            "assets/playground/assets/index.css".to_string(),
         ],
         Product::Wrapper => vec![format!("bin/baml{exe_suffix}")],
     };
@@ -556,6 +559,9 @@ fn validate_archive_layout(
             format!("bin/baml-cli{exe_suffix}"),
             format!("bin/baml-pack-host{exe_suffix}"),
             "assets/baml-vscode.vsix".to_string(),
+            "assets/playground/index.html".to_string(),
+            "assets/playground/assets/index.js".to_string(),
+            "assets/playground/assets/index.css".to_string(),
         ],
     };
     for path in &forbidden {
@@ -795,6 +801,9 @@ mod tests {
                 "bin/baml-cli",
                 "bin/baml-pack-host",
                 "assets/baml-vscode.vsix",
+                "assets/playground/index.html",
+                "assets/playground/assets/index.js",
+                "assets/playground/assets/index.css",
                 "bin/baml",
             ] {
                 let bytes = b"fake";
@@ -815,6 +824,100 @@ mod tests {
         )
         .unwrap_err();
         assert!(format!("{err}").contains("bin/baml"));
+    }
+
+    #[test]
+    fn test_validate_toolchain_archive_layout_accepts_playground_payload() {
+        let mut gzip = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        {
+            let mut builder = tar::Builder::new(&mut gzip);
+            for path in [
+                "bin/baml-cli",
+                "bin/baml-pack-host",
+                "assets/baml-vscode.vsix",
+                "assets/playground/index.html",
+                "assets/playground/assets/index.js",
+                "assets/playground/assets/index.css",
+            ] {
+                let bytes = b"fake";
+                let mut header = tar::Header::new_gnu();
+                header.set_size(bytes.len() as u64);
+                header.set_mode(0o755);
+                header.set_cksum();
+                builder.append_data(&mut header, path, &bytes[..]).unwrap();
+            }
+            builder.finish().unwrap();
+        }
+        let archive = gzip.finish().unwrap();
+        validate_archive_layout(
+            Product::Toolchain,
+            "x86_64-unknown-linux-gnu",
+            &archive,
+            "https://example.com/archive.tar.gz",
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn test_validate_windows_toolchain_archive_layout_accepts_playground_payload() {
+        use std::io::Write;
+
+        let mut archive = Cursor::new(Vec::new());
+        {
+            let mut zip = zip::ZipWriter::new(&mut archive);
+            for path in [
+                "bin/baml-cli.exe",
+                "bin/baml-pack-host.exe",
+                "assets/baml-vscode.vsix",
+                "assets/playground/index.html",
+                "assets/playground/assets/index.js",
+                "assets/playground/assets/index.css",
+            ] {
+                zip.start_file(path, zip::write::SimpleFileOptions::default())
+                    .unwrap();
+                zip.write_all(b"fake").unwrap();
+            }
+            zip.finish().unwrap();
+        }
+        validate_archive_layout(
+            Product::Toolchain,
+            "x86_64-pc-windows-msvc",
+            &archive.into_inner(),
+            "https://example.com/archive.zip",
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn test_validate_toolchain_archive_layout_rejects_incomplete_playground_payload() {
+        let mut gzip = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        {
+            let mut builder = tar::Builder::new(&mut gzip);
+            for path in [
+                "bin/baml-cli",
+                "bin/baml-pack-host",
+                "assets/baml-vscode.vsix",
+                "assets/playground/index.html",
+                "assets/playground/assets/index.css",
+            ] {
+                let bytes = b"fake";
+                let mut header = tar::Header::new_gnu();
+                header.set_size(bytes.len() as u64);
+                header.set_mode(0o755);
+                header.set_cksum();
+                builder.append_data(&mut header, path, &bytes[..]).unwrap();
+            }
+            builder.finish().unwrap();
+        }
+        let archive = gzip.finish().unwrap();
+        let err = validate_archive_layout(
+            Product::Toolchain,
+            "x86_64-unknown-linux-gnu",
+            &archive,
+            "https://example.com/archive.tar.gz",
+        )
+        .unwrap_err();
+        assert!(format!("{err}").contains("assets/playground/assets/index.js"));
     }
 
     #[test]

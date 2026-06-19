@@ -1015,6 +1015,7 @@ dependencies = [
  "baml_compiler2_visualization",
  "baml_version",
  "base64",
+ "bex_events",
  "bex_heap",
  "bex_project",
  "bridge_ctypes",
@@ -1022,6 +1023,8 @@ dependencies = [
  "futures",
  "indexmap",
  "lsp-server",
+ "lsp-types",
+ "notify",
  "num-bigint",
  "parking_lot",
  "prost",
@@ -1243,9 +1246,11 @@ dependencies = [
  "prost",
  "prost-build",
  "protoc-bin-vendored",
+ "serde_json",
  "smallvec",
  "sys_types",
  "uuid",
+ "web-time",
 ]
 
 [[package]]
@@ -1529,6 +1534,8 @@ name = "bridge_ctypes"
 version = "0.1.0"
 dependencies = [
  "baml_type",
+ "base64",
+ "bex_events",
  "bex_project",
  "indexmap",
  "num-bigint",
@@ -1583,6 +1590,8 @@ version = "0.1.0"
 dependencies = [
  "baml_type",
  "baml_version",
+ "base64",
+ "bex_events",
  "bex_heap",
  "bex_project",
  "bridge_ctypes",

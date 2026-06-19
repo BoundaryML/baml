@@ -12,14 +12,19 @@ use baml_db::{
     baml_compiler2_emit,
 };
 use baml_project::ProjectDatabase;
-use baml_workspace::discover_baml_files;
 use bex_engine::{BexEngine, FunctionCallContextBuilder, UserFunctionInfo};
 // `surface_clap_error` is defined later in this file.
 // For --log-file event sink.
 use clap::Args;
 use sys_native::{CallId, SysOpsExt};
 
-use crate::{project_load::load_project_from_reporting, reporter::Reporter};
+use crate::{
+    project_load::{
+        find_project_root_from, load_project_from_reporting, load_project_or_default,
+        resolve_standalone_file, validate_file_from_flags,
+    },
+    reporter::Reporter,
+};
 
 // ============================================================================
 // Script expansion types
@@ -159,9 +164,9 @@ pub struct RunArgs {
     #[arg(long, short = 'h')]
     pub help: bool,
 
-    /// Project root directory. Ignored when `--file` is set.
-    #[arg(long, default_value = ".")]
-    pub from: PathBuf,
+    /// Project search starting point. Mutually exclusive with `--file`.
+    #[arg(long, value_name = "PATH")]
+    pub from: Option<PathBuf>,
 
     /// Arguments passed to the target after `--`. Parsed as auto-CLI
     /// flags derived from the function signature(s). With multiple `-f`
@@ -310,17 +315,8 @@ impl RunArgs {
 
         // `--file` is the standalone-source alternative to `--from`. Both
         // pointing at sources would be ambiguous (which one wins?), so
-        // reject the combination up front. We only enforce this when
-        // `--from` is set to something other than its default `.`,
-        // because clap can't tell "user passed `.`" from "user passed
-        // nothing." If `--file` is set and `--from` was left at the
-        // default, treat that as fine.
-        if self.file.is_some() && self.from != Path::new(".") {
-            anyhow::bail!(
-                "`--file` and `--from` are mutually exclusive — `--file` already names \
-                 the single source to load."
-            );
-        }
+        // reject an explicit combination up front.
+        validate_file_from_flags(self.file.as_deref(), self.from.as_deref())?;
 
         // Expression mode short-circuits before reaching project / file
         // loading, so combining `-e` with surfaces that change *what* is
@@ -369,14 +365,12 @@ impl RunArgs {
                 "--list".to_string(),
             ];
             let (db, engine, _) = self.load_and_compile(bootstrap_argv, reporter)?;
-            let _ = db;
             // `--file` mode is hermetic — skip the project `[scripts]`
             // lookup the same way `run_single_target` does.
             let scripts = if self.file.is_some() {
                 HashMap::new()
             } else {
-                let toml_content =
-                    std::fs::read_to_string(self.from.join("baml.toml")).unwrap_or_default();
+                let (_toml_path, toml_content) = Self::project_toml(&db)?;
                 Self::parse_scripts(&toml_content)
             };
             let namespaces = collect_namespaces(&engine);
@@ -413,22 +407,26 @@ impl RunArgs {
     fn run_single_target(&self, target: &str, reporter: &Reporter) -> Result<crate::ExitCode> {
         let argv = self.build_argv_for_single(target);
         let (db, mut engine, needs_format_hint) = self.load_and_compile(argv.clone(), reporter)?;
-        let _ = db;
         Self::emit_format_hint_if_needed(reporter, needs_format_hint);
+        let project_root = Self::project_root(&db)?;
 
         // `[scripts]` are a project-mode concept. In `--file` (standalone)
         // mode the project's `baml.toml` shouldn't be consulted — the
         // file is hermetic by intent — so an empty `scripts` map skips
         // both expansion and validation.
-        let (toml_content, scripts) = if self.file.is_some() {
-            (String::new(), HashMap::new())
+        let (toml_path, toml_content, scripts) = if self.file.is_some() {
+            (
+                project_root.join("baml.toml"),
+                String::new(),
+                HashMap::new(),
+            )
         } else {
-            let content = std::fs::read_to_string(self.from.join("baml.toml")).unwrap_or_default();
+            let (toml_path, content) = Self::project_toml(&db)?;
             let parsed = Self::parse_scripts(&content);
-            (content, parsed)
+            (toml_path, content, parsed)
         };
         let namespaces = collect_namespaces(&engine);
-        self.validate_scripts(&engine, &scripts, &namespaces, &toml_content)?;
+        self.validate_scripts(&engine, &scripts, &namespaces, &toml_path, &toml_content)?;
 
         // Resolve to (function_name, effective_args, was_script).
         let (function_name, effective_target_args, was_script) =
@@ -453,7 +451,10 @@ impl RunArgs {
                 (target.to_string(), self.target_args.clone(), false)
             } else {
                 return Err(Self::target_not_found_error_in(
-                    &scripts, &engine, target, &self.from,
+                    &scripts,
+                    &engine,
+                    target,
+                    &project_root,
                 ));
             };
 
@@ -715,7 +716,7 @@ impl RunArgs {
         // `load_project_from_reporting` emits one `Loading <file>`
         // line per discovered source file (cargo-style per-unit
         // progress) — no aggregate `Loading <project>` needed.
-        let (db, from, baml_files) = load_project_from_reporting(&self.from, reporter)?;
+        let (db, from, baml_files) = load_project_from_reporting(self.from.as_deref(), reporter)?;
         self.vlog(format_args!("Loading project from {}", from.display()));
         if baml_files.is_empty() {
             anyhow::bail!("No .baml files found in {}", from.display());
@@ -758,8 +759,7 @@ impl RunArgs {
     ) -> Result<(ProjectDatabase, BexEngine, bool)> {
         let display = file_path.display().to_string();
         reporter.spin("Loading", &display);
-        let canonical = std::fs::canonicalize(file_path)
-            .with_context(|| format!("File not found: {display}"))?;
+        let canonical = resolve_standalone_file(file_path)?;
         self.vlog(format_args!(
             "Standalone mode: loading {}",
             canonical.display()
@@ -816,51 +816,23 @@ impl RunArgs {
         // `-> unknown` lets any return type through.
         let synthetic = format!("function baml_run_expr_main__() -> unknown {{\n{expr_body}\n}}");
 
-        // Default --from is "." (cwd) which always exists. If user passed an
-        // explicit path that can't be resolved, that's a hard error.
-        let from = match std::fs::canonicalize(&self.from) {
-            Ok(path) => Some(path),
-            Err(_) if self.from == Path::new(".") => None,
-            Err(e) => anyhow::bail!("Cannot resolve --from path `{}`: {e}", self.from.display()),
-        };
-
-        let mut db = ProjectDatabase::new();
-        // Project marker: matches `project_load::load_project_from_inner`.
-        // A directory is a project if it has *either* a `baml.toml` or a
-        // `baml_src/` — `baml.toml` is opt-in — so `baml run -e` picks up
-        // the surrounding project's definitions in the same cases every
-        // other verb now does.
-        let has_explicit_project = from
-            .as_ref()
-            .is_some_and(|f| f.join("baml.toml").exists() || f.join("baml_src").is_dir());
-
-        let project_root = if has_explicit_project {
-            let root = from.as_ref().unwrap();
-            db.set_project_root(root);
-            let src_dir = if root.join("baml_src").exists() {
-                root.join("baml_src")
-            } else {
-                root.clone()
-            };
-            let baml_files = discover_baml_files(&src_dir);
-            for file_path in &baml_files {
-                if let Ok(content) = std::fs::read_to_string(file_path) {
-                    db.add_or_update_file(file_path, &content);
-                }
-            }
+        let (mut db, project_root) = if find_project_root_from(self.from.as_deref())?.is_some() {
+            let (db_with_project, root, baml_files) =
+                load_project_or_default(self.from.as_deref())?;
             self.vlog(format_args!(
                 "Project context: loaded {} file(s)",
                 baml_files.len()
             ));
-            root.clone()
+            (db_with_project, root)
         } else {
             let tmp = std::env::temp_dir().join("baml_expr");
             std::fs::create_dir_all(&tmp).ok();
+            let mut db = ProjectDatabase::new();
             db.set_project_root(&tmp);
             self.vlog(format_args!(
                 "Project context: none (standalone expression)"
             ));
-            tmp
+            (db, tmp)
         };
 
         db.add_or_update_file(&project_root.join("__expr__.baml"), &synthetic);
@@ -1001,25 +973,37 @@ impl RunArgs {
         }
     }
 
+    fn project_root(db: &ProjectDatabase) -> Result<PathBuf> {
+        db.get_project()
+            .map(|project| project.root(db).clone())
+            .ok_or_else(|| anyhow!("No project context"))
+    }
+
+    fn project_toml(db: &ProjectDatabase) -> Result<(PathBuf, String)> {
+        let toml_path = Self::project_root(db)?.join("baml.toml");
+        let content = std::fs::read_to_string(&toml_path).unwrap_or_default();
+        Ok((toml_path, content))
+    }
+
     /// Validate `[scripts]` entries at load time per BEP-027.
     fn validate_scripts(
         &self,
         engine: &BexEngine,
         scripts: &HashMap<String, Vec<String>>,
         namespaces: &HashSet<String>,
+        toml_path: &Path,
         toml_content: &str,
     ) -> Result<()> {
         if scripts.is_empty() {
             return Ok(());
         }
 
-        let toml_path = self.from.join("baml.toml");
         let mut errors: Vec<String> = Vec::new();
 
         for (name, tokens) in scripts {
             if RESERVED_VERBS.contains(&name.as_str()) {
                 errors.push(Self::script_error(
-                    &toml_path,
+                    toml_path,
                     toml_content,
                     name,
                     "name is a reserved verb and cannot be used as a script name",
@@ -1042,7 +1026,7 @@ impl RunArgs {
                     let target_func = if let Some(func) = &expansion.function {
                         if engine.find_user_function(func).is_none() {
                             errors.push(Self::script_error(
-                                &toml_path,
+                                toml_path,
                                 toml_content,
                                 name,
                                 &format!("--function target `{func}` not found"),
@@ -1065,7 +1049,7 @@ impl RunArgs {
                         let flag_keys = extract_flag_keys(&expansion.extra_args);
                         for flag in flag_keys.iter().filter(|k| !param_names.contains(k)) {
                             errors.push(Self::script_error(
-                                &toml_path,
+                                toml_path,
                                 toml_content,
                                 name,
                                 &format!(
@@ -1079,7 +1063,7 @@ impl RunArgs {
                 }
                 Err(e) => {
                     errors.push(Self::script_error(
-                        &toml_path,
+                        toml_path,
                         toml_content,
                         name,
                         &e.to_string(),
@@ -1849,7 +1833,7 @@ mod tests {
             log_file: None,
             verbose: false,
             help: false,
-            from: PathBuf::from("."),
+            from: None,
             target_args: Vec::new(),
         }
     }
@@ -1944,28 +1928,20 @@ mod tests {
         let mut args = run_args();
         args.target = Some("X".into());
         args.file = Some(PathBuf::from("a.baml"));
-        args.from = PathBuf::from("./project");
+        args.from = Some(PathBuf::from("./project"));
         let err = args.run().unwrap_err();
         let msg = format!("{err}");
         assert!(msg.contains("mutually exclusive"), "got: {msg}");
         assert!(msg.contains("--file"), "got: {msg}");
     }
 
-    /// `--file` with default `--from` (i.e. `.`) is fine — we can't tell
-    /// "user passed `.`" from "user passed nothing" at the clap layer,
-    /// so the mutex only fires when `--from` is explicitly non-default.
+    /// `--file` with omitted `--from` is fine.
     #[test]
-    fn test_run_allows_file_with_default_from() {
+    fn test_run_allows_file_with_omitted_from() {
         let mut args = run_args();
         args.target = Some("X".into());
         args.file = Some(PathBuf::from("a.baml"));
-        // args.from is `PathBuf::from(".")` (the default).
-        // The validation pass shouldn't reject this; the actual file load
-        // will fail later but for a different reason.
-        // We can't call .run() here without hitting filesystem so probe
-        // the same predicate `run_with_reporter` would.
-        assert!(args.file.is_some());
-        assert_eq!(args.from, Path::new("."));
+        validate_file_from_flags(args.file.as_deref(), args.from.as_deref()).unwrap();
     }
 
     // ── Clap derive parse tests ──────────────────────────────────────

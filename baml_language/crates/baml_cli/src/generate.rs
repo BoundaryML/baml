@@ -22,9 +22,9 @@ use crate::{
 
 #[derive(Args, Clone, Debug)]
 pub struct GenerateArgs {
-    /// Path to the baml_src directory
-    #[arg(long, default_value = ".")]
-    pub from: PathBuf,
+    /// Project search starting point. Defaults to the current directory.
+    #[arg(long, value_name = "PATH")]
+    pub from: Option<PathBuf>,
 
     /// Output directory override (takes precedence over generator config)
     #[arg(long, short = 'o')]
@@ -49,7 +49,7 @@ impl GenerateArgs {
             "Generating",
             format!("clients with CLI version: {}", release_version()),
         );
-        let (db, from, baml_files) = load_project_from_reporting(&self.from, &reporter)?;
+        let (db, from, baml_files) = load_project_from_reporting(self.from.as_deref(), &reporter)?;
         if baml_files.is_empty() {
             reporter.abandon();
             crate::reporter::print_error(format_args!(

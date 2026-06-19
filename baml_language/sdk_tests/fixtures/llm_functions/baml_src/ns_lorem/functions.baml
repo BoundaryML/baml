@@ -201,4 +201,3 @@ function stream_e2e_collect(text: string) -> StreamE2ECollectResult {
     final_call: final_call,
   }
 }
-

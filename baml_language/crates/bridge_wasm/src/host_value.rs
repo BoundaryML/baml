@@ -46,7 +46,7 @@
 //!   exactly the right entry regardless of which runtime registered it. There
 //!   is no per-runtime ambiguity to resolve. (In WASM, `registerHostCallable`
 //!   is a free function the JS encoder calls *while building the proto args*,
-//!   before `callFunction` is even invoked — there is no runtime receiver to
+//!   before a `RunStore` start command is invoked — there is no runtime receiver to
 //!   attribute the registration to. A global registry sidesteps that entirely.)
 //! * The `in_flight` table holds only a `CompletionHandle` (a oneshot sender).
 //!   Resolving it is fully self-contained — it needs no runtime context — and

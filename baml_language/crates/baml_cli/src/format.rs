@@ -4,12 +4,12 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use baml_fmt::FormatOptions;
 use baml_workspace::discover_baml_files;
 use clap::Args;
 
-use crate::reporter::Reporter;
+use crate::{project_load::find_project_root_from, reporter::Reporter};
 
 #[derive(Args, Debug)]
 pub struct FormatArgs {
@@ -18,12 +18,12 @@ pub struct FormatArgs {
     )]
     pub paths: Vec<PathBuf>,
 
-    /// Project root to discover files from when no explicit paths are
-    /// passed. Mirrors `baml run`/`baml pack`'s `--from`. When the
+    /// Project search starting point for default file discovery. Mirrors
+    /// `baml run`/`baml pack`'s `--from`. When the
     /// directory has neither a `baml.toml` nor a `baml_src/` subdirectory,
     /// there's nothing to format and `baml fmt` is a no-op success.
-    #[arg(long, default_value = ".")]
-    pub from: PathBuf,
+    #[arg(long, value_name = "PATH")]
+    pub from: Option<PathBuf>,
 
     #[arg(
         short = 'n',
@@ -42,7 +42,7 @@ impl FormatArgs {
         // every `.baml` under cwd from an unrelated directory; with no
         // marker there's simply nothing to format (a no-op success).
         let paths = if self.paths.is_empty() {
-            match discover_project_files(&self.from)? {
+            match discover_project_files(self.from.as_deref())? {
                 Some(files) => files,
                 None => {
                     // No `baml.toml` / `baml_src/` here — there's nothing to
@@ -59,7 +59,11 @@ impl FormatArgs {
 
         if paths.is_empty() {
             let search_root = if self.paths.is_empty() {
-                self.from.display().to_string()
+                self.from
+                    .as_deref()
+                    .unwrap_or_else(|| Path::new("."))
+                    .display()
+                    .to_string()
             } else {
                 self.paths
                     .iter()
@@ -167,29 +171,20 @@ fn expand_explicit_paths(paths: &[PathBuf]) -> Vec<PathBuf> {
     expanded
 }
 
-/// Walk a project root and return every `.baml` file inside it. Requires a
-/// `baml.toml` or `baml_src/` marker so `baml fmt` doesn't accidentally
-/// rewrite every `.baml` under cwd from an unrelated directory, and prefers
-/// the `baml_src/` subtree when present so loose top-level fixtures aren't
-/// touched.
+/// Walk a resolved project root and return every `.baml` file inside it.
+/// Requires a `baml.toml` or `baml_src/` marker in the search path or its
+/// ancestors so `baml fmt` doesn't accidentally rewrite every `.baml` under an
+/// unrelated directory, and prefers the `baml_src/` subtree when present so
+/// loose top-level fixtures aren't touched.
 ///
-/// Returns `Ok(None)` when neither marker is present — `baml fmt` mutates
-/// files, so unlike the read-only `describe`/`grep` introspection path it
-/// does **not** walk up to adopt a distant ancestor project (that could
-/// silently rewrite files far from the cwd). The caller turns `None` into a
-/// no-op success rather than a hard error.
-fn discover_project_files(from: &Path) -> Result<Option<Vec<PathBuf>>> {
-    let canonical = fs::canonicalize(from)
-        .with_context(|| format!("Could not resolve path: {}", from.display()))?;
-
-    let has_baml_toml = canonical.join("baml.toml").exists();
-    let baml_src = canonical.join("baml_src");
-    let has_baml_src = baml_src.is_dir();
-    if !has_baml_toml && !has_baml_src {
+/// Returns `Ok(None)` when neither marker is present. The caller turns `None`
+/// into a no-op success rather than a hard error.
+fn discover_project_files(from: Option<&Path>) -> Result<Option<Vec<PathBuf>>> {
+    let Some(root) = find_project_root_from(from)? else {
         return Ok(None);
-    }
-
-    let walk_root = if has_baml_src { baml_src } else { canonical };
+    };
+    let baml_src = root.join("baml_src");
+    let walk_root = if baml_src.is_dir() { baml_src } else { root };
     Ok(Some(discover_baml_files(&walk_root)))
 }
 
@@ -219,7 +214,7 @@ mod tests {
 
         let args = FormatArgs {
             paths: vec![baml_src],
-            from: tmp.path().to_path_buf(),
+            from: Some(tmp.path().to_path_buf()),
             dry_run: false,
         };
         let exit_code = args.run().unwrap();
@@ -256,5 +251,23 @@ mod tests {
         ]);
 
         assert_eq!(expanded, vec![main, nested]);
+    }
+
+    #[test]
+    fn default_discovery_walks_up_from_nested_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        fs::write(
+            tmp.path().join("baml.toml"),
+            "[package]\nname = \"fmt-test\"\n",
+        )
+        .unwrap();
+        let nested_dir = tmp.path().join("baml_src/nested");
+        fs::create_dir_all(&nested_dir).unwrap();
+        let main = tmp.path().join("baml_src/main.baml");
+        fs::write(&main, "function main() -> string { \"hello\" }\n").unwrap();
+        let main = fs::canonicalize(main).unwrap();
+
+        let files = discover_project_files(Some(&nested_dir)).unwrap().unwrap();
+        assert_eq!(files, vec![main]);
     }
 }

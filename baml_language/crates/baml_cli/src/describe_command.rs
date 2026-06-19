@@ -47,9 +47,9 @@ pub struct DescribeArgs {
     #[arg(long)]
     pub symbols: bool,
 
-    /// Project root directory
-    #[arg(long, default_value = ".")]
-    pub from: PathBuf,
+    /// Project search starting point. Defaults to the current directory.
+    #[arg(long, value_name = "PATH")]
+    pub from: Option<PathBuf>,
 
     /// Soft line budget for output (default 30)
     #[arg(long, default_value_t = 30)]
@@ -264,7 +264,7 @@ impl DescribeArgs {
         // baml.String` works anywhere. An empty user-file set is therefore
         // expected, not an error — unresolved names still surface through
         // the per-target "No symbol found" + did-you-mean paths below.
-        let (db, from, _baml_files) = load_project_or_default(&self.from)?;
+        let (db, from, _baml_files) = load_project_or_default(self.from.as_deref())?;
 
         // ── --symbols deprecation ───────────────────────────────────────────
         if self.symbols {

@@ -9,6 +9,7 @@ import {
   Uri,
   ViewColumn,
   type WebviewPanel as VSCodeWebviewPanel,
+  commands,
   window,
   workspace,
 } from 'vscode';
@@ -54,7 +55,7 @@ export class WebviewPanel {
     // Dispose listener
     this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
     this._panel.webview.onDidReceiveMessage(
-      (message: { type?: string; source?: SourceNavigationTarget }) => {
+      (message: { type?: string; source?: SourceNavigationTarget; project?: string }) => {
         if (message.type === 'webviewReady') {
           this.forwardOpenPlayground();
           this.forwardActiveEditorCursorPosition();
@@ -62,6 +63,11 @@ export class WebviewPanel {
         }
         if (message.type === 'navigateToSource' && message.source) {
           void this.navigateToSource(message.source);
+        } else if (message.type === 'openInBrowser') {
+          void commands.executeCommand(
+            'baml.openPlaygroundInBrowser',
+            message.project ?? this._openTarget.project,
+          );
         }
       },
       null,
