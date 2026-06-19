@@ -319,6 +319,21 @@ fn raw_skill(skill_path: SkillArchivePath, content: String, source_path: PathBuf
     }
 }
 
+/// Normalize raw skill payloads into installable skills.
+///
+/// This validates direct-layout frontmatter names, rewrites legacy-layout
+/// names and references, and applies post-processing normalizations so the
+/// installed skill content matches current canonical BAML style.
+///
+/// # Parameters
+/// - `raw`: raw skills collected from an archive or directory.
+///
+/// # Returns
+/// A sorted, validated list of skills ready to install.
+///
+/// # Errors
+/// Returns an error when the source contains no skills, duplicate names, or
+/// invalid/missing frontmatter.
 fn normalize_skills(raw: Vec<RawSkill>) -> Result<Vec<Skill>> {
     if raw.is_empty() {
         anyhow::bail!(
@@ -353,10 +368,214 @@ fn normalize_skills(raw: Vec<RawSkill>) -> Result<Vec<Skill>> {
             };
             Ok(Skill {
                 name: skill.name,
-                content: normalize_skill_references(content, &skill_names),
+                content: normalize_skill_class_field_syntax(normalize_skill_references(
+                    content,
+                    &skill_names,
+                )),
             })
         })
         .collect()
+}
+
+/// Normalize skill markdown so class examples teach formatter-canonical syntax.
+///
+/// This rewrites prose mentions of class fields from ``name type`` to
+/// ``name: type,``, removes the obsolete formatter-discrepancy note, and
+/// canonicalizes class field declarations inside fenced `baml` code blocks.
+///
+/// # Parameters
+/// - `content`: skill markdown to normalize.
+///
+/// # Returns
+/// The normalized markdown content.
+fn normalize_skill_class_field_syntax(content: String) -> String {
+    normalize_skill_baml_code_block_class_fields(normalize_skill_class_field_prose(content))
+}
+
+/// Rewrite prose guidance about class fields to canonical syntax.
+///
+/// # Parameters
+/// - `content`: skill markdown to rewrite.
+///
+/// # Returns
+/// The rewritten markdown with canonical class-field prose.
+fn normalize_skill_class_field_prose(content: String) -> String {
+    let had_trailing_newline = content.ends_with('\n');
+    let filtered_lines = content
+        .lines()
+        .filter(|line| {
+            !line.contains("The formatter (`baml fmt`) currently rewrites fields with a colon")
+        })
+        .collect::<Vec<_>>();
+
+    let mut normalized = filtered_lines.join("\n");
+    normalized = normalized.replace("`name type`", "`name: type,`");
+    normalized = normalized.replace("name type class fields", "`name: type,` class fields");
+    normalized = normalized.replace(
+        "class fields are `name: type,` (no colon)",
+        "class fields are `name: type,`",
+    );
+    normalized = normalized.replace("no colon, no comma", "colon + trailing comma");
+
+    if had_trailing_newline {
+        normalized.push('\n');
+    }
+    normalized
+}
+
+/// Rewrite class field declarations inside fenced `baml` code blocks.
+///
+/// # Parameters
+/// - `content`: skill markdown to normalize.
+///
+/// # Returns
+/// The markdown with class fields rewritten to `name: type,`.
+fn normalize_skill_baml_code_block_class_fields(content: String) -> String {
+    let had_trailing_newline = content.ends_with('\n');
+    let mut lines = Vec::new();
+    let mut in_baml_block = false;
+    let mut brace_depth = 0_usize;
+    let mut class_body_depths = Vec::<usize>::new();
+
+    for line in content.lines() {
+        let trimmed = line.trim_start();
+        if !in_baml_block {
+            if trimmed.starts_with("```baml") {
+                in_baml_block = true;
+                brace_depth = 0;
+                class_body_depths.clear();
+            }
+            lines.push(line.to_string());
+            continue;
+        }
+
+        if trimmed.starts_with("```") {
+            in_baml_block = false;
+            lines.push(line.to_string());
+            continue;
+        }
+
+        let code_segment = line.split_once("//").map_or(line, |(code, _)| code);
+        let code_trimmed = code_segment.trim();
+        if code_trimmed.starts_with("class ") && code_segment.contains('{') {
+            class_body_depths.push(brace_depth.saturating_add(1));
+        }
+
+        let mut rewritten = line.to_string();
+        if let Some(class_depth) = class_body_depths.last().copied() {
+            if brace_depth == class_depth
+                && let Some(class_field_line) = normalize_class_field_declaration_line(line)
+            {
+                rewritten = class_field_line;
+            }
+        }
+
+        for ch in code_segment.chars() {
+            if ch == '{' {
+                brace_depth = brace_depth.saturating_add(1);
+            } else if ch == '}' {
+                brace_depth = brace_depth.saturating_sub(1);
+            }
+        }
+
+        while class_body_depths
+            .last()
+            .is_some_and(|depth| brace_depth < *depth)
+        {
+            class_body_depths.pop();
+        }
+
+        lines.push(rewritten);
+    }
+
+    let mut normalized = lines.join("\n");
+    if had_trailing_newline {
+        normalized.push('\n');
+    }
+    normalized
+}
+
+/// Canonicalize a single class-field declaration line.
+///
+/// The line is rewritten only when it looks like a bare field declaration at
+/// class-body depth (`name type`). Non-field lines return `None`.
+///
+/// # Parameters
+/// - `line`: one line from a fenced `baml` code block.
+///
+/// # Returns
+/// - `Some(String)` with canonical `name: type,` syntax for field declarations.
+/// - `None` when the line is not a class-field declaration.
+fn normalize_class_field_declaration_line(line: &str) -> Option<String> {
+    let (code, comment) = line
+        .split_once("//")
+        .map_or((line, None), |(lhs, rhs)| (lhs, Some(rhs.trim_start())));
+    let trimmed = code.trim();
+    if trimmed.is_empty() || trimmed.contains(':') || trimmed.contains('(') || trimmed.contains(')')
+    {
+        return None;
+    }
+    if trimmed.ends_with('{')
+        || trimmed.ends_with('}')
+        || trimmed.ends_with(';')
+        || trimmed.contains('=')
+    {
+        return None;
+    }
+
+    let mut parts = trimmed.split_whitespace();
+    let name = parts.next()?;
+    let ty = parts.collect::<Vec<_>>().join(" ");
+    if ty.is_empty() || !is_identifier(name) {
+        return None;
+    }
+    if matches!(
+        name,
+        "class"
+            | "enum"
+            | "type"
+            | "function"
+            | "let"
+            | "return"
+            | "if"
+            | "for"
+            | "while"
+            | "match"
+            | "client"
+            | "prompt"
+            | "test"
+            | "testset"
+            | "assert"
+    ) {
+        return None;
+    }
+
+    let indent_len = code.len().saturating_sub(code.trim_start().len());
+    let indent = &code[..indent_len];
+    let canonical = format!("{indent}{name}: {},", ty.trim_end_matches(','));
+    Some(match comment {
+        Some(comment) => format!("{canonical} // {comment}"),
+        None => canonical,
+    })
+}
+
+/// Check whether a string is a valid bare identifier.
+///
+/// # Parameters
+/// - `candidate`: identifier text to validate.
+///
+/// # Returns
+/// `true` when the text is a non-empty ASCII identifier (`[A-Za-z_][A-Za-z0-9_]*`),
+/// otherwise `false`.
+fn is_identifier(candidate: &str) -> bool {
+    let mut chars = candidate.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    if !(first.is_ascii_alphabetic() || first == '_') {
+        return false;
+    }
+    chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
 }
 
 fn normalized_components(path: &Path) -> Result<Vec<String>> {
@@ -827,6 +1046,83 @@ mod tests {
             "{message}"
         );
         assert!(message.contains("Installed BAML agent skills in /tmp/project"));
+    }
+
+    /// Verifies install-time normalization rewrites old class-field prose and
+    /// code examples to formatter-canonical `name: type,` syntax.
+    #[test]
+    fn old_class_field_style_is_canonicalized_in_skill_content() {
+        let legacy_content = r#"---
+name: baml-core
+description: BAML uses `name type` class fields.
+---
+# baml
+
+Class fields are `name type` — no colon, no comma.
+
+```baml
+class Point {
+  x int
+  y int
+}
+
+class Box<T> {
+  value T
+}
+```
+
+> The formatter (`baml fmt`) currently rewrites fields with a colon (`x: int,`); both forms compile, but write `x int` to match the language and the stdlib source.
+"#;
+        let archive = make_archive(&[("skills/baml-core/SKILL.md", legacy_content)]);
+
+        let skills = skills_from_archive(&archive).unwrap();
+        let core = skills
+            .iter()
+            .find(|skill| skill.name == "baml-core")
+            .unwrap();
+
+        assert!(core.content.contains("`name: type,` class fields"));
+        assert!(core.content.contains("Class fields are `name: type,`"));
+        assert!(core.content.contains("x: int,"));
+        assert!(core.content.contains("y: int,"));
+        assert!(core.content.contains("value: T,"));
+        assert!(!core.content.contains("x int"));
+        assert!(!core.content.contains("value T"));
+        assert!(
+            !core
+                .content
+                .contains("currently rewrites fields with a colon")
+        );
+    }
+
+    /// Verifies class-field normalization does not rewrite method signatures or
+    /// struct-construction literals that already use canonical colon syntax.
+    #[test]
+    fn class_field_normalization_preserves_non_field_lines() {
+        let content = r#"---
+name: baml-core
+description: test
+---
+```baml
+class Point {
+  x int
+  function new(x: int) -> Point {
+    Point { x: x }
+  }
+}
+```
+"#;
+        let archive = make_archive(&[("skills/baml-core/SKILL.md", content)]);
+
+        let skills = skills_from_archive(&archive).unwrap();
+        let core = skills
+            .iter()
+            .find(|skill| skill.name == "baml-core")
+            .unwrap();
+
+        assert!(core.content.contains("x: int,"));
+        assert!(core.content.contains("function new(x: int) -> Point {"));
+        assert!(core.content.contains("Point { x: x }"));
     }
 
     fn skill(name: &str) -> String {
