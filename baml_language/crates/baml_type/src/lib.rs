@@ -420,6 +420,10 @@ impl Ty {
         }
     }
 
+    pub fn type_var(name: &str) -> Self {
+        Ty::TypeVar(Name::new(name), TyAttr::default())
+    }
+
     // --- Opaque leaf-type constructors (default TyAttr) ---
 
     /// Opaque resource handle type (file, socket, HTTP response body).
