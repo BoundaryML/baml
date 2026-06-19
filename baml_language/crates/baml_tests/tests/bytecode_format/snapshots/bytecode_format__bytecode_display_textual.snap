@@ -32,10 +32,28 @@ function assert.equal(actual: unknown, expected: unknown) -> null {
     jump L2
 
   L1:
-    load_const "assertion failed: expected equal values"
+    load_var actual
+    call assert.format_operand
+    store_var _8
+    load_var expected
+    call assert.format_operand
+    store_var _9
+    load_const "assertion failed: left = "
+    load_var _8
+    bin_op +
+    load_const ", right = "
+    bin_op +
+    load_var _9
+    bin_op +
     call baml.sys.panic
 
   L2:
+    return
+}
+
+function assert.format_operand(value: unknown) -> string {
+    load_var value
+    call baml.String.from
     return
 }
 

@@ -42,6 +42,11 @@ fn assert.equal(actual: unknown, expected: unknown) -> null {
     let _2: unknown // expected // param
     let _3: bool
     let _4: bool
+    let _5: string
+    let _6: string
+    let _7: string
+    let _8: string
+    let _9: string
 
     bb0: {
         _4 = call const fn baml.ops.equals_equals(copy _1, copy _2) -> [bb1];
@@ -54,14 +59,39 @@ fn assert.equal(actual: unknown, expected: unknown) -> null {
 
     bb2: {
         _0 = const null;
-        goto -> bb4;
+        goto -> bb6;
     }
 
     bb3: {
-        _0 = call const fn baml.sys.panic(const "assertion failed: expected equal values") -> [bb4];
+        _8 = call const fn assert.format_operand(copy _1) -> [bb4];
     }
 
     bb4: {
+        _7 = const "assertion failed: left = " + copy _8;
+        _6 = copy _7 + const ", right = ";
+        _9 = call const fn assert.format_operand(copy _2) -> [bb5];
+    }
+
+    bb5: {
+        _5 = copy _6 + copy _9;
+        _0 = call const fn baml.sys.panic(copy _5) -> [bb6];
+    }
+
+    bb6: {
+        return;
+    }
+}
+
+fn assert.format_operand(value: unknown) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: unknown // value // param
+
+    bb0: {
+        _0 = call const fn baml.String.from(copy _1) -> [bb1];
+    }
+
+    bb1: {
         return;
     }
 }
