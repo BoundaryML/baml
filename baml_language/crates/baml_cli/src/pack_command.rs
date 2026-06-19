@@ -40,7 +40,9 @@ use sys_native::SysOpsExt;
 
 use crate::{
     commands::release_version,
-    project_load::{load_project_from_reporting, validate_file_from_flags},
+    project_load::{
+        load_project_from_reporting, resolve_standalone_file, validate_file_from_flags,
+    },
     reporter::Reporter,
 };
 
@@ -84,9 +86,9 @@ pub struct PackArgs {
     #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
     pub output_format: OutputFormat,
 
-    /// Project root directory. Ignored when `--file` is set.
-    #[arg(long, default_value = ".")]
-    pub from: PathBuf,
+    /// Project search starting point. Ignored when `--file` is set.
+    #[arg(long, value_name = "PATH")]
+    pub from: Option<PathBuf>,
 
     /// `-e/--expression` is recognized only so we can reject it with a
     /// targeted message — `baml pack` doesn't support expression mode.
@@ -199,11 +201,9 @@ impl PackArgs {
             );
         }
         // `--file` and `--from` both name a source location. Reject the
-        // combination up front instead of silently preferring one. Same
-        // rule as `baml run`. The check is gated on `--from != "."`
-        // because clap can't tell "user passed `.`" from "user passed
-        // nothing"; `--file` alongside the default `--from` is fine.
-        validate_file_from_flags(self.file.as_deref(), &self.from)?;
+        // combination up front instead of silently preferring one. Same rule
+        // as `baml run`.
+        validate_file_from_flags(self.file.as_deref(), self.from.as_deref())?;
         if let Some(target) = self.target.as_deref() {
             if looks_like_path(target) {
                 anyhow::bail!(
@@ -270,7 +270,7 @@ impl PackArgs {
     }
 
     fn load_project(&self, reporter: &Reporter) -> Result<(ProjectDatabase, bool)> {
-        let (db, from, baml_files) = load_project_from_reporting(&self.from, reporter)?;
+        let (db, from, baml_files) = load_project_from_reporting(self.from.as_deref(), reporter)?;
         if baml_files.is_empty() {
             anyhow::bail!("No .baml files found in {}", from.display());
         }
@@ -288,8 +288,7 @@ impl PackArgs {
     }
 
     fn load_standalone(&self, file_path: &Path) -> Result<(ProjectDatabase, bool)> {
-        let canonical = std::fs::canonicalize(file_path)
-            .with_context(|| format!("File not found: {}", file_path.display()))?;
+        let canonical = resolve_standalone_file(file_path)?;
         let content = std::fs::read_to_string(&canonical)
             .with_context(|| format!("Failed to read {}", canonical.display()))?;
         let needs_format_hint = crate::run_command::source_needs_format_hint(&content);
@@ -361,7 +360,7 @@ impl PackArgs {
                     )
                 });
         }
-        crate::project_load::resolve_project_name(&self.from)
+        crate::project_load::resolve_project_name(self.from.as_deref())
     }
 }
 
@@ -637,7 +636,7 @@ mod tests {
             output: None,
             target_triple: None,
             output_format: OutputFormat::Json,
-            from: PathBuf::from("."),
+            from: None,
             expression: None,
         }
     }
@@ -665,7 +664,7 @@ mod tests {
         let mut args = pack_args();
         args.functions = vec!["main".into()];
         args.file = Some(PathBuf::from("a.baml"));
-        args.from = PathBuf::from("./project");
+        args.from = Some(PathBuf::from("./project"));
         let err = args.validate_flags().unwrap_err();
         let msg = format!("{err}");
         assert!(msg.contains("mutually exclusive"), "got: {msg}");
@@ -1007,7 +1006,7 @@ mod tests {
         )
         .unwrap();
         let mut args = pack_args();
-        args.from = tmp.path().to_path_buf();
+        args.from = Some(tmp.path().to_path_buf());
         assert_eq!(args.resolve_output_basename().unwrap(), "my-app");
     }
 
@@ -1034,8 +1033,8 @@ mod tests {
 
         let mut args = pack_args();
         args.file = Some(baml_file);
-        // `--from` defaults to `.`, but file mode short-circuits before
-        // touching it. Stem wins.
+        // `--from` is omitted, and file mode short-circuits project lookup.
+        // Stem wins.
         assert_eq!(args.resolve_output_basename().unwrap(), "hello");
     }
 
@@ -1053,7 +1052,7 @@ mod tests {
         .unwrap();
 
         let mut args = pack_args();
-        args.from = tmp.path().to_path_buf();
+        args.from = Some(tmp.path().to_path_buf());
         args.file = Some(PathBuf::from("..")); // no file_stem
 
         let err = args.resolve_output_basename().unwrap_err();
@@ -1177,7 +1176,7 @@ mod tests {
         std::fs::create_dir(tmp.path().join("baml_src")).unwrap();
 
         let mut args = pack_args();
-        args.from = tmp.path().to_path_buf();
+        args.from = Some(tmp.path().to_path_buf());
         let reporter = Reporter::new();
         let err = args.load_project(&reporter).unwrap_err();
         assert!(

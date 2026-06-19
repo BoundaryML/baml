@@ -7,6 +7,7 @@ mod wasm_helpers;
 use std::{collections::HashMap, io::Read};
 
 use ::std::sync::Arc;
+use baml_workspace::{BAML_SRC_DIR, BAML_TOML, find_baml_project_root_from_ancestors};
 pub use wasm_helpers::BackgroundSpawner;
 
 /// Factory that creates [`sys_ops::SysOps`] for a given project root.
@@ -160,67 +161,14 @@ impl BexMulitProject {
     }
 
     fn get_baml_project_root(path: &vfs::VfsPath) -> Result<vfs::VfsPath, LspError> {
-        // Baml project live in one of three places:
-        // 1. inside a baml_src directory
-        // 2. inside a folder which has a baml.toml file
-        // 3. (internal development only) as standalone files inside a folder named baml_language
-
-        let file_name = path.filename();
-
-        match file_name.as_str() {
-            "baml_src"
-                if path.is_dir().map_err(|e| LspError::InvalidVFSPath {
-                    path: path.clone(),
-                    message: format!("Failed to check if path is a directory: {e}"),
-                })? =>
-            {
-                let parent = path.parent();
-                if Self::has_baml_toml(&parent) {
-                    return Ok(parent);
-                }
-                return Ok(path.clone());
-            }
-            "baml.toml"
-                if path.is_file().map_err(|e| LspError::InvalidVFSPath {
-                    path: path.clone(),
-                    message: format!("Failed to check if path is a file: {e}"),
-                })? =>
-            {
-                return Ok(path.parent());
-            }
-            _ => {}
-        }
-
-        let mut current = path.parent();
-        while !current.is_root() {
-            let parent = current;
-            // check if parent is baml_src directory
-            if parent.filename().as_str() == "baml_src"
-                && parent.is_dir().map_err(|e| LspError::InvalidVFSPath {
-                    path: parent.clone(),
-                    message: format!("Failed to check if path is a directory: {e}"),
-                })?
-            {
-                let owner = parent.parent();
-                if Self::has_baml_toml(&owner) {
-                    return Ok(owner);
-                }
-                return Ok(parent);
-            }
-
-            // check if parent has a baml.toml file
-            let baml_toml_path =
-                parent
-                    .join("baml.toml")
-                    .map_err(|e| LspError::InvalidVFSPath {
-                        path: parent.clone(),
-                        message: format!("Failed to join path: {e}"),
-                    })?;
-            if baml_toml_path.exists().unwrap_or(false) {
-                return Ok(parent);
-            }
-
-            current = parent.parent();
+        let start = Self::project_search_start(path);
+        let root = find_baml_project_root_from_ancestors(
+            vfs_ancestors(start),
+            Self::has_baml_toml,
+            Self::has_baml_src_dir,
+        );
+        if let Some(root) = root {
+            return Ok(root);
         }
 
         // In some special cases, .baml files are treated as their own projects
@@ -281,7 +229,8 @@ impl BexMulitProject {
             }
         }
 
-        let glob = format!("{}/**/*.baml", project_root.as_str());
+        let source_root = Self::project_source_root(project_root)?;
+        let glob = format!("{}/**/*.baml", source_root.as_str());
         let entries = self
             .fs
             .read_many(&glob)
@@ -304,10 +253,42 @@ impl BexMulitProject {
     }
 
     fn has_baml_toml(path: &vfs::VfsPath) -> bool {
-        path.join("baml.toml")
+        path.join(BAML_TOML)
             .ok()
-            .and_then(|path| path.exists().ok())
+            .and_then(|path| path.is_file().ok())
             .unwrap_or(false)
+    }
+
+    fn has_baml_src_dir(path: &vfs::VfsPath) -> bool {
+        path.join(BAML_SRC_DIR)
+            .ok()
+            .and_then(|path| path.is_dir().ok())
+            .unwrap_or(false)
+    }
+
+    fn project_source_root(project_root: &vfs::VfsPath) -> Result<vfs::VfsPath, LspError> {
+        let baml_src = project_root
+            .join(BAML_SRC_DIR)
+            .map_err(|e| LspError::InvalidVFSPath {
+                path: project_root.clone(),
+                message: format!("Failed to join path: {e}"),
+            })?;
+        if baml_src.is_dir().unwrap_or(false) {
+            Ok(baml_src)
+        } else {
+            Ok(project_root.clone())
+        }
+    }
+
+    fn project_search_start(path: &vfs::VfsPath) -> vfs::VfsPath {
+        if path.filename().as_str() == BAML_TOML
+            || path.extension().is_some_and(|ext| ext.as_str() == "baml")
+            || path.is_file().unwrap_or(false)
+        {
+            path.parent()
+        } else {
+            path.clone()
+        }
     }
 
     fn discover_workspace_projects(&self, workspace_roots: &[vfs::VfsPath]) -> Vec<vfs::VfsPath> {
@@ -329,11 +310,7 @@ impl BexMulitProject {
                 continue;
             }
 
-            if let Ok(true) = root.is_dir() {
-                if Self::has_baml_toml(root) || root.filename().as_str() == "baml_src" {
-                    project_roots.push(root.clone());
-                }
-            } else if let Ok(pr) = Self::get_baml_project_root(root) {
+            if let Ok(pr) = Self::get_baml_project_root(root) {
                 project_roots.push(pr);
             }
 
@@ -1013,6 +990,23 @@ fn relative_source_path(project_root: &vfs::VfsPath, path: &crate::fs::FsPath) -
         .into_owned()
 }
 
+fn vfs_ancestors(start: vfs::VfsPath) -> impl Iterator<Item = vfs::VfsPath> {
+    let mut ancestors = Vec::new();
+    let mut current = start;
+    loop {
+        ancestors.push(current.clone());
+        if current.is_root() {
+            break;
+        }
+        let parent = current.parent();
+        if parent.as_str() == current.as_str() {
+            break;
+        }
+        current = parent;
+    }
+    ancestors.into_iter()
+}
+
 fn resolve_source_path_for_project(
     project_root: &vfs::VfsPath,
     path: &str,
@@ -1051,12 +1045,16 @@ fn ensure_source_belongs_to_project(
     project_root: &vfs::VfsPath,
     source_path: &vfs::VfsPath,
 ) -> Result<(), LspError> {
+    let expected_root;
     if project_root.is_file().unwrap_or(false) {
         if source_path.as_str() == project_root.as_str() {
             return Ok(());
         }
+        expected_root = project_root.as_str().to_string();
     } else {
-        let root = project_root.as_str().trim_end_matches('/');
+        let source_root = BexMulitProject::project_source_root(project_root)?;
+        expected_root = source_root.as_str().to_string();
+        let root = source_root.as_str().trim_end_matches('/');
         let source = source_path.as_str();
         if source == root
             || source
@@ -1069,10 +1067,7 @@ fn ensure_source_belongs_to_project(
 
     Err(LspError::InvalidVFSPath {
         path: source_path.clone(),
-        message: format!(
-            "Source file is outside project root {}",
-            project_root.as_str()
-        ),
+        message: format!("Source file is outside project source root {expected_root}"),
     })
 }
 

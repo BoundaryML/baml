@@ -18,8 +18,8 @@ use crate::{
 
 #[derive(Args, Clone, Debug)]
 pub struct TestArgs {
-    #[arg(long, help = "path/to/baml_src", default_value = ".")]
-    pub from: PathBuf,
+    #[arg(long, help = "Project search starting point", value_name = "PATH")]
+    pub from: Option<PathBuf>,
 
     /// Only list selected tests
     #[arg(long, default_value_t = false)]
@@ -94,7 +94,7 @@ impl TestArgs {
     pub fn run(&self) -> Result<crate::ExitCode> {
         let reporter = Reporter::new();
         // ── 1. Load project ────────────────────────────────────────────────
-        let (db, from, baml_files) = load_project_from_reporting(&self.from, &reporter)?;
+        let (db, from, baml_files) = load_project_from_reporting(self.from.as_deref(), &reporter)?;
         if baml_files.is_empty() {
             reporter.abandon();
             crate::reporter::print_error(format_args!(

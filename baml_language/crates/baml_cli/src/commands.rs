@@ -246,11 +246,11 @@ mod tests {
     }
 
     #[test]
-    fn check_help_mentions_default_from_directory() {
+    fn check_help_mentions_default_search_start() {
         let help = help_for(&["baml-cli", "check", "--help"]);
         assert!(help.contains("Usage: baml check [OPTIONS]"), "{help}");
         assert!(
-            help.contains("Project root to check. Defaults to the current directory"),
+            help.contains("Project search starting point. Defaults to the current directory"),
             "{help}"
         );
     }
@@ -267,6 +267,6 @@ mod tests {
         let help = help_for(&["baml-cli", "playground", "--help"]);
         assert!(help.contains("Usage: baml playground [OPTIONS]"), "{help}");
         assert!(help.contains("--file <PATH>"), "{help}");
-        assert!(help.contains("--from <FROM>"), "{help}");
+        assert!(help.contains("--from <PATH>"), "{help}");
     }
 }

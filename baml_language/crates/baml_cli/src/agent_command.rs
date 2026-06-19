@@ -10,7 +10,7 @@ use std::{
 use anyhow::{Context, Result, anyhow};
 use clap::Args;
 
-use crate::ExitCode;
+use crate::{ExitCode, project_load::find_project_root_from};
 
 const SKILL_SOURCE_URL: &str =
     "https://codeload.github.com/BoundaryML/baml-skill/tar.gz/refs/heads/main";
@@ -202,11 +202,8 @@ fn detect_install_root() -> Result<PathBuf> {
         .canonicalize()
         .with_context(|| format!("failed to resolve {}", cwd.display()))?;
 
-    if let Some(root) = canonical
-        .ancestors()
-        .find(|dir| dir.join("baml.toml").is_file())
-    {
-        return Ok(root.to_path_buf());
+    if let Some(root) = find_project_root_from(Some(&canonical))? {
+        return Ok(root);
     }
 
     if let Ok(output) = Command::new("git")
@@ -745,6 +742,22 @@ mod tests {
         let nested = root.join("a/b");
         fs::create_dir_all(&nested).unwrap();
         fs::write(root.join("baml.toml"), "[package]\nname = \"x\"\n").unwrap();
+
+        let old = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&nested).unwrap();
+        let detected = detect_install_root().unwrap();
+        std::env::set_current_dir(old).unwrap();
+
+        assert_eq!(detected, root.canonicalize().unwrap());
+    }
+
+    #[test]
+    fn root_detection_accepts_baml_src_only_project() {
+        let _guard = cwd_lock().lock().unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("project");
+        let nested = root.join("baml_src/nested");
+        fs::create_dir_all(&nested).unwrap();
 
         let old = std::env::current_dir().unwrap();
         std::env::set_current_dir(&nested).unwrap();

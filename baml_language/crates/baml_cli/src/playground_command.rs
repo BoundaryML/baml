@@ -11,22 +11,22 @@ pub struct PlaygroundArgs {
     #[arg(long, value_name = "PATH")]
     pub file: Option<PathBuf>,
 
-    /// Project root directory. Ignored when `--file` is set.
-    #[arg(long, default_value = ".")]
-    pub from: PathBuf,
+    /// Project search starting point. Ignored when `--file` is set.
+    #[arg(long, value_name = "PATH")]
+    pub from: Option<PathBuf>,
 }
 
 impl PlaygroundArgs {
     pub fn run(&self) -> Result<crate::ExitCode> {
         let playground_dir = resolve_playground_assets()?;
 
-        let roots = workspace_roots(&self.from, self.file.as_deref())?;
+        let roots = workspace_roots(self.from.as_deref(), self.file.as_deref())?;
         baml_lsp_server::run_playground_server(roots, playground_dir)?;
         Ok(crate::ExitCode::Success)
     }
 }
 
-fn workspace_roots(from: &Path, file: Option<&Path>) -> Result<Vec<PathBuf>> {
+fn workspace_roots(from: Option<&Path>, file: Option<&Path>) -> Result<Vec<PathBuf>> {
     let location = resolve_source_location(from, file, None)?;
     match location {
         SourceLocation::Project { root, files } => {
@@ -103,7 +103,7 @@ mod tests {
     }
 
     #[test]
-    fn project_mode_uses_strict_run_loader() {
+    fn project_mode_errors_without_project_marker() {
         let tmp = TempDir::new().unwrap();
         fs::write(
             tmp.path().join("loose.baml"),
@@ -111,8 +111,8 @@ mod tests {
         )
         .unwrap();
 
-        let err = workspace_roots(tmp.path(), None).unwrap_err();
-        assert!(format!("{err}").contains("doesn't look like a BAML project"));
+        let err = workspace_roots(Some(tmp.path()), None).unwrap_err();
+        assert!(format!("{err}").contains("doesn't look like it belongs to a BAML project"));
     }
 
     #[test]
@@ -122,7 +122,7 @@ mod tests {
         fs::create_dir(&src).unwrap();
         fs::write(src.join("main.baml"), "function main() -> int { 1 }").unwrap();
 
-        let roots = workspace_roots(tmp.path(), None).unwrap();
+        let roots = workspace_roots(Some(tmp.path()), None).unwrap();
         assert_eq!(roots, vec![std::fs::canonicalize(tmp.path()).unwrap()]);
     }
 
@@ -132,7 +132,19 @@ mod tests {
         fs::write(tmp.path().join("baml.toml"), valid_manifest()).unwrap();
         fs::write(tmp.path().join("main.baml"), "function main() -> int { 1 }").unwrap();
 
-        let roots = workspace_roots(tmp.path(), None).unwrap();
+        let roots = workspace_roots(Some(tmp.path()), None).unwrap();
+        assert_eq!(roots, vec![std::fs::canonicalize(tmp.path()).unwrap()]);
+    }
+
+    #[test]
+    fn project_mode_walks_up_from_baml_src() {
+        let tmp = TempDir::new().unwrap();
+        fs::write(tmp.path().join("baml.toml"), valid_manifest()).unwrap();
+        let src = tmp.path().join("baml_src");
+        fs::create_dir(&src).unwrap();
+        fs::write(src.join("main.baml"), "function main() -> int { 1 }").unwrap();
+
+        let roots = workspace_roots(Some(&src), None).unwrap();
         assert_eq!(roots, vec![std::fs::canonicalize(tmp.path()).unwrap()]);
     }
 
@@ -142,7 +154,7 @@ mod tests {
         let file = tmp.path().join("script.baml");
         fs::write(&file, "function main() -> int { 1 }").unwrap();
 
-        let roots = workspace_roots(Path::new("."), Some(&file)).unwrap();
+        let roots = workspace_roots(None, Some(&file)).unwrap();
         assert_eq!(roots, vec![std::fs::canonicalize(file).unwrap()]);
     }
 
