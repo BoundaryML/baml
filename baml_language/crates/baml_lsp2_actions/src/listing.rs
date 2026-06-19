@@ -5,6 +5,7 @@ use baml_compiler2_hir::{
     contributions::{Definition, DefinitionKind},
     package::{PackageId, PackageItems, package_items},
 };
+use baml_compiler2_tir::ty::Package;
 
 use crate::Db;
 
@@ -175,7 +176,7 @@ impl ListingEntry {
             format!("{}.{}", parts.join("."), self.item_name.as_str())
         };
 
-        if self.package_name.as_str() == "user" {
+        if is_user_package_name(&self.package_name) {
             local_path
         } else {
             format!("{}.{}", self.package_name.as_str(), local_path)
@@ -316,12 +317,19 @@ pub fn non_user_package_names(db: &dyn Db) -> std::collections::HashSet<String> 
     let mut names = std::collections::HashSet::new();
     for file in baml_compiler2_hir::compiler2_all_files(db) {
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-        let pkg_name = pkg_info.package.as_str().to_string();
-        if pkg_name != "user" {
-            names.insert(pkg_name);
+        if !is_user_package_name(&pkg_info.package) {
+            names.insert(pkg_info.package.as_str().to_string());
         }
     }
     names
+}
+
+/// Return whether `package_name` identifies the implicit user package.
+///
+/// This funnels package-locality checks through the typed `Package` classifier
+/// instead of comparing raw `"user"` string literals at call sites.
+fn is_user_package_name(package_name: &Name) -> bool {
+    matches!(Package::from_name(package_name.clone()), Package::Local)
 }
 
 /// Build a single `ListingEntry` from a definition.
