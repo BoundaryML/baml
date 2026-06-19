@@ -761,7 +761,7 @@ pub(crate) fn maybe_wrap_union(
 pub(crate) fn collect_type_var_bindings(
     declared: &RuntimeTy,
     concrete: &RuntimeTy,
-    out: &mut std::collections::HashMap<String, RuntimeTy>,
+    out: &mut indexmap::IndexMap<String, RuntimeTy>,
 ) {
     match (declared, concrete) {
         // A type-var position binds to whatever concrete type sits opposite it.
@@ -812,7 +812,7 @@ pub(crate) fn collect_type_var_bindings(
 /// [`collect_type_var_bindings`]) makes the concrete arm present.
 pub(crate) fn substitute_type_vars(
     ty: &RuntimeTy,
-    bindings: &std::collections::HashMap<String, RuntimeTy>,
+    bindings: &indexmap::IndexMap<String, RuntimeTy>,
 ) -> RuntimeTy {
     if bindings.is_empty() {
         return ty.clone();

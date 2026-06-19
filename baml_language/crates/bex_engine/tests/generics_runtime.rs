@@ -34,7 +34,7 @@ async fn call_named(
     source: &str,
     function: &str,
     args: Vec<BexExternalValue>,
-    named_type_args: Vec<(String, baml_type::RuntimeTy)>,
+    type_args: Vec<(String, baml_type::RuntimeTy)>,
 ) -> Result<BexExternalValue, EngineError> {
     let snapshot = compile_for_engine(source);
     let engine = Arc::new(
@@ -46,7 +46,7 @@ async fn call_named(
             function,
             args,
             FunctionCallContextBuilder::new(sys_types::CallId::next())
-                .with_type_args(named_type_args.into_iter().collect())
+                .with_type_args(type_args.into_iter().collect())
                 .build(),
             true,
         )

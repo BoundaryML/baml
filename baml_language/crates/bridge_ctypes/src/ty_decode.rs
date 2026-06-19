@@ -14,6 +14,7 @@ use baml_type::{
     FunctionParamMode, MediaKind, Name, RuntimeFunctionParamTy, RuntimeTy, TyAttr, TypeName,
 };
 use bex_project::{BexExternalAdt, BexExternalValue};
+use indexmap::IndexMap;
 
 use crate::{
     baml_core::cffi::{
@@ -23,14 +24,16 @@ use crate::{
     error::CtypesError,
 };
 
-/// Decode `CallFunctionArgs.type_args` (a list of named `TyArg`s) into
-/// `(TypeVar name, concrete RuntimeTy)` pairs, preserving wire order. A `TyArg`
-/// with an absent `type_value` decodes to the unknown/top type, mirroring
-/// [`proto_ty_to_runtime_ty`]'s rollout-safe default. The engine resolves the
-/// names against the callee's generic params when seeding the entry frame.
+/// Decode `CallFunctionArgs.type_args` (a list of named `TyArg`s) into a
+/// `TypeVar name -> concrete RuntimeTy` map, preserving wire order (the map's
+/// insertion order is the host's De Bruijn order). A `TyArg` with an absent
+/// `type_value` decodes to the unknown/top type, mirroring
+/// [`proto_ty_to_runtime_ty`]'s rollout-safe default. A repeated `type_var`
+/// keeps the last binding. The engine resolves the names against the callee's
+/// generic params when seeding the entry frame.
 pub fn proto_ty_args_to_named(
     type_args: &[TyArg],
-) -> Result<Vec<(String, RuntimeTy)>, CtypesError> {
+) -> Result<IndexMap<String, RuntimeTy>, CtypesError> {
     type_args
         .iter()
         .map(|arg| {

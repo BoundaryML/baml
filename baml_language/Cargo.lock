@@ -1574,6 +1574,7 @@ dependencies = [
  "bex_project",
  "bridge_cffi",
  "bridge_ctypes",
+ "indexmap",
  "log",
  "prost",
  "pyo3",

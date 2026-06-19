@@ -1938,20 +1938,18 @@ impl BexEngine {
         let declared_param_types: Vec<RuntimeTy> =
             params.iter().map(|(_, ty, _)| (*ty).clone()).collect();
 
-        // Build the unified `TypeVar -> concrete` binding map for a generic call
-        // (01pt3). Two sources feed it:
-        //   (a) class type args recovered from a generic `self` receiver
-        //       (instance methods). A generic instance method called by name
-        //       leaves its declared types with the class's type vars
-        //       unsubstituted (e.g. `Stream.next`'s `TStream | StreamFinished`);
-        //       the inbound `self` handle carries them concretely, so zipping the
-        //       declared `self` against the actual recovers the bindings. See
-        //       bridge-generics/streaming/04.
-        //   (b) the host's explicit `_types=` bindings (`type_args`) — the
-        //       single inbound channel for call-level TypeVar bindings; these
-        //       win on conflict.
-        let mut bindings: std::collections::HashMap<String, RuntimeTy> =
-            std::collections::HashMap::new();
+        // `type_args` is the unified `TypeVar -> concrete` binding map for a
+        // generic call (01pt3). It already holds the host's explicit `_types=`
+        // bindings (source (b)); fold in source (a): class type args recovered
+        // from a generic `self` receiver (instance methods). A generic instance
+        // method called by name leaves its declared types with the class's type
+        // vars unsubstituted (e.g. `Stream.next`'s `TStream | StreamFinished`);
+        // the inbound `self` handle carries them concretely, so zipping the
+        // declared `self` against the actual recovers the bindings. See
+        // bridge-generics/streaming/04. `collect_type_var_bindings` only fills
+        // keys not already bound, so the explicit `_types=` bindings win on
+        // conflict.
+        let mut type_args = type_args;
         if let (Some(self_declared), Some(BexCallArg::Provided(self_value))) =
             (declared_param_types.first(), args.first())
         {
@@ -1959,19 +1957,16 @@ impl BexEngine {
                 crate::conversion::collect_type_var_bindings(
                     self_declared,
                     self_actual,
-                    &mut bindings,
+                    &mut type_args,
                 );
             }
-        }
-        for (name, ty) in &type_args {
-            bindings.insert(name.clone(), ty.clone());
         }
 
         // Always fold the recovered bindings into the return type. This is the
         // pre-existing streaming fix (a generic `self` method's return type
         // carries the class's type vars; the receiver binds them concretely)
-        // and is a no-op when `bindings` is empty.
-        return_type = crate::conversion::substitute_type_vars(&return_type, &bindings);
+        // and is a no-op when `type_args` is empty.
+        return_type = crate::conversion::substitute_type_vars(&return_type, &type_args);
 
         // A call is generic iff the callee declares any generic params, OR a
         // TypeVar appears in a parameter / the return type. The declared-params
@@ -2004,7 +1999,7 @@ impl BexEngine {
             // of bare TypeVars.
             let substituted: Vec<RuntimeTy> = declared_param_types
                 .iter()
-                .map(|t| crate::conversion::substitute_type_vars(t, &bindings))
+                .map(|t| crate::conversion::substitute_type_vars(t, &type_args))
                 .collect();
 
             // The wire must be fully bound (free functions only). Two checks:
@@ -2024,7 +2019,7 @@ impl BexEngine {
                 } else {
                     declared_generic_params
                         .iter()
-                        .find(|p| !bindings.contains_key(p.as_str()))
+                        .find(|p| !type_args.contains_key(p.as_str()))
                         .cloned()
                 };
                 // Check (2) — no TypeVar survives substitution in params/return.
@@ -2097,16 +2092,12 @@ impl BexEngine {
 
         // `function_index` is the entry function's `HeapPtr`. The call's named
         // `type_args` are lowered to positional De Bruijn slots against the
-        // callee's generic params inside `set_entry_point_with_named_type_args`.
-        // The positional `run_entry_point` channel is left empty here; only the
-        // closure/bound-method path (`call_callable`) seeds it, with class/
-        // captured type args it already holds positionally.
+        // callee's generic params inside `set_entry_point_with_type_args`.
         self.run_entry_point(
             thread,
             function_index,
             vm_args,
-            Vec::new(),
-            type_args.into_iter().collect(),
+            type_args,
             return_type,
             throws_type,
             host_call_id,
@@ -2172,8 +2163,7 @@ impl BexEngine {
         mut thread: ActiveHeapPermit<BexThread>,
         entry_ptr: HeapPtr,
         vm_args: Vec<Value>,
-        type_args: Vec<RuntimeTy>,
-        named_type_args: Vec<(String, RuntimeTy)>,
+        type_args: indexmap::IndexMap<String, RuntimeTy>,
         return_type: RuntimeTy,
         throws_type: Option<RuntimeTy>,
         host_call_id: CallId,
@@ -2201,17 +2191,13 @@ impl BexEngine {
                 name: b"",
             });
         }
-        if named_type_args.is_empty() {
-            thread
-                .vm
-                .set_entry_point_with_type_args(entry_ptr, &vm_args, type_args);
-        } else {
-            // Host SDK calls pass named bindings; the VM lowers them to
-            // positional De Bruijn slots against the callee's generic params.
-            thread
-                .vm
-                .set_entry_point_with_named_type_args(entry_ptr, &vm_args, named_type_args);
-        }
+        // The call's named type args are lowered to positional De Bruijn slots
+        // against the callee's generic params. An empty map seeds nothing
+        // (non-generic callee) or all-unbound slots (generic callee with no
+        // bindings).
+        thread
+            .vm
+            .set_entry_point_with_type_args(entry_ptr, &vm_args, type_args);
         let entry_call_ref = CallRef {
             process_euid: self.process_euid,
             engine_id: self.engine_id,
@@ -2347,7 +2333,7 @@ impl BexEngine {
         // parameter types (including `self` for methods) for type-directed
         // coercion; lambdas leave it empty (types inferred, not stored), so the
         // real arity comes from `arity` and coercion is best-effort.
-        let (mut return_type, throws_type, arity, param_types) =
+        let (mut return_type, throws_type, arity, param_types, generic_param_names) =
             match thread.vm.get_object(func_ptr) {
                 Object::Function(func) => {
                     // A value referencing an unresolved native builtin can't be an
@@ -2358,11 +2344,21 @@ impl BexEngine {
                             kind: format!("{:?}", func.kind),
                         });
                     }
+                    // De Bruijn-ordered generic-param names (enclosing class
+                    // params first, then the function's own), bounds stripped to
+                    // the bare TypeVar — used to lower the positional `seed_type_args`
+                    // onto the named `type_args` channel below.
+                    let generic_param_names: Vec<String> = func
+                        .display_type_params
+                        .iter()
+                        .map(|p| p.split_whitespace().next().unwrap_or(p).to_string())
+                        .collect();
                     (
                         func.return_type.clone(),
                         func.throws_type.clone(),
                         func.arity,
                         func.param_types.clone(),
+                        generic_param_names,
                     )
                 }
                 _ => {
@@ -2380,7 +2376,7 @@ impl BexEngine {
         // panics on a concrete value. See bridge-generics/streaming/04.
         if receiver.is_some() {
             if let Some(RuntimeTy::Class(_, declared_args, _)) = param_types.first() {
-                let mut bindings = std::collections::HashMap::new();
+                let mut bindings = indexmap::IndexMap::new();
                 for (declared, concrete) in declared_args.iter().zip(seed_type_args.iter()) {
                     crate::conversion::collect_type_var_bindings(declared, concrete, &mut bindings);
                 }
@@ -2432,14 +2428,26 @@ impl BexEngine {
         // resolves to the actual function's metadata row. (The .bamlprof
         // root `CallFunction` id is stamped independently by the VM in
         // `prof_enter_call` from `Function.function_id`.)
+        // Lower the closure's captured / bound-method's class type args (held
+        // positionally in De Bruijn order) onto the named `type_args` channel by
+        // pairing each with the callee's generic-param name. A lambda has no
+        // declared param names, so fall back to the index as a key; the named
+        // lowering then emits the unnamed bindings in order.
+        let seed_type_args: indexmap::IndexMap<String, RuntimeTy> = seed_type_args
+            .into_iter()
+            .enumerate()
+            .map(|(i, ty)| {
+                (
+                    generic_param_names.get(i).cloned().unwrap_or_else(|| i.to_string()),
+                    ty,
+                )
+            })
+            .collect();
         self.run_entry_point(
             thread,
             entry,
             vm_args,
             seed_type_args,
-            // Bound-method/closure callables seed class/captured type args
-            // positionally above; no named host bindings on this path.
-            Vec::new(),
             return_type,
             throws_type,
             host_call_id,

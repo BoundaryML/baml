@@ -181,11 +181,10 @@ fn call_function_inner(
         unsafe { CallFunctionArgs::from_c_buffer(encoded_args, length) }?
     };
     let call_id = decoded_call_id(args.call_id)?;
-    let named_type_args = bridge_ctypes::proto_ty_args_to_named(&args.type_args)?;
+    let type_args = bridge_ctypes::proto_ty_args_to_named(&args.type_args)?;
     let kwargs = kwargs_to_bex_values(args.kwargs, &HANDLE_TABLE)?;
 
-    let call_ctx = function_call_context_builder(call_id)
-        .with_type_args(named_type_args.into_iter().collect());
+    let call_ctx = function_call_context_builder(call_id).with_type_args(type_args);
 
     get_tokio_runtime()?.spawn(async move {
         // `call_and_encode` already wraps the engine call in its own

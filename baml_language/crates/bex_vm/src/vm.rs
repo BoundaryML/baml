@@ -102,13 +102,13 @@ fn guard_template_matches(
 /// fallback, matching the host's De Bruijn send order.
 fn lower_named_type_args(
     param_names: &[String],
-    named_type_args: Vec<(String, baml_type::RuntimeTy)>,
+    type_args: IndexMap<String, baml_type::RuntimeTy>,
 ) -> Vec<baml_type::RuntimeTy> {
     if param_names.is_empty() {
-        return named_type_args.into_iter().map(|(_, ty)| ty).collect();
+        return type_args.into_iter().map(|(_, ty)| ty).collect();
     }
     let mut positional = vec![baml_type::RuntimeTy::unknown(); param_names.len()];
-    for (name, ty) in named_type_args {
+    for (name, ty) in type_args {
         if let Some(idx) = param_names.iter().position(|p| *p == name) {
             positional[idx] = ty;
         }
@@ -1651,18 +1651,40 @@ impl BexVm {
         // the type-arg-aware host call path
         // (`BexEngine::call_function_bound_args`) shares one
         // implementation with the spawn path.
-        let type_args = match self.get_object(function) {
+        let positional = match self.get_object(function) {
             Object::Function(_) => vec![],
             Object::Closure(closure) => closure.captured_type_args.to_vec(),
             Object::GenericFunction(gf) => gf.type_args.to_vec(),
             other => panic!("expect function or closure as entry point, got {other:?}"),
         };
+        // The captured/specialized type args are positional (De Bruijn order);
+        // pair each with the callee's generic-param name so they round-trip
+        // through the named `set_entry_point_with_type_args` channel. A lambda
+        // (spawn closure) has no declared param names — its captured args are
+        // inherited positional slots — so fall back to the index as a key; the
+        // named lowering then emits the unnamed bindings in order.
+        let param_names = self.entry_point_generic_param_names(function);
+        let type_args: IndexMap<String, baml_type::RuntimeTy> = positional
+            .into_iter()
+            .enumerate()
+            .map(|(i, ty)| (param_names.get(i).cloned().unwrap_or_else(|| i.to_string()), ty))
+            .collect();
         self.set_entry_point_with_type_args(function, args, type_args);
     }
 
     /// Like [`Self::set_entry_point`], but seeds the entry frame's
     /// `type_args` slot. Use when the host invokes a generic function
     /// (e.g. a user function with `<T>`) and needs to thread `T` through.
+    ///
+    /// Accepts *named* `TypeVar` bindings (`name -> type`, insertion order is the
+    /// host's De Bruijn order) and lowers them to the positional `type_args` slot
+    /// here — the one place where the callee `HeapPtr` is resolved (so its
+    /// generic-param names are known) and the entry frame is built. Each binding
+    /// is placed at the index of the matching generic param in the callee's De
+    /// Bruijn-ordered param list (enclosing class params first, then the
+    /// function's own params), recovered from `Function::display_type_params`.
+    /// Unbound slots default to the unknown/top type and unrecognized names are
+    /// ignored — both rollout-safe, mirroring the wire decode default.
     ///
     /// Bytecode entry points are pushed directly. Native and sysop entries are
     /// wrapped in a synthetic bytecode caller that executes either
@@ -1672,7 +1694,7 @@ impl BexVm {
         &mut self,
         function: HeapPtr,
         args: &[Value],
-        type_args: Vec<baml_type::RuntimeTy>,
+        type_args: IndexMap<String, baml_type::RuntimeTy>,
     ) {
         debug_assert!(
             matches!(
@@ -1682,6 +1704,11 @@ impl BexVm {
             "expect function or closure as entry point, got {:?}",
             self.get_object(function)
         );
+
+        // Lower the named bindings onto the positional De Bruijn slot against the
+        // callee's generic params before seeding the frame.
+        let param_names = self.entry_point_generic_param_names(function);
+        let type_args = lower_named_type_args(&param_names, type_args);
 
         // Normalize a `GenericFunction` entry point to its concrete inner
         // function (`dispatch_ptr`) and the stored specialization
@@ -1741,29 +1768,6 @@ impl BexVm {
                 unreachable!("entry point kind is not directly invokable: {callable_kind:?}");
             }
         }
-    }
-
-    /// Like [`Self::set_entry_point_with_type_args`], but accepts *named*
-    /// `TypeVar` bindings (`(name, type)`) as sent by a host SDK over
-    /// `CallFunctionArgs.type_args`, and lowers them to the positional De Bruijn
-    /// `type_args` slot here — the one place where the callee `HeapPtr` is
-    /// resolved (so its generic-param names are known) and the entry frame is
-    /// built.
-    ///
-    /// Each binding is placed at the index of the matching generic param in the
-    /// callee's De Bruijn-ordered param list (enclosing class params first, then
-    /// the function's own params), recovered from `Function::display_type_params`.
-    /// Unbound slots default to the unknown/top type and unrecognized names are
-    /// ignored — both rollout-safe, mirroring the wire decode default.
-    pub fn set_entry_point_with_named_type_args(
-        &mut self,
-        function: HeapPtr,
-        args: &[Value],
-        named_type_args: Vec<(String, baml_type::RuntimeTy)>,
-    ) {
-        let param_names = self.entry_point_generic_param_names(function);
-        let positional = lower_named_type_args(&param_names, named_type_args);
-        self.set_entry_point_with_type_args(function, args, positional);
     }
 
     /// The callee's De Bruijn-ordered generic-param names (bare, bounds
