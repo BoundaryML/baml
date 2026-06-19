@@ -87,12 +87,12 @@ pub fn suggest_similar(db: &ProjectDatabase, name: &str, limit: usize) -> Vec<St
         }
     }
 
-    // Builtin packages: bare package name + items + namespaces (prefixed).
+    // Builtin packages: bare package name + item paths + namespaces.
     for pkg_name in baml_lsp2_actions::non_user_package_names(db) {
         all_paths.push(pkg_name.clone());
         let pkg = PackageId::new(db, baml_db::Name::new(&pkg_name));
         for entry in baml_lsp2_actions::list_package_items(db, pkg) {
-            all_paths.push(format!("{}.{}", pkg_name, entry.fqn()));
+            all_paths.push(entry.fqn());
         }
         let pkg_info = package_items(db, pkg);
         for ns_path in pkg_info.namespaces.keys() {
