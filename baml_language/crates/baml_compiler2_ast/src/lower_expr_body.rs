@@ -422,6 +422,12 @@ struct LoweringContext {
     /// args aren't double-counted. Only standalone, value-position `<...>` (e.g.
     /// `let f = foo<int>`) becomes a `GenericApply`.
     consumed_generic_args: std::collections::HashSet<TextRange>,
+    /// When set, every node allocated via `alloc_expr`/`alloc_stmt`/
+    /// `alloc_pattern` is recorded as compiler-synthesized in the source map.
+    /// Scoped on around desugarings (e.g. backtick-template elaboration) so the
+    /// generated nodes are distinguishable from the user-written ones they wrap
+    /// — see [`AstSourceMap::synthetic_exprs`]. Consumed by inlay hints.
+    synthesizing: bool,
 }
 
 /// The elaborated form of a single `${…}` interpolation in an untagged
@@ -451,6 +457,7 @@ impl LoweringContext {
             env_var_refs: Vec::new(),
             needs_chain_wrap: std::collections::HashSet::new(),
             consumed_generic_args: std::collections::HashSet::new(),
+            synthesizing: false,
         }
     }
 
@@ -480,18 +487,27 @@ impl LoweringContext {
     fn alloc_expr(&mut self, expr: Expr, range: TextRange) -> ExprId {
         let id = self.exprs.alloc(expr);
         self.source_map.expr_spans.alloc(range);
+        if self.synthesizing {
+            self.source_map.synthetic_exprs.insert(id);
+        }
         id
     }
 
     fn alloc_stmt(&mut self, stmt: Stmt, range: TextRange) -> StmtId {
         let id = self.stmts.alloc(stmt);
         self.source_map.stmt_spans.alloc(range);
+        if self.synthesizing {
+            self.source_map.synthetic_stmts.insert(id);
+        }
         id
     }
 
     fn alloc_pattern(&mut self, pattern: Pattern, range: TextRange) -> PatId {
         let id = self.patterns.alloc(pattern);
         self.source_map.pattern_spans.alloc(range);
+        if self.synthesizing {
+            self.source_map.synthetic_patterns.insert(id);
+        }
         id
     }
 
@@ -2864,7 +2880,14 @@ impl LoweringContext {
         // `.to_string()`) from the *same* segment `ExprId`s. HIR/MIR/codegen
         // consume `elaborated`; TIR types it (quietly) and uses `segments`
         // only for the strict per-`${…}` diagnostics (BEP §11).
+        //
+        // The elaboration is entirely compiler-generated — mark every node it
+        // allocates as synthetic so consumers (e.g. inlay hints) can skip it.
+        // The segments were lowered above as real user code and keep their
+        // non-synthetic ids; nested backtick strings save/restore the flag.
+        let prev_synth = std::mem::replace(&mut self.synthesizing, true);
         let elaborated = self.elaborate_default_segments(&segments, span);
+        self.synthesizing = prev_synth;
         self.alloc_expr(
             Expr::Template {
                 tag: TemplateTag::Default { elaborated },

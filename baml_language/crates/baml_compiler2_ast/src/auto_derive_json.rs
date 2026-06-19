@@ -316,14 +316,7 @@ fn build_to_json_wrapper_body(class: &ClassDef, span: TextRange) -> (ExprBody, A
     };
     let source_map = AstSourceMap {
         expr_spans,
-        stmt_spans: Arena::new(),
-        pattern_spans: Arena::new(),
-        match_arm_spans: Arena::new(),
-        type_annotation_spans: Arena::new(),
-        catch_arm_spans: Arena::new(),
-        member_access_member_spans: std::collections::HashMap::new(),
-        path_segment_spans: std::collections::HashMap::new(),
-        call_arg_label_spans: std::collections::HashMap::new(),
+        ..Default::default()
     };
     (body, source_map)
 }
@@ -419,14 +412,7 @@ fn build_to_json_body(class: &ClassDef, span: TextRange) -> (ExprBody, AstSource
     };
     let source_map = AstSourceMap {
         expr_spans,
-        stmt_spans: Arena::new(),
-        pattern_spans: Arena::new(),
-        match_arm_spans: Arena::new(),
-        type_annotation_spans: Arena::new(),
-        catch_arm_spans: Arena::new(),
-        member_access_member_spans: std::collections::HashMap::new(),
-        path_segment_spans: std::collections::HashMap::new(),
-        call_arg_label_spans: std::collections::HashMap::new(),
+        ..Default::default()
     };
     (body, source_map)
 }
@@ -485,14 +471,7 @@ fn build_from_json_wrapper_body(class: &ClassDef, span: TextRange) -> (ExprBody,
     };
     let source_map = AstSourceMap {
         expr_spans,
-        stmt_spans: Arena::new(),
-        pattern_spans: Arena::new(),
-        match_arm_spans: Arena::new(),
-        type_annotation_spans: Arena::new(),
-        catch_arm_spans: Arena::new(),
-        member_access_member_spans: std::collections::HashMap::new(),
-        path_segment_spans: std::collections::HashMap::new(),
-        call_arg_label_spans: std::collections::HashMap::new(),
+        ..Default::default()
     };
     (body, source_map)
 }
@@ -612,14 +591,7 @@ fn build_from_json_body(class: &ClassDef, span: TextRange) -> (ExprBody, AstSour
     };
     let source_map = AstSourceMap {
         expr_spans,
-        stmt_spans: Arena::new(),
-        pattern_spans: Arena::new(),
-        match_arm_spans: Arena::new(),
-        type_annotation_spans: Arena::new(),
-        catch_arm_spans: Arena::new(),
-        member_access_member_spans: std::collections::HashMap::new(),
-        path_segment_spans: std::collections::HashMap::new(),
-        call_arg_label_spans: std::collections::HashMap::new(),
+        ..Default::default()
     };
     (body, source_map)
 }

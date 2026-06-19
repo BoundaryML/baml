@@ -55,7 +55,7 @@
 use baml_base::SourceFile;
 use baml_compiler2_ast::{
     Expr, ExprId, Stmt,
-    ast::{AstSourceMap, DeclarativeMeta, ExprBody, FunctionBodyDef, FunctionOrigin, LetOrigin},
+    ast::{AstSourceMap, DeclarativeMeta, ExprBody, FunctionBodyDef, FunctionOrigin},
 };
 use baml_compiler2_hir::{
     body::FunctionBody,
@@ -171,19 +171,16 @@ fn process_body(
     out: &mut Vec<InlineAnnotation>,
 ) {
     // ── Type hints for let bindings without annotations ───────────────────────
-    for (_stmt_id, stmt) in body.stmts.iter() {
-        let Stmt::Let {
-            pattern, origin, ..
-        } = stmt
-        else {
+    for (stmt_id, stmt) in body.stmts.iter() {
+        let Stmt::Let { pattern, .. } = stmt else {
             continue;
         };
 
         // Skip compiler-synthesized bindings — e.g. the accumulator a `${…}`
         // interpolation lowers to (`let " __m3_concat" = ""`). Their spans point
         // inside the backtick template, so a `: T` hint there is noise the user
-        // never wrote.
-        if matches!(origin, LetOrigin::Compiler) {
+        // never wrote. Marked at lowering time (see `AstSourceMap::synthetic_stmts`).
+        if source_map.is_synthetic_stmt(stmt_id) {
             continue;
         }
 
@@ -249,17 +246,16 @@ fn process_body(
                 if is_synthetic_registration(body, *callee) {
                     continue;
                 }
-                let callee_span = source_map.expr_span(*callee);
-                if callee_span.is_empty() {
+                // Skip compiler-synthesized wrapping calls — e.g. the
+                // `string.from(${expr})` that `${…}` interpolation lowers to.
+                // Marked at lowering time (see `AstSourceMap::synthetic_exprs`),
+                // so without this every interpolation would get a spurious
+                // `value:` parameter hint.
+                if source_map.is_synthetic_expr(expr_id) {
                     continue;
                 }
-                // Skip compiler-synthesized wrapping calls — e.g. the
-                // `string.from(${expr})` that `${…}` interpolation lowers to. A
-                // real call's span covers `callee(args…)`, so it is strictly
-                // larger than the callee's; a synthesized wrapper is allocated
-                // with the SAME (template) span for both, so without this every
-                // interpolation would get a spurious `value:` parameter hint.
-                if source_map.expr_span(expr_id) == callee_span {
+                let callee_span = source_map.expr_span(*callee);
+                if callee_span.is_empty() {
                     continue;
                 }
 
