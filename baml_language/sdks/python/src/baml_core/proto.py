@@ -712,10 +712,22 @@ def _try_rehydrate_host_value(decoded: Any) -> Optional[BaseException]:
     return None
 
 
+def _unwrap_union_variant(holder):
+    """Peel any `union_variant_value` wrapper(s) so a metadata read sees the
+    inner value. The engine wraps a thrown value in `union_variant_value` when
+    the function declares a multi-member `throws` union; `decode_value` already
+    unwraps this for the value itself, so the FQN read must match or
+    `class_name` is lost for union throws."""
+    while holder.WhichOneof("value") == "union_variant_value":
+        holder = holder.union_variant_value.value
+    return holder
+
+
 def _outbound_class_fqn(holder) -> Optional[str]:
     """The BAML FQN of a `BamlOutboundValue` that is a class instance (e.g.
     `baml.json.JsonParseError`), else `None`. Used only to build a readable
     `BamlError` / `BamlPanic` message."""
+    holder = _unwrap_union_variant(holder)
     if holder.WhichOneof("value") == "class_value":
         return holder.class_value.name.name
     return None
