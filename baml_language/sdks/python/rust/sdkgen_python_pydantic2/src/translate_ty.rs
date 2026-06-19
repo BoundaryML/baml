@@ -7,6 +7,7 @@
 
 use baml_base::{Literal, MediaKind};
 use baml_codegen_types::{Name, Ty};
+use indexmap::IndexMap;
 
 use crate::{
     py_string,
@@ -28,6 +29,15 @@ pub(crate) struct TranslateCtx {
     /// quoted form defers resolution until pydantic walks the alias
     /// later.
     pub(crate) defer_name_refs: bool,
+    /// `.pyi`-only: maps each optional-argument `Ty::Callable` in the leaf to
+    /// the name of the `typing.Protocol` emitted for it. A function *type*
+    /// (`typing.Callable[[…], R]`) cannot express per-parameter optionality,
+    /// so a callback with optional params is rendered as a named Protocol
+    /// whose `__call__` carries the precise signature; the type expression for
+    /// such a callable is just that Protocol's name. Absent (`None`) in the
+    /// runtime `.py` path, where callable types fall back to
+    /// `typing.Callable[..., R]` (Protocol classes are stub-only).
+    pub(crate) callback_protocols: Option<std::rc::Rc<IndexMap<Ty, String>>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -101,12 +111,19 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
         }
         Ty::BuiltinUnknown => "typing.Any".to_string(),
         Ty::Callable { params, ret } => {
-            let ret = translate_ty(ret, ctx);
-            if params
+            let has_optional = params
                 .iter()
-                .any(|param| param.mode == baml_codegen_types::CodegenFunctionParamMode::Optional)
-            {
-                format!("typing.Callable[..., {ret}]")
+                .any(|param| param.mode == baml_codegen_types::CodegenFunctionParamMode::Optional);
+            if has_optional {
+                // A callback with optional params is emitted as a named
+                // `typing.Protocol` (see `TranslateCtx::callback_protocols`):
+                // the type expression here is just that Protocol's name.
+                if let Some(name) = ctx.callback_protocols.as_ref().and_then(|map| map.get(ty)) {
+                    return name.clone();
+                }
+                // Runtime `.py` path (no Protocol map): `typing.Callable` can't
+                // express per-param optionality, so widen the arg list.
+                format!("typing.Callable[..., {}]", translate_ty(ret, ctx))
             } else {
                 format!(
                     "typing.Callable[[{}], {}]",
@@ -115,7 +132,7 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
                         .map(|param| translate_ty(&param.ty, ctx))
                         .collect::<Vec<_>>()
                         .join(", "),
-                    ret
+                    translate_ty(ret, ctx)
                 )
             }
         }
@@ -216,6 +233,7 @@ mod tests {
             current_leaf: leaf(segments),
             self_ref: None,
             defer_name_refs: false,
+            callback_protocols: None,
         }
     }
 
@@ -227,6 +245,7 @@ mod tests {
         TranslateCtx {
             current_leaf: leaf(current_segments),
             defer_name_refs: false,
+            callback_protocols: None,
             self_ref: Some(SelfRef {
                 routed_leaf: leaf(self_segments),
                 bare_name: bare_name.to_string(),
@@ -245,6 +264,7 @@ mod tests {
         TranslateCtx {
             current_leaf: leaf(current_segments),
             defer_name_refs: true,
+            callback_protocols: None,
             self_ref: Some(SelfRef {
                 routed_leaf: leaf(self_segments),
                 bare_name: bare_name.to_string(),
