@@ -30,11 +30,16 @@ function assert.not_null(value: unknown | null) -> null throws never {
       }
   }
 }
+function assert.format_operand(value: unknown) -> string throws never {
+  { : string
+    string.from<T>(value) : string
+  }
+}
 function assert.equal(actual: unknown, expected: unknown) -> null throws never {
   { : null
     if (actual != expected : bool) : null
       { : never
-        baml.sys.panic("assertion failed:...") : never
+        baml.sys.panic("assertion failed:..." + format_operand(actual) + ", right = " + format_operand(expected)) : never
       }
     else
       { : null
