@@ -1489,8 +1489,19 @@ impl RunArgs {
 pub(crate) const FORMAT_HINT: &str =
     "Your code is unformatted — run `baml fmt` to format it. Continuing.";
 
+/// Returns whether source differs from canonical CLI formatting.
+///
+/// Parameters:
+/// - `source`: Raw BAML source text to check.
+///
+/// Returns `true` when formatting would rewrite `source`, otherwise `false`.
+///
+/// This helper does not panic and treats formatter errors as "no hint needed."
 pub(crate) fn source_needs_format_hint(source: &str) -> bool {
-    let options = baml_fmt::FormatOptions::default();
+    let options = baml_fmt::FormatOptions {
+        indent_width: 2,
+        ..baml_fmt::FormatOptions::default()
+    };
     match baml_fmt::format(source, &options) {
         Ok(formatted) => formatted != source,
         Err(_) => false,
@@ -1617,9 +1628,17 @@ mod tests {
         }
     }
 
+    /// Confirms the formatter hint is suppressed for canonically formatted
+    /// source.
+    ///
+    /// This test has no parameters and no return value.
+    ///
+    /// # Panics
+    /// Panics if `source_needs_format_hint` flags valid two-space-indented
+    /// source as unformatted.
     #[test]
     fn source_needs_format_hint_returns_false_for_formatted_source() {
-        let source = "function main() -> string {\n    \"ok\"\n}\n";
+        let source = "function main() -> string {\n  \"ok\"\n}\n";
         assert!(!source_needs_format_hint(source));
     }
 

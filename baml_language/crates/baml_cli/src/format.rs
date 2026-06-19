@@ -11,6 +11,9 @@ use clap::Args;
 
 use crate::reporter::Reporter;
 
+/// Canonical indentation width used by `baml fmt`.
+const CANONICAL_INDENT_WIDTH: usize = 2;
+
 #[derive(Args, Debug)]
 pub struct FormatArgs {
     #[arg(
@@ -28,13 +31,24 @@ pub struct FormatArgs {
     #[arg(
         short = 'n',
         long = "dry-run",
-        help = "Write formatter changes to stdout instead of files.",
+        help = "Write formatter changes to stdout instead of files (formatter canonical style uses 2-space indentation).",
         default_value = "false"
     )]
     pub dry_run: bool,
 }
 
 impl FormatArgs {
+    /// Formats selected BAML files using the CLI's canonical style.
+    ///
+    /// This method reads each selected file, formats it with
+    /// [`baml_fmt`], and either writes the result back to disk or emits it
+    /// to stdout in dry-run mode.
+    ///
+    /// Returns an [`crate::ExitCode`] indicating success or failure.
+    ///
+    /// # Errors
+    /// Returns an error when path resolution or project discovery fails before
+    /// file-level formatting begins.
     pub fn run(&self) -> Result<crate::ExitCode> {
         // Cargo-style default: with no positional paths, discover every
         // `.baml` file under the project root and format the lot. The
@@ -98,7 +112,10 @@ impl FormatArgs {
                     continue;
                 }
             };
-            let options = FormatOptions::default();
+            let options = FormatOptions {
+                indent_width: CANONICAL_INDENT_WIDTH,
+                ..FormatOptions::default()
+            };
             match baml_fmt::format(&source, &options) {
                 Ok(formatted) => {
                     if self.dry_run {
@@ -199,6 +216,14 @@ mod tests {
 
     use super::*;
 
+    /// Ensures recursive explicit-path formatting applies the CLI canonical
+    /// formatting options to every discovered `.baml` file.
+    ///
+    /// This test has no parameters and no return value.
+    ///
+    /// # Panics
+    /// Panics if formatting fails, if discovered files are not rewritten, or
+    /// if non-BAML files are mutated.
     #[test]
     fn explicit_directory_formats_baml_files_recursively() {
         let tmp = tempfile::tempdir().unwrap();
@@ -227,11 +252,25 @@ mod tests {
         assert!(matches!(exit_code, crate::ExitCode::Success));
         assert_eq!(
             fs::read_to_string(&main).unwrap(),
-            baml_fmt::format(main_source, &FormatOptions::default()).unwrap()
+            baml_fmt::format(
+                main_source,
+                &FormatOptions {
+                    indent_width: CANONICAL_INDENT_WIDTH,
+                    ..FormatOptions::default()
+                }
+            )
+            .unwrap()
         );
         assert_eq!(
             fs::read_to_string(&nested).unwrap(),
-            baml_fmt::format(nested_source, &FormatOptions::default()).unwrap()
+            baml_fmt::format(
+                nested_source,
+                &FormatOptions {
+                    indent_width: CANONICAL_INDENT_WIDTH,
+                    ..FormatOptions::default()
+                }
+            )
+            .unwrap()
         );
         assert_eq!(fs::read_to_string(ignored).unwrap(), ignored_source);
     }
