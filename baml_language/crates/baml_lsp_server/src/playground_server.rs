@@ -31,7 +31,7 @@ use bex_events::run::{
     AttachRootTraceResult, CancellationState, ExecutionRequest, HostCallId, InMemoryRunStore,
     ProjectGeneration, ProjectId, RequestId, RunCursor, RunCursorExpiredReason, RunError,
     RunErrorClass, RunFilter, RunId, RunKind, RunOutcome, RunResult, RunSubscription, RunTarget,
-    RunVisibilityFilter,
+    RunVisibilityFilter, StartedHostRun,
 };
 use bex_project::{is_cancelled_engine_error, is_cancelled_runtime_error};
 use futures::{SinkExt, stream::StreamExt};
@@ -84,6 +84,90 @@ fn broadcast_run_patch(
     let _ = broadcast_tx.send(WsOutMessage::RunPatch {
         patch: patch_to_wire(patch),
     });
+}
+
+fn broadcast_started_host_run(
+    broadcast_tx: &broadcast::Sender<WsOutMessage>,
+    run_store: &InMemoryRunStore,
+    started: &StartedHostRun,
+    request_id: Option<u64>,
+) {
+    broadcast_run_started(broadcast_tx, run_store, started.start.run_id, request_id);
+    if let Some(patch) = &started.started_patch {
+        broadcast_run_patch(broadcast_tx, patch);
+    }
+}
+
+fn broadcast_root_trace_attachment(
+    broadcast_tx: &broadcast::Sender<WsOutMessage>,
+    run_store: &InMemoryRunStore,
+    run_id: RunId,
+    entry_call_ref: bex_events::ids::CallRef,
+    label: &str,
+) {
+    match run_store.attach_root_trace(run_id, entry_call_ref) {
+        AttachRootTraceResult::Attached { patches } => {
+            for patch in patches {
+                broadcast_run_patch(broadcast_tx, &patch);
+            }
+        }
+        AttachRootTraceResult::AlreadyAttached => {}
+        AttachRootTraceResult::RunMissing => {
+            tracing::warn!("RunStore missing {label}run {}", run_id.to_wire_string());
+        }
+        AttachRootTraceResult::Conflict { existing } => {
+            tracing::warn!(
+                "RunStore {label}root trace conflict for {}: existing {}",
+                run_id.to_wire_string(),
+                existing.encode()
+            );
+        }
+    }
+}
+
+fn encoded_success_outcome(
+    result: &bex_heap::BexExternalValue,
+    renderer_hint: &'static str,
+) -> RunOutcome {
+    let handle_options = bridge_ctypes::CffiHandleTableOptions::for_wire();
+    match bridge_ctypes::external_to_outbound(result, &handle_options) {
+        Ok(baml_val) => {
+            let b64 = base64::engine::general_purpose::STANDARD.encode(baml_val.encode_to_vec());
+            RunOutcome::Succeeded(RunResult {
+                value: Some(b64),
+                renderer_hint: Some(renderer_hint.to_string()),
+                supporting_payload_ids: Vec::new(),
+            })
+        }
+        Err(e) => host_error_outcome(format!("Failed to encode result: {e}")),
+    }
+}
+
+fn engine_error_outcome(err: &bex_project::EngineError) -> RunOutcome {
+    if is_cancelled_engine_error(err) {
+        let now = epoch_ms();
+        return RunOutcome::Cancelled(CancellationState {
+            requested_at_ms: now,
+            completed_at_ms: Some(now),
+            reason: Some(format!("{err}")),
+        });
+    }
+    RunOutcome::Failed(RunError {
+        class: RunErrorClass::Runtime,
+        message: format!("{err}"),
+        details: None,
+    })
+}
+
+fn complete_run_and_broadcast(
+    broadcast_tx: &broadcast::Sender<WsOutMessage>,
+    run_store: &InMemoryRunStore,
+    run_id: RunId,
+    outcome: RunOutcome,
+) {
+    if let Some(patch) = run_store.complete_run_now(run_id, outcome) {
+        broadcast_run_patch(broadcast_tx, &patch);
+    }
 }
 
 async fn send_ws(sink: &mut futures::stream::SplitSink<WebSocket, AxumWsMsg>, msg: &WsOutMessage) {
@@ -1072,7 +1156,7 @@ async fn handle_function_run(
     };
 
     let run_store = state.run_store.clone();
-    let start = run_store.create_run(
+    let started = run_store.create_attached_run(
         ExecutionRequest {
             project_id: ProjectId(fs_path.as_path().to_string_lossy().to_string()),
             project_generation: ProjectGeneration(project_generation),
@@ -1081,91 +1165,43 @@ async fn handle_function_run(
             options_summary: None,
         },
         RequestId(client.request_id()),
+        HostCallId::Native(call_id),
     );
-    broadcast_run_started(
+    broadcast_started_host_run(
         &broadcast_tx,
         &run_store,
-        start.run_id,
+        &started,
         client.run_started_request_id(),
     );
-    if let Some(patch) = run_store.attach_host_call(start.run_id, HostCallId::Native(call_id)) {
-        broadcast_run_patch(&broadcast_tx, &patch);
-    }
+    let run_id = started.start.run_id;
 
     tokio::spawn(async move {
-        let handle_options = bridge_ctypes::CffiHandleTableOptions::for_wire();
         let function_name = target.call_function_name;
         match bex
             .call_function_with_trace(&function_name, kwargs.into(), function_call_ctx.build())
             .await
         {
             Ok(traced) => {
-                match run_store.attach_root_trace(start.run_id, traced.entry_call_ref) {
-                    AttachRootTraceResult::Attached { patches } => {
-                        for patch in patches {
-                            broadcast_run_patch(&broadcast_tx, &patch);
-                        }
-                    }
-                    AttachRootTraceResult::AlreadyAttached => {}
-                    AttachRootTraceResult::RunMissing => {
-                        tracing::warn!("RunStore missing run {}", start.run_id.to_wire_string());
-                    }
-                    AttachRootTraceResult::Conflict { existing } => {
-                        tracing::warn!(
-                            "RunStore root trace conflict for {}: existing {}",
-                            start.run_id.to_wire_string(),
-                            existing.encode()
-                        );
-                    }
-                }
-
-                match traced.value {
-                    Ok(result) => {
-                        match bridge_ctypes::external_to_outbound(&result, &handle_options) {
-                            Ok(baml_val) => {
-                                let b64 = base64::engine::general_purpose::STANDARD
-                                    .encode(baml_val.encode_to_vec());
-                                if let Some(patch) = run_store.complete_run(
-                                    start.run_id,
-                                    RunOutcome::Succeeded(RunResult {
-                                        value: Some(b64.clone()),
-                                        renderer_hint: Some("baml.outbound.base64".to_string()),
-                                        supporting_payload_ids: Vec::new(),
-                                    }),
-                                    epoch_ms(),
-                                ) {
-                                    broadcast_run_patch(&broadcast_tx, &patch);
-                                }
-                            }
-                            Err(e) => {
-                                let message = format!("Failed to encode result: {e}");
-                                if let Some(patch) = run_store.complete_run(
-                                    start.run_id,
-                                    host_error_outcome(message.clone()),
-                                    epoch_ms(),
-                                ) {
-                                    broadcast_run_patch(&broadcast_tx, &patch);
-                                }
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        if let Some(patch) = run_store.complete_run(
-                            start.run_id,
-                            runtime_error_outcome(&e),
-                            epoch_ms(),
-                        ) {
-                            broadcast_run_patch(&broadcast_tx, &patch);
-                        }
-                    }
-                }
+                broadcast_root_trace_attachment(
+                    &broadcast_tx,
+                    &run_store,
+                    run_id,
+                    traced.entry_call_ref,
+                    "",
+                );
+                let outcome = match traced.value {
+                    Ok(result) => encoded_success_outcome(&result, "baml.outbound.base64"),
+                    Err(e) => runtime_error_outcome(&e),
+                };
+                complete_run_and_broadcast(&broadcast_tx, &run_store, run_id, outcome);
             }
             Err(e) => {
-                if let Some(patch) =
-                    run_store.complete_run(start.run_id, runtime_error_outcome(&e), epoch_ms())
-                {
-                    broadcast_run_patch(&broadcast_tx, &patch);
-                }
+                complete_run_and_broadcast(
+                    &broadcast_tx,
+                    &run_store,
+                    run_id,
+                    runtime_error_outcome(&e),
+                );
             }
         };
     });
@@ -1183,7 +1219,7 @@ fn handle_test_run(
     let broadcast_tx = state.broadcast_tx.clone();
     let bex = state.bex.clone();
     let run_store = state.run_store.clone();
-    let start = run_store.create_run(
+    let started = run_store.create_attached_run(
         ExecutionRequest {
             project_id: ProjectId(project.clone()),
             project_generation: ProjectGeneration(generation),
@@ -1195,16 +1231,15 @@ fn handle_test_run(
             options_summary: None,
         },
         RequestId(client.request_id()),
+        HostCallId::Native(call_id),
     );
-    broadcast_run_started(
+    broadcast_started_host_run(
         &broadcast_tx,
         &run_store,
-        start.run_id,
+        &started,
         client.run_started_request_id(),
     );
-    if let Some(patch) = run_store.attach_host_call(start.run_id, HostCallId::Native(call_id)) {
-        broadcast_run_patch(&broadcast_tx, &patch);
-    }
+    let run_id = started.start.run_id;
 
     tokio::spawn(async move {
         match bex
@@ -1212,102 +1247,26 @@ fn handle_test_run(
             .await
         {
             Ok(traced) => {
-                match run_store.attach_root_trace(start.run_id, traced.entry_call_ref) {
-                    AttachRootTraceResult::Attached { patches } => {
-                        for patch in patches {
-                            broadcast_run_patch(&broadcast_tx, &patch);
-                        }
-                    }
-                    AttachRootTraceResult::AlreadyAttached => {}
-                    AttachRootTraceResult::RunMissing => {
-                        tracing::warn!(
-                            "RunStore missing test run {}",
-                            start.run_id.to_wire_string()
-                        );
-                    }
-                    AttachRootTraceResult::Conflict { existing } => {
-                        tracing::warn!(
-                            "RunStore test root trace conflict for {}: existing {}",
-                            start.run_id.to_wire_string(),
-                            existing.encode()
-                        );
-                    }
-                }
-
-                match traced.value {
-                    Ok(result) => {
-                        let handle_options = bridge_ctypes::CffiHandleTableOptions::for_wire();
-                        match bridge_ctypes::external_to_outbound(&result, &handle_options) {
-                            Ok(baml_val) => {
-                                let b64 = base64::engine::general_purpose::STANDARD
-                                    .encode(baml_val.encode_to_vec());
-                                if let Some(patch) = run_store.complete_run(
-                                    start.run_id,
-                                    RunOutcome::Succeeded(RunResult {
-                                        value: Some(b64.clone()),
-                                        renderer_hint: Some("testReport".to_string()),
-                                        supporting_payload_ids: Vec::new(),
-                                    }),
-                                    epoch_ms(),
-                                ) {
-                                    broadcast_run_patch(&broadcast_tx, &patch);
-                                }
-                            }
-                            Err(e) => {
-                                let message = format!("Failed to encode result: {e}");
-                                if let Some(patch) = run_store.complete_run(
-                                    start.run_id,
-                                    host_error_outcome(message.clone()),
-                                    epoch_ms(),
-                                ) {
-                                    broadcast_run_patch(&broadcast_tx, &patch);
-                                }
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        let is_cancelled = is_cancelled_engine_error(&e);
-                        let outcome = if is_cancelled {
-                            let now = epoch_ms();
-                            RunOutcome::Cancelled(CancellationState {
-                                requested_at_ms: now,
-                                completed_at_ms: Some(now),
-                                reason: Some(format!("{e}")),
-                            })
-                        } else {
-                            RunOutcome::Failed(RunError {
-                                class: RunErrorClass::Runtime,
-                                message: format!("{e}"),
-                                details: None,
-                            })
-                        };
-                        if let Some(patch) =
-                            run_store.complete_run(start.run_id, outcome, epoch_ms())
-                        {
-                            broadcast_run_patch(&broadcast_tx, &patch);
-                        }
-                    }
-                }
+                broadcast_root_trace_attachment(
+                    &broadcast_tx,
+                    &run_store,
+                    run_id,
+                    traced.entry_call_ref,
+                    "test ",
+                );
+                let outcome = match traced.value {
+                    Ok(result) => encoded_success_outcome(&result, "testReport"),
+                    Err(e) => engine_error_outcome(&e),
+                };
+                complete_run_and_broadcast(&broadcast_tx, &run_store, run_id, outcome);
             }
             Err(e) => {
-                let is_cancelled = is_cancelled_engine_error(&e);
-                let outcome = if is_cancelled {
-                    let now = epoch_ms();
-                    RunOutcome::Cancelled(CancellationState {
-                        requested_at_ms: now,
-                        completed_at_ms: Some(now),
-                        reason: Some(format!("{e}")),
-                    })
-                } else {
-                    RunOutcome::Failed(RunError {
-                        class: RunErrorClass::Runtime,
-                        message: format!("{e}"),
-                        details: None,
-                    })
-                };
-                if let Some(patch) = run_store.complete_run(start.run_id, outcome, epoch_ms()) {
-                    broadcast_run_patch(&broadcast_tx, &patch);
-                }
+                complete_run_and_broadcast(
+                    &broadcast_tx,
+                    &run_store,
+                    run_id,
+                    engine_error_outcome(&e),
+                );
             }
         };
     });

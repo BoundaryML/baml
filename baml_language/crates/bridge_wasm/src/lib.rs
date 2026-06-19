@@ -66,7 +66,7 @@ use bex_events::{
         HostCallId, InMemoryRunStore, ProjectGeneration, ProjectId, RequestId, RunCursor,
         RunCursorExpiredReason, RunDiagnostic, RunError, RunErrorClass, RunFilter, RunId, RunKind,
         RunOutcome, RunRequestState, RunResult, RunSubscription, RunTarget, RunVisibilityFilter,
-        RuntimeTarget, patch_to_wire, run_summary_to_wire, run_to_wire,
+        RuntimeTarget, StartedHostRun, patch_to_wire, run_summary_to_wire, run_to_wire,
     },
 };
 pub use bridge_ctypes::{
@@ -433,7 +433,7 @@ impl BamlWasmRuntime {
             .get_bex_for_project(&fs_path)
             .map_err(|e| JsError::new(&format!("Failed to get Bex for project: {e}")))?;
         let project_generation = self.bex.project_generation(&project).unwrap_or(0);
-        let start = self.run_store.create_run(
+        let started = self.run_store.create_attached_run(
             ExecutionRequest {
                 project_id: ProjectId(fs_path.as_path().to_string_lossy().to_string()),
                 project_generation: ProjectGeneration(project_generation),
@@ -444,16 +444,15 @@ impl BamlWasmRuntime {
                 options_summary: None,
             },
             RequestId(u64::from(request_id)),
+            host_call_id,
         );
-        send_run_started(
+        send_started_host_run(
             &self.playground_callback,
             &self.run_store,
-            start.run_id,
+            &started,
             Some(u64::from(request_id)),
         );
-        if let Some(patch) = self.run_store.attach_host_call(start.run_id, host_call_id) {
-            send_run_patch(&self.playground_callback, &patch);
-        }
+        let run_id = started.start.run_id;
 
         let run_store = self.run_store.clone();
         let callback = self.playground_callback.clone();
@@ -461,50 +460,22 @@ impl BamlWasmRuntime {
         let function_name = name.to_string();
         let ctx = bex_project::FunctionCallContextBuilder::new(call_id).build();
         wasm_bindgen_futures::spawn_local(async move {
-            let handle_options = bridge_ctypes::CffiHandleTableOptions::for_wire();
             match bex
                 .call_function_with_trace(&function_name, kwargs.into(), ctx)
                 .await
             {
                 Ok(traced) => {
-                    publish_root_trace(&callback, &run_store, start.run_id, traced.entry_call_ref);
-                    drain_wasm_profiles(&callback, &run_store, &profile_drain, Some(start.run_id));
-                    match traced.value {
-                        Ok(result) => {
-                            let outcome = match external_to_outbound(&result, &handle_options) {
-                                Ok(baml_val) => {
-                                    let b64 = base64::engine::general_purpose::STANDARD
-                                        .encode(baml_val.encode_to_vec());
-                                    RunOutcome::Succeeded(RunResult {
-                                        value: Some(b64),
-                                        renderer_hint: Some("baml.outbound.base64".to_string()),
-                                        supporting_payload_ids: Vec::new(),
-                                    })
-                                }
-                                Err(e) => {
-                                    host_error_outcome(format!("Failed to encode result: {e}"))
-                                }
-                            };
-                            complete_wasm_run(&callback, &run_store, start.run_id, outcome);
-                        }
-                        Err(e) => {
-                            complete_wasm_run(
-                                &callback,
-                                &run_store,
-                                start.run_id,
-                                runtime_error_outcome(&e),
-                            );
-                        }
-                    }
+                    publish_root_trace(&callback, &run_store, run_id, traced.entry_call_ref);
+                    drain_wasm_profiles(&callback, &run_store, &profile_drain, Some(run_id));
+                    let outcome = match traced.value {
+                        Ok(result) => encoded_success_outcome(&result, "baml.outbound.base64"),
+                        Err(e) => runtime_error_outcome(&e),
+                    };
+                    complete_wasm_run(&callback, &run_store, run_id, outcome);
                 }
                 Err(e) => {
-                    complete_wasm_run(
-                        &callback,
-                        &run_store,
-                        start.run_id,
-                        runtime_error_outcome(&e),
-                    );
-                    drain_wasm_profiles(&callback, &run_store, &profile_drain, Some(start.run_id));
+                    complete_wasm_run(&callback, &run_store, run_id, runtime_error_outcome(&e));
+                    drain_wasm_profiles(&callback, &run_store, &profile_drain, Some(run_id));
                 }
             }
         });
@@ -536,7 +507,7 @@ impl BamlWasmRuntime {
             .get_bex_for_project(&fs_path)
             .map_err(|e| JsError::new(&format!("Failed to get Bex for project: {e}")))?;
         let project_generation = self.bex.project_generation(&project).unwrap_or(0);
-        let start = self.run_store.create_run(
+        let started = self.run_store.create_attached_run(
             ExecutionRequest {
                 project_id: ProjectId(fs_path.as_path().to_string_lossy().to_string()),
                 project_generation: ProjectGeneration(project_generation),
@@ -548,16 +519,15 @@ impl BamlWasmRuntime {
                 options_summary: None,
             },
             RequestId(u64::from(request_id)),
+            host_call_id,
         );
-        send_run_started(
+        send_started_host_run(
             &self.playground_callback,
             &self.run_store,
-            start.run_id,
+            &started,
             Some(u64::from(request_id)),
         );
-        if let Some(patch) = self.run_store.attach_host_call(start.run_id, host_call_id) {
-            send_run_patch(&self.playground_callback, &patch);
-        }
+        let run_id = started.start.run_id;
 
         let run_store = self.run_store.clone();
         let callback = self.playground_callback.clone();
@@ -565,50 +535,22 @@ impl BamlWasmRuntime {
         let function_name = function_name.to_string();
         let ctx = bex_project::FunctionCallContextBuilder::new(call_id).build();
         wasm_bindgen_futures::spawn_local(async move {
-            let handle_options = bridge_ctypes::CffiHandleTableOptions::for_wire();
             match bex
                 .call_function_with_trace(&function_name, kwargs.into(), ctx)
                 .await
             {
                 Ok(traced) => {
-                    publish_root_trace(&callback, &run_store, start.run_id, traced.entry_call_ref);
-                    drain_wasm_profiles(&callback, &run_store, &profile_drain, Some(start.run_id));
-                    match traced.value {
-                        Ok(result) => {
-                            let outcome = match external_to_outbound(&result, &handle_options) {
-                                Ok(baml_val) => {
-                                    let b64 = base64::engine::general_purpose::STANDARD
-                                        .encode(baml_val.encode_to_vec());
-                                    RunOutcome::Succeeded(RunResult {
-                                        value: Some(b64),
-                                        renderer_hint: Some("baml.outbound.base64".to_string()),
-                                        supporting_payload_ids: Vec::new(),
-                                    })
-                                }
-                                Err(e) => {
-                                    host_error_outcome(format!("Failed to encode result: {e}"))
-                                }
-                            };
-                            complete_wasm_run(&callback, &run_store, start.run_id, outcome);
-                        }
-                        Err(e) => {
-                            complete_wasm_run(
-                                &callback,
-                                &run_store,
-                                start.run_id,
-                                runtime_error_outcome(&e),
-                            );
-                        }
-                    }
+                    publish_root_trace(&callback, &run_store, run_id, traced.entry_call_ref);
+                    drain_wasm_profiles(&callback, &run_store, &profile_drain, Some(run_id));
+                    let outcome = match traced.value {
+                        Ok(result) => encoded_success_outcome(&result, "baml.outbound.base64"),
+                        Err(e) => runtime_error_outcome(&e),
+                    };
+                    complete_wasm_run(&callback, &run_store, run_id, outcome);
                 }
                 Err(e) => {
-                    complete_wasm_run(
-                        &callback,
-                        &run_store,
-                        start.run_id,
-                        runtime_error_outcome(&e),
-                    );
-                    drain_wasm_profiles(&callback, &run_store, &profile_drain, Some(start.run_id));
+                    complete_wasm_run(&callback, &run_store, run_id, runtime_error_outcome(&e));
+                    drain_wasm_profiles(&callback, &run_store, &profile_drain, Some(run_id));
                 }
             }
         });
@@ -902,7 +844,7 @@ impl BamlWasmRuntime {
             u32::try_from(call_id.0)
                 .map_err(|_| JsError::new("Function call ID overflowed u32"))?,
         );
-        let start = self.run_store.create_run(
+        let started = self.run_store.create_attached_run(
             ExecutionRequest {
                 project_id: ProjectId(project.to_string()),
                 project_generation: ProjectGeneration(u64::from(generation)),
@@ -914,16 +856,15 @@ impl BamlWasmRuntime {
                 options_summary: None,
             },
             RequestId(u64::from(request_id)),
+            host_call_id,
         );
-        send_run_started(
+        send_started_host_run(
             &self.playground_callback,
             &self.run_store,
-            start.run_id,
+            &started,
             Some(u64::from(request_id)),
         );
-        if let Some(patch) = self.run_store.attach_host_call(start.run_id, host_call_id) {
-            send_run_patch(&self.playground_callback, &patch);
-        }
+        let run_id = started.start.run_id;
 
         let bex = self.bex.clone();
         let run_store = self.run_store.clone();
@@ -939,45 +880,17 @@ impl BamlWasmRuntime {
                 .await
             {
                 Ok(traced) => {
-                    publish_root_trace(&callback, &run_store, start.run_id, traced.entry_call_ref);
-                    drain_wasm_profiles(&callback, &run_store, &profile_drain, Some(start.run_id));
-                    match traced.value {
-                        Ok(result) => {
-                            let handle_options = bridge_ctypes::CffiHandleTableOptions::for_wire();
-                            let outcome = match external_to_outbound(&result, &handle_options) {
-                                Ok(baml_val) => {
-                                    let b64 = base64::engine::general_purpose::STANDARD
-                                        .encode(baml_val.encode_to_vec());
-                                    RunOutcome::Succeeded(RunResult {
-                                        value: Some(b64),
-                                        renderer_hint: Some("testReport".to_string()),
-                                        supporting_payload_ids: Vec::new(),
-                                    })
-                                }
-                                Err(e) => {
-                                    host_error_outcome(format!("Failed to encode result: {e}"))
-                                }
-                            };
-                            complete_wasm_run(&callback, &run_store, start.run_id, outcome);
-                        }
-                        Err(e) => {
-                            complete_wasm_run(
-                                &callback,
-                                &run_store,
-                                start.run_id,
-                                runtime_error_outcome(&e),
-                            );
-                        }
-                    }
+                    publish_root_trace(&callback, &run_store, run_id, traced.entry_call_ref);
+                    drain_wasm_profiles(&callback, &run_store, &profile_drain, Some(run_id));
+                    let outcome = match traced.value {
+                        Ok(result) => encoded_success_outcome(&result, "testReport"),
+                        Err(e) => runtime_error_outcome(&e),
+                    };
+                    complete_wasm_run(&callback, &run_store, run_id, outcome);
                 }
                 Err(e) => {
-                    complete_wasm_run(
-                        &callback,
-                        &run_store,
-                        start.run_id,
-                        runtime_error_outcome(&e),
-                    );
-                    drain_wasm_profiles(&callback, &run_store, &profile_drain, Some(start.run_id));
+                    complete_wasm_run(&callback, &run_store, run_id, runtime_error_outcome(&e));
+                    drain_wasm_profiles(&callback, &run_store, &profile_drain, Some(run_id));
                 }
             }
         });
@@ -1047,6 +960,18 @@ fn send_run_started(
                 run: run_to_wire(&run),
             },
         );
+    }
+}
+
+fn send_started_host_run(
+    callback: &send_wrapper::SendWrapper<Function>,
+    run_store: &InMemoryRunStore,
+    started: &StartedHostRun,
+    request_id: Option<u64>,
+) {
+    send_run_started(callback, run_store, started.start.run_id, request_id);
+    if let Some(patch) = &started.started_patch {
+        send_run_patch(callback, patch);
     }
 }
 
@@ -1153,8 +1078,26 @@ fn complete_wasm_run(
     run_id: RunId,
     outcome: RunOutcome,
 ) {
-    if let Some(patch) = run_store.complete_run(run_id, outcome, epoch_ms()) {
+    if let Some(patch) = run_store.complete_run_now(run_id, outcome) {
         send_run_patch(callback, &patch);
+    }
+}
+
+fn encoded_success_outcome(
+    result: &bex_heap::BexExternalValue,
+    renderer_hint: &'static str,
+) -> RunOutcome {
+    let handle_options = bridge_ctypes::CffiHandleTableOptions::for_wire();
+    match external_to_outbound(result, &handle_options) {
+        Ok(baml_val) => {
+            let b64 = base64::engine::general_purpose::STANDARD.encode(baml_val.encode_to_vec());
+            RunOutcome::Succeeded(RunResult {
+                value: Some(b64),
+                renderer_hint: Some(renderer_hint.to_string()),
+                supporting_payload_ids: Vec::new(),
+            })
+        }
+        Err(e) => host_error_outcome(format!("Failed to encode result: {e}")),
     }
 }
 

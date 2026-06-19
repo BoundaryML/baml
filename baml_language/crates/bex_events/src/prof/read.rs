@@ -201,9 +201,8 @@ mod tests {
         encode_length_delimited_message(&mut bytes, &header).unwrap();
         bytes.extend_from_slice(&[1, 0]);
 
-        let error = match super::read_bamlprof_from_bytes(&bytes) {
-            Ok(_) => panic!("malformed event frame should fail"),
-            Err(error) => error,
+        let Err(error) = super::read_bamlprof_from_bytes(&bytes) else {
+            panic!("malformed event frame should fail");
         };
         assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
     }

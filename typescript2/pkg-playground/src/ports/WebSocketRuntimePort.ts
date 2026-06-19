@@ -15,145 +15,10 @@ import type { RuntimePort } from '../runtime-port';
 import type {
   WorkerOutMessage,
   WorkerInMessage,
-  PlaygroundNotification,
-  Run,
-  RunCursorExpiredReason,
-  RunListFilter,
-  RunPatch,
-  RunSummary,
+  WebSocketInMessage,
+  WebSocketOutMessage,
 } from '../worker-protocol';
 import { isPlaygroundProtocolCompatible } from '../protocol';
-
-/** Server → Client message shapes (must match playground_ws.rs WsOutMessage) */
-type WsOutMessage =
-  | {
-      type: 'hello';
-      toolchainVersion: string;
-      playgroundProtocol: number;
-      minClientPlaygroundProtocol: number;
-      capabilities: string[];
-    }
-  | { type: 'ready' }
-  | { type: 'playgroundNotification'; notification: PlaygroundNotification }
-  | { type: 'runStarted'; requestId?: number; run: Run }
-  | { type: 'runPatch'; patch: RunPatch }
-  | { type: 'commandAck'; requestId: number; outcome: string }
-  | { type: 'commandError'; requestId: number; code: string; message: string }
-  | { type: 'runList'; requestId: number; runs: RunSummary[] }
-  | { type: 'runSnapshot'; requestId?: number; runId: string; snapshot: Run }
-  | {
-      type: 'runCursorExpired';
-      requestId?: number;
-      subscriptionId?: string;
-      runId: string;
-      reason: RunCursorExpiredReason;
-    }
-  | { type: 'envVarRequest'; id: number; variable: string }
-  | { type: 'processEnvVars'; vars: Record<string, string> }
-  | { type: 'envVarFromShell'; variable: string; value: string }
-  | { type: 'knownEnvVarNames'; names: string[] }
-  | {
-      type: 'inputRequest';
-      id: number;
-      prompt: string | undefined;
-      callId: number;
-    }
-  | { type: 'inputResolved'; id: number; callId: number }
-  | {
-      type: 'fetchLogNew';
-      callId: number;
-      id: number;
-      method: string;
-      url: string;
-      requestHeaders: Record<string, string>;
-      requestBody: string;
-    }
-  | {
-      type: 'fetchLogUpdate';
-      callId: number;
-      logId: number;
-      status?: number;
-      durationMs?: number;
-      responseBody?: string;
-      error?: string;
-      responseHeaders?: Record<string, string>;
-    }
-  | {
-      type: 'controlFlowGraphResult';
-      functionName: string;
-      graph: unknown | null;
-    }
-  | { type: 'cursorContext'; context: unknown };
-
-/** Client → Server message shapes (must match playground_ws.rs WsInMessage) */
-type WsInMessage =
-  | {
-      type: 'startRun';
-      requestId: number;
-      project: string;
-      functionName: string;
-      argsBytes: string;
-    }
-  | {
-      type: 'startPreviewRun';
-      requestId: number;
-      project: string;
-      parentFunctionName: string;
-      helper: string;
-      functionName: string;
-      argsBytes: string;
-    }
-  | {
-      type: 'startTestRun';
-      requestId: number;
-      project: string;
-      generation: number;
-      testName: string;
-    }
-  | { type: 'cancelRun'; requestId: number; runId: string }
-  | {
-      type: 'respondToInput';
-      requestId: number;
-      runId: string;
-      inputRequestId: string;
-      value: string;
-    }
-  | {
-      type: 'respondToEnv';
-      requestId: number;
-      runId: string;
-      envRequestId: string;
-      value?: string;
-    }
-  | { type: 'listRuns'; requestId: number; filter?: RunListFilter }
-  | { type: 'snapshot'; requestId: number; runId: string }
-  | {
-      type: 'subscribe';
-      requestId: number;
-      subscriptionId: string;
-      runId: string;
-      afterCursor?: number;
-    }
-  | { type: 'unsubscribe'; requestId: number; subscriptionId: string }
-  | {
-      type: 'expandTestSet';
-      project: string;
-      generation: number;
-      testsetName: string;
-    }
-  | {
-      type: 'envVarResponse';
-      id: number;
-      value: string | undefined;
-      variable?: string;
-    }
-  | { type: 'inputResponse'; id: number; value: string; callId: number }
-  | { type: 'setEnvVar'; key: string; value: string }
-  | { type: 'deleteEnvVar'; key: string }
-  | { type: 'requestState' }
-  | { type: 'requestCollectTests'; project: string }
-  | { type: 'requestControlFlowGraph'; project: string; functionName: string }
-  | { type: 'cursorPosition'; file: string; line: number; column: number };
 
 const MAX_RECONNECT_DELAY = 5000;
 
@@ -195,7 +60,7 @@ export class WebSocketRuntimePort implements RuntimePort {
 
     this.ws.onmessage = (event: MessageEvent) => {
       try {
-        const raw: WsOutMessage = JSON.parse(event.data as string);
+        const raw: WebSocketOutMessage = JSON.parse(event.data as string);
         const msg = this.fromServer(raw);
         if (!msg) return;
 
@@ -239,7 +104,7 @@ export class WebSocketRuntimePort implements RuntimePort {
     this.sendServerMessage(serverMsg);
   }
 
-  private sendServerMessage(serverMsg: WsInMessage): void {
+  private sendServerMessage(serverMsg: WebSocketInMessage): void {
     const raw = JSON.stringify(serverMsg);
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(raw);
@@ -288,7 +153,7 @@ export class WebSocketRuntimePort implements RuntimePort {
   // Convert WorkerInMessage → WsInMessage (base64-encode argsBytes)
   // ---------------------------------------------------------------------------
 
-  private toServer(msg: WorkerInMessage): WsInMessage | null {
+  private toServer(msg: WorkerInMessage): WebSocketInMessage | null {
     switch (msg.type) {
       case 'startRun':
         this.clearLogDecorations();
@@ -409,10 +274,10 @@ export class WebSocketRuntimePort implements RuntimePort {
   }
 
   // ---------------------------------------------------------------------------
-  // Convert WsOutMessage → WorkerOutMessage (base64-decode resultProto)
+  // Convert WebSocketOutMessage → WorkerOutMessage.
   // ---------------------------------------------------------------------------
 
-  private fromServer(raw: WsOutMessage): WorkerOutMessage | null {
+  private fromServer(raw: WebSocketOutMessage): WorkerOutMessage | null {
     switch (raw.type) {
       case 'hello':
         this.playgroundCompatible = isPlaygroundProtocolCompatible(

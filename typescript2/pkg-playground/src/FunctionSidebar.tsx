@@ -23,29 +23,11 @@ import {
   buildFunctionSidebarTree,
   type FunctionSidebarTreeNode,
 } from './function-sidebar-tree';
+import type {
+  SerializedTestDef,
+  SerializedTestSet,
+} from './serialized-test-tree';
 import type { FunctionInfo } from './worker-protocol';
-
-// ---------------------------------------------------------------------------
-// SerializedTestDef — the proto-decoded shape from TestRegistry.serialize()
-// ---------------------------------------------------------------------------
-
-/** A single test: { type: "test", name: string } */
-export type SerializedTest = { type: 'test'; name: string };
-
-/** A lazy (not-yet-expanded) testset: { type: "lazyTestSet", name: string } */
-export type SerializedLazyTestSet = { type: 'lazyTestSet'; name: string };
-
-/** An expanded testset: { name: string, items: SerializedTestDef[], loadingTimeMs: number } */
-export type SerializedTestSet = {
-  name: string;
-  items: SerializedTestDef[];
-  loadingTimeMs: number;
-};
-
-export type SerializedTestDef =
-  | SerializedTest
-  | SerializedLazyTestSet
-  | SerializedTestSet;
 
 // ---------------------------------------------------------------------------
 // TestTreeNode — recursive tree renderer for SerializedTestDef items
@@ -210,7 +192,7 @@ export interface FunctionSidebarProps {
   showInternalFunctions: boolean;
   internalFunctionCount: number;
   isLoadingProject?: boolean;
-  testTree?: any; // SerializedTestDef[] from BAML TestRegistry.serialize()
+  testTree?: SerializedTestDef[] | null;
   selectedFn: string | null;
   onSelectFn: (name: string | null) => void;
   onRefreshTests: () => void;
@@ -364,9 +346,7 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
     setOpenFolderKeys((prev) => ({ ...prev, [key]: open }));
   };
 
-  const treeItems: SerializedTestDef[] = Array.isArray(testTree)
-    ? testTree
-    : [];
+  const treeItems = testTree ?? [];
   let emptyFunctionMessage = 'No matches';
   if (isLoadingProject) {
     emptyFunctionMessage = 'Loading project...';

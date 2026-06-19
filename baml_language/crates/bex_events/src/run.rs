@@ -290,6 +290,12 @@ pub struct StartRunContext {
 }
 
 #[derive(Clone, Debug)]
+pub struct StartedHostRun {
+    pub start: StartRunContext,
+    pub started_patch: Option<RunPatch>,
+}
+
+#[derive(Clone, Debug)]
 pub struct RunContext {
     pub run_id: RunId,
     pub request: RunRequestSummary,
@@ -914,6 +920,20 @@ impl InMemoryRunStore {
         }
     }
 
+    pub fn create_attached_run(
+        &self,
+        request: ExecutionRequest,
+        request_id: RequestId,
+        host_call_id: HostCallId,
+    ) -> StartedHostRun {
+        let start = self.create_run(request, request_id);
+        let started_patch = self.attach_host_call(start.run_id, host_call_id);
+        StartedHostRun {
+            start,
+            started_patch,
+        }
+    }
+
     #[must_use]
     pub fn snapshot(&self, run_id: RunId) -> Option<Run> {
         self.inner
@@ -1142,6 +1162,10 @@ impl InMemoryRunStore {
                 RunPatchChange::Complete(outcome),
             ],
         ))
+    }
+
+    pub fn complete_run_now(&self, run_id: RunId, outcome: RunOutcome) -> Option<RunPatch> {
+        self.complete_run(run_id, outcome, epoch_ms())
     }
 
     pub fn add_diagnostic(&self, run_id: RunId, diagnostic: RunDiagnostic) -> Option<RunPatch> {

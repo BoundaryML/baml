@@ -31,6 +31,16 @@ export type {
   SessionStoreSnapshot,
   SessionStoreStorage,
 } from './session-store';
+export {
+  normalizeSerializedTestTree,
+  parseSerializedTestTreeJson,
+} from './serialized-test-tree';
+export type {
+  SerializedLazyTestSet,
+  SerializedTest,
+  SerializedTestDef,
+  SerializedTestSet,
+} from './serialized-test-tree';
 
 // Result renderers: register custom React components per BAML type
 export {
@@ -55,6 +65,8 @@ export type {
   WorkerOutMessage,
   WorkerInMessage,
   WorkerInitMessage,
+  WebSocketInMessage,
+  WebSocketOutMessage,
   ControlFlowGraph,
   DiagnosticEntry,
   FetchLogEntry,

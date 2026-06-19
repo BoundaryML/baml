@@ -54,11 +54,7 @@ import {
   isHttpRequest,
 } from './renderers/HttpRequestCurl';
 import { GraphView } from './graph/GraphView';
-import {
-  FunctionSidebar,
-  type SerializedTestDef,
-  type SerializedTestSet,
-} from './FunctionSidebar';
+import { FunctionSidebar } from './FunctionSidebar';
 import { companionFunctionName } from './shared/companion-functions';
 import { createExecutionStore, type ExecutionStore } from './execution-store';
 import { createRunStoreClient } from './run-store-client';
@@ -74,6 +70,11 @@ import {
   selectMainFunctionName,
 } from './default-function-selection';
 import { ExecutionProfileView } from './ExecutionProfileView';
+import {
+  parseSerializedTestTreeJson,
+  type SerializedTestDef,
+  type SerializedTestSet,
+} from './serialized-test-tree';
 
 registerBuiltinResultRenderers();
 
@@ -582,7 +583,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   const [projectUpdates, setProjectUpdates] = useState<
     Record<string, ProjectUpdate>
   >({});
-  const [testTree, setTestTree] = useState<any>(null);
+  const [testTree, setTestTree] = useState<SerializedTestDef[] | null>(null);
   const [collectionCallId, setCollectionCallId] = useState<number | null>(null);
   const [generation, setGeneration] = useState<number>(0);
   const [testStartErrors, setTestStartErrors] = useState<Map<string, string>>(
@@ -1074,7 +1075,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                 const jsonStr = new TextDecoder().decode(
                   new Uint8Array(n.data),
                 );
-                const tree = JSON.parse(jsonStr);
+                const tree = parseSerializedTestTreeJson(jsonStr);
 
                 // Track failed expansions from the server-provided error field
                 if (n.expandError) {
@@ -1722,7 +1723,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   );
 
   useEffect(() => {
-    if (!pendingTestTarget || !selectedProject || !Array.isArray(testTree)) {
+    if (!pendingTestTarget || !selectedProject || !testTree) {
       return;
     }
     if (pendingTestTarget.project !== selectedProject) {
@@ -1731,7 +1732,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
       return;
     }
 
-    const treeItems = testTree as SerializedTestDef[];
+    const treeItems = testTree;
     const hasPendingLazyTestSets = hasLazyTestSets(treeItems);
     if (pendingTestTarget.kind === 'test') {
       const testName = findTestNameInTree(treeItems, pendingTestTarget.name);
@@ -1788,9 +1789,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
       setFailedExpands(new Set());
     }
     const pending = pendingExpandsRef.current.names;
-    const expandLazy = (items: any[]) => {
+    const expandLazy = (items: SerializedTestDef[]) => {
       for (const item of items) {
-        if (item && item.type === 'lazyTestSet' && !pending.has(item.name)) {
+        if ('type' in item && item.type === 'lazyTestSet' && !pending.has(item.name)) {
           pending.add(item.name);
           port.postMessage({
             type: 'expandTestSet',
@@ -1798,15 +1799,13 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
             generation,
             testsetName: item.name,
           });
-        } else if (item && item.items && Array.isArray(item.items)) {
+        } else if (isExpandedTestSet(item)) {
           // Recurse into expanded testsets to find nested lazy items
           expandLazy(item.items);
         }
       }
     };
-    if (Array.isArray(testTree)) {
-      expandLazy(testTree);
-    }
+    expandLazy(testTree);
   }, [testTree, selectedProject, generation, port]);
 
   // Retry expansion for a failed (or already expanded) testset
