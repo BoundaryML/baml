@@ -2,35 +2,55 @@
 source: crates/baml_tests/tests/bytecode_format/main.rs
 ---
 function assert.contains(haystack: string, needle: string) -> null {
-  32   0   load_var2 1 2          
+  51   0   load_var2 1 2          
        1   call 189 ntypeargs=0   (baml.String.includes)
        2   unary_op !             
        3   pop_jump_if_false +2   (to 5)
        4   jump +3                (to 7)
 
-  35   5   load_const 0           (null)
+  54   5   load_const 0           (null)
 
-  32   6   jump +3                (to 9)
+  51   6   jump +3                (to 9)
 
-  33   7   load_const 1           ("assertion failed: string does not contain expected substring")
+  52   7   load_const 1           ("assertion failed: string does not contain expected substring")
        8   call 330 ntypeargs=0   (baml.sys.panic)
        9   return                 
 }
 
 function assert.equal(actual: unknown, expected: unknown) -> null {
-  23   0   load_var2 1 2          
-       1   call 902 ntypeargs=0   (baml.ops.equals_equals)
-       2   unary_op !             
-       3   pop_jump_if_false +2   (to 5)
-       4   jump +3                (to 7)
+  37   0    load_var2 1 2          
+       1    call 902 ntypeargs=0   (baml.ops.equals_equals)
+       2    unary_op !             
+       3    pop_jump_if_false +2   (to 5)
+       4    jump +3                (to 7)
 
-  26   5   load_const 0           (null)
+  45   5    load_const 0           (null)
 
-  23   6   jump +3                (to 9)
+  37   6    jump +15               (to 21)
 
-  24   7   load_const 1           ("assertion failed: expected equal values")
-       8   call 330 ntypeargs=0   (baml.sys.panic)
-       9   return                 
+  40   7    load_var 1             (actual)
+       8    call 944 ntypeargs=0   (assert.format_operand)
+       9    store_var 3            (_8)
+
+  42   10   load_var 2             (expected)
+       11   call 944 ntypeargs=0   (assert.format_operand)
+       12   store_var 4            (_9)
+
+  40   13   load_const 1           ("assertion failed: left = ")
+       14   load_var 3             (_8)
+       15   bin_op +               
+       16   load_const 2           (", right = ")
+       17   bin_op +               
+       18   load_var 4             (_9)
+       19   bin_op +               
+       20   call 330 ntypeargs=0   (baml.sys.panic)
+       21   return                 
+}
+
+function assert.format_operand(value: unknown) -> string {
+  32   0   load_var 1             (value)
+       1   call 162 ntypeargs=0   (baml.String.from)
+       2   return                 
 }
 
 function assert.is_true(condition: bool) -> null {

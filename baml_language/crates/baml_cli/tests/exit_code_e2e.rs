@@ -318,6 +318,48 @@ fn test_no_tests_returns_specific_exit_code() {
     );
 }
 
+/// Failing `assert.equal` should surface both operand values and keep stack
+/// traces user-facing (no internal `Span`/`FileId` debug structs).
+#[test]
+fn test_assert_equal_failure_shows_values_without_internal_span_debug() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(
+        tmp.path(),
+        r#"
+test "assert-equal-failure" {
+  assert.equal(4611686018427387903, -4611686018427387904)
+}
+"#,
+    );
+
+    let output = run_baml_cli(built, tmp.path(), &["test", "--from", "."]);
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "Expected test failure exit code for failing assert.equal, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr
+            .contains("assertion failed: left = 4611686018427387903, right = -4611686018427387904"),
+        "Expected assert.equal failure message to include left/right values, got: {stderr}",
+    );
+    assert!(
+        !stderr.contains("Span {"),
+        "User-facing test output should not include internal Span debug data: {stderr}",
+    );
+    assert!(
+        !stderr.contains("FileId("),
+        "User-facing test output should not include internal FileId debug data: {stderr}",
+    );
+}
+
 // ============================================================================
 // Tests for project-less introspection (`baml describe` / `baml grep` /
 // `baml fmt` without a `baml.toml`). The most expensive thing an agent can
