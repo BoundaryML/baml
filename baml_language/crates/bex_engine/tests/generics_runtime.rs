@@ -27,6 +27,32 @@ async fn run_main(source: &str) -> Result<BexExternalValue, EngineError> {
         .await
 }
 
+/// Call a named function with explicit *named* `TypeVar` bindings (the host SDK
+/// `_types=` channel) and the given argument values. The inbound surface that
+/// 01pt3 makes generics-aware.
+async fn call_named(
+    source: &str,
+    function: &str,
+    args: Vec<BexExternalValue>,
+    named_type_args: Vec<(String, baml_type::RuntimeTy)>,
+) -> Result<BexExternalValue, EngineError> {
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
+    );
+    engine
+        .call_function(
+            function,
+            args,
+            FunctionCallContextBuilder::new(sys_types::CallId::next())
+                .with_named_type_args(named_type_args)
+                .build(),
+            true,
+        )
+        .await
+}
+
 /// An instance constructed inside a generic frame (`Box<T>` in `mk<T>`)
 /// carries the caller-resolved type args, observable via `is` after the
 /// value escapes to a non-generic frame. The `mk("hi")` call writes no
@@ -86,6 +112,108 @@ async fn typed_arm_on_enclosing_typevar_matches() {
         }
     "#;
     assert_eq!(run_main(source).await.unwrap(), BexExternalValue::Int(2));
+}
+
+// ===========================================================================
+// 01pt3: inbound (host-call) generics — named `_types=` channel
+// ===========================================================================
+
+/// A body-only TypeVar (`T` appears only via `reflect.type_of<T>()`, never in
+/// the signature) is bound through the named channel and threads into the
+/// frame. Proves the path doesn't rely on argument inference.
+#[tokio::test]
+async fn inbound_named_binding_threads_to_reflect() {
+    let source = r#"
+        function one_type_arg<T>() -> string { reflect.type_of<T>().to_string() }
+        function main() -> int { 0 }
+    "#;
+    let out = call_named(
+        source,
+        "one_type_arg",
+        vec![],
+        vec![("T".to_string(), baml_type::RuntimeTy::int())],
+    )
+    .await
+    .unwrap();
+    assert_eq!(out, BexExternalValue::String("int".into()));
+}
+
+/// A generic function called without binding all its type params is a hard
+/// caller error at the inbound boundary (the wire must be fully bound).
+#[tokio::test]
+async fn inbound_missing_binding_rejected() {
+    let source = r#"
+        function one_type_arg<T>() -> string { reflect.type_of<T>().to_string() }
+        function main() -> int { 0 }
+    "#;
+    let err = call_named(source, "one_type_arg", vec![], vec![])
+        .await
+        .expect_err("missing _types binding must be rejected");
+    assert!(
+        matches!(err, EngineError::TypeMismatch { .. }),
+        "expected TypeMismatch, got {err:?}"
+    );
+}
+
+/// A generic instance argument's wire-supplied class type args are landed into
+/// the VM `Object::Instance::class_type_args` (the `alloc_instance` fix). The
+/// callee tests `b is Box<T>`: this matches only if the instance's resolved
+/// class type args (`[int]`, from the wire) equal the frame's `T` binding
+/// (`int`, from the named channel) — i.e. the wire args flowed into the VM
+/// instance. (Were the args dropped, `class_type_args` would be `[]` and the
+/// length-mismatch would make the test false.)
+#[tokio::test]
+async fn inbound_instance_arg_lands_class_type_args() {
+    let source = r#"
+        class Box<T> { v T }
+        function takes_box<T>(b: Box<T>) -> int {
+            if (b is Box<T>) { 1 } else { 0 }
+        }
+        function main() -> int { 0 }
+    "#;
+    let arg = BexExternalValue::instance_generic(
+        "Box",
+        vec![baml_type::RuntimeTy::int()],
+        indexmap::IndexMap::from_iter([("v", BexExternalValue::Int(5))]),
+    );
+    let out = call_named(
+        source,
+        "takes_box",
+        vec![arg],
+        vec![("T".to_string(), baml_type::RuntimeTy::int())],
+    )
+    .await
+    .unwrap();
+    assert_eq!(out, BexExternalValue::Int(1));
+}
+
+/// A generic instance whose wire class args disagree with the (substituted)
+/// declared param type is a hard type error (`Box<string>` vs `Box<int>`).
+#[tokio::test]
+async fn inbound_instance_arg_wrong_type_args_rejected() {
+    let source = r#"
+        class Box<T> { v T }
+        function takes_box<T>(b: Box<T>) -> int { 1 }
+        function main() -> int { 0 }
+    "#;
+    let arg = BexExternalValue::instance_generic(
+        "Box",
+        vec![baml_type::RuntimeTy::string()],
+        indexmap::IndexMap::from_iter([("v", BexExternalValue::String("hi".into()))]),
+    );
+    let err = call_named(
+        source,
+        "takes_box",
+        vec![arg],
+        // bind T = int, but the instance carries Box<string>
+        vec![("T".to_string(), baml_type::RuntimeTy::int())],
+    )
+    .await
+    .expect_err("Box<string> arg against Box<int> param must be rejected");
+    assert!(
+        matches!(err, EngineError::TypeMismatch { .. }),
+        "expected TypeMismatch, got {err:?}"
+    );
 }
 
 /// Explicit call-site type args still win over inference (regression guard

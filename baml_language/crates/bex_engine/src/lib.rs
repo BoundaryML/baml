@@ -1931,41 +1931,126 @@ impl BexEngine {
             });
         let throws_type = self.function_throws_type(function_name);
 
-        // Type-directed coercion for each provided arg: lets host SDKs send
-        // `int(42)` to a `bigint` slot (and vice versa) without re-encoding,
-        // and rewrites the engine-registered class FQN onto incoming
-        // `Map`/`Instance`/`Variant` values. Idempotent for already-matching
-        // values, so callers that already coerced (e.g. `BexProject::Bex`
-        // kwargs entry) aren't double-charged.
-        let param_types: Vec<RuntimeTy> = self
-            .function_params(function_name)?
-            .into_iter()
-            .map(|(_, ty, _)| ty.clone())
-            .collect();
+        // Declared parameter types (TypeVars unsubstituted). Also note whether
+        // this is an instance method (first param `self`): full-binding
+        // enforcement (01pt3) is scoped to *free functions* — instance/static
+        // method binding (where class TypeVars ride the receiver) is Phase 5
+        // (01pt5), so methods keep the permissive path here.
+        let params = self.function_params(function_name)?;
+        let has_self_receiver = params.first().is_some_and(|(name, _, _)| *name == "self");
+        let declared_param_types: Vec<RuntimeTy> =
+            params.iter().map(|(_, ty, _)| (*ty).clone()).collect();
 
-        // Substitute the declared return type's class type variables from the
-        // receiver's concrete `self`. A generic instance method (`Stream.next`,
-        // `Stream.final`, ...) called by name from the host leaves its return
-        // type with the class's type vars unsubstituted (e.g. `Stream.next`'s
-        // `TStream | StreamFinished`), because the named-entry path seeds no
-        // class type args. The inbound `self` handle carries them concretely, so
-        // zipping the declared `self` type against the actual one recovers the
-        // bindings — without this, a concrete partial (`null | string`, a
-        // `$stream` class) matches no union member and host-return conversion
-        // panics. See bridge-generics/streaming/04.
+        // Build the unified `TypeVar -> concrete` binding map for a generic call
+        // (01pt3). Two sources feed it:
+        //   (a) class type args recovered from a generic `self` receiver
+        //       (instance methods). A generic instance method called by name
+        //       leaves its declared types with the class's type vars
+        //       unsubstituted (e.g. `Stream.next`'s `TStream | StreamFinished`);
+        //       the inbound `self` handle carries them concretely, so zipping the
+        //       declared `self` against the actual recovers the bindings. See
+        //       bridge-generics/streaming/04.
+        //   (b) the host's explicit `_types=` bindings (`named_type_args`) — the
+        //       single inbound channel for call-level TypeVar bindings; these
+        //       win on conflict.
+        let mut bindings: std::collections::HashMap<String, RuntimeTy> =
+            std::collections::HashMap::new();
         if let (Some(self_declared), Some(BexCallArg::Provided(self_value))) =
-            (param_types.first(), args.first())
+            (declared_param_types.first(), args.first())
         {
             if let Some(self_actual) = crate::conversion::tagged_handle_runtime_ty(self_value) {
-                let mut bindings = std::collections::HashMap::new();
                 crate::conversion::collect_type_var_bindings(
                     self_declared,
                     self_actual,
                     &mut bindings,
                 );
-                return_type = crate::conversion::substitute_type_vars(&return_type, &bindings);
             }
         }
+        for (name, ty) in &named_type_args {
+            bindings.insert(name.clone(), ty.clone());
+        }
+
+        // Always fold the recovered bindings into the return type. This is the
+        // pre-existing streaming fix (a generic `self` method's return type
+        // carries the class's type vars; the receiver binds them concretely)
+        // and is a no-op when `bindings` is empty.
+        return_type = crate::conversion::substitute_type_vars(&return_type, &bindings);
+
+        // A call is generic iff the callee declares any generic params, OR a
+        // TypeVar appears in a parameter / the return type. The declared-params
+        // list also catches type params used only in the body (e.g.
+        // `one_type_arg<T>()` reflecting `T`), which a signature scan misses.
+        // Non-generic calls bypass all type-var work and keep the existing
+        // permissive coercion path untouched (no regression, zero extra cost).
+        let declared_generic_params = self.function_generic_params(function_name);
+        let callee_is_generic = !declared_generic_params.is_empty()
+            || declared_param_types
+                .iter()
+                .chain(std::iter::once(&return_type))
+                .any(crate::conversion::contains_type_var);
+
+        // Strict generic handling (substitution + full-binding enforcement +
+        // structural arg check) applies only to the *named* binding channel
+        // (host SDK `_types=`). The legacy *positional* `type_args` channel
+        // (BEP-039 / native `$rust_function` generics consumed positionally via
+        // `current_call_type_args()`) keeps the permissive path — its bindings
+        // are lowered positionally in `set_entry_point`, not name-resolved here.
+        let strict_generics = callee_is_generic && type_args.is_empty();
+        // Full-binding enforcement + per-arg structural check are scoped to
+        // *free* generic functions in Phase 3. Instance methods (a `self`
+        // receiver carrying class TypeVars) are Phase 5; they keep the
+        // permissive path here even though their params are still substituted.
+        let enforce_full_binding = strict_generics && !has_self_receiver;
+
+        let param_types: Vec<RuntimeTy> = if strict_generics {
+            // Substitute the explicit/recovered bindings into every declared
+            // parameter so coercion and validation see concrete types instead
+            // of bare TypeVars.
+            let substituted: Vec<RuntimeTy> = declared_param_types
+                .iter()
+                .map(|t| crate::conversion::substitute_type_vars(t, &bindings))
+                .collect();
+
+            // The wire must be fully bound (free functions only). Two checks:
+            //   (1) every declared generic param has a binding — catches body-only
+            //       type params (`one_type_arg<T>()`) that never reach the
+            //       signature; and
+            //   (2) no TypeVar survives substitution in the params/return —
+            //       catches a param/return type var the bindings didn't cover.
+            if enforce_full_binding {
+                let unbound = declared_generic_params
+                    .iter()
+                    .find(|p| !bindings.contains_key(p.as_str()))
+                    .cloned()
+                    .or_else(|| {
+                        substituted
+                            .iter()
+                            .chain(std::iter::once(&return_type))
+                            .find_map(crate::conversion::first_unbound_type_var)
+                    });
+                if let Some(name) = unbound {
+                    return Err(EngineError::TypeMismatch {
+                        message: format!(
+                            "generic function `{function_name}` is missing a type binding for \
+                             type parameter `{name}` (every TypeVar must be bound, e.g. via \
+                             `_types=`)"
+                        ),
+                    });
+                }
+            }
+            substituted
+        } else {
+            declared_param_types
+        };
+
+        // Type-directed coercion for each provided arg: lets host SDKs send
+        // `int(42)` to a `bigint` slot (and vice versa) without re-encoding,
+        // and rewrites the engine-registered class FQN onto incoming
+        // `Map`/`Instance`/`Variant` values. Idempotent for already-matching
+        // values, so callers that already coerced (e.g. `BexProject::Bex`
+        // kwargs entry) aren't double-charged. For a generic call, the now-
+        // concrete `param_types` also drive a structural check that hard-fails
+        // a wire value that doesn't inhabit its expected type (01pt3 item 5).
         let args: Vec<BexCallArg> = args
             .into_iter()
             .enumerate()
@@ -1973,6 +2058,10 @@ impl BexEngine {
                 BexCallArg::Provided(value) => {
                     let coerced =
                         crate::conversion::coerce_arg_to_declared_type(*value, &param_types[idx])?;
+                    if enforce_full_binding {
+                        crate::conversion::check_generic_arg(&coerced, &param_types[idx])
+                            .map_err(|message| EngineError::TypeMismatch { message })?;
+                    }
                     Ok(BexCallArg::Provided(Box::new(coerced)))
                 }
                 BexCallArg::OmittedDefault => Ok(BexCallArg::OmittedDefault),
@@ -1982,16 +2071,11 @@ impl BexEngine {
         // Create the root thread (shared heap, own TLAB) and acquire its permit.
         let mut thread = self.new_root_thread(cancel.clone(), profile_enabled).await;
 
-        // Snapshot the declared parameter types so we can thread the
-        // expected `RuntimeTy` into per-arg conversion. Binding a `HostValue` to an
+        // Reuse the (substituted) `param_types` to thread the expected
+        // `RuntimeTy` into per-arg VM conversion. Binding a `HostValue` to an
         // `Object::HostClosure` needs it: the closure carries the declared
-        // `RuntimeTy::Function`'s arity and return type, extracted from the parameter
-        // type.
-        let param_types: Vec<RuntimeTy> = self
-            .function_params(function_name)?
-            .into_iter()
-            .map(|(_, ty, _)| ty.clone())
-            .collect();
+        // `RuntimeTy::Function`'s arity and return type, extracted from the
+        // parameter type.
         let vm_args: Vec<Value> = args
             .into_iter()
             .enumerate()
@@ -2507,6 +2591,31 @@ impl BexEngine {
             other => Err(EngineError::TypeMismatch {
                 message: format!("Expected Function, got {other:?}"),
             }),
+        }
+    }
+
+    /// The callee's declared generic-param names (bare, bounds stripped), in
+    /// declaration order. Empty for a non-generic function. Sourced from the
+    /// `Function`'s `display_type_params`, so it includes type params that
+    /// appear only in the body (e.g. `one_type_arg<T>()` whose `T` shows up
+    /// solely via `reflect.type_of<T>()`), which a signature-only scan misses.
+    fn function_generic_params(&self, name: &str) -> Vec<String> {
+        let Some(resolved) = self.resolve_function_name(name) else {
+            return vec![];
+        };
+        let Some((ptr, _kind)) = self.resolved_function_names.get(resolved) else {
+            return vec![];
+        };
+        // SAFETY: ptr is from resolved_function_names, a compile-time object.
+        match unsafe { ptr.get() } {
+            Object::Function(func) => func
+                .display_type_params
+                .iter()
+                // `display_type_params` may render bounds ("T extends Foo"); the
+                // bare TypeVar name is the leading whitespace-free token.
+                .map(|p| p.split_whitespace().next().unwrap_or(p).to_string())
+                .collect(),
+            _ => vec![],
         }
     }
 

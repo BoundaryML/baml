@@ -377,11 +377,12 @@ impl BexEngine {
                 Value::object(holder.holder_mut().tlab_mut().alloc_rust_data(data))
             }
             // Allocate instance by looking up class and converting fields.
-            // `type_args` (the wire-supplied class args) are landed into the VM
-            // `Object::Instance::class_type_args` in Phase 3 (the `alloc_instance`
-            // fix); ignored here so Phase 2 stays a pure BEV-carrier change.
+            // The wire-supplied class `type_args` are landed into the VM
+            // `Object::Instance::class_type_args` via `alloc_instance_with_type_args`.
             BexExternalValue::Instance {
-                class_name, fields, ..
+                class_name,
+                type_args,
+                fields,
             } => {
                 let class_ptr = self
                     .resolved_class_names
@@ -429,7 +430,7 @@ impl BexEngine {
                     holder
                         .holder_mut()
                         .tlab_mut()
-                        .alloc_instance(*class_ptr, values),
+                        .alloc_instance_with_type_args(*class_ptr, type_args, values),
                 )
             }
             BexExternalValue::Variant {
@@ -860,6 +861,35 @@ pub(crate) fn substitute_type_vars(
     }
 }
 
+/// Return the name of the first unbound `TypeVar` reachable in `ty` (walking the
+/// same aggregate positions [`substitute_type_vars`] does), or `None` if the
+/// type is fully concrete. After substituting a generic callee's bindings, any
+/// `TypeVar` that remains is unbound — the host failed to supply it. The
+/// engine rejects such calls (the wire must be fully bound).
+pub(crate) fn first_unbound_type_var(ty: &RuntimeTy) -> Option<String> {
+    match ty {
+        RuntimeTy::TypeVar(name, _) => Some(name.to_string()),
+        RuntimeTy::Class(_, args, _) => args.iter().find_map(first_unbound_type_var),
+        RuntimeTy::List(inner, _) | RuntimeTy::WatchAccessor(inner, _) => {
+            first_unbound_type_var(inner)
+        }
+        RuntimeTy::Map { key, value, .. } => {
+            first_unbound_type_var(key).or_else(|| first_unbound_type_var(value))
+        }
+        RuntimeTy::Union(members, _) => members.iter().find_map(first_unbound_type_var),
+        RuntimeTy::Future(value, error, _) => {
+            first_unbound_type_var(value).or_else(|| first_unbound_type_var(error))
+        }
+        _ => None,
+    }
+}
+
+/// Whether `ty` mentions any `TypeVar` (i.e. the callee is generic at this
+/// position). Thin wrapper over [`first_unbound_type_var`].
+pub(crate) fn contains_type_var(ty: &RuntimeTy) -> bool {
+    first_unbound_type_var(ty).is_some()
+}
+
 /// The concrete `RuntimeTy` carried by a typed heap-handle argument (e.g. a
 /// `Stream` receiver passed as `self`), if any. The handle's `ty` is canonically
 /// `Class { name, args }` with the instance's bound type args — the concrete
@@ -1081,14 +1111,21 @@ fn value_matches_type(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
         // `Instance` during materialization. This lets a host-built class
         // value satisfy a union's class member (e.g. `T | string`).
         (BexExternalValue::Map { .. }, RuntimeTy::Class(..)) => true,
-        // For FFI-boundary matching we only compare class names because
-        // `BexExternalValue::Instance` does not carry class_type_args (that
-        // field lives on the VM-side `Object::Instance`).  Fine-grained
-        // generic disambiguation (e.g. `Foo<int>` vs `Foo<string>`) is
-        // handled in-VM via `IsType` instructions (Phase 8.6) and
-        // `find_matching_union_member` below.
-        (BexExternalValue::Instance { class_name, .. }, RuntimeTy::Class(tn, _, _)) => {
+        // `BexExternalValue::Instance` now carries its wire-supplied class
+        // type args, so we can disambiguate `Foo<int>` from `Foo<string>` at
+        // the FFI boundary instead of name-only. The comparison stays lenient
+        // where args are absent (a non-generic instance, or a declared `Class`
+        // whose args are still bare TypeVars) — see `class_type_args_compatible`.
+        (
+            BexExternalValue::Instance {
+                class_name,
+                type_args,
+                ..
+            },
+            RuntimeTy::Class(tn, expected_args, _),
+        ) => {
             type_name_matches_external_name(class_name, tn)
+                && class_type_args_compatible(type_args, expected_args)
         }
         (BexExternalValue::Variant { enum_name, .. }, RuntimeTy::Enum(tn, _)) => {
             type_name_matches_external_name(enum_name, tn)
@@ -1101,6 +1138,131 @@ fn value_matches_type(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
             members.iter().any(|m| value_matches_type(value, m))
         }
         _ => false,
+    }
+}
+
+/// Compare a generic instance's wire-supplied class type args against a declared
+/// `Class`'s args at the FFI boundary. Lenient by design — returns `true` unless
+/// there is a *positive* mismatch:
+///
+/// - either side empty (a non-generic instance, or a declared class whose args
+///   are absent/erased) → compatible (fall back to name-only).
+/// - differing arity → compatible (don't over-reject on shape surprises).
+/// - per-arg: an expected `TypeVar`/`BuiltinUnknown` is a wildcard; otherwise the
+///   wire arg must be a subtype of the expected arg.
+fn class_type_args_compatible(wire_args: &[RuntimeTy], expected_args: &[RuntimeTy]) -> bool {
+    if wire_args.is_empty() || expected_args.is_empty() || wire_args.len() != expected_args.len() {
+        return true;
+    }
+    wire_args
+        .iter()
+        .zip(expected_args)
+        .all(|(wire, expected)| runtime_ty_compatible(wire, expected))
+}
+
+/// Structural compatibility of a wire-supplied type against a declared
+/// (substituted) type, used to disambiguate generic instances at the FFI
+/// boundary without depending on `TyAttr` equality or full subtyping. Lenient:
+/// only a *positive* leaf/shape mismatch returns `false`.
+///
+/// - an expected `TypeVar`/`BuiltinUnknown` is a wildcard;
+/// - two primitives must be the same primitive (this is what separates
+///   `Foo<int>` from `Foo<string>`);
+/// - matching containers recurse; class names must match, then args recurse;
+/// - anything else is treated as compatible (don't over-reject).
+fn runtime_ty_compatible(wire: &RuntimeTy, expected: &RuntimeTy) -> bool {
+    use RuntimeTy as T;
+    match (wire, expected) {
+        (_, T::TypeVar(..) | T::BuiltinUnknown { .. }) => true,
+        (T::TypeVar(..) | T::BuiltinUnknown { .. }, _) => true,
+        (T::Int { .. }, T::Int { .. })
+        | (T::String { .. }, T::String { .. })
+        | (T::Bool { .. }, T::Bool { .. })
+        | (T::Float { .. }, T::Float { .. })
+        | (T::Null { .. }, T::Null { .. })
+        | (T::Bigint { .. }, T::Bigint { .. })
+        | (T::Uint8Array { .. }, T::Uint8Array { .. }) => true,
+        // Distinct primitives: a positive mismatch.
+        (
+            T::Int { .. }
+            | T::String { .. }
+            | T::Bool { .. }
+            | T::Float { .. }
+            | T::Null { .. }
+            | T::Bigint { .. }
+            | T::Uint8Array { .. },
+            T::Int { .. }
+            | T::String { .. }
+            | T::Bool { .. }
+            | T::Float { .. }
+            | T::Null { .. }
+            | T::Bigint { .. }
+            | T::Uint8Array { .. },
+        ) => false,
+        (T::List(w, _), T::List(e, _)) => runtime_ty_compatible(w, e),
+        (
+            T::Map {
+                key: wk, value: wv, ..
+            },
+            T::Map {
+                key: ek, value: ev, ..
+            },
+        ) => runtime_ty_compatible(wk, ek) && runtime_ty_compatible(wv, ev),
+        (T::Class(wn, wa, _), T::Class(en, ea, _)) => {
+            wn == en && class_type_args_compatible(wa, ea)
+        }
+        // Everything else (unions, enums, aliases, opaque, mixed kinds) is
+        // treated leniently as compatible.
+        _ => true,
+    }
+}
+
+/// Structurally check a generic call's **instance** argument against its
+/// now-concrete expected parameter type, returning a human-readable error on a
+/// positive mismatch. Scoped to `BexExternalValue::Instance` — the value kind
+/// whose wire-supplied `type_args` carry generic information that the signature
+/// can check (e.g. a `GenericBox<string>` arriving at a `GenericBox<int>`
+/// param). Opaque handles/Adts/host values and bare maps keep the permissive
+/// path (their types aren't comparable at this boundary). Also rejects an
+/// instance smuggling an unbound `TypeVar` in its wire args (the wire must be
+/// fully bound).
+pub(crate) fn check_generic_arg(
+    value: &BexExternalValue,
+    expected: &RuntimeTy,
+) -> Result<(), String> {
+    let BexExternalValue::Instance { type_args, .. } = value else {
+        return Ok(());
+    };
+    if let Some(name) = type_args.iter().find_map(first_unbound_type_var) {
+        return Err(format!(
+            "generic argument carries an unbound type variable `{name}`; the host must \
+             send fully-bound generic instances"
+        ));
+    }
+    // Compare against the expected type, peeling optional/union wrappers so an
+    // instance bound for a `T?`/`T | ...` slot still validates against the
+    // class member. Lenient where the expected type isn't a concrete class.
+    if expected_admits_instance(value, expected) {
+        Ok(())
+    } else {
+        Err(format!(
+            "argument of runtime type `{}` does not satisfy the expected type `{expected:?}`",
+            value.type_name(),
+        ))
+    }
+}
+
+/// Whether an `Instance` value is admitted by `expected`, peeling `Union`
+/// (covers `Optional`, which lowers to `T | null`) so a class instance matches
+/// its union/optional member. Defers the actual class+args comparison to
+/// [`value_matches_type`].
+fn expected_admits_instance(value: &BexExternalValue, expected: &RuntimeTy) -> bool {
+    match expected {
+        RuntimeTy::Union(members, _) => members.iter().any(|m| expected_admits_instance(value, m)),
+        // Only a `Class` slot can definitively reject an instance; against any
+        // other expected shape (TypeVar/unknown/opaque) stay lenient.
+        RuntimeTy::Class(..) => value_matches_type(value, expected),
+        _ => true,
     }
 }
 
