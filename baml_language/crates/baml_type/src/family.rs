@@ -57,6 +57,25 @@ ty_family! {
         }
     }
 
+    // An interface *constraint*: a reference to interface `name` at the given
+    // input `generics`, plus any `associated_types` it pins. This is the
+    // declaring interface of an `AssociatedTypeProjection` and the subject of a
+    // generic bound — distinct from `Ty::Interface`, the interface *existential*
+    // type, which requires every associated type to be specified. (A `//` comment,
+    // not `///`: the `ty_family!` satellite grammar has no slot for a leading doc.)
+    satellite Interface {
+        pub name: TypeName,
+        /// The interface's generic *input* arguments, in declaration order.
+        /// Resolved from context; never defaulted away — they are part of the
+        /// interface's identity (`Converter<int>` ≠ `Converter<float>`).
+        pub generics: Vec<Ty>,
+        /// Associated-type bindings that further constrain the implementor (the
+        /// `Item = int` in `Iterator<Item = int>`). Real constraints carried as
+        /// part of the interface, never stripped; sorted by name for a
+        /// deterministic order.
+        pub associated_types: Vec<(Name, Ty)>,
+    }
+
     /// The unified type representation for BAML, used from VIR through runtime.
     ///
     /// Contains both core runtime variants and compiler-only variants.

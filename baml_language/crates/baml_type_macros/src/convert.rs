@@ -501,7 +501,11 @@ fn sat_narrow_body(
 
 fn value_field(own: Own, fid: &Ident) -> TokenStream {
     match own {
-        Own::Ref => quote!(&value.#fid),
+        // Parenthesized: the by-ref binding flows into method chains like
+        // `#binding.iter()` (for a `Vec<Self>`/`Option<Self>` satellite field), and
+        // a bare `&value.#fid.iter()` would bind the `&` to the whole chain
+        // (`&(value.#fid.iter()…)`) rather than the field.
+        Own::Ref => quote!((&value.#fid)),
         Own::Owned => quote!(value.#fid),
     }
 }
