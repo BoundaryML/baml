@@ -3348,7 +3348,12 @@ impl LoweringContext {
         // Desugared closure body: flatten segments into a `baml.TaggedString`.
         // MIR lowers this for the dynamic (`${for}`/`${if}`) case and keeps a
         // fixed-array fast-path off `segments` for purely-static templates.
+        // The desugared closure body is entirely compiler-generated — mark its
+        // nodes synthetic, mirroring the untagged path. The segments were lowered
+        // above as real user code and keep their non-synthetic ids.
+        let prev_synth = std::mem::replace(&mut self.synthesizing, true);
         let body = self.elaborate_tagged_body(&segments, span);
+        self.synthesizing = prev_synth;
 
         self.alloc_expr(
             Expr::Template {
@@ -3379,7 +3384,12 @@ impl LoweringContext {
             span,
         );
         let segments = self.lower_template_segments_checked(backtick);
+        // The desugared closure body is entirely compiler-generated — mark its
+        // nodes synthetic, mirroring the untagged path. The segments were lowered
+        // above as real user code and keep their non-synthetic ids.
+        let prev_synth = std::mem::replace(&mut self.synthesizing, true);
         let body = self.elaborate_tagged_body(&segments, span);
+        self.synthesizing = prev_synth;
         self.alloc_expr(
             Expr::Template {
                 tag: TemplateTag::Custom { tag, body },

@@ -449,6 +449,53 @@ function UseEcho() -> string {
     }
 
     #[test]
+    fn annotations_skip_tagged_template_synthetic_hints() {
+        // A custom `//baml:tagged_string` tag used in an expression function
+        // desugars to a closure body full of compiler-generated nodes
+        // (`__tt_parts`/`__tt_values`/`__tt_cur` accumulators and `.push(...)`
+        // calls). None of them should produce inlay hints — only the user's
+        // `let q` binding does. Marked synthetic at lowering (see
+        // `AstSourceMap::synthetic_stmts`/`synthetic_exprs`), so this holds even
+        // if those nodes later gain real spans / lose their type annotations.
+        let mut builder = ProjectTest::builder();
+        builder.source(
+            "main.baml",
+            r##"
+//baml:tagged_string
+function sql(body: (x: int) -> baml.TaggedString) -> string {
+    "ok"
+}
+
+function Demo(items: int[]) -> string {
+    let q = sql`SELECT ${1} ${for (let x in items)}c_${x}, ${endfor}done`
+    q
+}
+"##,
+        );
+        let project = builder.build();
+        let hints = annotations(&project.db, project.files[0]);
+
+        // The synthesized `.push(...)` calls must not surface `value:`-style hints.
+        assert!(
+            hints.iter().all(|h| h.kind != AnnotationKind::Parameter),
+            "tagged-template desugaring must not emit parameter hints, got {:?}",
+            hints.iter().map(|h| h.label.as_str()).collect::<Vec<_>>()
+        );
+        // The only type hint is the user's `let q: string`; the `__tt_*`
+        // accumulators must not contribute their own.
+        let type_hints: Vec<_> = hints
+            .iter()
+            .filter(|h| h.kind == AnnotationKind::Type)
+            .map(|h| h.label.as_str())
+            .collect();
+        assert_eq!(
+            type_hints,
+            vec![": string"],
+            "only the user's `let q` should get a type hint"
+        );
+    }
+
+    #[test]
     fn annotations_skip_string_interpolation_synthetic_hints() {
         let mut builder = ProjectTest::builder();
         builder.source(
