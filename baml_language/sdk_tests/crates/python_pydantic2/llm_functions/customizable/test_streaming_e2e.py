@@ -17,22 +17,8 @@ deterministic, bridge-level regression guard for the class-typed streaming bug
 Re-record the SSE fixtures (needs a real key):
 
     INSTA_UPDATE=always infisical run -- cargo nextest run -p sdk_test_llm_recordings
-
-Skipped on Windows: the replay server's SSE chunk pacing drains too fast there,
-so `next()` collapses many partials into one and the `>= 10 partials` asserts
-flake. Tracked in Linear B-315; remove the skip once that's fixed.
 """
-import sys
-
-import pytest
-
 from replay_harness import replay_server
-
-# See module docstring: streaming replay flakes on Windows pending investigation.
-pytestmark = pytest.mark.skipif(
-    sys.platform.startswith("win"),
-    reason="replay-server streaming pacing flakes on Windows; see Linear B-315",
-)
 
 
 # ---------------------------------------------------------------------------
