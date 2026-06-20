@@ -123,6 +123,21 @@ Pattern matching ([BEP-015](https://beps.boundaryml.com/beps/15)) on types falls
 
 To check pattern fallibility/infallibility/exhaustiveness, BAML ensures that the union of the matched patterns represent a superset of the scrutinee's type, or defines a diverging path for fallible patterns if not. `match` also rejects cases that can provably never be reached. While these do not necessarily violate the type system, they are dead code that could be misleading.
 
+### Binding Patterns Require `let`
+
+In pattern position, a **bare identifier is a _type_ pattern**, not a value binding — it matches by type name (`Success`, `int`, `null`, …). To bind the scrutinee (or a narrowed projection of it) to a name that is in scope for the arm's guard and body, you must use the `let` keyword:
+
+```baml
+function grade(score: int) -> string {
+  match (score) {
+    let n if n >= 90 => "A",   // `let n` binds the scrutinee to `n`
+    _ => "F",
+  }
+}
+```
+
+Writing `n if n >= 90 => …` (without `let`) is interpreted as a type pattern named `n`. Since no type `n` exists, the compiler reports `unresolved type: n` and points you at the `let` binding form. The `let` form also accepts a type ascription and guard together, e.g. `let n: int if n >= 90 => …`.
+
 ## Type Variables
 
 There are several types of type variables in BAML: generics, associated types, and `Self`. At any run-time usage site, they correspond to exactly one _realized_ type. They (may) also have interface-bounds which enable us to use polymorphic behavior on them as a [universal type](https://en.wikipedia.org/wiki/Parametric_polymorphism).
