@@ -25,6 +25,10 @@ pub enum LlmProvider {
     #[strum(serialize = "openrouter")]
     OpenRouter,
 
+    /// Requesty (OpenAI-compatible, router.requesty.ai)
+    #[strum(serialize = "requesty")]
+    Requesty,
+
     /// `OpenAI` Responses API
     #[strum(serialize = "openai-responses")]
     OpenAiResponses,

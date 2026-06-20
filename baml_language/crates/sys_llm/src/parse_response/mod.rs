@@ -148,7 +148,8 @@ pub(crate) fn parse_response(
         | LlmProvider::OpenAiGeneric
         | LlmProvider::AzureOpenAi
         | LlmProvider::Ollama
-        | LlmProvider::OpenRouter => openai::chat_completions::parse_openai_response(body),
+        | LlmProvider::OpenRouter
+        | LlmProvider::Requesty => openai::chat_completions::parse_openai_response(body),
 
         LlmProvider::Anthropic => anthropic::parse_anthropic_response(body),
         LlmProvider::AwsBedrock => bedrock::parse_bedrock_response(body),
@@ -243,6 +244,7 @@ mod tests {
             LlmProvider::AzureOpenAi,
             LlmProvider::Ollama,
             LlmProvider::OpenRouter,
+            LlmProvider::Requesty,
         ] {
             let resp = parse_response(provider, OPENAI_CHAT_BODY).unwrap();
             assert_eq!(resp.content, "ok");

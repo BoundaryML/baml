@@ -34,6 +34,7 @@ pub(crate) async fn auth_request(
         | LlmProvider::AzureOpenAi
         | LlmProvider::Ollama
         | LlmProvider::OpenRouter
+        | LlmProvider::Requesty
         | LlmProvider::OpenAiResponses
         | LlmProvider::AiGatewayImages => auth_openai(request, client, provider),
         LlmProvider::AwsBedrock => {
@@ -303,6 +304,27 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(req.headers.get("authorization").unwrap(), "Bearer sk-or");
+    }
+
+    #[tokio::test]
+    async fn requesty_uses_bearer() {
+        let client = make_client(
+            "requesty",
+            PrimitiveClientOptions {
+                api_key: Some("sk-req".to_string()),
+                ..Default::default()
+            },
+        );
+        let mut req = fake_request();
+        auth_request(
+            LlmProvider::Requesty,
+            &mut req,
+            &client,
+            Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
+        )
+        .await
+        .unwrap();
+        assert_eq!(req.headers.get("authorization").unwrap(), "Bearer sk-req");
     }
 
     #[tokio::test]

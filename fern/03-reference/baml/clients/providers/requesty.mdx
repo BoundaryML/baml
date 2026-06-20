@@ -1,0 +1,50 @@
+---
+title: requesty
+---
+
+The `requesty` provider offers native integration with [Requesty](https://requesty.ai), an OpenAI-compatible router that provides access to models from multiple providers through a single endpoint.
+
+Example:
+
+```baml BAML
+client<llm> MyClient {
+  provider requesty
+  options {
+    model "openai/gpt-4o-mini"
+  }
+}
+```
+
+<Note>
+  You can also use [`openai-generic`](openai-generic) with Requesty by manually setting the `base_url`. The `requesty` provider simplifies this by providing sensible defaults.
+</Note>
+
+## Requesty-specific options
+
+The `requesty` provider extends [`openai-generic`](openai-generic) with Requesty-specific defaults. See [`openai-generic`](openai-generic) for the full list of supported options.
+
+<ParamField path="api_key" type="string">
+  **Default: `env.REQUESTY_API_KEY`**
+
+  Create a key at [app.requesty.ai/api-keys](https://app.requesty.ai/api-keys).
+</ParamField>
+
+<ParamField path="base_url" type="string">
+  **Default: `https://router.requesty.ai/v1`**
+</ParamField>
+
+<ParamField path="model" type="string" required>
+  The model to use, in Requesty's `provider/model-name` format.
+
+| Model | Description |
+|-------|-------------|
+| `openai/gpt-4o-mini` | Fast, cost-effective |
+| `openai/gpt-4o` | OpenAI GPT-4o |
+| `anthropic/claude-3-5-sonnet-latest` | Claude 3.5 Sonnet |
+| `google/gemini-2.0-flash-001` | Gemini 2.0 Flash |
+
+For the complete list, see the [Requesty model list](https://app.requesty.ai/router/list).
+</ParamField>
+
+For all other options (`temperature`, `max_tokens`, `headers`, etc.), see [`openai-generic`](openai-generic) and the [Requesty documentation](https://docs.requesty.ai).
+

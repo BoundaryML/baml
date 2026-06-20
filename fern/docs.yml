@@ -804,6 +804,9 @@ navigation:
           - page: "OpenRouter"
             slug: openrouter
             path: 03-reference/baml/clients/providers/openrouter.mdx
+          - page: "Requesty"
+            slug: requesty
+            path: 03-reference/baml/clients/providers/requesty.mdx
           - page: "openai-generic"
             path: 03-reference/baml/clients/providers/openai-generic.mdx
           - page: "Microsoft Foundry (openai-generic)"

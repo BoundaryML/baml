@@ -76,6 +76,7 @@ pub fn new_accumulator(provider_str: &str) -> Result<ResourceHandle, LlmOpError>
         | LlmProvider::AzureOpenAi
         | LlmProvider::Ollama
         | LlmProvider::OpenRouter
+        | LlmProvider::Requesty
         | LlmProvider::Anthropic => {}
         _ => {
             return Err(LlmOpError::NotImplemented {
@@ -155,7 +156,8 @@ fn extract_delta(state: &mut AccumulatorState, data: &serde_json::Value) {
         | LlmProvider::OpenAiGeneric
         | LlmProvider::AzureOpenAi
         | LlmProvider::Ollama
-        | LlmProvider::OpenRouter => {
+        | LlmProvider::OpenRouter
+        | LlmProvider::Requesty => {
             if let Some(model) = data.get("model").and_then(|m| m.as_str()) {
                 state.model = Some(model.to_string());
             }

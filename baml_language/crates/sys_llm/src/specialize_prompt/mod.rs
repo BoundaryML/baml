@@ -48,6 +48,7 @@ fn provider_promotes_media_to_user(provider: LlmProvider) -> bool {
             | LlmProvider::AzureOpenAi
             | LlmProvider::Ollama
             | LlmProvider::OpenRouter
+            | LlmProvider::Requesty
             | LlmProvider::OpenAiResponses
             | LlmProvider::Anthropic
     )

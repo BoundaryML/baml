@@ -63,6 +63,7 @@ impl ModelFeatures {
             | LlmProvider::AzureOpenAi
             | LlmProvider::Ollama
             | LlmProvider::OpenRouter
+            | LlmProvider::Requesty
             | LlmProvider::OpenAiResponses
             | LlmProvider::AiGatewayImages => Self {
                 max_one_system_prompt: false,
