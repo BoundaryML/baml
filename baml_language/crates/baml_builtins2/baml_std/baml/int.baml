@@ -6,17 +6,21 @@ class Int {
   }
   // ─── Comparisons / clamping ───────────────────────────────────────────────
 
-  /// Returns the absolute value of `self`.
+  /// Returns the absolute value of `self`, computed on the true 64-bit value.
   ///
-  /// Throws `InvalidArgument` for `int.min_value()` because its absolute value
-  /// (`2^63`) does not fit in an `int`.
+  /// Throws `InvalidArgument` only for the genuine 64-bit minimum (`i64::MIN`),
+  /// whose absolute value (`2^63`) does not fit in an `int`. Because `int` is
+  /// currently backed by the i63 tagged representation, every int operation
+  /// (including `abs`) wraps two's-complement within that range, so
+  /// `int.min_value().abs()` wraps back to `int.min_value()` rather than
+  /// throwing (mirroring `i64::MIN.wrapping_abs() == i64::MIN`).
   ///
   /// # Examples
   /// ```
-  /// (-7).abs()         // 7
-  /// (3).abs()          // 3
-  /// (0).abs()          // 0
-  /// int.min_value().abs()  // throws — overflow
+  /// (-7).abs()             // 7
+  /// (3).abs()              // 3
+  /// (0).abs()              // 0
+  /// int.min_value().abs()  // int.min_value() (wraps, like int +/-/*)
   /// ```
   function abs(self) -> int throws root.errors.InvalidArgument {
     $rust_function
