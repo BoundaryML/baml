@@ -28,14 +28,11 @@ test "int_abs_zero" {
     assert.is_true(baml.deep_equals((0).abs(), 0))
 }
 
-// int.min_value() is -2^62; its abs() is 2^62 which exceeds int.max_value().
-test "int_abs_min_value_throws" {
-    {
-        int.min_value().abs();
-        baml.sys.panic("expected int.min_value().abs() to throw")
-    } catch (e) {
-        baml.errors.InvalidArgument => null
-    }
+// int.min_value() is -2^62; its abs() (2^62) is one past int.max_value() and
+// wraps back to int.min_value() in the i63 representation — consistent with how
+// int +/-/* wrap two's-complement. abs only throws for the genuine i64::MIN.
+test "int_abs_min_value_wraps" {
+    assert.is_true(baml.deep_equals(int.min_value().abs(), int.min_value()))
 }
 
 test "int_abs_near_min_value_succeeds" {
