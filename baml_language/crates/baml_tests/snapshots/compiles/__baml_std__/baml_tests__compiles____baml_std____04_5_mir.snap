@@ -260,6 +260,48 @@ fn baml.Map.delete = builtin(vm)
 
 fn baml.Array.every = builtin(vm)
 
+fn baml.Array.filled(n: int, value: T) -> T[] {
+    // Locals:
+    let _0: T[] // _0 // return
+    let _1: int // n // param
+    let _2: T // value // param
+    let _3: T[] // out
+    let _4: int // i
+    let _5: bool
+    let _6: int
+    let _7: int
+
+    bb0: {
+        _3 = [];
+        _4 = const 0_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        _6 = copy _4;
+        _5 = copy _6 < copy _1;
+        branch copy _5 -> [bb4, bb2];
+    }
+
+    bb2: {
+        _0 = copy _3;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+
+    bb4: {
+        _7 = call const fn baml.Array.push(copy _3, copy _2) -> [bb5];
+    }
+
+    bb5: {
+        _4 = copy _4 + const 1_i64;
+        goto -> bb1;
+    }
+}
+
 fn baml.Array.filter = builtin(vm)
 
 fn baml.Array.filter_map(self: baml.Array, fn: (T) -> U | null throws E) -> U[] {
