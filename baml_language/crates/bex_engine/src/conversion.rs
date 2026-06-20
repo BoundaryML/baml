@@ -1113,9 +1113,11 @@ fn value_matches_type(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
         (BexExternalValue::Map { .. }, RuntimeTy::Class(..)) => true,
         // `BexExternalValue::Instance` now carries its wire-supplied class
         // type args, so we can disambiguate `Foo<int>` from `Foo<string>` at
-        // the FFI boundary instead of name-only. The comparison stays lenient
-        // where args are absent (a non-generic instance, or a declared `Class`
-        // whose args are still bare TypeVars) — see `class_type_args_compatible`.
+        // the FFI boundary instead of name-only. The comparison is name-only
+        // where the *declared* `Class`'s args are absent/erased (a non-generic
+        // class, or args still bare TypeVars); against a concrete generic slot
+        // the wire instance must supply matching args — see
+        // `class_type_args_compatible`.
         (
             BexExternalValue::Instance {
                 class_name,
@@ -1142,22 +1144,46 @@ fn value_matches_type(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
 }
 
 /// Compare a generic instance's wire-supplied class type args against a declared
-/// `Class`'s args at the FFI boundary. Lenient by design — returns `true` unless
-/// there is a *positive* mismatch:
+/// `Class`'s args at the FFI boundary. Strict where the declared type is
+/// *concrete*: a generic instance must arrive fully bound (Phase 2/3), so an
+/// instance that omits the args a concrete generic slot requires — or whose
+/// arity disagrees — is a positive mismatch, not a shape surprise to wave
+/// through.
 ///
-/// - either side empty (a non-generic instance, or a declared class whose args
-///   are absent/erased) → compatible (fall back to name-only).
-/// - differing arity → compatible (don't over-reject on shape surprises).
+/// - `expected_args` empty → compatible: the declared class is non-generic, so
+///   there is nothing to check (fall back to name-only).
+/// - `wire_args` empty against a non-empty `expected_args`: reject only if the
+///   expected args are concrete. If they are still erased/unconcretized
+///   wildcards (`TypeVar`/`BuiltinUnknown` — e.g. an instance method's class
+///   param that couldn't be bound, lowered to runtime `unknown`), there is
+///   nothing concrete to contradict, so stay lenient.
+/// - differing (non-zero) arity → reject.
 /// - per-arg: an expected `TypeVar`/`BuiltinUnknown` is a wildcard; otherwise the
-///   wire arg must be a subtype of the expected arg.
+///   wire arg must be compatible with the expected arg.
 fn class_type_args_compatible(wire_args: &[RuntimeTy], expected_args: &[RuntimeTy]) -> bool {
-    if wire_args.is_empty() || expected_args.is_empty() || wire_args.len() != expected_args.len() {
+    if expected_args.is_empty() {
         return true;
+    }
+    if wire_args.is_empty() {
+        return expected_args.iter().all(is_wildcard_ty);
+    }
+    if wire_args.len() != expected_args.len() {
+        return false;
     }
     wire_args
         .iter()
         .zip(expected_args)
         .all(|(wire, expected)| runtime_ty_compatible(wire, expected))
+}
+
+/// A type-arg position that imposes no concrete constraint: an unsubstituted
+/// `TypeVar` or the `unknown` sentinel. Such a position can't positively
+/// contradict a wire arg, so the structural matcher treats it as a wildcard.
+fn is_wildcard_ty(ty: &RuntimeTy) -> bool {
+    matches!(
+        ty,
+        RuntimeTy::TypeVar(..) | RuntimeTy::BuiltinUnknown { .. }
+    )
 }
 
 /// Structural compatibility of a wire-supplied type against a declared
@@ -1712,7 +1738,9 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: Value) -> BexExternalValue {
 /// 1. **Class / enum naming:** host encoders carry an informational class or
 ///    variant name (e.g. `root.lorem.MyLorem`); rewrite it to the
 ///    engine-registered FQN (`user.lorem.MyLorem`) so VM heap lookups hit. A
-///    plain `Map` arriving at a class slot is also promoted to `Instance`.
+///    plain `Map` arriving at a *non-generic* class slot is also promoted to
+///    `Instance`; against a *generic* class slot the promotion is rejected (a
+///    bare map can't supply the required class type args).
 /// 2. **Numeric / optional / union coercion:** see `coerce_numeric_to_declared_type`.
 ///
 /// Nested container types (arrays/maps with mismatched element types) are not
@@ -1723,8 +1751,22 @@ pub(crate) fn coerce_arg_to_declared_type(
 ) -> Result<BexExternalValue, EngineError> {
     match (value, ty) {
         // ── Class / enum naming (incoming only) ──────────────────────────
-        (BexExternalValue::Map { entries, .. }, RuntimeTy::Class(type_name, _, _)) => {
-            // A bare map carries no class type args.
+        (BexExternalValue::Map { entries, .. }, RuntimeTy::Class(type_name, class_args, _)) => {
+            // Promoting a bare `Map` to an `Instance` fabricates a class value
+            // with NO class type args (a map carries none). That's only sound
+            // for a *non-generic* class slot. Against a generic class the slot
+            // demands concrete type args the map can't supply, so promotion
+            // would manufacture an under-specified generic instance — reject
+            // instead and require the host to send a fully-bound instance.
+            if !class_args.is_empty() {
+                return Err(EngineError::TypeMismatch {
+                    message: format!(
+                        "cannot coerce a host map into the generic class `{type_name}`: a bare \
+                         map carries no class type arguments. Send a fully-bound generic \
+                         instance instead."
+                    ),
+                });
+            }
             Ok(BexExternalValue::Instance {
                 class_name: type_name.to_string(),
                 type_args: vec![],
