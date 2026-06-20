@@ -99,6 +99,14 @@ pub enum TirTypeError {
         name: Name,
         suggestions: Vec<String>,
     },
+    /// A bare identifier appeared in `match` pattern position followed by a
+    /// guard (`name if … => …`). The parser reads the bare identifier as a
+    /// *type* pattern, not a value binding, so it fails to resolve as a type —
+    /// which previously surfaced as a cryptic "unresolved type" error. This
+    /// variant carries an actionable message telling the user to write
+    /// `let <name>` to bind the scrutinee. Mapped to the same diagnostic code
+    /// as `UnresolvedType` (E0002).
+    MatchBindingPatternNeedsLet { name: Name },
     /// Wrong number of arguments in a function call.
     ArgumentCountMismatch { expected: usize, got: usize },
     /// A positional argument appeared after a named argument in the same call.
@@ -494,6 +502,13 @@ impl fmt::Display for TirTypeError {
                         suggestions.join("`, `")
                     )
                 }
+            }
+            TirTypeError::MatchBindingPatternNeedsLet { name } => {
+                write!(
+                    f,
+                    "unresolved type: {name}. To bind the scrutinee to a name, \
+                     use `let {name}` (e.g. `let {name} if … => …`)"
+                )
             }
             TirTypeError::ArgumentCountMismatch { expected, got } => {
                 write!(f, "expected {expected} argument(s), got {got}")

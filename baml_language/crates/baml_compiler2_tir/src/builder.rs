@@ -750,6 +750,15 @@ pub struct TypeInferenceBuilder<'db> {
     /// user wrote them.  Real type errors still surface from the user's
     /// own field declaration.
     is_auto_derived_body: bool,
+    /// While lowering a `match` arm whose top-level pattern is a bare
+    /// lowercase identifier (e.g. `n if n >= 90 => …`), this holds the arm's
+    /// guard expression. The parser reads such a bare identifier as a *type*
+    /// pattern, not a value binding, so resolving it yields a confusing
+    /// "unresolved type" diagnostic. When set, [`Self::resolve_type_expr_at_pat`]
+    /// rewrites that diagnostic into an actionable one suggesting the `let`
+    /// binding form. `None` for every other pattern position, so ordinary type
+    /// resolution is unaffected.
+    match_guard_bind_hint: Option<ExprId>,
 }
 
 impl<'db> TypeInferenceBuilder<'db> {
@@ -976,6 +985,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             template_body_params: FxHashMap::default(),
             lambda_effective_throws: FxHashMap::default(),
             is_auto_derived_body: false,
+            match_guard_bind_hint: None,
         }
     }
 
@@ -6919,7 +6929,20 @@ impl<'db> TypeInferenceBuilder<'db> {
             let arm = &body.match_arms[*arm_id];
             let pattern_id = arm.pattern;
 
+            // Detect `name if … => …` where `name` is a bare lowercase
+            // identifier the parser interpreted as a type pattern rather than
+            // a value binding. When such an arm carries a guard, set a hint so
+            // the resulting "unresolved type" diagnostic can point the user at
+            // the `let` binding form. Restricted to guarded arms and lowercase
+            // identifiers so legitimate (PascalCase) type patterns and
+            // unguarded arms are never flagged.
+            self.match_guard_bind_hint = arm.guard.filter(|_| {
+                matches!(&body.patterns[pattern_id], ast::Pattern::Type(te)
+                    if Self::is_bare_lowercase_type_path(te))
+            });
+
             let result = self.analyze_and_lower(pattern_id, &scrutinee_ty, body, arm.body);
+            self.match_guard_bind_hint = None;
             let narrowed = result.matched_ty.clone();
 
             // Snapshot/restore the scope for this arm's bindings.
@@ -7845,6 +7868,23 @@ impl<'db> TypeInferenceBuilder<'db> {
         ty
     }
 
+    /// `true` if `ty` is a single-segment path whose identifier starts with an
+    /// ASCII lowercase letter (e.g. `n`, `score`) — the shape produced when a
+    /// user writes a bare value-style identifier in pattern position. Builtin
+    /// type sugar (`int`, `string`, …) also matches this shape but is resolved
+    /// earlier and never reaches the unresolved-type path, so it never triggers
+    /// the binding hint. PascalCase identifiers (genuine type names/typos) are
+    /// deliberately excluded.
+    fn is_bare_lowercase_type_path(ty: &TypeExpr) -> bool {
+        matches!(ty, TypeExpr::Path { segments, .. }
+            if segments.len() == 1
+                && segments[0]
+                    .as_str()
+                    .chars()
+                    .next()
+                    .is_some_and(|c| c.is_ascii_lowercase()))
+    }
+
     /// Same as [`Self::resolve_type_expr`], but anchors diagnostics at the
     /// pattern's source span (via [`Self::report_at_pat_or_expr`]) instead
     /// of falling all the way back to the surrounding scrutinee
@@ -7873,6 +7913,18 @@ impl<'db> TypeInferenceBuilder<'db> {
             &mut diags,
         );
         for diag in diags {
+            // A bare lowercase identifier in a guarded match arm (`n if … => …`)
+            // is parsed as a type pattern, so it fails to resolve as a type.
+            // The user almost certainly meant to bind the scrutinee; swap the
+            // cryptic "unresolved type" message for one that points at the
+            // `let` binding form.
+            if self.match_guard_bind_hint.is_some()
+                && let TirTypeError::UnresolvedType { name, .. } = &diag
+            {
+                let improved = TirTypeError::MatchBindingPatternNeedsLet { name: name.clone() };
+                self.report_at_pat_or_expr(improved, pat_id, fallback_expr);
+                continue;
+            }
             self.report_at_pat_or_expr(diag, pat_id, fallback_expr);
         }
         if let Some(sm) = self.body_source_map.as_ref() {
