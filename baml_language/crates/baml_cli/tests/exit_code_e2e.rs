@@ -915,6 +915,162 @@ fn test_without_baml_toml_using_baml_src_returns_no_tests_code() {
     );
 }
 
+// ============================================================================
+// `baml run --file` script mode + shebang execution
+// ============================================================================
+
+/// Executing an actual `#!` script through the OS kernel: the implicit
+/// `main` entry point runs, and arguments passed after a `--` separator at
+/// the call site (`./script.baml -- alpha …`) flow into `baml.sys.argv()`.
+/// (There is no bare-shebang passthrough, so the `--` is required.)
+#[cfg(unix)]
+#[test]
+fn run_file_script_mode_passes_args_after_separator_as_argv() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let built = common::ensure_built();
+    let cli = built.baml_cli.display();
+
+    let tmp = tempfile::tempdir().unwrap();
+    let script = tmp.path().join("script.baml");
+    std::fs::write(
+        &script,
+        format!(
+            "#!/usr/bin/env -S BAML_CLI_ALLOW_DIRECT=1 {cli} run --file\n\
+             function main() -> string[] {{\n    baml.sys.argv()\n}}\n"
+        ),
+    )
+    .unwrap();
+    let mut perms = std::fs::metadata(&script).unwrap().permissions();
+    perms.set_mode(0o755);
+    std::fs::set_permissions(&script, perms).unwrap();
+
+    // The kernel turns `./script.baml -- alpha --beta gamma` into
+    // `… run --file <script> -- alpha --beta gamma`.
+    let output = Command::new(&script)
+        .args(["--", "alpha", "--beta", "gamma"])
+        .current_dir(tmp.path())
+        .output()
+        .expect("execute the shebang script directly");
+
+    assert!(
+        output.status.success(),
+        "Expected exit 0 running a shebang script, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // The tokens after `--` land in argv verbatim — including the `--beta`
+    // flag, which is NOT consumed as a run-level option.
+    for needle in ["alpha", "--beta", "gamma", "main"] {
+        assert!(
+            stdout.contains(needle),
+            "Expected argv to contain `{needle}`, got:\n{stdout}"
+        );
+    }
+}
+
+/// A shebang can name a *specific* function to run, not just `main`: the
+/// function name goes in the shebang before `--file`
+/// (`#! … run greet --file`), and the kernel appends the script path as the
+/// `--file` value. The named function runs; `main` does not.
+#[cfg(unix)]
+#[test]
+fn shebang_can_name_a_specific_function() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let built = common::ensure_built();
+    let cli = built.baml_cli.display();
+
+    let tmp = tempfile::tempdir().unwrap();
+    let script = tmp.path().join("multi.baml");
+    // `run greet --file` selects `greet`; the kernel appends this script's
+    // path right after `--file`, so it becomes the `--file` value.
+    std::fs::write(
+        &script,
+        format!(
+            "#!/usr/bin/env -S BAML_CLI_ALLOW_DIRECT=1 {cli} run greet --file\n\
+             function greet() -> string {{\n    \"greetings from the named function\"\n}}\n\
+             function main() -> string {{\n    \"this is main, not greet\"\n}}\n"
+        ),
+    )
+    .unwrap();
+    let mut perms = std::fs::metadata(&script).unwrap().permissions();
+    perms.set_mode(0o755);
+    std::fs::set_permissions(&script, perms).unwrap();
+
+    let output = Command::new(&script)
+        .current_dir(tmp.path())
+        .output()
+        .expect("execute the shebang script directly");
+
+    assert!(
+        output.status.success(),
+        "Expected exit 0 dispatching a named function from a shebang, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("greetings from the named function"),
+        "Expected `greet` output, got:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains("this is main"),
+        "Expected `greet` to run, not `main`, got:\n{stdout}"
+    );
+}
+
+/// The real thing: make a `.baml` file executable with a `#!` line pointing
+/// at the built CLI, then run it directly so the OS kernel drives the
+/// shebang. Proves the feature end-to-end on Unix. The `env -S` line also
+/// sets `BAML_CLI_ALLOW_DIRECT=1`, exactly as the committed demo does, to
+/// silence the direct-invocation advisory.
+#[cfg(unix)]
+#[test]
+fn executable_baml_script_runs_via_kernel_shebang() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let built = common::ensure_built();
+    let cli = built.baml_cli.display();
+
+    let tmp = tempfile::tempdir().unwrap();
+    let script = tmp.path().join("greet.baml");
+    std::fs::write(
+        &script,
+        format!(
+            "#!/usr/bin/env -S BAML_CLI_ALLOW_DIRECT=1 {cli} run --file\n\
+             function main() -> string {{\n    \"hello from a shebang script\"\n}}\n"
+        ),
+    )
+    .unwrap();
+    let mut perms = std::fs::metadata(&script).unwrap().permissions();
+    perms.set_mode(0o755);
+    std::fs::set_permissions(&script, perms).unwrap();
+
+    // No arguments: bare-shebang passthrough is unsupported, so the script
+    // takes none. The kernel drives `#! … run --file <this script>`.
+    let output = Command::new(&script)
+        .current_dir(tmp.path())
+        .output()
+        .expect("execute the shebang script directly");
+
+    assert!(
+        output.status.success(),
+        "Expected the executable .baml to run, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("hello from a shebang script"),
+        "Expected the script's output, got:\n{stdout}"
+    );
+}
+
 /// Generators are declared in `baml.toml`'s `[generator.<name>]` sections,
 /// so a manifest-less `baml_src/`-only project has nowhere to declare one:
 /// `baml generate` reports the missing-generator hint rather than producing
