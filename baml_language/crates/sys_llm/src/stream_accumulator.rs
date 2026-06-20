@@ -83,7 +83,7 @@ pub fn new_accumulator(provider_str: &str) -> Result<ResourceHandle, LlmOpError>
                 message: format!(
                     "Streaming is not yet implemented for provider '{provider_str}'. \
                      Supported providers: openai, openai-generic, azure-openai, ollama, \
-                     openrouter, anthropic."
+                     openrouter, requesty, anthropic."
                 ),
             });
         }
