@@ -155,8 +155,22 @@ pub enum TokenKind {
     #[regex(r"[0-9]+")]
     IntegerLiteral,
 
-    /// Float literal (must come after Integer in regex priority)
+    /// Float literal (must come after Integer in regex priority).
+    ///
+    /// Two patterns feed this token:
+    /// - `[0-9]+\.[0-9]+` — plain decimals such as `1.0` or `3.14`.
+    /// - `[0-9]+(\.[0-9]+)?[eE][+-]?[0-9]+` — scientific notation with an
+    ///   integer or decimal mantissa and a required signed/unsigned integer
+    ///   exponent, such as `1e10`, `1E3`, `1e-3`, `2e+5`, or `1.5e-3`.
+    ///
+    /// Maximal munch ensures `1e10` lexes as a single float rather than the
+    /// integer `1` followed by an identifier `e10` (which previously surfaced a
+    /// misleading "unresolved name" error). The exponent digits are mandatory,
+    /// so `1e` still lexes as `IntegerLiteral` + `Word`. The mantissa is the
+    /// same digit sequence used by `IntegerLiteral`, and `f64::from_str`
+    /// (used downstream when lowering the literal) accepts every form above.
     #[regex(r"[0-9]+\.[0-9]+")]
+    #[regex(r"[0-9]+(\.[0-9]+)?[eE][+-]?[0-9]+")]
     FloatLiteral,
 
     // ============ Operators and Punctuation ============
@@ -1099,6 +1113,45 @@ mod tests {
 
         // Verify lossless
         assert_eq!(reconstruct_source(&lex(source)), source);
+    }
+
+    #[test]
+    fn lex_scientific_notation_float() {
+        // Scientific notation lexes as a single FloatLiteral token rather than
+        // splitting the exponent into a misleading `Word` (the bug this fixes).
+        for src in [
+            "1e10", "1E3", "1e-3", "2e+5", "1.0e10", "1.5e3", "1.5e-3", "10E-2",
+        ] {
+            assert_eq!(
+                lex_no_whitespace(src),
+                vec![TokenKind::FloatLiteral],
+                "expected a single FloatLiteral for {src:?}"
+            );
+            assert_eq!(reconstruct_source(&lex(src)), src);
+        }
+
+        // The exponent digits are mandatory: a bare `e` is not consumed.
+        assert_eq!(
+            lex_no_whitespace("1e"),
+            vec![TokenKind::IntegerLiteral, TokenKind::Word]
+        );
+
+        // A space breaks scientific notation back into integer + identifier.
+        assert_eq!(
+            lex_no_whitespace("1 e10"),
+            vec![TokenKind::IntegerLiteral, TokenKind::Word]
+        );
+
+        // Plain decimals and integers are unaffected (no regression).
+        assert_eq!(lex_no_whitespace("3.14"), vec![TokenKind::FloatLiteral]);
+        assert_eq!(lex_no_whitespace("42"), vec![TokenKind::IntegerLiteral]);
+
+        // Member access on an integer is still integer + dot + word, because the
+        // float patterns require either fractional digits or an exponent.
+        assert_eq!(
+            lex_no_whitespace("3.foo"),
+            vec![TokenKind::IntegerLiteral, TokenKind::Dot, TokenKind::Word]
+        );
     }
 
     #[test]
