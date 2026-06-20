@@ -7873,7 +7873,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// user writes a bare value-style identifier in pattern position. Builtin
     /// type sugar (`int`, `string`, …) also matches this shape but is resolved
     /// earlier and never reaches the unresolved-type path, so it never triggers
-    /// the binding hint. PascalCase identifiers (genuine type names/typos) are
+    /// the binding hint. `PascalCase` identifiers (genuine type names/typos) are
     /// deliberately excluded.
     fn is_bare_lowercase_type_path(ty: &TypeExpr) -> bool {
         matches!(ty, TypeExpr::Path { segments, .. }
