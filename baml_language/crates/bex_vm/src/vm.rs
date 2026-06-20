@@ -2755,19 +2755,28 @@ impl BexVm {
             // SAFETY: See `load_function` doc comment.
             let frame_function = unsafe { self.load_function(depth)? };
 
-            // Find the first exception table entry covering this PC.
+            // Find the INNERMOST exception table entry covering this PC: the one
+            // with the largest `start_pc`. Multiple regions can cover the same
+            // PC (a `catch`/`defer` nested inside another in the same frame);
+            // the innermost must win, matching lexical handler nesting. Picking
+            // the first covering entry would route to the OUTERMOST handler,
+            // mis-routing any throw that reaches the table (e.g. an exception
+            // propagating out of a called function, or a runtime panic). On ties
+            // in `start_pc` (regions sharing a body entry), `max_by_key` returns
+            // the last, which is the inner region since handlers are registered
+            // outermost-first.
             // Use compact exception table when available (byte-offset PCs),
             // otherwise fall back to the legacy instruction-index table.
             let handler_entry = if let Some(compact) = &frame_function.bytecode.compact {
                 compact
                     .exception_handlers_for_pc(faulting_pc)
-                    .next()
+                    .max_by_key(|e| e.start_pc)
                     .cloned()
             } else {
                 frame_function
                     .bytecode
                     .exception_handlers_for_pc(faulting_pc)
-                    .next()
+                    .max_by_key(|e| e.start_pc)
                     .cloned()
             };
             if let Some(entry) = handler_entry {
@@ -5556,6 +5565,15 @@ impl BexVm {
                         // interrupt loudly (see try_unwind_exception).
                         return Err(VmInternalError::ExpectedCompletion.into());
                     }
+                    // A handler was found; sync the local `pc` to its entry.
+                    // When the handler is in the SAME frame, the dispatch loop
+                    // would otherwise `continue` with the stale post-throw `pc`
+                    // instead of jumping to the handler. (Cross-frame unwinds
+                    // reload `pc` on the frame switch, so this is a no-op there.)
+                    // Cold path — does not affect the hot per-instruction loop.
+                    if let Some(Frame::Bytecode(bf)) = self.frames.get(*frame_idx) {
+                        *pc = bf.instruction_ptr;
+                    }
                     if self.early_yield.should_early_yield() {
                         return Ok(Some(VmExecState::EarlyYield));
                     }
@@ -5758,6 +5776,14 @@ impl BexVm {
                             // See OpCode::Throw: an escaping watch-filter
                             // exception fails the interrupt loudly.
                             return Err(VmInternalError::ExpectedCompletion.into());
+                        }
+                        // Sync the local `pc` to the handler entry (see
+                        // OpCode::Throw): a same-frame rethrow — an inner
+                        // wildcard catch rethrowing a panic to an outer catch in
+                        // the same function — must jump to the handler instead of
+                        // falling through to the not-a-panic continuation.
+                        if let Some(Frame::Bytecode(bf)) = self.frames.get(*frame_idx) {
+                            *pc = bf.instruction_ptr;
                         }
                     }
                     if self.early_yield.should_early_yield() {
