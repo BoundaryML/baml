@@ -1,0 +1,34 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "p"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        BINARY_EXPR "2 ** 10"
+          INTEGER_LITERAL "2"
+          STAR "*"
+          STAR "*"
+          INTEGER_LITERAL "10"
+        R_BRACE "}"
+
+=== ERRORS ===
+error: unknown operator '**'; use x.pow(n) instead
+   ╭─[ power_operator.baml:5:7 ]
+   │
+ 5 │     2 ** 10
+   │       ─┬  
+   │        ╰── unknown operator '**'; use x.pow(n) instead
+   │ 
+   │ Note: Error code: E0010
+───╯

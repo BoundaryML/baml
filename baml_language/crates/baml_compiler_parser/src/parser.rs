@@ -5844,6 +5844,34 @@ impl<'a> Parser<'a> {
                 self.parse_pattern();
                 self.wrap_events_in_node(lhs_start, SyntaxKind::IS_EXPR);
                 self.finish_node();
+            } else if op == TokenKind::Star && self.at_double_star() {
+                // `**` is not a valid BAML operator (there is no power
+                // operator). Without this branch the two adjacent `*` tokens
+                // split into a `*` infix operator followed by a `*` that cannot
+                // start an expression, producing a confusing two-error cascade
+                // (`operator '*' cannot be applied to ...` plus `Expected
+                // expression, found '*'`). Detect the pair here and emit a
+                // single, actionable diagnostic instead.
+                //
+                // We give `**` the same precedence as `*` (left binding power
+                // 24) so it groups identically to multiplication; the resulting
+                // node is still a `BINARY_EXPR`, which AST lowering recognises
+                // and lowers to `Missing` (no value, no second diagnostic).
+                let left_bp = 24u8;
+                if left_bp < min_bp {
+                    break;
+                }
+                let lhs_start = self.find_previous_expr_start_after(expr_start);
+                let span = self.double_star_span();
+                self.error(
+                    "unknown operator '**'; use x.pow(n) instead".to_string(),
+                    span,
+                );
+                self.bump(); // first `*`
+                self.bump(); // second `*`
+                self.parse_expr_bp(25); // right operand (matches `*` right bp)
+                self.wrap_events_in_node(lhs_start, SyntaxKind::BINARY_EXPR);
+                self.finish_node();
             } else if let Some((left_bp, right_bp)) = Self::infix_binding_power(op) {
                 // General infix operators (including < when it's not generic args)
                 if left_bp < min_bp {
@@ -5866,6 +5894,42 @@ impl<'a> Parser<'a> {
             } else {
                 break;
             }
+        }
+    }
+
+    /// Check whether the parser is positioned at an adjacent `**` pair.
+    ///
+    /// Returns `true` only when the current token is a `*` immediately
+    /// followed by another `*` with no trivia between them (i.e. the source
+    /// text contains literal `**`). A space-separated `* *` is intentionally
+    /// not treated as `**`. Callers use this to recognise the unsupported
+    /// power operator and emit a single dedicated diagnostic.
+    fn at_double_star(&self) -> bool {
+        let Some(first) = self.current() else {
+            return false;
+        };
+        let Some(second) = self.peek(1) else {
+            return false;
+        };
+        first.kind == TokenKind::Star
+            && second.kind == TokenKind::Star
+            && first.span.range.end() == second.span.range.start()
+    }
+
+    /// Compute the source span covering an adjacent `**` pair.
+    ///
+    /// Assumes the parser is positioned at the first `*` of a `**` pair (see
+    /// [`Self::at_double_star`]). Returns a span from the start of the first
+    /// `*` to the end of the second `*`. If the second token is somehow
+    /// missing, falls back to the span of the first `*`; if both are missing,
+    /// falls back to the last token's span or an empty default span.
+    fn double_star_span(&self) -> baml_base::Span {
+        match (self.current().map(|t| t.span), self.peek(1).map(|t| t.span)) {
+            (Some(first), Some(second)) => Self::span_from_to(first, second),
+            (Some(first), None) => first,
+            _ => self.tokens.last().map(|t| t.span).unwrap_or_else(|| {
+                baml_base::Span::new(baml_base::FileId::new(0), TextRange::default())
+            }),
         }
     }
 
@@ -11241,5 +11305,69 @@ function f() -> int {
             .filter(|n| n.kind() == SyntaxKind::BLOCK_EXPR)
             .count();
         assert_eq!(block_count, 0, "plain let-stmt should have no BLOCK_EXPR");
+    }
+
+    #[test]
+    fn double_star_emits_single_unknown_operator_error() {
+        // `**` is not a valid BAML operator (no power operator). It must
+        // produce exactly one actionable diagnostic that names the `**`
+        // operator and points at `x.pow(n)` — not the historical two-error
+        // cascade where `**` split into a `*` infix op plus a stray `*`.
+        let source = r#"
+function p() -> int {
+    2 ** 10
+}
+"#;
+        let (root, errors) = parse_source(source);
+
+        assert_eq!(
+            errors.len(),
+            1,
+            "expected exactly one parse error for `**`, got: {errors:#?}"
+        );
+        match &errors[0] {
+            ParseError::InvalidSyntax { message, .. } => {
+                assert_eq!(message, "unknown operator '**'; use x.pow(n) instead");
+            }
+            other => panic!("expected InvalidSyntax for `**`, got: {other:#?}"),
+        }
+
+        // The two `*` tokens are kept inside a single BINARY_EXPR so downstream
+        // lowering can recognise the `**` shape.
+        let binary = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::BINARY_EXPR)
+            .expect("expected BINARY_EXPR node for `2 ** 10`");
+        let star_count = binary
+            .children_with_tokens()
+            .filter(|elem| {
+                matches!(
+                    elem,
+                    rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::STAR
+                )
+            })
+            .count();
+        assert_eq!(star_count, 2, "BINARY_EXPR should contain both `*` tokens");
+    }
+
+    #[test]
+    fn spaced_stars_are_not_treated_as_double_star() {
+        // A space-separated `* *` is not the `**` power operator; it should
+        // keep its previous behaviour (a `*` infix op followed by a stray
+        // `*`), so the dedicated `**` diagnostic must not fire here.
+        let source = r#"
+function p() -> int {
+    2 * * 10
+}
+"#;
+        let (_root, errors) = parse_source(source);
+        assert!(
+            !errors.iter().any(|e| matches!(
+                e,
+                ParseError::InvalidSyntax { message, .. }
+                    if message == "unknown operator '**'; use x.pow(n) instead"
+            )),
+            "spaced `* *` must not trigger the `**` diagnostic, got: {errors:#?}"
+        );
     }
 }

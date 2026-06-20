@@ -978,6 +978,25 @@ impl LoweringContext {
     }
 
     fn lower_binary_expr(&mut self, node: &SyntaxNode) -> ExprId {
+        // `**` (the unsupported power operator) is parsed as a `BINARY_EXPR`
+        // containing two adjacent `STAR` tokens. The parser already emits a
+        // single "unknown operator '**'" diagnostic for it, so here we simply
+        // lower it to `Missing` — this avoids pretending it has a value and
+        // prevents a second, misleading type error (`operator '*' cannot be
+        // applied to ...`) from cascading downstream. A well-formed
+        // multiplication always has exactly one `STAR`, so two or more `STAR`
+        // tokens unambiguously identify the `**` case.
+        let star_count = node
+            .children_with_tokens()
+            .filter(|elem| {
+                elem.as_token()
+                    .is_some_and(|t| t.kind() == SyntaxKind::STAR)
+            })
+            .count();
+        if star_count >= 2 {
+            return self.alloc_expr(Expr::Missing, node.text_range());
+        }
+
         let mut lhs = None;
         let mut rhs = None;
         let mut op = None;

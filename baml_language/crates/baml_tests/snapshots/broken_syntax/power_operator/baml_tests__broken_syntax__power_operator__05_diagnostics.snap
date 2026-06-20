@@ -1,0 +1,13 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [parse] error: unknown operator '**'; use x.pow(n) instead
+   ╭─[ power_operator.baml:5:7 ]
+   │
+ 5 │     2 ** 10
+   │       ─┬  
+   │        ╰── unknown operator '**'; use x.pow(n) instead
+   │ 
+   │ Note: Error code: E0010
+───╯
