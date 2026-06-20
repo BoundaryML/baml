@@ -5844,7 +5844,7 @@ impl<'a> Parser<'a> {
                 self.parse_pattern();
                 self.wrap_events_in_node(lhs_start, SyntaxKind::IS_EXPR);
                 self.finish_node();
-            } else if op == TokenKind::Not {
+            } else if op == TokenKind::Not && !self.has_newline_ahead() {
                 // Postfix `!` (TypeScript/Swift/Kotlin non-null assertion).
                 // BAML has no such operator: `!` is only a *prefix* unary
                 // operator (handled in `parse_prefix`). Reaching it here means
@@ -5857,6 +5857,17 @@ impl<'a> Parser<'a> {
                 // whatever follows (a `}` or `else`), producing a misleading
                 // "expected expression"/"if without else" error cascade that
                 // never points at the `!` itself.
+                //
+                // The `!self.has_newline_ahead()` guard is essential: BAML
+                // separates statements by newlines (no semicolons), so a `!`
+                // at the *start of the next line* is a legitimate prefix unary
+                // operator on a fresh statement, e.g.
+                //   let v: int | string = "hi"
+                //   !(v is int)
+                // Without the guard the trailing-`!` branch would greedily
+                // absorb that prefix `!` as a postfix on the previous
+                // statement's value. This mirrors the same no-newline
+                // restriction the tagged-template (`Backtick`) branch uses.
                 let bang_span = token.span;
                 self.error(
                     "unexpected '!'; BAML has no non-null assertion operator — \
@@ -11326,6 +11337,37 @@ function f() -> int {
         // single NotEquals token rather than `!` + `=`.
         let source = r#"function f(a: int, b: int) -> bool {
     a != b
+}
+"#;
+        let (_root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+    }
+
+    #[test]
+    fn prefix_bang_on_next_line_is_not_treated_as_postfix() {
+        // Regression: BAML separates statements by newlines (no semicolons), so
+        // a `!` at the *start of the next line* is a legitimate prefix unary
+        // operator on a fresh statement — NOT a stray postfix non-null
+        // assertion on the previous statement's value. The trailing-`!` branch
+        // must therefore only fire when the `!` directly follows its operand on
+        // the same line (guarded by `!has_newline_ahead`).
+        let source = r#"function f() -> bool {
+    let v: int | string = "hi"
+    !(v is int)
+}
+"#;
+        let (_root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+    }
+
+    #[test]
+    fn prefix_bang_starting_chained_boolean_is_not_treated_as_postfix() {
+        // The newline-separated prefix `!` must also parse cleanly when it
+        // begins a larger boolean expression, e.g. `!(a is int) || (b is int)`.
+        let source = r#"function f() -> bool {
+    let a: int | string = 1
+    let b: int | string = 2
+    !(a is int) || (b is int)
 }
 "#;
         let (_root, errors) = parse_source(source);
