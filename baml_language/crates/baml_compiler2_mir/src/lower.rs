@@ -48,6 +48,7 @@ struct LoopContext {
     defer_depth: usize,
 }
 
+#[derive(Clone, Copy)]
 struct CatchContext {
     unwind_target: BlockId,
     error_local: Local,
@@ -3218,12 +3219,25 @@ impl<'db> LoweringContext<'db> {
     /// remaining defers are emitted on the resulting dead block and eliminated.
     fn replay_defers_to_depth(&mut self, defer_depth: usize) {
         let defers: Vec<AstExprId> = self.defer_stack[defer_depth..].to_vec();
+        if defers.is_empty() {
+            return;
+        }
+        // Inline replay (the non-throwing exits) runs the defers OUTSIDE their
+        // own scope's unwind pads: a defer that throws here must not be routed
+        // back into the pad that would replay it again (double-run / loop).
+        // Clearing the catch context makes such a throw propagate outward
+        // (replace-semantics; no cause chain in this pass). Restored after.
+        let saved_catch = self.catch_context.take();
         for body in defers.into_iter().rev() {
+            if self.builder.is_current_terminated() {
+                break;
+            }
             let tmp = self.builder.temp(RuntimeTy::Void {
                 attr: TyAttr::default(),
             });
             self.lower_expr(body, Place::local(tmp));
         }
+        self.catch_context = saved_catch;
     }
 
     fn restore_locals_after_scope(
@@ -4441,13 +4455,72 @@ impl LoweringContext<'_> {
         let watched_depth = self.watched_locals_stack.len();
         let defer_depth = self.defer_stack.len();
 
+        // BEP-042 Stage 2: a defer must also run when an exception propagates
+        // out of a *call* inside the block. Each defer splits the block and
+        // opens a catch-all unwind region whose landing pad replays that defer
+        // then cascades to the next-outer pad / enclosing handler. The
+        // exception table routes a throw to the innermost region reached so far
+        // (see `try_unwind_exception`), so only the defers armed before the
+        // throw run. (Non-throwing exits — normal fall-through, return,
+        // break/continue — run defers via the inline `replay_defers_to_depth`
+        // path instead.)
+        let block_incoming_catch = self.catch_context;
+        // (landing-pad block, defer body, context to cascade to after replay)
+        let mut defer_pads: Vec<(BlockId, AstExprId, Option<CatchContext>)> = Vec::new();
+        let mut shared_error: Option<Local> = None;
+
         for &stmt_id in stmts {
-            self.lower_stmt(stmt_id);
-            if self.builder.is_current_terminated() {
-                break;
+            let defer_body = match &self.body.stmts[stmt_id] {
+                AstStmt::Defer { body } => Some(*body),
+                _ => None,
+            };
+            match defer_body {
+                Some(body) => {
+                    // Register for inline replay on the non-throwing exits.
+                    self.defer_stack.push(body);
+                    // Open the unwind region protecting the rest of the block.
+                    let error_local = *shared_error.get_or_insert_with(|| {
+                        self.builder.declare_local(
+                            None,
+                            RuntimeTy::BuiltinUnknown {
+                                attr: TyAttr::default(),
+                            },
+                            None,
+                            false,
+                        )
+                    });
+                    let pad = self.builder.create_block();
+                    // Split into a fresh block so the region covers only the
+                    // code AFTER this defer (a throw before it must not run it).
+                    let region_start = self.builder.create_block();
+                    if !self.builder.is_current_terminated() {
+                        self.builder.goto(region_start);
+                    }
+                    self.builder.set_current_block(region_start);
+                    self.builder.catch_regions.push(CatchRegion {
+                        body_entry: region_start,
+                        handler: pad,
+                        error_local,
+                        stack_trace_local: None,
+                    });
+                    let route_ctx = self.catch_context;
+                    defer_pads.push((pad, body, route_ctx));
+                    self.catch_context = Some(CatchContext {
+                        unwind_target: pad,
+                        error_local,
+                    });
+                }
+                None => {
+                    self.lower_stmt(stmt_id);
+                    if self.builder.is_current_terminated() {
+                        break;
+                    }
+                }
             }
         }
 
+        // Tail expr is still inside the innermost defer region, so a throw here
+        // runs the block's defers via the pad path.
         if !self.builder.is_current_terminated() {
             match tail_expr {
                 Some(tail) => self.lower_expr(tail, dest),
@@ -4458,10 +4531,49 @@ impl LoweringContext<'_> {
             }
         }
 
+        // Normal (non-throwing) fall-through: replay defers inline, then
+        // unwatch watched locals.
         if !self.builder.is_current_terminated() {
             self.replay_defers_to_depth(defer_depth);
             self.emit_unwatch_to_depth(watched_depth);
         }
+
+        // Emit the landing pads out of line (reached via the exception table).
+        // Reverse order so the innermost (last-declared) pad is laid out first.
+        if !defer_pads.is_empty() {
+            let continuation = self.builder.current_block();
+            for &(pad, body, route_ctx) in defer_pads.iter().rev() {
+                self.builder.set_current_block(pad);
+                // A call/throw inside the defer body cascades to the next-outer
+                // handler so a throwing defer doesn't skip the remaining defers.
+                self.catch_context = route_ctx;
+                let tmp = self.builder.temp(RuntimeTy::Void {
+                    attr: TyAttr::default(),
+                });
+                self.lower_expr(body, Place::local(tmp));
+                if !self.builder.is_current_terminated() {
+                    let error =
+                        shared_error.expect("a defer pad implies a shared error local exists");
+                    match route_ctx {
+                        Some(outer) => {
+                            if outer.error_local != error {
+                                self.builder.assign(
+                                    Place::local(outer.error_local),
+                                    Rvalue::Use(Operand::Copy(Place::Local(error))),
+                                );
+                            }
+                            self.builder.goto(outer.unwind_target);
+                        }
+                        None => {
+                            self.builder.throw(Operand::Copy(Place::Local(error)));
+                        }
+                    }
+                }
+            }
+            self.builder.set_current_block(continuation);
+        }
+
+        self.catch_context = block_incoming_catch;
         self.defer_stack.truncate(defer_depth);
         self.restore_locals_after_scope(saved_locals, watched_depth);
     }
@@ -11238,11 +11350,11 @@ impl LoweringContext<'_> {
 
             AstStmt::Throw { value } => {
                 let val_op = self.lower_to_operand(value);
-                // Run all pending defers (LIFO), then unwatch all watched locals
-                // before throwing, matching the Return path. Without the
-                // unwatch, a `watch let conn = …` followed by a `throw` leaks
-                // the watcher.
-                self.replay_defers_to_depth(0);
+                // Unwatch all watched locals before throwing. Defers run via the
+                // block's unwind landing pads: the throw's PC is inside the
+                // enclosing defer region(s), so the exception table routes it to
+                // the innermost defer pad (BEP-042 Stage 2). We do NOT inline-
+                // replay here — that would double-run the defers.
                 self.emit_unwatch_to_depth(0);
                 self.builder.throw(val_op);
                 let dead = self.builder.create_block();

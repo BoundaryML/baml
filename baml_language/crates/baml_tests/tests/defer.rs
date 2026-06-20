@@ -95,3 +95,103 @@ function main() -> string {
     );
     assert_eq!(expect_string(output.result.unwrap()), "final:complete");
 }
+
+#[track_caller]
+fn expect_strings(v: BexExternalValue) -> Vec<String> {
+    match v {
+        BexExternalValue::Array { items, .. } => items
+            .into_iter()
+            .map(|it| match it {
+                BexExternalValue::String(s) => s.to_string(),
+                other => panic!("expected String element, got {other:?}"),
+            })
+            .collect(),
+        other => panic!("expected Array, got {other:?}"),
+    }
+}
+
+// ── Stage 2: defers on an exception propagating out of a call ──────────────
+
+#[tokio::test]
+async fn defer_runs_when_called_function_throws() {
+    // The BEP's motivating case: a defer runs when an exception propagates out
+    // of a *call*, not just an explicit `throw` in the same scope. Observed via
+    // a shared array the defer pushes to (read after the catch).
+    let output = baml_test!(
+        r#"
+function boom() -> void { throw "boom" }
+
+function risky(log: string[]) -> void {
+  defer { log.push("cleanup") }
+  boom()
+}
+
+function main() -> string[] {
+  let log: string[] = []
+  risky(log) catch (e) {
+    _ => { log.push("caught") }
+  }
+  log
+}
+"#
+    );
+    assert_eq!(
+        expect_strings(output.result.unwrap()),
+        vec!["cleanup", "caught"]
+    );
+}
+
+#[tokio::test]
+async fn defer_unwind_is_lifo_with_multiple_defers() {
+    // Two armed defers, then a call throws after both: they run last-first.
+    let output = baml_test!(
+        r#"
+function boom() -> void { throw "boom" }
+
+function risky(log: string[]) -> void {
+  defer { log.push("a") }
+  defer { log.push("b") }
+  boom()
+}
+
+function main() -> string[] {
+  let log: string[] = []
+  risky(log) catch (e) {
+    _ => {}
+  }
+  log
+}
+"#
+    );
+    assert_eq!(expect_strings(output.result.unwrap()), vec!["b", "a"]);
+}
+
+#[tokio::test]
+async fn defer_unwind_runs_only_armed_defers() {
+    // A throw between two defers runs ONLY the defer armed before it (stair-step
+    // regions). `maybe_throw(1)` throws at runtime, but the compiler can't
+    // prove it, so the second defer is reachable code.
+    let output = baml_test!(
+        r#"
+function maybe_throw(x: int) -> void {
+  if (x > 0) { throw "boom" }
+}
+
+function risky(log: string[]) -> void {
+  defer { log.push("a") }
+  maybe_throw(1)
+  defer { log.push("b") }
+  log.push("body")
+}
+
+function main() -> string[] {
+  let log: string[] = []
+  risky(log) catch (e) {
+    _ => {}
+  }
+  log
+}
+"#
+    );
+    assert_eq!(expect_strings(output.result.unwrap()), vec!["a"]);
+}
