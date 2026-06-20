@@ -8,8 +8,9 @@
 //   * `Suspend<R>`            — a host-thrown signal carrying a resume schema + an
 //                               approver-facing payload (the suspendSchema seam).
 //   * `Suspendable`           — a capability interface `requires Provider`: a provider
-//                               whose `call` may legally suspend, and that can be
-//                               re-entered with resume data.
+//                               whose run (`start`) may legally suspend, and that can be
+//                               re-entered with resume data. Its own interaction shape —
+//                               NOT a refinement of any base `call` (the marker has none).
 //   * `Snapshot`              — opaque, host-owned, serializable run state. The
 //                               teaching twin of the opaque `Transcript`/`PromptAst`:
 //                               the *only* thing allowed to cross the wait.
@@ -25,11 +26,25 @@
 // ============================================================================
 
 // ----------------------------------------------------------------------------
+// NET-NEW capability-error interface. Suspend/resume is a capability beyond
+// call/stream/realtime/tools, so per the error model it gets its OWN error
+// interface (the §"any NEW capability" row): same shape as baml.errors.CallError
+// — common classifiers so callers triage without knowing the concrete class.
+// `start`/`reenter`/`freeze` and the Durable persistence statics all declare
+// `baml.ExtendUnknownError<baml.errors.SuspendError>`.
+// ----------------------------------------------------------------------------
+interface baml.errors.SuspendError {
+  function is_network_error(self) -> bool   // a store/transport failure (claim, put)
+  function is_drift(self) -> bool           // snapshot version != build version
+  function is_unfreezable(self) -> bool     // continuation held a non-serializable resource
+}
+
+// ----------------------------------------------------------------------------
 // The suspend signal. This is NOT an error in the "call failed" sense — it is a
-// control-flow escape that the Durable combinator catches. It rides the SAME
-// `throws` channel the spine already uses, so a Suspendable provider's `call`
-// signature widens its error type to include it. `R` is the resume schema as a
-// first-class `type` (parameters: type, exactly like `Tool`).
+// control-flow escape that the Durable combinator catches. It rides the result
+// union (`T | Suspend`), NOT the `throws` channel, so a Suspendable provider's
+// `start`/`reenter` return it rather than throwing it. `R` is the resume schema
+// as a first-class `type` (parameters: type, exactly like `Tool`).
 // ----------------------------------------------------------------------------
 class Suspend {
   // what the approver/human is shown — the Mastra `suspendSchema` payload, as data
@@ -56,29 +71,60 @@ class Snapshot {
 }
 
 // ----------------------------------------------------------------------------
-// The capability. A Suspendable provider is one whose `call` may suspend, and
+// The capability. A Suspendable provider is one whose run (`start`) may suspend, and
 // which can be RE-ENTERED with a snapshot + resume value to drive to completion
 // (or suspend again). It is NOT a host boundary on its own — it is a capability
-// any provider (HTTP chat model, harness, tool loop) can layer on.
+// any provider (HTTP chat model, harness, tool loop) can layer on. It is its OWN
+// interaction shape on the marker `Provider`, sitting beside `HttpProvider.call` /
+// `Streaming.stream` / `Realtime.run` — not a variant of any of them.
 //
-// `reenter` is the resume half of `call`: same generic output `T`, but it takes
+// `reenter` is the resume half of `start`: same generic output `T`, but it takes
 // the snapshot the host persisted plus the human's resume value.
 // ----------------------------------------------------------------------------
 interface Suspendable requires Provider {
-  // produce a fresh snapshot if `call` (or reenter) suspends; otherwise return T.
+  // produce a Suspend if the run (or reenter) suspends; otherwise return T.
   // We model "may suspend OR finish" as a union, the Iterator.next shape again:
   //   T          -> done
   //   Suspend    -> paused, here is what to persist + show the human
-  function start<T>(self, prompt: baml.llm.PromptAst) -> T | Suspend throws Error
+  function start<T>(self, prompt: baml.llm.PromptAst) -> T | Suspend
+      throws baml.ExtendUnknownError<baml.errors.SuspendError>
 
   // re-enter a persisted run. `resume` is the human's answer (validated by the
   // caller against snap-recovered resume_schema BEFORE this is called).
-  function reenter<T>(self, snap: Snapshot, resume: unknown) -> T | Suspend throws Error
+  function reenter<T>(self, snap: Snapshot, resume: unknown) -> T | Suspend
+      throws baml.ExtendUnknownError<baml.errors.SuspendError>
 
   // the host freezes the just-suspended continuation into a Snapshot. This is the
   // boundary that "serializes live state": it is the host's job to refuse if the
-  // live state holds a non-serializable thing (open stream/socket/closure).
-  function freeze(self, s: Suspend) -> Snapshot throws Error
+  // live state holds a non-serializable thing (open stream/socket/closure) — it
+  // throws Unfreezable (a SuspendError) in that case.
+  function freeze(self, s: Suspend) -> Snapshot
+      throws baml.ExtendUnknownError<baml.errors.SuspendError>
+}
+
+// A continuation that captured a non-serializable resource (open stream/socket/
+// subprocess). `freeze` throws this; it is a deliberate domain failure of the
+// suspend capability, so it implements SuspendError with is_unfreezable -> true.
+class Unfreezable {
+  point: string
+  implements baml.errors.SuspendError {
+    function is_network_error(self) -> bool { return false; }
+    function is_drift(self)         -> bool { return false; }
+    function is_unfreezable(self)   -> bool { return true; }
+  }
+}
+
+// A resume blocked because the snapshot was produced by different code/schema.
+// Durable.resume_run throws this instead of silently re-entering a stale
+// continuation. Implements SuspendError with is_drift -> true.
+class SchemaDrift {
+  snapshot_version: string
+  build_version: string
+  implements baml.errors.SuspendError {
+    function is_network_error(self) -> bool { return false; }
+    function is_drift(self)         -> bool { return true; }
+    function is_unfreezable(self)   -> bool { return false; }
+  }
 }
 
 // ============================================================================
@@ -95,16 +141,21 @@ class Anthropic {
   implements HttpProvider {
     type Body = baml.http.Response
 
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       // Anthropic puts the output schema in a FORCED tool (one of the four encodings).
       // This is the real divergence the spine keeps inside build_request.
       $rust_io_function
     }
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
-      baml.http.send(request) catch (e) { _ => { throw baml.errors.LlmClient { message: "http failed" }; } }
+    function send(self, request: baml.http.Request) -> baml.http.Response
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.http.send(request) catch (e) { _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "anthropic http send failed"); }
     }
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
+    function parse<T>(self, from: baml.http.Response) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       baml.sap.parse<T>(from.text())
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "anthropic parse failed");
     }
   }
 
@@ -113,13 +164,16 @@ class Anthropic {
     // bookkeeping stays inside begin/step/submit, below the ToolCall seam.
     type Transcript = AnthropicTranscript
 
-    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> AnthropicTranscript throws baml.errors.LlmClient {
+    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> AnthropicTranscript
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       $rust_io_function
     }
-    function step<T>(self, t: AnthropicTranscript) -> T | ToolCalls throws baml.errors.LlmClient {
+    function step<T>(self, t: AnthropicTranscript) -> T | ToolCalls
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       $rust_io_function
     }
-    function submit(self, t: AnthropicTranscript, results: ToolResult[]) -> AnthropicTranscript throws baml.errors.LlmClient {
+    function submit(self, t: AnthropicTranscript, results: ToolResult[]) -> AnthropicTranscript
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // matches each ToolResult.id back to the open tool_use block, in Anthropic's
       // required positional order. Opaque to the loop above.
       $rust_io_function
@@ -131,21 +185,24 @@ class Anthropic {
   // is gated on approval. The host owns turning the live transcript into a
   // serializable Snapshot (freeze) and back (reenter).
   implements Suspendable {
-    function start<T>(self, prompt: baml.llm.PromptAst) -> T | Suspend throws baml.errors.LlmClient {
+    function start<T>(self, prompt: baml.llm.PromptAst) -> T | Suspend
+        throws baml.ExtendUnknownError<baml.errors.SuspendError> {
       // host drives begin/step until a gated tool call appears; if it does, it
       // returns Suspend{ payload: the pending call, resume_schema, point }.
       $rust_io_function
     }
-    function reenter<T>(self, snap: Snapshot, resume: unknown) -> T | Suspend throws baml.errors.LlmClient {
+    function reenter<T>(self, snap: Snapshot, resume: unknown) -> T | Suspend
+        throws baml.ExtendUnknownError<baml.errors.SuspendError> {
       // host re-hydrates the AnthropicTranscript FROM snap._state, injects `resume`
       // as the approved/denied tool_result (or as resumeData), and continues the
       // loop. May suspend again at the next gate.
       $rust_io_function
     }
-    function freeze(self, s: Suspend) -> Snapshot throws baml.errors.LlmClient {
+    function freeze(self, s: Suspend) -> Snapshot
+        throws baml.ExtendUnknownError<baml.errors.SuspendError> {
       // serialize the live transcript + pending point into Snapshot._state. REFUSES
-      // (throws) if the continuation captured a non-serializable resource. Stamps
-      // the current build version onto Snapshot.version.
+      // (throws Unfreezable) if the continuation captured a non-serializable
+      // resource. Stamps the current build version onto Snapshot.version.
       $rust_io_function
     }
   }
@@ -169,29 +226,31 @@ class ClaudeCode {
   allowed_tools: string[]?
   permission_mode: string?
 
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
-      $rust_io_function                          // drives the spawned `claude` subprocess
-    }
-  }
-
+  // No `implements Provider { call }`: a harness has no honest request/response
+  // single-turn `call` to expose (driving the whole subprocess "and hoping" is the
+  // degenerate fake the marker revision retires). Because `Suspendable requires
+  // Provider`, ClaudeCode still IS a Provider (the marker) — it just exposes only
+  // its real interaction: the suspend/resume surface below.
   implements Suspendable {
-    function start<T>(self, prompt: baml.llm.PromptAst) -> T | Suspend throws baml.errors.LlmClient {
+    function start<T>(self, prompt: baml.llm.PromptAst) -> T | Suspend
+        throws baml.ExtendUnknownError<baml.errors.SuspendError> {
       // the subprocess runs until it hits a permission prompt (e.g. a Bash command
       // the sandbox won't auto-approve). The host SUSPENDS the subprocess (it does
       // not keep it alive — it serializes the session id + cwd diff), and returns
       // Suspend{ payload: the proposed action, resume_schema: ApprovalDecision, ... }.
       $rust_io_function
     }
-    function reenter<T>(self, snap: Snapshot, resume: unknown) -> T | Suspend throws baml.errors.LlmClient {
+    function reenter<T>(self, snap: Snapshot, resume: unknown) -> T | Suspend
+        throws baml.ExtendUnknownError<baml.errors.SuspendError> {
       // re-attach to / re-spawn the session from snap._state, feed the decision,
       // continue. A fresh process — the original may be long gone.
       $rust_io_function
     }
-    function freeze(self, s: Suspend) -> Snapshot throws baml.errors.LlmClient {
+    function freeze(self, s: Suspend) -> Snapshot
+        throws baml.ExtendUnknownError<baml.errors.SuspendError> {
       // the hard one for a harness: the live socket/subprocess CANNOT be serialized.
-      // freeze persists only the session id + replayable cwd state and throws if the
-      // session is unrecoverable. This is exactly the "no sockets/streams" rule.
+      // freeze persists only the session id + replayable cwd state and throws
+      // Unfreezable if the session is unrecoverable. Exactly the "no sockets/streams" rule.
       $rust_io_function
     }
   }
@@ -227,48 +286,44 @@ class Durable {
   // the build version this process is running; compared to Snapshot.version on resume.
   build_version: string
 
-  // NOTE: Durable is a Provider (it forwards plain .call), but suspend/resume need a
-  // run id, so the real surface is start()/resume() statics below, not bare .call.
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
-      // a non-suspending convenience: run to completion or fail loudly if it parks.
-      let run_id = baml.sys.uuid();
-      match (self.start_run<T>(run_id, prompt)) {
-        let v: T => { return v; },
-        let h: RunHandle => {
-          throw baml.errors.LlmClient { message: "run suspended; use Durable.resume (run_id=" + run_id + ")" };
-        },
-      }
-    }
-  }
+  // No `implements Provider { call }`: a single-value `call` has no room for "I paused",
+  // so the old degenerate path ran to completion and threw if the run parked — which a
+  // `Fallback` could legitimately mistake for a CallError and silently lose the run. The
+  // marker revision retires that fake. Durable's REAL surface is the run-id-threaded
+  // start_run/resume_run statics below; because it wraps a `Suspendable inner` (which
+  // `requires Provider`) it still IS a Provider (the marker) and composes.
 
   // START a run. Persists a snapshot if it suspends; returns either the value or a
   // suspended RunHandle the caller can hand to a UI.
-  function start_run<T>(self, run_id: string, prompt: baml.llm.PromptAst) -> T | RunHandle throws baml.errors.LlmClient {
+  function start_run<T>(self, run_id: string, prompt: baml.llm.PromptAst) -> T | RunHandle
+      throws baml.ExtendUnknownError<baml.errors.SuspendError> {
     match (self.inner.start<T>(prompt)) {
       let v: T => {
         return v;
       },
       let s: Suspend => {
         let snap: Snapshot = self.inner.freeze(s);
-        self.store.put(run_id, snap, s) catch (e) { _ => { throw baml.errors.LlmClient { message: "persist failed" }; } };
+        self.store.put(run_id, snap, s);
         return RunHandle { run_id: run_id, status: "suspended", pending: s };
       },
     }
+  } catch (e) {
+    // inner.start/freeze ride SuspendError unchanged; store.put's foreign
+    // baml.errors.Io is normalized into the SuspendError channel.
+    _ => throw baml.UnknownError.with_message<baml.errors.SuspendError>(e, "durable persist failed");
   }
 
   // RESUME a run. `resume` is the human's answer. EXACTLY-ONCE is enforced by claim():
   // if two replicas / a double-click race here, only the claim winner proceeds.
-  function resume_run<T>(self, run_id: string, resume: unknown) -> T | RunHandle throws baml.errors.LlmClient {
-    let token = baml.sys.uuid();
-    let claimed: Snapshot? = self.store.claim(run_id, token)
-      catch (e) { _ => { throw baml.errors.LlmClient { message: "claim failed" }; } };
+  function resume_run<T>(self, run_id: string, resume: unknown) -> T | RunHandle
+      throws baml.ExtendUnknownError<baml.errors.SuspendError> {
+    let token = baml.id.new();
+    let claimed: Snapshot? = self.store.claim(run_id, token);
 
     match (claimed) {
       null => {
         // lost the race (already resumed) — return the current handle, do NOT re-run.
-        return self.store.load_handle(run_id)
-          catch (e) { _ => { throw baml.errors.LlmClient { message: "load failed" }; } };
+        return self.store.load_handle(run_id);
       },
       let snap: Snapshot => {
         // SCHEMA DRIFT GATE: a Monday snapshot resuming on a Friday build. We refuse
@@ -276,9 +331,7 @@ class Durable {
         if (snap.version != self.build_version) {
           self.store.release(run_id, token, "failed")
             catch (e) { _ => {} };
-          throw baml.errors.LlmClient {
-            message: "snapshot version " + snap.version + " != build " + self.build_version + " (schema drift)"
-          };
+          throw SchemaDrift { snapshot_version: snap.version, build_version: self.build_version };
         }
         match (self.inner.reenter<T>(snap, resume)) {
           let v: T => {
@@ -289,13 +342,17 @@ class Durable {
             // suspended AGAIN at the next gate. Persist the new snapshot, release the
             // claim back to suspended so the next human can resume.
             let snap2: Snapshot = self.inner.freeze(s);
-            self.store.put(run_id, snap2, s) catch (e) { _ => { throw baml.errors.LlmClient { message: "persist failed" }; } };
+            self.store.put(run_id, snap2, s);
             self.store.release(run_id, token, "suspended") catch (e) { _ => {} };
             return RunHandle { run_id: run_id, status: "suspended", pending: s };
           },
         }
       },
     }
+  } catch (e) {
+    // SchemaDrift and inner.reenter/freeze's SuspendErrors pass through unchanged;
+    // the store's foreign baml.errors.Io (claim/load_handle/put) is normalized here.
+    _ => throw baml.UnknownError.with_message<baml.errors.SuspendError>(e, "durable resume failed");
   }
 }
 
@@ -321,19 +378,22 @@ class ApprovalGate {
     false
   }
 
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
-      self.inner.call<T>(prompt)
-    }
-  }
-
+  // No `implements Provider { call }`: ApprovalGate wraps a `Tools` provider (which has
+  // no `call` to forward to anyway), and its whole point is to SUSPEND on a gated tool
+  // call rather than run straight through. Its real interaction is the suspend surface
+  // below; since `Suspendable requires Provider`, it remains a Provider (the marker).
   implements Suspendable {
-    function start<T>(self, prompt: baml.llm.PromptAst) -> T | Suspend throws baml.errors.LlmClient {
+    function start<T>(self, prompt: baml.llm.PromptAst) -> T | Suspend
+        throws baml.ExtendUnknownError<baml.errors.SuspendError> {
       let t = self.inner.begin<T>(prompt, gated_tools_of(self));
       self.drive<T>(t)
+    } catch (e) {
+      // inner.begin rides ToolError; drive rides SuspendError — both normalize here.
+      _ => throw baml.UnknownError.with_message<baml.errors.SuspendError>(e, "approval gate start failed");
     }
 
-    function reenter<T>(self, snap: Snapshot, resume: unknown) -> T | Suspend throws baml.errors.LlmClient {
+    function reenter<T>(self, snap: Snapshot, resume: unknown) -> T | Suspend
+        throws baml.ExtendUnknownError<baml.errors.SuspendError> {
       // rebuild the inner transcript from the snapshot, then translate the human's
       // decision into a ToolResult for the gated call and submit it.
       let t: Transcript = rehydrate_transcript(self.inner, snap);
@@ -351,9 +411,14 @@ class ApprovalGate {
         let t2 = self.inner.submit(t, [denied]);
         return self.drive<T>(t2);
       }
+    } catch (e) {
+      // rehydrate/run_for_real/inner.submit and drive all bubble here; foreign and
+      // ToolError values normalize into the SuspendError channel.
+      _ => throw baml.UnknownError.with_message<baml.errors.SuspendError>(e, "approval gate reenter failed");
     }
 
-    function freeze(self, s: Suspend) -> Snapshot throws baml.errors.LlmClient {
+    function freeze(self, s: Suspend) -> Snapshot
+        throws baml.ExtendUnknownError<baml.errors.SuspendError> {
       // delegate to the host's transcript-freeze; ApprovalGate adds no live state.
       freeze_transcript(self.inner, s)
     }
@@ -361,7 +426,8 @@ class ApprovalGate {
 
   // shared loop: step until done OR until a gated call shows up; on a gated call,
   // emit a Suspend carrying that call as the approver payload.
-  function drive<T>(self, t0: Transcript) -> T | Suspend throws baml.errors.LlmClient {
+  function drive<T>(self, t0: Transcript) -> T | Suspend
+      throws baml.ExtendUnknownError<baml.errors.SuspendError> {
     let t = t0;
     while (true) {
       match (self.inner.step<T>(t)) {
@@ -395,11 +461,15 @@ class ApprovalGate {
 // the combinator bodies readable.
 // ----------------------------------------------------------------------------
 function gated_tools_of(g: ApprovalGate) -> Tool[] { $rust_io_function }
-function rehydrate_transcript(inner: Tools, snap: Snapshot) -> Transcript throws baml.errors.LlmClient { $rust_io_function }
-function freeze_transcript(inner: Tools, s: Suspend) -> Snapshot throws baml.errors.LlmClient { $rust_io_function }
+function rehydrate_transcript(inner: Tools, snap: Snapshot) -> Transcript
+    throws baml.ExtendUnknownError<baml.errors.SuspendError> { $rust_io_function }
+function freeze_transcript(inner: Tools, s: Suspend) -> Snapshot
+    throws baml.ExtendUnknownError<baml.errors.SuspendError> { $rust_io_function }
 function pending_call_of(snap: Snapshot) -> ToolCall { $rust_io_function }
-function run_for_real(call: ToolCall) -> ToolResult throws baml.errors.LlmClient { $rust_io_function }
-function dispatch_all(calls: ToolCall[]) -> ToolResult[] throws baml.errors.LlmClient { $rust_io_function }
+function run_for_real(call: ToolCall) -> ToolResult
+    throws baml.ExtendUnknownError<baml.errors.ToolError> { $rust_io_function }
+function dispatch_all(calls: ToolCall[]) -> ToolResult[]
+    throws baml.ExtendUnknownError<baml.errors.ToolError> { $rust_io_function }
 function first_gated(g: ApprovalGate, calls: ToolCall[]) -> ToolCall? {
   for (let c in calls) {
     if (g.is_gated(c.name)) { return c; }

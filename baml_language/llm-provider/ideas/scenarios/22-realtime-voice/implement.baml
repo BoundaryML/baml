@@ -97,6 +97,21 @@ class Usage { input_tokens: int, output_tokens: int }
 class ToolCall   { id: string, name: string, args: map<string, unknown> }
 class ToolResult { id: string, output: unknown }
 
+// (b') Concrete domain error: the server pushed a session-fatal structured
+// `error` frame mid-session (InKind.Error with a usable message). This is NOT a
+// transport failure and NOT the answer — it is a deliberate domain decline the
+// provider raises on purpose, so it gets a concrete class on the realtime
+// channel. It implements only baml.errors.RealtimeError now: under the marker
+// model there is no degenerate `call` path to surface on, so the old CallError
+// impl (and the "surfaces on call too" framing) is gone. (No network/rate-limit
+// classification — false.)
+class RealtimeServerError {
+  message: string
+  implements baml.errors.RealtimeError {
+    function is_network_error(self) -> bool { return false; }
+  }
+}
+
 // (c) The record run() returns. NOT the audio — the audio already left over the
 //     Channel. This is the durable conversation: a list of typed ITEMS, which
 //     is the OpenAI model, and which Gemini's turn stream is folded into. An
@@ -128,16 +143,17 @@ class Item {
 //
 //   baml.realtime.open(url, headers) -> WireSocket throws baml.errors.Io
 //
-// (e) NET-NEW host primitive: the two concurrent pumps. The background's #1
-//     "what's hard" is concurrency — you must pump mic audio UP and drain
-//     server events DOWN at the same time, forever, over one socket, or you
-//     deadlock. BAML run() is single-threaded straight-line code; it cannot
-//     express "do these two loops concurrently" without a host primitive.
-//     So we add a spawn that runs a closure on a host task and returns a handle
-//     the provider can join/abort:
-//
-//   class Task { _handle: $rust_type }   // .join() -> null throws Io ; .abort() -> null
-//   baml.sys.spawn(body: () -> null) -> Task throws baml.errors.Io
+// (e) Concurrency — the two concurrent pumps. The background's #1 "what's hard"
+//     is concurrency: you must pump mic audio UP and drain server events DOWN at
+//     the same time, forever, over one socket, or you deadlock. This is NOT
+//     net-new surface: BAML has first-class structured concurrency today
+//     (BEP-034, baml_std/baml/ns_spawn + ns_future). `spawn { body }` starts the
+//     down-pump loop concurrently and returns a `baml.future.Future<null, E>`
+//     immediately; `await f` blocks on it and re-throws its error; `f.cancel()`
+//     tears it down. So "do these two loops concurrently" is expressed in the
+//     language — `run` spawns the down-pump and awaits it, and the up-pump rides
+//     the app's own spawn (see usage.baml). No host concurrency primitive is
+//     introduced here.
 // ----------------------------------------------------------------------------
 
 
@@ -163,31 +179,22 @@ class OpenAIRealtime {
     }
   }
 
-  // Realtime requires Provider, so we MUST supply call<T>. A single-turn over a
-  // realtime model is a degenerate session: connect, send one text item, ask
-  // for one response, drain to the first TurnDone, parse the caption, hang up.
-  // This is the "best-effort single turn" of Open Question 1. It is real but
-  // lossy — no audio, no streaming — so almost nobody calls Voice() directly.
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
-      let sock = self.open_socket();
-      self.configure(sock);
-      sock.send_text(self.encode_text_turn(baml.llm.render_text(prompt)))
-        catch (e) { _ => { throw baml.errors.LlmClient { message: "realtime send failed" }; } };
-      sock.send_text(self.encode_request_response())
-        catch (e) { _ => { throw baml.errors.LlmClient { message: "response.create failed" }; } };
-      // Drain frames until the model's own caption is done, then SAP-parse it.
-      let caption: string = self.drain_one_caption(sock);
-      sock.close();
-      baml.sap.parse<T>(caption)
-    }
-  }
+  // NOTE: OpenAIRealtime has NO `implements Provider { call }`. Under the
+  // marker model (../provider-as-marker.md) `Provider` is a bare marker with no
+  // interaction method; `call`/`call_with` belong to `HttpProvider`. A realtime
+  // model does request/response over a duplex socket only as a degenerate fake
+  // (connect, one text turn, drain one caption, hang up) — no audio, no
+  // streaming — so we DROP that lie. The class `requires Provider` via the
+  // `Realtime` capability below, so it still IS a Provider (marker); its REAL,
+  // honest interaction is `run`, and nothing forces a fake `call` onto it.
+  // (This closes the old OQ1 "degenerate call" complaint for realtime.)
 
   // THE capability. io is a PARAMETER (pass-in). The provider drives the duplex
   // and returns the Transcript record when the session ends. Audio never
   // appears in the return type — it left over `io`.
   implements Realtime {
-    function run(self, prompt: baml.llm.PromptAst, io: Channel) -> Transcript throws baml.errors.LlmClient {
+    function run(self, prompt: baml.llm.PromptAst, io: Channel) -> Transcript
+        throws baml.ExtendUnknownError<baml.errors.RealtimeError> {
       let sock = self.open_socket();
       self.configure(sock);                          // session.update: instructions, voice, VAD
 
@@ -195,8 +202,7 @@ class OpenAIRealtime {
       // splice it as an item. (prompt is the function's `prompt #"..."#`.)
       let seed = baml.llm.render_text(prompt);
       if (seed != "") {
-        sock.send_text(self.encode_session_instructions(seed))
-          catch (e) { _ => { throw baml.errors.LlmClient { message: "seed failed" }; } };
+        sock.send_text(self.encode_session_instructions(seed));
       }
 
       // The mutable session record. run() OWNS it while draining; this is the
@@ -215,148 +221,172 @@ class OpenAIRealtime {
 
       // --- PUMP DOWN: server frames get decoded, folded into `session`, and
       // the interesting ones (audio, captions, transcripts) re-emitted to the
-      // app over the SAME io. Two concurrent loops, one socket — the host
-      // spawn is what makes this not a deadlock.
-      let pump = baml.sys.spawn(() => {
+      // app over the SAME io. Two concurrent loops, one socket — `spawn`
+      // (BEP-034) is what makes this not a deadlock: it runs the drain loop
+      // concurrently with the app's up-pump and returns a Future immediately.
+      let pump: baml.future.Future<null, baml.errors.Io> = spawn {
         for (let frame = sock.recv(); frame != null; frame = sock.recv()) {
           let ev = self.decode_in(frame);
           self.fold(session, ev);                    // server-authoritative state update
           io.send_in(ev);                            // hand the normalized InEvent to the app
         }
-      }) catch (e) { _ => { throw baml.errors.LlmClient { message: "pump spawn failed" }; } };
+      };
 
       // run() blocks here for the WHOLE session — many responses long — until
       // either the app closes io (client_closed) or the socket drops
       // (server_closed). There is no "answer" to wait for; the wait IS the call.
-      pump.join() catch (e) { _ => { session.ended_reason = "error"; } };
+      // `await` re-throws the pump's error; on failure we mark the session.
+      (await pump) catch (e) { _ => { session.ended_reason = "error"; } };
       sock.close();
 
       Transcript { items: session.items, ended_reason: session.ended_reason }
+    } catch (e) {
+      // Foreign socket Io / spawn failures are normalized onto the realtime channel.
+      _ => throw baml.UnknownError.with_message<baml.errors.RealtimeError>(e, "openai realtime run failed");
     }
   }
 
   // ---- provider-private helpers (the real divergence lives here) ----
 
-  function open_socket(self) -> WireSocket throws baml.errors.LlmClient {
+  // These helpers feed `run` (the provider's ONLY interaction), so they ride the
+  // RealtimeError channel — there is no call path under the marker model, so no
+  // CallError surface here. A connect/configure failure is a realtime failure.
+  function open_socket(self) -> WireSocket
+      throws baml.ExtendUnknownError<baml.errors.RealtimeError> {
     baml.realtime.open(
       "wss://api.openai.com/v1/realtime?model=" + self.model,
       { "Authorization": "Bearer " + self.api_key, "OpenAI-Beta": "realtime=v1" },
-    ) catch (e) { _ => { throw baml.errors.LlmClient { message: "connect failed" }; } }
+    ) catch (e) { _ => { throw baml.UnknownError.with_message<baml.errors.RealtimeError>(e, "openai realtime connect failed"); } }
   }
 
   // session.update — the closest thing to a system prompt. The turn_detection
   // field is where server-VAD vs manual diverges on the wire.
-  function configure(self, sock: WireSocket) -> null throws baml.errors.LlmClient {
-    let turn_detection = if (self.manual_turn) {
-      "null"
+  function configure(self, sock: WireSocket) -> null
+      throws baml.ExtendUnknownError<baml.errors.RealtimeError> {
+    // turn_detection is a native json value: `null` under manual mode, or a
+    // server_vad config object under VAD mode. No string-escaping needed — it is
+    // a real `map<string, json>` (or `null`) nested directly into the session.
+    let turn_detection: baml.json.json = if (self.manual_turn) {
+      null
     } else {
-      "{\"type\":\"server_vad\",\"threshold\":0.5,\"silence_duration_ms\":500,\"create_response\":true}"
+      {
+        "type": "server_vad", "threshold": 0.5,
+        "silence_duration_ms": 500, "create_response": true,
+      }
     };
-    let frame = baml.json.object({
+    let frame: baml.json.json = {
       "type": "session.update",
-      "session": baml.json.object({
-        "modalities": baml.json.array(["text", "audio"]),
+      "session": {
+        "modalities": ["text", "audio"],
         "voice": self.voice,
         "instructions": self.instructions,
         "input_audio_format": "pcm16",
         "output_audio_format": "pcm16",
-        "input_audio_transcription": baml.json.object({ "model": "whisper-1" }),
-        "turn_detection": baml.json.raw(turn_detection),
-      }),
-    });
-    sock.send_text(frame)
-      catch (e) { _ => { throw baml.errors.LlmClient { message: "session.update failed" }; } }
+        "input_audio_transcription": { "model": "whisper-1" },
+        "turn_detection": turn_detection,
+      },
+    };
+    sock.send_text(baml.json.stringify(frame))
+      catch (e) { _ => { throw baml.UnknownError.with_message<baml.errors.RealtimeError>(e, "openai session.update failed"); } }
   }
 
   // Forward one app OutEvent onto the OpenAI wire. THIS is where the OpenAI
   // event names live; the app never sees them. Note Commit / RequestResponse
   // are honored in BOTH modes — the app simply doesn't send them under VAD.
   function forward_out(self, sock: WireSocket, out: OutEvent) -> null {
-    let frame = match (out.kind) {
-      OutKind.AppendAudio => baml.json.object({
+    // Each arm builds a native `map<string, json>` (a `baml.json.json` value);
+    // `out.audio` is a uint8array, base64-encoded via the real `.to_base64()`.
+    let audio_b64: baml.json.json = match (out.audio) { null => "", let a: uint8array => a.to_base64() };
+    let frame: baml.json.json = match (out.kind) {
+      OutKind.AppendAudio => {
         "type": "input_audio_buffer.append",
-        "audio": baml.media.b64_encode(out.audio),
-      }),
-      OutKind.Commit          => baml.json.object({ "type": "input_audio_buffer.commit" }),
-      OutKind.RequestResponse => baml.json.object({ "type": "response.create" }),
-      OutKind.Cancel          => baml.json.object({ "type": "response.cancel" }),
-      OutKind.Truncate        => baml.json.object({
+        "audio": audio_b64,
+      },
+      OutKind.Commit          => { "type": "input_audio_buffer.commit" },
+      OutKind.RequestResponse => { "type": "response.create" },
+      OutKind.Cancel          => { "type": "response.cancel" },
+      OutKind.Truncate        => {
         "type": "conversation.item.truncate",
         "item_id": out.item_id,
         "content_index": 0,
         "audio_end_ms": out.audio_end_ms,           // what the user ACTUALLY heard
-      }),
-      OutKind.SendText => baml.json.object({
+      },
+      OutKind.SendText => {
         "type": "conversation.item.create",
-        "item": baml.json.object({
+        "item": {
           "type": "message", "role": "user",
-          "content": baml.json.array([baml.json.object({ "type": "input_text", "text": out.text })]),
-        }),
-      }),
-      OutKind.SendToolResult => baml.json.object({
+          "content": [{ "type": "input_text", "text": out.text }],
+        },
+      },
+      OutKind.SendToolResult => {
         "type": "conversation.item.create",
-        "item": baml.json.object({
+        "item": {
           "type": "function_call_output",
           "call_id": out.tool_result.id,            // id-correlation: opaque, echoed back
           "output": baml.json.to_string(out.tool_result.output),
-        }),
-      }),
-      OutKind.UpdateInstructions => baml.json.object({
+        },
+      },
+      OutKind.UpdateInstructions => {
         "type": "session.update",
-        "session": baml.json.object({ "instructions": out.text }),
-      }),
-      OutKind.UpdateSession => baml.json.object({
+        "session": { "instructions": out.text },
+      },
+      OutKind.UpdateSession => {
         "type": "session.update",
-        "session": baml.json.object({ "voice": out.voice }),
-      }),
+        "session": { "voice": out.voice },
+      },
     };
-    sock.send_text(frame) catch (e) { _ => { return null; } }    // best-effort; errors surface as InKind.Error
+    sock.send_text(baml.json.stringify(frame)) catch (e) { _ => { return null; } }    // best-effort; errors surface as InKind.Error
   }
 
   // Decode ONE OpenAI server frame into the normalized InEvent. The fan-in of
   // ~12 wire event types onto 9 InKinds. The audio delta is base64 PCM that we
   // decode to bytes HERE so the app gets raw audio, not a wire string.
+  //
+  // `baml.json.parse` turns the wire text into a `json` value once; the
+  // `json_*` helpers (below) navigate the resulting `map`/`json[]` by dotted
+  // path. Base64 audio is decoded with the real `uint8array.from_base64`.
   function decode_in(self, frame: string) -> InEvent {
-    let t = baml.json.get(frame, "type");
+    let root: baml.json.json = baml.json.parse(frame) catch (e) { _ => null };
+    let t = json_str(root, "type");
     if (t == "response.audio.delta") {
-      InEvent { kind: InKind.OutputAudio, audio: baml.media.b64_decode(baml.json.get(frame, "delta")),
-                text: null, item_id: baml.json.get(frame, "item_id"),
+      InEvent { kind: InKind.OutputAudio, audio: uint8array.from_base64(json_str(root, "delta")),
+                text: null, item_id: json_str(root, "item_id"),
                 ms_played_window: null, tool_call: null, usage: null, error_message: null }
     } else if (t == "response.audio_transcript.delta") {
-      InEvent { kind: InKind.OutputText, audio: null, text: baml.json.get(frame, "delta"),
-                item_id: baml.json.get(frame, "item_id"), ms_played_window: null,
+      InEvent { kind: InKind.OutputText, audio: null, text: json_str(root, "delta"),
+                item_id: json_str(root, "item_id"), ms_played_window: null,
                 tool_call: null, usage: null, error_message: null }
     } else if (t == "conversation.item.input_audio_transcription.completed") {
-      InEvent { kind: InKind.InputTranscript, audio: null, text: baml.json.get(frame, "transcript"),
-                item_id: baml.json.get(frame, "item_id"), ms_played_window: null,
+      InEvent { kind: InKind.InputTranscript, audio: null, text: json_str(root, "transcript"),
+                item_id: json_str(root, "item_id"), ms_played_window: null,
                 tool_call: null, usage: null, error_message: null }
     } else if (t == "input_audio_buffer.speech_started") {
       InEvent { kind: InKind.SpeechStarted, audio: null, text: null,
-                item_id: baml.json.get(frame, "item_id"), ms_played_window: null,
+                item_id: json_str(root, "item_id"), ms_played_window: null,
                 tool_call: null, usage: null, error_message: null }
     } else if (t == "input_audio_buffer.speech_stopped") {
       InEvent { kind: InKind.SpeechStopped, audio: null, text: null, item_id: null,
                 ms_played_window: null, tool_call: null, usage: null, error_message: null }
     } else if (t == "response.function_call_arguments.done") {
-      InEvent { kind: InKind.ToolCall, audio: null, text: null, item_id: baml.json.get(frame, "item_id"),
+      InEvent { kind: InKind.ToolCall, audio: null, text: null, item_id: json_str(root, "item_id"),
                 ms_played_window: null,
                 tool_call: ToolCall {
-                  id: baml.json.get(frame, "call_id"),       // OpenAI HAS ids
-                  name: baml.json.get(frame, "name"),
-                  args: baml.json.parse_map(baml.json.get(frame, "arguments")),
+                  id: json_str(root, "call_id"),       // OpenAI HAS ids
+                  name: json_str(root, "name"),
+                  args: json_args(json_str(root, "arguments")),
                 },
                 usage: null, error_message: null }
     } else if (t == "response.done") {
       InEvent { kind: InKind.TurnDone, audio: null, text: null, item_id: null, ms_played_window: null,
                 tool_call: null,
                 usage: Usage {
-                  input_tokens: baml.json.get_int(frame, "response.usage.input_tokens"),
-                  output_tokens: baml.json.get_int(frame, "response.usage.output_tokens"),
+                  input_tokens: json_int(root, "response.usage.input_tokens"),
+                  output_tokens: json_int(root, "response.usage.output_tokens"),
                 },
                 error_message: null }
     } else if (t == "error") {
       InEvent { kind: InKind.Error, audio: null, text: null, item_id: null, ms_played_window: null,
-                tool_call: null, usage: null, error_message: baml.json.get(frame, "error.message") }
+                tool_call: null, usage: null, error_message: json_str(root, "error.message") }
     } else if (t == "session.created" || t == "session.updated") {
       InEvent { kind: InKind.SessionReady, audio: null, text: null, item_id: null,
                 ms_played_window: null, tool_call: null, usage: null, error_message: null }
@@ -373,7 +403,7 @@ class OpenAIRealtime {
   function fold(self, s: RealtimeSession, ev: InEvent) -> null {
     match (ev.kind) {
       InKind.InputTranscript => {
-        s.items = baml.list.push(s.items, Item {
+        s.items.push(Item {
           id: ev.item_id, role: "user", itype: "message", text: ev.text, tool_name: null });
       },
       InKind.OutputText => {
@@ -382,7 +412,7 @@ class OpenAIRealtime {
         s.items = upsert_assistant_text(s.items, ev.item_id, ev.text);
       },
       InKind.ToolCall => {
-        s.items = baml.list.push(s.items, Item {
+        s.items.push(Item {
           id: ev.tool_call.id, role: "assistant", itype: "function_call",
           text: null, tool_name: ev.tool_call.name });
       },
@@ -391,33 +421,13 @@ class OpenAIRealtime {
     null
   }
 
-  function encode_text_turn(self, text: string) -> string {
-    baml.json.object({
-      "type": "conversation.item.create",
-      "item": baml.json.object({
-        "type": "message", "role": "user",
-        "content": baml.json.array([baml.json.object({ "type": "input_text", "text": text })]),
-      }),
-    })
-  }
-  function encode_request_response(self) -> string {
-    baml.json.object({ "type": "response.create" })
-  }
+  // encode_session_instructions stays — it splices the seed prompt into the live
+  // session inside run(). (The call-only helpers encode_text_turn /
+  // encode_request_response / drain_one_caption were removed with the degenerate
+  // call: the marker model means OpenAIRealtime no longer fakes request/response.)
   function encode_session_instructions(self, text: string) -> string {
-    baml.json.object({ "type": "session.update", "session": baml.json.object({ "instructions": text }) })
-  }
-  function drain_one_caption(self, sock: WireSocket) -> string throws baml.errors.LlmClient {
-    let acc = "";
-    for (let frame = sock.recv(); frame != null; frame = sock.recv()) {
-      let ev = self.decode_in(frame);
-      match (ev.kind) {
-        InKind.OutputText => { acc = acc + ev.text; },
-        InKind.TurnDone   => { return acc; },
-        InKind.Error      => { throw baml.errors.LlmClient { message: ev.error_message }; },
-        _ => {},
-      }
-    }
-    acc
+    let frame: baml.json.json = { "type": "session.update", "session": { "instructions": text } };
+    baml.json.stringify(frame)
   }
 }
 
@@ -430,6 +440,63 @@ class RealtimeSession {
 
 function upsert_assistant_text(items: Item[], id: string, delta: string) -> Item[] {
   $rust_io_function   // append `delta` to the assistant message item with `id`, or create it
+}
+
+
+// ----------------------------------------------------------------------------
+// JSON navigation helpers — read a parsed `baml.json.json` value by dotted path.
+//
+// These replace the invented `baml.json.get/get_int/has/parse_map` readers. They
+// are built on the REAL surface: `baml.json` is `null | bool | int | float |
+// string | json[] | map<string, json>`, navigated with `Map.get` / `Array.at`
+// after `match`-narrowing each segment. A path segment that is all-digits indexes
+// an array; anything else is a map key. A miss yields `null` (never throws), so
+// decode_in stays total over malformed/partial frames.
+// ----------------------------------------------------------------------------
+function json_get(root: baml.json.json, path: string) -> baml.json.json {
+  let cur: baml.json.json = root;
+  for (let seg in path.split(".")) {
+    cur = match (cur) {
+      let m: map<string, json> => match (m.get(seg)) { null => null, let v: json => v },
+      let a: json[] => if (seg.is_ascii_numeric()) {
+        match (a.at(int.from_string(seg) catch (e) { _ => -1 })) { null => null, let v: json => v }
+      } else { null },
+      _ => null,
+    };
+  }
+  cur
+}
+
+// A string at `path`, or "" when absent / not a string.
+function json_str(root: baml.json.json, path: string) -> string {
+  match (json_get(root, path)) { let s: string => s, _ => "" }
+}
+
+// An int at `path`, or 0 when absent / not an int.
+function json_int(root: baml.json.json, path: string) -> int {
+  match (json_get(root, path)) { let i: int => i, _ => 0 }
+}
+
+// True when `path` resolves to a present (non-null) value.
+function json_has(root: baml.json.json, path: string) -> bool {
+  match (json_get(root, path)) { null => false, _ => true }
+}
+
+// The map at `path` (tool-call args), or an empty map when absent / not a map.
+function json_map_at(root: baml.json.json, path: string) -> map<string, unknown> {
+  match (json_get(root, path)) {
+    let m: map<string, json> => m,
+    _ => {},
+  }
+}
+
+// Parse a JSON-encoded arguments string (OpenAI delivers function args as a JSON
+// STRING) into a map. A parse failure or non-object yields an empty map.
+function json_args(args: string) -> map<string, unknown> {
+  match (baml.json.parse(args) catch (e) { _ => null }) {
+    let m: map<string, json> => m,
+    _ => {},
+  }
 }
 
 
@@ -452,48 +519,50 @@ class GeminiLive {
   // handling" with explicit start/end. Same boolean role, different wire.
   manual_turn: bool
 
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
-      // best-effort single turn, same shape as OpenAIRealtime.call
-      $rust_io_function
-    }
-  }
+  // Like OpenAIRealtime: NO `implements Provider { call }`. The marker model
+  // (../provider-as-marker.md) drops the degenerate best-effort single turn;
+  // GeminiLive `requires Provider` via `Realtime` and exposes only `run`.
 
   implements Realtime {
-    function run(self, prompt: baml.llm.PromptAst, io: Channel) -> Transcript throws baml.errors.LlmClient {
+    function run(self, prompt: baml.llm.PromptAst, io: Channel) -> Transcript
+        throws baml.ExtendUnknownError<baml.errors.RealtimeError> {
       let sock = baml.realtime.open(
         "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent",
         { "x-goog-api-key": self.api_key },
-      ) catch (e) { _ => { throw baml.errors.LlmClient { message: "connect failed" }; } };
+      );
 
       // Gemini's setup frame: response_modalities + system_instruction.
-      sock.send_text(baml.json.object({
-        "setup": baml.json.object({
+      let setup: baml.json.json = {
+        "setup": {
           "model": "models/" + self.model,
-          "generation_config": baml.json.object({
-            "response_modalities": baml.json.array(["AUDIO"]),
-          }),
+          "generation_config": {
+            "response_modalities": ["AUDIO"],
+          },
           "system_instruction": self.instructions,
-        }),
-      })) catch (e) { _ => { throw baml.errors.LlmClient { message: "setup failed" }; } };
+        },
+      };
+      sock.send_text(baml.json.stringify(setup));
 
       let session = RealtimeSession { items: [], active_item_id: null, ended_reason: "client_closed" };
 
       // Same UP pump: app OutEvents -> Gemini realtimeInput frames.
       io.on(out => { self.forward_out(sock, out); });
 
-      // Same DOWN pump, Gemini decode.
-      let pump = baml.sys.spawn(() => {
+      // Same DOWN pump, Gemini decode. `spawn` (BEP-034) runs it concurrently.
+      let pump: baml.future.Future<null, baml.errors.Io> = spawn {
         for (let frame = sock.recv(); frame != null; frame = sock.recv()) {
           let ev = self.decode_in(frame);
           self.fold(session, ev);
           io.send_in(ev);
         }
-      }) catch (e) { _ => { throw baml.errors.LlmClient { message: "pump spawn failed" }; } };
+      };
 
-      pump.join() catch (e) { _ => { session.ended_reason = "error"; } };
+      (await pump) catch (e) { _ => { session.ended_reason = "error"; } };
       sock.close();
       Transcript { items: session.items, ended_reason: session.ended_reason }
+    } catch (e) {
+      // Foreign socket Io / setup / spawn failures normalized onto the realtime channel.
+      _ => throw baml.UnknownError.with_message<baml.errors.RealtimeError>(e, "gemini live run failed");
     }
   }
 
@@ -503,38 +572,42 @@ class GeminiLive {
   // that emits them under manual mode is simply ignored under Gemini auto-VAD.
   // (This is a real portability seam — see evaluation.md.)
   function forward_out(self, sock: WireSocket, out: OutEvent) -> null {
-    let frame = match (out.kind) {
-      OutKind.AppendAudio => baml.json.object({
-        "realtimeInput": baml.json.object({
-          "mediaChunks": baml.json.array([baml.json.object({
+    let audio_b64: baml.json.json = match (out.audio) { null => "", let a: uint8array => a.to_base64() };
+    // `null` is the drop sentinel (Gemini auto-VAD has no wire frame for some
+    // OutKinds); every other arm builds a native `map<string, json>` value.
+    let frame: baml.json.json = match (out.kind) {
+      OutKind.AppendAudio => {
+        "realtimeInput": {
+          "mediaChunks": [{
             "mimeType": "audio/pcm;rate=16000",
-            "data": baml.media.b64_encode(out.audio),
-          })]),
-        }),
-      }),
-      OutKind.SendText => baml.json.object({
-        "clientContent": baml.json.object({
-          "turns": baml.json.array([baml.json.object({
+            "data": audio_b64,
+          }],
+        },
+      },
+      OutKind.SendText => {
+        "clientContent": {
+          "turns": [{
             "role": "user",
-            "parts": baml.json.array([baml.json.object({ "text": out.text })]),
-          })]),
-          "turnComplete": baml.json.raw("true"),
-        }),
-      }),
-      OutKind.SendToolResult => baml.json.object({
-        "toolResponse": baml.json.object({
-          "functionResponses": baml.json.array([baml.json.object({
+            "parts": [{ "text": out.text }],
+          }],
+          "turnComplete": true,
+        },
+      },
+      OutKind.SendToolResult => {
+        "toolResponse": {
+          "functionResponses": [{
             "name": out.tool_result.id,    // Gemini correlates by NAME, not a call id
             "response": baml.json.to_string(out.tool_result.output),
-          })]),
-        }),
-      }),
+          }],
+        },
+      },
       // Gemini auto-VAD has no explicit commit/response.create/cancel/truncate
       // wire frame. We drop them rather than fake them.
-      _ => "",
+      _ => null,
     };
-    if (frame != "") {
-      sock.send_text(frame) catch (e) { _ => { return null; } };
+    match (frame) {
+      null => {},
+      let f: baml.json.json => { sock.send_text(baml.json.stringify(f)) catch (e) { _ => { return null; } }; },
     }
     null
   }
@@ -542,24 +615,25 @@ class GeminiLive {
   // Gemini turn-based server_content -> the same normalized InEvent. Output
   // audio arrives as raw bytes (response.data), captions/interruptions differ.
   function decode_in(self, frame: string) -> InEvent {
-    if (baml.json.has(frame, "serverContent.modelTurn.parts.0.inlineData")) {
+    let root: baml.json.json = baml.json.parse(frame) catch (e) { _ => null };
+    if (json_has(root, "serverContent.modelTurn.parts.0.inlineData")) {
       InEvent { kind: InKind.OutputAudio,
-                audio: baml.media.b64_decode(baml.json.get(frame, "serverContent.modelTurn.parts.0.inlineData.data")),
+                audio: uint8array.from_base64(json_str(root, "serverContent.modelTurn.parts.0.inlineData.data")),
                 text: null, item_id: null, ms_played_window: null,
                 tool_call: null, usage: null, error_message: null }
-    } else if (baml.json.has(frame, "serverContent.interrupted")) {
+    } else if (json_has(root, "serverContent.interrupted")) {
       // Gemini signals barge-in as a flag + discards its own queued audio.
       InEvent { kind: InKind.SpeechStarted, audio: null, text: null, item_id: null,
                 ms_played_window: null, tool_call: null, usage: null, error_message: null }
-    } else if (baml.json.has(frame, "toolCall")) {
+    } else if (json_has(root, "toolCall")) {
       InEvent { kind: InKind.ToolCall, audio: null, text: null, item_id: null, ms_played_window: null,
                 tool_call: ToolCall {
-                  id: baml.json.get(frame, "toolCall.functionCalls.0.name"),  // NO id; name IS the id
-                  name: baml.json.get(frame, "toolCall.functionCalls.0.name"),
-                  args: baml.json.parse_map(baml.json.get(frame, "toolCall.functionCalls.0.args")),
+                  id: json_str(root, "toolCall.functionCalls.0.name"),  // NO id; name IS the id
+                  name: json_str(root, "toolCall.functionCalls.0.name"),
+                  args: json_map_at(root, "toolCall.functionCalls.0.args"),
                 },
                 usage: null, error_message: null }
-    } else if (baml.json.has(frame, "serverContent.turnComplete")) {
+    } else if (json_has(root, "serverContent.turnComplete")) {
       InEvent { kind: InKind.TurnDone, audio: null, text: null, item_id: null, ms_played_window: null,
                 tool_call: null, usage: Usage { input_tokens: 0, output_tokens: 0 }, error_message: null }
     } else {
@@ -571,7 +645,7 @@ class GeminiLive {
   function fold(self, s: RealtimeSession, ev: InEvent) -> null {
     match (ev.kind) {
       InKind.ToolCall => {
-        s.items = baml.list.push(s.items, Item {
+        s.items.push(Item {
           id: ev.tool_call.id, role: "assistant", itype: "function_call",
           text: null, tool_name: ev.tool_call.name });
       },
@@ -593,10 +667,14 @@ class GeminiLive {
 // ----------------------------------------------------------------------------
 
 // Conceptually-generated for `function VoiceChat(...) { client: ...; prompt ... }`:
-function VoiceChat$live(system: string, io: Channel) -> Transcript throws baml.errors.LlmClient {
+function VoiceChat$live(system: string, io: Channel) -> Transcript
+    throws baml.ExtendUnknownError<baml.errors.RealtimeError> {
   let p = VoiceChat$client();
   match (p) {
     let r: Realtime => r.run(baml.llm.render_text_prompt(system), io),
+    // Unsupported implements every capability interface, so it is legal on the
+    // RealtimeError channel and is caught by its concrete type — NOT routed
+    // through UnknownError.
     _               => throw baml.errors.Unsupported { message: "client is not realtime" },
   }
 }

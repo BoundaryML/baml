@@ -72,11 +72,11 @@ function Haiku(topic: string) -> string {
 // companion is generated from Haiku (conventions §companions): it `match`es the
 // provider for Streaming, else buffers. For a typewriter UI, TStream = string,
 // TFinal = string.
-function PrintHaiku(topic: string) -> string throws baml.errors.LlmClient {
+function PrintHaiku(topic: string) -> string throws baml.ExtendUnknownError<baml.errors.StreamError> {
   let s: baml.llm.Stream<string, string> = Haiku.stream<string, string>(topic);
   while (true) {
     match (s.next()) {
-      let delta: string => { baml.sys.print(delta); }   // typewriter
+      let delta: string => { baml.io.print(delta); }   // typewriter
       let _done: baml.llm.StreamDone => { break; }
     }
   }
@@ -99,7 +99,7 @@ function ExtractMeeting(blurb: string) -> Meeting {
   prompt #"Extract the meeting from: {{ blurb }}"#
 }
 
-function RenderMeetingLive(blurb: string) -> Meeting throws baml.errors.LlmClient {
+function RenderMeetingLive(blurb: string) -> Meeting throws baml.ExtendUnknownError<baml.errors.StreamError> {
   // Note the two independent type params: partials are MeetingPartial, the
   // validated final is Meeting.
   let s: baml.llm.Stream<MeetingPartial, Meeting> =
@@ -132,7 +132,7 @@ function ExtractMeetingResilient(blurb: string) -> Meeting {
   prompt #"Extract the meeting from: {{ blurb }}"#
 }
 
-function RenderMeetingResilient(blurb: string) -> Meeting throws baml.errors.LlmClient {
+function RenderMeetingResilient(blurb: string) -> Meeting throws baml.ExtendUnknownError<baml.errors.StreamError> {
   let s: baml.llm.Stream<MeetingPartial, Meeting> =
     ExtractMeetingResilient.stream<MeetingPartial, Meeting>(blurb);
   while (true) {
@@ -148,9 +148,9 @@ function RenderMeetingResilient(blurb: string) -> Meeting throws baml.errors.Llm
 // ============================================================================
 // (D) Fallback-to-call: a non-streaming provider still answers .stream.
 //
-// Canned()'s EchoModel implements only Provider.call. The generated .stream
-// companion `match`es for Streaming, misses, and takes the `_` arm:
-// buffer_as_stream. The consumer code is UNCHANGED — it just gets one partial
+// Canned()'s EchoModel implements only HttpProvider (call/call_with), not Streaming.
+// The generated .stream companion `match`es for Streaming, misses, and takes the
+// HttpProvider arm: buffer_as_stream. The consumer code is UNCHANGED — it just gets one partial
 // (the whole object) then final, with no incrementality.
 // ============================================================================
 
@@ -159,7 +159,7 @@ function ExtractCanned(blurb: string) -> Meeting {
   prompt #"Extract the meeting from: {{ blurb }}"#
 }
 
-function RenderCanned(blurb: string) -> Meeting throws baml.errors.LlmClient {
+function RenderCanned(blurb: string) -> Meeting throws baml.ExtendUnknownError<baml.errors.StreamError> {
   let s: baml.llm.Stream<MeetingPartial, Meeting> =
     ExtractCanned.stream<MeetingPartial, Meeting>(blurb);
   // Loop runs exactly once (one buffered partial), then done.
@@ -177,14 +177,14 @@ function RenderCanned(blurb: string) -> Meeting throws baml.errors.LlmClient {
 // (E) Cancellation mid-stream — stop early, discard or surface the partial.
 // ============================================================================
 
-function FirstLine(topic: string) -> string throws baml.errors.LlmClient {
+function FirstLine(topic: string) -> string throws baml.ExtendUnknownError<baml.errors.StreamError> {
   let s: baml.llm.Stream<string, string> = Haiku.stream<string, string>(topic);
   let mut acc: string = "";
   while (true) {
     match (s.next()) {
       let delta: string => {
         acc = acc + delta;
-        if (baml.str.contains(acc, "\n")) {
+        if (acc.includes("\n")) {
           s.close();                                    // abort the HTTP request, stop accumulating
           return acc;
         }

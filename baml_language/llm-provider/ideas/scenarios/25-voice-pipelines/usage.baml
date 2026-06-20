@@ -31,7 +31,7 @@ client CartesiaTTS() {                             // divergent TTS — speed is
   Cartesia { api_key: env.CARTESIA_API_KEY, voice_id: "a0e...", model_id: "sonic-2", speed: "normal" }
 }
 
-client BrainLLM() {                                // the chat stage is just ANY Provider
+client BrainLLM() {                                // the chat stage is just ANY HttpProvider
   OpenAI { model: "gpt-4o", api_key: env.OPENAI_API_KEY }
 }
 
@@ -108,13 +108,25 @@ function Hear(clip: AudioStream) -> string {
 //        ->  CompositeVoice.listen(audio)  ->  Deepgram.listen(...)  (final string)
 
 // ---- Capability hole, made visible. ----------------------------------------
-//   SupportVoice() has no LLM, so the plain `Announce(text)` call (which routes
-//   to .call) THROWS at runtime — there is no honest single-turn answer.
-//   This is the runtime capability promise of `client` sugar (proposal §5):
-//   the type says `Provider`, the `.call` failure is discovered at call time.
+//   SupportVoice() returns a `CompositeVoice`, which does NOT implement
+//   `HttpProvider` — it has no `call` at all (no fake, no stub). The plain
+//   `Announce(text)` companion routes to the basic-call path: it `match`es the
+//   provider for `HttpProvider`, finds none, and its `_` arm THROWS
+//   `baml.errors.Unsupported`. The hole is now in the COMPANION match, not a
+//   forged provider method. This is the runtime capability promise of `client`
+//   sugar (proposal §5): the type says `Provider` (the marker), the absence of
+//   `call` is discovered at call time, on the CallError channel `Announce` declares.
 //
-//   Announce("hi")        // throws: "CompositeVoice has no LLM; use .listen/.speak ..."
 //   Announce.speak("hi")  // works:  routes to the TTS verb
+//
+//   The app catches the hole by the concrete `Unsupported` type (most-specific
+//   first), then the CallError interface, then the UnknownError escape hatch:
+//
+//   Announce("hi") catch (e) {
+//     let u: baml.errors.Unsupported => fallbackToBeep();           // the capability hole
+//     let c: baml.errors.CallError   => { if (c.is_network_error()) { retry(); } else { fail(); } }
+//     let u: baml.UnknownError       => report(u.message);          // anything foreign
+//   }
 
 // ---- Resilience reads as a combinator chain (inherited Provider methods). ---
 //   A flaky TTS can fall back; the cascade still presents one Realtime face.
@@ -122,7 +134,7 @@ function Hear(clip: AudioStream) -> string {
 client ResilientPhoneAgent() {
   CascadedVoice {
     stt: DeepgramSTT(),
-    llm: BrainLLM().with_retry(2),                // retry just the brain stage
+    llm: BrainLLM().with_retry(2),                // retry just the brain stage (Retry implements HttpProvider)
     tts: ElevenTTS(),                             // (TTS fallback would wrap at the TtsProvider layer)
     vad: silero_vad(),
     speaker: "rachel",

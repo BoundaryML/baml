@@ -57,7 +57,7 @@ client TerseSummarizing() {
 // -----------------------------------------------------------------------------
 // 2. The conversational function + its `.chat` companion.
 //
-// A plain `Ask(text)` would use Provider.call and forget everything. To get
+// A plain `Ask(text)` would use the HttpProvider.call capability and forget everything. To get
 // history threading the function declares it is conversational by taking a Session
 // and routing through the `.chat` companion, which `match`es the client's provider
 // against the Conversational capability (and ERRORS if it isn't — there's no honest
@@ -71,10 +71,13 @@ function Ask(text: string) -> string {
 
 // Ask.chat(text, session) — the companion the compiler generates from the `.chat`
 // capability. Shown longhand to make the negotiation explicit:
-function Ask$chat(text: string, session: Session) -> string {
+function Ask$chat(text: string, session: Session) -> string
+    throws baml.ExtendUnknownError<baml.errors.CallError> {
   let p = Terse();
   match (p) {
     let c: Conversational => c.chat<string>(render_prompt(text), session),
+    // Unsupported implements every capability-error interface, so it is legal on the
+    // CallError channel and is caught by its concrete type at the call site.
     _ => throw baml.errors.Unsupported { message: "client cannot hold a conversation" },
   }
 }
@@ -86,7 +89,10 @@ function Ask$chat(text: string, session: Session) -> string {
 //    "forgot to append the assistant turn" bug is structurally impossible here.
 // -----------------------------------------------------------------------------
 
-function Conversation() -> string throws baml.errors.Io {
+// The driver propagates the `.chat` channel: CallError | UnknownError. A session
+// store fault surfaces as StoreUnavailableError (a CallError), an http fault as the
+// inner provider's CallError, anything exotic as UnknownError — all one channel.
+function Conversation() -> string throws baml.ExtendUnknownError<baml.errors.CallError> {
   let s = Session.ephemeral("demo-1");
   // turn 1 — the array starts empty; .chat records user+assistant.
   let _a = Ask$chat("What's the capital of France?", s);
@@ -102,7 +108,7 @@ function Conversation() -> string throws baml.errors.Io {
 //    is fully absorbed by AnthropicChat.build_chat.
 // -----------------------------------------------------------------------------
 
-function ConversationClaude() -> string throws baml.errors.Io {
+function ConversationClaude() -> string throws baml.ExtendUnknownError<baml.errors.CallError> {
   let s = Session.ephemeral("demo-2");
   let p = TerseClaude();
   match (p) {
@@ -120,7 +126,7 @@ function ConversationClaude() -> string throws baml.errors.Io {
 //    swapping the client, nothing else. The Session and the call site are unchanged.
 // -----------------------------------------------------------------------------
 
-function LongConversation() -> string throws baml.errors.Io {
+function LongConversation() -> string throws baml.ExtendUnknownError<baml.errors.CallError> {
   let s = Session.new("support-ticket-4471", MemoryStore.new());
   let p = TerseSummarizing();                     // older turns auto-folded into a synopsis
   match (p) {
@@ -132,5 +138,30 @@ function LongConversation() -> string throws baml.errors.Io {
       return c.chat<string>(render_prompt("So what's the root cause?"), s);
     },
     _ => throw baml.errors.Unsupported { message: "not conversational" },
+  }
+}
+
+
+// -----------------------------------------------------------------------------
+// 6. The consumer catch — runtime match, most-specific first. Every failure mode
+//    of a `.chat` turn arrives on ONE channel (CallError | UnknownError): the store
+//    going down (StoreUnavailableError), a malformed persisted turn
+//    (MalformedTurnError, is_parse_error), an http fault from the inner provider,
+//    or a `.chat` on a non-conversational client (Unsupported). The app triages by
+//    concrete type first, then the interface, then the escape hatch.
+// -----------------------------------------------------------------------------
+
+function SafeConversation() -> string {
+  let s = Session.ephemeral("demo-3");
+  Ask$chat("What's the capital of France?", s) catch (e) {
+    let su: StoreUnavailableError    => "[session store down: " + su.detail + "]";   // concrete
+    let mt: MalformedTurnError       => "[corrupt transcript: " + mt.detail + "]";   // concrete
+    let un: baml.errors.Unsupported  => "[client cannot hold a conversation]";       // concrete
+    let c: baml.errors.CallError     => {                                            // interface triage
+      if (c.is_network_error()) { "[network — retry later]" }
+      else if (c.is_rate_limit()) { "[rate limited]" }
+      else { "[provider error]" }
+    },
+    let u: baml.UnknownError         => "[unexpected: " + u.message.join("; ") + "]";
   }
 }

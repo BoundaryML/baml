@@ -100,6 +100,58 @@ interface TransportInfo {
 }
 
 
+// -----------------------------------------------------------------------------
+// 1b. The concrete transport errors these providers deliberately raise.
+//
+// Under the new error model there is no `type Error` / `baml.errors.LlmClient`.
+// Each capability method declares `baml.ExtendUnknownError<CapErr>`; a deliberate
+// domain failure is a CONCRETE class implementing the capability interface(s).
+//
+// A warm `wss://` socket can drop a `SocketClosed` on the request/response path of
+// `ResponsesWS` (an HttpProvider whose call_with / stream both ride one socket) AND a
+// duplex `wss://`/WebRTC socket can drop it mid-session (inside `run` /
+// `drive_realtime_events`), so it implements CallError, StreamError AND RealtimeError.
+// NOTE (provider-as-marker): its CallError impl is load-bearing because of the GENUINE
+// request/response warm socket (ResponsesWS) — NOT because of a dishonest realtime
+// `call`. Realtime providers no longer carry `call` at all, so OQ1's "this CallError is
+// dead weight" complaint is gone. A plain HTTP non-2xx is call/stream only.
+// -----------------------------------------------------------------------------
+
+// A non-2xx HTTP status from a request/response transport. Classified: it is
+// neither a network failure nor a rate limit nor a parse error per se — it is a
+// transport-domain status the app may branch on (e.g. 401 vs 503).
+class TransportHttpError {
+  status: int
+  implements baml.errors.CallError {
+    function is_network_error(self) -> bool { return false; }
+    function is_rate_limit(self)    -> bool { return self.status == 429; }
+    function is_parse_error(self)   -> bool { return false; }
+  }
+  implements baml.errors.StreamError {
+    function is_network_error(self) -> bool { return false; }
+  }
+}
+
+// The socket closed before the turn / session reached a terminal frame. This is a
+// genuine domain failure: connection loss = state loss (Reason #5). It can surface on
+// the request/response path of the WARM socket (ResponsesWS.call_with), mid-stream
+// (ResponsesWS.stream), and mid-session (Realtime.run), so it implements all three.
+class SocketClosed {
+  detail: string
+  implements baml.errors.CallError {
+    function is_network_error(self) -> bool { return true; }
+    function is_rate_limit(self)    -> bool { return false; }
+    function is_parse_error(self)   -> bool { return false; }
+  }
+  implements baml.errors.StreamError {
+    function is_network_error(self) -> bool { return true; }
+  }
+  implements baml.errors.RealtimeError {
+    function is_network_error(self) -> bool { return true; }
+  }
+}
+
+
 // =============================================================================
 // 2. THE FLOOR: HTTP single-shot. Transport = Http, state = ClientOwned.
 //
@@ -120,14 +172,23 @@ class ChatHTTP {
 
   implements HttpProvider {
     type Body = baml.http.Response
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       $rust_io_function                              // response_format = json_schema of T
     }
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
-      baml.http.send(request) catch (e) { _ => { throw baml.errors.LlmClient { message: "http failed" }; } }
+    function send(self, request: baml.http.Request) -> baml.http.Response
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      let resp = baml.http.send(request);
+      if (!resp.ok()) { throw TransportHttpError { status: resp.status_code }; }   // non-2xx → typed
+      return resp;
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "chathttp send failed");
     }
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
-      baml.sap.parse<T>(from.text() catch (e) { _ => { throw baml.errors.LlmClient { message: "no body" }; } })
+    function parse<T>(self, from: baml.http.Response) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.sap.parse<T>(from.text())
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "chathttp parse failed");
     }
   }
 }
@@ -155,20 +216,29 @@ class ChatSSE {
 
   implements HttpProvider {
     type Body = baml.http.Response
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       $rust_io_function
     }
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
-      baml.http.send(request) catch (e) { _ => { throw baml.errors.LlmClient { message: "http failed" }; } }
+    function send(self, request: baml.http.Request) -> baml.http.Response
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      let resp = baml.http.send(request);
+      if (!resp.ok()) { throw TransportHttpError { status: resp.status_code }; }   // non-2xx → typed
+      return resp;
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "chatsse send failed");
     }
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
-      baml.sap.parse<T>(from.text() catch (e) { _ => { throw baml.errors.LlmClient { message: "no body" }; } })
+    function parse<T>(self, from: baml.http.Response) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.sap.parse<T>(from.text())
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "chatsse parse failed");
     }
   }
 
   implements Streaming {
     function stream<TStream, TFinal>(self, prompt: baml.llm.PromptAst)
-        -> baml.llm.Stream<TStream, TFinal> throws baml.errors.LlmClient {
+        -> baml.llm.Stream<TStream, TFinal> throws baml.ExtendUnknownError<baml.errors.StreamError> {
       // Opens an SSE reader. Server -> client only. There is NO method here, and
       // none possible, that lets the consumer say something back mid-stream:
       // SseStream has .next() and .close(), but no .send(). That absence IS the
@@ -189,7 +259,9 @@ class ChatSSE {
 //    NO duplex. One in-flight response per connection.
 //
 //    THE TEACHING POINT: this is a `wss://` socket, yet it is NOT Realtime. It
-//    implements `Provider.call` and `Streaming` — the SAME capabilities as ChatSSE.
+//    implements `HttpProvider` (call/call_with) and `Streaming` — the SAME
+//    capabilities as ChatSSE. Under provider-as-marker, `call`/`call_with` live on
+//    `HttpProvider`; the `Provider` marker carries no interaction.
 //    The wire is WebSocket; the capability is request/response. Proof that transport
 //    is orthogonal to capability: you cannot read "is this realtime?" off "is this a
 //    socket?". The warm socket is an optimization the application code never sees.
@@ -217,42 +289,71 @@ class ResponsesWS {
     function state_location(self) -> StateLocation { ServerStoredById }
   }
 
-  // ★ It implements PLAIN Provider.call (and Streaming) — NOT Realtime. The socket
-  // is request/response on a warm wire. "One in-flight response per connection"
-  // maps exactly onto call's 1:1 contract: one response.create -> one terminal
-  // response.completed, then the socket is free for the next turn.
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
+  // ★ It implements HttpProvider — request/response on a warm wire — NOT Realtime.
+  // Under provider-as-marker, `call`/`call_with` live on HttpProvider (the marker
+  // `Provider` carries no interaction). "One in-flight response per connection" maps
+  // exactly onto call's 1:1 contract: one response.create -> one terminal
+  // response.completed, then the socket is free for the next turn. The warm socket is
+  // request/response, just on a persistent wire — so this provider is genuinely an
+  // HttpProvider whose transport happens to be a `wss://` upgrade, not an HTTP POST.
+  //
+  // We DON'T use the build_request/send/parse/meta_of codec default here (the warm
+  // socket has no single Request and no single Response Body — that is OQ3, flagged in
+  // evaluation.md). Instead we override call_with directly with the hand-rolled drain,
+  // and derive `call` from it (project nothing). call_with is the PRIMITIVE; the late
+  // usage/finish-reason on response.completed rides the projected ResponseMeta.
+  implements HttpProvider {
+    type Body = baml.http.Response   // unused by this override; the warm drain is hand-rolled
+
+    function call_with<T, U>(self, prompt: baml.llm.PromptAst, project: (ResponseMeta) -> U) -> (T, U)
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       // Borrow the warm socket from the host pool (dials lazily, guards one-in-flight).
       let ws: WsSocket = self.warm_socket();
       // First (or continuation) turn: a normal Responses body wrapped as a
       // response.create event, carrying previous_response_id for the warm cache.
       // The host pool supplies the last id so each turn chains the warm cache.
       let body: string = self.encode_response_create<T>(prompt, self.last_id());
-      ws.send(body) catch (e) { _ => { throw baml.errors.LlmClient { message: "ws send failed" }; } };
+      ws.send(body);
 
       // Drain server->client events until response.completed. This is a 1:1
       // request/response loop *over* a duplex socket — we never send mid-response,
-      // which is exactly why this is `call` and not Realtime.
+      // which is exactly why this is `call_with` and not Realtime.
       let acc: string = "";
       while (true) {
-        let frame: string? = ws.recv() catch (e) { _ => { throw baml.errors.LlmClient { message: "ws recv failed" }; } };
+        let frame: string? = ws.recv();
         match (frame) {
-          null => { throw baml.errors.LlmClient { message: "socket closed mid-response" }; }
+          null => { throw SocketClosed { detail: "socket closed mid-response" }; }   // typed CallError
           let raw: string => {
-            let etype: string = baml.json.get_str(raw, "type") ?? "";
+            // Decode the frame into a typed event class (partial — unknown fields ignored).
+            let ev: ResponsesWsFrame = baml.json.from_string<ResponsesWsFrame>(raw);
+            let etype: string = ev.type ?? "";
             if (etype == "response.output_text.delta") {
-              acc = acc + (baml.json.get_str(raw, "delta") ?? "");
+              acc = acc + (ev.delta ?? "");
             }
             if (etype == "response.completed") {
               // record the id in the host pool so the NEXT call chains the warm cache.
-              self.remember_id(baml.json.get_str(raw, "response.id") ?? "");
-              return baml.sap.parse<T>(acc);
+              let rid: string = match (ev.response) { null => "", let r: ResponsesWsResponse => r.id ?? "" };
+              self.remember_id(rid);
+              // late sidecar (usage/finish-reason) lands on the terminal frame:
+              let meta: ResponseMeta = ResponsesWsMeta { raw: raw };
+              return (baml.sap.parse<T>(acc), project(meta));
             }
           }
         }
       }
       baml.sys.panic("unreachable")
+    } catch (e) {
+      // Foreign Io from ws.send/ws.recv (and any host failure) normalizes here;
+      // the deliberate SocketClosed passes through unchanged.
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "responsesws call failed");
+    }
+
+    // `call` derives from call_with — project nothing, drop the sidecar (spine default,
+    // restated here because we overrode call_with rather than the codec primitives).
+    function call<T>(self, prompt: baml.llm.PromptAst) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      let (v, _): (T, null) = self.call_with<T, null>(prompt, m => null);
+      v
     }
   }
 
@@ -260,7 +361,7 @@ class ResponsesWS {
     // Same warm socket, but yield deltas as they arrive. Still server->client only
     // within a turn — a delivery refinement, identical capability to ChatSSE.
     function stream<TStream, TFinal>(self, prompt: baml.llm.PromptAst)
-        -> baml.llm.Stream<TStream, TFinal> throws baml.errors.LlmClient {
+        -> baml.llm.Stream<TStream, TFinal> throws baml.ExtendUnknownError<baml.errors.StreamError> {
       $rust_io_function
     }
   }
@@ -270,12 +371,45 @@ class ResponsesWS {
   // Pool accessors — host-backed, like MemoryStore's store methods. The lifecycle
   // (lazy dial, ~60-min cap, one-in-flight guard) lives in the host, NOT in a
   // mutable BAML field.
-  function warm_socket(self) -> WsSocket throws baml.errors.LlmClient { $rust_io_function }
+  function warm_socket(self) -> WsSocket throws baml.ExtendUnknownError<baml.errors.CallError> { $rust_io_function }
   function last_id(self) -> string? { $rust_io_function }
   function remember_id(self, id: string) -> null { $rust_io_function }
   function encode_response_create<T>(self, prompt: baml.llm.PromptAst, prev: string?)
-      -> string throws baml.errors.LlmClient { $rust_io_function }
+      -> string throws baml.ExtendUnknownError<baml.errors.CallError> { $rust_io_function }
 }
+
+// The warm-socket sidecar: usage/finish-reason normalized LAZILY off the terminal
+// response.completed frame. Same ResponseMeta shape as OpenAIResponse in the spine —
+// the warm socket is request/response, so it has a perfectly ordinary call sidecar.
+class ResponsesWsMeta {
+  raw: string                                          // the response.completed frame JSON
+  implements ResponseMeta {
+    function usage(self) -> Usage {
+      // Decode the terminal frame into the typed event class and read the nested usage.
+      let ev: ResponsesWsFrame = baml.json.from_string<ResponsesWsFrame>(self.raw);
+      match (ev.response) {
+        null => Usage { input: 0, output: 0 },
+        let r: ResponsesWsResponse => match (r.usage) {
+          null => Usage { input: 0, output: 0 },
+          let u: ResponsesWsUsage => Usage { input: u.input_tokens ?? 0, output: u.output_tokens ?? 0 },
+        },
+      }
+    }
+    function finish_reason(self) -> string {
+      let ev: ResponsesWsFrame = baml.json.from_string<ResponsesWsFrame>(self.raw);
+      match (ev.response) { null => "", let r: ResponsesWsResponse => r.status ?? "" }
+    }
+    function logprobs(self)      -> Supported<Logprob[]> { Unsupported { reason: "responses ws" } }
+    function citations(self)     -> Supported<Citation[]> { Unsupported { reason: "responses ws" } }
+    function reasoning(self)     -> Supported<string>     { Unsupported { reason: "responses ws" } }
+  }
+}
+
+// Typed shapes for the warm-socket frames `ResponsesWS` decodes (partial — only the
+// fields these methods read; SAP's structural decode ignores the rest of the frame).
+class ResponsesWsFrame    { type: string?, delta: string?, response: ResponsesWsResponse? }
+class ResponsesWsResponse { id: string?, status: string?, usage: ResponsesWsUsage? }
+class ResponsesWsUsage    { input_tokens: int?, output_tokens: int? }
 
 
 // =============================================================================
@@ -305,18 +439,18 @@ class RealtimeWS {
     // io: Channel is a PASS-IN parameter (proposal §3): the caller's duplex endpoint
     // (their mic/speaker, their UI). The provider drives the wire and bridges it to
     // io. The session ends -> return the Transcript record.
-    function run(self, prompt: baml.llm.PromptAst, io: Channel) -> Transcript throws baml.errors.LlmClient {
+    function run(self, prompt: baml.llm.PromptAst, io: Channel) -> Transcript
+        throws baml.ExtendUnknownError<baml.errors.RealtimeError> {
       let req = baml.http.Request {
         method: "GET",
         url: "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview",
         headers: { "authorization": "Bearer " + self.api_key, "openai-beta": "realtime=v1" },
         body: "",
       };
-      let ws: WsSocket = baml.ws.connect(req)
-        catch (e) { _ => { throw baml.errors.LlmClient { message: "realtime dial failed" }; } };
+      let ws: WsSocket = baml.ws.connect(req);
 
       // configure the server-authoritative session (voice, modalities, VAD).
-      ws.send(self.session_update_frame()) catch (e) { _ => { throw baml.errors.LlmClient { message: "session.update failed" }; } };
+      ws.send(self.session_update_frame());
 
       // ---- REASON #1: concurrent duplex. ----
       // The caller's inbound events feed the socket WHILE the socket feeds the caller.
@@ -351,14 +485,14 @@ class RealtimeWS {
       });
 
       // seed the conversation with the initial prompt (server now owns it).
-      ws.send(self.initial_prompt_frame(prompt)) catch (e) { _ => { throw baml.errors.LlmClient { message: "seed failed" }; } };
+      ws.send(self.initial_prompt_frame(prompt));
 
       // ---- the receive loop: REASONS #2, #3, #4 all live here. ----
       // It accumulates the provider-owned Transcript. N user turns, each yielding 0/1/
       // several responses -> there is no single "the response". (REASON #3: 1:N.)
       let transcript: Transcript = empty_transcript();
       while (true) {
-        let frame: string? = ws.recv() catch (e) { _ => { throw baml.errors.LlmClient { message: "recv failed" }; } };
+        let frame: string? = ws.recv();
         match (frame) {
           // ---- REASON #5: connection loss = state loss. ----
           // null = socket closed. There is NO session id to resume; the server-held
@@ -366,7 +500,9 @@ class RealtimeWS {
           // surface the loss — we cannot reconnect to "the same session".
           null => { return transcript; }
           let raw: string => {
-            let etype: string = baml.json.get_str(raw, "type") ?? "";
+            // Decode the frame into the shared typed realtime event class.
+            let ev: RealtimeFrame = baml.json.from_string<RealtimeFrame>(raw);
+            let etype: string = ev.type ?? "";
 
             // ---- REASON #2: server-initiated events with NO triggering request. ----
             // rate_limits.updated / speech_started / a mid-session error / session.updated
@@ -374,11 +510,14 @@ class RealtimeWS {
             // here they are just frames the duplex loop dispatches to the caller's io.
             if (etype == "input_audio_buffer.speech_started") { io.send(SpeechStartedOut {}); }
             if (etype == "rate_limits.updated") { io.send(RateLimitOut { raw: raw }); }
-            if (etype == "error") { io.send(ServerErrorOut { message: baml.json.get_str(raw, "error.message") ?? "" }); }
+            if (etype == "error") {
+              let msg: string = match (ev.error) { null => "", let e: RealtimeErrorBody => e.message ?? "" };
+              io.send(ServerErrorOut { message: msg });
+            }
 
             // model audio out -> caller's speaker (the OTHER half of the duplex).
             if (etype == "response.audio.delta") {
-              io.send(AudioOutEvent { pcm: baml.json.get_str(raw, "delta") ?? "" });
+              io.send(AudioOutEvent { pcm: ev.delta ?? "" });
             }
 
             // ---- REASON #4: server-authoritative state. ----
@@ -398,48 +537,29 @@ class RealtimeWS {
         }
       }
       baml.sys.panic("unreachable")
+    } catch (e) {
+      // Foreign Io from baml.ws.connect / .send / .recv (and any host failure)
+      // normalizes onto the Realtime channel.
+      _ => throw baml.UnknownError.with_message<baml.errors.RealtimeError>(e, "realtimews run failed");
     }
   }
 
-  // Realtime requires Provider, so we MUST supply call. Open Question 1 made
-  // concrete: a "best-effort single turn over the connection". We make it honest by
-  // dialing, sending one prompt, draining to the first response.done, and closing.
-  // It works, but it throws away everything that makes the provider a realtime one
-  // (no io, no barge-in, no duplex) — see evaluation.md (c).
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
-      let req = baml.http.Request {
-        method: "GET", url: "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview",
-        headers: { "authorization": "Bearer " + self.api_key, "openai-beta": "realtime=v1" }, body: "",
-      };
-      let ws: WsSocket = baml.ws.connect(req) catch (e) { _ => { throw baml.errors.LlmClient { message: "dial failed" }; } };
-      ws.send(self.initial_prompt_frame(prompt)) catch (e) { _ => { throw baml.errors.LlmClient { message: "seed failed" }; } };
-      ws.send(self.response_create_text_frame()) catch (e) { _ => { throw baml.errors.LlmClient { message: "create failed" }; } };
-      let acc: string = "";
-      while (true) {
-        let frame: string? = ws.recv() catch (e) { _ => { throw baml.errors.LlmClient { message: "recv failed" }; } };
-        match (frame) {
-          null => { ws.close(); throw baml.errors.LlmClient { message: "closed before response.done" }; }
-          let raw: string => {
-            if ((baml.json.get_str(raw, "type") ?? "") == "response.text.delta") {
-              acc = acc + (baml.json.get_str(raw, "delta") ?? "");
-            }
-            if ((baml.json.get_str(raw, "type") ?? "") == "response.done") {
-              ws.close();
-              return baml.sap.parse<T>(acc);
-            }
-          }
-        }
-      }
-      baml.sys.panic("unreachable")
-    }
-  }
+  // Under provider-as-marker, RealtimeWS does NOT implement `call`. `Realtime requires
+  // Provider` (the bare marker), and the marker carries no interaction method — so the
+  // class IS a Provider purely by being composable, and exposes ONLY its real
+  // interaction (`run`, above). The old "best-effort single turn" (dial a fresh socket,
+  // send one prompt, drain to the first response.done, close) is GONE: it threw away
+  // everything that makes the provider realtime (no io, no barge-in, no duplex) and was
+  // the concrete form of the now-RESOLVED OQ1 footgun. A function over a realtime client
+  // simply has no `.call` companion; `Foo.live(args, io)` matches `Realtime` (no degrade).
 
   // host-boundary frame encoders — the divergent wire grammar stays in the provider.
-  function session_update_frame(self) -> string throws baml.errors.LlmClient { $rust_io_function }
-  function initial_prompt_frame(self, prompt: baml.llm.PromptAst) -> string throws baml.errors.LlmClient { $rust_io_function }
-  function response_create_text_frame(self) -> string { $rust_io_function }
-  function reconfigure_frame(self, c: ControlEvent) -> string throws baml.errors.LlmClient { $rust_io_function }
+  // These are pure host-side JSON encoders (a genuine host boundary), so they throw
+  // the FOREIGN host error `baml.errors.Io`; `run` (the Realtime channel) normalizes
+  // that Io into `baml.UnknownError` in its trailing catch.
+  function session_update_frame(self) -> string throws baml.errors.Io { $rust_io_function }
+  function initial_prompt_frame(self, prompt: baml.llm.PromptAst) -> string throws baml.errors.Io { $rust_io_function }
+  function reconfigure_frame(self, c: ControlEvent) -> string throws baml.errors.Io { $rust_io_function }
 }
 
 
@@ -469,10 +589,10 @@ class RealtimeWebRTC {
   }
 
   implements Realtime {
-    function run(self, prompt: baml.llm.PromptAst, io: Channel) -> Transcript throws baml.errors.LlmClient {
+    function run(self, prompt: baml.llm.PromptAst, io: Channel) -> Transcript
+        throws baml.ExtendUnknownError<baml.errors.RealtimeError> {
       // 1. mint the ephemeral key server-side.
-      let ek: string = mint_ephemeral_key(self.ephemeral_key_endpoint)
-        catch (e) { _ => { throw baml.errors.LlmClient { message: "ephemeral key failed" }; } };
+      let ek: string = mint_ephemeral_key(self.ephemeral_key_endpoint);
 
       // 2. SDP offer/answer -> two planes. The host wires the MEDIA plane to the
       //    caller's mic/speaker DIRECTLY (the audio bytes bypass BAML entirely).
@@ -480,8 +600,7 @@ class RealtimeWebRTC {
         method: "POST", url: "https://api.openai.com/v1/realtime",
         headers: { "authorization": "Bearer " + ek, "content-type": "application/sdp" }, body: "",
       };
-      let rtc: RtcSession = baml.webrtc.connect(offer_req, ek)
-        catch (e) { _ => { throw baml.errors.LlmClient { message: "webrtc connect failed" }; } };
+      let rtc: RtcSession = baml.webrtc.connect(offer_req, ek);
 
       // 3. media plane: hand the track to the caller's hardware. AUDIO NEVER becomes
       //    a BAML value here — no response.audio.delta over WebRTC (background).
@@ -492,20 +611,21 @@ class RealtimeWebRTC {
       //    This is the proof that the event vocabulary is transport-independent.
       return drive_realtime_events(rtc.data, prompt, io,
         self.session_update_frame(), self.initial_prompt_frame(prompt));
+    } catch (e) {
+      // Foreign Io from mint_ephemeral_key / baml.webrtc.connect (and any host
+      // failure) normalizes onto the Realtime channel.
+      _ => throw baml.UnknownError.with_message<baml.errors.RealtimeError>(e, "realtimewebrtc run failed");
     }
   }
 
-  // best-effort single turn: text-only over the data plane, no media.
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
-      // WebRTC for a single text turn is absurd in practice; we degrade to the same
-      // text drain as §5 over the data channel. Honest but pointless — flagged.
-      $rust_io_function
-    }
-  }
+  // Under provider-as-marker, RealtimeWebRTC does NOT implement `call`. The old
+  // "best-effort single turn" here was actively absurd — spin up an ephemeral key +
+  // SDP/ICE negotiation just to read one text answer. `Realtime requires Provider` (the
+  // marker), so the class IS a Provider with NO fabricated call; it exposes only `run`.
+  // The most acute form of the now-RESOLVED OQ1 footgun is simply deleted.
 
-  function session_update_frame(self) -> string throws baml.errors.LlmClient { $rust_io_function }
-  function initial_prompt_frame(self, prompt: baml.llm.PromptAst) -> string throws baml.errors.LlmClient { $rust_io_function }
+  function session_update_frame(self) -> string throws baml.errors.Io { $rust_io_function }
+  function initial_prompt_frame(self, prompt: baml.llm.PromptAst) -> string throws baml.errors.Io { $rust_io_function }
 }
 
 
@@ -523,8 +643,8 @@ function drive_realtime_events(
   io: Channel,
   session_frame: string,
   prompt_frame: string,
-) -> Transcript throws baml.errors.LlmClient {
-  ws.send(session_frame) catch (e) { _ => { throw baml.errors.LlmClient { message: "session.update failed" }; } };
+) -> Transcript throws baml.ExtendUnknownError<baml.errors.RealtimeError> {
+  ws.send(session_frame);
 
   io.on(ev => {
     match (ev) {
@@ -538,25 +658,33 @@ function drive_realtime_events(
     }
   });
 
-  ws.send(prompt_frame) catch (e) { _ => { throw baml.errors.LlmClient { message: "seed failed" }; } };
+  ws.send(prompt_frame);
 
   let transcript: Transcript = empty_transcript();
   while (true) {
-    let frame: string? = ws.recv() catch (e) { _ => { throw baml.errors.LlmClient { message: "recv failed" }; } };
+    let frame: string? = ws.recv();
     match (frame) {
       null => { return transcript; }                               // state loss
       let raw: string => {
-        let etype: string = baml.json.get_str(raw, "type") ?? "";
+        let ev: RealtimeFrame = baml.json.from_string<RealtimeFrame>(raw);
+        let etype: string = ev.type ?? "";
         if (etype == "input_audio_buffer.speech_started") { io.send(SpeechStartedOut {}); }
         if (etype == "rate_limits.updated") { io.send(RateLimitOut { raw: raw }); }
-        if (etype == "error") { io.send(ServerErrorOut { message: baml.json.get_str(raw, "error.message") ?? "" }); }
-        if (etype == "response.audio.delta") { io.send(AudioOutEvent { pcm: baml.json.get_str(raw, "delta") ?? "" }); }
+        if (etype == "error") {
+          let msg: string = match (ev.error) { null => "", let e: RealtimeErrorBody => e.message ?? "" };
+          io.send(ServerErrorOut { message: msg });
+        }
+        if (etype == "response.audio.delta") { io.send(AudioOutEvent { pcm: ev.delta ?? "" }); }
         if (etype == "conversation.item.created") { transcript = append_server_item(transcript, raw); }
         if (etype == "response.done") { transcript = append_completed_response(transcript, raw); }
       }
     }
   }
   baml.sys.panic("unreachable")
+} catch (e) {
+  // Foreign Io from ws.send/ws.recv (and the transcript helpers' host failures)
+  // normalizes onto the Realtime channel — the one error home for both transports.
+  _ => throw baml.UnknownError.with_message<baml.errors.RealtimeError>(e, "realtime event loop failed");
 }
 
 
@@ -587,15 +715,21 @@ class SpeechStartedOut {}                                            // cliff #4
 class RateLimitOut    { raw: string }                                // cliff #4: server-initiated
 class ServerErrorOut  { message: string }                           // cliff #4: mid-session error
 
+// Typed shape for the raw server->client realtime frames the event loops decode.
+// Partial — only the fields the loops read (`type`, `delta`, `error.message`); SAP's
+// structural decode ignores the rest of each frame's wire grammar.
+class RealtimeFrame     { type: string?, delta: string?, error: RealtimeErrorBody? }
+class RealtimeErrorBody { message: string? }
+
 
 // -----------------------------------------------------------------------------
 // 9. A combinator that respects the transport/capability split.
 //
 // A `WarmThenCold` fallback: prefer the warm-socket ResponsesWS for latency, fall
 // back to plain ChatHTTP if the socket is capped/dead. BOTH are request/response
-// (`call` + `Streaming`), so this fallback is HONEST — it forwards capabilities its
-// members actually share. Critically it does NOT claim Realtime, because neither
-// member is Realtime. Contrast the proposal's generic Fallback (§6), which claims
+// (`HttpProvider` — call/call_with — + `Streaming`), so this fallback is HONEST: it
+// forwards capabilities its members actually share. Critically it does NOT claim
+// Realtime, because neither member is Realtime. Contrast the proposal's generic Fallback (§6), which claims
 // EVERY capability and degrades at call time; here we hand-build a fallback that
 // only forwards what's actually shared, to make the transport boundary a compile-ish line.
 // -----------------------------------------------------------------------------
@@ -604,25 +738,59 @@ class WarmThenCold {
   warm: Provider         // ResponsesWS — warm socket
   cold: Provider         // ChatHTTP — the floor
 
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
-      let r: T = self.warm.call<T>(prompt) catch (e) {
-        _ => { return self.cold.call<T>(prompt); }    // socket capped/dead -> cold POST
-      };
-      return r;
+  // Combinators declare the SAME channel as the capability they forward — no
+  // narrow / widen / forward. The warm member's CallError (or UnknownError) is
+  // recovered at the consumer's catch, not re-typed here. Under provider-as-marker,
+  // request/response forwarding lives on HttpProvider (call + call_with), inherited
+  // factories (with_retry/fallback_to/cached) ride the `Provider` marker via `requires`.
+  implements HttpProvider {
+    type Body = unknown                                // routed to a member; this combinator has no codec
+
+    // call_with is the PRIMITIVE — forward the projection to whichever member serves the
+    // turn, so usage/finish-reason/cost are NOT dropped (the P1 fix). Both members are
+    // HttpProvider here (ResponsesWS + ChatHTTP), so each `.call_with` carries its own
+    // ResponseMeta; the warm member's sidecar is preferred, the cold member's on fallback.
+    function call_with<T, U>(self, prompt: baml.llm.PromptAst, project: (ResponseMeta) -> U) -> (T, U)
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      match (self.warm) {
+        let h: HttpProvider => {
+          let r: (T, U) = h.call_with<T, U>(prompt, project) catch (e) {
+            _ => {                                      // socket capped/dead -> cold POST
+              match (self.cold) {
+                let c: HttpProvider => { return c.call_with<T, U>(prompt, project); },
+                _                   => { throw baml.errors.Unsupported { message: "cold member is not http" }; },
+              }
+            }
+          };
+          return r;
+        },
+        _ => {
+          match (self.cold) {
+            let c: HttpProvider => { return c.call_with<T, U>(prompt, project); },
+            _                   => { throw baml.errors.Unsupported { message: "no http member" }; },
+          }
+        },
+      }
+    }
+
+    // `call` derives from call_with — project nothing (drop the sidecar).
+    function call<T>(self, prompt: baml.llm.PromptAst) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      let (v, _): (T, null) = self.call_with<T, null>(prompt, m => null);
+      v
     }
   }
 
   implements Streaming {
     function stream<TStream, TFinal>(self, prompt: baml.llm.PromptAst)
-        -> baml.llm.Stream<TStream, TFinal> throws baml.errors.LlmClient {
+        -> baml.llm.Stream<TStream, TFinal> throws baml.ExtendUnknownError<baml.errors.StreamError> {
       match (self.warm) {
         let s: Streaming => { return s.stream<TStream, TFinal>(prompt); },
         _               => {},
       }
       match (self.cold) {
         let s: Streaming => { return s.stream<TStream, TFinal>(prompt); },
-        _               => { throw baml.errors.LlmClient { message: "no streaming member" }; },
+        _               => { throw baml.errors.Unsupported { message: "no streaming member" }; },
       }
     }
   }
@@ -639,15 +807,15 @@ class WarmThenCold {
 // the Realtime Transcript is provider-owned + opaque (proposal §7 / conventions).
 class Transcript { _items: $rust_type }
 function empty_transcript() -> Transcript { Transcript { _items: $rust_io_function } }
-function append_server_item(t: Transcript, raw: string) -> Transcript throws baml.errors.LlmClient { $rust_io_function }
-function append_completed_response(t: Transcript, raw: string) -> Transcript throws baml.errors.LlmClient { $rust_io_function }
+function append_server_item(t: Transcript, raw: string) -> Transcript throws baml.errors.Io { $rust_io_function }
+function append_completed_response(t: Transcript, raw: string) -> Transcript throws baml.errors.Io { $rust_io_function }
 
 // frame encoders — opaque-string JSON events. Divergent grammar stays host-side.
 function append_audio_frame(pcm: string) -> string { $rust_io_function }
 function cancel_frame() -> string { $rust_io_function }
 function truncate_frame(item_id: string, audio_ms: int) -> string { $rust_io_function }
-function function_call_output_frame(call_id: string, output: unknown) -> string throws baml.errors.LlmClient { $rust_io_function }
-function control_frame(c: ControlEvent) -> string throws baml.errors.LlmClient { $rust_io_function }
+function function_call_output_frame(call_id: string, output: unknown) -> string throws baml.errors.Io { $rust_io_function }
+function control_frame(c: ControlEvent) -> string throws baml.errors.Io { $rust_io_function }
 
 // WebRTC ephemeral-key mint (server-side).
 function mint_ephemeral_key(endpoint: string) -> string throws baml.errors.Io { $rust_io_function }

@@ -23,6 +23,33 @@
 // at-least-once retry envelope — none of which BAML reimplements.
 //
 // `StepLog` is the existential the adapter hands us; concrete adapters below.
+//
+// Durability is a NET-NEW capability the provider model never anticipated, so it
+// gets its own capability-error interface (flagged net-new in evaluation.md). A
+// durability failure is neither a transport nor a parse failure — it is a
+// determinism/replay violation, which the classifiers below name explicitly.
+interface baml.errors.DurabilityError {
+  function is_non_determinism(self) -> bool
+  function is_step_log_error(self) -> bool
+}
+
+// A determinism violation: the prompt at a recorded coordinate changed across
+// replay (the workflow body was edited non-deterministically between runs). It
+// arises on the call path, so it implements CallError too — the app can catch it
+// as a concrete type or triage it via either interface's classifiers.
+class NonDeterministicReplay {
+  step: string
+  implements baml.errors.CallError {
+    function is_network_error(self) -> bool { return false; }
+    function is_rate_limit(self)    -> bool { return false; }
+    function is_parse_error(self)   -> bool { return false; }
+  }
+  implements baml.errors.DurabilityError {
+    function is_non_determinism(self) -> bool { return true; }
+    function is_step_log_error(self)  -> bool { return false; }
+  }
+}
+
 interface StepLog {
   // Look up a previously-recorded step result by coordinate. Returns null on a
   // genuine first execution (the engine has no checkpoint for this coordinate).
@@ -46,11 +73,13 @@ class StepCoord {
   step: string                       // logical name, e.g. "extract" or "charge"
 }
 
-// ── The combinator: record-once, replay-forever around any Provider.call. ────
+// ── The combinator: record-once, replay-forever around any HttpProvider.call. ──
 //
 // `Durable` is a plain (non-generic) Provider combinator, exactly like Cache in
 // the spine — `inner: Provider`, plus the step log and this step's coordinate.
-// It claims `Provider` only: streaming/realtime/tools do NOT compose with
+// It forwards the request/response capability only: it `implements HttpProvider`
+// (which owns `call`/`call_with` under the marker-`Provider` revision; see
+// ../provider-as-marker.md). Streaming/realtime/tools do NOT compose with
 // at-least-once replay (you cannot replay half a token stream from a step log),
 // so we deliberately do NOT forward those capabilities. See evaluation (c).
 class Durable {
@@ -58,14 +87,14 @@ class Durable {
   log: StepLog
   coord: StepCoord
 
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
+  implements HttpProvider {
+    type Body = unknown
+    function call<T>(self, prompt: baml.llm.PromptAst) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       // 1. Replay path: if the engine already recorded this coordinate, return
       //    the recorded response. We NEVER re-sample the model on replay — this
       //    is the whole correctness property.
-      let prior: string? = self.log.recorded(self.coord) catch (e) {
-        _ => { throw baml.errors.LlmClient { message: "step log read failed" }; }
-      };
+      let prior: string? = self.log.recorded(self.coord);
       match (prior) {
         let hit: string => {
           // Determinism guard: the prompt at this coordinate must match what we
@@ -75,10 +104,7 @@ class Durable {
           // a silent re-sample.
           let fp: string = baml.llm.prompt_fingerprint(prompt);
           if (!durable_envelope_matches(hit, fp)) {
-            throw baml.errors.LlmClient {
-              message: "non-determinism at step '" + self.coord.step
-                       + "': prompt changed across replay"
-            };
+            throw NonDeterministicReplay { step: self.coord.step };
           }
           // Decode the recorded wire response back into T with the same parser
           // path the live call would have used. Recording is at the response
@@ -98,12 +124,32 @@ class Durable {
           let answer: T = self.inner.call<T>(prompt);
           let fp: string = baml.llm.prompt_fingerprint(prompt);
           let envelope: string = durable_envelope_new(fp, durable_encode<T>(answer));
-          self.log.record(self.coord, envelope) catch (e) {
-            _ => { throw baml.errors.LlmClient { message: "step log write failed" }; }
-          };
+          self.log.record(self.coord, envelope);
           return answer;
         }
       }
+    } catch (e) {
+      // Known CallErrors — the inner provider's typed errors and our own
+      // NonDeterministicReplay — pass through unchanged; foreign step-log Io and
+      // anything else is wrapped + annotated.
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "durable step '" + self.coord.step + "' failed");
+    }
+
+    // call_with forwards the value+sidecar projection to the inner provider's own
+    // request/response capability (the P1 fix: a durable combinator must not drop
+    // the sidecar — usage/cost/logprobs the inner call produces). The record/replay
+    // determinism guard lives on `call` above; the sidecar path forwards to the
+    // first http-capable member so the projection still sees the live ResponseMeta.
+    // (A fuller Durable could also persist the projected sidecar in the envelope;
+    // forwarding keeps the combinator honest without fabricating a recorded meta.)
+    function call_with<T, U>(self, prompt: baml.llm.PromptAst, project: (ResponseMeta) -> U) -> (T, U)
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      match (self.inner) {
+        let h: HttpProvider => { return h.call_with<T, U>(prompt, project); }
+        _ => { throw baml.errors.Unsupported { message: "durable inner provider has no request/response sidecar" }; }
+      }
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "durable step '" + self.coord.step + "' call_with failed");
     }
   }
 }
@@ -192,20 +238,19 @@ class DurableDispatch {
   log: StepLog
   run: string
 
-  function dispatch(self, calls: ToolCall[]) -> ToolResult[] throws baml.errors.Io {
+  function dispatch(self, calls: ToolCall[]) -> ToolResult[]
+      throws baml.ExtendUnknownError<baml.errors.ToolError> {
     let out: ToolResult[] = [];
     for (let c in calls) {
       // Coordinate per tool call: the call's opaque id IS the idempotency key,
       // tied to the run. Re-dispatch on replay hits the same coordinate.
       let coord: StepCoord = StepCoord { run: self.run, step: "tool:" + c.id };
-      let prior: string? = self.log.recorded(coord) catch (e) {
-        _ => { throw baml.errors.Io { message: "tool step log read failed" }; }
-      };
+      let prior: string? = self.log.recorded(coord);
       match (prior) {
         let hit: string => {
           // Already executed in a prior attempt: replay its recorded output,
           // do NOT re-invoke the tool (do NOT charge the card twice).
-          out = out + [ToolResult { id: c.id, output: durable_decode<unknown>(hit) }];
+          out.push(ToolResult { id: c.id, output: durable_decode<unknown>(hit) });
         }
         null => {
           // First execution of this tool call. The author's tool body should
@@ -215,14 +260,16 @@ class DurableDispatch {
           // and only the downstream API's dedupe prevents a double charge.
           let results: ToolResult[] = self.inner.dispatch([c]);
           let r: ToolResult = single(results);
-          self.log.record(coord, durable_encode<unknown>(r.output)) catch (e) {
-            _ => { throw baml.errors.Io { message: "tool step log write failed" }; }
-          };
-          out = out + [r];
+          self.log.record(coord, durable_encode<unknown>(r.output));
+          out.push(r);
         }
       }
     }
     out
+  } catch (e) {
+    // Foreign step-log Io and any dispatch failure normalize into UnknownError on
+    // the tool channel; a known ToolError from the inner router passes through.
+    _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "durable tool dispatch failed");
   }
 }
 

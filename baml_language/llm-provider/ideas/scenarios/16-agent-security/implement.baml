@@ -91,14 +91,16 @@ class OpenAITools {
 
   implements HttpProvider {
     type Body = baml.http.Response
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.ExtendUnknownError<baml.errors.CallError> {
       $rust_io_function
     }
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
-      baml.http.send(request) catch (e) { _ => { throw baml.errors.LlmClient { message: "http failed" }; } }
+    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.http.send(request) catch (e) { _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "openai send failed"); }
     }
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
+    function parse<T>(self, from: baml.http.Response) -> T throws baml.ExtendUnknownError<baml.errors.CallError> {
       baml.sap.parse<T>(from.text())
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "openai parse failed");
     }
   }
 
@@ -106,13 +108,13 @@ class OpenAITools {
     // Opaque, provider-owned. Holds the assistant-turn history + OpenAI call ids.
     type Transcript = $rust_type
 
-    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> Transcript throws baml.errors.LlmClient {
+    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> Transcript throws baml.ExtendUnknownError<baml.errors.ToolError> {
       $rust_io_function                              // threads system+user turn, registers MCP tools by id
     }
-    function step<T>(self, t: Transcript) -> T | ToolCalls throws baml.errors.LlmClient {
+    function step<T>(self, t: Transcript) -> T | ToolCalls throws baml.ExtendUnknownError<baml.errors.ToolError> {
       $rust_io_function                              // each ToolCall carries the OpenAI tool_call_id verbatim
     }
-    function submit(self, t: Transcript, results: ToolResult[]) -> Transcript throws baml.errors.LlmClient {
+    function submit(self, t: Transcript, results: ToolResult[]) -> Transcript throws baml.ExtendUnknownError<baml.errors.ToolError> {
       $rust_io_function                              // correlates ToolResult.id -> tool_call_id (id-based)
     }
     // run_tools inherited from Tools default — dispatch policy (taint/gate) lives in ctx.
@@ -155,28 +157,30 @@ class GeminiTools {
 
   implements HttpProvider {
     type Body = baml.http.Response
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.ExtendUnknownError<baml.errors.CallError> {
       $rust_io_function                              // tools -> OpenAPI-3 subset; schema -> responseSchema
     }
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
-      baml.http.send(request) catch (e) { _ => { throw baml.errors.LlmClient { message: "http failed" }; } }
+    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.http.send(request) catch (e) { _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "gemini send failed"); }
     }
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
+    function parse<T>(self, from: baml.http.Response) -> T throws baml.ExtendUnknownError<baml.errors.CallError> {
       baml.sap.parse<T>(from.text())
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "gemini parse failed");
     }
   }
 
   implements Tools {
     type Transcript = $rust_type
-    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> Transcript throws baml.errors.LlmClient {
+    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> Transcript throws baml.ExtendUnknownError<baml.errors.ToolError> {
       $rust_io_function
     }
-    function step<T>(self, t: Transcript) -> T | ToolCalls throws baml.errors.LlmClient {
+    function step<T>(self, t: Transcript) -> T | ToolCalls throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // Gemini gives no id; the provider SYNTHESIZES a stable id from name+index so
       // the opaque-id contract holds, but correlation on submit is name-based.
       $rust_io_function
     }
-    function submit(self, t: Transcript, results: ToolResult[]) -> Transcript throws baml.errors.LlmClient {
+    function submit(self, t: Transcript, results: ToolResult[]) -> Transcript throws baml.ExtendUnknownError<baml.errors.ToolError> {
       $rust_io_function                              // functionResponse parts, correlated by tool NAME
     }
   }
@@ -192,26 +196,41 @@ class GeminiTools {
 // ---------------------------------------------------------------------------
 // Net-new combinator: Quarantined.  Breaks the trifecta by CAPABILITY SUBTRACTION.
 //
-// It wraps a Provider and forwards `call` only. It deliberately does NOT
-// implement Tools. So `Quarantined(p)` is, at the type level, a no-tools
-// provider: a `.run_tools` companion match against `Tools` will miss it and the
-// `_` arm fires. This is the dual-LLM/quarantine pattern expressed as a type:
-// the quarantined model reads untrusted bytes but structurally cannot act.
+// It wraps a Provider and forwards the REQUEST/RESPONSE capability only — so it
+// `implements HttpProvider` (which owns call/call_with now that Provider is a
+// bare marker; see ../provider-as-marker.md). It deliberately does NOT implement
+// Tools. So `Quarantined(p)` is, at the type level, a no-tools provider: a
+// `.run_tools` companion match against `Tools` will miss it and the `_` arm
+// fires. This is the dual-LLM/quarantine pattern expressed as a type: the
+// quarantined model reads untrusted bytes but structurally cannot act.
 //
 // Note what this costs (the §7 "breaking the trifecta costs capability"): you
-// lose Streaming, Realtime, Tools — everything except the irreducible `call`.
-// That loss is the point; it is enforced, not advisory.
+// lose Streaming, Realtime, Tools — everything except the request/response
+// `call`/`call_with`. That loss is the point; it is enforced, not advisory.
 // ---------------------------------------------------------------------------
 class Quarantined {
   inner: Provider
 
-  implements Provider {
-    // Only `call`. Whatever the quarantined model returns is born TAINTED, because
-    // it was produced from untrusted content. We can't change `call`'s return type
-    // generically, so the obligation is on the CALLER to wrap (see usage.baml's
-    // `summarize_untrusted`). The combinator's job is purely to deny tools.
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
-      self.inner.call<T>(prompt)
+  implements HttpProvider {
+    type Body = unknown
+    // Only request/response. Whatever the quarantined model returns is born
+    // TAINTED, because it was produced from untrusted content. We can't change
+    // call's return type generically, so the obligation is on the CALLER to wrap
+    // (see usage.baml's SummarizeUntrusted). The combinator's job is purely to
+    // deny tools — it FORWARDS call_with to the inner http member so the usage/
+    // sidecar projection is not dropped (the P1 fix); `call` derives from it.
+    function call_with<T, U>(self, prompt: baml.llm.PromptAst, project: (ResponseMeta) -> U) -> (T, U)
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      match (self.inner) {
+        let h: HttpProvider => { return h.call_with<T, U>(prompt, project); },
+        _ => { throw baml.errors.Unsupported { message: "quarantined inner cannot produce a value" }; }
+      }
+    }
+    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.ExtendUnknownError<baml.errors.CallError> {
+      match (self.inner) {
+        let h: HttpProvider => { return h.call<T>(prompt); },
+        _ => { throw baml.errors.Unsupported { message: "quarantined inner cannot produce a value" }; }
+      }
     }
   }
   // intentionally NO `implements Tools`, NO `implements Streaming`, NO Realtime.
@@ -241,7 +260,35 @@ interface Provider {
 //                           "tainted input + dangerous tool", not tool name alone.
 //
 // It needs the originating Provider to ask `label_for`, so it holds a Provenance.
+//
+// The gate's two deliberate refusals are DOMAIN failures the dispatcher raises on
+// purpose, so they are concrete typed errors on the tool channel (ToolError), not
+// foreign errors routed through UnknownError. The app branches on them by type.
 // ---------------------------------------------------------------------------
+
+// An outbound URL whose host isn't on the allowlist — refused before dispatch.
+// Not a transport/parse failure: it's a policy decision, so all classifiers false.
+class BlockedOutboundUrl {
+  url: string
+  implements baml.errors.ToolError {
+    function is_network_error(self) -> bool { return false; }
+    function is_rate_limit(self)    -> bool { return false; }
+    function is_parse_error(self)   -> bool { return false; }
+  }
+}
+
+// The human-in-the-loop denied a tainted, side-effecting call. A policy refusal
+// (the security equivalent of `Refused`), carried on the tool channel.
+class HumanDeniedCall {
+  tool: string
+  taint: string[]
+  implements baml.errors.ToolError {
+    function is_network_error(self) -> bool { return false; }
+    function is_rate_limit(self)    -> bool { return false; }
+    function is_parse_error(self)   -> bool { return false; }
+  }
+}
+
 class GatedContext {
   source: Provenance                  // the privileged provider, for label_for
   allow_hosts: string[]               // output-URL allowlist (leg 3)
@@ -249,7 +296,7 @@ class GatedContext {
   _taint_ledger: $rust_type           // host-owned map<result-id -> TaintSet>, the running taint state
 
   implements ExecutionContext {
-    function dispatch(self, calls: ToolCall[]) -> ToolResult[] throws baml.errors.LlmClient {
+    function dispatch(self, calls: ToolCall[]) -> ToolResult[] throws baml.ExtendUnknownError<baml.errors.ToolError> {
       let out: ToolResult[] = [];
       for (let call in calls) {
         // (1) compute incoming taint: provenance of THIS source + any tainted args
@@ -259,9 +306,7 @@ class GatedContext {
         // (2) output-URL allowlist — refuse exfil hosts outright, before dispatch.
         for (let url in outbound_urls(call)) {
           if (!host_allowed(self.allow_hosts, url)) {
-            throw baml.errors.LlmClient {
-              message: "blocked outbound URL to non-allowlisted host: " + url
-            };
+            throw BlockedOutboundUrl { url: url };
           }
         }
 
@@ -270,9 +315,7 @@ class GatedContext {
         if (is_side_effecting(call) && !arg_taint.is_empty()) {
           let decision = self.approver.review(call, arg_taint.labels());
           if (!decision.approved) {
-            throw baml.errors.LlmClient {
-              message: "human denied tainted call to " + call.name
-            };
+            throw HumanDeniedCall { tool: call.name, taint: arg_taint.labels() };
           }
         }
 
@@ -283,15 +326,20 @@ class GatedContext {
         let result_taint: TaintSet = self.source.label_for(call).union(arg_taint);
         record_taint(self._taint_ledger, call.id, result_taint);
 
-        out = push(out, ToolResult { id: call.id, output: raw });
+        out.push(ToolResult { id: call.id, output: raw });
       }
       out
+    } catch (e) {
+      // BlockedOutboundUrl / HumanDeniedCall are known ToolErrors and pass through
+      // with_message UNCHANGED (they keep their identity); only a foreign Io/Timeout
+      // from run_tool/record_taint/the host helpers is normalized into UnknownError.
+      _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "gated dispatch failed");
     }
   }
 }
 
 interface Approver {
-  function review(self, call: ToolCall, taint: string[]) -> ApprovalDecision throws baml.errors.LlmClient
+  function review(self, call: ToolCall, taint: string[]) -> ApprovalDecision throws baml.ExtendUnknownError<baml.errors.ToolError>
 }
 class ApprovalDecision { approved: bool, reason: string? }
 
@@ -302,7 +350,6 @@ function host_allowed(allow: string[], url: string) -> bool { $rust_io_function 
 function is_side_effecting(call: ToolCall) -> bool { $rust_io_function }   // best-effort: name + arg shape
 function run_tool(call: ToolCall) -> unknown { $rust_io_function }
 function record_taint(ledger: $rust_type, id: string, t: TaintSet) -> null { $rust_io_function }
-function push(xs: ToolResult[], x: ToolResult) -> ToolResult[] { $rust_io_function }
 
 // ---------------------------------------------------------------------------
 // Net-new: output scrubbing for the markdown-image / autolink channel.

@@ -68,11 +68,14 @@ client VoiceResilient() {
 // ----------------------------------------------------------------------------
 // THE FUNCTION + its realtime-tools companion.
 //
-// `Concierge(persona)` is the plain form: it would use `.call` (a degraded,
-// text-only single turn). The interesting companion is `.run_tools_live`, which
-// `match`es the client's provider for the RealtimeTools capability. There is NO
-// honest fallback — you cannot fake a duplex tool session with a single `.call`
-// — so the `_` arm ERRORS, exactly like `.live` and `.run_tools`.
+// The interaction here is `.run_tools_live`, which `match`es the client's provider
+// for the RealtimeTools capability. The plain `Concierge(persona)` value form would
+// match for `HttpProvider.call` — which `VoiceGpt()` (a realtime-only provider) does
+// NOT implement, so it hits the `_` arm and throws `Unsupported`: a realtime client
+// has no `call` to fake (OQ1 resolved — `Provider` is a marker, `call` is an
+// HttpProvider capability the realtime provider simply does not own). And there is no
+// honest fallback FROM `.run_tools_live` either — you cannot fake a duplex tool
+// session with a one-shot — so its `_` arm ERRORS too, exactly like `.live`.
 // ----------------------------------------------------------------------------
 function Concierge(persona: string) -> Transcript {
   client: VoiceGpt()
@@ -100,7 +103,8 @@ function Concierge(persona: string) -> Transcript {
 // and drives the live tool loop. `run_tools_live` blocks until the caller hangs
 // up (closes `io`) and returns the server-authoritative Transcript.
 // ----------------------------------------------------------------------------
-function AnswerCall(persona: string, user_id: int) -> Transcript throws baml.errors.LlmClient {
+function AnswerCall(persona: string, user_id: int) -> Transcript
+    throws baml.ExtendUnknownError<baml.errors.RealtimeToolError> {
   // Host boundary: a Channel bound to this phone call's audio (G.711 in/out).
   let io: Channel = open_phone_channel();
 
@@ -123,7 +127,8 @@ function AnswerCall(persona: string, user_id: int) -> Transcript throws baml.err
 // Gemini Live if GPT can't open a session — but only AT OPEN. The app is unaware
 // which member answered.
 // ----------------------------------------------------------------------------
-function AnswerCallResilient(persona: string, user_id: int) -> Transcript throws baml.errors.LlmClient {
+function AnswerCallResilient(persona: string, user_id: int) -> Transcript
+    throws baml.ExtendUnknownError<baml.errors.RealtimeToolError> {
   let io: Channel = open_phone_channel();
   let ctx = ExecutionContext {
     function_name: "Concierge",
@@ -146,7 +151,8 @@ function AnswerCallResilient(persona: string, user_id: int) -> Transcript throws
 // (function_call_output + response.create on OpenAI; toolResponse on Gemini)
 // stays inside emit_tool_output, untouched.
 // ----------------------------------------------------------------------------
-function BudgetedConcierge(persona: string, ctx: ExecutionContext) -> Transcript throws baml.errors.LlmClient {
+function BudgetedConcierge(persona: string, ctx: ExecutionContext) -> Transcript
+    throws baml.ExtendUnknownError<baml.errors.RealtimeToolError> {
   let io: Channel = open_phone_channel();
   let p = VoiceGpt();
   match (p) {
@@ -164,7 +170,7 @@ function BudgetedConcierge(persona: string, ctx: ExecutionContext) -> Transcript
             let out: ToolOutputEvent = run_with_deadline(ctx, ev, 1500)
               catch (e) {
                 _ => { ToolOutputEvent { call_id: ev.call_id,
-                                         output_json: "{\"status\":\"still looking that up\"}" } }
+                                         output_json: baml.json.stringify({ "status": "still looking that up" }) } }
               };
             rt.emit_tool_output(io, out) catch (e) { _ => { } };
           },
@@ -176,9 +182,16 @@ function BudgetedConcierge(persona: string, ctx: ExecutionContext) -> Transcript
     },
     _ => throw baml.errors.Unsupported { message: "client is not realtime-tools" },
   }
+} catch (e) {
+  // `rt.run` drives the session on the RealtimeError channel, but this function
+  // declares RealtimeToolError — the channels do NOT unify. A RealtimeError leaking
+  // out of `run` normalizes through UnknownError; RealtimeToolErrors (and the
+  // Unsupported negotiation error) pass through unchanged.
+  _ => throw baml.UnknownError.with_message<baml.errors.RealtimeToolError>(e, "budgeted concierge failed");
 }
 
 
 // --- host boundaries the app supplies ---
 function open_phone_channel() -> Channel { $rust_io_function }   // mic<->speaker over G.711
-function run_with_deadline(ctx: ExecutionContext, ev: ToolEvent, ms: int) -> ToolOutputEvent throws baml.errors.LlmClient { $rust_io_function }
+function run_with_deadline(ctx: ExecutionContext, ev: ToolEvent, ms: int) -> ToolOutputEvent
+    throws baml.ExtendUnknownError<baml.errors.RealtimeToolError> { $rust_io_function }

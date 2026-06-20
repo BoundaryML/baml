@@ -17,7 +17,8 @@ function Disk() -> VectorStore {
   Qdrant { url: env.QDRANT_URL, collection: "memories", embed_model: "text-embedding-3-small" }
 }
 
-// mem0-style curated memory: extractor + decider are ordinary providers. THIS is
+// mem0-style curated memory: extractor + decider are ordinary request/response
+// providers (HttpProvider — the capability the pipeline's .call uses). THIS is
 // the payoff — the memory layer consumes providers, it isn't one.
 function CuratedMemory() -> MemoryStore {
   Mem0 {
@@ -50,8 +51,10 @@ client Assistant() {
 }
 
 // Same function, memory wrapped around it, scoped to the caller. Because
-// with_memory returns a Provider (WithMemory implements Provider), it drops
-// straight into the `client:` slot — like .with_retry / .cached.
+// with_memory returns a WithMemory (which implements HttpProvider, so it is a
+// Provider — the marker — that owns request/response call), it drops straight
+// into the `client:` slot — like .with_retry / .cached. The basic-call companion
+// matches HttpProvider on it.
 function ChatWithMemory(user: string, message: string) -> string {
   client: with_memory(Assistant(), CuratedMemory(), ScopeFor(user))
   prompt #"{{ message }}"#
@@ -86,6 +89,22 @@ function ResilientMemChat(user: string, message: string) -> string {
             .with_retry(2)
             .fallback_to(AssistantGpt())
   prompt #"{{ message }}"#
+}
+
+// Consuming the middleware path with the new per-capability error model. Because
+// `with_memory(...)` widens to `Provider`, the call sits on the CallError channel:
+// a recall failure inside WithMemory was normalized onto CallError, the underlying
+// model can raise a concrete rate-limit, and anything exotic is the UnknownError
+// escape hatch. Catch runtime-match, most-specific-first.
+function ChatWithMemorySafe(user: string, message: string) -> string {
+  client: with_memory(Assistant(), CuratedMemory(), ScopeFor(user))
+  prompt #"{{ message }}"#
+} catch (e) {
+  let rl: AnthropicOverloadedError => "[backing off: model overloaded]";        // concrete, when known
+  let c: baml.errors.CallError =>
+    { if (c.is_network_error()) { "[memory or model unreachable; retry]" }
+      else { "[call failed]" } };                                                // interface triage
+  let u: baml.UnknownError => "[unexpected; see breadcrumb]";                    // escape hatch (u.message is the trail)
 }
 
 

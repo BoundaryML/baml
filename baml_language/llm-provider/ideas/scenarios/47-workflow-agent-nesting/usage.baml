@@ -54,7 +54,8 @@ class SupportWorkflow {
     type Input = Ticket
     type Output = string            // the resolved reply
 
-    function run(self, input: Ticket, ctx: DurableCtx) -> string throws baml.errors.LlmClient {
+    function run(self, input: Ticket, ctx: DurableCtx) -> string
+        throws baml.ExtendUnknownError<baml.errors.WorkflowError> {
       // ---- Step 1: triage — an AGENT, run as a single durable, cost-rolled step.
       // The provider could be either ClaudeAgent() or GptAgent(); we pick Claude
       // here. The nesting machinery does not care which — Anthropic's forced-tool
@@ -62,7 +63,10 @@ class SupportWorkflow {
       // inside Anthropic's Tools impl, below the ToolCall/ToolResult seam.
       let agent: Tools = match (ClaudeAgent()) {
         let t: Tools => t,
-        _ => { throw baml.errors.LlmClient { message: "triage client is not a Tools agent" }; },
+        // Capability negotiation: this client's provider does not implement Tools.
+        // Unsupported is legal on the WorkflowError channel (it implements every
+        // capability-error interface).
+        _ => { throw baml.errors.Unsupported { message: "triage client is not a Tools agent" }; },
       };
 
       let step = DurableAgentStep {
@@ -74,12 +78,22 @@ class SupportWorkflow {
         parent_span: null,
       };
 
-      let rec: StepRecord<Triage> =
-        step.run<Triage>(render_prompt({ "ticket": input.body }), app_exec());
+      // The agent step is a value+sidecar boundary: `run_with` hands back the
+      // typed `Triage` AND a projected sidecar as a TUPLE. We project the rolled-up
+      // usage and the replayed-echo bit off the DurableMeta (a ResponseMeta) — no
+      // bespoke StepRecord companion. Same code on first run and on replay; only
+      // `was_replayed` flips.
+      let (triage, meta): (Triage, (Usage, bool)) =
+        step.run_with<Triage, (Usage, bool)>(
+          render_prompt({ "ticket": input.body }),
+          app_exec(),
+          m => (m.usage(), match (m) { let r: Replayable => r.replayed(), _ => false }),
+        );
+      let (rolled_usage, was_replayed) = meta;     // tuple destructuring (net-new surface)
 
       // ---- Step 2..N: a deterministic branch on the agent's recorded output.
-      // This is the outer graph's determinism: same `rec.category` -> same path.
-      if (rec.value.category == "billing") {
+      // This is the outer graph's determinism: same `triage.category` -> same path.
+      if (triage.category == "billing") {
         durable_activity(ctx, "billing.reply", () => { handle_billing(input) })
       } else {
         durable_activity(ctx, "tech.reply", () => { handle_tech(input) })
@@ -113,7 +127,8 @@ class ProvisionWorkflow {
     type Input = Provision
     type Output = Provisioned
 
-    function run(self, input: Provision, ctx: DurableCtx) -> Provisioned throws baml.errors.LlmClient {
+    function run(self, input: Provision, ctx: DurableCtx) -> Provisioned
+        throws baml.ExtendUnknownError<baml.errors.WorkflowError> {
       let acct = durable_activity(ctx, "create_account", () => { input.customer_id + ".acct" });
       let _seed = durable_activity(ctx, "seed_config",   () => { acct + ":seeded" });
       let url   = durable_activity(ctx, "send_welcome",  () => { "https://app/" + acct });
@@ -140,14 +155,34 @@ function onboarding_tools(ctx: DurableCtx) -> Tool[] {
 // Dispatch: when the model calls run_provisioning, route it to the workflow
 // adapter. This is the bridge between the two nondeterminism models — the model
 // chose to call it (nondeterministic); the body runs deterministically/durably.
-function onboarding_dispatch(ctx: DurableCtx, call: ToolCall) -> ToolResult throws baml.errors.LlmClient {
+function onboarding_dispatch(ctx: DurableCtx, call: ToolCall) -> ToolResult
+    throws baml.ExtendUnknownError<baml.errors.ToolError> {
   if (call.name == "run_provisioning") {
-    let provider: Provider = WorkflowProvider { wf: ProvisionWorkflow {}, ctx: ctx };
+    // call/call_with live on the HttpProvider capability now (../provider-as-marker.md);
+    // a workflow-as-tool is request/response, so it IS an HttpProvider. Bind the
+    // capability type, not the bare `Provider` marker (which has no `call`).
+    let provider: HttpProvider = WorkflowProvider { wf: ProvisionWorkflow {}, ctx: ctx };
     // The workflow runs as a provider call; its Output comes back typed.
     let out: Provisioned = provider.call<Provisioned>(call_as_prompt(call));
     ToolResult { id: call.id, output: out }          // id correlation is the agent's job
   } else {
-    throw baml.errors.LlmClient { message: "unknown tool: " + call.name };
+    // The model asked for a tool this dispatcher does not serve — a genuine
+    // tool-dispatch failure on the ToolError channel.
+    throw UnknownToolError { name: call.name };
+  }
+} catch (e) {
+  // provider.call surfaces CallErrors here, foreign to the ToolError channel this
+  // dispatcher presents to the agent loop; normalize them (UnknownToolError, a
+  // known ToolError, passes through unchanged).
+  _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "onboarding tool dispatch failed");
+}
+
+// A tool the agent requested that this dispatcher does not serve. A concrete
+// ToolError so the app can branch on it distinctly from a transport failure.
+class UnknownToolError {
+  name: string
+  implements baml.errors.ToolError {
+    function is_unknown_tool(self) -> bool { return true; }
   }
 }
 function call_as_prompt(call: ToolCall) -> baml.llm.PromptAst { $rust_io_function }
@@ -155,10 +190,13 @@ function call_as_prompt(call: ToolCall) -> baml.llm.PromptAst { $rust_io_functio
 // The onboarding agent function. It is an ordinary Tools agent; the workflow is
 // just one of its tools. run_tools drives the loop; our dispatch routes the
 // workflow tool to the durable graph.
-function Onboard(goal: string, ctx: DurableCtx) -> string throws baml.errors.LlmClient {
+function Onboard(goal: string, ctx: DurableCtx) -> string
+    throws baml.ExtendUnknownError<baml.errors.ToolError> {
   let agent: Tools = match (GptAgent()) {
     let t: Tools => t,
-    _ => { throw baml.errors.LlmClient { message: "onboarding client is not a Tools agent" }; },
+    // Capability negotiation: legal on the ToolError channel (Unsupported
+    // implements every capability-error interface).
+    _ => { throw baml.errors.Unsupported { message: "onboarding client is not a Tools agent" }; },
   };
   agent.run_tools<string>(
     render_prompt({ "goal": goal }),
@@ -183,7 +221,26 @@ function app_exec_with_dispatch(ctx: DurableCtx) -> ExecutionContext { $rust_io_
 //   `as_tool` to expose a workflow. The four structured-output encodings, the
 //   id-vs-name correlation, and the record/replay journal are all library code.
 // =============================================================================
-function ResolveTicket(ticket: string, ctx: DurableCtx) -> string throws baml.errors.LlmClient {
+function ResolveTicket(ticket: string, ctx: DurableCtx) -> string
+    throws baml.ExtendUnknownError<baml.errors.WorkflowError> {
   let wf = SupportWorkflow {};
   wf.run(Ticket { body: ticket }, ctx)
+}
+
+// Top-level consumer: catch by runtime match, most-specific first. The new
+// WorkflowError channel triages exactly like the core channels — concrete durable
+// errors first (DurableDecodeError), then the capability interface (use its
+// classifiers), then baml.UnknownError as the escape hatch. Note baml.errors.
+// Unsupported (the Tools-negotiation failure inside the workflow) is concrete, so
+// it is caught by its own type before the interface arm.
+function ResolveTicketSafe(ticket: string, ctx: DurableCtx) -> string {
+  ResolveTicket(ticket, ctx) catch (e) {
+    let u: baml.errors.Unsupported => "[no agent capability: " + u.message + "]";
+    let d: DurableDecodeError      => "[journal mismatch at step " + d.step_id + ": " + d.detail + "]";
+    let w: baml.errors.WorkflowError => {
+      if (w.is_replay_mismatch()) { "[non-deterministic replay; manual recovery needed]" }
+      else { "[workflow failed]" }
+    };
+    let x: baml.UnknownError       => "[unexpected: " + x.message.join("; ") + "]";
+  }
 }

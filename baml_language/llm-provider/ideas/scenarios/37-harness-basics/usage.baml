@@ -48,19 +48,29 @@ client ResilientCoder() {
   CodeAgent().fallback_to(PiCoder()).with_retry(2)
 }
 
-// ---- the ONE-SHOT entry point: a plain function over `.call` -----------------
-// Each call is a fresh session. No control plane. This is `query()` in Python.
+// ---- the ONE-SHOT entry point: a harness has NO `.call` ----------------------
+// A harness drops the degenerate `call` (provider-as-marker.md §2), so the plain
+// `Fix(task) -> Patch` value-function does NOT resolve against `CodeAgent()`: its
+// companion `match`es `HttpProvider` (and, via the call<->stream degrade, a
+// `Streaming` provider) and a harness is neither. A "fresh session, run to
+// completion" one-shot is therefore expressed as a `Realtime.run` over a
+// throwaway channel that just collects the final transcript — i.e. it is `.live`
+// with a do-nothing driver, not a separate `call`. (This is Python `query()`,
+// which under the hood is also a session run to completion.)
 
 class Patch {
   files_changed: string[]
   summary: string
 }
 
-function Fix(task: string) -> Patch {
+// One-shot = drive a session that we never steer, then read the transcript.
+function Fix(task: string) -> HarnessTranscript {
   client: CodeAgent()
   prompt #"Fix the bug: {{ task }}"#
 }
-// Fix("auth.py null deref")            -> ClaudeCode.call<Patch>(prompt)
+// Fix("auth.py null deref") desugars to the `.live` companion with an empty
+// driver: match (CodeAgent()) { let r: Realtime => r.run(prompt, fresh_channel()), ... }
+// There is no `ClaudeCode.call<Patch>(prompt)` to call — the harness has no call.
 
 // ---- the STATEFUL, driven session: the `.live` companion ---------------------
 // `.live(args, io)` is the Realtime companion. The app hands in a Channel and
@@ -84,7 +94,8 @@ function Build(spec: string, io: Channel) -> HarnessTranscript {
 // as messages over the handed-in channel, plus capability negotiation so the UI
 // only offers verbs the chosen harness actually backs.
 
-function DriveBuild(spec: string, raw_io: Channel) -> HarnessTranscript throws baml.errors.LlmClient {
+function DriveBuild(spec: string, raw_io: Channel) -> HarnessTranscript
+    throws baml.ExtendUnknownError<baml.errors.RealtimeError> {
   let p = CodeAgent();
 
   // The harness must be Realtime to be driven; a one-shot can't fake a session.
@@ -105,7 +116,7 @@ function DriveBuild(spec: string, raw_io: Channel) -> HarnessTranscript throws b
             baml.io.print("permission requested: " + ask.name);
           },
           let done: TurnDone   => { baml.io.print("[turn done] checkpoint=" + done.user_message_id); },
-          let rr: RewindResult => { baml.io.print("[reverted] " + rr.reverted_paths.len() + " files"); },
+          let rr: RewindResult => { baml.io.print("[reverted] " + rr.reverted_paths.length().to_string() + " files"); },
           let e: SessionError  => { baml.io.print("[error] " + e.message); },
           _                    => {},
         }
@@ -129,7 +140,7 @@ function DriveBuild(spec: string, raw_io: Channel) -> HarnessTranscript throws b
       // the opaque transcript.
       r.run(render_prompt(spec), io)
     },
-    _ => throw baml.errors.LlmClient { message: "CodeAgent is not a steerable harness" },
+    _ => throw baml.errors.Unsupported { message: "CodeAgent is not a steerable harness" },
   }
 }
 
@@ -138,7 +149,8 @@ function DriveBuild(spec: string, raw_io: Channel) -> HarnessTranscript throws b
 // uses the Tools companion instead of letting the harness run tools internally.
 // Same provider, different capability — `.run_tools` vs `.live`.
 
-function BuildWithMyTools(spec: string, my_tools: Tool[], ctx: ExecutionContext) -> Patch throws baml.errors.LlmClient {
+function BuildWithMyTools(spec: string, my_tools: Tool[], ctx: ExecutionContext) -> Patch
+    throws baml.ExtendUnknownError<baml.errors.ToolError> {
   let p = CodeAgent();
   match (p) {
     let t: Tools => t.run_tools<Patch>(render_prompt(spec), my_tools, ctx),

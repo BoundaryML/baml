@@ -12,8 +12,9 @@
 //     a top-level `system` string (Anthropic), a top-level `system_instruction`
 //     (Gemini).
 //   - Role names diverge: assistant vs "model"; the tool/function role.
-//   - Sampling params + max_tokens + usage are PLAIN provider fields. No
-//     options blob.
+//   - Sampling params + max_tokens are PLAIN provider fields. No options blob.
+//     Usage is NOT a field — it is a PRODUCT sidecar, projected from the
+//     normalized ResponseMeta via the base `call_with` (../value-sidecar-model.md).
 //   - A refusal is NOT the answer — it lands in a separate channel
 //     (stop_reason / refusal part), so `parse` must look there before SAP.
 //   - There is NO shared message type — each provider re-shapes the SAME
@@ -48,25 +49,32 @@ namespace baml.llm {
   function non_system_turns(prompt: baml.llm.PromptAst) -> PromptTurn[] { $rust_io_function }
 }
 
-// JSON assembly at the host boundary. A pure-BAML provider could string-concat,
-// but real providers build a structured body; this keeps build_request honest
-// without making us hand-roll JSON escaping in BAML.
-namespace baml.json {
-  function obj(fields: map<string, unknown>) -> string { $rust_io_function }
-  function arr(items: unknown[]) -> string { $rust_io_function }
-  // Raw, already-serialized fragment so we can nest obj/arr results.
-  function raw(serialized: string) -> unknown { $rust_io_function }
-}
+// JSON assembly uses the REAL stdlib: `baml.json` already gives us the `json`
+// value type (`null | bool | int | float | string | json[] | map<string, json>`)
+// plus `baml.json.stringify(j) -> string`. We build the request body as a NATIVE
+// `map<string, json>` literal (nested arrays are `json[]`, nested objects are
+// `map<string, json>` — no escaping by hand) and serialize once at the seam. For
+// reading responses we use `baml.json.from_json<T>` into a typed class (preferred)
+// or `baml.json.parse` + navigation. No invented `obj`/`arr`/`raw`/`json_path`.
 
 
 // ---------------------------------------------------------------------------
-// NET-NEW capability: Usage reporting.
+// Usage = a PRODUCT sidecar, carried by `call_with` + `ResponseMeta`.
 //
 // `Provider.call<T>` returns T — the *answer*. Token usage is a side-band fact
-// about the call, not part of the answer, so it does not fit `call`'s return.
-// We model it as a capability interface (requires Provider) so a provider that
-// can report usage opts in, and a harness/combinator can `match` for it.
-// This is the same shape as Streaming/Inspectable: a refinement on top of call.
+// about the same call, not part of the answer, so it does not fit `call`'s
+// return. The earlier draft bolted on a parallel `Metered.call_metered<T> ->
+// Metered_Result<T>` companion, which duplicated send/parse plumbing AND got
+// silently dropped when routed through an inherited `.call` (a Fallback that
+// forwards `Metered` degrades to zero-usage). The value+sidecar model
+// (../value-sidecar-model.md) replaces that bespoke wrapper with the BASE
+// method `call_with<T,U>(prompt, project: (ResponseMeta) -> U) -> (T, U)`:
+// every combinator forwards it, so usage survives Fallback/Retry/Cache.
+//
+// `ResponseMeta` is an INTERFACE (the SAME interface/concrete/external-impl/
+// `Supported` shape as the error model). Each provider's `meta_of` wraps the
+// wire Body into a concrete response type that normalizes it LAZILY — projecting
+// `m => m.usage()` never touches logprobs/citations.
 // ---------------------------------------------------------------------------
 
 class Usage {
@@ -76,22 +84,160 @@ class Usage {
   cache_write_tokens: int
 }
 
-// A call that ALSO hands back usage. `call` throws away usage; this doesn't.
-interface Metered requires Provider {
-  function call_metered<T>(self, prompt: baml.llm.PromptAst) -> Metered_Result<T> throws Error
+// The normalized sidecar interface. Common dimensions live here (everyone
+// implements them, `Supported` where a provider CAN'T); genuinely-novel
+// dimensions arrive later as external-impl interfaces (../value-sidecar-model.md §7).
+// Only `usage` / `finish_reason` are load-bearing for THIS scenario; the rest are
+// shown so the three providers demonstrate "can't" (`Unsupported`) vs "empty".
+interface ResponseMeta {
+  function usage(self)         -> Usage
+  function finish_reason(self) -> string
+  function logprobs(self)      -> Supported<Logprob[]>     // "can't" is typed, not null
 }
 
-class Metered_Result<T> {
-  value: T
-  usage: Usage
+// "this provider CAN'T" vs "empty this call" — keeps per-field absence honest
+// instead of overloading null (../value-sidecar-model.md §4).
+type Supported<T> = T | Unsupported
+class Unsupported { reason: string }
+
+class Logprob { token: string, logprob: float }
+
+// ---------------------------------------------------------------------------
+// Typed WIRE classes — the shape we read OUT of each provider's JSON response.
+// Instead of the invented `Response.json_path("a.b")` (Response has NO such
+// method), we decode the body ONCE into a typed class with `baml.json.from_json<T>`
+// (the real stdlib coercion) and read named fields. Optional fields cover the
+// keys that are absent on some models (e.g. Anthropic cache_* / stop_details).
+// ---------------------------------------------------------------------------
+
+class AnthropicUsageWire {
+  input_tokens: int
+  output_tokens: int
+  cache_read_input_tokens: int?
+  cache_creation_input_tokens: int?
+}
+class AnthropicContentBlock { text: string? }
+class AnthropicStopDetails { category: string? }
+class AnthropicBodyWire {
+  stop_reason: string?
+  stop_details: AnthropicStopDetails?
+  content: AnthropicContentBlock[]?
+  usage: AnthropicUsageWire
+}
+
+class OpenAiPromptTokensDetails { cached_tokens: int? }
+class OpenAiUsageWire {
+  prompt_tokens: int
+  completion_tokens: int
+  prompt_tokens_details: OpenAiPromptTokensDetails?
+}
+class OpenAiMessageWire { content: string?, refusal: string? }
+class OpenAiChoiceWire { message: OpenAiMessageWire, finish_reason: string? }
+class OpenAiBodyWire {
+  choices: OpenAiChoiceWire[]
+  usage: OpenAiUsageWire
+}
+
+class GeminiUsageWire {
+  promptTokenCount: int
+  candidatesTokenCount: int
+  cachedContentTokenCount: int?
+}
+class GeminiPart { text: string? }
+class GeminiContentWire { parts: GeminiPart[]? }
+class GeminiCandidateWire { content: GeminiContentWire?, finishReason: string? }
+class GeminiBodyWire {
+  candidates: GeminiCandidateWire[]
+  usageMetadata: GeminiUsageWire
+}
+
+// Small helper: unwrap an `int?` (absent cache field) to 0.
+function int_or_zero(v: int?) -> int {
+  match (v) { let n: int => n, _ => 0 }
+}
+
+// Concrete provider response types implement ResponseMeta over the raw wire
+// Body, normalizing LAZILY. `meta_of` (HttpProvider) wraps the Body into these.
+// Each decodes the raw response text into its typed wire class on demand.
+class AnthropicResponse {
+  raw: baml.http.Response
+  implements ResponseMeta {
+    function usage(self) -> Usage {
+      let b = baml.json.from_json<AnthropicBodyWire>(baml.json.parse(self.raw.text()));
+      Usage {
+        input_tokens:       b.usage.input_tokens,
+        output_tokens:      b.usage.output_tokens,
+        cache_read_tokens:  int_or_zero(b.usage.cache_read_input_tokens),
+        cache_write_tokens: int_or_zero(b.usage.cache_creation_input_tokens),
+      }
+    }
+    function finish_reason(self) -> string {
+      let b = baml.json.from_json<AnthropicBodyWire>(baml.json.parse(self.raw.text()));
+      match (b.stop_reason) { let s: string => s, _ => "" }
+    }
+    function logprobs(self) -> Supported<Logprob[]> { Unsupported { reason: "anthropic: no logprobs" } }
+  }
+}
+
+class OpenAIResponse {
+  raw: baml.http.Response
+  implements ResponseMeta {
+    function usage(self) -> Usage {
+      let b = baml.json.from_json<OpenAiBodyWire>(baml.json.parse(self.raw.text()));
+      // OpenAI cache hits live under prompt_tokens_details; absent -> 0.
+      let cached = match (b.usage.prompt_tokens_details) {
+        let d: OpenAiPromptTokensDetails => int_or_zero(d.cached_tokens),
+        _ => 0,
+      };
+      Usage {
+        input_tokens:       b.usage.prompt_tokens,
+        output_tokens:      b.usage.completion_tokens,
+        cache_read_tokens:  cached,
+        cache_write_tokens: 0,
+      }
+    }
+    function finish_reason(self) -> string {
+      let b = baml.json.from_json<OpenAiBodyWire>(baml.json.parse(self.raw.text()));
+      match (b.choices.at(0)) {
+        let c: OpenAiChoiceWire => match (c.finish_reason) { let r: string => r, _ => "" },
+        _ => "",
+      }
+    }
+    function logprobs(self) -> Supported<Logprob[]> { Unsupported { reason: "openai chat: logprobs not requested" } }
+  }
+}
+
+class GeminiResponse {
+  raw: baml.http.Response
+  implements ResponseMeta {
+    function usage(self) -> Usage {
+      let b = baml.json.from_json<GeminiBodyWire>(baml.json.parse(self.raw.text()));
+      Usage {
+        input_tokens:       b.usageMetadata.promptTokenCount,
+        output_tokens:      b.usageMetadata.candidatesTokenCount,
+        cache_read_tokens:  int_or_zero(b.usageMetadata.cachedContentTokenCount),
+        cache_write_tokens: 0,
+      }
+    }
+    function finish_reason(self) -> string {
+      let b = baml.json.from_json<GeminiBodyWire>(baml.json.parse(self.raw.text()));
+      match (b.candidates.at(0)) {
+        let c: GeminiCandidateWire => match (c.finishReason) { let r: string => r, _ => "" },
+        _ => "",
+      }
+    }
+    function logprobs(self) -> Supported<Logprob[]> { Unsupported { reason: "gemini: no logprobs" } }
+  }
 }
 
 
 // ---------------------------------------------------------------------------
 // NET-NEW failure shape: a refusal is a typed channel, not a thrown error and
 // not the answer. The model returned 200 OK, produced no usable T, and told us
-// why in a separate field. We surface it on the typed `throws` channel as a
-// distinct error class so callers can branch on it (vs a transport failure).
+// why in a separate field. We surface it on the `baml.errors.CallError` channel
+// as a CONCRETE error class so callers can branch on it (vs a transport
+// failure). It implements CallError directly (not a transport/rate-limit/parse
+// failure — all three classifiers are false), so it is legal on the call path.
 // ---------------------------------------------------------------------------
 
 class Refused {
@@ -100,6 +246,49 @@ class Refused {
   //   OpenAI choices[0].message.refusal (Chat) / a refusal content part (Responses).
   category: string
   message: string
+
+  implements baml.errors.CallError {
+    function is_network_error(self) -> bool { return false; }
+    function is_rate_limit(self)    -> bool { return false; }
+    function is_parse_error(self)   -> bool { return false; }
+  }
+}
+
+
+// ---------------------------------------------------------------------------
+// NET-NEW domain errors: an HTTP non-2xx is a DELIBERATE throw the provider
+// raises on purpose (the model said no at the transport level). Per-provider
+// concrete classes implementing `baml.errors.CallError`, with a `status` so the
+// app can branch. 429 is the one classification that matters (is_rate_limit);
+// everything else is a generic call failure. We carry `status` so the consumer
+// can refine further without us minting a class per HTTP code.
+// ---------------------------------------------------------------------------
+
+class AnthropicHttpError {
+  status: int
+  implements baml.errors.CallError {
+    function is_network_error(self) -> bool { return false; }
+    function is_rate_limit(self)    -> bool { return self.status == 429; }
+    function is_parse_error(self)   -> bool { return false; }
+  }
+}
+
+class OpenAiHttpError {
+  status: int
+  implements baml.errors.CallError {
+    function is_network_error(self) -> bool { return false; }
+    function is_rate_limit(self)    -> bool { return self.status == 429; }
+    function is_parse_error(self)   -> bool { return false; }
+  }
+}
+
+class GeminiHttpError {
+  status: int
+  implements baml.errors.CallError {
+    function is_network_error(self) -> bool { return false; }
+    function is_rate_limit(self)    -> bool { return self.status == 429; }
+    function is_parse_error(self)   -> bool { return false; }
+  }
 }
 
 
@@ -128,37 +317,37 @@ class Anthropic {
   implements HttpProvider {
     type Body = baml.http.Response
 
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       // Re-shape the SAME PromptAst into Anthropic's envelope.
       // (1) system hoisted out of the message array:
       let system = baml.llm.system_text(prompt);
 
       // (2) user/assistant messages — Anthropic's role names happen to match
       //     our normalized names, but we still map explicitly so the divergence
-      //     is visible at the seam.
-      let msgs: unknown[] = [];
+      //     is visible at the seam. `msgs` is a native `json[]` of message objects.
+      let msgs: json[] = [];
       for (let turn in baml.llm.non_system_turns(prompt)) {
         let role = match (turn.role) {
           "assistant" => "assistant",
           _           => "user",            // Anthropic has no other inbound role
         };
-        msgs = msgs.append(baml.json.raw(baml.json.obj({
-          "role": role,
-          "content": turn.text,
-        })));
+        // Native `map<string, json>` literal — no hand-rolled JSON.
+        let msg: map<string, json> = { "role": role, "content": turn.text };
+        msgs.push(msg);
       }
 
       // (3) body fields — bespoke provider fields go straight in, no blob.
-      let fields: map<string, unknown> = {
+      let fields: map<string, json> = {
         "model": self.model,
         "max_tokens": self.max_tokens,         // REQUIRED here
-        "messages": baml.json.raw(baml.json.arr(msgs)),
+        "messages": msgs,
       };
-      if (system != "") { fields = fields.insert("system", system); }
-      match (self.temperature) { let t: float => { fields = fields.insert("temperature", t); }, _ => {} }
-      match (self.top_p)       { let p: float => { fields = fields.insert("top_p", p); }, _ => {} }
-      match (self.top_k)       { let k: int   => { fields = fields.insert("top_k", k); }, _ => {} }
-      match (self.stop_sequences) { let s: string[] => { fields = fields.insert("stop_sequences", baml.json.raw(baml.json.arr(s))); }, _ => {} }
+      if (system != "") { fields.set("system", system); }
+      match (self.temperature) { let t: float => { fields.set("temperature", t); }, _ => {} }
+      match (self.top_p)       { let p: float => { fields.set("top_p", p); }, _ => {} }
+      match (self.top_k)       { let k: int   => { fields.set("top_k", k); }, _ => {} }
+      match (self.stop_sequences) { let s: string[] => { fields.set("stop_sequences", s); }, _ => {} }
 
       let key = match (self.api_key) { let k: string => k, _ => env.ANTHROPIC_API_KEY };
       baml.http.Request {
@@ -169,47 +358,53 @@ class Anthropic {
           "x-api-key": key,
           "anthropic-version": "2023-06-01",
         },
-        body: baml.json.obj(fields),
+        body: baml.json.stringify(fields),
       }
     }
 
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
+    function send(self, request: baml.http.Request) -> baml.http.Response
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      // Foreign transport errors (baml.errors.Io / Timeout) are not classified
+      // here — normalize them into UnknownError with context.
       baml.http.send(request) catch (e) {
-        _ => { throw baml.errors.LlmClient { message: "anthropic http failed" }; }
+        _ => { throw baml.UnknownError.with_message<baml.errors.CallError>(e, "anthropic http failed"); }
       }
     }
 
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
-      if (!from.ok()) { throw baml.errors.LlmClient { message: "anthropic http " }; }
+    function parse<T>(self, from: baml.http.Response) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      if (!from.ok()) { throw AnthropicHttpError { status: from.status_code }; }
+      // Decode the body ONCE into the typed wire class (no invented json_path).
+      let b = baml.json.from_json<AnthropicBodyWire>(baml.json.parse(from.text()));
       // REFUSAL CHANNEL FIRST — a refusal is not the answer. The text you want
       // is empty and the decline lands in stop_reason, never in content.
-      let stop = from.json_path("stop_reason");
+      let stop = match (b.stop_reason) { let s: string => s, _ => "" };
       if (stop == "refusal") {
-        throw Refused {
-          category: from.json_path("stop_details.category"),  // "" on older models
-          message: "anthropic refused",
+        let category = match (b.stop_details) {
+          let d: AnthropicStopDetails => match (d.category) { let c: string => c, _ => "" },
+          _ => "",                                          // "" on older models
         };
+        throw Refused { category: category, message: "anthropic refused" };
       }
       // Only now extract the answer text and SAP-parse it into T.
       // content is a list of typed blocks; content[0].text is the first text.
-      baml.sap.parse<T>(from.json_path("content.0.text"))
-    }
-  }
-
-  // Usage capability: same wire, but lift the usage object too.
-  implements Metered {
-    function call_metered<T>(self, prompt: baml.llm.PromptAst) -> Metered_Result<T> throws baml.errors.LlmClient {
-      let resp = self.send(self.build_request<T>(prompt));
-      let value: T = self.parse<T>(resp);
-      Metered_Result<T> {
-        value: value,
-        usage: Usage {
-          input_tokens:       baml.sap.parse<int>(resp.json_path("usage.input_tokens")),
-          output_tokens:      baml.sap.parse<int>(resp.json_path("usage.output_tokens")),
-          cache_read_tokens:  baml.sap.parse<int>(resp.json_path("usage.cache_read_input_tokens")),
-          cache_write_tokens: baml.sap.parse<int>(resp.json_path("usage.cache_creation_input_tokens")),
+      let text = match (b.content) {
+        let blocks: AnthropicContentBlock[] => match (blocks.at(0)) {
+          let blk: AnthropicContentBlock => match (blk.text) { let t: string => t, _ => "" },
+          _ => "",
         },
-      }
+        _ => "",
+      };
+      baml.sap.parse<T>(text)
+    }
+
+    // The sidecar half: wrap the SAME Body into a concrete ResponseMeta that
+    // normalizes usage/finish_reason LAZILY. `call_with` (inherited from
+    // HttpProvider) pairs `parse<T>` with `project(meta_of(body))` in ONE codec
+    // pass — no duplicated send, and combinators forward it (no zero-usage drop).
+    function meta_of(self, from: baml.http.Response) -> ResponseMeta
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      AnthropicResponse { raw: from }
     }
   }
 }
@@ -241,12 +436,13 @@ class OpenAI {
   implements HttpProvider {
     type Body = baml.http.Response
 
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       // Re-shape the SAME PromptAst into OpenAI's FLAT message array, with the
       // system prompt KEPT IN the array as a role:"system" message. This is the
       // opposite placement decision from Anthropic — same PromptAst, different
       // envelope, and there is no shared message type to lean on.
-      let msgs: unknown[] = [];
+      let msgs: json[] = [];
       for (let turn in baml.llm.turns(prompt)) {       // includes the system turn
         // OpenAI role names match our normalized ones here, but we map
         // explicitly so the (lack of) divergence is auditable.
@@ -255,22 +451,20 @@ class OpenAI {
           "assistant" => "assistant",
           _           => "user",
         };
-        msgs = msgs.append(baml.json.raw(baml.json.obj({
-          "role": role,
-          "content": turn.text,
-        })));
+        let msg: map<string, json> = { "role": role, "content": turn.text };
+        msgs.push(msg);
       }
 
-      let fields: map<string, unknown> = {
+      let fields: map<string, json> = {
         "model": self.model,
-        "messages": baml.json.raw(baml.json.arr(msgs)),
+        "messages": msgs,
       };
-      match (self.max_tokens)        { let m: int   => { fields = fields.insert("max_tokens", m); }, _ => {} }
-      match (self.temperature)       { let t: float => { fields = fields.insert("temperature", t); }, _ => {} }
-      match (self.top_p)             { let p: float => { fields = fields.insert("top_p", p); }, _ => {} }
-      match (self.frequency_penalty) { let f: float => { fields = fields.insert("frequency_penalty", f); }, _ => {} }
-      match (self.presence_penalty)  { let p: float => { fields = fields.insert("presence_penalty", p); }, _ => {} }
-      match (self.stop)              { let s: string[] => { fields = fields.insert("stop", baml.json.raw(baml.json.arr(s))); }, _ => {} }
+      match (self.max_tokens)        { let m: int   => { fields.set("max_tokens", m); }, _ => {} }
+      match (self.temperature)       { let t: float => { fields.set("temperature", t); }, _ => {} }
+      match (self.top_p)             { let p: float => { fields.set("top_p", p); }, _ => {} }
+      match (self.frequency_penalty) { let f: float => { fields.set("frequency_penalty", f); }, _ => {} }
+      match (self.presence_penalty)  { let p: float => { fields.set("presence_penalty", p); }, _ => {} }
+      match (self.stop)              { let s: string[] => { fields.set("stop", s); }, _ => {} }
 
       let key = match (self.api_key) { let k: string => k, _ => env.OPENAI_API_KEY };
       baml.http.Request {
@@ -280,43 +474,40 @@ class OpenAI {
           "content-type": "application/json",
           "authorization": "Bearer " + key,
         },
-        body: baml.json.obj(fields),
+        body: baml.json.stringify(fields),
       }
     }
 
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
+    function send(self, request: baml.http.Request) -> baml.http.Response
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       baml.http.send(request) catch (e) {
-        _ => { throw baml.errors.LlmClient { message: "openai http failed" }; }
+        _ => { throw baml.UnknownError.with_message<baml.errors.CallError>(e, "openai http failed"); }
       }
     }
 
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
-      if (!from.ok()) { throw baml.errors.LlmClient { message: "openai http " }; }
+    function parse<T>(self, from: baml.http.Response) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      if (!from.ok()) { throw OpenAiHttpError { status: from.status_code }; }
+      // Decode the body ONCE into the typed wire class (no invented json_path).
+      let b = baml.json.from_json<OpenAiBodyWire>(baml.json.parse(from.text()));
+      let msg = match (b.choices.at(0)) {
+        let c: OpenAiChoiceWire => c.message,
+        _ => OpenAiMessageWire { content: null, refusal: null },
+      };
       // REFUSAL CHANNEL FIRST — OpenAI lands the decline in a sibling field
       // `refusal`, and the content you'd read is empty. Blindly reading the
       // text would surface "" and misclassify a refusal as a malformed answer.
-      let refusal = from.json_path("choices.0.message.refusal");
-      if (refusal != "" && refusal != "null") {
-        throw Refused { category: "policy", message: refusal };
+      match (msg.refusal) {
+        let r: string => { throw Refused { category: "policy", message: r }; },
+        _ => {},
       }
-      baml.sap.parse<T>(from.json_path("choices.0.message.content"))
+      let content = match (msg.content) { let t: string => t, _ => "" };
+      baml.sap.parse<T>(content)
     }
-  }
 
-  implements Metered {
-    function call_metered<T>(self, prompt: baml.llm.PromptAst) -> Metered_Result<T> throws baml.errors.LlmClient {
-      let resp = self.send(self.build_request<T>(prompt));
-      let value: T = self.parse<T>(resp);
-      Metered_Result<T> {
-        value: value,
-        usage: Usage {
-          input_tokens:       baml.sap.parse<int>(resp.json_path("usage.prompt_tokens")),
-          output_tokens:      baml.sap.parse<int>(resp.json_path("usage.completion_tokens")),
-          // OpenAI cache hits live under prompt_tokens_details; absent -> 0.
-          cache_read_tokens:  baml.sap.parse<int>(resp.json_path("usage.prompt_tokens_details.cached_tokens")),
-          cache_write_tokens: 0,
-        },
-      }
+    function meta_of(self, from: baml.http.Response) -> ResponseMeta
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      OpenAIResponse { raw: from }
     }
   }
 }
@@ -346,42 +537,38 @@ class Gemini {
   implements HttpProvider {
     type Body = baml.http.Response
 
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       // Re-shape the SAME PromptAst a THIRD way: contents[] with role "model"
       // for assistant turns, system hoisted into a system_instruction OBJECT.
-      let contents: unknown[] = [];
+      let contents: json[] = [];
       for (let turn in baml.llm.non_system_turns(prompt)) {
         let role = match (turn.role) {
           "assistant" => "model",          // <-- the assistant/"model" divergence
           _           => "user",
         };
-        contents = contents.append(baml.json.raw(baml.json.obj({
-          "role": role,
-          "parts": baml.json.raw(baml.json.arr([
-            baml.json.raw(baml.json.obj({ "text": turn.text })),
-          ])),
-        })));
+        let part: map<string, json> = { "text": turn.text };
+        let entry: map<string, json> = { "role": role, "parts": [part] };
+        contents.push(entry);
       }
 
-      let gen: map<string, unknown> = {};
-      match (self.max_output_tokens) { let m: int   => { gen = gen.insert("maxOutputTokens", m); }, _ => {} }
-      match (self.temperature)       { let t: float => { gen = gen.insert("temperature", t); }, _ => {} }
-      match (self.top_p)             { let p: float => { gen = gen.insert("topP", p); }, _ => {} }
-      match (self.top_k)             { let k: int   => { gen = gen.insert("topK", k); }, _ => {} }
-      match (self.stop_sequences)    { let s: string[] => { gen = gen.insert("stopSequences", baml.json.raw(baml.json.arr(s))); }, _ => {} }
+      let gen: map<string, json> = {};
+      match (self.max_output_tokens) { let m: int   => { gen.set("maxOutputTokens", m); }, _ => {} }
+      match (self.temperature)       { let t: float => { gen.set("temperature", t); }, _ => {} }
+      match (self.top_p)             { let p: float => { gen.set("topP", p); }, _ => {} }
+      match (self.top_k)             { let k: int   => { gen.set("topK", k); }, _ => {} }
+      match (self.stop_sequences)    { let s: string[] => { gen.set("stopSequences", s); }, _ => {} }
 
-      let fields: map<string, unknown> = {
-        "contents": baml.json.raw(baml.json.arr(contents)),
-        "generationConfig": baml.json.raw(baml.json.obj(gen)),
+      let fields: map<string, json> = {
+        "contents": contents,
+        "generationConfig": gen,
       };
       let system = baml.llm.system_text(prompt);
       if (system != "") {
         // system_instruction is an OBJECT with parts — a third placement shape.
-        fields = fields.insert("system_instruction", baml.json.raw(baml.json.obj({
-          "parts": baml.json.raw(baml.json.arr([
-            baml.json.raw(baml.json.obj({ "text": system })),
-          ])),
-        })));
+        let sys_part: map<string, json> = { "text": system };
+        let sys_instr: map<string, json> = { "parts": [sys_part] };
+        fields.set("system_instruction", sys_instr);
       }
 
       let key = match (self.api_key) { let k: string => k, _ => env.GEMINI_API_KEY };
@@ -389,40 +576,47 @@ class Gemini {
         method: "POST",
         url: "https://generativelanguage.googleapis.com/v1beta/models/" + self.model + ":generateContent?key=" + key,
         headers: { "content-type": "application/json" },
-        body: baml.json.obj(fields),
+        body: baml.json.stringify(fields),
       }
     }
 
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
+    function send(self, request: baml.http.Request) -> baml.http.Response
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       baml.http.send(request) catch (e) {
-        _ => { throw baml.errors.LlmClient { message: "gemini http failed" }; }
+        _ => { throw baml.UnknownError.with_message<baml.errors.CallError>(e, "gemini http failed"); }
       }
     }
 
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
-      if (!from.ok()) { throw baml.errors.LlmClient { message: "gemini http " }; }
+    function parse<T>(self, from: baml.http.Response) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      if (!from.ok()) { throw GeminiHttpError { status: from.status_code }; }
+      // Decode the body ONCE into the typed wire class (no invented json_path).
+      let b = baml.json.from_json<GeminiBodyWire>(baml.json.parse(from.text()));
+      let cand = match (b.candidates.at(0)) {
+        let c: GeminiCandidateWire => c,
+        _ => GeminiCandidateWire { content: null, finishReason: null },
+      };
       // Gemini's refusal channel is finishReason == "SAFETY" with no parts.
-      let finish = from.json_path("candidates.0.finishReason");
+      let finish = match (cand.finishReason) { let f: string => f, _ => "" };
       if (finish == "SAFETY" || finish == "PROHIBITED_CONTENT") {
         throw Refused { category: finish, message: "gemini blocked" };
       }
-      baml.sap.parse<T>(from.json_path("candidates.0.content.parts.0.text"))
-    }
-  }
-
-  implements Metered {
-    function call_metered<T>(self, prompt: baml.llm.PromptAst) -> Metered_Result<T> throws baml.errors.LlmClient {
-      let resp = self.send(self.build_request<T>(prompt));
-      let value: T = self.parse<T>(resp);
-      Metered_Result<T> {
-        value: value,
-        usage: Usage {
-          input_tokens:       baml.sap.parse<int>(resp.json_path("usageMetadata.promptTokenCount")),
-          output_tokens:      baml.sap.parse<int>(resp.json_path("usageMetadata.candidatesTokenCount")),
-          cache_read_tokens:  baml.sap.parse<int>(resp.json_path("usageMetadata.cachedContentTokenCount")),
-          cache_write_tokens: 0,
+      let text = match (cand.content) {
+        let co: GeminiContentWire => match (co.parts) {
+          let ps: GeminiPart[] => match (ps.at(0)) {
+            let p: GeminiPart => match (p.text) { let t: string => t, _ => "" },
+            _ => "",
+          },
+          _ => "",
         },
-      }
+        _ => "",
+      };
+      baml.sap.parse<T>(text)
+    }
+
+    function meta_of(self, from: baml.http.Response) -> ResponseMeta
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      GeminiResponse { raw: from }
     }
   }
 }

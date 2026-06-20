@@ -95,7 +95,8 @@ function ContractAnalyst() -> Gemini {
 // (2) A whole analysis session over ONE large contract, sharing one cache.
 //     CacheScope guarantees the handle is deleted (and the storage bill stops)
 //     even if a question throws.
-function AnalyzeContract(contract: string, questions: string[]) -> string[] throws baml.errors.LlmClient {
+function AnalyzeContract(contract: string, questions: string[]) -> string[]
+    throws baml.ExtendUnknownError<baml.errors.CacheError> {
   let gemini: Gemini = ContractAnalyst();
 
   CacheScope.with_cache<baml.llm.PromptAst, string[]>(
@@ -113,6 +114,23 @@ function AnalyzeContract(contract: string, questions: string[]) -> string[] thro
 }
 // AnalyzeContract(big_pdf_text, ["termination clause?", "indemnity cap?"])
 //   -> ONE create_cache, N cheap call_with_cache, ONE delete_cache.
+
+// The novel CacheError channel is triaged most-specific-first, exactly like the
+// core capability channels: the concrete expired-handle case is recoverable (drop
+// the handle, re-run from scratch), the interface case covers the rest, and the
+// UnknownError escape hatch carries anything foreign that bubbled through.
+function AnalyzeContractSafe(contract: string, questions: string[]) -> string[] {
+  AnalyzeContract(contract, questions) catch (e) {
+    let expired: GeminiExpiredCacheError => {
+      // handle died mid-session; the simplest recovery is a clean re-run.
+      AnalyzeContract(contract, questions) catch (e2) { _ => { [] } }
+    }
+    let c: baml.errors.CacheError => {
+      if (c.is_rate_limit()) { [] } else { [] }   // backoff/skip per app policy
+    }
+    let u: baml.UnknownError => u.message          // the escape hatch
+  }
+}
 
 // -----------------------------------------------------------------------------
 // (E) Caching x fallback — the interaction the background flags.

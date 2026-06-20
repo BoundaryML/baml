@@ -79,25 +79,45 @@ class SessionHandle {
 // they cross a request boundary: a handler in request A creates the session, a
 // totally different handler in request B resumes it. You cannot model that with a
 // single `Realtime.run(io)` call — `io` only exists within one request.
+// NET-NEW capability-error channel: HarnessError.
+//
+// The Harness lifecycle (create/attach/detach/stop/destroy) is a capability
+// beyond call/stream/realtime/tools, so per the error model it gets its OWN
+// capability-error interface rather than reusing CallError. Its classifiers
+// reflect the failure modes a cross-request session layer actually triages:
+// the live runtime behind a stored handle was reclaimed (is_session_expired),
+// the sandbox/process leg failed (is_runtime_error). (Declared in baml.errors;
+// shown here as the surface this scenario contributes — flagged net-new in
+// evaluation.md (b).)
+interface baml.errors.HarnessError {
+  function is_session_expired(self) -> bool
+  function is_runtime_error(self) -> bool
+}
+
 interface Harness requires Realtime {
   // Mint a parked session WITHOUT driving it yet. Spawns/leases the runtime,
   // returns coordinates. The live channel comes later, on attach.
-  function create_session(self, opts: SessionOpts) -> SessionHandle throws Error
+  function create_session(self, opts: SessionOpts) -> SessionHandle
+      throws baml.ExtendUnknownError<baml.errors.HarnessError>
 
   // Resume a parked session and DRIVE it over a freshly-handed-in channel. This
   // is `Realtime.run` but keyed by a handle instead of starting fresh: the prior
   // history/sandbox/workdir are reattached. `io` is a NEW channel for THIS request.
-  function attach(self, h: SessionHandle, io: Channel) -> HarnessTranscript throws Error
+  function attach(self, h: SessionHandle, io: Channel) -> HarnessTranscript
+      throws baml.ExtendUnknownError<baml.errors.HarnessError>
 
   // Park without destroying: persist history, relinquish the live channel, leave
   // the sandbox claimable. Returns the (possibly-updated) handle to store.
-  function detach(self, h: SessionHandle) -> SessionHandle throws Error
+  function detach(self, h: SessionHandle) -> SessionHandle
+      throws baml.ExtendUnknownError<baml.errors.HarnessError>
 
   // Halt an in-flight turn but KEEP the session (so it can be attached again).
-  function stop(self, h: SessionHandle) -> null throws Error
+  function stop(self, h: SessionHandle) -> null
+      throws baml.ExtendUnknownError<baml.errors.HarnessError>
 
   // Tear down: kill the child process, release the sandbox, drop the transcript.
-  function destroy(self, h: SessionHandle) -> null throws Error
+  function destroy(self, h: SessionHandle) -> null
+      throws baml.ExtendUnknownError<baml.errors.HarnessError>
 }
 
 // Config handed to create_session. The bound provider fields (model/sandbox/...)
@@ -128,7 +148,8 @@ class SessionOpts {
 interface AgentStreaming requires Streaming {
   // The lossless event log (ToolStarted/PermissionAsk/TurnDone/...). A plain UI
   // ignores this and uses `.stream`; a rich agent UI subscribes to it.
-  function events(self, prompt: baml.llm.PromptAst, h: SessionHandle?) -> baml.llm.Stream<InEvent, HarnessTranscript> throws Error
+  function events(self, prompt: baml.llm.PromptAst, h: SessionHandle?) -> baml.llm.Stream<InEvent, HarnessTranscript>
+      throws baml.ExtendUnknownError<baml.errors.StreamError>
 }
 
 
@@ -140,22 +161,25 @@ interface AgentStreaming requires Streaming {
 // surface. It forwards by runtime delegation — the same pattern as Fallback —
 // so an app can hold `HarnessAgent` and never name the concrete runtime.
 //
-// The payoff the proposal predicts: because HarnessAgent `implements Provider`,
-// the `client → function ... -> Provider` sugar covers it. `Build(spec)` over a
-// HarnessAgent reads identically to `Extract(resume)` over an OpenAI client.
+// The payoff the proposal predicts: because HarnessAgent IS a Provider (it
+// `implements` capabilities that `requires Provider` — the marker — so no explicit
+// `implements Provider` is needed), the `client → function ... -> Provider` sugar
+// covers it. Driving a HarnessAgent over `.live`/`.stream`/`.run_tools` reads the
+// same as driving an OpenAI client over its own capabilities.
 // ----------------------------------------------------------------------------
 
 class HarnessAgent {
   inner: Harness            // the concrete runtime (ClaudeCode, PiAgent, ...)
 
-  // -- base Provider: one-shot. Delegates straight through. --------------------
-  // `HarnessAgent(...).call<T>()` == `inner.call<T>()` == a fresh session run to
-  // completion. The app gets a plain typed answer; no session bookkeeping.
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
-      self.inner.call<T>(prompt)
-    }
-  }
+  // NO `implements Provider { call }`. `Provider` is now a bare MARKER
+  // (../provider-as-marker.md): a harness has no honest request/response `call` to
+  // forward. Its inner runtime is a Harness/Realtime, not an HttpProvider — the
+  // old `inner.call<T>()` was the degenerate "run the whole subprocess and hope"
+  // that the marker revision deletes. HarnessAgent still IS a Provider (it
+  // `implements` capabilities that `requires Provider`), so no explicit
+  // `implements Provider` is needed; it exposes only its REAL interactions below
+  // (Streaming/AgentStreaming/Realtime/Harness/ControlPlane). An app that wants a
+  // single value drains the stream/event log (see usage.baml `Summarize`).
 
   // -- Streaming: project the runtime's event log onto baml.llm.Stream. --------
   // This is the "indistinguishable from streamText at the UI" move. We pull the
@@ -163,7 +187,8 @@ class HarnessAgent {
   // a plain UI doesn't render. The result is the SAME type a chat model emits.
   implements Streaming {
     function stream<TStream, TFinal>(self, prompt: baml.llm.PromptAst)
-        -> baml.llm.Stream<TStream, TFinal> throws baml.errors.LlmClient {
+        -> baml.llm.Stream<TStream, TFinal>
+        throws baml.ExtendUnknownError<baml.errors.StreamError> {
       // inner is Realtime/Harness, not necessarily classic Streaming, so we lift
       // its event log into a token-shaped stream. project_text_stream keeps only
       // assistant text deltas and the final transcript -> TFinal.
@@ -174,14 +199,16 @@ class HarnessAgent {
   // -- AgentStreaming: hand back the FULL event log for rich agent UIs. --------
   implements AgentStreaming {
     function events(self, prompt: baml.llm.PromptAst, h: SessionHandle?)
-        -> baml.llm.Stream<InEvent, HarnessTranscript> throws baml.errors.LlmClient {
+        -> baml.llm.Stream<InEvent, HarnessTranscript>
+        throws baml.ExtendUnknownError<baml.errors.StreamError> {
       self.inner.events(prompt, h)
     }
   }
 
   // -- Realtime: forward the driven duplex straight through. -------------------
   implements Realtime {
-    function run(self, prompt: baml.llm.PromptAst, io: Channel) -> HarnessTranscript throws baml.errors.LlmClient {
+    function run(self, prompt: baml.llm.PromptAst, io: Channel) -> HarnessTranscript
+        throws baml.ExtendUnknownError<baml.errors.RealtimeError> {
       self.inner.run(prompt, io)
     }
   }
@@ -191,19 +218,24 @@ class HarnessAgent {
   //    "cwd-keyed storage orphans transcripts when a project moves" problem made
   //    explicit: the handle carries its own runtime identity). -----------------
   implements Harness {
-    function create_session(self, opts: SessionOpts) -> SessionHandle throws baml.errors.LlmClient {
+    function create_session(self, opts: SessionOpts) -> SessionHandle
+        throws baml.ExtendUnknownError<baml.errors.HarnessError> {
       self.inner.create_session(opts)
     }
-    function attach(self, h: SessionHandle, io: Channel) -> HarnessTranscript throws baml.errors.LlmClient {
+    function attach(self, h: SessionHandle, io: Channel) -> HarnessTranscript
+        throws baml.ExtendUnknownError<baml.errors.HarnessError> {
       self.inner.attach(h, io)
     }
-    function detach(self, h: SessionHandle) -> SessionHandle throws baml.errors.LlmClient {
+    function detach(self, h: SessionHandle) -> SessionHandle
+        throws baml.ExtendUnknownError<baml.errors.HarnessError> {
       self.inner.detach(h)
     }
-    function stop(self, h: SessionHandle) -> null throws baml.errors.LlmClient {
+    function stop(self, h: SessionHandle) -> null
+        throws baml.ExtendUnknownError<baml.errors.HarnessError> {
       self.inner.stop(h)
     }
-    function destroy(self, h: SessionHandle) -> null throws baml.errors.LlmClient {
+    function destroy(self, h: SessionHandle) -> null
+        throws baml.ExtendUnknownError<baml.errors.HarnessError> {
       self.inner.destroy(h)
     }
   }
@@ -257,14 +289,16 @@ class ClaudeCodeHarness {
   allowed_tools: string[]?
   cwd: string?
 
-  // Provider + Realtime + ControlPlane bodies are identical to 37's ClaudeCode;
-  // elided here to keep the focus on the cross-runtime additions. We re-declare
-  // the signatures so this file type-checks standalone.
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient { $rust_io_function }
-  }
+  // Realtime + ControlPlane bodies are identical to 37's ClaudeCode; elided here
+  // to keep the focus on the cross-runtime additions. We re-declare the signatures
+  // so this file type-checks standalone. NO `implements Provider { call }`: a
+  // harness has no honest request/response `call` (the old body was the degenerate
+  // "run the whole subprocess and hope"). Under the marker revision the class still
+  // IS a Provider via `Realtime`/`Harness` (both `requires Provider`); its real
+  // interaction is the driven session + the lifecycle below.
   implements Realtime {
-    function run(self, prompt: baml.llm.PromptAst, io: Channel) -> HarnessTranscript throws baml.errors.LlmClient { $rust_io_function }
+    function run(self, prompt: baml.llm.PromptAst, io: Channel) -> HarnessTranscript
+        throws baml.ExtendUnknownError<baml.errors.RealtimeError> { $rust_io_function }
   }
   implements ControlPlane {
     function supported_verbs(self) -> type[] {
@@ -276,7 +310,7 @@ class ClaudeCodeHarness {
       ];
       match (self.sandbox) {
         Sandbox.Local => base,                                       // Local can't reliably revert fs
-        _ => base.append(reflect.type_of<RewindFiles>()),           // ONLY Claude has rewind
+        _ => base.concat([reflect.type_of<RewindFiles>()]),         // ONLY Claude has rewind
       }
     }
   }
@@ -286,31 +320,37 @@ class ClaudeCodeHarness {
     // a sandbox + workdir and writes the transcript file; the handle's _ref is
     // (cwd, jsonl_path). The background's "cwd-keyed storage orphans transcripts
     // when a project moves" risk lives entirely in this host body.
-    function create_session(self, opts: SessionOpts) -> SessionHandle throws baml.errors.LlmClient {
+    function create_session(self, opts: SessionOpts) -> SessionHandle
+        throws baml.ExtendUnknownError<baml.errors.HarnessError> {
       $rust_io_function
     }
     // attach = `claude --resume <session_id> --cwd <cwd>`, then drive `io` exactly
     // like run(). The prior JSONL is replayed so history/workdir come back.
-    function attach(self, h: SessionHandle, io: Channel) -> HarnessTranscript throws baml.errors.LlmClient {
+    function attach(self, h: SessionHandle, io: Channel) -> HarnessTranscript
+        throws baml.ExtendUnknownError<baml.errors.HarnessError> {
       $rust_io_function
     }
     // detach = flush JSONL, kill the child but KEEP the file + sandbox lease so a
     // later request can --resume. Returns the handle (possibly with an updated
     // last-message id baked into _ref).
-    function detach(self, h: SessionHandle) -> SessionHandle throws baml.errors.LlmClient {
+    function detach(self, h: SessionHandle) -> SessionHandle
+        throws baml.ExtendUnknownError<baml.errors.HarnessError> {
       $rust_io_function
     }
-    function stop(self, h: SessionHandle) -> null throws baml.errors.LlmClient {
+    function stop(self, h: SessionHandle) -> null
+        throws baml.ExtendUnknownError<baml.errors.HarnessError> {
       $rust_io_function                                              // SIGINT the current turn, keep session
     }
-    function destroy(self, h: SessionHandle) -> null throws baml.errors.LlmClient {
+    function destroy(self, h: SessionHandle) -> null
+        throws baml.ExtendUnknownError<baml.errors.HarnessError> {
       $rust_io_function                                              // delete JSONL, release sandbox
     }
   }
 
   implements AgentStreaming {
     function events(self, prompt: baml.llm.PromptAst, h: SessionHandle?)
-        -> baml.llm.Stream<InEvent, HarnessTranscript> throws baml.errors.LlmClient {
+        -> baml.llm.Stream<InEvent, HarnessTranscript>
+        throws baml.ExtendUnknownError<baml.errors.StreamError> {
       // Spawn (or --resume h), then pump the subprocess's JSONL event log up as
       // InEvents. The host body translates Claude's native stream-json lines into
       // TextDelta/ToolStarted/ToolFinished/PermissionAsk/TurnDone.
@@ -331,11 +371,12 @@ class PiHarness {
   model: string
   cwd: string?
 
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient { $rust_io_function }
-  }
+  // NO `implements Provider { call }` — same as ClaudeCodeHarness: a harness has no
+  // honest one-shot request/response. PiHarness IS a Provider via Realtime/Harness
+  // (marker), and exposes only its real interactions below.
   implements Realtime {
-    function run(self, prompt: baml.llm.PromptAst, io: Channel) -> HarnessTranscript throws baml.errors.LlmClient { $rust_io_function }
+    function run(self, prompt: baml.llm.PromptAst, io: Channel) -> HarnessTranscript
+        throws baml.ExtendUnknownError<baml.errors.RealtimeError> { $rust_io_function }
   }
   implements ControlPlane {
     function supported_verbs(self) -> type[] {
@@ -349,16 +390,20 @@ class PiHarness {
     // Pi parks to a node in a session tree. create_session mints a node; if
     // opts.resume_from is set it FORKS at that node (cheap pointer-to-parent,
     // unlike Claude's copy). The _ref is the node id.
-    function create_session(self, opts: SessionOpts) -> SessionHandle throws baml.errors.LlmClient {
+    function create_session(self, opts: SessionOpts) -> SessionHandle
+        throws baml.ExtendUnknownError<baml.errors.HarnessError> {
       $rust_io_function
     }
-    function attach(self, h: SessionHandle, io: Channel) -> HarnessTranscript throws baml.errors.LlmClient {
+    function attach(self, h: SessionHandle, io: Channel) -> HarnessTranscript
+        throws baml.ExtendUnknownError<baml.errors.HarnessError> {
       $rust_io_function
     }
-    function detach(self, h: SessionHandle) -> SessionHandle throws baml.errors.LlmClient {
+    function detach(self, h: SessionHandle) -> SessionHandle
+        throws baml.ExtendUnknownError<baml.errors.HarnessError> {
       $rust_io_function
     }
-    function stop(self, h: SessionHandle) -> null throws baml.errors.LlmClient {
+    function stop(self, h: SessionHandle) -> null
+        throws baml.ExtendUnknownError<baml.errors.HarnessError> {
       // Pi has NO interrupt verb. The best stop() can do is stop subscribing and
       // let the in-flight turn settle; it CANNOT halt mid-turn. The uniform
       // `stop` therefore means something WEAKER on Pi — a lossy normalization the
@@ -366,14 +411,16 @@ class PiHarness {
       // still complete server-side. (Documented divergence, not a lie.)
       $rust_io_function
     }
-    function destroy(self, h: SessionHandle) -> null throws baml.errors.LlmClient {
+    function destroy(self, h: SessionHandle) -> null
+        throws baml.ExtendUnknownError<baml.errors.HarnessError> {
       $rust_io_function                                              // drop the node + children
     }
   }
 
   implements AgentStreaming {
     function events(self, prompt: baml.llm.PromptAst, h: SessionHandle?)
-        -> baml.llm.Stream<InEvent, HarnessTranscript> throws baml.errors.LlmClient {
+        -> baml.llm.Stream<InEvent, HarnessTranscript>
+        throws baml.ExtendUnknownError<baml.errors.StreamError> {
       // Pi's `subscribe` event stream, mapped onto the same InEvent union. Pi
       // emits no PermissionAsk (no built-in permission gate) — that variant just
       // never appears. Same union, narrower inhabitation.
@@ -395,7 +442,19 @@ class PiHarness {
 // be GC'd out from under us (attach can throw SessionExpired).
 // ----------------------------------------------------------------------------
 
-class SessionExpired { id: string }                  // net-new error: handle outlived its runtime
+// net-new CONCRETE error: the stored handle outlived its runtime. It is a domain
+// failure the harness layer raises on purpose (the runtime was reclaimed), so it
+// is a typed error the app branches on — NOT a foreign error routed to
+// UnknownError. It surfaces both from the store's `get` AND mid-attach, so it
+// implements baml.errors.HarnessError; is_session_expired -> true is the bit
+// callers triage on.
+class SessionExpired {
+  id: string
+  implements baml.errors.HarnessError {
+    function is_session_expired(self) -> bool { return true; }
+    function is_runtime_error(self)   -> bool { return false; }
+  }
+}
 
 interface SessionService {
   function put(self, h: SessionHandle) -> null throws baml.errors.Io
@@ -431,6 +490,19 @@ class HandleStore {
 // glue over the Harness + SessionService primitives — no host body.
 // ----------------------------------------------------------------------------
 
+// A concrete, classified HarnessError the cross-request driver raises on purpose
+// when a lifecycle leg fails (attach/persist/reattach). It is a runtime-leg
+// failure, distinct from SessionExpired (which means the runtime is gone). The
+// driver throws it directly, so it stays a known HarnessError on the channel and
+// the trailing UnknownError normalization never has to fire for these.
+class HarnessRuntimeError {
+  message: string
+  implements baml.errors.HarnessError {
+    function is_session_expired(self) -> bool { return false; }
+    function is_runtime_error(self)   -> bool { return true; }
+  }
+}
+
 class ServerSession {
   agent: HarnessAgent
   service: SessionService
@@ -438,16 +510,16 @@ class ServerSession {
   // Handler A: start a fresh logical session, drive it over THIS request's io,
   // then PARK it and persist the handle for the next request to find.
   function open(self, prompt: baml.llm.PromptAst, opts: SessionOpts, io: Channel)
-      -> SessionHandle throws baml.errors.LlmClient {
+      -> SessionHandle throws baml.ExtendUnknownError<baml.errors.HarnessError> {
     let h = self.agent.create_session(opts);
     // drive this request's turn(s)
     self.agent.attach(h, io) catch (e) {
-      _ => { self.agent.destroy(h) catch (e2) { _ => {} }; throw baml.errors.LlmClient { message: "open turn failed" }; }
+      _ => { self.agent.destroy(h) catch (e2) { _ => {} }; throw HarnessRuntimeError { message: "open turn failed" }; }
     };
     // park: relinquish the live channel, keep the sandbox claimable
     let parked = self.agent.detach(h);
     self.service.put(parked) catch (e) {
-      _ => { throw baml.errors.LlmClient { message: "could not persist session handle" }; }
+      _ => { throw HarnessRuntimeError { message: "could not persist session handle" }; }
     };
     return parked;
   }
@@ -456,15 +528,22 @@ class ServerSession {
   // drive, re-park. The SessionExpired arm is the server-authoritative truth: the
   // runtime may have been reclaimed while the user was away, and there is nothing
   // the BAML layer could have done to prevent it — only to handle it.
-  function resume(self, id: string, io: Channel) -> SessionHandle throws baml.errors.LlmClient {
+  function resume(self, id: string, io: Channel) -> SessionHandle
+      throws baml.ExtendUnknownError<baml.errors.HarnessError> {
     let h = self.service.get(id) catch (e) {
-      let exp: SessionExpired => { throw baml.errors.LlmClient { message: "session " + exp.id + " expired; start a new one" }; },
-      _ => { throw baml.errors.LlmClient { message: "session store unavailable" }; },
+      // SessionExpired is already a HarnessError; rethrow it so the app can branch
+      // on is_session_expired() rather than parsing a string.
+      let exp: SessionExpired => { throw exp; },
+      _ => { throw HarnessRuntimeError { message: "session store unavailable" }; },
     };
     self.agent.attach(h, io) catch (e) {
       // attach is the SECOND place expiry surfaces: the handle was stored but the
       // sandbox is gone. The store said yes; the runtime says no. Authoritative.
-      _ => { self.service.drop(id) catch (e2) { _ => {} }; throw baml.errors.LlmClient { message: "session " + id + " could not be reattached" }; }
+      // SessionExpired is a concrete HarnessError thrown on purpose here — preserve
+      // it (drop the dead handle, then rethrow) so the consumer keeps the
+      // is_session_expired() bit instead of having it flattened into a runtime leg.
+      let exp: SessionExpired => { self.service.drop(id) catch (e2) { _ => {} }; throw exp; },
+      _ => { self.service.drop(id) catch (e2) { _ => {} }; throw HarnessRuntimeError { message: "session " + id + " could not be reattached" }; }
     };
     let parked = self.agent.detach(h);
     self.service.put(parked) catch (e) { _ => {} };
@@ -472,7 +551,8 @@ class ServerSession {
   }
 
   // Explicit teardown from a /delete handler.
-  function close(self, id: string) -> null throws baml.errors.LlmClient {
+  function close(self, id: string) -> null
+      throws baml.ExtendUnknownError<baml.errors.HarnessError> {
     let h = self.service.get(id) catch (e) { _ => { return null; } };  // already gone: nothing to do
     self.agent.destroy(h) catch (e) { _ => {} };
     self.service.drop(id) catch (e) { _ => {} };
@@ -490,4 +570,5 @@ class ServerSession {
 // TFinal. THIS is the "indistinguishable from streamText at the UI" translation;
 // it is a genuine host boundary (it bridges two opaque stream representations).
 function project_text_stream<TStream, TFinal>(events: baml.llm.Stream<InEvent, HarnessTranscript>)
-    -> baml.llm.Stream<TStream, TFinal> throws baml.errors.LlmClient { $rust_io_function }
+    -> baml.llm.Stream<TStream, TFinal>
+    throws baml.ExtendUnknownError<baml.errors.StreamError> { $rust_io_function }

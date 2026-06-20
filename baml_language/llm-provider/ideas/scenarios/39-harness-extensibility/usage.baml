@@ -145,19 +145,23 @@ function Pair(task: string) -> Transcript {
 
 // -----------------------------------------------------------------------------
 // 7. PORTABILITY CHECK — swap the provider, keep the function. A2A peer as the
-//    PRIMARY client (no harness at all). Proves a peer-over-the-wire and an
-//    owned subprocess harness both satisfy `Provider.call` behind one function.
+//    PRIMARY client (no harness at all). Proves a peer-over-the-wire and a local
+//    HTTP chat model are both request/response — both expose the HttpProvider.call
+//    capability — behind one function. (A subprocess harness is NOT request/response
+//    under the marker spine: it has no honest `call`, so it cannot stand in here —
+//    it would `throw Unsupported` on the call match. Its real surface is the tool
+//    loop / live session / skills, exercised in §6, not a faked one-shot value.)
 // -----------------------------------------------------------------------------
 
 client RemoteSummarizer() {
   A2aProvider.discover("https://summarize.example.com", {})
     .with_retry(2)                          // combinator chain reads the same as on any provider
-    .fallback_to(ClaudeCode { model: "claude-haiku-4-5", permission_mode: "default" })
+    .fallback_to(A2aProvider.discover("https://summarize-backup.example.com", {}))
 }
 
 function Summarize(doc: string) -> string {
-  client: RemoteSummarizer()                // A2A peer first, local harness as fallback
+  client: RemoteSummarizer()                // A2A peer first, backup peer as fallback
   prompt #"Summarize: {{ doc }}"#
 }
-// Summarize("...")  -> tries the A2A peer (HttpProvider.call), on failure the harness.
-// Same call site whether the answer comes from a peer agent or a subprocess.
+// Summarize("...")  -> tries the A2A peer (HttpProvider.call), on failure the backup peer.
+// Same call site whether the answer comes from either peer agent over the wire.

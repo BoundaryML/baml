@@ -47,6 +47,29 @@ function Extract(resume: string) -> Resume {
   prompt #"Extract the structured resume from: {{ resume }}"#
 }
 
+// What the retry budget surfaces lands on the CallError channel
+// (`baml.ExtendUnknownError<baml.errors.CallError>`). The app catches by runtime
+// match, most-specific first: the concrete LlmError (read its rich `kind`) → the
+// CallError interface (the three coarse classifiers, when the handle is opaque) →
+// baml.UnknownError (the escape hatch, read its breadcrumb `.message`).
+function ExtractOrFallbackText(resume: string) -> Resume {
+  Extract(resume) catch (e) {
+    let err: LlmError => {
+      // The combinator already exhausted transient retries; branch on the taxonomy.
+      match (err.kind) {
+        FailureKind.ContextLength => { Resume.empty_truncated() }   // shed + re-ask elsewhere
+        FailureKind.ContentFilter => { Resume.empty_blocked() }     // clean refusal, not junk
+        _ => { Resume.empty_failed() }                              // permanent / exhausted
+      }
+    }
+    let c: baml.errors.CallError => {
+      // Only hold the interface here: triage via classifiers, no `kind` to read.
+      if (c.is_rate_limit()) { Resume.empty_rate_limited() } else { Resume.empty_failed() }
+    }
+    let u: baml.UnknownError => { Resume.empty_unknown(u.message) }  // escape hatch
+  }
+}
+
 
 // ----------------------------------------------------------------------------
 // 2. Fallback that preserves semantics. GPT-4.1, then Claude if GPT is *down*.

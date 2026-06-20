@@ -48,7 +48,8 @@ function ExtractIntent(req: BillingRequest) -> Intent {
 // random — it just names step coordinates.
 // ─────────────────────────────────────────────────────────────────────────────
 
-function BillingWorkflow(req: BillingRequest, log: StepLog, run: string) -> Receipt {
+function BillingWorkflow(req: BillingRequest, log: StepLog, run: string) -> Receipt
+    throws baml.ExtendUnknownError<baml.errors.CallError> {
   // Step 1: the model call, wrapped so it is RECORDED-and-replayed, never
   // re-sampled. On first run it samples once and records; on replay after a
   // crash it returns the recorded Intent without touching Anthropic.
@@ -68,9 +69,7 @@ function BillingWorkflow(req: BillingRequest, log: StepLog, run: string) -> Rece
   // charging again, AND we pass an idempotency key into the tool for the
   // crash-after-effect-before-record window (belt and suspenders).
   let charge_coord: StepCoord = StepCoord { run: run, step: "charge" };
-  let prior: string? = log.recorded(charge_coord) catch (e) {
-    _ => { throw baml.errors.LlmClient { message: "charge log read failed" }; }
-  };
+  let prior: string? = log.recorded(charge_coord);
   let receipt: Receipt =
     match (prior) {
       let hit: string => durable_decode<Receipt>(durable_envelope_body(hit)),
@@ -78,14 +77,17 @@ function BillingWorkflow(req: BillingRequest, log: StepLog, run: string) -> Rece
         // idempotency key tied to (run, step) — survives replay, dedupes at Stripe.
         let key: string = run + ":charge";
         let r: Receipt = charge_card(req.customer, intent.amount_cents, key);
-        log.record(charge_coord, durable_envelope_new("charge", durable_encode<Receipt>(r))) catch (e) {
-          _ => { throw baml.errors.LlmClient { message: "charge log write failed" }; }
-        };
+        log.record(charge_coord, durable_envelope_new("charge", durable_encode<Receipt>(r)));
         r
       }
     };
 
   receipt
+} catch (e) {
+  // Foreign step-log Io from the charge step normalizes into UnknownError on the
+  // call channel; a known CallError (the durable step's NonDeterministicReplay,
+  // the provider's typed errors) passes through unchanged.
+  _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "billing workflow run '" + run + "' failed");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -93,7 +95,8 @@ function BillingWorkflow(req: BillingRequest, log: StepLog, run: string) -> Rece
 // where the charge is a TOOL the model calls (so DurableDispatch is exercised).
 // ─────────────────────────────────────────────────────────────────────────────
 
-function AgenticBillingWorkflow(req: BillingRequest, log: StepLog, run: string) -> Intent {
+function AgenticBillingWorkflow(req: BillingRequest, log: StepLog, run: string) -> Intent
+    throws baml.ExtendUnknownError<baml.errors.ToolError> {
   // Tools-capable client. The model decides when to charge; the loop dispatches
   // tools through DurableDispatch so each tool call is a checkpointed,
   // idempotent step. Replay re-enters the loop but recorded tool calls are
@@ -106,7 +109,7 @@ function AgenticBillingWorkflow(req: BillingRequest, log: StepLog, run: string) 
   // durable dispatcher to run_tools as the ExecutionContext-shaped router.
   match (p) {
     let t: Tools => t.run_tools<Intent>(render_intent_prompt(req), billing_tools(), as_ctx(durable_ctx)),
-    _ => throw baml.errors.LlmClient { message: "client is not tool-capable" },
+    _ => throw baml.errors.Unsupported { message: "client is not tool-capable" },
   }
 }
 

@@ -17,65 +17,61 @@
 //   define here. The provider model is untouched: a step that talks to an LLM
 //   just holds a Provider and calls it.
 //
-//   The ONE thing the host language does NOT give you for free is FAN-IN with
-//   real concurrency: starting N model calls and joining them (the sync barrier
-//   that every framework "spends its design budget on", per background §what's
-//   hard). BAML control flow is sequential; `let a = ...; let b = ...;` runs a
-//   then b. To express `.parallel([...])` honestly we need a host primitive for
-//   structured concurrency. THAT is the only net-new surface here, and it is a
-//   host scheduler seam, NOT a provider capability.
+//   FAN-IN with real concurrency — starting N model calls and joining them (the
+//   sync barrier that every framework "spends its design budget on", per
+//   background §what's hard) — is NOT net-new: BAML has first-class structured
+//   concurrency (BEP-034). `spawn { body }` starts `body` concurrently and
+//   returns a `baml.future.Future` immediately; `await f` joins it. To express
+//   `.parallel([summarize, classify])` you spawn each branch and join with
+//   `baml.future.all`. Bounded fan-out (`.foreach concurrency:N`) is a
+//   `baml.spawn.TaskGroup`. Cancellation is `Future.cancel()` /
+//   `baml.spawn.CancelToken`. None of this is a Provider capability — it is the
+//   language's own concurrency surface, and it is already shipped.
 //
-//   The SECOND axis the title demands — DURABLE — is also not a provider
-//   concern. A step graph is durable iff each step's result is checkpointed so a
-//   re-run skips completed steps. We model that as a `Checkpoint` store the step
-//   functions consult; it wraps step EXECUTION, never the Provider. We show it
-//   here to prove the proposal does not need to grow a durability capability:
-//   durability is orthogonal to `call`.
+//   The ONE axis the title demands that IS net-new is DURABLE. A step graph is
+//   durable iff each step's result is checkpointed so a re-run skips completed
+//   steps. We model that as a `Checkpoint` store the step functions consult; it
+//   wraps step EXECUTION, never the Provider. We show it here to prove the
+//   proposal does not need to grow a durability capability: durability is
+//   orthogonal to `call` (and orthogonal to concurrency).
 //
 // Net-new surface this file introduces (flagged in evaluation.md):
-//   - `baml.async.join2 / join_all` — host structured-concurrency seam: the ONLY
-//     way to get a real parallel fan-out + sync-barrier join. Not a Provider
-//     thing. (background §what's hard: "fan-in is where complexity hides")
 //   - `Checkpoint` — a content-addressed step-result store; makes the graph
-//     re-runnable / durable. Wraps step execution, NOT the provider.
+//     re-runnable / durable. Wraps step execution, NOT the provider. This is the
+//     ONLY genuinely net-new primitive in this scenario.
 //   - `step<T>(...)` helper — memoizes one step through a Checkpoint. Pure glue.
-//   Everything else (Provider, HttpProvider, Tools) is reused verbatim.
+//   Everything else — including the concurrency surface (`spawn`/`await`/
+//   `baml.future.all`/`baml.spawn.TaskGroup`), Provider, HttpProvider, Tools —
+//   is reused verbatim / is a shipped language feature.
 // =============================================================================
 
 
 // -----------------------------------------------------------------------------
-// 0. The host structured-concurrency seam.
+// 0. Concurrency is a SHIPPED language feature (BEP-034) — nothing to add.
 //
-//    This is the irreducible net-new primitive. BAML expression evaluation is
-//    sequential: `let a = f(); let b = g();` evaluates f to completion before g.
-//    Fan-out (`.parallel`, `.foreach`) needs to START both and join them — a
-//    sync barrier. No provider interface can supply this; it is the SCHEDULER's
-//    job. So we expose it as a host async primitive, deliberately OUTSIDE the
-//    Provider hierarchy.
+//    A fan-out + sync-barrier join (Mastra `.parallel`/`.foreach`,
+//    pydantic-graph's parallel branches) is expressed directly:
 //
-//    A thunk is a zero-arg closure `() -> T throws E` — the standard way BAML
-//    defers a computation. join2/join_all run the thunks concurrently and block
-//    (the sync barrier) until ALL complete, then return the tuple/array.
+//      let fa = spawn { branch_a() };               // starts concurrently
+//      let fb = spawn { branch_b() };
+//      let (a, b) = (await fa, await fb);           // join (the sync barrier)
 //
-//    `join_all` also fixes the failure-mode question every framework answers
-//    ("what does 'all' mean when one fails"): it is FAIL-FAST — the first thunk
-//    to throw aborts the others and re-throws. The all-settled variant
-//    (collect every Result, succeed even if some fail) is `join_settled`.
+//    Over a list, `baml.future.all` is the join:
+//
+//      let fs  = thunks.map(t => spawn { t() });
+//      let xs  = await baml.future.all(fs);         // values in input order
+//
+//    `baml.future.all` is FAIL-FAST (JS `Promise.all`): the first future to fail
+//    cancels the losers and re-throws. When losers have side effects that must
+//    finish, `baml.future.all_complete` lets them run to completion (and still
+//    throws the first error, in input order). Bounded fan-out uses a
+//    `baml.spawn.TaskGroup` (the rate limiter): spawns sharing a group are
+//    capped, excess queue FIFO. So fan-out is "a list of spawns", the join is
+//    `baml.future.all`, and the "what does 'all' mean when one fails" question is
+//    a choice between `all` (fail-fast) and `all_complete` (all-finish) — all of
+//    it first-class in the language, none of it a Provider capability and none of
+//    it net-new.
 // -----------------------------------------------------------------------------
-
-// baml.async  (host seam — structured concurrency over thunks)
-//   function join2<A, B>(a: () -> A throws E, b: () -> B throws E) -> (A, B) throws E
-//   function join_all<T>(thunks: (() -> T throws E)[]) -> T[] throws E          // fail-fast
-//   function join_settled<T>(thunks: (() -> T throws E)[]) -> Result<T, E>[]    // all-settled
-//   function map_concurrent<I, O>(items: I[], width: int, f: (I) -> O throws E) -> O[] throws E
-//                                                                               // .foreach with bounded concurrency
-
-// A Result is the all-settled cell: exactly one of value/error is present.
-class Result<T, E> {
-  value: T?
-  error: E?
-  ok: bool
-}
 
 
 // -----------------------------------------------------------------------------
@@ -107,9 +103,9 @@ interface Checkpoint {
 // The key is content-addressed: same run, same step name, same input => same
 // key => same cached result. This is what makes a crashed graph resumable from
 // the middle, and what makes a deterministic re-run a no-op.
-function step<T>(ckpt: Checkpoint, run_id: string, name: string, input: string, body: () -> T throws baml.errors.LlmClient)
-    -> T throws baml.errors.LlmClient {
-  let key = baml.str.concat(run_id, baml.str.concat("/", baml.str.concat(name, baml.str.concat("/", baml.hash.sha256(input)))));
+function step<T>(ckpt: Checkpoint, run_id: string, name: string, input: string, body: () -> T throws baml.ExtendUnknownError<baml.errors.CallError>)
+    -> T throws baml.ExtendUnknownError<baml.errors.CallError> {
+  let key = run_id + "/" + name + "/" + baml.hash.sha256(input);
   let cached: T? = ckpt.load<T>(key) catch (e) { _ => { null } };   // a checkpoint read failure just forces recompute
   match (cached) {
     let hit: T => { return hit; }     // already done — skip the work (durability)
@@ -132,7 +128,7 @@ function step<T>(ckpt: Checkpoint, run_id: string, name: string, input: string, 
 
 class MemoryCheckpoint {
   _table: $rust_type
-  function new() -> MemoryCheckpoint { MemoryCheckpoint { _table: baml.sys.new_map() } }
+  function new() -> MemoryCheckpoint { MemoryCheckpoint { _table: {} } }
   implements Checkpoint {
     function load<T>(self, key: string) -> T? throws baml.errors.Io { $rust_io_function }
     function save<T>(self, key: string, value: T) -> null throws baml.errors.Io { $rust_io_function }
@@ -147,6 +143,31 @@ class KvCheckpoint {
     // what makes the graph durable across a redeploy, not just a crash.
     function load<T>(self, key: string) -> T? throws baml.errors.Io { $rust_io_function }
     function save<T>(self, key: string, value: T) -> null throws baml.errors.Io { $rust_io_function }
+  }
+}
+
+
+// -----------------------------------------------------------------------------
+// 2b. Tiny `json` navigation helpers (reading a response envelope).
+//
+//    `baml.json.parse(resp.text())` yields the `json` union
+//    (`null | bool | int | float | string | json[] | map<string, json>`).
+//    `baml.json.field(j, key)` is the real stdlib accessor for the map arm;
+//    these two helpers cover the array-index and string-extract arms so the
+//    provider `parse` bodies read like `choices[0].message.content`.
+// -----------------------------------------------------------------------------
+
+function json_at(j: json, index: int) -> json {
+  match (j) {
+    let xs: json[] => match (xs.at(index)) { null => null, let v: json => v }
+    _ => null
+  }
+}
+
+function json_as_string(j: json) -> string {
+  match (j) {
+    let s: string => s
+    _ => ""
   }
 }
 
@@ -172,25 +193,35 @@ class OpenAI {
 
   implements HttpProvider {
     type Body = baml.http.Response
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.ExtendUnknownError<baml.errors.CallError> {
       let schema = reflect.type_of<T>();
       // DIVERGENCE 1/2: OpenAI carries the schema in a top-level response_format.
+      // The body is a native `map<string, json>` literal (nested values are native
+      // json — strings, and the json fragments the wire-shapers return) serialized
+      // with `baml.json.stringify`.
+      let body: map<string, json> = {
+        "model": self.model,
+        "messages": baml.llm.render_messages(prompt),
+        "response_format": baml.llm.openai_response_format(schema),
+      };
       baml.http.Request {
         method: "POST",
         url: "https://api.openai.com/v1/chat/completions",
-        headers: baml.http.bearer(self.api_key),
-        body: baml.json.encode(baml.json.object([
-          ("model", baml.json.string(self.model)),
-          ("messages", baml.llm.render_messages(prompt)),
-          ("response_format", baml.llm.openai_response_format(schema)),
-        ])),
+        headers: { "Authorization": "Bearer " + self.api_key, "Content-Type": "application/json" },
+        body: baml.json.stringify(body),
       }
     }
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
-      baml.http.send(request) catch (e) { _ => { throw baml.errors.LlmClient { message: "openai http failed" }; } }
+    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.http.send(request) catch (e) { _ => { throw baml.UnknownError.with_message<baml.errors.CallError>(e, "openai http failed"); } }
     }
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
-      baml.sap.parse<T>(from.json_path("choices.0.message.content"))
+    function parse<T>(self, from: baml.http.Response) -> T throws baml.ExtendUnknownError<baml.errors.CallError> {
+      // Parse the envelope, navigate choices[0].message.content (a JSON-as-string
+      // the model emitted), then SAP-coerce that string into T.
+      let root = baml.json.parse(from.text());
+      let content = baml.json.field(json_at(baml.json.field(root, "choices"), 0), "message");
+      baml.sap.parse<T>(json_as_string(baml.json.field(content, "content")))
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "openai parse failed");
     }
   }
 }
@@ -206,29 +237,38 @@ class Anthropic {
 
   implements HttpProvider {
     type Body = baml.http.Response
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.ExtendUnknownError<baml.errors.CallError> {
       let schema = reflect.type_of<T>();
       // DIVERGENCE 2/2: Anthropic has no response_format. We force a single tool
       // whose input_schema IS the output schema, then read the tool input back.
+      // Body is a native `map<string, json>` literal: ints/strings are json, the
+      // tool list is a json fragment, and `tool_choice` nests a sub-map literal.
+      let body: map<string, json> = {
+        "model": self.model,
+        "max_tokens": self.max_tokens,
+        "messages": baml.llm.render_messages(prompt),
+        "tools": baml.llm.forced_schema_tool(schema),
+        "tool_choice": { "type": "any" },
+      };
       baml.http.Request {
         method: "POST",
         url: "https://api.anthropic.com/v1/messages",
-        headers: baml.http.anthropic_headers(self.api_key),
-        body: baml.json.encode(baml.json.object([
-          ("model", baml.json.string(self.model)),
-          ("max_tokens", baml.json.int(self.max_tokens)),
-          ("messages", baml.llm.render_messages(prompt)),
-          ("tools", baml.llm.forced_schema_tool(schema)),
-          ("tool_choice", baml.json.object([("type", baml.json.string("any"))])),
-        ])),
+        headers: { "x-api-key": self.api_key, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
+        body: baml.json.stringify(body),
       }
     }
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
-      baml.http.send(request) catch (e) { _ => { throw baml.errors.LlmClient { message: "anthropic http failed" }; } }
+    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.http.send(request) catch (e) { _ => { throw baml.UnknownError.with_message<baml.errors.CallError>(e, "anthropic http failed"); } }
     }
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
-      // Read the forced-tool input back as the structured output.
-      baml.sap.parse<T>(from.json_path("content.0.input"))
+    function parse<T>(self, from: baml.http.Response) -> T throws baml.ExtendUnknownError<baml.errors.CallError> {
+      // Read the forced-tool input back as the structured output. content[0].input
+      // is already a JSON object (the model's tool input), so coerce that `json`
+      // value into T directly with `from_json` — no re-stringify, no SAP needed.
+      let root = baml.json.parse(from.text());
+      let input = baml.json.field(json_at(baml.json.field(root, "content"), 0), "input");
+      baml.json.from_json<T>(input)
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "anthropic parse failed");
     }
   }
 }
@@ -254,18 +294,19 @@ class Anthropic {
 class ToolRegistryCtx {
   _registry: $rust_type     // name -> host fn, registered by the app
   implements ExecutionContext {
-    function dispatch(self, calls: ToolCall[]) -> ToolResult[] throws baml.errors.LlmClient {
+    function dispatch(self, calls: ToolCall[]) -> ToolResult[] throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // Sequential dispatch by default. A graph node that wants PARALLEL tool
-      // dispatch uses baml.async.map_concurrent here (§0) — same join barrier as
-      // .parallel, reused. We keep the default sequential for determinism.
+      // dispatch spawns each call and joins with baml.future.all here (§0) — same
+      // join barrier as .parallel, reused. We keep the default sequential for
+      // determinism.
       let out: ToolResult[] = [];
       for (let c in calls) {
         let result = self.invoke_one(c) catch (e) { _ => { ToolResult { id: c.id, output: "tool error" } } };
-        out = baml.list.push(out, result);
+        out.push(result);
       }
       out
     }
-    function invoke_one(self, c: ToolCall) -> ToolResult throws baml.errors.LlmClient { $rust_io_function }
+    function invoke_one(self, c: ToolCall) -> ToolResult throws baml.ExtendUnknownError<baml.errors.ToolError> { $rust_io_function }
   }
 }
 
@@ -273,10 +314,12 @@ class ToolRegistryCtx {
 // -----------------------------------------------------------------------------
 // Host boundaries used above (genuine $rust seams; declared for completeness).
 // -----------------------------------------------------------------------------
-// baml.async.join2 / join_all / join_settled / map_concurrent  // STRUCTURED CONCURRENCY — the net-new seam
-// baml.sys.new_map() -> $rust_type ; baml.sys.panic(msg) -> never
-// baml.hash.sha256(s: string) -> string                        // content-addressed checkpoint keys
-// baml.list.push(xs, x) -> xs'                                 // pure list append
-// baml.llm.render_messages / openai_response_format / forced_schema_tool
+// spawn { } -> baml.future.Future ; await ; baml.future.{all,all_complete}     // SHIPPED structured concurrency (BEP-034)
+// baml.spawn.TaskGroup.new(limit) ; spawn with baml.spawn.options(group=)       // bounded fan-out (the rate limiter)
+// baml.sys.panic(msg) -> never
+// baml.hash.sha256(s: string) -> string                        // content-addressed checkpoint keys (net-new)
+// baml.llm.render_messages / openai_response_format / forced_schema_tool   // provider wire-shapers (return `json`)
 // baml.sap.parse<T>(s: string) -> T
-// baml.json.{object,array,string,int,encode} ; baml.str.{concat,eq} ; baml.http.{bearer,anthropic_headers,send}
+// Real stdlib used directly: `+` (string concat) · `xs.push(x)` · `xs.at(i)` (Array) ·
+//   `{}` / `{ "k": v }` map literals · `baml.json.{parse,stringify,field,from_json}` ·
+//   `baml.http.send` + inline header maps (no bearer/anthropic_headers sugar).

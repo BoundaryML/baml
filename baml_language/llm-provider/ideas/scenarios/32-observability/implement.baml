@@ -49,13 +49,17 @@ function obs_now() -> Instant { $rust_io_function }
 function redact(text: string) -> string { $rust_io_function }
 
 // -----------------------------------------------------------------------------
-// Usage normalization.
+// Usage normalization — rides the value+sidecar model (call_with + ResponseMeta).
 //
 // Every provider buries token counts under different keys (OpenAI:
 // usage.prompt_tokens / completion_tokens; Anthropic: usage.input_tokens /
 // output_tokens + cache_creation_input_tokens / cache_read_input_tokens). A
-// span needs ONE shape to attribute cost, so we define a normalized record and
-// a read-interface a provider's raw body satisfies.
+// span needs ONE shape to attribute cost. Usage is a PRODUCT sidecar — it
+// accompanies the answer — so it is NOT a bespoke `last_usage()` companion
+// returning a stateful side-channel. It is a dimension of the normalized
+// `ResponseMeta` the provider hands back from `call_with`, read by projection.
+// This is the P1 fix applied: the usage travels WITH the value out of one codec
+// pass (`meta_of(body)`), so a Fallback forwards it instead of racing a stash.
 // -----------------------------------------------------------------------------
 
 class Usage {
@@ -66,10 +70,28 @@ class Usage {
   reasoning_tokens: int       // 0 on Chat-Completions-normalized paths
 }
 
-// A provider that can surface usage for the LAST call it made. Optional
-// capability: not every provider can (a subprocess harness may not).
-interface UsageReporting requires Provider {
-  function last_usage(self) -> Usage throws Error
+// `usage()` is a base dimension of ResponseMeta (every response can report it).
+// `Supported<T>` is reserved for dimensions a provider genuinely CAN'T produce
+// (logprobs on Anthropic, etc.); usage is always present, so it returns Usage
+// directly. The per-provider key divergence is normalized LAZILY inside each
+// concrete response type's `implements ResponseMeta` (see usage.baml).
+interface ResponseMeta {
+  function usage(self) -> Usage
+}
+
+// The tool-loop analog of `meta_of(body)`. `Tools.step` returns `T | ToolCalls`
+// (a sentinel SUM, not a `call_with` product), so per-turn usage cannot ride
+// `call_with` inside the loop — there is no single `T` to pair a turn with. We
+// add `meta(t) -> ResponseMeta` on the SAME ResponseMeta grain instead, exposing
+// the most recent turn's normalized response. Like `Traceable requires Provider`
+// (we cannot edit the canonical `Tools` interface), this is a sibling extension
+// `MeteredTools requires Tools` — net-new, flagged in evaluation.md — so a value
+// typed as `MeteredTools` can actually call `.meta()` (a base-`Tools` value
+// cannot). The combinator `match`es for it and degrades when a provider's tool
+// loop can't report per-turn usage.
+interface MeteredTools requires Tools {
+  function meta(self, t: Transcript) -> ResponseMeta
+      throws baml.ExtendUnknownError<baml.errors.ToolError>
 }
 
 // Cost attribution: usage * a per-model price table -> dollars. Pure BAML.
@@ -84,11 +106,11 @@ class Cost {
   }
   function attrs(usage: Usage, dollars: float) -> map<string, string> {  // gen_ai.* conventions
     {
-      "gen_ai.usage.input_tokens": baml.fmt.int(usage.input_tokens),
-      "gen_ai.usage.output_tokens": baml.fmt.int(usage.output_tokens),
-      "gen_ai.usage.cache_read_tokens": baml.fmt.int(usage.cache_read_tokens),
-      "gen_ai.usage.reasoning_tokens": baml.fmt.int(usage.reasoning_tokens),
-      "gen_ai.usage.cost_usd": baml.fmt.float(dollars),
+      "gen_ai.usage.input_tokens": usage.input_tokens.to_string(),
+      "gen_ai.usage.output_tokens": usage.output_tokens.to_string(),
+      "gen_ai.usage.cache_read_tokens": usage.cache_read_tokens.to_string(),
+      "gen_ai.usage.reasoning_tokens": usage.reasoning_tokens.to_string(),
+      "gen_ai.usage.cost_usd": dollars.to_string(),
     }
   }
 }
@@ -171,39 +193,67 @@ class Traced {
   price: Price?                     // for cost attribution; null => skip cost
   export_messages: bool             // sampling/PII gate: persist the UI message?
 
-  // Pull normalized usage from the inner provider if it can report it.
-  function usage_attrs(self) -> map<string, string> {
-    match (self.inner) {
-      let u: UsageReporting => {
-        let usage = u.last_usage() catch (e) { _ => { return {}; } };
-        match (self.price) {
-          let p: Price => Cost.attrs(usage, Cost.of(usage, p)),
-          _            => Cost.attrs(usage, 0.0),
-        }
-      },
-      _ => {},        // provider can't report usage (e.g. a subprocess harness)
+  // Turn a projected Usage into the gen_ai.* span attributes (cost folded in).
+  function usage_attrs(self, usage: Usage) -> map<string, string> {
+    match (self.price) {
+      let p: Price => Cost.attrs(usage, Cost.of(usage, p)),
+      _            => Cost.attrs(usage, 0.0),
     }
   }
 
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
-      let span = obs_start(self.name, self.parent, { "gen_ai.operation.name": "chat" });
-      let r: T = self.inner.call<T>(prompt) catch (e) {
-        _ => {
-          // partial failure must still CLOSE the span, with an error status.
-          obs_finish(span, {}, "call failed");
-          throw baml.errors.LlmClient { message: "traced call failed" };
-        }
-      };
-      obs_finish(span, self.usage_attrs(), null);
-      r
+  // `call` + `call_with` now belong to HttpProvider (provider-as-marker): the
+  // base `Provider` is a bare marker, so request/response lives here. This block
+  // FORWARDS both to the inner provider's call_with (the P1 fix: usage/sidecar is
+  // not dropped — it rides the winner's codec pass), so we KEEP it as a combinator
+  // delegation rather than fabricating build_request/send/parse/meta_of.
+  implements HttpProvider {
+    type Body = unknown
+    // `call` stays the zero-tax path; usage is read by `call_with` below.
+    function call<T>(self, prompt: baml.llm.PromptAst) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      let (value, _): (T, null) = self.call_with<T, null>(prompt, m => null);
+      value
+    }
+
+    // The metadata path. We project the usage sidecar OUT of the same codec pass
+    // and attach it to the span — no stateful `last_usage()` stash, no race under
+    // Fallback (the inner combinator forwards `call_with`, so usage is the
+    // WINNER's view, not a separately-fetched body). The projection the caller
+    // asked for (`project`) is honored independently of the span attribution.
+    function call_with<T, U>(self, prompt: baml.llm.PromptAst, project: (ResponseMeta) -> U) -> (T, U)
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      // `self.inner` is the bare `Provider` marker (no `call_with`), so route the
+      // projection to the member that owns request/response — `HttpProvider` —
+      // and FORWARD it (so usage/sidecar is the WINNER's view, not dropped). A
+      // pure-realtime/harness inner has no call to wrap: that errors Unsupported.
+      match (self.inner) {
+        let h: HttpProvider => {
+          let span = obs_start(self.name, self.parent, { "gen_ai.operation.name": "chat" });
+          // one pass: project BOTH the caller's U and the usage we need for the span.
+          let (value, both): (T, (U, Usage)) =
+            h.call_with<T, (U, Usage)>(prompt, m => (project(m), m.usage())) catch (e) {
+              _ => {
+                // partial failure must still CLOSE the span, with an error status,
+                // then re-raise the original error unchanged (Refused, rate-limit,
+                // foreign Io) on the call channel.
+                obs_finish(span, {}, "call failed");
+                throw baml.UnknownError.with_message<baml.errors.CallError>(e, "traced call failed");
+              }
+            };
+          let (u, usage): (U, Usage) = both;
+          obs_finish(span, self.usage_attrs(usage), null);
+          return (value, u);
+        },
+        _ => throw baml.errors.Unsupported { message: "inner provider cannot serve a request/response call" },
+      }
     }
   }
 
   // ---- Streaming span: open on first byte, close on last, usage at the end. --
   implements Streaming {
     function stream<TStream, TFinal>(self, prompt: baml.llm.PromptAst)
-        -> baml.llm.Stream<TStream, TFinal> throws baml.errors.LlmClient {
+        -> baml.llm.Stream<TStream, TFinal>
+        throws baml.ExtendUnknownError<baml.errors.StreamError> {
       match (self.inner) {
         let s: Streaming => {
           let span = obs_start(self.name, self.parent, { "gen_ai.operation.name": "chat.stream" });
@@ -216,7 +266,15 @@ class Traced {
           }
         },
         // degrade: no native streaming -> buffer the call, still one span.
-        _ => baml.llm.buffer_as_stream<TStream, TFinal>(self.call<TFinal>(prompt)),
+        // `self.call` throws on the CallError channel; this method declares the
+        // StreamError channel, so a foreign CallError (a refusal, a rate-limit)
+        // is re-channeled through baml.UnknownError to stay legal here.
+        _ => {
+          let final: TFinal = self.call<TFinal>(prompt) catch (e) {
+            _ => throw baml.UnknownError.with_message<baml.errors.StreamError>(e, "traced stream degrade-to-call failed");
+          };
+          baml.llm.buffer_as_stream<TStream, TFinal>(final)
+        },
       }
     }
   }
@@ -225,9 +283,13 @@ class Traced {
   implements Tools {
     type Transcript = TracedTranscript
 
-    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> TracedTranscript throws baml.errors.LlmClient {
+    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> TracedTranscript
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       match (self.inner) {
-        let t: Tools => {
+        // require MeteredTools (not just Tools): we need `meta(t)` to project
+        // per-turn usage onto the span. A provider whose tool loop can't report
+        // usage is rejected here, same as the missing-Tools case.
+        let t: MeteredTools => {
           let loop_span = obs_start(self.name, self.parent, { "gen_ai.operation.name": "agent.loop" });
           TracedTranscript {
             inner: t.begin<T>(prompt, tools),
@@ -237,21 +299,29 @@ class Traced {
             turn: 0,
           }
         },
-        _ => throw baml.errors.LlmClient { message: "inner provider has no Tools capability" },
+        _ => throw baml.errors.Unsupported { message: "inner provider has no metered Tools capability" },
       }
     }
 
-    function step<T>(self, tr: TracedTranscript) -> T | ToolCalls throws baml.errors.LlmClient {
+    function step<T>(self, tr: TracedTranscript) -> T | ToolCalls
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // one child span per MODEL turn, nested under the loop span.
-      let turn_span = obs_start("llm.turn", tr.loop_span, { "turn": baml.fmt.int(tr.turn) });
+      let turn_span = obs_start("llm.turn", tr.loop_span, { "turn": tr.turn.to_string() });
       let out: T | ToolCalls = tr.owner_tools.step<T>(tr.inner) catch (e) {
-        _ => { obs_finish(turn_span, {}, "turn failed"); throw baml.errors.LlmClient { message: "turn failed" }; }
+        _ => {
+          obs_finish(turn_span, {}, "turn failed");
+          throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "turn failed");
+        }
       };
-      obs_finish(turn_span, self.usage_attrs(), null);
+      // Per-turn usage rides the transcript's ResponseMeta (the Tools capability
+      // exposes `meta(t)` for the last turn) — same projection grain as call_with,
+      // not a stateful `last_usage()` stash on the provider.
+      obs_finish(turn_span, self.usage_attrs(tr.owner_tools.meta(tr.inner).usage()), null);
       out
     }
 
-    function submit(self, tr: TracedTranscript, results: ToolResult[]) -> TracedTranscript throws baml.errors.LlmClient {
+    function submit(self, tr: TracedTranscript, results: ToolResult[]) -> TracedTranscript
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // the dispatch spans were already emitted by ExecutionContext.emit during
       // ctx.dispatch (see TracingContext below); here we only thread the loop.
       TracedTranscript {
@@ -267,14 +337,18 @@ class Traced {
     // begin/step/submit, so our spans nest automatically. But we DO need the
     // loop span to close when the loop returns; the default run_tools returns T
     // directly, so we close in `step` on the value arm via a wrapper:
-    function run_tools<T>(self, prompt: baml.llm.PromptAst, tools: Tool[], ctx: ExecutionContext) -> T throws baml.errors.LlmClient {
+    function run_tools<T>(self, prompt: baml.llm.PromptAst, tools: Tool[], ctx: ExecutionContext) -> T
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       let tr = self.begin<T>(prompt, tools);
       let mut cur = tr;
       while (true) {
         match (self.step<T>(cur)) {
           let calls: ToolCalls => { cur = self.submit(cur, ctx.dispatch(calls.calls)); },
           let value: T => {
-            obs_finish(cur.loop_span, self.usage_attrs(), null);   // close the parent span
+            // close the parent span with the final turn's usage, projected from
+            // the transcript's ResponseMeta (the loop-aggregate caveat: this is
+            // the last turn's view, see evaluation.md).
+            obs_finish(cur.loop_span, self.usage_attrs(cur.owner_tools.meta(cur.inner).usage()), null);
             return value;
           },
         }
@@ -306,16 +380,22 @@ class TracedStream<TStream, TFinal> {
     type Item = TStream
     type Final = TFinal
 
-    function next(self) -> TStream | baml.llm.StreamDone throws baml.errors.LlmClient {
+    function next(self) -> TStream | baml.llm.StreamDone
+        throws baml.ExtendUnknownError<baml.errors.StreamError> {
       // mark first-byte the first time through.
       if (!self.opened) { obs_event(self.span, "first_token", {}); }
       let item: TStream | baml.llm.StreamDone = self.inner.next() catch (e) {
-        _ => { obs_finish(self.span, {}, "stream broke mid-flight"); throw baml.errors.LlmClient { message: "stream error" }; }
+        _ => {
+          obs_finish(self.span, {}, "stream broke mid-flight");
+          throw baml.UnknownError.with_message<baml.errors.StreamError>(e, "stream error");
+        }
       };
       match (item) {
         let done: baml.llm.StreamDone => {
-          // last byte: NOW usage is known.
-          obs_finish(self.span, self.owner.usage_attrs(), null);
+          // last byte: NOW usage is known. The terminal StreamDone carries the
+          // normalized ResponseMeta (the streaming analog of `meta_of(body)`),
+          // so usage is projected here — same grain as call_with, not a stash.
+          obs_finish(self.span, self.owner.usage_attrs(done.meta.usage()), null);
           done
         },
         let chunk: TStream => chunk,
@@ -326,7 +406,7 @@ class TracedStream<TStream, TFinal> {
 
 class TracedTranscript {
   inner: unknown          // the wrapped provider's own opaque transcript
-  owner_tools: Tools
+  owner_tools: MeteredTools   // MeteredTools so `.meta(t)` is reachable through this field
   loop_span: SpanId
   owner: Traced
   turn: int
@@ -342,13 +422,17 @@ class TracingContext {
   inner_dispatch: (ToolCall[]) -> ToolResult[]    // the app's real tool runner
 
   implements ExecutionContext {
-    function dispatch(self, calls: ToolCall[]) -> ToolResult[] throws baml.errors.LlmClient {
+    function dispatch(self, calls: ToolCall[]) -> ToolResult[]
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       let mut results: ToolResult[] = [];
       for (let c in calls) {
         // one function_span per tool call; id-correlated to the result.
         let tspan = obs_start("tool." + c.name, self.parent_span, { "tool.call_id": c.id });
         let one: ToolResult[] = self.inner_dispatch([c]) catch (e) {
-          _ => { obs_finish(tspan, {}, "tool threw"); throw baml.errors.LlmClient { message: "tool dispatch failed" }; }
+          _ => {
+            obs_finish(tspan, {}, "tool threw");
+            throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "tool dispatch failed");
+          }
         };
         obs_finish(tspan, { "tool.result_id": c.id }, null);
         results = results + one;

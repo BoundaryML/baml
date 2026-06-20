@@ -7,7 +7,8 @@
 //   - that the SAME function body works across Anthropic/OpenAI/Gemini
 //     despite the three system-prompt placements and the assistant/"model"
 //     role split (all absorbed inside the providers — §implement.baml),
-//   - how usage is read via the .metered companion (a capability match),
+//   - how usage is read via `.call_with` (a product sidecar projected from
+//     the normalized ResponseMeta — returns a TUPLE (T, U)),
 //   - how a refusal surfaces as a typed channel the app branches on,
 //   - how a combinator chain reads.
 // ============================================================================
@@ -75,32 +76,48 @@ function SummarizeViaGpt(work: string) -> string {
 }
 
 
-// --- Usage: the .metered companion. -----------------------------------------
+// --- Usage: the `.call_with` companion (a product sidecar). ------------------
 // `Summarize(work)` uses `.call` and discards usage. When the app wants tokens,
-// it calls the `.metered` companion. That companion `match`es the client's
-// provider for the Metered capability and, if present, returns value + usage.
-// Because all three providers in implement.baml implement Metered, this works
-// for any of them. If a provider could NOT report usage, the `_` arm decides
-// what "no usage" means (here: zeros, since usage is a refinement of call).
+// it calls `.call_with`, handing in a `project: (ResponseMeta) -> U` closure
+// that reads exactly the dimension it wants off the normalized sidecar — here
+// `m => m.usage()`. The result is a TUPLE `(T, U)`: the answer AND the usage.
+// `call_with` lives on the BASE Provider, so EVERY provider has it and EVERY
+// combinator forwards it — usage is not dropped under Fallback/Retry/Cache (the
+// silent-zero-usage degrade the bespoke `Metered` companion suffered is gone).
+// There is no capability `match` and no degrade arm: usage is not opt-in, it is
+// a projection any ResponseMeta answers (a provider that genuinely can't report
+// a dimension says so with `Unsupported`, not with a zeroed struct).
 //
-// Companion desugaring (what the compiler generates for `.metered`):
-function Summarize$metered(work: string) -> Metered_Result<string> {
+// Companion desugaring (what the compiler generates for `.call_with`):
+function Summarize$call_with<U>(work: string, project: (ResponseMeta) -> U) -> (string, U)
+    throws baml.ExtendUnknownError<baml.errors.CallError> {
   let p = Claude();
   let prompt = render_prompt("Summarize", { work: work });
-  match (p) {
-    let m: Metered => m.call_metered<string>(prompt),
-    _ => Metered_Result<string> {           // degrade: still answer, just no tokens
-      value: p.call<string>(prompt),
-      usage: Usage { input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0 },
-    },
-  }
+  p.call_with<string, U>(prompt, project)
 }
 
-// App code reading usage for cost accounting:
-function SummarizeWithCost(work: string) -> string throws baml.errors.LlmClient {
-  let r = Summarize$metered(work);
-  baml.sys.log("tokens in=" + r.usage.input_tokens + " out=" + r.usage.output_tokens);
-  r.value
+// App code reading usage for cost accounting. Note the tuple destructuring —
+// `(T, U)` is net-new surface (../value-sidecar-model.md §6), flagged in
+// evaluation.md §b.
+function SummarizeWithCost(work: string) -> string
+    throws baml.ExtendUnknownError<baml.errors.CallError> {
+  let (answer, usage): (string, Usage) = Summarize.call_with(work, m => m.usage());
+  baml.log.info("tokens in=" + usage.input_tokens.to_string() + " out=" + usage.output_tokens.to_string());
+  answer
+}
+
+// Composing more than one sidecar is just a richer projection — still ONE call,
+// still one tuple. logprobs come back `Unsupported` on all three chat providers
+// here (typed "can't", not a silent zero), which the app can branch on.
+function SummarizeWithUsageAndLogprobs(work: string) -> string
+    throws baml.ExtendUnknownError<baml.errors.CallError> {
+  let (answer, extras): (string, (Usage, Supported<Logprob[]>)) =
+      Summarize.call_with(work, m => (m.usage(), m.logprobs()));
+  match (extras.1) {
+    let lp: Logprob[]   => baml.log.info("got " + lp.length().to_string() + " logprobs"),
+    let u: Unsupported  => baml.log.info("logprobs unsupported: " + u.reason),
+  }
+  answer
 }
 
 
@@ -110,8 +127,13 @@ function SummarizeWithCost(work: string) -> string throws baml.errors.LlmClient 
 
 function SummarizeSafe(work: string) -> string {
   Summarize(work) catch (e) {
-    let r: Refused => "[declined: " + r.category + "]",   // distinct from a real answer
-    _              => "[error]",
+    // Most-specific first: the concrete provider error, then the capability
+    // interface (triaged via classifiers), then the UnknownError escape hatch.
+    let r: Refused                => "[declined: " + r.category + "]",   // distinct from a real answer
+    let c: baml.errors.CallError  => {                                   // any transport/HTTP failure
+      if (c.is_rate_limit()) { "[rate-limited]" } else { "[error]" }
+    },
+    let u: baml.UnknownError      => "[error: " + u.message.join(" / ") + "]",
   }
 }
 

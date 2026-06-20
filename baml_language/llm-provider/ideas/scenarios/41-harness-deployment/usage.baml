@@ -58,11 +58,24 @@ function boot() -> null {
 // -----------------------------------------------------------------------------
 // 3. PORTABLE FUNCTIONS — written once, run on either transport.
 // -----------------------------------------------------------------------------
-// .call flattens the whole agent run to one typed answer. The app author writes
-// the SAME function regardless of JSONL vs RPC vs in-process generator.
+// A harness is NOT request/response, so it has no `HttpProvider.call`; its real
+// value path is `Drivable.drive_to_value`, which flattens the whole agent run to
+// one typed answer. Under provider-as-marker the basic `Fix(task)` companion is a
+// capability `match` like every other: it prefers `HttpProvider.call`, else drains
+// a `Streaming` provider, else — the arm THIS scenario adds — drives a `Drivable`
+// to completion, else errors `Unsupported`. The app author still writes the SAME
+// function regardless of JSONL vs RPC vs in-process generator.
+//
+//   Fix("...")
+//     -> match (CodeAgent()) {
+//          let h: HttpProvider => h.call<Patch>(prompt),
+//          let s: Streaming    => drain<Patch>(s.stream(prompt)),
+//          let d: Drivable     => d.drive_to_value<Patch>(prompt),   // harness value path
+//          _                   => throw Unsupported,
+//        }
 
 function Fix(task: string) -> Patch {
-  client: CodeAgent()                              // ClaudeCode / JSONL
+  client: CodeAgent()                              // ClaudeCode / JSONL — Drivable arm
   prompt #"Fix the bug, return a patch: {{ task }}"#
 }
 
@@ -104,10 +117,17 @@ function translator_agent() -> DeployedAgent {
 
 // What the substrate calls when POST /agents/translator/<customer-id> arrives.
 // <customer-id> IS the durable instance: same id == same conversation space.
+// handle() throws the deployment channel; the webhook handler catches by runtime
+// match, most-specific-first: a contended lease that bubbled up as DurableError,
+// the DeployError interface, then the UnknownError escape hatch.
 function on_webhook(customer_id: string, text: string, language: string) -> string {
   let agent = translator_agent();
   let prompt = render_translate(language, text);
-  agent.handle(customer_id, prompt)                // single-writer lease inside
+  agent.handle(customer_id, prompt) catch (e) {     // single-writer lease inside
+    let busy: InstanceBusyError      => "[409: instance " + busy.instance_id + " is busy]";
+    let d: baml.errors.DeployError   => "[503: deployed run failed]";
+    let u: baml.UnknownError         => report_500(u.message);
+  }
 }
 
 // Pi --no-session as the inner harness: NOT durable. handle() `match`es and
@@ -136,7 +156,8 @@ class FlueSdkClient {
 
   implements HttpProvider {
     type Body = baml.http.Response
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       baml.http.Request {
         method: "POST",
         url: self.base_url + "/agents/translator/invoke",
@@ -144,10 +165,12 @@ class FlueSdkClient {
         body: frame_user(prompt),
       }
     }
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
-      baml.http.send(request) catch (e) { _ => { throw baml.errors.LlmClient { message: "deploy unreachable" }; } }
+    function send(self, request: baml.http.Request) -> baml.http.Response
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.http.send(request) catch (e) { _ => { throw baml.UnknownError.with_message<baml.errors.CallError>(e, "deploy unreachable"); } }
     }
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
+    function parse<T>(self, from: baml.http.Response) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       baml.sap.parse<T>(from.text())
     }
   }
@@ -165,3 +188,4 @@ function Translate(text: string, language: string) -> string {
 }
 
 function render_translate(language: string, text: string) -> baml.llm.PromptAst { $rust_io_function }
+function report_500(breadcrumb: string[]) -> string { $rust_io_function }   // join + 500-frame

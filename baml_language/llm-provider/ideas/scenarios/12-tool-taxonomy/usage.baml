@@ -37,14 +37,16 @@ class Brief { headline: string, sources: string[] }
 // impossible (none declared), and observe just logs.
 class TraceOnly {
   implements ExecutionContext {
-    function dispatch(self, calls: ToolCall[]) -> ToolResult[] {
-      throw baml.errors.LlmClient { message: "no client tools declared" }
+    function dispatch(self, calls: ToolCall[]) -> ToolResult[]
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
+      throw baml.errors.Unsupported { message: "no client tools declared" }
     }
-    function perform(self, call: ComputerCall) -> Screenshot {
-      throw baml.errors.LlmClient { message: "no computer tool declared" }
+    function perform(self, call: ComputerCall) -> Screenshot
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
+      throw baml.errors.Unsupported { message: "no computer tool declared" }
     }
     function observe(self, activity: ToolActivity) -> null {
-      baml.sys.log("tool", activity.source + " " + activity.phase);   // you OBSERVE, can't drive
+      baml.log.info("tool: " + activity.source + " " + activity.phase);   // you OBSERVE, can't drive
       null
     }
   }
@@ -57,7 +59,8 @@ function Research(topic: string) -> Brief {
 // The .run_mixed companion is generated from the function (decompose pattern):
 //   Research.run_mixed(topic, tools, ctx)
 // Driving it for the hosted-tool case — the app author supplies declare-only tools:
-function RunResearch(topic: string) -> Brief {
+function RunResearch(topic: string) -> Brief
+    throws baml.ExtendUnknownError<baml.errors.ToolError> {
   let tools: ToolKind[] = [
     HostedTool { kind: "web_search", config: { "max_uses": 3 } },
   ];
@@ -80,7 +83,8 @@ function RunResearch(topic: string) -> Brief {
 
 class OrderTools {
   implements ExecutionContext {
-    function dispatch(self, calls: ToolCall[]) -> ToolResult[] {
+    function dispatch(self, calls: ToolCall[]) -> ToolResult[]
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       let out: ToolResult[] = [];
       for (let c in calls) {
         match (c.name) {
@@ -93,11 +97,12 @@ class OrderTools {
       }
       out
     }
-    function perform(self, call: ComputerCall) -> Screenshot {
-      throw baml.errors.LlmClient { message: "no computer tool" }
+    function perform(self, call: ComputerCall) -> Screenshot
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
+      throw baml.errors.Unsupported { message: "no computer tool" }
     }
     function observe(self, activity: ToolActivity) -> null {
-      baml.sys.log("hosted", activity.source + ":" + activity.phase); null
+      baml.log.info("hosted: " + activity.source + ":" + activity.phase); null
     }
   }
 }
@@ -109,7 +114,8 @@ function TriageOrder(order_id: string) -> OrderTriage {
   prompt #"Investigate order {{ order_id }}; run any analysis you need, then resolve it."#
 }
 
-function RunTriage(order_id: string) -> OrderTriage {
+function RunTriage(order_id: string) -> OrderTriage
+    throws baml.ExtendUnknownError<baml.errors.ToolError> {
   let lookup: type = LookupArgs;     // first-class type for the FunctionTool schema
   let tools: ToolKind[] = [
     FunctionTool { name: "lookup_order", description: "Fetch an order by id", parameters: LookupArgs },
@@ -133,10 +139,12 @@ class LookupArgs { order_id: string }
 
 class BrowserDriver {
   implements ExecutionContext {
-    function dispatch(self, calls: ToolCall[]) -> ToolResult[] {
-      throw baml.errors.LlmClient { message: "computer-use only" }
+    function dispatch(self, calls: ToolCall[]) -> ToolResult[]
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
+      throw baml.errors.Unsupported { message: "computer-use only" }
     }
-    function perform(self, call: ComputerCall) -> Screenshot {
+    function perform(self, call: ComputerCall) -> Screenshot
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // drive a real/virtual machine, return a fresh screenshot keyed by call_id.
       Screenshot { call_id: call.call_id, image_b64: drive_browser(call.action) }
     }
@@ -146,9 +154,10 @@ class BrowserDriver {
 
 class ConsoleApprover {
   implements Approver {
-    function review(self, name: string, args: map<string, unknown>) -> map<string, unknown> throws baml.errors.LlmClient {
+    function review(self, name: string, args: map<string, unknown>) -> map<string, unknown>
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       let ok = prompt_human(name, args);          // blocks for a person
-      if (ok) { args } else { throw baml.errors.LlmClient { message: "denied by operator" }; }
+      if (ok) { args } else { throw ApprovalDenied { tool_name: name, reason: "denied by operator" }; }
     }
   }
 }
@@ -171,9 +180,15 @@ function RunBooking(site: string) -> Booking {
     gated: ["computer_use"],
   };
   let p = GPT();
+  // The gate's denial (ApprovalDenied) and any mid-loop ToolError both ride the
+  // ToolError channel; catch most-specific-first per the error model.
   match (p) {
     let m: MixedTools => m.run_mixed<Booking>(render_prompt(site), tools, ctx),
     _ => throw baml.errors.Unsupported { message: "client cannot do computer use" },
+  } catch (e) {
+    let d: ApprovalDenied        => Booking { confirmed: false, detail: "declined: " + d.reason };
+    let _t: baml.errors.ToolError => Booking { confirmed: false, detail: "tool loop failed" };
+    let u: baml.UnknownError     => { baml.log.error("booking: " + u.message.join(" | ")); Booking { confirmed: false, detail: "tool loop crashed" } };
   }
 }
 
@@ -193,7 +208,8 @@ function SummarizeIssue(repo: string) -> IssueSummary {
   prompt #"Open the latest issue in {{ repo }} and summarize it."#
 }
 
-function RunSummarize(repo: string) -> IssueSummary {
+function RunSummarize(repo: string) -> IssueSummary
+    throws baml.ExtendUnknownError<baml.errors.ToolError> {
   let tools: ToolKind[] = [
     McpServerTool {
       server_label: "github",

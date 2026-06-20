@@ -43,11 +43,22 @@
 // call (unlike a Channel), because it is configuration, not a live handle.
 // ---------------------------------------------------------------------------
 
+// NET-NEW capability error interface: executing a shell command in a fence is a
+// capability beyond call/stream/realtime/tools, so it gets its OWN error channel
+// (flagged net-new in evaluation.md). The classifiers a sandbox can meaningfully
+// answer are network (the container connector dropped) and a generic "the fence
+// itself failed"; rate-limit/parse don't apply, so the interface stays minimal.
+interface baml.errors.SandboxError {
+  function is_network_error(self) -> bool
+  function is_exec_failure(self) -> bool
+}
+
 interface Sandbox {
   // The sandbox executes a shell command and returns its captured output. This
   // is the ONLY method the tool loop needs; everything else (isolation, lifetime)
   // is the implementation's business.
-  function exec(self, command: string, cwd: string?) -> ShellResult throws baml.errors.Io
+  function exec(self, command: string, cwd: string?) -> ShellResult
+      throws baml.ExtendUnknownError<baml.errors.SandboxError>
 
   // A read-interface so policy code can report which fence is in force without
   // knowing the concrete type. `kind` is "virtual" | "local" | "container".
@@ -61,8 +72,11 @@ class ShellResult { stdout: string, stderr: string, exit_code: int }
 class VirtualSandbox {
   _vm: $rust_type                                   // host-owned just-bash interpreter handle
   implements Sandbox {
-    function exec(self, command: string, cwd: string?) -> ShellResult throws baml.errors.Io {
+    function exec(self, command: string, cwd: string?) -> ShellResult
+        throws baml.ExtendUnknownError<baml.errors.SandboxError> {
       just_bash_exec(self._vm, command, cwd)          // runs in-memory; no host fs by default
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.SandboxError>(e, "virtual sandbox exec failed");
     }
     function kind(self) -> string { "virtual" }
   }
@@ -73,8 +87,11 @@ class VirtualSandbox {
 class LocalSandbox {
   cwd: string
   implements Sandbox {
-    function exec(self, command: string, cwd: string?) -> ShellResult throws baml.errors.Io {
+    function exec(self, command: string, cwd: string?) -> ShellResult
+        throws baml.ExtendUnknownError<baml.errors.SandboxError> {
       local_shell_exec(command, cwd ?? self.cwd)      // real process on the host machine
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.SandboxError>(e, "local sandbox exec failed");
     }
     function kind(self) -> string { "local" }
   }
@@ -85,8 +102,11 @@ class LocalSandbox {
 class ContainerSandbox {
   _handle: $rust_type                               // remote container session (created by connector)
   implements Sandbox {
-    function exec(self, command: string, cwd: string?) -> ShellResult throws baml.errors.Io {
+    function exec(self, command: string, cwd: string?) -> ShellResult
+        throws baml.ExtendUnknownError<baml.errors.SandboxError> {
       container_exec(self._handle, command, cwd)
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.SandboxError>(e, "container sandbox exec failed");
     }
     function kind(self) -> string { "container" }
   }
@@ -186,18 +206,32 @@ class ApprovalDecision {
 // any Tools provider (id-based or name-based) and across any sandbox.
 // ---------------------------------------------------------------------------
 
+// A deliberate domain failure raised by the dispatcher when a callback returns a
+// behavior that is neither "allow" / "deny" / "ask". It is a tool-loop error (it
+// only arises while dispatching tool calls), so it implements ToolError. It is
+// neither a network nor a parse failure — the classifiers reflect that.
+class BadApprovalBehavior {
+  behavior: string
+  implements baml.errors.ToolError {
+    function is_network_error(self) -> bool { return false; }
+    function is_rate_limit(self)    -> bool { return false; }
+    function is_parse_error(self)   -> bool { return false; }
+  }
+}
+
 class PermissionedContext {
   policy: ToolPolicy                          // declarative rules (require_approval, deny patterns)
   can_use_tool: ((ToolCall) -> ApprovalDecision)?   // the programmatic callback hook
   control: Channel?                           // present in a steerable session; "ask" -> event
 
   implements ExecutionContext {
-    function dispatch(self, calls: ToolCall[]) -> ToolResult[] throws baml.errors.LlmClient {
+    function dispatch(self, calls: ToolCall[]) -> ToolResult[]
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       let out: ToolResult[] = [];
       for (let call in calls) {
         // (1) declarative deny pattern — the sieve. Refuse before anything runs.
         if (self.policy.is_denied(call)) {
-          out = push_result(out, ToolResult {
+          out.push(ToolResult {
             id: call.id,
             output: deny_payload("denied by policy pattern"),
           });
@@ -211,7 +245,7 @@ class PermissionedContext {
 
         match (decision.behavior) {
           "deny" => {
-            out = push_result(out, ToolResult {
+            out.push(ToolResult {
               id: call.id,
               output: deny_payload(decision.message ?? "denied"),
             });
@@ -219,22 +253,26 @@ class PermissionedContext {
           "allow" => {
             // the callback may have rewritten the input (Edit -> updatedInput).
             let effective = apply_updated_input(call, decision.updated_input);
-            out = push_result(out, ToolResult { id: call.id, output: run_tool(effective) });
+            out.push(ToolResult { id: call.id, output: run_tool(effective) });
           },
           "ask" => {
             // (4) escalate. With a control channel, ask the operator; without one,
             //     "ask" is unsafe-by-default -> deny (a batch run can't block).
             let approved: bool = self.escalate(call);
             if (approved) {
-              out = push_result(out, ToolResult { id: call.id, output: run_tool(call) });
+              out.push(ToolResult { id: call.id, output: run_tool(call) });
             } else {
-              out = push_result(out, ToolResult { id: call.id, output: deny_payload("operator denied") });
+              out.push(ToolResult { id: call.id, output: deny_payload("operator denied") });
             }
           },
-          _ => { throw baml.errors.LlmClient { message: "bad approval behavior: " + decision.behavior }; },
+          _ => { throw BadApprovalBehavior { behavior: decision.behavior }; },
         }
       }
       out
+    } catch (e) {
+      // BadApprovalBehavior (a known ToolError) passes through unchanged; the foreign
+      // baml.errors.Io a channel `send`/`await_approval` can raise is normalized here.
+      _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "permissioned dispatch failed");
     }
   }
 
@@ -255,7 +293,8 @@ class PermissionedContext {
   // "ask" -> a Channel EVENT when a control channel is present. This is the SAME
   // decision as the callback, surfaced over the live session: emit a request,
   // block on the operator's reply. Without a channel we cannot block, so deny.
-  function escalate(self, call: ToolCall) -> bool {
+  function escalate(self, call: ToolCall) -> bool
+      throws baml.ExtendUnknownError<baml.errors.ToolError> {
     match (self.control) {
       let io: Channel => {
         io.send(approval_request_event(call));      // host serializes call -> OutEvent
@@ -263,6 +302,9 @@ class PermissionedContext {
       },
       _ => { return false; },                         // unattended run: ask == deny
     }
+  } catch (e) {
+    // the channel `send` raises a foreign baml.errors.Io; normalize onto the tool channel.
+    _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "approval escalation failed");
   }
 }
 
@@ -271,7 +313,6 @@ function command_matches(call: ToolCall, pattern: string) -> bool { $rust_io_fun
 function deny_payload(reason: string) -> unknown { $rust_io_function }
 function apply_updated_input(call: ToolCall, updated: map<string, unknown>?) -> ToolCall { $rust_io_function }
 function run_tool(call: ToolCall) -> unknown { $rust_io_function }
-function push_result(xs: ToolResult[], x: ToolResult) -> ToolResult[] { $rust_io_function }
 function approval_request_event(call: ToolCall) -> OutEvent { $rust_io_function }
 function await_approval(io: Channel, call_id: string) -> bool { $rust_io_function }
 
@@ -282,7 +323,10 @@ function await_approval(io: Channel, call_id: string) -> bool { $rust_io_functio
 // Divergence shown: this provider has the rich Claude-specific mode words
 // (`default` | `acceptEdits` | `plan` | `bypassPermissions`) as a bound field,
 // plus allowed/disallowed tool lists as bound fields, plus a bound `sandbox`.
-// It is a Provider with NO HttpProvider (transport is a subprocess), and adds
+// It is a harness whose transport is a subprocess: NO HttpProvider, and (per
+// ../provider-as-marker.md) NO degenerate `call` either — a harness has no honest
+// single-turn request/response. It IS a Provider purely via the marker (its
+// capabilities `requires Provider`), and exposes only its REAL interactions:
 // Tools (the agentic loop) and Realtime (the steerable session). The permission
 // fields shape what the subprocess is ALLOWED to wire up; the per-call gate is
 // still the ExecutionContext.
@@ -295,14 +339,11 @@ class ClaudeCode {
   disallowed_tools: string[]?             // bound deny-list   (e.g. ["Bash(rm*)"])
   permission_mode: string?                // CLAUDE-SPECIFIC vocab; see mode_to_rules below
 
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
-      // one-shot: spawn `claude` non-interactively. allowed/disallowed/mode/sandbox
-      // are passed to the subprocess as flags; there is no human in the loop here,
-      // so the mode's "ask" postures collapse to deny unless bypassPermissions.
-      claude_code_run_once(self, prompt)            // $rust_io_function
-    }
-  }
+  // No `implements Provider { call }`: a harness has no honest single-turn call to
+  // fake (the OLD degenerate one-shot is retired — ../provider-as-marker.md §4).
+  // The class is still a Provider via the marker, because Tools/Realtime below
+  // `requires Provider`. Permission modes only mean something inside Tools/Realtime,
+  // which is exactly why the fake `call` had nowhere to put an "ask".
 
   implements Tools {
     // Opaque, provider-owned. Holds the subprocess session + the permission flags
@@ -311,19 +352,28 @@ class ClaudeCode {
     // applies the per-call callback on top.
     type Transcript = $rust_type
 
-    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> Transcript throws baml.errors.LlmClient {
+    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> Transcript
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // filter `tools` by allowed_tools/disallowed_tools BEFORE offering them, so
       // the model never sees a forbidden tool. permission_mode is translated into
       // the subprocess flags here. The sandbox is bound into the session so every
       // Bash the model emits runs inside `self.sandbox.exec`.
       let offered = filter_tools(tools, self.allowed_tools, self.disallowed_tools);
       claude_code_begin(self, prompt, offered)        // $rust_io_function
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "claude code begin failed");
     }
-    function step<T>(self, t: Transcript) -> T | ToolCalls throws baml.errors.LlmClient {
+    function step<T>(self, t: Transcript) -> T | ToolCalls
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       claude_code_step(t)                             // $rust_io_function; emits ToolCalls or final T
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "claude code step failed");
     }
-    function submit(self, t: Transcript, results: ToolResult[]) -> Transcript throws baml.errors.LlmClient {
+    function submit(self, t: Transcript, results: ToolResult[]) -> Transcript
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       claude_code_submit(t, results)                  // $rust_io_function
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "claude code submit failed");
     }
     // run_tools inherited from Tools default — the per-call gate lives in `ctx`.
   }
@@ -333,8 +383,11 @@ class ClaudeCode {
     // the call (pass-in) — this is ALSO the channel over which an "ask" approval
     // event flows back to the operator (PermissionedContext.escalate). The mode
     // can be changed mid-session by sending a control event over `io`.
-    function run(self, prompt: baml.llm.PromptAst, io: Channel) -> Transcript throws baml.errors.LlmClient {
+    function run(self, prompt: baml.llm.PromptAst, io: Channel) -> Transcript
+        throws baml.ExtendUnknownError<baml.errors.RealtimeError> {
       claude_code_session(self, prompt, io)           // $rust_io_function; drives steer/interrupt/approve
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.RealtimeError>(e, "claude code session failed");
     }
   }
 
@@ -370,7 +423,6 @@ class ClaudeCode {
 }
 
 function filter_tools(tools: Tool[], allow: string[]?, deny: string[]?) -> Tool[] { $rust_io_function }
-function claude_code_run_once<T>(p: ClaudeCode, prompt: baml.llm.PromptAst) -> T { $rust_io_function }
 function claude_code_begin(p: ClaudeCode, prompt: baml.llm.PromptAst, tools: Tool[]) -> $rust_type { $rust_io_function }
 function claude_code_step<T>(t: $rust_type) -> T | ToolCalls { $rust_io_function }
 function claude_code_submit(t: $rust_type, results: ToolResult[]) -> $rust_type { $rust_io_function }
@@ -399,29 +451,41 @@ class FlueHarness {
   disallowed_tools: string[]?
   // NOTE: deliberately NO permission_mode — Flue has no mode vocabulary.
 
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
-      flue_run_once(self, prompt)
-    }
-  }
+  // No `implements Provider { call }`: like ClaudeCode, this is a subprocess harness
+  // with no honest single-turn call (../provider-as-marker.md §4). It IS a Provider
+  // via the marker because Tools/Realtime below `requires Provider`.
 
   implements Tools {
     type Transcript = $rust_type
-    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> Transcript throws baml.errors.LlmClient {
+    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> Transcript
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // same wire move as ClaudeCode: filter by allow/deny before offering. There
       // is no mode to translate — the tool list IS the permission policy here.
       let offered = filter_tools(tools, self.allowed_tools, self.disallowed_tools);
       flue_begin(self, prompt, offered)
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "flue begin failed");
     }
-    function step<T>(self, t: Transcript) -> T | ToolCalls throws baml.errors.LlmClient { flue_step(t) }
-    function submit(self, t: Transcript, results: ToolResult[]) -> Transcript throws baml.errors.LlmClient {
+    function step<T>(self, t: Transcript) -> T | ToolCalls
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
+      flue_step(t)
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "flue step failed");
+    }
+    function submit(self, t: Transcript, results: ToolResult[]) -> Transcript
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       flue_submit(t, results)
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "flue submit failed");
     }
   }
 
   implements Realtime {
-    function run(self, prompt: baml.llm.PromptAst, io: Channel) -> Transcript throws baml.errors.LlmClient {
+    function run(self, prompt: baml.llm.PromptAst, io: Channel) -> Transcript
+        throws baml.ExtendUnknownError<baml.errors.RealtimeError> {
       flue_session(self, prompt, io)
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.RealtimeError>(e, "flue session failed");
     }
   }
 
@@ -440,7 +504,6 @@ class FlueHarness {
   }
 }
 
-function flue_run_once<T>(p: FlueHarness, prompt: baml.llm.PromptAst) -> T { $rust_io_function }
 function flue_begin(p: FlueHarness, prompt: baml.llm.PromptAst, tools: Tool[]) -> $rust_type { $rust_io_function }
 function flue_step<T>(t: $rust_type) -> T | ToolCalls { $rust_io_function }
 function flue_submit(t: $rust_type, results: ToolResult[]) -> $rust_type { $rust_io_function }

@@ -1,13 +1,18 @@
 // ============================================================================
 // 37-harness-basics / implement.baml   (std-lib / library-author code)
 //
-// A harness (Claude Code, Pi, Flue, ...) is the payoff of the base-`Provider`
+// A harness (Claude Code, Pi, Flue, ...) is the payoff of the provider-as-MARKER
 // model: its transport is a *subprocess*, not `baml.http`, so it is NOT an
-// `HttpProvider`. It implements:
-//   - Provider   (one-shot `call<T>`: spawn -> run to completion -> typed answer)
+// `HttpProvider` and it has NO `call` (provider-as-marker.md §2 — a harness drops
+// the old degenerate "spawn-and-hope `call`"). It is a `Provider` only in the
+// marker sense (it is composable, the type `client` returns); what it can DO is
+// per-capability. It implements:
 //   - Realtime   (the long-lived steerable session; control plane = messages
-//                 over the handed-in Channel)
+//                 over the handed-in Channel) — this is its REAL interaction, and
+//                 it is also how you get a one-shot: `run` over a throwaway channel
 //   - Tools      (so the host can also drive its own tool dispatch policy)
+// All three of these `requires Provider`, so `ClaudeCode` IS a `Provider`
+// automatically with no explicit `implements Provider` block.
 //
 // The control plane (interrupt / setModel / setPermissionMode / rewindFiles /
 // steer / followUp / stopTask) is NOT a pile of methods on the client. It is a
@@ -96,6 +101,42 @@ class HarnessTranscript {
 }
 
 // ----------------------------------------------------------------------------
+// (2b) Concrete harness errors. A subprocess harness has its OWN domain failures
+//      that are neither the answer nor a foreign transport error, so they get
+//      concrete typed classes (error-model rule 2). Each `implements` whichever
+//      capability interfaces it can actually arise on. Since a harness has NO
+//      `call` (provider-as-marker.md), there is NO CallError channel here: a
+//      spawn failure surfaces on the driven session (RealtimeError) and the
+//      host-dispatch tool loop (ToolError), the harness's only two interactions.
+//      None are rate-limit / parse failures, so those classifiers are false;
+//      spawn failures ARE classified as network-ish (the subprocess bridge is
+//      the harness's "transport"), so `is_network_error` is true there.
+class HarnessSpawnError {
+  message: string                 // e.g. "claude binary not found", "sandbox denied"
+  implements baml.errors.RealtimeError {
+    function is_network_error(self) -> bool { return true; }   // subprocess bridge = transport
+  }
+  implements baml.errors.ToolError {
+    function is_network_error(self) -> bool { return true; }
+  }
+}
+
+// The harness ran but the model declined the task (HTTP-200-equivalent refusal
+// surfaced in the subprocess event log). Canonical `Refused` shape, on the
+// realtime/tool channels because a harness declines mid-session or mid-tool-loop
+// (no `call`, so no CallError variant here).
+class Refused {
+  category: string
+  message: string
+  implements baml.errors.RealtimeError {
+    function is_network_error(self) -> bool { return false; }
+  }
+  implements baml.errors.ToolError {
+    function is_network_error(self) -> bool { return false; }
+  }
+}
+
+// ----------------------------------------------------------------------------
 // (3) NET-NEW capability: ControlPlane.
 //
 // `Realtime.run(prompt, io) -> Transcript` (canonical) already gives us the
@@ -120,8 +161,9 @@ interface ControlPlane requires Realtime {
 // ----------------------------------------------------------------------------
 // (4) The harness provider: ClaudeCode.
 //
-// Transport is a subprocess. NO `implements HttpProvider`. `call` and `run` are
-// host-backed (`$rust_io_function`) — the genuine bridge boundary (Open Q7).
+// Transport is a subprocess. NO `implements HttpProvider`, NO `call`. `run` and
+// the `Tools` methods are host-backed (`$rust_io_function`) — the genuine bridge
+// boundary (Open Q7).
 // ----------------------------------------------------------------------------
 
 class ClaudeCode {
@@ -144,17 +186,15 @@ class ClaudeCode {
     }
   }
 
-  // -- base Provider: the ONE-SHOT entry point (Python SDK `query()`). --------
-  // Spawn the subprocess, run the task to completion, parse the final answer
-  // into T. No channel: a fresh session, no control plane, no history.
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
-      // Drives `claude --print` (or equiv) in `self.sandbox`, with the bound
-      // permission_mode / allowed_tools applied as spawn flags, then SAP-parses
-      // the final assistant message into T. Subprocess, not HTTP.
-      $rust_io_function
-    }
-  }
+  // -- No `implements Provider { call }`. ------------------------------------
+  // A harness drives a subprocess; it does NOT do HTTP request/response, so it
+  // does not own `call` (provider-as-marker.md §2: harnesses drop the degenerate
+  // best-effort `call`). `ClaudeCode` IS a `Provider` (the marker) automatically,
+  // because `Realtime`/`Tools`/`ControlPlane` all `requires Provider`. Its REAL
+  // interactions are below: the driven session (`Realtime.run`) and host-owned
+  // tool dispatch (`Tools`). A fresh one-shot ("Python `query()`") is just a
+  // `run` over a throwaway channel (or `run_tools`) — there is no separate,
+  // honest `call<T>` to fake.
 
   // -- Realtime: the STATEFUL, driven session (TS `query()` -> Query). --------
   // The caller hands in `io`. The harness:
@@ -164,7 +204,8 @@ class ClaudeCode {
   //   * returns the opaque transcript when the session ends.
   // The whole control plane is here, as message handling — NOT as methods.
   implements Realtime {
-    function run(self, prompt: baml.llm.PromptAst, io: Channel) -> HarnessTranscript throws baml.errors.LlmClient {
+    function run(self, prompt: baml.llm.PromptAst, io: Channel) -> HarnessTranscript
+        throws baml.ExtendUnknownError<baml.errors.RealtimeError> {
       // Host body owns: subprocess lifecycle, the mid-flight-mutation race
       // ("land Steer/Interrupt/SetModel at a boundary between tool calls or
       // model round-trips without corrupting the in-progress transcript"
@@ -181,6 +222,8 @@ class ClaudeCode {
       // And UP: TextDelta / ToolStarted / ToolFinished / PermissionAsk /
       // TurnDone / RewindResult / SessionError via io.send.
       $rust_io_function
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.RealtimeError>(e, "claude code session failed");
     }
   }
 
@@ -200,7 +243,7 @@ class ClaudeCode {
       ];
       match (self.sandbox) {
         Sandbox.Local => base,                                    // no rewind
-        _             => base.append(reflect.type_of<RewindFiles>()),
+        _             => base.concat([reflect.type_of<RewindFiles>()]),
       }
     }
   }
@@ -213,22 +256,31 @@ class ClaudeCode {
   implements Tools {
     type Transcript = HarnessTranscript
 
-    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> HarnessTranscript throws baml.errors.LlmClient {
+    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> HarnessTranscript
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // Spawn with host tools registered as external tools the subprocess will
       // call out for (rather than running Bash/Edit itself).
       $rust_io_function
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "claude code begin failed");
     }
 
-    function step<T>(self, t: HarnessTranscript) -> T | ToolCalls throws baml.errors.LlmClient {
+    function step<T>(self, t: HarnessTranscript) -> T | ToolCalls
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // Advance the subprocess until it either emits a final answer (parse->T)
       // or requests host tools. ToolCall.id is the subprocess's correlation id,
       // OPAQUE to the loop (same contract as the HTTP providers).
       $rust_io_function
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "claude code step failed");
     }
 
-    function submit(self, t: HarnessTranscript, results: ToolResult[]) -> HarnessTranscript throws baml.errors.LlmClient {
+    function submit(self, t: HarnessTranscript, results: ToolResult[]) -> HarnessTranscript
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // Feed tool outputs back over the subprocess stdin, correlated by id.
       $rust_io_function
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "claude code submit failed");
     }
     // run_tools<T> inherited from Tools default.
   }
@@ -247,20 +299,22 @@ class PiAgent {
   model: string
   cwd: string?
 
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
-      $rust_io_function   // Pi one-shot
-    }
-  }
+  // No `implements Provider { call }` — like ClaudeCode, Pi is a driven
+  // subprocess, not an HTTP request/response provider. It IS a `Provider`
+  // (marker) via `Realtime`/`ControlPlane` requiring it. Its real interaction is
+  // the driven session below.
 
   implements Realtime {
-    function run(self, prompt: baml.llm.PromptAst, io: Channel) -> HarnessTranscript throws baml.errors.LlmClient {
+    function run(self, prompt: baml.llm.PromptAst, io: Channel) -> HarnessTranscript
+        throws baml.ExtendUnknownError<baml.errors.RealtimeError> {
       // Pi's session.prompt/steer/followUp/subscribe, mapped onto the same
       // OutEvent/InEvent vocabulary. Pi has NO interrupt and NO rewind, so:
       //   - it IGNORES Interrupt / RewindFiles / SetModel / StopTask, OR
       //   - the driver should have consulted supported_verbs and never sent them.
       // Sending an unsupported verb is a no-op + a SessionError up the channel.
       $rust_io_function
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.RealtimeError>(e, "pi session failed");
     }
   }
 

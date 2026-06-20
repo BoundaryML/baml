@@ -155,23 +155,27 @@ class Screenshot { call_id: string, image_b64: string }      // the hybrid resul
 
 interface MixedTools requires Tools {
   // Same Transcript associated type as Tools — provider-owned, opaque.
-  function begin_mixed<T>(self, prompt: baml.llm.PromptAst, tools: ToolKind[]) -> Transcript throws Error
+  function begin_mixed<T>(self, prompt: baml.llm.PromptAst, tools: ToolKind[]) -> Transcript
+      throws baml.ExtendUnknownError<baml.errors.ToolError>
 
   // The widened next(): a value, function calls you drive, a computer action you
   // drive, or a read-only activity you can only observe. Mirror of Iterator.next
   // with two extra "Item" shapes.
   function step_mixed<T>(self, t: Transcript)
-      -> T | ToolCalls | ComputerCalls | ToolActivity throws Error
+      -> T | ToolCalls | ComputerCalls | ToolActivity
+      throws baml.ExtendUnknownError<baml.errors.ToolError>
 
   // Answer the computer-use leg. Distinct from `submit(results: ToolResult[])`
   // because the payload is screenshots correlated by provider call_id, and the
   // wire encoding (`computer_call_output` / `input_image`) is provider-specific.
-  function submit_screenshots(self, t: Transcript, shots: Screenshot[]) -> Transcript throws Error
+  function submit_screenshots(self, t: Transcript, shots: Screenshot[]) -> Transcript
+      throws baml.ExtendUnknownError<baml.errors.ToolError>
 
   // The full mixed loop. Reuses the canonical run_tools dispatch policy but adds
   // arms for the new locations. ctx gains `perform` (computer-use) and `observe`
   // (hosted/MCP status sink) — see ExecutionContext extension below.
-  function run_mixed<T>(self, prompt: baml.llm.PromptAst, tools: ToolKind[], ctx: ExecutionContext) -> T throws Error {
+  function run_mixed<T>(self, prompt: baml.llm.PromptAst, tools: ToolKind[], ctx: ExecutionContext) -> T
+      throws baml.ExtendUnknownError<baml.errors.ToolError> {
     let t = self.begin_mixed<T>(prompt, tools);
     while (true) {
       match (self.step_mixed<T>(t)) {
@@ -207,8 +211,13 @@ interface MixedTools requires Tools {
 // ----------------------------------------------------------------------------
 
 interface ExecutionContext {
+  // dispatch/perform run app code on the tool-loop path, so they share the loop's
+  // ToolError channel (an approval denial, a "wrong tool kind" guard, or a host
+  // fault all surface here). observe is a pure sink and stays infallible.
   function dispatch(self, calls: ToolCall[]) -> ToolResult[]   // canonical (FunctionTool)
+      throws baml.ExtendUnknownError<baml.errors.ToolError>
   function perform(self, call: ComputerCall) -> Screenshot     // computer-use: drive the machine
+      throws baml.ExtendUnknownError<baml.errors.ToolError>
   function observe(self, activity: ToolActivity) -> null       // hosted/MCP: read-only sink
 }
 
@@ -222,9 +231,19 @@ interface ExecutionContext {
 // it wraps a *context*, it composes with any provider's loop unchanged.
 // ----------------------------------------------------------------------------
 
+// A denied approval is a deliberate domain failure raised on the tool-loop path:
+// it is neither a transport fault nor a parse failure, so it gets its own concrete
+// class on the ToolError channel that the app can branch on by type.
+class ApprovalDenied {
+  tool_name: string
+  reason: string
+  implements baml.errors.ToolError {}
+}
+
 interface Approver {
   // returns the (possibly edited) args to run, or throws to deny.
-  function review(self, name: string, args: map<string, unknown>) -> map<string, unknown> throws baml.errors.LlmClient
+  function review(self, name: string, args: map<string, unknown>) -> map<string, unknown>
+      throws baml.ExtendUnknownError<baml.errors.ToolError>
 }
 
 class ApprovalGate {
@@ -233,10 +252,11 @@ class ApprovalGate {
   gated: string[]                         // tool names that require approval
 
   implements ExecutionContext {
-    function dispatch(self, calls: ToolCall[]) -> ToolResult[] {
+    function dispatch(self, calls: ToolCall[]) -> ToolResult[]
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       let approved: ToolCall[] = [];
       for (let c in calls) {
-        if (self.gated.contains(c.name)) {
+        if (self.gated.includes(c.name)) {
           // pause the run for a person; review throws to deny, mutates to edit.
           let args = self.approver.review(c.name, c.args);
           approved = approved + [ToolCall { id: c.id, name: c.name, args: args }];
@@ -247,8 +267,9 @@ class ApprovalGate {
       self.inner.dispatch(approved)
     }
     // computer-use clicks are real side effects — gate them too if requested.
-    function perform(self, call: ComputerCall) -> Screenshot {
-      if (self.gated.contains("computer_use")) {
+    function perform(self, call: ComputerCall) -> Screenshot
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
+      if (self.gated.includes("computer_use")) {
         self.approver.review("computer_use", call.action);
       }
       self.inner.perform(call)
@@ -281,14 +302,19 @@ class Anthropic {
 
   implements HttpProvider {
     type Body = baml.http.Response
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       $rust_io_function     // base chat request; tool encoding lives in build_tools below
     }
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
-      baml.http.send(request) catch (e) { _ => { throw baml.errors.LlmClient { message: "http failed" }; } }
+    function send(self, request: baml.http.Request) -> baml.http.Response
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.http.send(request) catch (e) { _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "anthropic send failed"); }
     }
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
+    function parse<T>(self, from: baml.http.Response) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       baml.sap.parse<T>(from.text())
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "anthropic parse failed");
     }
   }
 
@@ -296,7 +322,8 @@ class Anthropic {
   // wire shape. This is where execution-location divergence becomes concrete:
   // each kind serializes differently, and HostedTool/McpServerTool carry NO
   // client schema.
-  function build_tools(self, tools: ToolKind[]) -> baml.http.Request throws baml.errors.LlmClient {
+  function build_tools(self, tools: ToolKind[]) -> baml.http.Request
+      throws baml.ExtendUnknownError<baml.errors.ToolError> {
     let entries: map<string, unknown>[] = [];
     let mcp_servers: map<string, unknown>[] = [];
     for (let tk in tools) {
@@ -345,12 +372,15 @@ class Anthropic {
       }
     }
     $rust_io_function   // splice `entries` -> tools[], `mcp_servers` -> mcp_servers[]
+  } catch (e) {
+    _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "anthropic build_tools failed");
   }
 
   // Resolve McpAuth to a bearer. StaticBearer is a passthrough (first-party only).
   // OAuth21 runs the discovery + audience-bound token grant — the `resource`
   // parameter (RFC 8707) is what binds the token to THIS server.
-  function resolve_mcp_token(self, auth: McpAuth) -> string throws baml.errors.LlmClient {
+  function resolve_mcp_token(self, auth: McpAuth) -> string
+      throws baml.ExtendUnknownError<baml.errors.ToolError> {
     match (auth) {
       let b: StaticBearer => { b.token },
       let o: OAuth21 => {
@@ -363,18 +393,26 @@ class Anthropic {
       },
     }
   }
-  function mcp_oauth_flow(self, o: OAuth21) -> string throws baml.errors.LlmClient { $rust_io_function }
+  function mcp_oauth_flow(self, o: OAuth21) -> string
+      throws baml.ExtendUnknownError<baml.errors.ToolError> {
+    $rust_io_function
+  } catch (e) {
+    _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "anthropic mcp oauth flow failed");
+  }
 
   implements Tools {
     type Transcript = AnthropicTranscript
 
-    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> AnthropicTranscript throws baml.errors.LlmClient {
+    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> AnthropicTranscript
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       $rust_io_function   // function-tool-only path (canonical Tools)
     }
-    function step<T>(self, t: AnthropicTranscript) -> T | ToolCalls throws baml.errors.LlmClient {
+    function step<T>(self, t: AnthropicTranscript) -> T | ToolCalls
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       $rust_io_function   // reads tool_use blocks -> ToolCalls correlated by tool_use_id
     }
-    function submit(self, t: AnthropicTranscript, results: ToolResult[]) -> AnthropicTranscript throws baml.errors.LlmClient {
+    function submit(self, t: AnthropicTranscript, results: ToolResult[]) -> AnthropicTranscript
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // Claude correlates by tool_use_id: each ToolResult.id MUST equal a prior
       // tool_use block's id, or the follow-up 400s. Order is not load-bearing
       // for Claude (id-correlated), unlike Gemini's positional results.
@@ -383,7 +421,8 @@ class Anthropic {
   }
 
   implements MixedTools {
-    function begin_mixed<T>(self, prompt: baml.llm.PromptAst, tools: ToolKind[]) -> AnthropicTranscript throws baml.errors.LlmClient {
+    function begin_mixed<T>(self, prompt: baml.llm.PromptAst, tools: ToolKind[]) -> AnthropicTranscript
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       let req = self.build_tools(tools);
       $rust_io_function   // send req; seed transcript with the heterogeneous tool set
     }
@@ -394,7 +433,8 @@ class Anthropic {
     // block by which arm of step_mixed's sum it belongs to. pause_turn is the
     // hosted-tool tell: the provider ran a server tool and wants to continue.
     function step_mixed<T>(self, t: AnthropicTranscript)
-        -> T | ToolCalls | ComputerCalls | ToolActivity throws baml.errors.LlmClient {
+        -> T | ToolCalls | ComputerCalls | ToolActivity
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       $rust_io_function
       // Concretely the native body does:
       //   - block.type == "tool_use"           -> ToolCalls   (id = block.id, your code)
@@ -408,7 +448,8 @@ class Anthropic {
       //   - stop_reason == "end_turn"           -> parse<T> the final message
     }
 
-    function submit_screenshots(self, t: AnthropicTranscript, shots: Screenshot[]) -> AnthropicTranscript throws baml.errors.LlmClient {
+    function submit_screenshots(self, t: AnthropicTranscript, shots: Screenshot[]) -> AnthropicTranscript
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // computer-use answer: each screenshot becomes a tool_result with the
       // matching call_id and an image content block. Correlated by call_id, NOT
       // by ToolResult.id — that's why this isn't `submit`.
@@ -439,18 +480,31 @@ class OpenAIResponses {
 
   implements HttpProvider {
     type Body = baml.http.Response
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       $rust_io_function   // POST /v1/responses
     }
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
-      baml.http.send(request) catch (e) { _ => { throw baml.errors.LlmClient { message: "http failed" }; } }
+    function send(self, request: baml.http.Request) -> baml.http.Response
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.http.send(request) catch (e) { _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "openai send failed"); }
     }
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
-      baml.sap.parse<T>(from.json_path("output_text"))
+    function parse<T>(self, from: baml.http.Response) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      // Responses puts the assembled text in a top-level `output_text` field.
+      // Navigate the parsed json map (Response has no json_path), then SAP-parse it.
+      let body = baml.json.parse(from.text());
+      let text = match (baml.json.field(body, "output_text")) {
+        let s: string => s,
+        _              => throw Refused { category: "no_output", message: "response had no output_text" },
+      };
+      baml.sap.parse<T>(text)
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "openai parse failed");
     }
   }
 
-  function build_tools(self, tools: ToolKind[]) -> baml.http.Request throws baml.errors.LlmClient {
+  function build_tools(self, tools: ToolKind[]) -> baml.http.Request
+      throws baml.ExtendUnknownError<baml.errors.ToolError> {
     let entries: map<string, unknown>[] = [];
     for (let tk in tools) {
       match (tk) {
@@ -493,21 +547,32 @@ class OpenAIResponses {
       }
     }
     $rust_io_function
+  } catch (e) {
+    _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "openai build_tools failed");
   }
 
-  function resolve_mcp_token(self, auth: McpAuth) -> string throws baml.errors.LlmClient {
+  function resolve_mcp_token(self, auth: McpAuth) -> string
+      throws baml.ExtendUnknownError<baml.errors.ToolError> {
     match (auth) {
       let b: StaticBearer => { b.token },
       let o: OAuth21      => { self.mcp_oauth_flow(o) },   // same RFC-8707 binding
     }
   }
-  function mcp_oauth_flow(self, o: OAuth21) -> string throws baml.errors.LlmClient { $rust_io_function }
+  function mcp_oauth_flow(self, o: OAuth21) -> string
+      throws baml.ExtendUnknownError<baml.errors.ToolError> {
+    $rust_io_function
+  } catch (e) {
+    _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "openai mcp oauth flow failed");
+  }
 
   implements Tools {
     type Transcript = ResponsesTranscript
-    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> ResponsesTranscript throws baml.errors.LlmClient { $rust_io_function }
-    function step<T>(self, t: ResponsesTranscript) -> T | ToolCalls throws baml.errors.LlmClient { $rust_io_function }
-    function submit(self, t: ResponsesTranscript, results: ToolResult[]) -> ResponsesTranscript throws baml.errors.LlmClient {
+    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> ResponsesTranscript
+        throws baml.ExtendUnknownError<baml.errors.ToolError> { $rust_io_function }
+    function step<T>(self, t: ResponsesTranscript) -> T | ToolCalls
+        throws baml.ExtendUnknownError<baml.errors.ToolError> { $rust_io_function }
+    function submit(self, t: ResponsesTranscript, results: ToolResult[]) -> ResponsesTranscript
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // Responses correlates function results by call_id and threads state via
       // previous_response_id (the transcript holds it). Each function_call_output
       // names its call_id.
@@ -516,12 +581,14 @@ class OpenAIResponses {
   }
 
   implements MixedTools {
-    function begin_mixed<T>(self, prompt: baml.llm.PromptAst, tools: ToolKind[]) -> ResponsesTranscript throws baml.errors.LlmClient {
+    function begin_mixed<T>(self, prompt: baml.llm.PromptAst, tools: ToolKind[]) -> ResponsesTranscript
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       let req = self.build_tools(tools);
       $rust_io_function
     }
     function step_mixed<T>(self, t: ResponsesTranscript)
-        -> T | ToolCalls | ComputerCalls | ToolActivity throws baml.errors.LlmClient {
+        -> T | ToolCalls | ComputerCalls | ToolActivity
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       $rust_io_function
       // Classify Responses output[] items:
       //   item.type == "function_call"          -> ToolCalls    (call_id, your code)
@@ -533,7 +600,8 @@ class OpenAIResponses {
       //     | "mcp_approval_request"             -> ToolActivity (source = "mcp:"+server_label)
       //   final message                          -> parse<T>(output_text)
     }
-    function submit_screenshots(self, t: ResponsesTranscript, shots: Screenshot[]) -> ResponsesTranscript throws baml.errors.LlmClient {
+    function submit_screenshots(self, t: ResponsesTranscript, shots: Screenshot[]) -> ResponsesTranscript
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // Responses computer-use answer: a `computer_call_output` input item with
       // {"type":"input_image","image_url":"data:image/png;base64,<b64>"} keyed by
       // call_id, sent with previous_response_id. This is the loop the background's

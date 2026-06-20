@@ -7,9 +7,11 @@
 // This scenario sits on top of TWO earlier ones and adds the harness-specific
 // divergence the background §5 names:
 //
-//   * from 37-harness-basics: `ClaudeCode` is a `Provider` whose transport is a
-//     subprocess (NOT HttpProvider), plus `Realtime` + `ControlPlane`.  We REUSE
-//     those interfaces verbatim and only add the storage + toolset surface here.
+//   * from 37-harness-basics: `ClaudeCode` is a `Provider` (the marker — see
+//     ../provider-as-marker.md) whose transport is a subprocess, NOT an
+//     HttpProvider, so it carries NO request/response `call`; its real
+//     interactions are `Realtime` + `ControlPlane` (37) plus the storage +
+//     toolset surface added here.  We REUSE those interfaces verbatim.
 //   * from 17-history-and-sessions: the `SessionStore` 4-method protocol
 //     (load/save/append/clear over `Turn[]`).  The whole point of THIS scenario
 //     is that a harness's store is not an in-process map — it is a real
@@ -24,7 +26,58 @@
 //       (listSessions / getSessionMessages / tagSession / renameSession) and the
 //       continue/resume/fork verbs, surfaced as a capability the harness
 //       advertises — because a chat-model Provider has no such store to query.
+//
+// Error model: this scenario introduces a NEW capability (`SessionCatalog`), so
+// per the canonical error model it also introduces a NEW capability-error
+// interface, `baml.errors.SessionError`, and every catalog method declares
+// `baml.ExtendUnknownError<baml.errors.SessionError>`.  The session run path
+// (`call_in_session`/`call_with_session`) uses `baml.errors.SessionError`; the
+// host-dispatch tool path uses `baml.errors.ToolError`.  (There is no base
+// request/response `call` here — the harness is not an HttpProvider.)
+// Foreign `baml.errors.Io` from the on-disk store is normalized into
+// `baml.UnknownError` at the catalog boundary.  Flagged net-new in evaluation.md.
 // ============================================================================
+
+
+// ----------------------------------------------------------------------------
+// NET-NEW capability-error interface for the session control plane.
+//
+// `SessionCatalog` is a capability beyond call/stream/realtime/tools, so it needs
+// its own error channel.  Its classifiers mirror the core interfaces; the one
+// that is genuinely meaningful here is `is_not_found` (a resume/continue against a
+// missing or moved session) — the harness analog of "no such transcript".
+// ----------------------------------------------------------------------------
+interface baml.errors.SessionError {
+  function is_network_error(self) -> bool
+  function is_not_found(self) -> bool      // session id / cwd dir does not exist
+}
+
+// NET-NEW REQUIREMENT on a spec type: because `SessionCatalog` invents a new
+// capability channel, `baml.errors.Unsupported` (the capability-negotiation error a
+// companion's `_` arm throws) must ALSO implement `SessionError` to be legal on this
+// channel — its canonical definition in _conventions.md only covers
+// Call/Stream/Tool/Realtime.  usage.baml throws `baml.errors.Unsupported` on the
+// SessionError channel (the `_` arms of `match (p) { let cat: SessionCatalog => ... }`),
+// so the spec's `Unsupported` is extended here with the session channel.  Every
+// classifier is false: an unsupported provider has neither a network failure nor a
+// missing session — it simply has no store at all.
+extend baml.errors.Unsupported {
+  implements baml.errors.SessionError {
+    function is_network_error(self) -> bool { return false; }
+    function is_not_found(self)     -> bool { return false; }
+  }
+}
+
+// A concrete SessionError the catalog raises when a pickup names a session that
+// is not on disk (resume/resumeAt/fork against a missing id, or a moved cwd dir).
+class SessionNotFound {
+  session_id: string?
+  message: string
+  implements baml.errors.SessionError {
+    function is_network_error(self) -> bool { return false; }
+    function is_not_found(self)     -> bool { return true; }
+  }
+}
 
 
 // ----------------------------------------------------------------------------
@@ -72,7 +125,7 @@ class BuiltinTools {
     for (let t in BuiltinTools.all()) {
       let allowed: bool = if (allow == null) { true } else { string_in(allow, t.name) };
       let denied: bool  = if (deny == null)  { false } else { string_in(deny, t.name) };
-      if (allowed && !denied) { out = out.append(t); }
+      if (allowed && !denied) { out.push(t); }
     }
     out
   }
@@ -201,9 +254,12 @@ class SqliteSessionStore {
 // runtime `match`).
 //
 // `SessionCatalog` is the harness analog of 17's `Conversational`: it threads a
-// persisted transcript through `Provider.call`, but here the transcript is on
-// disk and addressable by id, and the pickup mode (continue/resume/fork) selects
-// WHICH transcript and HOW to diverge.
+// persisted transcript through the harness's OWN run (a subprocess, via
+// `call_with_session`), but here the transcript is on disk and addressable by id,
+// and the pickup mode (continue/resume/fork) selects WHICH transcript and HOW to
+// diverge.  Note: it does NOT bottom out on a base `Provider.call` — under the
+// marker model `Provider` has no `call`; the harness's real interaction is its
+// own subprocess run, which `call_with_session` drives.
 // ----------------------------------------------------------------------------
 
 // How to pick up prior history.  Mirrors the Claude SDK Options (§5) but as a
@@ -223,25 +279,32 @@ interface SessionCatalog requires Provider {
   type Store: SessionStore
 
   // --- queryable helpers (operate on the store WITHOUT running the agent) ---
-  function list_sessions(self) -> SessionInfo[] throws baml.errors.Io
-  function session_info(self, id: string) -> SessionInfo throws baml.errors.Io
-  function session_messages(self, id: string) -> Turn[] throws baml.errors.Io
-  function rename_session(self, id: string, title: string) -> null throws baml.errors.Io
-  function tag_session(self, id: string, tag: string) -> null throws baml.errors.Io
+  function list_sessions(self) -> SessionInfo[]
+      throws baml.ExtendUnknownError<baml.errors.SessionError>
+  function session_info(self, id: string) -> SessionInfo
+      throws baml.ExtendUnknownError<baml.errors.SessionError>
+  function session_messages(self, id: string) -> Turn[]
+      throws baml.ExtendUnknownError<baml.errors.SessionError>
+  function rename_session(self, id: string, title: string) -> null
+      throws baml.ExtendUnknownError<baml.errors.SessionError>
+  function tag_session(self, id: string, tag: string) -> null
+      throws baml.ExtendUnknownError<baml.errors.SessionError>
 
   // --- pickup: resolve a Pickup into a concrete, writable session id ---
   // Fork is where the storage models diverge (background §5: Claude copies the
   // prefix, Pi points at the parent).  We expose the SEMANTIC ("give me a new id
   // seeded from this history") and let the impl choose copy-vs-pointer.
-  function resolve_pickup(self, p: Pickup) -> string throws baml.errors.Io
+  function resolve_pickup(self, p: Pickup) -> string
+      throws baml.ExtendUnknownError<baml.errors.SessionError>
 
   // --- the threaded run: pick up history, run one turn, persist back ---
   // This is the harness analog of 17.Conversational.chat: it bottoms out on the
-  // provider's own `call`, but loads/appends the on-disk transcript around it.
-  function call_in_session<T>(self, prompt: baml.llm.PromptAst, p: Pickup) -> T throws Error {
-    let id: string = self.resolve_pickup(p) catch (e) {
-      _ => { throw baml.errors.LlmClient { message: "could not resolve session pickup" }; }
-    };
+  // harness's own subprocess run (`call_with_session`), loading/appending the
+  // on-disk transcript around it.  (Under the marker model there is no base
+  // `Provider.call` to bottom out on — the real interaction is the subprocess.)
+  function call_in_session<T>(self, prompt: baml.llm.PromptAst, p: Pickup) -> T
+      throws baml.ExtendUnknownError<baml.errors.SessionError> {
+    let id: string = self.resolve_pickup(p);
     // The harness's own call runs the turn (subprocess); the host body of
     // `call_with_session` is responsible for pointing the subprocess at session
     // `id` so the subprocess appends to the SAME jsonl.  We pass the id as a
@@ -249,10 +312,13 @@ interface SessionCatalog requires Provider {
     self.call_with_session<T>(prompt, id)
   }
 
-  // The provider-specific bridge: run `call`, but bound to an explicit session id
-  // so persistence lands in the right jsonl.  A harness implements this with its
-  // subprocess; nothing portable can be said about it (Open Q3/Q7).
-  function call_with_session<T>(self, prompt: baml.llm.PromptAst, session_id: string) -> T throws Error
+  // The provider-specific bridge: run the harness's subprocess turn, but bound to
+  // an explicit session id so persistence lands in the right jsonl.  A harness
+  // implements this with its subprocess; nothing portable can be said about it
+  // (Open Q3/Q7).  This IS the harness's real interaction — it replaces the
+  // degenerate base `call` the marker model retired.
+  function call_with_session<T>(self, prompt: baml.llm.PromptAst, session_id: string) -> T
+      throws baml.ExtendUnknownError<baml.errors.SessionError>
 }
 
 
@@ -303,12 +369,13 @@ class ClaudeCode {
     BuiltinTools.resolve(self.allowed_tools, self.disallowed_tools)
   }
 
-  // -- base Provider: one-shot, fresh session (37, unchanged) -----------------
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
-      $rust_io_function   // spawn `claude --print` in self.sandbox, SAP-parse final
-    }
-  }
+  // -- NO degenerate `implements Provider { call }`.  Under the marker model
+  //    (../provider-as-marker.md) `Provider` is a bare marker — a harness does
+  //    NOT fake a request/response `call`.  `ClaudeCode` IS a Provider because
+  //    its REAL capabilities (`SessionCatalog`, `Tools`, and 37's
+  //    Realtime/ControlPlane) each `requires Provider`.  The one-shot "fresh
+  //    session" turn is the real interaction `SessionCatalog.call_in_session`
+  //    with `Fresh {}`, not a degenerate base `call`.
 
   // -- Realtime + ControlPlane: identical to 37-harness-basics; the driven,
   //    steerable session.  Omitted here to keep this file about STORAGE; the
@@ -323,41 +390,67 @@ class ClaudeCode {
     // Every helper delegates to the host, scoped to THIS cwd's directory.  The
     // cwd-coupling is visible: list_sessions can only ever see sessions under
     // self.cwd — move the project and this returns [].
-    function list_sessions(self) -> SessionInfo[] throws baml.errors.Io {
+    function list_sessions(self) -> SessionInfo[]
+        throws baml.ExtendUnknownError<baml.errors.SessionError> {
       // scans <session_root>/<encode_cwd(cwd)>/*.jsonl, reading the header record
       list_sessions_in_dir(self.store().dir_for())
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.SessionError>(e, "claude list_sessions failed");
     }
-    function session_info(self, id: string) -> SessionInfo throws baml.errors.Io {
+    function session_info(self, id: string) -> SessionInfo
+        throws baml.ExtendUnknownError<baml.errors.SessionError> {
       session_info_in_dir(self.store().dir_for(), id)
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.SessionError>(e, "claude session_info failed");
     }
-    function session_messages(self, id: string) -> Turn[] throws baml.errors.Io {
+    function session_messages(self, id: string) -> Turn[]
+        throws baml.ExtendUnknownError<baml.errors.SessionError> {
       // reuse the store's own load — same jsonl, same flattening of nested blocks
       self.store().load(id)
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.SessionError>(e, "claude session_messages failed");
     }
-    function rename_session(self, id: string, title: string) -> null throws baml.errors.Io {
+    function rename_session(self, id: string, title: string) -> null
+        throws baml.ExtendUnknownError<baml.errors.SessionError> {
       rename_session_in_dir(self.store().dir_for(), id, title)
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.SessionError>(e, "claude rename_session failed");
     }
-    function tag_session(self, id: string, tag: string) -> null throws baml.errors.Io {
+    function tag_session(self, id: string, tag: string) -> null
+        throws baml.ExtendUnknownError<baml.errors.SessionError> {
       tag_session_in_dir(self.store().dir_for(), id, tag)
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.SessionError>(e, "claude tag_session failed");
     }
 
     // resolve_pickup: the continue/resume/fork verbs.  This is where the
     // copy-vs-pointer fork divergence lives.  Written out, not elided, because it
     // is the teaching point of "fork cost varies".
-    function resolve_pickup(self, p: Pickup) -> string throws baml.errors.Io {
+    function resolve_pickup(self, p: Pickup) -> string
+        throws baml.ExtendUnknownError<baml.errors.SessionError> {
       let dir: string = self.store().dir_for();
       match (p) {
         let f: Fresh    => { return new_session_id(dir); },             // mint a fresh jsonl
         let c: Continue => {
           // most-recently-updated session in THIS cwd.  Empty if none / moved dir.
           let infos: SessionInfo[] = list_sessions_in_dir(dir);
-          if (infos.len() == 0) { return new_session_id(dir); }         // nothing to continue -> fresh
+          if (infos.length() == 0) { return new_session_id(dir); }      // nothing to continue -> fresh
           return most_recent(infos).id;
         },
-        let r: Resume   => { return r.session_id; },                    // caller named it
+        let r: Resume   => {                                            // caller named it
+          // A named id that is not on disk is a domain error the app branches on
+          // (not a transport failure) — raise the concrete, classified SessionError.
+          if (!session_exists_in_dir(dir, r.session_id)) {
+            throw SessionNotFound { session_id: r.session_id, message: "no such session in this cwd" };
+          }
+          return r.session_id;
+        },
         let ra: ResumeAt => {
           // Claude SDK resumeSessionAt: truncate the transcript at message_id,
           // keep the SAME id (history after that point is discarded on next save).
+          if (!session_exists_in_dir(dir, ra.session_id)) {
+            throw SessionNotFound { session_id: ra.session_id, message: "no such session in this cwd" };
+          }
           truncate_session_at(dir, ra.session_id, ra.message_id);
           return ra.session_id;
         },
@@ -366,18 +459,26 @@ class ClaudeCode {
           // at_message (or the whole thing) into it, record parent + branch_point.
           // A Pi-style harness would instead write a pointer record and copy
           // nothing — same SEMANTIC, cheaper storage.  The choice is the impl's.
+          if (!session_exists_in_dir(dir, fk.session_id)) {
+            throw SessionNotFound { session_id: fk.session_id, message: "cannot fork a missing session" };
+          }
           let new_id: string = new_session_id(dir);
           fork_copy_prefix(dir, fk.session_id, new_id, fk.at_message);  // host: copy or pointer
           return new_id;
         },
       }
+    } catch (e) {
+      // SessionNotFound (a known SessionError) passes through unchanged; foreign
+      // Io from the host store ops is normalized into the universal wrapper.
+      _ => throw baml.UnknownError.with_message<baml.errors.SessionError>(e, "claude resolve_pickup failed");
     }
 
     // call_with_session: subprocess bound to an explicit jsonl.  The host body
     // points `claude --resume <id>` at the right file so its own appends land in
     // OUR store (the subprocess and BAML must agree on the file — the load-bearing
     // coupling, Open Q3/Q7).
-    function call_with_session<T>(self, prompt: baml.llm.PromptAst, session_id: string) -> T throws baml.errors.LlmClient {
+    function call_with_session<T>(self, prompt: baml.llm.PromptAst, session_id: string) -> T
+        throws baml.ExtendUnknownError<baml.errors.SessionError> {
       $rust_io_function
     }
   }
@@ -388,13 +489,16 @@ class ClaudeCode {
   // honored even on the host-dispatch path.
   implements Tools {
     type Transcript = HarnessTranscript
-    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> HarnessTranscript throws baml.errors.LlmClient {
+    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> HarnessTranscript
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // tools passed by the host are MERGED with (or override) self.tools();
       // host body decides precedence.  id correlation is the subprocess's, opaque.
       $rust_io_function
     }
-    function step<T>(self, t: HarnessTranscript) -> T | ToolCalls throws baml.errors.LlmClient { $rust_io_function }
-    function submit(self, t: HarnessTranscript, results: ToolResult[]) -> HarnessTranscript throws baml.errors.LlmClient { $rust_io_function }
+    function step<T>(self, t: HarnessTranscript) -> T | ToolCalls
+        throws baml.ExtendUnknownError<baml.errors.ToolError> { $rust_io_function }
+    function submit(self, t: HarnessTranscript, results: ToolResult[]) -> HarnessTranscript
+        throws baml.ExtendUnknownError<baml.errors.ToolError> { $rust_io_function }
     // run_tools<T> inherited from Tools default.
   }
 }
@@ -419,40 +523,57 @@ class PiAgent {
     PiAgent { model: model, cwd: null, tree_db: tree_db, _tree: $rust_io_function }
   }
 
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient { $rust_io_function }
-  }
+  // NO degenerate `implements Provider { call }` — like ClaudeCode, Pi is a
+  // harness, not an HttpProvider.  It IS a Provider via the marker, because its
+  // `SessionCatalog` impl `requires Provider`.  The one-shot is
+  // `call_in_session(..., Fresh {})`.
 
   implements SessionCatalog {
     // Pi's store is a tree DB, but it STILL satisfies the 4-method SessionStore
     // protocol (load/save/append/clear over a leaf id).
     type Store = PiTreeStore
 
-    function list_sessions(self) -> SessionInfo[] throws baml.errors.Io {
+    function list_sessions(self) -> SessionInfo[]
+        throws baml.ExtendUnknownError<baml.errors.SessionError> {
       pi_tree_list(self._tree)                       // walks leaves; no cwd filter
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.SessionError>(e, "pi list_sessions failed");
     }
-    function session_info(self, id: string) -> SessionInfo throws baml.errors.Io {
+    function session_info(self, id: string) -> SessionInfo
+        throws baml.ExtendUnknownError<baml.errors.SessionError> {
       pi_tree_info(self._tree, id)
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.SessionError>(e, "pi session_info failed");
     }
-    function session_messages(self, id: string) -> Turn[] throws baml.errors.Io {
+    function session_messages(self, id: string) -> Turn[]
+        throws baml.ExtendUnknownError<baml.errors.SessionError> {
       // a leaf's transcript is its prefix walked from the root — the pointer
       // model: reading message history MATERIALIZES the chain, it isn't stored flat.
       pi_tree_materialize(self._tree, id)
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.SessionError>(e, "pi session_messages failed");
     }
-    function rename_session(self, id: string, title: string) -> null throws baml.errors.Io {
+    function rename_session(self, id: string, title: string) -> null
+        throws baml.ExtendUnknownError<baml.errors.SessionError> {
       pi_tree_rename(self._tree, id, title)
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.SessionError>(e, "pi rename_session failed");
     }
-    function tag_session(self, id: string, tag: string) -> null throws baml.errors.Io {
+    function tag_session(self, id: string, tag: string) -> null
+        throws baml.ExtendUnknownError<baml.errors.SessionError> {
       pi_tree_tag(self._tree, id, tag)
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.SessionError>(e, "pi tag_session failed");
     }
 
-    function resolve_pickup(self, p: Pickup) -> string throws baml.errors.Io {
+    function resolve_pickup(self, p: Pickup) -> string
+        throws baml.ExtendUnknownError<baml.errors.SessionError> {
       match (p) {
         let f: Fresh    => { return pi_tree_new_root(self._tree); },
         let c: Continue => {
           // Pi has NO cwd key; "continue" means "the most recent leaf overall".
           let infos: SessionInfo[] = pi_tree_list(self._tree);
-          if (infos.len() == 0) { return pi_tree_new_root(self._tree); }
+          if (infos.length() == 0) { return pi_tree_new_root(self._tree); }
           return most_recent(infos).id;
         },
         let r: Resume   => { return r.session_id; },
@@ -468,9 +589,12 @@ class PiAgent {
           return pi_tree_branch_at(self._tree, fk.session_id, optional_or(fk.at_message, pi_tree_head(self._tree, fk.session_id)));
         },
       }
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.SessionError>(e, "pi resolve_pickup failed");
     }
 
-    function call_with_session<T>(self, prompt: baml.llm.PromptAst, session_id: string) -> T throws baml.errors.LlmClient {
+    function call_with_session<T>(self, prompt: baml.llm.PromptAst, session_id: string) -> T
+        throws baml.ExtendUnknownError<baml.errors.SessionError> {
       $rust_io_function
     }
   }
@@ -501,6 +625,7 @@ function session_info_in_dir(dir: string, id: string) -> SessionInfo throws baml
 function rename_session_in_dir(dir: string, id: string, title: string) -> null throws baml.errors.Io { $rust_io_function }
 function tag_session_in_dir(dir: string, id: string, tag: string) -> null throws baml.errors.Io { $rust_io_function }
 function new_session_id(dir: string) -> string throws baml.errors.Io { $rust_io_function }
+function session_exists_in_dir(dir: string, id: string) -> bool throws baml.errors.Io { $rust_io_function }
 function truncate_session_at(dir: string, id: string, message_id: string) -> null throws baml.errors.Io { $rust_io_function }
 function fork_copy_prefix(dir: string, from_id: string, to_id: string, at_message: string?) -> null throws baml.errors.Io { $rust_io_function }
 

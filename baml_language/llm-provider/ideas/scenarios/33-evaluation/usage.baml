@@ -49,7 +49,9 @@ client JudgeModel() {
   }
 }
 
-// An embedding model for semantic scoring. Also "just a provider"; T = float[].
+// An embedding model for semantic scoring. Also "just an HttpProvider"; T = float[].
+// It feeds an `EmbeddingScorer.embedder: HttpProvider` field, because `call` lives on
+// HttpProvider now (the bare `Provider` marker carries no interaction method).
 client EmbedModel() {
   OpenAIChat {
     model: "text-embedding-3-large",
@@ -71,7 +73,7 @@ function support_scorers() -> Scorer<string, string>[] {
     //    question is about refunds. A code assertion — reference-free.
     Assert<string, string> {
       name: "mentions_policy",
-      predicate: (out) => baml.str.contains(out, "30 day"),
+      predicate: (out) => out.includes("30 day"),
     },
     // 2. Embedding similarity to the golden answer where one exists.
     EmbeddingScorer<string> {
@@ -123,7 +125,7 @@ function prod_cases() -> Case<string, string>[] {
 }
 
 function support_dataset() -> Case<string, string>[] {
-  baml.array.concat(golden_cases(), prod_cases())
+  golden_cases().concat(prod_cases())
 }
 
 
@@ -144,7 +146,8 @@ function eval_support() -> RunReport {
 
 // CI entrypoint: floor of 95% pass-rate, OR no worse than the last green run.
 // Throwing => non-zero exit => red build.
-function ci_gate_support(baseline_pass_rate: float?) -> bool throws baml.errors.LlmClient {
+function ci_gate_support(baseline_pass_rate: float?) -> bool
+    throws baml.ExtendUnknownError<baml.errors.EvalError> {
   let runner = Runner<string, string> {
     cases: support_dataset(),
     task: (q) => SupportReply(q),
@@ -152,6 +155,20 @@ function ci_gate_support(baseline_pass_rate: float?) -> bool throws baml.errors.
     task_provider: SupportModel(),
   };
   runner.gate(0.95, baseline_pass_rate)
+}
+
+// What CI's shell actually calls: turn the gate's typed verdict into an exit summary,
+// runtime-matching MOST-SPECIFIC-FIRST per the error model. EvalGateFailure (concrete)
+// is the expected red-build path; the EvalError interface catches a scorer that was
+// inapplicable across the board; baml.UnknownError is the escape hatch for a foreign
+// fault (a judge/embedder transport error normalized up from inside a scorer).
+function ci_report(baseline_pass_rate: float?) -> string {
+  let passed = ci_gate_support(baseline_pass_rate) catch (e) {
+    let g: EvalGateFailure        => { return "RED: " + g.reason; }
+    let v: baml.errors.EvalError  => { if (v.is_inapplicable()) { return "RED: a scorer could not score the dataset"; } else { return "RED: eval failed"; } }
+    let u: baml.UnknownError      => { return u.message.join("; "); }   // foreign fault bubbled up
+  };
+  if (passed) { "GREEN" } else { "RED" }
 }
 
 

@@ -107,21 +107,48 @@ enum OutKind {
 //    io" claim and OQ#2 (io is a parameter of the capability method).
 // -----------------------------------------------------------------------------
 
+// NET-NEW capability-error interface. LiveControl is a capability BEYOND
+// call/stream/realtime/tools (a mid-session control plane), so per the error
+// model it gets its own `baml.errors.<Cap>Error` interface with classifiers a
+// caller can triage without knowing the concrete class. Flagged net-new in
+// evaluation.md (b6). A control frame can fail to reach the server (network), or
+// be rejected by the backend (unsupported field / wrong state); the classifiers
+// let the app branch without pinning the concrete provider error.
+interface baml.errors.LiveControlError {
+  function is_network_error(self) -> bool
+  function is_rejected(self) -> bool   // backend refused the control frame
+}
+
+// Because LiveControl is net-new, the canonical capability-negotiation error
+// `baml.errors.Unsupported` (which already implements the four CORE capability
+// interfaces) must also implement THIS interface to remain legal on the
+// LiveControl channel when a `_` arm rejects a non-steerable provider. Extending
+// it here is itself a finding: every net-new capability error must retro-fit
+// Unsupported, or the `_`-arm reject can't typecheck (see evaluation b6/c).
+extend baml.errors.Unsupported {
+  implements baml.errors.LiveControlError {
+    function is_network_error(self) -> bool { return false; }
+    function is_rejected(self)      -> bool { return false; }
+  }
+}
+
 interface LiveControl requires Realtime {
   // Stop the response currently being generated. Does NOT end the session.
   // After this, `io` stays open; a new response may follow.
-  function cancel(self, io: Channel) -> null throws baml.errors.Io
+  function cancel(self, io: Channel) -> null
+      throws baml.ExtendUnknownError<baml.errors.LiveControlError>
 
   // Rewrite server-side memory so the assistant item reflects only what the user
   // HEARD. `heard_ms` is the played position the caller tracked. Providers that
   // truncate by ms encode it; providers that don't (Gemini) make this a no-op
   // because the server already discarded the unheard tail on its own.
   function truncate(self, io: Channel, item_id: string, heard_ms: int)
-      -> null throws baml.errors.Io
+      -> null throws baml.ExtendUnknownError<baml.errors.LiveControlError>
 
   // Mutate live session config (voice/instructions/temperature/tools/VAD) with
   // no reconnect. `patch` is a JSON object of the fields to change.
-  function update_session(self, io: Channel, patch: string) -> null throws baml.errors.Io
+  function update_session(self, io: Channel, patch: string) -> null
+      throws baml.ExtendUnknownError<baml.errors.LiveControlError>
 
   // Barge-in is cancel+truncate as ONE atomic intent (the background's core move).
   // Defaulted so every LiveControl provider inherits the correct ordering and the
@@ -129,7 +156,7 @@ interface LiveControl requires Realtime {
   // truncate at the played position (so memory matches what was heard). A
   // provider can override if its backend wants the opposite order or a fused frame.
   function barge_in(self, io: Channel, item_id: string, heard_ms: int)
-      -> null throws baml.errors.Io {
+      -> null throws baml.ExtendUnknownError<baml.errors.LiveControlError> {
     self.cancel(io);
     self.truncate(io, item_id, heard_ms);
   }
@@ -171,7 +198,8 @@ class PlaybackCursor {
   // Called when an assistant Audio frame arrives. Returns the cursor advanced by
   // however many ms the speaker actually accepted — UNLESS we are mid-interrupt,
   // in which case the frame is discarded (the race) and played_ms is frozen.
-  function on_audio(self, ev: InEvent) -> PlaybackCursor throws baml.errors.Io {
+  function on_audio(self, ev: InEvent) -> PlaybackCursor
+      throws baml.ExtendUnknownError<baml.errors.RealtimeError> {
     if (self.interrupting) {
       // Race: this delta was already in flight when we decided to cancel. The
       // user never heard it. Drop it; do NOT advance played_ms.
@@ -194,6 +222,10 @@ class PlaybackCursor {
       generation: self.generation,
       interrupting: false,
     }
+  } catch (e) {
+    // The audio device's foreign Io is not a meaningful classified realtime error
+    // here — normalize it into the universal wrapper on the RealtimeError channel.
+    _ => throw baml.UnknownError.with_message<baml.errors.RealtimeError>(e, "audio playback failed");
   }
 
   // Caller decided to interrupt (server VAD said speech_started, or push-to-talk).
@@ -226,6 +258,21 @@ class PlaybackCursor {
 //    cancel/truncate/update are three distinct outbound frames over `io`.
 // -----------------------------------------------------------------------------
 
+// A deliberate domain failure raised when a session-establishing control frame
+// (session.update to open, or the first response.create) cannot be delivered.
+// It can arise while driving the duplex (RealtimeError) and while sending a
+// control frame (LiveControlError), so it implements both. `op` names which frame.
+class RealtimeSessionError {
+  op: string
+  implements baml.errors.RealtimeError {
+    function is_network_error(self) -> bool { return true; }
+  }
+  implements baml.errors.LiveControlError {
+    function is_network_error(self) -> bool { return true; }
+    function is_rejected(self)      -> bool { return false; }
+  }
+}
+
 class OpenAIRealtime {
   voice: string
   api_key: string
@@ -240,15 +287,16 @@ class OpenAIRealtime {
   // barge-in WORK: it owns a PlaybackCursor, reacts to server VAD by calling its
   // own barge_in (via LiveControl), and discards late audio through the cursor.
   implements Realtime {
-    function run(self, prompt: baml.llm.PromptAst, io: Channel) -> Transcript throws baml.errors.LlmClient {
+    function run(self, prompt: baml.llm.PromptAst, io: Channel) -> Transcript
+        throws baml.ExtendUnknownError<baml.errors.RealtimeError> {
       // Open the session with the configured voice/instructions.
       io.send(OutEvent {
         kind: OutKind.SessionUpdate,
         session_patch: self.session_open_patch(),
-      }) catch (e) { _ => { throw baml.errors.LlmClient { message: "realtime open failed" }; } };
+      }) catch (e) { _ => { throw RealtimeSessionError { op: "realtime open" }; } };
       // Ask for the first response.
       io.send(OutEvent { kind: OutKind.ResponseCreate }) catch (e) {
-        _ => { throw baml.errors.LlmClient { message: "response.create failed" }; }
+        _ => { throw RealtimeSessionError { op: "response.create" }; }
       };
 
       // Mutable session-local state. `cursor` is the played-position bookkeeping.
@@ -290,18 +338,27 @@ class OpenAIRealtime {
       // $rust_io_function: block until the session ends (caller closes io or the
       // server hangs up), then materialize the accumulated transcript.
       baml.realtime.await_transcript(io)
+    } catch (e) {
+      // Trailing normalization: RealtimeSessionError passes through unchanged
+      // (it's a known RealtimeError); any foreign Io from await_transcript / io.on
+      // is wrapped into the universal hatch on the RealtimeError channel.
+      _ => throw baml.UnknownError.with_message<baml.errors.RealtimeError>(e, "openai realtime session failed");
     }
   }
 
   // LiveControl (net-new): the typed barge-in surface. THIS is where OpenAI's
   // wire encoding + ms-truncate semantics live. The app never builds these frames.
   implements LiveControl {
-    function cancel(self, io: Channel) -> null throws baml.errors.Io {
+    function cancel(self, io: Channel) -> null
+        throws baml.ExtendUnknownError<baml.errors.LiveControlError> {
       // response.cancel: stop the in-flight response. Session stays open.
       io.send(OutEvent { kind: OutKind.Cancel })
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.LiveControlError>(e, "openai cancel failed");
     }
 
-    function truncate(self, io: Channel, item_id: string, heard_ms: int) -> null throws baml.errors.Io {
+    function truncate(self, io: Channel, item_id: string, heard_ms: int) -> null
+        throws baml.ExtendUnknownError<baml.errors.LiveControlError> {
       // conversation.item.truncate at the PLAYED position. content_index 0 is the
       // audio content of the assistant item. heard_ms came from PlaybackCursor —
       // the ms the speaker actually rendered, NOT the ms the server generated.
@@ -311,36 +368,43 @@ class OpenAIRealtime {
         content_index: 0,
         audio_end_ms: heard_ms,
       })
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.LiveControlError>(e, "openai truncate failed");
     }
 
-    function update_session(self, io: Channel, patch: string) -> null throws baml.errors.Io {
+    function update_session(self, io: Channel, patch: string) -> null
+        throws baml.ExtendUnknownError<baml.errors.LiveControlError> {
       // session.update with a partial patch. No reconnect; takes effect on the
       // NEXT response. Changing voice mid-response does not retro-rewrite audio
       // already streamed.
       io.send(OutEvent { kind: OutKind.SessionUpdate, session_patch: patch })
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.LiveControlError>(e, "openai session.update failed");
     }
     // barge_in inherited from LiveControl's default: cancel THEN truncate.
   }
 
-  // Provider.call: a best-effort single turn over the realtime connection
-  // (Realtime requires Provider — OQ#1). One prompt in, one buffered answer out,
-  // no barge-in. Present so the existential `Provider` contract holds.
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
-      $rust_io_function  // open ephemeral session, send prompt, drain one response, parse
-    }
-  }
+  // No `implements Provider { call }`. Provider is a bare MARKER
+  // (../provider-as-marker.md): it carries no interaction method, and `call` is an
+  // HttpProvider capability — not something a realtime session can honestly fake.
+  // OpenAIRealtime IS a Provider transitively (LiveControl requires Realtime
+  // requires Provider); it exposes only its REAL interactions (Realtime.run +
+  // LiveControl.{cancel,truncate,update_session,barge_in}). The old degenerate
+  // "best-effort single turn" call is gone — OQ#1 resolved by the marker.
 
   function session_open_patch(self) -> string {
-    baml.json.encode(baml.json.object([
-      ("voice", baml.json.string(self.voice)),
-      ("instructions", match (self.instructions) {
-        let s: string => baml.json.string(s),
-        null           => baml.json.null(),
-      }),
+    // Build a native `map<string, json>` literal and serialize it. Strings, the
+    // nested map, and `null` ARE `json` values — no per-field wrapper functions.
+    let patch: map<string, json> = {
+      "voice": self.voice,
+      "instructions": match (self.instructions) {
+        let s: string => s,
+        null           => null,
+      },
       // server-VAD turn detection is what gives us speech_started for barge-in.
-      ("turn_detection", baml.json.object([("type", baml.json.string("server_vad"))])),
-    ]))
+      "turn_detection": { "type": "server_vad" },
+    };
+    baml.json.stringify(patch)
   }
 }
 
@@ -370,13 +434,12 @@ class GeminiLive {
   }
 
   implements Realtime {
-    function run(self, prompt: baml.llm.PromptAst, io: Channel) -> Transcript throws baml.errors.LlmClient {
+    function run(self, prompt: baml.llm.PromptAst, io: Channel) -> Transcript
+        throws baml.ExtendUnknownError<baml.errors.RealtimeError> {
       io.send(OutEvent {
         kind: OutKind.SessionUpdate,
-        session_patch: baml.json.encode(baml.json.object([
-          ("voice", baml.json.string(self.voice)),
-        ])),
-      }) catch (e) { _ => { throw baml.errors.LlmClient { message: "gemini live open failed" }; } };
+        session_patch: baml.json.stringify({ "voice": self.voice }),
+      }) catch (e) { _ => { throw RealtimeSessionError { op: "gemini live open" }; } };
 
       let cursor = PlaybackCursor.fresh();
 
@@ -408,18 +471,25 @@ class GeminiLive {
       });
 
       baml.realtime.await_transcript(io)
+    } catch (e) {
+      // RealtimeSessionError passes through; foreign Io is wrapped on the channel.
+      _ => throw baml.UnknownError.with_message<baml.errors.RealtimeError>(e, "gemini realtime session failed");
     }
   }
 
   implements LiveControl {
-    function cancel(self, io: Channel) -> null throws baml.errors.Io {
+    function cancel(self, io: Channel) -> null
+        throws baml.ExtendUnknownError<baml.errors.LiveControlError> {
       // Gemini's "stop the current model turn" control frame. Different wire shape
       // from OpenAI's response.cancel, same OutKind tag — the provider's encoder
       // (below, at the host boundary) maps OutKind.Cancel to the right JSON.
       io.send(OutEvent { kind: OutKind.Cancel })
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.LiveControlError>(e, "gemini cancel failed");
     }
 
-    function truncate(self, io: Channel, item_id: string, heard_ms: int) -> null throws baml.errors.Io {
+    function truncate(self, io: Channel, item_id: string, heard_ms: int) -> null
+        throws baml.ExtendUnknownError<baml.errors.LiveControlError> {
       // NO-OP. Gemini is server-authoritative over what was kept: when it
       // interrupts, it has already dropped the unheard tail. There is no
       // client->server "truncate at ms" message to send, and heard_ms cannot be
@@ -428,22 +498,23 @@ class GeminiLive {
       null
     }
 
-    function update_session(self, io: Channel, patch: string) -> null throws baml.errors.Io {
+    function update_session(self, io: Channel, patch: string) -> null
+        throws baml.ExtendUnknownError<baml.errors.LiveControlError> {
       // Gemini also supports live config updates, but only a subset of fields and
       // some require a turn boundary. We forward the patch; the host encoder
       // rejects unsupported keys.
       io.send(OutEvent { kind: OutKind.SessionUpdate, session_patch: patch })
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.LiveControlError>(e, "gemini session.update failed");
     }
     // barge_in inherited; for Gemini truncate is a no-op so it degenerates to
     // "cancel only" — which is the right behavior for a server-authoritative
     // backend, but only by accident of the default's ordering.
   }
 
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
-      $rust_io_function
-    }
-  }
+  // No `implements Provider { call }` — same as OpenAIRealtime. Provider is a
+  // marker; GeminiLive is a Provider transitively via Realtime, and exposes only
+  // its real Realtime.run + LiveControl surface. No degenerate buffered call.
 }
 
 
@@ -467,5 +538,5 @@ class GeminiLive {
 // baml.audio.play_and_measure(b64_pcm: string) -> int        // push to speaker,
 //     returns ms ACTUALLY buffered/played (the played-position primitive)
 // baml.realtime.await_transcript(io: Channel) -> Transcript  // block til session end
-// baml.json.{object,string,int,bool,null,encode}             // JSON builder
+// baml.json.stringify(j: json) -> string                     // serialize a native map<string,json>
 // Channel.{on,send,close}, InEvent/OutEvent                  // canonical + (this file)

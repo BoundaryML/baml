@@ -3,7 +3,7 @@
 // ============================================================================
 //
 // Canonical primitives reused VERBATIM from _conventions.md:
-//   interface Provider     — call<T>
+//   interface Provider     — the bare MARKER (no interaction method; combinator factories only)
 //   interface Realtime     — run(prompt, io: Channel) -> Transcript   (pass-in channel)
 //   interface Tools        — begin / step / submit / default run_tools (SYNC loop)
 //   interface Channel      — on(handler) / send(data) / close()
@@ -33,10 +33,26 @@
 //
 //   Net-new surface (flagged in evaluation.md):
 //     * interface RealtimeTools requires Realtime          (the event-driven loop)
+//     * interface baml.errors.RealtimeToolError            (NEW capability-error channel)
 //     * class ToolEvent  { call_id, name, args_json }      (the inbound event)
 //     * ExecutionContext.emit / .dispatch_async            (event-emit surface)
 //     * InEvent / OutEvent payload shapes for tool plumbing
 // ============================================================================
+
+
+// ----------------------------------------------------------------------------
+// NET-NEW CAPABILITY ERROR — RealtimeTools is a capability beyond the core four
+// (call/stream/realtime/tools), so per the error model it gets its own capability
+// error interface. It is NOT RealtimeError (a realtime-tools failure is a distinct
+// concern: a tool blew up off the audio path, a function_call_output couldn't be
+// spliced, a continuation event failed) and it is NOT ToolError (that channel is
+// the SYNC begin/step/submit loop). Same classifier shape as the core interfaces.
+// ----------------------------------------------------------------------------
+interface baml.errors.RealtimeToolError {
+  function is_network_error(self) -> bool
+  function is_rate_limit(self) -> bool
+  function is_dispatch_error(self) -> bool   // the tool handler itself failed (off the audio path)
+}
 
 
 // ----------------------------------------------------------------------------
@@ -89,13 +105,14 @@ class ExecutionContext {
   deps: unknown                     // injected dependencies the model never sees
 
   // SYNC path (reused by the chat Tools loop, unchanged from scenario 09/10).
-  function dispatch(self, calls: ToolCall[]) -> ToolResult[] throws baml.errors.LlmClient {
+  function dispatch(self, calls: ToolCall[]) -> ToolResult[]
+      throws baml.ExtendUnknownError<baml.errors.ToolError> {
     let out: ToolResult[] = [];
     for (let c in calls) {
       let r: ToolResult = self.invoke_one(c) catch (e) {
         _ => { ToolResult { id: c.id, output: { "error": "tool execution failed" } } }
       };
-      out = out.append(r);
+      out.push(r);
     }
     out
   }
@@ -105,18 +122,21 @@ class ExecutionContext {
   // network. Returns the ToolOutputEvent the provider will splice back via the
   // Channel. Crucially this DOES NOT block the audio path: the provider awaits it
   // off the event loop. Latency here is dead air, so a real impl wraps a deadline.
-  function dispatch_async(self, ev: ToolEvent) -> ToolOutputEvent throws baml.errors.LlmClient {
+  function dispatch_async(self, ev: ToolEvent) -> ToolOutputEvent
+      throws baml.ExtendUnknownError<baml.errors.RealtimeToolError> {
     let output: string = self.invoke_one_async(ev) catch (e) {
       // Surface the failure to the MODEL (it can apologize over audio) rather than
       // killing the session — a thrown error here is dead air with no explanation.
-      _ => { baml.sap.to_json({ "error": "tool failed; tell the user you couldn't complete it" }) }
+      _ => { baml.json.stringify({ "error": "tool failed; tell the user you couldn't complete it" }) }
     };
     ToolOutputEvent { call_id: ev.call_id, output_json: output }
   }
 
   // Host boundaries: resolve handler by name, validate args, inject deps, invoke.
-  function invoke_one(self, c: ToolCall) -> ToolResult throws baml.errors.LlmClient { $rust_io_function }
-  function invoke_one_async(self, ev: ToolEvent) -> string throws baml.errors.LlmClient { $rust_io_function }
+  function invoke_one(self, c: ToolCall) -> ToolResult
+      throws baml.ExtendUnknownError<baml.errors.ToolError> { $rust_io_function }
+  function invoke_one_async(self, ev: ToolEvent) -> string
+      throws baml.ExtendUnknownError<baml.errors.RealtimeToolError> { $rust_io_function }
 }
 
 
@@ -141,19 +161,22 @@ interface RealtimeTools requires Realtime {
   // Declare the tools for the session. Realtime declares tools up front in
   // `session.update` (or per response.create), not per-call — so this is config
   // sent once when the session opens, not a parameter threaded through a loop.
-  function configure_tools(self, io: Channel, tools: Tool[]) -> null throws Error
+  function configure_tools(self, io: Channel, tools: Tool[]) -> null
+      throws baml.ExtendUnknownError<baml.errors.RealtimeToolError>
 
   // Reconstruct a complete ToolEvent from the raw event the channel delivered, or
   // null if `raw` is not a function_call.done event. Each provider owns the
   // event-name vocabulary (`response.function_call_arguments.done`) and the
   // delta-accumulation BELOW this seam.
-  function decode_tool_event(self, raw: InEvent) -> ToolEvent? throws Error
+  function decode_tool_event(self, raw: InEvent) -> ToolEvent?
+      throws baml.ExtendUnknownError<baml.errors.RealtimeToolError>
 
   // Splice a tool result back into the SERVER-SIDE conversation as an event, then
   // ask the model to continue. This is the realtime replacement for `Tools.submit`
   // — but note it takes NO transcript: the conversation lives on the SERVER, not in
   // a client-held transcript. The client is stateless about history here.
-  function emit_tool_output(self, io: Channel, output: ToolOutputEvent) -> null throws Error
+  function emit_tool_output(self, io: Channel, output: ToolOutputEvent) -> null
+      throws baml.ExtendUnknownError<baml.errors.RealtimeToolError>
 
   // The default realtime tool loop. Compare with `Tools.run_tools`:
   //   * `Tools.run_tools` is a WHILE loop over `step` (pull, blocking).
@@ -161,7 +184,8 @@ interface RealtimeTools requires Realtime {
   // The session ends when the host closes the channel (hangup); `run` returns the
   // server-authoritative Transcript at that point.
   function run_tools_live(self, prompt: baml.llm.PromptAst, tools: Tool[],
-                          io: Channel, ctx: ExecutionContext) -> Transcript throws Error {
+                          io: Channel, ctx: ExecutionContext) -> Transcript
+      throws baml.ExtendUnknownError<baml.errors.RealtimeToolError> {
     // 1. Open the session by declaring the tools up front.
     self.configure_tools(io, tools);
 
@@ -174,7 +198,7 @@ interface RealtimeTools requires Realtime {
           // Run the tool OFF the audio path. The model may still be speaking the
           // turn that requested this call — we do not pause it.
           let out: ToolOutputEvent = ctx.dispatch_async(ev) catch (e) {
-            _ => { ToolOutputEvent { call_id: ev.call_id, output_json: "{\"error\":\"dispatch failed\"}" } }
+            _ => { ToolOutputEvent { call_id: ev.call_id, output_json: baml.json.stringify({ "error": "dispatch failed" }) } }
           };
           // Splice the result back as an event keyed by call_id, then (inside
           // emit_tool_output) ask the model to continue. ORDERING-WITH-AUDIO
@@ -188,6 +212,12 @@ interface RealtimeTools requires Realtime {
     // 3. Drive the session via Realtime.run on the SAME channel. `run` blocks until
     //    the host closes the channel; the `on` handler above fires throughout.
     self.run(prompt, io)
+  } catch (e) {
+    // `self.run` declares the RealtimeError channel, but this method declares
+    // RealtimeToolError — the two capability channels do NOT unify. A RealtimeError
+    // surfacing out of `run` is foreign HERE, so it normalizes through UnknownError
+    // (it keeps its identity; with_message only annotates the unknown/wrapped path).
+    _ => throw baml.UnknownError.with_message<baml.errors.RealtimeToolError>(e, "realtime tool loop failed");
   }
 }
 
@@ -215,21 +245,18 @@ class OpenAIRealtime {
 
   implements ChatModelOptions { model as model, api_key as api_key }
 
-  // Realtime requires Provider, so we also owe a best-effort single-turn `call`.
-  // For a realtime socket model, `call` opens a throwaway session, sends the
-  // prompt as text, drains to the first complete text response, closes. Honest
-  // but lossy (no audio) — this is the Open Question #1 "best-effort single turn".
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
-      $rust_io_function    // open socket, text-only turn, SAP-parse, close
-    }
-  }
+  // `Provider` is now the bare MARKER — no degenerate `call` to fake. This provider
+  // drives a duplex socket; its REAL interaction is `Realtime.run` (+ RealtimeTools).
+  // Because Realtime requires Provider (the marker), OpenAIRealtime IS a Provider with
+  // no explicit `implements Provider` block — the old "best-effort single-turn `call`"
+  // that opened a throwaway socket is gone (OQ1 resolved: realtime owns no `call`).
 
   implements Realtime {
     // The duplex driver. Wires inbound audio/transcript events to whatever sink
     // the HOST attached to `io`, and accepts outbound user audio. Returns the
     // server-authoritative Transcript when the host closes `io`.
-    function run(self, prompt: baml.llm.PromptAst, io: Channel) -> Transcript throws baml.errors.LlmClient {
+    function run(self, prompt: baml.llm.PromptAst, io: Channel) -> Transcript
+        throws baml.ExtendUnknownError<baml.errors.RealtimeError> {
       // session.update with instructions + voice, then stream. The tool handler (if
       // any) was layered on by RealtimeTools.configure_tools BEFORE we got here.
       OpenAIRealtime.open_session(self, io, prompt);   // host boundary: socket + audio bridge
@@ -238,23 +265,25 @@ class OpenAIRealtime {
   }
 
   implements RealtimeTools {
-    function configure_tools(self, io: Channel, tools: Tool[]) -> null throws baml.errors.LlmClient {
+    function configure_tools(self, io: Channel, tools: Tool[]) -> null
+        throws baml.ExtendUnknownError<baml.errors.RealtimeToolError> {
       // DIALECT: each Tool's `parameters: type` -> JSON Schema, wrapped in the
       // realtime session tool entry { type:"function", name, description, parameters }.
       // Sent ONCE as a session.update event — not per turn.
       let entries: string[] = [];
       for (let tool in tools) {
         let schema: string = baml.reflect.type_to_json_schema(tool.parameters);
-        entries = entries.append(
-          baml.llm.openai_realtime_tool_entry(tool.name, tool.description, schema)
+        entries.push(
+          OpenAIRealtime.openai_realtime_tool_entry(tool.name, tool.description, schema)
         );
       }
       io.send(OpenAIRealtime.session_update_tools_event(entries))   // OutEvent
-        catch (e) { _ => { throw baml.errors.LlmClient { message: "session.update failed" }; } };
+        catch (e) { _ => { throw baml.UnknownError.with_message<baml.errors.RealtimeToolError>(e, "session.update failed"); } };
       null
     }
 
-    function decode_tool_event(self, raw: InEvent) -> ToolEvent? throws baml.errors.LlmClient {
+    function decode_tool_event(self, raw: InEvent) -> ToolEvent?
+        throws baml.ExtendUnknownError<baml.errors.RealtimeToolError> {
       // We only fire on the TERMINAL event. The host's transport layer accumulates
       // response.function_call_arguments.delta into the final `arguments` string and
       // tags the frame; here we just test the event type and pull the fields.
@@ -268,12 +297,13 @@ class OpenAIRealtime {
       null   // audio delta / transcript / response.done / etc.
     }
 
-    function emit_tool_output(self, io: Channel, output: ToolOutputEvent) -> null throws baml.errors.LlmClient {
+    function emit_tool_output(self, io: Channel, output: ToolOutputEvent) -> null
+        throws baml.ExtendUnknownError<baml.errors.RealtimeToolError> {
       // THREADING: two SEPARATE events, in order.
       // (1) conversation.item.create with a function_call_output item carrying the
       //     SAME call_id — this is the "no slot, correlate by id" reality.
       io.send(OpenAIRealtime.function_call_output_event(output.call_id, output.output_json))
-        catch (e) { _ => { throw baml.errors.LlmClient { message: "item.create failed" }; } };
+        catch (e) { _ => { throw baml.UnknownError.with_message<baml.errors.RealtimeToolError>(e, "item.create failed"); } };
 
       // (2) ORDERING-WITH-AUDIO: block for response.done of the CURRENT turn before
       //     asking for the next one, so the follow-up audio doesn't interleave with
@@ -283,14 +313,15 @@ class OpenAIRealtime {
 
       // (3) response.create — ask the model to continue WITH the spliced result.
       io.send(OpenAIRealtime.response_create_event())
-        catch (e) { _ => { throw baml.errors.LlmClient { message: "response.create failed" }; } };
+        catch (e) { _ => { throw baml.UnknownError.with_message<baml.errors.RealtimeToolError>(e, "response.create failed"); } };
       null
     }
   }
 
   // --- statics: host bridges + event encoders, all BELOW the seam ---
   function open_session(self: OpenAIRealtime, io: Channel, prompt: baml.llm.PromptAst) -> null { $rust_io_function }
-  function pump_until_closed(self: OpenAIRealtime, io: Channel) -> Transcript throws baml.errors.LlmClient { $rust_io_function }
+  function pump_until_closed(self: OpenAIRealtime, io: Channel) -> Transcript
+      throws baml.ExtendUnknownError<baml.errors.RealtimeError> { $rust_io_function }
   function await_response_done(io: Channel) -> null { $rust_io_function }   // blocks off the audio path
   function event_type(raw: InEvent) -> string { $rust_io_function }
   function event_field(raw: InEvent, key: string) -> string { $rust_io_function }
@@ -327,21 +358,20 @@ class GeminiLive {
 
   implements ChatModelOptions { model as model, api_key as api_key }
 
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
-      $rust_io_function    // single-turn over a throwaway live socket
-    }
-  }
+  // Marker-only: no degenerate single-turn `call`. GeminiLive's real interaction is
+  // `Realtime.run` (+ RealtimeTools). It IS a Provider via Realtime requires Provider.
 
   implements Realtime {
-    function run(self, prompt: baml.llm.PromptAst, io: Channel) -> Transcript throws baml.errors.LlmClient {
+    function run(self, prompt: baml.llm.PromptAst, io: Channel) -> Transcript
+        throws baml.ExtendUnknownError<baml.errors.RealtimeError> {
       GeminiLive.open_setup(self, io, prompt);     // BidiGenerateContentSetup
       GeminiLive.pump_until_closed(self, io)
     }
   }
 
   implements RealtimeTools {
-    function configure_tools(self, io: Channel, tools: Tool[]) -> null throws baml.errors.LlmClient {
+    function configure_tools(self, io: Channel, tools: Tool[]) -> null
+        throws baml.ExtendUnknownError<baml.errors.RealtimeToolError> {
       // DIALECT: JSON-Schema-shaped `parameters: type` -> Gemini OpenAPI-3 subset
       // (strip $ref, coerce formats, flatten anyOf) — the SAME lossy transform as
       // batch Gemini in scenario 09, just delivered in the Setup message, not a
@@ -350,16 +380,17 @@ class GeminiLive {
       let decls: string[] = [];
       for (let tool in tools) {
         let openapi: string = baml.reflect.type_to_gemini_openapi(tool.parameters);
-        decls = decls.append(
-          baml.llm.gemini_function_declaration(tool.name, tool.description, openapi)
+        decls.push(
+          GeminiLive.gemini_function_declaration(tool.name, tool.description, openapi)
         );
       }
       io.send(GeminiLive.setup_tools_event(decls))   // part of BidiGenerateContentSetup
-        catch (e) { _ => { throw baml.errors.LlmClient { message: "setup tools failed" }; } };
+        catch (e) { _ => { throw baml.UnknownError.with_message<baml.errors.RealtimeToolError>(e, "setup tools failed"); } };
       null
     }
 
-    function decode_tool_event(self, raw: InEvent) -> ToolEvent? throws baml.errors.LlmClient {
+    function decode_tool_event(self, raw: InEvent) -> ToolEvent?
+        throws baml.ExtendUnknownError<baml.errors.RealtimeToolError> {
       // Gemini delivers the functionCall WHOLE inside a serverContent/toolCall
       // message — no delta accumulation to wait for. One server message can carry
       // SEVERAL functionCalls; the host transport fans them into one InEvent each,
@@ -379,20 +410,22 @@ class GeminiLive {
       null
     }
 
-    function emit_tool_output(self, io: Channel, output: ToolOutputEvent) -> null throws baml.errors.LlmClient {
+    function emit_tool_output(self, io: Channel, output: ToolOutputEvent) -> null
+        throws baml.ExtendUnknownError<baml.errors.RealtimeToolError> {
       // THREADING: ONE event. BidiGenerateContentToolResponse with a single
       // functionResponse keyed by the SAME id (and name). Sending it IS the
       // continuation — there is no response.create. So this branch DROPS OpenAI's
       // await_response_done + response.create two-step. The capability seam is the
       // same; the implementation underneath is genuinely different shapes.
       io.send(GeminiLive.tool_response_event(output.call_id, output.output_json))
-        catch (e) { _ => { throw baml.errors.LlmClient { message: "toolResponse failed" }; } };
+        catch (e) { _ => { throw baml.UnknownError.with_message<baml.errors.RealtimeToolError>(e, "toolResponse failed"); } };
       null
     }
   }
 
   function open_setup(self: GeminiLive, io: Channel, prompt: baml.llm.PromptAst) -> null { $rust_io_function }
-  function pump_until_closed(self: GeminiLive, io: Channel) -> Transcript throws baml.errors.LlmClient { $rust_io_function }
+  function pump_until_closed(self: GeminiLive, io: Channel) -> Transcript
+      throws baml.ExtendUnknownError<baml.errors.RealtimeError> { $rust_io_function }
   function is_function_call(raw: InEvent) -> bool { $rust_io_function }
   function function_call_id_or_synth(raw: InEvent) -> string { $rust_io_function }
   function event_field(raw: InEvent, key: string) -> string { $rust_io_function }
@@ -412,58 +445,122 @@ class GeminiLive {
 // After `run_tools_live` is entered, we are committed to the chosen member. This
 // is weaker than chat Fallback (which can retry per request) and the combinator
 // must say so.
+//
+// CONCRETE COMBINATOR ERRORS. The combinator raises two genuine domain failures on
+// purpose, so each is a concrete class implementing every capability interface the
+// combinator forwards (it can surface on any of call / run / run_tools_live):
+//   * RealtimeFallbackExhausted — no member could serve the requested capability.
+//   * RealtimeFallbackMisuse    — a seam method was called that this combinator
+//     can only forward as a whole loop (the configure/decode/emit "traps").
+// Neither is a network/rate/parse/dispatch condition, so all classifiers are false.
 // ----------------------------------------------------------------------------
+class RealtimeFallbackExhausted {
+  capability: string
+  implements baml.errors.CallError {
+    function is_network_error(self) -> bool { return false; }
+    function is_rate_limit(self)    -> bool { return false; }
+    function is_parse_error(self)   -> bool { return false; }
+  }
+  implements baml.errors.RealtimeError {
+    function is_network_error(self) -> bool { return false; }
+    function is_rate_limit(self)    -> bool { return false; }
+  }
+  implements baml.errors.RealtimeToolError {
+    function is_network_error(self)  -> bool { return false; }
+    function is_rate_limit(self)     -> bool { return false; }
+    function is_dispatch_error(self) -> bool { return false; }
+  }
+}
+
+class RealtimeFallbackMisuse {
+  method: string
+  implements baml.errors.RealtimeToolError {
+    function is_network_error(self)  -> bool { return false; }
+    function is_rate_limit(self)     -> bool { return false; }
+    function is_dispatch_error(self) -> bool { return false; }
+  }
+}
+
 class RealtimeFallback {
   strategy: Provider[]
 
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
+  // `call`/`call_with` live on HttpProvider now (Provider is the marker). The combinator
+  // forwards them to the first HTTP-capable member by runtime delegation. `call_with`
+  // forwards the projection too, so a member's usage/sidecar is not dropped (the P1 fix).
+  // The combinator factories (with_retry/fallback_to/cached) are inherited via the marker.
+  implements HttpProvider {
+    type Body = unknown
+    function call_with<T,U>(self, prompt: baml.llm.PromptAst, project: (ResponseMeta) -> U) -> (T,U)
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       for (let p in self.strategy) {
-        let r: T = p.call<T>(prompt) catch (e) { _ => { continue; } };
-        return r;
+        match (p) {
+          let h: HttpProvider => {
+            let r: (T,U) = h.call_with<T,U>(prompt, project) catch (e) { _ => { continue; } };
+            return r;
+          },
+          _ => { continue; },
+        }
       }
-      throw baml.errors.LlmClient { message: "all providers failed" }
+      throw RealtimeFallbackExhausted { capability: "call_with" }
+    }
+    function call<T>(self, prompt: baml.llm.PromptAst) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      for (let p in self.strategy) {
+        match (p) {
+          let h: HttpProvider => {
+            let r: T = h.call<T>(prompt) catch (e) { _ => { continue; } };
+            return r;
+          },
+          _ => { continue; },
+        }
+      }
+      throw RealtimeFallbackExhausted { capability: "call" }
     }
   }
 
   implements Realtime {
-    function run(self, prompt: baml.llm.PromptAst, io: Channel) -> Transcript throws baml.errors.LlmClient {
+    function run(self, prompt: baml.llm.PromptAst, io: Channel) -> Transcript
+        throws baml.ExtendUnknownError<baml.errors.RealtimeError> {
       for (let p in self.strategy) {
         match (p) {
           let r: Realtime => { return r.run(prompt, io); },   // commit to the first realtime member
           _ => { continue; },
         }
       }
-      throw baml.errors.LlmClient { message: "no realtime provider available" }
+      throw RealtimeFallbackExhausted { capability: "run" }
     }
   }
 
   implements RealtimeTools {
     // Pick the first member that can do realtime tools and run its WHOLE live loop.
     // We cannot split configure/decode/emit across members — they share one socket.
-    function configure_tools(self, io: Channel, tools: Tool[]) -> null throws baml.errors.LlmClient {
+    function configure_tools(self, io: Channel, tools: Tool[]) -> null
+        throws baml.ExtendUnknownError<baml.errors.RealtimeToolError> {
       // unused on its own path; the default run_tools_live below drives a member
       // directly. Present only to satisfy the interface — see run_tools_live.
-      throw baml.errors.LlmClient { message: "configure_tools on RealtimeFallback: call run_tools_live" }
+      throw RealtimeFallbackMisuse { method: "configure_tools" }
     }
-    function decode_tool_event(self, raw: InEvent) -> ToolEvent? throws baml.errors.LlmClient {
-      throw baml.errors.LlmClient { message: "decode_tool_event on RealtimeFallback: call run_tools_live" }
+    function decode_tool_event(self, raw: InEvent) -> ToolEvent?
+        throws baml.ExtendUnknownError<baml.errors.RealtimeToolError> {
+      throw RealtimeFallbackMisuse { method: "decode_tool_event" }
     }
-    function emit_tool_output(self, io: Channel, output: ToolOutputEvent) -> null throws baml.errors.LlmClient {
-      throw baml.errors.LlmClient { message: "emit_tool_output on RealtimeFallback: call run_tools_live" }
+    function emit_tool_output(self, io: Channel, output: ToolOutputEvent) -> null
+        throws baml.ExtendUnknownError<baml.errors.RealtimeToolError> {
+      throw RealtimeFallbackMisuse { method: "emit_tool_output" }
     }
 
     // Override the default loop: choose a member ONCE, then delegate its entire
     // event loop. No mid-session failover.
     function run_tools_live(self, prompt: baml.llm.PromptAst, tools: Tool[],
-                            io: Channel, ctx: ExecutionContext) -> Transcript throws baml.errors.LlmClient {
+                            io: Channel, ctx: ExecutionContext) -> Transcript
+        throws baml.ExtendUnknownError<baml.errors.RealtimeToolError> {
       for (let p in self.strategy) {
         match (p) {
           let rt: RealtimeTools => { return rt.run_tools_live(prompt, tools, io, ctx); },
           _ => { continue; },
         }
       }
-      throw baml.errors.LlmClient { message: "no realtime-tools provider available" }
+      throw RealtimeFallbackExhausted { capability: "run_tools_live" }
     }
   }
 }

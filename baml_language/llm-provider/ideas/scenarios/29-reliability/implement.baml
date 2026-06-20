@@ -5,7 +5,10 @@
 // "orchestration (retry/fallback/cache) lives in combinators that wrap a
 // Provider." The old ClientType enum loop (ns_llm/llm_types.baml:6,273) becomes
 // three plain, non-generic combinator classes — Retry, Fallback, RoundRobin —
-// that each `implements Provider` and forward by runtime delegation.
+// that each forward by runtime delegation. They forward request/response, so they
+// `implements HttpProvider` (call/call_with) — per provider-as-marker.md, `Provider`
+// is a bare marker and `call`/`call_with` live on `HttpProvider`. They are still
+// providers (the marker) because `HttpProvider requires Provider`.
 //
 // The hard part the background flags ("What's hard"):
 //   - retry must read the TYPED throws channel to decide transient vs permanent
@@ -24,19 +27,26 @@
 
 
 // ----------------------------------------------------------------------------
-// 1. The error taxonomy — a typed throws channel rich enough to drive retry.
+// 1. The error taxonomy — a concrete CallError rich enough to drive retry.
 //
-// The spine's base says `type Error = baml.errors.LlmClient`. That single opaque
-// error can't answer "is this worth retrying?". The background's table (Transient
-// / Permanent / Context-length / Content-filter) is the contract a retry loop
-// needs, so we REFINE the error into a tagged class that any provider throws and
-// any combinator can `match` on.
+// The canonical channel is `baml.ExtendUnknownError<baml.errors.CallError>`: a
+// CallError carries only the three coarse classifiers (is_network_error /
+// is_rate_limit / is_parse_error). Those three answer "is this transport noise?"
+// but NOT the finer "is this worth retrying, or context-length, or a clean
+// content-filter empty?" the background's 4-row table demands. So this scenario
+// supplies a CONCRETE CallError — `class LlmError` — that carries a richer
+// `FailureKind` discriminator AND implements the canonical classifiers (derived
+// from `kind`), so combinators `match` on the concrete `kind` while app code that
+// only holds `baml.errors.CallError` still triages via the interface methods.
 //
-// NET-NEW (flagged in evaluation.md (b)): `baml.errors.LlmClient` gains a
-// `kind` discriminator + a `retry_after` channel. Without a typed kind, retry is
-// reduced to string-sniffing `e.message` (what the TS background does:
-// `/context length/i.test(err.message)`) — which is exactly the fragility we want
-// to delete along with the provider enum.
+// LlmError ALSO implements StreamError and ToolError: the very same condition
+// (a 429, a content-filter) surfaces mid-stream and mid-tool-loop, so the one
+// concrete error is legal on all three capability channels.
+//
+// NET-NEW (flagged in evaluation.md (b)): the `FailureKind` refinement beyond the
+// three canonical classifiers. Without it, retry is reduced to string-sniffing
+// `e.message` (what the TS background does: `/context length/i.test(err.message)`)
+// — exactly the fragility we want to delete along with the provider enum.
 // ----------------------------------------------------------------------------
 
 enum FailureKind {
@@ -46,9 +56,11 @@ enum FailureKind {
   ContentFilter    // finish_reason: content_filter / safety — a *successful* empty
 }
 
-// The shape every provider throws. We treat it as a refinement of the spine's
-// `baml.errors.LlmClient` (assume the host error carries these fields, the way
-// the OpenAI/Anthropic SDKs expose `.status_code` and `.response.headers`).
+// The concrete domain error every provider throws on the call path. It is a
+// CallError (and StreamError / ToolError, since the same condition recurs on those
+// channels). The three canonical classifiers are DERIVED from `kind` so the
+// interface contract stays consistent with the richer discriminator combinators
+// read directly.
 class LlmError {
   kind: FailureKind
   status_code: int?                 // HTTP status when transport-level
@@ -56,6 +68,29 @@ class LlmError {
   retry_after_secs: float?          // parsed from the `Retry-After` header (429/503)
   // Surfaced so a context-length handler can decide how much to shed.
   provider_name: string
+
+  implements baml.errors.CallError {
+    // Transport-level Transient with no status (conn reset / timeout) is a network
+    // error; a 429/503/529 Transient is the rate-limit/overload signal.
+    function is_network_error(self) -> bool {
+      return self.kind == FailureKind.Transient && self.status_code == null;
+    }
+    function is_rate_limit(self) -> bool {
+      return self.kind == FailureKind.Transient &&
+        (self.status_code == 429 || self.status_code == 503 || self.status_code == 529);
+    }
+    function is_parse_error(self) -> bool {
+      // A schema-parse failure is a Permanent 200 in this taxonomy.
+      return self.kind == FailureKind.Permanent && self.status_code == 200;
+    }
+  }
+  // Same error can surface mid-stream and mid-tool-loop.
+  implements baml.errors.StreamError {
+    function is_network_error(self) -> bool {
+      return self.kind == FailureKind.Transient && self.status_code == null;
+    }
+  }
+  implements baml.errors.ToolError {}
 }
 
 // Classify a raw transport result into the taxonomy. This is the one place the
@@ -67,6 +102,14 @@ class LlmError {
 interface Classifier {
   function classify(self, resp: baml.http.Response) -> LlmError throws never
 }
+
+// Minimal typed shapes the classifier coerces the 200-body into, so the
+// content-filter signal is read by typed field access rather than the invented
+// `Response.json_path` (which does not exist on baml.http.Response). Each provider
+// reads only the one field it cares about; extra wire fields are ignored by SAP.
+class OpenAIChoice { finish_reason: string? }
+class OpenAIBody   { choices: OpenAIChoice[] }
+class AnthropicBody { stop_reason: string? }
 
 
 // ----------------------------------------------------------------------------
@@ -107,8 +150,8 @@ class OpenAIChat {
         // context-length is a 400 SUBTYPE — must be split out of Permanent, or a
         // retry loop wastes a fallback hop on an error the next model also rejects.
         let body = resp.text() catch (e) { _ => { ""; } };
-        if (baml.str.contains(body, "maximum context length") ||
-            baml.str.contains(body, "context_length_exceeded")) {
+        if (body.includes("maximum context length") ||
+            body.includes("context_length_exceeded")) {
           return LlmError {
             kind: FailureKind.ContextLength, status_code: 400,
             message: "context length exceeded", retry_after_secs: null,
@@ -129,7 +172,13 @@ class OpenAIChat {
       // 200 path: a content_filter finish_reason is a SUCCESSFUL empty, not a
       // transport error — the background's subtle row. It surfaces here so the
       // parse step can refuse to return junk.
-      let fr = resp.json_path("choices.0.finish_reason") catch (e) { _ => { ""; } };
+      let body200 = resp.text() catch (e) { _ => { ""; } };
+      let fr = match (baml.json.from_string<OpenAIBody>(body200)) {
+        let b: OpenAIBody => match (b.choices.at(0)) {
+          let c: OpenAIChoice => (c.finish_reason ?? ""),
+          _ => "",
+        },
+      } catch (e) { _ => { ""; } };
       if (fr == "content_filter") {
         return LlmError {
           kind: FailureKind.ContentFilter, status_code: 200,
@@ -148,14 +197,20 @@ class OpenAIChat {
   implements HttpProvider {
     type Body = baml.http.Response
 
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws LlmError {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       // service_tier rides as a body field; previous_response_id (if set) threads
       // server-side state. Both are provider-bound, not combinator-bound.
       $rust_io_function
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "openai build_request failed");
     }
 
-    function send(self, request: baml.http.Request) -> baml.http.Response throws LlmError {
-      // Transport-level failures (DNS, conn reset, timeout) are Transient.
+    function send(self, request: baml.http.Request) -> baml.http.Response
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      // Transport-level failures (DNS, conn reset, timeout) are a CLASSIFIED network
+      // error — map them to the concrete LlmError (is_network_error -> true) so the
+      // retry loop can read `kind`, rather than routing through UnknownError.
       let resp = baml.http.send(request) catch (e) {
         baml.errors.Timeout => {
           throw LlmError { kind: FailureKind.Transient, status_code: null,
@@ -168,9 +223,12 @@ class OpenAIChat {
       };
       if (!resp.ok()) { throw self.classify(resp); }     // 4xx/5xx -> typed kind
       return resp;
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "openai send failed");
     }
 
-    function parse<T>(self, from: baml.http.Response) -> T throws LlmError {
+    function parse<T>(self, from: baml.http.Response) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       let err = self.classify(from);
       if (err.kind == FailureKind.ContentFilter) { throw err; }   // empty success -> error
       baml.sap.parse<T>(from.text())
@@ -178,6 +236,8 @@ class OpenAIChat {
           throw LlmError { kind: FailureKind.Permanent, status_code: 200,
             message: "schema parse failed", retry_after_secs: null, provider_name: "openai" };
         } }
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "openai parse failed");
     }
   }
 }
@@ -203,8 +263,8 @@ class Anthropic {
       }
       if (resp.status_code == 400) {
         let body = resp.text() catch (e) { _ => { ""; } };
-        if (baml.str.contains(body, "prompt is too long") ||
-            baml.str.contains(body, "context")) {
+        if (body.includes("prompt is too long") ||
+            body.includes("context")) {
           return LlmError { kind: FailureKind.ContextLength, status_code: 400,
             message: "prompt too long", retry_after_secs: null, provider_name: "anthropic" };
         }
@@ -217,7 +277,10 @@ class Anthropic {
       }
       // Anthropic content-filter shape differs: stop_reason + a separate safety
       // signal, NOT a finish_reason string. Provider-local knowledge stays here.
-      let sr = resp.json_path("stop_reason") catch (e) { _ => { ""; } };
+      let body200 = resp.text() catch (e) { _ => { ""; } };
+      let sr = match (baml.json.from_string<AnthropicBody>(body200)) {
+        let b: AnthropicBody => (b.stop_reason ?? ""),
+      } catch (e) { _ => { ""; } };
       if (sr == "refusal") {
         return LlmError { kind: FailureKind.ContentFilter, status_code: 200,
           message: "refusal", retry_after_secs: null, provider_name: "anthropic" };
@@ -229,10 +292,14 @@ class Anthropic {
 
   implements HttpProvider {
     type Body = baml.http.Response
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws LlmError {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       $rust_io_function
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "anthropic build_request failed");
     }
-    function send(self, request: baml.http.Request) -> baml.http.Response throws LlmError {
+    function send(self, request: baml.http.Request) -> baml.http.Response
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       let resp = baml.http.send(request) catch (e) {
         baml.errors.Timeout => {
           throw LlmError { kind: FailureKind.Transient, status_code: null,
@@ -245,8 +312,11 @@ class Anthropic {
       };
       if (!resp.ok()) { throw self.classify(resp); }
       return resp;
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "anthropic send failed");
     }
-    function parse<T>(self, from: baml.http.Response) -> T throws LlmError {
+    function parse<T>(self, from: baml.http.Response) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       let err = self.classify(from);
       if (err.kind == FailureKind.ContentFilter) { throw err; }
       baml.sap.parse<T>(from.text())
@@ -254,6 +324,8 @@ class Anthropic {
           throw LlmError { kind: FailureKind.Permanent, status_code: 200,
             message: "schema parse failed", retry_after_secs: null, provider_name: "anthropic" };
         } }
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "anthropic parse failed");
     }
   }
 }
@@ -285,8 +357,9 @@ function jittered_backoff(attempt: int, base: float, cap: float) -> float {
 // 4. Retry — the typed throws channel drives the decision.
 //
 // Replaces the ClientType retry arm. It is a plain, non-generic class that
-// `implements Provider`; `with_retry(max)` on the Provider base (the conventions
-// default method) constructs it. The whole point: the `match (e.kind)` decides
+// `implements HttpProvider` (it forwards request/response); `with_retry(max)` on the
+// Provider marker (the conventions default method) constructs it. The whole point:
+// the `match (e.kind)` decides
 // transient-retry vs give-up — money and latency live in this match.
 // ----------------------------------------------------------------------------
 
@@ -297,11 +370,23 @@ class Retry {
   cap_secs: float           // e.g. 60.0
   idempotent: bool          // §5 — refuse to retry side-effecting calls
 
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws LlmError {
+  implements HttpProvider {
+    // Retry forwards request/response, so `call`/`call_with` belong to HttpProvider.
+    // `call_with` runs the SAME retry loop but threads the caller's `project` through to
+    // the inner provider's `call_with` — so usage/sidecar is not dropped by the wrapper.
+    function call<T>(self, prompt: baml.llm.PromptAst) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      // Only a request/response provider has `call`; match the inner for HttpProvider.
+      let h: HttpProvider = match (self.inner) {
+        let hh: HttpProvider => hh,
+        _ => { throw baml.errors.Unsupported { message: "inner provider has no request/response call" }; },
+      };
       let attempt = 0;
       while (true) {
-        let r: T = self.inner.call<T>(prompt) catch (e) {
+        let r: T = h.call<T>(prompt) catch (e) {
+          // A foreign/opaque failure carries no `kind` — we can't prove it's
+          // transient, so surface it unchanged rather than guess.
+          let u: baml.UnknownError => { throw u; }
           let err: LlmError => {
             // The decision table, in one place:
             match (err.kind) {
@@ -337,6 +422,42 @@ class Retry {
       }
       baml.sys.panic("unreachable")
     }
+
+    // Same retry loop, but route through the inner's call_with so the caller's
+    // projection (usage/cost/logprobs) survives the wrapper — the P1 fix. We match
+    // the inner for HttpProvider (only a request/response provider has call_with).
+    function call_with<T, U>(self, prompt: baml.llm.PromptAst, project: (ResponseMeta) -> U) -> (T, U)
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      match (self.inner) {
+        let h: HttpProvider => {
+          let attempt = 0;
+          while (true) {
+            let r: (T, U) = h.call_with<T, U>(prompt, project) catch (e) {
+              let u: baml.UnknownError => { throw u; }
+              let err: LlmError => {
+                match (err.kind) {
+                  FailureKind.Permanent => { throw err; }
+                  FailureKind.ContextLength => { throw err; }
+                  FailureKind.ContentFilter => { throw err; }
+                  FailureKind.Transient => {
+                    if (!self.idempotent && err.status_code == null) { throw err; }
+                    if (attempt >= self.max) { throw err; }
+                    let wait =
+                      if (err.retry_after_secs != null) { err.retry_after_secs }
+                      else { jittered_backoff(attempt, self.base_secs, self.cap_secs) };
+                    backoff_sleep(wait);
+                    attempt = attempt + 1;
+                  }
+                }
+              },
+            };
+            return r;
+          }
+          baml.sys.panic("unreachable")
+        },
+        _ => { throw baml.errors.Unsupported { message: "inner provider has no request/response sidecar" }; },
+      }
+    }
   }
 
   // Retry is a pure delivery wrapper — it forwards Streaming/Tools to inner so a
@@ -344,12 +465,13 @@ class Retry {
   // evaluation.md (c).)
   implements Streaming {
     function stream<TStream, TFinal>(self, prompt: baml.llm.PromptAst)
-        -> baml.llm.Stream<TStream, TFinal> throws LlmError {
+        -> baml.llm.Stream<TStream, TFinal>
+        throws baml.ExtendUnknownError<baml.errors.StreamError> {
       match (self.inner) {
         let s: Streaming => s.stream<TStream, TFinal>(prompt),
-        _ => { throw LlmError { kind: FailureKind.Permanent, status_code: null,
-          message: "inner provider is not streaming", retry_after_secs: null,
-          provider_name: "retry" }; },
+        // Capability negotiation failed — the canonical Unsupported (legal on any
+        // capability channel) rather than a hand-rolled "permanent" LlmError.
+        _ => { throw baml.errors.Unsupported { message: "inner provider is not streaming" }; },
       }
     }
   }
@@ -371,12 +493,21 @@ class Retry {
 class Fallback {
   strategy: Provider[]
 
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws LlmError {
+  implements HttpProvider {
+    // Fallback forwards request/response, so `call`/`call_with` belong to HttpProvider.
+    function call<T>(self, prompt: baml.llm.PromptAst) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       let last: LlmError = LlmError { kind: FailureKind.Permanent, status_code: null,
         message: "no providers", retry_after_secs: null, provider_name: "fallback" };
       for (let p in self.strategy) {
-        let r: T = p.call<T>(prompt) catch (e) {
+        let h: HttpProvider = match (p) {
+          let hh: HttpProvider => hh,
+          _ => { continue; },     // non-http member can't serve a value here
+        };
+        let r: T = h.call<T>(prompt) catch (e) {
+          // An opaque failure has no `kind` to decide "would another provider
+          // succeed?" — don't launder it across the fallback; surface immediately.
+          let u: baml.UnknownError => { throw u; }
           let err: LlmError => {
             last = err;
             match (err.kind) {
@@ -391,22 +522,50 @@ class Fallback {
       }
       throw last
     }
+
+    // Same fallback walk, forwarding the caller's projection to the chosen member's
+    // call_with so usage/sidecar rides through (the P1 fix). A member's AggregateMeta
+    // could fold per-attempt cost; here we forward the winner's meta to `project`.
+    function call_with<T, U>(self, prompt: baml.llm.PromptAst, project: (ResponseMeta) -> U) -> (T, U)
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      let last: LlmError = LlmError { kind: FailureKind.Permanent, status_code: null,
+        message: "no providers", retry_after_secs: null, provider_name: "fallback" };
+      for (let p in self.strategy) {
+        let h: HttpProvider = match (p) {
+          let hh: HttpProvider => hh,
+          _ => { continue; },
+        };
+        let r: (T, U) = h.call_with<T, U>(prompt, project) catch (e) {
+          let u: baml.UnknownError => { throw u; }
+          let err: LlmError => {
+            last = err;
+            match (err.kind) {
+              FailureKind.Transient => { continue; }
+              FailureKind.ContextLength => { continue; }
+              FailureKind.Permanent => { throw err; }
+              FailureKind.ContentFilter => { throw err; }
+            }
+          },
+        };
+        return r;
+      }
+      throw last
+    }
   }
 
   // Forwards streaming to the first streaming-capable member (conventions
   // pattern). Each implements block is a runtime `match`-and-route.
   implements Streaming {
     function stream<TStream, TFinal>(self, prompt: baml.llm.PromptAst)
-        -> baml.llm.Stream<TStream, TFinal> throws LlmError {
+        -> baml.llm.Stream<TStream, TFinal>
+        throws baml.ExtendUnknownError<baml.errors.StreamError> {
       for (let p in self.strategy) {
         match (p) {
           let s: Streaming => { return s.stream<TStream, TFinal>(prompt); },
           _ => { continue; },
         }
       }
-      throw LlmError { kind: FailureKind.Permanent, status_code: null,
-        message: "no streaming provider in fallback", retry_after_secs: null,
-        provider_name: "fallback" }
+      throw baml.errors.Unsupported { message: "no streaming provider in fallback" }
     }
   }
 
@@ -416,26 +575,31 @@ class Fallback {
   // front and ride it for the whole loop — it cannot fail over mid-transcript.
   implements Tools {
     type Transcript = OpaqueTranscript          // erased wrapper; see net-new flag
-    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> OpaqueTranscript throws LlmError {
+    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> OpaqueTranscript
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       for (let p in self.strategy) {
         match (p) {
           let t: Tools => {
-            let inner = t.begin<T>(prompt, tools) catch (e) { let err: LlmError => {
-              match (err.kind) { FailureKind.Transient => { continue; }, _ => { throw err; } }
-            }};
+            let inner = t.begin<T>(prompt, tools) catch (e) {
+              let u: baml.UnknownError => { throw u; }   // opaque — can't reclassify
+              let err: LlmError => {
+                match (err.kind) { FailureKind.Transient => { continue; }, _ => { throw err; } }
+              }
+            };
             return OpaqueTranscript { provider: t, inner_handle: inner };
           },
           _ => { continue; },
         }
       }
-      throw LlmError { kind: FailureKind.Permanent, status_code: null,
-        message: "no tools provider in fallback", retry_after_secs: null, provider_name: "fallback" }
+      throw baml.errors.Unsupported { message: "no tools provider in fallback" }
     }
-    function step<T>(self, t: OpaqueTranscript) -> T | ToolCalls throws LlmError {
+    function step<T>(self, t: OpaqueTranscript) -> T | ToolCalls
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // Bound to whichever member began. NO failover here — see evaluation.md (c).
       t.provider.step<T>(t.inner_handle)
     }
-    function submit(self, t: OpaqueTranscript, results: ToolResult[]) -> OpaqueTranscript throws LlmError {
+    function submit(self, t: OpaqueTranscript, results: ToolResult[]) -> OpaqueTranscript
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       OpaqueTranscript { provider: t.provider, inner_handle: t.provider.submit(t.inner_handle, results) }
     }
   }
@@ -468,17 +632,23 @@ class RoundRobin {
   // cannot hold a counter. NET-NEW: a mutable host handle.
   state: $rust_type           // RoundRobinState: cursor + health map + clock
 
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws LlmError {
+  implements HttpProvider {
+    // RoundRobin spreads request/response load, so `call`/`call_with` belong to HttpProvider.
+    function call<T>(self, prompt: baml.llm.PromptAst) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       let last: LlmError = LlmError { kind: FailureKind.Transient, status_code: null,
         message: "all members cooling down", retry_after_secs: null, provider_name: "roundrobin" };
       // Try up to `len(members)` healthy picks this call.
       let tries = 0;
-      while (tries < baml.array.len(self.members)) {
+      while (tries < self.members.length()) {
         let idx = rr_next_healthy(self.state);          // host: skips cooled-down members
         if (idx < 0) { throw last; }                    // everything is in cooldown
-        let p = self.members[idx];
-        let r: T = p.call<T>(prompt) catch (e) {
+        let h: HttpProvider = match (self.members[idx]) {
+          let hh: HttpProvider => hh,
+          _ => { tries = tries + 1; continue; },   // non-http member — skip this pick
+        };
+        let r: T = h.call<T>(prompt) catch (e) {
+          let u: baml.UnknownError => { throw u; }   // opaque — not a load signal
           let err: LlmError => {
             last = err;
             match (err.kind) {
@@ -496,6 +666,39 @@ class RoundRobin {
       }
       throw last
     }
+
+    // Same load-balancing walk, forwarding the caller's projection to the chosen
+    // member's call_with so usage/sidecar is preserved (the P1 fix).
+    function call_with<T, U>(self, prompt: baml.llm.PromptAst, project: (ResponseMeta) -> U) -> (T, U)
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      let last: LlmError = LlmError { kind: FailureKind.Transient, status_code: null,
+        message: "all members cooling down", retry_after_secs: null, provider_name: "roundrobin" };
+      let tries = 0;
+      while (tries < self.members.length()) {
+        let idx = rr_next_healthy(self.state);
+        if (idx < 0) { throw last; }
+        let h: HttpProvider = match (self.members[idx]) {
+          let hh: HttpProvider => hh,
+          _ => { tries = tries + 1; continue; },
+        };
+        let r: (T, U) = h.call_with<T, U>(prompt, project) catch (e) {
+          let u: baml.UnknownError => { throw u; }
+          let err: LlmError => {
+            last = err;
+            match (err.kind) {
+              FailureKind.Transient => {
+                rr_record_fail(self.state, idx, self.allowed_fails, self.cooldown_secs);
+                tries = tries + 1;
+              }
+              _ => { throw err; }
+            }
+          },
+        };
+        rr_record_success(self.state, idx);
+        return r;
+      }
+      throw last
+    }
   }
 }
 
@@ -508,7 +711,7 @@ function rr_record_success(state: $rust_type, idx: int) -> null { $rust_io_funct
 class RoundRobin {
   function over(members: Provider[]) -> RoundRobin {
     RoundRobin { members: members, allowed_fails: 2, cooldown_secs: 60.0,
-                 state: rr_new_state(baml.array.len(members)) }
+                 state: rr_new_state(members.length()) }
   }
 }
 function rr_new_state(n: int) -> $rust_type { $rust_io_function }

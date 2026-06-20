@@ -101,7 +101,7 @@ function limited_ctx(max_concurrent: int) -> ExecutionContext {
     function_name: "Research",
     args: {},
     registry: build_registry(),
-    dispatcher: LimitedDispatch { limit: max_concurrent },   // semaphore-capped fan-out
+    dispatcher: LimitedDispatch { limit: max_concurrent },   // TaskGroup-capped fan-out
   }
 }
 
@@ -186,8 +186,12 @@ function run_checkout(instruction: string) -> Receipt {
 function run_strict_pipeline(q: string) -> ResearchReport {
   // stop-on-first-error: a single failed tool aborts the whole turn (throws).
   Research.run_tools(q, [search_tool(), weather_tool()], strict_ctx()) catch (e) {
-    let err: baml.errors.LlmClient => {
+    let err: baml.errors.ToolError => {
       // a tool failed and we cancelled the rest; surface a degraded report.
+      ResearchReport { summary: "aborted: a tool failed", sources: [] }
+    },
+    let u: baml.UnknownError => {
+      // a foreign/transport failure bubbled up through the tool loop.
       ResearchReport { summary: "aborted: a tool failed", sources: [] }
     },
   }

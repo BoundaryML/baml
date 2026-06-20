@@ -58,14 +58,14 @@ function Speak(line: string) -> Media {
 }
 
 // STT INVERTS modality: the media is an INPUT (an audio attachment in the
-// prompt), the output is a plain string. Same Provider.call interface.
+// prompt), the output is a plain string. Same HttpProvider.call interface.
 function Transcribe(clip: audio) -> string {
   client: Scribe()
   prompt #"{{ clip }}"#
 }
 
 // In-conversation path: T = MixedReply. One call returns interleaved text +
-// image, and the usage carries BOTH cost meters.
+// image; BOTH cost meters ride the sidecar, not a field on the reply.
 function IllustrateAnswer(question: string) -> MixedReply {
   client: VisualChat()
   prompt #"Answer and illustrate: {{ question }}"#
@@ -85,26 +85,83 @@ function PreviewFox(subject: string) -> baml.llm.Stream<Media, Media> {
 // call site:  for (let frame in PreviewFox.stream("fox")) { show(frame); }
 
 // ----------------------------------------------------------------------------
-// Reading the two cost meters at the app layer.
+// Reading the two cost meters at the app layer — the PRODUCT SIDECAR path.
+// `call_with` returns a TUPLE (T, U): the answer AND whatever the `project`
+// closure pulled out of the normalized ResponseMeta. Usage is no longer a field
+// on MixedReply (nor absent on the dedicated `-> Media` path) — it is the SAME
+// `m => m.usage()` projection on both, and combinators forward it (a Fallback
+// no longer degrades usage to zero).
 // ----------------------------------------------------------------------------
 function CostAwareIllustrate(question: string) -> string {
   let p = VisualChat();
-  let reply: MixedReply = p.call<MixedReply>(baml.llm.render("Answer and illustrate: " + question));
-  // The app can branch on which path billed what — the dedicated path would
-  // report mainline_tokens == 0, the tool path reports both.
-  let u: Usage = reply.usage;
+  // destructure the tuple: the MixedReply value AND the projected Usage sidecar.
+  let (reply, u): (MixedReply, Usage) =
+      p.call_with<MixedReply, Usage>(
+        baml.llm.render("Answer and illustrate: " + question),
+        m => m.usage());
+  // The app can branch on which path billed what — the dedicated path reports
+  // mainline_tokens == 0, the tool path reports both.
   "billed " + u.mainline_tokens + " mainline tokens + " + u.generation_units + " " + u.generation_kind
+}
+
+// The dedicated path projects the SAME `m => m.usage()` — the seam usage USED to
+// fall through (Media had no usage slot, MixedReply did) is gone: one projection,
+// both paths. (Compare (c)#3 in the old evaluation.)
+function CostAwareDraw(subject: string) -> string {
+  let (img, u): (Media, Usage) =
+      Painter().call_with<Media, Usage>(
+        baml.llm.render("a watercolor " + subject),
+        m => m.usage());
+  "drew " + img.mime + " — billed " + u.generation_units + " " + u.generation_kind
+}
+
+// The provider-revised prompt is ALSO a sidecar now (it left the Media value).
+// It is an EXTERNAL dimension (RevisesPrompt), reached by a runtime `match`
+// through the response — the §7 escape-hatch pattern. A provider that can't
+// revise (tts/stt/chat) is an `Unsupported` match-miss, not a silent null.
+function DrawAndShowRewrite(subject: string) -> string {
+  let (img, rev): (Media, Supported<string>) =
+      Painter().call_with<Media, Supported<string>>(
+        baml.llm.render("a watercolor " + subject),
+        m => match (m) {
+          let rp: RevisesPrompt => rp.revised_prompt(),
+          _                     => Unsupported { reason: "provider does not revise prompts" },
+        });
+  match (rev) {
+    let r: string       => "drew " + img.mime + " (rewrote to: " + r + ")",
+    let _: Unsupported  => "drew " + img.mime + " (prompt used as written)",
+  }
 }
 
 // ----------------------------------------------------------------------------
 // Portability check across the two divergent providers, side by side.
 // Painter (GptImage, b64 bytes, dedicated) and VisualChat (Gpt55, output-item,
-// in-conversation) both reach `.call` — but note the return type MUST differ
+// in-conversation) both reach `.call` via HttpProvider — but note the return type MUST differ
 // (Media vs MixedReply), which is where the abstraction leaks (see evaluation).
 // ----------------------------------------------------------------------------
 function TwoPaths(subject: string) -> Media {
   let dedicated: Media = DrawFox(subject);                       // GptImage -> Media
   let mixed: MixedReply = IllustrateAnswer("draw a " + subject); // Gpt55     -> MixedReply
   // To treat them uniformly the app must reach INTO MixedReply for the media:
-  if (mixed.media.len() > 0) { mixed.media[0] } else { dedicated }
+  match (mixed.media.at(0)) { let first: Media => first, null => dedicated }
+}
+
+// ----------------------------------------------------------------------------
+// Consumer error triage — image-gen moderation is a TYPED domain decline.
+// Runtime match, most-specific first: concrete Refused (the provider declined to
+// draw the prompt) -> the CallError interface (network / rate-limit triage) ->
+// baml.UnknownError (the escape hatch, read the breadcrumb). The `client` returns
+// the existential Provider, so the static channel here is
+// `baml.errors.CallError | baml.UnknownError`; the concrete arms are runtime
+// refinements of it.
+// ----------------------------------------------------------------------------
+function DrawOrExplain(subject: string) -> string
+    throws baml.ExtendUnknownError<baml.errors.CallError> {
+  let m: Media = DrawFox(subject);
+  "drew " + m.mime
+} catch (e) {
+  let r: Refused                => "[declined: " + r.category + " — " + r.message + "]";
+  let h: OpenAiMediaHttpError   => "[http " + h.status + ": " + h.detail + "]";
+  let c: baml.errors.CallError  => { if (c.is_network_error()) { "[transient, retry]" } else { "[failed]" } }
+  let u: baml.UnknownError      => "[unexpected: " + u.message.join("; ") + "]";
 }

@@ -3,7 +3,7 @@
 // ============================================================================
 //
 // We build the voice stack on the canonical spine (`_conventions.md`):
-//   - `Provider`  — the irreducible base (call<T>)
+//   - `Provider`  — the irreducible MARKER (no interaction method; see ../provider-as-marker.md)
 //   - `Realtime`  — `run(prompt, io: Channel) -> Transcript`
 //   - `Channel`   — the pass-in duplex the caller hands to a realtime provider
 //
@@ -12,6 +12,11 @@
 // implement `Realtime`. STT/LLM/TTS are three composable providers; a
 // combinator wires them and presents a single `Realtime` face. Swap any
 // stage by swapping a field.
+//
+// NOTE (provider-as-marker revision): `Provider` is a bare marker now — it has
+// NO `call`. A realtime combinator/provider exposes ONLY its real interaction
+// (`Realtime.run`); a pure voice-I/O adapter exposes ONLY `listen`/`speak`.
+// None of them fakes a degenerate `call` to satisfy the base (OQ1 resolved).
 //
 // Everything below is std-lib / library-author code.
 
@@ -40,21 +45,38 @@ class VoiceTurn { role: string, text: string, start_ms: int, end_ms: int }
 
 // ----------------------------------------------------------------------------
 // NET-NEW capability interfaces: the unified voice verbs.
-//   `listen` = STT, `speak` = TTS. Each `requires Provider`, so an STT box is
-//   *also* a Provider whose `call<T>` is "transcribe one clip to T" (T=string
-//   in practice). This is the Open-Question-1 "best-effort single turn" stance.
+//   `listen` = STT, `speak` = TTS. Each `requires Provider` (the marker), so an
+//   STT/TTS box IS a Provider in the compositional sense — but it owns its OWN
+//   interaction (`listen`/`speak`), not a forced `call`. A box that also wants a
+//   one-shot HTTP path adds `implements HttpProvider` separately (Deepgram does).
 // ----------------------------------------------------------------------------
+
+// NET-NEW capability error channels for the voice verbs. STT and TTS are
+// capabilities beyond call/stream/realtime/tools, so they get their OWN error
+// interfaces (same shape as the core ones: classifiers callers triage on
+// WITHOUT knowing the concrete class). Flagged net-new in evaluation §(b).
+interface baml.errors.SttError {
+  function is_network_error(self) -> bool
+  function is_rate_limit(self) -> bool
+  function is_parse_error(self) -> bool
+}
+interface baml.errors.TtsError {
+  function is_network_error(self) -> bool
+  function is_rate_limit(self) -> bool
+}
 
 // STT: audio stream in -> transcription stream out.  Mastra's `listen()`.
 interface SttProvider requires Provider {
   // streaming form: partial + final transcriptions as audio arrives.
-  function listen(self, audio: AudioStream) -> baml.llm.Stream<Transcription, string> throws Error
+  function listen(self, audio: AudioStream) -> baml.llm.Stream<Transcription, string>
+      throws baml.ExtendUnknownError<baml.errors.SttError>
 }
 
 // TTS: text in -> audio stream out.  Mastra's `speak()`.
 interface TtsProvider requires Provider {
   // `voice` overrides the provider's default speaker per call (Mastra's `speaker:`).
-  function speak(self, text: string, voice: string?) -> AudioStream throws Error
+  function speak(self, text: string, voice: string?) -> AudioStream
+      throws baml.ExtendUnknownError<baml.errors.TtsError>
 }
 
 // ----------------------------------------------------------------------------
@@ -62,6 +84,23 @@ interface TtsProvider requires Provider {
 //   Divergence shown: Deepgram is a websocket-streaming recognizer; its `call`
 //   (one-shot transcribe) is a plain HTTP POST, but `listen` is the live path.
 // ----------------------------------------------------------------------------
+// A classified Deepgram transport failure (non-2xx). It can land on the one-shot
+// call path AND on the streaming `listen` path, so it implements BOTH CallError
+// and the net-new SttError.
+class DeepgramHttpError {
+  status: int
+  implements baml.errors.CallError {
+    function is_network_error(self) -> bool { return false; }
+    function is_rate_limit(self)    -> bool { return self.status == 429; }
+    function is_parse_error(self)   -> bool { return false; }
+  }
+  implements baml.errors.SttError {
+    function is_network_error(self) -> bool { return false; }
+    function is_rate_limit(self)    -> bool { return self.status == 429; }
+    function is_parse_error(self)   -> bool { return false; }
+  }
+}
+
 class Deepgram {
   api_key: string
   model: string                                   // "nova-2", "nova-3", ...
@@ -69,24 +108,48 @@ class Deepgram {
 
   implements HttpProvider {                        // gives `call<T>` = transcribe one clip
     type Body = baml.http.Response
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       // one-shot: the "prompt" carries a single AudioChunk to transcribe.
       $rust_io_function                            // POST audio/* to api.deepgram.com/v1/listen
     }
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
-      baml.http.send(request) catch (e) { _ => { throw baml.errors.LlmClient { message: "deepgram http failed" }; } }
+    function send(self, request: baml.http.Request) -> baml.http.Response
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      let resp = baml.http.send(request);
+      if (!resp.ok()) { throw DeepgramHttpError { status: resp.status_code }; }
+      resp
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "deepgram http failed");
     }
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
-      // Deepgram wraps the transcript at results.channels.0.alternatives.0.transcript
-      baml.sap.parse<T>(from.json_path("results.channels.0.alternatives.0.transcript"))
+    function parse<T>(self, from: baml.http.Response) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      // Deepgram wraps the transcript at results.channels.0.alternatives.0.transcript.
+      // Navigate the parsed `json` value (map -> array index -> map) down to the string.
+      let root: baml.json.json = baml.json.parse(from.text());
+      let channels = baml.json.field(baml.json.field(root, "results"), "channels");
+      let alts = match (channels) {
+        let arr: baml.json.json[] => match (arr.at(0)) { let c: baml.json.json => baml.json.field(c, "alternatives"), _ => null },
+        _ => null,
+      };
+      let transcript = match (alts) {
+        let arr: baml.json.json[] => match (arr.at(0)) { let a: baml.json.json => baml.json.field(a, "transcript"), _ => null },
+        _ => null,
+      };
+      match (transcript) {
+        let s: string => baml.sap.parse<T>(s),
+        _ => baml.sap.parse<T>(""),
+      }
     }
   }
 
   implements SttProvider {
-    function listen(self, audio: AudioStream) -> baml.llm.Stream<Transcription, string> throws baml.errors.LlmClient {
+    function listen(self, audio: AudioStream) -> baml.llm.Stream<Transcription, string>
+        throws baml.ExtendUnknownError<baml.errors.SttError> {
       // opens a Deepgram streaming websocket, pushes audio chunks, yields
       // interim+final Transcription frames, finalizes to the full string.
       $rust_io_function
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.SttError>(e, "deepgram listen failed");
     }
   }
 }
@@ -103,22 +166,34 @@ class Whisper {
 
   implements HttpProvider {
     type Body = baml.http.Response
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       $rust_io_function                            // multipart POST to /v1/audio/transcriptions
     }
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
-      baml.http.send(request) catch (e) { _ => { throw baml.errors.LlmClient { message: "whisper http failed" }; } }
+    function send(self, request: baml.http.Request) -> baml.http.Response
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.http.send(request)
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "whisper http failed");
     }
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
-      baml.sap.parse<T>(from.json_path("text"))
+    function parse<T>(self, from: baml.http.Response) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      // Whisper returns { "text": "..." } at the top level.
+      match (baml.json.field(baml.json.parse(from.text()), "text")) {
+        let s: string => baml.sap.parse<T>(s),
+        _ => baml.sap.parse<T>(""),
+      }
     }
   }
 
   implements SttProvider {
-    function listen(self, audio: AudioStream) -> baml.llm.Stream<Transcription, string> throws baml.errors.LlmClient {
+    function listen(self, audio: AudioStream) -> baml.llm.Stream<Transcription, string>
+        throws baml.ExtendUnknownError<baml.errors.SttError> {
       // Whisper can't stream: drain the whole clip, POST once, emit ONE final
       // frame. The interface is identical to Deepgram's; the behavior diverges.
       $rust_io_function
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.SttError>(e, "whisper listen failed");
     }
   }
 }
@@ -138,23 +213,34 @@ class ElevenLabs {
 
   implements HttpProvider {                        // `call<T>` here is rarely used directly
     type Body = baml.http.Response
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       $rust_io_function
     }
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
-      baml.http.send(request) catch (e) { _ => { throw baml.errors.LlmClient { message: "11labs http failed" }; } }
+    function send(self, request: baml.http.Request) -> baml.http.Response
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.http.send(request)
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "11labs http failed");
     }
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
-      // T is audio: decode the returned bytes into an AudioChunk-bearing value.
-      baml.sap.parse<T>(from.json_path("audio_base64"))
+    function parse<T>(self, from: baml.http.Response) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      // T is audio: decode the returned base64 bytes into an AudioChunk-bearing value.
+      match (baml.json.field(baml.json.parse(from.text()), "audio_base64")) {
+        let s: string => baml.sap.parse<T>(s),
+        _ => baml.sap.parse<T>(""),
+      }
     }
   }
 
   implements TtsProvider {
-    function speak(self, text: string, voice: string?) -> AudioStream throws baml.errors.LlmClient {
+    function speak(self, text: string, voice: string?) -> AudioStream
+        throws baml.ExtendUnknownError<baml.errors.TtsError> {
       // voice ?? self.voice_id selects the speaker; stability/similarity_boost
       // ride along in the websocket open frame. Streams audio chunks back.
       $rust_io_function
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.TtsError>(e, "11labs speak failed");
     }
   }
 }
@@ -174,20 +260,32 @@ class Cartesia {
 
   implements HttpProvider {
     type Body = baml.http.Response
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       $rust_io_function
     }
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
-      baml.http.send(request) catch (e) { _ => { throw baml.errors.LlmClient { message: "cartesia http failed" }; } }
+    function send(self, request: baml.http.Request) -> baml.http.Response
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.http.send(request)
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "cartesia http failed");
     }
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
-      baml.sap.parse<T>(from.json_path("audio"))
+    function parse<T>(self, from: baml.http.Response) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      // Cartesia returns { "audio": "<base64>" }.
+      match (baml.json.field(baml.json.parse(from.text()), "audio")) {
+        let s: string => baml.sap.parse<T>(s),
+        _ => baml.sap.parse<T>(""),
+      }
     }
   }
 
   implements TtsProvider {
-    function speak(self, text: string, voice: string?) -> AudioStream throws baml.errors.LlmClient {
+    function speak(self, text: string, voice: string?) -> AudioStream
+        throws baml.ExtendUnknownError<baml.errors.TtsError> {
       $rust_io_function                            // POST /tts/bytes, stream sonic audio frames
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.TtsError>(e, "cartesia speak failed");
     }
   }
 }
@@ -215,13 +313,14 @@ function silero_vad() -> VadDetector { $rust_io_function }
 // ----------------------------------------------------------------------------
 class CascadedVoice {
   stt: SttProvider                                // swap: Deepgram | Whisper | ...
-  llm: Provider                                   // swap: ANY chat provider (just needs .call)
+  llm: HttpProvider                               // swap: ANY chat provider (the brain stage needs `call`)
   tts: TtsProvider                                // swap: ElevenLabs | Cartesia | ...
   vad: VadDetector
   speaker: string?                                // default TTS voice for this pipeline
 
   implements Realtime {
-    function run(self, prompt: baml.llm.PromptAst, io: Channel) -> VoiceTranscript throws baml.errors.LlmClient {
+    function run(self, prompt: baml.llm.PromptAst, io: Channel) -> VoiceTranscript
+        throws baml.ExtendUnknownError<baml.errors.RealtimeError> {
       // `prompt` carries the system instruction; `io` is the duplex to the user
       // (mic in via InEvent::audio, speaker out via OutEvent::audio).
       let context = baml.llm.transcript_from(prompt);   // accumulated LLM context
@@ -249,14 +348,14 @@ class CascadedVoice {
         // STT: drain the live recognizer to a final transcript.
         let heard = baml.llm.stream_final(self.stt.listen(mic))
           catch (e) { _ => { return; } };
-        turns = turns.append(VoiceTurn { role: "user", text: heard, start_ms: 0, end_ms: 0 });
+        turns.push(VoiceTurn { role: "user", text: heard, start_ms: 0, end_ms: 0 });
         context = context.append_user(heard);
 
-        // LLM: any Provider works — only `.call` is required. The chat stage
-        // is a plain Provider, so Whisper-STT × Llama-LLM × Cartesia-TTS all fit.
+        // LLM: any HttpProvider works — only `.call` is required. The chat stage
+        // is a plain HttpProvider, so Whisper-STT × Llama-LLM × Cartesia-TTS all fit.
         let reply: string = self.llm.call<string>(context.to_prompt())
           catch (e) { _ => { return; } };
-        turns = turns.append(VoiceTurn { role: "assistant", text: reply, start_ms: 0, end_ms: 0 });
+        turns.push(VoiceTurn { role: "assistant", text: reply, start_ms: 0, end_ms: 0 });
         context = context.append_assistant(reply);
 
         // TTS: stream synthesized audio back down `io`, honoring barge-in.
@@ -274,16 +373,11 @@ class CascadedVoice {
     }
   }
 
-  // Realtime requires Provider, so we owe a best-effort `call<T>`: run ONE
-  // synchronous STT->LLM->TTS turn over a clip and return the LLM's text.
-  // (OQ1: "best-effort single turn over the connection".)
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
-      // No live audio in a one-shot call -> the cascade degenerates to the LLM
-      // stage. This is the honest floor: text in, text out.
-      self.llm.call<T>(prompt)
-    }
-  }
+  // No fake `call`. `Realtime requires Provider` (the marker), so CascadedVoice
+  // already IS a Provider without declaring `implements Provider`. There is no
+  // honest "one synchronous voice turn" without a live channel, so we no longer
+  // forge a degenerate `call` that silently drops STT/TTS — the cascade exposes
+  // ONLY its real interaction, `Realtime.run`. (OQ1 resolved: no degenerate call.)
 }
 
 // ----------------------------------------------------------------------------
@@ -296,23 +390,23 @@ class CompositeVoice {
   input: SttProvider
   output: TtsProvider
 
-  // It IS a Provider (base requirement of every capability), but composite
-  // voice has no model of its own, so `call` is meaningless -> it errors.
-  // This is a capability HOLE made explicit (see evaluation §c).
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
-      throw baml.errors.LlmClient { message: "CompositeVoice has no LLM; use .listen/.speak or wrap it in CascadedVoice" }
-    }
-  }
+  // It IS a Provider (the marker, inherited via SttProvider/TtsProvider's
+  // `requires Provider`), but composite voice has no model of its own. Under the
+  // marker revision it simply does NOT implement `HttpProvider`, so there is no
+  // `call` to fake or to throw from — the capability is absent, not stubbed. The
+  // `.call`-routing companion (`Announce(text)`) discovers this absence at the
+  // companion `match` and throws `Unsupported` there (see usage.baml / evaluation §c).
 
   // Forward the unified verbs to the chosen members.
   implements SttProvider {
-    function listen(self, audio: AudioStream) -> baml.llm.Stream<Transcription, string> throws baml.errors.LlmClient {
+    function listen(self, audio: AudioStream) -> baml.llm.Stream<Transcription, string>
+        throws baml.ExtendUnknownError<baml.errors.SttError> {
       self.input.listen(audio)
     }
   }
   implements TtsProvider {
-    function speak(self, text: string, voice: string?) -> AudioStream throws baml.errors.LlmClient {
+    function speak(self, text: string, voice: string?) -> AudioStream
+        throws baml.ExtendUnknownError<baml.errors.TtsError> {
       self.output.speak(text, voice)
     }
   }
@@ -329,15 +423,18 @@ class NovaSonic {                                  // AWS Nova Sonic: single spe
   voice: string
 
   implements Realtime {
-    function run(self, prompt: baml.llm.PromptAst, io: Channel) -> VoiceTranscript throws baml.errors.LlmClient {
+    function run(self, prompt: baml.llm.PromptAst, io: Channel) -> VoiceTranscript
+        throws baml.ExtendUnknownError<baml.errors.RealtimeError> {
       // one network hop: audio in -> audio out, prosody preserved, low latency,
       // no VAD/barge-in bookkeeping in BAML (the model owns turn-taking).
       $rust_io_function
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.RealtimeError>(e, "nova sonic run failed");
     }
   }
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient { $rust_io_function }
-  }
+  // No fake `call`. A single-STS model is a duplex realtime session; "one HTTP
+  // turn over the socket" was a degenerate best-effort. `Realtime requires
+  // Provider` makes NovaSonic a Provider (marker) already; it exposes ONLY `run`.
 }
 
 // ----------------------------------------------------------------------------

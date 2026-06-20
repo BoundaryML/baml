@@ -3,8 +3,8 @@
 // ============================================================================
 //
 // We build on the canonical primitives from _conventions.md VERBATIM:
-//   interface Provider          — call<T>
-//   interface HttpProvider      — build_request / send / parse / default call
+//   interface Provider          — the bare MARKER (no interaction method; combinator factories)
+//   interface HttpProvider      — build_request / send / parse / call / call_with (request/response)
 //   interface Tools             — begin / step / submit / default run_tools
 //   class ToolCall  { id, name, args }          // id OPAQUE to the loop
 //   class ToolResult{ id, output }
@@ -26,6 +26,46 @@
 
 
 // ----------------------------------------------------------------------------
+// Concrete typed errors this scenario raises ON PURPOSE (per the error model).
+// Each `implements` the capability interface(s) for the channel it surfaces on,
+// so it is a legal throw there AND can be caught by its concrete type. Foreign
+// transport errors (from baml.http.send / host posts) are NOT here — those route
+// through baml.UnknownError via the trailing catch in each method.
+// ----------------------------------------------------------------------------
+
+// No tool-capable member in a ToolFallback strategy. A ToolError because it can
+// only arise on the tool path (begin); it is the loop's structural failure.
+class NoToolProvider {
+  implements baml.errors.ToolError {
+    function is_network_error(self) -> bool { return false; }
+    function is_rate_limit(self)    -> bool { return false; }
+    function is_parse_error(self)   -> bool { return false; }
+  }
+}
+
+// App-policy denial of a tool call (the ApprovedSupport approval gate). Surfaces
+// mid-loop, so it is a ToolError the app can catch concretely.
+class ToolCallDenied {
+  tool_name: string
+  implements baml.errors.ToolError {
+    function is_network_error(self) -> bool { return false; }
+    function is_rate_limit(self)    -> bool { return false; }
+    function is_parse_error(self)   -> bool { return false; }
+  }
+}
+
+// Every member of a plain Fallback's call path failed. A CallError (it surfaces
+// from ToolFallback.call), distinct from a transport failure of any one member.
+class AllProvidersFailed {
+  implements baml.errors.CallError {
+    function is_network_error(self) -> bool { return false; }
+    function is_rate_limit(self)    -> bool { return false; }
+    function is_parse_error(self)   -> bool { return false; }
+  }
+}
+
+
+// ----------------------------------------------------------------------------
 // NET-NEW host surface #1: ExecutionContext gains `dispatch`.
 //
 // `Tools.run_tools` (the default loop in _conventions.md) calls
@@ -43,7 +83,7 @@ class ExecutionContext {
   // run the matching handler, and stamp the SAME id back onto the result.
   // The provider correlates by that id (or, for Gemini, re-derives correlation
   // from name+position BELOW the seam — the loop is none the wiser).
-  function dispatch(self, calls: ToolCall[]) -> ToolResult[] throws baml.errors.LlmClient {
+  function dispatch(self, calls: ToolCall[]) -> ToolResult[] throws baml.ExtendUnknownError<baml.errors.ToolError> {
     let out: ToolResult[] = [];
     for (let c in calls) {
       // Host bridge: look up the registered handler for `c.name`, SAP-validate
@@ -53,14 +93,14 @@ class ExecutionContext {
       let result: ToolResult = self.invoke_one(c) catch (e) {
         _ => { ToolResult { id: c.id, output: { "error": "tool execution failed" } } }
       };
-      out = out.append(result);
+      out.push(result);
     }
     out
   }
 
   // Host boundary: resolve handler by name, validate args against its `type`,
   // inject deps, call it. Stamps `c.id` onto the returned ToolResult.
-  function invoke_one(self, c: ToolCall) -> ToolResult throws baml.errors.LlmClient {
+  function invoke_one(self, c: ToolCall) -> ToolResult throws baml.ExtendUnknownError<baml.errors.ToolError> {
     $rust_io_function
   }
 }
@@ -85,14 +125,16 @@ class OpenAI {
   // The plain chat codec (no tools) — gives us `call` for free.
   implements HttpProvider {
     type Body = baml.http.Response
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.ExtendUnknownError<baml.errors.CallError> {
       $rust_io_function
     }
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
-      baml.http.send(request) catch (e) { _ => { throw baml.errors.LlmClient { message: "http failed" }; } }
+    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.http.send(request) catch (e) { _ => { throw baml.UnknownError.with_message<baml.errors.CallError>(e, "openai send failed"); } }
     }
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
+    function parse<T>(self, from: baml.http.Response) -> T throws baml.ExtendUnknownError<baml.errors.CallError> {
       baml.sap.parse<T>(from.text())
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "openai parse failed");
     }
   }
 
@@ -103,7 +145,7 @@ class OpenAI {
   implements Tools {
     type Transcript = OpenAiTranscript
 
-    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> OpenAiTranscript throws baml.errors.LlmClient {
+    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> OpenAiTranscript throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // DIALECT #1: encode each Tool's `parameters: type` to JSON Schema, wrapped
       // in OpenAI's { type:"function", function:{ name, description, parameters } }.
       let wire_tools: string = OpenAI.encode_tools_openai(tools);
@@ -116,11 +158,9 @@ class OpenAI {
       }
     }
 
-    function step<T>(self, t: OpenAiTranscript) -> T | ToolCalls throws baml.errors.LlmClient {
+    function step<T>(self, t: OpenAiTranscript) -> T | ToolCalls throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // POST /chat/completions with t.messages + t.wire_tools.
-      let resp: baml.http.Response = OpenAI.post_chat(t) catch (e) {
-        _ => { throw baml.errors.LlmClient { message: "openai chat failed" }; }
-      };
+      let resp: baml.http.Response = OpenAI.post_chat(t);
       let body: string = resp.text();
 
       // finish_reason == "tool_calls"  => model wants to call tools.
@@ -130,7 +170,7 @@ class OpenAI {
         let raw: OpenAiToolCall[] = baml.llm.openai_extract_tool_calls(body);
         let calls: ToolCall[] = [];
         for (let r in raw) {
-          calls = calls.append(ToolCall {
+          calls.push(ToolCall {
             id: r.id,                                           // <- echoed back later
             name: r.name,
             args: baml.sap.parse<map<string, unknown>>(r.arguments_json),
@@ -144,17 +184,20 @@ class OpenAI {
 
       // Otherwise it's a final answer: SAP-parse the content into T.
       baml.sap.parse<T>(baml.llm.openai_content(body))
+    } catch (e) {
+      // post_chat / SAP foreign failures normalize to UnknownError on the tool channel.
+      _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "openai chat step failed");
     }
 
-    function submit(self, t: OpenAiTranscript, results: ToolResult[]) -> OpenAiTranscript throws baml.errors.LlmClient {
+    function submit(self, t: OpenAiTranscript, results: ToolResult[]) -> OpenAiTranscript throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // THREADING #1: OpenAI wants ONE dedicated message per result:
       //   { role:"tool", tool_call_id: <id>, content: <output> }
       // correlated BY ID. Order does not matter to OpenAI, but we keep it stable
       // for cache friendliness.
       let appended: string[] = [];
       for (let r in results) {
-        appended = appended.append(
-          baml.llm.openai_tool_message(r.id, baml.sap.to_json(r.output))   // {role:"tool",tool_call_id,content}
+        appended.push(
+          baml.llm.openai_tool_message(r.id, baml.json.to_string<unknown>(r.output))   // {role:"tool",tool_call_id,content}
         );
       }
       OpenAI.append_messages(t, appended)
@@ -162,18 +205,19 @@ class OpenAI {
   }
 
   // --- statics: the dialect encoders & host bridges, all BELOW the seam ---
-  function encode_tools_openai(tools: Tool[]) -> string throws baml.errors.LlmClient {
+  function encode_tools_openai(tools: Tool[]) -> string throws baml.ExtendUnknownError<baml.errors.ToolError> {
     // For each tool: reflect its `parameters: type` to JSON Schema, then wrap.
     let entries: string[] = [];
     for (let tool in tools) {
       let schema: string = baml.reflect.type_to_json_schema(tool.parameters);  // standard JSON Schema
-      entries = entries.append(
+      entries.push(
         baml.llm.openai_tool_entry(tool.name, tool.description, schema)
       );
     }
-    baml.llm.json_array(entries)
+    // entries are already-serialized JSON objects; splice them into a JSON array.
+    "[" + entries.join(",") + "]"
   }
-  function post_chat(t: OpenAiTranscript) -> baml.http.Response throws baml.errors.LlmClient { $rust_io_function }
+  function post_chat(t: OpenAiTranscript) -> baml.http.Response throws baml.ExtendUnknownError<baml.errors.ToolError> { $rust_io_function }
   function remember_assistant_turn(t: OpenAiTranscript, body: string) -> null { $rust_io_function }
   function append_messages(t: OpenAiTranscript, msgs: string[]) -> OpenAiTranscript { $rust_io_function }
 }
@@ -210,21 +254,23 @@ class Anthropic {
 
   implements HttpProvider {
     type Body = baml.http.Response
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.ExtendUnknownError<baml.errors.CallError> {
       $rust_io_function
     }
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
-      baml.http.send(request) catch (e) { _ => { throw baml.errors.LlmClient { message: "http failed" }; } }
+    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.http.send(request) catch (e) { _ => { throw baml.UnknownError.with_message<baml.errors.CallError>(e, "anthropic send failed"); } }
     }
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
+    function parse<T>(self, from: baml.http.Response) -> T throws baml.ExtendUnknownError<baml.errors.CallError> {
       baml.sap.parse<T>(from.text())
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "anthropic parse failed");
     }
   }
 
   implements Tools {
     type Transcript = AnthropicTranscript
 
-    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> AnthropicTranscript throws baml.errors.LlmClient {
+    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> AnthropicTranscript throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // DIALECT #2: same JSON Schema as OpenAI, but under `input_schema` and with
       // no `{type:"function"}` wrapper.
       AnthropicTranscript {
@@ -239,10 +285,8 @@ class Anthropic {
       }
     }
 
-    function step<T>(self, t: AnthropicTranscript) -> T | ToolCalls throws baml.errors.LlmClient {
-      let resp: baml.http.Response = Anthropic.post_messages(t) catch (e) {
-        _ => { throw baml.errors.LlmClient { message: "anthropic messages failed" }; }
-      };
+    function step<T>(self, t: AnthropicTranscript) -> T | ToolCalls throws baml.ExtendUnknownError<baml.errors.ToolError> {
+      let resp: baml.http.Response = Anthropic.post_messages(t);
       let body: string = resp.text();
 
       // stop_reason == "tool_use"  => the assistant content is a list of blocks;
@@ -252,8 +296,8 @@ class Anthropic {
         let calls: ToolCall[] = [];
         let ids: string[] = [];
         for (let r in raw) {
-          calls = calls.append(ToolCall { id: r.id, name: r.name, args: r.input });
-          ids = ids.append(r.id);                               // remember positional order
+          calls.push(ToolCall { id: r.id, name: r.name, args: r.input });
+          ids.push(r.id);                                       // remember positional order
         }
         // Preserve the assistant turn verbatim (it carries the tool_use blocks) and
         // record the id order for positional re-assembly in submit().
@@ -262,9 +306,11 @@ class Anthropic {
       }
 
       baml.sap.parse<T>(baml.llm.anthropic_text(body))
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "anthropic messages step failed");
     }
 
-    function submit(self, t: AnthropicTranscript, results: ToolResult[]) -> AnthropicTranscript throws baml.errors.LlmClient {
+    function submit(self, t: AnthropicTranscript, results: ToolResult[]) -> AnthropicTranscript throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // THREADING #2: results go back as `tool_result` blocks nested in a SINGLE
       // role:"user" message, and the blocks must appear in the SAME ORDER as the
       // tool_use blocks that requested them. We re-sort `results` by `t.pending_ids`
@@ -273,8 +319,8 @@ class Anthropic {
       let ordered: ToolResult[] = Anthropic.reorder_by_ids(results, t.pending_ids);
       let blocks: string[] = [];
       for (let r in ordered) {
-        blocks = blocks.append(
-          baml.llm.anthropic_tool_result_block(r.id, baml.sap.to_json(r.output))  // {type:"tool_result",tool_use_id,content}
+        blocks.push(
+          baml.llm.anthropic_tool_result_block(r.id, baml.json.to_string<unknown>(r.output))  // {type:"tool_result",tool_use_id,content}
         );
       }
       // wrap all blocks in one user message and append
@@ -282,27 +328,28 @@ class Anthropic {
     }
   }
 
-  function encode_tools_anthropic(tools: Tool[]) -> string throws baml.errors.LlmClient {
+  function encode_tools_anthropic(tools: Tool[]) -> string throws baml.ExtendUnknownError<baml.errors.ToolError> {
     let entries: string[] = [];
     for (let tool in tools) {
       let schema: string = baml.reflect.type_to_json_schema(tool.parameters);     // standard JSON Schema
-      entries = entries.append(
+      entries.push(
         baml.llm.anthropic_tool_entry(tool.name, tool.description, schema)         // input_schema, no wrapper
       );
     }
-    baml.llm.json_array(entries)
+    // entries are already-serialized JSON objects; splice them into a JSON array.
+    "[" + entries.join(",") + "]"
   }
   // Re-order results to match the recorded tool_use order (positional discipline).
   function reorder_by_ids(results: ToolResult[], order: string[]) -> ToolResult[] {
     let out: ToolResult[] = [];
     for (let id in order) {
       for (let r in results) {
-        if (r.id == id) { out = out.append(r); }
+        if (r.id == id) { out.push(r); }
       }
     }
     out
   }
-  function post_messages(t: AnthropicTranscript) -> baml.http.Response throws baml.errors.LlmClient { $rust_io_function }
+  function post_messages(t: AnthropicTranscript) -> baml.http.Response throws baml.ExtendUnknownError<baml.errors.ToolError> { $rust_io_function }
   function remember_assistant_turn(t: AnthropicTranscript, body: string, ids: string[]) -> null { $rust_io_function }
   function append_user_message(t: AnthropicTranscript, blocks: string[]) -> AnthropicTranscript { $rust_io_function }
 }
@@ -344,21 +391,23 @@ class Gemini {
 
   implements HttpProvider {
     type Body = baml.http.Response
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.ExtendUnknownError<baml.errors.CallError> {
       $rust_io_function
     }
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
-      baml.http.send(request) catch (e) { _ => { throw baml.errors.LlmClient { message: "http failed" }; } }
+    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.http.send(request) catch (e) { _ => { throw baml.UnknownError.with_message<baml.errors.CallError>(e, "gemini send failed"); } }
     }
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
+    function parse<T>(self, from: baml.http.Response) -> T throws baml.ExtendUnknownError<baml.errors.CallError> {
       baml.sap.parse<T>(from.text())
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "gemini parse failed");
     }
   }
 
   implements Tools {
     type Transcript = GeminiTranscript
 
-    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> GeminiTranscript throws baml.errors.LlmClient {
+    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> GeminiTranscript throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // DIALECT #3: transform each tool's JSON-Schema-shaped `parameters: type`
       // into the Gemini OpenAPI-3 subset (strip $ref, coerce formats, flatten
       // anyOf). This is the lossy translation the background calls out.
@@ -372,10 +421,8 @@ class Gemini {
       }
     }
 
-    function step<T>(self, t: GeminiTranscript) -> T | ToolCalls throws baml.errors.LlmClient {
-      let resp: baml.http.Response = Gemini.post_generate(t) catch (e) {
-        _ => { throw baml.errors.LlmClient { message: "gemini generateContent failed" }; }
-      };
+    function step<T>(self, t: GeminiTranscript) -> T | ToolCalls throws baml.ExtendUnknownError<baml.errors.ToolError> {
+      let resp: baml.http.Response = Gemini.post_generate(t);
       let body: string = resp.text();
 
       // A turn with functionCall parts => tool calls. There are NO wire ids, so we
@@ -390,8 +437,8 @@ class Gemini {
           // disambiguating two concurrent calls to the same function (the exact case
           // name-correlation alone can't handle).
           let synthetic: string = Gemini.synth_id(r.name, index);
-          calls = calls.append(ToolCall { id: synthetic, name: r.name, args: r.args });
-          mapping = mapping.append(GeminiIdEntry { id: synthetic, name: r.name, index: index });
+          calls.push(ToolCall { id: synthetic, name: r.name, args: r.args });
+          mapping.push(GeminiIdEntry { id: synthetic, name: r.name, index: index });
           index = index + 1;
         }
         Gemini.remember_model_turn(t, body, mapping);
@@ -399,9 +446,11 @@ class Gemini {
       }
 
       baml.sap.parse<T>(baml.llm.gemini_text(body))
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "gemini generateContent step failed");
     }
 
-    function submit(self, t: GeminiTranscript, results: ToolResult[]) -> GeminiTranscript throws baml.errors.LlmClient {
+    function submit(self, t: GeminiTranscript, results: ToolResult[]) -> GeminiTranscript throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // THREADING #3: results go back as functionResponse parts inside a user turn.
       // The wire has no ids, so we look up each result's synthetic id in t.id_map to
       // recover the function NAME (and position) Gemini correlates by. We re-order by
@@ -410,8 +459,8 @@ class Gemini {
       for (let entry in Gemini.sorted_by_index(t.id_map)) {
         for (let r in results) {
           if (r.id == entry.id) {
-            parts = parts.append(
-              baml.llm.gemini_function_response(entry.name, baml.sap.to_json(r.output))  // keyed by NAME
+            parts.push(
+              baml.llm.gemini_function_response(entry.name, baml.json.to_string<unknown>(r.output))  // keyed by NAME
             );
           }
         }
@@ -420,12 +469,12 @@ class Gemini {
     }
   }
 
-  function encode_tools_gemini(tools: Tool[]) -> string throws baml.errors.LlmClient {
+  function encode_tools_gemini(tools: Tool[]) -> string throws baml.ExtendUnknownError<baml.errors.ToolError> {
     let decls: string[] = [];
     for (let tool in tools) {
       // The lossy transform: JSON Schema -> Gemini OpenAPI-3 subset.
       let openapi: string = baml.reflect.type_to_gemini_openapi(tool.parameters);
-      decls = decls.append(
+      decls.push(
         baml.llm.gemini_function_declaration(tool.name, tool.description, openapi)
       );
     }
@@ -436,7 +485,7 @@ class Gemini {
     // stable sort by .index so functionResponse ordering matches functionCall ordering
     $rust_io_function
   }
-  function post_generate(t: GeminiTranscript) -> baml.http.Response throws baml.errors.LlmClient { $rust_io_function }
+  function post_generate(t: GeminiTranscript) -> baml.http.Response throws baml.ExtendUnknownError<baml.errors.ToolError> { $rust_io_function }
   function remember_model_turn(t: GeminiTranscript, body: string, map: GeminiIdEntry[]) -> null { $rust_io_function }
   function append_function_turn(t: GeminiTranscript, parts: string[]) -> GeminiTranscript { $rust_io_function }
 }
@@ -469,20 +518,43 @@ class GeminiIdEntry { id: string, name: string, index: int }
 class ToolFallback {
   strategy: Provider[]
 
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
+  // call / call_with now belong to HttpProvider (Provider is a bare marker — see
+  // ../../provider-as-marker.md). ToolFallback forwards the request/response path
+  // to the first http-capable member, and call_with FORWARDS the projection so the
+  // member's usage/sidecar is not dropped (the P1 fix). The combinator factories
+  // (with_retry / fallback_to / cached) are inherited via `requires Provider`.
+  implements HttpProvider {
+    type Body = unknown
+    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.ExtendUnknownError<baml.errors.CallError> {
       for (let p in self.strategy) {
-        let r: T = p.call<T>(prompt) catch (e) { _ => { continue; } };
-        return r;
+        match (p) {
+          let h: HttpProvider => {
+            let r: T = h.call<T>(prompt) catch (e) { _ => { continue; } };
+            return r;
+          },
+          _ => { continue; }
+        }
       }
-      throw baml.errors.LlmClient { message: "all providers failed" }
+      throw AllProvidersFailed {}
+    }
+    function call_with<T, U>(self, prompt: baml.llm.PromptAst, project: (ResponseMeta) -> U) -> (T, U) throws baml.ExtendUnknownError<baml.errors.CallError> {
+      for (let p in self.strategy) {
+        match (p) {
+          let h: HttpProvider => {
+            let r: (T, U) = h.call_with<T, U>(prompt, project) catch (e) { _ => { continue; } };
+            return r;
+          },
+          _ => { continue; }
+        }
+      }
+      throw AllProvidersFailed {}
     }
   }
 
   implements Tools {
     type Transcript = BoundTranscript
 
-    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> BoundTranscript throws baml.errors.LlmClient {
+    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> BoundTranscript throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // Pick the first member that actually implements Tools; bind the transcript
       // to it so step/submit re-target the same provider.
       for (let p in self.strategy) {
@@ -494,15 +566,15 @@ class ToolFallback {
           _ => { continue; }
         }
       }
-      throw baml.errors.LlmClient { message: "no tool-capable provider available" }
+      throw NoToolProvider {}
     }
 
-    function step<T>(self, t: BoundTranscript) -> T | ToolCalls throws baml.errors.LlmClient {
+    function step<T>(self, t: BoundTranscript) -> T | ToolCalls throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // re-dispatch to the bound owner; its opaque Transcript lives inside t.inner.
       t.owner.step<T>(t.inner)
     }
 
-    function submit(self, t: BoundTranscript, results: ToolResult[]) -> BoundTranscript throws baml.errors.LlmClient {
+    function submit(self, t: BoundTranscript, results: ToolResult[]) -> BoundTranscript throws baml.ExtendUnknownError<baml.errors.ToolError> {
       let next = t.owner.submit(t.inner, results);
       BoundTranscript { owner: t.owner, inner: next }
     }

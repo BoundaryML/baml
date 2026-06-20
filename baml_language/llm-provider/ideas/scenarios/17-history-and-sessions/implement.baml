@@ -10,7 +10,7 @@
 //
 //   1. A `Turn` grammar (net-new) and a `Session` (array + id + pluggable store).
 //   2. A `Conversational` capability (net-new) that threads a transcript through
-//      the existing Provider.call seam — and shows the per-provider divergence
+//      the existing HttpProvider build_request/send/parse seam — and shows the per-provider divergence
 //      (system-prompt placement, message grammar) INSIDE build_request, where the
 //      proposal already says it belongs.
 //   3. A `Windowed` / `Summarizing` combinator (a Provider that wraps a Provider)
@@ -60,11 +60,35 @@ class ReasoningBlock  { text: string, signature: string? }                      
 // The pluggable store. 4 methods — load / save / append / clear. This is the
 // "it is the application's job to *hold* the array" seam, made pluggable so the
 // next scenario (persistence) drops in a different `implements SessionStore`.
+// NET-NEW capability error channel. Session persistence is a capability beyond
+// call/stream/realtime/tools, so it gets its own capability-error interface with a
+// classifier that matters here: did the store fail because the backing IO was down
+// (transient, retryable) versus a genuine missing-session / corruption fault.
+interface baml.errors.SessionError {
+  function is_store_unavailable(self) -> bool
+}
+
 interface SessionStore {
-  function load(self, id: string) -> Turn[] throws baml.errors.Io
-  function save(self, id: string, turns: Turn[]) -> null throws baml.errors.Io
-  function append(self, id: string, turns: Turn[]) -> null throws baml.errors.Io
-  function clear(self, id: string) -> null throws baml.errors.Io
+  function load(self, id: string) -> Turn[] throws baml.ExtendUnknownError<baml.errors.SessionError>
+  function save(self, id: string, turns: Turn[]) -> null throws baml.ExtendUnknownError<baml.errors.SessionError>
+  function append(self, id: string, turns: Turn[]) -> null throws baml.ExtendUnknownError<baml.errors.SessionError>
+  function clear(self, id: string) -> null throws baml.ExtendUnknownError<baml.errors.SessionError>
+}
+
+// A concrete store fault. The host map IO can fail (e.g. a Redis/Postgres store
+// swapped in via this same interface). It is classified as a SessionError; it also
+// implements CallError so it is legal where `chat` (a call-path method) loads/records
+// a session without forcing the call-path caller to widen its channel.
+class StoreUnavailableError {
+  detail: string
+  implements baml.errors.SessionError {
+    function is_store_unavailable(self) -> bool { return true; }
+  }
+  implements baml.errors.CallError {
+    function is_network_error(self) -> bool { return true; }
+    function is_rate_limit(self)    -> bool { return false; }
+    function is_parse_error(self)   -> bool { return false; }
+  }
 }
 
 // The default store: an in-process map. Background §1 "what's hard": close the
@@ -75,10 +99,26 @@ class MemoryStore {
   function new() -> MemoryStore { MemoryStore { _cells: $rust_io_function } }
 
   implements SessionStore {
-    function load(self, id: string) -> Turn[] throws baml.errors.Io { $rust_io_function }
-    function save(self, id: string, turns: Turn[]) -> null throws baml.errors.Io { $rust_io_function }
-    function append(self, id: string, turns: Turn[]) -> null throws baml.errors.Io { $rust_io_function }
-    function clear(self, id: string) -> null throws baml.errors.Io { $rust_io_function }
+    function load(self, id: string) -> Turn[] throws baml.ExtendUnknownError<baml.errors.SessionError> {
+      $rust_io_function
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.SessionError>(e, "memory store load failed");
+    }
+    function save(self, id: string, turns: Turn[]) -> null throws baml.ExtendUnknownError<baml.errors.SessionError> {
+      $rust_io_function
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.SessionError>(e, "memory store save failed");
+    }
+    function append(self, id: string, turns: Turn[]) -> null throws baml.ExtendUnknownError<baml.errors.SessionError> {
+      $rust_io_function
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.SessionError>(e, "memory store append failed");
+    }
+    function clear(self, id: string) -> null throws baml.ExtendUnknownError<baml.errors.SessionError> {
+      $rust_io_function
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.SessionError>(e, "memory store clear failed");
+    }
   }
 }
 
@@ -94,9 +134,9 @@ class Session {
   // ergonomic default — an ephemeral in-process session.
   function ephemeral(id: string) -> Session { Session { id: id, store: MemoryStore.new() } }
 
-  function history(self) -> Turn[] throws baml.errors.Io { self.store.load(self.id) }
-  function record(self, turns: Turn[]) -> null throws baml.errors.Io { self.store.append(self.id, turns) }
-  function reset(self) -> null throws baml.errors.Io { self.store.clear(self.id) }
+  function history(self) -> Turn[] throws baml.ExtendUnknownError<baml.errors.SessionError> { self.store.load(self.id) }
+  function record(self, turns: Turn[]) -> null throws baml.ExtendUnknownError<baml.errors.SessionError> { self.store.append(self.id, turns) }
+  function reset(self) -> null throws baml.ExtendUnknownError<baml.errors.SessionError> { self.store.clear(self.id) }
 }
 
 
@@ -104,7 +144,7 @@ class Session {
 // 3. The Conversational capability  (NET-NEW interface that `requires Provider`)
 // -----------------------------------------------------------------------------
 //
-// Why a new capability and not just Provider.call? Because the prompt is no longer
+// Why a new capability and not just HttpProvider.call? Because the prompt is no longer
 // the whole input — the transcript is. `call<T>(prompt)` takes a PromptAst (the
 // freshly rendered turn). A conversational provider needs to *prepend* prior turns
 // before building the request, and *append* the new user+assistant turns after.
@@ -115,32 +155,44 @@ class Session {
 interface Conversational requires Provider {
   // Turn a PromptAst (the new user turn) + the prior transcript into the full
   // request. THIS is where system-prompt placement and message grammar diverge.
-  function build_chat<T>(self, history: Turn[], next: Turn) -> baml.http.Request throws Error
+  // build_chat is on the call path → the CallError channel.
+  function build_chat<T>(self, history: Turn[], next: Turn) -> baml.http.Request
+      throws baml.ExtendUnknownError<baml.errors.CallError>
 
   // The threaded call: load history, build, send, parse, then persist BOTH the
   // user turn and the assistant turn (the recurring bug the background warns about
   // is appending only the user turn — here it's impossible to forget, the default
-  // method does both).
-  function chat<T>(self, prompt: baml.llm.PromptAst, session: Session) -> T throws Error {
+  // method does both). chat is a call-path method → CallError; the session faults it
+  // surfaces are StoreUnavailableError, which implements CallError so they ride this
+  // same channel without a separate one.
+  function chat<T>(self, prompt: baml.llm.PromptAst, session: Session) -> T
+      throws baml.ExtendUnknownError<baml.errors.CallError> {
     let user_turn: Turn = self.to_user_turn(prompt);
     let history: Turn[] = session.history() catch (e) {
-      _ => { throw baml.errors.LlmClient { message: "session load failed" }; }
+      // a session-load failure on the call path is a classified store fault, not an
+      // opaque unknown — surface it as StoreUnavailableError (CallError + SessionError).
+      let s: baml.errors.SessionError => throw StoreUnavailableError { detail: "session load failed" };
     };
     let req = self.build_chat<T>(history, user_turn);
     let value: T = self.parse_chat<T>(self.send_chat(req));
     // persist user + assistant atomically; forgetting the assistant turn is the
     // classic contradiction bug — the seam makes it the default, not a choice.
     session.record([user_turn, self.to_assistant_turn(value)]) catch (e) {
-      _ => { throw baml.errors.LlmClient { message: "session record failed" }; }
+      let s: baml.errors.SessionError => throw StoreUnavailableError { detail: "session record failed" };
     };
     return value;
   }
 
-  // Adapters the default method leans on. A provider supplies them once.
-  function to_user_turn(self, prompt: baml.llm.PromptAst) -> Turn throws Error
-  function to_assistant_turn<T>(self, value: T) -> Turn throws Error
-  function send_chat(self, request: baml.http.Request) -> baml.http.Response throws Error
-  function parse_chat<T>(self, from: baml.http.Response) -> T throws Error
+  // Adapters the default method leans on. A provider supplies them once. All are on
+  // the call path → the CallError channel.
+  function to_user_turn(self, prompt: baml.llm.PromptAst) -> Turn
+      throws baml.ExtendUnknownError<baml.errors.CallError>
+  function to_assistant_turn<T>(self, value: T) -> Turn
+      throws baml.ExtendUnknownError<baml.errors.CallError>
+  function send_chat(self, request: baml.http.Request) -> baml.http.Response
+      throws baml.ExtendUnknownError<baml.errors.CallError>
+  function parse_chat<T>(self, from: baml.http.Response) -> T
+      throws baml.ExtendUnknownError<baml.errors.CallError>
 }
 
 
@@ -163,52 +215,75 @@ class OpenAIChat {
 
   implements HttpProvider {
     type Body = baml.http.Response
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       $rust_io_function                            // single-shot path (no history) — unchanged
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "openai build_request failed");
     }
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
-      baml.http.send(request) catch (e) { _ => { throw baml.errors.LlmClient { message: "http failed" }; } }
+    function send(self, request: baml.http.Request) -> baml.http.Response
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.http.send(request) catch (e) {
+        _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "openai http send failed");
+      }
     }
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
+    function parse<T>(self, from: baml.http.Response) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       baml.sap.parse<T>(from.text())
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "openai parse failed");
     }
   }
 
   implements Conversational {
-    function to_user_turn(self, prompt: baml.llm.PromptAst) -> Turn throws baml.errors.LlmClient {
+    function to_user_turn(self, prompt: baml.llm.PromptAst) -> Turn
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       Turn { role: User, blocks: [TextBlock { text: prompt_text(prompt) }] }
     }
-    function to_assistant_turn<T>(self, value: T) -> Turn throws baml.errors.LlmClient {
+    function to_assistant_turn<T>(self, value: T) -> Turn
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       // the assistant turn is the serialized answer; for prose this is the text,
       // for structured T it's the canonical JSON the next turn will see.
-      Turn { role: Assistant, blocks: [TextBlock { text: baml.sap.to_string<T>(value) }] }
+      Turn { role: Assistant, blocks: [TextBlock { text: baml.json.to_string<T>(value) }] }
     }
 
     // ★ DIVERGENCE: OpenAI puts the system prompt as the FIRST in-array message,
     // flattens every turn to {role, content}, and encodes tool turns as
     // assistant.tool_calls + {role:"tool", tool_call_id: <id>}.
-    function build_chat<T>(self, history: Turn[], next: Turn) -> baml.http.Request throws baml.errors.LlmClient {
-      let msgs: map<string, unknown>[] = [];
+    function build_chat<T>(self, history: Turn[], next: Turn) -> baml.http.Request
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      let msgs: json[] = [];
       // system prompt: IN the array, position 0.
-      msgs = baml.json.push(msgs, { "role": "system", "content": self.system });
-      for (let turn in history) { msgs = baml.json.push(msgs, openai_encode_turn(turn)); }
-      msgs = baml.json.push(msgs, openai_encode_turn(next));
+      msgs.push({ "role": "system", "content": self.system });
+      for (let turn in history) { msgs.push(openai_encode_turn(turn)); }
+      msgs.push(openai_encode_turn(next));
+      let body: map<string, json> = {
+        "model": self.model,
+        "messages": msgs,
+        "response_format": sap_response_format<T>(),   // schema goes in response_format for OpenAI
+      };
       baml.http.Request {
         method: "POST",
         url: "https://api.openai.com/v1/chat/completions",
         headers: { "authorization": "Bearer " + self.api_key, "content-type": "application/json" },
-        body: baml.json.encode({
-          "model": self.model,
-          "messages": msgs,
-          "response_format": sap_response_format<T>(),   // schema goes in response_format for OpenAI
-        }),
+        body: baml.json.stringify(body),
+      }
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "openai build_chat failed");
+    }
+    function send_chat(self, request: baml.http.Request) -> baml.http.Response
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.http.send(request) catch (e) {
+        _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "openai http send failed");
       }
     }
-    function send_chat(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
-      baml.http.send(request) catch (e) { _ => { throw baml.errors.LlmClient { message: "http failed" }; } }
-    }
-    function parse_chat<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
-      baml.sap.parse<T>(from.json_path("choices.0.message.content"))
+    function parse_chat<T>(self, from: baml.http.Response) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      // navigate the OpenAI envelope, then SAP-parse the content string into T.
+      let env: OpenAIChatEnvelope = baml.json.from_json<OpenAIChatEnvelope>(baml.json.parse(from.text()));
+      baml.sap.parse<T>(openai_message_content(env))
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "openai parse_chat failed");
     }
   }
 }
@@ -221,33 +296,52 @@ class AnthropicChat {
 
   implements HttpProvider {
     type Body = baml.http.Response
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       $rust_io_function
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "anthropic build_request failed");
     }
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
-      baml.http.send(request) catch (e) { _ => { throw baml.errors.LlmClient { message: "http failed" }; } }
+    function send(self, request: baml.http.Request) -> baml.http.Response
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.http.send(request) catch (e) {
+        _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "anthropic http send failed");
+      }
     }
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
+    function parse<T>(self, from: baml.http.Response) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       baml.sap.parse<T>(from.text())
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "anthropic parse failed");
     }
   }
 
   implements Conversational {
-    function to_user_turn(self, prompt: baml.llm.PromptAst) -> Turn throws baml.errors.LlmClient {
+    function to_user_turn(self, prompt: baml.llm.PromptAst) -> Turn
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       Turn { role: User, blocks: [TextBlock { text: prompt_text(prompt) }] }
     }
-    function to_assistant_turn<T>(self, value: T) -> Turn throws baml.errors.LlmClient {
-      Turn { role: Assistant, blocks: [TextBlock { text: baml.sap.to_string<T>(value) }] }
+    function to_assistant_turn<T>(self, value: T) -> Turn
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      Turn { role: Assistant, blocks: [TextBlock { text: baml.json.to_string<T>(value) }] }
     }
 
     // ★ DIVERGENCE: Anthropic HOISTS the system prompt to a top-level `system`
     // field OUTSIDE the messages array; every turn nests a content-block array;
     // tool_result blocks correlate by `tool_use_id` (the id, never the name).
-    function build_chat<T>(self, history: Turn[], next: Turn) -> baml.http.Request throws baml.errors.LlmClient {
-      let msgs: map<string, unknown>[] = [];
+    function build_chat<T>(self, history: Turn[], next: Turn) -> baml.http.Request
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      let msgs: json[] = [];
       // NOTE: no system message in the array — it lives in the top-level field below.
-      for (let turn in history) { msgs = baml.json.push(msgs, anthropic_encode_turn(turn)); }
-      msgs = baml.json.push(msgs, anthropic_encode_turn(next));
+      for (let turn in history) { msgs.push(anthropic_encode_turn(turn)); }
+      msgs.push(anthropic_encode_turn(next));
+      let body: map<string, json> = {
+        "model": self.model,
+        "max_tokens": self.max_tokens,
+        "system": self.system,                  // ← top-level, OUTSIDE messages
+        "messages": msgs,
+        "tools": sap_forced_tool<T>(),          // schema goes in a forced tool for Anthropic
+      };
       baml.http.Request {
         method: "POST",
         url: "https://api.anthropic.com/v1/messages",
@@ -256,21 +350,25 @@ class AnthropicChat {
           "anthropic-version": "2023-06-01",
           "content-type": "application/json",
         },
-        body: baml.json.encode({
-          "model": self.model,
-          "max_tokens": self.max_tokens,
-          "system": self.system,                  // ← top-level, OUTSIDE messages
-          "messages": msgs,
-          "tools": sap_forced_tool<T>(),          // schema goes in a forced tool for Anthropic
-        }),
+        body: baml.json.stringify(body),
+      }
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "anthropic build_chat failed");
+    }
+    function send_chat(self, request: baml.http.Request) -> baml.http.Response
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.http.send(request) catch (e) {
+        _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "anthropic http send failed");
       }
     }
-    function send_chat(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
-      baml.http.send(request) catch (e) { _ => { throw baml.errors.LlmClient { message: "http failed" }; } }
-    }
-    function parse_chat<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
-      // forced-tool answers arrive in content[0].input, not a text block.
-      baml.sap.parse<T>(from.json_path("content.0.input"))
+    function parse_chat<T>(self, from: baml.http.Response) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      // forced-tool answers arrive in content[0].input, not a text block. Navigate the
+      // parsed envelope, re-stringify the tool input, and SAP-parse it into T.
+      let env: AnthropicMsgEnvelope = baml.json.from_json<AnthropicMsgEnvelope>(baml.json.parse(from.text()));
+      baml.sap.parse<T>(baml.json.stringify(anthropic_tool_input(env)))
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "anthropic parse_chat failed");
     }
   }
 }
@@ -286,29 +384,30 @@ class AnthropicChat {
 // Anthropic keys it `tool_use_id`, Gemini (not shown) has no ids and correlates
 // positionally by function name. Same transcript, three correlation schemes.
 
-function openai_encode_turn(turn: Turn) -> map<string, unknown> throws baml.errors.LlmClient {
+function openai_encode_turn(turn: Turn) -> json
+    throws baml.ExtendUnknownError<baml.errors.CallError> {
   match (turn.role) {
     Tool => {
       // OpenAI: a tool result is its OWN flat message with role "tool".
       let r: ToolResultBlock = first_tool_result(turn.blocks);
-      return { "role": "tool", "tool_call_id": r.id, "content": baml.json.encode(r.output) };
+      return { "role": "tool", "tool_call_id": r.id, "content": baml.json.to_string<unknown>(r.output) };
     },
     Assistant => {
       // assistant text + any tool_use become assistant.content + assistant.tool_calls.
       let text: string = collect_text(turn.blocks);
-      let calls: map<string, unknown>[] = [];
+      let calls: json[] = [];
       for (let b in turn.blocks) {
         match (b) {
           let u: ToolUseBlock => {
-            calls = baml.json.push(calls, {
+            calls.push({
               "id": u.id, "type": "function",
-              "function": { "name": u.name, "arguments": baml.json.encode(u.args) },
+              "function": { "name": u.name, "arguments": baml.json.to_string<map<string, unknown>>(u.args) },
             });
           },
           _ => {},
         }
       }
-      if (baml.array.len(calls) > 0) {
+      if (calls.length() > 0) {
         return { "role": "assistant", "content": text, "tool_calls": calls };
       }
       return { "role": "assistant", "content": text };
@@ -317,19 +416,21 @@ function openai_encode_turn(turn: Turn) -> map<string, unknown> throws baml.erro
   }
 }
 
-function anthropic_encode_turn(turn: Turn) -> map<string, unknown> throws baml.errors.LlmClient {
+function anthropic_encode_turn(turn: Turn) -> json
+    throws baml.ExtendUnknownError<baml.errors.CallError> {
   // Anthropic NESTS everything into a content-block array; tool_result is a block
   // INSIDE a user turn, correlated by tool_use_id.
-  let content: map<string, unknown>[] = [];
+  let content: json[] = [];
   for (let b in turn.blocks) {
     match (b) {
-      let t: TextBlock       => { content = baml.json.push(content, { "type": "text", "text": t.text }); },
-      let u: ToolUseBlock    => { content = baml.json.push(content, {
-                                    "type": "tool_use", "id": u.id, "name": u.name, "input": u.args }); },
-      let r: ToolResultBlock => { content = baml.json.push(content, {
+      let t: TextBlock       => { content.push({ "type": "text", "text": t.text }); },
+      let u: ToolUseBlock    => { content.push({
+                                    "type": "tool_use", "id": u.id, "name": u.name,
+                                    "input": baml.json.to_json<map<string, unknown>>(u.args) }); },
+      let r: ToolResultBlock => { content.push({
                                     "type": "tool_result", "tool_use_id": r.id,
-                                    "content": baml.json.encode(r.output) }); },
-      let g: ReasoningBlock  => { content = baml.json.push(content, {
+                                    "content": baml.json.to_string<unknown>(r.output) }); },
+      let g: ReasoningBlock  => { content.push({
                                     "type": "thinking", "thinking": g.text, "signature": g.signature }); },
     }
   }
@@ -358,28 +459,47 @@ class Windowed {
   keep: int
 
   implements Conversational {
-    function build_chat<T>(self, history: Turn[], next: Turn) -> baml.http.Request throws baml.errors.LlmClient {
+    function build_chat<T>(self, history: Turn[], next: Turn) -> baml.http.Request
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       self.inner.build_chat<T>(window_tail(history, self.keep), next)
     }
-    function to_user_turn(self, prompt: baml.llm.PromptAst) -> Turn throws baml.errors.LlmClient {
+    function to_user_turn(self, prompt: baml.llm.PromptAst) -> Turn
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       self.inner.to_user_turn(prompt)
     }
-    function to_assistant_turn<T>(self, value: T) -> Turn throws baml.errors.LlmClient {
+    function to_assistant_turn<T>(self, value: T) -> Turn
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       self.inner.to_assistant_turn<T>(value)
     }
-    function send_chat(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
+    function send_chat(self, request: baml.http.Request) -> baml.http.Response
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       self.inner.send_chat(request)
     }
-    function parse_chat<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
+    function parse_chat<T>(self, from: baml.http.Response) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       self.inner.parse_chat<T>(from)
     }
   }
 
-  // Windowed is still a Provider (Conversational requires Provider). Its single-shot
-  // call has no history, so it just delegates to whatever the inner provider is.
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
-      self.inner.call<T>(prompt)
+  // Windowed is still a Provider (the marker) because Conversational requires Provider.
+  // It ALSO forwards the request/response capability: its single-shot call/call_with
+  // has no history, so it routes to the inner provider IF that provider is an
+  // HttpProvider. The combinator factories (with_retry/…) are inherited via the marker
+  // and are NOT redefined here.
+  implements HttpProvider {
+    type Body = unknown
+    function call<T>(self, prompt: baml.llm.PromptAst) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      let (v, _): (T, null) = self.call_with<T, null>(prompt, m => null);
+      v
+    }
+    // Forward the projection to the inner member so usage/sidecar is not dropped (P1).
+    function call_with<T, U>(self, prompt: baml.llm.PromptAst, project: (ResponseMeta) -> U) -> (T, U)
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      match (self.inner) {
+        let h: HttpProvider => { return h.call_with<T, U>(prompt, project); },
+        _ => { throw baml.errors.Unsupported { message: "windowed inner cannot do request/response" }; },
+      }
     }
   }
 }
@@ -392,40 +512,61 @@ class Summarizing {
   keep: int
 
   implements Conversational {
-    function build_chat<T>(self, history: Turn[], next: Turn) -> baml.http.Request throws baml.errors.LlmClient {
-      let n: int = baml.array.len(history);
+    function build_chat<T>(self, history: Turn[], next: Turn) -> baml.http.Request
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      let n: int = history.length();
       if (n <= self.keep) { return self.inner.build_chat<T>(history, next); }
-      // older turns get folded into a single rolling-synopsis system-ish turn.
+      // older turns get folded into a single rolling-synopsis system-ish turn. The
+      // summarizer is a Provider (marker); `call` lives on HttpProvider now, so we
+      // match it for the request/response capability before summarizing.
       let old: Turn[] = window_head(history, n - self.keep);
-      let synopsis: string = self.summarizer.call<string>(
-        summarize_prompt(old)
-      ) catch (e) {
-        // if summarization fails, fall back to a hard window rather than dropping state.
+      let synopsis: string = (match (self.summarizer) {
+        let h: HttpProvider => h.call<string>(summarize_prompt(old)),
+        _ => throw baml.errors.Unsupported { message: "summarizer cannot do request/response" },
+      }) catch (e) {
+        // if summarization fails (for ANY reason — call error, Unsupported, or unknown),
+        // fall back to a hard window rather than dropping state. Recovery, not rethrow.
         _ => { return self.inner.build_chat<T>(window_tail(history, self.keep), next); }
       };
-      let folded: Turn[] = baml.array.concat(
-        [Turn { role: System, blocks: [TextBlock { text: "Earlier conversation summary: " + synopsis }] }],
-        window_tail(history, self.keep),
-      );
+      let folded: Turn[] =
+        [Turn { role: System, blocks: [TextBlock { text: "Earlier conversation summary: " + synopsis }] }]
+          .concat(window_tail(history, self.keep));
       return self.inner.build_chat<T>(folded, next);
     }
-    function to_user_turn(self, prompt: baml.llm.PromptAst) -> Turn throws baml.errors.LlmClient {
+    function to_user_turn(self, prompt: baml.llm.PromptAst) -> Turn
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       self.inner.to_user_turn(prompt)
     }
-    function to_assistant_turn<T>(self, value: T) -> Turn throws baml.errors.LlmClient {
+    function to_assistant_turn<T>(self, value: T) -> Turn
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       self.inner.to_assistant_turn<T>(value)
     }
-    function send_chat(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
+    function send_chat(self, request: baml.http.Request) -> baml.http.Response
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       self.inner.send_chat(request)
     }
-    function parse_chat<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
+    function parse_chat<T>(self, from: baml.http.Response) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       self.inner.parse_chat<T>(from)
     }
   }
 
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
-      self.inner.call<T>(prompt)
+  // Summarizing is a Provider (the marker) via Conversational; it also forwards the
+  // request/response capability to its inner member when that member is an HttpProvider,
+  // routing the projection so usage/sidecar survives (P1). Factories are inherited.
+  implements HttpProvider {
+    type Body = unknown
+    function call<T>(self, prompt: baml.llm.PromptAst) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      let (v, _): (T, null) = self.call_with<T, null>(prompt, m => null);
+      v
+    }
+    function call_with<T, U>(self, prompt: baml.llm.PromptAst, project: (ResponseMeta) -> U) -> (T, U)
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      match (self.inner) {
+        let h: HttpProvider => { return h.call_with<T, U>(prompt, project); },
+        _ => { throw baml.errors.Unsupported { message: "summarizing inner cannot do request/response" }; },
+      }
     }
   }
 }
@@ -436,16 +577,68 @@ class Summarizing {
 // -----------------------------------------------------------------------------
 
 // genuine host boundary: pull the rendered text out of the opaque PromptAst.
-function prompt_text(p: baml.llm.PromptAst) -> string throws baml.errors.LlmClient { $rust_io_function }
+function prompt_text(p: baml.llm.PromptAst) -> string
+    throws baml.ExtendUnknownError<baml.errors.CallError> {
+  $rust_io_function
+} catch (e) {
+  _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "prompt_text failed");
+}
 
 // schema-encoding helpers — the FOUR structured-output encodings live in build_chat
-// (response_format for OpenAI, forced-tool for Anthropic). These produce the fragments.
-function sap_response_format<T>() -> map<string, unknown> throws baml.errors.LlmClient { $rust_io_function }
-function sap_forced_tool<T>() -> map<string, unknown>[] throws baml.errors.LlmClient { $rust_io_function }
+// (response_format for OpenAI, forced-tool for Anthropic). These produce native `json`
+// fragments that nest directly into the request-body map.
+function sap_response_format<T>() -> json
+    throws baml.ExtendUnknownError<baml.errors.CallError> {
+  $rust_io_function
+} catch (e) {
+  _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "sap_response_format failed");
+}
+function sap_forced_tool<T>() -> json[]
+    throws baml.ExtendUnknownError<baml.errors.CallError> {
+  $rust_io_function
+} catch (e) {
+  _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "sap_forced_tool failed");
+}
 
-// pure transcript utilities.
-function window_tail(turns: Turn[], keep: int) -> Turn[] { baml.array.suffix(turns, keep) }
-function window_head(turns: Turn[], take: int) -> Turn[] { baml.array.prefix(turns, take) }
+// -----------------------------------------------------------------------------
+// Response envelopes + navigation — typed coercion replaces the invented
+// Response.json_path. parse_chat decodes the provider envelope into one of these
+// classes, then reads the field where the answer lives.
+// -----------------------------------------------------------------------------
+
+class OpenAIChatEnvelope { choices: OpenAIChoice[] }
+class OpenAIChoice       { message: OpenAIMessage }
+class OpenAIMessage      { content: string }
+
+// content lives at choices[0].message.content; a missing choice is a malformed envelope.
+function openai_message_content(env: OpenAIChatEnvelope) -> string
+    throws baml.ExtendUnknownError<baml.errors.CallError> {
+  match (env.choices.at(0)) {
+    null => throw MalformedTurnError { detail: "openai response had no choices" },
+    let c: OpenAIChoice => c.message.content,
+  }
+}
+
+class AnthropicMsgEnvelope { content: AnthropicContentBlock[] }
+class AnthropicContentBlock { input: map<string, json> }
+
+// the forced-tool answer is content[0].input; absent content is a malformed envelope.
+function anthropic_tool_input(env: AnthropicMsgEnvelope) -> json
+    throws baml.ExtendUnknownError<baml.errors.CallError> {
+  match (env.content.at(0)) {
+    null => throw MalformedTurnError { detail: "anthropic response had no content blocks" },
+    let b: AnthropicContentBlock => b.input,
+  }
+}
+
+// pure transcript utilities. slice clamps out-of-range indices, so the
+// max(0, …) guards keep a `keep`/`take` larger than the array (or zero) honest.
+function window_tail(turns: Turn[], keep: int) -> Turn[] {
+  turns.slice(baml.math.max(0, turns.length() - keep), turns.length())
+}
+function window_head(turns: Turn[], take: int) -> Turn[] {
+  turns.slice(0, baml.math.max(0, take))
+}
 
 function collect_text(blocks: Block[]) -> string {
   let out: string = "";
@@ -453,13 +646,31 @@ function collect_text(blocks: Block[]) -> string {
   out
 }
 
-function first_tool_result(blocks: Block[]) -> ToolResultBlock throws baml.errors.LlmClient {
+// A malformed transcript turn is a deliberate domain failure on the call path: the
+// turn claimed role Tool but carried no tool_result block. A concrete CallError, not
+// a transport fault — is_parse_error is true (the transcript shape is wrong).
+class MalformedTurnError {
+  detail: string
+  implements baml.errors.CallError {
+    function is_network_error(self) -> bool { return false; }
+    function is_rate_limit(self)    -> bool { return false; }
+    function is_parse_error(self)   -> bool { return true; }
+  }
+}
+
+function first_tool_result(blocks: Block[]) -> ToolResultBlock
+    throws baml.ExtendUnknownError<baml.errors.CallError> {
   for (let b in blocks) { match (b) { let r: ToolResultBlock => { return r; }, _ => {} } }
-  throw baml.errors.LlmClient { message: "tool turn had no tool_result block" }
+  throw MalformedTurnError { detail: "tool turn had no tool_result block" }
 }
 
 function role_string(r: Role) -> string {
   match (r) { System => "system", User => "user", Assistant => "assistant", Tool => "tool" }
 }
 
-function summarize_prompt(old: Turn[]) -> baml.llm.PromptAst throws baml.errors.LlmClient { $rust_io_function }
+function summarize_prompt(old: Turn[]) -> baml.llm.PromptAst
+    throws baml.ExtendUnknownError<baml.errors.CallError> {
+  $rust_io_function
+} catch (e) {
+  _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "summarize_prompt failed");
+}

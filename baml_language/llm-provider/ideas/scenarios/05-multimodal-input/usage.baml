@@ -93,9 +93,13 @@ function DescribeVideoSafe(clip: video, keyframe: image) -> string {
   client: GPT4()
   prompt #"Describe this clip. {{ clip }}"#
 }
-// catch at the call site:
+// catch at the call site — runtime match, most-specific first (the error channel here is
+// `baml.ExtendUnknownError<baml.errors.CallError>`, surfaced through the existential client):
 //   DescribeVideoSafe(v, frame) catch (e) {
-//     baml.errors.Unsupported => { DescribeImage(frame); }   // degrade to the keyframe image
+//     let _u: baml.errors.Unsupported => { DescribeImage(frame); }   // degrade to the keyframe image
+//     let _m: MediaTransportError     => { DescribeImage(frame); }   // e.g. handle not portable here
+//     let c: baml.errors.CallError    => { if (c.is_network_error()) { retry(); } else { fail(); } }
+//     let u: baml.UnknownError        => report(u.message);          // the escape hatch
 //   }
 
 

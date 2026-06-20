@@ -5,9 +5,10 @@
 // most of the pieces for free, because the things being composed ARE providers and
 // functions:
 //
-//   - the TASK under test is a BAML function  -> a Provider.call wrapped in a fn;
+//   - the TASK under test is a BAML function  -> an HttpProvider.call wrapped in a fn;
 //   - a SCORER is a function `(input, output, expected) -> Score`;
-//   - an LLM-JUDGE scorer is ANOTHER Provider (a different model family, on purpose);
+//   - an LLM-JUDGE scorer is ANOTHER provider (an HttpProvider — `call` lives there,
+//     not on the bare `Provider` marker; a different model family, on purpose);
 //   - determinism levers (seed / temperature) dissolve into PROVIDER FIELDS, and
 //     their AVAILABILITY differs per provider (OpenAI has seed; Anthropic/Gemini
 //     do not) — which surfaces as a capability interface, not a uniform field;
@@ -90,9 +91,41 @@ class RunFingerprint {
 // `interface`/`implements` + the typed `throws` channel.
 // ----------------------------------------------------------------------------
 
+// NET-NEW capability-error channel (flagged in evaluation.md): scoring is a capability
+// distinct from call/stream/tools/realtime — a scorer may invoke a Provider (judge,
+// embedder) but its OWN failure surface (inapplicable scorer, malformed verdict) is not
+// a call-path error. So scoring declares `baml.errors.EvalError`. The classifier
+// `is_inapplicable` lets the runner tell "this scorer can't score THIS case" (count as
+// skipped) apart from a genuine fault.
+interface baml.errors.EvalError {
+  function is_inapplicable(self) -> bool
+}
+
+// A scorer was asked to score a case it cannot handle (e.g. a reference-based scorer
+// with no `case.expected`). Honest typed failure rather than a silent 0 that poisons
+// the aggregate. It is an EvalError (the runner branches on `is_inapplicable`).
+class ScorerInapplicable {
+  scorer: string
+  reason: string
+  implements baml.errors.EvalError {
+    function is_inapplicable(self) -> bool { return true; }
+  }
+}
+
+// The CI gate's terminal verdict: the eval regressed below the floor / baseline, or
+// produced no interpretable scores. NOT inapplicable — it is a real, deliberate fail
+// the build acts on. An EvalError so app code catches it on the same channel.
+class EvalGateFailure {
+  reason: string
+  pass_rate: float
+  implements baml.errors.EvalError {
+    function is_inapplicable(self) -> bool { return false; }
+  }
+}
+
 interface Scorer<TInput, TOutput> {
-  type Error = baml.errors.LlmClient
-  function score(self, case: Case<TInput, TOutput>, output: TOutput) -> Score throws Error
+  function score(self, case: Case<TInput, TOutput>, output: TOutput) -> Score
+      throws baml.ExtendUnknownError<baml.errors.EvalError>
 }
 
 
@@ -104,17 +137,18 @@ class ExactMatch {
   threshold: float          // 1.0 = exact; <1.0 = fuzzy ratio floor
 
   implements Scorer<string, string> {
-    function score(self, case: Case<string, string>, output: string) -> Score throws baml.errors.LlmClient {
+    function score(self, case: Case<string, string>, output: string) -> Score
+        throws baml.ExtendUnknownError<baml.errors.EvalError> {
       match (case.expected) {
         let exp: string => {
-          let ratio = baml.str.similarity_ratio(output, exp);   // host: 0.0..1.0
+          let ratio = similarity_ratio(output, exp);   // host: 0.0..1.0 (net-new compute helper)
           Score { value: ratio, passed: ratio >= self.threshold,
                   scorer: "exact_match", rationale: null }
         }
         _ => {
-          // No reference: an exact-match scorer is inapplicable. Honest failure
+          // No reference: an exact-match scorer is inapplicable. Honest typed failure
           // rather than a silent 0 that poisons the aggregate.
-          throw baml.errors.LlmClient { message: "ExactMatch needs case.expected" };
+          throw ScorerInapplicable { scorer: "exact_match", reason: "ExactMatch needs case.expected" };
         }
       }
     }
@@ -128,7 +162,8 @@ class Assert<TInput, TOutput> {
   predicate: (TOutput) -> bool
 
   implements Scorer<TInput, TOutput> {
-    function score(self, case: Case<TInput, TOutput>, output: TOutput) -> Score throws baml.errors.LlmClient {
+    function score(self, case: Case<TInput, TOutput>, output: TOutput) -> Score
+        throws baml.ExtendUnknownError<baml.errors.EvalError> {
       let ok = self.predicate(output);
       Score { value: if (ok) { 1.0 } else { 0.0 }, passed: ok,
               scorer: self.name, rationale: null }
@@ -138,20 +173,25 @@ class Assert<TInput, TOutput> {
 
 
 // --- Embedding similarity: cheap, deterministic-ISH. This one NEEDS a provider, --
-//     but an EMBEDDING provider, not a chat one. An embeddings model is just a
-//     Provider whose `call<T>` yields a vector — `T = float[]`. Nothing new.
+//     but an EMBEDDING provider, not a chat one. An embeddings model is just an
+//     HttpProvider whose `call<T>` yields a vector — `T = float[]`. Nothing new
+//     (`call` lives on HttpProvider, not the bare Provider marker).
 
 class EmbeddingScorer<TInput> {
-  embedder: Provider          // a model that returns float[] from `call`
+  embedder: HttpProvider      // an HttpProvider that returns float[] from `call` (call lives on HttpProvider, not the bare marker)
   threshold: float
 
   implements Scorer<TInput, string> {
-    function score(self, case: Case<TInput, string>, output: string) -> Score throws baml.errors.LlmClient {
+    function score(self, case: Case<TInput, string>, output: string) -> Score
+        throws baml.ExtendUnknownError<baml.errors.EvalError> {
       match (case.expected) {
         let exp: string => {
           // Two `call`s on the embedding provider — the SAME `call<T>` seam as a
-          // chat model, just with T = float[]. Determinism comes for free: an
-          // embedding model has no sampling.
+          // chat model, just with T = float[]. `call` lives on HttpProvider (the
+          // marker `Provider` carries no interaction), so `embedder` is typed
+          // HttpProvider. Determinism comes for free: an embedding model has no
+          // sampling. The embedder's CallError channel is foreign to scoring; the
+          // trailing catch normalizes it into UnknownError.
           let a: float[] = self.embedder.call<float[]>(baml.llm.text_prompt(output));
           let b: float[] = self.embedder.call<float[]>(baml.llm.text_prompt(exp));
           let cos = baml.vec.cosine(a, b);                    // host: -1.0..1.0
@@ -159,8 +199,10 @@ class EmbeddingScorer<TInput> {
           Score { value: norm, passed: norm >= self.threshold,
                   scorer: "embedding_similarity", rationale: null }
         }
-        _ => { throw baml.errors.LlmClient { message: "EmbeddingScorer needs case.expected" }; }
+        _ => { throw ScorerInapplicable { scorer: "embedding_similarity", reason: "EmbeddingScorer needs case.expected" }; }
       }
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.EvalError>(e, "embedding scorer call failed");
     }
   }
 }
@@ -188,24 +230,30 @@ class Verdict {
 }
 
 class JudgeScorer<TInput, TOutput> {
-  judge: Provider           // the judge MODEL — deliberately a different family
+  judge: HttpProvider       // the judge MODEL — deliberately a different family (call lives on HttpProvider)
   rubric: string            // anchored criteria with examples (calibration defense)
   // Pin so historical scores stay comparable across runs (judge-drift defense).
   // This is informational — the actual pin is a FIELD on `judge`'s provider class.
   judge_model_id: string
 
   implements Scorer<TInput, TOutput> {
-    function score(self, case: Case<TInput, TOutput>, output: TOutput) -> Score throws baml.errors.LlmClient {
+    function score(self, case: Case<TInput, TOutput>, output: TOutput) -> Score
+        throws baml.ExtendUnknownError<baml.errors.EvalError> {
       // Build a judging prompt: rubric + the candidate output + (if present) the
       // reference. render_judge_prompt is host-side prompt assembly, exactly like
       // render_prompt for a task.
       let prompt = render_judge_prompt(self.rubric, output, case.expected);
-      // The judge is a Provider — we `call` it and SAP-parse a Verdict. Same seam
-      // as any task. The judge runs at temperature 0 (a field on its provider).
+      // The judge is an HttpProvider — we `call` it and SAP-parse a Verdict (the
+      // marker `Provider` has no `call`; request/response owns it). Same seam
+      // as any task. The judge runs at temperature 0 (a field on its provider). The
+      // judge's CallError channel is foreign to scoring; the trailing catch normalizes
+      // it (a judge refusal, a rate limit, a SAP parse fault) into UnknownError.
       let v: Verdict = self.judge.call<Verdict>(prompt);
       Score { value: int_to_unit(v.score, 5), passed: v.pass,
               scorer: "llm_judge(" + self.judge_model_id + ")",
               rationale: v.reasoning }
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.EvalError>(e, "judge scorer call failed");
     }
   }
 }
@@ -217,17 +265,18 @@ class JudgeScorer<TInput, TOutput> {
 // (which scores a single output). It is its own interface — a genuine divergence
 // that the single-output Scorer cannot absorb. NET-NEW, flagged in evaluation.md.
 interface PairwiseScorer<TInput, TOutput> {
-  type Error = baml.errors.LlmClient
-  function compare(self, input: TInput, a: TOutput, b: TOutput) -> Score throws Error
+  function compare(self, input: TInput, a: TOutput, b: TOutput) -> Score
+      throws baml.ExtendUnknownError<baml.errors.EvalError>
 }
 
 class PairwiseJudge<TInput, TOutput> {
-  judge: Provider
+  judge: HttpProvider       // call lives on HttpProvider, not the bare marker Provider
   rubric: string
   judge_model_id: string
 
   implements PairwiseScorer<TInput, TOutput> {
-    function compare(self, input: TInput, a: TOutput, b: TOutput) -> Score throws baml.errors.LlmClient {
+    function compare(self, input: TInput, a: TOutput, b: TOutput) -> Score
+        throws baml.ExtendUnknownError<baml.errors.EvalError> {
       // Order 1: a first. Order 2: b first. Position-bias mitigation = average.
       let p_ab = render_pairwise_prompt(self.rubric, input, a, b);
       let p_ba = render_pairwise_prompt(self.rubric, input, b, a);
@@ -242,6 +291,8 @@ class PairwiseJudge<TInput, TOutput> {
         scorer: "pairwise(" + self.judge_model_id + ")",
         rationale: "AB:" + v_ab.reasoning + " | BA:" + v_ba.reasoning,
       }
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.EvalError>(e, "pairwise judge call failed");
     }
   }
 }
@@ -263,13 +314,18 @@ class PairwiseJudge<TInput, TOutput> {
 interface Deterministic requires Provider {
   // Returns the fingerprint this provider WILL run under — so the runner records
   // it without sending a request. Providers without a seed return seed = null.
-  function fingerprint(self) -> RunFingerprint throws Error
+  // This is a read ABOUT how `call` behaves, so it rides the CallError channel
+  // (the OpenAI impl fires a probe request, which is genuinely a call-path failure).
+  function fingerprint(self) -> RunFingerprint
+      throws baml.ExtendUnknownError<baml.errors.CallError>
 }
 
 
 // --- Provider implementations: the two backends the runner mixes. -----------
 //     OpenAI is the seedable one; Anthropic is temperature-only. Both implement
-//     the base HttpProvider; only OpenAI implements Deterministic-with-a-seed.
+//     HttpProvider (which owns call/call_with — the request/response capability);
+//     only OpenAI implements Deterministic-with-a-seed. Each is a Provider only in
+//     the marker sense (it requires Provider via the capabilities it implements).
 
 class OpenAIChat {
   model: string
@@ -282,22 +338,30 @@ class OpenAIChat {
 
   implements HttpProvider {
     type Body = baml.http.Response
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       // temperature + seed + service_tier all ride into the request body here. The
       // four structured-output encodings (for the judge's Verdict schema) are chosen
       // in this method — OpenAI uses `response_format: json_schema`.
       $rust_io_function
     }
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
-      baml.http.send(request) catch (e) { _ => { throw baml.errors.LlmClient { message: "http failed" }; } }
+    function send(self, request: baml.http.Request) -> baml.http.Response
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.http.send(request) catch (e) {
+        _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "openai http send failed");
+      }
     }
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
-      baml.sap.parse<T>(from.text())
+    function parse<T>(self, from: baml.http.Response) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.sap.parse<T>(from.text()) catch (e) {
+        _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "openai parse failed");
+      }
     }
   }
 
   implements Deterministic {
-    function fingerprint(self) -> RunFingerprint throws baml.errors.LlmClient {
+    function fingerprint(self) -> RunFingerprint
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       // OpenAI: report the seed AND read back system_fingerprint from a probe header
       // so the runner can detect a silent backend change between runs.
       RunFingerprint {
@@ -306,6 +370,10 @@ class OpenAIChat {
         system_fingerprint: openai_system_fingerprint(self.model, self.api_key),
         model: self.model,
       }
+    } catch (e) {
+      // The probe is a genuine network call on the call path — normalize any foreign
+      // Io/Timeout into the CallError channel instead of letting it escape raw.
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "openai fingerprint probe failed");
     }
   }
 }
@@ -323,21 +391,29 @@ class Anthropic {
 
   implements HttpProvider {
     type Body = baml.http.Response
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       // Anthropic encodes the Verdict schema via a FORCED tool-use (tool_choice),
       // not response_format — the structured-output divergence, chosen here.
       $rust_io_function
     }
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
-      baml.http.send(request) catch (e) { _ => { throw baml.errors.LlmClient { message: "http failed" }; } }
+    function send(self, request: baml.http.Request) -> baml.http.Response
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.http.send(request) catch (e) {
+        _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "anthropic http send failed");
+      }
     }
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
-      baml.sap.parse<T>(from.text())
+    function parse<T>(self, from: baml.http.Response) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.sap.parse<T>(from.text()) catch (e) {
+        _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "anthropic parse failed");
+      }
     }
   }
 
   implements Deterministic {
-    function fingerprint(self) -> RunFingerprint throws baml.errors.LlmClient {
+    function fingerprint(self) -> RunFingerprint
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       // No seed, no system_fingerprint. temperature: 0 is the whole story — which is
       // exactly why exact-match regression scores are noisier on this backend.
       RunFingerprint {
@@ -413,8 +489,8 @@ class Runner<TInput, TOutput> {
         sum = sum + s.value;
         if (s.passed) { passes = passes + 1; }
         n_scores = n_scores + 1;
-        per = baml.map.insert(per, s.scorer, baml.map.get_or(per, s.scorer, 0.0) + s.value);
-        per_n = baml.map.insert(per_n, s.scorer, baml.map.get_or(per_n, s.scorer, 0) + 1);
+        per.set(s.scorer, per.get_or_insert(s.scorer, 0.0) + s.value);
+        per_n.set(s.scorer, per_n.get_or_insert(s.scorer, 0) + 1);
       }
     }
 
@@ -430,12 +506,15 @@ class Runner<TInput, TOutput> {
 
   // CI GATE. Two flavors the background names: an absolute floor, or a delta vs the
   // last green run. Returns true => build passes. Throwing here = fail the build.
-  function gate(self, floor: float, baseline: float?) -> bool throws baml.errors.LlmClient {
+  // Gating is the eval capability's terminal verdict, so it rides the EvalError
+  // channel; a regression / empty-run is a deliberate typed EvalGateFailure.
+  function gate(self, floor: float, baseline: float?) -> bool
+      throws baml.ExtendUnknownError<baml.errors.EvalError> {
     let report = self.run();
     // Refuse to gate on an unpinned run: if the task provider isn't Deterministic,
     // a green build is unreproducible and a red one is uninterpretable.
     if (report.errors > 0 && report.errors == report.total) {
-      throw baml.errors.LlmClient { message: "eval produced no scores (all cases errored)" };
+      throw EvalGateFailure { reason: "eval produced no scores (all cases errored)", pass_rate: 0.0 };
     }
     let ok_floor = report.pass_rate >= floor;
     let ok_delta = match (baseline) {
@@ -443,13 +522,15 @@ class Runner<TInput, TOutput> {
       _ => true,
     };
     if (!ok_floor) {
-      throw baml.errors.LlmClient {
-        message: "eval regressed: pass_rate " + float_to_str(report.pass_rate) + " < floor " + float_to_str(floor),
+      throw EvalGateFailure {
+        reason: "eval regressed: pass_rate " + float_to_str(report.pass_rate) + " < floor " + float_to_str(floor),
+        pass_rate: report.pass_rate,
       };
     }
     if (!ok_delta) {
-      throw baml.errors.LlmClient {
-        message: "eval regressed vs baseline: " + float_to_str(report.pass_rate),
+      throw EvalGateFailure {
+        reason: "eval regressed vs baseline: " + float_to_str(report.pass_rate),
+        pass_rate: report.pass_rate,
       };
     }
     true
@@ -480,7 +561,7 @@ class TraceDataset {
   function from_traces<TInput, TOutput>(traces: Trace<TInput, TOutput>[]) -> Case<TInput, TOutput>[] {
     let out: Case<TInput, TOutput>[] = [];
     for (let tr in traces) {
-      out = baml.array.push(out, Case<TInput, TOutput> {
+      out.push(Case<TInput, TOutput> {
         id: tr.request_id,
         input: tr.input,
         expected: tr.recorded_output,    // regression anchor; or null for ref-free
@@ -497,10 +578,10 @@ class TraceDataset {
 // 6. Host boundaries (genuine I/O / pure-compute the runtime owns).
 // ----------------------------------------------------------------------------
 
-// Deterministic string scorers.
-function similarity_ratio(a: string, b: string) -> float { $rust_io_function }   // baml.str
-// Vector math for embedding similarity.
-function cosine(a: float[], b: float[]) -> float { $rust_io_function }            // baml.vec
+// Deterministic string scorer — NET-NEW host compute (Levenshtein-normalized ratio);
+// not a stdlib string method, so it lives here as a library helper.
+function similarity_ratio(a: string, b: string) -> float { $rust_io_function }
+// Vector math for embedding similarity uses the real (net-new) `baml.vec.cosine` directly.
 
 // Prompt assembly for judges (rubric + candidate + optional reference).
 function render_judge_prompt<TOutput>(rubric: string, output: TOutput, expected: TOutput?) -> baml.llm.PromptAst { $rust_io_function }

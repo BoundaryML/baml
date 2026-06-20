@@ -26,9 +26,9 @@ function dispatch_research(calls: ToolCall[]) -> ToolResult[] {
   let out: ToolResult[] = [];
   for (let c in calls) {
     if (c.name == "web_search") {
-      out = baml.list.push(out, ToolResult { id: c.id, output: do_web_search(c.args) });
+      out.push(ToolResult { id: c.id, output: do_web_search(c.args) });
     } else {
-      out = baml.list.push(out, ToolResult { id: c.id, output: c.args });   // final_answer echoes
+      out.push(ToolResult { id: c.id, output: c.args });   // final_answer echoes
     }
   }
   out
@@ -122,21 +122,31 @@ function ResearchWithPartial(question: string) -> string {
 }
 
 // app-level driver: reach the combinator and ask for the budget-aware result.
-function drive_research(question: string, ctx: ExecutionContext) -> string {
+function drive_research(question: string, ctx: ExecutionContext) -> string
+    throws baml.ExtendUnknownError<baml.errors.ToolError> {
   let p = SmartResearcher();                      // p : Provider (existential)
   match (p) {
     let b: Bounded => {
-      match (b.run_to_budget<string>(render_prompt_for(question), tools_for_research(), ctx)) {
+      // run_to_budget throws on the ToolError channel; a Refused mid-loop, a
+      // rate limit, or a wrapped foreign failure all surface here.
+      let outcome = b.run_to_budget<string>(render_prompt_for(question), tools_for_research(), ctx) catch (e) {
+        let r: Refused                  => return "[declined: " + r.category,
+        let t: baml.errors.ToolError    => { if (t.is_rate_limit()) { return "[rate limited]"; } else { return "[tool error]"; } }
+        let u: baml.UnknownError        => return u.message.join("; "),
+      };
+      match (outcome) {
         let done: string  => done,                            // model finished cleanly
         let cap: Budget<string> => {
           // best-effort partial; fall back to a placeholder if nothing landed yet.
           match (cap.partial) {
-            let s: string => baml.string.concat("[partial @ budget] ", s),
+            let s: string => "[partial @ budget] " + s,
             _             => "[no answer before budget]",
           }
         },
       }
     },
+    // Unsupported implements ALL four capability error interfaces, so it is a legal
+    // throw on the ToolError channel and is caught by its concrete type upstream.
     _ => throw baml.errors.Unsupported { message: "client is not a Bounded loop" },
   }
 }
@@ -173,9 +183,11 @@ function ResearchFocused(question: string) -> string {
 
 // -----------------------------------------------------------------------------
 // (6) Combinator chain reads naturally: bound the loop, then make the underlying
-// model resilient. Bounded wraps Tools; with_retry/fallback_to wrap Provider.
-// Because Bounded is itself a Provider, the orchestration combinators compose
-// around it. (NOTE: see evaluation.md (c) — retry around a Tools loop is subtle.)
+// model resilient. Bounded implements Tools; with_retry is a Provider-MARKER
+// factory inherited by every provider (Bounded included, since Tools requires
+// Provider), producing a Retry that forwards the HttpProvider.call path.
+// (NOTE: see evaluation.md (c) — retry around a Tools loop is subtle: Bounded has
+// no single-turn call, so this retries the loop, not a call.)
 // -----------------------------------------------------------------------------
 
 client ResilientBounded() {

@@ -50,7 +50,8 @@ client ResilientAgent() {
 // 2. The same EXTRACTION function over four request/response transports.
 //
 //    THE PORTABILITY CLAIM: Batch (HTTP), Reading (SSE), WarmAgent (warm WS) all
-//    answer the identical `Extract.call` — because they share `Provider.call`. The
+//    answer the identical `Extract.call` — because they all implement `HttpProvider`
+//    (which OWNS `call`/`call_with`; the `Provider` marker carries no interaction). The
 //    app author writes ONE function body; swapping `client:` swaps the wire with
 //    ZERO code change. This is transport-is-provider, proven.
 // -----------------------------------------------------------------------------
@@ -90,7 +91,8 @@ function VoiceChat(system: string) -> Transcript {
 // The application's duplex endpoint. THIS is where the four cliff use cases are
 // pushed in, and where server-initiated events come out. None of these have a
 // home on a Stream — they only exist because `io` is a duplex Channel.
-function run_barista_session(system: string) -> Transcript throws baml.errors.LlmClient {
+function run_barista_session(system: string) -> Transcript
+    throws baml.ExtendUnknownError<baml.errors.RealtimeError> {
   let io: Channel = open_local_audio_channel();    // the app's mic+speaker endpoint
 
   // server -> caller: handle the model's audio + the UNSOLICITED server events.
@@ -108,7 +110,18 @@ function run_barista_session(system: string) -> Transcript throws baml.errors.Ll
   });
 
   // drive the duplex session to completion; returns the provider-owned Transcript.
-  VoiceChat.live(system, io)
+  // Consumer catch, most-specific first: the realtime-domain failure the app can
+  // act on, then the universal escape hatch. (SocketClosed lands in RealtimeError.)
+  VoiceChat.live(system, io) catch (e) {
+    let r: baml.errors.RealtimeError => {
+      if (r.is_network_error()) { surface_error("session dropped"); throw r; }
+      else { throw r; }
+    }
+    let u: baml.UnknownError => { surface_error(u.message); throw u; }
+  }
+} catch (e) {
+  // open_local_audio_channel's foreign Io normalizes onto the Realtime channel.
+  _ => throw baml.UnknownError.with_message<baml.errors.RealtimeError>(e, "barista session setup failed");
 }
 
 
@@ -122,15 +135,23 @@ function run_barista_session(system: string) -> Transcript throws baml.errors.Ll
 //    *write* the crossing, then refuses it at runtime. (See evaluation.md (c).)
 // -----------------------------------------------------------------------------
 
-function valid_live(system: string, io: Channel) -> Transcript throws baml.errors.LlmClient {
+function valid_live(system: string, io: Channel) -> Transcript
+    throws baml.ExtendUnknownError<baml.errors.RealtimeError> {
   VoiceChat.live(system, io)                        // Voice() is Realtime -> runs
 }
 
-function invalid_live(text: string, io: Channel) -> Transcript throws baml.errors.LlmClient {
+function invalid_live(text: string, io: Channel) -> Transcript
+    throws baml.ExtendUnknownError<baml.errors.RealtimeError> {
   // Extract's client is Batch() == ChatHTTP. ChatHTTP is HttpProvider only.
-  // .live matches for Realtime, misses, and the `_` arm throws Unsupported.
+  // .live matches for Realtime, misses, and the `_` arm throws baml.errors.Unsupported.
+  // Unsupported implements EVERY capability-error interface, so it is legal on this
+  // RealtimeError channel and the app catches it by its concrete type below.
   // A request/response transport CANNOT fake a live session — by design.
-  Extract.live(text, io)
+  Extract.live(text, io) catch (e) {
+    let u: baml.errors.Unsupported => { throw u; }   // surfaced as-is: not a transport failure
+    let r: baml.errors.RealtimeError => { throw r; } // any realtime-domain failure
+    let x: baml.UnknownError         => { throw x; } // the escape hatch
+  }
 }
 
 
@@ -167,7 +188,7 @@ function describe_transport(p: Provider) -> string {
 // 6. host-boundary helpers the app uses to wire its own audio I/O.
 // -----------------------------------------------------------------------------
 
-function open_local_audio_channel() -> Channel throws baml.errors.LlmClient { $rust_io_function }
+function open_local_audio_channel() -> Channel throws baml.errors.Io { $rust_io_function }
 function play_to_speaker(pcm: string) -> null { $rust_io_function }
 function current_response_item() -> string { $rust_io_function }
 function spoken_ms() -> int { $rust_io_function }

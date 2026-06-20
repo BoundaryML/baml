@@ -61,11 +61,15 @@ function Prices() -> PriceTable {
 // -----------------------------------------------------------------------------
 // 3. A single metered call. The app wants the answer AND what it cost.
 //
-//    `.call` (the plain companion) throws usage away. To get usage the app uses
-//    the `.metered` companion, which `match`es the provider for Metering and
-//    returns Metered<T>. Note: NO fallback to `.call` is meaningful here — if the
-//    provider can't meter, you cannot fabricate usage. So this is an "errors"
-//    capability, not a "degrades" one (proposal §5 split).
+//    `.call` (the plain companion) returns only the value. To ALSO get usage the
+//    app matches the client's provider for `HttpProvider` and uses its `call_with`
+//    seam, projecting `m.usage()` off the normalized ResponseMeta — usage is a
+//    PRODUCT SIDECAR (value AND metadata), so there is no `.metered` companion, no
+//    bespoke `Metered<T>`: any `HttpProvider` answers `m.usage()`. Because `call_with`
+//    lives on the SAME capability as `call` (HttpProvider — see ../provider-as-marker.md),
+//    it FORWARDS through Fallback/Retry/Cache, so a fallback's winning-member usage is
+//    not dropped (the bug the old bespoke companion had). The (value, usage) pair is
+//    just the tuple `call_with` returns — destructured here.
 // -----------------------------------------------------------------------------
 
 function Classify(text: string) -> Ticket {
@@ -73,14 +77,20 @@ function Classify(text: string) -> Ticket {
   prompt #"Classify this support ticket: {{ text }}"#
 }
 
-// The metered companion the app actually calls when it cares about cost:
-//   Classify.metered(text)  ->  Metered<Ticket>
-// Generated like the .stream / .live companions: match on Metering, else error.
-function Classify$metered(text: string) -> Metered<Ticket> {
-  let p = Cheap();
-  match (p) {
-    let m: Metering => m.call_metered<Ticket>(render_prompt(text)),
-    _ => throw baml.errors.Unsupported { message: "client cannot report usage" },
+// The metered call the app makes when it cares about cost — no companion, just
+// `call_with` projecting usage. Returns the tuple (Ticket, Usage):
+//   let (ticket, usage) = Classify.call_with(text, m => m.usage());
+// Fails on the canonical CallError channel like any `.call` (usage is not a
+// separate capability to negotiate — any HttpProvider has a ResponseMeta; only a
+// client with NO request/response capability at all hits the `_` arm below).
+function ClassifyMetered(text: string) -> (Ticket, Usage)
+    throws baml.ExtendUnknownError<baml.errors.CallError> {
+  // `call_with` is an HttpProvider capability now (the marker `Provider` carries no
+  // interaction method, see ../provider-as-marker.md), so match the client's provider
+  // for it. A pure-realtime/harness client would hit the `_` arm and be Unsupported.
+  match (Cheap()) {
+    let h: HttpProvider => h.call_with<Ticket, Usage>(render_prompt(text), m => m.usage()),
+    _ => throw baml.errors.Unsupported { message: "client has no request/response sidecar" },
   }
 }
 
@@ -96,7 +106,8 @@ function Classify$metered(text: string) -> Metered<Ticket> {
 //    Because a Budget IS a Provider, it slots into a normal combinator chain:
 //    here the inner provider is itself a Fallback (Fast -> Claude), and BOTH
 //    members' usage flows through the single accumulator — even when the Fallback
-//    swaps models mid-run, because charge_one reads the model off Metered<T>.
+//    swaps models mid-run, because charge_one reads the model off the projected
+//    ResponseMeta (MeteredMeta.served_model), not off a fixed config.
 //
 //    The awkward bit: the cell is constructed imperatively and threaded by hand,
 //    because the `client` sugar cannot own mutable cross-call state. So budgeting
@@ -106,7 +117,10 @@ function Classify$metered(text: string) -> Metered<Ticket> {
 // Build a budgeted provider for one app-request, sharing `cell`. Not a `client`
 // because it takes the mutable cell as an argument — sugar can't carry that.
 function Budgeted(cell: BudgetCell, tenant: string) -> Provider {
-  // inner: try the priority model, fall back to Claude. Both are Metering.
+  // inner: try the priority model, fall back to Claude. Budget charges by projecting
+  // each call's usage/model/tier off `call_with`, which the Fallback forwards — so a
+  // model swap still flows through the one accumulator. Both providers' responses
+  // carry the MeteredMeta dimension, so both are priceable.
   Budget {
     inner: Fast().fallback_to(Claude()),
     prices: Prices(),
@@ -119,18 +133,49 @@ function Budgeted(cell: BudgetCell, tenant: string) -> Provider {
 // billed calls share ONE BudgetCell, so the run has one attributable total and a
 // hard ceiling. If the third call would blow $0.05, charge_one throws before it
 // returns and the whole pipeline aborts — that is the runaway protection.
-function TriageRun(tenant: string, t1: string, t2: string) -> Ticket[] throws baml.errors.LlmClient {
+// The fan-out propagates on the CallError channel (Budget.call forwards there). A
+// blown ceiling arrives as the concrete `BudgetExceeded` — which implements BOTH
+// MeteringError and CallError — so the caller of TriageRun can catch it by its
+// concrete type (see SafeTriage) even though the static channel here is CallError.
+function TriageRun(tenant: string, t1: string, t2: string) -> Ticket[]
+    throws baml.ExtendUnknownError<baml.errors.CallError> {
   let cell = BudgetCell.new(0.05);                 // $0.05 ceiling for this whole request
   let p: Provider = Budgeted(cell, tenant);
 
-  let a: Ticket = p.call<Ticket>(render_prompt(t1));   // charged + checked
-  let b: Ticket = p.call<Ticket>(render_prompt(t2));   // charged + checked (running total)
+  // `call` is an HttpProvider capability now (the marker `Provider` carries no
+  // interaction method, see ../provider-as-marker.md), so match for it. Budget
+  // implements HttpProvider, so the budgeted forwarder matches here.
+  match (p) {
+    let h: HttpProvider => {
+      let a: Ticket = h.call<Ticket>(render_prompt(t1));   // charged + checked
+      let b: Ticket = h.call<Ticket>(render_prompt(t2));   // charged + checked (running total)
 
-  // At the end the app reads the summed usage/cost off the cell for chargeback.
-  let spent = cell.total();
-  baml.sys.log("tenant " ++ tenant ++ " spent $" ++ fmt_usd(spent.usd)
-               ++ " over " ++ int_to_str(cell.usage().output_tokens) ++ " output tokens");
-  [a, b]
+      // At the end the app reads the summed usage/cost off the cell for chargeback.
+      let spent = cell.total();
+      baml.log.info("tenant " + tenant + " spent $" + fmt_usd(spent.usd)
+                   + " over " + cell.usage().output_tokens.to_string() + " output tokens");
+      [a, b]
+    },
+    _ => throw baml.errors.Unsupported {
+      message: "budgeted client is not request/response (HttpProvider)" },
+  }
+}
+
+// The consumer catch, most-specific-first: the concrete BudgetExceeded (price/ceiling
+// domain failure), then the CallError interface (network/rate-limit triage without
+// knowing the concrete class), then baml.UnknownError as the escape hatch.
+function SafeTriage(tenant: string, t1: string, t2: string) -> Ticket[] {
+  TriageRun(tenant, t1, t2) catch (e) {
+    let be: BudgetExceeded       => {
+      baml.log.info("aborted: tenant " + be.tenant + " hit $" + fmt_usd(be.limit_usd));
+      []
+    },
+    let c: baml.errors.CallError => {
+      if (c.is_rate_limit()) { baml.log.info("rate limited"); } else { baml.log.info("call failed"); }
+      []
+    },
+    let u: baml.UnknownError     => { baml.log.info("unexpected triage failure"); [] },
+  }
 }
 
 
@@ -149,18 +194,19 @@ function TriageRun(tenant: string, t1: string, t2: string) -> Ticket[] throws ba
 // Score a backlog. Submit -> poll -> download is hidden behind run_batch; we get
 // back a dict keyed by our own custom_id (e.g. the DB row id).
 function ScoreBacklog(rows: map<string, string>) -> map<string, BatchResult<Ticket>>
-    throws baml.errors.LlmClient {
+    throws baml.ExtendUnknownError<baml.errors.BatchError> {
   let p = Claude();                                // Anthropic batch: inline array path
   match (p) {
     let b: Batch => {
       // build one BatchRequest per row, custom_id = the DB key so we can rejoin.
       let reqs: BatchRequest[] = [];
-      for (let key in keys(rows)) {
-        reqs = reqs ++ [BatchRequest {
+      for (let key in rows.keys()) {
+        let text: string = match (rows.get(key)) { let s: string => s, null => "" };
+        reqs.push(BatchRequest {
           custom_id: key,
-          prompt: render_prompt(rows[key]),
+          prompt: render_prompt(text),
           overrides: {},
-        }];
+        });
       }
       // run_batch polls every 30s until terminal, downloads, rejoins by custom_id.
       b.run_batch<Ticket>(reqs, 30000)
@@ -172,13 +218,15 @@ function ScoreBacklog(rows: map<string, string>) -> map<string, BatchResult<Tick
 // The progress-UI variant: the app drives submit/poll/download itself so it can
 // surface "342/1000 done" without blocking. Shows the lifecycle is first-class,
 // not only the blocking convenience.
-function StartBatch(rows: map<string, string>) -> BatchHandle<Ticket> throws baml.errors.LlmClient {
+function StartBatch(rows: map<string, string>) -> BatchHandle<Ticket>
+    throws baml.ExtendUnknownError<baml.errors.BatchError> {
   let p = Cheap();                                 // OpenAI batch: JSONL file path
   match (p) {
     let b: Batch => {
       let reqs: BatchRequest[] = [];
-      for (let key in keys(rows)) {
-        reqs = reqs ++ [BatchRequest { custom_id: key, prompt: render_prompt(rows[key]), overrides: {} }];
+      for (let key in rows.keys()) {
+        let text: string = match (rows.get(key)) { let s: string => s, null => "" };
+        reqs.push(BatchRequest { custom_id: key, prompt: render_prompt(text), overrides: {} });
       }
       b.submit_batch<Ticket>(reqs)                 // returns immediately; persist this handle
     },
@@ -187,7 +235,8 @@ function StartBatch(rows: map<string, string>) -> BatchHandle<Ticket> throws bam
 }
 
 // ...later, possibly a different process, re-hydrating the persisted handle:
-function CheckBatch(handle: BatchHandle<Ticket>) -> BatchState throws baml.errors.LlmClient {
+function CheckBatch(handle: BatchHandle<Ticket>) -> BatchState
+    throws baml.ExtendUnknownError<baml.errors.BatchError> {
   let p = Cheap();
   match (p) {
     let b: Batch => b.poll_batch<Ticket>(handle),
@@ -195,9 +244,26 @@ function CheckBatch(handle: BatchHandle<Ticket>) -> BatchState throws baml.error
   }
 }
 
+// A batch consumer catch, most-specific-first: the concrete WrongBatchOwner (an id
+// minted by a different provider — e.g. a Fallback member), then the BatchError
+// interface (network/rate-limit/partial-failure triage), then the escape hatch.
+function SafeCheckBatch(handle: BatchHandle<Ticket>) -> BatchState? {
+  CheckBatch(handle) catch (e) {
+    let w: WrongBatchOwner    => {
+      baml.log.info("handle owned by " + w.actual + ", not " + w.expected);
+      null
+    },
+    let b: baml.errors.BatchError => {
+      if (b.is_rate_limit()) { baml.log.info("batch pool rate limited"); } else { baml.log.info("batch poll failed"); }
+      null
+    },
+    let u: baml.UnknownError  => { baml.log.info("unexpected batch failure"); null },
+  }
+}
+
 
 // -----------------------------------------------------------------------------
-// 6. Host seams used by app code only.
+// 6. Host seams used by app code only. (Map iteration uses `rows.keys()`, int→string
+//    uses `n.to_string()`, and string concat uses `+` — all real stdlib, so no
+//    bespoke host shims are needed here anymore.)
 // -----------------------------------------------------------------------------
-function keys<V>(m: map<string, V>) -> string[] { $rust_io_function }
-function int_to_str(n: int) -> string { $rust_io_function }

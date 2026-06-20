@@ -4,8 +4,8 @@
 // ============================================================================
 //
 // Builds on the canonical primitives from _conventions.md VERBATIM:
-//   interface Provider          — call<T>
-//   interface HttpProvider      — build_request / send / parse / default call
+//   interface Provider          — bare MARKER (no call; see ../provider-as-marker.md)
+//   interface HttpProvider      — build_request / send / parse / default call / call_with
 //   interface Tools             — begin / step / submit / default run_tools
 //   class ToolCall   { id, name, args }                 // id OPAQUE to the loop
 //   class ToolResult { id, output }
@@ -80,7 +80,7 @@ class Catalog {
   function all_tools(self) -> CatalogTool[] {
     let out: CatalogTool[] = [];
     for (let ns in self.namespaces) {
-      for (let t in ns.tools) { out = out.append(t); }
+      for (let t in ns.tools) { out.push(t); }
     }
     out
   }
@@ -88,7 +88,7 @@ class Catalog {
   function eager_tools(self) -> CatalogTool[] {
     let out: CatalogTool[] = [];
     for (let t in self.all_tools()) {
-      if (!t.defer) { out = out.append(t); }
+      if (!t.defer) { out.push(t); }
     }
     out
   }
@@ -111,7 +111,9 @@ class Catalog {
 interface SearchResolver {
   // Map a model-issued search query to the tools your registry actually exposes
   // for THIS request (tenant/permission set). Returns the definitions to load.
-  function resolve(self, query: string) -> CatalogTool[] throws baml.errors.LlmClient
+  // On the tool-dispatch path -> the ToolError channel.
+  function resolve(self, query: string) -> CatalogTool[]
+      throws baml.ExtendUnknownError<baml.errors.ToolError>
 }
 
 interface SearchableTools requires Tools {
@@ -119,7 +121,7 @@ interface SearchableTools requires Tools {
   // new interaction shape. The provider's transcript additionally remembers which
   // deferred definitions are currently "loaded" so step/submit stay consistent.
   function begin_searchable<T>(self, prompt: baml.llm.PromptAst, catalog: Catalog, resolver: SearchResolver)
-      -> Transcript throws Error
+      -> Transcript throws baml.ExtendUnknownError<baml.errors.ToolError>
 
   // Default searchable loop: identical to Tools.run_tools EXCEPT it starts from a
   // Catalog and intercepts the synthetic search tool. The provider's step()
@@ -128,7 +130,8 @@ interface SearchableTools requires Tools {
   // ToolResult — WITHOUT running app dispatch for it. Real tool calls flow to
   // ctx.dispatch exactly as before.
   function search_tools<T>(self, prompt: baml.llm.PromptAst, catalog: Catalog,
-                           resolver: SearchResolver, ctx: ExecutionContext) -> T throws Error {
+                           resolver: SearchResolver, ctx: ExecutionContext) -> T
+      throws baml.ExtendUnknownError<baml.errors.ToolError> {
     let t = self.begin_searchable<T>(prompt, catalog, resolver);
     while (true) {
       match (self.step<T>(t)) {
@@ -146,14 +149,14 @@ interface SearchableTools requires Tools {
             let loaded: CatalogTool[] = resolver.resolve(query);
             // The "result" of a search tool is the set of definitions that just
             // became callable. step()'s next turn will see these as loaded.
-            results = results.append(ToolResult {
+            results.push(ToolResult {
               id: sc.id,
               output: SearchableToolsOps.search_result_payload(loaded),
             });
           }
           // app dispatch for the genuine tool calls (correlated by opaque id)
           let dispatched: ToolResult[] = ctx.dispatch(to_dispatch);
-          for (let d in dispatched) { results = results.append(d); }
+          for (let d in dispatched) { results.push(d); }
 
           t = self.submit(t, results);
         },
@@ -173,24 +176,26 @@ class SearchableToolsOps {
   function filter_search(calls: ToolCall[]) -> ToolCall[] {
     let out: ToolCall[] = [];
     for (let c in calls) {
-      if (c.name == SearchableToolsOps.search_tool_name()) { out = out.append(c); }
+      if (c.name == SearchableToolsOps.search_tool_name()) { out.push(c); }
     }
     out
   }
   function filter_real(calls: ToolCall[]) -> ToolCall[] {
     let out: ToolCall[] = [];
     for (let c in calls) {
-      if (c.name != SearchableToolsOps.search_tool_name()) { out = out.append(c); }
+      if (c.name != SearchableToolsOps.search_tool_name()) { out.push(c); }
     }
     out
   }
-  function search_query_of(args: map<string, unknown>) -> string throws baml.errors.LlmClient {
+  function search_query_of(args: map<string, unknown>) -> string
+      throws baml.ExtendUnknownError<baml.errors.ToolError> {
     // the search tool's single param is `{ "query": string }`
     $rust_io_function
   }
   // Serialize the loaded definitions into the payload the model receives as the
   // search result: name + description + full JSON Schema, now in context.
-  function search_result_payload(loaded: CatalogTool[]) -> unknown throws baml.errors.LlmClient {
+  function search_result_payload(loaded: CatalogTool[]) -> unknown
+      throws baml.ExtendUnknownError<baml.errors.ToolError> {
     $rust_io_function
   }
   // The synthetic search tool, declared to the model so it can issue searches.
@@ -230,14 +235,21 @@ class OpenAI {
 
   implements HttpProvider {
     type Body = baml.http.Response
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       $rust_io_function
     }
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
-      baml.http.send(request) catch (e) { _ => { throw baml.errors.LlmClient { message: "http failed" }; } }
+    function send(self, request: baml.http.Request) -> baml.http.Response
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.http.send(request) catch (e) {
+        _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "openai http send failed");
+      }
     }
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
+    function parse<T>(self, from: baml.http.Response) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       baml.sap.parse<T>(from.text())
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "openai parse failed");
     }
   }
 
@@ -245,7 +257,8 @@ class OpenAI {
   implements Tools {
     type Transcript = OpenAiTranscript
 
-    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> OpenAiTranscript throws baml.errors.LlmClient {
+    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> OpenAiTranscript
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       OpenAiTranscript {
         model: self.model,
         api_key: self.api_key,
@@ -253,11 +266,15 @@ class OpenAI {
         wire_tools: OpenAI.encode_tools_flat(tools),    // no deferral: ship them all eagerly
         loaded_names: [],                               // unused in flat mode
       }
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "openai begin failed");
     }
-    function step<T>(self, t: OpenAiTranscript) -> T | ToolCalls throws baml.errors.LlmClient {
+    function step<T>(self, t: OpenAiTranscript) -> T | ToolCalls
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       OpenAI.step_impl<T>(t)
     }
-    function submit(self, t: OpenAiTranscript, results: ToolResult[]) -> OpenAiTranscript throws baml.errors.LlmClient {
+    function submit(self, t: OpenAiTranscript, results: ToolResult[]) -> OpenAiTranscript
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       OpenAI.submit_impl(t, results)
     }
   }
@@ -265,7 +282,7 @@ class OpenAI {
   // HOSTED searchable: this is where defer_loading lives.
   implements SearchableTools {
     function begin_searchable<T>(self, prompt: baml.llm.PromptAst, catalog: Catalog, resolver: SearchResolver)
-        -> OpenAiTranscript throws baml.errors.LlmClient {
+        -> OpenAiTranscript throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // resolver is IGNORED in hosted mode — OpenAI runs the search itself.
       // DIVERGENCE that matters: we encode each tool with a `defer_loading` flag
       // and prepend a { "type":"tool_search" } entry. Deferred schemas ARE on the
@@ -278,45 +295,50 @@ class OpenAI {
         wire_tools: OpenAI.encode_tools_searchable(catalog),    // tool_search + defer_loading:true
         loaded_names: [],
       }
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "openai begin_searchable failed");
     }
   }
 
   // --- statics: the encoders & host bridges, all BELOW the seam ---
 
   // Flat: every tool inline, full JSON Schema. The expensive default.
-  function encode_tools_flat(tools: Tool[]) -> string throws baml.errors.LlmClient {
+  function encode_tools_flat(tools: Tool[]) -> string
+      throws baml.ExtendUnknownError<baml.errors.ToolError> {
     let entries: string[] = [];
     for (let tool in tools) {
       let schema: string = baml.reflect.type_to_json_schema(tool.parameters);
-      entries = entries.append(baml.llm.openai_tool_entry(tool.name, tool.description, schema));
+      entries.push(baml.llm.openai_tool_entry(tool.name, tool.description, schema));
     }
-    baml.llm.json_array(entries)
+    "[" + entries.join(",") + "]"
   }
 
   // Searchable: prepend { "type":"tool_search" }, then emit each CatalogTool with
   // its `defer_loading` flag set from CatalogTool.defer. The namespace name is
   // folded into the wire tool name so the model's search groups correctly
   // (namespacing discipline -> wire-visible prefix, e.g. "billing.process_refund").
-  function encode_tools_searchable(catalog: Catalog) -> string throws baml.errors.LlmClient {
+  function encode_tools_searchable(catalog: Catalog) -> string
+      throws baml.ExtendUnknownError<baml.errors.ToolError> {
     let entries: string[] = [];
-    entries = entries.append(baml.llm.openai_tool_search_entry());   // { "type": "tool_search" }
+    entries.push(baml.llm.openai_tool_search_entry());   // { "type": "tool_search" }
     for (let ns in catalog.namespaces) {
       for (let ct in ns.tools) {
         let qualified: string = OpenAI.qualify(ns.name, ct.tool.name);  // "billing.process_refund"
         let schema: string = baml.reflect.type_to_json_schema(ct.tool.parameters);
-        entries = entries.append(
+        entries.push(
           baml.llm.openai_tool_entry_deferrable(qualified, ct.tool.description, schema, ct.defer)
         );
       }
     }
-    baml.llm.json_array(entries)
+    "[" + entries.join(",") + "]"
   }
   // Namespacing discipline made wire-real: prefix the tool name with its group.
   function qualify(namespace: string, name: string) -> string { $rust_io_function }
 
-  function step_impl<T>(t: OpenAiTranscript) -> T | ToolCalls throws baml.errors.LlmClient {
+  function step_impl<T>(t: OpenAiTranscript) -> T | ToolCalls
+      throws baml.ExtendUnknownError<baml.errors.ToolError> {
     let resp: baml.http.Response = OpenAI.post_responses(t) catch (e) {
-      _ => { throw baml.errors.LlmClient { message: "openai responses failed" }; }
+      _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "openai responses failed");
     };
     let body: string = resp.text();
     // In hosted mode a tool_search call is resolved by the provider; we only ever
@@ -327,7 +349,7 @@ class OpenAI {
       let calls: ToolCall[] = [];
       for (let r in raw) {
         // strip the namespace prefix back off so the app's handler name matches
-        calls = calls.append(ToolCall {
+        calls.push(ToolCall {
           id: r.call_id,
           name: OpenAI.unqualify(r.name),
           args: baml.sap.parse<map<string, unknown>>(r.arguments_json),
@@ -337,20 +359,26 @@ class OpenAI {
       return ToolCalls { calls: calls };
     }
     baml.sap.parse<T>(baml.llm.responses_output_text(body))
+  } catch (e) {
+    _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "openai step failed");
   }
   function unqualify(qualified: string) -> string { $rust_io_function }
 
-  function submit_impl(t: OpenAiTranscript, results: ToolResult[]) -> OpenAiTranscript throws baml.errors.LlmClient {
+  function submit_impl(t: OpenAiTranscript, results: ToolResult[]) -> OpenAiTranscript
+      throws baml.ExtendUnknownError<baml.errors.ToolError> {
     let appended: string[] = [];
     for (let r in results) {
-      appended = appended.append(
-        baml.llm.responses_function_output(r.id, baml.sap.to_json(r.output))   // correlated by call_id
+      appended.push(
+        baml.llm.responses_function_output(r.id, baml.json.to_string(r.output))   // correlated by call_id
       );
     }
     OpenAI.append_input(t, appended)
+  } catch (e) {
+    _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "openai submit failed");
   }
 
-  function post_responses(t: OpenAiTranscript) -> baml.http.Response throws baml.errors.LlmClient { $rust_io_function }
+  function post_responses(t: OpenAiTranscript) -> baml.http.Response
+      throws baml.ExtendUnknownError<baml.errors.ToolError> { $rust_io_function }
   function remember_assistant_turn(t: OpenAiTranscript, body: string) -> null { $rust_io_function }
   function append_input(t: OpenAiTranscript, items: string[]) -> OpenAiTranscript { $rust_io_function }
 }
@@ -396,21 +424,29 @@ class Anthropic {
 
   implements HttpProvider {
     type Body = baml.http.Response
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       $rust_io_function
     }
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
-      baml.http.send(request) catch (e) { _ => { throw baml.errors.LlmClient { message: "http failed" }; } }
+    function send(self, request: baml.http.Request) -> baml.http.Response
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.http.send(request) catch (e) {
+        _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "anthropic http send failed");
+      }
     }
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
+    function parse<T>(self, from: baml.http.Response) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       baml.sap.parse<T>(from.text())
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "anthropic parse failed");
     }
   }
 
   implements Tools {
     type Transcript = AnthropicTranscript
 
-    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> AnthropicTranscript throws baml.errors.LlmClient {
+    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> AnthropicTranscript
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       AnthropicTranscript {
         model: self.model,
         api_key: self.api_key,
@@ -421,11 +457,15 @@ class Anthropic {
         loaded_names: [],
         pending_ids: [],
       }
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "anthropic begin failed");
     }
-    function step<T>(self, t: AnthropicTranscript) -> T | ToolCalls throws baml.errors.LlmClient {
+    function step<T>(self, t: AnthropicTranscript) -> T | ToolCalls
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       Anthropic.step_impl<T>(t)
     }
-    function submit(self, t: AnthropicTranscript, results: ToolResult[]) -> AnthropicTranscript throws baml.errors.LlmClient {
+    function submit(self, t: AnthropicTranscript, results: ToolResult[]) -> AnthropicTranscript
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       Anthropic.submit_impl(t, results)
     }
   }
@@ -433,7 +473,7 @@ class Anthropic {
   // EMULATED searchable: ship only descriptions + the synthetic search tool.
   implements SearchableTools {
     function begin_searchable<T>(self, prompt: baml.llm.PromptAst, catalog: Catalog, resolver: SearchResolver)
-        -> AnthropicTranscript throws baml.errors.LlmClient {
+        -> AnthropicTranscript throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // The wire tools at START are: every EAGER tool + our synthetic tool_search.
       // Deferred schemas are withheld. The resolver is NOT called here — it's
       // called later, by the default loop, when the model issues a search.
@@ -449,46 +489,52 @@ class Anthropic {
         loaded_names: [],            // grows as searches resolve -> cache-prefix churn
         pending_ids: [],
       }
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "anthropic begin_searchable failed");
     }
   }
 
   // --- statics ---
 
-  function encode_tools_anthropic(tools: Tool[]) -> string throws baml.errors.LlmClient {
+  function encode_tools_anthropic(tools: Tool[]) -> string
+      throws baml.ExtendUnknownError<baml.errors.ToolError> {
     let entries: string[] = [];
     for (let tool in tools) {
       let schema: string = baml.reflect.type_to_json_schema(tool.parameters);
-      entries = entries.append(baml.llm.anthropic_tool_entry(tool.name, tool.description, schema));
+      entries.push(baml.llm.anthropic_tool_entry(tool.name, tool.description, schema));
     }
-    baml.llm.json_array(entries)
+    "[" + entries.join(",") + "]"
   }
 
   // Start state: eager tools (full schema) + a description-only stub per namespace
   // baked into the synthetic search tool's description, + the search tool itself.
   // The namespace descriptions are what the model "searches" over.
-  function encode_searchable_start(catalog: Catalog, eager: CatalogTool[]) -> string throws baml.errors.LlmClient {
+  function encode_searchable_start(catalog: Catalog, eager: CatalogTool[]) -> string
+      throws baml.ExtendUnknownError<baml.errors.ToolError> {
     let entries: string[] = [];
     for (let ct in eager) {
       let schema: string = baml.reflect.type_to_json_schema(ct.tool.parameters);
       let qualified: string = Anthropic.qualify(ct.namespace, ct.tool.name);
-      entries = entries.append(baml.llm.anthropic_tool_entry(qualified, ct.tool.description, schema));
+      entries.push(baml.llm.anthropic_tool_entry(qualified, ct.tool.description, schema));
     }
     // synthetic search tool, with the namespace catalog folded into its description
     // (short discriminative descriptions only — NOT the deferred schemas).
     let search_desc: string = Anthropic.namespace_digest(catalog);
-    entries = entries.append(
+    entries.push(
       baml.llm.anthropic_tool_entry("tool_search", search_desc,
         baml.reflect.type_to_json_schema(reflect.type_of<SearchQuery>()))
     );
-    baml.llm.json_array(entries)
+    "[" + entries.join(",") + "]"
   }
   // Build the short, discriminative "here are the groups you can search" text.
-  function namespace_digest(catalog: Catalog) -> string throws baml.errors.LlmClient { $rust_io_function }
+  function namespace_digest(catalog: Catalog) -> string
+      throws baml.ExtendUnknownError<baml.errors.ToolError> { $rust_io_function }
   function qualify(namespace: string, name: string) -> string { $rust_io_function }
 
-  function step_impl<T>(t: AnthropicTranscript) -> T | ToolCalls throws baml.errors.LlmClient {
+  function step_impl<T>(t: AnthropicTranscript) -> T | ToolCalls
+      throws baml.ExtendUnknownError<baml.errors.ToolError> {
     let resp: baml.http.Response = Anthropic.post_messages(t) catch (e) {
-      _ => { throw baml.errors.LlmClient { message: "anthropic messages failed" }; }
+      _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "anthropic messages failed");
     };
     let body: string = resp.text();
     if (baml.llm.anthropic_stop_reason(body) == "tool_use") {
@@ -498,17 +544,20 @@ class Anthropic {
       for (let r in raw) {
         // The synthetic "tool_search" comes back like any other tool_use; we pass
         // its name THROUGH unqualified so the default loop's split recognizes it.
-        calls = calls.append(ToolCall { id: r.id, name: Anthropic.unqualify(r.name), args: r.input });
-        ids = ids.append(r.id);
+        calls.push(ToolCall { id: r.id, name: Anthropic.unqualify(r.name), args: r.input });
+        ids.push(r.id);
       }
       Anthropic.remember_assistant_turn(t, body, ids);
       return ToolCalls { calls: calls };
     }
     baml.sap.parse<T>(baml.llm.anthropic_text(body))
+  } catch (e) {
+    _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "anthropic step failed");
   }
   function unqualify(qualified: string) -> string { $rust_io_function }
 
-  function submit_impl(t: AnthropicTranscript, results: ToolResult[]) -> AnthropicTranscript throws baml.errors.LlmClient {
+  function submit_impl(t: AnthropicTranscript, results: ToolResult[]) -> AnthropicTranscript
+      throws baml.ExtendUnknownError<baml.errors.ToolError> {
     // THE EMULATION LEAK, concretely. If any result corresponds to a search
     // (its id was a tool_search call), the default loop has already turned the
     // resolver output into a ToolResult whose `output` is the loaded definitions.
@@ -523,25 +572,29 @@ class Anthropic {
     let ordered: ToolResult[] = Anthropic.reorder_by_ids(results, with_loaded.pending_ids);
     let blocks: string[] = [];
     for (let r in ordered) {
-      blocks = blocks.append(
-        baml.llm.anthropic_tool_result_block(r.id, baml.sap.to_json(r.output))
+      blocks.push(
+        baml.llm.anthropic_tool_result_block(r.id, baml.json.to_string(r.output))
       );
     }
     Anthropic.append_user_message(with_loaded, blocks)
+  } catch (e) {
+    _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "anthropic submit failed");
   }
   // Read the search ToolResults, pull the loaded CatalogTools out, add their full
   // schemas to wire_tools, and grow loaded_names. The cache-busting step.
-  function splice_loaded_schemas(t: AnthropicTranscript, results: ToolResult[]) -> AnthropicTranscript throws baml.errors.LlmClient {
+  function splice_loaded_schemas(t: AnthropicTranscript, results: ToolResult[]) -> AnthropicTranscript
+      throws baml.ExtendUnknownError<baml.errors.ToolError> {
     $rust_io_function
   }
   function reorder_by_ids(results: ToolResult[], order: string[]) -> ToolResult[] {
     let out: ToolResult[] = [];
     for (let id in order) {
-      for (let r in results) { if (r.id == id) { out = out.append(r); } }
+      for (let r in results) { if (r.id == id) { out.push(r); } }
     }
     out
   }
-  function post_messages(t: AnthropicTranscript) -> baml.http.Response throws baml.errors.LlmClient { $rust_io_function }
+  function post_messages(t: AnthropicTranscript) -> baml.http.Response
+      throws baml.ExtendUnknownError<baml.errors.ToolError> { $rust_io_function }
   function remember_assistant_turn(t: AnthropicTranscript, body: string, ids: string[]) -> null { $rust_io_function }
   function append_user_message(t: AnthropicTranscript, blocks: string[]) -> AnthropicTranscript { $rust_io_function }
 }
@@ -580,10 +633,25 @@ class McpProvider {
   inner: Provider                    // the actual chat model (OpenAI/Anthropic/...)
   servers: McpServer[]               // remote tool catalogs
 
-  // McpProvider is itself a Provider: plain .call just delegates (no tools).
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
-      self.inner.call<T>(prompt)
+  // McpProvider forwards request/response: plain .call / .call_with delegate to the
+  // inner provider's HttpProvider capability (no tools). Per provider-as-marker.md,
+  // call/call_with live on HttpProvider now — McpProvider claims it and routes.
+  implements HttpProvider {
+    type Body = unknown
+    function call_with<T, U>(self, prompt: baml.llm.PromptAst, project: (ResponseMeta) -> U) -> (T, U)
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      // forward the projection to the inner http member so usage/sidecar is not dropped
+      match (self.inner) {
+        let h: HttpProvider => { return h.call_with<T, U>(prompt, project); },
+        _ => { throw baml.errors.Unsupported { message: "inner provider has no request/response call" }; }
+      }
+    }
+    function call<T>(self, prompt: baml.llm.PromptAst) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      match (self.inner) {
+        let h: HttpProvider => { return h.call<T>(prompt); },
+        _ => { throw baml.errors.Unsupported { message: "inner provider has no request/response call" }; }
+      }
     }
   }
 
@@ -591,7 +659,8 @@ class McpProvider {
   implements Tools {
     type Transcript = McpTranscript
 
-    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> McpTranscript throws baml.errors.LlmClient {
+    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> McpTranscript
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // Even the flat form federates: union the inline `tools` with whatever the
       // servers advertise at connect (tools/list). This is discovery-at-connect.
       let discovered: Tool[] = McpProvider.list_all(self.servers);
@@ -601,13 +670,15 @@ class McpProvider {
           let inner = tp.begin<T>(prompt, all);
           return McpTranscript { owner: tp, inner: inner, servers: self.servers };
         },
-        _ => { throw baml.errors.LlmClient { message: "inner provider is not tool-capable" }; }
+        _ => { throw baml.errors.Unsupported { message: "inner provider is not tool-capable" }; }
       }
     }
-    function step<T>(self, t: McpTranscript) -> T | ToolCalls throws baml.errors.LlmClient {
+    function step<T>(self, t: McpTranscript) -> T | ToolCalls
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       t.owner.step<T>(t.inner)
     }
-    function submit(self, t: McpTranscript, results: ToolResult[]) -> McpTranscript throws baml.errors.LlmClient {
+    function submit(self, t: McpTranscript, results: ToolResult[]) -> McpTranscript
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       let next = t.owner.submit(t.inner, results);
       McpTranscript { owner: t.owner, inner: next, servers: t.servers }
     }
@@ -621,7 +692,7 @@ class McpProvider {
   // emulation does the same with our resolver.
   implements SearchableTools {
     function begin_searchable<T>(self, prompt: baml.llm.PromptAst, catalog: Catalog, resolver: SearchResolver)
-        -> McpTranscript throws baml.errors.LlmClient {
+        -> McpTranscript throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // Compose resolvers: the app's `resolver` first, then federate to MCP
       // servers for anything not in the local registry. (Two registries reconciled
       // — the exact drift hazard the background flags.)
@@ -639,22 +710,23 @@ class McpProvider {
               let inner = tp.begin<T>(prompt, discovered);
               return McpTranscript { owner: tp, inner: inner, servers: self.servers };
             },
-            _ => { throw baml.errors.LlmClient { message: "inner provider is not tool-capable" }; }
+            _ => { throw baml.errors.Unsupported { message: "inner provider is not tool-capable" }; }
           }
         }
       }
     }
   }
 
-  function inner_as_tools(self) -> Tools throws baml.errors.LlmClient {
+  function inner_as_tools(self) -> Tools throws baml.ExtendUnknownError<baml.errors.ToolError> {
     match (self.inner) {
       let tp: Tools => tp,
-      _ => { throw baml.errors.LlmClient { message: "inner provider is not tool-capable" }; }
+      _ => { throw baml.errors.Unsupported { message: "inner provider is not tool-capable" }; }
     }
   }
 
   // host bridges to MCP servers
-  function list_all(servers: McpServer[]) -> Tool[] throws baml.errors.LlmClient { $rust_io_function }
+  function list_all(servers: McpServer[]) -> Tool[]
+      throws baml.ExtendUnknownError<baml.errors.ToolError> { $rust_io_function }
   function union_tools(a: Tool[], b: Tool[]) -> Tool[] { $rust_io_function }
 }
 
@@ -677,7 +749,8 @@ class McpResolver {
   fallback: SearchResolver
 
   implements SearchResolver {
-    function resolve(self, query: string) -> CatalogTool[] throws baml.errors.LlmClient {
+    function resolve(self, query: string) -> CatalogTool[]
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // 1. ask each MCP server for matching tools (tools/list with a filter)
       let remote: CatalogTool[] = McpResolver.search_servers(self.servers, query) catch (e) {
         _ => { []; }     // a dead server must not abort the whole search
@@ -687,7 +760,8 @@ class McpResolver {
       McpResolver.dedup(remote, local)   // drift reconciliation: prefer one source on name clash
     }
   }
-  function search_servers(servers: McpServer[], query: string) -> CatalogTool[] throws baml.errors.LlmClient { $rust_io_function }
+  function search_servers(servers: McpServer[], query: string) -> CatalogTool[]
+      throws baml.ExtendUnknownError<baml.errors.ToolError> { $rust_io_function }
   function dedup(remote: CatalogTool[], local: CatalogTool[]) -> CatalogTool[] { $rust_io_function }
 }
 
@@ -706,16 +780,18 @@ class RegistryResolver {
   allowed: string[]                  // permission filter: tool names this principal may load
 
   implements SearchResolver {
-    function resolve(self, query: string) -> CatalogTool[] throws baml.errors.LlmClient {
+    function resolve(self, query: string) -> CatalogTool[]
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // rank namespaces + tools by relevance to `query`, then filter by permission.
       let ranked: CatalogTool[] = RegistryResolver.rank(self.catalog, query);
       let out: CatalogTool[] = [];
       for (let ct in ranked) {
-        if (self.allowed.contains(ct.tool.name)) { out = out.append(ct); }
+        if (self.allowed.includes(ct.tool.name)) { out.push(ct); }
       }
       out
     }
   }
   // host bridge: semantic/lexical ranking of the catalog against the query.
-  function rank(catalog: Catalog, query: string) -> CatalogTool[] throws baml.errors.LlmClient { $rust_io_function }
+  function rank(catalog: Catalog, query: string) -> CatalogTool[]
+      throws baml.ExtendUnknownError<baml.errors.ToolError> { $rust_io_function }
 }

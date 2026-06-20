@@ -14,7 +14,7 @@
 // THE TEACHING POINT of THIS file: when the model emits SEVERAL tool calls in one
 // assistant turn, "run them concurrently and feed all results back together" is
 // NOT a provider concern. The provider already handed the loop a `ToolCalls` with
-// N calls; how those N are executed (sequential, fan-out, gated, semaphore-
+// N calls; how those N are executed (sequential, fan-out, gated, group-rate-
 // limited, stop-on-first-error) is purely the implementation of ONE method:
 //
 //     ExecutionContext.dispatch(calls: ToolCall[]) -> ToolResult[]
@@ -31,9 +31,13 @@
 //   (2) A `@side_effect` / read-only annotation on `Tool`, because there is NO
 //       standard wire metadata that marks a tool safe to parallelize. We add a
 //       `effect: ToolEffect` field to `Tool`.
-//   (3) A host concurrency primitive: `baml.async.gather` (run-all, order-
-//       preserving) and `baml.async.gather_until_error` (stop-on-first-error
-//       with cooperative cancellation), plus a `Semaphore` for rate-limit caps.
+//
+// CONCURRENCY IS NOT NET-NEW: structured concurrency (`spawn`/`await`/`Future`,
+// `baml.future.all`/`all_complete`, `baml.spawn.TaskGroup`, `CancelToken`) is a
+// SHIPPED first-class language feature (BEP-034 — see ../_conventions.md
+// "Concurrency", and baml_std/baml/ns_spawn + ns_future). Fan-out is just "a list
+// of spawns", the join is `baml.future.all`, and rate-limiting is a `TaskGroup`.
+// We use those primitives directly; none of them is a host boundary we invent.
 // =============================================================================
 
 
@@ -64,37 +68,44 @@ class Tool {
 
 
 // -----------------------------------------------------------------------------
-// NET-NEW #3: host concurrency primitives.
+// CONCURRENCY: use the SHIPPED BEP-034 primitives directly. No host boundary.
 //
-// BAML has no concurrency surface today. Parallel dispatch needs three host
-// boundaries. All three are deterministic in their OUTPUT ORDER regardless of
-// completion order — the determinism the background demands for Anthropic's
-// positional matching and for prompt-cache stability.
+// `spawn { body }` starts `body` concurrently and returns a `Future<T,E>`; `await`
+// yields the value or re-throws. `baml.future.all` is `Promise.all` (fail-fast,
+// cancels losers); `baml.future.all_complete` lets losers finish; the rate limiter
+// is `baml.spawn.TaskGroup`. All are order-preserving in their OUTPUT (values come
+// back in INPUT order), which is exactly the determinism the background demands for
+// Anthropic's positional matching and for prompt-cache stability.
+//
+// For the RUN-ALL policy we want per-call failure capture (a failed sibling does
+// NOT abort the turn — it becomes an error result the model can react to). BEP-034
+// has no "allSettled" combinator, but it doesn't need one: each spawn CATCHES its
+// own failure and resolves to a `Settled<T>`, so `baml.future.all` over those never
+// throws and we get the per-task ok/failure union in input order. `Settled<T>` is a
+// plain data record, not a host primitive.
 // -----------------------------------------------------------------------------
-
-// Run all of `tasks` concurrently; collect results in the SAME index order as the
-// input, after every task settles. A task that throws is NOT propagated — it is
-// captured as a `Settled.failure` so siblings still finish (run-all policy). This
-// is `asyncio.gather(..., return_exceptions=True)` / `Promise.allSettled`.
 class Settled<T> {
   ok: T?
-  failure: string?         // present iff the task threw; message only
+  failure: string?         // present iff the spawned body threw; message only
 }
-function gather<T>(tasks: (() -> T)[]) -> Settled<T>[] { $rust_io_function }
 
-// Run all concurrently, but the FIRST task to throw cancels the rest
-// (cooperative cancellation) and the whole call throws. This is
-// `asyncio.gather(...)` default / `Promise.all`. Order-preserving on success.
-function gather_until_error<T>(tasks: (() -> T)[]) -> T[] throws baml.errors.LlmClient { $rust_io_function }
-
-// A counting semaphore for tool-level rate limits. `run` blocks until a permit is
-// free, runs the thunk, releases. Host-backed because it needs real async waiting.
-class Semaphore {
-  permits: int
-  _handle: $rust_type
-  function acquire_run<T>(self, thunk: () -> T) -> T throws baml.errors.LlmClient { $rust_io_function }
+// Run every thunk concurrently, capturing per-task failures so siblings always
+// finish (run-all / `Promise.allSettled` semantics). Each thunk runs in its own
+// `spawn` and catches its own error INSIDE the spawn, so the future is infallible
+// and `baml.future.all` returns all of them in INPUT order without ever throwing.
+function settle_all<T>(thunks: (() -> T)[]) -> Settled<T>[] {
+  let fs: baml.future.Future<Settled<T>, never>[] = thunks.map((thunk) -> {
+    spawn {
+      // catch INSIDE the spawn body so the Future itself is infallible (`never`):
+      // a thrown task becomes a captured `Settled.failure`, siblings keep running.
+      // Both arms yield `Settled<T>`, so the spawn body's type is `Settled<T>`.
+      Settled<T> { ok: thunk(), failure: null } catch (e) {
+        _ => { Settled<T> { ok: null, failure: "tool execution failed" } }
+      }
+    }
+  });
+  await baml.future.all(fs)
 }
-function semaphore(permits: int) -> Semaphore { $rust_io_function }
 
 
 // -----------------------------------------------------------------------------
@@ -118,14 +129,14 @@ interface Dispatcher {
   // their recorded tool_use order (Anthropic). But a well-behaved dispatcher
   // returns them in INPUT order anyway, for cache stability when the provider is
   // id-agnostic about order (OpenAI keeps whatever order it receives).
-  function dispatch(self, calls: ToolCall[], reg: Registry) -> ToolResult[] throws baml.errors.LlmClient
+  function dispatch(self, calls: ToolCall[], reg: Registry) -> ToolResult[] throws baml.ExtendUnknownError<baml.errors.ToolError>
 }
 
 // The handler registry + deps. This is the shared "below invoke_one" machinery
 // every dispatcher reuses; it is NOT itself a strategy. `invoke_one` is the leaf
 // that actually runs one tool and stamps the id — the unit of work a strategy
 // schedules. It is a `() -> ToolResult` THUNK so a strategy can hand it to
-// `gather` / a semaphore without running it eagerly.
+// `settle_all` / a `spawn` without running it eagerly.
 class Registry {
   deps: unknown                 // injected out-of-band state (DB, user, auth) — model never sees it
   _handlers: $rust_type         // name -> handler closure, registered host-side
@@ -133,11 +144,11 @@ class Registry {
   // Resolve handler by name, SAP-validate `c.args` against the tool's `type`,
   // inject deps, invoke, stamp `c.id`. A failure is thrown by THIS — the strategy
   // decides whether to swallow it (run-all) or propagate (stop-on-first-error).
-  function invoke_one(self, c: ToolCall) -> ToolResult throws baml.errors.LlmClient {
+  function invoke_one(self, c: ToolCall) -> ToolResult throws baml.ExtendUnknownError<baml.errors.ToolError> {
     $rust_io_function
   }
 
-  // The thunk a strategy schedules. Capturing `c` and `self` lets `gather` run
+  // The thunk a strategy schedules. Capturing `c` and `self` lets a `spawn` run
   // many of these concurrently.
   function thunk_for(self, c: ToolCall) -> (() -> ToolResult) {
     () => self.invoke_one(c)
@@ -157,13 +168,13 @@ class Registry {
 // -----------------------------------------------------------------------------
 class SequentialDispatch {
   implements Dispatcher {
-    function dispatch(self, calls: ToolCall[], reg: Registry) -> ToolResult[] throws baml.errors.LlmClient {
+    function dispatch(self, calls: ToolCall[], reg: Registry) -> ToolResult[] throws baml.ExtendUnknownError<baml.errors.ToolError> {
       let out: ToolResult[] = [];
       for (let c in calls) {
         let r: ToolResult = reg.invoke_one(c) catch (e) {
           _ => { ToolResult { id: c.id, output: { "error": "tool execution failed" } } }
         };
-        out = out.append(r);
+        out.push(r);
       }
       out
     }
@@ -175,23 +186,23 @@ class SequentialDispatch {
 // STRATEGY B — Parallel, run-all, order-preserving (the headline of the scenario).
 //
 // "Start all calls at once, append results in the ORIGINAL order." Implemented as
-// collect-then-append: build a thunk per call, `gather` them concurrently (which
-// settles ALL of them, capturing per-call failures), then walk the settled array
-// IN INPUT ORDER and project each to a ToolResult. A failed call becomes an error
-// ToolResult — the model sees everything and decides (run-all). Determinism +
-// Anthropic positional matching + cache stability all fall out of "the writer
-// emits in call order", NOT completion order.
+// collect-then-append: build a thunk per call, `settle_all` spawns them concurrently
+// (each spawn captures its own failure, `baml.future.all` joins them in INPUT
+// order), then walk the settled array IN INPUT ORDER and project each to a
+// ToolResult. A failed call becomes an error ToolResult — the model sees everything
+// and decides (run-all). Determinism + Anthropic positional matching + cache
+// stability all fall out of "the writer emits in call order", NOT completion order.
 // -----------------------------------------------------------------------------
 class ParallelDispatch {
   implements Dispatcher {
-    function dispatch(self, calls: ToolCall[], reg: Registry) -> ToolResult[] throws baml.errors.LlmClient {
+    function dispatch(self, calls: ToolCall[], reg: Registry) -> ToolResult[] throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // 1. build one thunk per call (does NOT run yet).
       let thunks: (() -> ToolResult)[] = [];
       for (let c in calls) {
-        thunks = thunks.append(reg.thunk_for(c));
+        thunks.push(reg.thunk_for(c));
       }
-      // 2. fan out. gather settles every task and preserves index order.
-      let settled: Settled<ToolResult>[] = gather<ToolResult>(thunks);
+      // 2. fan out. settle_all spawns every task and joins them in index order.
+      let settled: Settled<ToolResult>[] = settle_all<ToolResult>(thunks);
       // 3. SINGLE writer, INPUT ORDER: project settled -> ToolResult. A failure
       //    becomes an error result stamped with the original call's id (run-all).
       let out: ToolResult[] = [];
@@ -199,10 +210,10 @@ class ParallelDispatch {
       for (let s in settled) {
         let original: ToolCall = calls.at(i);
         match (s.ok) {
-          let r: ToolResult => { out = out.append(r); },
+          let r: ToolResult => { out.push(r); },
           _ => {
             // s.failure is set; surface it as a result the model can react to.
-            out = out.append(ToolResult { id: original.id, output: { "error": s.failure } });
+            out.push(ToolResult { id: original.id, output: { "error": s.failure } });
           },
         }
         i = i + 1;
@@ -217,21 +228,23 @@ class ParallelDispatch {
 // STRATEGY C — Parallel, stop-on-first-error.
 //
 // The other partial-failure policy: the first call to throw cancels the in-flight
-// siblings and aborts the turn. Needs cooperative cancellation, which lives in the
-// host primitive `gather_until_error`. NOTE the visible cost: because we abort, we
-// CANNOT return a result per call — so this strategy THROWS rather than feeding a
-// half-turn back. That asymmetry (run-all returns; stop-on-error throws) is real
-// and is called out in the evaluation.
+// siblings and aborts the turn. This is exactly `baml.future.all`'s contract
+// (Promise.all): on the first failure it cancels the losing futures and re-throws.
+// NOTE the visible cost: because we abort, we CANNOT return a result per call — so
+// this strategy THROWS rather than feeding a half-turn back. That asymmetry
+// (run-all returns; stop-on-error throws) is real and is called out in the
+// evaluation. The thrown error keeps its concrete `ToolError` type — it is the
+// failing invoke_one's error, re-thrown by `await` unchanged.
 // -----------------------------------------------------------------------------
 class StopOnFirstErrorDispatch {
   implements Dispatcher {
-    function dispatch(self, calls: ToolCall[], reg: Registry) -> ToolResult[] throws baml.errors.LlmClient {
-      let thunks: (() -> ToolResult)[] = [];
-      for (let c in calls) {
-        thunks = thunks.append(reg.thunk_for(c));
-      }
-      // throws on the FIRST failure (siblings cancelled). On success, order-preserved.
-      gather_until_error<ToolResult>(thunks)
+    function dispatch(self, calls: ToolCall[], reg: Registry) -> ToolResult[] throws baml.ExtendUnknownError<baml.errors.ToolError> {
+      // Each call runs in its own spawn; the future carries the ToolError channel.
+      let fs: baml.future.Future<ToolResult, baml.ExtendUnknownError<baml.errors.ToolError>>[] =
+        calls.map((c) -> { spawn { reg.invoke_one(c) } });
+      // `all` joins in INPUT order; the FIRST failure cancels the rest and re-throws
+      // the original ToolError. `await` surfaces it on this method's channel.
+      await baml.future.all(fs)
     }
   }
 }
@@ -254,7 +267,7 @@ class StopOnFirstErrorDispatch {
 // -----------------------------------------------------------------------------
 class EffectAwareDispatch {
   implements Dispatcher {
-    function dispatch(self, calls: ToolCall[], reg: Registry) -> ToolResult[] throws baml.errors.LlmClient {
+    function dispatch(self, calls: ToolCall[], reg: Registry) -> ToolResult[] throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // 1. partition while remembering each call's ORIGINAL index for re-assembly.
       let read_thunks: (() -> ToolResult)[] = [];
       let read_index: int[] = [];
@@ -264,25 +277,25 @@ class EffectAwareDispatch {
       for (let c in calls) {
         match (reg.effect_of(c)) {
           ToolEffect::ReadOnly => {
-            read_thunks = read_thunks.append(reg.thunk_for(c));
-            read_index = read_index.append(i);
+            read_thunks.push(reg.thunk_for(c));
+            read_index.push(i);
           },
           ToolEffect::Write => {
-            write_calls = write_calls.append(c);
-            write_index = write_index.append(i);
+            write_calls.push(c);
+            write_index.push(i);
           },
         }
         i = i + 1;
       }
 
       // 2. fan out the reads (run-all), sequence the writes in relative order.
-      let read_settled: Settled<ToolResult>[] = gather<ToolResult>(read_thunks);
+      let read_settled: Settled<ToolResult>[] = settle_all<ToolResult>(read_thunks);
       let write_results: ToolResult[] = [];
       for (let wc in write_calls) {
         let r: ToolResult = reg.invoke_one(wc) catch (e) {
           _ => { ToolResult { id: wc.id, output: { "error": "tool execution failed" } } }
         };
-        write_results = write_results.append(r);
+        write_results.push(r);
       }
 
       // 3. SCATTER back into a slot array indexed by original position, so the
@@ -293,14 +306,14 @@ class EffectAwareDispatch {
         let orig: int = read_index.at(ri);
         let oc: ToolCall = calls.at(orig);
         match (s.ok) {
-          let r: ToolResult => { slots = slots.set(orig, r); },
-          _ => { slots = slots.set(orig, ToolResult { id: oc.id, output: { "error": s.failure } }); },
+          let r: ToolResult => { slots.splice(orig, 1, [r]); },
+          _ => { slots.splice(orig, 1, [ToolResult { id: oc.id, output: { "error": s.failure } }]); },
         }
         ri = ri + 1;
       }
       let wi: int = 0;
       for (let r in write_results) {
-        slots = slots.set(write_index.at(wi), r);
+        slots.splice(write_index.at(wi), 1, [r]);
         wi = wi + 1;
       }
       ParallelHelpers.unwrap_slots(slots)        // assert all filled, drop the option
@@ -315,38 +328,41 @@ class ParallelHelpers {
 
 
 // -----------------------------------------------------------------------------
-// STRATEGY E — Concurrency-limited (a decorator over ANOTHER strategy).
+// STRATEGY E — Concurrency-limited (the rate-limit cap).
 //
-// "Three concurrent calls to the same API can blow a rate limit." A semaphore is
-// the caller's problem — and it is ORTHOGONAL to run-all-vs-stop-on-error. So we
-// make it a DECORATOR: it wraps each thunk in `semaphore.acquire_run`, then hands
-// the throttled thunks to its inner strategy. Composition over inheritance.
-//
-// To throttle, the limiter has to wrap thunks BEFORE the inner strategy schedules
-// them. So it doesn't delegate to `inner.dispatch` directly; it owns the same
-// fan-out shape and reuses run-all semantics. (We keep it run-all here; a stop-
-// on-error limited variant would compose `gather_until_error` instead.)
+// "Three concurrent calls to the same API can blow a rate limit." The cap is the
+// caller's problem — and it is ORTHOGONAL to run-all-vs-stop-on-error. The SHIPPED
+// rate limiter is `baml.spawn.TaskGroup`: spawns that share a group are capped at
+// `limit`; excess spawns queue FIFO and start as earlier ones settle (each `spawn`
+// still returns its Future immediately, so the queueing is invisible). We enroll
+// every call's spawn in one group via `spawn with baml.spawn.options(group = g)`,
+// then join run-all with `settle_all`'s catch-inside-spawn pattern so a failed call
+// becomes an error result instead of aborting the turn.
 // -----------------------------------------------------------------------------
 class LimitedDispatch {
   limit: int
 
   implements Dispatcher {
-    function dispatch(self, calls: ToolCall[], reg: Registry) -> ToolResult[] throws baml.errors.LlmClient {
-      let sem: Semaphore = semaphore(self.limit);
-      // wrap each unit of work so it must hold a permit to run.
-      let throttled: (() -> ToolResult)[] = [];
-      for (let c in calls) {
-        let base: (() -> ToolResult) = reg.thunk_for(c);
-        throttled = throttled.append(() => sem.acquire_run<ToolResult>(base));
-      }
-      let settled: Settled<ToolResult>[] = gather<ToolResult>(throttled);
+    function dispatch(self, calls: ToolCall[], reg: Registry) -> ToolResult[] throws baml.ExtendUnknownError<baml.errors.ToolError> {
+      let g = baml.spawn.TaskGroup.new(self.limit);          // cap concurrency at `limit`
+      // Spawn every call INTO the group (run-all: each catches its own failure so
+      // the future is infallible and `baml.future.all` never throws). At most
+      // `limit` run at once; the rest queue FIFO.
+      let fs: baml.future.Future<Settled<ToolResult>, never>[] = calls.map((c) -> {
+        spawn with baml.spawn.options(group = g) {
+          Settled<ToolResult> { ok: reg.invoke_one(c), failure: null } catch (e) {
+            _ => { Settled<ToolResult> { ok: null, failure: "tool execution failed" } }
+          }
+        }
+      });
+      let settled: Settled<ToolResult>[] = await baml.future.all(fs);
       let out: ToolResult[] = [];
       let i: int = 0;
       for (let s in settled) {
         let oc: ToolCall = calls.at(i);
         match (s.ok) {
-          let r: ToolResult => { out = out.append(r); },
-          _ => { out = out.append(ToolResult { id: oc.id, output: { "error": s.failure } }); },
+          let r: ToolResult => { out.push(r); },
+          _ => { out.push(ToolResult { id: oc.id, output: { "error": s.failure } }); },
         }
         i = i + 1;
       }
@@ -370,7 +386,7 @@ class ExecutionContext {
   registry: Registry
   dispatcher: Dispatcher       // strategy object — sequential / parallel / effect-aware / limited
 
-  function dispatch(self, calls: ToolCall[]) -> ToolResult[] throws baml.errors.LlmClient {
+  function dispatch(self, calls: ToolCall[]) -> ToolResult[] throws baml.ExtendUnknownError<baml.errors.ToolError> {
     self.dispatcher.dispatch(calls, self.registry)
   }
 }
@@ -400,7 +416,7 @@ class Anthropic {
   implements Tools {
     type Transcript = AnthropicTranscript
 
-    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> AnthropicTranscript throws baml.errors.LlmClient {
+    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> AnthropicTranscript throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // tools encoded to input_schema; `effect` is NOT serialized (it never goes
       // on the wire — only the dispatcher reads it).
       AnthropicTranscript {
@@ -413,10 +429,8 @@ class Anthropic {
       }
     }
 
-    function step<T>(self, t: AnthropicTranscript) -> T | ToolCalls throws baml.errors.LlmClient {
-      let resp = Anthropic.post_messages(t) catch (e) {
-        _ => { throw baml.errors.LlmClient { message: "anthropic messages failed" }; }
-      };
+    function step<T>(self, t: AnthropicTranscript) -> T | ToolCalls throws baml.ExtendUnknownError<baml.errors.ToolError> {
+      let resp = Anthropic.post_messages(t);
       let body: string = resp.text();
       if (baml.llm.anthropic_stop_reason(body) == "tool_use") {
         // MULTIPLE tool_use blocks in one turn = the parallel case. We surface them
@@ -425,16 +439,18 @@ class Anthropic {
         let calls: ToolCall[] = [];
         let ids: string[] = [];
         for (let r in raw) {
-          calls = calls.append(ToolCall { id: r.id, name: r.name, args: r.input });
-          ids = ids.append(r.id);                 // positional order recorded for submit()
+          calls.push(ToolCall { id: r.id, name: r.name, args: r.input });
+          ids.push(r.id);                 // positional order recorded for submit()
         }
         Anthropic.remember_assistant_turn(t, body, ids);
         return ToolCalls { calls: calls };
       }
       baml.sap.parse<T>(baml.llm.anthropic_text(body))
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "anthropic messages failed");
     }
 
-    function submit(self, t: AnthropicTranscript, results: ToolResult[]) -> AnthropicTranscript throws baml.errors.LlmClient {
+    function submit(self, t: AnthropicTranscript, results: ToolResult[]) -> AnthropicTranscript throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // POSITIONAL DISCIPLINE: re-sort by the recorded tool_use order before
       // serializing. The dispatcher SHOULD already return input order, but this
       // guarantees Anthropic's positional matching even if a future strategy
@@ -442,25 +458,25 @@ class Anthropic {
       let ordered: ToolResult[] = Anthropic.reorder_by_ids(results, t.pending_ids);
       let blocks: string[] = [];
       for (let r in ordered) {
-        blocks = blocks.append(
-          baml.llm.anthropic_tool_result_block(r.id, baml.sap.to_json(r.output))
+        blocks.push(
+          baml.llm.anthropic_tool_result_block(r.id, baml.json.to_string<unknown>(r.output))
         );
       }
       Anthropic.append_user_message(t, blocks)
     }
   }
 
-  function encode_tools_anthropic(tools: Tool[]) -> string throws baml.errors.LlmClient { $rust_io_function }
+  function encode_tools_anthropic(tools: Tool[]) -> string throws baml.ExtendUnknownError<baml.errors.ToolError> { $rust_io_function }
   function reorder_by_ids(results: ToolResult[], order: string[]) -> ToolResult[] {
     let out: ToolResult[] = [];
     for (let id in order) {
       for (let r in results) {
-        if (r.id == id) { out = out.append(r); }
+        if (r.id == id) { out.push(r); }
       }
     }
     out
   }
-  function post_messages(t: AnthropicTranscript) -> baml.http.Response throws baml.errors.LlmClient { $rust_io_function }
+  function post_messages(t: AnthropicTranscript) -> baml.http.Response throws baml.ExtendUnknownError<baml.errors.ToolError> { $rust_io_function }
   function remember_assistant_turn(t: AnthropicTranscript, body: string, ids: string[]) -> null { $rust_io_function }
   function append_user_message(t: AnthropicTranscript, blocks: string[]) -> AnthropicTranscript { $rust_io_function }
 }
@@ -491,7 +507,7 @@ class Gemini {
   implements Tools {
     type Transcript = GeminiTranscript
 
-    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> GeminiTranscript throws baml.errors.LlmClient {
+    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> GeminiTranscript throws baml.ExtendUnknownError<baml.errors.ToolError> {
       GeminiTranscript {
         model: self.model,
         api_key: self.api_key,
@@ -501,10 +517,8 @@ class Gemini {
       }
     }
 
-    function step<T>(self, t: GeminiTranscript) -> T | ToolCalls throws baml.errors.LlmClient {
-      let resp = Gemini.post_generate(t) catch (e) {
-        _ => { throw baml.errors.LlmClient { message: "gemini generateContent failed" }; }
-      };
+    function step<T>(self, t: GeminiTranscript) -> T | ToolCalls throws baml.ExtendUnknownError<baml.errors.ToolError> {
+      let resp = Gemini.post_generate(t);
       let body: string = resp.text();
       let raw: GeminiFunctionCall[] = baml.llm.gemini_extract_function_calls(body);
       if (raw.length() > 0) {
@@ -516,25 +530,27 @@ class Gemini {
         let index: int = 0;
         for (let r in raw) {
           let synthetic: string = Gemini.synth_id(r.name, index);
-          calls = calls.append(ToolCall { id: synthetic, name: r.name, args: r.args });
-          mapping = mapping.append(GeminiIdEntry { id: synthetic, name: r.name, index: index });
+          calls.push(ToolCall { id: synthetic, name: r.name, args: r.args });
+          mapping.push(GeminiIdEntry { id: synthetic, name: r.name, index: index });
           index = index + 1;
         }
         Gemini.remember_model_turn(t, body, mapping);
         return ToolCalls { calls: calls };
       }
       baml.sap.parse<T>(baml.llm.gemini_text(body))
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "gemini generateContent failed");
     }
 
-    function submit(self, t: GeminiTranscript, results: ToolResult[]) -> GeminiTranscript throws baml.errors.LlmClient {
+    function submit(self, t: GeminiTranscript, results: ToolResult[]) -> GeminiTranscript throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // resolve synthetic ids -> (name, index); emit functionResponse parts in
       // recorded index order so positional correlation holds.
       let parts: string[] = [];
       for (let entry in Gemini.sorted_by_index(t.id_map)) {
         for (let r in results) {
           if (r.id == entry.id) {
-            parts = parts.append(
-              baml.llm.gemini_function_response(entry.name, baml.sap.to_json(r.output))
+            parts.push(
+              baml.llm.gemini_function_response(entry.name, baml.json.to_string<unknown>(r.output))
             );
           }
         }
@@ -543,10 +559,10 @@ class Gemini {
     }
   }
 
-  function encode_tools_gemini(tools: Tool[]) -> string throws baml.errors.LlmClient { $rust_io_function }
+  function encode_tools_gemini(tools: Tool[]) -> string throws baml.ExtendUnknownError<baml.errors.ToolError> { $rust_io_function }
   function synth_id(name: string, index: int) -> string { $rust_io_function }
   function sorted_by_index(m: GeminiIdEntry[]) -> GeminiIdEntry[] { $rust_io_function }
-  function post_generate(t: GeminiTranscript) -> baml.http.Response throws baml.errors.LlmClient { $rust_io_function }
+  function post_generate(t: GeminiTranscript) -> baml.http.Response throws baml.ExtendUnknownError<baml.errors.ToolError> { $rust_io_function }
   function remember_model_turn(t: GeminiTranscript, body: string, m: GeminiIdEntry[]) -> null { $rust_io_function }
   function append_function_turn(t: GeminiTranscript, parts: string[]) -> GeminiTranscript { $rust_io_function }
 }

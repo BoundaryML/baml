@@ -25,8 +25,10 @@
 // iterator (mirror of ns_iter's Iterator), with a terminal `final()`:
 //
 //   interface Stream<TStream, TFinal> {
-//     function next(self)  -> TStream | StreamDone throws baml.errors.Io   // typewriter step
-//     function final(self) -> TFinal throws baml.errors.LlmClient          // validated answer
+//     function next(self)  -> TStream | StreamDone
+//         throws baml.ExtendUnknownError<baml.errors.StreamError>           // typewriter step
+//     function final(self) -> TFinal
+//         throws baml.ExtendUnknownError<baml.errors.StreamError>           // validated answer
 //     function close(self) -> null                                          // cancel mid-stream
 //   }
 //
@@ -94,7 +96,8 @@ class StreamAcc {
 // the target schema. Both come off the SAME buffer; the only difference is how
 // you read it. We expose ONE host hook for tolerant partial parsing:
 //
-//   baml.sap.parse_partial<TStream>(buffer: string) -> TStream throws baml.errors.LlmClient
+//   baml.sap.parse_partial<TStream>(buffer: string) -> TStream
+//       throws baml.ExtendUnknownError<baml.errors.StreamError>
 //
 // This is the streaming twin of baml.sap.parse<T> (conventions, §SAP): it
 // returns the best-effort deep-partial of the growing buffer, treating
@@ -110,7 +113,28 @@ class StreamAcc {
 // HttpProvider for the plain .call path (Body = Response, SAP the whole text),
 // PLUS Streaming for incremental delivery. The streaming `send` opens an SSE
 // stream; reassembly folds `choices[0].delta.content` into buffer.
+//
+// Each `data:` line is a complete JSON chunk. Rather than reach for an invented
+// dotted-path reader, we decode each frame with `baml.json.from_string<T>` into a
+// typed chunk class (every field optional, since a frame may be role-only /
+// usage-only) and read the fields directly.
 // ----------------------------------------------------------------------------
+
+class OpenAiStreamChunk {
+  choices: OpenAiStreamChoice[]?
+  usage: OpenAiStreamUsage?
+}
+class OpenAiStreamChoice {
+  delta: OpenAiStreamDelta?
+  finish_reason: string?
+}
+class OpenAiStreamDelta {
+  content: string?
+}
+class OpenAiStreamUsage {
+  prompt_tokens: int?
+  completion_tokens: int?
+}
 
 class OpenAI {
   model: string
@@ -121,22 +145,26 @@ class OpenAI {
   implements HttpProvider {
     type Body = baml.http.Response
 
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.ExtendUnknownError<baml.errors.CallError> {
       // For non-stream .call: response_format = json_schema of T. (One of the four
       // encodings; the streaming build_request below flips `stream: true`.)
       $rust_io_function
     }
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
-      baml.http.send(request) catch (e) { _ => { throw baml.errors.LlmClient { message: "openai http failed" }; } }
+    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.http.send(request)
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "openai http failed");
     }
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
-      baml.sap.parse<T>(from.text() catch (e) { _ => { throw baml.errors.LlmClient { message: "no body" }; } })
+    function parse<T>(self, from: baml.http.Response) -> T throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.sap.parse<T>(from.text())
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "openai parse failed");
     }
   }
 
   implements Streaming {
     function stream<TStream, TFinal>(self, prompt: baml.llm.PromptAst)
-        -> baml.llm.Stream<TStream, TFinal> throws baml.errors.LlmClient {
+        -> baml.llm.Stream<TStream, TFinal> throws baml.ExtendUnknownError<baml.errors.StreamError> {
       // 1. Build the SAME request as .call, but with stream:true and (for OpenAI)
       //    stream_options.include_usage so the final chunk carries usage.
       let req: baml.http.Request = self.build_request<TFinal>(prompt);
@@ -145,7 +173,7 @@ class OpenAI {
       // 2. Open the SSE reader. This is the OpenAI/Anthropic wire primitive.
       let sse: baml.http.SseStream =
         baml.http.fetch_sse(stream_req)
-          catch (e) { _ => { throw baml.errors.LlmClient { message: "openai sse failed" }; } };
+          catch (e) { _ => { throw baml.UnknownError.with_message<baml.errors.StreamError>(e, "openai sse failed"); } };
 
       // 3. Unfold the SSE stream into a baml.llm.Stream. The closure is the
       //    stateful reassembly: pull one `data:` line, fold its delta into buffer,
@@ -160,11 +188,11 @@ class OpenAI {
 
   // ----- stateful SSE reassembly for OpenAI's flat deltas -----
   function fold_sse<TStream>(seed: (StreamAcc, baml.http.SseStream))
-      -> StreamStep<(StreamAcc, baml.http.SseStream), TStream> throws baml.errors.LlmClient {
+      -> StreamStep<(StreamAcc, baml.http.SseStream), TStream> throws baml.ExtendUnknownError<baml.errors.StreamError> {
     let acc: StreamAcc = seed.0;
     let sse: baml.http.SseStream = seed.1;
 
-    let line: string? = sse.next() catch (e) { _ => { throw baml.errors.LlmClient { message: "sse read" }; } };
+    let line: string? = sse.next() catch (e) { _ => { throw baml.UnknownError.with_message<baml.errors.StreamError>(e, "openai sse read failed"); } };
     match (line) {
       null => {                                              // socket closed without [DONE]
         return StreamStep<(StreamAcc, baml.http.SseStream), TStream> { state: (acc, sse), emit: null, done: true };
@@ -173,11 +201,15 @@ class OpenAI {
         if (raw == "[DONE]") {                               // OpenAI's literal terminal sentinel
           return StreamStep<(StreamAcc, baml.http.SseStream), TStream> { state: (acc, sse), emit: null, done: true };
         }
-        // Each data line is a JSON chunk. Pull delta + finish_reason + (final) usage.
-        let delta: string? = baml.json.get_str(raw, "choices.0.delta.content");
-        let finish: string? = baml.json.get_str(raw, "choices.0.finish_reason");
-        let ptoks: int? = baml.json.get_int(raw, "usage.prompt_tokens");
-        let otoks: int? = baml.json.get_int(raw, "usage.completion_tokens");
+        // Each data line is a JSON chunk. Decode it into a typed chunk class, then
+        // pull delta + finish_reason + (final) usage by reading fields.
+        let chunk: OpenAiStreamChunk = baml.json.from_string<OpenAiStreamChunk>(raw)
+          catch (e) { _ => { throw baml.UnknownError.with_message<baml.errors.StreamError>(e, "openai chunk decode failed"); } };
+        let choice: OpenAiStreamChoice? = (chunk.choices ?? []).at(0);
+        let delta: string? = choice?.delta?.content;
+        let finish: string? = choice?.finish_reason;
+        let ptoks: int? = chunk.usage?.prompt_tokens;
+        let otoks: int? = chunk.usage?.completion_tokens;
 
         let next_acc: StreamAcc = StreamAcc {
           buffer: acc.buffer + (delta ?? ""),
@@ -210,12 +242,14 @@ class OpenAI {
   }
 
   // ----- build the validated final object from the drained buffer -----
-  function finalize<TFinal>(seed: (StreamAcc, baml.http.SseStream)) -> TFinal throws baml.errors.LlmClient {
+  function finalize<TFinal>(seed: (StreamAcc, baml.http.SseStream)) -> TFinal throws baml.ExtendUnknownError<baml.errors.StreamError> {
     let acc: StreamAcc = seed.0;
     seed.1.close();                                          // release the socket
     // The "final object still has to be built": full SAP validation (required
     // fields, coercion) on the complete buffer — NOT the tolerant partial parse.
     baml.sap.parse<TFinal>(acc.buffer)
+  } catch (e) {
+    _ => throw baml.UnknownError.with_message<baml.errors.StreamError>(e, "openai finalize failed");
   }
 }
 
@@ -229,7 +263,32 @@ class OpenAI {
 // across start+end. This is the "two stream readers" point made concrete even
 // *within* SSE: OpenAI's flat deltas and Anthropic's event grammar need
 // different fold logic behind the one method.
+//
+// As with OpenAI, each `data:` line decodes (via `baml.json.from_string<T>`) into
+// a typed event class — one class covers every event variant with optional fields.
 // ----------------------------------------------------------------------------
+
+class AnthropicStreamEvent {
+  type: string?
+  index: int?
+  message: AnthropicStreamMessage?
+  delta: AnthropicStreamDelta?
+  usage: AnthropicStreamUsage?
+}
+class AnthropicStreamMessage {
+  usage: AnthropicStreamUsage?
+}
+class AnthropicStreamDelta {
+  type: string?
+  text: string?
+  thinking: string?
+  partial_json: string?
+  stop_reason: string?
+}
+class AnthropicStreamUsage {
+  input_tokens: int?
+  output_tokens: int?
+}
 
 class Anthropic {
   model: string
@@ -240,25 +299,29 @@ class Anthropic {
 
   implements HttpProvider {
     type Body = baml.http.Response
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.ExtendUnknownError<baml.errors.CallError> {
       $rust_io_function                                      // Anthropic forced-tool encoding of T
     }
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
-      baml.http.send(request) catch (e) { _ => { throw baml.errors.LlmClient { message: "anthropic http failed" }; } }
+    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.http.send(request)
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "anthropic http failed");
     }
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
-      baml.sap.parse<T>(from.text() catch (e) { _ => { throw baml.errors.LlmClient { message: "no body" }; } })
+    function parse<T>(self, from: baml.http.Response) -> T throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.sap.parse<T>(from.text())
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "anthropic parse failed");
     }
   }
 
   implements Streaming {
     function stream<TStream, TFinal>(self, prompt: baml.llm.PromptAst)
-        -> baml.llm.Stream<TStream, TFinal> throws baml.errors.LlmClient {
+        -> baml.llm.Stream<TStream, TFinal> throws baml.ExtendUnknownError<baml.errors.StreamError> {
       let req: baml.http.Request = self.build_request<TFinal>(prompt);
       let stream_req: baml.http.Request = baml.llm.anthropic_mark_stream(req);   // sets "stream": true
       let sse: baml.http.SseStream =
         baml.http.fetch_sse(stream_req)
-          catch (e) { _ => { throw baml.errors.LlmClient { message: "anthropic sse failed" }; } };
+          catch (e) { _ => { throw baml.UnknownError.with_message<baml.errors.StreamError>(e, "anthropic sse failed"); } };
 
       baml.llm.stream_unfold<(StreamAcc, baml.http.SseStream), TStream, TFinal>(
         (StreamAcc.empty(), sse),
@@ -270,21 +333,23 @@ class Anthropic {
 
   // ----- stateful reassembly for Anthropic's event grammar -----
   function fold_events<TStream>(seed: (StreamAcc, baml.http.SseStream))
-      -> StreamStep<(StreamAcc, baml.http.SseStream), TStream> throws baml.errors.LlmClient {
+      -> StreamStep<(StreamAcc, baml.http.SseStream), TStream> throws baml.ExtendUnknownError<baml.errors.StreamError> {
     let acc: StreamAcc = seed.0;
     let sse: baml.http.SseStream = seed.1;
 
-    let line: string? = sse.next() catch (e) { _ => { throw baml.errors.LlmClient { message: "sse read" }; } };
+    let line: string? = sse.next() catch (e) { _ => { throw baml.UnknownError.with_message<baml.errors.StreamError>(e, "anthropic sse read failed"); } };
     match (line) {
       null => { return StreamStep<(StreamAcc, baml.http.SseStream), TStream> { state: (acc, sse), emit: null, done: true }; }
       let raw: string => {
-        let etype: string = baml.json.get_str(raw, "type") ?? "";
+        let ev: AnthropicStreamEvent = baml.json.from_string<AnthropicStreamEvent>(raw)
+          catch (e) { _ => { throw baml.UnknownError.with_message<baml.errors.StreamError>(e, "anthropic event decode failed"); } };
+        let etype: string = ev.type ?? "";
 
         if (etype == "message_start") {
           // input-token usage arrives here, at the START
           let acc2: StreamAcc = StreamAcc {
             buffer: acc.buffer, thinking: acc.thinking, finish_reason: acc.finish_reason,
-            prompt_tokens: baml.json.get_int(raw, "message.usage.input_tokens") ?? acc.prompt_tokens,
+            prompt_tokens: ev.message?.usage?.input_tokens ?? acc.prompt_tokens,
             output_tokens: acc.output_tokens, open_block: acc.open_block,
           };
           return StreamStep<(StreamAcc, baml.http.SseStream), TStream> { state: (acc2, sse), emit: null, done: false };
@@ -293,17 +358,17 @@ class Anthropic {
           let acc2: StreamAcc = StreamAcc {
             buffer: acc.buffer, thinking: acc.thinking, finish_reason: acc.finish_reason,
             prompt_tokens: acc.prompt_tokens, output_tokens: acc.output_tokens,
-            open_block: baml.json.get_int(raw, "index"),    // track which block is streaming
+            open_block: ev.index,                           // track which block is streaming
           };
           return StreamStep<(StreamAcc, baml.http.SseStream), TStream> { state: (acc2, sse), emit: null, done: false };
         }
         if (etype == "content_block_delta") {
-          let dtype: string = baml.json.get_str(raw, "delta.type") ?? "";
+          let dtype: string = ev.delta?.type ?? "";
           if (dtype == "thinking_delta") {
             // thinking deltas must NOT be mixed into the answer buffer
             let acc2: StreamAcc = StreamAcc {
               buffer: acc.buffer,
-              thinking: acc.thinking + (baml.json.get_str(raw, "delta.thinking") ?? ""),
+              thinking: acc.thinking + (ev.delta?.thinking ?? ""),
               finish_reason: acc.finish_reason, prompt_tokens: acc.prompt_tokens,
               output_tokens: acc.output_tokens, open_block: acc.open_block,
             };
@@ -311,8 +376,8 @@ class Anthropic {
           }
           // text_delta (or input_json_delta for forced-tool structured output) -> answer buffer
           let frag: string =
-            baml.json.get_str(raw, "delta.text")
-            ?? baml.json.get_str(raw, "delta.partial_json")
+            ev.delta?.text
+            ?? ev.delta?.partial_json
             ?? "";
           let acc2: StreamAcc = StreamAcc {
             buffer: acc.buffer + frag, thinking: acc.thinking,
@@ -326,9 +391,9 @@ class Anthropic {
           // stop reason + output-token usage at the END
           let acc2: StreamAcc = StreamAcc {
             buffer: acc.buffer, thinking: acc.thinking,
-            finish_reason: baml.json.get_str(raw, "delta.stop_reason") ?? acc.finish_reason,
+            finish_reason: ev.delta?.stop_reason ?? acc.finish_reason,
             prompt_tokens: acc.prompt_tokens,
-            output_tokens: baml.json.get_int(raw, "usage.output_tokens") ?? acc.output_tokens,
+            output_tokens: ev.usage?.output_tokens ?? acc.output_tokens,
             open_block: acc.open_block,
           };
           return StreamStep<(StreamAcc, baml.http.SseStream), TStream> { state: (acc2, sse), emit: null, done: false };
@@ -342,9 +407,11 @@ class Anthropic {
     }
   }
 
-  function finalize<TFinal>(seed: (StreamAcc, baml.http.SseStream)) -> TFinal throws baml.errors.LlmClient {
+  function finalize<TFinal>(seed: (StreamAcc, baml.http.SseStream)) -> TFinal throws baml.ExtendUnknownError<baml.errors.StreamError> {
     seed.1.close();
     baml.sap.parse<TFinal>(seed.0.buffer)
+  } catch (e) {
+    _ => throw baml.UnknownError.with_message<baml.errors.StreamError>(e, "anthropic finalize failed");
   }
 }
 
@@ -364,7 +431,29 @@ class Anthropic {
 // ship fetch_sse. The Streaming *interface* is unchanged — only the reader behind
 // it differs. Also note: each Gemini chunk is a COMPLETE object whose parts[0].text
 // is that chunk's increment, so the fold still concatenates into buffer.
+//
+// Each array element decodes (via `baml.json.from_string<T>`) into a typed chunk
+// class; fields are read directly off the decoded value.
 // ----------------------------------------------------------------------------
+
+class GeminiStreamChunk {
+  candidates: GeminiStreamCandidate[]?
+  usageMetadata: GeminiStreamUsage?
+}
+class GeminiStreamCandidate {
+  content: GeminiStreamContent?
+  finishReason: string?
+}
+class GeminiStreamContent {
+  parts: GeminiStreamPart[]?
+}
+class GeminiStreamPart {
+  text: string?
+}
+class GeminiStreamUsage {
+  promptTokenCount: int?
+  candidatesTokenCount: int?
+}
 
 class Gemini {
   model: string
@@ -374,26 +463,30 @@ class Gemini {
 
   implements HttpProvider {
     type Body = baml.http.Response
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.ExtendUnknownError<baml.errors.CallError> {
       $rust_io_function                                      // Gemini responseSchema encoding of T
     }
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
-      baml.http.send(request) catch (e) { _ => { throw baml.errors.LlmClient { message: "gemini http failed" }; } }
+    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.http.send(request)
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "gemini http failed");
     }
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
-      baml.sap.parse<T>(from.text() catch (e) { _ => { throw baml.errors.LlmClient { message: "no body" }; } })
+    function parse<T>(self, from: baml.http.Response) -> T throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.sap.parse<T>(from.text())
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "gemini parse failed");
     }
   }
 
   implements Streaming {
     function stream<TStream, TFinal>(self, prompt: baml.llm.PromptAst)
-        -> baml.llm.Stream<TStream, TFinal> throws baml.errors.LlmClient {
+        -> baml.llm.Stream<TStream, TFinal> throws baml.ExtendUnknownError<baml.errors.StreamError> {
       let req: baml.http.Request = self.build_request<TFinal>(prompt);
       // route to :streamGenerateContent (vs :generateContent) — a URL change, not a body flag
       let stream_req: baml.http.Request = baml.llm.gemini_mark_stream(req);
       let seq: baml.http.JsonSeq =
         baml.http.fetch_json_seq(stream_req)               // SECOND reader: chunked JSON, not SSE
-          catch (e) { _ => { throw baml.errors.LlmClient { message: "gemini stream failed" }; } };
+          catch (e) { _ => { throw baml.UnknownError.with_message<baml.errors.StreamError>(e, "gemini stream failed"); } };
 
       baml.llm.stream_unfold<(StreamAcc, baml.http.JsonSeq), TStream, TFinal>(
         (StreamAcc.empty(), seq),
@@ -405,19 +498,22 @@ class Gemini {
 
   // ----- stateful reassembly over JSON-array elements -----
   function fold_chunks<TStream>(seed: (StreamAcc, baml.http.JsonSeq))
-      -> StreamStep<(StreamAcc, baml.http.JsonSeq), TStream> throws baml.errors.LlmClient {
+      -> StreamStep<(StreamAcc, baml.http.JsonSeq), TStream> throws baml.ExtendUnknownError<baml.errors.StreamError> {
     let acc: StreamAcc = seed.0;
     let seq: baml.http.JsonSeq = seed.1;
 
-    let elem: string? = seq.next() catch (e) { _ => { throw baml.errors.LlmClient { message: "json seq read" }; } };
+    let elem: string? = seq.next() catch (e) { _ => { throw baml.UnknownError.with_message<baml.errors.StreamError>(e, "gemini json seq read failed"); } };
     match (elem) {
       null => { return StreamStep<(StreamAcc, baml.http.JsonSeq), TStream> { state: (acc, seq), emit: null, done: true }; }
       let raw: string => {
         // each `raw` is a COMPLETE GenerateContentResponse; its increment is parts[0].text
-        let frag: string = baml.json.get_str(raw, "candidates.0.content.parts.0.text") ?? "";
-        let finish: string? = baml.json.get_str(raw, "candidates.0.finishReason");
-        let ptoks: int? = baml.json.get_int(raw, "usageMetadata.promptTokenCount");
-        let otoks: int? = baml.json.get_int(raw, "usageMetadata.candidatesTokenCount");
+        let chunk: GeminiStreamChunk = baml.json.from_string<GeminiStreamChunk>(raw)
+          catch (e) { _ => { throw baml.UnknownError.with_message<baml.errors.StreamError>(e, "gemini chunk decode failed"); } };
+        let cand: GeminiStreamCandidate? = (chunk.candidates ?? []).at(0);
+        let frag: string = ((cand?.content?.parts ?? []).at(0))?.text ?? "";
+        let finish: string? = cand?.finishReason;
+        let ptoks: int? = chunk.usageMetadata?.promptTokenCount;
+        let otoks: int? = chunk.usageMetadata?.candidatesTokenCount;
 
         let acc2: StreamAcc = StreamAcc {
           buffer: acc.buffer + frag, thinking: acc.thinking,
@@ -435,9 +531,11 @@ class Gemini {
     }
   }
 
-  function finalize<TFinal>(seed: (StreamAcc, baml.http.JsonSeq)) -> TFinal throws baml.errors.LlmClient {
+  function finalize<TFinal>(seed: (StreamAcc, baml.http.JsonSeq)) -> TFinal throws baml.ExtendUnknownError<baml.errors.StreamError> {
     seed.1.close();
     baml.sap.parse<TFinal>(seed.0.buffer)
+  } catch (e) {
+    _ => throw baml.UnknownError.with_message<baml.errors.StreamError>(e, "gemini finalize failed");
   }
 }
 
@@ -445,19 +543,52 @@ class Gemini {
 // ----------------------------------------------------------------------------
 // 6. A NON-streaming provider, to exercise the fallback path.
 //
-// Some providers (a local toy model, an embeddings-only endpoint, a harness)
-// implement only Provider.call — no Streaming. The .stream companion must still
+// Some providers (a local toy model, an embeddings-only endpoint) implement only
+// HttpProvider (call/call_with) — no Streaming. The .stream companion must still
 // "work" by buffering the whole answer and emitting it as a one-shot stream.
 // ----------------------------------------------------------------------------
 
 class EchoModel {
   reply: string
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
-      baml.sap.parse<T>(self.reply)
+  // A concrete request/response provider: `call` lives on HttpProvider now (Provider is a bare
+  // marker — see ../provider-as-marker.md). EchoModel does NOT go over the wire, so it overrides
+  // call_with directly (no build_request/send/parse codec) rather than deriving from the codec.
+  implements HttpProvider {
+    type Body = string                                       // the canned reply text
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.sys.panic("EchoModel does not build requests")    // never on the wire; call_with is overridden
+    }
+    function send(self, request: baml.http.Request) -> string throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.sys.panic("EchoModel does not send")
+    }
+    function parse<T>(self, from: string) -> T throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.sap.parse<T>(from)
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "echo parse failed");
+    }
+    function meta_of(self, from: string) -> ResponseMeta throws baml.ExtendUnknownError<baml.errors.CallError> {
+      EchoMeta { }
+    }
+    // call_with is the primitive: parse the canned reply, project an empty sidecar. `call` derives.
+    function call_with<T, U>(self, prompt: baml.llm.PromptAst, project: (ResponseMeta) -> U) -> (T, U)
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      (self.parse<T>(self.reply), project(self.meta_of(self.reply)))
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "echo call failed");
     }
   }
   // NOTE: no `implements Streaming`. This is the fallback case.
+}
+
+// Minimal ResponseMeta for the codec-less EchoModel (no usage/logprobs over a canned reply).
+class EchoMeta {
+  implements ResponseMeta {
+    function usage(self)         -> Usage                 { Usage { input: 0, output: 0 } }
+    function finish_reason(self) -> string                { "stop" }
+    function logprobs(self)      -> Supported<Logprob[]>  { Unsupported { reason: "echo model" } }
+    function citations(self)     -> Supported<Citation[]> { Unsupported { reason: "echo model" } }
+    function reasoning(self)     -> Supported<string>     { Unsupported { reason: "echo model" } }
+  }
 }
 
 
@@ -483,9 +614,14 @@ class EchoModel {
 // invent a delivery shape it was never given a stream for.
 // ----------------------------------------------------------------------------
 
-function buffer_as_stream<TStream, TFinal>(p: Provider, prompt: baml.llm.PromptAst)
-    -> baml.llm.Stream<TStream, TFinal> throws baml.errors.LlmClient {
+function buffer_as_stream<TStream, TFinal>(p: HttpProvider, prompt: baml.llm.PromptAst)
+    -> baml.llm.Stream<TStream, TFinal> throws baml.ExtendUnknownError<baml.errors.StreamError> {
+  // `call` is an HttpProvider capability now (Provider is a bare marker — ../provider-as-marker.md),
+  // so this degrade takes an HttpProvider: you can only buffer-as-stream something that HAS a call.
   let final: TFinal = p.call<TFinal>(prompt);
   let whole: TStream = baml.sap.partial_of<TStream, TFinal>(final);
   baml.llm.stream_once<TStream, TFinal>(whole, final)
+} catch (e) {
+  // p.call's CallError is foreign to the StreamError channel here — normalize it.
+  _ => throw baml.UnknownError.with_message<baml.errors.StreamError>(e, "buffer_as_stream fallback failed");
 }

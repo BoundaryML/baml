@@ -59,7 +59,7 @@ function VoiceAssistant(system: string) -> Transcript {
 // A push-to-talk handler the app wires to its own "user pressed talk" button.
 // `cursor` is the app's PlaybackCursor (it owns playback, so it owns the cursor).
 function PushToTalkInterrupt(p: Provider, io: Channel, cursor: PlaybackCursor)
-    -> null throws baml.errors.Io {
+    -> null throws baml.ExtendUnknownError<baml.errors.LiveControlError> {
   match (p) {
     let lc: LiveControl => {
       match (cursor.item_id) {
@@ -71,7 +71,9 @@ function PushToTalkInterrupt(p: Provider, io: Channel, cursor: PlaybackCursor)
       }
     },
     // No honest fallback: a provider that isn't steerable cannot be barged into.
-    _ => { throw baml.errors.Io { message: "client does not support live barge-in" }; },
+    // Unsupported implements every capability-error interface (incl. LiveControlError),
+    // so it is legal on this channel and the caller catches it by its concrete type.
+    _ => { throw baml.errors.Unsupported { message: "client does not support live barge-in" }; },
   }
 }
 
@@ -81,26 +83,24 @@ function PushToTalkInterrupt(p: Provider, io: Channel, cursor: PlaybackCursor)
 //    a runtime LiveControl match, because `client` returned the existential.
 // -----------------------------------------------------------------------------
 
-function SwapVoice(p: Provider, io: Channel, new_voice: string) -> null throws baml.errors.Io {
+function SwapVoice(p: Provider, io: Channel, new_voice: string) -> null
+    throws baml.ExtendUnknownError<baml.errors.LiveControlError> {
   match (p) {
     let lc: LiveControl => {
-      lc.update_session(io, baml.json.encode(baml.json.object([
-        ("voice", baml.json.string(new_voice)),
-      ])));
+      lc.update_session(io, baml.json.stringify({ "voice": new_voice }));
     },
-    _ => { throw baml.errors.Io { message: "client cannot be mutated live" }; },
+    _ => { throw baml.errors.Unsupported { message: "client cannot be mutated live" }; },
   }
 }
 
 // Switch the model to Spanish partway through (instructions patch).
-function SwitchToSpanish(p: Provider, io: Channel) -> null throws baml.errors.Io {
+function SwitchToSpanish(p: Provider, io: Channel) -> null
+    throws baml.ExtendUnknownError<baml.errors.LiveControlError> {
   match (p) {
     let lc: LiveControl => {
-      lc.update_session(io, baml.json.encode(baml.json.object([
-        ("instructions", baml.json.string("From now on, respond only in Spanish.")),
-      ])));
+      lc.update_session(io, baml.json.stringify({ "instructions": "From now on, respond only in Spanish." }));
     },
-    _ => { throw baml.errors.Io { message: "client cannot be mutated live" }; },
+    _ => { throw baml.errors.Unsupported { message: "client cannot be mutated live" }; },
   }
 }
 
@@ -113,10 +113,11 @@ function SwitchToSpanish(p: Provider, io: Channel) -> null throws baml.errors.Io
 //    apart — this is the one place the proposal genuinely helps here.
 // -----------------------------------------------------------------------------
 
-function StopThisResponse(p: Provider, io: Channel) -> null throws baml.errors.Io {
+function StopThisResponse(p: Provider, io: Channel) -> null
+    throws baml.ExtendUnknownError<baml.errors.LiveControlError> {
   match (p) {
     let lc: LiveControl => { lc.cancel(io); },   // session stays open; a new turn can follow
-    _ => { throw baml.errors.Io { message: "not steerable" }; },
+    _ => { throw baml.errors.Unsupported { message: "not steerable" }; },
   }
 }
 
@@ -134,18 +135,17 @@ function EndTheCall(io: Channel) -> null {
 
 // Generic "run a steerable voice turn with manual barge-in wiring" that works
 // against either provider via the existential. Proves the call site is portable.
-function RunSteerable(p: Provider, io: Channel) -> null throws baml.errors.Io {
+function RunSteerable(p: Provider, io: Channel) -> null
+    throws baml.ExtendUnknownError<baml.errors.LiveControlError> {
   match (p) {
     let lc: LiveControl => {
       // Open with whatever VAD/voice the provider configured; then, for demo,
       // mutate the voice mid-call. Identical lines for OpenAI and Gemini.
-      lc.update_session(io, baml.json.encode(baml.json.object([
-        ("voice", baml.json.string("shimmer")),
-      ])));
+      lc.update_session(io, baml.json.stringify({ "voice": "shimmer" }));
       // The actual barge-in is driven inside run()'s loop; here we only show that
       // the control surface is uniform across providers at the call site.
     },
-    _ => { throw baml.errors.Io { message: "provider not steerable" }; },
+    _ => { throw baml.errors.Unsupported { message: "provider not steerable" }; },
   }
 }
 
@@ -158,6 +158,6 @@ function RunSteerable(p: Provider, io: Channel) -> null throws baml.errors.Io {
 
 // -----------------------------------------------------------------------------
 // Host helpers referenced (declared in implement.baml's host-boundary list):
-//   baml.json.{object,string,encode}
+//   baml.json.stringify  (build a native map<string, json> literal -> serialize)
 //   Channel.{send,close}, PlaybackCursor, LiveControl, Transcript
 // -----------------------------------------------------------------------------

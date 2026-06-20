@@ -7,8 +7,19 @@
 //   - Anthropic (usage.input_tokens / output_tokens + cache_*; native SSE)
 //
 // The point: the app wraps with `.with_traced(...)` and never touches the
-// per-provider key differences — UsageReporting normalizes them below the seam.
+// per-provider key differences — each provider's ResponseMeta impl normalizes
+// them lazily below the seam, projected out of `call_with`.
 // =============================================================================
+
+// ---- Concrete response types normalize usage LAZILY via ResponseMeta. --------
+// Usage is a PRODUCT sidecar: it rides `call_with` out of the same codec pass as
+// the value (via `meta_of(body)`), NOT a stateful `last_usage()` companion. So
+// there is no "made a call but stashed no body" failure mode to classify — the
+// body that holds the tokens is the very body `parse<T>` consumed, projected in
+// the same pass. The bespoke `baml.errors.UsageError` channel and the
+// `*UsageMissingError` classes are therefore deleted: the only way usage is
+// "missing" now is a malformed body, which surfaces on the CallError channel
+// like any other parse failure.
 
 // ---- Two divergent providers, each teaching their usage encoding. -----------
 
@@ -18,37 +29,73 @@ class OpenAI {
 
   implements HttpProvider {
     type Body = baml.http.Response
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       $rust_io_function
     }
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
-      baml.http.send(request) catch (e) { _ => { throw baml.errors.LlmClient { message: "http failed" }; } }
+    function send(self, request: baml.http.Request) -> baml.http.Response
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.http.send(request) catch (e) {
+        _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "openai http send failed");
+      }
     }
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
+    function parse<T>(self, from: baml.http.Response) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       baml.sap.parse<T>(from.text())
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "openai parse failed");
+    }
+    // The sidecar seam: wrap the same Body the call just parsed in a lazy
+    // ResponseMeta. `call_with` (on HttpProvider) projects over this; nothing is
+    // stashed on `self`, so a Fallback forwards it instead of racing a stash.
+    function meta_of(self, from: baml.http.Response) -> ResponseMeta
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      OpenAIResponse { raw: from }
     }
   }
 
   implements Streaming {
     function stream<TStream, TFinal>(self, prompt: baml.llm.PromptAst)
-        -> baml.llm.Stream<TStream, TFinal> throws baml.errors.LlmClient { $rust_io_function }
+        -> baml.llm.Stream<TStream, TFinal>
+        throws baml.ExtendUnknownError<baml.errors.StreamError> { $rust_io_function }
   }
+}
 
-  // DIVERGENCE: OpenAI reports prompt_tokens / completion_tokens, no cache split
-  // on the Chat-Completions path, no reasoning tokens.
-  implements UsageReporting {
-    function last_usage(self) -> Usage throws baml.errors.LlmClient {
-      let raw = self.last_response_body() catch (e) { _ => { throw baml.errors.LlmClient { message: "no usage" }; } };
+// DIVERGENCE: OpenAI reports prompt_tokens / completion_tokens, no cache split
+// on the Chat-Completions path, no reasoning tokens. Normalized LAZILY: `usage()`
+// is only computed when a projection asks for it.
+//
+// READING the wire body: `baml.http.Response` has no `.json_path_int` (that was
+// invented). We decode the body into a typed shape with `baml.json.from_json<T>`
+// (preferred over hand-navigating the `json` union) and read its fields. The
+// provider-specific key names live on the shape class, so the divergence is
+// captured by the type, not a path string.
+class OpenAiUsageWire {                 // mirrors OpenAI's `usage` object
+  prompt_tokens: int
+  completion_tokens: int
+}
+class OpenAiBodyWire {                  // the slice of the response body we read
+  usage: OpenAiUsageWire
+}
+
+class OpenAIResponse {
+  raw: baml.http.Response
+  implements ResponseMeta {
+    function usage(self) -> Usage {
+      let body: OpenAiBodyWire = baml.json.from_json<OpenAiBodyWire>(
+        baml.json.parse(self.raw.text())
+      ) catch (e) {
+        _ => { return Usage { input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, reasoning_tokens: 0 }; }
+      };
       Usage {
-        input_tokens: baml.json.int(raw, "usage.prompt_tokens"),
-        output_tokens: baml.json.int(raw, "usage.completion_tokens"),
+        input_tokens: body.usage.prompt_tokens,
+        output_tokens: body.usage.completion_tokens,
         cache_read_tokens: 0,
         cache_write_tokens: 0,
         reasoning_tokens: 0,
       }
     }
   }
-  function last_response_body(self) -> string throws baml.errors.LlmClient { $rust_io_function }
 }
 
 class Anthropic {
@@ -58,44 +105,90 @@ class Anthropic {
 
   implements HttpProvider {
     type Body = baml.http.Response
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       $rust_io_function
     }
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
-      baml.http.send(request) catch (e) { _ => { throw baml.errors.LlmClient { message: "http failed" }; } }
+    function send(self, request: baml.http.Request) -> baml.http.Response
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.http.send(request) catch (e) {
+        _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "anthropic http send failed");
+      }
     }
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
+    function parse<T>(self, from: baml.http.Response) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       baml.sap.parse<T>(from.text())
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "anthropic parse failed");
+    }
+    function meta_of(self, from: baml.http.Response) -> ResponseMeta
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      AnthropicResponse { raw: from }
     }
   }
 
   implements Streaming {
     function stream<TStream, TFinal>(self, prompt: baml.llm.PromptAst)
-        -> baml.llm.Stream<TStream, TFinal> throws baml.errors.LlmClient { $rust_io_function }
+        -> baml.llm.Stream<TStream, TFinal>
+        throws baml.ExtendUnknownError<baml.errors.StreamError> { $rust_io_function }
   }
 
   implements Tools {
     type Transcript = $rust_type        // provider-owned, opaque (Anthropic positional tool_result order)
-    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> $rust_type throws baml.errors.LlmClient { $rust_io_function }
-    function step<T>(self, t: $rust_type) -> T | ToolCalls throws baml.errors.LlmClient { $rust_io_function }
-    function submit(self, t: $rust_type, results: ToolResult[]) -> $rust_type throws baml.errors.LlmClient { $rust_io_function }
+    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> $rust_type
+        throws baml.ExtendUnknownError<baml.errors.ToolError> { $rust_io_function }
+    function step<T>(self, t: $rust_type) -> T | ToolCalls
+        throws baml.ExtendUnknownError<baml.errors.ToolError> { $rust_io_function }
+    function submit(self, t: $rust_type, results: ToolResult[]) -> $rust_type
+        throws baml.ExtendUnknownError<baml.errors.ToolError> { $rust_io_function }
   }
 
-  // DIVERGENCE: Anthropic reports input_tokens / output_tokens AND
-  // cache_creation_input_tokens / cache_read_input_tokens. Normalized to ONE Usage.
-  implements UsageReporting {
-    function last_usage(self) -> Usage throws baml.errors.LlmClient {
-      let raw = self.last_response_body() catch (e) { _ => { throw baml.errors.LlmClient { message: "no usage" }; } };
+  // The tool-loop analog of `meta_of(body)`: project the last turn's usage off
+  // the transcript. `step` returns `T | ToolCalls` (a sentinel SUM, not a
+  // call_with product), so per-turn usage cannot ride `call_with` here — the
+  // transcript exposes a ResponseMeta for the most recent turn instead. This is
+  // the `MeteredTools requires Tools` sibling extension (net-new, flagged in
+  // evaluation.md), declared in its OWN `implements` block so it stays off the
+  // canonical `Tools` interface; it reuses the SAME ResponseMeta grain.
+  implements MeteredTools {
+    function meta(self, t: $rust_type) -> ResponseMeta
+        throws baml.ExtendUnknownError<baml.errors.ToolError> { $rust_io_function }
+  }
+
+}
+
+// DIVERGENCE: Anthropic reports input_tokens / output_tokens AND
+// cache_creation_input_tokens / cache_read_input_tokens. Normalized to ONE Usage,
+// LAZILY, from the same body the call parsed. Same `from_json<T>` decode as
+// OpenAI, onto a shape whose field names are Anthropic's.
+class AnthropicUsageWire {              // mirrors Anthropic's `usage` object
+  input_tokens: int
+  output_tokens: int
+  cache_read_input_tokens: int
+  cache_creation_input_tokens: int
+}
+class AnthropicBodyWire {
+  usage: AnthropicUsageWire
+}
+
+class AnthropicResponse {
+  raw: baml.http.Response
+  implements ResponseMeta {
+    function usage(self) -> Usage {
+      let body: AnthropicBodyWire = baml.json.from_json<AnthropicBodyWire>(
+        baml.json.parse(self.raw.text())
+      ) catch (e) {
+        _ => { return Usage { input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, reasoning_tokens: 0 }; }
+      };
       Usage {
-        input_tokens: baml.json.int(raw, "usage.input_tokens"),
-        output_tokens: baml.json.int(raw, "usage.output_tokens"),
-        cache_read_tokens: baml.json.int(raw, "usage.cache_read_input_tokens"),
-        cache_write_tokens: baml.json.int(raw, "usage.cache_creation_input_tokens"),
+        input_tokens: body.usage.input_tokens,
+        output_tokens: body.usage.output_tokens,
+        cache_read_tokens: body.usage.cache_read_input_tokens,
+        cache_write_tokens: body.usage.cache_creation_input_tokens,
         reasoning_tokens: 0,
       }
     }
   }
-  function last_response_body(self) -> string throws baml.errors.LlmClient { $rust_io_function }
 }
 
 // ---- Price tables (pure data, app-owned). -----------------------------------
@@ -137,7 +230,7 @@ function SummarizeRevenue(quarter: string) -> Summary {
 }
 
 // Swap to Claude with ZERO code change downstream — cache tokens now appear on
-// the span because Anthropic's UsageReporting populates them.
+// the span because Anthropic's `AnthropicResponse` ResponseMeta populates them.
 function SummarizeRevenueClaude(quarter: string) -> Summary {
   client: TracedClaude()
   prompt #"Summarize {{ quarter }} revenue."#
@@ -157,7 +250,8 @@ function ResearchAgent(question: string, tools: Tool[]) -> Summary {
 
 // How the app drives the traced tool loop with nested spans + redacted export.
 // The TracingContext's parent_span is the loop span the Traced.Tools impl opened.
-function run_research(question: string, tools: Tool[], real_dispatch: (ToolCall[]) -> ToolResult[]) -> Summary {
+function run_research(question: string, tools: Tool[], real_dispatch: (ToolCall[]) -> ToolResult[]) -> Summary
+    throws baml.ExtendUnknownError<baml.errors.ToolError> {
   let p = ResearchAgent_provider();        // the client body, as a provider value
   match (p) {
     let t: Tools => {
@@ -165,7 +259,10 @@ function run_research(question: string, tools: Tool[], real_dispatch: (ToolCall[
       let loop_span = obs_start("research.run", null, { "question": redact(question) });
       let ctx = TracingContext { parent_span: loop_span, inner_dispatch: real_dispatch };
       let answer: Summary = t.run_tools<Summary>(render_prompt(question), tools, ctx) catch (e) {
-        _ => { obs_finish(loop_span, {}, "agent failed"); throw baml.errors.LlmClient { message: "agent failed" }; }
+        _ => {
+          obs_finish(loop_span, {}, "agent failed");
+          throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "agent failed");
+        }
       };
       obs_finish(loop_span, {}, null);
       answer

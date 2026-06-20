@@ -47,8 +47,16 @@ class Cache {
   store: KV
   ttl_secs: int
 
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
+  // Cache is a request/response COMBINATOR: it wraps an HttpProvider and serves
+  // call/call_with from a KV store. Under the marker model those interactions
+  // live on `HttpProvider`, so Cache implements HttpProvider (not the bare marker).
+  // The combinator factories (with_retry/fallback_to/cached) are inherited via
+  // `requires Provider`.
+  implements HttpProvider {
+    type Body = unknown
+
+    function call<T>(self, prompt: baml.llm.PromptAst) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       // Key on the rendered prompt bytes. `prompt_fingerprint` is a host hash of
       // the opaque PromptAst — the same byte-stability requirement that prefix
       // caching has, surfaced here as the cache key.
@@ -61,20 +69,102 @@ class Cache {
         _ => {},                              // miss: fall through to the model
       }
 
-      let value: T = self.inner.call<T>(prompt);
-      // re-serialize for storage; SAP round-trips the typed value back to text.
-      self.store.put(key, baml.sap.to_json<T>(value), self.ttl_secs)
+      // Miss: route to the wrapped member's call. It IS an HttpProvider (the only
+      // thing a response cache can sensibly front), so match for it.
+      let value: T = match (self.inner) {
+        let h: HttpProvider => h.call<T>(prompt),
+        _ => throw baml.errors.Unsupported { message: "cache inner is not request/response" },
+      };
+      // re-serialize for storage; `to_string<T>` is the typed JSON encoder
+      // (inverse of the SAP parse on the read side).
+      self.store.put(key, baml.json.to_string<T>(value), self.ttl_secs)
         catch (e) { _ => { null } };          // best-effort write
       value
     }
+
+    // call_with FORWARDS the projection to the wrapped member so the usage/cost
+    // sidecar (cache_read_input_tokens, cached_tokens, etc.) is NOT dropped on a
+    // cache MISS. On a cache HIT there is no live ResponseMeta — the model was
+    // skipped — so the projection sees a synthetic "served-from-cache" meta.
+    function call_with<T, U>(self, prompt: baml.llm.PromptAst, project: (ResponseMeta) -> U) -> (T, U)
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      let key: string = baml.llm.prompt_fingerprint(prompt);
+
+      let hit: string? = self.store.get(key)
+        catch (e) { _ => { null } };
+      match (hit) {
+        let raw: string => {
+          // Cache hit: no wire response. Project a synthetic meta that reports the
+          // call was served from cache (zero live usage) so the sidecar stays honest.
+          return (baml.sap.parse<T>(raw), project(CacheHitMeta { }));
+        },
+        _ => {},                              // miss: fall through to the member
+      }
+
+      let (value, side): (T, U) = match (self.inner) {
+        let h: HttpProvider => h.call_with<T, U>(prompt, project),
+        _ => throw baml.errors.Unsupported { message: "cache inner is not request/response" },
+      };
+      self.store.put(key, baml.json.to_string<T>(value), self.ttl_secs)
+        catch (e) { _ => { null } };
+      (value, side)
+    }
+  }
+}
+
+// A synthetic ResponseMeta for a cache HIT: the model was skipped, so there is no
+// live usage. Reports zero usage and a "cached" finish reason; everything else is
+// Unsupported (the wire response that would carry it never happened).
+class CacheHitMeta {
+  implements ResponseMeta {
+    function usage(self)         -> Usage                 { Usage { input: 0, output: 0 } }
+    function finish_reason(self) -> string                { "cached" }
+    function logprobs(self)      -> Supported<Logprob[]>  { Unsupported { reason: "served from cache" } }
+    function citations(self)     -> Supported<Citation[]> { Unsupported { reason: "served from cache" } }
+    function reasoning(self)     -> Supported<string>     { Unsupported { reason: "served from cache" } }
   }
 }
 
 // Note: Cache does NOT forward Streaming/Realtime/Tools. A response cache for a
 // duplex session or a tool loop is meaningless, so we deliberately implement
-// only Provider here. `.stream` on a cached client therefore degrades to the
+// only HttpProvider here. `.stream` on a cached client therefore degrades to the
 // Streaming companion's `_` arm (buffer-from-call) — which is correct: a cached
 // answer is a single buffered value, not a live stream.
+
+// -----------------------------------------------------------------------------
+// Typed response envelopes — the shapes `parse` reads off the wire.
+// -----------------------------------------------------------------------------
+// `baml.http.Response` has NO `.json_path`; the typed read is
+// `baml.json.from_json<RespClass>(baml.json.parse(resp.text()))` into one of
+// these classes, then field access. Each class names only the fields we touch.
+
+class AnthropicBlock     { text: string }
+class AnthropicEnvelope  { content: AnthropicBlock[] }
+
+class OpenAiContent      { text: string }
+class OpenAiOutputItem   { content: OpenAiContent[] }
+class OpenAiEnvelope     { output: OpenAiOutputItem[] }
+
+class GeminiPart         { text: string }
+class GeminiContent      { parts: GeminiPart[] }
+class GeminiCandidate    { content: GeminiContent }
+class GeminiEnvelope     { candidates: GeminiCandidate[] }
+class GeminiCachedContents { name: string }   // POST /cachedContents response
+
+// Pull `candidates[0].content.parts[0].text` out of a generateContent body by
+// decoding into the typed envelope and walking the (optional) firsts. Used by
+// both the plain `.call` parse and `call_with_cache`.
+function gemini_first_text(raw: string) -> string
+    throws baml.ExtendUnknownError<baml.errors.CallError> {
+  let env: GeminiEnvelope = baml.json.from_json<GeminiEnvelope>(baml.json.parse(raw));
+  match (env.candidates.at(0)) {
+    let cand: GeminiCandidate => match (cand.content.parts.at(0)) {
+      let part: GeminiPart => part.text,
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>("empty parts", "gemini parse failed"),
+    },
+    _ => throw baml.UnknownError.with_message<baml.errors.CallError>("empty candidates", "gemini parse failed"),
+  }
+}
 
 // -----------------------------------------------------------------------------
 // (B) Anthropic inline annotation — `cache_control`, expressed in build_request.
@@ -100,7 +190,8 @@ class Anthropic {
   implements HttpProvider {
     type Body = baml.http.Response
 
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       // PromptAst -> Anthropic's segmented message structure. The host renderer
       // gives us the segments tagged by role; we walk them and stamp
       // cache_control onto the ones the app asked to break on.
@@ -108,7 +199,7 @@ class Anthropic {
 
       let marked = for (let seg in segments) {
         // Stamp cache_control onto a segment if its role is a chosen breakpoint.
-        if (self.cache_breakpoints.contains(seg.role)) {
+        if (self.cache_breakpoints.includes(seg.role)) {
           baml.llm.anthropic.with_cache_control(seg, self.cache_ttl)
         } else {
           seg
@@ -128,14 +219,27 @@ class Anthropic {
       }
     }
 
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
-      baml.http.send(request) catch (e) { _ => { throw baml.errors.LlmClient { message: "http failed" }; } }
+    function send(self, request: baml.http.Request) -> baml.http.Response
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.http.send(request)
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "anthropic send failed");
     }
 
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
+    function parse<T>(self, from: baml.http.Response) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       // cache_creation_input_tokens / cache_read_input_tokens ride in usage; we
       // surface them through the normal usage channel, not the typed result.
-      baml.sap.parse<T>(from.json_path("content.0.text"))
+      // Decode the wire envelope into a typed class, then SAP-parse the text it
+      // carries. (Response has no `.json_path` — `from_json<T>` is the typed read.)
+      let env: AnthropicEnvelope = baml.json.from_json<AnthropicEnvelope>(baml.json.parse(from.text()));
+      let block: AnthropicBlock? = env.content.at(0);
+      match (block) {
+        let b: AnthropicBlock => baml.sap.parse<T>(b.text),
+        _ => throw baml.UnknownError.with_message<baml.errors.CallError>("empty content", "anthropic parse failed"),
+      }
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "anthropic parse failed");
     }
   }
 }
@@ -159,7 +263,8 @@ class OpenAI {
   implements HttpProvider {
     type Body = baml.http.Response
 
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       // base body, then optionally splice in the routing hint. The hint changes
       // ONLY routing, never the model input — so it is appended after the prompt
       // is rendered and cannot bust the prefix.
@@ -179,13 +284,31 @@ class OpenAI {
       }
     }
 
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
-      baml.http.send(request) catch (e) { _ => { throw baml.errors.LlmClient { message: "http failed" }; } }
+    function send(self, request: baml.http.Request) -> baml.http.Response
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.http.send(request)
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "openai send failed");
     }
 
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
+    function parse<T>(self, from: baml.http.Response) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       // usage.input_tokens_details.cached_tokens > 0 means a hit; observed via usage.
-      baml.sap.parse<T>(from.json_path("output.0.content.0.text"))
+      // Typed read of the Responses envelope, then SAP-parse the inner text.
+      let env: OpenAiEnvelope = baml.json.from_json<OpenAiEnvelope>(baml.json.parse(from.text()));
+      let text: string? = match (env.output.at(0)) {
+        let item: OpenAiOutputItem => match (item.content.at(0)) {
+          let c: OpenAiContent => c.text,
+          _ => null,
+        },
+        _ => null,
+      };
+      match (text) {
+        let t: string => baml.sap.parse<T>(t),
+        _ => throw baml.UnknownError.with_message<baml.errors.CallError>("empty output", "openai parse failed"),
+      }
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "openai parse failed");
     }
   }
 }
@@ -207,21 +330,48 @@ class OpenAI {
 
 class CacheHandle { name: string, _data: $rust_type }   // opaque to callers
 
+// NET-NEW capability-error interface. Managing a server-authoritative cache
+// resource is NOT call/stream/realtime/tools, so it gets its own channel. A
+// dangling/expired handle is the cache-specific failure callers want to triage
+// (so they can recreate); the shared transport classifiers carry over.
+interface baml.errors.CacheError {
+  function is_network_error(self) -> bool
+  function is_rate_limit(self) -> bool
+  function is_expired_handle(self) -> bool
+}
+
 interface ManagedCache requires Provider {
   type Handle
 
   // Create the resource (a separate API call). Returns the addressable handle.
-  function create_cache(self, prefix: baml.llm.PromptAst, ttl_secs: int) -> Handle throws Error
+  function create_cache(self, prefix: baml.llm.PromptAst, ttl_secs: int) -> Handle
+      throws baml.ExtendUnknownError<baml.errors.CacheError>
 
   // Extend TTL on an existing handle.
-  function refresh_cache(self, handle: Handle, ttl_secs: int) -> Handle throws Error
+  function refresh_cache(self, handle: Handle, ttl_secs: int) -> Handle
+      throws baml.ExtendUnknownError<baml.errors.CacheError>
 
   // Delete the resource — stops the storage bill. Caller MUST eventually call
   // this or leak money. The proposal has no destructor/RAII, so this is manual.
-  function delete_cache(self, handle: Handle) -> null throws Error
+  function delete_cache(self, handle: Handle) -> null
+      throws baml.ExtendUnknownError<baml.errors.CacheError>
 
   // Make a call that REFERENCES an existing handle as its cached prefix.
-  function call_with_cache<T>(self, handle: Handle, prompt: baml.llm.PromptAst) -> T throws Error
+  function call_with_cache<T>(self, handle: Handle, prompt: baml.llm.PromptAst) -> T
+      throws baml.ExtendUnknownError<baml.errors.CacheError>
+}
+
+// A dangling/expired `cachedContents` handle: Gemini returns an error referencing
+// a cache that no longer exists. A distinct typed failure on the CacheError
+// channel so the caller can recreate the resource rather than treating it as a
+// generic transport blip.
+class GeminiExpiredCacheError {
+  handle_name: string
+  implements baml.errors.CacheError {
+    function is_network_error(self)   -> bool { return false; }
+    function is_rate_limit(self)      -> bool { return false; }
+    function is_expired_handle(self)  -> bool { return true; }
+  }
 }
 
 class Gemini {
@@ -236,7 +386,8 @@ class Gemini {
   implements HttpProvider {
     type Body = baml.http.Response
 
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       baml.http.Request {
         method: "POST",
         url: "https://generativelanguage.googleapis.com/v1beta/models/" + self.model + ":generateContent",
@@ -244,11 +395,17 @@ class Gemini {
         body: baml.llm.gemini.encode_body(prompt, self.model),
       }
     }
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
-      baml.http.send(request) catch (e) { _ => { throw baml.errors.LlmClient { message: "http failed" }; } }
+    function send(self, request: baml.http.Request) -> baml.http.Response
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.http.send(request)
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "gemini send failed");
     }
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
-      baml.sap.parse<T>(from.json_path("candidates.0.content.parts.0.text"))
+    function parse<T>(self, from: baml.http.Response) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.sap.parse<T>(gemini_first_text(from.text()))
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "gemini parse failed");
     }
   }
 
@@ -256,7 +413,8 @@ class Gemini {
   implements ManagedCache {
     type Handle = CacheHandle
 
-    function create_cache(self, prefix: baml.llm.PromptAst, ttl_secs: int) -> CacheHandle throws baml.errors.LlmClient {
+    function create_cache(self, prefix: baml.llm.PromptAst, ttl_secs: int) -> CacheHandle
+        throws baml.ExtendUnknownError<baml.errors.CacheError> {
       // POST /cachedContents — a SEPARATE round trip from generateContent.
       let req = baml.http.Request {
         method: "POST",
@@ -264,37 +422,47 @@ class Gemini {
         headers: { "x-goog-api-key": self.api_key ?? env.GEMINI_API_KEY, "content-type": "application/json" },
         body: baml.llm.gemini.encode_cache_create(prefix, self.model, ttl_secs),
       };
-      let resp = baml.http.send(req)
-        catch (e) { _ => { throw baml.errors.LlmClient { message: "cache create failed" }; } };
+      let resp = baml.http.send(req);
+      let created: GeminiCachedContents =
+        baml.json.from_json<GeminiCachedContents>(baml.json.parse(resp.text()));
       CacheHandle {
-        name: resp.json_path("name"),         // "cachedContents/abc123"
+        name: created.name,                   // "cachedContents/abc123"
         _data: baml.llm.gemini.cache_state(resp),
       }
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CacheError>(e, "gemini cache create failed");
     }
 
-    function refresh_cache(self, handle: CacheHandle, ttl_secs: int) -> CacheHandle throws baml.errors.LlmClient {
+    function refresh_cache(self, handle: CacheHandle, ttl_secs: int) -> CacheHandle
+        throws baml.ExtendUnknownError<baml.errors.CacheError> {
       let req = baml.http.Request {
         method: "PATCH",
         url: "https://generativelanguage.googleapis.com/v1beta/" + handle.name + "?updateMask=ttl",
         headers: { "x-goog-api-key": self.api_key ?? env.GEMINI_API_KEY, "content-type": "application/json" },
         body: baml.llm.gemini.encode_ttl(ttl_secs),
       };
-      baml.http.send(req) catch (e) { _ => { throw baml.errors.LlmClient { message: "cache refresh failed" }; } };
+      baml.http.send(req);
       handle
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CacheError>(e, "gemini cache refresh failed");
     }
 
-    function delete_cache(self, handle: CacheHandle) -> null throws baml.errors.LlmClient {
+    function delete_cache(self, handle: CacheHandle) -> null
+        throws baml.ExtendUnknownError<baml.errors.CacheError> {
       let req = baml.http.Request {
         method: "DELETE",
         url: "https://generativelanguage.googleapis.com/v1beta/" + handle.name,
         headers: { "x-goog-api-key": self.api_key ?? env.GEMINI_API_KEY },
         body: "",
       };
-      baml.http.send(req) catch (e) { _ => { throw baml.errors.LlmClient { message: "cache delete failed" }; } };
+      baml.http.send(req);
       null
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CacheError>(e, "gemini cache delete failed");
     }
 
-    function call_with_cache<T>(self, handle: CacheHandle, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
+    function call_with_cache<T>(self, handle: CacheHandle, prompt: baml.llm.PromptAst) -> T
+        throws baml.ExtendUnknownError<baml.errors.CacheError> {
       // generateContent with `cached_content: <handle.name>`. The handle supplies
       // the prefix; `prompt` is just the new turn.
       let body: string = baml.llm.gemini.encode_body_with_cache(prompt, self.model, handle.name);
@@ -304,11 +472,16 @@ class Gemini {
         headers: { "x-goog-api-key": self.api_key ?? env.GEMINI_API_KEY, "content-type": "application/json" },
         body: body,
       };
-      let resp = baml.http.send(req)
-        catch (e) { _ => { throw baml.errors.LlmClient { message: "cached generate failed" }; } };
-      // A dangling/expired handle returns an error from Gemini — surfaced here as
-      // the typed LlmClient throw, so the caller can recreate.
-      baml.sap.parse<T>(resp.json_path("candidates.0.content.parts.0.text"))
+      let resp = baml.http.send(req);
+      // A dangling/expired handle is a distinct, recoverable failure: surface it as
+      // the concrete GeminiExpiredCacheError on the CacheError channel so the caller
+      // can recreate, rather than letting it look like a generic transport error.
+      if (baml.llm.gemini.is_expired_cache(resp)) {
+        throw GeminiExpiredCacheError { handle_name: handle.name };
+      }
+      baml.sap.parse<T>(gemini_first_text(resp.text()))
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CacheError>(e, "gemini cached generate failed");
     }
   }
 }
@@ -328,13 +501,15 @@ class CacheScope {
     prefix: baml.llm.PromptAst,
     ttl_secs: int,
     body: (ManagedCache, ManagedCache.Handle) -> R
-  ) -> R throws baml.errors.LlmClient {
+  ) -> R throws baml.ExtendUnknownError<baml.errors.CacheError> {
     let handle = provider.create_cache(prefix, ttl_secs);
     let result: R = body(provider, handle)
       catch (e) {
+        // clean up even on failure, then re-raise the ORIGINAL error unchanged
+        // (a known CacheError keeps its identity; anything else stays wrapped).
         _ => {
-          provider.delete_cache(handle) catch (e2) { _ => { null } };   // clean up even on failure
-          throw baml.errors.LlmClient { message: "cached body failed; handle deleted" };
+          provider.delete_cache(handle) catch (e2) { _ => { null } };
+          throw baml.UnknownError.with_message<baml.errors.CacheError>(e, "cached body failed; handle deleted");
         }
       };
     provider.delete_cache(handle) catch (e) { _ => { null } };          // stop the storage bill
@@ -345,7 +520,6 @@ class CacheScope {
 // -----------------------------------------------------------------------------
 // Host boundaries used above (all genuine $rust_io / codec seams):
 //   baml.llm.prompt_fingerprint(prompt) -> string          // stable hash of PromptAst
-//   baml.sap.to_json<T>(value) -> string                   // inverse of sap.parse
 //   baml.llm.anthropic.segments(prompt, model) -> Segment[]
 //   baml.llm.anthropic.with_cache_control(seg, ttl) -> Segment
 //   baml.llm.anthropic.encode_body(segs, model, max_tokens) -> string
@@ -356,4 +530,5 @@ class CacheScope {
 //   baml.llm.gemini.encode_ttl(ttl) -> string
 //   baml.llm.gemini.encode_body_with_cache(prompt, model, name) -> string
 //   baml.llm.gemini.cache_state(resp) -> $rust_type
+//   baml.llm.gemini.is_expired_cache(resp) -> bool           // dangling cachedContents handle
 // `Segment` is the host renderer's tagged content-block type: { role: string, ... }.

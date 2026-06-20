@@ -146,8 +146,9 @@ client WriterPipeline() {
   Sequential { steps: [drafter_agent(), editor_agent()] }
 }
 
-// Sequential implements only Provider.call, so this is a plain function (no
-// companion needed) — code-decided routing reads as ordinary BAML.
+// Sequential implements HttpProvider (it owns call now — ../provider-as-marker.md),
+// so this is a plain function (no companion needed): `Foo(args)` matches
+// HttpProvider.call — code-decided routing reads as ordinary BAML.
 function WriteSection(topic: string) -> string {
   client: WriterPipeline()
   prompt #"{{ _.role("user") }} Write about: {{ topic }}"#

@@ -52,21 +52,36 @@ client OpenAICompactor() {
 // the companion: shrink the held window. Falls through to an error if the client's
 // provider can't compact (there is no honest `.call` fallback for replacement
 // state — you cannot fabricate machine state from a single answer).
-function CompactNow(window: WindowItems) -> Compacted {
+function CompactNow(window: WindowItems) -> Compacted
+    throws baml.ExtendUnknownError<baml.errors.CompactionError> {
   let p = OpenAICompactor();                       // p : Provider (existential)
   match (p) {
     let c: Compaction => {
       let w = c.window_of(window);
       c.compact(w)                                 // opaque output; pass forward verbatim
     },
+    // Unsupported implements every capability-error interface (incl. CompactionError),
+    // so it is legal on this channel and the caller catches it by its concrete type.
     _ => throw baml.errors.Unsupported { message: "client cannot compact" },
   }
 }
 
 // app driver: a milestone just completed, so compact and adopt the result. The app
 // NEVER reads compacted.output — it splices it ahead of the next user turn as-is.
-function after_milestone(window: WindowItems, next_user_turn: WindowItems) -> WindowItems {
-  let result = CompactNow(window);
+function after_milestone(window: WindowItems, next_user_turn: WindowItems) -> WindowItems
+    throws baml.ExtendUnknownError<baml.errors.CompactionError> {
+  let result = CompactNow(window) catch (e) {
+    // most-specific-first: capability-negotiation failure, then the classified
+    // CompactionError interface, then the universal escape hatch.
+    let u: baml.errors.Unsupported     => throw u;                       // no compaction seam at all
+    let c: baml.errors.CompactionError => {
+      // a transient network/rate-limit compaction failure is non-fatal: skip this
+      // milestone and carry the un-compacted window forward unchanged.
+      if (c.is_network_error() || c.is_rate_limit()) { return concat_items(window, next_user_turn); }
+      throw c;
+    }
+    let e: baml.UnknownError           => { report_compaction_failure(e.message); throw e; }
+  };
   if (result.busts_cache_prefix) {
     log_cache_miss(result.before_tokens, result.after_tokens);   // the turn after pays a miss
   }
@@ -116,7 +131,8 @@ function make_gemini_session(initial: WindowItems) -> AutoCompact {
 
 // THE portable driver. Append turns; when a milestone lands, checkpoint. Identical
 // body for all three providers — only the `session` factory differs.
-function run_until_milestone(session: AutoCompact, turns: WindowItems[]) -> Compacted? {
+function run_until_milestone(session: AutoCompact, turns: WindowItems[]) -> Compacted?
+    throws baml.ExtendUnknownError<baml.errors.CompactionError> {
   let last: Compacted? = null;
   for (let turn in turns) {
     session.append_turn(turn);
@@ -154,7 +170,8 @@ client AnthropicEditor() {
 }
 
 // prune-as-you-go: each call runs a turn and reports what the server cleared.
-function EditDownTo(window: WindowItems) -> Compacted {
+function EditDownTo(window: WindowItems) -> Compacted
+    throws baml.ExtendUnknownError<baml.errors.CompactionError> {
   let p = AnthropicEditor();
   match (p) {
     let e: ContextEditing => {
@@ -177,4 +194,5 @@ function EditDownTo(window: WindowItems) -> Compacted {
 function is_milestone(turn: WindowItems) -> bool { $rust_io_function }       // e.g. a sub-task finished
 function log_cache_miss(before: int, after: int) -> null { $rust_io_function }
 function log_edit(strategy: string, n: int) -> null { $rust_io_function }
+function report_compaction_failure(message: string[]) -> null { $rust_io_function }
 function anthropic_window_of(p: Provider, items: WindowItems) -> AnthropicWindow { $rust_io_function }

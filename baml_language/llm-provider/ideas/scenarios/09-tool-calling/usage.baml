@@ -129,7 +129,7 @@ function CustomerSupport(question: string) -> string {
 
 // A host-side entry point an app would write to wire deps + tools and drive the loop.
 // (Illustrative: the `ctx` carrying `deps` is constructed at the call boundary.)
-function RunSupport(question: string, customer_id: int) -> string throws baml.errors.LlmClient {
+function RunSupport(question: string, customer_id: int) -> string throws baml.ExtendUnknownError<baml.errors.ToolError> {
   let ctx = ExecutionContext {
     function_name: "CustomerSupport",
     args: { "question": question },
@@ -148,7 +148,7 @@ function RunSupport(question: string, customer_id: int) -> string throws baml.er
 // are untouched — this is the proposal's claim that overriding `run_tools`
 // changes dispatch POLICY only.
 // ----------------------------------------------------------------------------
-function ApprovedSupport(question: string, ctx: ExecutionContext) -> string throws baml.errors.LlmClient {
+function ApprovedSupport(question: string, ctx: ExecutionContext) -> string throws baml.ExtendUnknownError<baml.errors.ToolError> {
   let p = Claude();
   match (p) {
     let tp: Tools => {
@@ -159,7 +159,7 @@ function ApprovedSupport(question: string, ctx: ExecutionContext) -> string thro
             // app policy: approve each call before dispatch; threading untouched.
             for (let c in calls.calls) {
               if (!app_approve(c.name, c.args)) {
-                throw baml.errors.LlmClient { message: "tool call denied by policy" };
+                throw ToolCallDenied { tool_name: c.name };
               }
             }
             t = tp.submit(t, ctx.dispatch(calls.calls));

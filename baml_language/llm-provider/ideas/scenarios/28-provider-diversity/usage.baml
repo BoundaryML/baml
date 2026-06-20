@@ -91,7 +91,8 @@ function Extract(bio: string) -> Profile {
 // The client expression is `Registry.resolve(spec)` — a Provider-typed value,
 // which is exactly what `client:` accepts.
 
-function RoutedExtract(spec: string, bio: string) -> Profile throws baml.errors.LlmClient {
+function RoutedExtract(spec: string, bio: string) -> Profile
+    throws baml.ExtendUnknownError<baml.errors.CallError> {
   client: Registry.resolve(spec)        // a string -> a Provider; this is the bridge
   prompt #"
     {{ _.role("user") }}
@@ -99,8 +100,11 @@ function RoutedExtract(spec: string, bio: string) -> Profile throws baml.errors.
   "#
 }
 
-// App code that does literal model-string switching, LiteLLM-style:
-function ExtractMany(bio: string) -> Profile[] throws baml.errors.LlmClient {
+// App code that does literal model-string switching, LiteLLM-style. The per-spec
+// catch triages most-specific-first: a bad prefix or rate-limit is recoverable
+// (skip that backend), a transport blip is retried, anything exotic is reported.
+function ExtractMany(bio: string) -> Profile[]
+    throws baml.ExtendUnknownError<baml.errors.CallError> {
   let specs = [
     "openai/gpt-4.1",
     "anthropic/claude-sonnet-4-5",
@@ -110,7 +114,12 @@ function ExtractMany(bio: string) -> Profile[] throws baml.errors.LlmClient {
   ];
   let out: Profile[] = [];
   for (let s in specs) {
-    out = baml.array.push(out, RoutedExtract(s, bio));
+    let p = RoutedExtract(s, bio) catch (e) {
+      let up: UnknownProviderError => continue;                       // unroutable spec -> skip
+      let c: baml.errors.CallError => { if (c.is_rate_limit()) { continue; } else { throw c; } }
+      let u: baml.UnknownError     => throw u;                        // escape hatch: re-raise
+    };
+    out.push(p);
   }
   out
 }
@@ -123,7 +132,8 @@ client Smart(spec: string) {
   Registry.resolve(spec)
 }
 
-function TenantExtract(tenant: string, bio: string) -> Profile throws baml.errors.LlmClient {
+function TenantExtract(tenant: string, bio: string) -> Profile
+    throws baml.ExtendUnknownError<baml.errors.CallError> {
   // enterprise tenants hit the internal gateway; everyone else hits a cheap proxy
   let spec = if (tenant == "enterprise") { "internal/gpt-4.1" } else { "groq/llama-3.3-70b-versatile" };
   client: Smart(spec)
@@ -160,9 +170,9 @@ function BalancedExtract(bio: string) -> Profile {
 
 
 // --- The lowest-common-denominator trap, made explicit in app code. ---------
-// `Cheap` normalizes its backend to base-Provider only: streaming and any
-// bespoke capability are ERASED by `Normalized`. This is the honest cost of a
-// universal surface — you get portability and lose the ceiling.
+// `Cheap` normalizes its backend to request/response only (`HttpProvider`):
+// streaming and any bespoke capability are ERASED by `Normalized`. This is the
+// honest cost of a universal surface — you get portability and lose the ceiling.
 
 client Cheap(spec: string) {
   Normalized { inner: Registry.resolve(spec) }
@@ -170,7 +180,8 @@ client Cheap(spec: string) {
 
 // This function can ONLY use `.call`. There is no `.stream` companion that will
 // find a Streaming impl, because the client returns a Normalized handle.
-function CheapExtract(spec: string, bio: string) -> Profile throws baml.errors.LlmClient {
+function CheapExtract(spec: string, bio: string) -> Profile
+    throws baml.ExtendUnknownError<baml.errors.CallError> {
   client: Cheap(spec)
   prompt #"
     {{ _.role("user") }}
@@ -185,8 +196,14 @@ function CheapExtract(spec: string, bio: string) -> Profile throws baml.errors.L
 // getting it or a clear typed failure — the typed analog of providerOptions.
 
 function StreamIfPossible(spec: string, bio: string)
-    -> baml.llm.Stream<Profile, Profile> throws baml.errors.LlmClient {
-  let p = Registry.resolve(spec);              // existential Provider
-  let s = Escape.as_streaming(p);              // recover Streaming or throw
+    -> baml.llm.Stream<Profile, Profile>
+    throws baml.ExtendUnknownError<baml.errors.StreamError> {
+  // `Registry.resolve` is on the CALL channel (CallError); this companion is on
+  // the STREAM channel. resolve's CallErrors are not StreamErrors, so normalize
+  // them into the stream channel as the body crosses the capability boundary.
+  let p = Registry.resolve(spec) catch (e) {
+    _ => throw baml.UnknownError.with_message<baml.errors.StreamError>(e, "resolve for stream failed");
+  };                                           // existential Provider
+  let s = Escape.as_streaming(p);              // recover Streaming or throw Unsupported
   s.stream<Profile, Profile>(render_prompt("StreamIfPossible", { bio: bio }))
 }

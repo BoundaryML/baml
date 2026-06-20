@@ -96,7 +96,8 @@ function ToSql(question: string) -> string {
 // honest fallback to `.call`, so the `_` arm errors — unlike `.stream`.
 // ---------------------------------------------------------------------------
 
-function Classify$decode(text: string, constraint: Constraint) -> Sentiment {
+function Classify$decode(text: string, constraint: Constraint) -> Sentiment
+    throws baml.ExtendUnknownError<baml.errors.ConstraintError> {
   let p = LocalLlama();
   match (p) {
     let c: Constrained => c.decode<Sentiment>(render_prompt(text), constraint),
@@ -114,7 +115,8 @@ function Classify$decode(text: string, constraint: Constraint) -> Sentiment {
 // lowering). The app code is identical; the provider absorbs the divergence.
 // ---------------------------------------------------------------------------
 
-function GuaranteedLabel(text: string, where: string) -> Sentiment {
+function GuaranteedLabel(text: string, where: string) -> Sentiment
+    throws baml.ExtendUnknownError<baml.errors.ConstraintError> {
   // pick the backend at runtime — clients are functions, so this is ordinary.
   let p = if (where == "vllm") { LocalLlama() }
           else if (where == "llamacpp") { LlamaCppBox() }
@@ -131,17 +133,27 @@ function GuaranteedLabel(text: string, where: string) -> Sentiment {
 // only return a JSON-wrapped value validated after the fact, NOT a guarantee. The
 // leak is visible: for a Choice, the fallback to Hosted will THROW Unsatisfiable,
 // because a bare enum token is not a JsonShape. The app must decide to accept that.
-function PortableLabel(text: string) -> Sentiment {
+// The degrade path falls back to an unconstrained `.call`, so this function's own
+// channel carries BOTH the constraint and the call capability errors.
+function PortableLabel(text: string) -> Sentiment
+    throws baml.ExtendUnknownError<baml.errors.ConstraintError | baml.errors.CallError> {
   let p = Portable();                          // ConstrainedFallback[VLLM, OpenAIHosted]
   let choice = Choice { options: ["Positive", "Negative", "Neutral"] };
   // If vLLM is up: guaranteed. If down: Unsatisfiable (hosted can't honor Choice).
   p.decode<Sentiment>(render_prompt(text), choice)
     catch (e) {
-      // app-level recovery: re-shape the SAME intent as a JSON schema so the
-      // hosted tier CAN serve it (best-effort, validated by SAP, not guaranteed).
-      _ => {
+      // app-level recovery, most-specific-first: the EXPECTED miss is Unsatisfiable
+      // (hosted tier can't honor a bare-enum Choice). Re-shape the SAME intent as a
+      // JSON schema so the hosted tier CAN serve it (best-effort, SAP-validated, not
+      // guaranteed). Any other ConstraintError (or an unknown) we re-raise.
+      let _u: Unsatisfiable           => {
         let p2 = Hosted();
         p2.call<Sentiment>(render_prompt(text))   // degrade explicitly, app's choice
-      }
+      },
+      let c: baml.errors.ConstraintError => {
+        if (c.is_network_error()) { throw c; }    // box unreachable mid-decode — not recoverable here
+        else { throw c; }
+      },
+      let u: baml.UnknownError        => throw u,  // the escape hatch — re-raise with its breadcrumb
     }
 }

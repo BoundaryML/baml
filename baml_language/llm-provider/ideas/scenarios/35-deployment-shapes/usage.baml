@@ -68,6 +68,16 @@ function Analyze(text: string, who: Provider) -> Summary {
 // Browser-proxied home:
 //   Analyze("...", BrowserProxiedChat())
 //
+// All four share ONE catch surface on the CallError channel
+// (baml.ExtendUnknownError<baml.errors.CallError>) — the IAM-chain-absent failure
+// and a transport blip triage the same way regardless of home:
+//   Analyze("...", IamChat("us-east-1")) catch (e) {
+//     let c: CredentialUnavailable => "[no cloud-IAM chain in this home: " + c.reason + "]";
+//     let h: HttpTransportError    => retry();                          // is_network_error() == true
+//     let e2: baml.errors.CallError => { if (e2.is_network_error()) retry(); else fail(); }
+//     let u: baml.UnknownError     => report(u.message);               // the escape hatch
+//   }
+//
 // Streaming companion — viable in ALL FOUR because SSE is universal:
 //   Analyze.stream("...", EdgeChat())          // edge can stream within its budget
 //   Analyze.stream("...", BrowserProxiedChat()) // browser streams from same-origin
@@ -92,8 +102,17 @@ function VoiceSession(system: string, who: Provider, io: Channel) -> Transcript 
 //
 // Edge attempt (FAILS LOUDLY, by design):
 //   VoiceSession.live("be terse", BrowserVoice(p_with_ws_transport), io)
-//      -> throws LlmClient "this deployment cannot hold a websocket socket..."
+//      -> throws TransportUnviable { transport: "websocket" }   // a typed RealtimeError
 //         because host_can_hold("websocket") == false on a plain serverless function.
+//
+// The caller catches it most-specific-first on the RealtimeError channel
+// (baml.ExtendUnknownError<baml.errors.RealtimeError>):
+//   VoiceSession.live("be terse", BrowserVoice(p), io) catch (e) {
+//     let t: TransportUnviable      => fallBackToTextChat();          // concrete realtime-domain miss
+//     let c: CredentialUnavailable  => remintFromServer();           // stale/absent token
+//     let r: baml.errors.RealtimeError => { if (r.is_network_error()) retry(); else fail(); }
+//     let u: baml.UnknownError      => report(u.message);            // the escape hatch
+//   }
 
 // ---------------------------------------------------------------------------
 // Cron / durable home — combinator chains read the same regardless of host.

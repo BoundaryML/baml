@@ -71,7 +71,8 @@ function ResearchAndAct(task: string, untrusted_facts: Tainted<PageFacts>) -> st
 
 // The app wires the gate explicitly at the run_tools call. `.run_tools` matches
 // Privileged() against Tools (OpenAITools implements it) and threads our ctx.
-function run_agent(task: string, page: string, page_host: string) -> string {
+function run_agent(task: string, page: string, page_host: string) -> string
+    throws baml.ExtendUnknownError<baml.errors.ToolError> {
   // 1) quarantined read of untrusted content
   let facts = Tainted<PageFacts>.from(
     SummarizeUntrusted(page, page_host),
@@ -97,9 +98,17 @@ function run_agent(task: string, page: string, page_host: string) -> string {
     Tool { name: "read_inbox", description: "read the user's inbox", parameters: reflect.type_of<Empty>() },
   ];
 
+  // The gate's deliberate refusals surface here as typed ToolErrors. Catch them
+  // most-specific-first: concrete gate errors -> the ToolError interface -> the
+  // UnknownError escape hatch. A refusal becomes a benign string, not a crash.
   let answer: string = match (actor) {
     let t: Tools => t.run_tools<string>(render_for(task, facts), tools, gate),
     _ => throw baml.errors.Unsupported { message: "privileged client is not a Tools provider" },
+  } catch (e) {
+    let b: BlockedOutboundUrl => "[blocked exfil to " + b.url + "]",
+    let d: HumanDeniedCall    => "[denied tainted call to " + d.tool + "]",
+    let te: baml.errors.ToolError => { if (te.is_network_error()) { "[tool transport error]" } else { "[tool error]" } },
+    let u: baml.UnknownError  => "[agent failed: " + u.message.join(", ") + "]",
   };
 
   // 4) close the markdown-image channel on the way out (renderer-side leg 3).
@@ -111,7 +120,8 @@ function run_agent(task: string, page: string, page_host: string) -> string {
 // The ONLY thing that changed is the client. GatedContext, Quarantined, Tainted,
 // and scrub_output are all provider-agnostic: taint keys off call.name, which both
 // id-based (OpenAI) and name-based (Gemini) providers populate.
-function run_agent_gemini(task: string, page: string, page_host: string) -> string {
+function run_agent_gemini(task: string, page: string, page_host: string) -> string
+    throws baml.ExtendUnknownError<baml.errors.ToolError> {
   let facts = Tainted<PageFacts>.from(SummarizeUntrusted(page, page_host), "web:" + page_host);
   let actor: Provider = PrivilegedGemini();
   let gate = GatedContext {
@@ -134,7 +144,7 @@ function run_agent_gemini(task: string, page: string, page_host: string) -> stri
 // ---- a trivial console approver -----------------------------------------
 class ConsoleApprover {
   implements Approver {
-    function review(self, call: ToolCall, taint: string[]) -> ApprovalDecision throws baml.errors.LlmClient {
+    function review(self, call: ToolCall, taint: string[]) -> ApprovalDecision throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // host prompts the operator: "call `http_post` carries tainted data from
       // [web:evil.example] — approve?"  Defaults to deny on tainted+dangerous.
       $rust_io_function
@@ -147,7 +157,7 @@ class FetchArgs { url: string }
 class PostArgs  { url: string, body: string }
 class Empty     {}
 
-function as_provenance(p: Provider) -> Provenance {
+function as_provenance(p: Provider) -> Provenance throws baml.ExtendUnknownError<baml.errors.ToolError> {
   match (p) {
     let x: Provenance => x,
     _ => throw baml.errors.Unsupported { message: "actor has no Provenance capability" },

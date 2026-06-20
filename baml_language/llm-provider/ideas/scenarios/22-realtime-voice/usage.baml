@@ -66,7 +66,8 @@ function VoiceChat(system: string) -> Transcript {
 // to make the ergonomics concrete.
 // ============================================================================
 
-function run_phone_call() -> Transcript throws baml.errors.LlmClient {
+function run_phone_call() -> Transcript
+    throws baml.ExtendUnknownError<baml.errors.RealtimeError> {
   // 1. Get a Channel from the host, bound to the mic + speaker. The app does
   //    NOT construct the wire — it hands the provider an io it can drive.
   let io = baml.audio.open_channel();           // returns an AudioChannel : Channel
@@ -80,19 +81,33 @@ function run_phone_call() -> Transcript throws baml.errors.LlmClient {
 
   // 3. Pump the mic UP. Under server VAD we send ONLY AppendAudio — no commit,
   //    no response.create. The server detects silence and replies on its own.
-  baml.sys.spawn(() => {
+  //    `spawn { }` (BEP-034) runs the capture loop concurrently with the .live
+  //    call below and returns a Future immediately.
+  let pump: baml.future.Future<null, baml.errors.Io> = spawn {
     for (let chunk = mic.next(); chunk != null; chunk = mic.next()) {
       io.send(OutEvent {
         kind: OutKind.AppendAudio, audio: chunk,
         text: null, voice: null, item_id: null, audio_end_ms: null, tool_result: null,
       }) catch (e) { _ => { return null; } };
     }
-  });
+  };
 
   // 4. Open the session. This BLOCKS for the whole call — many turns — and
   //    returns the Transcript record when the user closes io. Audio already
   //    streamed out; only the durable item list comes back here.
-  VoiceChat.live("You are a friendly voice assistant. Keep replies short.", io)
+  //
+  //    Catch most-specific-first: the concrete server-pushed decline, then the
+  //    realtime capability interface, then the UnknownError escape hatch. Note
+  //    the closed-channel Unsupported can never fire here — VoiceChat's client
+  //    IS realtime — but a non-realtime client would surface it concretely.
+  VoiceChat.live("You are a friendly voice assistant. Keep replies short.", io) catch (e) {
+    let s: RealtimeServerError    => { ui.toast(s.message); Transcript { items: [], ended_reason: "error" }; }
+    let r: baml.errors.RealtimeError => {
+      if (r.is_network_error()) { ui.toast("connection dropped"); } else { ui.toast("voice session failed"); }
+      Transcript { items: [], ended_reason: "error" };
+    }
+    let u: baml.UnknownError      => { ui.toast(u.message.join(": ")); Transcript { items: [], ended_reason: "error" }; }
+  }
 }
 
 
@@ -105,13 +120,15 @@ function VoicePTT(system: string) -> Transcript {
   prompt #"{{ system }}"#
 }
 
-function run_push_to_talk() -> Transcript throws baml.errors.LlmClient {
+function run_push_to_talk() -> Transcript
+    throws baml.ExtendUnknownError<baml.errors.RealtimeError> {
   let io = baml.audio.open_channel();
   io.on_kind(InKind.OutputAudio, ev => { baml.audio.play(ev.audio); });
   io.on_kind(InKind.OutputText, ev => { ui.append_caption(ev.text); });
 
-  // While the button is HELD, stream audio up:
-  baml.sys.spawn(() => {
+  // While the button is HELD, stream audio up. `spawn { }` runs the capture
+  // loop concurrently with the .live session below.
+  let pump: baml.future.Future<null, baml.errors.Io> = spawn {
     for (let chunk = mic.while_held(); chunk != null; chunk = mic.while_held()) {
       io.send(OutEvent {
         kind: OutKind.AppendAudio, audio: chunk,
@@ -124,7 +141,7 @@ function run_push_to_talk() -> Transcript throws baml.errors.LlmClient {
                        item_id: null, audio_end_ms: null, tool_result: null }) catch (e) { _ => {} };
     io.send(OutEvent { kind: OutKind.RequestResponse, audio: null, text: null, voice: null,
                        item_id: null, audio_end_ms: null, tool_result: null }) catch (e) { _ => {} };
-  });
+  };
 
   VoicePTT.live("Answer only when asked.", io)
 }
@@ -136,7 +153,8 @@ function run_push_to_talk() -> Transcript throws baml.errors.LlmClient {
 // model's MEMORY reflects what the user heard, not what it generated.
 // ============================================================================
 
-function run_with_bargein() -> Transcript throws baml.errors.LlmClient {
+function run_with_bargein() -> Transcript
+    throws baml.ExtendUnknownError<baml.errors.RealtimeError> {
   let io = baml.audio.open_channel();
   let played = PlayedCursor { ms: 0, active_item: null };
 

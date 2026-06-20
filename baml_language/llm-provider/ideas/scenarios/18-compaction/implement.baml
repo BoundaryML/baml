@@ -14,9 +14,9 @@
 //       - Anthropic : server-side context EDITING — prune in place, report what
 //                     was removed; the "compaction" is a side effect of a normal
 //                     turn, not a separate call.
-//       - Gemini    : NO endpoint. Roll-your-own LLM summary, built FROM the base
-//                     `call` — so a pure-BAML provider implements Compaction by
-//                     calling itself.
+//       - Gemini    : NO endpoint. Roll-your-own LLM summary, built FROM its own
+//                     `HttpProvider.call` — so a pure-BAML provider implements
+//                     Compaction by calling itself.
 //   * Compaction busts the prompt-cache prefix; we surface that as metadata, not
 //     as something the model can hide.
 //   * Lossy by design — there is no inspection seam on the opaque output, and we
@@ -26,6 +26,20 @@
 // -----------------------------------------------------------------------------
 // NET-NEW capability + host surface on top of _conventions.md.
 // -----------------------------------------------------------------------------
+
+// NET-NEW error channel: compaction is a capability beyond call/stream/realtime/
+// tools, so it gets its OWN capability-error interface (same shape as
+// baml.errors.CallError). Both Compaction.{window_of,compact} and
+// ContextEditing.edit declare `baml.ExtendUnknownError<baml.errors.CompactionError>`.
+// The same classifiers apply: a compaction request can hit the network (Gemini's
+// summary round-trips through `call`), be rate-limited, or fail to parse the
+// server's compaction report.
+// (net-new: the CompactionError capability-error interface — flagged in evaluation.md.)
+interface baml.errors.CompactionError {
+  function is_network_error(self) -> bool
+  function is_rate_limit(self) -> bool
+  function is_parse_error(self) -> bool
+}
 
 // The live context window, as the model round-trips it. This is the SAME grammar
 // `Tools.Transcript` accumulates (messages, tool calls, tool outputs, reasoning
@@ -64,9 +78,10 @@ class AppliedEdit {
 
 // The capability. Only providers that can shrink a window implement it. There is
 // NO default `call`-fallback for this companion (see evaluation.md (c)): a model
-// that has no compaction endpoint and no base `call` cannot fake replacement
-// state. A pure-BAML provider that DOES have `call` can still implement this by
-// summarizing — but that is a real implementation, not a generic fallback.
+// that has no compaction endpoint and no `HttpProvider.call` cannot fake
+// replacement state. A pure-BAML provider that DOES implement HttpProvider can
+// still implement this by summarizing through its own `call` — but that is a real
+// implementation, not a generic fallback.
 //
 // (net-new: the `Compaction` capability interface.)
 interface Compaction requires Provider {
@@ -74,10 +89,12 @@ interface Compaction requires Provider {
 
   // Wrap a raw item list into this provider's window handle. The caller obtains
   // its starting window from its session/transcript store (out of scope here).
-  function window_of(self, items: WindowItems) -> Window throws Error
+  function window_of(self, items: WindowItems) -> Window
+      throws baml.ExtendUnknownError<baml.errors.CompactionError>
 
   // Shrink the window. Returns opaque replacement state + cache/size metadata.
-  function compact(self, window: Window) -> Compacted throws Error
+  function compact(self, window: Window) -> Compacted
+      throws baml.ExtendUnknownError<baml.errors.CompactionError>
 
   // Unwrap the compacted output back into the item-list handle the NEXT request
   // consumes. The two-step (compact -> output -> window_of) lets a combinator sit
@@ -110,28 +127,37 @@ class OpenAIResponses {
   implements HttpProvider {
     type Body = baml.http.Response
 
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       // server-managed compaction: if compact_threshold is set, attach
       // context_management so the server compacts its stored chain past the bound.
       // This is the "client keeps doing exactly what it did before" mode.
       openai_responses_request(self.model, self.api_key, prompt, self.compact_threshold)
     }
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
-      baml.http.send(request) catch (e) { _ => { throw baml.errors.LlmClient { message: "http failed" }; } }
+    function send(self, request: baml.http.Request) -> baml.http.Response
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.http.send(request)
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "openai send failed");
     }
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
+    function parse<T>(self, from: baml.http.Response) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       baml.sap.parse<T>(from.text())
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "openai parse failed");
     }
   }
 
   implements Compaction {
     type Window = OpenAIWindow
 
-    function window_of(self, items: WindowItems) -> OpenAIWindow throws baml.errors.LlmClient {
+    function window_of(self, items: WindowItems) -> OpenAIWindow
+        throws baml.ExtendUnknownError<baml.errors.CompactionError> {
       OpenAIWindow { model: self.model, api_key: self.api_key, items: items }
     }
 
-    function compact(self, window: OpenAIWindow) -> Compacted throws baml.errors.LlmClient {
+    function compact(self, window: OpenAIWindow) -> Compacted
+        throws baml.ExtendUnknownError<baml.errors.CompactionError> {
       // POST /v1/responses/compact { model, input: window.items } — the manual
       // primitive. The host returns the raw `compacted.output` (opaque) and the
       // token deltas the server reports. We DO NOT decode `output`.
@@ -143,6 +169,8 @@ class OpenAIResponses {
         after_tokens: raw.after_tokens,
         removed: [],                    // replacement is not decomposable into edits
       }
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CompactionError>(e, "openai compact failed");
     }
   }
 
@@ -188,7 +216,8 @@ class Anthropic {
   implements HttpProvider {
     type Body = baml.http.Response
 
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       // attach the beta header + context_management.edits. The server prunes in
       // place during this very turn; the pruning is NOT a separate compact call.
       // edits MUST be ordered clear_thinking-before-clear_tool_uses; we sort to
@@ -196,18 +225,25 @@ class Anthropic {
       anthropic_messages_request(self.model, self.api_key, self.max_tokens, prompt,
                                  order_edits(self.edits))
     }
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
-      baml.http.send(request) catch (e) { _ => { throw baml.errors.LlmClient { message: "http failed" }; } }
+    function send(self, request: baml.http.Request) -> baml.http.Response
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.http.send(request)
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "anthropic send failed");
     }
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
+    function parse<T>(self, from: baml.http.Response) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       baml.sap.parse<T>(from.text())
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "anthropic parse failed");
     }
   }
 
   implements Compaction {
     type Window = AnthropicWindow
 
-    function window_of(self, items: WindowItems) -> AnthropicWindow throws baml.errors.LlmClient {
+    function window_of(self, items: WindowItems) -> AnthropicWindow
+        throws baml.ExtendUnknownError<baml.errors.CompactionError> {
       AnthropicWindow { model: self.model, api_key: self.api_key, max_tokens: self.max_tokens,
                         edits: order_edits(self.edits), items: items }
     }
@@ -215,7 +251,8 @@ class Anthropic {
     // `compact` on Anthropic uses the summarize-style primitive (compact_20260112):
     // it folds earlier turns into a `compaction` block the next request must echo.
     // That block IS new prefix state, so it busts the cache.
-    function compact(self, window: AnthropicWindow) -> Compacted throws baml.errors.LlmClient {
+    function compact(self, window: AnthropicWindow) -> Compacted
+        throws baml.ExtendUnknownError<baml.errors.CompactionError> {
       let raw: AnthropicCompactResp =
         anthropic_compact_call(window.model, window.api_key, window.max_tokens, window.items);
       Compacted {
@@ -225,6 +262,8 @@ class Anthropic {
         after_tokens: raw.after_tokens,
         removed: [],                    // summarize-style: not reported as discrete edits
       }
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CompactionError>(e, "anthropic compact failed");
     }
   }
 
@@ -232,13 +271,14 @@ class Anthropic {
   // after a normal turn rather than produced by `compact`. An app that wants
   // edit-as-you-go uses `edit` + the per-turn `applied_edits` report.
   implements ContextEditing {
-    function edit(self, window: AnthropicWindow) -> Compacted throws baml.errors.LlmClient {
+    function edit(self, window: AnthropicWindow) -> Compacted
+        throws baml.ExtendUnknownError<baml.errors.CompactionError> {
       // run ONE normal turn with the edits attached, then read what the server
       // pruned off the front. The "shrink" is the response's reported deletions.
       let resp: AnthropicEditedTurn =
         anthropic_edited_turn(window.model, window.api_key, window.max_tokens, window.items, window.edits);
       // the cache prefix only moves if the server actually cleared a leading block.
-      let moved = baml.list.len(resp.applied_edits) > 0;
+      let moved = resp.applied_edits.length() > 0;
       Compacted {
         output: resp.pruned_items,      // the window minus the cleared blocks — opaque
         busts_cache_prefix: moved,
@@ -246,6 +286,8 @@ class Anthropic {
         after_tokens: resp.after_tokens,
         removed: resp.applied_edits,    // THIS shape DOES report what it removed
       }
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CompactionError>(e, "anthropic edit failed");
     }
   }
 
@@ -278,17 +320,19 @@ class AnthropicEditedTurn {
 // (net-new: a second, prune-shaped capability — see evaluation.md on whether this
 // should have been one interface with two shapes or two interfaces.)
 interface ContextEditing requires Provider {
-  function edit(self, window: AnthropicWindow) -> Compacted throws Error
+  function edit(self, window: AnthropicWindow) -> Compacted
+      throws baml.ExtendUnknownError<baml.errors.CompactionError>
 }
 
 // -----------------------------------------------------------------------------
 // Provider #3: Gemini — NO compaction endpoint. Roll-your-own LLM summary.
 //
-// Divergence shown (the payoff of base `Provider`):
+// Divergence shown (the payoff of capabilities composing on the `Provider` marker):
 //   * Gemini has no compact() and no server-side editing. The ONLY way to shrink
 //     a Gemini window is to ask an LLM to rewrite the old turns into a synopsis —
-//     i.e. implement Compaction FROM the base `call`. This provider therefore
-//     implements Compaction by calling ITSELF.
+//     i.e. implement Compaction FROM its own `HttpProvider.call`. This provider
+//     therefore implements Compaction by calling ITSELF (it implements both
+//     HttpProvider and Compaction; the latter is built out of the former).
 //   * The output here is NOT opaque machine state — it is prose the app could
 //     read. But to keep ONE portable surface, we still wrap it in `WindowItems`
 //     and still forbid editing through the type. The honesty cost (a summary IS
@@ -303,34 +347,45 @@ class GeminiSummary {
 
   implements HttpProvider {
     type Body = baml.http.Response
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       gemini_generate_request(self.model, self.api_key, prompt)
     }
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
-      baml.http.send(request) catch (e) { _ => { throw baml.errors.LlmClient { message: "http failed" }; } }
+    function send(self, request: baml.http.Request) -> baml.http.Response
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.http.send(request)
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "gemini send failed");
     }
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
+    function parse<T>(self, from: baml.http.Response) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       baml.sap.parse<T>(from.text())
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "gemini parse failed");
     }
   }
 
   implements Compaction {
     type Window = GeminiWindow
 
-    function window_of(self, items: WindowItems) -> GeminiWindow throws baml.errors.LlmClient {
+    function window_of(self, items: WindowItems) -> GeminiWindow
+        throws baml.ExtendUnknownError<baml.errors.CompactionError> {
       GeminiWindow { items: items }
     }
 
     // The hand-rolled compaction: split the window into [old | recent], render the
     // old part as a summarization prompt, and ask THIS SAME provider's `call` to
     // produce a synopsis. Then splice synopsis + recent back into a new window.
-    function compact(self, window: GeminiWindow) -> Compacted throws baml.errors.LlmClient {
+    function compact(self, window: GeminiWindow) -> Compacted
+        throws baml.ExtendUnknownError<baml.errors.CompactionError> {
       let split: WindowSplit = split_window(window.items, self.keep_last);
       let before = count_tokens(window.items);
 
       // Build a summarization prompt over the OLD turns and run it through `self`.
-      // This is the load-bearing line: a pure-BAML provider implements a capability
-      // by using its own base method.
+      // This is the load-bearing line: a pure-BAML provider implements one capability
+      // (Compaction) out of another it also implements (HttpProvider.call). `self.call`
+      // throws on the CallError channel; the trailing catch re-homes any such failure
+      // onto the CompactionError channel.
       let summary_prompt: baml.llm.PromptAst = summarize_prompt(split.old);
       let synopsis: string = self.call<string>(summary_prompt);
 
@@ -342,6 +397,8 @@ class GeminiSummary {
         after_tokens: count_tokens(new_items),
         removed: [],
       }
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CompactionError>(e, "gemini compact failed");
     }
   }
 
@@ -356,15 +413,18 @@ class WindowSplit { old: WindowItems, recent: WindowItems }
 // at a milestone, then keeps calling the inner provider with the compacted state.
 //
 // This is the orchestration layer the proposal promises: it WRAPS a provider and
-// adds a policy (when to compact), forwarding `call` through and exposing a
-// `checkpoint` method the app calls after a milestone. It works for ANY provider
-// that implements Compaction — OpenAI, Anthropic, or Gemini — because it only ever
-// touches the opaque seam (compact -> output -> window_of). It never decodes.
+// adds a policy (when to compact), forwarding the `HttpProvider` capability
+// (`call`/`call_with`) through — by `match`ing the inner provider for HttpProvider,
+// since `inner` is typed as the bare Compaction marker (../provider-as-marker.md)
+// which carries no `call` — and exposing a `checkpoint` method the app calls after
+// a milestone. It works for ANY provider that implements Compaction — OpenAI,
+// Anthropic, or Gemini — because it only ever touches the opaque seam
+// (compact -> output -> window_of). It never decodes.
 //
 // It carries the live window AS STATE between turns, which is the one wrinkle:
 // a combinator that holds mutable conversational state, not just config (see
-// evaluation.md (c) and Open Question #1 on whether capabilities should refine
-// base `call`).
+// evaluation.md (c) on where stateful session state lives now that no provider
+// method threads it).
 // -----------------------------------------------------------------------------
 
 class AutoCompact {
@@ -372,18 +432,41 @@ class AutoCompact {
   window: WindowItems          // the live window it carries forward between turns
   last_busted_cache: bool      // diagnostics: did the most recent checkpoint bust cache
 
-  implements Provider {
-    // plain call delegates straight to the inner provider's base call. The window
+  // `call`/`call_with` are an HttpProvider capability now (Provider is a bare
+  // marker — see ../provider-as-marker.md). AutoCompact forwards them to its inner
+  // provider WHEN that provider is itself request/response. `inner` is typed as the
+  // Compaction marker, so we `match` it for HttpProvider at the call site rather
+  // than calling a base `.call` that no longer exists on the marker.
+  implements HttpProvider {
+    type Body = unknown
+
+    // call_with is the PRIMITIVE (value-sidecar-model.md): forward the projection to
+    // the inner provider so its usage/sidecar is NOT dropped (the P1 fix). The window
     // is threaded by the host turn machinery, not re-implemented here.
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
-      self.inner.call<T>(prompt)
+    function call_with<T, U>(self, prompt: baml.llm.PromptAst, project: (ResponseMeta) -> U) -> (T, U)
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      match (self.inner) {
+        let h: HttpProvider => { return h.call_with<T, U>(prompt, project); },
+        _ => throw baml.errors.Unsupported { message: "AutoCompact inner provider cannot call" },
+      }
+    }
+    // plain call delegates straight to the inner provider's call.
+    function call<T>(self, prompt: baml.llm.PromptAst) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      match (self.inner) {
+        let h: HttpProvider => { return h.call<T>(prompt); },
+        _ => throw baml.errors.Unsupported { message: "AutoCompact inner provider cannot call" },
+      }
     }
   }
 
   // The milestone seam: shrink the carried window and adopt the compacted output
   // VERBATIM as the new live window. The app calls this after a sub-task finishes.
   // The opaque output is round-tripped through window_of WITHOUT inspection.
-  function checkpoint(self) -> Compacted throws baml.errors.LlmClient {
+  // It forwards the inner provider's CompactionError channel unchanged (rule 4:
+  // combinators declare the SAME channel as what they wrap — no widen/forward).
+  function checkpoint(self) -> Compacted
+      throws baml.ExtendUnknownError<baml.errors.CompactionError> {
     let w = self.inner.window_of(self.window);
     let result = self.inner.compact(w);
     self.window = result.output;               // adopt verbatim — DO NOT edit
@@ -393,8 +476,10 @@ class AutoCompact {
 
   // Append a new user turn onto the carried (possibly-compacted) window. The
   // ordering contract — compacted.output FIRST, new turn AFTER — lives here so the
-  // app never has to remember it.
-  function append_turn(self, items: WindowItems) -> null throws baml.errors.LlmClient {
+  // app never has to remember it. Pure local bookkeeping, but it declares the
+  // CompactionError channel for uniformity with the rest of the session surface.
+  function append_turn(self, items: WindowItems) -> null
+      throws baml.ExtendUnknownError<baml.errors.CompactionError> {
     self.window = concat_items(self.window, items);
     null
   }

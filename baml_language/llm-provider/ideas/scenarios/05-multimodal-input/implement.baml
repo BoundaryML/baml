@@ -84,13 +84,16 @@ interface MediaIngest requires Provider {
 
   // Upload bytes to the provider's Files API and return a handle. Only meaningful for
   // providers that mint handles (Gemini); others may leave the default that throws.
-  function upload(self, ref: MediaRef) -> MediaRef throws baml.errors.LlmClient {
+  // On the call path (build_request -> resolve -> upload) -> the CallError channel.
+  function upload(self, ref: MediaRef) -> MediaRef
+      throws baml.ExtendUnknownError<baml.errors.CallError> {
     throw baml.errors.Unsupported { message: "provider has no Files API to upload to" }
   }
 
   // The negotiation engine. Default method — every MediaIngest provider inherits it,
   // and almost none override it. This is the logic the Vercel SDK hand-rolls per call.
-  function resolve(self, ref: MediaRef) -> MediaRef throws baml.errors.LlmClient {
+  function resolve(self, ref: MediaRef) -> MediaRef
+      throws baml.ExtendUnknownError<baml.errors.CallError> {
     // Hard gate first: a provider that accepts NO transport for this kind can't ingest
     // it. (audio -> Anthropic ; video -> non-Gemini.) Caught, never silently dropped.
     if (!self.accepts(ref.kind, url) &&
@@ -98,7 +101,7 @@ interface MediaIngest requires Provider {
         !self.accepts(ref.kind, data_url) &&
         !self.accepts(ref.kind, handle)) {
       throw baml.errors.Unsupported {
-        message: "provider does not accept media kind: " + reflect.show(ref.kind)
+        message: "provider does not accept media kind: " + ref.kind.to_string()
       };
     }
 
@@ -116,7 +119,7 @@ interface MediaIngest requires Provider {
                             data_url: baml.media.to_data_url(ref) };
         }
         if (self.accepts(ref.kind, handle)) { return self.upload(ref); }
-        throw baml.errors.LlmClient { message: "no acceptable transport for inline bytes" };
+        throw MediaTransportError { message: "no acceptable transport for inline bytes" };
       },
       data_url => {
         if (self.accepts(ref.kind, data_url)) { return ref; }
@@ -126,7 +129,7 @@ interface MediaIngest requires Provider {
                             bytes: baml.media.to_base64_bytes(ref) };
         }
         if (self.accepts(ref.kind, handle)) { return self.upload(ref); }
-        throw baml.errors.LlmClient { message: "no acceptable transport for data URL" };
+        throw MediaTransportError { message: "no acceptable transport for data URL" };
       },
       handle => {
         // A handle is only valid for the provider that minted it.
@@ -138,11 +141,16 @@ interface MediaIngest requires Provider {
           },
           _ => {},
         }
-        throw baml.errors.LlmClient {
+        throw MediaTransportError {
           message: "uploaded handle is not portable to this provider; re-upload the bytes"
         };
       },
     }
+  } catch (e) {
+    // Foreign Io/Timeout from baml.media.{download,to_data_url,to_base64_bytes,which}
+    // (host pre-fetch / re-encode) normalize here; deliberate Unsupported /
+    // MediaTransportError are known CallErrors and pass through with_message unchanged.
+    _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "media resolve failed");
   }
 
   // Identity used to validate handle portability.
@@ -151,6 +159,45 @@ interface MediaIngest requires Provider {
 
 // baml.media.to_base64_bytes(ref) -> uint8array : decode a data_url back to raw bytes.
 // (Listed with the other baml.media host fns above; kept here to keep `resolve` honest.)
+
+
+// -----------------------------------------------------------------------------
+// 1b. Media-resolution domain error (NET-NEW concrete error).
+//
+// `resolve` runs ENTIRELY on the call path (build_request calls it per part), so its
+// deliberate throws live on the CallError channel. A transport-negotiation failure
+// ("no acceptable wire form for these bytes", "this handle isn't portable") is a real,
+// branchable domain error — distinct from a transport/network failure and from a
+// model refusal — so it gets a concrete class implementing baml.errors.CallError.
+// It is NOT a network/rate-limit/parse failure, hence all three classifiers are false.
+// -----------------------------------------------------------------------------
+class MediaTransportError {
+  message: string
+  implements baml.errors.CallError {
+    function is_network_error(self) -> bool { return false; }
+    function is_rate_limit(self)    -> bool { return false; }
+    function is_parse_error(self)   -> bool { return false; }
+  }
+}
+
+
+// -----------------------------------------------------------------------------
+// 1c. Typed response shapes (just the fields `parse` reads). Each provider's
+// `parse` decodes its response with `baml.json.from_json<…>` into one of these and
+// reads the inner content string, then SAP-parses that into the caller's `T`.
+// (Replaces the invented `Response.json_path("a.b.c")` reader.)
+// -----------------------------------------------------------------------------
+class OpenAIChatMessage  { content: string }
+class OpenAIChatChoice   { message: OpenAIChatMessage }
+class OpenAIChatResponse { choices: OpenAIChatChoice[] }
+
+class AnthropicBlock     { text: string }
+class AnthropicResponse  { content: AnthropicBlock[] }
+
+class GeminiPart         { text: string }
+class GeminiContent      { parts: GeminiPart[] }
+class GeminiCandidate    { content: GeminiContent }
+class GeminiResponse     { candidates: GeminiCandidate[] }
 
 
 // -----------------------------------------------------------------------------
@@ -178,61 +225,80 @@ class OpenAI {
       }
     }
     // OpenAI mints file ids for PDFs; upload() would POST /v1/files. Elided host body:
-    function upload(self, ref: MediaRef) -> MediaRef throws baml.errors.LlmClient {
+    function upload(self, ref: MediaRef) -> MediaRef
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       $rust_io_function
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "openai file upload failed");
     }
   }
 
   implements HttpProvider {
     type Body = baml.http.Response
 
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       let view = baml.media.view(prompt);
-      // Build the content array. Text first, then each media part in its accepted form.
-      let parts: string[] = [json.object({ "type": "text", "text": view.text })];
+      // Build the content array as native json. Text first, then each media part in
+      // its accepted form. Each part is a `map<string, json>`; `parts` is a `json[]`.
+      let parts: json[] = [{ "type": "text", "text": view.text }];
       for (let part in view.media) {
         let r = self.resolve(part.ref);             // <-- negotiation happens HERE
         match (r.kind) {
           image => {
             // image_url takes a remote URL or a data: URL — both land in the same field.
             let u = match (r.which()) { url => r.url!, _ => baml.media.to_data_url(r) };
-            parts = parts + [json.object({
+            parts.push({
               "type": "image_url",
-              "image_url": json.object({ "url": u, "detail": "auto" }),
-            })];
+              "image_url": { "url": u, "detail": "auto" },
+            });
           },
           audio => {
-            parts = parts + [json.object({
+            parts.push({
               "type": "input_audio",
-              "input_audio": json.object({
+              "input_audio": {
                 "data": baml.media.to_base64(r),
                 "format": baml.media.audio_format(r),     // "wav" | "mp3"
-              }),
-            })];
+              },
+            });
           },
           pdf => {
-            parts = parts + [json.object({ "type": "input_file", "file_id": r.handle! })];
+            parts.push({ "type": "input_file", "file_id": r.handle! });
           },
           video => { baml.sys.panic("unreachable: resolve() rejects video for OpenAI"); },
         }
       }
-      let body = json.object({
+      let body: map<string, json> = {
         "model": self.model,
-        "messages": json.array([ json.object({ "role": "user", "content": json.array(parts) }) ]),
-      });
+        "messages": [ { "role": "user", "content": parts } ],
+      };
       baml.http.Request {
         method: "POST",
         url: "https://api.openai.com/v1/chat/completions",
         headers: { "authorization": "Bearer " + self.api_key, "content-type": "application/json" },
-        body: json.stringify(body),
+        body: baml.json.stringify(body),
       }
+    } catch (e) {
+      // Foreign Io from baml.media.{view,to_data_url,to_base64,audio_format} normalize here;
+      // deliberate Unsupported/MediaTransportError from resolve are known CallErrors and pass through.
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "openai build_request failed");
     }
 
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
-      baml.http.send(request) catch (e) { _ => { throw baml.errors.LlmClient { message: "http failed" }; } }
+    function send(self, request: baml.http.Request) -> baml.http.Response
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.http.send(request)
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "openai send failed");
     }
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
-      baml.sap.parse<T>(from.json_path("choices.0.message.content"))
+    function parse<T>(self, from: baml.http.Response) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      // Parse the response into a typed class, then SAP the inner content into T.
+      let resp: OpenAIChatResponse = baml.json.from_json<OpenAIChatResponse>(
+        baml.json.parse(from.text()));
+      let choice = resp.choices.at(0)!;
+      baml.sap.parse<T>(choice.message.content)
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "openai parse failed");
     }
   }
 }
@@ -272,27 +338,28 @@ class Anthropic {
   implements HttpProvider {
     type Body = baml.http.Response
 
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       let view = baml.media.view(prompt);
-      let parts: string[] = [json.object({ "type": "text", "text": view.text })];
+      let parts: json[] = [{ "type": "text", "text": view.text }];
       for (let part in view.media) {
         let r = self.resolve(part.ref);             // re-frames data_url -> bytes; rejects audio/video
         // `image` and `document` differ only in the top-level `type` tag; the `source`
         // sub-object is identical (base64+media_type or url). Factor it.
-        let source = match (r.which()) {
-          url   => json.object({ "type": "url", "url": r.url! }),
-          _     => json.object({ "type": "base64",
-                                 "media_type": r.mime!,        // resolve() guarantees mime is set
-                                 "data": baml.media.to_base64(r) }),
+        let source: map<string, json> = match (r.which()) {
+          url   => { "type": "url", "url": r.url! },
+          _     => { "type": "base64",
+                     "media_type": r.mime!,        // resolve() guarantees mime is set
+                     "data": baml.media.to_base64(r) },
         };
         let tag = match (r.kind) { pdf => "document", _ => "image" };
-        parts = parts + [json.object({ "type": tag, "source": source })];
+        parts.push({ "type": tag, "source": source });
       }
-      let body = json.object({
+      let body: map<string, json> = {
         "model": self.model,
         "max_tokens": self.max_tokens,
-        "messages": json.array([ json.object({ "role": "user", "content": json.array(parts) }) ]),
-      });
+        "messages": [ { "role": "user", "content": parts } ],
+      };
       baml.http.Request {
         method: "POST",
         url: "https://api.anthropic.com/v1/messages",
@@ -301,15 +368,27 @@ class Anthropic {
           "anthropic-version": "2023-06-01",
           "content-type": "application/json",
         },
-        body: json.stringify(body),
+        body: baml.json.stringify(body),
       }
+    } catch (e) {
+      // Foreign Io from baml.media.{view,to_base64,guess_mime} normalize here; deliberate
+      // Unsupported/MediaTransportError from resolve are known CallErrors and pass through.
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "anthropic build_request failed");
     }
 
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
-      baml.http.send(request) catch (e) { _ => { throw baml.errors.LlmClient { message: "http failed" }; } }
+    function send(self, request: baml.http.Request) -> baml.http.Response
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.http.send(request)
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "anthropic send failed");
     }
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
-      baml.sap.parse<T>(from.json_path("content.0.text"))
+    function parse<T>(self, from: baml.http.Response) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      let resp: AnthropicResponse = baml.json.from_json<AnthropicResponse>(
+        baml.json.parse(from.text()));
+      baml.sap.parse<T>(resp.content.at(0)!.text)
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "anthropic parse failed");
     }
   }
 }
@@ -346,45 +425,61 @@ class Gemini {
 
     // The real Files API upload. resolve() routes raw video bytes (and large media)
     // here automatically, then references the returned handle.
-    function upload(self, ref: MediaRef) -> MediaRef throws baml.errors.LlmClient {
+    function upload(self, ref: MediaRef) -> MediaRef
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       $rust_io_function                              // POST .../upload/v1beta/files, poll ACTIVE
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "gemini files upload failed");
     }
   }
 
   implements HttpProvider {
     type Body = baml.http.Response
 
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       let view = baml.media.view(prompt);
-      let parts: string[] = [json.object({ "text": view.text })];
+      let parts: json[] = [{ "text": view.text }];
       for (let part in view.media) {
         let r = self.resolve(part.ref);             // video-bytes -> upload() -> handle, here
-        let p = match (r.which()) {
-          handle => json.object({
-            "file_data": json.object({ "mime_type": baml.media.guess_mime(r), "file_uri": r.handle! }),
-          }),
-          _ => json.object({
-            "inline_data": json.object({ "mime_type": r.mime!, "data": baml.media.to_base64(r) }),
-          }),
+        let p: map<string, json> = match (r.which()) {
+          handle => {
+            "file_data": { "mime_type": baml.media.guess_mime(r), "file_uri": r.handle! },
+          },
+          _ => {
+            "inline_data": { "mime_type": r.mime!, "data": baml.media.to_base64(r) },
+          },
         };
-        parts = parts + [p];
+        parts.push(p);
       }
-      let body = json.object({
-        "contents": json.array([ json.object({ "role": "user", "parts": json.array(parts) }) ]),
-      });
+      let body: map<string, json> = {
+        "contents": [ { "role": "user", "parts": parts } ],
+      };
       baml.http.Request {
         method: "POST",
         url: "https://generativelanguage.googleapis.com/v1beta/models/" + self.model + ":generateContent",
         headers: { "x-goog-api-key": self.api_key, "content-type": "application/json" },
-        body: json.stringify(body),
+        body: baml.json.stringify(body),
       }
+    } catch (e) {
+      // Foreign Io from baml.media.{view,guess_mime,to_base64} and from resolve's pre-upload
+      // normalize here; deliberate Unsupported/MediaTransportError are known CallErrors.
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "gemini build_request failed");
     }
 
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
-      baml.http.send(request) catch (e) { _ => { throw baml.errors.LlmClient { message: "http failed" }; } }
+    function send(self, request: baml.http.Request) -> baml.http.Response
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.http.send(request)
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "gemini send failed");
     }
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
-      baml.sap.parse<T>(from.json_path("candidates.0.content.parts.0.text"))
+    function parse<T>(self, from: baml.http.Response) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      let resp: GeminiResponse = baml.json.from_json<GeminiResponse>(
+        baml.json.parse(from.text()));
+      baml.sap.parse<T>(resp.candidates.at(0)!.content.parts.at(0)!.text)
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "gemini parse failed");
     }
   }
 }
@@ -403,8 +498,17 @@ class TranscribeFirst {
   inner: Provider          // the target chat model (e.g. Anthropic — no audio)
   stt: Provider            // a speech-to-text provider used to turn audio into text
 
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
+  // TranscribeFirst is a request/response combinator: it rewrites the PromptAst (folding
+  // audio it can't ingest into transcript text) and forwards to `inner`. So its call path
+  // is an `HttpProvider` capability now (provider-as-marker.md): it OWNS call + call_with,
+  // and `call_with` FORWARDS the projection to `inner` so the inner provider's sidecar
+  // (usage/cost) is NOT dropped (the P1 fix). The combinator factories (with_retry/
+  // fallback_to/cached) are inherited via `requires Provider` — not redefined here.
+  implements HttpProvider {
+    type Body = unknown
+
+    function call_with<T, U>(self, prompt: baml.llm.PromptAst, project: (ResponseMeta) -> U) -> (T, U)
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       let view = baml.media.view(prompt);
       // If inner can already ingest every media kind present, do nothing.
       let rewritten = match (self.inner) {
@@ -421,21 +525,46 @@ class TranscribeFirst {
         },
         _ => prompt,        // inner isn't MediaIngest -> can't reason; pass through
       };
-      self.inner.call<T>(rewritten)
+      // Forward to inner's request/response call_with so its ResponseMeta (usage/cost of
+      // the actual chat completion) reaches `project` instead of being thrown away.
+      match (self.inner) {
+        let h: HttpProvider => { return h.call_with<T, U>(rewritten, project); },
+        _ => { throw baml.errors.Unsupported { message: "transcribe-first inner is not request/response" }; },
+      }
+    } catch (e) {
+      // Foreign Io from baml.media.view normalizes here; known CallErrors from
+      // fold_audio_to_text (STT) and inner.call_with pass through with_message unchanged.
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "transcribe-first call failed");
+    }
+
+    // `call` derives from call_with — keep it (the basic single-value path).
+    function call<T>(self, prompt: baml.llm.PromptAst) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      let (v, _): (T, null) = self.call_with<T, null>(prompt, m => null);
+      v
     }
   }
 
   // Replace every audio part with "[audio transcript: ...]" text, transcribing via stt.
-  function fold_audio_to_text(self, prompt: baml.llm.PromptAst) -> baml.llm.PromptAst throws baml.errors.LlmClient {
+  function fold_audio_to_text(self, prompt: baml.llm.PromptAst) -> baml.llm.PromptAst
+      throws baml.ExtendUnknownError<baml.errors.CallError> {
     let view = baml.media.view(prompt);
     let extra = "";
     for (let part in view.media) {
       if (part.ref.kind == audio) {
-        let text: string = self.stt.call<string>(baml.media.audio_only_prompt(part.ref));
+        // stt is a Provider (marker); `call` is an HttpProvider capability now — match for it.
+        let text: string = match (self.stt) {
+          let h: HttpProvider => h.call<string>(baml.media.audio_only_prompt(part.ref)),
+          _ => { throw baml.errors.Unsupported { message: "stt provider cannot transcribe (no request/response call)" }; },
+        };
         extra = extra + "\n[audio transcript: " + text + "]";
       }
     }
     baml.media.with_text_and_drop_kind(prompt, view.text + extra, audio)
+  } catch (e) {
+    // Foreign Io from baml.media.{view,audio_only_prompt,with_text_and_drop_kind} normalizes
+    // here; the STT sub-call's CallErrors are known and pass through with_message unchanged.
+    _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "stt transcribe failed");
   }
 }
 

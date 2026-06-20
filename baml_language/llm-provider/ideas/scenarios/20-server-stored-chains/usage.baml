@@ -39,7 +39,8 @@ class Answer { text: string }
 // no system-prompt placement, no trimming. The handle threads the turns.
 // =============================================================================
 
-function GeographyChat_ServerStored() -> Answer {
+function GeographyChat_ServerStored() -> Answer
+    throws baml.ExtendUnknownError<baml.errors.ChainError> {
   client: GptChained()
 
   // We need the Chain capability, so we match it off the existential provider.
@@ -50,9 +51,10 @@ function GeographyChat_ServerStored() -> Answer {
     let c: Chain => {
       // Reasoning-continuity is THE reason this layer exists. Assert it before
       // we lean on it; if the model were non-reasoning or store:false this is
-      // where we'd find out, not three turns deep.
+      // where we'd find out, not three turns deep. A dropped-reasoning chain is
+      // a handle/config domain error, so we raise a concrete ChainError.
       if (!c.preserves_reasoning()) {
-        throw baml.errors.LlmClient { message: "expected a reasoning-preserving chain" };
+        throw ChainNotStored { message: "expected a reasoning-preserving chain" };
       }
 
       // Turn 1: open the thread. We get the answer AND a handle.
@@ -68,7 +70,10 @@ function GeographyChat_ServerStored() -> Answer {
 
       t2.value
     },
-    _ => { throw baml.errors.LlmClient { message: "client does not hold a server-stored chain" }; },
+    // Capability negotiation: the client's provider is not a Chain. Unsupported
+    // implements every capability-error interface, so it is legal on this
+    // ChainError channel and the caller catches it by its concrete type.
+    _ => { throw baml.errors.Unsupported { message: "client does not hold a server-stored chain" }; },
   }
 }
 
@@ -79,7 +84,8 @@ function GeographyChat_ServerStored() -> Answer {
 // bytes grow in our process. Durable only because/if we persist `s2.session`.
 // =============================================================================
 
-function GeographyChat_ClientHeld() -> Answer {
+function GeographyChat_ClientHeld() -> Answer
+    throws baml.ExtendUnknownError<baml.errors.CallError> {
   client: ClaudeHeld()
 
   let p = ClaudeHeld();
@@ -102,13 +108,15 @@ function GeographyChat_ClientHeld() -> Answer {
 // refuses it: two layers cannot both own the past.
 // =============================================================================
 
-function GeographyChat_DoubleCounted() -> Answer {
+function GeographyChat_DoubleCounted() -> Answer
+    throws baml.ExtendUnknownError<baml.errors.CallError> {
   client: GptChained()
 
   let p = GptChained();
   let s0 = ClientHeldSession.empty();
-  // ClientHeldSession.ask matches `Chain` off p and THROWS: the provider already
-  // holds the chain server-side; layering a client-held session double-counts.
+  // ClientHeldSession.ask matches `Chain` off p and THROWS DoubleCountedChain: the
+  // provider already holds the chain server-side; layering a client-held session
+  // double-counts. (DoubleCountedChain implements CallError, so it rides this channel.)
   let s1: SessionTurn<Answer> = s0.ask<Answer>(p, "What's the capital of France?");
   s1.value
 }
@@ -121,14 +129,16 @@ function GeographyChat_DoubleCounted() -> Answer {
 // because Anthropic does not implement Chain. The leak is honest and visible.
 // =============================================================================
 
-function OneShot(q: string) -> Answer {
+function OneShot(q: string) -> Answer
+    throws baml.ExtendUnknownError<baml.errors.CallError> {
   // Portable across BOTH providers: just `.call`, no ownership involved.
   client: GptStateless()
   prompt #"{{ q }}"#
 }
 
 // Swap the client and OneShot still compiles and runs — proof `.call` ports.
-function OneShotClaude(q: string) -> Answer {
+function OneShotClaude(q: string) -> Answer
+    throws baml.ExtendUnknownError<baml.errors.CallError> {
   client: ClaudeHeld()
   prompt #"{{ q }}"#
 }
@@ -141,7 +151,8 @@ function OneShotClaude(q: string) -> Answer {
 // continue(). This is what "you hold ids, not bytes" buys.
 // =============================================================================
 
-function ResumeLater(saved_id: string, follow_up: string) -> Answer {
+function ResumeLater(saved_id: string, follow_up: string) -> Answer
+    throws baml.ExtendUnknownError<baml.errors.ChainError> {
   client: GptChained()
 
   let p = GptChained();
@@ -151,10 +162,20 @@ function ResumeLater(saved_id: string, follow_up: string) -> Answer {
       // a handle minted by a different provider class can't be smuggled in here
       // (state you cannot migrate — implement.baml refuses foreign owners too).
       let handle = ChainHandle { id: saved_id, kind: ChainKind.ResponseId, owner: "OpenAIResponses" };
-      let t: ChainTurn<Answer> = c.continue<Answer>(handle, render_prompt(follow_up));
+      // Consumer triage, most-specific-first: a concrete handle failure (the chain
+      // was minted elsewhere or evicted) → the ChainError interface (transport vs
+      // rate-limit, classified) → the UnknownError escape hatch (read .message).
+      let t: ChainTurn<Answer> = c.continue<Answer>(handle, render_prompt(follow_up)) catch (e) {
+        let f: ForeignChainHandle      => return Answer { text: "[unmigratable chain, owned by " + f.owner + "]" };
+        let ce: baml.errors.ChainError => {
+          if (ce.is_network_error()) { return Answer { text: "[transient network error resuming chain]" }; }
+          return Answer { text: "[chain resume failed]" };
+        }
+        let u: baml.UnknownError       => return Answer { text: "[unknown: " + u.message.join("; ") + "]" };
+      };
       t.value
     },
-    _ => { throw baml.errors.LlmClient { message: "cannot resume: client is not a Chain provider" }; },
+    _ => { throw baml.errors.Unsupported { message: "cannot resume: client is not a Chain provider" }; },
   }
 }
 
@@ -166,7 +187,8 @@ function ResumeLater(saved_id: string, follow_up: string) -> Answer {
 // double-append. Safe only because the SERVER owns the chain.
 // =============================================================================
 
-function GeographyChat_Resilient(prior_id: string, q: string) -> Answer {
+function GeographyChat_Resilient(prior_id: string, q: string) -> Answer
+    throws baml.ExtendUnknownError<baml.errors.ChainError> {
   client: GptChained()
 
   let p = GptChained();
@@ -177,6 +199,6 @@ function GeographyChat_Resilient(prior_id: string, q: string) -> Answer {
       let t: ChainTurn<Answer> = retry.continue_retrying<Answer>(prior, render_prompt(q));
       t.value
     },
-    _ => { throw baml.errors.LlmClient { message: "not a chain" }; },
+    _ => { throw baml.errors.Unsupported { message: "not a chain" }; },
   }
 }

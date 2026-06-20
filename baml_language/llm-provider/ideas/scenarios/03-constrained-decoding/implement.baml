@@ -62,19 +62,38 @@ type Constraint = Choice | Regex | Grammar | JsonShape
 // it does not. That asymmetry is the whole point of the two-tier portability.
 // ---------------------------------------------------------------------------
 
+// Constrained decoding is a capability BEYOND call/stream/realtime/tools, so it
+// gets its OWN capability-error interface (NET-NEW, flagged in evaluation.md).
+// Its classifier is constraint-specific: was the decode guarantee impossible to
+// honor on this backend? Network/parse failures still come through CallError-shaped
+// concrete errors that ALSO implement this interface, so a `decode` caller can
+// triage everything off one channel.
+interface baml.errors.ConstraintError {
+  function is_unsatisfiable(self) -> bool
+  function is_network_error(self) -> bool
+}
+
 interface Constrained requires Provider {
   // Decode a `T` whose wire form is guaranteed to satisfy `constraint`.
   // Throws Unsatisfiable if the provider cannot honor this particular
   // constraint class (e.g. a JSON-only hosted backend handed a Grammar, or a
   // backend handed a grammar dialect it doesn't speak).
   function decode<T>(self, prompt: baml.llm.PromptAst, constraint: Constraint)
-      -> T throws Error
+      -> T throws baml.ExtendUnknownError<baml.errors.ConstraintError>
 }
 
 // A typed failure so the negotiation `match` can distinguish "this provider
 // can't do constraints at all" (membership miss) from "this provider does
-// constraints but not THIS one" (Unsatisfiable).
-class Unsatisfiable { message: string, constraint: Constraint }
+// constraints but not THIS one" (Unsatisfiable). It is a concrete error on the
+// ConstraintError channel — a domain failure the provider raises on purpose.
+class Unsatisfiable {
+  message: string
+  constraint: Constraint
+  implements baml.errors.ConstraintError {
+    function is_unsatisfiable(self)  -> bool { return true; }
+    function is_network_error(self)  -> bool { return false; }
+  }
+}
 
 // ---------------------------------------------------------------------------
 // 2. Host boundary helpers
@@ -91,8 +110,44 @@ function json_schema_of(t: type) -> string { $rust_io_function }
 
 // Strict decode of an already-guaranteed string into T. For Choice this maps the
 // literal token onto an enum variant; for Regex/Grammar T is usually `string`
-// and this is the identity cast. NOT SAP: there is nothing to repair.
-function cast_exact<T>(s: string) -> T throws baml.errors.LlmClient { $rust_io_function }
+// and this is the identity cast. NOT SAP: there is nothing to repair. On the
+// constrained decode path → the ConstraintError channel.
+function cast_exact<T>(s: string) -> T throws baml.ExtendUnknownError<baml.errors.ConstraintError> { $rust_io_function }
+
+// Pull `choices[0].message.content` out of an OpenAI-shaped response body. Reads
+// the response text, parses it to a native `json` value, and navigates the
+// map/json[] union by hand (Response has no `.json_path`). Foreign Io / parse
+// failures are normalized to the caller's channel by its trailing catch.
+function openai_content(resp: baml.http.Response) -> string throws baml.errors.Io | baml.json.JsonParseError {
+  let root = baml.json.parse(resp.text());
+  match (root) {
+    let obj: map<string, json> => match (obj.get("choices")) {
+      let choices: json[] => match (choices.at(0)) {
+        let first: map<string, json> => match (first.get("message")) {
+          let msg: map<string, json> => match (msg.get("content")) {
+            let s: string => s,
+            _ => "",
+          },
+          _ => "",
+        },
+        _ => "",
+      },
+      _ => "",
+    },
+    _ => "",
+  }
+}
+
+// llama.cpp's /completion returns the text under a top-level `content` field.
+function llamacpp_content(resp: baml.http.Response) -> string throws baml.errors.Io | baml.json.JsonParseError {
+  match (baml.json.parse(resp.text())) {
+    let obj: map<string, json> => match (obj.get("content")) {
+      let s: string => s,
+      _ => "",
+    },
+    _ => "",
+  }
+}
 
 // ============================================================================
 // 3. HOSTED tier — schema-JSON only. These do NOT implement `Constrained`.
@@ -112,30 +167,33 @@ class OpenAIHosted {
   implements HttpProvider {
     type Body = baml.http.Response
 
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.ExtendUnknownError<baml.errors.CallError> {
       // The hosted strict-JSON encoding: schema goes in response_format.
       // (One of the four wire encodings of a schema; the others — Gemini
       // responseSchema, Anthropic forced-tool, prompt-text+SAP — live in their
       // own providers. Here we show exactly this one.)
       let schema = json_schema_of(reflect.type_of<T>());
+      // Build the request body as a native `map<string, json>` literal (nested
+      // values are native json: strings / sub-maps / bools) and serialize it.
+      let body: map<string, json> = {
+        "model": self.model,
+        "messages": baml.llm.as_openai_messages(prompt),
+        "response_format": { "type": "json_schema", "json_schema": { "name": "out", "strict": true, "schema": schema } },
+      };
       baml.http.Request {
         method: "POST",
         url: "https://api.openai.com/v1/chat/completions",
         headers: { "authorization": "Bearer " + self.api_key, "content-type": "application/json" },
-        body: baml.json.encode({
-          "model": self.model,
-          "messages": baml.llm.as_openai_messages(prompt),
-          "response_format": { "type": "json_schema", "json_schema": { "name": "out", "strict": true, "schema": schema } },
-        }),
+        body: baml.json.stringify(body),
       }
     }
 
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
-      baml.http.send(request) catch (e) { _ => { throw baml.errors.LlmClient { message: "http failed" }; } }
+    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.http.send(request) catch (e) { _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "openai http failed"); }
     }
 
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
-      baml.sap.parse<T>(from.json_path("choices.0.message.content"))
+    function parse<T>(self, from: baml.http.Response) -> T throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.sap.parse<T>(openai_content(from)) catch (e) { _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "openai parse failed"); }
     }
   }
 
@@ -159,44 +217,47 @@ class VLLM {
 
   implements ChatModelOptions { model as model, api_key as api_key }
 
-  // Ordinary unconstrained chat still works (Provider.call via the codec).
+  // Ordinary unconstrained chat still works (HttpProvider.call via the codec).
   implements HttpProvider {
     type Body = baml.http.Response
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
-      self.request_with(prompt, null)     // no guided_* body
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.ExtendUnknownError<baml.errors.CallError> {
+      // null constraint => no guided_* body => the dialect-throw branch is dead;
+      // normalize anyway so the ConstraintError-typed helper fits the CallError channel.
+      self.request_with(prompt, null) catch (e) { _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "vllm build_request failed"); }
     }
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
-      baml.http.send(request) catch (e) { _ => { throw baml.errors.LlmClient { message: "vllm http failed" }; } }
+    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.http.send(request) catch (e) { _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "vllm http failed"); }
     }
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
-      baml.sap.parse<T>(from.json_path("choices.0.message.content"))
+    function parse<T>(self, from: baml.http.Response) -> T throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.sap.parse<T>(openai_content(from)) catch (e) { _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "vllm parse failed"); }
     }
   }
 
   // The guaranteed-shape capability.
   implements Constrained {
-    function decode<T>(self, prompt: baml.llm.PromptAst, constraint: Constraint) -> T throws baml.errors.LlmClient {
+    function decode<T>(self, prompt: baml.llm.PromptAst, constraint: Constraint) -> T throws baml.ExtendUnknownError<baml.errors.ConstraintError> {
       let req = self.request_with(prompt, constraint);
-      let resp = baml.http.send(req) catch (e) { _ => { throw baml.errors.LlmClient { message: "vllm http failed" }; } };
-      let raw = resp.json_path("choices.0.message.content");
+      let resp = baml.http.send(req);
+      let raw = openai_content(resp);
       // The output is GUARANTEED to match by construction, so cast exactly.
       // (JsonShape is the exception: it's still JSON, so SAP-parse it.)
       match (constraint) {
         let _j: JsonShape => baml.sap.parse<T>(raw),
         _                 => cast_exact<T>(raw),
       }
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.ConstraintError>(e, "vllm decode failed");
     }
   }
 
   // The divergence, isolated: how vLLM names each constraint in its extra_body.
-  function request_with(self, prompt: baml.llm.PromptAst, constraint: Constraint?) -> baml.http.Request throws baml.errors.LlmClient {
-    let base = {
-      "model": self.model,
-      "messages": baml.llm.as_openai_messages(prompt),
-    };
+  // On the constrained construction path → the ConstraintError channel; the
+  // deliberate dialect-mismatch throw is an `Unsatisfiable`.
+  function request_with(self, prompt: baml.llm.PromptAst, constraint: Constraint?) -> baml.http.Request throws baml.ExtendUnknownError<baml.errors.ConstraintError> {
     // vLLM dispatches guided_choice / guided_regex / guided_grammar / guided_json
-    // to its backend (XGrammar / Guidance). Each constraint kind => one extra key.
-    let guided = match (constraint) {
+    // to its backend (XGrammar / Guidance). Each constraint kind => one extra key
+    // in a native `map<string, json>` (the guided_choice value is itself a json[]).
+    let guided: map<string, json> = match (constraint) {
       null              => {},
       let c: Choice     => { "guided_choice": c.options },
       let r: Regex      => { "guided_regex": r.pattern },
@@ -204,17 +265,23 @@ class VLLM {
         // vLLM's guided_grammar wants a GBNF / Lark-ish CFG. Reject dialects we
         // know it can't parse rather than emit a silently-wrong mask.
         if (g.dialect != "gbnf" && g.dialect != "lark") {
-          throw baml.errors.LlmClient { message: "vLLM guided_grammar supports gbnf|lark, got " + g.dialect };
+          throw Unsatisfiable { message: "vLLM guided_grammar supports gbnf|lark, got " + g.dialect, constraint: g };
         }
         { "guided_grammar": g.source }
       },
       let j: JsonShape  => { "guided_json": json_schema_of(j.schema_of) },
     };
+    // Build the body as one native json map (base fields + the nested guided block).
+    let body: map<string, json> = {
+      "model": self.model,
+      "messages": baml.llm.as_openai_messages(prompt),
+      "extra_body": guided,
+    };
     baml.http.Request {
       method: "POST",
       url: self.base_url + "/chat/completions",
       headers: { "authorization": "Bearer " + (self.api_key ?? "x"), "content-type": "application/json" },
-      body: baml.json.encode(baml.json.merge(base, { "extra_body": guided })),
+      body: baml.json.stringify(body),
     }
   }
 }
@@ -232,26 +299,28 @@ class LlamaCpp {
 
   implements HttpProvider {
     type Body = baml.http.Response
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
-      self.request_with(prompt, null)
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.ExtendUnknownError<baml.errors.CallError> {
+      self.request_with(prompt, null) catch (e) { _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "llama.cpp build_request failed"); }
     }
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
-      baml.http.send(request) catch (e) { _ => { throw baml.errors.LlmClient { message: "llama.cpp http failed" }; } }
+    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.http.send(request) catch (e) { _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "llama.cpp http failed"); }
     }
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
-      baml.sap.parse<T>(from.json_path("content"))
+    function parse<T>(self, from: baml.http.Response) -> T throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.sap.parse<T>(llamacpp_content(from)) catch (e) { _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "llama.cpp parse failed"); }
     }
   }
 
   implements Constrained {
-    function decode<T>(self, prompt: baml.llm.PromptAst, constraint: Constraint) -> T throws baml.errors.LlmClient {
+    function decode<T>(self, prompt: baml.llm.PromptAst, constraint: Constraint) -> T throws baml.ExtendUnknownError<baml.errors.ConstraintError> {
       let req = self.request_with(prompt, constraint);
-      let resp = baml.http.send(req) catch (e) { _ => { throw baml.errors.LlmClient { message: "llama.cpp http failed" }; } };
-      let raw = resp.json_path("content");
+      let resp = baml.http.send(req);
+      let raw = llamacpp_content(resp);
       match (constraint) {
         let _j: JsonShape => baml.sap.parse<T>(raw),
         _                 => cast_exact<T>(raw),
       }
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.ConstraintError>(e, "llama.cpp decode failed");
     }
   }
 
@@ -259,13 +328,13 @@ class LlamaCpp {
   // is supposed to absorb: choice -> alternation of string literals; regex ->
   // (llama.cpp accepts a regex INSIDE GBNF via the `=` char-class rules, but the
   // robust path is to refuse raw regex and require the caller pass a Grammar).
-  function request_with(self, prompt: baml.llm.PromptAst, constraint: Constraint?) -> baml.http.Request throws baml.errors.LlmClient {
+  function request_with(self, prompt: baml.llm.PromptAst, constraint: Constraint?) -> baml.http.Request throws baml.ExtendUnknownError<baml.errors.ConstraintError> {
     let gbnf = match (constraint) {
       null              => null,
       let c: Choice     => gbnf_from_choice(c.options),       // "root ::= \"a\" | \"b\""
       let g: Grammar    => {
         if (g.dialect != "gbnf") {
-          throw baml.errors.LlmClient { message: "llama.cpp only speaks gbnf, got " + g.dialect };
+          throw Unsatisfiable { message: "llama.cpp only speaks gbnf, got " + g.dialect, constraint: g };
         }
         g.source
       },
@@ -273,10 +342,10 @@ class LlamaCpp {
       let _r: Regex     => {
         // Honest failure: llama.cpp's grammar engine does not take a bare regex.
         // Translating regex->GBNF is the subtle-wrong trap; refuse it.
-        throw baml.errors.LlmClient { message: "llama.cpp: pass a Grammar, not a Regex (no regex->gbnf)" };
+        throw Unsatisfiable { message: "llama.cpp: pass a Grammar, not a Regex (no regex->gbnf)", constraint: _r };
       },
     };
-    let body = match (gbnf) {
+    let body: map<string, json> = match (gbnf) {
       null            => { "prompt": baml.llm.as_completion_prompt(prompt) },
       let src: string => { "prompt": baml.llm.as_completion_prompt(prompt), "grammar": src },
     };
@@ -284,7 +353,7 @@ class LlamaCpp {
       method: "POST",
       url: self.base_url + "/completion",
       headers: { "content-type": "application/json" },
-      body: baml.json.encode(body),
+      body: baml.json.stringify(body),
     }
   }
 }
@@ -294,25 +363,33 @@ class LlamaCpp {
 function gbnf_from_choice(options: string[]) -> string { $rust_io_function }
 function gbnf_from_json_schema(schema: string) -> string { $rust_io_function }
 
-// ---- 4c. Outlines (in-process, NOT HttpProvider) -------------------------
+// ---- 4c. Outlines (in-process request/response, NO HTTP) -----------------
 // Divergence of a different axis: Outlines isn't an HTTP server at all. It runs
-// the model in-process (like the harness in §8 of the proposal). So it does NOT
-// implement HttpProvider — it implements `Provider.call` and `Constrained.decode`
-// over a $rust_io_function that drives the local transformers model. This proves
-// "where it runs" is a provider-class property: same `Constrained` surface, no
-// HTTP underneath at all.
+// the model in-process. Its `call` is nonetheless a genuine request/response
+// (drive the local transformers model, get one value back) — so it owns the
+// request/response capability `HttpProvider` (which is "request/response", not
+// "must speak HTTP"). It supplies `call`/`call_with` directly over a
+// $rust_io_function instead of going through build_request/send/parse — the
+// codec defaults are overridden, no actual HTTP underneath. This proves "where
+// it runs" is a provider-class property: same `Constrained` surface, no HTTP.
 class Outlines {
   model_id: string          // HF id, e.g. "meta-llama/Llama-3.1-8B-Instruct"
   device: string?           // "cuda" | "cpu"
 
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
-      $rust_io_function       // unconstrained in-process generate + SAP
+  implements HttpProvider {
+    type Body = unknown      // no wire body; call_with is supplied directly
+    function call_with<T, U>(self, prompt: baml.llm.PromptAst, project: (ResponseMeta) -> U) -> (T, U)
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      $rust_io_function       // unconstrained in-process generate + SAP, with meta
+    }
+    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.ExtendUnknownError<baml.errors.CallError> {
+      let (v, _): (T, null) = self.call_with<T, null>(prompt, m => null);
+      v
     }
   }
 
   implements Constrained {
-    function decode<T>(self, prompt: baml.llm.PromptAst, constraint: Constraint) -> T throws baml.errors.LlmClient {
+    function decode<T>(self, prompt: baml.llm.PromptAst, constraint: Constraint) -> T throws baml.ExtendUnknownError<baml.errors.ConstraintError> {
       // Outlines has first-class generate.choice / generate.regex / generate.cfg.
       // It has NO json-schema knob distinct from regex (it compiles schema->regex
       // internally), so JsonShape is lowered to its schema generator here.
@@ -321,7 +398,7 @@ class Outlines {
         let _r: Regex     => self.run_regex<T>(prompt, _r.pattern),
         let _g: Grammar   => {
           if (_g.dialect != "lark" && _g.dialect != "ebnf") {
-            throw baml.errors.LlmClient { message: "Outlines CFG wants lark|ebnf, got " + _g.dialect };
+            throw Unsatisfiable { message: "Outlines CFG wants lark|ebnf, got " + _g.dialect, constraint: _g };
           }
           self.run_cfg<T>(prompt, _g.source)
         },
@@ -331,11 +408,11 @@ class Outlines {
   }
 
   // Each binds a distinct Outlines generator. Host bodies: these drive the
-  // in-process compiled FSM/mask — the genuine boundary.
-  function run_choice<T>(self, prompt: baml.llm.PromptAst, options: string[]) -> T throws baml.errors.LlmClient { $rust_io_function }
-  function run_regex<T>(self, prompt: baml.llm.PromptAst, pattern: string) -> T throws baml.errors.LlmClient { $rust_io_function }
-  function run_cfg<T>(self, prompt: baml.llm.PromptAst, source: string) -> T throws baml.errors.LlmClient { $rust_io_function }
-  function run_json<T>(self, prompt: baml.llm.PromptAst, schema: string) -> T throws baml.errors.LlmClient { $rust_io_function }
+  // in-process compiled FSM/mask — the genuine boundary → ConstraintError channel.
+  function run_choice<T>(self, prompt: baml.llm.PromptAst, options: string[]) -> T throws baml.ExtendUnknownError<baml.errors.ConstraintError> { $rust_io_function }
+  function run_regex<T>(self, prompt: baml.llm.PromptAst, pattern: string) -> T throws baml.ExtendUnknownError<baml.errors.ConstraintError> { $rust_io_function }
+  function run_cfg<T>(self, prompt: baml.llm.PromptAst, source: string) -> T throws baml.ExtendUnknownError<baml.errors.ConstraintError> { $rust_io_function }
+  function run_json<T>(self, prompt: baml.llm.PromptAst, schema: string) -> T throws baml.ExtendUnknownError<baml.errors.ConstraintError> { $rust_io_function }
 }
 
 // ============================================================================
@@ -349,21 +426,46 @@ class Outlines {
 // runtime delegation and STATICALLY claims Constrained (degrading at call time).
 // ============================================================================
 
+// Combinator-exhaustion error: every member of a fallback chain failed. A domain
+// failure on the unconstrained call path → CallError. It is not itself a network/
+// rate-limit/parse failure (those were the per-member causes, already discarded).
+class AllMembersFailed {
+  message: string
+  implements baml.errors.CallError {
+    function is_network_error(self) -> bool { return false; }
+    function is_rate_limit(self)    -> bool { return false; }
+    function is_parse_error(self)   -> bool { return false; }
+  }
+}
+
 class ConstrainedFallback {
   strategy: Provider[]      // first capable member wins; mixed hosted/self-hosted
 
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
+  implements HttpProvider {
+    type Body = unknown      // pure forwarder; call/call_with route to a member
+    // Forward value+sidecar to the first http-capable member, so usage/cost
+    // (the P1 fix) is not dropped on the unconstrained degrade path.
+    function call_with<T, U>(self, prompt: baml.llm.PromptAst, project: (ResponseMeta) -> U) -> (T, U)
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       for (let p in self.strategy) {
-        let r: T = p.call<T>(prompt) catch (e) { _ => { continue; } };
-        return r;
+        match (p) {
+          let h: HttpProvider => {
+            let r: (T, U) = h.call_with<T, U>(prompt, project) catch (e) { _ => { continue; } };
+            return r;
+          },
+          _ => { continue; },
+        }
       }
-      throw baml.errors.LlmClient { message: "all providers failed" }
+      throw AllMembersFailed { message: "all providers failed" }
+    }
+    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.ExtendUnknownError<baml.errors.CallError> {
+      let (v, _): (T, null) = self.call_with<T, null>(prompt, m => null);
+      v
     }
   }
 
   implements Constrained {
-    function decode<T>(self, prompt: baml.llm.PromptAst, constraint: Constraint) -> T throws baml.errors.LlmClient {
+    function decode<T>(self, prompt: baml.llm.PromptAst, constraint: Constraint) -> T throws baml.ExtendUnknownError<baml.errors.ConstraintError> {
       // Prefer a member that can actually guarantee the shape.
       for (let p in self.strategy) {
         match (p) {
@@ -388,11 +490,17 @@ class ConstrainedFallback {
           constraint: constraint,
         },
       }
+    } catch (e) {
+      // The JsonShape degrade routes through `self.call`, whose CallError-typed
+      // failures (AllMembersFailed, …) don't belong on the ConstraintError channel;
+      // normalize them so this method stays on its declared channel. Known
+      // ConstraintErrors (Unsatisfiable) pass through with_message untouched.
+      _ => throw baml.UnknownError.with_message<baml.errors.ConstraintError>(e, "constrained fallback decode failed");
     }
   }
 
   function add(self, p: Provider) -> ConstrainedFallback {
-    ConstrainedFallback { strategy: self.strategy.append(p) }
+    ConstrainedFallback { strategy: self.strategy.concat([p]) }
   }
 }
 

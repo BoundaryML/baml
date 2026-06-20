@@ -36,9 +36,12 @@ class Review   { findings: Findings, approved: bool }
 class FetchStep {
   implements Step {
     function id(self) -> string { "fetch" }
-    function run(self, ctx: StepContext) -> StepOutcome throws baml.errors.LlmClient {
+    function run(self, ctx: StepContext) -> StepOutcome
+        throws baml.ExtendUnknownError<baml.errors.StepError> {
       let url: string = baml.flow.as_string(ctx.input);     // the workflow input
-      let text: string = http_get_text(url) catch (e) { _ => { throw baml.errors.LlmClient { message: "fetch failed" }; } };
+      // The fetch I/O failure is foreign (a host Io). It isn't classified here, so
+      // route it through the wrapper rather than minting a typed parse/network error.
+      let text: string = http_get_text(url) catch (e) { _ => { throw baml.UnknownError.with_message<baml.errors.StepError>(e, "fetch failed"); } };
       StepOutcome { value: Doc { url: url, text: text }, suspend: null }
     }
   }
@@ -55,7 +58,8 @@ class ExtractStep {
   model: Provider           // injected: OpenAI (SSE). Could be Gemini (chunked JSON) — same code.
   implements Step {
     function id(self) -> string { "extract" }
-    function run(self, ctx: StepContext) -> StepOutcome throws baml.errors.LlmClient {
+    function run(self, ctx: StepContext) -> StepOutcome
+        throws baml.ExtendUnknownError<baml.errors.StepError> {
       let doc: Doc = baml.flow.as_doc(ctx.input);
       // TStream = FindingsPartial (deep-partial streamed to the UI), TFinal = Findings.
       // Every token the model emits becomes a step-token in the OUTER stream.
@@ -85,7 +89,8 @@ class ReviewStep {
   model: Provider           // Anthropic
   implements Step {
     function id(self) -> string { "review" }
-    function run(self, ctx: StepContext) -> StepOutcome throws baml.errors.LlmClient {
+    function run(self, ctx: StepContext) -> StepOutcome
+        throws baml.ExtendUnknownError<baml.errors.StepError> {
       // RE-ENTRY: if we have a resume value, the human already approved/rejected.
       match (ctx.resume) {
         let decision: bool => {
@@ -160,7 +165,8 @@ function Research(url: string) -> Review {
 // MULTIPLEXED step-token frames from step 2's streaming model — all in one
 // ordered feed.
 
-function watch_research(url: string) -> Review throws baml.errors.LlmClient {
+function watch_research(url: string) -> Review
+    throws baml.ExtendUnknownError<baml.errors.StepError> {
   // `.steps` is the Steppable companion generated from Research, exactly like
   // `.stream` is the Streaming companion. TFinal = Review.
   let s: baml.llm.Stream<StepEvent, Review> = Research.steps<Review>(url);
@@ -202,15 +208,19 @@ function watch_research(url: string) -> Review throws baml.errors.LlmClient {
 // recorded run id; committed steps replay from the log, and the suspended
 // `review` step re-enters with the human decision as ctx.resume.
 
-function approve_and_finish(run_id: string, approved: bool) -> Review throws baml.errors.LlmClient {
+function approve_and_finish(run_id: string, approved: bool) -> Review
+    throws baml.ExtendUnknownError<baml.errors.StepError> {
   let p = ResearchFlow_provider();              // the client body as a provider value
   match (p) {
     let w: Steppable => {
       // record the human decision into the suspended step's checkpoint, then
       // replay JUST that step against its recorded input (time-travel of one step).
       baml.flow.record_resume(run_id, "review", approved);
+      // replay_step already speaks the StepError channel; re-raise its typed errors
+      // unchanged and normalize anything foreign. with_message keeps a known
+      // StepError (MissingCheckpoint, ReplayFailed) intact.
       let outcome: StepOutcome = w.replay_step<Review>(run_id, "review") catch (e) {
-        _ => { throw baml.errors.LlmClient { message: "resume failed" }; }
+        _ => { throw baml.UnknownError.with_message<baml.errors.StepError>(e, "resume failed"); }
       };
       baml.flow.as_review(outcome.value ?? null)
     }
@@ -226,12 +236,13 @@ function approve_and_finish(run_id: string, approved: bool) -> Review throws bam
 // generation, which is exactly the §5 caveat. Useful for "does this step still
 // behave?", not for byte-identical reproduction.
 
-function debug_extract(run_id: string) -> Findings throws baml.errors.LlmClient {
+function debug_extract(run_id: string) -> Findings
+    throws baml.ExtendUnknownError<baml.errors.StepError> {
   let p = ResearchFlow_provider();
   match (p) {
     let w: Steppable => {
       let outcome: StepOutcome = w.replay_step<Findings>(run_id, "extract") catch (e) {
-        _ => { throw baml.errors.LlmClient { message: "replay failed" }; }
+        _ => { throw baml.UnknownError.with_message<baml.errors.StepError>(e, "replay failed"); }
       };
       baml.flow.as_findings(outcome.value ?? null)
     }
@@ -241,7 +252,7 @@ function debug_extract(run_id: string) -> Findings throws baml.errors.LlmClient 
 
 
 // ---- host-side sinks the app provides (declared extern) --------------------
-function http_get_text(url: string) -> string throws baml.errors.LlmClient { $rust_io_function }
+function http_get_text(url: string) -> string throws baml.errors.Io { $rust_io_function }
 function ui_step_start(step_id: string) -> null { $rust_io_function }
 function ui_step_token(step_id: string, token: string) -> null { $rust_io_function }
 function ui_step_result(step_id: string) -> null { $rust_io_function }

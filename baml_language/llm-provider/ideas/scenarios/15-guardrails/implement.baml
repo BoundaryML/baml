@@ -36,8 +36,31 @@ class GuardVerdict {
 // field) so the application can `catch` one without the other — matching the
 // SDK's two distinct exception classes InputGuardrailTripwireTriggered /
 // OutputGuardrailTripwireTriggered.
-class InputTripwire  { name: string, info: unknown }
-class OutputTripwire { name: string, info: unknown }
+//
+// A tripwire is a deliberate guardrail DOMAIN failure (like a Refused), raised
+// both on the plain-call path (Guarded.call -> CallError) AND mid tool-loop
+// (Guarded.step -> ToolError), so each implements BOTH capability interfaces. It
+// is neither a transport nor a parse fault, so every classifier is false.
+class InputTripwire {
+  name: string
+  info: unknown
+  implements baml.errors.CallError {
+    function is_network_error(self) -> bool { return false; }
+    function is_rate_limit(self)    -> bool { return false; }
+    function is_parse_error(self)   -> bool { return false; }
+  }
+  implements baml.errors.ToolError {}
+}
+class OutputTripwire {
+  name: string
+  info: unknown
+  implements baml.errors.CallError {
+    function is_network_error(self) -> bool { return false; }
+    function is_rate_limit(self)    -> bool { return false; }
+    function is_parse_error(self)   -> bool { return false; }
+  }
+  implements baml.errors.ToolError {}
+}
 
 
 // -----------------------------------------------------------------------------
@@ -59,7 +82,9 @@ interface Guardrail requires Provider {
   // Inspect a value. Returns a verdict; does NOT throw on a trip — the COMBINATOR
   // decides what a trip means (abort vs rewrite vs log). This keeps the
   // "what a trip does" policy (background §6 "What a trip does") at the wrap site.
-  function inspect<V>(self, value: V) -> GuardVerdict throws Error
+  // Inspecting is on the call path (a model guard does an LLM judge call) -> CallError.
+  function inspect<V>(self, value: V) -> GuardVerdict
+      throws baml.ExtendUnknownError<baml.errors.CallError>
 }
 
 
@@ -70,9 +95,10 @@ interface Guardrail requires Provider {
 // The common case (background §6 "The guardrail is another model"): PII /
 // toxicity detection is an LLM call. ModelGuard wraps an inner Provider (the
 // detector model) and turns its structured answer into a verdict. Because it
-// `implements Provider`, ModelGuard.call just delegates to the inner detector;
-// because it `implements Guardrail`, .inspect renders the value into a judging
-// prompt and SAP-parses a Decision.
+// `implements HttpProvider`, ModelGuard.call/.call_with just delegate to the
+// inner detector (forwarding the request/response surface — ModelGuard is a
+// forwarding provider); because it `implements Guardrail`, .inspect renders the
+// value into a judging prompt and SAP-parses a Decision.
 
 class GuardDecision {
   flagged: bool
@@ -84,23 +110,43 @@ class ModelGuard {
   judge: Provider          // the detector model — itself a Provider
   rubric: string           // "Return flagged=true if the text contains PII", etc.
 
-  // Provider.call is a passthrough to the judge. This is what makes ModelGuard
-  // reusable as an ordinary provider (you can retry/cache the detector).
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
-      self.judge.call<T>(prompt)
+  // HttpProvider.call/.call_with are a passthrough to the judge. This is what
+  // makes ModelGuard reusable as an ordinary request/response provider (you can
+  // retry/cache the detector). call_with FORWARDS the sidecar projection to the
+  // judge so usage/cost of the detector model is not dropped.
+  implements HttpProvider {
+    type Body = unknown
+
+    function call_with<T, U>(self, prompt: baml.llm.PromptAst, project: (ResponseMeta) -> U) -> (T, U)
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      match (self.judge) {
+        let h: HttpProvider => { return h.call_with<T, U>(prompt, project); },
+        _                   => { throw baml.errors.Unsupported { message: "model guard judge has no request/response surface" }; },
+      }
+    }
+
+    function call<T>(self, prompt: baml.llm.PromptAst) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      let (v, _): (T, null) = self.call_with<T, null>(prompt, m => null);
+      v
     }
   }
 
   implements Guardrail {
     function name(self) -> string { self.guard_name }
 
-    function inspect<V>(self, value: V) -> GuardVerdict throws baml.errors.LlmClient {
+    function inspect<V>(self, value: V) -> GuardVerdict
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       // Render the value + rubric into a judging prompt. render_guard_prompt is a
       // host helper that stringifies V and builds a PromptAst asking for a
       // GuardDecision — the judge never sees the actor's tools, only the text.
       let p: baml.llm.PromptAst = render_guard_prompt(self.rubric, value);
-      let decision: GuardDecision = self.judge.call<GuardDecision>(p);
+      // The judge is a bare Provider (marker); `call` lives on HttpProvider, so
+      // we match for it. A judge that cannot do request/response is unusable here.
+      let decision: GuardDecision = match (self.judge) {
+        let h: HttpProvider => h.call<GuardDecision>(p),
+        _                   => throw baml.errors.Unsupported { message: "model guard judge cannot do a request/response call" },
+      };
       GuardVerdict { tripped: decision.flagged, info: decision }
     }
   }
@@ -116,24 +162,22 @@ function render_guard_prompt<V>(rubric: string, value: V) -> baml.llm.PromptAst 
 // -----------------------------------------------------------------------------
 //
 // Not every guardrail is a model. A cheap deterministic check (a regex for SSNs)
-// is ALSO a Guardrail, so the combinator below is agnostic. Its .call has no
-// meaningful "produce an answer from a prompt" — a deterministic checker is a
-// degenerate provider — so it errors. (Open Question 1: does every capability
-// really `requires Provider`? Here the answer is awkward; see evaluation.md.)
+// is ALSO a Guardrail, so the combinator below is agnostic. A deterministic
+// checker has NO request/response surface — and under the marker model it simply
+// does not claim one: `CodeGuard` implements `Guardrail` only. It is still a
+// `Provider` (the marker) because `Guardrail requires Provider`, so it composes
+// with the other guards in a list — but it carries no fake/degenerate `call`.
+// (This is the resolution of the old Open Question 1: a capability `requires
+// Provider` the MARKER, not a `call`; see evaluation.md.)
 
 class CodeGuard {
   guard_name: string
   pattern: string          // e.g. an SSN / credit-card regex
 
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
-      throw baml.errors.LlmClient { message: "CodeGuard is not a generative provider" }
-    }
-  }
-
   implements Guardrail {
     function name(self) -> string { self.guard_name }
-    function inspect<V>(self, value: V) -> GuardVerdict throws baml.errors.LlmClient {
+    function inspect<V>(self, value: V) -> GuardVerdict
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       let hit: bool = regex_search(self.pattern, value);   // host: stringify V, run regex
       GuardVerdict { tripped: hit, info: self.pattern }
     }
@@ -148,47 +192,77 @@ function regex_search<V>(pattern: string, value: V) -> bool { $rust_io_function 
 // -----------------------------------------------------------------------------
 //
 // Guarded wraps an inner Provider with lists of input/output guardrails. It is a
-// plain non-generic class (the Fallback/Retry pattern). It forwards Provider.call
-// — adding the input/output checks around the inner .call — and forwards Tools so
-// guardrails apply to an agentic loop too.
+// plain non-generic class (the Fallback/Retry pattern). It forwards the
+// HttpProvider request/response surface — adding the input/output checks around
+// the inner .call_with — and forwards Tools so guardrails apply to an agentic
+// loop too.
 //
 // Concurrency: input guardrails run CONCURRENTLY with the inner call and cancel
 // it on a trip (background §6 "run the input guardrail concurrently ... cancel").
-// We express this with a host race primitive `baml.sys.race_cancel`, since BAML
-// has no native task/cancel surface. This is NET-NEW (see evaluation.md).
+// This is plain structured concurrency (BEP-034): `spawn` the inner call and each
+// guard, `baml.future.race` them, and use a `baml.spawn.CancelToken` so a tripping
+// guard cancels the inner call. No host primitive — it's a shipped language feature.
 
 class Guarded {
   inner: Provider
   input_guards: Guardrail[]
   output_guards: Guardrail[]
 
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
-      // --- INPUT phase, run CONCURRENTLY with the agent ---------------------
+  implements HttpProvider {
+    // Guarded only forwards the inner provider's request/response surface; it has
+    // no codec of its own. call_with is the primitive and threads `project`
+    // straight through to the inner's call_with, so the inner detector/agent's
+    // usage/cost sidecar is NOT dropped by the guard wrapper (the P1 fix).
+    type Body = unknown
+
+    function call_with<T, U>(self, prompt: baml.llm.PromptAst, project: (ResponseMeta) -> U) -> (T, U)
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      // --- INPUT phase, run CONCURRENTLY with the agent (BEP-034) -----------
       // We extract the user-visible text from the prompt to feed the input guards.
       let user_text: string = prompt_user_text(prompt);
 
-      // race_cancel(agent_task, guard_tasks):
-      //   - starts the agent task and every guard task on the host scheduler;
-      //   - if any guard task resolves with tripped=true, it CANCELS the agent
-      //     task and the race resolves to an InputTrip sentinel;
-      //   - if the agent finishes first, all guard tasks are cancelled and the
-      //     race resolves to the agent's value.
-      // We model the two outcomes as a tagged union the host returns.
-      let outcome: AgentValue<T> | InputTrip = baml.sys.race_cancel<T>(
-        // the agent task: just the inner call
-        () => { self.inner.call<T>(prompt) },
-        // the guard tasks: each inspects the user text and trips on tripped
-        self.input_guards,
-        user_text,
-      );
+      // A cooperative cancel token wired into the agent's spawn. When a guard
+      // trips it fires; the agent's next `await` then throws baml.panics.Cancelled
+      // (cancels the in-flight HTTP request / subprocess turn cooperatively).
+      let cancel = baml.spawn.CancelToken.new();
 
-      let value: T = match (outcome) {
-        let trip: InputTrip => {
-          throw InputTripwire { name: trip.name, info: trip.info };
-        },
-        let ok: AgentValue<T> => { ok.value },
-      };
+      // The agent task: forward call_with to the inner request/response provider.
+      // `cancel = cancel` links the token so a tripping guard can stop it. Its
+      // settled value is the (T, U) answer; its error rides the CallError channel.
+      let agent: baml.future.Future<(T, U), baml.errors.CallError> =
+        spawn with baml.spawn.options(cancel = cancel) {
+          match (self.inner) {
+            let h: HttpProvider => h.call_with<T, U>(prompt, project),
+            _                   => throw baml.errors.Unsupported { message: "inner provider has no request/response surface" },
+          }
+        };
+
+      // Each guard task: inspect the user text and, on a trip, fire the agent's
+      // cancel token and throw the typed InputTripwire (the throw IS the trip
+      // signal — InputTripwire implements CallError, so it shares the agent's
+      // error channel). A NON-tripping guard has nothing to contribute, so it
+      // mirrors the agent (`await agent`): it can only settle with the agent's own
+      // (T, U), so it never beats the agent in the race. Thus only the agent or a
+      // TRIPPING guard ever wins.
+      let guards: baml.future.Future<(T, U), baml.errors.CallError>[] =
+        self.input_guards.map((g) -> {
+          spawn {
+            let v: GuardVerdict = g.inspect<string>(user_text);
+            if (v.tripped) {
+              cancel.cancel();                                   // stop the agent
+              throw InputTripwire { name: g.name(), info: v.info };
+            }
+            await agent                                          // mirror the agent
+          }
+        });
+
+      // Race the agent against the guards (Promise.race): the FIRST to settle wins
+      // and the losers are cancelled. A tripping guard settles first by throwing
+      // InputTripwire (and its cancel.cancel() has already stopped the agent);
+      // otherwise the agent settles first with (T, U) and race cancels the guards.
+      let (value, sidecar): (T, U) = await baml.future.race(
+        [agent].concat(guards),
+      );
 
       // --- OUTPUT phase, inherently SEQUENTIAL ------------------------------
       // Output guards need the value first, so no concurrency is possible.
@@ -198,7 +272,13 @@ class Guarded {
           throw OutputTripwire { name: g.name(), info: v.info };
         }
       }
-      value
+      (value, sidecar)
+    }
+
+    function call<T>(self, prompt: baml.llm.PromptAst) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      let (v, _): (T, null) = self.call_with<T, null>(prompt, m => null);
+      v
     }
   }
 
@@ -210,7 +290,8 @@ class Guarded {
     // The transcript is just the inner provider's transcript — we don't own one.
     type Transcript = InnerTranscript
 
-    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> InnerTranscript throws baml.errors.LlmClient {
+    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> InnerTranscript
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // Input guard BEFORE the loop starts. Sequential here (no agent running yet
       // to race against — begin() hasn't produced a value).
       let user_text: string = prompt_user_text(prompt);
@@ -220,11 +301,18 @@ class Guarded {
       }
       match (self.inner) {
         let t: Tools => { InnerTranscript { _h: t.begin<T>(prompt, tools) } },
-        _            => { throw baml.errors.LlmClient { message: "inner provider has no Tools capability" }; },
+        _            => { throw baml.errors.Unsupported { message: "inner provider has no Tools capability" }; },
       }
+    } catch (e) {
+      // A guard's .inspect throws on the CallError channel (a judge rate-limit, an
+      // Unsupported judge). That is NOT a ToolError, so we normalize it into THIS
+      // method's ToolError channel. InputTripwire / Unsupported are known ToolErrors
+      // and pass through with_message unchanged — only the alien CallError is wrapped.
+      _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "guarded begin: input guard failed");
     }
 
-    function step<T>(self, t: InnerTranscript) -> T | ToolCalls throws baml.errors.LlmClient {
+    function step<T>(self, t: InnerTranscript) -> T | ToolCalls
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       match (self.inner) {
         let inner: Tools => {
           match (inner.step<T>(t._h)) {
@@ -239,14 +327,19 @@ class Guarded {
             },
           }
         },
-        _ => { throw baml.errors.LlmClient { message: "inner provider has no Tools capability" }; },
+        _ => { throw baml.errors.Unsupported { message: "inner provider has no Tools capability" }; },
       }
+    } catch (e) {
+      // Same normalization: the output guard's CallError-channel faults become
+      // UnknownError on the ToolError channel; OutputTripwire / Unsupported pass through.
+      _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "guarded step: output guard failed");
     }
 
-    function submit(self, t: InnerTranscript, results: ToolResult[]) -> InnerTranscript throws baml.errors.LlmClient {
+    function submit(self, t: InnerTranscript, results: ToolResult[]) -> InnerTranscript
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       match (self.inner) {
         let inner: Tools => { InnerTranscript { _h: inner.submit(t._h, results) } },
-        _ => { throw baml.errors.LlmClient { message: "inner provider has no Tools capability" }; },
+        _ => { throw baml.errors.Unsupported { message: "inner provider has no Tools capability" }; },
       }
     }
     // run_tools is inherited from Tools' default loop and dispatches through the
@@ -264,31 +357,19 @@ function prompt_user_text(prompt: baml.llm.PromptAst) -> string { $rust_io_funct
 
 
 // -----------------------------------------------------------------------------
-// 6. The race/cancel host primitive  (NET-NEW)
+// 6. The concurrent input phase is plain BEP-034 structured concurrency
 // -----------------------------------------------------------------------------
 //
-// BAML today has no task-spawn / cooperative-cancel surface. The concurrent input
-// guardrail NEEDS one: start the agent and the guards together, cancel the loser.
-// We declare the minimal shape and implement it at the host boundary.
-//
-// race_cancel<T>(agent, guards, value):
-//   - `agent` is a thunk returning T (the inner call);
-//   - `guards` each .inspect the `value` (the user text);
-//   - returns AgentValue<T> if the agent wins, or InputTrip if a guard trips first;
-//   - in BOTH cases the loser tasks are cancelled by the host.
-
-class AgentValue<T> { value: T }
-class InputTrip     { name: string, info: unknown }
-
-// The host body: spawns the agent thunk and one task per guard on the runtime's
-// scheduler, awaits the first to resolve to a terminal condition (agent done, or
-// a guard with tripped=true), cancels the rest, and maps a tripped guard to
-// InputTrip{ name, info }. Guards that resolve tripped=false are ignored.
-function race_cancel<T>(
-  agent: () -> T,
-  guards: Guardrail[],
-  value: string,
-) -> AgentValue<T> | InputTrip throws baml.errors.LlmClient { $rust_io_function }
+// There is NO host race primitive and NO net-new concurrency surface. The
+// "run input guards concurrently with the agent, cancel the agent on a trip"
+// requirement is expressed with shipped language features (see _conventions.md
+// "Concurrency"):
+//   - `spawn { ... }` starts the agent and each guard concurrently, returning a
+//     `baml.future.Future` immediately;
+//   - `baml.spawn.CancelToken` is the cooperative cancel signal — a tripping
+//     guard fires it and the agent's next `await` throws `baml.panics.Cancelled`;
+//   - `baml.future.race` settles on the first task to finish and cancels the rest.
+// All of this lives ABOVE the `$rust_io_function` line, in BAML itself.
 
 
 // -----------------------------------------------------------------------------

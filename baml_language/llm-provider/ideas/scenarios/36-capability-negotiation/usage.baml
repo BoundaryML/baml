@@ -42,10 +42,32 @@ client SmartExtractor() {
 
 // One line of client config, then an ordinary function. The Resume.contact
 // union triggers the `Maybe` branch inside Negotiated: it probes, and if the
-// 400 comes back it downgrades to prompt JSON and records a warning.
+// 400 comes back it downgrades to prompt JSON and records a warning. The plain
+// `.call` path here ignores that warning (the 90% path, zero tax) — to READ it
+// the caller projects it off `call_with` (see ExtractChecked below).
 function Extract(bio: string) -> Resume {
   client: SmartExtractor()
   prompt #"Extract a Resume from: {{ bio }}"#
+}
+
+// The author who DOES care whether a silent downgrade happened projects the
+// warnings sidecar off `call_with` — same product-sidecar path as usage. Because
+// Negotiated forwards `call_with` and wraps the meta in a DowngradeMeta, the
+// downgrade note survives the combinator and lands in `m.warnings()`.
+function ExtractChecked(bio: string) -> (Resume, Warning[]) {
+  let p = SmartExtractor();
+  // `client` returns the bare `Provider` marker, which has no `call_with` — so
+  // match it to HttpProvider first (the universal companion-as-match, now applied
+  // to the value+sidecar path too). Negotiated implements HttpProvider, so it matches.
+  match (p) {
+    let h: HttpProvider => h.call_with<Resume, Warning[]>(
+      baml.llm.render_prompt(bio),
+      m => match (m) {
+        let w: Warnings => w.warnings(),   // downgrade notes, if any
+        _               => [],             // provider with no warnings dimension
+      }),
+    _ => throw baml.errors.Unsupported { message: "client has no request/response sidecar" },
+  }
 }
 
 
@@ -105,7 +127,7 @@ function CanThisModelDoStructuredOutput() -> string {
 function FitsInContext(estimated_tokens: int) -> bool {
   let p = Candidate();
   match (p) {
-    let cap: Capabilities => { estimated_tokens < cap.max_input_tokens(self) },
+    let cap: Capabilities => { estimated_tokens < cap.max_input_tokens() },
     _ => { true },   // can't know -> optimistically proceed; the 400 is the backstop.
   }
 }
@@ -128,8 +150,10 @@ function Summarize$stream<TStream, TFinal>(doc: string)
     -> baml.llm.Stream<TStream, TFinal> {
   let p = MaybeStreams();
   match (p) {
-    let s: Streaming => s.stream<TStream, TFinal>(baml.llm.render_prompt(doc)),
-    _               => buffer_as_stream<TStream, TFinal>(p.call<TFinal>(baml.llm.render_prompt(doc))),
+    let s: Streaming    => s.stream<TStream, TFinal>(baml.llm.render_prompt(doc)),
+    // degrade both ways: buffer an HttpProvider.call as a single-chunk stream.
+    let h: HttpProvider => buffer_as_stream<TStream, TFinal>(h.call<TFinal>(baml.llm.render_prompt(doc))),
+    _                   => throw baml.errors.Unsupported { message: "client cannot stream" },
   }
 }
 
@@ -137,20 +161,37 @@ function Summarize$stream<TStream, TFinal>(doc: string)
 // ----------------------------------------------------------------------------
 // (4) THE RESOLUTION-GRADIENT PATH — image input "but not at this resolution".
 //     The app hands a possibly-huge image; ResolutionGate consults the SAME
-//     Capabilities surface on a DIFFERENT axis and silently downscales + warns.
-//     Proves the gradient lattice generalizes past schemas.
+//     Capabilities surface on a DIFFERENT axis and silently downscales. guard()
+//     hands the (possibly downscaled) image back NEXT TO any downscale warning
+//     as a tuple; the author threads that warning into the call's projection so
+//     it lands in the SAME `m.warnings()` channel as a §1 schema downgrade.
+//     Proves the gradient lattice generalizes past schemas — and that the one
+//     warnings sidecar carries request-time and response-time downgrades alike.
 // ----------------------------------------------------------------------------
 
 client VisionModel() {
   OpenAIChat { model: "gpt-4o", api_key: env.OPENAI_API_KEY, max_tokens: null }
 }
 
-function DescribeImage(photo: image) -> string {
-  // app author opts into the gate; guard() returns a (possibly downscaled) image.
+// returns the description AND any downgrade warnings (here: a downscale).
+function DescribeImage(photo: image) -> (string, Warning[]) {
+  // app author opts into the gate; guard() returns a (possibly downscaled)
+  // image AND the warnings that pre-flight produced.
   let gate = ResolutionGate { inner: VisionModel(), max_edge: 2000 };
-  let safe = gate.guard(photo);
-  client: VisionModel()
-  prompt #"Describe this image: {{ safe }}"#
+  let (safe, pre): (image, Warning[]) = gate.guard(photo);
+  let p = VisionModel();
+  // PreflightMeta folds the request-time downscale warning into the response's
+  // warnings() so the projection reads request- and response-side notes as one.
+  // `p` is the bare Provider marker — match to HttpProvider for the sidecar call.
+  match (p) {
+    let h: HttpProvider => h.call_with<string, Warning[]>(
+      baml.llm.render_prompt_image("Describe this image:", safe),
+      m => match (m) {
+        let w: Warnings => pre.concat(w.warnings()),
+        _               => pre,
+      }),
+    _ => throw baml.errors.Unsupported { message: "vision client has no request/response sidecar" },
+  }
 }
 
 

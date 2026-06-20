@@ -66,13 +66,22 @@ class Patch {
 }
 
 // Identical in shape to `Extract(resume) -> Resume` over OpenAI. The app author
-// writes NOTHING harness-specific. `.call` spins a fresh session to completion.
+// writes NOTHING harness-specific. A harness has no honest request/response `call`
+// (the marker revision deleted the degenerate "run the subprocess and hope" body),
+// so `Summarize(task)` takes the §2 call↔stream degrade: the basic-value companion
+// prefers `HttpProvider.call`, finds none, and DRAINS the harness's `Streaming` to
+// a single settled value. HarnessAgent implements Streaming, so this is honest —
+// the one-shot value is a fully-drained session stream, not a faked call.
 function Summarize(task: string) -> Patch {
   client: CodeAgent()
   prompt #"Inspect the repository and summarize the test setup, then: {{ task }}"#
 }
-// Summarize("note any flaky tests")  ->  HarnessAgent.call<Patch>(prompt)
-//                                        ->  ClaudeCodeHarness.call<Patch>(prompt)
+// Summarize("note any flaky tests")  ->  desugars (§2) to:
+//   match (p) {
+//     let h: HttpProvider => h.call<Patch>(render_prompt(task)),       // harness has none
+//     let s: Streaming    => drain<Patch>(s.stream<Patch,Patch>(...)), // <- this arm: drain HarnessAgent.stream
+//     _                   => throw baml.errors.Unsupported { ... },
+//   }
 
 
 // ---- harness output INTO the same streaming UI as a plain call ---------------
@@ -85,13 +94,15 @@ function SummarizeStream(task: string) -> Patch {
   client: CodeAgent()
   prompt #"Inspect the repo and summarize: {{ task }}"#
 }
-// SummarizeStream.stream("...")  ->  desugars (§5) to:
+// SummarizeStream.stream("...")  ->  desugars (§2) to:
 //   match (p) {
-//     let s: Streaming => s.stream<string, Patch>(render_prompt(task)),  // <- HarnessAgent.stream
-//     _               => buffer_as_stream(p.call<Patch>(render_prompt(task))),
+//     let s: Streaming    => s.stream<string, Patch>(render_prompt(task)),  // <- HarnessAgent.stream
+//     let h: HttpProvider => buffer_as_stream<string, Patch>(h, render_prompt(task)),
+//     _                   => throw baml.errors.Unsupported { ... },
 //   }
 // The match takes the Streaming arm: harness text deltas arrive as plain stream
-// items, the settled transcript as the final Patch.
+// items, the settled transcript as the final Patch. (The HttpProvider arm is the
+// marker-model degrade for a plain chat client; a harness never reaches it.)
 
 
 // ---- a RICH agent UI: subscribe to the full event log (tool cards, asks) -----
@@ -99,7 +110,8 @@ function SummarizeStream(task: string) -> Patch {
 // uses the AgentStreaming companion to get the lossless InEvent stream. Still ONE
 // interface; just a richer projection.
 
-function DriveRich(task: string) -> HarnessTranscript throws baml.errors.LlmClient {
+function DriveRich(task: string) -> HarnessTranscript
+    throws baml.ExtendUnknownError<baml.errors.StreamError> {
   let p = CodeAgent();
   match (p) {
     let a: AgentStreaming => {
@@ -108,7 +120,10 @@ function DriveRich(task: string) -> HarnessTranscript throws baml.errors.LlmClie
       // for (let ev in evs) { match (ev) { let t: ToolStarted => render_card(t), ... } }
       drain_to_transcript(evs)
     },
-    _ => throw baml.errors.LlmClient { message: "client does not expose an agent event log" },
+    // Capability negotiation: this client's provider isn't an agent event source.
+    // Unsupported implements every capability-error interface, so it is legal on
+    // the StreamError channel and is caught by its concrete type.
+    _ => throw baml.errors.Unsupported { message: "client does not expose an agent event log" },
   }
 }
 
@@ -143,7 +158,8 @@ function build_server() -> ServerSession {
 
 // POST /agent/start  -> creates the session, runs the first turn, parks it, and
 // returns the session id for the client to store in a cookie.
-function HandleStart(spec: string, io: Channel) -> string throws baml.errors.LlmClient {
+function HandleStart(spec: string, io: Channel) -> string
+    throws baml.ExtendUnknownError<baml.errors.HarnessError> {
   let srv = build_server();
   let h = srv.open(render_prompt(spec), SessionOpts { cwd: "/workspace", resume_from: null, permission_mode: null }, io);
   return h.id;     // the app stores this; the live sandbox is parked, claimable
@@ -153,14 +169,23 @@ function HandleStart(spec: string, io: Channel) -> string throws baml.errors.Llm
 // process. Reattaches the parked session over a NEW channel and runs another turn.
 // The `session expired` path is the server-authoritative reality: if the sandbox
 // was GC'd while the user was away, no amount of client-side state can recover it.
-function HandleContinue(id: string, io: Channel) -> string throws baml.errors.LlmClient {
+// The catch is the canonical consumer triage, most-specific-first: the concrete
+// SessionExpired (start a new session) -> the HarnessError interface (classify a
+// runtime leg) -> baml.UnknownError (the escape hatch, read its breadcrumb).
+function HandleContinue(id: string, io: Channel) -> string
+    throws baml.ExtendUnknownError<baml.errors.HarnessError> {
   let srv = build_server();
-  let h = srv.resume(id, io);     // throws "expired; start a new one" if reclaimed
+  let h = srv.resume(id, io) catch (e) {     // expiry surfaces if the runtime was reclaimed
+    let exp: SessionExpired          => { throw SessionExpired { id: exp.id }; },    // concrete: tell the client to start fresh
+    let he: baml.errors.HarnessError => { throw he; },                              // interface: a runtime leg failed
+    let u: baml.UnknownError         => { throw u; },                               // escape hatch: read u.message
+  };
   return h.id;
 }
 
 // DELETE /agent/:id  -> tear down the sandbox + child process.
-function HandleEnd(id: string) -> null throws baml.errors.LlmClient {
+function HandleEnd(id: string) -> null
+    throws baml.ExtendUnknownError<baml.errors.HarnessError> {
   let srv = build_server();
   srv.close(id)
 }
@@ -179,23 +204,27 @@ function HandleEnd(id: string) -> null throws baml.errors.LlmClient {
 // an explicit door instead of a silent drop.
 // ============================================================================
 
-function RewindIfPossible(id: string, to_msg: string, io: Channel) -> HarnessTranscript throws baml.errors.LlmClient {
+function RewindIfPossible(id: string, to_msg: string, io: Channel) -> HarnessTranscript
+    throws baml.ExtendUnknownError<baml.errors.HarnessError> {
   let p = CodeAgent();
 
-  // Step down to the concrete runtime via the escape hatch.
+  // Step down to the concrete runtime via the escape hatch. Not-a-harness is a
+  // capability-negotiation miss -> Unsupported (legal on the HarnessError channel
+  // because Unsupported implements every capability-error interface).
   let h: Harness = match (p) {
     let agent: HarnessAgent => agent.raw(),     // <- the documented escape hatch
-    _ => throw baml.errors.LlmClient { message: "client is not a harness" },
+    _ => throw baml.errors.Unsupported { message: "client is not a harness" },
   };
 
   // Negotiate: does THIS runtime back rewind at all? (Claude/Container: yes.
-  // Pi or Claude/Local: no.) supported_verbs is the honest gate.
+  // Pi or Claude/Local: no.) supported_verbs is the honest gate. A runtime that
+  // can't rewind is again a capability miss, not a transport failure -> Unsupported.
   let can_rewind = match (h) {
     let cp: ControlPlane => verb_supported(cp.supported_verbs(), reflect.type_of<RewindFiles>()),
     _ => false,
   };
   if (!can_rewind) {
-    throw baml.errors.LlmClient { message: "this runtime cannot rewind files; only Claude Code in a non-Local sandbox can" };
+    throw baml.errors.Unsupported { message: "this runtime cannot rewind files; only Claude Code in a non-Local sandbox can" };
   }
 
   // It can. Reattach the live session and send the runtime-specific verb over the
@@ -203,7 +232,7 @@ function RewindIfPossible(id: string, to_msg: string, io: Channel) -> HarnessTra
   // exists as an OutEvent the concrete runtime honors.
   io.on(ev => {
     match (ev) {
-      let rr: RewindResult => { baml.io.print("[reverted] " + rr.reverted_paths.len() + " files"); },
+      let rr: RewindResult => { baml.io.print("[reverted] " + rr.reverted_paths.length().to_string() + " files"); },
       _ => {},
     }
   });
@@ -217,11 +246,12 @@ function RewindIfPossible(id: string, to_msg: string, io: Channel) -> HarnessTra
 // ---- small helpers ----------------------------------------------------------
 
 function drain_to_transcript(evs: baml.llm.Stream<InEvent, HarnessTranscript>)
-    -> HarnessTranscript throws baml.errors.LlmClient { $rust_io_function }
+    -> HarnessTranscript throws baml.ExtendUnknownError<baml.errors.StreamError> { $rust_io_function }
 
 function verb_supported(verbs: type[], want: type) -> bool {
   for (let v in verbs) { if (v == want) { return true; } }
   false
 }
 
-function rehydrate_ref(id: string) -> $rust_type throws baml.errors.LlmClient { $rust_io_function }
+function rehydrate_ref(id: string) -> $rust_type
+    throws baml.ExtendUnknownError<baml.errors.HarnessError> { $rust_io_function }

@@ -99,8 +99,21 @@ function ResumeCodeFix(run_id: string, decision: ApprovalDecision) -> Patch | Ru
 // Sketched as a function to show the ergonomics; in real life start/resume are
 // two different HTTP handlers in possibly two different processes.
 // ----------------------------------------------------------------------------
-function DemoRefundFlow(order_id: string, amount: float) -> Refund throws baml.errors.LlmClient {
-  let run_id = baml.sys.uuid();
+// An app-level signal that a resume did not finish (suspended again at a further
+// gate, or lost the claim race). It is a suspend-capability outcome, so it rides
+// the SuspendError channel as a concrete class the caller can branch on.
+class StillPending {
+  run_id: string
+  implements baml.errors.SuspendError {
+    function is_network_error(self) -> bool { return false; }
+    function is_drift(self)         -> bool { return false; }
+    function is_unfreezable(self)   -> bool { return false; }
+  }
+}
+
+function DemoRefundFlow(order_id: string, amount: float) -> Refund
+    throws baml.ExtendUnknownError<baml.errors.SuspendError> {
+  let run_id = baml.id.new();
 
   // 1) start. The process may now exit; state is persisted in pg_run_store.
   match (StartRefund(order_id, amount, run_id)) {
@@ -110,13 +123,22 @@ function DemoRefundFlow(order_id: string, amount: float) -> Refund throws baml.e
       //    h.pending.resume_schema == ApprovalDecision tells the UI how to validate.
       //    ... time passes, possibly a redeploy, possibly process restart ...
 
-      // 3) a human approves. Resume in a (possibly different) process.
+      // 3) a human approves. Resume in a (possibly different) process. We triage
+      //    failures most-specific-first: a concrete drift refusal, then the
+      //    SuspendError interface (store/network), then the UnknownError hatch.
       match (ResumeRefund(run_id, ApprovalDecision { approved: true, note: "ok per policy" })) {
         let done: Refund => { return done; },
         let still: RunHandle => {
           // suspended again at a further gate, or lost the claim race (double-click).
-          throw baml.errors.LlmClient { message: "still pending: " + still.run_id };
+          throw StillPending { run_id: still.run_id };
         },
+      } catch (e) {
+        let d: SchemaDrift              => { throw d; }                  // redeploy mismatch — fail loudly, no retry
+        let s: baml.errors.SuspendError => {
+          // a transient store/network blip is retryable; an unfreezable run is not.
+          if (s.is_network_error()) { throw StillPending { run_id: run_id }; } else { throw s; }
+        }
+        let u: baml.UnknownError        => { throw u; }                  // escape hatch — keep .message breadcrumb
       }
     },
   }

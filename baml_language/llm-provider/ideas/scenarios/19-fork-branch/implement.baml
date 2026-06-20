@@ -55,18 +55,76 @@ class Turn {
   id: string?                // provider's per-turn id, when it exposes one (fork-anywhere needs it)
 }
 
-// Branching can fail in scenario-specific ways the base LlmClient error doesn't
-// name. We refine the typed-throws channel (proposal §1: `type Error`) so the
-// `match`/`catch` at the call site can distinguish "can't branch here" from
-// "the model call failed".
-// (net-new error variants, in the same family as baml.errors.Unsupported.)
+// NET-NEW capability error interfaces (error-model rule 4). Sessions and
+// branching are capabilities BEYOND call/stream/realtime/tools, so they get
+// their own per-capability error channels — `baml.errors.SessionError` for the
+// session lifecycle (open/turn/latest/head/cursor_at/transcript) and
+// `baml.errors.BranchError` for fork/copy_out. Each carries classifiers in the
+// same shape as CallError so callers can triage without the concrete class.
+// (Flagged net-new in evaluation.md.)
+interface baml.errors.SessionError {
+  function is_network_error(self) -> bool
+  function is_not_found(self) -> bool      // a referenced turn / id is unknown
+}
+interface baml.errors.BranchError {
+  function is_network_error(self) -> bool
+  function is_position_rejected(self) -> bool   // tail-only provider refused a non-head cursor
+  function is_not_owned(self) -> bool           // server-authoritative: branch can't be copied out
+}
+
+// The canonical `baml.errors.Unsupported` (see _conventions.md "Error model")
+// implements the FOUR built-in capability-error interfaces (Call/Stream/Tool/
+// Realtime) so it is legal on any of those channels. Because this scenario
+// introduces TWO net-new capability-error interfaces, we must EXTEND that same
+// negotiation error to implement them too — otherwise throwing `Unsupported` on
+// the SessionError / BranchError channel (the `_` arm of `OpenChat` / `Fork` /
+// `BackupBranch`) would violate error-model rule 2 (a throw is legal iff it
+// implements the channel's interface or is routed through baml.UnknownError).
+// All classifiers are false: "capability absent" is not a network/not-found/
+// position/ownership failure.
+extend baml.errors.Unsupported {
+  implements baml.errors.SessionError {
+    function is_network_error(self) -> bool { return false; }
+    function is_not_found(self)     -> bool { return false; }
+  }
+  implements baml.errors.BranchError {
+    function is_network_error(self)     -> bool { return false; }
+    function is_position_rejected(self) -> bool { return false; }
+    function is_not_owned(self)         -> bool { return false; }
+  }
+}
+
+// Branching can fail in scenario-specific ways the base call channel doesn't
+// name. These are CONCRETE typed errors the provider raises ON PURPOSE; each
+// implements `baml.errors.BranchError` so the `match`/`catch` at the call site
+// can distinguish "can't branch here" from "the model call failed".
 class CannotForkHere {
   message: string            // e.g. "this provider only forks from the tail"
   cursor: Cursor
+  implements baml.errors.BranchError {
+    function is_network_error(self)    -> bool { return false; }
+    function is_position_rejected(self) -> bool { return true; }
+    function is_not_owned(self)        -> bool { return false; }
+  }
 }
 class ForkNotOwned {
   message: string            // server-authoritative: branch exists but you can't copy it out
   branch_id: string
+  implements baml.errors.BranchError {
+    function is_network_error(self)    -> bool { return false; }
+    function is_position_rejected(self) -> bool { return false; }
+    function is_not_owned(self)        -> bool { return true; }
+  }
+}
+
+// A referenced turn / response id does not exist in this session. A deliberate
+// domain failure on the session lifecycle path -> implements SessionError.
+class TurnNotFound {
+  message: string
+  implements baml.errors.SessionError {
+    function is_network_error(self) -> bool { return false; }
+    function is_not_found(self)     -> bool { return true; }
+  }
 }
 
 
@@ -85,24 +143,30 @@ interface Session requires Provider {
   type Session                                   // provider-owned, opaque (like Transcript)
 
   // Start a fresh conversation seeded by `prompt` (usually the system turn).
-  function open<T>(self, prompt: baml.llm.PromptAst) -> Session throws Error
+  function open<T>(self, prompt: baml.llm.PromptAst) -> Session
+      throws baml.ExtendUnknownError<baml.errors.SessionError>
 
   // One round-trip: append the user `prompt`, get the model answer, return the
   // NEW session value (sessions are immutable values here; the provider decides
   // whether that means "append to an array" or "advance a server id").
-  function turn<T>(self, s: Session, prompt: baml.llm.PromptAst) -> Session throws Error
+  function turn<T>(self, s: Session, prompt: baml.llm.PromptAst) -> Session
+      throws baml.ExtendUnknownError<baml.errors.SessionError>
 
   // The typed answer the latest turn produced.
-  function latest<T>(self, s: Session) -> T throws Error
+  function latest<T>(self, s: Session) -> T
+      throws baml.ExtendUnknownError<baml.errors.SessionError>
 
   // Positions you can fork from. `head` is always available; `cursor_at` lets
   // you address a prior turn by its id (fork-anywhere). A tail-only provider
   // still implements `cursor_at` but its `fork` will reject a non-head cursor.
-  function head(self, s: Session) -> Cursor throws Error
-  function cursor_at(self, s: Session, turn_id: string) -> Cursor throws Error
+  function head(self, s: Session) -> Cursor
+      throws baml.ExtendUnknownError<baml.errors.SessionError>
+  function cursor_at(self, s: Session, turn_id: string) -> Cursor
+      throws baml.ExtendUnknownError<baml.errors.SessionError>
 
   // The read-only view. `complete` tells the truth about server-stored bytes.
-  function transcript(self, s: Session) -> Transcript throws Error
+  function transcript(self, s: Session) -> Transcript
+      throws baml.ExtendUnknownError<baml.errors.SessionError>
 }
 
 
@@ -119,12 +183,14 @@ interface Branching requires Session {
   // Fork at `at` (or at the tail when `at` is null). Returns a NEW session that
   // shares the prefix up to `at` and diverges after it. HOW it shares — copy,
   // pointer, or reused id — is entirely the provider's business.
-  function fork<T>(self, s: Session, at: Cursor?) -> Session throws Error
+  function fork<T>(self, s: Session, at: Cursor?) -> Session
+      throws baml.ExtendUnknownError<baml.errors.BranchError>
 
   // Copy the branch OUT of the provider (export the bytes). Honest only for
   // providers that actually hold the bytes; server-authoritative providers
   // throw ForkNotOwned. Exposed so the app can ask, and get a real error.
-  function copy_out<T>(self, s: Session) -> Transcript throws Error
+  function copy_out<T>(self, s: Session) -> Transcript
+      throws baml.ExtendUnknownError<baml.errors.BranchError>
 }
 
 
@@ -141,17 +207,17 @@ class ClaudeSdkSession {
   model: string
   api_key: string
 
-  implements Provider {
-    // single-turn convenience: open a throwaway session, take one turn.
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
-      $rust_io_function                          // spawn `claude`, one query, no persisted id
-    }
-  }
+  // No `implements Provider { call }`: a `Session` provider's real interaction is
+  // open/turn/latest, and a single-turn `call` that DISCARDED the accumulating
+  // session was the degenerate fake the marker revision (../provider-as-marker.md)
+  // retires. Because `Session requires Provider`, this class still IS a Provider
+  // (the marker) — no explicit `implements Provider` block is needed.
 
   implements Session {
     type Session = ClaudeForkState
 
-    function open<T>(self, prompt: baml.llm.PromptAst) -> ClaudeForkState throws baml.errors.LlmClient {
+    function open<T>(self, prompt: baml.llm.PromptAst) -> ClaudeForkState
+        throws baml.ExtendUnknownError<baml.errors.SessionError> {
       // the SDK mints a session id; transcript starts with the system prompt.
       let id = $rust_io_function;                // claude_sdk.new_session() -> string
       ClaudeForkState {
@@ -161,59 +227,76 @@ class ClaudeSdkSession {
         turns: baml.llm.turns_from(prompt),
         parent_id: null,
       }
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.SessionError>(e, "claude sdk open failed");
     }
 
-    function turn<T>(self, s: ClaudeForkState, prompt: baml.llm.PromptAst) -> ClaudeForkState throws baml.errors.LlmClient {
+    function turn<T>(self, s: ClaudeForkState, prompt: baml.llm.PromptAst) -> ClaudeForkState
+        throws baml.ExtendUnknownError<baml.errors.SessionError> {
       let user = baml.llm.turns_from(prompt);
       // resume the existing id, send only the new turn; the SDK appends.
       let answer: string = $rust_io_function;    // claude_sdk.query(resume=s.session_id, prompt)
       ClaudeForkState {
         session_id: s.session_id,
-        turns: baml.list.concat(s.turns, baml.list.concat(user, [Turn { role: "assistant", content: answer, id: $rust_io_function }])),
+        turns: s.turns.concat(user).concat([Turn { role: "assistant", content: answer, id: $rust_io_function }]),
         parent_id: s.parent_id,
       }
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.SessionError>(e, "claude sdk turn failed");
     }
 
-    function latest<T>(self, s: ClaudeForkState) -> T throws baml.errors.LlmClient {
-      let last = s.turns[-1];                    // negative indexing, BEP
-      baml.sap.parse<T>(last.content)
+    function latest<T>(self, s: ClaudeForkState) -> T
+        throws baml.ExtendUnknownError<baml.errors.SessionError> {
+      match (s.turns.at(-1)) {                    // Array.at — negative index from the end
+        let last: Turn => baml.sap.parse<T>(last.content),
+        null           => throw TurnNotFound { message: "empty session" },
+      }
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.SessionError>(e, "claude sdk latest parse failed");
     }
 
-    function head(self, s: ClaudeForkState) -> Cursor throws baml.errors.LlmClient {
+    function head(self, s: ClaudeForkState) -> Cursor
+        throws baml.ExtendUnknownError<baml.errors.SessionError> {
       // copy-based: a cursor is an INDEX into the prefix array.
       Cursor { _data: $rust_io_function }        // encode(index = len(turns) - 1)
     }
-    function cursor_at(self, s: ClaudeForkState, turn_id: string) -> Cursor throws baml.errors.LlmClient {
+    function cursor_at(self, s: ClaudeForkState, turn_id: string) -> Cursor
+        throws baml.ExtendUnknownError<baml.errors.SessionError> {
       // find the index of `turn_id`; copy-fork can resume at ANY message.
-      for (let i in baml.list.indices(s.turns)) {
-        if (s.turns[i].id == turn_id) { return Cursor { _data: $rust_io_function }; }  // encode(index=i)
+      match (s.turns.find_index((t: Turn) -> bool { t.id == turn_id })) {
+        let i: int => Cursor { _data: $rust_io_function },   // encode(index=i)
+        null       => throw TurnNotFound { message: "no such turn" },
       }
-      throw baml.errors.LlmClient { message: "no such turn" }
     }
 
-    function transcript(self, s: ClaudeForkState) -> Transcript throws baml.errors.LlmClient {
+    function transcript(self, s: ClaudeForkState) -> Transcript
+        throws baml.ExtendUnknownError<baml.errors.SessionError> {
       Transcript { turns: s.turns, complete: true }   // bytes are LOCAL
     }
   }
 
   implements Branching {
-    function fork<T>(self, s: ClaudeForkState, at: Cursor?) -> ClaudeForkState throws baml.errors.LlmClient {
+    function fork<T>(self, s: ClaudeForkState, at: Cursor?) -> ClaudeForkState
+        throws baml.ExtendUnknownError<baml.errors.BranchError> {
       // resolve the fork index: tail when `at` is null, else the cursor's index.
       let idx: int = match (at) {
         let c: Cursor => $rust_io_function,      // decode_index(c) — claude forks ANYWHERE
-        _             => baml.list.len(s.turns) - 1,
+        _             => s.turns.length() - 1,
       };
       // COPY the prefix [0..=idx], mint a new id seeded with that copy.
-      let prefix = baml.list.take(s.turns, idx + 1);
+      let prefix = s.turns.slice(0, idx + 1);
       let new_id = $rust_io_function;            // claude_sdk.fork_session(s.session_id, atIndex=idx)
       ClaudeForkState {
         session_id: new_id,                      // NEW id
         turns: prefix,                           // a COPY — duplicated bytes
         parent_id: s.session_id,                 // we remember lineage for our own bookkeeping
       }
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.BranchError>(e, "claude sdk fork failed");
     }
 
-    function copy_out<T>(self, s: ClaudeForkState) -> Transcript throws baml.errors.LlmClient {
+    function copy_out<T>(self, s: ClaudeForkState) -> Transcript
+        throws baml.ExtendUnknownError<baml.errors.BranchError> {
       Transcript { turns: s.turns, complete: true }   // honest: we own the bytes
     }
   }
@@ -242,55 +325,75 @@ class PiSession {
   api_key: string
   store: NodeStore           // the DAG — net-new host handle (see below)
 
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
-      $rust_io_function
-    }
-  }
+  // No `implements Provider { call }`: see ClaudeSdkSession. The DAG provider's
+  // real interaction is the Session/Branching surface over the node store; a
+  // session-discarding single-turn `call` was the degenerate fake now dropped.
+  // `Session requires Provider`, so PiSession is still a Provider (marker).
 
   implements Session {
     type Session = PiNode
 
-    function open<T>(self, prompt: baml.llm.PromptAst) -> PiNode throws baml.errors.LlmClient {
+    function open<T>(self, prompt: baml.llm.PromptAst) -> PiNode
+        throws baml.ExtendUnknownError<baml.errors.SessionError> {
       // a root node: no parent. The node stores ONLY this turn's delta — the
       // prefix is reached by walking `parent`.
       let node_id = self.store.put_node($rust_io_function, null);   // put_node(turn, parent=null)
       PiNode { store: self.store, node_id: node_id }
+    } catch (e) {
+      // the store throws baml.errors.Io; normalize that foreign transport error.
+      _ => throw baml.UnknownError.with_message<baml.errors.SessionError>(e, "pi open failed");
     }
 
-    function turn<T>(self, s: PiNode, prompt: baml.llm.PromptAst) -> PiNode throws baml.errors.LlmClient {
+    function turn<T>(self, s: PiNode, prompt: baml.llm.PromptAst) -> PiNode
+        throws baml.ExtendUnknownError<baml.errors.SessionError> {
       // to call the model we must materialize the full prefix by walking ancestors.
       let prefix = self.store.walk_ancestry(s.node_id);            // [root .. s] — shared, not copied
       let answer: string = $rust_io_function;                      // model.call(prefix + new user turn)
       // append a NEW child node pointing at s; only the delta is stored.
-      let delta = baml.list.concat(baml.llm.turns_from(prompt), [Turn { role: "assistant", content: answer, id: null }]);
+      let delta = baml.llm.turns_from(prompt).concat([Turn { role: "assistant", content: answer, id: null }]);
       let child = self.store.put_node(delta, s.node_id);           // parent = s.node_id
       PiNode { store: self.store, node_id: child }
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.SessionError>(e, "pi turn failed");
     }
 
-    function latest<T>(self, s: PiNode) -> T throws baml.errors.LlmClient {
+    function latest<T>(self, s: PiNode) -> T
+        throws baml.ExtendUnknownError<baml.errors.SessionError> {
       let delta = self.store.node_delta(s.node_id);
-      baml.sap.parse<T>(delta[-1].content)
+      match (delta.at(-1)) {
+        let last: Turn => baml.sap.parse<T>(last.content),
+        null           => throw TurnNotFound { message: "empty node delta" },
+      }
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.SessionError>(e, "pi latest failed");
     }
 
-    function head(self, s: PiNode) -> Cursor throws baml.errors.LlmClient {
+    function head(self, s: PiNode) -> Cursor
+        throws baml.ExtendUnknownError<baml.errors.SessionError> {
       // pointer-based: a cursor IS a node id. No copy involved.
       Cursor { _data: $rust_io_function }                          // encode(node_id = s.node_id)
     }
-    function cursor_at(self, s: PiNode, turn_id: string) -> Cursor throws baml.errors.LlmClient {
+    function cursor_at(self, s: PiNode, turn_id: string) -> Cursor
+        throws baml.ExtendUnknownError<baml.errors.SessionError> {
       // walk ancestry to find the node whose delta contains turn_id.
       let node = self.store.find_ancestor_with_turn(s.node_id, turn_id);
       Cursor { _data: $rust_io_function }                          // encode(node)
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.SessionError>(e, "pi cursor_at failed");
     }
 
-    function transcript(self, s: PiNode) -> Transcript throws baml.errors.LlmClient {
+    function transcript(self, s: PiNode) -> Transcript
+        throws baml.ExtendUnknownError<baml.errors.SessionError> {
       // materialize by WALKING — the leak the DAG buys back: read is O(depth).
       Transcript { turns: self.store.walk_ancestry(s.node_id), complete: true }
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.SessionError>(e, "pi transcript failed");
     }
   }
 
   implements Branching {
-    function fork<T>(self, s: PiNode, at: Cursor?) -> PiNode throws baml.errors.LlmClient {
+    function fork<T>(self, s: PiNode, at: Cursor?) -> PiNode
+        throws baml.ExtendUnknownError<baml.errors.BranchError> {
       // resolve the fork node: tail = s itself, else the cursor's node.
       let parent_node: string = match (at) {
         let c: Cursor => $rust_io_function,                        // decode_node(c) — Pi forks ANYWHERE
@@ -300,11 +403,16 @@ class PiSession {
       // No bytes copied — the prefix is shared via the parent pointer.
       let leaf = self.store.put_node([], parent_node);
       PiNode { store: self.store, node_id: leaf }
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.BranchError>(e, "pi fork failed");
     }
 
-    function copy_out<T>(self, s: PiNode) -> Transcript throws baml.errors.LlmClient {
+    function copy_out<T>(self, s: PiNode) -> Transcript
+        throws baml.ExtendUnknownError<baml.errors.BranchError> {
       // honest — bytes are in OUR store — but we must walk to materialize them.
       Transcript { turns: self.store.walk_ancestry(s.node_id), complete: true }
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.BranchError>(e, "pi copy_out failed");
     }
   }
 }
@@ -348,54 +456,66 @@ class ResponsesSession {
   model: string
   api_key: string
 
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
-      $rust_io_function                          // responses.create, no previous_response_id
-    }
-  }
+  // No `implements Provider { call }`: see ClaudeSdkSession. The real interaction
+  // is the server-id-chained Session/Branching surface; a `call` that threw the
+  // chain away was the degenerate fake the marker revision retires. The class
+  // stays a Provider (marker) through `Session requires Provider`.
 
   implements Session {
     type Session = ResponsesChain
 
-    function open<T>(self, prompt: baml.llm.PromptAst) -> ResponsesChain throws baml.errors.LlmClient {
+    function open<T>(self, prompt: baml.llm.PromptAst) -> ResponsesChain
+        throws baml.ExtendUnknownError<baml.errors.SessionError> {
       // first response; the server stores it. We keep only the id.
       let resp_id: string = $rust_io_function;   // responses.create(input=prompt, store=true).id
       ResponsesChain { current_id: resp_id, known_ids: [resp_id] }
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.SessionError>(e, "responses open failed");
     }
 
-    function turn<T>(self, s: ResponsesChain, prompt: baml.llm.PromptAst) -> ResponsesChain throws baml.errors.LlmClient {
+    function turn<T>(self, s: ResponsesChain, prompt: baml.llm.PromptAst) -> ResponsesChain
+        throws baml.ExtendUnknownError<baml.errors.SessionError> {
       // send ONLY the new turn, chaining off current_id; server supplies prefix.
       let resp_id: string = $rust_io_function;   // responses.create(input=prompt, previous_response_id=s.current_id)
       ResponsesChain {
         current_id: resp_id,
-        known_ids: baml.list.concat(s.known_ids, [resp_id]),   // remember ids -> enables fork-anywhere
+        known_ids: s.known_ids.concat([resp_id]),   // remember ids -> enables fork-anywhere
       }
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.SessionError>(e, "responses turn failed");
     }
 
-    function latest<T>(self, s: ResponsesChain) -> T throws baml.errors.LlmClient {
+    function latest<T>(self, s: ResponsesChain) -> T
+        throws baml.ExtendUnknownError<baml.errors.SessionError> {
       let text: string = $rust_io_function;      // responses.get(s.current_id).output_text
       baml.sap.parse<T>(text)
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.SessionError>(e, "responses latest failed");
     }
 
-    function head(self, s: ResponsesChain) -> Cursor throws baml.errors.LlmClient {
+    function head(self, s: ResponsesChain) -> Cursor
+        throws baml.ExtendUnknownError<baml.errors.SessionError> {
       Cursor { _data: $rust_io_function }        // encode(response_id = s.current_id)
     }
-    function cursor_at(self, s: ResponsesChain, turn_id: string) -> Cursor throws baml.errors.LlmClient {
+    function cursor_at(self, s: ResponsesChain, turn_id: string) -> Cursor
+        throws baml.ExtendUnknownError<baml.errors.SessionError> {
       // fork-anywhere ONLY if we recorded that id. The server won't list them.
       for (let id in s.known_ids) {
         if (id == turn_id) { return Cursor { _data: $rust_io_function }; }   // encode(id)
       }
-      throw baml.errors.LlmClient { message: "unknown response id (server won't enumerate the chain)" }
+      throw TurnNotFound { message: "unknown response id (server won't enumerate the chain)" }
     }
 
-    function transcript(self, s: ResponsesChain) -> Transcript throws baml.errors.LlmClient {
+    function transcript(self, s: ResponsesChain) -> Transcript
+        throws baml.ExtendUnknownError<baml.errors.SessionError> {
       // THE LEAK: we hold ids, not bytes. We can name the chain but not show it.
       Transcript { turns: [], complete: false }  // complete=false => "ask the server, we can't"
     }
   }
 
   implements Branching {
-    function fork<T>(self, s: ResponsesChain, at: Cursor?) -> ResponsesChain throws baml.errors.LlmClient {
+    function fork<T>(self, s: ResponsesChain, at: Cursor?) -> ResponsesChain
+        throws baml.ExtendUnknownError<baml.errors.BranchError> {
       // EMERGENT: forking is just choosing which prior id to chain the next turn
       // from. We copy NOTHING and call NOTHING — branching falls out of the id.
       let from_id: string = match (at) {
@@ -405,9 +525,12 @@ class ResponsesSession {
       // a "branch" is a chain whose head is `from_id`. The next `turn` will use
       // it as previous_response_id, diverging from siblings server-side.
       ResponsesChain { current_id: from_id, known_ids: s.known_ids }
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.BranchError>(e, "responses fork failed");
     }
 
-    function copy_out<T>(self, s: ResponsesChain) -> Transcript throws baml.errors.LlmClient {
+    function copy_out<T>(self, s: ResponsesChain) -> Transcript
+        throws baml.ExtendUnknownError<baml.errors.BranchError> {
       // we CANNOT honor this — the bytes are server-authoritative. Say so plainly
       // instead of returning an empty transcript that lies.
       throw ForkNotOwned {

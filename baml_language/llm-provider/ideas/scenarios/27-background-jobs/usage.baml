@@ -5,7 +5,7 @@
 //   - config-only `client`s, store:true baked in (so background is even legal)
 //   - the .background companion: submit returns a Job handle IMMEDIATELY
 //   - polling a persisted job AFTER a process restart (durability)
-//   - a blocking await with a Cadence (backoff) for callers that just want T
+//   - a blocking wait_for with a Cadence (backoff) for callers that just want T
 //   - TWO divergent providers (OpenAI inline-result, Anthropic batch second-fetch)
 //     driven by byte-for-byte identical app code — portability proof
 //   - reconciliation: the APP owns the idempotency key, threaded through Poller
@@ -62,7 +62,8 @@ function ReviewRepo(repo: string) -> ArchReview {
 //     function can return 202 to the user immediately.
 // ============================================================================
 
-function KickOffReview(repo: string, request_id: string) -> string throws baml.errors.LlmClient {
+function KickOffReview(repo: string, request_id: string) -> string
+    throws baml.ExtendUnknownError<baml.errors.BackgroundError> {
   // The APP owns the idempotency key — here, our own request id. If this endpoint
   // is retried by our load balancer, the same key reaches submit and the provider
   // dedupes instead of spawning a second multi-minute job (background §"reconcile").
@@ -82,7 +83,8 @@ function KickOffReview(repo: string, request_id: string) -> string throws baml.e
 //     process held. This is the entire durability claim, exercised.
 // ============================================================================
 
-function CheckReview(request_id: string) -> ReviewStatus throws baml.errors.LlmClient {
+function CheckReview(request_id: string) -> ReviewStatus
+    throws baml.ExtendUnknownError<baml.errors.BackgroundError> {
   let row = load_job_handle(request_id);
   // Rebuild the typed handle from our stored bytes. owner lets poll() refuse a
   // handle that doesn't belong to this provider.
@@ -110,16 +112,41 @@ class ReviewStatus {
 
 // ============================================================================
 // (D) Blocking convenience: a CLI / worker that just wants the answer and is
-//     willing to wait. await() with backoff. One line, durable underneath.
+//     willing to wait. wait_for() with backoff. One line, durable underneath.
+//     (`wait_for`, not `await`: `await` is the BEP-034 keyword for in-process
+//     Futures; this is a server-side poll loop.)
 // ============================================================================
 
-function ReviewRepoBlocking(repo: string) -> ArchReview throws baml.errors.LlmClient {
-  // await() generates its own idempotency key (single caller, no external retry
+function ReviewRepoBlocking(repo: string) -> ArchReview
+    throws baml.ExtendUnknownError<baml.errors.BackgroundError> {
+  // wait_for() generates its own idempotency key (single caller, no external retry
   // to reconcile with). BackoffCadence avoids hammering the retrieve endpoint.
-  BigAnalysis().await<ArchReview>(
+  // The BackgroundError channel propagates: a server JobFailed / JobCancelled, a
+  // transport hiccup wrapped as baml.UnknownError. The caller (G' below) triages.
+  BigAnalysis().wait_for<ArchReview>(
     render_review_prompt(repo),
     BackoffCadence { base_ms: 1000, cap_ms: 30000 },
   )
+}
+
+// (D') The matching consumer catch — most-specific-first, the new error model.
+// A caller that wants a degraded value instead of a propagated throw triages the
+// BackgroundError channel: concrete server outcomes, then the interface (transport
+// classifiers), then the UnknownError escape hatch.
+function ReviewRepoOrPlaceholder(repo: string) -> ArchReview {
+  ReviewRepoBlocking(repo) catch (e) {
+    let f: JobFailed             => ArchReview { summary: "[job failed: " + f.reason, risks: [], score: 0 };
+    let c: JobCancelled          => ArchReview { summary: "[job cancelled]", risks: [], score: 0 };
+    let b: baml.errors.BackgroundError => {
+      // Transport-classified (rate limit / network) vs everything else.
+      if (b.is_rate_limit()) {
+        ArchReview { summary: "[rate limited; retry later]", risks: [], score: 0 }
+      } else {
+        ArchReview { summary: "[background error]", risks: [], score: 0 }
+      }
+    }
+    let u: baml.UnknownError     => ArchReview { summary: "[unknown error]", risks: u.message, score: 0 };
+  }
 }
 
 
@@ -132,8 +159,9 @@ function ReviewRepoBlocking(repo: string) -> ArchReview throws baml.errors.LlmCl
 //     absorbs the inline-vs-batch divergence. The leak is real but contained.
 // ============================================================================
 
-function ReviewRepoBatch(repo: string) -> ArchReview throws baml.errors.LlmClient {
-  BatchClaude().await<ArchReview>(
+function ReviewRepoBatch(repo: string) -> ArchReview
+    throws baml.ExtendUnknownError<baml.errors.BackgroundError> {
+  BatchClaude().wait_for<ArchReview>(
     render_review_prompt(repo),
     BackoffCadence { base_ms: 5000, cap_ms: 60000 },   // batches are slower; poll lazily
   )
@@ -146,7 +174,8 @@ function ReviewRepoBatch(repo: string) -> ArchReview throws baml.errors.LlmClien
 //     instead of re-submitting. This is the reconciliation story end to end.
 // ============================================================================
 
-function ReviewWithDeadline(repo: string, request_id: string) -> ReviewStatus throws baml.errors.LlmClient {
+function ReviewWithDeadline(repo: string, request_id: string) -> ReviewStatus
+    throws baml.ExtendUnknownError<baml.errors.BackgroundError> {
   let poller = Poller {
     inner: OpenAIResponses.background("gpt-5"),
     cadence: BackoffCadence { base_ms: 2000, cap_ms: 20000 },
@@ -178,10 +207,18 @@ function ReviewWithDeadline(repo: string, request_id: string) -> ReviewStatus th
 //     resumable id). Contrast .stream, which CAN degrade to .call.
 // ============================================================================
 
-function TryBackgroundOnPlain(repo: string) -> Job<ArchReview> throws baml.errors.LlmClient {
+function TryBackgroundOnPlain(repo: string) -> Job<ArchReview>
+    throws baml.ExtendUnknownError<baml.errors.BackgroundError> {
   // At runtime this throws baml.errors.Unsupported: "client is not a background
   // provider". The app must choose a Background-capable client to get a Job.
+  // NOTE: Unsupported is legal on this channel only because it implements
+  // baml.errors.BackgroundError too — and BackgroundError is net-new (see eval (e)),
+  // so the canonical Unsupported declaration had to be widened to add it.
   ReviewRepoPlain.background<ArchReview>(repo, "req-xyz")
+    catch (e) {
+      let un: baml.errors.Unsupported => baml.sys.panic("not a background provider: " + un.message);
+      let u: baml.UnknownError        => baml.sys.panic("background companion failed");
+    }
 }
 
 function ReviewRepoPlain(repo: string) -> ArchReview {

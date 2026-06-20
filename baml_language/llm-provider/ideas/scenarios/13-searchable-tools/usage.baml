@@ -167,7 +167,8 @@ function Support(request: string) -> string {
 // ----------------------------------------------------------------------------
 
 // HOSTED: catalog.mode == "hosted"; resolver passed but ignored by OpenAI.
-function RunSupportHosted(request: string, principal_tools: string[]) -> string throws baml.errors.LlmClient {
+function RunSupportHosted(request: string, principal_tools: string[]) -> string
+    throws baml.ExtendUnknownError<baml.errors.ToolError> {
   let ctx = ExecutionContext {
     function_name: "Support",
     args: { "request": request },
@@ -179,7 +180,8 @@ function RunSupportHosted(request: string, principal_tools: string[]) -> string 
 // EMULATED: same call, but a client whose provider can't defer on the wire. The
 // library prunes the list + intercepts the synthetic tool_search; the resolver
 // (now LIVE) resolves the query from the app registry. Notice: app code unchanged.
-function RunSupportEmulated(request: string, principal_tools: string[]) -> string throws baml.errors.LlmClient {
+function RunSupportEmulated(request: string, principal_tools: string[]) -> string
+    throws baml.ExtendUnknownError<baml.errors.ToolError> {
   let ctx = ExecutionContext {
     function_name: "Support",
     args: { "request": request },
@@ -199,7 +201,8 @@ function RunSupportEmulated(request: string, principal_tools: string[]) -> strin
 
 // MCP: discovery federates to servers; the resolver also reconciles with the app
 // registry inside McpResolver. Two registries, one search.
-function RunSupportMcp(request: string, principal_tools: string[]) -> string throws baml.errors.LlmClient {
+function RunSupportMcp(request: string, principal_tools: string[]) -> string
+    throws baml.ExtendUnknownError<baml.errors.ToolError> {
   let ctx = ExecutionContext {
     function_name: "Support",
     args: { "request": request },
@@ -231,7 +234,8 @@ class SupportDeps { tenant: string, region: string }
 // guard: each search is an extra round-trip the background warns about).
 // ----------------------------------------------------------------------------
 function BudgetedSupport(request: string, max_searches: int,
-                         resolver: SearchResolver, ctx: ExecutionContext) -> string throws baml.errors.LlmClient {
+                         resolver: SearchResolver, ctx: ExecutionContext) -> string
+    throws baml.ExtendUnknownError<baml.errors.ToolError> {
   let p = EmulatedClient();
   match (p) {
     let st: SearchableTools => {
@@ -245,17 +249,17 @@ function BudgetedSupport(request: string, max_searches: int,
               if (c.name == "tool_search") {
                 if (searches >= max_searches) {
                   // refuse further discovery; tell the model to use what it has.
-                  results = results.append(ToolResult {
+                  results.push(ToolResult {
                     id: c.id, output: { "error": "search budget exhausted; use loaded tools" },
                   });
                 } else {
                   searches = searches + 1;
                   let loaded = resolver.resolve(search_query(c.args));
-                  results = results.append(ToolResult { id: c.id, output: loaded });
+                  results.push(ToolResult { id: c.id, output: loaded });
                 }
               } else {
                 // a real tool call -> app dispatch (one entry)
-                for (let r in ctx.dispatch([c])) { results = results.append(r); }
+                for (let r in ctx.dispatch([c])) { results.push(r); }
               }
             }
             t = st.submit(t, results);
@@ -268,4 +272,5 @@ function BudgetedSupport(request: string, max_searches: int,
     _ => throw baml.errors.Unsupported { message: "client cannot run searchable tools" },
   }
 }
-function search_query(args: map<string, unknown>) -> string throws baml.errors.LlmClient { $rust_io_function }
+function search_query(args: map<string, unknown>) -> string
+    throws baml.ExtendUnknownError<baml.errors.ToolError> { $rust_io_function }

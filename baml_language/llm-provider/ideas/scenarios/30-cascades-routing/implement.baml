@@ -1,30 +1,33 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // implement.baml — Model cascades & semantic routing  (LIBRARY / STD-LIB code)
 //
-// Builds on the canonical primitives from _conventions.md:
-//   interface Provider { call<T>; with_retry; fallback_to; cached }
-//   interface HttpProvider requires Provider { Body; build_request; send; parse }
+// Builds on the canonical primitives from _conventions.md (provider-as-marker spine):
+//   interface Provider { with_retry; fallback_to; cached }              // bare MARKER, no call
+//   interface HttpProvider requires Provider { Body; build_request; send; parse; call; call_with }
 //
 // What this scenario needs that the spine does NOT give for free:
 //   1. A way to read a CONFIDENCE signal off a producing provider, where the
 //      signal differs per backend (logprobs on OpenAI, none on Anthropic/Gemini).
 //   2. A `Cascade` combinator: cheap-first, escalate on a low signal.
-//   3. A `Judge`-gated escalation combinator (the gate is itself a Provider call).
+//   3. A `Judge`-gated escalation combinator (the gate is itself an HttpProvider call).
 //   4. Semantic / classifier routing: a function returning a Provider per request
 //      (this needs NO new primitive — it is just `client` sugar, §3 of the proposal).
 //
-// The divergence this file makes concrete: confidence is NOT a property the base
-// `call<T>` can return (call returns a clean T). So we introduce a capability
-// interface `Scored` requires Provider, and show two providers diverging inside it.
+// The divergence this file makes concrete: confidence is NOT a property `HttpProvider.call<T>`
+// can return (call returns a clean T). So we introduce a capability interface `Scored`
+// requires Provider, and show two providers diverging inside it. The combinators here
+// (Cascade/JudgeGated/SemanticRouter) are request/response, so they `implements HttpProvider`
+// and forward call_with to the member that answers (sidecar is not dropped).
 // ─────────────────────────────────────────────────────────────────────────────
 
 
 // ─── net-new capability: a producing call that also reports a confidence signal ───
 //
-// `call<T>` deliberately returns a bare T. A cascade needs (value, signal). Rather
-// than widen `call` for everyone, confidence is a CAPABILITY: providers that can
-// surface a signal implement `Scored`; those that can't simply don't, and the
-// cascade `match`es for it (exactly the §5 negotiation pattern).
+// `HttpProvider.call<T>` deliberately returns a bare T. A cascade needs (value, signal).
+// Rather than widen `call` for every HttpProvider, confidence is a CAPABILITY: providers
+// that can surface a signal implement `Scored`; those that can't simply don't, and the
+// cascade `match`es for it (exactly the §5 negotiation pattern). Like every interaction
+// it `requires Provider` (the marker) and adds its own method.
 class Scored<T> {
   value: T
   // 0.0..1.0, provider-normalized. Source differs per backend (see impls below).
@@ -34,8 +37,33 @@ class Scored<T> {
 }
 
 interface ConfidenceProvider requires Provider {
-  // Same prompt as `call`, but returns the value WITH a normalized confidence.
-  function call_scored<T>(self, prompt: baml.llm.PromptAst) -> Scored<T> throws Error
+  // Same prompt as HttpProvider.call, but returns the value WITH a normalized confidence.
+  // call_scored is a producing call on the call path -> the CallError channel.
+  function call_scored<T>(self, prompt: baml.llm.PromptAst) -> Scored<T>
+      throws baml.ExtendUnknownError<baml.errors.CallError>
+}
+
+
+// ─── concrete provider errors (each implements the capability interfaces it can arise on) ───
+//
+// An HTTP non-2xx from either backend, carrying the status. It implements CallError
+// and classifies a 429 as a rate-limit so the app can back off without a bespoke class.
+class OpenAiHttpError {
+  status: int
+  implements baml.errors.CallError {
+    function is_network_error(self) -> bool { return false; }
+    function is_rate_limit(self)    -> bool { return self.status == 429; }
+    function is_parse_error(self)   -> bool { return false; }
+  }
+}
+
+class AnthropicHttpError {
+  status: int
+  implements baml.errors.CallError {
+    function is_network_error(self) -> bool { return false; }
+    function is_rate_limit(self)    -> bool { return self.status == 429; }
+    function is_parse_error(self)   -> bool { return false; }
+  }
 }
 
 
@@ -55,21 +83,32 @@ class OpenAI {
   implements HttpProvider {
     type Body = baml.http.Response
 
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       // SAP-in-prompt encoding for the schema; logprobs toggled by the field.
       $rust_io_function
     }
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
-      baml.http.send(request) catch (e) { _ => { throw baml.errors.LlmClient { message: "openai http failed" }; } }
+    function send(self, request: baml.http.Request) -> baml.http.Response
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      let resp = baml.http.send(request);
+      if (!resp.ok()) { throw OpenAiHttpError { status: resp.status_code }; }
+      resp
+    } catch (e) {
+      // foreign Io/Timeout from baml.http.send -> normalize; the thrown OpenAiHttpError passes through.
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "openai http failed");
     }
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
+    function parse<T>(self, from: baml.http.Response) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       baml.sap.parse<T>(from.text())
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "openai parse failed");
     }
   }
 
   implements ConfidenceProvider {
     // OpenAI: derive a real confidence from token logprobs in the SAME response.
-    function call_scored<T>(self, prompt: baml.llm.PromptAst) -> Scored<T> throws baml.errors.LlmClient {
+    function call_scored<T>(self, prompt: baml.llm.PromptAst) -> Scored<T>
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       // We must build the request with logprobs ON regardless of the field, else
       // there is no signal to read. Construct a logprobs-on variant of self.
       let me = OpenAI { model: self.model, api_key: self.api_key, logprobs: true };
@@ -93,15 +132,25 @@ class Anthropic {
   implements HttpProvider {
     type Body = baml.http.Response
 
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       // Anthropic forced-tool encoding of the schema; max_tokens is a real field.
       $rust_io_function
     }
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
-      baml.http.send(request) catch (e) { _ => { throw baml.errors.LlmClient { message: "anthropic http failed" }; } }
+    function send(self, request: baml.http.Request) -> baml.http.Response
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      let resp = baml.http.send(request);
+      if (!resp.ok()) { throw AnthropicHttpError { status: resp.status_code }; }
+      resp
+    } catch (e) {
+      // foreign Io/Timeout from baml.http.send -> normalize; the thrown AnthropicHttpError passes through.
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "anthropic http failed");
     }
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
+    function parse<T>(self, from: baml.http.Response) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       baml.sap.parse<T>(from.text())
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "anthropic parse failed");
     }
   }
 
@@ -110,7 +159,8 @@ class Anthropic {
     // self-reported certainty we must ask for as part of the structured answer.
     // This is the leak the background warns about: the cascade's "confidence" means
     // something *different* here than on OpenAI, and it costs an extra schema field.
-    function call_scored<T>(self, prompt: baml.llm.PromptAst) -> Scored<T> throws baml.errors.LlmClient {
+    function call_scored<T>(self, prompt: baml.llm.PromptAst) -> Scored<T>
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       // We can still parse T cleanly; but we cannot derive a calibrated number.
       // Two choices, both unsatisfying — we pick the conservative one: declare the
       // signal absent (1.0 => "never blocks", caller must use a Judge instead).
@@ -133,8 +183,14 @@ class Cascade {
   strong: Provider
   threshold: float                 // escalate when cheap confidence < threshold
 
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
+  // call / call_with belong to HttpProvider now (provider-as-marker.md). Cascade is a
+  // request/response combinator: it OWNS call (the confidence gate) and forwards
+  // call_with to whichever member ultimately answers, so the sidecar is not dropped.
+  implements HttpProvider {
+    type Body = unknown
+
+    function call<T>(self, prompt: baml.llm.PromptAst) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       // The cheap tier MUST be Scored for a confidence gate to mean anything.
       // If it isn't, we have no signal and (honestly) cannot cascade on confidence
       // — we degrade to "always trust cheap", which the app author should see.
@@ -148,12 +204,46 @@ class Cascade {
           }
           baml.telemetry.emit("cascade.escalate", { conf: s.confidence, src: s.source });
           // only the residual pays the premium.
-          return self.strong.call<T>(prompt);
+          match (self.strong) {
+            let h: HttpProvider => { return h.call<T>(prompt); },
+            _ => { throw baml.errors.Unsupported { message: "cascade strong tier cannot call" }; },
+          }
         },
         // cheap tier reports no signal -> we can't gate on confidence at all.
         _ => {
           baml.telemetry.emit("cascade.no_signal", { tier: "cheap" });
-          return self.cheap.call<T>(prompt);
+          match (self.cheap) {
+            let h: HttpProvider => { return h.call<T>(prompt); },
+            _ => { throw baml.errors.Unsupported { message: "cascade cheap tier cannot call" }; },
+          }
+        },
+      }
+    }
+
+    // Forward the sidecar projection to the tier that answers. The gate decides WHICH
+    // member responds; the sidecar (usage/cost) rides whichever one paid for the call.
+    function call_with<T, U>(self, prompt: baml.llm.PromptAst, project: (ResponseMeta) -> U) -> (T, U)
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      match (self.cheap) {
+        let c: ConfidenceProvider => {
+          let s: Scored<T> = c.call_scored<T>(prompt);
+          if (s.confidence >= self.threshold) {
+            // settled on cheap: project the cheap tier's meta.
+            match (self.cheap) {
+              let h: HttpProvider => { return h.call_with<T, U>(prompt, project); },
+              _ => { throw baml.errors.Unsupported { message: "cascade cheap tier has no request/response sidecar" }; },
+            }
+          }
+          match (self.strong) {
+            let h: HttpProvider => { return h.call_with<T, U>(prompt, project); },
+            _ => { throw baml.errors.Unsupported { message: "cascade strong tier has no request/response sidecar" }; },
+          }
+        },
+        _ => {
+          match (self.cheap) {
+            let h: HttpProvider => { return h.call_with<T, U>(prompt, project); },
+            _ => { throw baml.errors.Unsupported { message: "cascade cheap tier has no request/response sidecar" }; },
+          }
         },
       }
     }
@@ -162,7 +252,8 @@ class Cascade {
   // Cascade forwards ConfidenceProvider too: the escalated answer can itself be
   // scored if the strong tier supports it, so a Cascade can nest in a Cascade.
   implements ConfidenceProvider {
-    function call_scored<T>(self, prompt: baml.llm.PromptAst) -> Scored<T> throws baml.errors.LlmClient {
+    function call_scored<T>(self, prompt: baml.llm.PromptAst) -> Scored<T>
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       match (self.cheap) {
         let c: ConfidenceProvider => {
           let s: Scored<T> = c.call_scored<T>(prompt);
@@ -170,10 +261,16 @@ class Cascade {
           // escalate; re-score on the strong tier if it can, else mark "none".
           match (self.strong) {
             let cs: ConfidenceProvider => { return cs.call_scored<T>(prompt); },
-            _ => { return Scored<T> { value: self.strong.call<T>(prompt), confidence: 1.0, source: "none" }; },
+            let h: HttpProvider => { return Scored<T> { value: h.call<T>(prompt), confidence: 1.0, source: "none" }; },
+            _ => { throw baml.errors.Unsupported { message: "cascade strong tier cannot call" }; },
           }
         },
-        _ => { return Scored<T> { value: self.cheap.call<T>(prompt), confidence: 1.0, source: "none" }; },
+        _ => {
+          match (self.cheap) {
+            let h: HttpProvider => { return Scored<T> { value: h.call<T>(prompt), confidence: 1.0, source: "none" }; },
+            _ => { throw baml.errors.Unsupported { message: "cascade cheap tier cannot call" }; },
+          }
+        },
       }
     }
   }
@@ -185,7 +282,7 @@ class Cascade {
 //
 // A SEPARATE provider (the judge) scores the cheap output; below `min_score`
 // the request is retried on the strong tier. The judge is itself a billed
-// Provider.call — the file makes that explicit (background: "the router is itself
+// HttpProvider.call — the file makes that explicit (background: "the router is itself
 // a call"). The judge produces a Verdict via a structured call.
 // ─────────────────────────────────────────────────────────────────────────────
 class Verdict {
@@ -199,22 +296,59 @@ class JudgeGated {
   judge: Provider       // billed on EVERY request — the eats-the-savings risk
   min_score: float
 
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
+  // call / call_with belong to HttpProvider now (provider-as-marker.md). JudgeGated is a
+  // request/response combinator: it OWNS call (cheap -> judge -> maybe strong) and
+  // forwards call_with to the tier that ultimately answers so the sidecar survives.
+  implements HttpProvider {
+    type Body = unknown
+
+    function call<T>(self, prompt: baml.llm.PromptAst) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       // 1. cheap produces a candidate.
-      let candidate: T = self.cheap.call<T>(prompt);
+      let candidate: T = match (self.cheap) {
+        let h: HttpProvider => h.call<T>(prompt),
+        _ => { throw baml.errors.Unsupported { message: "judge-gated cheap tier cannot call" }; },
+      };
 
       // 2. the judge scores it. NOTE: we render a NEW prompt for the judge from
       //    the original prompt + the candidate. This is a second billed call.
       let judge_prompt = baml.llm.render_judge(prompt, candidate);   // host: build the rubric prompt
-      let v: Verdict = self.judge.call<Verdict>(judge_prompt);
+      let v: Verdict = match (self.judge) {
+        let h: HttpProvider => h.call<Verdict>(judge_prompt),
+        _ => { throw baml.errors.Unsupported { message: "judge-gated judge cannot call" }; },
+      };
       baml.telemetry.emit("judge.scored", { score: v.score, reason: v.reason });
 
       if (v.score >= self.min_score) { return candidate; }
 
       // 3. below threshold -> pay for the strong tier.
       baml.telemetry.emit("judge.escalate", { score: v.score });
-      return self.strong.call<T>(prompt);
+      match (self.strong) {
+        let h: HttpProvider => { return h.call<T>(prompt); },
+        _ => { throw baml.errors.Unsupported { message: "judge-gated strong tier cannot call" }; },
+      }
+    }
+
+    // Forward the sidecar to the tier that answers. The judge gate runs first to decide
+    // cheap-vs-strong; we project the meta of whichever member produces the returned T.
+    function call_with<T, U>(self, prompt: baml.llm.PromptAst, project: (ResponseMeta) -> U) -> (T, U)
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      let (candidate, cheap_meta): (T, U) = match (self.cheap) {
+        let h: HttpProvider => h.call_with<T, U>(prompt, project),
+        _ => { throw baml.errors.Unsupported { message: "judge-gated cheap tier has no request/response sidecar" }; },
+      };
+      let judge_prompt = baml.llm.render_judge(prompt, candidate);
+      let v: Verdict = match (self.judge) {
+        let h: HttpProvider => h.call<Verdict>(judge_prompt),
+        _ => { throw baml.errors.Unsupported { message: "judge-gated judge cannot call" }; },
+      };
+      baml.telemetry.emit("judge.scored", { score: v.score, reason: v.reason });
+      if (v.score >= self.min_score) { return (candidate, cheap_meta); }
+      baml.telemetry.emit("judge.escalate", { score: v.score });
+      match (self.strong) {
+        let h: HttpProvider => { return h.call_with<T, U>(prompt, project); },
+        _ => { throw baml.errors.Unsupported { message: "judge-gated strong tier has no request/response sidecar" }; },
+      }
     }
   }
 }
@@ -241,16 +375,37 @@ class SemanticRouter {
   easy: Provider
   hard: Provider
 
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
+  // call / call_with belong to HttpProvider now (provider-as-marker.md). SemanticRouter is a
+  // request/response combinator: it picks a tier up front, then OWNS call / forwards call_with
+  // to the chosen tier so the sidecar (usage/cost) rides the member that answered.
+  implements HttpProvider {
+    type Body = unknown
+
+    function route(self, prompt: baml.llm.PromptAst) -> Provider {
       // embed the incoming prompt + nearest-exemplar vote. This is a billed
       // embedding call (host) — the router-is-a-call cost, paid up front.
       let tier = baml.llm.nearest_exemplar_tier(prompt, self.exemplars)
                    catch (e) { _ => { "hard" } };   // fail safe to the strong tier
       baml.telemetry.emit("router.dispatch", { tier: tier });
       match (tier) {
-        "easy" => { return self.easy.call<T>(prompt); },
-        _      => { return self.hard.call<T>(prompt); },
+        "easy" => self.easy,
+        _      => self.hard,
+      }
+    }
+
+    function call<T>(self, prompt: baml.llm.PromptAst) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      match (self.route(prompt)) {
+        let h: HttpProvider => { return h.call<T>(prompt); },
+        _ => { throw baml.errors.Unsupported { message: "routed tier cannot call" }; },
+      }
+    }
+
+    function call_with<T, U>(self, prompt: baml.llm.PromptAst, project: (ResponseMeta) -> U) -> (T, U)
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      match (self.route(prompt)) {
+        let h: HttpProvider => { return h.call_with<T, U>(prompt, project); },
+        _ => { throw baml.errors.Unsupported { message: "routed tier has no request/response sidecar" }; },
       }
     }
   }
@@ -259,8 +414,9 @@ class SemanticRouter {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Fluent sugar: add cascade/judge as default methods so they chain like §6's
-// with_retry / fallback_to. These EXTEND interface Provider with new defaults —
-// flagged in evaluation.md as net-new surface on the base interface.
+// with_retry / fallback_to. These are COMBINATOR FACTORIES — exactly the kind of member
+// the `Provider` MARKER hosts (it carries no interaction, only these factories). They EXTEND
+// interface Provider with new defaults — flagged in evaluation.md as net-new surface on the marker.
 // ─────────────────────────────────────────────────────────────────────────────
 interface Provider {
   function escalate_to(self, strong: Provider, threshold: float) -> Cascade {

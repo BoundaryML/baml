@@ -24,6 +24,33 @@
 
 
 // -----------------------------------------------------------------------------
+// NET-NEW capability-error interface. MemoryStore is a sibling capability (not
+// call/stream/realtime/tools), so under the error model it needs its OWN
+// capability-error interface with the same classifier shape, and its methods
+// declare `baml.ExtendUnknownError<baml.errors.MemoryError>`. Flagged net-new in
+// evaluation.md. The disk below it (VectorStore) is the host boundary and keeps
+// raising the foreign `baml.errors.Io`; the layer normalizes that into its own
+// channel.
+// -----------------------------------------------------------------------------
+interface baml.errors.MemoryError {
+  function is_network_error(self) -> bool   // the disk/embedding host was unreachable
+  function is_not_found(self) -> bool       // a scoped key/row did not exist
+}
+
+// Read a required string argument out of a ToolCall's `args` (a map<string,
+// unknown>): look the key up with the real Map.get method and narrow the
+// `unknown?` it returns to a string. A missing/ill-typed arg is a protocol
+// violation, surfaced as Unsupported (legal on any capability channel).
+function arg_str(args: map<string, unknown>, key: string) -> string
+    throws baml.errors.Unsupported {
+  match (args.get(key)) {
+    let s: string => s,
+    _ => throw baml.errors.Unsupported { message: "tool arg missing or not a string: " + key },
+  }
+}
+
+
+// -----------------------------------------------------------------------------
 // 0. Scope — mem0's set-theoretic identifiers, LangGraph's namespace tuples, and
 //    ADK's prefix strings all reduce to "a partition key with optional facets".
 //    We model it as a small record so an impl can index on whatever subset it
@@ -113,18 +140,20 @@ class Qdrant {
 //    add() is where curation lives — and its body is the divergence point.
 // -----------------------------------------------------------------------------
 interface MemoryStore {
-  type Error = baml.errors.Io
-
   // retrieve-before: relevance search scoped by identifiers.
-  function search(self, query: string, scope: Scope, top_k: int) -> Memory[] throws Error
+  function search(self, query: string, scope: Scope, top_k: int) -> Memory[]
+      throws baml.ExtendUnknownError<baml.errors.MemoryError>
 
   // store-after: hand the raw exchange; the layer decides what (if anything) to
   // keep. Returns the decisions it applied (so a caller can audit/log).
-  function add(self, turns: Turn[], scope: Scope) -> MemoryDecision[] throws Error
+  function add(self, turns: Turn[], scope: Scope) -> MemoryDecision[]
+      throws baml.ExtendUnknownError<baml.errors.MemoryError>
 
   // direct mutation — used by Letta self-editing tools and the raw BaseStore.
-  function put(self, scope: Scope, key: string, value: string) -> null throws Error
-  function get_all(self, scope: Scope) -> Memory[] throws Error
+  function put(self, scope: Scope, key: string, value: string) -> null
+      throws baml.ExtendUnknownError<baml.errors.MemoryError>
+  function get_all(self, scope: Scope) -> Memory[]
+      throws baml.ExtendUnknownError<baml.errors.MemoryError>
 }
 
 
@@ -133,46 +162,55 @@ interface MemoryStore {
 //     LLM pipeline. Note the two LLM calls are PROVIDERS handed in as fields:
 //     this is where the proposal's "everything is a Provider" pays off — the
 //     memory layer is a *consumer* of providers, not a provider itself.
+//
+//     Under the marker spine (../provider-as-marker.md) `call<T>` lives on
+//     HttpProvider, not on the bare Provider marker, so the two LLMs the pipeline
+//     calls are typed `HttpProvider` (request/response chat models) — that is the
+//     capability `add()` actually uses. They are still Providers (HttpProvider
+//     requires Provider); the field just names the capability it needs.
 // -----------------------------------------------------------------------------
 class Mem0 {
   disk: VectorStore        // the raw vector DB (the "disk")
-  extractor: Provider      // LLM that emits candidate facts
-  decider: Provider        // LLM that classifies ADD/UPDATE/DELETE/NONE
+  extractor: HttpProvider  // LLM that emits candidate facts
+  decider: HttpProvider    // LLM that classifies ADD/UPDATE/DELETE/NONE
 
   // Build the partition filter the disk understands from the scope record.
   function scope_filter(scope: Scope) -> map<string, string> {
     let f: map<string, string> = {};
-    match (scope.user_id)  { let v: string => { f = baml.map.set(f, "user_id", v); }, _ => {} }
-    match (scope.agent_id) { let v: string => { f = baml.map.set(f, "agent_id", v); }, _ => {} }
-    match (scope.run_id)   { let v: string => { f = baml.map.set(f, "run_id", v); }, _ => {} }
-    match (scope.app_id)   { let v: string => { f = baml.map.set(f, "app_id", v); }, _ => {} }
+    match (scope.user_id)  { let v: string => { f.set("user_id", v); }, _ => {} }
+    match (scope.agent_id) { let v: string => { f.set("agent_id", v); }, _ => {} }
+    match (scope.run_id)   { let v: string => { f.set("run_id", v); }, _ => {} }
+    match (scope.app_id)   { let v: string => { f.set("app_id", v); }, _ => {} }
     f
   }
 
   implements MemoryStore {
-    type Error = baml.errors.Io
-
-    function search(self, query: string, scope: Scope, top_k: int) -> Memory[] throws baml.errors.Io {
+    function search(self, query: string, scope: Scope, top_k: int) -> Memory[]
+        throws baml.ExtendUnknownError<baml.errors.MemoryError> {
       let v = self.disk.embed(query);
       let rows = self.disk.query(v, top_k, Mem0.scope_filter(scope));
       let out: Memory[] = [];
       for (let r in rows) {
-        out = baml.array.push(out, Memory {
+        out.push(Memory {
           id: r.id, memory: r.text, metadata: r.metadata, score: r.score,
           created_at: "", updated_at: "",
         });
       }
       out
+    } catch (e) {
+      // foreign disk/embedding Io normalized into the MemoryError channel.
+      _ => throw baml.UnknownError.with_message<baml.errors.MemoryError>(e, "mem0 search failed");
     }
 
     // The headline pipeline. Each step is a provider .call<T> — the four-stage
     // extract->retrieve->decide->persist made of ordinary typed calls.
-    function add(self, turns: Turn[], scope: Scope) -> MemoryDecision[] throws baml.errors.Io {
+    function add(self, turns: Turn[], scope: Scope) -> MemoryDecision[]
+        throws baml.ExtendUnknownError<baml.errors.MemoryError> {
       // (1) EXTRACT — LLM emits candidate facts as short declarative statements.
       let transcript = Mem0.render_turns(turns);
       let candidates: string[] = self.extractor.call<string[]>(
         baml.llm.render("Extract durable, third-person facts worth remembering from:\n{{t}}", { t: transcript })
-      ) catch (e) { _ => { throw baml.errors.Io { message: "extract failed" }; } };
+      );
 
       let applied: MemoryDecision[] = [];
       for (let cand in candidates) {
@@ -187,12 +225,12 @@ class Mem0 {
             "Decide ADD (new), UPDATE (rewrite an existing id), DELETE (contradicts), or NONE (covered).",
             { c: cand, n: Mem0.render_rows(neighbors) }
           )
-        ) catch (e) { _ => { throw baml.errors.Io { message: "decide failed" }; } };
+        );
 
         // (4) PERSIST — apply the decided op to the disk.
         match (decision.op) {
           MemoryOp.ADD => {
-            let id = baml.id.uuid();
+            let id = baml.id.new();
             self.disk.upsert(id, vec, Mem0.text_of(decision, cand), Mem0.scope_filter(scope));
           },
           MemoryOp.UPDATE => {
@@ -204,17 +242,25 @@ class Mem0 {
           MemoryOp.DELETE => { self.disk.delete(Mem0.id_of(decision)); },
           MemoryOp.NONE   => { },   // already covered — the dedup win
         }
-        applied = baml.array.push(applied, decision);
+        applied.push(decision);
       }
       applied
+    } catch (e) {
+      // foreign extractor/decider CallErrors and disk Io alike normalize here; a
+      // deliberately-thrown MemoryError would pass through with_message unchanged.
+      _ => throw baml.UnknownError.with_message<baml.errors.MemoryError>(e, "mem0 add pipeline failed");
     }
 
-    function put(self, scope: Scope, key: string, value: string) -> null throws baml.errors.Io {
+    function put(self, scope: Scope, key: string, value: string) -> null
+        throws baml.ExtendUnknownError<baml.errors.MemoryError> {
       let v = self.disk.embed(value);
       self.disk.upsert(key, v, value, Mem0.scope_filter(scope))
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.MemoryError>(e, "mem0 put failed");
     }
 
-    function get_all(self, scope: Scope) -> Memory[] throws baml.errors.Io {
+    function get_all(self, scope: Scope) -> Memory[]
+        throws baml.ExtendUnknownError<baml.errors.MemoryError> {
       // mem0 has no "list all" on the hot path; emulate with an empty-query scan.
       self.search("", scope, 1000)
     }
@@ -249,38 +295,46 @@ class RawStore {
   disk: VectorStore
 
   implements MemoryStore {
-    type Error = baml.errors.Io
-
-    function search(self, query: string, scope: Scope, top_k: int) -> Memory[] throws baml.errors.Io {
+    function search(self, query: string, scope: Scope, top_k: int) -> Memory[]
+        throws baml.ExtendUnknownError<baml.errors.MemoryError> {
       let v = self.disk.embed(query);
       let rows = self.disk.query(v, top_k, Mem0.scope_filter(scope));
       let out: Memory[] = [];
       for (let r in rows) {
-        out = baml.array.push(out, Memory {
+        out.push(Memory {
           id: r.id, memory: r.text, metadata: r.metadata, score: r.score,
           created_at: "", updated_at: "",
         });
       }
       out
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.MemoryError>(e, "raw store search failed");
     }
 
     // raw upsert — NO extract, NO decide. This is the "you reinvent dedup" path.
-    function add(self, turns: Turn[], scope: Scope) -> MemoryDecision[] throws baml.errors.Io {
+    function add(self, turns: Turn[], scope: Scope) -> MemoryDecision[]
+        throws baml.ExtendUnknownError<baml.errors.MemoryError> {
       let applied: MemoryDecision[] = [];
       for (let t in turns) {
-        let id = baml.id.uuid();
+        let id = baml.id.new();
         let v = self.disk.embed(t.content);
         self.disk.upsert(id, v, t.content, Mem0.scope_filter(scope));
-        applied = baml.array.push(applied, MemoryDecision { op: MemoryOp.ADD, id: id, text: t.content });
+        applied.push(MemoryDecision { op: MemoryOp.ADD, id: id, text: t.content });
       }
       applied
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.MemoryError>(e, "raw store add failed");
     }
 
-    function put(self, scope: Scope, key: string, value: string) -> null throws baml.errors.Io {
+    function put(self, scope: Scope, key: string, value: string) -> null
+        throws baml.ExtendUnknownError<baml.errors.MemoryError> {
       let v = self.disk.embed(value);
       self.disk.upsert(key, v, value, Mem0.scope_filter(scope))
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.MemoryError>(e, "raw store put failed");
     }
-    function get_all(self, scope: Scope) -> Memory[] throws baml.errors.Io {
+    function get_all(self, scope: Scope) -> Memory[]
+        throws baml.ExtendUnknownError<baml.errors.MemoryError> {
       self.search("", scope, 1000)
     }
   }
@@ -292,8 +346,13 @@ class RawStore {
 //    A combinator that wraps a Provider: retrieve-before (inject relevant
 //    memories into the prompt) and store-after (extract from the exchange).
 //    This is the Vercel "system + onFinish" shape. It is structurally identical
-//    to the spine's Cache combinator: a plain class that implements Provider and
-//    delegates to `inner`.
+//    to the spine's Cache combinator: a plain class that forwards the
+//    request/response capability (HttpProvider) and delegates to `inner`. Under
+//    the marker spine (../provider-as-marker.md) `call`/`call_with` live on
+//    HttpProvider, not on the bare Provider marker, so a combinator that does
+//    retrieve-before / store-after around a single call `implements HttpProvider`
+//    and forwards both `call` and `call_with` (the latter so the model's
+//    usage/sidecar is not dropped — the P1 fix).
 //
 //    NOTE the awkwardness it exposes (see evaluation): `call<T>(prompt)` gives us
 //    only an opaque PromptAst, so we need a host primitive to splice retrieved
@@ -306,18 +365,36 @@ class WithMemory {
   scope: Scope
   top_k: int
 
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
+  implements HttpProvider {
+    // The member we forward to is itself a Provider; only an HttpProvider member
+    // actually has call/call_with, so we route to it by runtime match (the §3
+    // combinator pattern). We never build/send/parse ourselves, so the codec
+    // methods (build_request/send/parse/meta_of) are inherited unchanged and the
+    // Body type is opaque — this combinator only forwards.
+    type Body = unknown
+
+    // call_with is the PRIMITIVE here: retrieve-before, forward the projection to
+    // the inner HttpProvider (so the model's usage/sidecar survives — the P1 fix),
+    // then store-after. `call` derives from it below.
+    function call_with<T, U>(self, prompt: baml.llm.PromptAst, project: (ResponseMeta) -> U) -> (T, U)
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       // retrieve-before: derive a search query from the prompt, recall, inject.
       let q = baml.llm.last_user_text(prompt);     // NET-NEW host primitive
       let hits = self.store.search(q, self.scope, self.top_k)
-        catch (e) { _ => { throw baml.errors.LlmClient { message: "memory search failed" }; } };
+        catch (e) {
+          // a recall failure (MemoryError or its UnknownError) is folded onto the
+          // call path — the combinator forwards the store's channel into CallError.
+          _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "memory search failed");
+        };
 
       let facts = WithMemory.render_facts(hits);
       // splice the recalled facts into the system position of the opaque AST.
       let augmented = baml.llm.with_system_suffix(prompt, facts);   // NET-NEW host primitive
 
-      let answer: T = self.inner.call<T>(augmented);
+      // forward call_with to the inner request/response provider so `project`
+      // reads the inner model's ResponseMeta (usage/logprobs) — not dropped.
+      let result: (T, U) = WithMemory.forward_call_with<T, U>(self.inner, augmented, project);
+      let answer: T = result.0;
 
       // store-after: hand the exchange to the layer; it curates implicitly.
       self.store.add(
@@ -326,7 +403,27 @@ class WithMemory {
         self.scope
       ) catch (e) { _ => { /* memory write is best-effort; don't fail the turn */ } };
 
-      answer
+      result
+    }
+
+    // `call` derives from call_with (project nothing, drop the sidecar) — same
+    // derivation the HttpProvider default uses, kept explicit so the retrieve/store
+    // wrapping is visible at the call site.
+    function call<T>(self, prompt: baml.llm.PromptAst) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      let (v, _): (T, null) = self.call_with<T, null>(prompt, m => null);
+      v
+    }
+  }
+
+  // route call_with to the first request/response member (here, the single inner
+  // provider). Errors if the inner provider is not an HttpProvider — the runtime
+  // promise a forwarding combinator makes (§3 / §6).
+  function forward_call_with<T, U>(inner: Provider, prompt: baml.llm.PromptAst, project: (ResponseMeta) -> U) -> (T, U)
+      throws baml.ExtendUnknownError<baml.errors.CallError> {
+    match (inner) {
+      let h: HttpProvider => h.call_with<T, U>(prompt, project),
+      _ => throw baml.errors.Unsupported { message: "memory middleware: inner provider has no request/response call" },
     }
   }
 
@@ -379,10 +476,14 @@ class MemoryTools {
 
   // dispatch body for the search tool — invoked by ExecutionContext.dispatch when
   // the model emits a `search_memory` ToolCall. Returns a ToolResult.
-  function handle(self, call: ToolCall) -> ToolResult throws baml.errors.Io {
-    let q = baml.map.get_str(call.args, "query");
+  function handle(self, call: ToolCall) -> ToolResult
+      throws baml.ExtendUnknownError<baml.errors.ToolError> {
+    let q = arg_str(call.args, "query");
     let hits = self.store.search(q, self.scope, 5);
     ToolResult { id: call.id, output: WithMemory.render_facts(hits) }
+  } catch (e) {
+    // the store's MemoryError surfaces mid-tool-loop; normalize onto ToolError.
+    _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "search_memory dispatch failed");
   }
 }
 
@@ -413,25 +514,25 @@ class AnthropicMemoryTool {
 
   // The model curates; WE execute. No extract->decide — the model's command IS
   // the decision. This is the structural opposite of Mem0.add().
-  function handle(self, call: ToolCall) -> ToolResult throws baml.errors.Io {
-    let cmd = baml.map.get_str(call.args, "command");
-    let path = baml.map.get_str(call.args, "path");
+  function handle(self, call: ToolCall) -> ToolResult
+      throws baml.ExtendUnknownError<baml.errors.ToolError> {
+    let cmd = arg_str(call.args, "command");
+    let path = arg_str(call.args, "path");
     match (cmd) {
       "view" => {
         let rows = self.store.get_all(AnthropicMemoryTool.path_scope(self.scope, path));
         ToolResult { id: call.id, output: WithMemory.render_facts(rows) }
       },
       "create" => {
-        self.store.put(self.scope, path, baml.map.get_str(call.args, "text"));
+        self.store.put(self.scope, path, arg_str(call.args, "text"));
         ToolResult { id: call.id, output: "created " + path }
       },
       "str_replace" => {
         // read-modify-write through the store; the model supplied old/new.
         let cur = self.store.get_all(AnthropicMemoryTool.path_scope(self.scope, path));
-        let next = baml.str.replace(
-          WithMemory.render_facts(cur),
-          baml.map.get_str(call.args, "old_str"),
-          baml.map.get_str(call.args, "new_str"));
+        let next = WithMemory.render_facts(cur).replace(
+          arg_str(call.args, "old_str"),
+          arg_str(call.args, "new_str"));
         self.store.put(self.scope, path, next);
         ToolResult { id: call.id, output: "edited " + path }
       },
@@ -439,8 +540,14 @@ class AnthropicMemoryTool {
         self.store.put(self.scope, path, "");   // tombstone
         ToolResult { id: call.id, output: "deleted " + path }
       },
-      _ => { throw baml.errors.Io { message: "unsupported memory command: " + cmd }; }
+      // a command the protocol doesn't define is a capability-negotiation miss;
+      // Unsupported is legal on any channel (it implements every capability error).
+      _ => { throw baml.errors.Unsupported { message: "unsupported memory command: " + cmd }; }
     }
+  } catch (e) {
+    // foreign disk Io from the store ops normalizes onto ToolError; the deliberate
+    // Unsupported above passes through with_message unchanged.
+    _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "memory-tool dispatch failed");
   }
 
   function path_scope(scope: Scope, path: string) -> Scope {
@@ -466,8 +573,10 @@ class CoreMemory {
 
   function render(self) -> string {
     let s = "";
-    for (let label in baml.map.keys(self.blocks)) {
-      s = s + "<" + label + ">\n" + baml.map.get_str(self.blocks, label) + "\n</" + label + ">\n";
+    for (let label in self.blocks.keys()) {
+      // keys() guarantees presence; narrow the V? get returns to a string.
+      let body = match (self.blocks.get(label)) { let v: string => v, _ => "" };
+      s = s + "<" + label + ">\n" + body + "\n</" + label + ">\n";
     }
     s
   }
@@ -484,20 +593,22 @@ class CoreMemory {
            parameters: type { label: string, value: string } }
   }
 
-  function handle(self, call: ToolCall) -> ToolResult throws baml.errors.Io {
+  function handle(self, call: ToolCall) -> ToolResult
+      throws baml.ExtendUnknownError<baml.errors.ToolError> {
     match (call.name) {
       "core_memory_append" => {
-        let label = baml.map.get_str(call.args, "label");
-        let cur = baml.map.get_str(self.blocks, label);
-        self.blocks = baml.map.set(self.blocks, label, cur + "\n" + baml.map.get_str(call.args, "content"));
+        let label = arg_str(call.args, "label");
+        let cur = match (self.blocks.get(label)) { let v: string => v, _ => "" };
+        self.blocks.set(label, cur + "\n" + arg_str(call.args, "content"));
         ToolResult { id: call.id, output: "ok" }
       },
       "core_memory_replace" => {
-        let label = baml.map.get_str(call.args, "label");
-        self.blocks = baml.map.set(self.blocks, label, baml.map.get_str(call.args, "value"));
+        let label = arg_str(call.args, "label");
+        self.blocks.set(label, arg_str(call.args, "value"));
         ToolResult { id: call.id, output: "ok" }
       },
-      _ => { throw baml.errors.Io { message: "not a core-memory tool: " + call.name }; }
+      // a call routed here that isn't a core-memory tool is a negotiation miss.
+      _ => { throw baml.errors.Unsupported { message: "not a core-memory tool: " + call.name }; }
     }
   }
 }
@@ -508,17 +619,33 @@ class CoreMemory {
 //     stateful agent: a plain Provider whose .call proxies to the Letta server
 //     by agent_id. All three memory tiers (core/recall/archival) live server-side
 //     and are INVISIBLE to BAML — we cannot model them as BAML MemoryStores
-//     because BAML never sees the state. This is the proposal's hard edge: the
-//     Provider base can host a remote agent, but the typed memory model stops at
-//     the wire. (See evaluation, section c.)
+//     because BAML never sees the state. This is the proposal's hard edge: a
+//     remote agent is still a request/response provider (HttpProvider), but the
+//     typed memory model stops at the wire. (See evaluation, section c.)
 // -----------------------------------------------------------------------------
 class LettaProxy {
   base_url: string
   agent_id: string       // the server-side stateful object; resumes with full memory
 
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
-      $rust_io_function   // POST {base_url}/agents/{agent_id}/messages ; server mutates its own memory
+  // LettaProxy genuinely does request/response (POST one turn, get one answer), so
+  // it owns call/call_with on HttpProvider — NOT a degenerate/faked call. Its codec
+  // is opaque (the host POST is one shot), so call_with is the primitive here and
+  // `call` derives from it.
+  implements HttpProvider {
+    type Body = unknown
+
+    function call_with<T, U>(self, prompt: baml.llm.PromptAst, project: (ResponseMeta) -> U) -> (T, U)
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      $rust_io_function   // POST {base_url}/agents/{agent_id}/messages ; server mutates its own
+                          // memory, returns the answer + a ResponseMeta the host hands to `project`.
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "letta proxy call failed");
+    }
+
+    function call<T>(self, prompt: baml.llm.PromptAst) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      let (v, _): (T, null) = self.call_with<T, null>(prompt, m => null);
+      v
     }
   }
 }
@@ -533,8 +660,10 @@ class LettaProxy {
 //      baml.llm.with_system_suffix(prompt: PromptAst, text: string) -> PromptAst
 //      baml.llm.render(template: string, vars: map<string, unknown>) -> PromptAst
 //      baml.llm.text_of<T>(value: T) -> string
-//      baml.map.get_str / set / keys ; baml.array.push ; baml.str.replace ;
-//      baml.id.uuid()
+//
+//    (The map/list/string/id manipulation above is NOT net-new — it is the real
+//    stdlib: `Map.get/set/keys`, `Array.push`, `String.replace`, and `baml.id.new()`.
+//    Only the four `baml.llm.*` prompt accessors are genuine host boundaries.)
 //
 //    Declared as externs so the file type-checks; bodies live in the host.
 // -----------------------------------------------------------------------------

@@ -12,7 +12,7 @@
 //   - sub-agents                    -> named Providers with restricted tools
 //   - skills / slash commands       -> a Skills capability (named, typed call)
 //   - hooks                         -> ExecutionContext.emit + a Hook seam
-//   - A2A peer agents               -> A2aProvider implements Provider
+//   - A2A peer agents               -> A2aProvider implements HttpProvider
 // =============================================================================
 
 
@@ -82,7 +82,7 @@ class Tools$factory {
     let specs = mcp_list_tools(conn);                           // [(local_name, desc, schema)]
     let out: HarnessTool[] = [];
     for (let s in specs) {
-      out = out.append(HarnessTool {
+      out.push(HarnessTool {
         name: "mcp__{server_name}__{s.local_name}",            // wire-name mangling, §4 leakage
         description: s.description,
         parameters: s.schema,
@@ -147,7 +147,7 @@ class HookedExecutionContext {
     function dispatch(self, calls: ToolCall[]) -> ToolResult[] throws baml.errors.Io {
       let results: ToolResult[] = [];
       for (let c in calls) {
-        results = results.append(self.dispatch_one(c));
+        results.push(self.dispatch_one(c));
       }
       results
     }
@@ -237,18 +237,32 @@ function coerce_args(v: unknown) -> map<string, unknown> { $rust_io_function }
 //    Net-new interface.
 // -----------------------------------------------------------------------------
 
+// Skills are a NEW capability beyond call/stream/realtime/tools, so they earn a
+// matching capability-error interface (flagged net-new in evaluation.md). Same
+// shape as the core ones: classifiers callers triage on without the concrete class.
+interface baml.errors.SkillError {
+  function is_network_error(self) -> bool
+  function is_unknown_skill(self) -> bool   // the harness has no such named procedure
+}
+
 interface Skills requires Provider {
   // typed output, args as a bag — mirrors Flue's session.skill("triage", {...}, schema)
-  function skill<T>(self, name: string, args: map<string, unknown>) -> T throws Error
+  function skill<T>(self, name: string, args: map<string, unknown>) -> T
+      throws baml.ExtendUnknownError<baml.errors.SkillError>
   // enumerate available slash commands over the control plane (Claude's supportedCommands)
-  function commands(self) -> string[] throws Error
+  function commands(self) -> string[]
+      throws baml.ExtendUnknownError<baml.errors.SkillError>
 }
 
 
 // -----------------------------------------------------------------------------
 // 4. The concrete harness provider. NOT an HttpProvider — transport is a
-//    subprocess (proposal §8). It implements Provider + Tools + Skills, and
-//    carries tools + sub-agents + hooks as plain config FIELDS.
+//    subprocess (proposal §8). Per ../provider-as-marker.md, `Provider` is a bare
+//    MARKER (no `call`), so the harness no longer fakes a degenerate one-shot
+//    `call`. It `requires Provider` THROUGH the capabilities it implements (Tools
+//    + Realtime + Skills) and carries tools + sub-agents + hooks as plain config
+//    FIELDS. Its real interaction surfaces are the tool loop, the steerable live
+//    session, and named skills — none of them request/response.
 // -----------------------------------------------------------------------------
 
 class ClaudeCode {
@@ -262,62 +276,61 @@ class ClaudeCode {
   agents: map<string, Provider>?           // sub-agents are named PROVIDERS (see §5)
   hooks: Hook[]?
 
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
-      // one-shot: spawn, run to completion, SAP-parse the final transcript text.
-      let session = harness_spawn(self.model, self.permission_mode, self.flat_tool_names());
-      let final = harness_run_to_end(session, prompt) catch (e) {
-        _ => { throw baml.errors.LlmClient { message: "harness call failed" }; }
-      };
-      baml.sap.parse<T>(final)
-    }
-  }
+  // No `implements Provider { call }` — a subprocess harness has no honest
+  // request/response `call`. The class is a Provider (marker) by virtue of
+  // implementing Tools/Realtime/Skills, each of which `requires Provider`.
 
   implements Tools {
     // Transcript is provider-owned + opaque: it wraps the live subprocess session.
     type Transcript = HarnessSession
 
-    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> HarnessSession throws baml.errors.LlmClient {
+    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> HarnessSession
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // NOTE: the loop hands us canonical `Tool[]`. But our dispatch needs the
       // RICHER HarnessTool[] (with handlers/MCP sources) we carry as a field.
       // We ignore the passed `tools` schema-list and use self.tools for dispatch.
       // <-- this is a real awkwardness; see evaluation (c).
       harness_spawn_session(self.model, self.permission_mode, self.flat_tool_names())
-        catch (e) { _ => { throw baml.errors.LlmClient { message: "spawn failed" }; } }
+        catch (e) { _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "spawn failed"); }
     }
 
-    function step<T>(self, t: HarnessSession) -> T | ToolCalls throws baml.errors.LlmClient {
+    function step<T>(self, t: HarnessSession) -> T | ToolCalls
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // pump the subprocess; either it asks for tools or it produces the final value.
-      let ev = harness_pump(t) catch (e) { _ => { throw baml.errors.LlmClient { message: "pump failed" }; } };
+      let ev = harness_pump(t) catch (e) { _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "pump failed"); };
       match (ev.tool_calls) {
         let calls: ToolCall[] => { ToolCalls { calls: calls } },           // id = parent_tool_use_id
         _ => { baml.sap.parse<T>(ev.final_text!) },
       }
     }
 
-    function submit(self, t: HarnessSession, results: ToolResult[]) -> HarnessSession throws baml.errors.LlmClient {
+    function submit(self, t: HarnessSession, results: ToolResult[]) -> HarnessSession
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       harness_submit(t, results)                       // ids threaded straight back, opaque
-        catch (e) { _ => { throw baml.errors.LlmClient { message: "submit failed" }; } }
+        catch (e) { _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "submit failed"); }
     }
     // run_tools<T> inherited from Tools default — drives begin/step/submit + ctx.dispatch.
   }
 
   implements Realtime {
     // the long-lived steerable session: the control/event channel is handed in.
-    function run(self, prompt: baml.llm.PromptAst, io: Channel) -> Transcript throws baml.errors.LlmClient {
+    function run(self, prompt: baml.llm.PromptAst, io: Channel) -> Transcript
+        throws baml.ExtendUnknownError<baml.errors.RealtimeError> {
       $rust_io_function                                // duplex over the spawned subprocess
     }
   }
 
   implements Skills {
-    function skill<T>(self, name: string, args: map<string, unknown>) -> T throws baml.errors.LlmClient {
+    function skill<T>(self, name: string, args: map<string, unknown>) -> T
+        throws baml.ExtendUnknownError<baml.errors.SkillError> {
       let raw = harness_run_skill(self.model, name, args)
-        catch (e) { _ => { throw baml.errors.LlmClient { message: "skill '{name}' failed" }; } };
+        catch (e) { _ => throw baml.UnknownError.with_message<baml.errors.SkillError>(e, "skill '{name}' failed"); };
       baml.sap.parse<T>(raw)                           // typed output via SAP, like Flue's schema
     }
-    function commands(self) -> string[] throws baml.errors.LlmClient {
+    function commands(self) -> string[]
+        throws baml.ExtendUnknownError<baml.errors.SkillError> {
       harness_supported_commands(self.model)
-        catch (e) { _ => { throw baml.errors.LlmClient { message: "commands failed" }; } }
+        catch (e) { _ => throw baml.UnknownError.with_message<baml.errors.SkillError>(e, "commands failed"); }
     }
   }
 
@@ -329,13 +342,13 @@ class ClaudeCode {
     let extra = match (self.tools) {
       let ts: HarnessTool[] => {
         let acc: string[] = [];
-        for (let t in ts) { acc = acc.append(t.name); }
+        for (let t in ts) { acc.push(t.name); }
         acc
       },
       _ => [],
     };
     // sub-agents surface to the model as a single built-in "Agent" tool (Claude SDK).
-    let with_agent = match (self.agents) { let _a: map<string, Provider> => names.append("Agent"), _ => names };
+    let with_agent = match (self.agents) { let _a: map<string, Provider> => names.concat(["Agent"]), _ => names };
     with_agent.concat(extra)
   }
 }
@@ -365,11 +378,28 @@ class SubAgent {
   description: string                      // the PARENT reads this to decide when to delegate
   max_turns: int?
 
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
+  // A sub-agent exposes ONLY request/response to its parent: one prompt in, final
+  // message out. So it forwards `call`/`call_with` to its inner provider's
+  // HttpProvider capability — `call` is an HttpProvider method now (marker spine).
+  implements HttpProvider {
+    type Body = unknown
+    function call<T>(self, prompt: baml.llm.PromptAst) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       // fresh conversation: the parent hands ONE prompt; we return ONLY the final.
-      // (No nested sub-agents: we expose Provider.call, never Tools, to the parent.)
-      self.inner.call<T>(prompt)
+      // (No nested sub-agents: we expose HttpProvider.call, never Tools, to the parent.)
+      match (self.inner) {
+        let h: HttpProvider => h.call<T>(prompt),
+        _ => throw baml.errors.Unsupported { message: "sub-agent inner is not request/response" },
+      }
+    }
+    // Forward the value+sidecar projection so the parent's usage/cost is not dropped
+    // (the P1 fix): route call_with straight to the inner HttpProvider's call_with.
+    function call_with<T, U>(self, prompt: baml.llm.PromptAst, project: (ResponseMeta) -> U) -> (T, U)
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      match (self.inner) {
+        let h: HttpProvider => h.call_with<T, U>(prompt, project),
+        _ => throw baml.errors.Unsupported { message: "sub-agent inner is not request/response" },
+      }
     }
   }
   // Deliberately does NOT implement Tools/Skills: a sub-agent is opaque to its
@@ -393,6 +423,13 @@ class AgentCard {
   _raw: $rust_type
 }
 
+// Typed view of the JSON-RPC 2.0 "message/send" result envelope. `parse` decodes
+// the response body into this (via baml.json.deserialize) and reads parts[0].text.
+class A2aRpcResponse { result: A2aResult }
+class A2aResult      { message: A2aMessage }
+class A2aMessage     { parts: A2aPart[] }
+class A2aPart        { text: string }
+
 class A2aProvider {
   endpoint: string                         // JSON-RPC 2.0 over HTTP(S)
   headers: map<string, string>?
@@ -407,7 +444,8 @@ class A2aProvider {
   implements HttpProvider {
     type Body = baml.http.Response
 
-    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request throws baml.errors.LlmClient {
+    function build_request<T>(self, prompt: baml.llm.PromptAst) -> baml.http.Request
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       // A2A "message/send" as a JSON-RPC 2.0 envelope. The peer's tools/prompts/
       // state are NOT exposed — we send a task, we get a result. T is irrelevant
       // to the wire shape here (peer decides its own output), only to `parse`.
@@ -419,20 +457,37 @@ class A2aProvider {
       }
     }
 
-    function send(self, request: baml.http.Request) -> baml.http.Response throws baml.errors.LlmClient {
-      baml.http.send(request) catch (e) { _ => { throw baml.errors.LlmClient { message: "a2a send failed" }; } }
+    function send(self, request: baml.http.Request) -> baml.http.Response
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      baml.http.send(request) catch (e) { _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "a2a send failed"); }
     }
 
-    function parse<T>(self, from: baml.http.Response) -> T throws baml.errors.LlmClient {
-      // pull result.parts[].text out of the JSON-RPC result, then SAP into T.
-      // The peer's output is loosely typed on the wire — we impose T at the edge.
-      baml.sap.parse<T>(from.json_path("result.message.parts.0.text"))
+    function parse<T>(self, from: baml.http.Response) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      // pull result.message.parts[0].text out of the JSON-RPC result, then SAP into T.
+      // Decode the envelope into a typed class (override-honoring), then SAP the
+      // peer's loosely-typed text into T at the edge.
+      let env: A2aRpcResponse = baml.json.deserialize<A2aRpcResponse>(from.text())
+        catch (e) { _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "a2a parse failed"); };
+      match (env.result.message.parts.at(0)) {
+        let p: A2aPart => baml.sap.parse<T>(p.text),
+        _ => throw baml.UnknownError.with_message<baml.errors.CallError>("a2a result had no message parts", "a2a parse failed"),
+      }
     }
     // call<T> inherited from HttpProvider default.
   }
 
   function with_headers(self, base: map<string, string>) -> map<string, string> {
-    match (self.headers) { let h: map<string, string> => base.merge(h), _ => base }
+    match (self.headers) {
+      let h: map<string, string> => {
+        // Map has no `merge`; copy the configured headers over the base in place.
+        for (let k in h.keys()) {
+          match (h.get(k)) { let v: string => { base.set(k, v); }, _ => {} }
+        }
+        base
+      },
+      _ => base,
+    }
   }
 }
 

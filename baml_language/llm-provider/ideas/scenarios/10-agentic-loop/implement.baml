@@ -63,19 +63,19 @@ class Budget<T> {
 interface Tools requires Provider {
   type Transcript
 
-  function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> Transcript throws Error
-  function step<T>(self, t: Transcript) -> T | ToolCalls throws Error   // next() -> Item | Done
-  function submit(self, t: Transcript, results: ToolResult[]) -> Transcript throws Error
+  function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> Transcript throws baml.ExtendUnknownError<baml.errors.ToolError>
+  function step<T>(self, t: Transcript) -> T | ToolCalls throws baml.ExtendUnknownError<baml.errors.ToolError>   // next() -> Item | Done
+  function submit(self, t: Transcript, results: ToolResult[]) -> Transcript throws baml.ExtendUnknownError<baml.errors.ToolError>
 
   // A read-only projection of the transcript so policy code (stop predicates,
   // tool filters) can observe progress without touching the wire format.
   // Default: provider supplies it; the existence is the net-new bit.
-  function history(self, t: Transcript) -> History throws Error
+  function history(self, t: Transcript) -> History throws baml.ExtendUnknownError<baml.errors.ToolError>
 
   // ---- the loop, as a DEFAULT method. This is the baseline every provider
   // inherits; an app overrides run_tools (NOT begin/step/submit) to change
   // dispatch policy. ----
-  function run_tools<T>(self, prompt: baml.llm.PromptAst, tools: Tool[], ctx: ExecutionContext) -> T throws Error {
+  function run_tools<T>(self, prompt: baml.llm.PromptAst, tools: Tool[], ctx: ExecutionContext) -> T throws baml.ExtendUnknownError<baml.errors.ToolError> {
     let t = self.begin<T>(prompt, tools);
     while (true) {
       match (self.step<T>(t)) {
@@ -107,7 +107,7 @@ class OpenAITools {
   implements Tools {
     type Transcript = OpenAITranscript
 
-    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> OpenAITranscript throws baml.errors.LlmClient {
+    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> OpenAITranscript throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // render the prompt into the OpenAI `messages` shape; attach the tool
       // schemas in OpenAI's `{type:"function", function:{...}}` envelope.
       let msgs = baml.llm.openai_messages_from(prompt);
@@ -117,46 +117,61 @@ class OpenAITools {
         messages: msgs,
         tools: tools,
       }
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "openai begin failed");
     }
 
-    function step<T>(self, t: OpenAITranscript) -> T | ToolCalls throws baml.errors.LlmClient {
+    function step<T>(self, t: OpenAITranscript) -> T | ToolCalls throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // one model round-trip. The host call returns the raw assistant turn,
       // INCLUDING tool_calls (with their ids) and the `phase` label.
       let turn: OpenAIAssistantTurn = openai_chat_once(t);
       // CRITICAL: preserve the assistant turn AND its phase before we branch,
       // so the next request re-sends commentary vs final_answer correctly.
-      t.messages = baml.list.push(t.messages, openai_assistant_message(turn));
-      if (baml.list.is_empty(turn.tool_calls)) {
+      t.messages.push(openai_assistant_message(turn));
+      if (turn.tool_calls.length() == 0) {
         // no tools requested -> the model is done. Parse the final content as T.
+        // A refusal lands here as a typed Refused, not a transport failure.
+        match (turn.refusal) {
+          let reason: string => throw Refused { category: "openai_refusal", message: reason };
+          _ => {},
+        }
         return baml.sap.parse<T>(turn.content);
       }
       // Done-sentinel: surface the calls (id is OPAQUE to the loop above).
       ToolCalls {
-        calls: baml.list.map(turn.tool_calls, c => ToolCall {
+        calls: turn.tool_calls.map(c => ToolCall {
           id: c.id,                     // OpenAI's `tool_call_id` — id-keyed correlation
           name: c.fn_name,
           args: c.arguments,
         }),
       }
+    } catch (e) {
+      // Refused (and any other typed ToolError) passes through unchanged; foreign
+      // host/parse failures are wrapped + annotated.
+      _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "openai step failed");
     }
 
-    function submit(self, t: OpenAITranscript, results: ToolResult[]) -> OpenAITranscript throws baml.errors.LlmClient {
+    function submit(self, t: OpenAITranscript, results: ToolResult[]) -> OpenAITranscript throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // id-keyed: each result becomes a `{role:"tool", tool_call_id: id, ...}`
       // message. Order does not matter for OpenAI because correlation is by id.
       for (let r in results) {
-        t.messages = baml.list.push(t.messages, OpenAIMessage {
+        t.messages.push(OpenAIMessage {
           role: "tool",
           tool_call_id: r.id,
-          content: baml.json.stringify(r.output),
+          content: baml.json.stringify(baml.json.to_json(r.output)),
         });
       }
       t
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "openai submit failed");
     }
 
-    function history(self, t: OpenAITranscript) -> History throws baml.errors.LlmClient {
+    function history(self, t: OpenAITranscript) -> History throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // wrap the messages array as an opaque snapshot. Policy code can ask
       // narrow questions (last_tool_called, etc.) via free helpers below.
       History { _data: openai_history_snapshot(t.messages) }
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "openai history failed");
     }
   }
 
@@ -177,6 +192,7 @@ class OpenAIMessage {
 }
 class OpenAIAssistantTurn {
   content: string?
+  refusal: string?            // OpenAI's `message.refusal` — a decline, not a transport failure
   tool_calls: OpenAIRawCall[]
   phase: string?              // the label we MUST keep and re-send
 }
@@ -205,7 +221,7 @@ class GeminiTools {
   implements Tools {
     type Transcript = GeminiTranscript
 
-    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> GeminiTranscript throws baml.errors.LlmClient {
+    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> GeminiTranscript throws baml.ExtendUnknownError<baml.errors.ToolError> {
       GeminiTranscript {
         model: self.model,
         api_key: self.api_key,
@@ -213,47 +229,61 @@ class GeminiTools {
         tools: tools,
         pending: [],            // (synthetic_id -> name) correlation table for the in-flight turn
       }
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "gemini begin failed");
     }
 
-    function step<T>(self, t: GeminiTranscript) -> T | ToolCalls throws baml.errors.LlmClient {
+    function step<T>(self, t: GeminiTranscript) -> T | ToolCalls throws baml.ExtendUnknownError<baml.errors.ToolError> {
       let turn: GeminiModelTurn = gemini_generate_once(t);
       // preserve the model turn verbatim (the functionCall parts ARE the history).
-      t.contents = baml.list.push(t.contents, gemini_model_content(turn));
-      if (baml.list.is_empty(turn.function_calls)) {
+      t.contents.push(gemini_model_content(turn));
+      if (turn.function_calls.length() == 0) {
+        // Gemini surfaces a safety block as finishReason "SAFETY" -> a typed Refused.
+        match (turn.block_reason) {
+          let reason: string => throw Refused { category: "gemini_safety", message: reason };
+          _ => {},
+        }
         return baml.sap.parse<T>(turn.text);
       }
       // Gemini gives us (name, position) but no id. MINT a synthetic id per call
       // and remember the name+position so `submit` can put results back in order.
       let pending: GeminiPending[] = [];
       let calls: ToolCall[] = [];
-      for (let i in baml.range.until(baml.list.len(turn.function_calls))) {
-        let fc = baml.list.at(turn.function_calls, i);
-        let synthetic = baml.uuid.v4();
-        pending = baml.list.push(pending, GeminiPending { id: synthetic, name: fc.name, position: i });
-        calls = baml.list.push(calls, ToolCall { id: synthetic, name: fc.name, args: fc.args });
+      let i = 0;
+      for (let fc in turn.function_calls) {
+        let synthetic = baml.id.new();
+        pending.push(GeminiPending { id: synthetic, name: fc.name, position: i });
+        calls.push(ToolCall { id: synthetic, name: fc.name, args: fc.args });
+        i = i + 1;
       }
       t.pending = pending;
       ToolCalls { calls: calls }
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "gemini step failed");
     }
 
-    function submit(self, t: GeminiTranscript, results: ToolResult[]) -> GeminiTranscript throws baml.errors.LlmClient {
+    function submit(self, t: GeminiTranscript, results: ToolResult[]) -> GeminiTranscript throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // RESOLVE synthetic ids back to (name, position). Gemini wants one `user`
       // content with functionResponse parts, ordered by the original call order.
       let ordered: GeminiFunctionResponse[] = [];
       for (let p in t.pending) {                       // pending is already in position order
         let r = find_result_by_id(results, p.id);      // the id the loop echoed back
-        ordered = baml.list.push(ordered, GeminiFunctionResponse {
+        ordered.push(GeminiFunctionResponse {
           name: p.name,                                // correlation key on the wire
           response: r.output,
         });
       }
-      t.contents = baml.list.push(t.contents, gemini_function_response_content(ordered));
+      t.contents.push(gemini_function_response_content(ordered));
       t.pending = [];
       t
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "gemini submit failed");
     }
 
-    function history(self, t: GeminiTranscript) -> History throws baml.errors.LlmClient {
+    function history(self, t: GeminiTranscript) -> History throws baml.ExtendUnknownError<baml.errors.ToolError> {
       History { _data: gemini_history_snapshot(t.contents) }
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "gemini history failed");
     }
   }
 
@@ -269,7 +299,7 @@ class GeminiTranscript {
 }
 class GeminiPending { id: string, name: string, position: int }
 class GeminiContent { role: string, _parts: $rust_type }
-class GeminiModelTurn { text: string?, function_calls: GeminiRawCall[] }
+class GeminiModelTurn { text: string?, function_calls: GeminiRawCall[], block_reason: string? }
 class GeminiRawCall { name: string, args: map<string, unknown> }
 class GeminiFunctionResponse { name: string, response: unknown }
 
@@ -316,29 +346,29 @@ class Bounded {
   stop_when: (StepInfo) -> bool         // post-step predicate
   per_turn_tools: ((int, History) -> Tool[])?   // optional per-turn tool filter
 
-  // Bounded is itself a Provider (every combinator is) so it chains.
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
-      self.inner.call<T>(prompt)
-    }
-  }
+  // Bounded is itself a Provider — but only as the MARKER. Its REAL interaction is
+  // the Tools loop below; there is no honest single-turn `call` to forward (its
+  // `inner` is a `Tools` provider, which under the marker model has no `call`). So
+  // Bounded does NOT fake an `implements Provider { call }`. Because `Tools requires
+  // Provider`, Bounded still IS a Provider (the marker), so combinator factories
+  // (`with_retry`, etc.) still chain off it.
 
   // Bounded forwards the Tools capability but with the OVERRIDDEN run_tools.
   // begin/step/submit/history delegate straight through — NO rewrite of wire code.
   implements Tools {
     type Transcript = BoundedTranscript
 
-    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> BoundedTranscript throws baml.errors.LlmClient {
+    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> BoundedTranscript throws baml.ExtendUnknownError<baml.errors.ToolError> {
       BoundedTranscript { inner: self.inner.begin<T>(prompt, tools), all_tools: tools }
     }
-    function step<T>(self, t: BoundedTranscript) -> T | ToolCalls throws baml.errors.LlmClient {
+    function step<T>(self, t: BoundedTranscript) -> T | ToolCalls throws baml.ExtendUnknownError<baml.errors.ToolError> {
       self.inner.step<T>(t.inner)
     }
-    function submit(self, t: BoundedTranscript, results: ToolResult[]) -> BoundedTranscript throws baml.errors.LlmClient {
+    function submit(self, t: BoundedTranscript, results: ToolResult[]) -> BoundedTranscript throws baml.ExtendUnknownError<baml.errors.ToolError> {
       t.inner = self.inner.submit(t.inner, results);
       t
     }
-    function history(self, t: BoundedTranscript) -> History throws baml.errors.LlmClient {
+    function history(self, t: BoundedTranscript) -> History throws baml.ExtendUnknownError<baml.errors.ToolError> {
       self.inner.history(t.inner)
     }
 
@@ -349,7 +379,9 @@ class Bounded {
     //       of looping forever or throwing the partial away.
     // It returns `T`, so to expose the Budget it throws a typed BudgetHit that
     // carries the partial (see run_bounded below for the ergonomic surface).
-    function run_tools<T>(self, prompt: baml.llm.PromptAst, tools: Tool[], ctx: ExecutionContext) -> T throws baml.errors.LlmClient {
+    // BudgetHit implements baml.errors.ToolError, so it is a LEGAL throw on this
+    // capability channel — even though it is a control signal, not a failure.
+    function run_tools<T>(self, prompt: baml.llm.PromptAst, tools: Tool[], ctx: ExecutionContext) -> T throws baml.ExtendUnknownError<baml.errors.ToolError> {
       let bt = self.begin<T>(prompt, tools);
       let step_no = 0;
       while (true) {
@@ -388,11 +420,15 @@ class Bounded {
 
   // A static helper that runs the bounded loop and turns the BudgetHit throw into
   // a typed `Budget<T>` value, so the app gets `T | Budget<T>` without catch noise.
-  function run_to_budget<T>(self, prompt: baml.llm.PromptAst, tools: Tool[], ctx: ExecutionContext) -> T | Budget<T> throws baml.errors.LlmClient {
+  function run_to_budget<T>(self, prompt: baml.llm.PromptAst, tools: Tool[], ctx: ExecutionContext) -> T | Budget<T> throws baml.ExtendUnknownError<baml.errors.ToolError> {
     let v: T = self.run_tools<T>(prompt, tools, ctx) catch (e) {
       let b: BudgetHit => {
         // turn the partial JSON into a best-effort T (may be null if nothing yet).
-        let partial: T? = baml.sap.parse_opt<T>(b.partial_json);
+        // `parse_partial<T>` coerces an in-flight fragment to a best-effort T.
+        let partial: T? = match (b.partial_json) {
+          let s: string => baml.sap.parse_partial<T>(s),
+          _             => null,
+        };
         return Budget<T> { partial: partial, steps_taken: b.steps_taken, history: b.history };
       },
     };
@@ -406,10 +442,38 @@ class BoundedTranscript {
 }
 
 // thrown internally by the override when the budget is hit; carries the partial.
+// It rides the ToolError channel (run_tools is a Tools method) so it MUST implement
+// baml.errors.ToolError to be a legal throw — even though it is a control signal,
+// not a failure. All classifiers are false: a budget cap is neither network, rate
+// limit, nor parse.
 class BudgetHit {
   partial_json: string?
   steps_taken: int
   history: History
+  implements baml.errors.ToolError {
+    function is_network_error(self) -> bool { return false; }
+    function is_rate_limit(self)    -> bool { return false; }
+    function is_parse_error(self)   -> bool { return false; }
+  }
+}
+
+// A model decline that arrives as HTTP 200 with no usable T (OpenAI message.refusal,
+// Gemini finishReason "SAFETY"). Neither the answer nor a transport failure — a
+// distinct typed error the app branches on. It can surface mid-loop, so it is a
+// ToolError; it is the same shape as a refusal on the single-turn call path.
+class Refused {
+  category: string
+  message: string
+  implements baml.errors.ToolError {
+    function is_network_error(self) -> bool { return false; }
+    function is_rate_limit(self)    -> bool { return false; }
+    function is_parse_error(self)   -> bool { return false; }
+  }
+  implements baml.errors.CallError {
+    function is_network_error(self) -> bool { return false; }
+    function is_rate_limit(self)    -> bool { return false; }
+    function is_parse_error(self)   -> bool { return false; }
+  }
 }
 
 

@@ -101,17 +101,20 @@ function ExtractResilient(text: string) -> Event {
 
 // --- handling a refusal at the call site ------------------------------------
 // A refusal is a typed error, NOT a malformed Event. The app distinguishes it
-// from a transport/parse failure by catching baml.errors.Refusal specifically.
+// from a transport/parse failure by catching the concrete `Refused` specifically,
+// then triaging the rest by capability interface, with UnknownError as the floor.
 
 function ExtractEventSafe(text: string) -> Event {
   client: ClaudeStructured()
   prompt #"Extract the calendar event from: {{ text }}"#
 }
 
-// app-level orchestration over the function's .call companion.
+// app-level orchestration over the function's .call companion. Runtime match,
+// most-specific first: concrete Refused -> CallError interface -> UnknownError.
 function TryExtract(text: string) -> Event? {
   ExtractEventSafe(text) catch (e) {
-    let r: baml.errors.Refusal => { null },              // model declined: no Event exists.
-    _                          => { throw e; },          // real failure: propagate.
+    let r: Refused                 => { null },          // model declined: no Event exists.
+    let c: baml.errors.CallError   => { throw c; },      // rate-limit / parse / transport: propagate.
+    let u: baml.UnknownError       => { throw u; },      // exotic/foreign failure: propagate.
   }
 }

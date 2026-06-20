@@ -11,8 +11,9 @@
 //   (C) Deterministic      : plain BAML functions sequence / fan-out / loop. code
 //
 // The proposal already gives us the three primitives we lean on:
-//   - `Provider` (the irreducible base: call<T>)
-//   - `Tools` (begin/step/submit/run_tools, the ToolCall/ToolResult seam)
+//   - `Provider` (the irreducible MARKER — no call; see ../provider-as-marker.md)
+//   - `HttpProvider` (owns call/call_with) and `Tools` (begin/step/submit/run_tools,
+//     the ToolCall/ToolResult seam) — the capabilities a provider actually does
 //   - `client` == `function ... -> Provider`  (so an agent IS a provider-factory)
 //
 // A handoff/sub-agent is "another agent", and an agent is a Provider. So the
@@ -41,14 +42,21 @@ class Agent {
 
   // Convenience: run this agent's own tool loop to completion against a prompt.
   // Just forwards to the provider's Tools capability (or errors if it has none).
-  function run<T>(self, prompt: baml.llm.PromptAst, ctx: ExecutionContext) -> T throws baml.errors.LlmClient {
+  function run<T>(self, prompt: baml.llm.PromptAst, ctx: ExecutionContext) -> T
+      throws baml.ExtendUnknownError<baml.errors.ToolError> {
     match (self.provider) {
       let tp: Tools => tp.run_tools<T>(prompt, self.tools, ctx),
-      _ => {
-        // No tool loop — degrade to a plain single call (an agent with no tools).
-        self.provider.call<T>(prompt)
-      },
+      // No tool loop — degrade to a plain single call (an agent with no tools).
+      // `call` is an HttpProvider capability now (../provider-as-marker.md), so we
+      // match for it rather than calling a base-Provider method that no longer exists.
+      let h: HttpProvider => h.call<T>(prompt),
+      _ => throw baml.errors.Unsupported { message: "agent provider can neither run tools nor call" },
     }
+  } catch (e) {
+    // The degrade arm runs on the CallError channel; a CallError surfacing in this
+    // ToolError-channel method is foreign here, so it normalizes through UnknownError.
+    // (A deliberately-thrown ToolError from the tool loop passes through unchanged.)
+    _ => throw baml.UnknownError.with_message<baml.errors.ToolError>(e, "agent run failed");
   }
 }
 
@@ -74,8 +82,32 @@ class Agent {
 // the two don't interoperate. We make the incompatibility a TYPE the author picks.
 interface Threading {
   // Build the child's opening prompt from (the parent prompt, the run so far).
-  function thread(self, parent_prompt: baml.llm.PromptAst, carry: Carry) -> baml.llm.PromptAst throws baml.errors.LlmClient
+  function thread(self, parent_prompt: baml.llm.PromptAst, carry: Carry) -> baml.llm.PromptAst
+      throws baml.ExtendUnknownError<baml.errors.ToolError>
   type Carry
+}
+
+// --- concrete handoff-domain errors (implement the ToolError channel) --------
+// These are deliberate DOMAIN failures the Handoff combinator raises on purpose
+// during the tool loop, so they implement baml.errors.ToolError and are caught
+// by their concrete type. Neither is a transport failure, so all classifiers
+// report false.
+class HandoffDepthExceeded {
+  max_depth: int
+  implements baml.errors.ToolError {
+    function is_network_error(self) -> bool { return false; }
+    function is_rate_limit(self)    -> bool { return false; }
+    function is_parse_error(self)   -> bool { return false; }
+  }
+}
+
+class NoSuchHandoffTarget {
+  to_name: string
+  implements baml.errors.ToolError {
+    function is_network_error(self) -> bool { return false; }
+    function is_rate_limit(self)    -> bool { return false; }
+    function is_parse_error(self)   -> bool { return false; }
+  }
 }
 
 // History model (OpenAI Agents SDK): concatenate the parent's transcript text.
@@ -86,7 +118,7 @@ class History {
   implements Threading {
     type Carry = baml.llm.PromptAst
     function thread(self, parent_prompt: baml.llm.PromptAst, carry: baml.llm.PromptAst)
-        -> baml.llm.PromptAst throws baml.errors.LlmClient {
+        -> baml.llm.PromptAst throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // concat parent's running conversation in front of the child charter.
       let joined = baml.llm.concat_prompts(parent_prompt, carry);
       match (self.max_chars) {
@@ -104,9 +136,19 @@ class Shared {
   implements Threading {
     type Carry = map<string, unknown>
     function thread(self, parent_prompt: baml.llm.PromptAst, carry: map<string, unknown>)
-        -> baml.llm.PromptAst throws baml.errors.LlmClient {
+        -> baml.llm.PromptAst throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // child does NOT see history; it sees the scoped state injected as variables.
-      baml.llm.inject_vars(parent_prompt, baml.collections.filter_prefix(carry, self.scope))
+      // keep only the keys under this scope (e.g. "user:"/"app:"/"temp:").
+      let scoped: map<string, unknown> = {};
+      for (let k in carry.keys()) {
+        if (k.starts_with(self.scope)) {
+          match (carry.get(k)) {
+            let v: unknown => { scoped.set(k, v); },
+            _ => {},
+          }
+        }
+      }
+      baml.llm.inject_vars(parent_prompt, scoped)
     }
   }
 }
@@ -123,13 +165,14 @@ class Handoff {
   implements Tools {
     type Transcript = HandoffState
 
-    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> HandoffState throws baml.errors.LlmClient {
+    function begin<T>(self, prompt: baml.llm.PromptAst, tools: Tool[]) -> HandoffState
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // The router gets the user's tools PLUS one synthesized transfer tool per target.
       let synthesized = self.synthesize_transfers();
       let active = self.router.provider;
       let inner = match (active) {
-        let tp: Tools => tp.begin<T>(prompt, baml.collections.concat(tools, synthesized)),
-        _ => throw baml.errors.LlmClient { message: "handoff router provider has no Tools capability" },
+        let tp: Tools => tp.begin<T>(prompt, tools.concat(synthesized)),
+        _ => throw baml.errors.Unsupported { message: "handoff router provider has no Tools capability" },
       };
       HandoffState {
         active: active,
@@ -142,17 +185,19 @@ class Handoff {
       }
     }
 
-    function step<T>(self, t: HandoffState) -> T | ToolCalls throws baml.errors.LlmClient {
+    function step<T>(self, t: HandoffState) -> T | ToolCalls
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       match (t.active) {
         let tp: Tools => tp.step<T>(t.inner),
-        _ => throw baml.errors.LlmClient { message: "active provider lost its Tools capability" },
+        _ => throw baml.errors.Unsupported { message: "active provider lost its Tools capability" },
       }
     }
 
     // submit is where the SWAP happens. We intercept transfer_to_* calls before
     // they reach the user's dispatch. A transfer is NOT a tool result — it ends
     // the current agent's loop and re-begins on the target provider.
-    function submit(self, t: HandoffState, results: ToolResult[]) -> HandoffState throws baml.errors.LlmClient {
+    function submit(self, t: HandoffState, results: ToolResult[]) -> HandoffState
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       // (results already correspond to calls the OUTER run_tools fed us; but a
       //  transfer call produces no honest result, so the OUTER loop must route it
       //  here as a control signal. We model that by re-reading the pending calls.)
@@ -160,17 +205,15 @@ class Handoff {
       match (pending) {
         let xfer: TransferCall => {
           if (t.depth + 1 > self.max_depth) {
-            throw baml.errors.LlmClient {
-              message: baml.strings.concat("handoff depth exceeded ", baml.strings.from_int(self.max_depth)),
-            };
+            throw HandoffDepthExceeded { max_depth: self.max_depth };
           }
           let target = self.find_target(xfer.to_name);
           // thread the parent's run into the child per the chosen model.
           let child_prompt = self.threading.thread(t.root_prompt, t.carry);
           let target_synth = self.synthesize_transfers();       // child can transfer onward too
           let child_inner = match (target.provider) {
-            let tp: Tools => tp.begin<T>(child_prompt, baml.collections.concat(target.tools, target_synth)),
-            _ => throw baml.errors.LlmClient { message: "transfer target has no Tools capability" },
+            let tp: Tools => tp.begin<T>(child_prompt, target.tools.concat(target_synth)),
+            _ => throw baml.errors.Unsupported { message: "transfer target has no Tools capability" },
           };
           HandoffState {
             active: target.provider,
@@ -186,7 +229,7 @@ class Handoff {
           // ordinary tool results -> forward to the active provider's submit.
           let inner2 = match (t.active) {
             let tp: Tools => tp.submit(t.inner, results),
-            _ => throw baml.errors.LlmClient { message: "active provider lost its Tools capability" },
+            _ => throw baml.errors.Unsupported { message: "active provider lost its Tools capability" },
           };
           HandoffState { active: t.active, active_agent: t.active_agent, inner: inner2,
                          depth: t.depth, user_tools: t.user_tools, carry: t.carry, root_prompt: t.root_prompt }
@@ -198,7 +241,8 @@ class Handoff {
     // transfer calls into ctx.dispatch (which doesn't know them). Our loop peels
     // transfer calls off and routes them to `submit` as control, dispatching the
     // rest normally.
-    function run_tools<T>(self, prompt: baml.llm.PromptAst, tools: Tool[], ctx: ExecutionContext) -> T throws baml.errors.LlmClient {
+    function run_tools<T>(self, prompt: baml.llm.PromptAst, tools: Tool[], ctx: ExecutionContext) -> T
+        throws baml.ExtendUnknownError<baml.errors.ToolError> {
       let t = self.begin<T>(prompt, tools);
       while (true) {
         match (self.step<T>(t)) {
@@ -206,12 +250,12 @@ class Handoff {
           let calls: ToolCalls => {
             // partition: transfer_to_* (control) vs real tool calls (dispatch)
             let parts = baml.agent.partition_transfers(calls.calls);
-            if (baml.collections.is_empty(parts.transfers)) {
+            if (parts.transfers.length() == 0) {
               t = self.submit(t, ctx.dispatch(parts.tools));        // normal turn
             } else {
               // a transfer was requested. Dispatch any co-occurring real calls first
               // (rare, but the model may emit both), then swap.
-              let t1 = match (baml.collections.is_empty(parts.tools)) {
+              let t1 = match (parts.tools.length() == 0) {
                 true => t,
                 _ => self.submit(t, ctx.dispatch(parts.tools)),
               };
@@ -225,19 +269,19 @@ class Handoff {
     }
   }
 
-  // Forward .call as a best-effort one-shot of the router (Tools requires Provider).
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
-      self.router.provider.call<T>(prompt)
-    }
-  }
+  // Handoff's REAL interaction is the Tools loop above. It does NOT fake a
+  // single-turn `call`: a router-swap loop has no honest one-shot. Because
+  // `Tools requires Provider`, a Handoff still IS a Provider (the marker) — so
+  // it composes (.with_retry/.cached) without claiming an HttpProvider.call it
+  // can't honestly serve. The old degenerate `implements Provider { call }`
+  // (a best-effort one-shot of the router) is gone (../provider-as-marker.md).
 
   // --- helpers (static-ish; take self) -------------------------------------
   function synthesize_transfers(self) -> Tool[] {
     let out: Tool[] = [];
     for (let a in self.targets) {
-      out = baml.collections.push(out, Tool {
-        name: baml.strings.concat("transfer_to_", a.name),
+      out.push(Tool {
+        name: "transfer_to_" + a.name,
         description: a.description,        // ADK uses the child's description as trigger text
         parameters: reflect.type_of<TransferInput>(),   // optional structured "why" payload
       });
@@ -245,11 +289,12 @@ class Handoff {
     out
   }
 
-  function find_target(self, name: string) -> Agent throws baml.errors.LlmClient {
+  function find_target(self, name: string) -> Agent
+      throws baml.ExtendUnknownError<baml.errors.ToolError> {
     for (let a in self.targets) {
       if (a.name == name) { return a; }
     }
-    throw baml.errors.LlmClient { message: baml.strings.concat("no such handoff target: ", name) }
+    throw NoSuchHandoffTarget { to_name: name }
   }
 }
 
@@ -304,7 +349,8 @@ class AgentTool {
   // Runs the child to completion with a FRESH context (isolated — the background's
   // "without polluting the main context"). Returns the child's output as the
   // tool's result payload.
-  function handle(self, call: ToolCall, ctx: ExecutionContext) -> ToolResult throws baml.errors.LlmClient {
+  function handle(self, call: ToolCall, ctx: ExecutionContext) -> ToolResult
+      throws baml.ExtendUnknownError<baml.errors.ToolError> {
     let prompt = baml.agent.prompt_from_input<SubAgentInput>(self.child.provider, call.args);
     // child gets its OWN nested execution context (own tool dispatch table).
     let child_ctx = ctx.child(self.child.name);
@@ -322,37 +368,96 @@ class SubAgentInput { request: string }
 // ADK's SequentialAgent / ParallelAgent / LoopAgent. The proposal already says
 // deterministic orchestration is "plain BAML functions". So these are NOT new
 // capabilities — they're combinators (Provider in, Provider out) whose `call`
-// runs children in code. We model the shared-state ("output_key") plumbing with
-// the `Shared` carry, since that's how ADK threads sequential pipelines.
+// runs children in code. Since they produce a VALUE (request/response shape),
+// they implement `HttpProvider` (which owns call/call_with) — not the bare
+// `Provider` marker (../provider-as-marker.md). We model the shared-state
+// ("output_key") plumbing with the `Shared` carry, since that's how ADK threads
+// sequential pipelines.
 
 // Sequential: run children in order; each reads prior outputs from shared state.
 class Sequential {
   steps: Agent[]
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
+  // Sequential produces a value (request/response shape) so it OWNS call now via
+  // HttpProvider (../provider-as-marker.md): `call` stays here, and `call_with`
+  // forwards the projection to the FINAL step's HttpProvider (the value-producing
+  // one) so the sidecar/usage isn't dropped — P1 fix. The earlier steps are pure
+  // pipeline plumbing; their meta is not the answer's meta.
+  implements HttpProvider {
+    type Body = unknown
+    function call<T>(self, prompt: baml.llm.PromptAst) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      let (v, _): (T, null) = self.call_with<T, null>(prompt, m => null);
+      v
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "Sequential step failed");
+    }
+
+    function call_with<T, U>(self, prompt: baml.llm.PromptAst, project: (ResponseMeta) -> U) -> (T, U)
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       let state: map<string, unknown> = {};
       let last: unknown = null;
+      let n = self.steps.length();
+      let i = 0;
       for (let a in self.steps) {
         let p = baml.llm.inject_vars(prompt, state);     // editor reads {draft} from state
+        // The FINAL step carries the answer's sidecar: if its provider is an
+        // HttpProvider, route call_with there so `project` sees the real meta.
+        if (i + 1 == n) {
+          match (a.provider) {
+            let h: HttpProvider => { return h.call_with<T, U>(p, project); },
+            _ => {},   // final step has no request/response sidecar — fall through to the loop value
+          }
+        }
         let ctx = baml.agent.root_ctx();
         last = a.run<unknown>(p, ctx);
-        state = baml.collections.set(state, a.name, last);   // output_key := agent name
+        state.set(a.name, last);   // output_key := agent name
+        i = i + 1;
       }
-      baml.agent.coerce<T>(last)
+      // final step was not an HttpProvider: no sidecar to project, hand `project` an empty meta.
+      (baml.agent.coerce<T>(last), project(baml.agent.empty_meta()))
+    } catch (e) {
+      // Children run a tool loop (ToolError channel); a ToolError surfacing in this
+      // CallError-channel method is foreign here, so it normalizes through UnknownError.
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "Sequential step failed");
     }
   }
 }
 
-// Parallel: fan children out concurrently; collect all outputs.
+// Parallel: fan children out concurrently; collect all outputs. Fan-out is a
+// list of `spawn`s and the join is `baml.future.all` — structured concurrency
+// is a SHIPPED first-class language feature (BEP-034), so no host scheduler
+// primitive is needed (see ../_conventions.md "Concurrency").
 class Parallel {
   branches: Agent[]
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
-      // host runs the closures concurrently and joins.
-      let results = baml.async.join_all(baml.collections.map(self.branches, a => {
-        () => a.run<unknown>(prompt, baml.agent.root_ctx())
-      }));
-      baml.agent.coerce<T>(results)            // T is typically a record/array of branch outputs
+  // Parallel produces a value (a joined record/array) so it OWNS call via
+  // HttpProvider now. There is no single value-producing member to forward to
+  // (it JOINS all branches), so `call_with` projects an AGGREGATE meta covering
+  // the whole fan-out — combinators are just code (../provider-as-marker.md).
+  implements HttpProvider {
+    type Body = unknown
+    function call<T>(self, prompt: baml.llm.PromptAst) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      let (v, _): (T, null) = self.call_with<T, null>(prompt, m => null);
+      v
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "Parallel branch failed");
+    }
+
+    function call_with<T, U>(self, prompt: baml.llm.PromptAst, project: (ResponseMeta) -> U) -> (T, U)
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      // Fan-out is a list of `spawn`s; the join is `baml.future.all` (BEP-034
+      // structured concurrency — a SHIPPED language feature, not a host primitive).
+      // Each branch starts concurrently and returns a Future immediately; `all`
+      // awaits them in input order and, on the first failure, cancels the losers
+      // before re-throwing — so one branch's CallError tears the rest down cleanly.
+      let branch_futures = self.branches.map(a => {
+        spawn { a.run<unknown>(prompt, baml.agent.root_ctx()) }
+      });
+      let results = await baml.future.all(branch_futures);
+      // fan-out has no single answer-meta; project an aggregate over all branches.
+      (baml.agent.coerce<T>(results), project(baml.agent.aggregate_meta(results)))
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "Parallel branch failed");
     }
   }
 }
@@ -362,16 +467,34 @@ class Loop {
   body: Agent[]
   max_iterations: int
   until: (unknown) -> bool          // code-decided stop, NOT a model
-  implements Provider {
-    function call<T>(self, prompt: baml.llm.PromptAst) -> T throws baml.errors.LlmClient {
+  // Loop produces a value (the converged output) so it OWNS call via HttpProvider
+  // now. The body runs as a Tools loop, not request/response, so there is no
+  // member call_with to forward to; `call_with` projects an empty meta over the
+  // converged result (../provider-as-marker.md).
+  implements HttpProvider {
+    type Body = unknown
+    function call<T>(self, prompt: baml.llm.PromptAst) -> T
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
+      let (v, _): (T, null) = self.call_with<T, null>(prompt, m => null);
+      v
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "Loop body failed");
+    }
+
+    function call_with<T, U>(self, prompt: baml.llm.PromptAst, project: (ResponseMeta) -> U) -> (T, U)
+        throws baml.ExtendUnknownError<baml.errors.CallError> {
       let last: unknown = null;
-      for (let i in baml.collections.range(0, self.max_iterations)) {
+      let i = 0;
+      while (i < self.max_iterations) {
         for (let a in self.body) {
           last = a.run<unknown>(prompt, baml.agent.root_ctx());
         }
-        if (self.until(last)) { return baml.agent.coerce<T>(last); }
+        if (self.until(last)) { return (baml.agent.coerce<T>(last), project(baml.agent.empty_meta())); }
+        i = i + 1;
       }
-      baml.agent.coerce<T>(last)
+      (baml.agent.coerce<T>(last), project(baml.agent.empty_meta()))
+    } catch (e) {
+      _ => throw baml.UnknownError.with_message<baml.errors.CallError>(e, "Loop body failed");
     }
   }
 }
@@ -388,8 +511,14 @@ class Loop {
 //   prompt_from_input<I>(p, args)      -> baml.llm.PromptAst
 //   coerce<T>(value)                   -> T                 // existential narrowing at a deterministic seam
 //   root_ctx()                         -> ExecutionContext  // fresh dispatch table
+//   empty_meta()                       -> ResponseMeta      // an all-Unsupported meta for non-http combinators
+//   aggregate_meta(results)            -> ResponseMeta      // a fan-out meta summing branch usage
 // ExecutionContext gains (per proposal §7 "needs a dispatch and an event-emit surface"):
 //   ctx.dispatch(calls)                -> ToolResult[]      // (already proposed)
 //   ctx.child(name)                    -> ExecutionContext  // NET-NEW: nested, isolated dispatch table
 // baml.llm.*  concat_prompts / truncate_prompt / inject_vars / empty_prompt
-// baml.async.join_all  / baml.collections.* / baml.strings.*
+// List/Map/String ops are the REAL stdlib methods — `xs.concat`/`.push`/`.map`/
+// `.length()`, `m.set`/`.get`/`.keys()`, `a + b`/`s.starts_with` — not host seams.
+// Concurrency (Parallel fan-out) uses the SHIPPED BEP-034 language surface
+// directly — `spawn { ... } -> baml.future.Future` + `baml.future.all` — not a
+// host seam: structured concurrency is first-class, not net-new plumbing.

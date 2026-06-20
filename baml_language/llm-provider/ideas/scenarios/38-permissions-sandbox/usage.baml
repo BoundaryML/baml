@@ -62,11 +62,14 @@ client FlueContainer() {
 // The client is config-only. The live control channel and the approval callback
 // are NOT client fields — they arrive at the call (the channel via `.live`, the
 // callback inside the ExecutionContext we hand to `.run_tools`).
-
-function FixBug(task: string) -> Patch {
-  client: CiFixer()
-  prompt #"Fix the bug and return a patch: {{ task }}"#
-}
+//
+// NOTE: there is no basic `FixBug(task)` value-call here. CiFixer() is a harness
+// (ClaudeCode) — a subprocess agent that exposes Tools/Realtime, NOT HttpProvider,
+// and (../provider-as-marker.md) it no longer fakes a single-turn `call`. So the
+// app drives it through its REAL interactions: `.run_tools` for the batch loop
+// (fix_in_ci / fix_with_flue) and `.live` + `.run_tools` for the steerable session
+// (fix_interactive). A bare `FixBug(task)` companion would `match` the client for
+// HttpProvider, miss, and throw `Unsupported` — so we don't write one.
 
 
 // ---- the per-call approval CALLBACK (the can_use_tool hook) --------------
@@ -96,7 +99,8 @@ function safety_callback() -> (ToolCall) -> ApprovalDecision {
 // provider's own mode (mode_to_rules) AND layer the programmatic callback on top.
 // With no control channel, any "ask" default-denies — correct for unattended CI.
 
-function fix_in_ci(task: string) -> Patch {
+function fix_in_ci(task: string) -> Patch
+    throws baml.ExtendUnknownError<baml.errors.ToolError> {
   let actor: Provider = CiFixer();
 
   // pull the declarative posture out of the Claude-specific mode word. This is
@@ -110,7 +114,7 @@ function fix_in_ci(task: string) -> Patch {
   let ctx = PermissionedContext {
     policy: ToolPolicy {
       tools: code_tools(),
-      rules: concat_rules(rules, [
+      rules: rules.concat([
         // declarative require_approval as DATA: always gate network egress.
         ApprovalRule { tool: "WebFetch", require: "always", deny_pattern: null },
         // pattern sieve as DATA: deny the literal `rm -rf` invocation outright.
@@ -136,7 +140,8 @@ function fix_in_ci(task: string) -> Patch {
 // answers over the same channel). This is the third home for the approval
 // decision — field? no; hook? yes for batch; CHANNEL EVENT for the live session.
 
-function fix_interactive(task: string, io: Channel) -> Patch {
+function fix_interactive(task: string, io: Channel) -> Patch
+    throws baml.ExtendUnknownError<baml.errors.ToolError> {
   let actor: Provider = CiFixer();
   let rules: ApprovalRule[] = match (actor) {
     let cc: ClaudeCode => cc.mode_to_rules(),
@@ -165,7 +170,8 @@ function fix_interactive(task: string, io: Channel) -> Patch {
 // from the tool list. PermissionedContext, ApprovalRule, the callback, and the
 // sandbox abstraction are all provider-agnostic.
 
-function fix_with_flue(task: string) -> Patch {
+function fix_with_flue(task: string) -> Patch
+    throws baml.ExtendUnknownError<baml.errors.ToolError> {
   let actor: Provider = FlueContainer();
   let ctx = PermissionedContext {
     policy: ToolPolicy {
@@ -203,6 +209,5 @@ function code_tools() -> Tool[] {
 }
 
 function command_has(call: ToolCall, needle: string) -> bool { $rust_io_function }   // reads call.args.command
-function concat_rules(a: ApprovalRule[], b: ApprovalRule[]) -> ApprovalRule[] { $rust_io_function }
 function render_task(task: string) -> baml.llm.PromptAst { $rust_io_function }
 function provision_container() -> $rust_type { $rust_io_function }                    // connector handle

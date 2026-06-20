@@ -50,15 +50,26 @@ client PortableCoder() {
 }
 
 
-// ---- one-shot: fresh session every call (the base `.call`) -------------------
+// ---- one-shot: fresh session every call --------------------------------------
+//
+// A harness is NOT an HttpProvider (../provider-as-marker.md): under the marker
+// model `Provider` has no `call`, so there is no `client:`/`prompt` sugar desugar
+// to a base `.call` here.  The harness's REAL one-shot is "run a fresh session" —
+// `SessionCatalog.call_in_session(..., Fresh {})`.  We write it as a companion
+// `match`, the same negotiation as every other harness interaction.
 
 class Patch { files_changed: string[], summary: string }
 
-function Fix(task: string) -> Patch {
-  client: CodeAgent()
-  prompt #"Fix the bug: {{ task }}"#
+function Fix(task: string) -> Patch
+    throws baml.ExtendUnknownError<baml.errors.SessionError> {
+  let p = CodeAgent();
+  match (p) {
+    let cat: SessionCatalog => cat.call_in_session<Patch>(render_prompt(task), Fresh {}),
+    _ => throw baml.errors.Unsupported { message: "client cannot run a session" },
+  }
 }
-// Fix("auth null deref")  ->  ClaudeCode.call<Patch>(prompt)  -> writes a NEW jsonl.
+// Fix("auth null deref")  ->  ClaudeCode.call_in_session<Patch>(prompt, Fresh {})
+//   -> the harness subprocess runs a fresh turn and writes a NEW jsonl.
 
 
 // ---- continue / resume / fork: a SessionCatalog companion --------------------
@@ -68,7 +79,8 @@ function Fix(task: string) -> Patch {
 // companion longhand to show the negotiation an app author does (and to show the
 // `_` arm: a chat model has no store, so this errors honestly).
 
-function FixContinuing(task: string, pickup: Pickup) -> Patch throws baml.errors.LlmClient {
+function FixContinuing(task: string, pickup: Pickup) -> Patch
+    throws baml.ExtendUnknownError<baml.errors.SessionError> {
   let p = CodeAgent();
   match (p) {
     let cat: SessionCatalog => cat.call_in_session<Patch>(render_prompt(task), pickup),
@@ -90,12 +102,15 @@ function FixContinuing(task: string, pickup: Pickup) -> Patch throws baml.errors
 // without spawning anything.  Again gated by a capability `match` — a chat client
 // would simply not be a SessionCatalog.
 
-function TriageSessions(incident_tag: string) -> SessionInfo[] throws baml.errors.LlmClient {
+function TriageSessions(incident_tag: string) -> SessionInfo[]
+    throws baml.ExtendUnknownError<baml.errors.SessionError> {
   let p = CodeAgent();
   match (p) {
     let cat: SessionCatalog => {
       let sessions: SessionInfo[] = cat.list_sessions() catch (e) {
-        _ => { throw baml.errors.LlmClient { message: "session store unreadable" }; }
+        // Annotate-and-rethrow on the SAME channel: a known SessionError passes
+        // through unchanged, foreign values get the breadcrumb.
+        _ => { throw baml.UnknownError.with_message<baml.errors.SessionError>(e, "session store unreadable"); }
       };
       // tag the most recent few so an on-call engineer can find them later.
       let recent: SessionInfo[] = [];
@@ -103,7 +118,7 @@ function TriageSessions(incident_tag: string) -> SessionInfo[] throws baml.error
         if (s.message_count > 0) {
           cat.tag_session(s.id, incident_tag) catch (e) { _ => {} };
           cat.rename_session(s.id, "triage: " + optional_or(s.title, s.id)) catch (e) { _ => {} };
-          recent = recent.append(s);
+          recent.push(s);
         }
       }
       return recent;
@@ -114,7 +129,8 @@ function TriageSessions(incident_tag: string) -> SessionInfo[] throws baml.error
 
 // Pull the raw transcript of one session for an audit view — note this reaches
 // the SAME jsonl the agent appends to, so it reflects in-flight state.
-function AuditSession(session_id: string) -> Turn[] throws baml.errors.LlmClient {
+function AuditSession(session_id: string) -> Turn[]
+    throws baml.ExtendUnknownError<baml.errors.SessionError> {
   let p = CodeAgent();
   match (p) {
     let cat: SessionCatalog => cat.session_messages(session_id),
@@ -130,12 +146,14 @@ function AuditSession(session_id: string) -> Turn[] throws baml.errors.LlmClient
 // the project gets a brand-new session and no error — the §5 "orphaned
 // transcripts" hazard, reproduced honestly.
 
-function ContinueHere(task: string) -> Patch throws baml.errors.LlmClient {
+function ContinueHere(task: string) -> Patch
+    throws baml.ExtendUnknownError<baml.errors.SessionError> {
   // Resolves to the most recent session under "/workspace/project".
   FixContinuing(task, Continue {})
 }
 
-function ContinueElsewhere(task: string) -> Patch throws baml.errors.LlmClient {
+function ContinueElsewhere(task: string) -> Patch
+    throws baml.ExtendUnknownError<baml.errors.SessionError> {
   let p = OtherDir();      // cwd = /workspace/other => a DIFFERENT encoded dir
   match (p) {
     let cat: SessionCatalog => cat.call_in_session<Patch>(render_prompt(task), Continue {}),
@@ -152,7 +170,8 @@ function ContinueElsewhere(task: string) -> Patch throws baml.errors.LlmClient {
 // runs against it because PiAgent is also a SessionCatalog — proving the
 // queryable surface is portable and the cwd-coupling was an impl property.
 
-function FixPortable(task: string, pickup: Pickup) -> Patch throws baml.errors.LlmClient {
+function FixPortable(task: string, pickup: Pickup) -> Patch
+    throws baml.ExtendUnknownError<baml.errors.SessionError> {
   let p = PortableCoder();
   match (p) {
     let cat: SessionCatalog => cat.call_in_session<Patch>(render_prompt(task), pickup),
@@ -160,6 +179,27 @@ function FixPortable(task: string, pickup: Pickup) -> Patch throws baml.errors.L
   }
 }
 // FixPortable("resume after I moved the repo", Resume { session_id: "leaf-77" })  -> still works.
+
+
+// ---- the consumer catch: triage a resume that may not exist -----------------
+//
+// Runtime match, MOST-SPECIFIC-FIRST (error model rule 5): the concrete
+// `SessionNotFound` (a session the user named that isn't on disk / was moved) is
+// branched first; then the `SessionError` interface (use its classifiers); then
+// `baml.UnknownError` as the escape hatch. `baml.errors.Unsupported` from the `_`
+// arm of FixPortable is itself a SessionError, so it is caught by the interface arm.
+
+function ResumeOrStartFresh(task: string, session_id: string) -> Patch
+    throws baml.ExtendUnknownError<baml.errors.SessionError> {
+  FixPortable(task, Resume { session_id: session_id }) catch (e) {
+    let nf: SessionNotFound        => FixPortable(task, Fresh {});     // moved/missing -> new session
+    let s: baml.errors.SessionError => {                              // any other session failure
+      if (s.is_network_error()) { FixPortable(task, Resume { session_id: session_id }) }   // transient DB blip: retry once
+      else { throw s; }
+    }
+    let u: baml.UnknownError       => throw u;                        // foreign: surface the breadcrumb
+  }
+}
 
 
 // ---- inspect the shipped toolset without spawning ---------------------------

@@ -107,13 +107,20 @@ function FixBug(task: string) -> Patch {
 // The app distinguishes an input trip from an output trip the way the SDK does —
 // by catching distinct exception types. This is end-user code that would live in
 // the host language, shown here in BAML's catch syntax for completeness.
+//
+// FileTaxes goes through .call, so its channel is
+// `baml.ExtendUnknownError<baml.errors.CallError>`. The catch matches MOST-SPECIFIC
+// FIRST: the concrete tripwire classes, then the CallError interface (a judge model's
+// rate-limit / network blip surfaced through a guard), then the UnknownError escape hatch.
 
 function FileTaxesSafely(question: string) -> TaxAnswer {
   client: AssistantChat()
   prompt #"Help the user with their taxes. Question: {{ question }}"#
-  // pseudo-handler illustrating the two typed catch arms:
+  // pseudo-handler illustrating the typed catch arms, most-specific first:
   //   FileTaxes(question) catch (e) {
-  //     let it: InputTripwire  => { log("blocked on input:", it.info);  fallback_answer() },
-  //     let ot: OutputTripwire => { log("blocked on output:", ot.info); refusal_answer() },
+  //     let it: InputTripwire        => { log("blocked on input:", it.info);  fallback_answer() },
+  //     let ot: OutputTripwire       => { log("blocked on output:", ot.info); refusal_answer() },
+  //     let c:  baml.errors.CallError => { if (c.is_rate_limit()) { backoff(); } else { fail(); } },
+  //     let u:  baml.UnknownError     => { report(u.message); },
   //   }
 }
