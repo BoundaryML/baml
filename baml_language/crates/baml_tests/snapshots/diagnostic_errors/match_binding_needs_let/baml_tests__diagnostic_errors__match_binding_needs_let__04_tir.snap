@@ -1,0 +1,24 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+function user.grade(score: int) -> string throws never {
+  { : "A" | "F"
+    match (score : int) : "A" | "F"
+      n if n >= 90 =>
+        "A" : "A"
+      _ =>
+        "F" : "F"
+  }
+  !! 307..313: unresolved type: n. To bind the scrutinee to a name, use `let n` (e.g. `let n if … => …`)
+  !! 317..318: unresolved name: n
+}
+function user.gradeOk(score: int) -> string throws never {
+  { : "A" | "F"
+    match (score : int) : "A" | "F"
+      n if n >= 90 =>
+        "A" : "A"
+      _ =>
+        "F" : "F"
+  }
+}

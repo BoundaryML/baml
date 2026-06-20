@@ -1,0 +1,10 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR2 ===
+function user.grade(score: int) -> string  [expr] {
+  {  } match (score) { n => "A", _ => "F" }
+}
+function user.gradeOk(score: int) -> string  [expr] {
+  {  } match (score) { n => "A", _ => "F" }
+}

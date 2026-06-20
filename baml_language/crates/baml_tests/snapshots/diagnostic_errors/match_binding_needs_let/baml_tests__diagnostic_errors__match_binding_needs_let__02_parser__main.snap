@@ -1,0 +1,112 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "grade"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "score"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "score"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            PATTERN
+              TYPE_PATTERN
+                TYPE_EXPR "n"
+                  WORD "n"
+            MATCH_GUARD
+              KW_IF "if"
+              BINARY_EXPR "n >= 90"
+                WORD "n"
+                GREATER_EQUALS ">="
+                INTEGER_LITERAL "90"
+            FAT_ARROW "=>"
+            STRING_LITERAL "A"
+              QUOTE """
+              WORD "A"
+              QUOTE """
+            COMMA ","
+          MATCH_ARM
+            PATTERN
+              WILDCARD_PATTERN "_"
+                WORD "_"
+            FAT_ARROW "=>"
+            STRING_LITERAL "F"
+              QUOTE """
+              WORD "F"
+              QUOTE """
+            COMMA ","
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "gradeOk"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "score"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "score"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            PATTERN
+              BINDING_PATTERN "let n"
+                KW_LET "let"
+                WORD "n"
+            MATCH_GUARD
+              KW_IF "if"
+              BINARY_EXPR "n >= 90"
+                WORD "n"
+                GREATER_EQUALS ">="
+                INTEGER_LITERAL "90"
+            FAT_ARROW "=>"
+            STRING_LITERAL "A"
+              QUOTE """
+              WORD "A"
+              QUOTE """
+            COMMA ","
+          MATCH_ARM
+            PATTERN
+              WILDCARD_PATTERN "_"
+                WORD "_"
+            FAT_ARROW "=>"
+            STRING_LITERAL "F"
+              QUOTE """
+              WORD "F"
+              QUOTE """
+            COMMA ","
+          R_BRACE "}"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

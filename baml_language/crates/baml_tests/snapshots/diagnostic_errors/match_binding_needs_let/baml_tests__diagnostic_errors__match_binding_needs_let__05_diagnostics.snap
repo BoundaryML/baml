@@ -1,0 +1,24 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] error: unresolved type: n. To bind the scrutinee to a name, use `let n` (e.g. `let n if … => …`)
+   ╭─[ main.baml:6:18 ]
+   │
+ 6 │ ╭─▶   match (score) {
+ 7 │ ├─▶     n if n >= 90 => "A",
+   │ │                              
+   │ ╰────────────────────────────── unresolved type: n. To bind the scrutinee to a name, use `let n` (e.g. `let n if … => …`)
+   │     
+   │     Note: Error code: E0002
+───╯
+
+  [type] error: unresolved name: n
+   ╭─[ main.baml:7:10 ]
+   │
+ 7 │     n if n >= 90 => "A",
+   │          ┬  
+   │          ╰── unresolved name: n
+   │ 
+   │ Note: Error code: E0003
+───╯
