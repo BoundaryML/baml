@@ -21,8 +21,8 @@ use crate::{
     ids::{FunctionMarker, LocalItemId},
     item_tree::ItemTree,
     loc::{
-        ClassLoc, ClientLoc, EnumLoc, FunctionLoc, GeneratorLoc, InterfaceLoc, LetLoc,
-        RetryPolicyLoc, TemplateStringLoc, TestLoc, TypeAliasLoc,
+        ClassLoc, ClientLoc, EnumLoc, FunctionLoc, InterfaceLoc, LetLoc, RetryPolicyLoc,
+        TemplateStringLoc, TestLoc, TypeAliasLoc,
     },
     scope::{FileScopeId, Scope, ScopeId, ScopeKind},
     semantic_index::{
@@ -1137,7 +1137,6 @@ impl<'db> SemanticIndexBuilder<'db> {
             ast::Item::TypeAlias(ta) => self.lower_type_alias(ta),
             ast::Item::Client(c) => self.lower_client(c),
             ast::Item::Test(t) => self.lower_test(t),
-            ast::Item::Generator(g) => self.lower_generator(g),
             ast::Item::TemplateString(ts) => self.lower_template_string(ts),
             ast::Item::RetryPolicy(rp) => self.lower_retry_policy(rp),
             ast::Item::Let(l) => self.lower_let(l),
@@ -1445,22 +1444,6 @@ impl<'db> SemanticIndexBuilder<'db> {
         ));
 
         self.push_scope(ScopeKind::Item, Some(t.name.clone()), t.span);
-        self.pop_scope();
-    }
-
-    fn lower_generator(&mut self, g: &ast::GeneratorDef) {
-        let local_id = self.item_tree.alloc_generator(g);
-        ItemTree::collect_generator_spans(&mut self.item_tree_source_map, local_id, g);
-        let loc = GeneratorLoc::new(self.db, self.file, local_id);
-        self.value_contributions.push((
-            g.name.clone(),
-            Contribution {
-                name_span: g.name_span,
-                definition: Definition::Generator(loc),
-            },
-        ));
-
-        self.push_scope(ScopeKind::Item, Some(g.name.clone()), g.span);
         self.pop_scope();
     }
 

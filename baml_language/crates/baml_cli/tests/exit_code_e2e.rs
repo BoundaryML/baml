@@ -40,17 +40,19 @@ fn create_project(dir: &Path, source: &str) {
     std::fs::write(src.join("main.baml"), source).unwrap();
 }
 
-/// Create a project with a generator block for testing the generate command.
+/// Create a project with a `[generator.py]` section in `baml.toml` for
+/// testing the generate command.
 fn create_project_with_generator(dir: &Path, source: &str) {
-    let generator_block = r#"
-generator py {
-    output_type "python/pydantic"
-    output_dir ".."
-    naming_convention "preserve-case"
-}
-"#;
-    let full_source = format!("{source}\n{generator_block}");
-    create_project(dir, &full_source);
+    create_project(dir, source);
+    std::fs::write(
+        dir.join("baml.toml"),
+        "[package]\nname = \"test-project\"\n\n\
+         [generator.py]\n\
+         output_type = \"python/pydantic\"\n\
+         output_dir = \"..\"\n\
+         naming_convention = \"preserve-case\"\n",
+    )
+    .unwrap();
 }
 
 // ============================================================================
@@ -913,28 +915,34 @@ fn test_without_baml_toml_using_baml_src_returns_no_tests_code() {
     );
 }
 
-/// `baml generate` runs a generator on a manifest-less `baml_src/` project.
+/// Generators are declared in `baml.toml`'s `[generator.<name>]` sections,
+/// so a manifest-less `baml_src/`-only project has nowhere to declare one:
+/// `baml generate` reports the missing-generator hint rather than producing
+/// output.
 #[test]
-fn generate_without_baml_toml_using_baml_src_succeeds() {
+fn generate_without_baml_toml_reports_no_generators() {
     let built = common::ensure_built();
     let tmp = tempfile::tempdir().unwrap();
     let src = tmp.path().join("baml_src");
     std::fs::create_dir_all(&src).unwrap();
     std::fs::write(
         src.join("main.baml"),
-        "function greet(name: string) -> string {\n  \"Hello, \" + name\n}\n\n\
-         generator py {\n  output_type \"python/pydantic\"\n  output_dir \"..\"\n  \
-         naming_convention \"preserve-case\"\n}\n",
+        "function greet(name: string) -> string {\n  \"Hello, \" + name\n}\n",
     )
     .unwrap();
 
     let output = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
 
-    assert!(
-        output.status.success(),
-        "Expected exit 0 for `baml generate` on a baml_src-only project, got: {:?}\nstdout: {}\nstderr: {}",
+    assert_eq!(
         output.status.code(),
-        String::from_utf8_lossy(&output.stdout),
+        Some(4),
+        "Expected exit 4 for a manifest-less project with no generators, got: {:?}\nstderr: {}",
+        output.status.code(),
         String::from_utf8_lossy(&output.stderr),
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("[generator"),
+        "Expected a missing-generator hint, got: {stderr}",
     );
 }

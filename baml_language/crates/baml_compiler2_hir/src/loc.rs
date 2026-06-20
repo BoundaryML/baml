@@ -12,8 +12,8 @@
 use baml_base::SourceFile;
 
 use crate::ids::{
-    ClassMarker, ClientMarker, EnumMarker, FunctionMarker, GeneratorMarker, InterfaceMarker,
-    LetMarker, LocalItemId, RetryPolicyMarker, TemplateStringMarker, TestMarker, TypeAliasMarker,
+    ClassMarker, ClientMarker, EnumMarker, FunctionMarker, InterfaceMarker, LetMarker, LocalItemId,
+    RetryPolicyMarker, TemplateStringMarker, TestMarker, TypeAliasMarker,
 };
 
 #[salsa::interned]
@@ -56,12 +56,6 @@ pub struct ClientLoc<'db> {
 pub struct TestLoc<'db> {
     pub file: SourceFile,
     pub id: LocalItemId<TestMarker>,
-}
-
-#[salsa::interned]
-pub struct GeneratorLoc<'db> {
-    pub file: SourceFile,
-    pub id: LocalItemId<GeneratorMarker>,
 }
 
 #[salsa::interned]
@@ -128,12 +122,6 @@ impl std::fmt::Debug for TestLoc<'_> {
     }
 }
 
-impl std::fmt::Debug for GeneratorLoc<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "GeneratorLoc(..)")
-    }
-}
-
 impl std::fmt::Debug for TemplateStringLoc<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "TemplateStringLoc(..)")
@@ -164,7 +152,6 @@ pub enum ItemId<'db> {
     TypeAlias(TypeAliasLoc<'db>),
     Client(ClientLoc<'db>),
     Test(TestLoc<'db>),
-    Generator(GeneratorLoc<'db>),
     TemplateString(TemplateStringLoc<'db>),
     RetryPolicy(RetryPolicyLoc<'db>),
     Let(LetLoc<'db>),
@@ -180,7 +167,6 @@ impl std::fmt::Debug for ItemId<'_> {
             ItemId::TypeAlias(_) => write!(f, "ItemId::TypeAlias(..)"),
             ItemId::Client(_) => write!(f, "ItemId::Client(..)"),
             ItemId::Test(_) => write!(f, "ItemId::Test(..)"),
-            ItemId::Generator(_) => write!(f, "ItemId::Generator(..)"),
             ItemId::TemplateString(_) => write!(f, "ItemId::TemplateString(..)"),
             ItemId::RetryPolicy(_) => write!(f, "ItemId::RetryPolicy(..)"),
             ItemId::Let(_) => write!(f, "ItemId::Let(..)"),

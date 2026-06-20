@@ -59,6 +59,8 @@ pub enum TokenKind {
     Function,
     #[token("client")]
     Client,
+    /// Deprecated: `generator` blocks moved to `baml.toml`. Still lexed so the
+    /// parser can recognize stale blocks and raise a migration diagnostic.
     #[token("generator")]
     Generator,
     #[token("test")]

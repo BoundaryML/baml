@@ -1056,7 +1056,6 @@ pub fn def_to_item_ref<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ite
         Definition::TypeAlias(loc) => item_tree[loc.id(db)].name.clone(),
         Definition::TemplateString(loc) => item_tree[loc.id(db)].name.clone(),
         Definition::Client(loc) => item_tree[loc.id(db)].name.clone(),
-        Definition::Generator(loc) => item_tree[loc.id(db)].name.clone(),
         Definition::Test(loc) => item_tree[loc.id(db)].name.clone(),
         Definition::RetryPolicy(loc) => item_tree[loc.id(db)].name.clone(),
         Definition::Let(loc) => item_tree[loc.id(db)].name.clone(),

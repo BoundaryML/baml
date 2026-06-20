@@ -17,7 +17,7 @@ use crate::{
     ast::{
         AssociatedTypeBindingDef, AssociatedTypeDef, AstSourceMap, BuiltinKind, CallArg,
         ConfigItemDef, EnumDef, Expr, ExprBody, ExprId, FieldDef, FunctionBodyDef, FunctionDef,
-        FunctionDefaults, GeneratorDef, ImplementsBlockDef, ImplementsForDef, InterfaceDef,
+        FunctionDefaults, ImplementsBlockDef, ImplementsForDef, InterfaceDef,
         InterfaceFieldLinkDef, Interpolation, Item, LetDef, LetOrigin, LlmBodyDef, MethodSigDef,
         Param, RawAttribute, RawAttributeArg, RawPrompt, SpannedTypeExpr, TemplateStringDef,
         TestDef, TypeAliasDef, TypeExpr, VariantDef,
@@ -133,9 +133,7 @@ pub fn lower_file_with_path(
                 }
             }
             baml_compiler_syntax::SyntaxKind::GENERATOR_DEF => {
-                if let Some(g) = lower_generator(&child, &mut diags) {
-                    items.push(Item::Generator(g));
-                }
+                diags.push(lower_generator_deprecation(&child));
             }
             baml_compiler_syntax::SyntaxKind::TEMPLATE_STRING_DEF => {
                 if let Some(ts) = lower_template_string(&child, &mut diags) {
@@ -2178,28 +2176,37 @@ fn lower_runner_element(
     }
 }
 
-fn lower_generator(node: &SyntaxNode, diags: &mut Vec<LoweringDiagnostic>) -> Option<GeneratorDef> {
-    let generator = ast::GeneratorDef::cast(node.clone())?;
-    let Some(name_token) = generator.name() else {
-        diags.push(LoweringDiagnostic::MissingItemName {
-            item_kind: "generator",
-            span: node.text_range(),
-        });
-        return None;
+/// Build the migration warning for a deprecated top-level `generator { … }`
+/// block. The block is otherwise ignored — generators are configured in
+/// `baml.toml` now (see `baml_cli`'s `discover_generators`).
+fn lower_generator_deprecation(node: &SyntaxNode) -> LoweringDiagnostic {
+    // Point the diagnostic at the `generator <name>` header, not the whole
+    // node — the node's `text_range()` would swallow leading trivia and the
+    // entire opaque body, producing an ugly multi-line caret.
+    let mut kw_range = None;
+    let mut name = None;
+    let mut name_range = None;
+    for token in node
+        .children_with_tokens()
+        .filter_map(baml_compiler_syntax::NodeOrToken::into_token)
+    {
+        match token.kind() {
+            SyntaxKind::KW_GENERATOR => kw_range = Some(token.text_range()),
+            SyntaxKind::WORD if name.is_none() => {
+                name = Some(token.text().to_string());
+                name_range = Some(token.text_range());
+            }
+            // Stop before the opaque `{ … }` body.
+            SyntaxKind::L_BRACE => break,
+            _ => {}
+        }
+    }
+    let span = match (kw_range, name_range) {
+        (Some(kw), Some(nm)) => text_size::TextRange::new(kw.start(), nm.end()),
+        (Some(kw), None) => kw,
+        _ => node.text_range(),
     };
-
-    let gen_name = name_token.text().to_string();
-    let config_items = generator
-        .config_block()
-        .map(|cb| lower_config_block(&cb, "generator", &gen_name, diags))
-        .unwrap_or_default();
-
-    Some(GeneratorDef {
-        name: Name::new(&gen_name),
-        config_items,
-        span: node.text_range(),
-        name_span: name_token.text_range(),
-    })
+    LoweringDiagnostic::GeneratorBlockInBaml { name, span }
 }
 
 fn lower_template_string(

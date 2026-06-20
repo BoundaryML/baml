@@ -7582,24 +7582,43 @@ impl<'a> Parser<'a> {
 
     // ============ Generator Parsing ============
 
-    /// Parse a generator declaration
+    /// Consume a deprecated top-level `generator NAME { … }` block **without
+    /// parsing its interior**. Code generators are now configured in
+    /// `baml.toml` under `[generator.<name>]`; the body here is swallowed as
+    /// opaque tokens so stale config never produces interior parse errors, and
+    /// CST → AST lowering raises a migration warning when it sees the
+    /// `GENERATOR_DEF` node (see `lower_cst`).
     pub(crate) fn parse_generator(&mut self) {
         self.with_node(SyntaxKind::GENERATOR_DEF, |p| {
             // 'generator' keyword
             p.expect(TokenKind::Generator);
 
-            // Generator name
+            // Optional generator name — kept as the first WORD child so
+            // lowering can name it in the diagnostic.
             if p.at(TokenKind::Word) {
                 p.bump();
-            } else {
-                p.error_unexpected_token("generator name".to_string());
             }
 
-            // Config block
+            // Swallow the `{ … }` body opaquely, tracking brace depth so
+            // nested braces (e.g. option maps) don't terminate early. The
+            // interior is deliberately NOT parsed into config items.
             if p.at(TokenKind::LBrace) {
-                p.parse_config_block();
-            } else {
-                p.error_unexpected_token("generator body".to_string());
+                p.bump(); // consume '{'
+                let mut depth = 1usize;
+                while depth > 0 && !p.at_end() {
+                    if p.at(TokenKind::LBrace) {
+                        depth += 1;
+                    } else if p.at(TokenKind::RBrace) {
+                        depth -= 1;
+                    }
+                    p.bump();
+                }
+                // Reached EOF with the body still open — preserve the
+                // unclosed-brace diagnostic rather than silently swallowing
+                // the rest of the file into this deprecated node.
+                if depth > 0 {
+                    p.error_unexpected_token("'}'".to_string());
+                }
             }
         });
     }

@@ -1373,7 +1373,6 @@ pub enum Item {
     TypeAlias(TypeAliasDef),
     Client(ClientDef),
     Test(TestDef),
-    Generator(GeneratorDef),
     TemplateString(TemplateStringDef),
     RetryPolicy(RetryPolicyDef),
     Let(LetDef),
@@ -1724,14 +1723,6 @@ pub struct ConfigItemDef {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TestDef {
-    pub name: Name,
-    pub config_items: Vec<ConfigItemDef>,
-    pub span: TextRange,
-    pub name_span: TextRange,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GeneratorDef {
     pub name: Name,
     pub config_items: Vec<ConfigItemDef>,
     pub span: TextRange,
