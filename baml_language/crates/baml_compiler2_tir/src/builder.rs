@@ -6931,15 +6931,19 @@ impl<'db> TypeInferenceBuilder<'db> {
 
             // Detect `name if … => …` where `name` is a bare lowercase
             // identifier the parser interpreted as a type pattern rather than
-            // a value binding. When such an arm carries a guard, set a hint so
-            // the resulting "unresolved type" diagnostic can point the user at
-            // the `let` binding form. Restricted to guarded arms and lowercase
-            // identifiers so legitimate (PascalCase) type patterns and
-            // unguarded arms are never flagged.
-            self.match_guard_bind_hint = arm.guard.filter(|_| {
-                matches!(&body.patterns[pattern_id], ast::Pattern::Type(te)
-                    if Self::is_bare_lowercase_type_path(te))
-            });
+            // a value binding. When such an arm carries a guard, capture the
+            // misparsed identifier so we can (a) rewrite the resulting
+            // "unresolved type" diagnostic into an actionable `let`-binding
+            // hint and (b) bind the name for the guard below to avoid emitting
+            // a second, redundant "unresolved name" error. Restricted to
+            // guarded arms and lowercase identifiers so legitimate (PascalCase)
+            // type patterns and unguarded arms are never flagged.
+            let bind_hint_name: Option<Name> =
+                arm.guard.and_then(|_| match &body.patterns[pattern_id] {
+                    ast::Pattern::Type(te) => Self::bare_lowercase_type_name(te).cloned(),
+                    _ => None,
+                });
+            self.match_guard_bind_hint = arm.guard.filter(|_| bind_hint_name.is_some());
 
             let result = self.analyze_and_lower(pattern_id, &scrutinee_ty, body, arm.body);
             self.match_guard_bind_hint = None;
@@ -6956,6 +6960,16 @@ impl<'db> TypeInferenceBuilder<'db> {
             self.finalize_pattern_lowering(pattern_id, &result, None, None, &scrutinee_ty);
 
             if let Some(guard_expr) = arm.guard {
+                // For the misparsed `name if … => …` form, bind `name` to the
+                // scrutinee type (mirroring what `let name` would do) before
+                // inferring the guard. The actionable "use `let`" diagnostic
+                // has already been emitted from the pattern; binding here only
+                // prevents a confusing duplicate "unresolved name" for the same
+                // identifier in the guard. The binding lives inside this arm's
+                // snapshot/restore scope, so it never leaks to other arms.
+                if let Some(name) = &bind_hint_name {
+                    self.narrow_local(name.clone(), scrutinee_ty.clone());
+                }
                 self.infer_expr(guard_expr, body);
             }
 
@@ -7868,21 +7882,27 @@ impl<'db> TypeInferenceBuilder<'db> {
         ty
     }
 
-    /// `true` if `ty` is a single-segment path whose identifier starts with an
-    /// ASCII lowercase letter (e.g. `n`, `score`) — the shape produced when a
-    /// user writes a bare value-style identifier in pattern position. Builtin
-    /// type sugar (`int`, `string`, …) also matches this shape but is resolved
-    /// earlier and never reaches the unresolved-type path, so it never triggers
-    /// the binding hint. `PascalCase` identifiers (genuine type names/typos) are
-    /// deliberately excluded.
-    fn is_bare_lowercase_type_path(ty: &TypeExpr) -> bool {
-        matches!(ty, TypeExpr::Path { segments, .. }
-            if segments.len() == 1
-                && segments[0]
-                    .as_str()
-                    .chars()
-                    .next()
-                    .is_some_and(|c| c.is_ascii_lowercase()))
+    /// Returns the identifier of `ty` when it is a single-segment path whose
+    /// name starts with an ASCII lowercase letter (e.g. `n`, `score`) — the
+    /// shape produced when a user writes a bare value-style identifier in
+    /// pattern position. Builtin type sugar (`int`, `string`, …) also matches
+    /// this shape but is resolved earlier and never reaches the unresolved-type
+    /// path, so it never triggers the binding hint. `PascalCase` identifiers
+    /// (genuine type names/typos) are deliberately excluded.
+    fn bare_lowercase_type_name(ty: &TypeExpr) -> Option<&Name> {
+        match ty {
+            TypeExpr::Path { segments, .. }
+                if segments.len() == 1
+                    && segments[0]
+                        .as_str()
+                        .chars()
+                        .next()
+                        .is_some_and(|c| c.is_ascii_lowercase()) =>
+            {
+                Some(&segments[0])
+            }
+            _ => None,
+        }
     }
 
     /// Same as [`Self::resolve_type_expr`], but anchors diagnostics at the

@@ -11,7 +11,6 @@ function user.grade(score: int) -> string throws never {
         "F" : "F"
   }
   !! 307..313: unresolved type: n. To bind the scrutinee to a name, use `let n` (e.g. `let n if … => …`)
-  !! 317..318: unresolved name: n
 }
 function user.gradeOk(score: int) -> string throws never {
   { : "A" | "F"
