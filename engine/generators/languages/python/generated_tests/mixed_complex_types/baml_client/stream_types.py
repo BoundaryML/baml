@@ -233,3 +233,45 @@ class Widget(BaseModel):
 # #########################################################################
 # Generated type aliases (0)
 # #########################################################################
+
+
+# #########################################################################
+# Model rebuilds (35)
+# #########################################################################
+# Resolve string forward references now that every model above is defined so
+# class declaration order never breaks Pydantic construction (issue #793).
+Action.model_rebuild()
+Asset.model_rebuild()
+AssetMetadata.model_rebuild()
+ButtonWidget.model_rebuild()
+ComplexData.model_rebuild()
+Condition.model_rebuild()
+Configuration.model_rebuild()
+ContainerWidget.model_rebuild()
+DataObject.model_rebuild()
+Dimensions.model_rebuild()
+Environment.model_rebuild()
+Error.model_rebuild()
+ErrorDetail.model_rebuild()
+Feature.model_rebuild()
+ImageWidget.model_rebuild()
+Item.model_rebuild()
+KitchenSink.model_rebuild()
+Node.model_rebuild()
+NodeMetadata.model_rebuild()
+PrimaryData.model_rebuild()
+Record.model_rebuild()
+ResponseMetadata.model_rebuild()
+Rule.model_rebuild()
+SecondaryData.model_rebuild()
+Setting.model_rebuild()
+SimpleCondition.model_rebuild()
+Success.model_rebuild()
+TertiaryData.model_rebuild()
+TextWidget.model_rebuild()
+UltraComplex.model_rebuild()
+User.model_rebuild()
+UserProfile.model_rebuild()
+UserResponse.model_rebuild()
+Variant.model_rebuild()
+Widget.model_rebuild()

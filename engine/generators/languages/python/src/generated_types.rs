@@ -473,6 +473,65 @@ pub(crate) fn render_py_types<T: askama::Template>(
     PyTypes { items, name }.render()
 }
 
+/// Forward-reference resolution for every generated model.
+///
+/// Class fields reference other classes as string forward-refs (e.g.
+/// `field: "Other"`) and classes are emitted alphabetically, so a class can
+/// reference another that is defined later in the file. Pydantic only resolves
+/// those refs when a model is rebuilt; relying on its implicit rebuild fails
+/// when the referenced class is not yet defined (issue #793). Emitting an
+/// explicit rebuild for every model once all of them are defined makes
+/// resolution independent of declaration order — and keeps working when types
+/// are split across files, where no ordering scheme can help.
+///
+/// ```askama
+/// {%- if !names.is_empty() %}
+/// # #########################################################################
+/// # Model rebuilds ({{ names.len() }})
+/// # #########################################################################
+/// # Resolve string forward references now that every model above is defined so
+/// # class declaration order never breaks Pydantic construction (issue #793).
+/// {%- for name in names %}
+/// {%- if is_pydantic_2 %}
+/// {{ name }}.model_rebuild()
+/// {%- else %}
+/// {{ name }}.update_forward_refs()
+/// {%- endif %}
+/// {%- endfor %}
+/// {%- endif %}
+/// ```
+#[derive(askama::Template)]
+#[template(in_doc = true, escape = "none", ext = "txt")]
+struct PyModelRebuilds {
+    names: Vec<String>,
+    is_pydantic_2: bool,
+}
+
+pub(crate) fn render_py_model_rebuilds(
+    classes: &[ClassPy],
+    pkg: &CurrentRenderPackage,
+) -> Result<String, askama::Error> {
+    use askama::Template;
+
+    // Emit nothing at all when there are no classes, so files with only enums or
+    // type aliases (e.g. the `enums` snapshot) gain no trailing rebuild section.
+    if classes.is_empty() {
+        return Ok(String::new());
+    }
+
+    let mut rendered = PyModelRebuilds {
+        names: classes.iter().map(|c| c.name.clone()).collect(),
+        is_pydantic_2: pkg.is_pydantic_2,
+    }
+    .render()?;
+    // Ensure the file ends with a trailing newline (the template's trailing
+    // whitespace is stripped by askama).
+    if !rendered.ends_with('\n') {
+        rendered.push('\n');
+    }
+    Ok(rendered)
+}
+
 /// A list of types in Py.
 ///
 /// ```askama

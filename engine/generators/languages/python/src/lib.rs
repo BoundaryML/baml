@@ -7,7 +7,8 @@ use generated_types::render_py_types;
 use crate::{
     functions::{render_config, render_globals, render_init, render_parser, render_tracing},
     generated_types::{
-        render_py_stream_types_utils, render_py_type_builder, render_py_types_utils,
+        render_py_model_rebuilds, render_py_stream_types_utils, render_py_type_builder,
+        render_py_types_utils,
     },
 };
 
@@ -131,6 +132,9 @@ impl LanguageFeatures for PyLanguageFeatures {
         collector.append_to_file("types.py", &render_py_types(&enums, &pkg)?)?;
         collector.append_to_file("types.py", &render_py_types(&py_classes, &pkg)?)?;
         collector.append_to_file("types.py", &render_py_types(&py_type_aliases, &pkg)?)?;
+        // Rebuild every model after all are defined so string forward references
+        // resolve regardless of class declaration order (issue #793).
+        collector.append_to_file("types.py", &render_py_model_rebuilds(&py_classes, &pkg)?)?;
 
         let mut py_stream_type_aliases = type_aliases
             .iter()
@@ -149,6 +153,11 @@ impl LanguageFeatures for PyLanguageFeatures {
         collector.append_to_file(
             "stream_types.py",
             &render_py_types(&py_stream_type_aliases, &pkg)?,
+        )?;
+        // Same forward-reference fix for the streaming models (issue #793).
+        collector.append_to_file(
+            "stream_types.py",
+            &render_py_model_rebuilds(&py_classes, &pkg)?,
         )?;
 
         Ok(())

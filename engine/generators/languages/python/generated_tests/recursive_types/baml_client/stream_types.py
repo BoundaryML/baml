@@ -47,3 +47,11 @@ Nonrecursive2: typing_extensions.TypeAlias = typing.Optional[str]
 
 
 Recursive1: typing_extensions.TypeAlias = typing.Optional[typing.Union[int, typing.List["Recursive1"]]]
+
+
+# #########################################################################
+# Model rebuilds (1)
+# #########################################################################
+# Resolve string forward references now that every model above is defined so
+# class declaration order never breaks Pydantic construction (issue #793).
+UseMyUnion.model_rebuild()

@@ -437,6 +437,80 @@ end"#)
     }
 
     #[test]
+    fn test_model_rebuilds_emitted_for_every_class() {
+        // Regression for issue #793: `A` composes `B` but sorts first
+        // alphabetically, so its `"B"` forward ref is unresolved at definition
+        // time. A trailing rebuild for every model fixes resolution regardless
+        // of order.
+        let ir = make_test_ir(
+            r#"
+            class B {
+                value string
+            }
+            class A {
+                property1 B
+            }
+        "#,
+        )
+        .unwrap();
+        let ir = std::sync::Arc::new(ir);
+        let pkg = CurrentRenderPackage::new("baml_client", ir.clone(), true);
+        let classes = vec![
+            ir_class_to_py(ir.find_class("A").unwrap().item, &pkg),
+            ir_class_to_py(ir.find_class("B").unwrap().item, &pkg),
+        ];
+
+        let rendered = crate::generated_types::render_py_model_rebuilds(&classes, &pkg).unwrap();
+        assert!(
+            rendered.contains("A.model_rebuild()"),
+            "expected A.model_rebuild(), got:\n{rendered}"
+        );
+        assert!(
+            rendered.contains("B.model_rebuild()"),
+            "expected B.model_rebuild(), got:\n{rendered}"
+        );
+        assert!(
+            !rendered.contains("update_forward_refs"),
+            "pydantic 2 should use model_rebuild, got:\n{rendered}"
+        );
+    }
+
+    #[test]
+    fn test_model_rebuilds_use_update_forward_refs_on_pydantic_1() {
+        let ir = make_test_ir(
+            r#"
+            class A {
+                value string
+            }
+        "#,
+        )
+        .unwrap();
+        let ir = std::sync::Arc::new(ir);
+        let pkg = CurrentRenderPackage::new("baml_client", ir.clone(), false);
+        let classes = vec![ir_class_to_py(ir.find_class("A").unwrap().item, &pkg)];
+
+        let rendered = crate::generated_types::render_py_model_rebuilds(&classes, &pkg).unwrap();
+        assert!(
+            rendered.contains("A.update_forward_refs()"),
+            "pydantic 1 should use update_forward_refs, got:\n{rendered}"
+        );
+        assert!(!rendered.contains("model_rebuild"));
+    }
+
+    #[test]
+    fn test_model_rebuilds_empty_when_no_classes() {
+        let ir = make_test_ir(r#"class A { value string }"#).unwrap();
+        let ir = std::sync::Arc::new(ir);
+        let pkg = CurrentRenderPackage::new("baml_client", ir.clone(), true);
+
+        let rendered = crate::generated_types::render_py_model_rebuilds(&[], &pkg).unwrap();
+        assert!(
+            !rendered.contains("model_rebuild") && !rendered.contains("Model rebuilds"),
+            "no classes should render nothing, got:\n{rendered}"
+        );
+    }
+
+    #[test]
     fn test_class_description_with_backslash_at_end() {
         use askama::Template;
 

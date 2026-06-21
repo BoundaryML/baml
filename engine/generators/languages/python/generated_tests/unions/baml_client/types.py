@@ -72,3 +72,12 @@ Recursive1: typing_extensions.TypeAlias = typing.Union[int, typing.List["Recursi
 
 
 SystemComponentCategory: typing_extensions.TypeAlias = typing.Union[typing_extensions.Literal['service'], typing_extensions.Literal['resource']]
+
+
+# #########################################################################
+# Model rebuilds (2)
+# #########################################################################
+# Resolve string forward references now that every model above is defined so
+# class declaration order never breaks Pydantic construction (issue #793).
+ExistingSystemComponent.model_rebuild()
+UseMyUnion.model_rebuild()

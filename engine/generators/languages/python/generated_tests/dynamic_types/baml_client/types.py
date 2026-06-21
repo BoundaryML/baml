@@ -82,3 +82,14 @@ class PureDynamic(BaseModel):
 # #########################################################################
 # Generated type aliases (0)
 # #########################################################################
+
+
+# #########################################################################
+# Model rebuilds (4)
+# #########################################################################
+# Resolve string forward references now that every model above is defined so
+# class declaration order never breaks Pydantic construction (issue #793).
+Address.model_rebuild()
+Article.model_rebuild()
+Person.model_rebuild()
+PureDynamic.model_rebuild()
