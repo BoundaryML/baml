@@ -95,6 +95,16 @@ pub enum LoweringDiagnostic {
     /// The `instanceof` operator was used; it has been removed. Use `match` instead.
     InstanceofRemoved { span: TextRange },
 
+    /// A backtick template has a malformed block tag — an unclosed,
+    /// mismatched, or stray `${for}`/`${if}` open/close.
+    MalformedTemplateBlock {
+        kind: baml_compiler_syntax::BacktickStructuralErrorKind,
+        span: TextRange,
+    },
+
+    /// A `${}` interpolation with no expression inside.
+    EmptyInterpolation { span: TextRange },
+
     /// `void` was used outside of a function return type position.
     VoidInNonReturnPosition { context: String, span: TextRange },
 
@@ -288,6 +298,70 @@ impl LoweringDiagnostic {
                 "`instanceof` is no longer supported. Use a `match` expression for type checking instead.".to_string(),
                 *span,
                 "use `match` instead",
+            ),
+            LoweringDiagnostic::MalformedTemplateBlock { kind, span } => {
+                use baml_compiler_syntax::BacktickStructuralErrorKind as K;
+                let (message, label): (&str, &str) = match kind {
+                    K::UnclosedFor => (
+                        "unclosed ${for} block — expected ${endfor}",
+                        "this ${for} is never closed",
+                    ),
+                    K::UnclosedIf => (
+                        "unclosed ${if} block — expected ${endif}",
+                        "this ${if} is never closed",
+                    ),
+                    K::MismatchedForClose => (
+                        "${for} block closed by ${endif} — expected ${endfor}",
+                        "expected ${endfor} here",
+                    ),
+                    K::MismatchedIfClose => (
+                        "${if} block closed by ${endfor} — expected ${endif}",
+                        "expected ${endif} here",
+                    ),
+                    K::StrayEndfor => (
+                        "stray ${endfor} with no matching ${for}",
+                        "no open ${for} to close",
+                    ),
+                    K::StrayEndif => (
+                        "stray ${endif} with no matching ${if}",
+                        "no open ${if} to close",
+                    ),
+                    K::StrayElse => (
+                        "stray ${else} outside an ${if} block",
+                        "${else} must be inside ${if}…${endif}",
+                    ),
+                    K::StrayElseIf => (
+                        "stray ${else if} outside an ${if} block",
+                        "${else if} must be inside ${if}…${endif}",
+                    ),
+                    K::DuplicateElse => (
+                        "duplicate ${else} in the same ${if} chain",
+                        "this ${if} already has an ${else}",
+                    ),
+                    K::ElseIfAfterElse => (
+                        "${else if} after ${else} in the same ${if} chain",
+                        "move ${else if} branches before ${else}",
+                    ),
+                };
+                (
+                    DiagnosticId::InvalidSyntax,
+                    Severity::Error,
+                    message.to_string(),
+                    *span,
+                    label,
+                )
+            }
+            LoweringDiagnostic::EmptyInterpolation { span } => (
+                DiagnosticId::InvalidSyntax,
+                // Advisory, not fatal: an empty `${}` renders to the empty
+                // string (a valid, if pointless, template). Pre-canary the HIR
+                // pipeline let this through; canary made severity authoritative,
+                // so keep it a warning to preserve the render-empty behavior
+                // (see bex_engine backtick_case_c_empty_interp_renders_empty).
+                Severity::Warning,
+                "empty interpolation ${} has no expression".to_string(),
+                *span,
+                "expected an expression inside ${…}",
             ),
             LoweringDiagnostic::VoidInNonReturnPosition { context, span } => (
                 DiagnosticId::VoidInNonReturnPosition,

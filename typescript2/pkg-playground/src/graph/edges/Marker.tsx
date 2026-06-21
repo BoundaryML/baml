@@ -1,3 +1,5 @@
+import { type GraphTheme, resolveGraphTheme } from '../theme';
+
 // Arrow marker colors for light and dark modes
 const kBaseMarkerColorDark = '#cbd5e1'; // slate-300
 const kYesMarkerColorDark = '#4ade80'; // green-400
@@ -22,14 +24,12 @@ export const kAllMarkerColors = [
   ...kBaseMarkerColorsDark,
 ];
 
-export const getMarkerColors = () => {
-  // Outside VS Code (no theme dataset) the panel is the light paper theme,
-  // so default to LIGHT; inside VS Code, follow the editor's theme kind.
-  const themeKind =
-    typeof document === 'undefined'
-      ? undefined
-      : document.body?.dataset?.vscodeThemeKind;
-  const isDark = themeKind ? !themeKind.includes('light') : false;
+export const getMarkerColors = (theme?: GraphTheme) => {
+  // Follow the shared graph theme resolver: VS Code's theme kind when present,
+  // otherwise the resolved panel background (the browser playground defaults
+  // to a dark surface), then the OS preference. Callers that already have the
+  // theme (edge render, convert) pass it to avoid a per-edge DOM probe.
+  const isDark = (theme ?? resolveGraphTheme()) === 'dark';
   return {
     base: isDark ? kBaseMarkerColorDark : kBaseMarkerColorLight,
     yes: isDark ? kYesMarkerColorDark : kYesMarkerColorLight,

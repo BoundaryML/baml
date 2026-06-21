@@ -1,5 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { ExecutionPanel, WebSocketRuntimePort, type SourceNavigationTarget } from '@b/pkg-playground';
+
+// Monaco workbench is heavy (monaco-vscode-api) and only needed when the user
+// opens the editor view; lazy-load it so the plain playground (and the VS Code
+// webview, which is already inside an editor) never pull it into the bundle.
+const RemoteEditorView = lazy(() => import('./RemoteEditorView'));
 
 declare global {
   interface Window {
@@ -34,6 +39,11 @@ interface OpenPlaygroundMessage {
   };
 }
 
+interface OpenInBrowserMessage {
+  type: 'openInBrowser';
+  project?: string;
+}
+
 function getVsCodeApi() {
   if (vscodeApi !== undefined) return vscodeApi;
   vscodeApi = typeof window.acquireVsCodeApi === 'function'
@@ -44,9 +54,21 @@ function getVsCodeApi() {
 
 const App: React.FC = () => {
   const [port, setPort] = useState<WebSocketRuntimePort | null>(null);
+  const [activeProject, setActiveProject] = useState<string | null>(null);
+  const [showEditor, setShowEditor] = useState(false);
+  const [editorHasUnsaved, setEditorHasUnsaved] = useState(false);
+  // Once the Monaco editor has been opened we keep it MOUNTED (just hidden via
+  // CSS when toggled off). monaco-vscode-api can only initialize once per page,
+  // so unmounting + remounting it on toggle would throw "Cannot register two
+  // commands…". Keeping it mounted means init happens exactly once.
+  const [editorEverOpened, setEditorEverOpened] = useState(false);
   const portRef = useRef<WebSocketRuntimePort | null>(null);
   const pendingCursorPositionRef = useRef<CursorPositionMessage['position'] | null>(null);
   const pendingOpenTargetRef = useRef<OpenPlaygroundMessage['target'] | null>(null);
+  const inVsCode = getVsCodeApi() !== null;
+  // The Monaco editor view is offered only when running standalone in a browser;
+  // inside VS Code the user already has a full editor.
+  const canShowEditor = !inVsCode;
 
   useEffect(() => {
     portRef.current = port;
@@ -55,6 +77,7 @@ const App: React.FC = () => {
     if (pendingOpenTargetRef.current) {
       const target = pendingOpenTargetRef.current;
       pendingOpenTargetRef.current = null;
+      setActiveProject(target.project);
       port.dispatchLocalMessage({
         type: 'playgroundNotification',
         notification: {
@@ -90,6 +113,29 @@ const App: React.FC = () => {
     return () => runtimePort.dispose();
   }, []);
 
+  // Track the active project from playground notifications so the editor view
+  // can be rooted at (and load source files for) the real project.
+  useEffect(() => {
+    if (!port) return;
+    const unsubscribe = port.onMessage((msg) => {
+      if (msg.type !== 'playgroundNotification') return;
+      const n = msg.notification;
+      if (n.type === 'openPlayground') {
+        setActiveProject(n.project);
+      } else if (n.type === 'listProjects' && n.projects.length > 0) {
+        // Only adopt the first discovered project if we don't have one yet.
+        setActiveProject((prev) => prev ?? n.projects[0]);
+      }
+    });
+    // The port buffers incoming messages and replays them only to the FIRST
+    // handler that subscribes — which is ExecutionPanel (a child mounts before
+    // this parent effect runs). So the initial listProjects/openPlayground is
+    // already drained by the time we get here. Ask the server to re-broadcast
+    // its state now that our handler is registered.
+    port.postMessage({ type: 'requestState' });
+    return unsubscribe;
+  }, [port]);
+
   useEffect(() => {
     const forwardCursorPosition = (position: CursorPositionMessage['position']) => {
       const currentPort = portRef.current;
@@ -106,6 +152,7 @@ const App: React.FC = () => {
     };
 
     const forwardOpenPlayground = (target: OpenPlaygroundMessage['target']) => {
+      setActiveProject(target.project);
       const currentPort = portRef.current;
       if (!currentPort) {
         pendingOpenTargetRef.current = target;
@@ -154,14 +201,97 @@ const App: React.FC = () => {
     );
   }
 
+  const editorActive = showEditor && canShowEditor && activeProject !== null;
+  if (editorActive && !editorEverOpened) {
+    // Mark opened on the render that first activates it; the editor then stays
+    // mounted for the rest of the session (hidden via CSS when toggled off).
+    setEditorEverOpened(true);
+  }
+
   return (
     <div className="playground-root flex h-full min-h-0 w-full flex-col overflow-hidden">
-      <ExecutionPanel
-        port={port}
-        onNavigateToSource={(source: SourceNavigationTarget) => {
-          getVsCodeApi()?.postMessage({ type: 'navigateToSource', source });
-        }}
-      />
+      {(inVsCode || canShowEditor) && (
+        <header className="flex h-10 shrink-0 items-center justify-end gap-2 border-b border-border bg-background px-2">
+          {editorActive && (
+            <span
+              className={
+                'flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold ' +
+                (editorHasUnsaved
+                  ? 'bg-amber-500 text-black'
+                  : 'bg-emerald-600/90 text-white')
+              }
+              title={
+                editorHasUnsaved
+                  ? 'You have unsaved changes. Press ⌘S / Ctrl+S to write them to disk.'
+                  : 'All changes saved to disk.'
+              }
+            >
+              <span className={'inline-block h-2 w-2 rounded-full ' + (editorHasUnsaved ? 'bg-black/80' : 'bg-white/90')} />
+              {editorHasUnsaved ? 'Unsaved — ⌘S to save' : 'All saved'}
+            </span>
+          )}
+          {canShowEditor && (
+            <>
+              <button
+                type="button"
+                onClick={() => setShowEditor((v) => !v)}
+                disabled={!showEditor && activeProject === null}
+                title={
+                  activeProject === null
+                    ? 'Waiting for a BAML project to load…'
+                    : showEditor
+                      ? 'Hide the code editor'
+                      : 'Open the code editor alongside the playground'
+                }
+                className="h-7 rounded-md border border-border px-3 text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {showEditor ? 'Playground only' : 'Open editor'}
+              </button>
+            </>
+          )}
+          {inVsCode && (
+            <button
+              type="button"
+              onClick={() => {
+                const message: OpenInBrowserMessage = {
+                  type: 'openInBrowser',
+                  ...(activeProject ? { project: activeProject } : {}),
+                };
+                getVsCodeApi()?.postMessage(message);
+              }}
+              className="h-7 rounded-md border border-border px-3 text-xs font-medium text-foreground hover:bg-muted"
+            >
+              Open in browser
+            </button>
+          )}
+        </header>
+      )}
+      {/*
+        The Monaco workbench hosts its own "Playground" pane, so it fully
+        replaces the standalone ExecutionPanel while active. Once opened it stays
+        mounted (hidden via CSS) so monaco-vscode-api is never re-initialized.
+      */}
+      {editorEverOpened && (
+        <div className="min-h-0 flex-1" style={{ display: editorActive ? 'flex' : 'none' }}>
+          <Suspense
+            fallback={
+              <div className="flex h-full w-full items-center justify-center text-sm text-muted-foreground">
+                Loading editor…
+              </div>
+            }
+          >
+            <RemoteEditorView project={activeProject!} onUnsavedChange={setEditorHasUnsaved} />
+          </Suspense>
+        </div>
+      )}
+      {!editorActive && (
+        <ExecutionPanel
+          port={port}
+          onNavigateToSource={(source: SourceNavigationTarget) => {
+            getVsCodeApi()?.postMessage({ type: 'navigateToSource', source });
+          }}
+        />
+      )}
     </div>
   );
 };

@@ -15,9 +15,9 @@ class StreamingDoc {
   word_count int
 }
 
-// Return shape for `StreamE2ECollect`: every value produced by
+// Return shape for `stream_e2e_collect`: every value produced by
 // `stream.next()` (the `S` side of `Stream<T, S>` — `null | string` for
-// the `StreamE2EExtract$stream` instantiation) plus the single `T`
+// the `stream_e2e_extract$stream` instantiation) plus the single `T`
 // value from `stream.final()`. The class is concrete (no generics) so
 // the FFI boundary doesn't depend on the engine's `Stream<T, S>`
 // type-var substitution.

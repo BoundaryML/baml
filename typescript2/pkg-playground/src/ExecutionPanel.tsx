@@ -9,10 +9,10 @@
  * VS Code webview without an embedded Monaco editor).
  */
 
-import type { ChangeEvent, FC, ReactNode, RefObject } from 'react';
+import type { ChangeEvent, FC, RefObject } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { encodeCallArgs } from '@b/pkg-proto';
-import type { BamlJsMedia, BamlJsValue } from '@b/pkg-proto';
+import { encodeRunArgs } from '@b/pkg-proto';
+import type { BamlJsValue } from '@b/pkg-proto';
 import { KeyRound, PanelLeft, Settings, Square } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
@@ -40,7 +40,9 @@ import type {
   FetchLogEntry,
   FunctionInfo,
   ProjectUpdate,
-  RunEntry,
+  Run,
+  RunId,
+  RunStatus,
   SourceNavigationTarget,
   WorkerOutMessage,
 } from './worker-protocol';
@@ -52,14 +54,27 @@ import {
   isHttpRequest,
 } from './renderers/HttpRequestCurl';
 import { GraphView } from './graph/GraphView';
+import { FunctionSidebar } from './FunctionSidebar';
+import { companionFunctionName } from './shared/companion-functions';
+import { createExecutionStore, type ExecutionStore } from './execution-store';
+import { createRunStoreClient } from './run-store-client';
+import type { ExecutionStoreSnapshot } from './execution-store';
 import {
-  FunctionSidebar,
+  decodeRunResultValue,
+  runToTraceRows,
+  runToDisplayRun,
+  type RunStoreDisplayRun,
+} from './run-store-projections';
+import {
+  selectDefaultFunctionName,
+  selectMainFunctionName,
+} from './default-function-selection';
+import { ExecutionProfileView } from './ExecutionProfileView';
+import {
+  parseSerializedTestTreeJson,
   type SerializedTestDef,
   type SerializedTestSet,
-} from './FunctionSidebar';
-import { EventValueDisplay } from './EventValueDisplay';
-import { findImageMedia, mediaToSrc } from './shared/media-values';
-import { companionFunctionName } from './shared/companion-functions';
+} from './serialized-test-tree';
 
 registerBuiltinResultRenderers();
 
@@ -78,6 +93,42 @@ function tryFormatJson(str: string): string {
     /* not valid JSON */
     return str;
   }
+}
+
+function isTerminalRunStatus(status: RunStatus): boolean {
+  return (
+    status === 'succeeded' ||
+    status === 'failed' ||
+    status === 'cancelled' ||
+    status === 'panicked'
+  );
+}
+
+type RunScopedEnvRequest = { runId: RunId; envRequestId: string };
+type PendingEnvDialogRequest = {
+  variable: string;
+  runScoped: RunScopedEnvRequest | null;
+};
+
+function findPendingEnvRequest(
+  runs: Run[],
+  requestId: string,
+  variable: string,
+): RunScopedEnvRequest | null {
+  for (const run of runs) {
+    for (const payload of run.payloads) {
+      const kind = payload.kind;
+      if (
+        kind.type === 'envRequested' &&
+        kind.requestId === requestId &&
+        kind.key === variable &&
+        kind.state === 'pending'
+      ) {
+        return { runId: run.runId, envRequestId: kind.requestId };
+      }
+    }
+  }
+  return null;
 }
 
 function stringifyResult(value: BamlJsValue): string {
@@ -154,27 +205,32 @@ function hasLazyTestSets(items: SerializedTestDef[]): boolean {
   return false;
 }
 
-function findLatestGraphRun(
-  runs: RunEntry[],
+function findLatestGraphRunSnapshot(
+  runs: Run[],
   selectedFn: string | null,
-): RunEntry | undefined {
+  selectedProject: string | null,
+): Run | undefined {
   if (!selectedFn) return undefined;
 
   for (let i = runs.length - 1; i >= 0; i -= 1) {
     const run = runs[i];
     if (!run) continue;
-    if (run.functionName === selectedFn) return run;
+    if (selectedProject && run.request.projectId !== selectedProject) continue;
+
     if (
-      run.runtimeEvents.some((evt) => {
-        const kind = evt.event;
-        return (
-          (kind?.$case === 'functionStart' &&
-            kind.functionStart.name === selectedFn) ||
-          (kind?.$case === 'functionEnd' &&
-            kind.functionEnd.name === selectedFn)
-        );
-      })
+      (run.target.kind === 'function' ||
+        run.target.kind === 'companion') &&
+      run.target.functionName === selectedFn
     ) {
+      return run;
+    }
+    if (
+      run.target.kind === 'preview' &&
+      run.target.parentFunctionName === selectedFn
+    ) {
+      return run;
+    }
+    if (run.calls.some((call) => call.functionName === selectedFn)) {
       return run;
     }
   }
@@ -185,76 +241,6 @@ function findLatestGraphRun(
 function isInternalFunction(fn: FunctionInfo): boolean {
   return fn.origin != null && fn.origin !== 'userDefined';
 }
-
-const InlineImageOutputs: FC<{ images: BamlJsMedia[] }> = ({ images }) => {
-  const visible = images.slice(0, 3);
-  const remaining = images.length - visible.length;
-
-  return (
-    <span className="inline-flex items-center gap-0.5 align-middle">
-      {visible.map((image, index) => {
-        const src = mediaToSrc(image);
-        return src ? (
-          <img
-            key={`${image.content_type}-${index}`}
-            src={src}
-            alt="BAML image output"
-            className="inline-block h-7 w-7 rounded border border-vsc-border object-cover align-middle"
-            loading="lazy"
-          />
-        ) : (
-          <span
-            key={`${image.content_type}-${index}`}
-            className="inline-flex h-7 w-10 items-center justify-center rounded border border-vsc-border bg-vsc-bg-secondary text-[9px] text-vsc-text-faint"
-          >
-            image
-          </span>
-        );
-      })}
-      {remaining > 0 && (
-        <span className="inline-flex h-7 items-center rounded border border-vsc-border bg-vsc-bg-secondary px-1 text-[10px] text-vsc-text-muted">
-          +{remaining}
-        </span>
-      )}
-    </span>
-  );
-};
-
-const FunctionEndPayload: FC<{
-  event: {
-    name: string;
-    durationMs: number;
-    result: BamlJsValue | null;
-    error?: string | null;
-  };
-  customRenderers?: Record<string, FC<ResultRendererProps>>;
-}> = ({ event, customRenderers }) => {
-  const images = event.result == null ? [] : findImageMedia(event.result);
-
-  return (
-    <span className="inline-flex min-w-0 flex-wrap items-center gap-1 align-middle">
-      <span>
-        {event.name} ({event.durationMs}ms)
-      </span>
-      {event.error && (
-        <>
-          <span className="text-vsc-text-faint">=&gt;</span>
-          <span className="text-vsc-red">error: {event.error}</span>
-        </>
-      )}
-      {event.result != null && (
-        <>
-          <span className="text-vsc-text-faint">=&gt;</span>
-          {images.length > 0 && <InlineImageOutputs images={images} />}
-          <EventValueDisplay
-            value={event.result}
-            customRenderers={customRenderers}
-          />
-        </>
-      )}
-    </span>
-  );
-};
 
 function formatBuildTime(epochSecs: number): {
   absolute: string;
@@ -295,8 +281,10 @@ export interface ExecutionPanelProps {
   onReload?: () => void;
   /** Called when user clicks an event with source location to jump to that line. */
   onNavigateToSource?: (source: SourceNavigationTarget) => void;
+  /** Called whenever the selected project changes. */
+  onSelectedProjectChange?: (project: string | null) => void;
   /** Tab shown on mount (default 'run'). Embedded views often want 'graph'. */
-  initialTab?: 'run' | 'graph' | 'prompt' | 'curl';
+  initialTab?: 'run' | 'graph' | 'trace' | 'flame' | 'prompt' | 'curl';
   /** Auto-select this function once the project reports it (applied once). */
   initialFunctionName?: string;
   /** Auto-run this test once the test tree reports it (applied once). */
@@ -314,24 +302,30 @@ export interface ExecutionPanelProps {
 }
 
 // ---------------------------------------------------------------------------
-// CollectionRunView — renders fetch logs from a collection/expansion RunEntry
+// CollectionDebugView — renders project/test discovery diagnostics without
+// modeling discovery as a playground execution run.
 // ---------------------------------------------------------------------------
 
-interface CollectionRunViewProps {
-  run: RunEntry;
-  expandedLogId: number | null;
-  setExpandedLogId: (id: number | null) => void;
-  resultRenderers?: Record<string, FC<ResultRendererProps>>;
+interface CollectionDebugState {
+  id: number;
+  fetchLogs: FetchLogEntry[];
+  error: string | null;
+  status: 'success' | 'error';
 }
 
-const CollectionRunView: FC<CollectionRunViewProps> = ({
-  run,
+interface CollectionDebugViewProps {
+  state: CollectionDebugState;
+  expandedLogId: number | null;
+  setExpandedLogId: (id: number | null) => void;
+}
+
+const CollectionDebugView: FC<CollectionDebugViewProps> = ({
+  state,
   expandedLogId,
   setExpandedLogId,
-  resultRenderers,
 }) => {
-  const hasError = run.status === 'error';
-  const errorMessage = run.error || 'Unknown expansion error';
+  const hasError = state.status === 'error';
+  const errorMessage = state.error || 'Unknown expansion error';
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {/* Header */}
@@ -343,13 +337,14 @@ const CollectionRunView: FC<CollectionRunViewProps> = ({
           )}
         />
         <span className="text-vsc-accent font-semibold text-[11px]">
-          $collect_tests
+          Test collection
         </span>
         <span className="text-vsc-text-faint text-[10px] flex-1">
           {hasError ? 'expansion error' : 'collection fetch logs'}
         </span>
         <span className="text-vsc-text-faint text-[10px]">
-          {run.fetchLogs.length} request{run.fetchLogs.length !== 1 ? 's' : ''}
+          {state.fetchLogs.length} request
+          {state.fetchLogs.length !== 1 ? 's' : ''}
         </span>
       </div>
       {/* Error message */}
@@ -365,12 +360,12 @@ const CollectionRunView: FC<CollectionRunViewProps> = ({
       )}
       {/* Fetch logs */}
       <div className="flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg">
-        {run.fetchLogs.length === 0 && !hasError && (
+        {state.fetchLogs.length === 0 && !hasError && (
           <div className="p-5 text-center text-vsc-text-faint text-[11px]">
             No fetch logs — collection may not have made any HTTP requests
           </div>
         )}
-        {run.fetchLogs.map((log) => {
+        {state.fetchLogs.map((log) => {
           const isExp = expandedLogId === log.id;
           const statusColorCls =
             log.status === null
@@ -438,99 +433,91 @@ const CollectionRunView: FC<CollectionRunViewProps> = ({
             </div>
           );
         })}
-        {/* Runtime events */}
-        {run.runtimeEvents.length > 0 && (
-          <div className="py-1.5 pr-2.5 pl-[22px] border-b border-vsc-border-subtle">
-            <div className="text-[10px] font-semibold text-vsc-text-muted mb-1 uppercase tracking-wide">
-              Events ({run.runtimeEvents.length})
+      </div>
+    </div>
+  );
+};
+
+const traceStatusClass = (status: Run['calls'][number]['status']): string => {
+  switch (status) {
+    case 'ok':
+      return 'bg-vsc-green';
+    case 'errored':
+      return 'bg-vsc-red';
+    case 'cancelled':
+    case 'exited':
+      return 'bg-vsc-yellow';
+    case 'running':
+      return 'bg-vsc-text-muted';
+    default:
+      status satisfies never;
+      return 'bg-vsc-text-muted';
+  }
+};
+
+function formatTraceMs(value: number | null): string {
+  if (value == null) return '';
+  if (value < 1) return `${value.toFixed(2)}ms`;
+  if (value < 100) return `${value.toFixed(1)}ms`;
+  return `${Math.round(value)}ms`;
+}
+
+const TraceTimelineView: FC<{ run: Run | undefined }> = ({ run }) => {
+  const rows = runToTraceRows(run);
+  if (rows.length === 0) {
+    return (
+      <div className="flex-1 flex items-center justify-center text-vsc-text-faint text-xs bg-vsc-bg">
+        No trace yet
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 overflow-auto bg-vsc-bg font-vsc-mono text-xs">
+      <div className="min-w-[560px] p-2">
+        {rows.map((row) => (
+          <div
+            key={row.id}
+            className="grid grid-cols-[72px_minmax(200px,1fr)_80px] gap-2 items-center border-b border-vsc-border-subtle py-1"
+          >
+            <div className="text-[10px] text-vsc-text-faint text-right">
+              {formatTraceMs(row.offsetMs)}
             </div>
-            <div className="flex flex-col gap-0.5">
-              {run.runtimeEvents.map((evt, evtIdx) => {
-                const kind = evt.event;
-                if (!kind) return null;
-
-                let label: string;
-                let payload: ReactNode;
-                let colorCls: string;
-
-                switch (kind.$case) {
-                  case 'functionStart':
-                    label = 'START';
-                    payload = kind.functionStart.name;
-                    colorCls = 'text-vsc-green';
-                    break;
-                  case 'functionEnd':
-                    label = 'END';
-                    payload = (
-                      <FunctionEndPayload
-                        event={kind.functionEnd}
-                        customRenderers={resultRenderers}
-                      />
-                    );
-                    colorCls = kind.functionEnd.error
-                      ? 'text-vsc-red'
-                      : 'text-vsc-text-muted';
-                    break;
-                  case 'log': {
-                    const lvl = kind.log.level;
-                    label = lvl;
-                    payload = (
-                      <EventValueDisplay
-                        value={kind.log.data}
-                        customRenderers={resultRenderers}
-                      />
-                    );
-                    colorCls =
-                      lvl === 'error'
-                        ? 'text-vsc-red'
-                        : lvl === 'warn'
-                          ? 'text-vsc-yellow'
-                          : lvl === 'debug'
-                            ? 'text-vsc-text-muted'
-                            : 'text-vsc-blue';
-                    break;
-                  }
-                  case 'custom':
-                    label = 'EVENT';
-                    payload = (
-                      <>
-                        <span>{kind.custom.name}: </span>
-                        <EventValueDisplay
-                          value={kind.custom.data}
-                          customRenderers={resultRenderers}
-                        />
-                      </>
-                    );
-                    colorCls = 'text-vsc-purple';
-                    break;
-                  case 'setTags':
-                    label = 'TAGS';
-                    payload = kind.setTags.tags
-                      .map((t) => `${t.key}=${t.value}`)
-                      .join(', ');
-                    colorCls = 'text-vsc-text-muted';
-                    break;
-                  default:
-                    return null;
-                }
-
-                return (
-                  <div
-                    key={evtIdx}
-                    className="flex items-start gap-1.5 text-[11px]"
-                  >
-                    <span
-                      className={`${colorCls} font-semibold uppercase shrink-0`}
-                    >
-                      {label}
-                    </span>
-                    <span className="text-vsc-text break-all">{payload}</span>
-                  </div>
-                );
-              })}
+            <div className="min-w-0">
+              <div
+                className="flex items-center gap-1.5 min-w-0"
+                style={{ paddingLeft: Math.min(row.depth, 12) * 12 }}
+              >
+                <span
+                  className={cn(
+                    'w-1.5 h-1.5 rounded-full shrink-0',
+                    traceStatusClass(row.status),
+                  )}
+                />
+                <span className="text-vsc-text truncate">
+                  {row.functionName}
+                </span>
+                {row.sourceLine != null && (
+                  <span className="text-vsc-text-faint text-[10px] shrink-0">
+                    :{row.sourceLine}
+                  </span>
+                )}
+              </div>
+              <div className="relative mt-1 h-1.5 rounded bg-vsc-surface overflow-hidden">
+                <div
+                  className="absolute top-0 bottom-0 rounded bg-vsc-accent"
+                  style={{
+                    left: `${row.spanLeftPct}%`,
+                    width: `${row.spanWidthPct}%`,
+                  }}
+                />
+              </div>
+            </div>
+            <div className="text-[10px] text-vsc-text-faint">
+              {formatTraceMs(row.durationMs)}
             </div>
           </div>
-        )}
+        ))}
       </div>
     </div>
   );
@@ -546,6 +533,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   resultRenderers,
   onReload,
   onNavigateToSource,
+  onSelectedProjectChange,
   initialTab,
   initialFunctionName,
   initialTestName,
@@ -554,19 +542,56 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   argsByFunction,
   initialSidebarOpen = true,
 }) => {
+  const executionStore = useMemo(
+    () => createExecutionStore(createRunStoreClient(port)),
+    [port],
+  );
+  const pendingExecutionStoreDisposalsRef = useRef(
+    new Map<ExecutionStore, ReturnType<typeof setTimeout>>(),
+  );
+  const [executionSnapshot, setExecutionSnapshot] =
+    useState<ExecutionStoreSnapshot>(() => executionStore.getSnapshot());
+  const [argsJsonByRunId, setArgsJsonByRunId] = useState<
+    Record<string, string>
+  >({});
+
+  useEffect(() => {
+    setExecutionSnapshot(executionStore.getSnapshot());
+    return executionStore.subscribe(setExecutionSnapshot);
+  }, [executionStore]);
+
+  useEffect(() => {
+    const pendingDispose =
+      pendingExecutionStoreDisposalsRef.current.get(executionStore);
+    if (pendingDispose) {
+      clearTimeout(pendingDispose);
+      pendingExecutionStoreDisposalsRef.current.delete(executionStore);
+    }
+
+    return () => {
+      // React StrictMode runs effect cleanup+setup once after mount in dev.
+      // Defer disposal so the remount can keep the same render-created store.
+      const timer = setTimeout(() => {
+        pendingExecutionStoreDisposalsRef.current.delete(executionStore);
+        executionStore.dispose();
+      }, 0);
+      pendingExecutionStoreDisposalsRef.current.set(executionStore, timer);
+    };
+  }, [executionStore]);
+
   const [projectRoots, setProjectRoots] = useState<string[]>([]);
   const [projectUpdates, setProjectUpdates] = useState<
     Record<string, ProjectUpdate>
   >({});
-  const [testTree, setTestTree] = useState<any>(null);
+  const [testTree, setTestTree] = useState<SerializedTestDef[] | null>(null);
   const [collectionCallId, setCollectionCallId] = useState<number | null>(null);
   const [generation, setGeneration] = useState<number>(0);
-  const [testRunResults, setTestRunResults] = useState<Map<string, unknown>>(
+  const [testStartErrors, setTestStartErrors] = useState<Map<string, string>>(
     new Map(),
   );
   const [failedExpands, setFailedExpands] = useState<Set<string>>(new Set());
-  // Synthetic RunEntry that accumulates fetch logs from test collection/expansion operations
-  const [collectionRun, setCollectionRun] = useState<RunEntry | null>(null);
+  const [collectionDebug, setCollectionDebug] =
+    useState<CollectionDebugState | null>(null);
   // When true, the main content area shows the collection run's fetch logs
   const [viewingCollection, setViewingCollection] = useState(false);
   // When true, the main content area shows the test run history panel
@@ -582,8 +607,55 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   // `argsByFunction` seed) when they switch back to that function.
   const typedArgsByFnRef = useRef<Record<string, string>>({});
 
-  // Run history — each entry is a complete invocation with its logs + result
-  const [runs, setRuns] = useState<RunEntry[]>([]);
+  const displayRuns = useMemo(
+    () =>
+      executionSnapshot.runs
+        .map((run) => runToDisplayRun(run, argsJsonByRunId))
+        .filter(
+          (run): run is RunStoreDisplayRun =>
+            run != null,
+        ),
+    [executionSnapshot.runs, argsJsonByRunId],
+  );
+  const functionRuns = useMemo(
+    () =>
+      displayRuns.filter(
+        (run) =>
+          run.kind === 'function' &&
+          (!selectedProject || run.projectId === selectedProject),
+      ),
+    [displayRuns, selectedProject],
+  );
+  const testRuns = useMemo(
+    () =>
+      displayRuns.filter(
+        (run) =>
+          run.kind === 'test' &&
+          (!selectedProject || run.projectId === selectedProject) &&
+          run.projectGeneration === generation,
+      ),
+    [displayRuns, generation, selectedProject],
+  );
+  const testRunResults = useMemo(() => {
+    const results = new Map<string, unknown>();
+    for (const [testName, error] of testStartErrors) {
+      results.set(testName, { outcome: 'error', error });
+    }
+    for (const run of testRuns) {
+      if (!run.testName) continue;
+      if (run.result != null) {
+        results.set(run.testName, run.result);
+      } else if (run.error) {
+        results.set(run.testName, { outcome: 'error', error: run.error });
+      } else if (run.status === 'cancelled') {
+        results.set(run.testName, {
+          outcome: 'error',
+          error: 'Cancelled',
+        });
+      }
+    }
+    return results;
+  }, [testRuns, testStartErrors]);
   const [expandedLogId, setExpandedLogId] = useState<number | null>(null);
   const outputRef = useRef<HTMLDivElement>(null);
   const promptContentRef = useRef<HTMLDivElement>(null);
@@ -593,9 +665,12 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   // CFGs for EVERY function in the project (prefetched) — powers the
   // workflow-root heuristic when a function is picked from the list.
   const workflowCfgCacheRef = useRef<Map<string, ControlFlowGraph>>(new Map());
+  const workflowCfgResponsesRef = useRef<Map<string, ControlFlowGraph | null>>(
+    new Map(),
+  );
   const [workflowCacheVersion, setWorkflowCacheVersion] = useState(0);
   const [activeTab, setActiveTab] = useState<
-    'run' | 'graph' | 'prompt' | 'curl'
+    'run' | 'graph' | 'trace' | 'flame' | 'prompt' | 'curl'
   >(initialTab ?? 'run');
   const [highlightedNodeId, setHighlightedNodeId] = useState<number | null>(
     null,
@@ -625,16 +700,14 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   );
   const resizingRef = useRef(false);
   const [resultModes, setResultModes] = useState<
-    Record<number, 'parsed' | 'raw'>
+    Record<string, 'parsed' | 'raw'>
   >({});
+  const [runValidationError, setRunValidationError] = useState<string | null>(
+    null,
+  );
 
   const [showApiKeysDialog, setShowApiKeysDialog] = useState(false);
   const showApiKeysDialogRef = useRef(false);
-
-  // Pending io.input() requests keyed by callId, each entry is a queue of { id, prompt }
-  const [pendingInputs, setPendingInputs] = useState<
-    Map<number, Array<{ id: number; prompt: string | undefined }>>
-  >(new Map());
 
   const [diagsExpanded, setDiagsExpanded] = useState(false);
   const [buildTime, setBuildTime] = useState<number | null>(null);
@@ -656,14 +729,35 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     importShellEnvVars,
     revertToShell,
   } = useEnvVars(port);
-  // In-flight worker requests waiting for a value: id → variable name. Ref because it doesn't drive renders.
-  const pendingEnvRequestsRef = useRef<Map<number, string>>(new Map());
+  // In-flight worker requests waiting for a value. Ref because it doesn't drive renders.
+  const pendingEnvRequestsRef = useRef<Map<number, PendingEnvDialogRequest>>(
+    new Map(),
+  );
 
   // Ref mirror of envVars so the message handler closure always sees current values.
   const envVarsRef = useRef(envVars);
   useEffect(() => {
     envVarsRef.current = envVars;
   }, [envVars]);
+  const executionRunsRef = useRef(executionSnapshot.runs);
+  useEffect(() => {
+    executionRunsRef.current = executionSnapshot.runs;
+    for (const [id, pending] of pendingEnvRequestsRef.current) {
+      if (pending.runScoped) continue;
+      const runScoped = findPendingEnvRequest(
+        executionSnapshot.runs,
+        String(id),
+        pending.variable,
+      );
+      if (runScoped) {
+        pendingEnvRequestsRef.current.set(id, { ...pending, runScoped });
+      }
+    }
+  }, [executionSnapshot.runs]);
+
+  useEffect(() => {
+    onSelectedProjectChange?.(selectedProject);
+  }, [onSelectedProjectChange, selectedProject]);
 
   // Ref mirrors for cursor context handler (avoids stale closures in port.onMessage).
   // workflowRouteFor is defined further down (it needs the function list);
@@ -691,12 +785,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     expiresAt: number;
   } | null>(null);
 
-  const pendingCallsRef = useRef<
-    Map<
-      number,
-      { resolve: (v: BamlJsValue) => void; reject: (e: Error) => void }
-    >
-  >(new Map());
   // Buffer fetch logs by callId so logs that arrive before testCollectionResult are not lost.
   const pendingLogsRef = useRef<Map<number, FetchLogEntry[]>>(new Map());
 
@@ -987,7 +1075,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                 const jsonStr = new TextDecoder().decode(
                   new Uint8Array(n.data),
                 );
-                const tree = JSON.parse(jsonStr);
+                const tree = parseSerializedTestTreeJson(jsonStr);
 
                 // Track failed expansions from the server-provided error field
                 if (n.expandError) {
@@ -1001,26 +1089,20 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                 setTestTree(tree);
                 setCollectionCallId(n.callId);
                 setGeneration(n.generation);
-                setTestRunResults(new Map());
+                setTestStartErrors(new Map());
 
-                // Create/replace the synthetic RunEntry for collection, hydrating any
-                // fetch logs that arrived before this notification.
+                // Create/replace collection debug state, hydrating any fetch
+                // logs that arrived before this notification.
                 const buffered = pendingLogsRef.current.get(n.callId) ?? [];
                 pendingLogsRef.current.delete(n.callId);
                 const hasError = !!n.expandError;
-                const collectionEntry: RunEntry = {
+                const collectionState: CollectionDebugState = {
                   id: n.callId,
-                  functionName: '$collect_tests',
-                  argsJson: '',
                   fetchLogs: buffered,
-                  runtimeEvents: [],
-                  result: null,
                   error: hasError ? n.expandError!.message : null,
                   status: hasError ? 'error' : 'success',
-                  startTime: performance.now(),
-                  durationMs: null,
                 };
-                setCollectionRun(collectionEntry);
+                setCollectionDebug(collectionState);
               } catch (e) {
                 console.error('[testCollectionResult] decode error:', e);
               }
@@ -1040,8 +1122,8 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                 setViewingTestRun(true);
                 setTestTree(null);
                 setCollectionCallId(null);
-                setCollectionRun(null);
-                setTestRunResults(new Map());
+                setCollectionDebug(null);
+                setTestStartErrors(new Map());
                 setPendingTestTarget({
                   project: n.project,
                   kind: n.testName ? 'test' : 'testset',
@@ -1054,9 +1136,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
               }
               break;
             case 'controlFlowGraphResult':
+              workflowCfgResponsesRef.current.set(n.functionName, n.graph);
+              setWorkflowCacheVersion((v) => v + 1);
               if (n.graph) {
                 workflowCfgCacheRef.current.set(n.functionName, n.graph);
-                setWorkflowCacheVersion((v) => v + 1);
                 // Only the selected function's graph drives the display —
                 // prefetched graphs for other functions just fill the cache.
                 if (n.functionName === selectedFnRef.current) {
@@ -1073,64 +1156,40 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
           break;
         }
 
-        case 'callFunctionResult': {
-          const pending = pendingCallsRef.current.get(data.id);
-          if (pending) {
-            pendingCallsRef.current.delete(data.id);
-            pending.resolve(data.result);
-          }
-          break;
-        }
-
-        case 'callFunctionError': {
-          const pending = pendingCallsRef.current.get(data.id);
-          if (pending) {
-            pendingCallsRef.current.delete(data.id);
-            const err = new Error(data.error);
-            (err as any).cancelled = data.cancelled ?? false;
-            pending.reject(err);
-          }
-          break;
-        }
-
-        case 'nextFunctionCallResult':
-        case 'nextFunctionCallError':
-          // RuntimePort implementations consume allocator replies internally.
+        case 'runStarted':
+        case 'runPatch':
+        case 'commandAck':
+        case 'commandError':
+        case 'runList':
+        case 'runSnapshot':
+        case 'runCursorExpired':
+        case 'profileArtifactChunk':
+          // RunStoreClient consumes these during the staged migration. The
+          // legacy reducer keeps ignoring them until the UI cutover.
           break;
 
         case 'fetchLogNew': {
           const logEntry = data.entry;
           // Always buffer by callId so logs that arrive before testCollectionResult are not lost.
-          const existing = pendingLogsRef.current.get(logEntry.callId);
+          const existing = pendingLogsRef.current.get(data.callId);
           if (existing) {
             existing.push(logEntry);
           } else {
-            pendingLogsRef.current.set(logEntry.callId, [logEntry]);
+            pendingLogsRef.current.set(data.callId, [logEntry]);
           }
           // Route to collection run if callId matches
-          setCollectionRun((prev) => {
-            if (prev && logEntry.callId === prev.id) {
+          setCollectionDebug((prev) => {
+            if (prev && data.callId === prev.id) {
               return { ...prev, fetchLogs: [...prev.fetchLogs, logEntry] };
             }
             return prev;
-          });
-          // Route to regular runs
-          setRuns((prev) => {
-            const targetIdx = prev.findIndex((r) => r.id === logEntry.callId);
-            if (targetIdx === -1) return prev;
-            const target = prev[targetIdx];
-            return [
-              ...prev.slice(0, targetIdx),
-              { ...target, fetchLogs: [...target.fetchLogs, logEntry] },
-              ...prev.slice(targetIdx + 1),
-            ];
           });
           break;
         }
 
         case 'fetchLogUpdate':
           // Also update collection run logs
-          setCollectionRun((prev) => {
+          setCollectionDebug((prev) => {
             if (!prev) return prev;
             const updated = prev.fetchLogs.map((e) =>
               e.id === data.logId ? { ...e, ...data.patch } : e,
@@ -1138,37 +1197,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
             if (updated === prev.fetchLogs) return prev;
             return { ...prev, fetchLogs: updated };
           });
-          setRuns((prev) =>
-            prev.map((r) => ({
-              ...r,
-              fetchLogs: r.fetchLogs.map((e) =>
-                e.id === data.logId ? { ...e, ...data.patch } : e,
-              ),
-            })),
-          );
           break;
-
-        case 'runtimeEventNew': {
-          const eventEntry = data.event;
-          if (data.callId != null) {
-            setRuns((prev) =>
-              prev.map((r) =>
-                r.id === data.callId
-                  ? { ...r, runtimeEvents: [...r.runtimeEvents, eventEntry] }
-                  : r,
-              ),
-            );
-            // Also route to collection run if this event belongs to it
-            setCollectionRun((prev) => {
-              if (!prev || prev.id !== data.callId) return prev;
-              return {
-                ...prev,
-                runtimeEvents: [...prev.runtimeEvents, eventEntry],
-              };
-            });
-          }
-          break;
-        }
 
         case 'processEnvVars': {
           importShellEnvVars(data.vars);
@@ -1192,16 +1221,32 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
           // Always track as a known required key (proactive indicator)
           addRequiredKey(data.variable);
           const cached = envVarsRef.current[data.variable];
+          const runScoped = findPendingEnvRequest(
+            executionRunsRef.current,
+            String(data.id),
+            data.variable,
+          );
           if (cached !== undefined) {
-            port.postMessage({
-              type: 'envVarResponse',
-              id: data.id,
-              value: cached,
-              variable: data.variable,
-            });
+            if (runScoped) {
+              void executionStore
+                .respondToEnv(runScoped.runId, runScoped.envRequestId, cached)
+                .catch((error) => {
+                  console.warn('[ExecutionPanel] respondToEnv failed:', error);
+                });
+            } else {
+              port.postMessage({
+                type: 'envVarResponse',
+                id: data.id,
+                value: cached,
+                variable: data.variable,
+              });
+            }
           } else {
             // Park the request — it will be resolved when the dialog closes
-            pendingEnvRequestsRef.current.set(data.id, data.variable);
+            pendingEnvRequestsRef.current.set(data.id, {
+              variable: data.variable,
+              runScoped,
+            });
             if (!showApiKeysDialogRef.current) {
               setShowApiKeysDialog(true);
               showApiKeysDialogRef.current = true;
@@ -1211,25 +1256,13 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
         }
 
         case 'inputRequest': {
-          const { id, prompt, callId } = data;
-          setPendingInputs((prev) => {
-            const next = new Map(prev);
-            const arr = next.get(callId) ?? [];
-            next.set(callId, [...arr, { id, prompt }]);
-            return next;
-          });
+          // Migrated run/test views render input prompts from RunStore payloads.
+          // Legacy input frames are ignored here during the transport cutover.
           break;
         }
 
         case 'inputResolved': {
-          const { id, callId } = data;
-          setPendingInputs((prev) => {
-            const next = new Map(prev);
-            const arr = (next.get(callId) ?? []).filter((r) => r.id !== id);
-            if (arr.length === 0) next.delete(callId);
-            else next.set(callId, arr);
-            return next;
-          });
+          // RunStore inputResolved payloads remove prompts from snapshots.
           break;
         }
 
@@ -1246,9 +1279,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
           break;
 
         case 'controlFlowGraphResult':
+          workflowCfgResponsesRef.current.set(data.functionName, data.graph);
+          setWorkflowCacheVersion((v) => v + 1);
           if (data.graph) {
             workflowCfgCacheRef.current.set(data.functionName, data.graph);
-            setWorkflowCacheVersion((v) => v + 1);
             if (data.functionName === selectedFnRef.current) {
               setControlFlowGraph(data.graph);
               const pending = pendingHighlightRef.current;
@@ -1271,10 +1305,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
         case 'logDecorations':
         case 'clearLogDecorations':
           // These are handled by MonacoEditor, ignore here
-          break;
-
-        case 'runtimeEventError':
-          console.warn('[ExecutionPanel] runtimeEventError:', data.error);
           break;
 
         default:
@@ -1383,29 +1413,70 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
 
     setPreviewLoading(true);
 
+    let cancelled = false;
     const timer = setTimeout(async () => {
+      const waitForPreviewRun = (runId: RunId): Promise<Run> => {
+        const existing = executionStore
+          .getSnapshot()
+          .runs.find((run) => run.runId === runId);
+        if (existing && isTerminalRunStatus(existing.status)) {
+          return Promise.resolve(existing);
+        }
+
+        return new Promise((resolve) => {
+          let resolved = false;
+          let shouldUnsubscribe = false;
+          let unsubscribe: (() => void) | null = null;
+          const finish = (run: Run) => {
+            if (resolved) return;
+            resolved = true;
+            if (unsubscribe) {
+              unsubscribe();
+            } else {
+              shouldUnsubscribe = true;
+            }
+            resolve(run);
+          };
+
+          unsubscribe = executionStore.subscribe((snapshot) => {
+            const run = snapshot.runs.find((entry) => entry.runId === runId);
+            if (run && isTerminalRunStatus(run.status)) {
+              finish(run);
+            }
+          });
+          if (shouldUnsubscribe) {
+            unsubscribe();
+          }
+        });
+      };
+
       try {
-        const callId = await port.nextFunctionCall();
-        const argsProto = encodeCallArgs(
-          parsed as Record<string, unknown>,
-          callId,
-        );
-        const resultValue = await new Promise<BamlJsValue>(
-          (resolve, reject) => {
-            pendingCallsRef.current.set(callId, { resolve, reject });
-            port.postMessage({
-              type: 'callFunction',
-              id: callId,
-              name: companionFunctionName(selectedFn, subFn),
-              argsProto: new Uint8Array(argsProto),
-              project: selectedProject,
-            });
-          },
-        );
+        const previewFunctionName = companionFunctionName(selectedFn, subFn);
+        const argsBytes = encodeRunArgs(parsed as Record<string, unknown>);
+        const runId = await executionStore.startPreviewRun({
+          project: selectedProject,
+          parentFunctionName: selectedFn,
+          helper: subFn,
+          functionName: previewFunctionName,
+          argsBytes: new Uint8Array(argsBytes),
+        });
+        const run = await waitForPreviewRun(runId);
+        if (run.error) {
+          throw new Error(run.error.message);
+        }
+        if (run.status === 'cancelled') {
+          throw new Error('Cancelled');
+        }
+        const resultValue = decodeRunResultValue(run);
+        if (resultValue == null) {
+          throw new Error('Preview completed without a result');
+        }
+        if (cancelled) return;
         setResult(resultValue);
         setError(null);
         setPreviewLoading(false);
       } catch (e) {
+        if (cancelled) return;
         const errMsg = e instanceof Error ? e.message : String(e);
         // Don't clear result — keep last valid prompt visible with error banner above
         setError(errMsg);
@@ -1414,6 +1485,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     }, 500);
 
     return () => {
+      cancelled = true;
       clearTimeout(timer);
       setPreviewLoading(false);
     };
@@ -1424,16 +1496,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     selectedProject,
     argsJson,
     port,
+    executionStore,
     projectUpdateVersion,
   ]);
-
-  // Sync existing envVars to the port whenever port changes
-  useEffect(() => {
-    for (const [key, value] of Object.entries(envVars)) {
-      port.postMessage({ type: 'setEnvVar', key, value });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only sync when port changes
-  }, [port]);
 
   const onArgsJsonChange = useCallback(
     (e: ChangeEvent<HTMLInputElement>) => {
@@ -1445,36 +1510,29 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
 
   // ── Run function ───────────────────────────────────────────────────────
 
-  const isRunning =
-    runs.length > 0 && runs[runs.length - 1].status === 'running';
+  const isRunning = functionRuns[0]?.status === 'running';
 
-  const onCancelRun = useCallback(
-    (runId: number) => {
-      if (!selectedProject) return;
-      port.postMessage({
-        type: 'cancelCall',
-        id: runId,
-        project: selectedProject,
+  const onCancelFunctionRun = useCallback(
+    (runId: RunId) => {
+      void executionStore.cancelRun(runId).catch((error) => {
+        console.warn('[ExecutionPanel] cancelRun failed:', error);
       });
     },
-    [port, selectedProject],
+    [executionStore],
   );
 
-  const submitInput = useCallback(
-    (id: number, value: string, callId: number) => {
-      port.postMessage({ type: 'inputResponse', id, value, callId });
-      setPendingInputs((prev) => {
-        const next = new Map(prev);
-        const arr = (next.get(callId) ?? []).filter((r) => r.id !== id);
-        if (arr.length === 0) next.delete(callId);
-        else next.set(callId, arr);
-        return next;
-      });
+  const submitRunInput = useCallback(
+    (runId: RunId, inputRequestId: string, value: string) => {
+      void executionStore
+        .respondToInput(runId, inputRequestId, value)
+        .catch((error) => {
+          console.warn('[ExecutionPanel] respondToInput failed:', error);
+        });
     },
-    [port],
+    [executionStore],
   );
 
-  const toggleResultMode = useCallback((runId: number) => {
+  const toggleResultMode = useCallback((runId: string) => {
     setResultModes((prev) => ({
       ...prev,
       [runId]: (prev[runId] ?? 'parsed') === 'parsed' ? 'raw' : 'parsed',
@@ -1536,23 +1594,8 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     if (!selectedFn || !selectedProject || isRunning) return;
 
     setActiveTab('run');
-
-    const runId = await port.nextFunctionCall();
-    const startTime = performance.now();
-    const newRun: RunEntry = {
-      id: runId,
-      functionName: selectedFn,
-      argsJson,
-      fetchLogs: [],
-      runtimeEvents: [],
-      result: null,
-      error: null,
-      status: 'running',
-      startTime,
-      durationMs: null,
-    };
-    setRuns((prev) => [...prev, newRun]);
     setExpandedLogId(null);
+    setRunValidationError(null);
 
     requestAnimationFrame(() => {
       outputRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1569,45 +1612,19 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
           'Arguments must be a JSON object, e.g. {"arr": [3,1,2]}',
         );
       }
-      const argsProto = encodeCallArgs(parsed as Record<string, unknown>, runId);
+      const argsBytes = encodeRunArgs(parsed as Record<string, unknown>);
 
-      const resultValue = await new Promise<BamlJsValue>((resolve, reject) => {
-        pendingCallsRef.current.set(runId, { resolve, reject });
-        port.postMessage({
-          type: 'callFunction',
-          id: runId,
-          name: selectedFn,
-          argsProto: new Uint8Array(argsProto),
-          project: selectedProject,
-        });
+      const runId = await executionStore.startRun({
+        project: selectedProject,
+        functionName: selectedFn,
+        argsBytes: new Uint8Array(argsBytes),
       });
-
-      const dur = Math.round(performance.now() - startTime);
-      setRuns((prev) =>
-        prev.map((r) =>
-          r.id === runId
-            ? { ...r, result: resultValue, status: 'success', durationMs: dur }
-            : r,
-        ),
-      );
+      setArgsJsonByRunId((prev) => ({ ...prev, [runId]: argsJson }));
     } catch (e) {
-      const isCancelled = e instanceof Error && (e as any).cancelled === true;
       const errMsg = e instanceof Error ? e.message : String(e);
-      const dur = Math.round(performance.now() - startTime);
-      setRuns((prev) =>
-        prev.map((r) =>
-          r.id === runId
-            ? {
-                ...r,
-                error: isCancelled ? null : errMsg,
-                status: isCancelled ? 'cancelled' : 'error',
-                durationMs: dur,
-              }
-            : r,
-        ),
-      );
+      setRunValidationError(errMsg);
     }
-  }, [selectedFn, selectedProject, argsJson, isRunning, port]);
+  }, [selectedFn, selectedProject, argsJson, isRunning, executionStore]);
 
   const handleRefreshTests = useCallback(() => {
     if (!selectedProject) return;
@@ -1631,8 +1648,8 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     setViewingTestRun(true);
     setTestTree(null);
     setCollectionCallId(null);
-    setCollectionRun(null);
-    setTestRunResults(new Map());
+    setCollectionDebug(null);
+    setTestStartErrors(new Map());
     setPendingTestTarget({
       project: selectedProject,
       kind: initialTestName ? 'test' : 'testset',
@@ -1641,90 +1658,72 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     port.postMessage({ type: 'requestCollectTests', project: selectedProject });
   }, [initialTestName, initialTestsetName, selectedProject, port]);
 
+  const waitForTerminalRun = useCallback(
+    (runId: RunId) => {
+      const existing = executionStore
+        .getSnapshot()
+        .runs.find((run) => run.runId === runId);
+      if (existing && isTerminalRunStatus(existing.status)) {
+        return Promise.resolve();
+      }
+
+      return new Promise<void>((resolve) => {
+        let resolved = false;
+        let unsubscribe: (() => void) | null = null;
+
+        const finish = () => {
+          if (resolved) return;
+          resolved = true;
+          resolve();
+          unsubscribe?.();
+        };
+
+        unsubscribe = executionStore.subscribe((snapshot) => {
+          const run = snapshot.runs.find((entry) => entry.runId === runId);
+          if (run && isTerminalRunStatus(run.status)) {
+            finish();
+          }
+        });
+        if (resolved) unsubscribe();
+      });
+    },
+    [executionStore],
+  );
+
   const handleRunTest = useCallback(
     async (name: string) => {
       if (!selectedProject) return;
       // Switch to the test run view so the runs panel is visible even when no function is selected.
       setViewingTestRun(true);
       setViewingCollection(false);
-      const runId = await port.nextFunctionCall();
-      const newRun: RunEntry = {
-        id: runId,
-        functionName: 'testing.run_test',
-        testName: name,
-        argsJson: `(test: ${name})`,
-        fetchLogs: [],
-        runtimeEvents: [],
-        result: null,
-        error: null,
-        status: 'running',
-        startTime: performance.now(),
-        durationMs: null,
-      };
-      setRuns((prev) => [...prev, newRun]);
-
+      setTestStartErrors((prev) => {
+        if (!prev.has(name)) return prev;
+        const next = new Map(prev);
+        next.delete(name);
+        return next;
+      });
       try {
-        const resultValue = await new Promise<BamlJsValue>(
-          (resolve, reject) => {
-            pendingCallsRef.current.set(runId, { resolve, reject });
-            port.postMessage({
-              type: 'callTestFunction',
-              id: runId,
-              project: selectedProject,
-              generation,
-              testName: name,
-            });
-          },
-        );
-
-        const dur = Math.round(performance.now() - newRun.startTime);
-        setRuns((prev) =>
-          prev.map((r) =>
-            r.id === runId
-              ? {
-                  ...r,
-                  result: resultValue,
-                  status: 'success',
-                  durationMs: dur,
-                }
-              : r,
-          ),
-        );
-
-        setTestRunResults((prev) => new Map(prev).set(name, resultValue));
-      } catch (e: any) {
-        const dur = Math.round(performance.now() - newRun.startTime);
-        const cancelled = e instanceof Error && (e as any).cancelled === true;
-        setRuns((prev) =>
-          prev.map((r) =>
-            r.id === runId
-              ? {
-                  ...r,
-                  error: cancelled
-                    ? null
-                    : e instanceof Error
-                      ? e.message
-                      : String(e),
-                  status: cancelled ? 'cancelled' : 'error',
-                  durationMs: dur,
-                }
-              : r,
-          ),
-        );
-
-        setTestRunResults((prev) =>
-          new Map(prev).set(name, {
-            outcome: 'error',
-            error: e instanceof Error ? e.message : String(e),
-          }),
+        const runId = await executionStore.startTestRun({
+          project: selectedProject,
+          generation,
+          testName: name,
+        });
+        await waitForTerminalRun(runId);
+      } catch (e) {
+        setTestStartErrors(
+          (prev) =>
+            new Map(prev).set(
+              name,
+              e instanceof Error ? e.message : String(e),
+            ),
         );
       }
     },
-    [selectedProject, generation, port],
+    [executionStore, generation, selectedProject, waitForTerminalRun],
   );
 
   useEffect(() => {
-    if (!pendingTestTarget || !selectedProject || !Array.isArray(testTree)) {
+    if (!pendingTestTarget || !selectedProject || !testTree) {
       return;
     }
     if (pendingTestTarget.project !== selectedProject) {
@@ -1733,7 +1732,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
       return;
     }
 
-    const treeItems = testTree as SerializedTestDef[];
+    const treeItems = testTree;
     const hasPendingLazyTestSets = hasLazyTestSets(treeItems);
     if (pendingTestTarget.kind === 'test') {
       const testName = findTestNameInTree(treeItems, pendingTestTarget.name);
@@ -1790,9 +1789,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
       setFailedExpands(new Set());
     }
     const pending = pendingExpandsRef.current.names;
-    const expandLazy = (items: any[]) => {
+    const expandLazy = (items: SerializedTestDef[]) => {
       for (const item of items) {
-        if (item && item.type === 'lazyTestSet' && !pending.has(item.name)) {
+        if ('type' in item && item.type === 'lazyTestSet' && !pending.has(item.name)) {
           pending.add(item.name);
           port.postMessage({
             type: 'expandTestSet',
@@ -1800,15 +1799,13 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
             generation,
             testsetName: item.name,
           });
-        } else if (item && item.items && Array.isArray(item.items)) {
+        } else if (isExpandedTestSet(item)) {
           // Recurse into expanded testsets to find nested lazy items
           expandLazy(item.items);
         }
       }
     };
-    if (Array.isArray(testTree)) {
-      expandLazy(testTree);
-    }
+    expandLazy(testTree);
   }, [testTree, selectedProject, generation, port]);
 
   // Retry expansion for a failed (or already expanded) testset
@@ -1840,6 +1837,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   const currentUpdate = selectedProject
     ? projectUpdates[selectedProject]
     : undefined;
+  const isLoadingProject = selectedProject != null && currentUpdate == null;
   const functions: FunctionInfo[] = currentUpdate?.functions ?? [];
   const internalFunctionCount = functions.filter(isInternalFunction).length;
   const visibleFunctions = showInternalFunctions
@@ -1852,7 +1850,21 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   const selectedFnInfo = visibleFunctions.find((f) => f.name === selectedFn);
   const canPreviewPrompt = selectedFnInfo?.capabilities?.renderPrompt ?? false;
   const canPreviewCurl = selectedFnInfo?.capabilities?.buildRequest ?? false;
-  const latestGraphRun = findLatestGraphRun(runs, selectedFn);
+  // Names of LLM functions — only these have a meaningful raw (un-parsed LLM
+  // output) vs parsed distinction, so the Parsed/Raw toggle is shown only for
+  // them. expr functions just return a structured value (raw == parsed).
+  const llmFunctionNames = new Set(
+    functions.filter((f) => f.kind === 'llm').map((f) => f.name),
+  );
+  const latestGraphRunSnapshot = useMemo(
+    () =>
+      findLatestGraphRunSnapshot(
+        executionSnapshot.runs,
+        selectedFn,
+        selectedProject,
+      ),
+    [executionSnapshot.runs, selectedFn, selectedProject],
+  );
   // The run-history/logs strip is lifted out of the sidebar+content row so it
   // spans the panel's full width; the row gets bottom padding to make room.
   const runLogsVisible =
@@ -1881,6 +1893,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
       slot.version = projectUpdateVersion;
       slot.names = new Set();
       workflowCfgCacheRef.current = new Map();
+      workflowCfgResponsesRef.current = new Map();
     }
     for (const name of functionNames) {
       if (slot.names.has(name)) continue;
@@ -2009,6 +2022,67 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     setSelectedFn((prev) => prev ?? match);
   }, [functionNames, initialFunctionName]);
 
+  const defaultSelectionScopeRef = useRef<{
+    project: string | null;
+    update: ProjectUpdate | undefined;
+    applied: boolean;
+  }>({ project: null, update: undefined, applied: false });
+  useEffect(() => {
+    const scope = defaultSelectionScopeRef.current;
+    if (scope.project !== selectedProject || scope.update !== projectUpdateVersion) {
+      defaultSelectionScopeRef.current = {
+        project: selectedProject,
+        update: projectUpdateVersion,
+        applied: false,
+      };
+    }
+
+    const currentScope = defaultSelectionScopeRef.current;
+    if (
+      currentScope.applied ||
+      selectedFn ||
+      !selectedProject ||
+      functionNames.length === 0 ||
+      viewingCollection ||
+      viewingTestRun
+    ) {
+      return;
+    }
+
+    if (initialFunctionName && !appliedInitialFnRef.current) {
+      const initialMatch = functionNames.find(
+        (n) => n === initialFunctionName || n.endsWith(`.${initialFunctionName}`),
+      );
+      if (initialMatch) return;
+    }
+
+    let next = selectMainFunctionName(functionNames);
+    if (!next) {
+      const graphResponses = workflowCfgResponsesRef.current;
+      const hasAllGraphResponses = functionNames.every((name) =>
+        graphResponses.has(name),
+      );
+      if (!hasAllGraphResponses) return;
+      next = selectDefaultFunctionName(functionNames, workflowCfgCacheRef.current);
+    }
+    if (!next) return;
+
+    currentScope.applied = true;
+    setWorkflowContext(null);
+    setSelectedFn(next);
+    setViewingCollection(false);
+    setViewingTestRun(false);
+  }, [
+    functionNames,
+    initialFunctionName,
+    projectUpdateVersion,
+    selectedFn,
+    selectedProject,
+    viewingCollection,
+    viewingTestRun,
+    workflowCacheVersion,
+  ]);
+
   // Reset active tab if current tab is no longer available for the selected function
   useEffect(() => {
     if (activeTab === 'prompt' && !canPreviewPrompt) setActiveTab('run');
@@ -2062,11 +2136,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
           {buildTime}
         </span>
       )}
-
       <Tabs
         value={activeTab}
         onValueChange={(v) => setActiveTab(v as typeof activeTab)}
-        className="relative flex-1 flex flex-col min-h-0 gap-0"
+        className="relative flex h-full min-h-0 w-full flex-1 flex-col gap-0 overflow-hidden"
       >
         {/* ──── Combined top bar ──── */}
         <div className="flex items-center gap-1.5 px-2 py-1 shrink-0 border-b border-vsc-border bg-vsc-surface">
@@ -2099,6 +2172,12 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                 </TabsTrigger>
                 <TabsTrigger value="graph" className="py-1 h-7">
                   Graph
+                </TabsTrigger>
+                <TabsTrigger value="trace" className="py-1 h-7">
+                  Trace
+                </TabsTrigger>
+                <TabsTrigger value="flame" className="py-1 h-7">
+                  Flame
                 </TabsTrigger>
                 {canPreviewPrompt && (
                   <TabsTrigger value="prompt" className="py-1 h-7">
@@ -2140,26 +2219,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
               size="sm"
             />
           )}
-
-          {selectedFn &&
-            !viewingCollection &&
-            !viewingTestRun &&
-            activeTab === 'run' &&
-            runs.length > 0 &&
-            !isRunning && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 px-2 text-[10px] text-vsc-text-muted hover:text-vsc-text"
-                onClick={() => {
-                  const runIds = runs.map((r) => r.id);
-                  port.postMessage({ type: 'clearHandles', runIds });
-                  setRuns([]);
-                }}
-              >
-                Clear
-              </Button>
-            )}
 
           {selectedFn && !viewingCollection && !viewingTestRun && (
             <Button
@@ -2368,49 +2427,22 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                   functions={visibleFunctions}
                   showInternalFunctions={showInternalFunctions}
                   internalFunctionCount={internalFunctionCount}
+                  isLoadingProject={isLoadingProject}
                   testTree={testTree}
                   selectedFn={selectedFn}
                   onSelectFn={(fn) => {
                     setViewingCollection(false);
                     setViewingTestRun(false);
                     setHighlightedNodeId(null);
-                    if (!fn) {
-                      setWorkflowContext(null);
-                      setSelectedFn(fn);
-                      return;
-                    }
-                    // Workflow heuristic: a helper that lives inside exactly
-                    // one workflow shows that whole workflow (with its call
-                    // site highlighted); an ambiguous one keeps itself
-                    // selected and asks via the picker bar.
-                    const route = workflowRouteFor(fn);
-                    const roots = route.roots;
-                    if (roots.length === 1 && roots[0]) {
-                      const root = roots[0];
-                      const hop = route.firstHop.get(root);
-                      const target = hop ? findCallSiteNode(root, hop) : null;
-                      setWorkflowContext(null);
-                      if (root !== selectedFn) {
-                        pendingHighlightRef.current =
-                          target != null ? { fn: root, nodeId: target } : null;
-                        setSelectedFn(root);
-                      } else if (target != null) {
-                        setHighlightedNodeId(target);
-                      }
-                    } else if (roots.length > 1) {
-                      setSelectedFn(fn);
-                      setWorkflowContext({ functionName: fn, workflows: roots });
-                    } else {
-                      setWorkflowContext(null);
-                      setSelectedFn(fn);
-                    }
+                    setWorkflowContext(null);
+                    setSelectedFn(fn);
                   }}
                   onRefreshTests={handleRefreshTests}
                   onRunTest={handleRunTest}
                   testRunResults={testRunResults}
                   failedExpands={failedExpands}
                   onRetryExpand={handleRetryExpand}
-                  collectionRun={collectionRun}
+                  collectionLogCount={collectionDebug?.fetchLogs.length ?? 0}
                   viewingCollection={viewingCollection}
                   onSelectCollectionView={() => {
                     setViewingCollection(true);
@@ -2428,24 +2460,23 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
 
           {/* Content area */}
           <div className="flex-1 flex flex-col min-h-0 min-w-0">
-            {viewingCollection && collectionRun ? (
-              <CollectionRunView
-                run={collectionRun}
+            {viewingCollection && collectionDebug ? (
+              <CollectionDebugView
+                state={collectionDebug}
                 expandedLogId={expandedLogId}
                 setExpandedLogId={setExpandedLogId}
-                resultRenderers={resultRenderers}
               />
             ) : viewingTestRun ? (
               <div
                 ref={outputRef}
                 className="flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg"
               >
-                {runs.length === 0 && (
+                {testRuns.length === 0 && (
                   <div className="p-5 text-center text-vsc-text-faint text-[11px]">
                     No test runs yet
                   </div>
                 )}
-                {[...runs].reverse().map((run, runIdx) => {
+                {testRuns.map((run, runIdx) => {
                   const isLatest = runIdx === 0;
                   const statusCls =
                     run.status === 'error'
@@ -2481,7 +2512,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                                     variant="ghost"
                                     size="icon"
                                     className="h-5 w-5 text-vsc-text-muted hover:text-vsc-error"
-                                    onClick={() => onCancelRun(run.id)}
+                                    onClick={() => onCancelFunctionRun(run.id)}
                                   >
                                     <Square size={12} />
                                   </Button>
@@ -2581,131 +2612,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                           </div>
                         );
                       })}
-                      {/* Runtime events (log.info, baml.events.send, etc.) */}
-                      {run.runtimeEvents.length > 0 && (
-                        <div className="py-1.5 pr-2.5 pl-[22px] border-b border-vsc-border-subtle">
-                          <div className="text-[10px] font-semibold text-vsc-text-muted mb-1 uppercase tracking-wide">
-                            Events ({run.runtimeEvents.length})
-                          </div>
-                          <div className="flex flex-col gap-0.5">
-                            {run.runtimeEvents.map((evt, evtIdx) => {
-                              const kind = evt.event;
-                              if (!kind) return null;
-
-                              let label: string;
-                              let payload: ReactNode;
-                              let colorCls: string;
-
-                              switch (kind.$case) {
-                                case 'functionStart':
-                                  label = 'START';
-                                  payload = kind.functionStart.name;
-                                  colorCls = 'text-vsc-green';
-                                  break;
-                                case 'functionEnd':
-                                  label = 'END';
-                                  payload = (
-                                    <FunctionEndPayload
-                                      event={kind.functionEnd}
-                                      customRenderers={resultRenderers}
-                                    />
-                                  );
-                                  colorCls = kind.functionEnd.error
-                                    ? 'text-vsc-red'
-                                    : 'text-vsc-text-muted';
-                                  break;
-                                case 'log': {
-                                  const lvl = kind.log.level;
-                                  label = lvl;
-                                  payload = (
-                                    <EventValueDisplay
-                                      value={kind.log.data}
-                                      customRenderers={resultRenderers}
-                                    />
-                                  );
-                                  colorCls =
-                                    lvl === 'error'
-                                      ? 'text-vsc-red'
-                                      : lvl === 'warn'
-                                        ? 'text-vsc-yellow'
-                                        : lvl === 'debug'
-                                          ? 'text-vsc-text-muted'
-                                          : 'text-vsc-blue';
-                                  break;
-                                }
-                                case 'custom':
-                                  label = 'EVENT';
-                                  payload = (
-                                    <>
-                                      <span>{kind.custom.name}: </span>
-                                      <EventValueDisplay
-                                        value={kind.custom.data}
-                                        customRenderers={resultRenderers}
-                                      />
-                                    </>
-                                  );
-                                  colorCls = 'text-vsc-purple';
-                                  break;
-                                case 'setTags':
-                                  label = 'TAGS';
-                                  payload = kind.setTags.tags
-                                    .map((t) => `${t.key}=${t.value}`)
-                                    .join(', ');
-                                  colorCls = 'text-vsc-text-muted';
-                                  break;
-                                default:
-                                  return null;
-                              }
-
-                              // Check if cursor is within this event's source span
-                              const source =
-                                kind.$case === 'log'
-                                  ? kind.log.source
-                                  : undefined;
-                              const isCursorMatch =
-                                cursorOffset != null &&
-                                source != null &&
-                                cursorOffset > source.startOffset &&
-                                cursorOffset <= source.endOffset;
-
-                              return (
-                                <div
-                                  key={`${evt.spanId}-${evtIdx}`}
-                                  className={cn(
-                                    'flex items-start gap-1.5 text-[11px]',
-                                    isCursorMatch &&
-                                      'bg-vsc-yellow/20 rounded px-1 -mx-1',
-                                    source &&
-                                      onNavigateToSource &&
-                                      'cursor-pointer hover:bg-vsc-bg-secondary',
-                                  )}
-                                  onClick={
-                                    source && onNavigateToSource
-                                      ? () =>
-                                          onNavigateToSource({
-                                            fileId: source.fileId,
-                                            line: source.line,
-                                            column: source.column,
-                                          })
-                                      : undefined
-                                  }
-                                >
-                                  <span
-                                    className={`${colorCls} font-semibold shrink-0 w-10 uppercase`}
-                                  >
-                                    {label}
-                                  </span>
-                                  <div className="text-vsc-text flex-1 min-w-0 break-all">
-                                    {payload}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-                      {/* Inline io.input() prompts for this run */}
-                      {(pendingInputs.get(run.id) ?? []).map((req) => (
+                      {run.inputRequests.map((req) => (
                         <div
                           key={req.id}
                           className="flex items-center gap-2 px-[22px] py-1.5 border-b border-vsc-border bg-vsc-surface"
@@ -2718,10 +2625,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                             autoFocus
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') {
-                                submitInput(
+                                submitRunInput(
+                                  run.id,
                                   req.id,
                                   e.currentTarget.value,
-                                  run.id,
                                 );
                               }
                             }}
@@ -2771,10 +2678,12 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                     <GraphView
                       graph={controlFlowGraph}
                       functionName={selectedFn}
-                      runtimeEvents={latestGraphRun?.runtimeEvents}
-                      runStatus={latestGraphRun?.status}
-                      runError={latestGraphRun?.error}
-                      runFunctionName={latestGraphRun?.functionName}
+                      graphRuntimeOverlay={
+                        latestGraphRunSnapshot?.graphRuntimeOverlay
+                      }
+                      calls={latestGraphRunSnapshot?.calls}
+                      runStatus={latestGraphRunSnapshot?.status}
+                      runError={latestGraphRunSnapshot?.error?.message ?? null}
                       customRenderers={resultRenderers}
                       selectedNodeId={highlightedNodeId}
                       onNodeClick={handleGraphNodeClick}
@@ -2783,6 +2692,26 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                     <div className="flex-1 flex items-center justify-center text-vsc-text-faint text-xs bg-vsc-bg h-full">
                       Loading graph...
                     </div>
+                  )}
+                </TabsContent>
+
+                {/* Trace timeline */}
+                <TabsContent
+                  value="trace"
+                  className="flex-1 min-h-0 mt-0 flex flex-col"
+                  style={{ minHeight: 300 }}
+                >
+                  <TraceTimelineView run={latestGraphRunSnapshot} />
+                </TabsContent>
+
+                {/* Profile flamegraph */}
+                <TabsContent
+                  value="flame"
+                  className="flex-1 min-h-0 mt-0 flex flex-col"
+                  style={{ minHeight: 300 }}
+                >
+                  {activeTab === 'flame' && (
+                    <ExecutionProfileView run={latestGraphRunSnapshot} />
                   )}
                 </TabsContent>
 
@@ -2882,10 +2811,14 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                       <GraphView
                         graph={controlFlowGraph}
                         functionName={selectedFn}
-                        runtimeEvents={latestGraphRun?.runtimeEvents}
-                        runStatus={latestGraphRun?.status}
-                        runError={latestGraphRun?.error}
-                        runFunctionName={latestGraphRun?.functionName}
+                        graphRuntimeOverlay={
+                          latestGraphRunSnapshot?.graphRuntimeOverlay
+                        }
+                        calls={latestGraphRunSnapshot?.calls}
+                        runStatus={latestGraphRunSnapshot?.status}
+                        runError={
+                          latestGraphRunSnapshot?.error?.message ?? null
+                        }
                         customRenderers={resultRenderers}
                         selectedNodeId={highlightedNodeId}
                         onNodeClick={handleGraphNodeClick}
@@ -2913,14 +2846,23 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                     className="absolute left-0 right-0 bottom-0 z-10 overflow-auto font-vsc-mono text-xs bg-vsc-bg"
                     style={{ height: logsPanelHeight }}
                   >
-                    {runs.length === 0 && (
+                    {runValidationError && (
+                      <div className="p-2.5 border-b border-vsc-border bg-vsc-error/10">
+                        <ErrorDisplay error={runValidationError} />
+                      </div>
+                    )}
+
+                    {functionRuns.length === 0 && !runValidationError && (
                       <div className="p-5 text-center text-vsc-text-faint text-[11px]">
                         Press Run to execute {selectedFn}()
                       </div>
                     )}
 
-                    {[...runs].reverse().map((run, runIdx) => {
+                    {functionRuns.map((run, runIdx) => {
                       const isLatest = runIdx === 0;
+                      const isLlmFunctionRun = llmFunctionNames.has(
+                        run.functionName,
+                      );
                       const statusCls =
                         run.status === 'error'
                           ? 'bg-vsc-red'
@@ -2960,7 +2902,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                                         variant="ghost"
                                         size="icon"
                                         className="h-5 w-5 text-vsc-text-muted hover:text-vsc-error"
-                                        onClick={() => onCancelRun(run.id)}
+                                        onClick={() =>
+                                          onCancelFunctionRun(run.id)
+                                        }
                                       >
                                         <Square size={12} />
                                       </Button>
@@ -3063,131 +3007,8 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                             );
                           })}
 
-                          {/* Runtime events (log.info, baml.events.send, etc.) */}
-                          {run.runtimeEvents.length > 0 && (
-                            <div className="py-1.5 pr-2.5 pl-[22px] border-b border-vsc-border-subtle">
-                              <div className="text-[10px] font-semibold text-vsc-text-muted mb-1 uppercase tracking-wide">
-                                Events ({run.runtimeEvents.length})
-                              </div>
-                              <div className="flex flex-col gap-0.5">
-                                {run.runtimeEvents.map((evt, evtIdx) => {
-                                  const kind = evt.event;
-                                  if (!kind) return null;
-
-                                  let label: string;
-                                  let payload: ReactNode;
-                                  let colorCls: string;
-
-                                  switch (kind.$case) {
-                                    case 'functionStart':
-                                      label = 'START';
-                                      payload = kind.functionStart.name;
-                                      colorCls = 'text-vsc-green';
-                                      break;
-                                    case 'functionEnd':
-                                      label = 'END';
-                                      payload = (
-                                        <FunctionEndPayload
-                                          event={kind.functionEnd}
-                                          customRenderers={resultRenderers}
-                                        />
-                                      );
-                                      colorCls = kind.functionEnd.error
-                                        ? 'text-vsc-red'
-                                        : 'text-vsc-text-muted';
-                                      break;
-                                    case 'log': {
-                                      const lvl = kind.log.level;
-                                      label = lvl;
-                                      payload = (
-                                        <EventValueDisplay
-                                          value={kind.log.data}
-                                          customRenderers={resultRenderers}
-                                        />
-                                      );
-                                      colorCls =
-                                        lvl === 'error'
-                                          ? 'text-vsc-red'
-                                          : lvl === 'warn'
-                                            ? 'text-vsc-yellow'
-                                            : lvl === 'debug'
-                                              ? 'text-vsc-text-muted'
-                                              : 'text-vsc-blue';
-                                      break;
-                                    }
-                                    case 'custom':
-                                      label = 'EVENT';
-                                      payload = (
-                                        <>
-                                          <span>{kind.custom.name}: </span>
-                                          <EventValueDisplay
-                                            value={kind.custom.data}
-                                            customRenderers={resultRenderers}
-                                          />
-                                        </>
-                                      );
-                                      colorCls = 'text-vsc-purple';
-                                      break;
-                                    case 'setTags':
-                                      label = 'TAGS';
-                                      payload = kind.setTags.tags
-                                        .map((t) => `${t.key}=${t.value}`)
-                                        .join(', ');
-                                      colorCls = 'text-vsc-text-muted';
-                                      break;
-                                    default:
-                                      return null;
-                                  }
-
-                                  // Check if cursor is within this event's source span
-                                  const source =
-                                    kind.$case === 'log'
-                                      ? kind.log.source
-                                      : undefined;
-                                  const isCursorMatch =
-                                    cursorOffset != null &&
-                                    source != null &&
-                                    cursorOffset > source.startOffset &&
-                                    cursorOffset <= source.endOffset;
-
-                                  return (
-                                    <div
-                                      key={`${evt.spanId}-${evtIdx}`}
-                                      className={cn(
-                                        'flex items-start gap-1.5 text-[11px]',
-                                        isCursorMatch &&
-                                          'bg-vsc-yellow/20 rounded px-1 -mx-1',
-                                        source &&
-                                          onNavigateToSource &&
-                                          'cursor-pointer hover:bg-vsc-bg-secondary',
-                                      )}
-                                      onClick={
-                                        source && onNavigateToSource
-                                          ? () =>
-                                              onNavigateToSource({
-                                                fileId: source.fileId,
-                                                line: source.line,
-                                                column: source.column,
-                                              })
-                                          : undefined
-                                      }
-                                    >
-                                      <span
-                                        className={`${colorCls} font-semibold shrink-0 w-10 uppercase`}
-                                      >
-                                        {label}
-                                      </span>
-                                      <div className="text-vsc-text flex-1 min-w-0 break-all">
-                                        {payload}
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          )}
                           {/* Inline io.input() prompts for this run */}
-                          {(pendingInputs.get(run.id) ?? []).map((req) => (
+                          {run.inputRequests.map((req) => (
                             <div
                               key={req.id}
                               className="flex items-center gap-2 px-[22px] py-1.5 border-b border-vsc-border bg-vsc-surface"
@@ -3200,17 +3021,16 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                                 autoFocus
                                 onKeyDown={(e) => {
                                   if (e.key === 'Enter') {
-                                    submitInput(
+                                    submitRunInput(
+                                      run.id,
                                       req.id,
                                       e.currentTarget.value,
-                                      run.id,
                                     );
                                   }
                                 }}
                               />
                             </div>
                           ))}
-
                           {/* Result / Error / Cancelled for this run */}
                           {run.status === 'cancelled' && (
                             <div className="py-1.5 pr-2.5 pl-[22px]">
@@ -3246,35 +3066,40 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                                   <div className="text-[10px] font-semibold text-vsc-green uppercase tracking-wide">
                                     Result
                                   </div>
-                                  <ToggleGroup
-                                    value={resultModes[run.id] ?? 'parsed'}
-                                    onValueChange={(v) =>
-                                      setResultModes((prev) => ({
-                                        ...prev,
-                                        [run.id]: v as 'parsed' | 'raw',
-                                      }))
-                                    }
-                                    options={[
-                                      { value: 'parsed', label: 'Parsed' },
-                                      { value: 'raw', label: 'Raw' },
-                                    ]}
-                                    size="sm"
-                                  />
+                                  {/* Parsed/Raw only applies to LLM functions,
+                                      where Raw is the un-parsed model output.
+                                      expr functions return a structured value. */}
+                                  {isLlmFunctionRun && (
+                                    <ToggleGroup
+                                      value={resultModes[run.id] ?? 'parsed'}
+                                      onValueChange={(v) =>
+                                        setResultModes((prev) => ({
+                                          ...prev,
+                                          [run.id]: v as 'parsed' | 'raw',
+                                        }))
+                                      }
+                                      options={[
+                                        { value: 'parsed', label: 'Parsed' },
+                                        { value: 'raw', label: 'Raw' },
+                                      ]}
+                                      size="sm"
+                                    />
+                                  )}
                                   <CopyButton
                                     text={stringifyResult(run.result)}
                                     iconSize={11}
                                   />
                                 </div>
-                                {(resultModes[run.id] ?? 'parsed') ===
-                                'parsed' ? (
+                                {isLlmFunctionRun &&
+                                (resultModes[run.id] ?? 'parsed') === 'raw' ? (
+                                  <pre className="whitespace-pre-wrap break-all font-vsc-mono text-[11px] text-vsc-text bg-vsc-bg-secondary p-2 rounded border border-vsc-border max-h-[400px] overflow-auto">
+                                    {stringifyResult(run.result)}
+                                  </pre>
+                                ) : (
                                   <ResultDisplay
                                     result={run.result}
                                     customRenderers={resultRenderers}
                                   />
-                                ) : (
-                                  <pre className="whitespace-pre-wrap break-all font-vsc-mono text-[11px] text-vsc-text bg-vsc-bg-secondary p-2 rounded border border-vsc-border max-h-[400px] overflow-auto">
-                                    {stringifyResult(run.result)}
-                                  </pre>
                                 )}
                               </div>
                             </div>
@@ -3287,7 +3112,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
               </>
             ) : (
               <div className="flex-1 flex items-center justify-center text-vsc-text-faint text-xs bg-vsc-bg">
-                {viewingCollection
+                {isLoadingProject
+                  ? 'Loading project...'
+                  : viewingCollection
                   ? 'Collection not yet available — click Refresh'
                   : 'Select a function to run'}
               </div>
@@ -3309,9 +3136,29 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
           if (!open) {
             // Dialog closed — resolve ALL pending env requests in one batch.
             // If user provided a value, envVarsRef has it. If not, value is undefined → worker errors the call.
-            for (const [id, variable] of pendingEnvRequestsRef.current) {
-              const value = envVarsRef.current[variable];
-              port.postMessage({ type: 'envVarResponse', id, value, variable });
+            for (const [id, pending] of pendingEnvRequestsRef.current) {
+              const value = envVarsRef.current[pending.variable];
+              if (pending.runScoped) {
+                void executionStore
+                  .respondToEnv(
+                    pending.runScoped.runId,
+                    pending.runScoped.envRequestId,
+                    value,
+                  )
+                  .catch((error) => {
+                    console.warn(
+                      '[ExecutionPanel] respondToEnv failed:',
+                      error,
+                    );
+                  });
+              } else {
+                port.postMessage({
+                  type: 'envVarResponse',
+                  id,
+                  value,
+                  variable: pending.variable,
+                });
+              }
             }
             pendingEnvRequestsRef.current.clear();
           }

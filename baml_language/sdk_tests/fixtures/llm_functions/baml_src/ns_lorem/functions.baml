@@ -7,7 +7,7 @@ client<llm> Stub {
   }
 }
 
-// Uniquely-named client so `StreamE2EExtract` resolves cleanly through
+// Uniquely-named client so `stream_e2e_extract` resolves cleanly through
 // `StreamStub$new`. The ambient `Stub` clients in ns_lorem and ns_ipsum
 // share a bare name — `Client.get_constructor` errors with
 // "Client resolve function Stub$new matches multiple namespaced
@@ -16,11 +16,19 @@ client<llm> Stub {
 // only), so the collision is latent for them; the streaming smoke is
 // the first test to actually drive a request, and a unique name is
 // the smallest unblock. Tracked as a separate engine bug.
+//
+// `base_url`/`api_key` resolve from env AT CALL TIME (`env.VAR` desugars to
+// `baml.env.get_or_panic`), so the SAME client drives BOTH the keyless
+// **replay harness** (tests point it at the in-process replay server —
+// thoughts/sam-projects/bridge-generics/streaming/02) and the key-gated
+// **live e2e** (point it at the real provider with a real key). Both modes
+// must set the two env vars first — see `customizable/conftest.py`.
 client<llm> StreamStub {
   provider openai
   options {
-    model "gpt-4o-mini"
-    api_key env.OPENAI_API_KEY
+    model "gpt-5.4-nano"
+    api_key env.BAML_REPLAY_API_KEY
+    base_url env.BAML_REPLAY_BASE_URL
   }
 }
 
@@ -68,13 +76,13 @@ function StreamingExtract(text: string) -> StreamingDoc {
 // Void" — once believed an engine constraint per 21b, actually an
 // emit-phase namespace-resolution bug in `compute_stream_return_type`,
 // fixed; see thoughts/sam-projects/bridge-generics/streaming/00. The
-// class-typed path is covered by `StreamE2EExtractDoc` below.)
+// class-typed path is covered by `stream_e2e_extract_doc` below.)
 //
 // The 8-bullet plain-text format forces multi-chunk SSE: the model
 // emits one bullet at a time, so `Stream.next()` yields a series of
 // distinct accumulated-content snapshots before `StreamFinished`.
 // Used by `customizable/test_streaming_e2e.py`.
-function StreamE2EExtract(text: string) -> string {
+function stream_e2e_extract(text: string) -> string {
   client StreamStub
   prompt #"
     Read the resume below and write a short summary as plain text.
@@ -95,7 +103,7 @@ function StreamE2EExtract(text: string) -> string {
 
 // === Class-typed streaming coverage (bridge-generics/streaming) ===
 //
-// Unlike `StreamE2EExtract` (returns plain `string`), these return a
+// Unlike `stream_e2e_extract` (returns plain `string`), these return a
 // *class*. The synthesized `$stream` companion is therefore
 // `Stream<StreamingDoc$stream, StreamingDoc>` (multi-field T) /
 // `Stream<Resume$stream, Resume>`. They use the streaming-capable
@@ -111,7 +119,7 @@ function StreamE2EExtract(text: string) -> string {
 // thoughts/sam-projects/bridge-generics/streaming/00). Now fixed; they
 // guard the class-typed `stream.next()` / `stream.final()` path. Used
 // by `customizable/test_streaming_class_e2e.py`.
-function StreamE2EExtractDoc(text: string) -> StreamingDoc {
+function stream_e2e_extract_doc(text: string) -> StreamingDoc {
   client StreamStub
   prompt #"
     Read the resume below and produce a structured doc.
@@ -129,7 +137,7 @@ function StreamE2EExtractDoc(text: string) -> StreamingDoc {
   "#
 }
 
-function StreamE2EExtractResume(text: string) -> Resume {
+function stream_e2e_extract_resume(text: string) -> Resume {
   client StreamStub
   prompt #"
     Extract a resume from the following text.
@@ -145,12 +153,12 @@ function StreamE2EExtractResume(text: string) -> Resume {
 }
 
 // BAML-driven counterpart that keeps the `S | StreamFinished` union on
-// the engine side (like `StreamE2ECollect`), but for a class-typed
+// the engine side (like `stream_e2e_collect`), but for a class-typed
 // stream. If this succeeds while the host-driven
-// `StreamE2EExtractDoc$stream` fails, the break is in the host bridge's
+// `stream_e2e_extract_doc$stream` fails, the break is in the host bridge's
 // handling of the class-typed `Stream<T, S>`, not the engine SAP path.
-function StreamE2ECollectDoc(text: string) -> StreamingDoc {
-  let s = StreamE2EExtractDoc$stream(text);
+function stream_e2e_collect_doc(text: string) -> StreamingDoc {
+  let s = stream_e2e_extract_doc$stream(text);
   while (true) {
     let v = s.next();
     match (v) {
@@ -170,8 +178,8 @@ function StreamE2ECollectDoc(text: string) -> StreamingDoc {
 // to sidestep a suspected `Ty::TypeVar → Ty::Void` fallback in
 // `tir2_to_template`; the real Void source turned out to be namespace
 // resolution in `compute_stream_return_type`, since fixed.)
-function StreamE2ECollect(text: string) -> StreamE2ECollectResult {
-  let s = StreamE2EExtract$stream(text);
+function stream_e2e_collect(text: string) -> StreamE2ECollectResult {
+  let s = stream_e2e_extract$stream(text);
   let next_calls: (null | string)[] = [];
   while (true) {
     let v = s.next();

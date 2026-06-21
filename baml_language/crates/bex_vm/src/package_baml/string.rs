@@ -4,7 +4,8 @@ use bex_vm_types::types::Value;
 
 use super::{BamlClassString, PackageBamlImpl};
 use crate::{
-    BexVm,
+    BexVm, VmPanic,
+    array_index::{resolve_index, resolve_slice_bound},
     errors::{VmBamlError, VmRustFnError},
 };
 
@@ -105,11 +106,13 @@ impl BamlClassString for PackageBamlImpl {
             .collect()
     }
 
-    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-    fn substring(string: &BexStr, start: i64, end: i64) -> Result<BexStr, VmRustFnError> {
-        let start = usize::try_from(start.max(0)).unwrap_or(usize::MAX);
-        let end = usize::try_from(end.max(0)).unwrap_or(usize::MAX);
-        Ok(string.substring_by_char(start, end))
+    fn substring(string: &BexStr, start: i64, end: i64) -> BexStr {
+        // Codepoint-indexed, not byte-indexed; a negative index counts from the end.
+        let len = string.char_count();
+        let start = resolve_slice_bound(start, len);
+        // An `end` resolving before `start` yields an empty string.
+        let end = resolve_slice_bound(end, len).max(start);
+        string.substring_by_char(start, end)
     }
 
     fn replace(string: &BexStr, search: &BexStr, replacement: &BexStr) -> BexStr {
@@ -128,15 +131,13 @@ impl BamlClassString for PackageBamlImpl {
     }
 
     fn char_at(string: &BexStr, index: i64) -> Result<BexStr, VmRustFnError> {
-        let Ok(index) = usize::try_from(index) else {
-            return Err(VmBamlError::InvalidArgument {
-                message: format!("at: index {index} is negative"),
-            }
-            .into());
-        };
-        Ok(string
-            .char_at_codepoint(index)
-            .unwrap_or_else(BexStr::empty))
+        // Codepoint-indexed, not byte-indexed. A negative index counts from the
+        // end; an out-of-bounds index raises `IndexOutOfBounds` (like `array[i]`),
+        // so success always yields exactly one codepoint.
+        let len = string.char_count();
+        resolve_index(index, len)
+            .and_then(|i| string.char_at_codepoint(i))
+            .ok_or_else(|| VmPanic::IndexOutOfBounds { index, length: len }.into())
     }
 
     fn repeat(string: &BexStr, count: i64) -> BexStr {

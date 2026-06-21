@@ -249,380 +249,512 @@ function arrays.$init_test_ns_arrays_arrays(registry: testing.TestCollector) -> 
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_remove_at_negative_returns_null_and_keeps_array"
+    load_const "array_remove_at_negative_counts_from_end"
     make_closure .<lambda($init_test_ns_arrays_arrays, 65)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_remove_at_empty_returns_null"
+    load_const "array_remove_at_past_start_returns_null_and_keeps_array"
     make_closure .<lambda($init_test_ns_arrays_arrays, 66)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_shift_returns_first_element"
+    load_const "array_remove_at_empty_returns_null"
     make_closure .<lambda($init_test_ns_arrays_arrays, 67)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_shift_modifies_array_in_place"
+    load_const "array_shift_returns_first_element"
     make_closure .<lambda($init_test_ns_arrays_arrays, 68)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_shift_empty_returns_null"
+    load_const "array_shift_modifies_array_in_place"
     make_closure .<lambda($init_test_ns_arrays_arrays, 69)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_shift_repeated_drains_array"
+    load_const "array_shift_empty_returns_null"
     make_closure .<lambda($init_test_ns_arrays_arrays, 70)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_unshift_returns_new_length"
+    load_const "array_shift_repeated_drains_array"
     make_closure .<lambda($init_test_ns_arrays_arrays, 71)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_unshift_inserts_at_front"
+    load_const "array_unshift_returns_new_length"
     make_closure .<lambda($init_test_ns_arrays_arrays, 72)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_unshift_empty_array"
+    load_const "array_unshift_inserts_at_front"
     make_closure .<lambda($init_test_ns_arrays_arrays, 73)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_insert_in_middle"
+    load_const "array_unshift_empty_array"
     make_closure .<lambda($init_test_ns_arrays_arrays, 74)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_insert_at_zero"
+    load_const "array_insert_in_middle"
     make_closure .<lambda($init_test_ns_arrays_arrays, 75)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_insert_at_length_appends"
+    load_const "array_insert_at_zero"
     make_closure .<lambda($init_test_ns_arrays_arrays, 76)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_insert_returns_new_length"
+    load_const "array_insert_at_length_appends"
     make_closure .<lambda($init_test_ns_arrays_arrays, 77)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_insert_empty_array_at_zero"
+    load_const "array_insert_returns_new_length"
     make_closure .<lambda($init_test_ns_arrays_arrays, 78)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_insert_negative_throws"
+    load_const "array_insert_empty_array_at_zero"
     make_closure .<lambda($init_test_ns_arrays_arrays, 79)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_insert_past_length_throws"
+    load_const "array_insert_negative_counts_from_end"
     make_closure .<lambda($init_test_ns_arrays_arrays, 80)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_splice_replaces_range"
+    load_const "array_insert_past_start_throws"
     make_closure .<lambda($init_test_ns_arrays_arrays, 81)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_splice_pure_insertion"
+    load_const "array_insert_past_length_throws"
     make_closure .<lambda($init_test_ns_arrays_arrays, 82)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_splice_pure_removal"
+    load_const "array_splice_replaces_range"
     make_closure .<lambda($init_test_ns_arrays_arrays, 83)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_splice_count_clamped_to_length"
+    load_const "array_splice_pure_insertion"
     make_closure .<lambda($init_test_ns_arrays_arrays, 84)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_splice_at_length_appends"
+    load_const "array_splice_pure_removal"
     make_closure .<lambda($init_test_ns_arrays_arrays, 85)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_splice_replace_with_longer"
+    load_const "array_splice_count_clamped_to_length"
     make_closure .<lambda($init_test_ns_arrays_arrays, 86)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_splice_negative_start_throws"
+    load_const "array_splice_at_length_appends"
     make_closure .<lambda($init_test_ns_arrays_arrays, 87)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_splice_start_past_length_throws"
+    load_const "array_splice_replace_with_longer"
     make_closure .<lambda($init_test_ns_arrays_arrays, 88)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_splice_negative_count_throws"
+    load_const "array_splice_negative_start_counts_from_end"
     make_closure .<lambda($init_test_ns_arrays_arrays, 89)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_some_finds_match"
+    load_const "array_splice_past_start_throws"
     make_closure .<lambda($init_test_ns_arrays_arrays, 90)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_some_no_match"
+    load_const "array_splice_start_past_length_throws"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 91)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_splice_negative_count_throws"
     make_closure .<lambda($init_test_ns_arrays_arrays, 92)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
+    load_const "array_some_finds_match"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 93)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_some_no_match"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 95)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
     load_const "array_some_empty_is_false"
-    make_closure .<lambda($init_test_ns_arrays_arrays, 94)>, 0
+    make_closure .<lambda($init_test_ns_arrays_arrays, 97)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "array_some_short_circuits"
-    make_closure .<lambda($init_test_ns_arrays_arrays, 96)>, 0
+    make_closure .<lambda($init_test_ns_arrays_arrays, 99)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "array_some_propagates_error"
-    make_closure .<lambda($init_test_ns_arrays_arrays, 98)>, 0
+    make_closure .<lambda($init_test_ns_arrays_arrays, 101)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "array_every_all_match"
-    make_closure .<lambda($init_test_ns_arrays_arrays, 100)>, 0
+    make_closure .<lambda($init_test_ns_arrays_arrays, 103)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "array_every_one_fails"
-    make_closure .<lambda($init_test_ns_arrays_arrays, 102)>, 0
+    make_closure .<lambda($init_test_ns_arrays_arrays, 105)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "array_every_empty_is_true"
-    make_closure .<lambda($init_test_ns_arrays_arrays, 104)>, 0
+    make_closure .<lambda($init_test_ns_arrays_arrays, 107)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "array_every_short_circuits_on_false"
-    make_closure .<lambda($init_test_ns_arrays_arrays, 106)>, 0
+    make_closure .<lambda($init_test_ns_arrays_arrays, 109)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "array_find_returns_first_match"
-    make_closure .<lambda($init_test_ns_arrays_arrays, 108)>, 0
+    make_closure .<lambda($init_test_ns_arrays_arrays, 111)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "array_find_returns_null_when_no_match"
-    make_closure .<lambda($init_test_ns_arrays_arrays, 110)>, 0
+    make_closure .<lambda($init_test_ns_arrays_arrays, 113)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "array_find_empty_is_null"
-    make_closure .<lambda($init_test_ns_arrays_arrays, 112)>, 0
+    make_closure .<lambda($init_test_ns_arrays_arrays, 115)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "array_find_index_returns_first_index"
-    make_closure .<lambda($init_test_ns_arrays_arrays, 114)>, 0
+    make_closure .<lambda($init_test_ns_arrays_arrays, 117)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "array_find_index_returns_null_when_no_match"
-    make_closure .<lambda($init_test_ns_arrays_arrays, 116)>, 0
+    make_closure .<lambda($init_test_ns_arrays_arrays, 119)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "array_find_short_circuits"
-    make_closure .<lambda($init_test_ns_arrays_arrays, 118)>, 0
+    make_closure .<lambda($init_test_ns_arrays_arrays, 121)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "array_find_last_returns_last_match"
-    make_closure .<lambda($init_test_ns_arrays_arrays, 120)>, 0
+    make_closure .<lambda($init_test_ns_arrays_arrays, 123)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "array_find_last_returns_null_when_no_match"
-    make_closure .<lambda($init_test_ns_arrays_arrays, 122)>, 0
+    make_closure .<lambda($init_test_ns_arrays_arrays, 125)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "array_find_last_index_returns_last_index"
-    make_closure .<lambda($init_test_ns_arrays_arrays, 124)>, 0
+    make_closure .<lambda($init_test_ns_arrays_arrays, 127)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "array_find_last_iterates_back_to_front"
-    make_closure .<lambda($init_test_ns_arrays_arrays, 126)>, 0
+    make_closure .<lambda($init_test_ns_arrays_arrays, 129)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "array_find_last_empty_is_null"
-    make_closure .<lambda($init_test_ns_arrays_arrays, 128)>, 0
-    load_const null
-    call testing.TestCollector.register_test
-    pop 1
-    load_var registry
-    load_const "array_includes_present"
-    make_closure .<lambda($init_test_ns_arrays_arrays, 130)>, 0
-    load_const null
-    call testing.TestCollector.register_test
-    pop 1
-    load_var registry
-    load_const "array_includes_absent"
     make_closure .<lambda($init_test_ns_arrays_arrays, 131)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_includes_empty"
-    make_closure .<lambda($init_test_ns_arrays_arrays, 132)>, 0
-    load_const null
-    call testing.TestCollector.register_test
-    pop 1
-    load_var registry
-    load_const "array_includes_strings"
+    load_const "array_includes_present"
     make_closure .<lambda($init_test_ns_arrays_arrays, 133)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_index_of_present"
+    load_const "array_includes_absent"
     make_closure .<lambda($init_test_ns_arrays_arrays, 134)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_index_of_first_match"
+    load_const "array_includes_empty"
     make_closure .<lambda($init_test_ns_arrays_arrays, 135)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_index_of_absent"
+    load_const "array_includes_strings"
     make_closure .<lambda($init_test_ns_arrays_arrays, 136)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_last_index_of_returns_last_match"
+    load_const "array_index_of_present"
     make_closure .<lambda($init_test_ns_arrays_arrays, 137)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_last_index_of_absent"
+    load_const "array_index_of_first_match"
     make_closure .<lambda($init_test_ns_arrays_arrays, 138)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_reduce_sum"
+    load_const "array_index_of_absent"
     make_closure .<lambda($init_test_ns_arrays_arrays, 139)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "array_reduce_with_nonzero_initial"
+    load_const "array_last_index_of_returns_last_match"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 140)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_last_index_of_absent"
     make_closure .<lambda($init_test_ns_arrays_arrays, 141)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
+    load_const "array_reduce_sum"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 142)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_reduce_with_nonzero_initial"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 144)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
     load_const "array_reduce_empty_returns_initial"
-    make_closure .<lambda($init_test_ns_arrays_arrays, 143)>, 0
+    make_closure .<lambda($init_test_ns_arrays_arrays, 146)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "array_reduce_visits_every_element"
-    make_closure .<lambda($init_test_ns_arrays_arrays, 145)>, 0
+    make_closure .<lambda($init_test_ns_arrays_arrays, 148)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "array_reduce_concat_strings"
-    make_closure .<lambda($init_test_ns_arrays_arrays, 147)>, 0
+    make_closure .<lambda($init_test_ns_arrays_arrays, 150)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "array_flat_map_doubles_each_element"
-    make_closure .<lambda($init_test_ns_arrays_arrays, 149)>, 0
+    make_closure .<lambda($init_test_ns_arrays_arrays, 152)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "array_flat_map_with_empty_inner_arrays"
-    make_closure .<lambda($init_test_ns_arrays_arrays, 151)>, 0
+    make_closure .<lambda($init_test_ns_arrays_arrays, 154)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "array_flat_map_empty_input"
-    make_closure .<lambda($init_test_ns_arrays_arrays, 153)>, 0
+    make_closure .<lambda($init_test_ns_arrays_arrays, 156)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "array_flat_map_uneven_inner_lengths"
-    make_closure .<lambda($init_test_ns_arrays_arrays, 155)>, 0
+    make_closure .<lambda($init_test_ns_arrays_arrays, 158)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_at_positive"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 160)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_at_negative_counts_from_end"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 161)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_at_past_end_is_null"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 162)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_at_past_start_is_null"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 163)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_at_empty_is_null"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 164)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_index_read_positive"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 165)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_index_read_negative_counts_from_end"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 166)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_index_read_past_end_panics"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 167)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_index_read_past_start_panics"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 168)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_index_write_negative_counts_from_end"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 169)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_index_write_past_end_panics"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 170)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_index_write_past_start_panics"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 171)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_slice_basic"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 172)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_slice_negative_start"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 173)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_slice_negative_end"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 174)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_slice_negative_both"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 175)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_slice_end_before_start_is_empty"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 176)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_slice_clamps_out_of_range"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 177)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_slice_empty_array"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 178)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
@@ -878,6 +1010,29 @@ function arrays.SortableItem.baml.Comparable.compare(self: arrays.SortableItem, 
     store_var _4
     load_var2 3 4
     call baml.Comparable$for$int.compare
+    return
+}
+
+function arrays.array_index_read(idx: int) -> int {
+    load_const 10
+    load_const 20
+    load_const 30
+    alloc_array 3
+    load_var idx
+    load_array_element
+    return
+}
+
+function arrays.array_index_write(idx: int) -> int[] {
+    load_const 10
+    load_const 20
+    load_const 30
+    alloc_array 3
+    store_var xs
+    load_var2 2 1
+    load_const 99
+    store_array_element
+    load_var xs
     return
 }
 

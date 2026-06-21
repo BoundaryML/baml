@@ -4,12 +4,18 @@
 //! [`ProfConfig::global`]). Unparseable values fall back to their defaults
 //! rather than failing the host process; out-of-range values are clamped.
 
+#[cfg(target_arch = "wasm32")]
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::{sync::OnceLock, time::Duration};
+
+#[cfg(target_arch = "wasm32")]
+static WASM_COOPERATIVE_PROFILE_ENABLED: AtomicBool = AtomicBool::new(false);
 
 /// Master switch for the profiling event stream. DEFAULT-ON (reconciliation
 /// follow-up 16): set `0`/`false` to opt out. Any value other than
-/// `1`/`true` disables; unset means enabled (native targets only — wasm32
-/// is forced off).
+/// `1`/`true` disables; unset means enabled on native targets. On wasm32,
+/// environment/default config stays off unless an adapter explicitly opts
+/// into cooperative profiling.
 pub const ENV_PROFILE: &str = "BAML_PROFILE";
 /// Ring segment size in bytes, clamped to `[MIN_SEG_BYTES, MAX_SEG_BYTES]`.
 pub const ENV_SEG_BYTES: &str = "BAML_RING_SEG_BYTES";
@@ -49,8 +55,8 @@ pub const DEFAULT_WAKE_INTERVAL: Duration = Duration::from_millis(50);
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProfConfig {
     /// Master switch ([`ENV_PROFILE`]); default-on (follow-up 16). Always
-    /// `false` on wasm32: there is no consumer thread or tick clock there
-    /// (cooperative drain is a designed but deferred follow-up).
+    /// `false` on wasm32 from config alone: shared clock/bytes infrastructure
+    /// exists, but a wasm adapter must explicitly own cooperative draining.
     pub enabled: bool,
     /// Ring segment size in bytes ([`ENV_SEG_BYTES`]).
     pub seg_bytes: usize,
@@ -92,6 +98,16 @@ impl ProfConfig {
         GLOBAL.get_or_init(ProfConfig::from_env)
     }
 
+    /// Effective profiling switch for producers.
+    ///
+    /// The parsed config remains default-off on wasm32 until an adapter that
+    /// owns a cooperative drain opts in. This keeps non-playground wasm
+    /// embedders from accumulating profile rings without an artifact sink.
+    #[must_use]
+    pub fn is_enabled(&self) -> bool {
+        self.enabled || wasm_cooperative_profile_enabled()
+    }
+
     /// [`ProfConfig::from_env`] with an injectable lookup, so parsing and
     /// clamping are testable without touching the (process-global, racy)
     /// environment.
@@ -104,8 +120,8 @@ impl ProfConfig {
                 v == "1" || v.eq_ignore_ascii_case("true")
             })
             .unwrap_or(defaults.enabled);
-        // No consumer thread and no tick clock on wasm32; the switch is forced
-        // off regardless of the environment (plan §2.2).
+        // Environment/default profiling stays off on wasm32; adapters that
+        // own a cooperative drain opt in through `is_enabled`.
         let enabled = enabled && cfg!(not(target_arch = "wasm32"));
 
         let seg_bytes = parse_usize(get(ENV_SEG_BYTES))
@@ -139,6 +155,24 @@ impl ProfConfig {
             profile_dir,
         }
     }
+}
+
+#[cfg(target_arch = "wasm32")]
+pub fn enable_wasm_cooperative_profile() {
+    WASM_COOPERATIVE_PROFILE_ENABLED.store(true, Ordering::Relaxed);
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn enable_wasm_cooperative_profile() {}
+
+#[cfg(target_arch = "wasm32")]
+fn wasm_cooperative_profile_enabled() -> bool {
+    WASM_COOPERATIVE_PROFILE_ENABLED.load(Ordering::Relaxed)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn wasm_cooperative_profile_enabled() -> bool {
+    false
 }
 
 fn parse_usize(value: Option<String>) -> Option<usize> {

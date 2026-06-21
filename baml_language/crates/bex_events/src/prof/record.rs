@@ -18,7 +18,7 @@
 pub const MAX_THREAD_NAME_LEN: usize = 256;
 
 /// Encoded sizes, tag byte included.
-pub const CALL_FUNCTION_LEN: usize = 38;
+pub const CALL_FUNCTION_LEN: usize = 54;
 /// See [`CALL_FUNCTION_LEN`].
 pub const END_FUNCTION_LEN: usize = 26;
 /// Fixed prefix of a `StartThread` record; the name bytes follow.
@@ -52,6 +52,20 @@ const TAG_END_FUNCTION: u8 = 0x02;
 const TAG_START_THREAD: u8 = 0x03;
 const TAG_END_THREAD: u8 = 0x04;
 const TAG_SET_FUNCTION_ID: u8 = 0x05;
+const CALL_SITE_FILE_ID_NONE: u32 = u32::MAX;
+
+/// Caller-side source span captured at a profiled call site.
+///
+/// This is the raw source-map projection from the VM: file id plus byte offsets
+/// and the 1-indexed line cached in the bytecode line table. File path and
+/// retained source text remain `ProjectStore` concerns.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CallSiteSourceSpan {
+    pub file_id: u32,
+    pub start_offset: u32,
+    pub end_offset: u32,
+    pub line: u32,
+}
 
 /// How a function call ended — a closed taxonomy of the ways a frame can be
 /// popped. Statuses describe the frame's fate, not the program's outcome (a
@@ -100,6 +114,8 @@ pub enum RawRecord<'a> {
         parent_call_id: BexCallId,
         /// Per-run function id (see the header's function table; 0 = unattributable).
         function_id: FunctionId,
+        /// Caller-side source span for the invocation that produced this call.
+        call_site: Option<CallSiteSourceSpan>,
         /// Raw clock ticks ([`crate::prof::clock::now_ticks`]); the consumer
         /// converts to nanoseconds at transcode.
         ts_ticks: u64,
@@ -216,6 +232,7 @@ impl RawRecord<'_> {
                 call_id,
                 parent_call_id,
                 function_id,
+                call_site,
                 ts_ticks,
             } => {
                 w.u8(TAG_CALL_FUNCTION);
@@ -225,6 +242,17 @@ impl RawRecord<'_> {
                 w.u64(parent_call_id.0);
                 w.u32(function_id.0);
                 w.u64(ts_ticks);
+                if let Some(call_site) = call_site {
+                    w.u32(call_site.file_id);
+                    w.u32(call_site.start_offset);
+                    w.u32(call_site.end_offset);
+                    w.u32(call_site.line);
+                } else {
+                    w.u32(CALL_SITE_FILE_ID_NONE);
+                    w.u32(0);
+                    w.u32(0);
+                    w.u32(0);
+                }
             }
             RawRecord::EndFunction {
                 status,
@@ -294,14 +322,34 @@ pub fn decode(buf: &[u8]) -> Result<(RawRecord<'_>, usize), DecodeError> {
     let mut r = Reader { buf, pos: 0 };
     let tag = r.u8()?;
     let rec = match tag {
-        TAG_CALL_FUNCTION => RawRecord::CallFunction {
-            flags: r.u8()?,
-            thread_id: BexThreadId(r.u64()?),
-            call_id: BexCallId(r.u64()?),
-            parent_call_id: BexCallId(r.u64()?),
-            function_id: FunctionId(r.u32()?),
-            ts_ticks: r.u64()?,
-        },
+        TAG_CALL_FUNCTION => {
+            let flags = r.u8()?;
+            let thread_id = BexThreadId(r.u64()?);
+            let call_id = BexCallId(r.u64()?);
+            let parent_call_id = BexCallId(r.u64()?);
+            let function_id = FunctionId(r.u32()?);
+            let ts_ticks = r.u64()?;
+            let call_site_file_id = r.u32()?;
+            let call_site_start_offset = r.u32()?;
+            let call_site_end_offset = r.u32()?;
+            let call_site_line = r.u32()?;
+            RawRecord::CallFunction {
+                flags,
+                thread_id,
+                call_id,
+                parent_call_id,
+                function_id,
+                call_site: (call_site_file_id != CALL_SITE_FILE_ID_NONE).then_some(
+                    CallSiteSourceSpan {
+                        file_id: call_site_file_id,
+                        start_offset: call_site_start_offset,
+                        end_offset: call_site_end_offset,
+                        line: call_site_line,
+                    },
+                ),
+                ts_ticks,
+            }
+        }
         TAG_END_FUNCTION => RawRecord::EndFunction {
             status: match r.u8()? {
                 0 => FunctionEndStatus::Ok,
@@ -533,6 +581,7 @@ mod tests {
                 call_id: BexCallId(v.wrapping_add(1)),
                 parent_call_id: BexCallId(v / 2),
                 function_id: FunctionId(v as u32),
+                call_site: None,
                 ts_ticks: v,
             });
             roundtrip(RawRecord::EndFunction {
@@ -574,6 +623,20 @@ mod tests {
             status: ThreadEndStatus::Errored,
             thread_id: BexThreadId(7),
             ts_ticks: 11,
+        });
+        roundtrip(RawRecord::CallFunction {
+            flags: 0,
+            thread_id: BexThreadId(1),
+            call_id: BexCallId(2),
+            parent_call_id: BexCallId(1),
+            function_id: FunctionId(3),
+            call_site: Some(CallSiteSourceSpan {
+                file_id: 0,
+                start_offset: 12,
+                end_offset: 18,
+                line: 4,
+            }),
+            ts_ticks: 99,
         });
     }
 
@@ -622,9 +685,10 @@ mod tests {
             call_id: BexCallId(1),
             parent_call_id: BexCallId(0),
             function_id: FunctionId(0),
+            call_site: None,
             ts_ticks: 0,
         };
-        assert_eq!(call.encode(&mut buf), 38);
+        assert_eq!(call.encode(&mut buf), 54);
         let end = RawRecord::EndFunction {
             status: FunctionEndStatus::Ok,
             thread_id: BexThreadId(1),
@@ -702,6 +766,12 @@ mod tests {
                 call_id: BexCallId(3),
                 parent_call_id: BexCallId(4),
                 function_id: FunctionId(5),
+                call_site: Some(CallSiteSourceSpan {
+                    file_id: 6,
+                    start_offset: 7,
+                    end_offset: 8,
+                    line: 9,
+                }),
                 ts_ticks: 6,
             },
             RawRecord::StartThread {
@@ -750,6 +820,7 @@ mod tests {
                 call_id: BexCallId(1),
                 parent_call_id: BexCallId(0),
                 function_id: FunctionId(7),
+                call_site: None,
                 ts_ticks: 2,
             },
             RawRecord::EndFunction {

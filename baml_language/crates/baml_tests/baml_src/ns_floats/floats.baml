@@ -779,7 +779,9 @@ test "float_random_distinct_values" {
 // Constant-folded path (both operands literals — folded by the compiler)
 
 test "float_eq_float_eq_int_literal_fold" {
-    assert.is_true(3.0 == 3)
+    // `float` and `int` are distinct concrete types, so `==` is always false
+    // (no implicit coercion); the compiler also warns it is provably disjoint.
+    assert.is_true((3.0 == 3) == false)
 }
 
 test "float_eq_float_neq_int_distinct_fold" {
@@ -795,11 +797,11 @@ test "float_eq_fold_ordinary_unequal_false" {
 }
 
 test "float_eq_int_eq_float_literal_fold" {
-    assert.is_true(2 == 2.0)
+    assert.is_true((2 == 2.0) == false)
 }
 
 test "float_eq_large_integer_valued_fold" {
-    assert.is_true(1000000.0 == 1000000)
+    assert.is_true((1000000.0 == 1000000) == false)
 }
 
 test "float_eq_neg_zero_lit_equals_neg_zero_lit_fold" {
@@ -816,8 +818,10 @@ test "float_eq_null_eq_float_symmetric_false" {
     assert.is_true((null == 2.0) == false)
 }
 
-test "float_eq_two_pow_53_exact" {
-    assert.is_true(9007199254740992.0 == 9007199254740992)
+test "float_eq_two_pow_53_cross_type_false" {
+    // Even where the int is exactly representable as a float, the two are
+    // distinct concrete types, so `==` is false (and provably disjoint).
+    assert.is_true((9007199254740992.0 == 9007199254740992) == false)
 }
 
 // Runtime VM path (≥1 non-literal operand forces the float-eq opcode)
@@ -951,7 +955,7 @@ test "float_eq_pos_inf_ne_neg_inf" {
 }
 
 test "float_eq_runtime_float_eq_int" {
-    assert.is_true(float.parse("2") == 2)
+    assert.is_true((float.parse("2") == 2) == false)
 }
 
 test "float_eq_runtime_float_neq_int_distinct" {
@@ -959,7 +963,7 @@ test "float_eq_runtime_float_neq_int_distinct" {
 }
 
 test "float_eq_runtime_int_eq_float" {
-    assert.is_true(5 == float.parse("5.0"))
+    assert.is_true((5 == float.parse("5.0")) == false)
 }
 
 test "float_eq_runtime_int_neq_float_distinct" {
@@ -992,4 +996,28 @@ test "float_eq_subnormal_nonzero" {
 
 test "float_eq_sum_equals_exact_rounded" {
     assert.is_true(0.1 + 0.2 == 0.30000000000000004)
+}
+
+// ─── NaN ordering (IEEE: every comparison involving NaN is false) ─────────────
+// `float` implements `baml.ops.Compare`, and its ordering must be IEEE — so NaN
+// is unordered: `<` `<=` `>` `>=` are all `false`, even `nan <= nan` / `nan >= nan`
+// (NaN is not even equal to itself). Regression guard for the float `Compare`
+// override (the boolean-derived defaults `gt = !le` would otherwise return `true`).
+test "nan_comparison" {
+    assert.is_true(!(float.nan() < 1.0))
+    assert.is_true(!(1.0 < float.nan()))
+    assert.is_true(!(float.nan() > 1.0))
+    assert.is_true(!(float.nan() < float.nan()))
+    assert.is_true(!(float.nan() <= float.nan()))
+    assert.is_true(!(float.nan() >= float.nan()))
+}
+
+// The same via the `Compare` *method* surface (`lt`/`le`/`gt`/`ge`), which is the
+// override that makes the operator correct.
+test "float_nan_lt_method_is_false" {
+    assert.is_true(!float.nan().lt(1.0))
+}
+
+test "float_nan_ge_method_is_false" {
+    assert.is_true(!float.nan().ge(float.nan()))
 }

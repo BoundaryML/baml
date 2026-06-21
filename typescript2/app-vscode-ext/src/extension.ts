@@ -146,6 +146,63 @@ function projectKeyForPath(projectPath: string): string {
   }
 }
 
+function isPowerShellShell(): boolean {
+  if (process.platform !== 'win32') {
+    return false;
+  }
+  const shell = vscode.env.shell.toLowerCase();
+  return shell.includes('powershell') || /(^|[\\/])pwsh(?:\.exe)?$/.test(shell);
+}
+
+function shellQuote(value: string): string {
+  if (process.platform === 'win32') {
+    if (isPowerShellShell()) {
+      return `'${value.replace(/'/g, "''")}'`;
+    }
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return `'${value.replace(/'/g, "'\\''")}'`;
+}
+
+function playgroundCommandForPath(projectPath?: string): { command: string; cwd?: string } {
+  const bin = `${isPowerShellShell() ? '& ' : ''}${shellQuote(wrapperPath)}`;
+  if (!projectPath) {
+    return { command: `${bin} playground` };
+  }
+
+  try {
+    const stat = fs.statSync(projectPath);
+    if (stat.isFile()) {
+      return {
+        command: `${bin} playground --file ${shellQuote(projectPath)}`,
+        cwd: path.dirname(projectPath),
+      };
+    }
+    if (stat.isDirectory()) {
+      return {
+        command: `${bin} playground --from ${shellQuote(projectPath)}`,
+        cwd: projectPath,
+      };
+    }
+  } catch {
+    // Fall through to --from. The CLI will surface the real path error.
+  }
+
+  return {
+    command: `${bin} playground --from ${shellQuote(projectPath)}`,
+  };
+}
+
+function openPlaygroundInBrowserTerminal(projectPath?: string): void {
+  const { command, cwd } = playgroundCommandForPath(projectPath);
+  const terminal = vscode.window.createTerminal({
+    name: 'BAML Playground',
+    ...(cwd ? { cwd } : {}),
+  });
+  terminal.show(false);
+  terminal.sendText(command);
+}
+
 async function ensureClient(projectRoot: string): Promise<LanguageClient> {
   const existing = clients.get(projectRoot);
   if (existing) {
@@ -342,6 +399,12 @@ export async function activate(context: vscode.ExtensionContext) {
         command: 'baml.openBamlPanel',
         arguments: [args],
       });
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('baml.openPlaygroundInBrowser', (projectPath?: string) => {
+      openPlaygroundInBrowserTerminal(projectPath);
     }),
   );
 

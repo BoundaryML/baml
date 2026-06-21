@@ -210,6 +210,52 @@ implements<T extends Named> Printable for Box<T> {
 }
 
 #[cfg(test)]
+mod backtick_format_tests {
+    use super::*;
+
+    /// BEP-049: backtick string literals must round-trip through the formatter
+    /// verbatim — no re-indenting, no escape re-emission, no delimiter rewrite.
+    /// Richer formatting can land later when there's real corpus.
+    #[test]
+    fn backtick_one_liner_round_trips() {
+        let source = "function Demo() -> string {\n    `hello ${name} world`\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert!(
+            formatted.contains("`hello ${name} world`"),
+            "got: {formatted}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second);
+    }
+
+    #[test]
+    fn backtick_multi_tick_ladder_round_trips() {
+        let source = "function Demo() -> string {\n    ``inline `code` here``\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert!(
+            formatted.contains("``inline `code` here``"),
+            "got: {formatted}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second);
+    }
+
+    #[test]
+    fn backtick_multiline_round_trips() {
+        let source =
+            "function Demo() -> string {\n    `\n        line one\n        line two\n    `\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert!(formatted.contains("line one"));
+        assert!(formatted.contains("line two"));
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second);
+    }
+}
+
+#[cfg(test)]
 mod pattern_format_tests {
     use super::*;
 

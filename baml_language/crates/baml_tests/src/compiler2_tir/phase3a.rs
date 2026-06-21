@@ -6,6 +6,168 @@
 
 use super::support::{make_db, render_tir};
 
+#[test]
+fn backtick_llm_function_compiles_to_prompt_closure() {
+    // BEP-049 M5f: a backtick prompt in an LLM function compiles to a
+    // `call_llm_function(client, "Fn", args, prompt`…`)` body — the 4th arg is
+    // the synthesized `(Context) -> PromptAst` closure (legacy Jinja prompts
+    // keep the 3-arg form). The `${name}` interp captures the function param.
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+client<llm> MyClient {
+  provider "openai"
+  options {
+    model "gpt-4o-mini"
+    api_key "k"
+  }
+}
+
+function Greet(name: string) -> string {
+  client MyClient
+  prompt `Hello ${name}!`
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        !tir.contains("!!"),
+        "backtick LLM function should compile clean, got:\n{tir}"
+    );
+    assert!(
+        tir.contains("call_llm_function") && tir.contains("prompt`"),
+        "body should call call_llm_function with a `prompt`…`` closure, got:\n{tir}"
+    );
+}
+
+#[test]
+fn new_mode_failures_have_good_diagnostics() {
+    // BEP-049 M5: every way a new-mode (backtick) `prompt` can go wrong must
+    // surface a diagnostic that points at the user's `${…}` source with a
+    // user-facing message — never a `0..0` span and never a leaked internal
+    // desugaring type. The prompt body is lowered into a synthesized
+    // `(ctx: baml.llm.Context) -> PromptAst` closure, so the risk is that
+    // errors land on compiler-generated nodes. These cases pin that they don't.
+    //
+    // `expect_substr` is asserted; the span column is checked to be non-`0..0`
+    // for every emitted diagnostic.
+    let cases = [
+        // (label, client clause, prompt body, a phrase the diagnostic must contain)
+        (
+            "undef_var",
+            "client C",
+            "prompt `Hi ${nobody}!`",
+            "unresolved name: nobody",
+        ),
+        (
+            "role_bad_arg",
+            "client C",
+            "prompt `${role(5)}hi`",
+            "expected string, got 5",
+        ),
+        // The member error must name the *user-facing* `baml.llm.Context`, not
+        // an internal closure/accumulator type — proves nothing leaks.
+        (
+            "ctx_bad_field",
+            "client C",
+            "prompt `${ctx.nope}`",
+            "`baml.llm.Context` has no member `nope`",
+        ),
+        (
+            "arith_type_err",
+            "client C",
+            r#"prompt `${1 + "a"}`"#,
+            "operator `+`",
+        ),
+        (
+            "undef_ctx_method",
+            "client C",
+            "prompt `${ctx.output_format_with(5)}`",
+            "expected string | null, got 5",
+        ),
+        (
+            "bad_client",
+            "client Nope",
+            "prompt `Hi ${name}!`",
+            "unresolved name: Nope",
+        ),
+        // Block-tag interps (`${for}`, `${role}`) must also report at the user's
+        // source. (A non-bool `${if}` condition is intentionally NOT an error —
+        // it matches plain `if`/`while`, which BAML does not bool-check.)
+        (
+            "for_non_iterable",
+            "client C",
+            "prompt `${for (let x in 5)}${x}${endfor}`",
+            "cannot iterate over type `5`",
+        ),
+        (
+            "for_body_type_err",
+            "client C",
+            r#"prompt `${for (let x in [1, 2])}${x + "a"}${endfor}`"#,
+            "operator `+`",
+        ),
+        (
+            "role_wrong_arity",
+            "client C",
+            "prompt `${role()}hi`",
+            "expected 1 argument(s), got 0",
+        ),
+    ];
+    for (label, client, body, expect_substr) in cases {
+        let mut db = make_db();
+        let src = format!(
+            "client<llm> C {{\n  provider \"openai\"\n  options {{ model \"m\" api_key \"k\" }}\n}}\n\nfunction Greet(name: string) -> string {{\n  {client}\n  {body}\n}}\n"
+        );
+        let file = db.add_file("test.baml", &src);
+        let tir = render_tir(&db, file);
+        let diags: Vec<&str> = tir
+            .lines()
+            .map(str::trim_start)
+            .filter(|l| l.starts_with("!!"))
+            .collect();
+        assert!(
+            !diags.is_empty(),
+            "[{label}] expected a diagnostic, got clean TIR:\n{tir}"
+        );
+        assert!(
+            diags.iter().any(|d| d.contains(expect_substr)),
+            "[{label}] expected a diagnostic containing {expect_substr:?}, got:\n{}",
+            diags.join("\n")
+        );
+        assert!(
+            !diags.iter().any(|d| d.starts_with("!! 0..0:")),
+            "[{label}] a diagnostic collapsed to a 0..0 span (internal node leaked):\n{}",
+            diags.join("\n")
+        );
+    }
+}
+
+#[test]
+fn nested_lambda_diagnostic_has_real_span() {
+    // Regression: a type error inside a nested lambda body must point at the
+    // offending expression, not collapse to a `0..0` span. The lambda body is
+    // inferred *inline* in the enclosing scope, so its diagnostics carry the
+    // lambda's arena IDs; their spans are frozen against the lambda's source
+    // map (see `InferContext::freeze_diagnostic_spans_from`). Before the fix
+    // this rendered as `!! 0..0: operator `+` ...`.
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        "function f() -> () -> int throws never {\n  let g = () -> { let x: int = 5; let y: string = \"a\"; x + y }\n  g\n}\n",
+    );
+    let tir = render_tir(&db, file);
+    let diag = tir
+        .lines()
+        .map(str::trim_start)
+        .find(|l| l.starts_with("!!") && l.contains("operator `+`"))
+        .unwrap_or_else(|| panic!("expected an operator `+` type error, got:\n{tir}"));
+    assert!(
+        !diag.starts_with("!! 0..0:"),
+        "nested-lambda binary-op error must have a real span, got: {diag}"
+    );
+}
+
 // ── 3A-1. Union normalization ────────────────────────────────────────────
 
 #[test]
@@ -560,7 +722,7 @@ fn invalid_binary_op_string_minus_int() {
       { : never
         return "hello" - 5 : unknown
       }
-      !! 28..40: operator `Sub` cannot be applied to `"hello"` and `5`
+      !! 28..40: operator `-` cannot be applied to `"hello"` and `5`
     }
     "#);
 }
@@ -574,7 +736,7 @@ fn invalid_binary_op_bool_add() {
       { : never
         return true + false : unknown
       }
-      !! 29..41: operator `Add` cannot be applied to `true` and `false`
+      !! 29..41: operator `+` cannot be applied to `true` and `false`
     }
     ");
 }
@@ -583,12 +745,12 @@ fn invalid_binary_op_bool_add() {
 fn invalid_binary_op_float_plus_bigint() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "function f() -> bigint { return 1.5 + 100n; }");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> bigint throws never {
       { : never
         return 1.5 + 100n : unknown
       }
-      !! 32..42: operator `Add` cannot be applied to `1.5` and `100n`
+      !! 32..42: operator `+` cannot be applied to `1.5` and `100n`
     }
     ");
 }
@@ -597,12 +759,12 @@ fn invalid_binary_op_float_plus_bigint() {
 fn invalid_binary_op_bigint_plus_float() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "function f() -> bigint { return 100n + 1.5; }");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> bigint throws never {
       { : never
         return 100n + 1.5 : unknown
       }
-      !! 32..42: operator `Add` cannot be applied to `100n` and `1.5`
+      !! 32..42: operator `+` cannot be applied to `100n` and `1.5`
     }
     ");
 }
@@ -611,28 +773,96 @@ fn invalid_binary_op_bigint_plus_float() {
 fn invalid_binary_op_float_lt_bigint() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "function f() -> bool { return 1.5 < 100n; }");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> bool throws never {
       { : never
         return 1.5 < 100n : bool
       }
-      !! 30..40: operator `Lt` cannot be applied to `1.5` and `100n`
+      !! 30..40: cannot order `1.5` and `100n` with `<`: ordering requires both operands to have the same type
     }
     ");
 }
 
 #[test]
-fn invalid_binary_op_bigint_eq_float() {
+fn bigint_eq_float_permitted() {
+    // `==` is valid for any operand pair, so `bigint == float` type-checks to `bool` with
+    // no diagnostic. The always-false lint (a warning on provably-disjoint operands) lands
+    // with `==` lowering in Phase 3B, where it matches the concrete-equality runtime.
     let mut db = make_db();
     let file = db.add_file("test.baml", "function f() -> bool { return 100n == 1.5; }");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> bool throws never {
       { : never
         return 100n == 1.5 : bool
       }
-      !! 30..41: operator `Eq` cannot be applied to `100n` and `1.5`
     }
     ");
+}
+
+#[test]
+fn ordering_unrelated_classes_is_error() {
+    // `<` `>` `<=` `>=` are exact-type; two different classes can't be ordered.
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        "class Dog { name string }\nclass Cat { name string }\n\
+         function f(a: Dog, b: Cat) -> bool { return a < b; }",
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("cannot order `Dog` and `Cat`"),
+        "expected OrderingDifferentTypes, got:\n{tir}"
+    );
+}
+
+#[test]
+fn ordering_subtype_related_is_error() {
+    // Exact-type: even though `int <: int?`, ordering requires the *same* type — only
+    // `==` may span a subtype relationship.
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        "function f(a: int, b: int?) -> bool { return a < b; }",
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("ordering requires both operands to have the same type"),
+        "expected OrderingDifferentTypes, got:\n{tir}"
+    );
+}
+
+#[test]
+fn ordering_non_compare_class_is_error() {
+    // A common type is found (both `Widget`), but `Widget` does not implement `Compare`,
+    // so it has no ordering.
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        "class Widget { id int }\n\
+         function f(a: Widget, b: Widget) -> bool { return a < b; }",
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("`Widget` does not implement `Compare`"),
+        "expected OrderingRequiresCompare, got:\n{tir}"
+    );
+}
+
+#[test]
+fn equality_disjoint_types_warns_always_false() {
+    // `==` is valid for any pair, but provably-disjoint operands (here `int` vs
+    // `string` — distinct concrete types) make it always false, so it warns
+    // (`ComparisonAlwaysDisjoint`) rather than erroring.
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        "function f(a: int, b: string) -> bool { return a == b; }",
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("share no value, so this comparison is always false"),
+        "expected ComparisonAlwaysDisjoint warning, got:\n{tir}"
+    );
 }
 
 #[test]
@@ -646,7 +876,7 @@ fn aliased_float_plus_bigint_is_rejected() {
     );
     let tir = render_tir(&db, file);
     assert!(
-        tir.contains("operator `Add` cannot be applied"),
+        tir.contains("operator `+` cannot be applied"),
         "expected InvalidBinaryOp diagnostic, got:\n{tir}"
     );
 }
@@ -681,7 +911,7 @@ fn invalid_unary_op_neg_string() {
       { : never
         return Neg "hello" : unknown
       }
-      !! 28..37: operator `Neg` cannot be applied to `"hello"`
+      !! 28..37: operator `-` cannot be applied to `"hello"`
     }
     "#);
 }
@@ -1408,5 +1638,37 @@ function main() -> void {
     assert!(
         tir.contains("() -> { ... } : () -> void throws never"),
         "expected lambdas to inherit void-returning aliased function context, got:\n{tir}"
+    );
+}
+
+#[test]
+fn explicit_unknown_list_annotation_pins_element_type() {
+    // Regression (BEP-049 M5): `let xs: unknown[] = []` must honour the
+    // explicit `unknown[]` annotation instead of starting an evolving
+    // `never[]` that pins to the first pushed value's type. The built-in
+    // `prompt` tag's `values` accumulator depends on this to hold a
+    // heterogeneous mix (a `Role`, then a string), so a regression here
+    // surfaces as a bogus "expected Role, got string" on the second push.
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function main() -> int {
+  let xs: unknown[] = []
+  let r = baml.llm.Role { name: "x", metadata: {} }
+  xs.push(r)
+  xs.push("hello")
+  return 0
+}
+"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        !output.contains("type mismatch"),
+        "heterogeneous pushes into `unknown[]` should type-check, got:\n{output}"
+    );
+    assert!(
+        !output.contains("(evolving)"),
+        "explicit `unknown[]` annotation should pin the element type, not evolve, got:\n{output}"
     );
 }

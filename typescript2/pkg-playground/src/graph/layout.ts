@@ -28,6 +28,41 @@ const NODE_SIZES: Record<string, { w: number; h: number }> = {
  */
 export const NODE_BUFFER = 6;
 
+/**
+ * A container with more than this many direct children in a chain would
+ * otherwise extend forever in one direction. Above it, we let ELK *wrap*
+ * the layering (see {@link wrappingOptions}). Short graphs are untouched.
+ */
+const WRAP_CHILD_THRESHOLD = 6;
+
+/**
+ * Target width:height ratio for a wrapped container. Higher = wider rows
+ * before wrapping; lower = squarer. ELK cuts the chain to approach this.
+ */
+const WRAP_ASPECT_RATIO = 2.3;
+
+/**
+ * ELK layered "wrapping": instead of one infinite row, cut a long chain
+ * where a single edge crosses and stack the pieces into rows (a serpentine
+ * layout), targeting {@link WRAP_ASPECT_RATIO}. Returns no options (wrapping
+ * off) until a container exceeds {@link WRAP_CHILD_THRESHOLD} children, so
+ * small/branching graphs keep their current layout.
+ *
+ * `dagre` (mermaid's engine) has no equivalent — this is ELK-specific.
+ */
+function wrappingOptions(childCount: number): Record<string, string> {
+  if (childCount <= WRAP_CHILD_THRESHOLD) return {};
+  return {
+    'org.eclipse.elk.layered.wrapping.strategy': 'SINGLE_EDGE',
+    // Aspect-ratio-driven cutting honours elk.aspectRatio below.
+    'org.eclipse.elk.layered.wrapping.cutting.strategy': 'ARD',
+    'org.eclipse.elk.aspectRatio': String(WRAP_ASPECT_RATIO),
+    // Tighten the corridor reserved for the wrap-around edges (default 10)
+    // so stacked rows sit closer together.
+    'org.eclipse.elk.layered.wrapping.additionalEdgeSpacing': '5',
+  };
+}
+
 function nodeSize(node: WorkflowNode): { w: number; h: number } {
   const base = NODE_SIZES[node.type ?? 'base'] ?? NODE_SIZES.base;
   const imageCount = node.data.imageOutputs?.length ?? 0;
@@ -99,9 +134,11 @@ function buildElkNodes(
         'elk.algorithm': 'layered',
         'elk.direction': isHorizontal ? 'RIGHT' : 'DOWN',
         'elk.hierarchyHandling': 'INCLUDE_CHILDREN',
-        'elk.padding': '[top=35,left=15,bottom=15,right=15]',
+        'elk.padding': '[top=30,left=12,bottom=12,right=12]',
         'spacing.nodeNode': '30',
         'spacing.nodeNodeBetweenLayers': '40',
+        // Wrap long sequential chains (e.g. many //# steps) into rows.
+        ...wrappingOptions(children.length),
       };
       elkNode.labels = [{ text: node.data.label, width: 80, height: 20 }];
       if (children.length > 0) {
@@ -249,6 +286,13 @@ export async function layoutGraph(
     edgesByOwner.set(lca, list);
   }
 
+  const rootChildren = buildElkNodes(
+    nodes,
+    direction,
+    edgesByOwner,
+    portsByNode,
+  );
+
   const elkGraph: ElkNode = {
     id: 'root',
     layoutOptions: {
@@ -260,8 +304,10 @@ export async function layoutGraph(
       'spacing.edgeNode': '20',
       'spacing.edgeEdge': '15',
       'elk.edgeRouting': 'ORTHOGONAL',
+      // Wrap a long top-level chain (function with many sequential steps).
+      ...wrappingOptions(rootChildren.length),
     },
-    children: buildElkNodes(nodes, direction, edgesByOwner, portsByNode),
+    children: rootChildren,
     edges: edgesByOwner.get('root') ?? [],
   };
 

@@ -1,9 +1,8 @@
 //! loom/std shims: the ring compiles against these so the exact same code is
 //! model-checked under `RUSTFLAGS="--cfg baml_loom"` and shipped against std.
 #![allow(unsafe_code)]
-// On wasm32 the consumer half of this module is compiled but unreachable —
-// profiling is forced off there (no consumer thread, no TSC clock), and the
-// designed-but-deferred cooperative drain would be its caller (v2 §6.5).
+// On wasm32 there is no background consumer thread, but shared ring and
+// cooperative-drain code still compile through these std shims.
 #![cfg_attr(target_arch = "wasm32", allow(dead_code))]
 
 // `AtomicBool` is re-exported only under loom: the std build's `Wake` uses

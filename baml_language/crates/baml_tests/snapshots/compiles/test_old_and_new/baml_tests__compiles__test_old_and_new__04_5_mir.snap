@@ -28,9 +28,13 @@ fn user.$init_test_main(registry: testing.TestCollector) -> null {
 fn .<lambda($init_test_main, 0)>() -> null {
     // Locals:
     let _0: null // _0 // return
+    let _1: string // result
+    let _2: string
 
     bb0: {
-        _0 = call const fn assert.not_null(const null) -> [bb1];
+        _1 = const "hello";
+        _2 = copy _1;
+        _0 = call const fn assert.not_null(copy _2) -> [bb1];
     }
 
     bb1: {

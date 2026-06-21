@@ -55,6 +55,7 @@ function type_reflection.GetBar(client: baml.llm.Client) -> type_reflection.Bar 
     load_var client
     load_const "GetBar"
     alloc_map 0
+    load_const <omitted>
     call baml.llm.call_llm_function
     return
 }
@@ -71,6 +72,7 @@ function type_reflection.GetBar$build_request(client: baml.llm.Client) -> baml.h
     load_var client
     load_const "GetBar"
     alloc_map 0
+    load_const <omitted>
     call baml.llm.build_request
     return
 }
@@ -87,6 +89,7 @@ function type_reflection.GetBar$build_request_stream(client: baml.llm.Client) ->
     load_var client
     load_const "GetBar"
     alloc_map 0
+    load_const <omitted>
     call baml.llm.build_request_stream
     return
 }
@@ -135,6 +138,7 @@ function type_reflection.GetBar$render_prompt(client: baml.llm.Client) -> baml.l
     load_var client
     load_const "GetBar"
     alloc_map 0
+    load_const <omitted>
     call baml.llm.render_prompt
     return
 }
@@ -153,6 +157,7 @@ function type_reflection.GetBar$stream(client: baml.llm.Client) -> baml.llm.Stre
     load_var client
     load_const "GetBar"
     alloc_map 0
+    load_const <omitted>
     call baml.llm.stream_llm_function
     return
 }
@@ -170,6 +175,7 @@ function type_reflection.GetFoo(client: baml.llm.Client) -> type_reflection.Foo 
     load_var client
     load_const "GetFoo"
     alloc_map 0
+    load_const <omitted>
     call baml.llm.call_llm_function
     return
 }
@@ -186,6 +192,7 @@ function type_reflection.GetFoo$build_request(client: baml.llm.Client) -> baml.h
     load_var client
     load_const "GetFoo"
     alloc_map 0
+    load_const <omitted>
     call baml.llm.build_request
     return
 }
@@ -202,6 +209,7 @@ function type_reflection.GetFoo$build_request_stream(client: baml.llm.Client) ->
     load_var client
     load_const "GetFoo"
     alloc_map 0
+    load_const <omitted>
     call baml.llm.build_request_stream
     return
 }
@@ -250,6 +258,7 @@ function type_reflection.GetFoo$render_prompt(client: baml.llm.Client) -> baml.l
     load_var client
     load_const "GetFoo"
     alloc_map 0
+    load_const <omitted>
     call baml.llm.render_prompt
     return
 }
@@ -268,6 +277,7 @@ function type_reflection.GetFoo$stream(client: baml.llm.Client) -> baml.llm.Stre
     load_var client
     load_const "GetFoo"
     alloc_map 0
+    load_const <omitted>
     call baml.llm.stream_llm_function
     return
 }
@@ -329,7 +339,7 @@ function type_reflection.eq_type_values_different_fn() -> bool {
     sys_op baml.llm.get_return_type
     store_var b
     load_var2 1 2
-    cmp_op ==
+    call baml.ops.equals_equals
     return
 }
 
@@ -341,7 +351,7 @@ function type_reflection.eq_type_values_same_fn() -> bool {
     sys_op baml.llm.get_return_type
     store_var b
     load_var2 1 2
-    cmp_op ==
+    call baml.ops.equals_equals
     return
 }
 
@@ -353,7 +363,8 @@ function type_reflection.neq_type_values_different_fn() -> bool {
     sys_op baml.llm.get_return_type
     store_var b
     load_var2 1 2
-    cmp_op !=
+    call baml.ops.equals_equals
+    unary_op !
     return
 }
 
@@ -365,6 +376,7 @@ function type_reflection.neq_type_values_same_fn() -> bool {
     sys_op baml.llm.get_return_type
     store_var b
     load_var2 1 2
-    cmp_op !=
+    call baml.ops.equals_equals
+    unary_op !
     return
 }

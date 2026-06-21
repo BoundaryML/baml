@@ -159,32 +159,49 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
         Ty::Callable { params, ret } => {
             let ret_t = translate_ty(ret, ctx);
             let mut imports = ret_t.imports;
-            let any_optional = params
-                .iter()
-                .any(|p| p.mode == CodegenFunctionParamMode::Optional);
-            let expr = if any_optional {
-                // TS can't express per-param optionality in a function type
-                // without naming each param; collapse to a rest-args type
-                // (mirrors Python's `Callable[..., R]` fallback).
-                format!("(...args: unknown[]) => {}", ret_t.expr)
-            } else {
-                let param_strs: Vec<String> = params
-                    .iter()
-                    .enumerate()
-                    .map(|(idx, p)| {
-                        let t = translate_ty(&p.ty, ctx);
-                        imports.extend(t.imports);
-                        let arg_name = p
-                            .name
-                            .as_ref()
-                            .map(|n| n.as_str().to_string())
-                            .unwrap_or_else(|| format!("arg{idx}"));
-                        format!("{arg_name}: {}", t.expr)
-                    })
-                    .collect();
-                format!("({}) => {}", param_strs.join(", "), ret_t.expr)
-            };
-            TranslatedType { expr, imports }
+            // Required params stay positional; optional params are grouped into
+            // a trailing `$opts?: { name?: T | undefined; … } | undefined`
+            // object — the same convention used for *calling* a BAML function
+            // (`leaf::fn_type_sig`), so a callback type and a function call read
+            // the same way. The engine invokes the callback positionally; the
+            // runtime adapter installed by `define_function.ts` (driven by the
+            // per-param metadata `leaf::callback_params_arg` emits) translates
+            // those positional args back into this `$opts` calling convention
+            // before the user's callback runs.
+            let mut positional: Vec<String> = Vec::new();
+            let mut opt_fields: Vec<String> = Vec::new();
+            for (idx, p) in params.iter().enumerate() {
+                let t = translate_ty(&p.ty, ctx);
+                imports.extend(t.imports);
+                let arg_name = p
+                    .name
+                    .as_ref()
+                    .map(|n| n.as_str().to_string())
+                    .unwrap_or_else(|| format!("arg{idx}"));
+                if p.mode == CodegenFunctionParamMode::Optional {
+                    opt_fields.push(format!(
+                        "{}?: {} | undefined",
+                        crate::leaf::option_field_name(&arg_name),
+                        t.expr
+                    ));
+                } else {
+                    positional.push(format!(
+                        "{}: {}",
+                        crate::leaf::safe_param_name(&arg_name),
+                        t.expr
+                    ));
+                }
+            }
+            if !opt_fields.is_empty() {
+                positional.push(format!(
+                    "$opts?: {{ {} }} | undefined",
+                    opt_fields.join("; ")
+                ));
+            }
+            TranslatedType {
+                expr: format!("({}) => {}", positional.join(", "), ret_t.expr),
+                imports,
+            }
         }
     }
 }
@@ -724,13 +741,30 @@ mod tests {
                 expected_imports: &[],
             },
             Case {
-                label: "callable_optional_fallback",
+                label: "callable_optional_only",
                 ty: Ty::Callable {
                     params: vec![optional_callable_param("x", Ty::Int)],
                     ret: boxed(Ty::Bool),
                 },
                 ctx: ctx(&[]),
-                expected_expr: "(...args: unknown[]) => boolean",
+                expected_expr: "($opts?: { x?: number | undefined } | undefined) => boolean",
+                expected_imports: &[],
+            },
+            Case {
+                label: "callable_required_and_optional",
+                ty: Ty::Callable {
+                    params: vec![
+                        baml_codegen_types::CallableParam {
+                            name: Some(BaseName::new("x")),
+                            ty: Ty::Int,
+                            mode: CodegenFunctionParamMode::Required,
+                        },
+                        optional_callable_param("y", Ty::Int),
+                    ],
+                    ret: boxed(Ty::String),
+                },
+                ctx: ctx(&[]),
+                expected_expr: "(x: number, $opts?: { y?: number | undefined } | undefined) => string",
                 expected_imports: &[],
             },
             Case {

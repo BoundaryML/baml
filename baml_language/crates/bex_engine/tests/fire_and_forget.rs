@@ -69,7 +69,7 @@ async fn rethrown_child_error_arrives_via_consumer() {
 async fn handled_slow_child_error_does_not_resurface() {
     let source = r#"
         function bad_slow() -> int {
-            baml.sys.sleep(50);
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(50n));
             throw "boom"
         }
         function main() -> int {
@@ -89,7 +89,7 @@ async fn handled_slow_child_error_does_not_resurface() {
 async fn unobserved_child_error_still_surfaces_at_spawner() {
     let source = r#"
         function bad() -> int throws string { throw "boom" }
-        function other() -> int { baml.sys.sleep(50); 1 }
+        function other() -> int { baml.sys.sleep(baml.time.Duration.from_milliseconds(50n)); 1 }
         function main() -> int {
             spawn { bad() };
             let g = spawn { other() };

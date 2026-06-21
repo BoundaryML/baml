@@ -1116,15 +1116,49 @@ impl io::IoNamespaceSys for NativeSysOps {
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        ms: i64,
+        delay: BexExternalValue,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        #[allow(clippy::cast_sign_loss)]
-        let millis = ms.max(0) as u64;
+        let nanos = match sleep_nanos_from_delay(delay) {
+            Ok(nanos) => nanos,
+            Err(err) => return SysOpOutput::err(err),
+        };
         SysOpOutput::async_op(async move {
-            tokio::time::sleep(std::time::Duration::from_millis(millis)).await;
+            tokio::time::sleep(std::time::Duration::from_nanos(nanos)).await;
             Ok(())
         })
+    }
+}
+
+fn sleep_nanos_from_delay(delay: BexExternalValue) -> Result<u64, VmRustFnError> {
+    match delay {
+        BexExternalValue::Instance {
+            class_name,
+            mut fields,
+        } if class_name == "baml.time.Duration" => {
+            let Some(nanos) = fields.swap_remove("_nanoseconds") else {
+                return Err(VmRustFnError::from(VmBamlError::Io {
+                    message: "sleep delay is missing Duration._nanoseconds".to_string(),
+                }));
+            };
+            let BexExternalValue::Bigint(nanos) = nanos else {
+                return Err(VmRustFnError::from(VmBamlError::Io {
+                    message: "sleep delay Duration._nanoseconds is not a bigint".to_string(),
+                }));
+            };
+            if nanos.sign() == num_bigint::Sign::Plus {
+                Ok(u64::try_from(&nanos).unwrap_or(u64::MAX))
+            } else {
+                Ok(0)
+            }
+        }
+        BexExternalValue::Union { value, .. } => sleep_nanos_from_delay(*value),
+        other => Err(VmRustFnError::from(VmBamlError::Io {
+            message: format!(
+                "sleep delay must be baml.time.Duration, got {}",
+                other.type_name()
+            ),
+        })),
     }
 }
 
@@ -1640,6 +1674,98 @@ impl io::IoClassHttpResponse for NativeSysOps {
         _body: Vec<u8>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::Response> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    #[cfg(feature = "bundle-http")]
+    fn new_streaming(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        status_code: i64,
+        headers: indexmap::IndexMap<String, String>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::http::Response> {
+        SysOpOutput::ok(crate::http_server::build_streaming_response(
+            status_code,
+            headers,
+        ))
+    }
+
+    #[cfg(not(feature = "bundle-http"))]
+    fn new_streaming(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _status_code: i64,
+        _headers: indexmap::IndexMap<String, String>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::http::Response> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    #[cfg(feature = "bundle-http")]
+    fn write(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        response: owned::http::Response,
+        data: Vec<u8>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::async_op(async move {
+            crate::http_server::downcast_body(&response._body)?
+                .write_chunk(data)
+                .await
+                .map_err(VmRustFnError::from)
+        })
+    }
+
+    #[cfg(not(feature = "bundle-http"))]
+    fn write(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _response: owned::http::Response,
+        _data: Vec<u8>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    #[cfg(feature = "bundle-http")]
+    fn end(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        response: owned::http::Response,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::async_op(async move {
+            crate::http_server::downcast_body(&response._body)?
+                .end_stream()
+                .await
+                .map_err(VmRustFnError::from)
+        })
+    }
+
+    #[cfg(not(feature = "bundle-http"))]
+    fn end(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _response: owned::http::Response,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
         SysOpOutput::err(VmPanic::HostUnavailable {
             resource: "http".to_string(),
             message: "Operation not supported on this platform".to_string(),

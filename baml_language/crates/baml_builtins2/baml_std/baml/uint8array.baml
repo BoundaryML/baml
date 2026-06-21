@@ -49,10 +49,11 @@ class Uint8Array {
     $rust_function
   }
 
-  /// Returns a new `uint8array` containing the bytes in the given range.
+  /// Returns a new `uint8array` with the bytes from `start` (inclusive) to
+  /// `end` (exclusive).
   ///
-  /// - `start` is clamped to the range `[0, length]`.
-  /// - `end` is clamped to the range `[start, length]`.
+  /// Negative indices count from the end. Out-of-range indices are clamped, and
+  /// an `end` that resolves at or before `start` yields an empty array.
   function slice(self, start: int, end: int) -> uint8array throws never {
     $rust_function
   }
@@ -115,7 +116,13 @@ class Uint8Array {
 
   /// Decodes the bytes as a UTF-8 string.
   /// Invalid UTF-8 sequences are replaced with U+FFFD (replacement character).
-  function to_string(self) -> string throws never {
+  implements baml.ToString {
+    function to_string(self) -> string throws never {
+      self._to_string_impl()
+    }
+  }
+
+  function _to_string_impl(self) -> string throws never {
     $rust_function
   }
 

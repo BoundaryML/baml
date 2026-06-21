@@ -224,6 +224,31 @@ message BamlTy {
   }
 }
 
+// Engine→host call of a host-callable. The engine has already resolved the call
+// against the callee's declared parameters and dropped any omitted optionals, so
+// `args` is a flat, declared-order list of the *supplied* args. Each arg carries
+// enough for a bridge to apply its own calling convention without the callee
+// type on the wire — `is_optional_arg` says whether it belongs in the positional
+// run or the host's optional/keyword bucket, and `arg_name` keys that bucket.
+// Omitted optionals are simply absent (the host's own language-level default
+// then applies). TypeScript folds the optional args into the trailing `$opts`
+// object; Python passes them as keyword arguments. Replaces the bare
+// `BamlOutboundValue` list previously passed to the dispatch FFI.
+message BamlToHostCall {
+  repeated BamlToHostArg args = 1;
+}
+
+message BamlToHostArg {
+  BamlOutboundValue value = 1;
+  // The parameter name, used to key the host's optional/keyword bucket. We
+  // leave `arg_name` empty for positional (required) args, which the host takes
+  // by position.
+  string arg_name = 2;
+  // Whether this is a supplied optional arg (→ the host's `$opts`/kwargs
+  // bucket) rather than a required positional arg.
+  bool is_optional_arg = 3;
+}
+
 // Simple marker messages for primitive types.
 message BamlTyString {}
 message BamlTyInt {}

@@ -347,6 +347,40 @@ impl MirBuilder {
         });
     }
 
+    /// Emit an open-world virtual interface-method call. The implementation is
+    /// resolved at runtime from the receiver's concrete type (the first `args`
+    /// entry) against `iface`. Used for statically-undetermined receivers
+    /// (bounded type-var / interface-existential / `Self` in a default body).
+    #[expect(clippy::too_many_arguments)]
+    pub(crate) fn virtual_call(
+        &mut self,
+        iface: baml_type::TyTemplate,
+        method: String,
+        args: Vec<Operand>,
+        ntypeargs: usize,
+        destination: Place,
+        target: BlockId,
+        unwind: Option<BlockId>,
+    ) {
+        debug_assert!(
+            matches!(destination, Place::Local(_)),
+            "VirtualCall destination must be a local place"
+        );
+        debug_assert!(
+            args.len() > ntypeargs,
+            "VirtualCall must carry at least the receiver value argument"
+        );
+        self.set_terminator(Terminator::VirtualCall {
+            iface,
+            method,
+            args,
+            ntypeargs,
+            destination,
+            target,
+            unwind,
+        });
+    }
+
     /// Emit an unreachable terminator.
     pub(crate) fn unreachable(&mut self) {
         self.set_terminator(Terminator::Unreachable);

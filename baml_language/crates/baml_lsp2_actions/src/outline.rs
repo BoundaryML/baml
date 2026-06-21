@@ -158,7 +158,7 @@ pub fn file_outline(db: &dyn Db, file: SourceFile) -> Vec<OutlineItem> {
                 match item_tree[loc.id(db)].origin {
                     baml_compiler2_ast::ast::LetOrigin::Client => DefinitionKind::Client,
                     baml_compiler2_ast::ast::LetOrigin::RetryPolicy => DefinitionKind::RetryPolicy,
-                    _ => DefinitionKind::Let,
+                    baml_compiler2_ast::ast::LetOrigin::Source => DefinitionKind::Let,
                 }
             }
             other => other.kind(),

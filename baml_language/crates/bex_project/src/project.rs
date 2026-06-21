@@ -1,8 +1,51 @@
+use std::collections::{HashMap, VecDeque};
+
 use bex_engine::BexEngine;
 use bex_external_types::Handle;
 use sys_ops::SysOps;
 
 use crate::RuntimeError;
+
+const RETAINED_CFG_GENERATIONS: usize = 8;
+
+#[derive(Default)]
+struct RetainedCfgSnapshots {
+    order: VecDeque<u64>,
+    graphs_by_generation:
+        HashMap<u64, HashMap<String, baml_compiler2_visualization::control_flow::ControlFlowGraph>>,
+}
+
+impl RetainedCfgSnapshots {
+    fn insert(
+        &mut self,
+        generation: u64,
+        graphs: HashMap<String, baml_compiler2_visualization::control_flow::ControlFlowGraph>,
+    ) {
+        if self
+            .graphs_by_generation
+            .insert(generation, graphs)
+            .is_none()
+        {
+            self.order.push_back(generation);
+        }
+        while self.order.len() > RETAINED_CFG_GENERATIONS {
+            if let Some(evicted) = self.order.pop_front() {
+                self.graphs_by_generation.remove(&evicted);
+            }
+        }
+    }
+
+    fn graph(
+        &self,
+        generation: u64,
+        function_name: &str,
+    ) -> Option<baml_compiler2_visualization::control_flow::ControlFlowGraph> {
+        self.graphs_by_generation
+            .get(&generation)
+            .and_then(|graphs| graphs.get(function_name))
+            .cloned()
+    }
+}
 
 pub(crate) struct TestState {
     pub generation: u64,
@@ -29,6 +72,7 @@ pub(crate) struct BexProject {
     /// The cancel token is cancelled and replaced on engine swap so in-flight tasks abort.
     /// The registry (a `Handle` to a live `testing.TestRegistry` on the heap) is cleared on engine swap.
     test_state: std::sync::Arc<std::sync::Mutex<TestState>>,
+    cfg_snapshots: std::sync::Mutex<RetainedCfgSnapshots>,
 }
 
 impl BexProject {
@@ -50,6 +94,7 @@ impl BexProject {
             sys_ops,
             current_bex: std::sync::RwLock::new((false, None)),
             test_state: std::sync::Arc::new(std::sync::Mutex::new(TestState::new())),
+            cfg_snapshots: std::sync::Mutex::new(RetainedCfgSnapshots::default()),
         }
     }
 
@@ -114,6 +159,21 @@ impl BexProject {
         current_bex.0
     }
 
+    pub(crate) fn current_generation(&self) -> u64 {
+        self.test_state.lock().unwrap().generation
+    }
+
+    pub(crate) fn control_flow_graph_for_generation(
+        &self,
+        generation: u64,
+        function_name: &str,
+    ) -> Option<baml_compiler2_visualization::control_flow::ControlFlowGraph> {
+        self.cfg_snapshots
+            .lock()
+            .unwrap()
+            .graph(generation, function_name)
+    }
+
     pub(crate) fn get_bex(&self) -> Result<std::sync::Arc<BexEngine>, RuntimeError> {
         let current_bex = self.current_bex.read().unwrap();
         current_bex.1.clone().ok_or(RuntimeError::Compilation {
@@ -135,7 +195,11 @@ impl BexProject {
         current_bex.0 = false;
     }
 
-    fn set_current_bex(&self, bex: BexEngine) {
+    fn set_current_bex(
+        &self,
+        bex: BexEngine,
+        cfg_snapshot: HashMap<String, baml_compiler2_visualization::control_flow::ControlFlowGraph>,
+    ) {
         let mut current_bex = self.current_bex.write().unwrap();
         current_bex.1 = Some(std::sync::Arc::new(bex));
         current_bex.0 = true;
@@ -143,8 +207,32 @@ impl BexProject {
         let mut state = self.test_state.lock().unwrap();
         state.cancel.cancel();
         state.generation += 1;
+        let generation = state.generation;
         state.cancel = sys_types::CancellationToken::new();
         state.registry = None;
+        drop(state);
+        self.cfg_snapshots
+            .lock()
+            .unwrap()
+            .insert(generation, cfg_snapshot);
+    }
+
+    fn capture_cfg_snapshot(
+        &self,
+    ) -> HashMap<String, baml_compiler2_visualization::control_flow::ControlFlowGraph> {
+        let db = self.db.lock().unwrap();
+        baml_project::list_functions_with_metadata(&db)
+            .into_iter()
+            .filter_map(|function| {
+                let graph = db.ast_control_flow_graph(&function.name)?;
+                Some((
+                    function.name,
+                    baml_compiler2_visualization::control_flow::prepare_control_flow_graph_for_visualization(
+                        &graph,
+                    ),
+                ))
+            })
+            .collect()
     }
 
     fn update_bex(&self) -> Result<(), RuntimeError> {
@@ -181,8 +269,35 @@ impl BexProject {
                 return Err(RuntimeError::Engine(e));
             }
         };
-        self.set_current_bex(runtime);
+        let cfg_snapshot = self.capture_cfg_snapshot();
+        self.set_current_bex(runtime, cfg_snapshot);
         log::info!("update_bex: success");
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn retained_cfg_snapshots_evict_oldest_generation() {
+        let mut snapshots = RetainedCfgSnapshots::default();
+        for generation in 1..=(RETAINED_CFG_GENERATIONS as u64 + 1) {
+            snapshots.insert(
+                generation,
+                HashMap::from([(
+                    "Workflow".to_string(),
+                    baml_compiler2_visualization::control_flow::ControlFlowGraph::default(),
+                )]),
+            );
+        }
+
+        assert!(snapshots.graph(1, "Workflow").is_none());
+        assert!(
+            snapshots
+                .graph(RETAINED_CFG_GENERATIONS as u64 + 1, "Workflow")
+                .is_some()
+        );
     }
 }

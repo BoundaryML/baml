@@ -29,20 +29,26 @@
 //! is the remaining follow-up. Nothing here should reuse
 //! `sys_types::CallId`.
 
+pub mod artifact;
 pub mod clock;
 pub mod config;
 #[cfg(all(not(target_arch = "wasm32"), not(baml_loom)))]
 pub(crate) mod consumer;
+#[cfg(not(baml_loom))]
+pub mod drain;
+pub mod encode;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod file;
+pub mod metadata;
+pub mod read;
 pub mod record;
 pub(crate) mod registry;
 pub(crate) mod ring;
 pub(crate) mod sync;
+pub mod transcode;
 pub(crate) mod wake;
 
 /// The `.bamlprof` wire types, generated from `prof/proto/bamlprof.proto`.
-#[cfg(not(target_arch = "wasm32"))]
 #[allow(
     clippy::pedantic,
     clippy::doc_markdown,
@@ -56,9 +62,12 @@ pub mod pb {
 #[cfg(test)]
 mod concurrency_tests;
 
-pub use config::ProfConfig;
+pub use config::{ProfConfig, enable_wasm_cooperative_profile};
 #[cfg(all(not(target_arch = "wasm32"), not(baml_loom)))]
-pub use consumer::{engine_closed, flush_and_join, register_engine_metadata};
+pub use consumer::{engine_closed, flush_and_join};
+#[cfg(not(baml_loom))]
+pub use drain::{CooperativeProfileDrain, CooperativeProfileDrainOptions};
+pub use metadata::register_engine_metadata;
 #[cfg(not(baml_loom))]
 pub use registry::ring_for_engine;
 pub use ring::{Ring, RingHandle};
@@ -72,6 +81,8 @@ pub struct EngineProfileMetadata {
     /// What identifies a Program is still open (M0 coordination); empty for
     /// now.
     pub program_id: String,
+    pub source_snapshot_id: Option<String>,
+    pub revision_id: Option<String>,
     /// Per-run function table; the FQN is the cross-run key.
     pub functions: Vec<FunctionMetaEntry>,
 }
@@ -91,20 +102,26 @@ pub struct FunctionMetaEntry {
     pub span_end: u32,
     /// "bytecode" | "sysop" | "native".
     pub kind: String,
+    pub definition_key: Option<String>,
+    pub owner_type: Option<String>,
+    pub parent_function: Option<String>,
+    pub lambda_path: Option<String>,
+    pub package_name: Option<String>,
+    pub namespace: Vec<String>,
 }
 
-// wasm32: profiling is forced off (no consumer thread, no tick clock); the
-// producer-facing surface compiles to no-ops so dual-target callers don't
-// need their own cfgs.
+// wasm32 has no native background consumer. Generic embedders keep profiling
+// off through config, while adapters such as bridge_wasm may opt into a
+// cooperative drain; this function remains a no-op because there is no
+// background thread to flush.
 #[cfg(target_arch = "wasm32")]
 pub fn flush_and_join(_timeout: std::time::Duration) -> bool {
     true
 }
 
-/// See the native implementation in [`consumer`]. No-op on wasm32.
+/// WASM has no native consumer, but engine close still releases shared
+/// metadata registered for cooperative artifact/header construction.
 #[cfg(target_arch = "wasm32")]
-pub fn register_engine_metadata(_engine_id: u64, _meta: EngineProfileMetadata) {}
-
-/// See the native implementation in [`consumer`]. No-op on wasm32.
-#[cfg(target_arch = "wasm32")]
-pub fn engine_closed(_engine_id: u64) {}
+pub fn engine_closed(engine_id: u64) {
+    let _ = metadata::remove_engine_metadata(engine_id);
+}

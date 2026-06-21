@@ -37,7 +37,7 @@ async fn shell_with_pipe() {
         load_const null
         sys_op baml.sys.shell
         load_field .stdout
-        call baml.Uint8Array.to_string
+        call baml.Uint8Array.baml.ToString.to_string
         return
     }
     "#);

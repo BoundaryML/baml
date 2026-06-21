@@ -285,6 +285,39 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
             }
             write!(f, "];")
         }
+        Terminator::VirtualCall {
+            iface,
+            method,
+            args,
+            ntypeargs,
+            destination,
+            target,
+            unwind,
+        } => {
+            write!(f, "{destination} = virtual_call {method} as {iface}")?;
+            if *ntypeargs > 0 {
+                write!(f, "<")?;
+                for (i, arg) in args.iter().take(*ntypeargs).enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write_operand(f, arg)?;
+                }
+                write!(f, ">")?;
+            }
+            write!(f, "(")?;
+            for (i, arg) in args.iter().skip(*ntypeargs).enumerate() {
+                if i > 0 {
+                    write!(f, ", ")?;
+                }
+                write_operand(f, arg)?;
+            }
+            write!(f, ") -> [{target}")?;
+            if let Some(u) = unwind {
+                write!(f, ", unwind: {u}")?;
+            }
+            write!(f, "];")
+        }
         Terminator::Unreachable => {
             write!(f, "unreachable;")
         }

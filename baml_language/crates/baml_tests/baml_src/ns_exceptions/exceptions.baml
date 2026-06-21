@@ -442,7 +442,9 @@ test "catch_map_key_not_found" {
     assert.is_true(baml.deep_equals(catch_map_key_not_found_fn(), -1))
 }
 
-function s5_bad_2() -> int { let a = [1, 2]; a[-1] }
+// `-3` counts from the end past the start of a length-2 array (it normalizes
+// to `-1`), so it is out of bounds. (`a[-1]` would resolve to the last element.)
+function s5_bad_2() -> int { let a = [1, 2]; a[-3] }
 
 function catch_negative_index_as_index_out_of_bounds_fn() -> int {
     s5_bad_2() catch (e) { baml.panics.IndexOutOfBounds => -1 }
