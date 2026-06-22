@@ -11,7 +11,8 @@
 //!     (decoded into a `type`-valued `BexExternalAdt::Type`).
 
 use baml_type::{
-    FunctionParamMode, MediaKind, Name, RuntimeFunctionParamTy, RuntimeTy, TyAttr, TypeName,
+    FunctionParamMode, MediaKind, Name, RuntimeFunctionParamTy, RuntimeInterface, RuntimeTy,
+    TyAttr, TypeName,
 };
 use bex_project::{BexExternalAdt, BexExternalValue};
 use indexmap::IndexMap;
@@ -135,12 +136,27 @@ pub fn proto_ty_to_runtime_ty(ty: &BamlTy) -> Result<RuntimeTy, CtypesError> {
         TyVariant::TypeVar(v) => RuntimeTy::TypeVar(Name::new(&v.name), TyAttr::default()),
         TyVariant::AssociatedTypeProjection(p) => RuntimeTy::AssociatedTypeProjection {
             base: Box::new(opt_to_runtime_ty(p.base.as_deref())?),
-            interface: p
-                .interface
-                .as_deref()
-                .map(proto_ty_to_runtime_ty)
-                .transpose()?
-                .map(Box::new),
+            // The projection's interface constraint is wired as a `Ty` and must
+            // decode to an interface existential, from which the constraint
+            // (`RuntimeInterface`) is recovered.
+            interface: match p.interface.as_deref() {
+                Some(ty) => match proto_ty_to_runtime_ty(ty)? {
+                    RuntimeTy::Interface(name, generics, associated_types, _) => {
+                        Some(Box::new(RuntimeInterface {
+                            name,
+                            generics,
+                            associated_types,
+                        }))
+                    }
+                    _ => {
+                        return Err(CtypesError::InternalError(
+                            "AssociatedTypeProjection.interface did not decode to an interface type"
+                                .to_string(),
+                        ));
+                    }
+                },
+                None => None,
+            },
             member: Name::new(&p.member),
             attr: TyAttr::default(),
         },

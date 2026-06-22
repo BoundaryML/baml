@@ -581,16 +581,6 @@ pub(super) fn ty_equivalent(a: &RuntimeTy, b: &RuntimeTy) -> bool {
     }
 }
 
-/// [`ty_equivalent`] lifted over optional types: `None`s match, a `Some`/`None` mismatch
-/// does not, and two `Some`s compare their inner types.
-fn opt_ty_equivalent(a: Option<&RuntimeTy>, b: Option<&RuntimeTy>) -> bool {
-    match (a, b) {
-        (Some(x), Some(y)) => ty_equivalent(x, y),
-        (None, None) => true,
-        (Some(_), None) | (None, Some(_)) => false,
-    }
-}
-
 /// Equivalence of two optional interface *constraints* (the `as I` annotation of
 /// an associated-type projection), mirroring the `RuntimeTy::Interface` arm of
 /// [`ty_equivalent`]: same name, equivalent generic arguments, and exactly
