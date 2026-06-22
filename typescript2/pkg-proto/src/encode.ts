@@ -87,7 +87,10 @@ function serializeValue(val: unknown): InboundValue {
       return {
         value: {
           $case: 'classValue',
-          classValue: { name: className, fields },
+          // `classTy` is the value-level generic type-args channel; absent for
+          // non-generic classes. The webview encoder does not yet support
+          // generic class instances, so it is always undefined here.
+          classValue: { name: className, fields, classTy: undefined },
         },
       };
     }

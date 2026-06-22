@@ -1667,7 +1667,12 @@ impl BexVm {
         let type_args: IndexMap<String, baml_type::RuntimeTy> = positional
             .into_iter()
             .enumerate()
-            .map(|(i, ty)| (param_names.get(i).cloned().unwrap_or_else(|| i.to_string()), ty))
+            .map(|(i, ty)| {
+                (
+                    param_names.get(i).cloned().unwrap_or_else(|| i.to_string()),
+                    ty,
+                )
+            })
             .collect();
         self.set_entry_point_with_type_args(function, args, type_args);
     }

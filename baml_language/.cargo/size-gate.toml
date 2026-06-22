@@ -36,9 +36,11 @@ package = "baml_cli"
 bin = "baml-cli"
 policy.max_delta_pct = 3.0
 
-# macOS arm64: baseline 15.59 MB file.
+# macOS arm64: baseline 16.09 MB file (generics: TyArg/TyClass proto types +
+# engine/compiler/sdkgen generics support, +499 KB / +3.2% vs the prior
+# 15.59 MB baseline).
 [artifacts.baml-cli.platform.aarch64-apple-darwin]
-max_file_bytes = 16_060_000
+max_file_bytes = 16_580_000
 # Linux x86_64: baseline 20.86 MB file.
 [artifacts.baml-cli.platform.x86_64-unknown-linux-gnu]
 max_file_bytes = 21_490_000

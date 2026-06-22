@@ -23,9 +23,9 @@ bex_engine = { workspace = true }
 bex_vm_types = { workspace = true }
 anyhow = { workspace = true }
 borsh = { workspace = true }
-indexmap = { workspace = true }
 clap = { workspace = true }
 console = { workspace = true }
+indexmap = { workspace = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]

@@ -5,7 +5,7 @@
 //!     generic function/method call (`TyArg { type_var, type_value }`). The
 //!     host sends them in De Bruijn order (enclosing class params first, then
 //!     the callee's own params); the engine maps each named binding onto the
-//!     entry frame's `type_args` slot by TypeVar name in
+//!     entry frame's `type_args` slot by `TypeVar` name in
 //!     `set_entry_point_with_type_args`.
 //!   - `InboundValue.ty_value` — a reflected type passed as an argument value
 //!     (decoded into a `type`-valued `BexExternalAdt::Type`).

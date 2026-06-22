@@ -51,10 +51,7 @@ impl FunctionCallContextBuilder {
     /// be the callee's De Bruijn order. The engine resolves them to positional
     /// slots against the callee's generic params.
     #[must_use]
-    pub fn with_type_args(
-        mut self,
-        type_args: IndexMap<String, baml_type::RuntimeTy>,
-    ) -> Self {
+    pub fn with_type_args(mut self, type_args: IndexMap<String, baml_type::RuntimeTy>) -> Self {
         self.type_args = Some(type_args);
         self
     }

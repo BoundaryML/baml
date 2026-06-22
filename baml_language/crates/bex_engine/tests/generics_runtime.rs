@@ -118,7 +118,7 @@ async fn typed_arm_on_enclosing_typevar_matches() {
 // 01pt3: inbound (host-call) generics — named `_types=` channel
 // ===========================================================================
 
-/// A body-only TypeVar (`T` appears only via `reflect.type_of<T>()`, never in
+/// A body-only `TypeVar` (`T` appears only via `reflect.type_of<T>()`, never in
 /// the signature) is bound through the named channel and threads into the
 /// frame. Proves the path doesn't rely on argument inference.
 #[tokio::test]

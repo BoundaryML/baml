@@ -332,6 +332,6 @@ async fn http_response_text_consumed() {
     insta::assert_snapshot!(output.result.unwrap_err().to_string(), @r#"
     Traceback (most recent call last):
       File "test.baml", line 5, in user.main
-    uncaught throw: Instance { class_name: "baml.errors.Io", fields: {"message": String("Response body has already been consumed")} }
+    uncaught throw: Instance { class_name: "baml.errors.Io", type_args: [], fields: {"message": String("Response body has already been consumed")} }
     "#);
 }

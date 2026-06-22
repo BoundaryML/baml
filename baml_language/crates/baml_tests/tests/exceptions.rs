@@ -152,7 +152,7 @@ function main() -> int {
       File "test.baml", line 11, in user.main
       File "test.baml", line 7, in user.caller
       File "test.baml", line 3, in user.divider
-    uncaught throw: Instance { class_name: "baml.panics.DivisionByZero", fields: {"dividend": Int(42)} }
+    uncaught throw: Instance { class_name: "baml.panics.DivisionByZero", type_args: [], fields: {"dividend": Int(42)} }
     "#);
 }
 
