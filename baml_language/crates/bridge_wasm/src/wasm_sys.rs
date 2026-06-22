@@ -194,6 +194,7 @@ fn sleep_millis_from_delay(delay: BexExternalValue) -> Result<i32, VmRustFnError
         BexExternalValue::Instance {
             class_name,
             mut fields,
+            ..
         } if class_name == "baml.time.Duration" => {
             let Some(nanos) = fields.swap_remove("_nanoseconds") else {
                 return Err(VmRustFnError::from(VmBamlError::Io {

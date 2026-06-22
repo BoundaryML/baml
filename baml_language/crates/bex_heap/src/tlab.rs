@@ -183,10 +183,23 @@ impl Tlab {
         self.alloc(Object::Map(values.into()))
     }
 
-    /// Allocate an instance object.
+    /// Allocate a non-generic instance object (empty class type args).
     #[inline]
     pub fn alloc_instance(&mut self, class: HeapPtr, fields: Vec<Value>) -> HeapPtr {
-        self.alloc(Object::Instance(Instance::new(class, vec![], fields)))
+        self.alloc_instance_with_type_args(class, vec![], fields)
+    }
+
+    /// Allocate an instance object carrying its concrete class type args (De
+    /// Bruijn order). Used by the inbound FFI path to land a generic instance's
+    /// wire-supplied `type_args` into `Object::Instance::class_type_args`.
+    #[inline]
+    pub fn alloc_instance_with_type_args(
+        &mut self,
+        class: HeapPtr,
+        type_args: Vec<baml_type::RuntimeTy>,
+        fields: Vec<Value>,
+    ) -> HeapPtr {
+        self.alloc(Object::Instance(Instance::new(class, type_args, fields)))
     }
 
     /// Allocate a variant object.

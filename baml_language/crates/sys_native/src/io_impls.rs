@@ -1135,6 +1135,7 @@ fn sleep_nanos_from_delay(delay: BexExternalValue) -> Result<u64, VmRustFnError>
         BexExternalValue::Instance {
             class_name,
             mut fields,
+            ..
         } if class_name == "baml.time.Duration" => {
             let Some(nanos) = fields.swap_remove("_nanoseconds") else {
                 return Err(VmRustFnError::from(VmBamlError::Io {

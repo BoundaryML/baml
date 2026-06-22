@@ -4,6 +4,7 @@ syntax = "proto3";
 package baml_core.cffi.v1;
 
 import "baml_core/cffi/v1/baml_inbound.proto";
+import "baml_core/cffi/v1/baml_type.proto";
 
 option go_package = "./cffi";
 
@@ -75,6 +76,9 @@ message BamlOutboundValue {
     BamlValuePromptAst prompt_ast_value = 18;
     bytes uint8array_value = 19;
     string bigint_value = 20;
+    // A reflected BAML type returned as a value (e.g. `reflect.type_of<T>()`).
+    // Shares the `Ty` representation with the inbound side.
+    Ty ty_value = 21;
   }
 }
 

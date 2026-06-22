@@ -352,6 +352,7 @@ mod tests {
             "person".to_string(),
             BexExternalValue::Instance {
                 class_name: "Person".to_string(),
+                type_args: vec![],
                 fields: person_fields,
             },
         );
@@ -531,6 +532,7 @@ mod tests {
         fields.insert("_data".to_string(), media);
         BexExternalValue::Instance {
             class_name: class_name.to_string(),
+            type_args: vec![],
             fields,
         }
     }
@@ -808,6 +810,7 @@ mod tests {
             "person".to_string(),
             BexExternalValue::Instance {
                 class_name: "user.Person".to_string(),
+                type_args: vec![],
                 fields,
             },
         );

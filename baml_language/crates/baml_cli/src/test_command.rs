@@ -474,7 +474,9 @@ fn flatten_tree(value: &BexExternalValue, out: &mut Vec<DiscoveredTest>) {
                 flatten_tree(item, out);
             }
         }
-        BexExternalValue::Instance { class_name, fields } => {
+        BexExternalValue::Instance {
+            class_name, fields, ..
+        } => {
             if class_matches(class_name, "SerializedTest") {
                 let kind = fields.get("type").and_then(as_string).unwrap_or_default();
                 if kind == "test" {
@@ -514,7 +516,9 @@ fn collect_lazy_names_inner(value: &BexExternalValue, out: &mut Vec<String>) {
                 collect_lazy_names_inner(item, out);
             }
         }
-        BexExternalValue::Instance { class_name, fields } => {
+        BexExternalValue::Instance {
+            class_name, fields, ..
+        } => {
             if class_matches(class_name, "SerializedTest") {
                 let kind = fields.get("type").and_then(as_string).unwrap_or_default();
                 if kind == "lazyTestSet" {

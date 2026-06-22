@@ -300,6 +300,7 @@ fn complete_with_test_error(call_id: u32, class_name: &str, message: &str) {
         call_id,
         BexExternalValue::Instance {
             class_name: "baml.errors.HostCallable".to_string(),
+            type_args: vec![],
             fields,
         },
     );
@@ -583,7 +584,9 @@ async fn host_callable_wrong_return_type_panics_as_host_contract_violation() {
 
     match result {
         Err(EngineError::UnhandledThrow { value, .. }) => match value.as_ref() {
-            BexExternalValue::Instance { class_name, fields } => {
+            BexExternalValue::Instance {
+                class_name, fields, ..
+            } => {
                 assert_eq!(
                     class_name, "baml.panics.HostContractViolation",
                     "expected baml.panics.HostContractViolation instance, got {class_name}"
@@ -658,7 +661,9 @@ async fn host_callable_wrong_return_with_declared_throws_keeps_return_diagnostic
 
     match result {
         Err(EngineError::UnhandledThrow { value, .. }) => match value.as_ref() {
-            BexExternalValue::Instance { class_name, fields } => {
+            BexExternalValue::Instance {
+                class_name, fields, ..
+            } => {
                 assert_eq!(
                     class_name, "baml.panics.HostContractViolation",
                     "expected baml.panics.HostContractViolation, got {class_name}"
@@ -699,7 +704,9 @@ async fn host_callable_wrong_return_with_declared_throws_keeps_return_diagnostic
 fn assert_host_callable_throw(result: &Result<BexExternalValue, EngineError>) {
     match result {
         Err(EngineError::UnhandledThrow { value, .. }) => match value.as_ref() {
-            BexExternalValue::Instance { class_name, fields } => {
+            BexExternalValue::Instance {
+                class_name, fields, ..
+            } => {
                 assert_eq!(
                     class_name, "baml.errors.HostCallable",
                     "expected baml.errors.HostCallable instance, got {class_name}"
@@ -728,7 +735,9 @@ fn assert_host_callable_throw(result: &Result<BexExternalValue, EngineError>) {
 fn assert_host_contract_violation_panic(result: &Result<BexExternalValue, EngineError>) {
     match result {
         Err(EngineError::UnhandledThrow { value, .. }) => match value.as_ref() {
-            BexExternalValue::Instance { class_name, fields } => {
+            BexExternalValue::Instance {
+                class_name, fields, ..
+            } => {
                 assert_eq!(
                     class_name, "baml.panics.HostContractViolation",
                     "expected baml.panics.HostContractViolation instance, got {class_name}"
@@ -779,6 +788,7 @@ async fn host_callable_wrong_class_field_type_panics_as_host_contract_violation(
         fields.insert("y".to_string(), BexExternalValue::Int(2));
         FakeReturn::Ok(BexExternalValue::Instance {
             class_name: "Point".to_string(),
+            type_args: vec![],
             fields,
         })
     });
@@ -829,6 +839,7 @@ async fn host_callable_wrong_generic_class_field_type_panics_as_host_contract_vi
         );
         FakeReturn::Ok(BexExternalValue::Instance {
             class_name: "Box".to_string(),
+            type_args: vec![],
             fields,
         })
     });
@@ -1280,7 +1291,9 @@ async fn host_callable_returning_a_callable_is_rejected() {
     // `baml.panics.HostContractViolation` rather than a raw `CannotConvert`.
     match result {
         Err(EngineError::UnhandledThrow { value, .. }) => match value.as_ref() {
-            BexExternalValue::Instance { class_name, fields } => {
+            BexExternalValue::Instance {
+                class_name, fields, ..
+            } => {
                 assert_eq!(class_name, "baml.panics.HostContractViolation");
                 match fields.get("message") {
                     Some(BexExternalValue::String(m)) => assert!(
@@ -1467,14 +1480,16 @@ async fn host_callable_with_generic_return_is_rejected() {
                 BexExternalValue::HostValue(Arc::clone(&arc)),
                 BexExternalValue::Int(1),
             ],
-            FunctionCallContextBuilder::new(sys_types::CallId::next())
-                .with_type_args(vec![baml_type::RuntimeTy::int()])
-                .build(),
+            // No `_types=` bindings: `T` is left unbound. The generic return
+            // can't be validated, so the call is rejected before the host
+            // callable is bound (full-binding enforcement, lib.rs).
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
             true,
         )
         .await;
 
-    // Bind-time rejection: the generic/erased return type can't be validated.
+    // Rejection: an unbound generic (its erased return can't be validated)
+    // fails up front.
     assert!(
         matches!(result, Err(EngineError::TypeMismatch { .. })),
         "a generic-return host callable must be rejected at bind, got {result:?}"

@@ -16,9 +16,9 @@ from __future__ import annotations
 import enum
 import os
 import typing
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
-from .cffi.v1 import baml_inbound_pb2, baml_outbound_pb2
+from .cffi.v1 import baml_inbound_pb2, baml_outbound_pb2, baml_type_pb2
 from .baml_py import (
     BamlAudio,
     BamlImage,
@@ -290,6 +290,16 @@ def _set_inbound_value(
         # `13b` §2.1. The Rust-side type checker already knows the
         # declared parameter type from the function signature.
         cv.name = get_type_map().py_type_to_baml_type(_base_class_for_fqn(type(value)))
+        # For a *generic* instance (`Box[int]`), also carry its concrete class
+        # type args (the value-level type channel) so the engine can recover and
+        # type-check `Box<int>` against a declared generic param. Recovered from
+        # Pydantic's generic metadata, in declaration order; absent for
+        # non-generic instances (no metadata args).
+        instance_args = pydantic_instance_type_args(value)
+        if instance_args:
+            cv.class_ty.name = cv.name
+            for arg in instance_args:
+                _fill_inner(cv.class_ty.type_args.add(), arg)
         # Walk fields by attribute access (Pydantic v2's `__iter__`
         # yields `(name, value)` without recursive serialization).
         # `model_dump()` would flatten nested Pydantic instances into
@@ -343,7 +353,135 @@ def _set_inbound_map_entry(
     _set_inbound_value(entry.value, value, kwarg_name=kwarg_name, registered=registered)
 
 
-def encode_call_args(kwargs: Dict[str, Any], call_id: int) -> bytes:
+# ---------------------------------------------------------------------------
+# Type-as-value encoding: Python type → wire `Ty` (baml_type.proto)
+# ---------------------------------------------------------------------------
+#
+# Used to bind a generic function/method's TypeVars at a host call: the host
+# supplies an explicit type (`_types=`) and/or a generic receiver carries its
+# class type args. Each Python type is lowered to a wire `Ty`, sent in
+# `CallFunctionArgs.type_args`, and seeded into the engine's entry frame.
+
+
+def python_type_to_wire_ty(py_type: Any) -> "baml_type_pb2.Ty":
+    """Lower a Python type (or `None` = unbound) to a wire `Ty`."""
+    ty = baml_type_pb2.Ty()
+    _fill_wire_ty(ty, py_type)
+    return ty
+
+
+_PRIMITIVE_KINDS = {
+    bool: baml_type_pb2.TY_PRIMITIVE_BOOL,
+    int: baml_type_pb2.TY_PRIMITIVE_INT,
+    float: baml_type_pb2.TY_PRIMITIVE_FLOAT,
+    str: baml_type_pb2.TY_PRIMITIVE_STRING,
+    bytes: baml_type_pb2.TY_PRIMITIVE_BYTES,
+    type(None): baml_type_pb2.TY_PRIMITIVE_NULL,
+}
+
+
+def _collect_never_types() -> tuple:
+    """`Never` (BAML's bottom type) may be imported from `typing` (3.11+) or
+    `typing_extensions`; codegen emits the `typing_extensions` form. Collect
+    every available spelling so a host's `_types={"T": Never}` matches whichever
+    it imported."""
+    found = []
+    for mod_name in ("typing", "typing_extensions"):
+        try:
+            mod = __import__(mod_name)
+        except ImportError:
+            continue
+        never = getattr(mod, "Never", None)
+        if never is not None:
+            found.append(never)
+    return tuple(found)
+
+
+_NEVER_TYPES = _collect_never_types()
+
+
+def _fill_wire_ty(ty: "baml_type_pb2.Ty", py_type: Any) -> None:
+    # `None` (the sentinel, not `type(None)`) means "unbound" → unknown/top.
+    if py_type is None:
+        ty.unknown.SetInParent()
+        return
+
+    # `Never` (bottom type). Identity check (not `in`) so unhashable special
+    # forms can't raise.
+    if any(py_type is never for never in _NEVER_TYPES):
+        ty.never.SetInParent()
+        return
+
+    # Primitives by identity. `bool` must precede `int` (bool ⊂ int), which the
+    # dict ordering and `is` identity handle since we key on the type object.
+    kind = _PRIMITIVE_KINDS.get(py_type)
+    if kind is not None:
+        ty.primitive.kind = kind
+        return
+
+    # typing constructs: list[X], dict[K, V], Optional[X], Union[...].
+    origin = typing.get_origin(py_type)
+    if origin is not None:
+        targs = typing.get_args(py_type)
+        if origin in (list, typing.List):
+            _fill_inner(ty.list.item, targs[0] if targs else None)
+            return
+        if origin in (dict, typing.Dict):
+            _fill_inner(ty.map.key, targs[0] if targs else None)
+            _fill_inner(ty.map.value, targs[1] if len(targs) > 1 else None)
+            return
+        if origin is typing.Union:
+            non_none = [a for a in targs if a is not type(None)]
+            if len(non_none) == 1 and len(non_none) != len(targs):
+                _fill_inner(ty.optional.inner, non_none[0])
+                return
+            for arg in targs:
+                _fill_inner(ty.union.options.add(), arg)
+            return
+        # Any other generic origin: fall through to the unknown default.
+
+    if isinstance(py_type, type):
+        # Parameterized Pydantic generic (`Box[int]`): the base FQN plus the
+        # concrete args recovered from Pydantic's generic metadata.
+        meta = getattr(py_type, "__pydantic_generic_metadata__", None)
+        if meta and meta.get("origin") is not None:
+            base = meta["origin"]
+            ty.class_ty.name = get_type_map().py_type_to_baml_type(base)
+            for arg in meta.get("args") or ():
+                _fill_inner(ty.class_ty.type_args.add(), arg)
+            return
+        if issubclass(py_type, enum.Enum):
+            fqn = get_type_map().py_type_to_baml_type(py_type)
+            if fqn:
+                ty.enum.name = fqn
+                return
+        fqn = get_type_map().py_type_to_baml_type(py_type)
+        if fqn:
+            ty.class_ty.name = fqn
+            return
+
+    # Unrecognized: leave as the unknown/top type (binds nothing).
+    ty.unknown.SetInParent()
+
+
+def _fill_inner(ty: "baml_type_pb2.Ty", py_type: Any) -> None:
+    _fill_wire_ty(ty, py_type)
+
+
+def pydantic_instance_type_args(value: Any) -> List[Any]:
+    """Concrete class type args of a Pydantic generic *instance* (`Box[int](...)`),
+    in declaration order. Empty for non-generic or unparameterized instances."""
+    meta = getattr(type(value), "__pydantic_generic_metadata__", None)
+    if meta and meta.get("args"):
+        return list(meta["args"])
+    return []
+
+
+def encode_call_args(
+    kwargs: Dict[str, Any],
+    call_id: int,
+    type_args: Optional[List[Tuple[str, "baml_type_pb2.Ty"]]] = None,
+) -> bytes:
     """Encode function keyword arguments as `CallFunctionArgs` protobuf.
 
     Release tradeoff: a callable that encodes successfully is registered in
@@ -367,6 +505,11 @@ def encode_call_args(kwargs: Dict[str, Any], call_id: int) -> bytes:
             _set_inbound_map_entry(
                 args.kwargs.add(), key, value, kwarg_name=key, registered=registered
             )
+        if type_args:
+            for type_var, wire_ty in type_args:
+                entry = args.type_args.add()
+                entry.type_var = type_var
+                entry.type_value.CopyFrom(wire_ty)
         return args.SerializeToString()
     except BaseException:
         # Roll back any host callables registered before the failure.

@@ -49,6 +49,7 @@ fn one_field_instance(class_name: &str, field: &str, value: BexExternalValue) ->
     fields.insert(field.to_string(), value);
     BexExternalValue::Instance {
         class_name: class_name.to_string(),
+        type_args: vec![],
         fields,
     }
 }

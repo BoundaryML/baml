@@ -1462,7 +1462,10 @@ async fn aliased_interface_fields_do_not_create_concrete_runtime_slots() {
         "#
     );
 
-    let Ok(BexExternalValue::Instance { class_name, fields }) = output.result else {
+    let Ok(BexExternalValue::Instance {
+        class_name, fields, ..
+    }) = output.result
+    else {
         panic!("expected instance, got: {:?}", output.result);
     };
     assert_eq!(class_name, "user.Person");
@@ -1495,7 +1498,10 @@ async fn interface_return_uses_concrete_implementor_field_shape() {
         "#
     );
 
-    let Ok(BexExternalValue::Instance { class_name, fields }) = output.result else {
+    let Ok(BexExternalValue::Instance {
+        class_name, fields, ..
+    }) = output.result
+    else {
         panic!("expected instance, got: {:?}", output.result);
     };
     assert_eq!(class_name, "user.Person");

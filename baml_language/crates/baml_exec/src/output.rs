@@ -74,7 +74,10 @@ async fn serialize_via_baml_json(
             "baml.json.serialize",
             vec![value],
             FunctionCallContextBuilder::new(CallId::next())
-                .with_type_args(vec![return_type.clone()])
+                .with_type_args(indexmap::IndexMap::from([(
+                    "T".to_string(),
+                    return_type.clone(),
+                )]))
                 .build(),
             true,
         )
@@ -114,7 +117,9 @@ pub fn format_value(value: &BexExternalValue) -> String {
                 .collect();
             format!("{{{}}}", inner.join(", "))
         }
-        BexExternalValue::Instance { class_name, fields } => {
+        BexExternalValue::Instance {
+            class_name, fields, ..
+        } => {
             let inner: Vec<String> = fields
                 .iter()
                 .map(|(k, v)| format!("{k}: {}", format_value(v)))

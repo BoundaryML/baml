@@ -614,7 +614,9 @@ async fn cancelled_panic_shape_equivalence() {
 
     fn extract_instance(v: &BexExternalValue) -> (&str, &IndexMap<String, BexExternalValue>) {
         match v {
-            BexExternalValue::Instance { class_name, fields } => (class_name.as_str(), fields),
+            BexExternalValue::Instance {
+                class_name, fields, ..
+            } => (class_name.as_str(), fields),
             other => panic!("expected Instance, got {other:?}"),
         }
     }
