@@ -1268,6 +1268,7 @@ impl BamlRuntime {
                             latency: web_time::Duration::from_millis(0),
                             content: String::new(),
                             metadata: LLMCompleteResponseMetadata {
+                                response_id: None,
                                 baml_is_complete: true,
                                 finish_reason: None,
                                 prompt_tokens: None,
@@ -1371,6 +1372,7 @@ impl BamlRuntime {
             start_time: SystemTime::now(),
             latency: Duration::from_millis(2025),
             metadata: LLMCompleteResponseMetadata {
+                response_id: None,
                 baml_is_complete: true,
                 finish_reason: Some("stop".to_string()),
                 prompt_tokens: Some(50),

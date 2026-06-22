@@ -319,6 +319,11 @@ pub struct LLMCompleteResponseMetadata {
     pub output_tokens: Option<u64>,
     pub total_tokens: Option<u64>,
     pub cached_input_tokens: Option<u64>,
+    /// Provider-assigned response id, when the API returns one (e.g. the OpenAI
+    /// Responses API `id`). Surfaced so stateless callers can capture it and pass
+    /// it back as `previous_response_id` on the next turn to resume server-side
+    /// state. `None` for providers/endpoints that don't return a response id.
+    pub response_id: Option<String>,
 }
 
 // This is how the response gets logged if you print the result to the console.

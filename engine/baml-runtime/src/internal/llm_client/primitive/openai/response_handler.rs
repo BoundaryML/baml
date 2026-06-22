@@ -83,6 +83,7 @@ pub fn parse_openai_response<C: WithClient + RequestBuilder>(
         model: response.model,
         request_options: client.request_options().clone(),
         metadata: LLMCompleteResponseMetadata {
+            response_id: None,
             baml_is_complete: match response.choices.first() {
                 Some(c) => c.finish_reason.as_ref().is_some_and(|f| f == "stop"),
                 None => false,
@@ -237,6 +238,7 @@ mod tests {
             model: "gpt-4o-2024-08-06".to_string(),
             request_options: client.request_options().clone(),
             metadata: LLMCompleteResponseMetadata {
+                response_id: None,
                 baml_is_complete: true,
                 finish_reason: Some("stop".to_string()),
                 prompt_tokens: Some(128),
@@ -338,6 +340,7 @@ pub fn parse_openai_responses_response<C: WithClient + RequestBuilder>(
         model: response.model,
         request_options: client.request_options().clone(),
         metadata: LLMCompleteResponseMetadata {
+            response_id: Some(response.id),
             baml_is_complete: response.status == "completed",
             finish_reason: Some(response.status),
             prompt_tokens: usage.map(|u| u.prompt_tokens),
@@ -547,6 +550,7 @@ mod responses_tests {
             model: "gpt-4.1-2025-04-14".to_string(),
             request_options: client.request_options().clone(),
             metadata: LLMCompleteResponseMetadata {
+                response_id: Some("resp_67ccd2bed1ec8190b14f964abc0542670bb6a6b452d3795b".to_string()),
                 baml_is_complete: true,
                 finish_reason: Some("completed".to_string()),
                 prompt_tokens: Some(36),
@@ -848,6 +852,7 @@ mod responses_tests {
             model: "gpt-5-2025-08-07".to_string(),
             request_options: client.request_options().clone(),
             metadata: LLMCompleteResponseMetadata {
+                response_id: Some("resp_68d21b0cb6908190a158e3c0e30a0b4c08c9448688b650fd".to_string()),
                 baml_is_complete: true,
                 finish_reason: Some("completed".to_string()),
                 prompt_tokens: Some(480),
@@ -970,6 +975,7 @@ mod responses_tests {
             model: "gpt-5-mini-2025-08-07".to_string(),
             request_options: client.request_options().clone(),
             metadata: LLMCompleteResponseMetadata {
+                response_id: Some("resp_0zcvUwjYtvOrllY9du6zPhINkdB0vdIjoT6WWeGBoXgGrdxRoKtv0I".to_string()),
                 baml_is_complete: true,
                 finish_reason: Some("completed".to_string()),
                 prompt_tokens: Some(480),

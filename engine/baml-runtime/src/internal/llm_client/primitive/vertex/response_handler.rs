@@ -94,6 +94,7 @@ pub fn parse_vertex_response<C: WithClient + RequestBuilder>(
         request_options: client.request_options().clone(),
         model: model_name.unwrap_or("<unknown>".to_string()),
         metadata: LLMCompleteResponseMetadata {
+            response_id: None,
             baml_is_complete: response.candidates[0].finish_reason == Some("STOP".to_string()),
             finish_reason: response.candidates[0]
                 .finish_reason
@@ -275,6 +276,7 @@ mod tests {
             model: model_name,
             request_options: client.request_options().clone(),
             metadata: LLMCompleteResponseMetadata {
+                response_id: None,
                 baml_is_complete: true,
                 finish_reason: Some("STOP".to_string()),
                 prompt_tokens: Some(79),

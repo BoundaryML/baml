@@ -331,6 +331,7 @@ mod tests {
             start_time: web_time::SystemTime::UNIX_EPOCH,
             latency: web_time::Duration::from_millis(500),
             metadata: LLMCompleteResponseMetadata {
+                response_id: None,
                 baml_is_complete: true,
                 finish_reason: None,
                 prompt_tokens: None,

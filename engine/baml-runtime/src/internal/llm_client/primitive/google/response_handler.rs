@@ -91,6 +91,7 @@ pub fn parse_google_response<C: WithClient + RequestBuilder>(
         request_options: client.request_options().clone(),
         model: model_name,
         metadata: LLMCompleteResponseMetadata {
+            response_id: None,
             baml_is_complete: candidate
                 .finish_reason
                 .as_ref()
@@ -333,6 +334,7 @@ mod tests {
             model: "gemini-1.5-flash".to_string(),
             request_options: client.request_options().clone(),
             metadata: LLMCompleteResponseMetadata {
+                response_id: None,
                 baml_is_complete: true,
                 finish_reason: Some("STOP".to_string()),
                 prompt_tokens: Some(166),

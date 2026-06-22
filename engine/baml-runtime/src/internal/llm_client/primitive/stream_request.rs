@@ -153,6 +153,7 @@ pub async fn make_stream_request(
                         model: model_name.clone().unwrap_or("<unknown>".to_string()),
                         request_options: params.clone(),
                         metadata: LLMCompleteResponseMetadata {
+                            response_id: None,
                             baml_is_complete: false,
                             finish_reason: None,
                             prompt_tokens: None,

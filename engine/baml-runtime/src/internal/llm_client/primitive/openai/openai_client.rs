@@ -129,7 +129,13 @@ impl ProviderStrategy {
     ) -> Result<serde_json::Value> {
         match self {
             ProviderStrategy::ResponsesApi => {
-                // Start with all properties passed through
+                // Start with all properties passed through. Responses-API request fields set as
+                // client options — e.g. `previous_response_id` (resume server-side state from a
+                // prior turn) and `store` — are forwarded verbatim to the request body. Combined
+                // with the surfaced `response_id` in the response metadata
+                // (LLMCompleteResponseMetadata.response_id), a caller can chain turns: read
+                // response_id from turn N, pass it as previous_response_id into turn N+1. BAML
+                // stays stateless — it forwards what the caller provides; it does not auto-track ids.
                 let mut body = properties.clone();
 
                 let input = match prompt {

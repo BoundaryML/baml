@@ -1019,6 +1019,7 @@ impl WithStreamChat for AwsClient {
                     model: self.properties.model.clone(),
                     request_options,
                     metadata: LLMCompleteResponseMetadata {
+                        response_id: None,
                         baml_is_complete: false,
                         finish_reason: None,
                         prompt_tokens: None,
@@ -1460,6 +1461,7 @@ impl WithChat for AwsClient {
                 request_options,
                 model: self.properties.model.clone(),
                 metadata: LLMCompleteResponseMetadata {
+                    response_id: None,
                     baml_is_complete: matches!(
                         response.stop_reason,
                         bedrock::types::StopReason::StopSequence
