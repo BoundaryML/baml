@@ -744,8 +744,8 @@ pub(crate) mod support {
                 writeln!(output, "{pad}{t} {op:?}= {v}").ok();
             }
             Stmt::Defer { body: defer_body } => {
-                let desc = expr_desc(*defer_body, body);
-                writeln!(output, "{pad}defer {desc}").ok();
+                writeln!(output, "{pad}defer").ok();
+                render_expr_body_untyped(body, *defer_body, indent + 2, output);
             }
             Stmt::Break => {
                 writeln!(output, "{pad}break").ok();
@@ -905,8 +905,8 @@ pub(crate) mod support {
                 writeln!(output, "{pad}{target_desc} {op:?}= {val_desc} : {val_ty}").ok();
             }
             Stmt::Defer { body: defer_body } => {
-                let desc = expr_desc(*defer_body, body);
-                writeln!(output, "{pad}defer {desc}").ok();
+                writeln!(output, "{pad}defer").ok();
+                render_expr(*defer_body, body, inference, indent + 2, output);
             }
             Stmt::Break => {
                 writeln!(output, "{pad}break").ok();
