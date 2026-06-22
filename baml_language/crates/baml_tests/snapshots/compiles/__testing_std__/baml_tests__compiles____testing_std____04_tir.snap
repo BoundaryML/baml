@@ -321,13 +321,17 @@ function testing.testset_child(registry: testing.TestRegistry, ts: testing.TestS
 }
 lambda testing.testset_child {
 }
-function testing.aggregate_reports(results: testing.ChildReport[]) -> testing.TestSetReport throws never {
+function testing.aggregate_reports(named_results: testing.NamedChildReport[]) -> testing.TestSetReport throws never {
   { : testing.TestSetReport
     let passed = 0 : 0 -> int
     let failed = 0 : 0 -> int
     let has_error = false : false -> bool
-    for result in results
+    let failed_names: string[] = [] : string[]
+    let results: ChildReport[] = [] : testing.ChildReport[]
+    for named_result in named_results
       { : void
+        let result = named_result.report : testing.ChildReport
+        results.push(result) : int
         let outcome = : testing.Outcome
           match (result : testing.ChildReport) : testing.Outcome
             report: TestReport =>
@@ -341,6 +345,23 @@ function testing.aggregate_reports(results: testing.ChildReport[]) -> testing.Te
         else
           { : void
             failed Add= 1 : int
+            let child_failed_names = : string[]
+              match (result : testing.ChildReport) : string[]
+                report: TestReport =>
+                  [named_result.name] : string[]
+                report: TestSetReport =>
+                  if (report.failed_names.length() > 0 : bool) : string[]
+                    { : string[]
+                      report.failed_names : string[]
+                    }
+                  else
+                    { : string[]
+                      [named_result.name] : string[]
+                    }
+            for name in child_failed_names
+              { : int
+                failed_names.push(name) : int
+              }
             if (outcome == "error" : bool) : void
               { : void
                 has_error = true : true
@@ -365,22 +386,22 @@ function testing.aggregate_reports(results: testing.ChildReport[]) -> testing.Te
           { : "fail"
             "fail" : "fail"
           }
-    TestSetReport { outcome: outcome, passed: passed, failed: failed, total: results.length(), results: results } : testing.TestSetReport
+    TestSetReport { outcome: outcome, passed: passed, failed: failed, total: results.length(), failed_names: failed_names, results: results } : testing.TestSetReport
   }
 }
 function testing.run_children_parallel(children: testing.TestSetChild[]) -> testing.TestSetReport throws never {
   { : testing.TestSetReport
-    let futures: baml.future.Future<ChildReport, null>[] = [] : Future<testing.ChildReport, null>[]
+    let futures: baml.future.Future<NamedChildReport, null>[] = [] : Future<testing.NamedChildReport, null>[]
     for child in children
       { : int
         futures.push(spawn { () -> { ... } }) : int
       }
-    let results = : testing.ChildReport[]
-      catch (await baml.future.all_complete(futures) : testing.ChildReport[]) : testing.ChildReport[]
+    let named_results = : testing.NamedChildReport[]
+      catch (await baml.future.all_complete(futures) : testing.NamedChildReport[]) : testing.NamedChildReport[]
         catch_all (e)
           _ =>
             baml.sys.panic("unexpected test c...") : never
-    root.aggregate_reports(results) : testing.TestSetReport
+    root.aggregate_reports(named_results) : testing.TestSetReport
   }
 }
 lambda testing.run_children_parallel {
@@ -588,7 +609,7 @@ function testing.PassRate(threshold: float) -> testing.TestSetRunner throws neve
                 {
                   "fail"
                 }
-          TestSetReport { outcome: outcome, passed: report.passed, failed: report.failed, total: report.total, results: report.results }
+          TestSetReport { outcome: outcome, passed: report.passed, failed: report.failed, total: report.total, failed_names: report.failed_names, results: report.results }
         }
   }
 }
@@ -618,11 +639,11 @@ lambda testing.FailFast {
 }
 function testing.run_children_sequential(children: testing.TestSetChild[], fail_fast: bool) -> testing.TestSetReport throws never {
   { : testing.TestSetReport
-    let results: ChildReport[] = [] : testing.ChildReport[]
+    let named_results: NamedChildReport[] = [] : testing.NamedChildReport[]
     for child in children
       { : null
         let report = child.run() : testing.ChildReport
-        results.push(report) : int
+        named_results.push(NamedChildReport { name: child.name, report: report }) : int
         let outcome = : testing.Outcome
           match (report : testing.ChildReport) : testing.Outcome
             r: TestReport =>
@@ -631,14 +652,14 @@ function testing.run_children_sequential(children: testing.TestSetChild[], fail_
               r.outcome : testing.Outcome
         if (fail_fast && outcome != "pass" : bool) : null
           { : never
-            return root.aggregate_reports(results) : testing.TestSetReport
+            return root.aggregate_reports(named_results) : testing.TestSetReport
           }
         else
           { : null
             null : null
           }
       }
-    root.aggregate_reports(results) : testing.TestSetReport
+    root.aggregate_reports(named_results) : testing.TestSetReport
   }
 }
 function testing._int_to_float(value: int) -> float throws never {
@@ -677,15 +698,26 @@ class testing.TestSetReport {
   passed: int
   failed: int
   total: int
+  failed_names: string[]
   results: testing.ChildReport[]
 }
 function testing.TestSetReport.to_json(self: testing.TestSetReport) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "outcome": baml.json.to_json(self.outcome), "passed": baml.json.to_json(self.passed), "failed": baml.json.to_json(self.failed), "total": baml.json.to_json(self.total), "results": baml.json.to_json(self.results) } : map<string, baml.json.json>
+  map { "outcome": baml.json.to_json(self.outcome), "passed": baml.json.to_json(self.passed), "failed": baml.json.to_json(self.failed), "total": baml.json.to_json(self.total), "failed_names": baml.json.to_json(self.failed_names), "results": baml.json.to_json(self.results) } : map<string, baml.json.json>
 }
 function testing.TestSetReport.from_json(j: baml.json.json) -> testing.TestSetReport throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  TestSetReport { outcome: baml.json.from_json<Outcome>(baml.json.field(j, "outcome")), passed: baml.json.from_json<int>(baml.json.field(j, "passed")), failed: baml.json.from_json<int>(baml.json.field(j, "failed")), total: baml.json.from_json<int>(baml.json.field(j, "total")), results: baml.json.from_json<ChildReport[]>(baml.json.field(j, "results")) } : testing.TestSetReport
+  TestSetReport { outcome: baml.json.from_json<Outcome>(baml.json.field(j, "outcome")), passed: baml.json.from_json<int>(baml.json.field(j, "passed")), failed: baml.json.from_json<int>(baml.json.field(j, "failed")), total: baml.json.from_json<int>(baml.json.field(j, "total")), failed_names: baml.json.from_json<string[]>(baml.json.field(j, "failed_names")), results: baml.json.from_json<ChildReport[]>(baml.json.field(j, "results")) } : testing.TestSetReport
 }
 type testing.ChildReport = testing.TestReport | testing.TestSetReport
+class testing.NamedChildReport {
+  name: string
+  report: testing.ChildReport
+}
+function testing.NamedChildReport.to_json(self: testing.NamedChildReport) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "name": baml.json.to_json(self.name), "report": baml.json.to_json(self.report) } : map<string, baml.json.json>
+}
+function testing.NamedChildReport.from_json(j: baml.json.json) -> testing.NamedChildReport throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  NamedChildReport { name: baml.json.from_json<string>(baml.json.field(j, "name")), report: baml.json.from_json<ChildReport>(baml.json.field(j, "report")) } : testing.NamedChildReport
+}
 type testing.TestBody = () -> void throws unknown
 type testing.TestSetBody = (testing.TestCollector) -> void throws unknown
 type testing.TestReportThunk = () -> testing.TestReport throws never
@@ -717,9 +749,14 @@ class testing.TestSetReport$stream {
   passed: int | null
   failed: int | null
   total: int | null
+  failed_names: string[]
   results: testing.ChildReport$stream[]
 }
 type testing.ChildReport$stream = testing.TestReport$stream | testing.TestSetReport$stream
+class testing.NamedChildReport$stream {
+  name: string | null
+  report: testing.ChildReport$stream | null
+}
 type testing.TestBody$stream = unknown
 type testing.TestSetBody$stream = unknown
 type testing.TestReportThunk$stream = unknown
