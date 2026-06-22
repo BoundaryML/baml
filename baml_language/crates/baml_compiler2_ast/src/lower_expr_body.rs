@@ -666,6 +666,7 @@ impl LoweringContext {
                         SyntaxKind::CONTINUE_STMT => {
                             self.alloc_stmt(Stmt::Continue, node.text_range())
                         }
+                        SyntaxKind::DEFER_STMT => self.lower_defer_stmt(node),
                         SyntaxKind::TEST_EXPR_DEF => {
                             if self.testset_collector_var.is_some() {
                                 let expr_id = self.lower_test_expr_as_register_call(node);
@@ -4440,6 +4441,21 @@ impl LoweringContext {
             result
         };
         self.alloc_stmt(Stmt::Return(expr), node.text_range())
+    }
+
+    /// Lower `defer { BODY }` (BEP-042). The CST shape is
+    /// `DEFER_STMT [ KW_DEFER BLOCK_EXPR ]`. Unlike `spawn`, the body is NOT a
+    /// lambda — it is lowered inline as an [`Expr::Block`] in the enclosing
+    /// `ExprBody`, so deferred code reads the live enclosing scope at exit
+    /// rather than a captured snapshot. MIR replays this block at every exit
+    /// edge of the enclosing scope.
+    fn lower_defer_stmt(&mut self, node: &SyntaxNode) -> StmtId {
+        let body = node
+            .children()
+            .find(|c| c.kind() == SyntaxKind::BLOCK_EXPR)
+            .map(|block| self.lower_expr(&block))
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
+        self.alloc_stmt(Stmt::Defer { body }, node.text_range())
     }
 
     fn lower_while_stmt(&mut self, node: &SyntaxNode) -> StmtId {

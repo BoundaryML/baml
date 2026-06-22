@@ -107,6 +107,8 @@ pub enum TokenKind {
     Spawn,
     #[token("await")]
     Await,
+    #[token("defer")]
+    Defer,
 
     // Other keywords
     #[token("watch")]
@@ -335,6 +337,7 @@ impl std::fmt::Display for TokenKind {
             TokenKind::Throws => "throws",
             TokenKind::Spawn => "spawn",
             TokenKind::Await => "await",
+            TokenKind::Defer => "defer",
             TokenKind::Watch => "watch",
             TokenKind::Instanceof => "instanceof",
             TokenKind::Is => "is",

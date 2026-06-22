@@ -680,6 +680,17 @@ pub struct TypeInferenceBuilder<'db> {
     /// `Index` auto-unwrap nullable bases (null is caught by the chain wrapper).
     /// When 0, accessing a member on a nullable type is a type error.
     in_optional_chain: usize,
+    /// Number of enclosing loops in the CURRENT `ExprBody` (reset across lambda
+    /// boundaries). Combined with `defer_loop_floors` to allow `break`/
+    /// `continue` that target a loop declared inside a `defer` body while
+    /// rejecting control flow that would escape the defer (BEP-042).
+    loop_depth: usize,
+    /// Stack of `loop_depth` values captured when entering each active `defer`
+    /// body (BEP-042). Non-empty ⇒ currently checking inside a defer body. A
+    /// `break`/`continue` escapes the innermost defer iff `loop_depth` equals
+    /// the top floor; a `return` escapes whenever the stack is non-empty.
+    /// Reset across lambda boundaries.
+    defer_loop_floors: Vec<usize>,
     /// TIR-inferred type of the root (first) segment for each multi-segment
     /// `Path` expression. Populated in `infer_path` so that MIR lowering can
     /// chain field projections even when the MIR local was declared with a
@@ -961,6 +972,8 @@ impl<'db> TypeInferenceBuilder<'db> {
             generic_params: Vec::new(),
             type_bindings: FxHashMap::default(),
             in_optional_chain: 0,
+            loop_depth: 0,
+            defer_loop_floors: Vec::new(),
             path_root_types: FxHashMap::default(),
             path_segment_types: FxHashMap::default(),
             path_member_resolutions: FxHashMap::default(),
@@ -1103,6 +1116,32 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// Report a type error at a raw source span (for type annotations).
     pub fn report_at_span(&self, error: TirTypeError, span: text_size::TextRange) {
         self.context.report_at_span(error, span);
+    }
+
+    /// True when type-checking inside at least one `defer` body (BEP-042).
+    fn in_defer(&self) -> bool {
+        !self.defer_loop_floors.is_empty()
+    }
+
+    /// True when a `break`/`continue` here would escape the innermost active
+    /// `defer` body — no loop has been entered since that defer began, so the
+    /// only loop it could target lies outside the defer.
+    fn break_escapes_defer(&self) -> bool {
+        self.defer_loop_floors.last() == Some(&self.loop_depth)
+    }
+
+    /// Report a "control flow cannot leave a `defer` body" error at `stmt_id`.
+    fn report_defer_escape(&self, keyword: &'static str, stmt_id: StmtId) {
+        if let Some(span) = self
+            .body_source_map
+            .as_ref()
+            .map(|sm| sm.stmt_span(stmt_id))
+        {
+            self.report_at_span(
+                crate::infer_context::TirTypeError::DeferControlFlowEscape { keyword },
+                span,
+            );
+        }
     }
 
     /// Add a local variable binding (e.g. function parameters).
@@ -3221,6 +3260,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                 );
                 Self::collect_default_expr_forward_references(
                     *value,
+                    body,
+                    later_params,
+                    shadowed,
+                    refs,
+                );
+            }
+            Stmt::Defer { body: defer_body } => {
+                Self::collect_default_expr_forward_references(
+                    *defer_body,
                     body,
                     later_params,
                     shadowed,
@@ -6363,6 +6411,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                 diverges
             }
             Stmt::Return(expr) => {
+                if self.in_defer() {
+                    self.report_defer_escape("return", stmt_id);
+                }
                 if let Some(e) = expr {
                     if let Some(ret_ty) = &self.declared_return_ty {
                         let ret_ty = ret_ty.clone();
@@ -6376,6 +6427,22 @@ impl<'db> TypeInferenceBuilder<'db> {
             Stmt::Throw { value } => {
                 self.infer_expr(*value, body);
                 true
+            }
+            Stmt::Defer { body: defer_body } => {
+                // BEP-042: check the inline defer body as an effect. Push the
+                // current loop depth so escaping `break`/`continue`/`return`
+                // inside the body are rejected (loop-aware: a `break` targeting
+                // a loop declared *inside* the defer is allowed).
+                self.defer_loop_floors.push(self.loop_depth);
+                // The defer body runs at scope exit, not at the `defer` site, so
+                // isolate its scoped-local narrowing/assignments — they must not
+                // leak into the statements between the `defer` and the scope
+                // exit (mirrors the per-body snapshot the loop arms take).
+                let snapshot = self.snapshot_scoped_locals();
+                self.infer_expr(*defer_body, body);
+                self.restore_scoped_locals(&snapshot);
+                self.defer_loop_floors.pop();
+                false // a `defer` statement does not diverge
             }
             Stmt::While {
                 condition,
@@ -6392,7 +6459,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // the body — Slack rule 2 — by filtering assignments
                 // through binding identity.
                 let snapshot = self.snapshot_scoped_locals();
+                self.loop_depth += 1;
                 self.infer_expr(*while_body, body);
+                self.loop_depth -= 1;
                 self.restore_scoped_locals(&snapshot);
                 // Type-check the C-style for `after` step, if present. It
                 // runs at the same lexical level as the body but in the
@@ -6433,7 +6502,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self.narrow_local(name.clone(), result.matched_ty.clone());
                 }
                 self.finalize_pattern_lowering(*pattern, &result, None, None, &scrutinee_ty);
+                self.loop_depth += 1;
                 self.infer_expr(*while_body, body);
+                self.loop_depth -= 1;
                 self.restore_scoped_locals(&snapshot);
 
                 // Irrefutability warning — same policy as `if let`. An
@@ -6518,7 +6589,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                 );
 
                 // 5. Check the body
+                self.loop_depth += 1;
                 self.infer_expr(*for_body, body);
+                self.loop_depth -= 1;
                 self.restore_scoped_locals(&snapshot);
                 false
             }
@@ -6642,7 +6715,18 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
                 false
             }
-            Stmt::Break | Stmt::Continue => true, // break/continue diverge
+            Stmt::Break => {
+                if self.break_escapes_defer() {
+                    self.report_defer_escape("break", stmt_id);
+                }
+                true // break diverges
+            }
+            Stmt::Continue => {
+                if self.break_escapes_defer() {
+                    self.report_defer_escape("continue", stmt_id);
+                }
+                true // continue diverges
+            }
             Stmt::Missing | Stmt::HeaderComment { .. } => false,
         }
     }
@@ -8490,6 +8574,12 @@ impl<'db> TypeInferenceBuilder<'db> {
             Stmt::Throw { value } => {
                 self.collect_throw_facts_from_expr(*value, body, out);
                 self.collect_throw_facts_from_value(*value, out);
+            }
+            Stmt::Defer { body: defer_body } => {
+                // A `throw` inside a defer body propagates (replace-semantics),
+                // so the defer body's throws are part of the enclosing
+                // function's throw surface.
+                self.collect_throw_facts_from_expr(*defer_body, body, out);
             }
             Stmt::Break | Stmt::Continue | Stmt::Missing | Stmt::HeaderComment { .. } => {}
         }
@@ -16220,6 +16310,11 @@ impl<'db> TypeInferenceBuilder<'db> {
         let saved_call_plans = std::mem::take(&mut self.call_plans);
         let saved_call_type_instantiations = std::mem::take(&mut self.call_type_instantiations);
         let saved_function_coercions = std::mem::take(&mut self.function_coercions);
+        // BEP-042: a lambda body is its own control-flow region — `return`
+        // targets the lambda, and the parent's defer/loop nesting must not leak
+        // in. Reset the counters for the body and restore them afterwards.
+        let saved_loop_depth = std::mem::take(&mut self.loop_depth);
+        let saved_defer_loop_floors = std::mem::take(&mut self.defer_loop_floors);
         let saved_body_source_map = self.body_source_map.clone();
         self.body_source_map = Some(lambda_source_map.clone());
         // Diagnostics emitted below carry THIS lambda's arena IDs but are
@@ -16368,6 +16463,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.scoped_local_assignments = saved_scoped_local_assignments;
         self.declared_return_ty = saved_return_ty;
         self.generic_params = saved_generic_params;
+        self.loop_depth = saved_loop_depth;
+        self.defer_loop_floors = saved_defer_loop_floors;
         // Freeze this lambda's diagnostic spans against its own source map
         // before restoring the enclosing map (otherwise they render at `0..0`).
         self.context
