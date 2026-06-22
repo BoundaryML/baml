@@ -231,6 +231,30 @@ class Sentiment {
     );
 }
 
+#[tokio::test]
+async fn test_output_format_can_render_null_as_omit() {
+    let rendered = common::render_output_format_with_opts(
+        r#"
+class Person {
+    name string
+    nickname string?
+}
+"#,
+        "Person",
+        "render_null_as='omit'",
+    )
+    .await;
+
+    assert!(
+        rendered.contains("nickname: string or omit,"),
+        "nullable field should use the custom null label:\n{rendered}"
+    );
+    assert!(
+        !rendered.contains("string or null"),
+        "custom null label should replace default null rendering:\n{rendered}"
+    );
+}
+
 /// Test the full `render_prompt` flow through the engine.
 ///
 /// This test:
