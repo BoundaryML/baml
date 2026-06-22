@@ -290,15 +290,7 @@ function main() -> string[] {
     );
 }
 
-// KNOWN LIMITATION: when a defer body ITSELF throws while the scope is already
-// unwinding, the BEP says the remaining (earlier-declared) defers still run. We
-// currently run only the throwing defer and propagate its throw (replace-
-// semantics) — the sibling defer is skipped because the throwing pad's body is
-// laid out past the outer defer region in PC order, so the rethrow escapes it.
-// Fixing this needs the unwind-error rework that the `cause` chain follow-up
-// will do anyway. `#[ignore]`d with the correct (target) assertion.
 #[tokio::test]
-#[ignore = "BEP-042 follow-up: a defer that itself throws mid-unwind skips sibling defers (needs cause-chain unwind rework)"]
 async fn defer_that_throws_still_runs_remaining_defers() {
     // A defer that throws mid-unwind: the remaining (earlier-declared) defers
     // still run, and the most-recent throw propagates (replace-semantics).

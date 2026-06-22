@@ -4544,9 +4544,16 @@ impl LoweringContext<'_> {
             let continuation = self.builder.current_block();
             for &(pad, body, route_ctx) in defer_pads.iter().rev() {
                 self.builder.set_current_block(pad);
-                // A call/throw inside the defer body cascades to the next-outer
-                // handler so a throwing defer doesn't skip the remaining defers.
-                self.catch_context = route_ctx;
+                // Lower the defer body under the ENCLOSING context, not this
+                // pad's `route_ctx`. A throw/call inside the body is routed to
+                // the next-outer pad by the exception table (its region covers
+                // the body). Using `route_ctx` here would instead give the
+                // body's calls an unwind edge to the sibling pad, pulling that
+                // pad early in RPO so its region no longer covers the body's
+                // (later-laid-out) throw block — and the throw would escape,
+                // skipping the remaining defers. The explicit cascade below
+                // handles a defer body that completes normally.
+                self.catch_context = block_incoming_catch;
                 let tmp = self.builder.temp(RuntimeTy::Void {
                     attr: TyAttr::default(),
                 });
