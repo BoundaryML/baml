@@ -141,6 +141,9 @@ pub enum DiagnosticId {
     // Type literal errors (E0033)
     UnsupportedFloatLiteral,
 
+    // Integer literal out of `int` (i63) range (E0139)
+    IntegerLiteralOutOfRange,
+
     // Map type errors (E0039)
     InvalidMapArity,
 
@@ -364,6 +367,7 @@ impl DiagnosticId {
 
             // Type literal errors
             DiagnosticId::UnsupportedFloatLiteral => "E0033",
+            DiagnosticId::IntegerLiteralOutOfRange => "E0139",
 
             // Map type errors
             DiagnosticId::InvalidMapArity => "E0039",

@@ -1210,6 +1210,31 @@ impl LoweringContext {
             return expr;
         };
 
+        // `-<int literal>` whose magnitude exceeds INT_MAX is folded into a
+        // single negative literal here, so the out-of-range positive
+        // intermediate `+v` (which can't be a valid `int` and would panic the
+        // VM at load) is never created. The classic case is INT_MIN, written
+        // `-4611686018427387904` (= -2^62): `+2^62` is not a valid `int`
+        // literal, but the negative literal is — mirroring the i64::MIN literal
+        // rule in Rust/Java/C#. In-range negative literals (`-42`) keep the
+        // ordinary `Neg(literal)` form and are folded by the MIR optimizer as
+        // before, and a bare `+2^62` stays rejected. (A parenthesized `-(2^62)`
+        // arrives as a child node, not this bare-literal token, so it is
+        // correctly not treated as a negative literal.)
+        // `INT_MAX == bex_vm_types::Value::INT_MAX == i64::MAX >> 1`.
+        if op == UnaryOp::Neg && !double_op {
+            let oversized_lit = match &self.exprs[expr] {
+                Expr::Literal(Literal::Int(v)) if *v > (i64::MAX >> 1) => Some(*v),
+                _ => None,
+            };
+            if let Some(v) = oversized_lit {
+                return self.alloc_expr(
+                    Expr::Literal(Literal::Int(v.wrapping_neg())),
+                    node.text_range(),
+                );
+            }
+        }
+
         let result = self.alloc_expr(Expr::Unary { op, expr }, node.text_range());
 
         if double_op {

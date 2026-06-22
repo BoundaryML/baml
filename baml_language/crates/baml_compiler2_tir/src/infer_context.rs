@@ -330,6 +330,10 @@ pub enum TirTypeError {
     /// `$id` used as a call-site argument label (`foo($id = x)`). Overrides
     /// are set inside the callee body with `$id = ...`, not by the caller.
     RuntimeIdCallSiteArgument,
+    /// An integer literal (or a constant-folded integer expression) is outside
+    /// the representable `int` range `[-2^62, 2^62-1]`. `int` is 63-bit; larger
+    /// magnitudes need a `bigint` literal (`n` suffix).
+    IntegerLiteralOutOfRange { value: i64 },
 }
 
 impl fmt::Display for TirTypeError {
@@ -820,6 +824,12 @@ impl fmt::Display for TirTypeError {
                 f,
                 "`$id` cannot be set at the call site; assign `$id = ...` inside the function \
                  body instead"
+            ),
+            TirTypeError::IntegerLiteralOutOfRange { value } => write!(
+                f,
+                "integer literal `{value}` is out of range for `int` \
+                 (which holds -4611686018427387904 to 4611686018427387903); \
+                 append `n` to write it as a `bigint`"
             ),
         }
     }
