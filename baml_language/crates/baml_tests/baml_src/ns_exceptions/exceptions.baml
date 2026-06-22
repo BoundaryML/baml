@@ -426,6 +426,7 @@ test "catch_division_by_zero" {
 // helpers take runtime args so the arithmetic isn't constant-folded away — it
 // runs through the VM's checked AddInt/SubInt/MulInt opcodes.
 function s5_add_overflow(x: int) -> int { x + 1 }
+function s5_sub_overflow(x: int) -> int { x - 1 }
 function s5_mul_overflow(x: int) -> int { x * 2 }
 function s5_neg_overflow(x: int) -> int { 0 - x }
 
@@ -435,6 +436,14 @@ function catch_integer_overflow_add_fn() -> int {
 
 test "catch_integer_overflow_add" {
     assert.is_true(baml.deep_equals(catch_integer_overflow_add_fn(), -1))
+}
+
+function catch_integer_overflow_sub_fn() -> int {
+    s5_sub_overflow(baml.Int.min_value()) catch (e) { baml.panics.IntegerOverflow => -1 }
+}
+
+test "catch_integer_overflow_sub" {
+    assert.is_true(baml.deep_equals(catch_integer_overflow_sub_fn(), -1))
 }
 
 function catch_integer_overflow_mul_fn() -> int {

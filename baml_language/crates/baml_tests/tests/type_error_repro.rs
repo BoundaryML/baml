@@ -82,7 +82,7 @@ async fn optional_index_with_valid_index_returns_element() {
 /// (a valid i64, but `INT_MAX + 1`) is rejected at compile time rather than
 /// panicking the VM at engine load. The diagnostic points at `bigint`.
 #[tokio::test]
-#[should_panic(expected = "out of range for `int`")]
+#[should_panic(expected = "[E0139]")]
 async fn int_literal_above_max_is_rejected_at_compile_time() {
     let _ = baml_test!(
         r#"
@@ -96,7 +96,7 @@ async fn int_literal_above_max_is_rejected_at_compile_time() {
 /// A genuinely-too-large negated literal (magnitude past `INT_MIN`) is also a
 /// compile error — the negated value is range-checked, not just the token.
 #[tokio::test]
-#[should_panic(expected = "out of range for `int`")]
+#[should_panic(expected = "[E0139]")]
 async fn negated_int_literal_below_min_is_rejected_at_compile_time() {
     let _ = baml_test!(
         r#"
@@ -112,7 +112,7 @@ async fn negated_int_literal_below_min_is_rejected_at_compile_time() {
 /// child node, so the `+2^62` is rejected just like a bare one (matching the
 /// Rust/Java/C# rule, where parentheses break the negative-literal form).
 #[tokio::test]
-#[should_panic(expected = "out of range for `int`")]
+#[should_panic(expected = "[E0139]")]
 async fn parenthesized_oversized_literal_is_rejected() {
     let _ = baml_test!(
         r#"
