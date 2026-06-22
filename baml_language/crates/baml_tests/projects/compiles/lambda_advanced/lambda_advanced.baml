@@ -42,14 +42,6 @@ function test_deep_capture() -> int {
     f(10) // 1 + 10 + 100 = 111
 }
 
-// ── Generic identity used at multiple types ──────────────────────
-function test_generic_multi_instantiation() -> int {
-    let id = <T>(x: T) -> T { x }
-    let a: int = id(42)
-    let b: string = id("hello")
-    a
-}
-
 // ── Lambda with match expression in body ─────────────────────────
 function test_lambda_with_match() -> string {
     let describe = (n: int) -> string {
@@ -204,14 +196,6 @@ function test_deep_capture_inferred() -> int {
         g(100)
     }
     f(10)
-}
-
-// ── Nested generic: apply with inferred return ───────────────────
-function test_generic_apply_inferred() -> int {
-    let apply = <T, U>(f: (T) -> U, x: T) -> U { f(x) }
-    apply((x) -> { x * 2 }, 21)
-    // x: T, but T bound to int from arg 21
-    // body x * 2 infers return as int, U binds to int
 }
 
 // ── Multiple lambda args: all inferred ───────────────────────────

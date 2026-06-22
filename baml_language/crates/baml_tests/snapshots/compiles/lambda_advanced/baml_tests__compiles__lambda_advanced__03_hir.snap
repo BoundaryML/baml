@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 9251
 ---
 === HIR2 ===
 function user.test_apply_twice_inferred() -> int  [expr] {
@@ -26,12 +25,6 @@ function user.test_deep_capture_inferred() -> int  [expr] {
 }
 function user.test_fully_inferred_map() -> int[]  [expr] {
   { let items: int[] = [1, 2, 3] } items.map((x) -> { {  } x Mul 2 })
-}
-function user.test_generic_apply_inferred() -> int  [expr] {
-  { let apply = <T, U>(f: (T) -> U, x: T) -> U { {  } f(x) } } apply((x) -> { {  } x Mul 2 }, 21)
-}
-function user.test_generic_multi_instantiation() -> int  [expr] {
-  { let id = <T>(x: T) -> T { {  } x }; let a: int = id(42); let b: string = id("hello") } a
 }
 function user.test_higher_order_inferred() -> int  [expr] {
   { let make_adder = (n: int) -> { { let adder = (x: int) -> { {  } x Add n } } adder }; let add5 = make_adder(5) } add5(37)

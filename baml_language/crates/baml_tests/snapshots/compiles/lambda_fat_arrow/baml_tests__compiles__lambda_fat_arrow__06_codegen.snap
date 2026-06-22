@@ -8,14 +8,6 @@ function user.test_annotated() -> int {
     return
 }
 
-function user.test_generic() -> int {
-    load_type int
-    load_const 42
-    make_closure .<lambda(test_generic, 0)>, 0
-    call_indirect
-    return
-}
-
 function user.test_in_match(x: int) -> int {
     load_var x
     load_const 0

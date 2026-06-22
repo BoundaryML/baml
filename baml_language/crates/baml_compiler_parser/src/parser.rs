@@ -1603,6 +1603,16 @@ impl<'a> Parser<'a> {
         self.events.push(Event::SyntaxHint { message, span });
     }
 
+    /// Emit a hard syntax error (custom message) at the current token's span.
+    fn error_here(&mut self, message: String) {
+        let span = self.current().map(|t| t.span).unwrap_or_else(|| {
+            self.tokens.last().map(|t| t.span).unwrap_or_else(|| {
+                baml_base::Span::new(baml_base::FileId::new(0), TextRange::default())
+            })
+        });
+        self.error(message, span);
+    }
+
     /// Parse with a node wrapper
     fn with_node<F>(&mut self, kind: SyntaxKind, f: F)
     where
@@ -2840,8 +2850,11 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_type_primary(&mut self, consume_union: bool) {
-        // Generic function type: `<T extends I>(T) -> R`.
+        // Function values cannot declare their own generic parameters, so a
+        // leading `<...>` on a function type is rejected. Recover by consuming the
+        // list and parsing the `(...) -> R` so the rest of the file still parses.
         if self.at(TokenKind::Less) {
+            self.error_here("a function type cannot declare generic parameters".to_string());
             self.parse_generic_param_list();
             if self.at(TokenKind::LParen) {
                 self.parse_paren_or_function_type(consume_union);
@@ -4235,8 +4248,10 @@ impl<'a> Parser<'a> {
     ///   `[<T, U>] (params) -> [RetType] [throws E] { body }`
     fn parse_lambda_expr(&mut self) {
         self.with_node(SyntaxKind::LAMBDA_EXPR, |p| {
-            // Optional generic parameters: <T> or <K, V>
+            // Lambdas are function *values* and cannot declare generic parameters;
+            // a leading `<...>` is rejected. Recover by consuming the list.
             if p.at(TokenKind::Less) {
+                p.error_here("a lambda cannot declare generic parameters".to_string());
                 p.parse_generic_param_list();
             }
 

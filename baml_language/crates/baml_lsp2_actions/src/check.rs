@@ -1105,22 +1105,11 @@ fn substitute_type_vars(
             attrs: attrs.clone(),
         },
         TypeExpr::Function {
-            generic_params,
-            generic_param_bounds,
             params,
             ret,
             throws,
             attrs,
         } => TypeExpr::Function {
-            generic_params: generic_params.clone(),
-            generic_param_bounds: generic_param_bounds
-                .iter()
-                .map(|bound| {
-                    bound
-                        .as_ref()
-                        .map(|bound| substitute_type_vars(bound, subst))
-                })
-                .collect(),
             params: params
                 .iter()
                 .map(|param| baml_compiler2_ast::FunctionTypeParam {
@@ -2327,34 +2316,13 @@ fn validate_associated_type_bindings_in_type_expr(
             }
         }
         TypeExpr::Function {
-            generic_params: function_generic_params,
-            generic_param_bounds,
             params,
             ret,
             throws,
             ..
         } => {
-            let mut nested_generic_params = generic_params.to_vec();
-            nested_generic_params.extend(function_generic_params.iter().cloned());
-            let nested_generic_bounds = extend_generic_bound_expr_map(
-                generic_bounds,
-                function_generic_params,
-                generic_param_bounds,
-            );
-            for bound in generic_param_bounds.iter().flatten() {
-                validate_associated_type_bindings_in_type_expr(
-                    db,
-                    file_id,
-                    bound,
-                    span,
-                    pkg_items,
-                    namespace_path,
-                    &nested_generic_params,
-                    &nested_generic_bounds,
-                    aliases,
-                    diagnostics,
-                );
-            }
+            // A function type carries no generics of its own; recurse with the
+            // enclosing scope.
             for param in params {
                 validate_associated_type_bindings_in_type_expr(
                     db,
@@ -2363,8 +2331,8 @@ fn validate_associated_type_bindings_in_type_expr(
                     span,
                     pkg_items,
                     namespace_path,
-                    &nested_generic_params,
-                    &nested_generic_bounds,
+                    generic_params,
+                    generic_bounds,
                     aliases,
                     diagnostics,
                 );
@@ -2376,8 +2344,8 @@ fn validate_associated_type_bindings_in_type_expr(
                 span,
                 pkg_items,
                 namespace_path,
-                &nested_generic_params,
-                &nested_generic_bounds,
+                generic_params,
+                generic_bounds,
                 aliases,
                 diagnostics,
             );
@@ -2389,8 +2357,8 @@ fn validate_associated_type_bindings_in_type_expr(
                     span,
                     pkg_items,
                     namespace_path,
-                    &nested_generic_params,
-                    &nested_generic_bounds,
+                    generic_params,
+                    generic_bounds,
                     aliases,
                     diagnostics,
                 );
@@ -2900,24 +2868,11 @@ fn validate_ambiguous_typevar_associated_projection_in_type_expr(
             }
         }
         TypeExpr::Function {
-            generic_param_bounds,
             params,
             ret,
             throws,
             ..
         } => {
-            for bound in generic_param_bounds.iter().flatten() {
-                validate_ambiguous_typevar_associated_projection_in_type_expr(
-                    db,
-                    file_id,
-                    bound,
-                    span,
-                    pkg_items,
-                    namespace_path,
-                    generic_bounds,
-                    diagnostics,
-                );
-            }
             for param in params {
                 validate_ambiguous_typevar_associated_projection_in_type_expr(
                     db,
@@ -4107,18 +4062,11 @@ fn expand_type_alias_rec(
             attr.clone(),
         ),
         Ty::Function {
-            generic_params,
-            generic_param_bounds,
             params,
             ret,
             throws,
             attr,
         } => Ty::Function {
-            generic_params: generic_params.clone(),
-            generic_param_bounds: generic_param_bounds
-                .iter()
-                .map(|b| b.as_ref().map(|t| recurse(t, seen)))
-                .collect(),
             params: params
                 .iter()
                 .map(|p| baml_compiler2_tir::ty::FunctionParamTy {
@@ -6197,6 +6145,7 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::CannotInferLambdaParamType { .. } => DiagnosticId::UnknownType,
         TirTypeError::WrongNumberOfTypeArgs { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::TypeIsNotGeneric { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::GenericFunctionValueNotSpecialized { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::WrongTypeArgArity { .. } => DiagnosticId::ArgumentCountMismatch,
         // Optional chaining diagnostics
         TirTypeError::UnnecessaryOptionalChaining { .. } => DiagnosticId::InvalidOperator,

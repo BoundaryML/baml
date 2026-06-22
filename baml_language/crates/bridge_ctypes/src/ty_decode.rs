@@ -98,12 +98,6 @@ pub fn proto_ty_to_runtime_ty(ty: &Ty) -> Result<RuntimeTy, CtypesError> {
             TyAttr::default(),
         ),
         TyVariant::Function(f) => RuntimeTy::Function {
-            generic_params: f.generic_params.iter().map(Name::new).collect(),
-            generic_param_bounds: f
-                .generic_param_bounds
-                .iter()
-                .map(|b| b.ty.as_ref().map(proto_ty_to_runtime_ty).transpose())
-                .collect::<Result<Vec<_>, _>>()?,
             params: f
                 .params
                 .iter()

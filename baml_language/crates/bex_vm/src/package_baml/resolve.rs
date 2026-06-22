@@ -556,29 +556,19 @@ pub(super) fn ty_equivalent(a: &RuntimeTy, b: &RuntimeTy) -> bool {
         }
         (
             RuntimeTy::Function {
-                generic_params: ag,
-                generic_param_bounds: agb,
                 params: ap,
                 ret: aret,
                 throws: athrows,
                 ..
             },
             RuntimeTy::Function {
-                generic_params: bg,
-                generic_param_bounds: bgb,
                 params: bp,
                 ret: bret,
                 throws: bthrows,
                 ..
             },
         ) => {
-            ag == bg
-                && agb.len() == bgb.len()
-                && agb
-                    .iter()
-                    .zip(bgb)
-                    .all(|(x, y)| opt_ty_equivalent(x.as_ref(), y.as_ref()))
-                && ap.len() == bp.len()
+            ap.len() == bp.len()
                 && ap.iter().zip(bp).all(|(x, y)| {
                     x.name == y.name && x.mode == y.mode && ty_equivalent(&x.ty, &y.ty)
                 })

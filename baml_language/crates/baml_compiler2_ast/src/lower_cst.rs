@@ -1169,17 +1169,6 @@ fn lower_class(
     Some(class_def)
 }
 
-/// Extract generic type parameter names from a `GENERIC_PARAM_LIST` CST child.
-///
-/// Walks the direct children of `node` to find a `GENERIC_PARAM_LIST`, then
-/// extracts each `GENERIC_PARAM` child's `WORD` token as a `Name`.
-pub(crate) fn extract_generic_params(node: &SyntaxNode) -> Vec<Name> {
-    extract_generic_params_with_bounds(node)
-        .into_iter()
-        .map(|(n, _)| n)
-        .collect()
-}
-
 /// BEP-044 generic bounds: walk `GENERIC_PARAM_LIST` and return each
 /// parameter's `Name` paired with its optional `extends Iface` bound.
 /// The bound is captured as a `TypeExpr` so generic parents like
