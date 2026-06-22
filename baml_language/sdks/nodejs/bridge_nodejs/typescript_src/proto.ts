@@ -23,6 +23,7 @@ import {
     tryRehydrateHostValueByKey,
 } from './host_value_registry.js';
 import { BamlTypeMap, getTypeMap } from './typemap.js';
+import { lowerTypeToWireTy, outboundTyToBamlType, type BamlType } from './wire_ty.js';
 
 const CallFunctionArgs = baml_core.cffi.v1.CallFunctionArgs;
 const BamlOutboundValue = baml_core.cffi.v1.BamlOutboundValue;
@@ -67,6 +68,29 @@ interface EncodeCtx {
 export interface EncodeCallArgsOptions {
     callId: bigint;
     syncMode?: boolean;
+    /**
+     * Call-level TypeVar bindings for a generic function/method, as
+     * `[typeVarName, wireTy]` pairs in De Bruijn order (enclosing class params
+     * first, then the callee's own `<...>` params). Encoded into
+     * `CallFunctionArgs.type_args`. Mirrors Python's `encode_call_args`
+     * `type_args` argument. Omitted/empty for non-generic calls.
+     */
+    typeArgs?: Array<[string, baml_core.cffi.v1.ITy]>;
+}
+
+/**
+ * Generic-class instances declare their TypeVar names (declaration order) in a
+ * static `$generic` field that codegen emits; this reads it back. Returns the
+ * param-name list for a generic class instance, or `null` for a non-generic
+ * one. The value-level type args ride a sibling `$types` instance field.
+ */
+function genericParamNames(value: object): string[] | null {
+    const ctor = (value as { constructor?: { $generic?: unknown } }).constructor;
+    const g = ctor?.$generic;
+    if (Array.isArray(g) && g.length > 0 && g.every((x) => typeof x === 'string')) {
+        return g as string[];
+    }
+    return null;
 }
 
 function setInboundValue(iv: baml_core.cffi.v1.IInboundValue, value: unknown, ctx: EncodeCtx): void {
@@ -196,6 +220,36 @@ function setInboundValue(iv: baml_core.cffi.v1.IInboundValue, value: unknown, ct
                 return;
             }
         }
+        // Generic class instance → a FQN-tagged `class_value` carrying the
+        // value-level class type-args channel (`class_ty`). Unlike a non-generic
+        // class instance (which encodes as a bare `map_value` for the engine to
+        // reshape against the declared param type), a generic instance MUST send
+        // its concrete type args: the engine strictly rejects coercing a bare map
+        // into a generic class slot ("a bare map carries no class type
+        // arguments"). The args come from the optional `$types` instance field;
+        // an absent binding lowers to the unknown/top type. Mirrors
+        // bridge_python's pydantic-generic-metadata path in proto.py, which sets
+        // `class_value.class_ty` for a generic instance.
+        if (isClassInstance) {
+            const params = genericParamNames(value);
+            if (params) {
+                const fqn = getTypeMap().jsTypeToBamlType((value as object).constructor);
+                const userTypes = (value as { $types?: Record<string, BamlType> }).$types;
+                const typeArgs = params.map((p) => lowerTypeToWireTy(userTypes?.[p]));
+                const classFields: baml_core.cffi.v1.IInboundMapEntry[] = [];
+                for (const [k, v] of Object.entries(value)) {
+                    // Skip method bindings (behavior, not state) and the synthetic
+                    // `$types` carrier (it rides `class_ty`, not the field list).
+                    if (typeof v === 'function') continue;
+                    if (k === '$types') continue;
+                    const childVal: baml_core.cffi.v1.IInboundValue = {};
+                    setInboundValue(childVal, v, ctx);
+                    classFields.push({ stringKey: k, value: childVal });
+                }
+                iv.classValue = { name: fqn, classTy: { name: fqn, typeArgs }, fields: classFields };
+                return;
+            }
+        }
         const entries: baml_core.cffi.v1.IInboundMapEntry[] = [];
         for (const [k, v] of Object.entries(value)) {
             if (isClassInstance && typeof v === 'function') continue;
@@ -245,7 +299,15 @@ export function encodeCallArgs(kwargs: Record<string, unknown>, options: EncodeC
             entry.value = iv;
             entries.push(entry);
         }
-        const msg = CallFunctionArgs.fromObject({ kwargs: entries, callId: callId.toString() });
+        const typeArgs = (options.typeArgs ?? []).map(([typeVar, typeValue]) => ({
+            typeVar,
+            typeValue,
+        }));
+        const msg = CallFunctionArgs.fromObject({
+            kwargs: entries,
+            callId: callId.toString(),
+            typeArgs,
+        });
         return Buffer.from(CallFunctionArgs.encode(msg).finish());
     } catch (err) {
         // Roll back any host callables registered before the failure so
@@ -423,8 +485,31 @@ function decodeClass(
             ) {
                 return fieldDict._data;
             }
-            const Ctor = Cls as new (init: Record<string, unknown>) => unknown;
-            return new Ctor(fieldDict);
+            const Ctor = Cls as (new (init: Record<string, unknown>) => unknown) & {
+                $generic?: readonly string[];
+            };
+            const instance = new Ctor(fieldDict);
+            // Repopulate a generic instance's `$types` from the wire's positional
+            // `generic_args` (the value-level type channel), keyed by the class's
+            // static `$generic` param names — the decode-side mirror of the
+            // encoder's `class_ty`. Defined non-enumerable so it neither perturbs
+            // structural equality (`toEqual`) nor re-encodes as a data field,
+            // while still being readable by a later generic instance-method call.
+            const params = Array.isArray(Ctor.$generic) ? Ctor.$generic : null;
+            const genericArgs = classValue.name?.genericArgs;
+            if (params && genericArgs && genericArgs.length) {
+                const types: Record<string, BamlType> = {};
+                params.forEach((p, i) => {
+                    types[p] = outboundTyToBamlType(genericArgs[i]?.ty);
+                });
+                Object.defineProperty(instance, '$types', {
+                    value: types,
+                    enumerable: false,
+                    writable: true,
+                    configurable: true,
+                });
+            }
+            return instance;
         }
     }
     // Fallback: plain object (null-prototype, matching the prior behavior).

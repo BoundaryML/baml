@@ -18,6 +18,11 @@ use crate::{
 struct DecodedCallArgs {
     kwargs: bex_project::BexArgs,
     call_id: bex_project::CallId,
+    /// Explicit TypeVar bindings for a generic call (`CallFunctionArgs.type_args`),
+    /// as a name-keyed map in wire (De Bruijn) order. Seeded into the entry
+    /// frame's `type_args` slot. Empty for non-generic calls. Mirrors
+    /// `bridge_python`'s `DecodedCallArgs::type_args`.
+    type_args: indexmap::IndexMap<String, bex_project::RuntimeTy>,
 }
 
 /// The main BAML runtime. A zero-sized handle (see module docs).
@@ -75,7 +80,9 @@ impl BamlRuntime {
             Ok(v) => v,
             Err(e) => return Ok(Buffer::from(bridge_cffi::error_to_outbound(e))),
         };
-        let call_ctx = bridge_cffi::function_call_context_builder(decoded.call_id).build();
+        let call_ctx = bridge_cffi::function_call_context_builder(decoded.call_id)
+            .with_type_args(decoded.type_args)
+            .build();
 
         // The whole Result -> BamlOutboundResult translation (incl. the
         // catch_unwind -> SdkPanic boundary and error/panic routing) lives in
@@ -113,8 +120,9 @@ impl BamlRuntime {
         env.spawn_future(async move {
             let bytes = match prepared {
                 Ok((runtime, decoded)) => {
-                    let call_ctx =
-                        bridge_cffi::function_call_context_builder(decoded.call_id).build();
+                    let call_ctx = bridge_cffi::function_call_context_builder(decoded.call_id)
+                        .with_type_args(decoded.type_args)
+                        .build();
                     bridge_cffi::call_and_encode(runtime, function_name, decoded.kwargs, call_ctx)
                         .await
                 }
@@ -154,10 +162,12 @@ fn decode_args(
     }
 
     let call_id = bex_project::CallId(args.call_id);
+    let type_args = bridge_ctypes::proto_ty_args_to_named(&args.type_args)?;
     let kwargs = kwargs_to_bex_values(args.kwargs, &HANDLE_TABLE)?;
 
     Ok(DecodedCallArgs {
         kwargs: kwargs.into(),
         call_id,
+        type_args,
     })
 }
