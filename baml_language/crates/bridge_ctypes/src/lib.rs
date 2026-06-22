@@ -25,5 +25,7 @@ pub use handle_table::{
 };
 pub use traceback::format_traceback_lines;
 pub use utils::DecodeFromBuffer;
-pub use value_decode::{inbound_to_external, kwargs_to_bex_values};
-pub use value_encode::external_to_outbound;
+pub use value_decode::{
+    inbound_to_external, kwargs_to_bex_values, playground_run_args_to_bex_values,
+};
+pub use value_encode::{build_to_host_call, encoded_success_outcome, external_to_outbound};

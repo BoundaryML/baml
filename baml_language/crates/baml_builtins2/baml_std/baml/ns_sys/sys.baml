@@ -32,8 +32,8 @@ function shell(command: string, options: ProcessOptions?) -> ShellOutput throws 
   $rust_io_function
 }
 
-/// Suspends the current thread for `ms` milliseconds.
-function sleep(ms: int) -> null throws root.errors.Io {
+/// Suspends the current thread for `delay`.
+function sleep(delay: root.time.Duration) -> null throws root.errors.Io {
   $rust_io_function
 }
 

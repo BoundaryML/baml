@@ -92,6 +92,25 @@ fn list_package_items_fqns_include_namespace() {
     assert!(entries.iter().any(|e| e.fqn() == "lorem.Resume"));
 }
 
+/// Builtin package listings include the package segment so names can round-trip
+/// through `baml describe` without callers needing to guess the package.
+#[test]
+fn list_package_items_builtin_fqns_include_package_name() {
+    let project = make_multi_ns_project();
+    let pkg_id =
+        baml_compiler2_hir::package::PackageId::new(&project.db, baml_base::Name::new("baml"));
+    let entries = crate::listing::list_package_items(&project.db, pkg_id);
+
+    assert!(
+        entries.iter().any(|e| e.fqn() == "baml.iter.Range"),
+        "expected builtin listing to include package-qualified names"
+    );
+    assert!(
+        !entries.iter().any(|e| e.fqn() == "iter.Range"),
+        "builtin listing must not emit unqualified names"
+    );
+}
+
 #[test]
 fn list_namespace_items_llm() {
     let project = make_multi_ns_project();

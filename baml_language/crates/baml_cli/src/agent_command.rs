@@ -10,7 +10,7 @@ use std::{
 use anyhow::{Context, Result, anyhow};
 use clap::Args;
 
-use crate::ExitCode;
+use crate::{ExitCode, project_load::find_project_root_from};
 
 const SKILL_SOURCE_URL: &str =
     "https://codeload.github.com/BoundaryML/baml-skill/tar.gz/refs/heads/main";
@@ -28,7 +28,16 @@ pub(crate) enum AgentCommand {
     Install(AgentInstallArgs),
 }
 
+/// Install or refresh the latest BAML agent skills in this project.
+///
+/// On install, each skill's `name:` frontmatter field is prefixed with `baml-`
+/// (so upstream `core` is installed as `baml-core`). This namespaces the skills
+/// to avoid collisions in the agent skill registry, and is the only difference
+/// from the upstream skill files.
 #[derive(Args, Clone, Debug)]
+#[command(
+    after_long_help = "Note: skill names are prefixed with 'baml-' on install to avoid registry collisions (e.g. upstream 'core' becomes 'baml-core')."
+)]
 pub(crate) struct AgentInstallArgs {
     /// Directory where project-local agent skills should be installed.
     ///
@@ -202,11 +211,8 @@ fn detect_install_root() -> Result<PathBuf> {
         .canonicalize()
         .with_context(|| format!("failed to resolve {}", cwd.display()))?;
 
-    if let Some(root) = canonical
-        .ancestors()
-        .find(|dir| dir.join("baml.toml").is_file())
-    {
-        return Ok(root.to_path_buf());
+    if let Some(root) = find_project_root_from(Some(&canonical))? {
+        return Ok(root);
     }
 
     if let Ok(output) = Command::new("git")
@@ -577,12 +583,36 @@ fn write_atomic(path: &Path, content: &str) -> Result<()> {
     Ok(())
 }
 
-fn print_success(root: &Path) -> Result<()> {
-    writeln!(
-        std::io::stdout(),
-        "Installed BAML agent skills in {}\n\nClaude Code:\n  .claude/skills/baml-*/SKILL.md\n\nCodex / OpenCode:\n  .agents/skills/baml-*/SKILL.md\n\nRestart any already-running agent session to pick them up.",
+/// Build the post-install summary text shown after a successful install.
+///
+/// The message lists the destination glob paths and discloses the `baml-`
+/// name-prefix transformation so it is documented rather than silent.
+///
+/// # Parameters
+/// - `root`: the project root the skills were installed under.
+///
+/// # Returns
+/// The summary string (without a trailing newline).
+fn success_message(root: &Path) -> String {
+    format!(
+        "Installed BAML agent skills in {}\n\nClaude Code:\n  .claude/skills/baml-*/SKILL.md\n\nCodex / OpenCode:\n  .agents/skills/baml-*/SKILL.md\n\nNote: skill names are prefixed with 'baml-' on install to avoid registry collisions (e.g. upstream 'core' becomes 'baml-core').\n\nRestart any already-running agent session to pick them up.",
         root.display()
-    )?;
+    )
+}
+
+/// Print the post-install summary to stdout.
+///
+/// Lists the destination paths for the installed skills and discloses that
+/// skill names are prefixed with `baml-` to avoid registry collisions, so the
+/// difference from upstream skill files is documented rather than silent.
+///
+/// # Parameters
+/// - `root`: the project root the skills were installed under.
+///
+/// # Errors
+/// Returns an error if writing to stdout fails.
+fn print_success(root: &Path) -> Result<()> {
+    writeln!(std::io::stdout(), "{}", success_message(root))?;
     Ok(())
 }
 
@@ -755,6 +785,22 @@ mod tests {
     }
 
     #[test]
+    fn root_detection_accepts_baml_src_only_project() {
+        let _guard = cwd_lock().lock().unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("project");
+        let nested = root.join("baml_src/nested");
+        fs::create_dir_all(&nested).unwrap();
+
+        let old = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&nested).unwrap();
+        let detected = detect_install_root().unwrap();
+        std::env::set_current_dir(old).unwrap();
+
+        assert_eq!(detected, root.canonicalize().unwrap());
+    }
+
+    #[test]
     fn root_detection_falls_back_to_current_dir_outside_git() {
         let _guard = cwd_lock().lock().unwrap();
         let tmp = tempfile::tempdir().unwrap();
@@ -782,6 +828,18 @@ mod tests {
         std::env::set_current_dir(old).unwrap();
 
         assert_eq!(root, explicit.canonicalize().unwrap());
+    }
+
+    #[test]
+    fn success_message_discloses_baml_name_prefix() {
+        let message = success_message(Path::new("/tmp/project"));
+        assert!(
+            message.contains(
+                "skill names are prefixed with 'baml-' on install to avoid registry collisions"
+            ),
+            "{message}"
+        );
+        assert!(message.contains("Installed BAML agent skills in /tmp/project"));
     }
 
     fn skill(name: &str) -> String {

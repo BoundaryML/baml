@@ -585,6 +585,10 @@ impl BexEngine {
                     ret_ty: Box::new(ret),
                     throws_ty: Box::new(normalized_throws),
                     arity: params.len(),
+                    // Capture the declared params (names + optionality) so the VM
+                    // can split the call args into positional + supplied-optional
+                    // (by name) on dispatch, for the per-bridge argument reshape.
+                    params: Box::new(params.clone()),
                 };
                 Value::object(
                     holder

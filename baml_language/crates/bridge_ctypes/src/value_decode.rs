@@ -7,6 +7,7 @@ use std::collections::HashMap;
 
 use bex_project::{BexExternalValue, RuntimeTy};
 use indexmap::IndexMap;
+use prost::Message;
 
 use crate::{
     baml_core::cffi::{
@@ -193,6 +194,23 @@ pub fn kwargs_to_bex_values(
         result.insert(key, value);
     }
     Ok(result)
+}
+
+/// Decode playground run arguments from a host-call-free byte envelope.
+///
+/// The envelope is a sequence of length-delimited `InboundMapEntry` records.
+/// It deliberately does not reuse `CallFunctionArgs`, because that CFFI
+/// request type also carries a host call id. `RunStore` adapters allocate host
+/// plumbing separately after the run identity exists.
+pub fn playground_run_args_to_bex_values(
+    mut bytes: &[u8],
+    handle_table: &CffiHandleTable,
+) -> Result<HashMap<String, BexExternalValue>, CtypesError> {
+    let mut kwargs = Vec::new();
+    while !bytes.is_empty() {
+        kwargs.push(InboundMapEntry::decode_length_delimited(&mut bytes)?);
+    }
+    kwargs_to_bex_values(kwargs, handle_table)
 }
 
 #[cfg(test)]

@@ -20,9 +20,9 @@
 //! subtracts the process base. The per-call-pair budget (~25 ns) assumes
 //! ≤10 ns per read — `benches/prof_clock.rs` measures it.
 //!
-//! On wasm32 (and under miri, which cannot execute `rdtsc`/`mrs`) this
-//! module is a stub: profiling is forced off there, and the concurrency
-//! tests stamp their own tick values.
+//! On wasm32 this module uses `web_time::Instant` as a monotonic nanosecond
+//! source. Under miri, which cannot execute `rdtsc`/`mrs`, it remains a
+//! stub and the concurrency tests stamp their own tick values.
 
 // Raw counter reads (`rdtsc`, `mrs`).
 #![allow(unsafe_code)]
@@ -39,7 +39,7 @@ pub enum ClockKind {
     Cntvct,
     /// `std::time::Instant` fallback; ticks are nanoseconds, rate (1, 1).
     Instant,
-    /// wasm32/miri stub; ticks are whatever the test stamped.
+    /// miri stub; ticks are whatever the test stamped.
     Stub,
 }
 
@@ -286,14 +286,67 @@ mod imp {
     }
 }
 
-// wasm32: profiling is forced off, nothing reads the clock. miri: rdtsc and
-// `mrs` are intrinsics/asm miri cannot execute, and the concurrency tests
-// miri runs stamp their own tick values.
-#[cfg(any(target_arch = "wasm32", miri))]
+// wasm32: use web_time's browser/worker-safe Instant as a monotonic
+// nanosecond source. This keeps ProfileEvent.timestamp_ns non-zero and
+// target-neutral once the wasm profile drain is enabled.
+#[cfg(target_arch = "wasm32")]
+mod imp {
+    use std::sync::OnceLock;
+
+    use super::{ClockKind, ClockMeta};
+
+    struct Anchor {
+        zero_instant: web_time::Instant,
+        base_unix_ns: u128,
+    }
+
+    static ANCHOR: OnceLock<Anchor> = OnceLock::new();
+
+    fn anchor() -> &'static Anchor {
+        ANCHOR.get_or_init(|| Anchor {
+            zero_instant: web_time::Instant::now(),
+            base_unix_ns: web_time::SystemTime::now()
+                .duration_since(web_time::UNIX_EPOCH)
+                .map_or(0, |d| d.as_nanos()),
+        })
+    }
+
+    pub fn init() {
+        let _ = anchor();
+    }
+
+    #[inline]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "ns since wasm module start; wraps after ~584 years"
+    )]
+    pub fn now_ticks() -> u64 {
+        anchor().zero_instant.elapsed().as_nanos() as u64
+    }
+
+    pub fn base_ticks() -> u64 {
+        0
+    }
+
+    pub fn meta() -> ClockMeta {
+        ClockMeta {
+            kind: ClockKind::Instant,
+            ns_per_tick: Some((1, 1)),
+        }
+    }
+
+    pub fn started_at_epoch_ns() -> u128 {
+        anchor().base_unix_ns
+    }
+}
+
+// miri: rdtsc and `mrs` are intrinsics/asm miri cannot execute, and the
+// concurrency tests miri runs stamp their own tick values.
+#[cfg(all(miri, not(target_arch = "wasm32")))]
 mod imp {
     use super::{ClockKind, ClockMeta};
 
-    /// No-op in stub builds (profiling is forced off).
+    /// No-op in miri stub builds.
     pub fn init() {}
 
     /// Always `0` in stub builds (nothing reads this).
@@ -322,7 +375,6 @@ mod imp {
 }
 
 /// How trustworthy the tick→ns rate is. Recorded in the `.bamlprof` header.
-#[cfg(not(target_arch = "wasm32"))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClockQuality {
     /// Platform-stated rational rate (CNTVCT, Instant, Stub).
@@ -366,6 +418,10 @@ pub struct TickConverter {
     /// reads taken at converter construction.
     sample0: Option<(std::time::Instant, u64)>,
 }
+
+#[cfg(target_arch = "wasm32")]
+#[derive(Debug, Clone)]
+pub struct TickConverter;
 
 /// Fixed-point precision of [`TickConverter::scale`]. 2^48 keeps the rounding
 /// error below 1 ns for any realistic `dt` (ticks since the segment base) while
@@ -509,6 +565,38 @@ impl TickConverter {
             }
             ClockKind::Cntvct | ClockKind::Instant | ClockKind::Stub => ClockQuality::Exact,
         }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+impl TickConverter {
+    /// Identity conversion for the wasm substrate: `now_ticks` already returns
+    /// monotonic nanoseconds from `web_time::Instant`.
+    pub fn identity() -> Self {
+        Self
+    }
+
+    pub fn from_clock() -> Self {
+        Self
+    }
+
+    #[inline]
+    pub fn to_ns(&self, ticks: u64) -> u64 {
+        ticks
+    }
+
+    pub fn maybe_refine(&mut self) {}
+
+    pub fn kind(&self) -> ClockKind {
+        ClockKind::Instant
+    }
+
+    pub fn rate(&self) -> (u64, u64) {
+        (1, 1)
+    }
+
+    pub fn quality(&self) -> ClockQuality {
+        ClockQuality::Exact
     }
 }
 

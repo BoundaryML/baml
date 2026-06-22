@@ -1,7 +1,35 @@
 import { describe, it, expect } from 'vitest';
-import { encodeCallArgs, decodeCallResult, serializeValue, deserializeValue } from '../index';
-import { CallFunctionArgs, BamlHandleType } from '../generated/baml_core/cffi/v1/baml_inbound';
+import { encodeCallArgs, encodeRunArgs, decodeCallResult, serializeValue, deserializeValue } from '../index';
+import { CallFunctionArgs, InboundMapEntry, BamlHandleType } from '../generated/baml_core/cffi/v1/baml_inbound';
 import { BamlOutboundValue, MediaTypeEnum } from '../generated/baml_core/cffi/v1/baml_outbound';
+
+function decodeDelimitedEntries(bytes: Uint8Array): InboundMapEntry[] {
+  const entries: InboundMapEntry[] = [];
+  let offset = 0;
+  while (offset < bytes.length) {
+    const { value: length, nextOffset } = readVarint(bytes, offset);
+    offset = nextOffset;
+    const end = offset + length;
+    entries.push(InboundMapEntry.decode(bytes.slice(offset, end)));
+    offset = end;
+  }
+  return entries;
+}
+
+function readVarint(bytes: Uint8Array, offset: number): { value: number; nextOffset: number } {
+  let value = 0;
+  let shift = 0;
+  let cursor = offset;
+  while (cursor < bytes.length) {
+    const byte = bytes[cursor++];
+    value += (byte & 0x7f) * 2 ** shift;
+    if ((byte & 0x80) === 0) {
+      return { value, nextOffset: cursor };
+    }
+    shift += 7;
+  }
+  throw new Error('unterminated varint');
+}
 
 describe('encodeCallArgs', () => {
   it('encodes an unsorted array as function kwargs', () => {
@@ -30,6 +58,25 @@ describe('encodeCallArgs', () => {
         expect(items[0].value.intValue).toBe(5);
       }
     }
+  });
+
+  it('encodes run args without the CallFunctionArgs call id wrapper', () => {
+    const bytes = encodeRunArgs({ name: 'Ada', count: 2 });
+    const entries = decodeDelimitedEntries(bytes);
+
+    expect(() => CallFunctionArgs.decode(bytes)).toThrow();
+    expect(entries.map((entry) => entry.key)).toEqual([
+      { $case: 'stringKey', stringKey: 'name' },
+      { $case: 'stringKey', stringKey: 'count' },
+    ]);
+    expect(entries[0].value?.value).toEqual({
+      $case: 'stringValue',
+      stringValue: 'Ada',
+    });
+    expect(entries[1].value?.value).toEqual({
+      $case: 'intValue',
+      intValue: 2,
+    });
   });
 
   it('encodes various JS types correctly', () => {

@@ -124,6 +124,7 @@ pub fn llm_parse(parent: &FunctionDef, type_args: Vec<TypeExpr>) -> Option<Funct
         origin: crate::ast::FunctionOrigin::Companion,
         attributes: vec![],
         docstring: parent.docstring.clone(),
+        is_tagged_template_tag: parent.is_tagged_template_tag,
         span: parent.span,
         name_span: parent.name_span,
     })
@@ -160,14 +161,20 @@ fn make_llm_companion(
         Some(DeclarativeMeta::Llm(llm)) => llm.client.as_ref().map(smol_str::SmolStr::as_str),
         _ => None,
     };
-    let (body, source_map) = synthesize_llm_builtin_call(
-        target,
-        parent.name.as_str(),
-        &param_names,
-        client_arg_name,
-        Vec::new(),
-        parent.span,
-    );
+    // New-mode (backtick) parents stashed a closure-carrying companion body for
+    // this target during CST lowering (the backtick CST isn't reachable here);
+    // use it so the companion renders the prompt through its closure — matching
+    // execution. Legacy Jinja parents fall back to the plain 3-arg builtin call.
+    let (body, source_map) = llm_companion_body(parent, target).unwrap_or_else(|| {
+        synthesize_llm_builtin_call(
+            target,
+            parent.name.as_str(),
+            &param_names,
+            client_arg_name,
+            Vec::new(),
+            parent.span,
+        )
+    });
     FunctionDef {
         name,
         generic_params: parent.generic_params.clone(),
@@ -181,7 +188,25 @@ fn make_llm_companion(
         origin: crate::ast::FunctionOrigin::Companion,
         attributes: vec![],
         docstring: parent.docstring.clone(),
+        is_tagged_template_tag: parent.is_tagged_template_tag,
         span: parent.span,
         name_span: parent.name_span,
     }
+}
+
+/// The pre-lowered, closure-carrying companion body for `target` that a new-mode
+/// (backtick) LLM parent stashed during CST lowering (see
+/// [`LlmBodyDef::companion_bodies`](crate::ast::LlmBodyDef::companion_bodies)),
+/// or `None` for a legacy Jinja parent (which renders via the 3-arg builtin).
+fn llm_companion_body(
+    parent: &FunctionDef,
+    target: &str,
+) -> Option<(crate::ast::ExprBody, crate::ast::AstSourceMap)> {
+    let Some(DeclarativeMeta::Llm(llm)) = &parent.declarative_meta else {
+        return None;
+    };
+    llm.companion_bodies
+        .iter()
+        .find(|(t, _)| t == target)
+        .map(|(_, body)| body.clone())
 }

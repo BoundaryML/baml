@@ -10,7 +10,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 pub use baml_builtins2::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
-pub use bex::Bex;
+pub use bex::{Bex, BexCallTraceResult};
 pub use bex_engine::{
     CANCELLED_PANIC_CLASS, EngineError, FunctionCallContext, FunctionCallContextBuilder,
     is_cancelled_engine_error,
@@ -103,7 +103,7 @@ pub fn new_from_bytecode(bytecode: &[u8], sys_ops: SysOps) -> Result<Arc<dyn Bex
 
 pub use bex_lsp::{
     BackgroundSpawner, BexLsp, FunctionInfo, FunctionKind, FunctionOrigin, LlmCapabilities,
-    LspClientSenderTrait, LspError, PlaygroundNotification, PlaygroundSender, ProjectDiagnostic,
-    ProjectUpdate, TestExpandError, new_lsp,
+    LspClientSenderTrait, LspError, PlaygroundNotification, PlaygroundSender, PlaygroundSourceFile,
+    ProjectDiagnostic, ProjectUpdate, TestExpandError, new_lsp,
 };
 pub use fs::{BamlVFS, BulkReadFileSystem, DefaultBulkReadFileSystem, FsPath};

@@ -66,9 +66,20 @@ class Instant {
     /// assert.equal(t.to_string(), "1970-01-01T00:00:00Z")
     /// ```
     ///
-    /// ## Errors
-    /// - If the year would be more than 4 digits.
-    function to_string(self) -> string throws root.errors.InvalidArgument {
+    /// ## Panics
+    /// - If the year would be more than 4 digits (outside the RFC 3339 range).
+    implements baml.ToString {
+        function to_string(self) -> string throws never {
+            self._to_string_impl() catch (_) {
+                root.errors.InvalidArgument { message } => root.sys.panic("Instant.to_string: " + message),
+            }
+        }
+    }
+
+    /// Internal RFC 3339 formatter. Throws `InvalidArgument` when the year is
+    /// outside the 4-digit RFC 3339 range; `baml.ToString.to_string` turns that
+    /// into a panic, while `to_json` surfaces it as a `JsonSerializationError`.
+    function _to_string_impl(self) -> string throws root.errors.InvalidArgument {
         $rust_function
     }
     function from_json(j: baml.json.json) -> Instant throws root.json.JsonDecodeError {
@@ -80,7 +91,7 @@ class Instant {
         }
     }
     function to_json(self) -> string throws root.json.JsonSerializationError {
-        self.to_string() catch (_) {
+        self._to_string_impl() catch (_) {
             root.errors.InvalidArgument { message } => throw root.json.JsonSerializationError { message: message, path: "" },
         }
     }

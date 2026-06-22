@@ -58,8 +58,9 @@ pub enum SyntaxKind {
     FLOAT_LITERAL,   // 123.45
 
     // String delimiters (parser assembles strings)
-    QUOTE, // "
-    HASH,  // # (for raw strings)
+    QUOTE,    // "
+    HASH,     // # (for raw strings)
+    BACKTICK, // ` (for BEP-049 interpolated strings)
 
     // Brackets
     L_BRACE,   // {
@@ -226,6 +227,11 @@ pub enum SyntaxKind {
     UNARY_EXPR,
     CALL_EXPR,
     INDEX_EXPR,
+    /// Tagged template literal: a tag identifier immediately followed by
+    /// a backtick string literal (BEP-049 §10). Structure: tag-expr child
+    /// plus `BACKTICK_STRING_LITERAL` child. Lowered to a call where the
+    /// body becomes a lambda producing a `TaggedString` value.
+    TAGGED_TEMPLATE_EXPR,
     /// Optional call: `func?.(args)` — short-circuits to null if callee is null.
     OPTIONAL_CALL_EXPR,
     /// Optional index: `obj?.[expr]` — short-circuits to null if base is null.
@@ -385,6 +391,22 @@ pub enum SyntaxKind {
     BYTE_STRING_LITERAL,
     UNQUOTED_STRING,
 
+    // Backtick interpolated string (BEP-049)
+    BACKTICK_STRING_LITERAL, // `...` or ``...`` etc.
+    BACKTICK_TEXT,           // Plain text segment between interpolations
+    BACKTICK_INTERPOLATION,  // ${ expr } inside a backtick string
+
+    // BEP-049 §5 block-tag forms inside `${...}`. The parser emits these as
+    // flat siblings of BACKTICK_INTERPOLATION inside a BACKTICK_STRING_LITERAL;
+    // segments() lifts matched open/close pairs into hierarchical For/If
+    // structures.
+    BACKTICK_FOR_OPEN, // ${for (let x in xs)}
+    BACKTICK_ENDFOR,   // ${endfor}
+    BACKTICK_IF_OPEN,  // ${if (cond)}
+    BACKTICK_ELSE_IF,  // ${else if (cond)}
+    BACKTICK_ELSE,     // ${else}
+    BACKTICK_ENDIF,    // ${endif}
+
     // Template components (inside raw strings)
     TEMPLATE_CONTENT,       // Plain text (deprecated, use PROMPT_TEXT)
     TEMPLATE_INTERPOLATION, // {{ expr }} - Jinja expressions
@@ -435,6 +457,7 @@ impl SyntaxKind {
                 | SyntaxKind::STRING_LITERAL
                 | SyntaxKind::RAW_STRING_LITERAL
                 | SyntaxKind::BYTE_STRING_LITERAL
+                | SyntaxKind::BACKTICK_STRING_LITERAL
         )
     }
 

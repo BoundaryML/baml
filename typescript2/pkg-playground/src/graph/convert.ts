@@ -126,6 +126,10 @@ export function graphToReactflow(
     edgesBySource.set(edge.source, list);
   }
 
+  // Resolve theme-aware marker colors once for the whole graph rather than
+  // re-probing the DOM per edge.
+  const colors = getMarkerColors();
+
   // Apply color data to fan-out edges
   for (const [, siblings] of edgesBySource) {
     const siblingCount = siblings.length;
@@ -133,7 +137,7 @@ export function graphToReactflow(
       const rawLabel = edge.data?.label;
       edge.data = {
         ...edge.data,
-        color: computeEdgeColor(rawLabel, siblingCount, idx),
+        color: computeEdgeColor(colors, rawLabel, siblingCount, idx),
       };
     });
   }
@@ -142,12 +146,11 @@ export function graphToReactflow(
 }
 
 function computeEdgeColor(
+  colors: ReturnType<typeof getMarkerColors>,
   label: string | undefined,
   siblingCount: number,
   siblingIndex: number,
 ): string {
-  const colors = getMarkerColors();
-
   // No label = sequential edge → base color
   if (!label) return colors.base;
 

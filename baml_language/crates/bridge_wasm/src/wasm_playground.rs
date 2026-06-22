@@ -98,12 +98,54 @@ pub enum PlaygroundNotification {
         #[serde(skip_serializing_if = "Option::is_none")]
         expand_error: Option<bex_project::TestExpandError>,
     },
-    /// A runtime event was emitted during execution (protobuf-encoded).
     #[serde(rename_all = "camelCase")]
-    RuntimeEvent {
-        /// Protobuf-encoded `RuntimeEvent` bytes (decode with `RuntimeEvent.decode()`)
-        data: Vec<u8>,
-        call_id: u64,
+    RunStarted {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        request_id: Option<u64>,
+        run: serde_json::Value,
+    },
+    #[serde(rename_all = "camelCase")]
+    RunPatch { patch: serde_json::Value },
+    #[serde(rename_all = "camelCase")]
+    ProfileArtifactChunk {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        run_id: Option<String>,
+        engine_id: u64,
+        process_id: String,
+        bytes_base64: String,
+        retained_bytes: usize,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        max_bytes: Option<usize>,
+        dropped_bytes: usize,
+        dropped_chunks: usize,
+    },
+    #[serde(rename_all = "camelCase")]
+    RunSnapshot {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        request_id: Option<u64>,
+        run_id: String,
+        snapshot: serde_json::Value,
+    },
+    #[serde(rename_all = "camelCase")]
+    RunList {
+        request_id: u64,
+        runs: Vec<serde_json::Value>,
+    },
+    #[serde(rename_all = "camelCase")]
+    RunCursorExpired {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        request_id: Option<u64>,
+        subscription_id: String,
+        run_id: String,
+        reason: String,
+    },
+    #[serde(rename_all = "camelCase")]
+    CommandAck { request_id: u64, outcome: String },
+    #[serde(rename_all = "camelCase")]
+    CommandError {
+        request_id: u64,
+        code: String,
+        message: String,
     },
 }
 
@@ -193,9 +235,6 @@ impl From<bex_project::PlaygroundNotification> for PlaygroundNotification {
                 data,
                 expand_error,
             },
-            bex_project::PlaygroundNotification::RuntimeEvent { data, call_id } => {
-                PlaygroundNotification::RuntimeEvent { data, call_id }
-            }
         }
     }
 }
@@ -216,24 +255,25 @@ impl bex_project::PlaygroundSender for WasmPlaygroundSender {
     fn send_playground_notification(&self, notification: bex_project::PlaygroundNotification) {
         let wasm_notif: PlaygroundNotification = notification.into();
         let callback = self.callback.inner();
-        // Variants carrying `serde_json::Value` payloads must cross the
-        // boundary as JSON text: with serde_json's `arbitrary_precision`
-        // feature, serde-wasm-bindgen/Tsify renders every Value number as
-        // `{ "$serde_json::private::Number": "…" }`, which broke graph
-        // node ids / parent ids / edges on the JS side.
-        let js_notif: JsValue = match &wasm_notif {
-            PlaygroundNotification::ControlFlowGraphResult { .. }
-            | PlaygroundNotification::CursorContext { .. } => {
-                match crate::wasm_lsp::to_json_jsvalue(&wasm_notif, "playground notification") {
-                    Ok(value) => value,
-                    Err(e) => {
-                        log::error!("failed to serialize playground notification for JS: {e}");
-                        return;
-                    }
-                }
-            }
-            _ => wasm_notif.into(),
-        };
-        let _ = callback.call1(&JsValue::NULL, &js_notif);
+        send_wasm_playground_notification(callback, &wasm_notif);
     }
+}
+
+pub(crate) fn send_wasm_playground_notification(
+    callback: &Function,
+    notification: &PlaygroundNotification,
+) {
+    // Serialize through JSON text rather than serde-wasm-bindgen/Tsify. With
+    // serde_json's `arbitrary_precision` feature, direct conversion renders
+    // Value numbers as `{ "$serde_json::private::Number": "…" }`, which broke
+    // graph node ids, parent ids, edges, and RunStore cursors on the JS side.
+    let js_notif: JsValue =
+        match crate::wasm_lsp::to_json_jsvalue(notification, "playground notification") {
+            Ok(value) => value,
+            Err(e) => {
+                log::error!("failed to serialize playground notification for JS: {e}");
+                return;
+            }
+        };
+    let _ = callback.call1(&JsValue::NULL, &js_notif);
 }

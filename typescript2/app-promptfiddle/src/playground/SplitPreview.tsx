@@ -10,9 +10,11 @@
  */
 
 import type { FC } from 'react';
-import { useState, useRef, useEffect } from 'react';
-import { usePlayground } from './PlaygroundProvider';
-import { MonacoEditor } from './MonacoEditor';
+import { useState, useRef, useEffect, useMemo } from 'react';
+import { useSetAtom } from 'jotai';
+import { MonacoEditor } from '@b/pkg-editor';
+import { usePlayground, blobUrlsAtom } from './PlaygroundProvider';
+import { createWorkerBackend } from './worker-backend';
 
 const ResetIcon: FC<{ size?: number }> = ({ size = 14 }) => (
   <svg
@@ -33,6 +35,8 @@ const ResetIcon: FC<{ size?: number }> = ({ size = 14 }) => (
 
 export const SplitPreview: FC = () => {
   const { files, setFiles, resetFiles } = usePlayground();
+  const setBlobUrls = useSetAtom(blobUrlsAtom);
+  const backend = useMemo(() => createWorkerBackend(), []);
   const [showConfirm, setShowConfirm] = useState(false);
   const confirmTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -67,6 +71,8 @@ export const SplitPreview: FC = () => {
       <MonacoEditor
         files={files}
         onFilesChange={setFiles}
+        backend={backend}
+        onBlobUrlsChange={setBlobUrls}
         height="100%"
       />
       <button

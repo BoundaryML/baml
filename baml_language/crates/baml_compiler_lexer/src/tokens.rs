@@ -59,6 +59,8 @@ pub enum TokenKind {
     Function,
     #[token("client")]
     Client,
+    /// Deprecated: `generator` blocks moved to `baml.toml`. Still lexed so the
+    /// parser can recognize stale blocks and raise a migration diagnostic.
     #[token("generator")]
     Generator,
     #[token("test")]
@@ -119,8 +121,13 @@ pub enum TokenKind {
     // ============ Identifiers and Literals ============
     /// Any identifier-like word (non-keyword)
     /// Also matches $-prefixed identifiers like $watch for special builtin methods
+    /// and `$`-separated names like `Foo$bar`. A *trailing* `$` is intentionally
+    /// rejected so that `${` inside a backtick string (BEP-049 interpolation
+    /// marker) doesn't get absorbed into a preceding identifier — e.g.
+    /// `before-${x}` must lex as `Word("before-"), Dollar, LBrace, ...`,
+    /// not `Word("before-$"), LBrace, ...`.
     #[regex(r"\$[a-zA-Z_][a-zA-Z0-9_]*")]
-    #[regex(r"[a-zA-Z_][a-zA-Z0-9_$-]*")]
+    #[regex(r"[a-zA-Z_][a-zA-Z0-9_-]*(\$[a-zA-Z_][a-zA-Z0-9_-]*)*")]
     Word,
 
     /// Quote symbol - used for string delimiters
@@ -134,6 +141,13 @@ pub enum TokenKind {
     /// E.g., #"hello"# → Hash, Quote, Word("hello"), Quote, Hash
     #[token("#")]
     Hash,
+
+    /// Backtick symbol - used for interpolated string delimiters (BEP-049)
+    /// Parser assembles backtick strings by collecting tokens between matching
+    /// runs of N backticks (multi-tick ladder, anchored close).
+    /// E.g., `hello ${name}` → Backtick, Word("hello"), ..., Backtick
+    #[token("`")]
+    Backtick,
 
     /// Bigint literal (must come before Integer so the longer `42n` match wins)
     #[regex(r"[0-9]+n")]
@@ -330,6 +344,7 @@ impl std::fmt::Display for TokenKind {
             TokenKind::Word => "identifier",
             TokenKind::Quote => "'\"'",
             TokenKind::Hash => "'#'",
+            TokenKind::Backtick => "'`'",
             TokenKind::BigintLiteral => "bigint",
             TokenKind::IntegerLiteral => "integer",
             TokenKind::FloatLiteral => "float",
@@ -811,6 +826,71 @@ mod tests {
                 TokenKind::Hash,
             ]
         );
+        assert_eq!(reconstruct_source(&lex(source)), source);
+    }
+
+    #[test]
+    fn test_backtick_basic() {
+        let source = "`hello`";
+        let tokens = lex_no_whitespace(source);
+
+        assert_eq!(
+            tokens,
+            vec![
+                TokenKind::Backtick,
+                TokenKind::Word, // hello
+                TokenKind::Backtick,
+            ]
+        );
+
+        assert_eq!(reconstruct_source(&lex(source)), source);
+    }
+
+    #[test]
+    fn test_backtick_multi_tick_ladder() {
+        // Three opening + three closing backticks
+        let source = "```contains `single` ticks```";
+        let tokens = lex_no_whitespace(source);
+
+        assert_eq!(
+            tokens,
+            vec![
+                TokenKind::Backtick,
+                TokenKind::Backtick,
+                TokenKind::Backtick,
+                TokenKind::Word, // contains
+                TokenKind::Backtick,
+                TokenKind::Word, // single
+                TokenKind::Backtick,
+                TokenKind::Word, // ticks
+                TokenKind::Backtick,
+                TokenKind::Backtick,
+                TokenKind::Backtick,
+            ]
+        );
+
+        assert_eq!(reconstruct_source(&lex(source)), source);
+    }
+
+    #[test]
+    fn test_backtick_with_interpolation_tokens() {
+        // ${...} inside backtick — lexer emits the raw tokens; parser assembles
+        let source = "`Hello ${name}`";
+        let tokens = lex_no_whitespace(source);
+
+        assert_eq!(
+            tokens,
+            vec![
+                TokenKind::Backtick,
+                TokenKind::Word, // Hello
+                TokenKind::Dollar,
+                TokenKind::LBrace,
+                TokenKind::Word, // name
+                TokenKind::RBrace,
+                TokenKind::Backtick,
+            ]
+        );
+
         assert_eq!(reconstruct_source(&lex(source)), source);
     }
 

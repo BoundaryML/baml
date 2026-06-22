@@ -1,24 +1,23 @@
 import { type NodeProps } from '@xyflow/react';
 import { GitBranch } from 'lucide-react';
 import { type ComponentType, memo } from 'react';
-import {
-  nodeBackground,
-  nodeShadow,
-  selectionRing,
-  stateColors,
-} from '../constants';
+import { getChrome, nodeBackground, nodeShadow, stateStyle } from '../constants';
+import { useGraphThemeContext } from '../theme';
 import type { WorkflowNodeData } from '../types';
 import { NodeHandles } from './NodeHandles';
 
 export const DiamondNode: ComponentType<NodeProps> = memo(({ data }) => {
   const d = data as WorkflowNodeData;
   const isHighlighted = d.selected;
+  const theme = useGraphThemeContext();
+  const chrome = getChrome(theme);
+  const branch = chrome.branch;
   // Conditionals are visually distinct via amber accent regardless of state.
-  const base = stateColors[d.executionState] ?? stateColors['not-started'];
+  const base = stateStyle(theme, d.executionState);
   const colors = {
     ...base,
-    accent: '#f59e0b',
-    border: isHighlighted ? selectionRing.color : 'rgba(245,158,11,0.35)',
+    accent: branch.accent,
+    border: isHighlighted ? chrome.selectionRing.color : branch.border,
   };
 
   return (
@@ -31,9 +30,9 @@ export const DiamondNode: ComponentType<NodeProps> = memo(({ data }) => {
           gap: 8,
           padding: '7px 11px 7px 9px',
           borderRadius: 8,
-          background: nodeBackground(colors),
+          background: nodeBackground(colors, theme),
           border: `1px solid ${colors.border}`,
-          boxShadow: nodeShadow(colors, !!isHighlighted),
+          boxShadow: nodeShadow(colors, !!isHighlighted, theme),
           width: '100%',
           height: '100%',
           boxSizing: 'border-box',
@@ -51,13 +50,13 @@ export const DiamondNode: ComponentType<NodeProps> = memo(({ data }) => {
             width: 20,
             height: 20,
             borderRadius: 6,
-            background: 'rgba(245,158,11,0.15)',
-            boxShadow: 'inset 0 0 0 1px rgba(245,158,11,0.35)',
+            background: branch.chipBg,
+            boxShadow: `inset 0 0 0 1px ${branch.chipRing}`,
           }}
         >
           <GitBranch
             size={12}
-            color="#fbbf24"
+            color={branch.icon}
             style={{ transform: 'rotate(180deg)' }}
           />
         </span>

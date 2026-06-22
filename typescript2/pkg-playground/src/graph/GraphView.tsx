@@ -21,33 +21,40 @@ import {
 import '@xyflow/react/dist/style.css';
 
 import type {
+  CallNode,
   ControlFlowGraph,
-  DeserializedRuntimeEvent,
-  RunEntry,
+  GraphRuntimeOverlay,
+  Run,
 } from '../worker-protocol';
 import type { ResultRendererProps } from '../result-renderers';
+import { getChrome } from './constants';
 import { cfgToGraphNodes, graphToReactflow } from './convert';
-import { collectGraphNodeRuntime } from './runtime-output';
 import { layoutGraph } from './layout';
 import { kNodeTypes } from './nodes';
 import { kEdgeTypes, ColorfulMarkerDefinitions } from './edges';
-import type { WorkflowNode, WorkflowEdge } from './types';
+import { GraphThemeContext, useGraphTheme } from './theme';
+import type {
+  GraphNode,
+  NodeExecutionState,
+  WorkflowNode,
+  WorkflowEdge,
+} from './types';
 
 interface GraphViewProps {
   graph: ControlFlowGraph;
   /** Function whose graph is displayed — keys the per-function layout
    *  direction memory. */
   functionName?: string | null;
-  runtimeEvents?: DeserializedRuntimeEvent[];
-  runStatus?: RunEntry['status'];
+  graphRuntimeOverlay?: GraphRuntimeOverlay | null;
+  calls?: CallNode[];
+  runStatus?: Run['status'];
   runError?: string | null;
-  runFunctionName?: string | null;
   customRenderers?: Record<string, FC<ResultRendererProps>>;
   selectedNodeId: number | null;
   onNodeClick: (nodeId: number) => void;
 }
 
-const EMPTY_RUNTIME_EVENTS: DeserializedRuntimeEvent[] = [];
+const EMPTY_CALLS: CallNode[] = [];
 
 type LayoutDirection = 'horizontal' | 'vertical';
 
@@ -81,17 +88,129 @@ function storeDirection(
   }
 }
 
+interface GraphNodeRuntime {
+  executionState: NodeExecutionState;
+  errorMessage?: string | null;
+}
+
+const statePriority: Record<NodeExecutionState, number> = {
+  'not-started': 0,
+  skipped: 0,
+  pending: 1,
+  cached: 2,
+  success: 3,
+  cancelled: 4,
+  running: 5,
+  error: 6,
+};
+
+function mergeState(
+  current: NodeExecutionState | undefined,
+  next: NodeExecutionState,
+): NodeExecutionState {
+  if (current == null) return next;
+  return statePriority[next] > statePriority[current] ? next : current;
+}
+
+function terminalRunState(status?: Run['status']): NodeExecutionState | null {
+  switch (status) {
+    case 'failed':
+    case 'panicked':
+      return 'error';
+    case 'cancelled':
+      return 'cancelled';
+    case 'succeeded':
+      return 'success';
+    default:
+      return null;
+  }
+}
+
+function callExecutionState(
+  call: CallNode,
+  runStatus?: Run['status'],
+): NodeExecutionState {
+  const terminal = terminalRunState(runStatus);
+  switch (call.status) {
+    case 'running':
+      return terminal ?? 'running';
+    case 'ok':
+    case 'exited':
+      return 'success';
+    case 'errored':
+      return 'error';
+    case 'cancelled':
+      return 'cancelled';
+    default:
+      call.status satisfies never;
+      return terminal ?? 'not-started';
+  }
+}
+
+function collectOverlayNodeRuntime(
+  graphNodes: GraphNode[],
+  overlay: GraphRuntimeOverlay | null | undefined,
+  calls: CallNode[],
+  runStatus?: Run['status'],
+  runError?: string | null,
+): Map<string, GraphNodeRuntime> {
+  if (!overlay || overlay.entries.length === 0 || calls.length === 0) {
+    return new Map();
+  }
+
+  const callById = new Map(calls.map((call) => [call.id, call]));
+  const parentById = new Map(graphNodes.map((node) => [node.id, node.parent]));
+  const direct = new Map<string, GraphNodeRuntime>();
+
+  for (const entry of overlay.entries) {
+    const nodeId = String(entry.cfgNodeId);
+    let executionState: NodeExecutionState | undefined;
+    let hasError = false;
+
+    for (const callNodeId of entry.callNodeIds) {
+      const call = callById.get(callNodeId);
+      if (!call) continue;
+      const callState = callExecutionState(call, runStatus);
+      executionState = mergeState(executionState, callState);
+      hasError = hasError || callState === 'error';
+    }
+
+    if (!executionState) continue;
+    direct.set(nodeId, {
+      executionState,
+      errorMessage: hasError ? (runError ?? undefined) : undefined,
+    });
+  }
+
+  const withAncestors = new Map(direct);
+  for (const [nodeId, runtime] of direct) {
+    let parentId = parentById.get(nodeId);
+    while (parentId != null) {
+      const prev = withAncestors.get(parentId);
+      withAncestors.set(parentId, {
+        executionState: mergeState(prev?.executionState, runtime.executionState),
+        errorMessage: runtime.errorMessage ?? prev?.errorMessage,
+      });
+      parentId = parentById.get(parentId);
+    }
+  }
+
+  return withAncestors;
+}
+
 function GraphViewInner({
   graph,
   functionName,
-  runtimeEvents = EMPTY_RUNTIME_EVENTS,
+  graphRuntimeOverlay,
+  calls = EMPTY_CALLS,
   runStatus,
   runError,
-  runFunctionName,
   customRenderers,
   selectedNodeId,
   onNodeClick,
 }: GraphViewProps) {
+  const theme = useGraphTheme();
+  const chrome = getChrome(theme);
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<WorkflowEdge>([]);
   // The component is remounted (keyed) per function, so the lazy initializer
@@ -115,20 +234,23 @@ function GraphViewInner({
       graphEdges,
     );
     return { graphNodes, rfNodes, rfEdges };
-  }, [graph]);
+    // `theme` is a dep so edge colors (baked in convert via getMarkerColors)
+    // re-resolve when the surface theme flips.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [graph, theme]);
 
   const runtimeInputsRef = useRef({
-    runtimeEvents,
+    graphRuntimeOverlay,
+    calls,
     runStatus,
     runError,
-    runFunctionName,
     customRenderers,
   });
   runtimeInputsRef.current = {
-    runtimeEvents,
+    graphRuntimeOverlay,
+    calls,
     runStatus,
     runError,
-    runFunctionName,
     customRenderers,
   };
 
@@ -138,20 +260,18 @@ function GraphViewInner({
   const decorateNodesWithRuntime = useCallback(
     (baseNodes: WorkflowNode[]): WorkflowNode[] => {
       const {
-        runtimeEvents: latestRuntimeEvents,
+        graphRuntimeOverlay: latestGraphRuntimeOverlay,
+        calls: latestCalls,
         runStatus: latestRunStatus,
         runError: latestRunError,
-        runFunctionName: latestRunFunctionName,
         customRenderers: latestCustomRenderers,
       } = runtimeInputsRef.current;
-      const runtimeByNode = collectGraphNodeRuntime(
+      const runtimeByNode = collectOverlayNodeRuntime(
         graphNodesRef.current,
-        latestRuntimeEvents,
-        {
-          status: latestRunStatus,
-          error: latestRunError,
-          functionName: latestRunFunctionName,
-        },
+        latestGraphRuntimeOverlay,
+        latestCalls,
+        latestRunStatus,
+        latestRunError,
       );
       const selectedId =
         selectedNodeIdRef.current == null
@@ -180,9 +300,9 @@ function GraphViewInner({
           ...node,
           data: {
             ...node.data,
-            result: runtime.result,
-            hasResult: runtime.hasResult,
-            imageOutputs: runtime.imageOutputs,
+            result: undefined,
+            hasResult: undefined,
+            imageOutputs: [],
             executionState: runtime.executionState,
             errorMessage: runtime.errorMessage,
             customRenderers: latestCustomRenderers,
@@ -197,7 +317,7 @@ function GraphViewInner({
   const layoutRunIdRef = useRef(0);
 
   // Convert CFG -> ReactFlow and run layout when graph geometry changes.
-  // Runtime output affects geometry because result previews can make nodes larger.
+  // Runtime overlay can affect geometry when an error preview is visible.
   useEffect(() => {
     const layoutRunId = ++layoutRunIdRef.current;
     const nodesWithRuntime = decorateNodesWithRuntime(graphModel.rfNodes);
@@ -220,10 +340,10 @@ function GraphViewInner({
       });
   }, [
     graphModel,
-    runtimeEvents,
+    graphRuntimeOverlay,
+    calls,
     runStatus,
     runError,
-    runFunctionName,
     direction,
     setNodes,
     setEdges,
@@ -234,10 +354,10 @@ function GraphViewInner({
   useEffect(() => {
     setNodes((nds) => decorateNodesWithRuntime(nds));
   }, [
-    runtimeEvents,
+    graphRuntimeOverlay,
+    calls,
     runStatus,
     runError,
-    runFunctionName,
     customRenderers,
     selectedNodeId,
     setNodes,
@@ -320,6 +440,7 @@ function GraphViewInner({
   );
 
   return (
+    <GraphThemeContext.Provider value={theme}>
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
       {/* Override @xyflow/react defaults:
             - .react-flow__node-group has a built-in light gray fill + 1px
@@ -372,11 +493,16 @@ function GraphViewInner({
           --xy-controls-box-shadow-default: 0 4px 14px rgba(26, 22, 18, 0.10);
         }
         .react-flow__controls {
-          border: 1px solid rgba(26, 22, 18, 0.14);
           border-radius: 8px;
           overflow: hidden;
           backdrop-filter: blur(8px);
           -webkit-backdrop-filter: blur(8px);
+        }
+        .react-flow.light .react-flow__controls {
+          border: 1px solid rgba(26, 22, 18, 0.14);
+        }
+        .react-flow.dark .react-flow__controls {
+          border: 1px solid rgba(255, 255, 255, 0.12);
         }
         @keyframes baml-graph-spin {
           to { transform: rotate(360deg); }
@@ -404,7 +530,7 @@ function GraphViewInner({
         fitView
         fitViewOptions={{ minZoom: 0.3, maxZoom: 0.85, padding: 0.2 }}
         proOptions={{ hideAttribution: true }}
-        colorMode="light"
+        colorMode={theme}
       >
         <Controls
           position="bottom-left"
@@ -412,7 +538,7 @@ function GraphViewInner({
         />
         <Background
           variant={BackgroundVariant.Dots}
-          color="rgba(42,37,32,0.12)"
+          color={chrome.backgroundDots}
           gap={18}
           size={1}
         />
@@ -439,25 +565,24 @@ function GraphViewInner({
           justifyContent: 'center',
           padding: 0,
           borderRadius: 8,
-          border: '1px solid #D8CFBD',
-          background: 'rgba(255,253,246,0.92)',
+          border: `1px solid ${chrome.button.border}`,
+          background: chrome.button.bg,
           backdropFilter: 'blur(8px)',
           WebkitBackdropFilter: 'blur(8px)',
-          color: '#1A1612',
+          color: chrome.button.text,
           cursor: 'pointer',
           fontSize: 14,
           lineHeight: 1,
-          boxShadow:
-            '0 1px 2px rgba(26,22,18,0.10), inset 0 1px 0 rgba(255,255,255,0.6)',
+          boxShadow: chrome.button.shadow,
           transition: 'background 120ms ease, border-color 120ms ease',
         }}
         onMouseEnter={(e) => {
-          e.currentTarget.style.background = '#F4EEE0';
-          e.currentTarget.style.borderColor = '#C9BFA9';
+          e.currentTarget.style.background = chrome.button.bgHover;
+          e.currentTarget.style.borderColor = chrome.button.borderHover;
         }}
         onMouseLeave={(e) => {
-          e.currentTarget.style.background = 'rgba(255,253,246,0.92)';
-          e.currentTarget.style.borderColor = '#D8CFBD';
+          e.currentTarget.style.background = chrome.button.bg;
+          e.currentTarget.style.borderColor = chrome.button.border;
         }}
         title={`Switch to ${direction === 'horizontal' ? 'vertical' : 'horizontal'} layout`}
         aria-label="Toggle layout direction"
@@ -465,6 +590,7 @@ function GraphViewInner({
         {direction === 'horizontal' ? '\u2195' : '\u2194'}
       </button>
     </div>
+    </GraphThemeContext.Provider>
   );
 }
 

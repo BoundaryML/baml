@@ -32,7 +32,7 @@ test "methods_after_successful_settle" {
 // Pending future (long sleep keeps the spawn body parked): state() returns
 // Pending. The orphaned 5s-sleep future is parked and does not block the test.
 function methods_on_pending_future() -> baml.future.FutureState {
-    let f = spawn { baml.sys.sleep(5000); 42 };
+    let f = spawn { baml.sys.sleep(baml.time.Duration.from_milliseconds(5000n)); 42 };
     let _ = f.is_settled();
     f.state()
 }
@@ -43,7 +43,7 @@ test "methods_on_pending_future" {
 
 // After f.cancel() on a pending future: state() returns Cancelled.
 function methods_after_cancel() -> baml.future.FutureState {
-    let f = spawn { baml.sys.sleep(5000); 42 };
+    let f = spawn { baml.sys.sleep(baml.time.Duration.from_milliseconds(5000n)); 42 };
     let _ = f.cancel();
     f.state()
 }

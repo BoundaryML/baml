@@ -366,10 +366,8 @@ impl App {
                 self.recompile();
             }
             // Trigger compiler rebuild on 'R' (Shift+R)
-            (KeyCode::Char('R'), KeyModifiers::SHIFT) => {
-                if self.watcher.is_watching_compiler() {
-                    self.trigger_rebuild();
-                }
+            (KeyCode::Char('R'), KeyModifiers::SHIFT) if self.watcher.is_watching_compiler() => {
+                self.trigger_rebuild();
             }
             // Enter to swap to new binary when build is ready
             (KeyCode::Enter, KeyModifiers::NONE) if ready_to_swap => {
@@ -509,10 +507,8 @@ impl App {
                 }
             }
             // Execute function on Enter when on VM Runner tab
-            (KeyCode::Enter, KeyModifiers::NONE) => {
-                if in_vm_runner {
-                    self.vm_runner_execute();
-                }
+            (KeyCode::Enter, KeyModifiers::NONE) if in_vm_runner => {
+                self.vm_runner_execute();
             }
             // Copy current output to clipboard with 'c' or 'y' (vim-style yank)
             (KeyCode::Char('c'), KeyModifiers::NONE) | (KeyCode::Char('y'), KeyModifiers::NONE) => {

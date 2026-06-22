@@ -30,6 +30,28 @@ function call_with_class_callback(callback: (Person) -> string, p: Person) -> st
     callback(p)
 }
 
+// ─── Optional args × host callables (the combination) ───────────────────────
+//
+// These exercise the intersection of two surfaces that were each covered
+// in isolation but never together: a host callable whose *own* type
+// carries optional parameters (`y?: int, z?: string`). Defaults are not
+// permitted inside a callable type — only the `?` optional marker is — so the
+// host's own language-level default is the only source of a value when BAML
+// omits the arg. Every case below uses the same two-optional callback shape so
+// the per-bridge `$opts` reshape is exercised with more than one optional in
+// every scenario (supplied, int-return, omitted, and second-only).
+function call_callback_with_optional_args_all_unset(callback: (x: int, y?: int, z?: int) -> int, x: int) -> int[] {
+    [callback(x)]
+}
+
+function call_callback_with_optional_args_partially_set(callback: (x: int, y?: int, z?: int) -> int, x: int) -> int[] {
+    [callback(x, y = 2), callback(x, z = 3)]
+}
+
+function call_callback_with_optional_args_all_set(callback: (x: int, y?: int, z?: int) -> int, x: int) -> int[] {
+    [callback(x, y = 2, z = 3)]
+}
+
 // Loop that invokes the callback N times — exercises N round-trips
 // through SysOp::BamlHostCallHostValue.
 function call_repeatedly(callback: (int) -> string, n: int) -> string[] {

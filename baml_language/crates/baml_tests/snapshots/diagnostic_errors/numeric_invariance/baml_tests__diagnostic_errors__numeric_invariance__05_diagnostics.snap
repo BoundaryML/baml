@@ -122,70 +122,70 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0001
 ────╯
 
-  [type] error: operator `Add` cannot be applied to `int | null` and `int`
+  [type] error: operator `+` cannot be applied to `int | null` and `int`
     ╭─[ numeric_invariance.baml:67:5 ]
     │
  67 │     x + y
     │     ──┬──  
-    │       ╰──── operator `Add` cannot be applied to `int | null` and `int`
+    │       ╰──── operator `+` cannot be applied to `int | null` and `int`
     │ 
     │ Note: Error code: E0004
 ────╯
 
-  [type] error: operator `BitAnd` cannot be applied to `int | null` and `int`
+  [type] error: operator `&` cannot be applied to `int | null` and `int`
     ╭─[ numeric_invariance.baml:72:5 ]
     │
  72 │     x & y
     │     ──┬──  
-    │       ╰──── operator `BitAnd` cannot be applied to `int | null` and `int`
+    │       ╰──── operator `&` cannot be applied to `int | null` and `int`
     │ 
     │ Note: Error code: E0004
 ────╯
 
-  [type] error: operator `Lt` cannot be applied to `int | null` and `int`
+  [type] error: cannot order `int | null` and `int` with `<`: ordering requires both operands to have the same type
     ╭─[ numeric_invariance.baml:79:5 ]
     │
  79 │     x < y
     │     ──┬──  
-    │       ╰──── operator `Lt` cannot be applied to `int | null` and `int`
+    │       ╰──── cannot order `int | null` and `int` with `<`: ordering requires both operands to have the same type
     │ 
     │ Note: Error code: E0004
 ────╯
 
-  [type] error: operator `Eq` cannot be applied to `float | null` and `bigint`
-    ╭─[ numeric_invariance.baml:85:5 ]
+  [type] warning: `float | null` and `bigint` share no value, so this comparison is always false
+    ╭─[ numeric_invariance.baml:87:5 ]
     │
- 85 │     x == y
+ 87 │     x == y
     │     ───┬──  
-    │        ╰──── operator `Eq` cannot be applied to `float | null` and `bigint`
+    │        ╰──── `float | null` and `bigint` share no value, so this comparison is always false
     │ 
     │ Note: Error code: E0004
 ────╯
 
-  [type] error: operator `Lt` cannot be applied to `float | null` and `bigint`
-    ╭─[ numeric_invariance.baml:91:5 ]
+  [type] error: cannot order `float | null` and `bigint` with `<`: ordering requires both operands to have the same type
+    ╭─[ numeric_invariance.baml:93:5 ]
     │
- 91 │     x < y
+ 93 │     x < y
     │     ──┬──  
-    │       ╰──── operator `Lt` cannot be applied to `float | null` and `bigint`
+    │       ╰──── cannot order `float | null` and `bigint` with `<`: ordering requires both operands to have the same type
     │ 
     │ Note: Error code: E0004
 ────╯
 
   [type] error: type mismatch: expected bigint, got 1
-    ╭─[ numeric_invariance.baml:99:27 ]
-    │
- 99 │     BigintHolder { count: 1 }
-    │                           ┬  
-    │                           ╰── type mismatch: expected bigint, got 1
-    │ 
-    │ Note: Error code: E0001
-────╯
+     ╭─[ numeric_invariance.baml:101:27 ]
+     │
+ 101 │     BigintHolder { count: 1 }
+     │                           ┬  
+     │                           ╰── type mismatch: expected bigint, got 1
+     │ 
+     │ Note: Error code: E0001
+─────╯
 
   [type] error: type mismatch: expected bigint, got 0
-     ╭─[ numeric_invariance.baml:104:44 ]
+     ╭─[ numeric_invariance.baml:106:44 ]
      │
- 104 │ function BigintParamDefaultInt(x: bigint = 0) -> bigint {
+ 106 │ function BigintParamDefaultInt(x: bigint = 0) -> bigint {
      │                                            ┬  
      │                                            ╰── type mismatch: expected bigint, got 0
      │ 

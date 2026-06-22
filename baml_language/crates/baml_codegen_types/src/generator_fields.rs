@@ -4,7 +4,7 @@
 //! settle on per-target rules. New backends or policies extend the enums
 //! here and the dispatch in `baml-cli generate`.
 
-/// Code-generation target. Surfaces as `output_type "python/pydantic"`.
+/// Code-generation target. Surfaces as `output_type = "python/pydantic"`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::EnumString, strum::Display)]
 pub enum OutputType {
     /// Python with Pydantic v2 models.

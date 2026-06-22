@@ -24,38 +24,7 @@ impl BexLspNotification for BexMulitProject {
         _params: lsp_notification_params!("initialized"),
     ) -> Result<(), LspError> {
         let workspace_roots = self.workspace_roots.lock().unwrap().clone();
-
-        if workspace_roots.is_empty() {
-            tracing::warn!(
-                "No workspace roots provided during initialize — skipping project discovery"
-            );
-            return Ok(());
-        }
-
-        let mut project_roots = Vec::new();
-        for root in &workspace_roots {
-            let Ok(dirs) = root.walk_dir() else {
-                tracing::warn!("Failed to walk workspace root: {}", root.as_str());
-                continue;
-            };
-            for entry in dirs.filter_map(Result::ok) {
-                if let Ok(pr) = Self::get_baml_project_root(&entry) {
-                    project_roots.push(pr);
-                }
-            }
-        }
-
-        project_roots.sort_by_key(|path| path.as_str().to_string());
-        project_roots.dedup_by(|a, b| a.as_str() == b.as_str());
-
-        tracing::info!("Discovered {} BAML project(s)", project_roots.len());
-
-        for project_root in project_roots {
-            let Ok(_) = self.get_or_create_project(project_root.clone()) else {
-                continue;
-            };
-            self.refresh_project(&project_root, ProjectRefreshMode::Full);
-        }
+        self.discover_workspace_projects(&workspace_roots);
 
         Ok(())
     }
