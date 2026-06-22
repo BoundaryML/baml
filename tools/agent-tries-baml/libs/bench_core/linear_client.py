@@ -27,32 +27,52 @@ LINEAR_API = os.environ.get("LINEAR_API_BASE", "https://api.linear.app/graphql")
 # there is no skill/language split on the board (kind is intentionally dropped).
 LINEAR_TEAM_ID = os.environ.get("LINEAR_TEAM_ID", "179250f3-902f-491e-94f8-8256292e8386")
 
+def _required_id(name: str) -> str:
+    """Read a required Linear id (status-group label or workflow state) from env.
+
+    These ids are deployment config, injected as secrets (Fly secrets / Infisical)
+    rather than hardcoded, so a different workspace points at its own ids and no
+    real ids are baked into source.
+
+    Args:
+        name: The environment variable holding the Linear id.
+
+    Returns:
+        The id string.
+
+    Raises:
+        RuntimeError: When the variable is unset or empty — a misconfigured deploy
+            should fail loudly at startup, not silently write to the wrong board.
+    """
+    v = os.environ.get(name)
+    if not v:
+        raise RuntimeError(
+            f"{name} is not set; the Linear status ids are configured as secrets "
+            "(see docs/configuration.md), not hardcoded")
+    return v
+
+
 # Status-group label ids (group parent = agent-tries-baml-status). Linear enforces
-# one label per group, so exactly one of these is ever set on an issue. They are
-# env-overridable so a different workspace can point at its own label ids.
-LINEAR_STATUS_NOT_STARTED = os.environ.get(
-    "LINEAR_STATUS_NOT_STARTED", "700b8d57-8a43-4186-b472-cb0339138d09")
-LINEAR_STATUS_APPROVED = os.environ.get(
-    "LINEAR_STATUS_APPROVED", "d85aa831-7a1e-42d0-839c-1f5e69df24b0")
-LINEAR_STATUS_TO_CURSOR = os.environ.get(
-    "LINEAR_STATUS_TO_CURSOR", "3f97173c-f313-4252-a22f-0162086cb6b9")
-LINEAR_STATUS_PR_PREP = os.environ.get(
-    "LINEAR_STATUS_PR_PREP", "434a1075-568a-4cc6-b3a5-c7ec055479f0")
-LINEAR_STATUS_READY_TO_MERGE = os.environ.get(
-    "LINEAR_STATUS_READY_TO_MERGE", "fd0bc873-0a3e-4e1f-8657-d9288bcd4fab")
-LINEAR_STATUS_NEEDS_HUMAN = os.environ.get(
-    "LINEAR_STATUS_NEEDS_HUMAN", "8678b003-ae70-4e19-ab30-ab3a12805178")
-LINEAR_STATUS_REDRAFT = os.environ.get(
-    "LINEAR_STATUS_REDRAFT", "f23b1672-4871-4fc4-b005-3ba735086595")
-LINEAR_STATUS_MERGED = os.environ.get(
-    "LINEAR_STATUS_MERGED", "3e52a59e-30c0-4cc8-b9d1-12fd658f00c0")
+# one label per group, so exactly one of these is ever set on an issue. Sourced from
+# the environment (deployed as secrets), never hardcoded.
+LINEAR_STATUS_NOT_STARTED = _required_id("LINEAR_STATUS_NOT_STARTED")
+LINEAR_STATUS_APPROVED = _required_id("LINEAR_STATUS_APPROVED")
+LINEAR_STATUS_TO_CURSOR = _required_id("LINEAR_STATUS_TO_CURSOR")
+LINEAR_STATUS_PR_PREP = _required_id("LINEAR_STATUS_PR_PREP")
+LINEAR_STATUS_READY_TO_MERGE = _required_id("LINEAR_STATUS_READY_TO_MERGE")
+LINEAR_STATUS_NEEDS_HUMAN = _required_id("LINEAR_STATUS_NEEDS_HUMAN")
+LINEAR_STATUS_REDRAFT = _required_id("LINEAR_STATUS_REDRAFT")
+LINEAR_STATUS_MERGED = _required_id("LINEAR_STATUS_MERGED")
+# Human-only terminal status: moving a card here deletes the issue from the
+# pipeline DB entirely (handled by ingress /linear/webhook). The bot never sets it.
+LINEAR_STATUS_REJECTED = _required_id("LINEAR_STATUS_REJECTED")
 
 # The full set of status-group label ids, used to STRIP the existing status label
 # before adding a new one (so the group never carries two at once).
 STATUS_GROUP_LABEL_IDS = frozenset({
     LINEAR_STATUS_NOT_STARTED, LINEAR_STATUS_APPROVED, LINEAR_STATUS_TO_CURSOR,
     LINEAR_STATUS_PR_PREP, LINEAR_STATUS_READY_TO_MERGE, LINEAR_STATUS_NEEDS_HUMAN,
-    LINEAR_STATUS_REDRAFT, LINEAR_STATUS_MERGED,
+    LINEAR_STATUS_REDRAFT, LINEAR_STATUS_MERGED, LINEAR_STATUS_REJECTED,
 })
 
 # Canonical human names for each status-group label id (the child label names in
@@ -67,7 +87,43 @@ STATUS_LABEL_NAMES: dict[str, str] = {
     LINEAR_STATUS_NEEDS_HUMAN: "needs-human",
     LINEAR_STATUS_REDRAFT: "redraft",
     LINEAR_STATUS_MERGED: "merged",
+    LINEAR_STATUS_REJECTED: "rejected",
 }
+
+# Linear native workflow-status (state) ids — the board's Status column. ATB keeps
+# its fine-grained pipeline stage in the status-group LABEL, and mirrors it onto one
+# of these coarse Linear statuses so the native board view is meaningful too. Also
+# sourced from the environment (deployed as secrets), never hardcoded.
+LINEAR_STATE_UNCOMMITTED = _required_id("LINEAR_STATE_UNCOMMITTED")
+LINEAR_STATE_IN_PROGRESS = _required_id("LINEAR_STATE_IN_PROGRESS")
+LINEAR_STATE_IN_REVIEW = _required_id("LINEAR_STATE_IN_REVIEW")
+LINEAR_STATE_DONE = _required_id("LINEAR_STATE_DONE")
+LINEAR_STATE_CANCELED = _required_id("LINEAR_STATE_CANCELED")
+
+# ATB status-group label id -> Linear workflow status id. Anything not listed here
+# (e.g. pr-prep, ready-to-merge) falls through to In Review via state_id_for_label.
+STATUS_LABEL_TO_STATE: dict[str, str] = {
+    LINEAR_STATUS_NOT_STARTED: LINEAR_STATE_UNCOMMITTED,
+    LINEAR_STATUS_APPROVED: LINEAR_STATE_IN_PROGRESS,
+    LINEAR_STATUS_TO_CURSOR: LINEAR_STATE_IN_PROGRESS,
+    LINEAR_STATUS_REDRAFT: LINEAR_STATE_IN_REVIEW,
+    LINEAR_STATUS_NEEDS_HUMAN: LINEAR_STATE_CANCELED,
+    LINEAR_STATUS_MERGED: LINEAR_STATE_DONE,
+    LINEAR_STATUS_REJECTED: LINEAR_STATE_CANCELED,
+}
+
+
+def state_id_for_label(status_label_id: str) -> str:
+    """Map an ATB status-group label id to its Linear workflow status id.
+
+    Args:
+        status_label_id: The ATB status-group label id being set.
+
+    Returns:
+        The Linear workflow status id to set alongside the label; unmapped labels
+        (pr-prep, ready-to-merge) fall through to In Review.
+    """
+    return STATUS_LABEL_TO_STATE.get(status_label_id, LINEAR_STATE_IN_REVIEW)
 
 
 class LinearError(RuntimeError):
@@ -248,6 +304,7 @@ class LinearClient:
             {"input": {
                 "teamId": self._team_id, "title": title,
                 "description": description, "labelIds": [status_label_id],
+                "stateId": state_id_for_label(status_label_id),
             }},
         )
         result = data.get("issueCreate") or {}
@@ -289,6 +346,7 @@ class LinearClient:
         label_ids = self._swap_status_label(current, status_label_id)
         await self._issue_update(issue_id, {
             "title": title, "description": description, "labelIds": label_ids,
+            "stateId": state_id_for_label(status_label_id),
         })
 
     async def set_status(self, issue_id: str, status_label_id: str) -> None:
@@ -307,7 +365,9 @@ class LinearClient:
         """
         current = await self._current_label_ids(issue_id)
         label_ids = self._swap_status_label(current, status_label_id)
-        await self._issue_update(issue_id, {"labelIds": label_ids})
+        await self._issue_update(issue_id, {
+            "labelIds": label_ids, "stateId": state_id_for_label(status_label_id),
+        })
 
     async def _issue_update(self, issue_id: str, input_fields: dict[str, Any]) -> None:
         """Run an ``issueUpdate`` mutation with the given input fields.

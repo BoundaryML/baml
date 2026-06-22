@@ -6,6 +6,26 @@
 #
 # Scale workers/proxies: docker compose up --scale baml-worker=4 --scale claude-proxy=3
 
+# Linear status/label/state ids are required from the environment by
+# bench_core.linear_client (no hardcoded defaults; the real ids are deployed as
+# secrets). These placeholders keep the local stack importable; override via .env
+# to drive a real board.
+x-linear-ids: &linear-ids
+  LINEAR_STATUS_NOT_STARTED: ${LINEAR_STATUS_NOT_STARTED:-dummy-not-started}
+  LINEAR_STATUS_APPROVED: ${LINEAR_STATUS_APPROVED:-dummy-approved}
+  LINEAR_STATUS_TO_CURSOR: ${LINEAR_STATUS_TO_CURSOR:-dummy-to-cursor}
+  LINEAR_STATUS_PR_PREP: ${LINEAR_STATUS_PR_PREP:-dummy-pr-prep}
+  LINEAR_STATUS_READY_TO_MERGE: ${LINEAR_STATUS_READY_TO_MERGE:-dummy-ready-to-merge}
+  LINEAR_STATUS_NEEDS_HUMAN: ${LINEAR_STATUS_NEEDS_HUMAN:-dummy-needs-human}
+  LINEAR_STATUS_REDRAFT: ${LINEAR_STATUS_REDRAFT:-dummy-redraft}
+  LINEAR_STATUS_MERGED: ${LINEAR_STATUS_MERGED:-dummy-merged}
+  LINEAR_STATUS_REJECTED: ${LINEAR_STATUS_REJECTED:-dummy-rejected}
+  LINEAR_STATE_UNCOMMITTED: ${LINEAR_STATE_UNCOMMITTED:-dummy-state-uncommitted}
+  LINEAR_STATE_IN_PROGRESS: ${LINEAR_STATE_IN_PROGRESS:-dummy-state-in-progress}
+  LINEAR_STATE_IN_REVIEW: ${LINEAR_STATE_IN_REVIEW:-dummy-state-in-review}
+  LINEAR_STATE_DONE: ${LINEAR_STATE_DONE:-dummy-state-done}
+  LINEAR_STATE_CANCELED: ${LINEAR_STATE_CANCELED:-dummy-state-canceled}
+
 services:
   # ---- self-hosted Convex backend (the DB + reactivity engine) ----
   convex:
@@ -136,6 +156,7 @@ services:
       BAML_REDRAFT_MODEL: ${BAML_REDRAFT_MODEL:-claude-sonnet-4-6}
       ATB_LINEAR_TOKEN: ${ATB_LINEAR_TOKEN:-}
       LINEAR_TEAM_ID: ${LINEAR_TEAM_ID:-179250f3-902f-491e-94f8-8256292e8386}
+      <<: *linear-ids
     depends_on: [api, claude-proxy]
 
   bug-verify:
@@ -150,6 +171,7 @@ services:
       ATB_CLAUDE_PROXY_TOKEN: ${CLAUDE_PROXY_TOKEN:-devproxytoken}
       ATB_LINEAR_TOKEN: ${ATB_LINEAR_TOKEN:-}
       LINEAR_TEAM_ID: ${LINEAR_TEAM_ID:-179250f3-902f-491e-94f8-8256292e8386}
+      <<: *linear-ids
       BUG_VERIFY_MODEL: ${BUG_VERIFY_MODEL:-claude-sonnet-4-6}
     depends_on: [api, claude-proxy]
 
@@ -163,6 +185,7 @@ services:
       SERVICE_TOKEN: ${SERVICE_TOKEN:-devservicetoken}
       ATB_LINEAR_TOKEN: ${ATB_LINEAR_TOKEN:-}
       LINEAR_TEAM_ID: ${LINEAR_TEAM_ID:-179250f3-902f-491e-94f8-8256292e8386}
+      <<: *linear-ids
       SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
       SLACK_FIX_CHANNEL: ${SLACK_FIX_CHANNEL:-}
       CURSOR_API_KEY: ${CURSOR_API_KEY:-}
@@ -193,6 +216,7 @@ services:
       ATB_LINEAR_TOKEN: ${ATB_LINEAR_TOKEN:-}
       ATB_LINEAR_WEBHOOK_SECRET: ${ATB_LINEAR_WEBHOOK_SECRET:-}
       LINEAR_TEAM_ID: ${LINEAR_TEAM_ID:-179250f3-902f-491e-94f8-8256292e8386}
+      <<: *linear-ids
     ports:
       - "${INGRESS_PORT:-8081}:8081"
     depends_on: [api]

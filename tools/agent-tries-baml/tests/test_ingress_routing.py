@@ -159,6 +159,40 @@ def test_linear_webhook_approved_ignored_when_in_flight(fake_service):
     assert fake_service.updated == []  # already dispatched -> no re-dispatch
 
 
+def test_linear_webhook_failed_reapproves(fake_service):
+    """`failed` is a resting state: re-approving a dispatch that exhausted its
+    attempts (e.g. a transient Cursor 400) is the human retry path, so it flips
+    back to approved for a fresh dispatch."""
+    fake_service.rows = [{"_id": "iss_1", "linearIssueId": LINEAR_ID, "status": "failed"}]
+    client = TestClient(ing.app)
+    r = client.post("/linear/webhook", json=_issue_event(lc.LINEAR_STATUS_APPROVED))
+    assert r.status_code == 200
+    assert fake_service.updated == [("iss_1", {"status": "approved"})]
+
+
+def test_linear_webhook_prprep_restarts_fix_budget(fake_service):
+    """Moving a needs_human issue back to pr-prep restarts its 3-attempt fix budget and
+    clears the dispatch/dedup fields so the tracker re-tries the PR from scratch."""
+    fake_service.rows = [{"_id": "iss_1", "linearIssueId": LINEAR_ID, "status": "needs_human",
+                          "fixAttempts": 3, "lastFixedSha": "abc", "cursorAgentId": "bc-old"}]
+    client = TestClient(ing.app)
+    r = client.post("/linear/webhook", json=_issue_event(lc.LINEAR_STATUS_PR_PREP))
+    assert r.status_code == 200
+    assert fake_service.updated == [("iss_1", {"status": "prprep", "fixAttempts": 0,
+                                               "lastFixedSha": "", "cursorAgentId": "",
+                                               "fixSlackTs": ""})]
+
+
+def test_linear_webhook_prprep_noop_when_not_needs_human(fake_service):
+    """A pr-prep label on an issue already in prprep is the bot's own write — no-op
+    (the status-state gate keeps the retry exclusive to needs_human)."""
+    fake_service.rows = [{"_id": "iss_1", "linearIssueId": LINEAR_ID, "status": "prprep"}]
+    client = TestClient(ing.app)
+    r = client.post("/linear/webhook", json=_issue_event(lc.LINEAR_STATUS_PR_PREP))
+    assert r.status_code == 200
+    assert fake_service.updated == []
+
+
 def test_linear_webhook_no_issue_id_is_400(fake_service):
     """An Issue event with no data.id returns 400."""
     client = TestClient(ing.app)

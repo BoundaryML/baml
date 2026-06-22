@@ -48,12 +48,19 @@ LINEAR_WEBHOOK_SECRET = os.environ.get("ATB_LINEAR_WEBHOOK_SECRET", "")
 LINEAR_WEBHOOK_MAX_SKEW_MS = int(os.environ.get("LINEAR_WEBHOOK_MAX_SKEW_MS", "60000"))
 # Loop/echo prevention is a status-state gate, NOT an actor check: a human-moved
 # label is only honored when the Convex issue sits in a resting state where that
-# move makes sense. Any in-flight/terminal status is ignored, so a duplicate
-# delivery — or a bot write that ever produced these labels — is a safe no-op.
-# This is identity-independent: the bot can share a human's API token without the
-# webhook suppressing that human's own board moves.
-_APPROVE_FROM = {"open", "confirmed", "needs_human", "redraft"}
-_REDRAFT_FROM = {"open", "confirmed", "needs_human", "approved"}
+# move makes sense. In-flight statuses (dispatching/fixing/syncing/redrafting) and
+# closed are ignored, so a duplicate delivery — or a bot write that ever produced
+# these labels — is a safe no-op. This is identity-independent: the bot can share a
+# human's API token without the webhook suppressing that human's own board moves.
+# `failed` is a resting state too (a dispatch that exhausted its attempts, e.g. a
+# transient Cursor 400) — re-approving / redrafting it from the board is the human
+# retry path, so both sets include it.
+_APPROVE_FROM = {"open", "confirmed", "needs_human", "redraft", "failed"}
+_REDRAFT_FROM = {"open", "confirmed", "needs_human", "approved", "failed"}
+# Moving a stuck issue back to pr-prep on the board is a human "retry": re-queue its
+# existing PR with a FRESH fix budget. Only from needs_human (the dead-end an exhausted
+# fix lands in) — a pr-prep label on any other status is the bot's own write (no-op).
+_RETRY_FROM = {"needs_human"}
 
 app = FastAPI(title="agent-tries-baml-ingress")
 _service = ServiceClient(SERVICE_URL, SERVICE_TOKEN)
@@ -274,31 +281,51 @@ async def linear_webhook(request: Request,
         return Response(status_code=200)
 
     issue = rows[0]
-    new_status = _route_linear_status(issue, data)
-    if new_status:
-        await _service.update("issues", issue["_id"], {"status": new_status})
-        log.info("linear webhook -> issue %s status=%s (linear=%s)",
-                 issue["_id"], new_status, linear_id)
+    # Rejected is a terminal human decision: moving a card to the "rejected" status
+    # label deletes the issue from the pipeline DB entirely (from ANY status — no
+    # resting-state gate). The Linear card stays in the Rejected column as the record;
+    # the bot never sets this label, so this can't echo a bot write.
+    label_ids = data.get("labelIds")
+    if label_ids is None:
+        label_ids = [lbl.get("id") for lbl in (data.get("labels") or [])]
+    if lc.LINEAR_STATUS_REJECTED in label_ids:
+        await _service.remove("issues", issue["_id"])
+        log.info("linear webhook -> issue %s REJECTED, deleted from DB (linear=%s)",
+                 issue["_id"], linear_id)
+        return Response(status_code=200)
+
+    patch = _route_linear_status(issue, data)
+    if patch:
+        await _service.update("issues", issue["_id"], patch)
+        log.info("linear webhook -> issue %s %s (linear=%s)",
+                 issue["_id"], patch, linear_id)
     return Response(status_code=200)
 
 
-def _route_linear_status(issue: dict[str, Any], data: dict[str, Any]) -> Optional[str]:
-    """Decide the issue status a Linear webhook should set from its labels.
+def _route_linear_status(issue: dict[str, Any], data: dict[str, Any]) -> Optional[dict[str, Any]]:
+    """Decide the issue patch a Linear webhook should apply from its labels.
 
     Reads the status-group label off the event's ``data`` (``labelIds`` directly,
-    or the ``labels`` array) and maps the two human-moved labels to their issue
-    lifecycle states — but only when the Convex issue currently sits in a resting
-    state where that move is valid (the status-state gate). A move targeting a
-    status the issue has already passed (in-flight dispatch, closed, or already
-    redrafting) is ignored, which is what makes the webhook safe against duplicate
-    deliveries and any echoed bot write without needing an actor check.
+    or the ``labels`` array) and maps the human-moved labels to issue patches — but
+    only when the Convex issue currently sits in a resting state where that move is
+    valid (the status-state gate). A move targeting a status the issue has already
+    passed (in-flight dispatch, closed, or already redrafting) is ignored, which is
+    what makes the webhook safe against duplicate deliveries and any echoed bot write
+    without needing an actor check.
+
+    The recognized human moves:
+      * approved  -> {"status": "approved"}   (the fix dispatcher claims it)
+      * redraft   -> {"status": "redraft"}    (the redraft loop claims it)
+      * pr-prep, from needs_human -> re-queue the existing PR with a FRESH fix budget
+        (``fixAttempts`` zeroed and the dispatch/dedup fields cleared) so the tracker
+        retries the merge-conflict / CI / CodeRabbit fix loop from scratch.
 
     Args:
         issue: The matched issue row; its current ``status`` gates the transition.
         data: The webhook event's ``data`` object for the issue.
 
     Returns:
-        The target issue status ("approved" or "redraft"), or None to do nothing.
+        The patch dict to apply, or None to do nothing.
     """
     label_ids = data.get("labelIds")
     if label_ids is None:
@@ -306,16 +333,23 @@ def _route_linear_status(issue: dict[str, Any], data: dict[str, Any]) -> Optiona
     cur = issue.get("status")
     if lc.LINEAR_STATUS_APPROVED in label_ids:
         if cur in _APPROVE_FROM:
-            return "approved"
+            return {"status": "approved"}
         log.info("linear webhook: approved label but issue %s is %s; no action",
                  issue.get("_id"), cur)
         return None
     if lc.LINEAR_STATUS_REDRAFT in label_ids:
         if cur in _REDRAFT_FROM:
-            return "redraft"
+            return {"status": "redraft"}
         log.info("linear webhook: redraft label but issue %s is %s; no action",
                  issue.get("_id"), cur)
         return None
+    if lc.LINEAR_STATUS_PR_PREP in label_ids:
+        if cur in _RETRY_FROM:
+            # Human retry of a stuck PR: restart the 3-attempt fix budget and clear the
+            # prior dispatch refs + per-sha dedup so the tracker re-dispatches afresh.
+            return {"status": "prprep", "fixAttempts": 0, "lastFixedSha": "",
+                    "cursorAgentId": "", "fixSlackTs": ""}
+        return None  # bot's own pr-prep write (issue already past needs_human) -> no-op
     return None
 
 

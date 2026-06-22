@@ -28,6 +28,18 @@ os.environ.setdefault("ATB_SLACK_SIGNING_SECRET", "devsigningsecret")
 # linear_sync freezes CURSOR_API_KEY at import time; set it before any test module
 # imports that service (the bench_stack fixture also sets it for the live drivers).
 os.environ.setdefault("ATB_CURSOR_API_KEY", "devcursorkey")
+# Linear status/label/state ids are required from env (no hardcoded defaults) in
+# bench_core.linear_client; seed distinct dummy values so import doesn't raise during
+# unit tests. Real ids are deployed as secrets. Distinct values matter — tests match
+# label ids against these constants, so collisions would cross-trigger routing.
+for _lid in (
+    "LINEAR_STATUS_NOT_STARTED", "LINEAR_STATUS_APPROVED", "LINEAR_STATUS_TO_CURSOR",
+    "LINEAR_STATUS_PR_PREP", "LINEAR_STATUS_READY_TO_MERGE", "LINEAR_STATUS_NEEDS_HUMAN",
+    "LINEAR_STATUS_REDRAFT", "LINEAR_STATUS_MERGED", "LINEAR_STATUS_REJECTED",
+    "LINEAR_STATE_UNCOMMITTED", "LINEAR_STATE_IN_PROGRESS", "LINEAR_STATE_IN_REVIEW",
+    "LINEAR_STATE_DONE", "LINEAR_STATE_CANCELED",
+):
+    os.environ.setdefault(_lid, f"dummy-{_lid.lower().replace('_', '-')}")
 
 import shutil
 import socket
