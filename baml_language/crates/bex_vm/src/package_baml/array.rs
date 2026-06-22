@@ -782,6 +782,17 @@ impl BamlClassArray for PackageBamlImpl {
         resolve_index(index, array.len()).map(|i| array[i])
     }
 
+    /// Builds a new array of `length` elements, each equal to `value`.
+    ///
+    /// Static constructor for `baml.Array.filled`. A negative `length` clamps to
+    /// an empty array. `Value` is `Copy`, so every slot shares the same `value`
+    /// (for reference types, the same underlying object).
+    #[allow(clippy::cast_sign_loss)]
+    fn filled(length: i64, value: &Value) -> Vec<Value> {
+        let count = usize::try_from(length).unwrap_or(0);
+        vec![*value; count]
+    }
+
     fn concat(array: &[Value], other: &[Value]) -> Vec<Value> {
         array.iter().chain(other.iter()).copied().collect()
     }

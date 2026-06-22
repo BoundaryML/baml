@@ -13,31 +13,7 @@ function baml.Array.concat(self: baml.Array<T>, other: T[]) -> T[] {
 function baml.Array.every(self: baml.Array<T>, predicate: (T) -> bool throws E) -> bool {
 }
 
-function baml.Array.filled(n: int, value: T) -> T[] {
-    alloc_array 0
-    store_var out
-    load_const 0
-    store_var i
-
-  L0:
-    load_var2 4 1
-    cmp_int_op <
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    load_var out
-    return
-
-  L2:
-    load_var2 3 2
-    call baml.Array.push
-    pop 1
-    load_var i
-    load_const 1
-    add_int
-    store_var i
-    jump L0
+function baml.Array.filled(length: int, value: T) -> T[] {
 }
 
 function baml.Array.filter(self: baml.Array<T>, predicate: (T) -> bool throws E) -> T[] {
