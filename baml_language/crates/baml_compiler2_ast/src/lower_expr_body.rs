@@ -2526,6 +2526,23 @@ impl LoweringContext {
         if type_args.is_empty() {
             return base;
         }
+        // Only a bare path reference to a generic function may be specialized into
+        // a value (`foo<int>`, `a.b.foo<int>`). A *parenthesized* base (`(foo)<int>`)
+        // is rejected even though its inner expression is a path — the paren lowers
+        // transparently, so it must be detected on the CST node — as is any other
+        // non-path base (`(a + b)<int>`, `g().foo<int>`).
+        let parenthesized_base = node.children().any(|n| n.kind() == SyntaxKind::PAREN_EXPR);
+        let path_base = matches!(self.exprs[base], Expr::Path(_));
+        if parenthesized_base || !path_base {
+            self.diags
+                .push(LoweringDiagnostic::TypeArgsOnNonPathBase { span: range });
+            // Recover by still specializing the inner reference when it is a path
+            // (`(foo)<int>`), so a downstream "must be specialized" error does not
+            // pile on; a genuinely non-path base cannot be specialized.
+            if !path_base {
+                return base;
+            }
+        }
         self.alloc_expr(Expr::GenericApply { base, type_args }, range)
     }
 
@@ -4170,8 +4187,10 @@ impl LoweringContext {
     fn lower_lambda_expr(&mut self, node: &SyntaxNode) -> ExprId {
         use baml_compiler_syntax::ast;
 
-        // Extract optional generic params: <T>, <K, V>, etc.
-        let generic_params = crate::lower_cst::extract_generic_params(node);
+        // A lambda is a function *value* and cannot declare generic parameters
+        // (rejected by the parser). Any leading `<...>` is left in the CST for
+        // recovery and ignored here, so the lambda carries no generics.
+        let generic_params = Vec::new();
 
         // Lower parameter list — gives us Vec<Param>
         let (params, defaults) = node

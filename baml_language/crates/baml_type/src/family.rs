@@ -143,15 +143,9 @@ ty_family! {
         #[axis(abstract)]
         Union(Vec<Ty>, TyAttr),
 
-        /// Function/arrow type: `<G…>(T1, T2, ...) -> R throws E`.
-        ///
-        /// `generic_params`/`generic_param_bounds` carry the function's declared
-        /// type parameters and their bounds (kept at runtime for reflection, even
-        /// though body `TypeVar`s are erased at the runtime boundary).
+        /// Function/arrow type: `(T1, T2, ...) -> R throws E`.
         #[axis(concrete)]
         Function {
-            generic_params: Vec<Name>,
-            generic_param_bounds: Vec<Option<Ty>>,
             params: Vec<FunctionParamTy>,
             ret: Box<Ty>,
             throws: Box<Ty>,
@@ -296,8 +290,6 @@ mod tests {
         Ty::Map {
             key: Box::new(Ty::String { attr: a() }),
             value: Box::new(Ty::Function {
-                generic_params: vec![Name::new("T")],
-                generic_param_bounds: vec![Some(Ty::String { attr: a() }), None],
                 params: vec![
                     FunctionParamTy::required(Some(Name::new("x")), Ty::Int { attr: a() }),
                     FunctionParamTy::optional(

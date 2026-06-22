@@ -5697,45 +5697,15 @@ fn out_of_body_implements_for_primitive_satisfies_interface_type() {
 }
 
 #[test]
-fn out_of_body_implements_for_generic_function_rejects_non_generic_function_value() {
+fn out_of_body_implements_for_generic_function_type_is_rejected() {
+    // A function *type* cannot declare generic parameters (function values are
+    // realized), so it cannot be the target of an out-of-body `implements`.
     assert_compile_error_contains(
         r#"
         interface GenericCallable {}
-
         implements GenericCallable for <T>(x: int) -> int {}
-
-        function concrete(x: int) -> int {
-            return x
-        }
-
-        function main() -> void {
-            let f: (x: int) -> int = concrete
-            let marker: GenericCallable = f
-        }
         "#,
-        "type mismatch",
-    );
-}
-
-#[test]
-fn out_of_body_implements_for_generic_function_rejects_different_bound() {
-    assert_compile_error_contains(
-        r#"
-        interface GenericCallable {}
-        interface Readable {}
-        interface Writable {}
-
-        implements GenericCallable for <T extends Readable>(x: int) -> int {}
-
-        function writable<U extends Writable>(x: int) -> int {
-            return x
-        }
-
-        function main() -> void {
-            let marker: GenericCallable = writable
-        }
-        "#,
-        "type mismatch",
+        "generic parameters",
     );
 }
 
@@ -7122,23 +7092,37 @@ async fn bounded_type_var_rule_satisfies_inferred_generic_interface_bound() {
 }
 
 #[test]
-fn interface_method_reference_accepts_bounded_generic_function_annotation() {
-    assert_no_compile_errors(
+fn bounded_generic_function_type_annotation_is_rejected() {
+    // A function *type* annotation cannot declare generic parameters; the valid
+    // form is the un-annotated `let method = MyInterface.myMethod`.
+    assert_compile_error_contains(
         r#"
         interface MyInterface {
             function myMethod(self) -> int
-        }
-        class MyClass {
-            implements MyInterface {
-                function myMethod(self) -> int {
-                    return 1
-                }
-            }
         }
         function main() -> void {
             let method : <T extends MyInterface>(T) -> int = MyInterface.myMethod
         }
     "#,
+        "generic parameters",
+    );
+}
+
+#[test]
+fn parenthesized_generic_apply_is_rejected() {
+    // Only a *bare* path reference may be specialized into a value (`foo<int>`);
+    // a parenthesized base `(foo)<int>` is rejected even though the inner is a
+    // path. (`foo<int>` and `foo<int>(x)` remain valid — see the explicit-type-arg
+    // tests.)
+    assert_compile_error_contains(
+        r#"
+        function identity<T>(x: T) -> T { x }
+        function caller() -> string {
+            let f = (identity)<int>
+            return "ok"
+        }
+        "#,
+        "function reference",
     );
 }
 

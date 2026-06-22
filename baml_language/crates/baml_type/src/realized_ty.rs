@@ -62,8 +62,6 @@ mod tests {
     #[test]
     fn round_trip_function() {
         let ty = Ty::Function {
-            generic_params: vec![Name::new("T")],
-            generic_param_bounds: vec![Some(Ty::String { attr: def() })],
             params: vec![
                 crate::FunctionParamTy::required(Some(Name::new("a")), Ty::Int { attr: def() }),
                 crate::FunctionParamTy::optional(
@@ -149,8 +147,6 @@ mod tests {
     #[test]
     fn nested_evolving_map_in_function_ret_blocks_conversion() {
         let ty = Ty::Function {
-            generic_params: vec![],
-            generic_param_bounds: vec![],
             params: vec![],
             ret: Box::new(Ty::EvolvingMap(
                 Box::new(Ty::Never { attr: def() }),

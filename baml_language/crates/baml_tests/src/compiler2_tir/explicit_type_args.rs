@@ -259,11 +259,12 @@ function caller() -> string {
     "#);
 }
 
-/// Control: a bare function reference (`let f = identity`, no type args) stays
-/// fully generic, so `f("s")` infers T=string and is accepted. Confirms the
-/// rejection above is specific to the *instantiated* value, not function refs.
+/// A bare reference to a generic function (`let f = identity`, no type args and
+/// no expected type) is an *unrealized* function value, so it is rejected: a
+/// generic function is a type constructor and must be specialized (`identity<int>`)
+/// or inferable from context before it can be used as a value.
 #[test]
-fn bare_function_ref_stays_generic() {
+fn bare_generic_function_ref_rejected() {
     let mut db = make_db();
     let file = db.add_file(
         "test.baml",
@@ -282,10 +283,11 @@ function caller() -> string {
       }
     }
     function user.caller() -> string throws never {
-      { : string | "string"
-        let f = identity : <T>(x: T) -> T throws never
-        f<T>("string") : string | "string"
+      { : unknown
+        let f = identity : (x: T) -> T throws never -> !error
+        f("string") : unknown
       }
+      !! 81..89: generic function `identity` must be specialized before it is used as a value (e.g. `identity<int>`)
     }
     "#);
 }
@@ -352,11 +354,13 @@ function caller() -> string {
     "#);
 }
 
-/// Instantiation through a non-`PATH_EXPR` receiver — here a parenthesized
-/// function reference `(identity)<int>`. The parser wraps the receiver in an
-/// outer PATH_EXPR holding GENERIC_ARGS; lowering must recurse into the inner
-/// expression (not only inner PATH_EXPRs) and wrap it in GenericApply. A prior
-/// bug silently lowered these to `<missing>`, dropping receiver + type args.
+/// A parenthesized base `(identity)<int>` is *rejected* — only a bare path
+/// reference may be specialized into a value — but lowering recovers by still
+/// specializing the inner path, so there is no cascading "must be specialized"
+/// error and the value's type is the concrete `(x: int) -> int` shown below. The
+/// rejection itself (`TypeArgsOnNonPathBase`) is an AST-lowering diagnostic that
+/// `render_tir` does not surface; `parenthesized_generic_apply_is_rejected`
+/// (interfaces.rs) covers it.
 #[test]
 fn generic_apply_through_parenthesized_receiver() {
     let mut db = make_db();
@@ -447,10 +451,10 @@ function pd<T>(y: T) -> int {
     "#);
 }
 
-/// Companion to the above: calling the same value with a *matching* argument
-/// (`y : T`) is fine, and an *uninstantiated* generic value (`let g = identity`)
-/// still infers its own type param from the argument. The rigidity only applies
-/// to type vars that are NOT among the value's own `generic_params`.
+/// Companion to the above: calling the rigid instantiation value with a
+/// *matching* argument (`y : T` inside `fwd<T>`) is fine. By contrast, a bare
+/// *uninstantiated* generic reference (`let g = identity`) is an unrealized
+/// function value and is rejected — it must be specialized before use.
 #[test]
 fn instantiation_value_call_preserves_valid_inference() {
     let mut db = make_db();
@@ -468,7 +472,7 @@ function uses() -> int {
 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.identity<T>(x: T) -> T throws never {
       { : T
         x : T
@@ -481,18 +485,19 @@ function uses() -> int {
       }
     }
     function user.uses() -> int throws never {
-      { : int | 5
-        let g = identity : <T>(x: T) -> T throws never
-        g<T>(5) : int | 5
+      { : unknown
+        let g = identity : (x: T) -> T throws never -> !error
+        g(5) : unknown
       }
+      !! 141..149: generic function `identity` must be specialized before it is used as a value (e.g. `identity<int>`)
     }
-    "#);
+    ");
 }
 
-/// Explicit type args applied to a parenthesized generic lambda
-/// (`(<T>(x: T) -> T { x })<int>`). The base of the `GenericApply` is an inline
-/// anonymous generic function, not a path. It is specialized to `(int) -> int`,
-/// so calling it with a `string` is a type error.
+/// A generic *lambda* (`<T>(x: T) -> T { x }`) is a function value parameterizing
+/// itself, which is rejected with a hard error — even wrapped in parentheses with
+/// explicit type args. The invalid lambda takes the error type, so the surrounding
+/// `<int>` application and the call recover without cascading.
 #[test]
 fn paren_generic_lambda_instantiation() {
     let mut db = make_db();
@@ -507,11 +512,16 @@ function caller() -> int {
     );
     insta::assert_snapshot!(render_tir(&db, file), @r#"
     function user.caller() -> int throws never {
-      { : int
-        let f = <T>(x: T) -> T { ... }<...> : (x: int) -> int throws never
-        f("string") : int
+      { : unknown
+        let f = : (x: unknown) -> unknown throws never
+          (x: T) -> T { ... } : (x: unknown) -> unknown throws never
+            {
+              x
+            }
+        f("string") : unknown
       }
-      !! 75..83: type mismatch: expected int, got "string"
+      !! 47..49: unresolved type: T
+      !! 53..55: unresolved type: T
     }
     lambda user.caller {
     }

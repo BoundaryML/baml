@@ -2083,8 +2083,6 @@ mod peel_function_ty_tests {
     /// `(int) -> string` — the canonical concrete function shape.
     fn fn_ty() -> RuntimeTy {
         RuntimeTy::Function {
-            generic_params: vec![],
-            generic_param_bounds: vec![],
             params: vec![RuntimeFunctionParamTy::required(
                 None,
                 RuntimeTy::Int {
@@ -2105,8 +2103,6 @@ mod peel_function_ty_tests {
     /// uniqueness rule rejects two function members in a union.
     fn other_fn_ty() -> RuntimeTy {
         RuntimeTy::Function {
-            generic_params: vec![],
-            generic_param_bounds: vec![],
             params: vec![],
             ret: Box::new(RuntimeTy::Int {
                 attr: TyAttr::default(),

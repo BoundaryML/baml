@@ -120,33 +120,6 @@ function user.test_fully_inferred_map() -> int[] {
     return
 }
 
-function user.test_generic_apply_inferred() -> int {
-    load_type int
-    load_type int
-    make_closure .<lambda(test_generic_apply_inferred, 1)>, 0
-    load_const 21
-    make_closure .<lambda(test_generic_apply_inferred, 0)>, 0
-    call_indirect
-    return
-}
-
-function user.test_generic_multi_instantiation() -> int {
-    make_closure .<lambda(test_generic_multi_instantiation, 0)>, 0
-    store_var id
-    load_type int
-    load_const 42
-    load_var id
-    call_indirect
-    store_var a
-    load_type string
-    load_const "hello"
-    load_var id
-    call_indirect
-    store_var b
-    load_var a
-    return
-}
-
 function user.test_higher_order_inferred() -> int {
     load_const 5
     make_closure .<lambda(test_higher_order_inferred, 0)>, 0

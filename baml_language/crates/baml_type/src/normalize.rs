@@ -1022,8 +1022,6 @@ impl NormalTy {
                 ret,
                 throws,
             } => Ty::Function {
-                generic_params: Vec::new(),
-                generic_param_bounds: Vec::new(),
                 params: params
                     .into_iter()
                     .map(|p| FunctionParamTy {
