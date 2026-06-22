@@ -5871,7 +5871,7 @@ impl<'a> Parser<'a> {
                 let bang_span = token.span;
                 self.error(
                     "unexpected '!'; BAML has no non-null assertion operator — \
-                     unwrap optionals with '?? <default>' or 'if let x: T = opt { ... }'"
+                     unwrap optionals with '?? <default>' or 'if (let x) = opt { ... }'"
                         .to_string(),
                     bang_span,
                 );
