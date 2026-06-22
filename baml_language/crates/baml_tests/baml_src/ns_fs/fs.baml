@@ -4,11 +4,11 @@
 // top-level `function` (to avoid the test-block local-boxing VM bug) + a
 // `test` block that calls it.
 //
-// HERMETICITY: every test uses a unique path under /tmp and removes any FILES
-// it creates before returning. Directories cannot be removed via
-// baml.fs.remove (it only handles files), so directory-creating tests use
-// unique paths and idempotent mkdir(recursive:true) so the suite is safe to
-// re-run and safe under the parallel .baml runner.
+// HERMETICITY: every test uses a unique path under /tmp (prefixed with
+// baml_fs_<testname>) and removes any FILES it creates before returning.
+// Directories cannot be removed via baml.fs.remove (it only handles files),
+// so directory-creating tests use sufficiently unique paths and idempotent
+// mkdir(recursive:true) so the suite is safe to re-run.
 //
 // Tests left in Rust (not converted):
 //
@@ -41,12 +41,8 @@
 // open + read (text)
 // ============================================================================
 
-function fs_tmp(name: string) -> string {
-    "/tmp/baml_fs_" + name + "_" + baml.json.stringify(baml.sys.now_ms()) + "_" + baml.json.stringify(int.random(0, 1000000000))
-}
-
 function fs_open_and_read_fn() -> string {
-    let path = fs_tmp("open_and_read.txt");
+    let path = "/tmp/baml_fs_open_and_read.txt";
     baml.fs.write(path, "Hello from BAML!");
     let file = baml.fs.open(path, "r");
     let result = file.text();
@@ -63,7 +59,7 @@ test "fs_open_and_read" {
 // ============================================================================
 
 function fs_open_and_read_bytes_fn() -> bool {
-    let path = fs_tmp("open_and_read_bytes.txt");
+    let path = "/tmp/baml_fs_open_and_read_bytes.txt";
     baml.fs.write(path, "Hello from BAML!");
     let file = baml.fs.open(path, "r");
     let data = file.bytes();
@@ -81,7 +77,7 @@ test "fs_open_and_read_bytes" {
 // ============================================================================
 
 function fs_write_string_fn() -> bool {
-    let path = fs_tmp("write_string.txt");
+    let path = "/tmp/baml_fs_write_string.txt";
     let n = baml.fs.write(path, "Hello, world!");
     let readback = baml.fs.read(path);
     baml.fs.remove(path);
@@ -97,8 +93,8 @@ test "fs_write_string" {
 // ============================================================================
 
 function fs_write_bytes_fn() -> bool {
-    let src = fs_tmp("write_bytes_src.bin");
-    let dst = fs_tmp("write_bytes_dst.bin");
+    let src = "/tmp/baml_fs_write_bytes_src.bin";
+    let dst = "/tmp/baml_fs_write_bytes_dst.bin";
     baml.fs.write(src, "binary data");
     let data = baml.fs.open(src, "r").bytes();
     let n = baml.fs.write_bytes(dst, data);
@@ -118,7 +114,7 @@ test "fs_write_bytes" {
 // ============================================================================
 
 function fs_write_creates_parent_dirs_fn() -> bool {
-    let path = fs_tmp("write_parent") + "/nested/dir/file.txt";
+    let path = "/tmp/baml_fs_write_parent/nested/dir/file.txt";
     let n = baml.fs.write(path, "nested content");
     let readback = baml.fs.read(path);
     // Can only remove the file; directories cannot be removed via baml.fs.remove.
@@ -136,7 +132,7 @@ test "fs_write_creates_parent_dirs" {
 // ============================================================================
 
 function fs_write_overwrites_existing_fn() -> bool {
-    let path = fs_tmp("write_overwrite.txt");
+    let path = "/tmp/baml_fs_write_overwrite.txt";
     baml.fs.write(path, "old content");
     let n = baml.fs.write(path, "new content");
     let readback = baml.fs.read(path);
@@ -153,7 +149,7 @@ test "fs_write_overwrites_existing" {
 // ============================================================================
 
 function fs_roundtrip_write_and_read_fn() -> string {
-    let path = fs_tmp("roundtrip.txt");
+    let path = "/tmp/baml_fs_roundtrip.txt";
     baml.fs.write(path, "roundtrip data");
     let f = baml.fs.open(path, "r");
     let result = f.text();
@@ -170,7 +166,7 @@ test "fs_roundtrip_write_and_read" {
 // ============================================================================
 
 function fs_file_rw_seek_and_read_fn() -> string {
-    let path = fs_tmp("seek_and_read.txt");
+    let path = "/tmp/baml_fs_seek_and_read.txt";
     baml.fs.write(path, "Hello from BAML!");
     let file = baml.fs.open(path, "r+");
     file.seek_from("start", 6);
@@ -188,7 +184,7 @@ test "fs_file_rw_seek_and_read" {
 // ============================================================================
 
 function fs_file_rw_write_and_read_back_fn() -> string {
-    let path = fs_tmp("rw_write_read.txt");
+    let path = "/tmp/baml_fs_rw_write_read.txt";
     baml.fs.write(path, "Hello from BAML!");
     let file = baml.fs.open(path, "r+");
     file.seek_from("start", 6);
@@ -208,8 +204,8 @@ test "fs_file_rw_write_and_read_back" {
 // ============================================================================
 
 function fs_file_rw_write_bytes_fn() -> bool {
-    let src = fs_tmp("file_write_bytes_src.bin");
-    let dst = fs_tmp("file_write_bytes_dst.bin");
+    let src = "/tmp/baml_fs_file_write_bytes_src.bin";
+    let dst = "/tmp/baml_fs_file_write_bytes_dst.bin";
     // source: 2 bytes "AB"
     baml.fs.write(src, "AB");
     // dest: 4 bytes we overwrite at the start
@@ -233,7 +229,7 @@ test "fs_file_rw_write_bytes" {
 // ============================================================================
 
 function fs_exists_returns_true_fn() -> bool {
-    let path = fs_tmp("exists_true.txt");
+    let path = "/tmp/baml_fs_exists_true.txt";
     baml.fs.write(path, "x");
     let result = baml.fs.exists(path);
     baml.fs.remove(path);
@@ -250,7 +246,7 @@ test "fs_exists_returns_true" {
 
 function fs_exists_returns_false_fn() -> bool {
     // Use a path that definitely does not exist
-    baml.fs.exists(fs_tmp("exists_false_NOPE.txt"))
+    baml.fs.exists("/tmp/baml_fs_exists_false_NOPE_12345.txt")
 }
 
 test "fs_exists_returns_false" {
@@ -262,7 +258,7 @@ test "fs_exists_returns_false" {
 // ============================================================================
 
 function fs_remove_deletes_file_fn() -> bool {
-    let path = fs_tmp("remove_deletes.txt");
+    let path = "/tmp/baml_fs_remove_deletes.txt";
     baml.fs.write(path, "bye");
     baml.fs.remove(path);
     // after remove, exists should return false
@@ -278,7 +274,7 @@ test "fs_remove_deletes_file" {
 // ============================================================================
 
 function fs_size_returns_length_fn() -> int {
-    let path = fs_tmp("size.bin");
+    let path = "/tmp/baml_fs_size.bin";
     baml.fs.write(path, "0123456789");
     let n = baml.fs.size(path);
     baml.fs.remove(path);
@@ -294,7 +290,7 @@ test "fs_size_returns_length" {
 // ============================================================================
 
 function fs_file_read_n_bytes_fn() -> string {
-    let path = fs_tmp("read_n.txt");
+    let path = "/tmp/baml_fs_read_n.txt";
     baml.fs.write(path, "Hello, world!");
     let f = baml.fs.open(path, "r");
     let result = f.read(5);
@@ -311,7 +307,7 @@ test "fs_file_read_n_bytes" {
 // ============================================================================
 
 function fs_file_read_truncates_at_eof_fn() -> string {
-    let path = fs_tmp("read_eof.txt");
+    let path = "/tmp/baml_fs_read_eof.txt";
     baml.fs.write(path, "abc");
     let f = baml.fs.open(path, "r");
     let result = f.read(100);
@@ -328,7 +324,7 @@ test "fs_file_read_truncates_at_eof" {
 // ============================================================================
 
 function fs_file_read_bytes_n_fn() -> bool {
-    let path = fs_tmp("read_bytes_n.bin");
+    let path = "/tmp/baml_fs_read_bytes_n.bin";
     baml.fs.write(path, "ABCDE");
     let f = baml.fs.open(path, "r");
     let data = f.read_bytes(3);
@@ -346,7 +342,7 @@ test "fs_file_read_bytes_n" {
 // ============================================================================
 
 function fs_file_read_advances_cursor_fn() -> string {
-    let path = fs_tmp("read_advances.txt");
+    let path = "/tmp/baml_fs_read_advances.txt";
     baml.fs.write(path, "ABCDEFGH");
     let f = baml.fs.open(path, "r");
     f.read(3);
@@ -364,7 +360,7 @@ test "fs_file_read_advances_cursor" {
 // ============================================================================
 
 function fs_open_append_creates_and_appends_fn() -> bool {
-    let path = fs_tmp("append.txt");
+    let path = "/tmp/baml_fs_append.txt";
     baml.fs.write(path, "start!");
     let f = baml.fs.open(path, "a");
     let n = f.write("more!");
@@ -382,7 +378,7 @@ test "fs_open_append_creates_and_appends" {
 // ============================================================================
 
 function fs_open_append_creates_missing_file_fn() -> bool {
-    let path = fs_tmp("append_new.txt");
+    let path = "/tmp/baml_fs_append_new.txt";
     // Ensure file doesn't exist from a previous run
     // (if it does exist, this test's logic is still correct since we only
     //  check what we wrote — but let's be safe and overwrite)
@@ -404,7 +400,7 @@ test "fs_open_append_creates_missing_file" {
 // ============================================================================
 
 function fs_open_append_plus_can_read_fn() -> string {
-    let path = fs_tmp("append_plus.txt");
+    let path = "/tmp/baml_fs_append_plus.txt";
     baml.fs.write(path, "existing");
     let f = baml.fs.open(path, "a+");
     f.write(" more");
@@ -423,7 +419,7 @@ test "fs_open_append_plus_can_read" {
 // ============================================================================
 
 function fs_file_close_is_idempotent_fn() -> null {
-    let path = fs_tmp("close_idempotent.txt");
+    let path = "/tmp/baml_fs_close_idempotent.txt";
     baml.fs.write(path, "x");
     let f = baml.fs.open(path, "r");
     f.close();
@@ -441,7 +437,7 @@ test "fs_file_close_is_idempotent" {
 // ============================================================================
 
 function fs_read_returns_contents_fn() -> string {
-    let path = fs_tmp("read_shorthand.txt");
+    let path = "/tmp/baml_fs_read_shorthand.txt";
     baml.fs.write(path, "Hello from fs.read!");
     let result = baml.fs.read(path);
     baml.fs.remove(path);
@@ -457,7 +453,7 @@ test "fs_read_returns_contents" {
 // ============================================================================
 
 function fs_open_w_truncates_existing_fn() -> bool {
-    let path = fs_tmp("open_w_truncate.txt");
+    let path = "/tmp/baml_fs_open_w_truncate.txt";
     baml.fs.write(path, "original content");
     let f = baml.fs.open(path, "w");
     let n = f.write("new");
@@ -475,7 +471,7 @@ test "fs_open_w_truncates_existing" {
 // ============================================================================
 
 function fs_open_w_creates_missing_file_fn() -> bool {
-    let path = fs_tmp("open_w_new.txt");
+    let path = "/tmp/baml_fs_open_w_new.txt";
     let f = baml.fs.open(path, "w");
     let n = f.write("hi");
     let readback = baml.fs.read(path);
@@ -492,7 +488,7 @@ test "fs_open_w_creates_missing_file" {
 // ============================================================================
 
 function fs_open_w_plus_reads_after_write_fn() -> string {
-    let path = fs_tmp("open_w_plus.txt");
+    let path = "/tmp/baml_fs_open_w_plus.txt";
     baml.fs.write(path, "original");
     let f = baml.fs.open(path, "w+");
     f.write("fresh");
@@ -511,7 +507,7 @@ test "fs_open_w_plus_reads_after_write" {
 // ============================================================================
 
 function fs_open_w_creates_parent_dirs_fn() -> bool {
-    let path = fs_tmp("open_w_parent") + "/nested/dir/new.txt";
+    let path = "/tmp/baml_fs_open_w_parent/nested/dir/new.txt";
     let f = baml.fs.open(path, "w");
     let n = f.write("nested");
     let readback = baml.fs.read(path);
@@ -530,7 +526,7 @@ test "fs_open_w_creates_parent_dirs" {
 // ============================================================================
 
 function fs_read_dir_returns_entries_fn() -> bool {
-    let dir = fs_tmp("read_dir_entries");
+    let dir = "/tmp/baml_fs_read_dir_entries";
     // idempotent mkdir so 2nd run succeeds
     baml.fs.mkdir(dir, baml.fs.MkdirOptions { recursive: true });
     baml.fs.write(dir + "/a.txt", "aaa");
@@ -558,7 +554,7 @@ test "fs_read_dir_returns_entries" {
 // ============================================================================
 
 function fs_read_dir_type_flags_fn() -> bool {
-    let dir = fs_tmp("read_dir_flags");
+    let dir = "/tmp/baml_fs_read_dir_flags";
     baml.fs.mkdir(dir, baml.fs.MkdirOptions { recursive: true });
     baml.fs.write(dir + "/file.txt", "content");
     baml.fs.mkdir(dir + "/subdir", baml.fs.MkdirOptions { recursive: true });
@@ -585,7 +581,7 @@ test "fs_read_dir_type_flags" {
 // ============================================================================
 
 function fs_read_dir_empty_dir_fn() -> bool {
-    let dir = fs_tmp("read_dir_empty");
+    let dir = "/tmp/baml_fs_read_dir_empty_abc";
     baml.fs.mkdir(dir, baml.fs.MkdirOptions { recursive: true });
     let entries = baml.fs.read_dir(dir);
     // Can't remove the dir, but it stays empty so re-runs are idempotent
@@ -601,7 +597,7 @@ test "fs_read_dir_empty_dir" {
 // ============================================================================
 
 function fs_mkdir_creates_directory_fn() -> bool {
-    let dir = fs_tmp("mkdir_new");
+    let dir = "/tmp/baml_fs_mkdir_new_abc";
     // recursive:true so re-runs don't fail when the dir already exists
     baml.fs.mkdir(dir, baml.fs.MkdirOptions { recursive: true });
     baml.fs.exists(dir)
@@ -616,7 +612,7 @@ test "fs_mkdir_creates_directory" {
 // ============================================================================
 
 function fs_mkdir_recursive_creates_parents_fn() -> bool {
-    let dir = fs_tmp("mkdir_recursive") + "/a/b/c";
+    let dir = "/tmp/baml_fs_mkdir_recursive_abc/a/b/c";
     baml.fs.mkdir(dir, baml.fs.MkdirOptions { recursive: true });
     baml.fs.exists(dir)
 }
@@ -630,7 +626,7 @@ test "fs_mkdir_recursive_creates_parents" {
 // ============================================================================
 
 function fs_mkdir_recursive_is_idempotent_fn() -> bool {
-    let dir = fs_tmp("mkdir_idempotent");
+    let dir = "/tmp/baml_fs_mkdir_idempotent_abc";
     baml.fs.mkdir(dir, baml.fs.MkdirOptions { recursive: true });
     // second call must not throw
     baml.fs.mkdir(dir, baml.fs.MkdirOptions { recursive: true });
