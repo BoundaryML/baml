@@ -1001,7 +1001,7 @@ fn collect_callee_names_stmt(body: &ast::ExprBody, id: ast::StmtId, names: &mut 
     match &body.stmts[id] {
         ast::Stmt::Expr(expr) => collect_callee_names_expr(body, *expr, names),
         ast::Stmt::Defer { body: defer_body } => {
-            collect_callee_names_expr(body, *defer_body, names)
+            collect_callee_names_expr(body, *defer_body, names);
         }
         ast::Stmt::Let {
             initializer,
