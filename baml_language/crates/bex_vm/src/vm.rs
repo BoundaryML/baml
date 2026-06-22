@@ -2678,6 +2678,41 @@ impl BexVm {
         self.integer_overflow(format!("{lv} {op} {rv} overflows int"))
     }
 
+    /// Build a catchable `baml.panics.NegativeBitShift` throw. Cold path only.
+    #[cold]
+    #[inline(never)]
+    fn negative_bit_shift(&mut self, count: i64) -> VmError {
+        VmError::Thrown(self.panic_to_exception_value(VmPanic::NegativeBitShift {
+            message: format!("bit shift count is negative: {count}"),
+        }))
+    }
+
+    /// `int << r`, validated: a negative count throws `NegativeBitShift`, and a
+    /// result outside the i63 range throws `IntegerOverflow` (e.g. `1 << 62`).
+    /// `checked_shl` also rules out the shift-amount UB of a raw `<<`.
+    #[inline]
+    fn int_shl(&mut self, l: i64, r: i64) -> Result<Value, VmError> {
+        let Ok(shift) = u32::try_from(r) else {
+            return Err(self.negative_bit_shift(r));
+        };
+        match l.checked_shl(shift).and_then(Value::try_int) {
+            Some(v) => Ok(v),
+            None => Err(self.integer_overflow(format!("{l} << {r} overflows int"))),
+        }
+    }
+
+    /// `int >> r` (arithmetic), validated: a negative count throws
+    /// `NegativeBitShift`. The result is always within i63 (magnitude only
+    /// shrinks); a count `>= 64` saturates to the sign bit (`min(63)` avoids the
+    /// shift-amount UB of a raw `>>`).
+    #[inline]
+    fn int_shr(&mut self, l: i64, r: i64) -> Result<Value, VmError> {
+        let Ok(shift) = u32::try_from(r) else {
+            return Err(self.negative_bit_shift(r));
+        };
+        Ok(Value::int(l >> shift.min(63)))
+    }
+
     /// Allocate a `baml.panics.*` class instance using pre-resolved pointers.
     pub fn alloc_panic_value(&mut self, class: PanicClass, fields: Vec<Value>) -> Value {
         let class_ptr = self.panic_class_ptrs[class as usize];
@@ -4302,8 +4337,10 @@ impl BexVm {
                 // Arithmetic is checked: overflow throws IntegerOverflow rather
                 // than wrapping or raw-Rust-panicking. Only `*` can overflow
                 // i64 from i63 operands (so it needs checked_mul); +, -, /, %
-                // can't, so a plain op + i63 range-check suffices. Bit ops
-                // can't leave the i63 range (And/Or/Xor/Shr) so they stay direct.
+                // can't, so a plain op + i63 range-check suffices. And/Or/Xor of
+                // two i63 values stay in range, but `<<` can leave it (e.g.
+                // `1 << 62`), so Shl/Shr are validated (overflow + negative
+                // count) too.
                 BinOp::Add => self.finish_int(l.wrapping_add(r), l, '+', r)?,
                 BinOp::Sub => self.finish_int(l.wrapping_sub(r), l, '-', r)?,
                 BinOp::Mul => self.int_arith_result(l.checked_mul(r), l, '*', r)?,
@@ -4312,8 +4349,8 @@ impl BexVm {
                 BinOp::BitAnd => Value::int(l & r),
                 BinOp::BitOr => Value::int(l | r),
                 BinOp::BitXor => Value::int(l ^ r),
-                BinOp::Shl => Value::int(l << r),
-                BinOp::Shr => Value::int(l >> r),
+                BinOp::Shl => self.int_shl(l, r)?,
+                BinOp::Shr => self.int_shr(l, r)?,
             }
         } else if let (Some(l), Some(r)) = (
             left.as_int()

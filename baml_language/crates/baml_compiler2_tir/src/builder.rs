@@ -15206,20 +15206,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                     Some(Ty::Literal(LiteralValue::Int(a ^ b), f, TyAttr::default()))
                 }
                 BinaryOp::Shl => {
+                    // `<<` can overflow i63 (e.g. `1 << 62`), so range-check the
+                    // result; out-of-range / negative-count cases return None and
+                    // defer to the runtime op's IntegerOverflow / NegativeBitShift.
                     let shift = u32::try_from(b).ok()?;
-                    Some(Ty::Literal(
-                        LiteralValue::Int(a.checked_shl(shift)?),
-                        f,
-                        TyAttr::default(),
-                    ))
+                    Self::fold_int(a.checked_shl(shift)?, f)
                 }
                 BinaryOp::Shr => {
                     let shift = u32::try_from(b).ok()?;
-                    Some(Ty::Literal(
-                        LiteralValue::Int(a.checked_shr(shift)?),
-                        f,
-                        TyAttr::default(),
-                    ))
+                    Self::fold_int(a.checked_shr(shift)?, f)
                 }
                 BinaryOp::Eq => Some(Ty::Literal(
                     LiteralValue::Bool(a == b),

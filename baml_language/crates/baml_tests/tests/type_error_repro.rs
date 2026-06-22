@@ -107,6 +107,22 @@ async fn negated_int_literal_below_min_is_rejected_at_compile_time() {
     );
 }
 
+/// The negative-literal fold only applies to a `-` directly on an integer
+/// literal token. A *parenthesized* `-(2^62)` lowers its operand through a
+/// child node, so the `+2^62` is rejected just like a bare one (matching the
+/// Rust/Java/C# rule, where parentheses break the negative-literal form).
+#[tokio::test]
+#[should_panic(expected = "out of range for `int`")]
+async fn parenthesized_oversized_literal_is_rejected() {
+    let _ = baml_test!(
+        r#"
+        function main() -> int {
+            -(4611686018427387904)
+        }
+    "#
+    );
+}
+
 /// `int.min_value()` (`-2^62`) must remain writable as a negated literal even
 /// though `+2^62` is not a legal `int` literal: the leading `-` forms a single
 /// negative literal. (Mirrors the i64::MIN literal rule in Rust/Java/C#.)
