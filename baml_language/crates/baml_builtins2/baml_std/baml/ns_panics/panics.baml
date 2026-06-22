@@ -93,4 +93,12 @@ class HostContractViolation {
   language string?
 }
 
-type Panic = DivisionByZero | IndexOutOfBounds | InvalidFieldAccess | MapKeyNotFound | StackOverflow | AssertionFailed | Unreachable | Cancelled | UserPanic | Exit | AllocFailure | HostUnavailable | NegativeBitShift | SdkPanic | HostContractViolation
+/// Raised when an `int` arithmetic operation (`+`, `-`, `*`, `/`, unary `-`)
+/// overflows the representable range. `int` is a 63-bit signed integer
+/// (`[-2^62, 2^62 - 1]`); operations that would fall outside it throw this
+/// rather than silently wrapping. Use `bigint` for unbounded integers.
+class IntegerOverflow {
+  message string
+}
+
+type Panic = DivisionByZero | IndexOutOfBounds | InvalidFieldAccess | MapKeyNotFound | StackOverflow | AssertionFailed | Unreachable | Cancelled | UserPanic | Exit | AllocFailure | HostUnavailable | NegativeBitShift | SdkPanic | HostContractViolation | IntegerOverflow

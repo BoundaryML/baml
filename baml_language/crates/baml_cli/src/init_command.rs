@@ -168,7 +168,12 @@ fn render_baml_toml(name: &str) -> String {
          name = \"{name}\"\n\
          \n\
          # [scripts]\n\
-         # dev = \"-f main\"\n",
+         # dev = \"-f main\"\n\
+         \n\
+         # [generator.my_client]\n\
+         # output_type = \"python/pydantic\"\n\
+         # output_dir = \"../python\"\n\
+         # naming_convention = \"preserve-case\"\n",
     )
 }
 

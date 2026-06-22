@@ -153,7 +153,6 @@ ast_node!(MethodSig, METHOD_SIG);
 ast_node!(AssociatedTypeDecl, ASSOCIATED_TYPE_DECL);
 ast_node!(ClientDef, CLIENT_DEF);
 ast_node!(TestDef, TEST_DEF);
-ast_node!(GeneratorDef, GENERATOR_DEF);
 ast_node!(RetryPolicyDef, RETRY_POLICY_DEF);
 ast_node!(TemplateStringDef, TEMPLATE_STRING_DEF);
 ast_node!(TypeAliasDef, TYPE_ALIAS_DEF);
@@ -970,6 +969,7 @@ ast_node!(ReturnStmt, RETURN_STMT);
 ast_node!(ThrowStmt, THROW_STMT);
 ast_node!(BreakStmt, BREAK_STMT);
 ast_node!(ContinueStmt, CONTINUE_STMT);
+ast_node!(DeferStmt, DEFER_STMT);
 ast_node!(PathExpr, PATH_EXPR);
 ast_node!(FieldAccessExpr, FIELD_ACCESS_EXPR);
 ast_node!(UpcastExpr, UPCAST_EXPR);
@@ -2385,24 +2385,6 @@ impl RetryPolicyDef {
     }
 }
 
-impl GeneratorDef {
-    /// Get the generator name.
-    pub fn name(&self) -> Option<SyntaxToken> {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| {
-                token.kind() == SyntaxKind::WORD && token.parent() == Some(self.syntax.clone())
-            })
-            .nth(0) // Get the first WORD (generator keyword is KW_GENERATOR, not WORD)
-    }
-
-    /// Get the config block.
-    pub fn config_block(&self) -> Option<ConfigBlock> {
-        self.syntax.children().find_map(ConfigBlock::cast)
-    }
-}
-
 impl ConfigBlock {
     /// Get all config items.
     pub fn items(&self) -> impl Iterator<Item = ConfigItem> {
@@ -3585,7 +3567,10 @@ impl BlockElement {
                 // so check siblings like expressions
                 if matches!(
                     node.kind(),
-                    SyntaxKind::WHILE_STMT | SyntaxKind::WHILE_LET_STMT | SyntaxKind::FOR_EXPR
+                    SyntaxKind::WHILE_STMT
+                        | SyntaxKind::WHILE_LET_STMT
+                        | SyntaxKind::FOR_EXPR
+                        | SyntaxKind::DEFER_STMT
                 ) {
                     return node
                         .siblings_with_tokens(Direction::Next)
@@ -3638,6 +3623,7 @@ impl BlockExpr {
                         | SyntaxKind::BREAK_STMT
                         | SyntaxKind::CONTINUE_STMT
                         | SyntaxKind::THROW_STMT
+                        | SyntaxKind::DEFER_STMT
                         // test/testset declarations inside blocks (dynamic test generation)
                         | SyntaxKind::TEST_EXPR_DEF
                         | SyntaxKind::TESTSET_DEF => Some(BlockElement::Stmt(n)),

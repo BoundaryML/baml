@@ -32,7 +32,7 @@ pub struct GrepArgs {
     pub symbols: bool,
 
     /// Filter by symbol kind (repeatable): class, enum, function, test,
-    /// client, type_alias, template_string, retry_policy, generator, let
+    /// client, type_alias, template_string, retry_policy, let
     #[arg(long, value_delimiter = ',')]
     pub kind: Vec<String>,
 
@@ -376,12 +376,11 @@ pub fn parse_kind_filter(kinds: &[String]) -> Result<Vec<DefinitionKind>> {
             "type_alias" => Ok(DefinitionKind::TypeAlias),
             "template_string" => Ok(DefinitionKind::TemplateString),
             "retry_policy" => Ok(DefinitionKind::RetryPolicy),
-            "generator" => Ok(DefinitionKind::Generator),
             "let" => Ok(DefinitionKind::Let),
             "field" => Ok(DefinitionKind::Field),
             "variant" => Ok(DefinitionKind::Variant),
             other => anyhow::bail!(
-                "Unknown kind: {other}. Valid kinds: class, enum, function, test, client, type_alias, template_string, retry_policy, generator, let, field, variant"
+                "Unknown kind: {other}. Valid kinds: class, enum, function, test, client, type_alias, template_string, retry_policy, let, field, variant"
             ),
         })
         .collect()

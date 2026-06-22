@@ -2648,6 +2648,10 @@ impl BexVm {
     pub fn panic_to_exception_value(&mut self, panic: VmPanic) -> Value {
         let (class, fields) = match panic {
             VmPanic::DivisionByZero { left, .. } => (PanicClass::DivisionByZero, vec![left]),
+            VmPanic::IntegerOverflow { message } => {
+                let msg = Value::object(self.alloc_string(message));
+                (PanicClass::IntegerOverflow, vec![msg])
+            }
             VmPanic::IndexOutOfBounds { index, length } =>
             {
                 #[allow(clippy::cast_possible_wrap)]
@@ -2735,6 +2739,94 @@ impl BexVm {
             field_index,
             field_count,
         }))
+    }
+
+    /// Encode an i64 arithmetic result into the i63 range, or throw
+    /// `IntegerOverflow`.
+    ///
+    /// Use this for `+`, `-`, `/`, `%`, and unary `-`: two operands already in
+    /// the i63 range can never overflow i64 under these ops (the widest case,
+    /// `INT_MAX - INT_MIN = 2^63 - 1`, is exactly `i64::MAX`), so the raw i64
+    /// result is well-defined and only the i63 range needs checking via
+    /// [`Value::try_int`]. The `l`/`op`/`r` context is formatted only on the
+    /// cold overflow path, so the hot path is just one range-checked encode.
+    #[inline]
+    fn finish_int(&mut self, v: i64, l: i64, op: char, r: i64) -> Result<Value, VmError> {
+        match Value::try_int(v) {
+            Some(val) => Ok(val),
+            None => Err(self.integer_overflow(format!("{l} {op} {r} overflows int"))),
+        }
+    }
+
+    /// Encode a *checked* `int` result, or throw `IntegerOverflow`. Used for
+    /// `*`, where two i63 operands genuinely can exceed i64 (e.g.
+    /// `INT_MAX * INT_MAX`): `checked` is `None` on i64 overflow, and
+    /// [`Value::try_int`] then enforces the tighter i63 range.
+    #[inline]
+    fn int_arith_result(
+        &mut self,
+        checked: Option<i64>,
+        l: i64,
+        op: char,
+        r: i64,
+    ) -> Result<Value, VmError> {
+        match checked.and_then(Value::try_int) {
+            Some(v) => Ok(v),
+            None => Err(self.integer_overflow(format!("{l} {op} {r} overflows int"))),
+        }
+    }
+
+    /// Build a catchable `baml.panics.IntegerOverflow` throw. Cold path only.
+    #[cold]
+    #[inline(never)]
+    fn integer_overflow(&mut self, message: String) -> VmError {
+        VmError::Thrown(self.panic_to_exception_value(VmPanic::IntegerOverflow { message }))
+    }
+
+    /// Cold-path `IntegerOverflow` for the tagged add/sub fast paths: untags the
+    /// operands (which the hot path deliberately skips) only to format the
+    /// message. `l`/`r` are `Int`-tagged Values.
+    #[cold]
+    #[inline(never)]
+    fn tagged_int_overflow(&mut self, l: Value, op: char, r: Value) -> VmError {
+        let lv = l.as_int().unwrap_or(0);
+        let rv = r.as_int().unwrap_or(0);
+        self.integer_overflow(format!("{lv} {op} {rv} overflows int"))
+    }
+
+    /// Build a catchable `baml.panics.NegativeBitShift` throw. Cold path only.
+    #[cold]
+    #[inline(never)]
+    fn negative_bit_shift(&mut self, count: i64) -> VmError {
+        VmError::Thrown(self.panic_to_exception_value(VmPanic::NegativeBitShift {
+            message: format!("bit shift count is negative: {count}"),
+        }))
+    }
+
+    /// `int << r`, validated: a negative count throws `NegativeBitShift`, and a
+    /// result outside the i63 range throws `IntegerOverflow` (e.g. `1 << 62`).
+    /// `checked_shl` also rules out the shift-amount UB of a raw `<<`.
+    #[inline]
+    fn int_shl(&mut self, l: i64, r: i64) -> Result<Value, VmError> {
+        let Ok(shift) = u32::try_from(r) else {
+            return Err(self.negative_bit_shift(r));
+        };
+        match l.checked_shl(shift).and_then(Value::try_int) {
+            Some(v) => Ok(v),
+            None => Err(self.integer_overflow(format!("{l} << {r} overflows int"))),
+        }
+    }
+
+    /// `int >> r` (arithmetic), validated: a negative count throws
+    /// `NegativeBitShift`. The result is always within i63 (magnitude only
+    /// shrinks); a count `>= 64` saturates to the sign bit (`min(63)` avoids the
+    /// shift-amount UB of a raw `>>`).
+    #[inline]
+    fn int_shr(&mut self, l: i64, r: i64) -> Result<Value, VmError> {
+        let Ok(shift) = u32::try_from(r) else {
+            return Err(self.negative_bit_shift(r));
+        };
+        Ok(Value::int(l >> shift.min(63)))
     }
 
     /// Allocate a `baml.panics.*` class instance using pre-resolved pointers.
@@ -2871,19 +2963,34 @@ impl BexVm {
             // SAFETY: See `load_function` doc comment.
             let frame_function = unsafe { self.load_function(depth)? };
 
-            // Find the first exception table entry covering this PC.
+            // Find the INNERMOST exception table entry covering this PC: the
+            // NARROWEST region — the largest `start_pc`, and among regions that
+            // share a `start_pc` (nested handlers with the same body entry) the
+            // smallest `end_pc`. The innermost handler must win, matching
+            // lexical nesting. Picking the first covering entry would route to
+            // the OUTERMOST handler, mis-routing any throw that reaches the
+            // table (e.g. an exception escaping a called function, or a runtime
+            // panic). Cold path — does not affect the hot per-instruction loop.
             // Use compact exception table when available (byte-offset PCs),
             // otherwise fall back to the legacy instruction-index table.
             let handler_entry = if let Some(compact) = &frame_function.bytecode.compact {
                 compact
                     .exception_handlers_for_pc(faulting_pc)
-                    .next()
+                    .max_by(|a, b| {
+                        a.start_pc
+                            .cmp(&b.start_pc)
+                            .then_with(|| b.end_pc.cmp(&a.end_pc))
+                    })
                     .cloned()
             } else {
                 frame_function
                     .bytecode
                     .exception_handlers_for_pc(faulting_pc)
-                    .next()
+                    .max_by(|a, b| {
+                        a.start_pc
+                            .cmp(&b.start_pc)
+                            .then_with(|| b.end_pc.cmp(&a.end_pc))
+                    })
                     .cloned()
             };
             if let Some(entry) = handler_entry {
@@ -4425,8 +4532,11 @@ impl BexVm {
 
         #[allow(clippy::cast_precision_loss)]
         let result = if let (Some(l), Some(r)) = (left.as_int(), right.as_int()) {
-            Value::int(match op {
-                BinOp::Div if r == 0 => {
+            match op {
+                // Both `/` and `%` by zero throw DivisionByZero (the `%` guard
+                // matches the specialized `ModInt` opcode — without it, `l % 0`
+                // on this generic path would raw-Rust-panic).
+                BinOp::Div | BinOp::Mod if r == 0 => {
                     return Err(VmError::Thrown(self.panic_to_exception_value(
                         VmPanic::DivisionByZero {
                             left: Value::int(l),
@@ -4434,17 +4544,24 @@ impl BexVm {
                         },
                     )));
                 }
-                BinOp::Add => l + r,
-                BinOp::Sub => l - r,
-                BinOp::Mul => l * r,
-                BinOp::Div => l / r,
-                BinOp::Mod => l % r,
-                BinOp::BitAnd => l & r,
-                BinOp::BitOr => l | r,
-                BinOp::BitXor => l ^ r,
-                BinOp::Shl => l << r,
-                BinOp::Shr => l >> r,
-            })
+                // Arithmetic is checked: overflow throws IntegerOverflow rather
+                // than wrapping or raw-Rust-panicking. Only `*` can overflow
+                // i64 from i63 operands (so it needs checked_mul); +, -, /, %
+                // can't, so a plain op + i63 range-check suffices. And/Or/Xor of
+                // two i63 values stay in range, but `<<` can leave it (e.g.
+                // `1 << 62`), so Shl/Shr are validated (overflow + negative
+                // count) too.
+                BinOp::Add => self.finish_int(l.wrapping_add(r), l, '+', r)?,
+                BinOp::Sub => self.finish_int(l.wrapping_sub(r), l, '-', r)?,
+                BinOp::Mul => self.int_arith_result(l.checked_mul(r), l, '*', r)?,
+                BinOp::Div => self.finish_int(l / r, l, '/', r)?,
+                BinOp::Mod => self.finish_int(l % r, l, '%', r)?,
+                BinOp::BitAnd => Value::int(l & r),
+                BinOp::BitOr => Value::int(l | r),
+                BinOp::BitXor => Value::int(l ^ r),
+                BinOp::Shl => self.int_shl(l, r)?,
+                BinOp::Shr => self.int_shr(l, r)?,
+            }
         } else if let (Some(l), Some(r)) = (
             left.as_int()
                 .map(|i| i as f64)
@@ -5898,6 +6015,15 @@ impl BexVm {
                         // interrupt loudly (see try_unwind_exception).
                         return Err(VmInternalError::ExpectedCompletion.into());
                     }
+                    // A handler was found; sync the local `pc` to its entry.
+                    // When the handler is in the SAME frame, the dispatch loop
+                    // would otherwise `continue` with the stale post-throw `pc`
+                    // instead of jumping to the handler. (Cross-frame unwinds
+                    // reload `pc` on the frame switch, so this is a no-op there.)
+                    // Cold path — does not affect the hot per-instruction loop.
+                    if let Some(Frame::Bytecode(bf)) = self.frames.get(*frame_idx) {
+                        *pc = bf.instruction_ptr;
+                    }
                     if self.early_yield.should_early_yield() {
                         return Ok(Some(VmExecState::EarlyYield));
                     }
@@ -6100,6 +6226,14 @@ impl BexVm {
                             // See OpCode::Throw: an escaping watch-filter
                             // exception fails the interrupt loudly.
                             return Err(VmInternalError::ExpectedCompletion.into());
+                        }
+                        // Sync the local `pc` to the handler entry (see
+                        // OpCode::Throw): a same-frame rethrow — an inner
+                        // wildcard catch rethrowing a panic to an outer catch in
+                        // the same function — must jump to the handler instead of
+                        // falling through to the not-a-panic continuation.
+                        if let Some(Frame::Bytecode(bf)) = self.frames.get(*frame_idx) {
+                            *pc = bf.instruction_ptr;
                         }
                     }
                     if self.early_yield.should_early_yield() {
@@ -6712,20 +6846,31 @@ impl BexVm {
 
                 // ── Specialized int arithmetic (skip type dispatch) ───────────
                 //
-                // Add / Sub use [`Value::tagged_int_add`] / `_sub` which
-                // operates directly on the tagged bit pattern, skipping
-                // the shift-right / shift-left round-trip through
-                // `as_int` + `Value::int`. Saves ~3 instructions per op
-                // on the hot loop (`i += 1` in `loop_50m` etc.).
+                // Operands are statically known to be `int`, so we untag via
+                // `as_int` and operate on raw `i64`. Every op is checked: a
+                // result outside the i63 range throws a catchable
+                // `baml.panics.IntegerOverflow` (via `int_arith_result`)
+                // rather than silently wrapping (old `tagged_int_add`/`_sub`)
+                // or raw-Rust-panicking (old `Value::int(l * r)`). The overflow
+                // branch is cold and ~never taken, so the hot path is the
+                // checked op plus one predicted-not-taken branch.
                 OpCode::AddInt => {
                     let r = self.stack.ensure_pop();
                     let l = self.stack.ensure_pop();
-                    self.stack.push(Value::tagged_int_add(l, r));
+                    // Overflow-checked tagged add: hot path stays branchless
+                    // (no untag/retag), cold path untags only for the message.
+                    match Value::tagged_int_add_checked(l, r) {
+                        Some(v) => self.stack.push(v),
+                        None => return Err(self.tagged_int_overflow(l, '+', r)),
+                    }
                 }
                 OpCode::SubInt => {
                     let r = self.stack.ensure_pop();
                     let l = self.stack.ensure_pop();
-                    self.stack.push(Value::tagged_int_sub(l, r));
+                    match Value::tagged_int_sub_checked(l, r) {
+                        Some(v) => self.stack.push(v),
+                        None => return Err(self.tagged_int_overflow(l, '-', r)),
+                    }
                 }
                 OpCode::MulInt => {
                     let Some(r) = self.stack.ensure_pop().as_int() else {
@@ -6734,7 +6879,8 @@ impl BexVm {
                     let Some(l) = self.stack.ensure_pop().as_int() else {
                         std::hint::unreachable_unchecked()
                     };
-                    self.stack.push(Value::int(l * r));
+                    let v = self.int_arith_result(l.checked_mul(r), l, '*', r)?;
+                    self.stack.push(v);
                 }
                 OpCode::DivInt => {
                     let Some(r) = self.stack.ensure_pop().as_int() else {
@@ -6751,7 +6897,11 @@ impl BexVm {
                             },
                         )));
                     }
-                    self.stack.push(Value::int(l / r));
+                    // r != 0 guaranteed above; `INT_MIN / -1` = 2^62 fits i64
+                    // (INT_MIN is -2^62, not i64::MIN) but not i63, so the
+                    // range-check in finish_int catches it.
+                    let v = self.finish_int(l / r, l, '/', r)?;
+                    self.stack.push(v);
                 }
                 OpCode::ModInt => {
                     let Some(r) = self.stack.ensure_pop().as_int() else {
@@ -6768,7 +6918,9 @@ impl BexVm {
                             },
                         )));
                     }
-                    self.stack.push(Value::int(l % r));
+                    // |l % r| < |r| <= 2^62, always within i63 range.
+                    let v = self.finish_int(l % r, l, '%', r)?;
+                    self.stack.push(v);
                 }
 
                 // ── Specialized float arithmetic (skip type dispatch) ─────────
@@ -6961,7 +7113,15 @@ impl BexVm {
                 OpCode::Neg => {
                     let val = self.stack.ensure_pop();
                     if let Some(n) = val.as_int() {
-                        self.stack.push(Value::int(-n));
+                        // Negating INT_MIN = -2^62 yields 2^62, which fits i64
+                        // (INT_MIN != i64::MIN) but not i63, so the range-check
+                        // in try_int catches it.
+                        match Value::try_int(n.wrapping_neg()) {
+                            Some(v) => self.stack.push(v),
+                            None => {
+                                return Err(self.integer_overflow(format!("-({n}) overflows int")));
+                            }
+                        }
                     } else if let Some(n) = value_as_float(val) {
                         let v = Value::object(self.alloc_float(-n));
                         self.stack.push(v);

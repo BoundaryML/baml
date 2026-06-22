@@ -217,3 +217,33 @@ function main() -> int | string {
       File "test.baml", line 3, in user.divider
     "#);
 }
+
+// ============================================================================
+// §N+2 — Regression: nested catch routing for cross-frame throws
+// ============================================================================
+
+/// Regression: a throw propagating out of a CALLED function must be caught by
+/// the INNERMOST enclosing `catch`, not the outermost.
+///
+/// Inline `throw`s are lowered as a direct jump to the handler, but a throw
+/// that escapes a callee — or a runtime panic — reaches the caller's exception
+/// table. The VM now selects the innermost covering entry (largest `start_pc`)
+/// rather than the first; previously it picked the outermost and mis-routed.
+///
+/// Here `boom()` throws inside `boom`; the inner `catch (e) { _ => 1 }` handles
+/// it (→ 1). (Paired fix: a same-frame rethrow now syncs the dispatch `pc` to
+/// the handler so the enclosing block aborts instead of falling through — see
+/// the `baml_src/ns_exceptions` wildcard panic-rethrow tests.)
+#[tokio::test]
+async fn nested_catch_inner_catches_callee_throw() {
+    let output = baml_test!(
+        r#"
+function boom() -> void { throw "x" }
+
+function main() -> int {
+  ({ boom(); 0 } catch (e) { _ => 1 }) catch (e2) { _ => 2 }
+}
+"#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(1));
+}

@@ -73,3 +73,74 @@ async fn optional_index_with_valid_index_returns_element() {
         output.result
     );
 }
+
+// ============================================================================
+// §N — Integer literals outside the i63 `int` range (B-266)
+// ============================================================================
+
+/// `int` is a 63-bit signed integer, so a bare literal of magnitude 2^62
+/// (a valid i64, but `INT_MAX + 1`) is rejected at compile time rather than
+/// panicking the VM at engine load. The diagnostic points at `bigint`.
+#[tokio::test]
+#[should_panic(expected = "[E0139]")]
+async fn int_literal_above_max_is_rejected_at_compile_time() {
+    let _ = baml_test!(
+        r#"
+        function main() -> int {
+            4611686018427387904
+        }
+    "#
+    );
+}
+
+/// A genuinely-too-large negated literal (magnitude past `INT_MIN`) is also a
+/// compile error — the negated value is range-checked, not just the token.
+#[tokio::test]
+#[should_panic(expected = "[E0139]")]
+async fn negated_int_literal_below_min_is_rejected_at_compile_time() {
+    let _ = baml_test!(
+        r#"
+        function main() -> int {
+            -5000000000000000000
+        }
+    "#
+    );
+}
+
+/// The negative-literal fold only applies to a `-` directly on an integer
+/// literal token. A *parenthesized* `-(2^62)` lowers its operand through a
+/// child node, so the `+2^62` is rejected just like a bare one (matching the
+/// Rust/Java/C# rule, where parentheses break the negative-literal form).
+#[tokio::test]
+#[should_panic(expected = "[E0139]")]
+async fn parenthesized_oversized_literal_is_rejected() {
+    let _ = baml_test!(
+        r#"
+        function main() -> int {
+            -(4611686018427387904)
+        }
+    "#
+    );
+}
+
+/// `int.min_value()` (`-2^62`) must remain writable as a negated literal even
+/// though `+2^62` is not a legal `int` literal: the leading `-` forms a single
+/// negative literal. (Mirrors the i64::MIN literal rule in Rust/Java/C#.)
+#[tokio::test]
+async fn negated_int_min_literal_is_valid() {
+    let output = baml_test!(
+        r#"
+        function main() -> int {
+            -4611686018427387904
+        }
+    "#
+    );
+    assert!(
+        matches!(
+            output.result,
+            Ok(BexExternalValue::Int(-4611686018427387904))
+        ),
+        "expected INT_MIN, got: {:?}",
+        output.result
+    );
+}

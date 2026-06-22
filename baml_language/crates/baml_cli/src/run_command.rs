@@ -910,8 +910,8 @@ impl RunArgs {
     /// matches every other advisory the CLI emits.
     fn parse_scripts(content: &str) -> HashMap<String, Vec<String>> {
         let trimmed = content.trim();
-        let table = match content.parse::<toml::Table>() {
-            Ok(t) => t,
+        let manifest = match crate::manifest::parse(content) {
+            Ok(m) => m,
             Err(e) => {
                 if !trimmed.is_empty() {
                     crate::reporter::print_warning(format_args!(
@@ -921,30 +921,14 @@ impl RunArgs {
                 return HashMap::new();
             }
         };
-        let Some(scripts) = table.get("scripts").and_then(|v| v.as_table()) else {
-            return HashMap::new();
-        };
-        scripts
-            .iter()
-            .filter_map(|(k, v)| {
-                // String form: tokenized via split_whitespace (like Cargo aliases).
-                if let Some(s) = v.as_str() {
-                    return Some((
-                        k.clone(),
-                        s.split_whitespace().map(|t| t.to_string()).collect(),
-                    ));
-                }
-                // Array form: each element is one argument verbatim.
-                if let Some(arr) = v.as_array() {
-                    let tokens: Vec<String> = arr
-                        .iter()
-                        .filter_map(|item| item.as_str().map(|s| s.to_string()))
-                        .collect();
-                    if !tokens.is_empty() {
-                        return Some((k.clone(), tokens));
-                    }
-                }
-                None
+        manifest
+            .scripts
+            .into_iter()
+            .filter_map(|(name, script)| {
+                let tokens = script.tokens();
+                // Empty bodies (e.g. `g = ""` or `g = []`) carry nothing to
+                // run; drop them so they don't shadow a real target.
+                (!tokens.is_empty()).then_some((name, tokens))
             })
             .collect()
     }

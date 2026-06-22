@@ -177,6 +177,10 @@ pub enum TirTypeError {
     /// loop never exits via pattern failure (an unconditional infinite loop).
     /// Suggest a plain `while`/`loop` instead.
     IrrefutablePatternInWhileLet,
+    /// `return`/`break`/`continue` inside a `defer` body that would escape the
+    /// defer (BEP-042). Only `throw` may leave a defer. `keyword` is the
+    /// offending control-flow keyword.
+    DeferControlFlowEscape { keyword: &'static str },
     /// Catch binding cannot be typed as `any` or `unknown`.
     InvalidCatchBindingType { type_name: String },
     /// Inferred escaping throws are not covered by the declared throws contract.
@@ -370,6 +374,10 @@ pub enum TirTypeError {
     /// `$id` used as a call-site argument label (`foo($id = x)`). Overrides
     /// are set inside the callee body with `$id = ...`, not by the caller.
     RuntimeIdCallSiteArgument,
+    /// An integer literal (or a constant-folded integer expression) is outside
+    /// the representable `int` range `[-2^62, 2^62-1]`. `int` is 63-bit; larger
+    /// magnitudes need a `bigint` literal (`n` suffix).
+    IntegerLiteralOutOfRange { value: i64 },
 }
 
 impl fmt::Display for TirTypeError {
@@ -607,6 +615,10 @@ impl fmt::Display for TirTypeError {
             TirTypeError::IrrefutablePatternInWhileLet => write!(
                 f,
                 "irrefutable `while let` pattern; the loop never exits by pattern failure — use a plain `while`/`loop` instead"
+            ),
+            TirTypeError::DeferControlFlowEscape { keyword } => write!(
+                f,
+                "`{keyword}` cannot leave a `defer` body; only `throw` may propagate out of a defer"
             ),
             TirTypeError::InvalidCatchBindingType { type_name } => write!(
                 f,
@@ -911,6 +923,12 @@ impl fmt::Display for TirTypeError {
                 f,
                 "`$id` cannot be set at the call site; assign `$id = ...` inside the function \
                  body instead"
+            ),
+            TirTypeError::IntegerLiteralOutOfRange { value } => write!(
+                f,
+                "integer literal `{value}` is out of range for `int` \
+                 (which holds -4611686018427387904 to 4611686018427387903); \
+                 append `n` to write it as a `bigint`"
             ),
         }
     }

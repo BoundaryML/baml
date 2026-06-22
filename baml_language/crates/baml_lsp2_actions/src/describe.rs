@@ -752,7 +752,6 @@ fn is_item_node(kind: SyntaxKind) -> bool {
             | SyntaxKind::FUNCTION_DEF
             | SyntaxKind::ENUM_DEF
             | SyntaxKind::CLIENT_DEF
-            | SyntaxKind::GENERATOR_DEF
             | SyntaxKind::TEST_DEF
             | SyntaxKind::TEST_EXPR_DEF
             | SyntaxKind::TESTSET_DEF
@@ -1430,7 +1429,6 @@ fn find_dependencies(
             // Template string params are plain names with no types; self-contained.
         }
         baml_compiler2_hir::contributions::Definition::RetryPolicy(_)
-        | baml_compiler2_hir::contributions::Definition::Generator(_)
         | baml_compiler2_hir::contributions::Definition::Let(_) => {
             // These don't have meaningful type dependencies for display.
         }

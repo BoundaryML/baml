@@ -62,6 +62,7 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::Throws => SyntaxKind::KW_THROWS,
         TokenKind::Spawn => SyntaxKind::KW_SPAWN,
         TokenKind::Await => SyntaxKind::KW_AWAIT,
+        TokenKind::Defer => SyntaxKind::KW_DEFER,
 
         // Literals
         TokenKind::Word => SyntaxKind::WORD,
@@ -1196,6 +1197,7 @@ impl<'a> Parser<'a> {
                         | TokenKind::Break
                         | TokenKind::Continue
                         | TokenKind::Throw
+                        | TokenKind::Defer
                 )
             )
     }
@@ -4362,6 +4364,8 @@ impl<'a> Parser<'a> {
             self.parse_continue_stmt();
         } else if self.at(TokenKind::Throw) {
             self.parse_throw_stmt();
+        } else if self.at(TokenKind::Defer) {
+            self.parse_defer_stmt();
         } else if self.at(TokenKind::Test) && self.looks_like_test_expr_body() {
             if self.testset_body_depth > 0 {
                 self.parse_test_expr();
@@ -4493,6 +4497,21 @@ impl<'a> Parser<'a> {
             // as one throw statement with catch attached to the throw.
             p.parse_expr();
             p.eat(TokenKind::Semicolon);
+        });
+    }
+
+    /// Parse `defer { body }` (BEP-042). The body is always a brace-delimited
+    /// block; it runs on every exit of the enclosing block (normal completion,
+    /// `return`, `break`/`continue`, and error unwinding) in LIFO order. The
+    /// CST shape is `DEFER_STMT [ KW_DEFER BLOCK_EXPR ]`.
+    fn parse_defer_stmt(&mut self) {
+        self.with_node(SyntaxKind::DEFER_STMT, |p| {
+            p.expect(TokenKind::Defer);
+            if p.at(TokenKind::LBrace) {
+                p.parse_block_expr();
+            } else {
+                p.error_unexpected_token("'{' after defer".to_string());
+            }
         });
     }
 
@@ -7582,24 +7601,43 @@ impl<'a> Parser<'a> {
 
     // ============ Generator Parsing ============
 
-    /// Parse a generator declaration
+    /// Consume a deprecated top-level `generator NAME { … }` block **without
+    /// parsing its interior**. Code generators are now configured in
+    /// `baml.toml` under `[generator.<name>]`; the body here is swallowed as
+    /// opaque tokens so stale config never produces interior parse errors, and
+    /// CST → AST lowering raises a migration warning when it sees the
+    /// `GENERATOR_DEF` node (see `lower_cst`).
     pub(crate) fn parse_generator(&mut self) {
         self.with_node(SyntaxKind::GENERATOR_DEF, |p| {
             // 'generator' keyword
             p.expect(TokenKind::Generator);
 
-            // Generator name
+            // Optional generator name — kept as the first WORD child so
+            // lowering can name it in the diagnostic.
             if p.at(TokenKind::Word) {
                 p.bump();
-            } else {
-                p.error_unexpected_token("generator name".to_string());
             }
 
-            // Config block
+            // Swallow the `{ … }` body opaquely, tracking brace depth so
+            // nested braces (e.g. option maps) don't terminate early. The
+            // interior is deliberately NOT parsed into config items.
             if p.at(TokenKind::LBrace) {
-                p.parse_config_block();
-            } else {
-                p.error_unexpected_token("generator body".to_string());
+                p.bump(); // consume '{'
+                let mut depth = 1usize;
+                while depth > 0 && !p.at_end() {
+                    if p.at(TokenKind::LBrace) {
+                        depth += 1;
+                    } else if p.at(TokenKind::RBrace) {
+                        depth -= 1;
+                    }
+                    p.bump();
+                }
+                // Reached EOF with the body still open — preserve the
+                // unclosed-brace diagnostic rather than silently swallowing
+                // the rest of the file into this deprecated node.
+                if depth > 0 {
+                    p.error_unexpected_token("'}'".to_string());
+                }
             }
         });
     }

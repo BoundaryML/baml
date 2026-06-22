@@ -59,6 +59,8 @@ pub enum TokenKind {
     Function,
     #[token("client")]
     Client,
+    /// Deprecated: `generator` blocks moved to `baml.toml`. Still lexed so the
+    /// parser can recognize stale blocks and raise a migration diagnostic.
     #[token("generator")]
     Generator,
     #[token("test")]
@@ -105,6 +107,8 @@ pub enum TokenKind {
     Spawn,
     #[token("await")]
     Await,
+    #[token("defer")]
+    Defer,
 
     // Other keywords
     #[token("watch")]
@@ -333,6 +337,7 @@ impl std::fmt::Display for TokenKind {
             TokenKind::Throws => "throws",
             TokenKind::Spawn => "spawn",
             TokenKind::Await => "await",
+            TokenKind::Defer => "defer",
             TokenKind::Watch => "watch",
             TokenKind::Instanceof => "instanceof",
             TokenKind::Is => "is",
