@@ -229,47 +229,31 @@ class UserSettings(BaseModel):
 
 
 # #########################################################################
-# Model rebuilds (30)
+# Model rebuilds (22)
 # #########################################################################
 # Resolve string forward references now that every model above is defined so
 # class declaration order never breaks Pydantic construction (issue #793).
-# Best-effort: a model that can't be eagerly rebuilt (e.g. one using a
-# recursive type alias Pydantic resolves lazily) is skipped, so importing
-# this module never fails.
-for _model_cls in (
-    Address,
-    Approval,
-    Budget,
-    Company,
-    CompanyMetadata,
-    ComplexNested,
-    Contact,
-    Coordinates,
-    DeeplyNested,
-    Department,
-    DisplaySettings,
-    Employee,
-    Level1,
-    Level2,
-    Level3,
-    Level4,
-    Level5,
-    Metadata,
-    Milestone,
-    NotificationSettings,
-    Preferences,
-    PrivacySettings,
-    Profile,
-    Project,
-    RecursiveStructure,
-    SimpleNested,
-    SocialLinks,
-    Task,
-    User,
-    UserSettings,
-):
-    try:
-        _model_cls.model_rebuild()
-    except Exception:
-        pass
-del _model_cls
+# Recursive models are intentionally omitted (Pydantic resolves those lazily;
+# eagerly rebuilding them can recurse).
+Address.model_rebuild()
+Approval.model_rebuild()
+Budget.model_rebuild()
+Contact.model_rebuild()
+Coordinates.model_rebuild()
+DeeplyNested.model_rebuild()
+DisplaySettings.model_rebuild()
+Employee.model_rebuild()
+Level1.model_rebuild()
+Level2.model_rebuild()
+Level3.model_rebuild()
+Level4.model_rebuild()
+Level5.model_rebuild()
+Metadata.model_rebuild()
+NotificationSettings.model_rebuild()
+Preferences.model_rebuild()
+PrivacySettings.model_rebuild()
+Profile.model_rebuild()
+SimpleNested.model_rebuild()
+SocialLinks.model_rebuild()
+User.model_rebuild()
+UserSettings.model_rebuild()

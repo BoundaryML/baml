@@ -58,14 +58,6 @@ class SimpleClass(BaseModel):
 # #########################################################################
 # Resolve string forward references now that every model above is defined so
 # class declaration order never breaks Pydantic construction (issue #793).
-# Best-effort: a model that can't be eagerly rebuilt (e.g. one using a
-# recursive type alias Pydantic resolves lazily) is skipped, so importing
-# this module never fails.
-for _model_cls in (
-    SimpleClass,
-):
-    try:
-        _model_cls.model_rebuild()
-    except Exception:
-        pass
-del _model_cls
+# Recursive models are intentionally omitted (Pydantic resolves those lazily;
+# eagerly rebuilding them can recurse).
+SimpleClass.model_rebuild()

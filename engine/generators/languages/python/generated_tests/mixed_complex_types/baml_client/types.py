@@ -254,52 +254,33 @@ class Widget(BaseModel):
 
 
 # #########################################################################
-# Model rebuilds (35)
+# Model rebuilds (24)
 # #########################################################################
 # Resolve string forward references now that every model above is defined so
 # class declaration order never breaks Pydantic construction (issue #793).
-# Best-effort: a model that can't be eagerly rebuilt (e.g. one using a
-# recursive type alias Pydantic resolves lazily) is skipped, so importing
-# this module never fails.
-for _model_cls in (
-    Action,
-    Asset,
-    AssetMetadata,
-    ButtonWidget,
-    ComplexData,
-    Condition,
-    Configuration,
-    ContainerWidget,
-    DataObject,
-    Dimensions,
-    Environment,
-    Error,
-    ErrorDetail,
-    Feature,
-    ImageWidget,
-    Item,
-    KitchenSink,
-    Node,
-    NodeMetadata,
-    PrimaryData,
-    Record,
-    ResponseMetadata,
-    Rule,
-    SecondaryData,
-    Setting,
-    SimpleCondition,
-    Success,
-    TertiaryData,
-    TextWidget,
-    UltraComplex,
-    User,
-    UserProfile,
-    UserResponse,
-    Variant,
-    Widget,
-):
-    try:
-        _model_cls.model_rebuild()
-    except Exception:
-        pass
-del _model_cls
+# Recursive models are intentionally omitted (Pydantic resolves those lazily;
+# eagerly rebuilding them can recurse).
+Action.model_rebuild()
+Asset.model_rebuild()
+AssetMetadata.model_rebuild()
+ButtonWidget.model_rebuild()
+DataObject.model_rebuild()
+Dimensions.model_rebuild()
+Environment.model_rebuild()
+Error.model_rebuild()
+ErrorDetail.model_rebuild()
+Feature.model_rebuild()
+ImageWidget.model_rebuild()
+Item.model_rebuild()
+NodeMetadata.model_rebuild()
+PrimaryData.model_rebuild()
+ResponseMetadata.model_rebuild()
+Setting.model_rebuild()
+SimpleCondition.model_rebuild()
+Success.model_rebuild()
+TertiaryData.model_rebuild()
+TextWidget.model_rebuild()
+User.model_rebuild()
+UserProfile.model_rebuild()
+UserResponse.model_rebuild()
+Variant.model_rebuild()

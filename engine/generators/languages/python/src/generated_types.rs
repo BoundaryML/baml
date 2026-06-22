@@ -484,11 +484,14 @@ pub(crate) fn render_py_types<T: askama::Template>(
 /// resolution independent of declaration order — and keeps working when types
 /// are split across files, where no ordering scheme can help.
 ///
-/// Each rebuild is best-effort: a model that can't be eagerly rebuilt (e.g. one
-/// whose field uses a recursive type alias that Pydantic only resolves lazily,
-/// and which would otherwise hit `RecursionError`) is skipped, leaving it in the
-/// same lazily-resolved state as before. This keeps importing the module safe
-/// while still resolving the forward references that issue #793 is about.
+/// Recursive classes are deliberately excluded. A model that participates in a
+/// dependency cycle — either a recursive class cycle or a structural recursive
+/// type alias (e.g. `value: "JsonValue"`) — can't always be eagerly rebuilt:
+/// Pydantic resolves those lazily and an eager `model_rebuild()` can hit
+/// `RecursionError`. Those models are left in their lazily-resolved state (the
+/// behavior before this change), while every non-recursive model still gets the
+/// forward-reference resolution that issue #793 is about. The recursive set is
+/// computed from the IR's existing cycle detection (see `recursive_class_names`).
 ///
 /// ```askama
 /// {%- if !names.is_empty() %}
@@ -497,23 +500,15 @@ pub(crate) fn render_py_types<T: askama::Template>(
 /// # #########################################################################
 /// # Resolve string forward references now that every model above is defined so
 /// # class declaration order never breaks Pydantic construction (issue #793).
-/// # Best-effort: a model that can't be eagerly rebuilt (e.g. one using a
-/// # recursive type alias Pydantic resolves lazily) is skipped, so importing
-/// # this module never fails.
-/// for _model_cls in (
+/// # Recursive models are intentionally omitted (Pydantic resolves those lazily;
+/// # eagerly rebuilding them can recurse).
 /// {%- for name in names %}
-///     {{ name }},
-/// {%- endfor %}
-/// ):
-///     try:
 /// {%- if is_pydantic_2 %}
-///         _model_cls.model_rebuild()
+/// {{ name }}.model_rebuild()
 /// {%- else %}
-///         _model_cls.update_forward_refs()
+/// {{ name }}.update_forward_refs()
 /// {%- endif %}
-///     except Exception:
-///         pass
-/// del _model_cls
+/// {%- endfor %}
 /// {%- endif %}
 /// ```
 #[derive(askama::Template)]
@@ -523,20 +518,29 @@ struct PyModelRebuilds {
     is_pydantic_2: bool,
 }
 
+/// Render `model_rebuild()` calls for every class that is NOT recursive.
+/// `recursive` is the set of class names that participate in a dependency cycle
+/// (computed once per generation; see `recursive_class_names`).
 pub(crate) fn render_py_model_rebuilds(
     classes: &[ClassPy],
+    recursive: &std::collections::HashSet<String>,
     pkg: &CurrentRenderPackage,
 ) -> Result<String, askama::Error> {
     use askama::Template;
 
-    // Emit nothing at all when there are no classes, so files with only enums or
-    // type aliases (e.g. the `enums` snapshot) gain no trailing rebuild section.
-    if classes.is_empty() {
+    let names: Vec<String> = classes
+        .iter()
+        .map(|c| c.name.clone())
+        .filter(|name| !recursive.contains(name))
+        .collect();
+
+    // Emit nothing when there are no non-recursive classes (e.g. enum-only files).
+    if names.is_empty() {
         return Ok(String::new());
     }
 
     let mut rendered = PyModelRebuilds {
-        names: classes.iter().map(|c| c.name.clone()).collect(),
+        names,
         is_pydantic_2: pkg.is_pydantic_2,
     }
     .render()?;

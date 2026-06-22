@@ -82,21 +82,13 @@ class User(BaseModel):
 # #########################################################################
 # Resolve string forward references now that every model above is defined so
 # class declaration order never breaks Pydantic construction (issue #793).
-# Best-effort: a model that can't be eagerly rebuilt (e.g. one using a
-# recursive type alias Pydantic resolves lazily) is skipped, so importing
-# this module never fails.
-for _model_cls in (
-    ArrayWithConstraints,
-    MixedArrays,
-    NestedArrays,
-    ObjectArrays,
-    Product,
-    SimpleArrays,
-    Tag,
-    User,
-):
-    try:
-        _model_cls.model_rebuild()
-    except Exception:
-        pass
-del _model_cls
+# Recursive models are intentionally omitted (Pydantic resolves those lazily;
+# eagerly rebuilding them can recurse).
+ArrayWithConstraints.model_rebuild()
+MixedArrays.model_rebuild()
+NestedArrays.model_rebuild()
+ObjectArrays.model_rebuild()
+Product.model_rebuild()
+SimpleArrays.model_rebuild()
+Tag.model_rebuild()
+User.model_rebuild()

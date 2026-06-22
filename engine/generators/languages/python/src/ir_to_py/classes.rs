@@ -460,23 +460,57 @@ end"#)
             ir_class_to_py(ir.find_class("B").unwrap().item, &pkg),
         ];
 
-        let rendered = crate::generated_types::render_py_model_rebuilds(&classes, &pkg).unwrap();
-        // Both classes are listed in the best-effort rebuild loop, which calls
-        // model_rebuild() on Pydantic 2 and swallows failures so a recursive
-        // type alias can't break import (issue #793).
-        assert!(rendered.contains("A,"), "expected A in rebuild loop, got:\n{rendered}");
-        assert!(rendered.contains("B,"), "expected B in rebuild loop, got:\n{rendered}");
+        // No recursive classes here, so both A and B get a direct rebuild.
+        let recursive = std::collections::HashSet::new();
+        let rendered =
+            crate::generated_types::render_py_model_rebuilds(&classes, &recursive, &pkg).unwrap();
         assert!(
-            rendered.contains("_model_cls.model_rebuild()"),
-            "expected model_rebuild() in loop, got:\n{rendered}"
+            rendered.contains("A.model_rebuild()"),
+            "expected A.model_rebuild(), got:\n{rendered}"
         );
         assert!(
-            rendered.contains("except Exception:"),
-            "expected best-effort try/except, got:\n{rendered}"
+            rendered.contains("B.model_rebuild()"),
+            "expected B.model_rebuild(), got:\n{rendered}"
         );
         assert!(
             !rendered.contains("update_forward_refs"),
             "pydantic 2 should use model_rebuild, got:\n{rendered}"
+        );
+    }
+
+    #[test]
+    fn test_model_rebuilds_skip_recursive_classes() {
+        // Recursive classes must be omitted (Pydantic resolves them lazily;
+        // eagerly rebuilding can recurse — issue #793).
+        let ir = make_test_ir(
+            r#"
+            class B {
+                value string
+            }
+            class A {
+                property1 B
+            }
+        "#,
+        )
+        .unwrap();
+        let ir = std::sync::Arc::new(ir);
+        let pkg = CurrentRenderPackage::new("baml_client", ir.clone(), true);
+        let classes = vec![
+            ir_class_to_py(ir.find_class("A").unwrap().item, &pkg),
+            ir_class_to_py(ir.find_class("B").unwrap().item, &pkg),
+        ];
+
+        // Pretend A is recursive: it should be excluded, B should remain.
+        let recursive = std::collections::HashSet::from(["A".to_string()]);
+        let rendered =
+            crate::generated_types::render_py_model_rebuilds(&classes, &recursive, &pkg).unwrap();
+        assert!(
+            !rendered.contains("A.model_rebuild()"),
+            "recursive class A should be skipped, got:\n{rendered}"
+        );
+        assert!(
+            rendered.contains("B.model_rebuild()"),
+            "non-recursive class B should be rebuilt, got:\n{rendered}"
         );
     }
 
@@ -494,9 +528,11 @@ end"#)
         let pkg = CurrentRenderPackage::new("baml_client", ir.clone(), false);
         let classes = vec![ir_class_to_py(ir.find_class("A").unwrap().item, &pkg)];
 
-        let rendered = crate::generated_types::render_py_model_rebuilds(&classes, &pkg).unwrap();
+        let recursive = std::collections::HashSet::new();
+        let rendered =
+            crate::generated_types::render_py_model_rebuilds(&classes, &recursive, &pkg).unwrap();
         assert!(
-            rendered.contains("_model_cls.update_forward_refs()"),
+            rendered.contains("A.update_forward_refs()"),
             "pydantic 1 should use update_forward_refs, got:\n{rendered}"
         );
         assert!(!rendered.contains("model_rebuild"));
@@ -508,7 +544,9 @@ end"#)
         let ir = std::sync::Arc::new(ir);
         let pkg = CurrentRenderPackage::new("baml_client", ir.clone(), true);
 
-        let rendered = crate::generated_types::render_py_model_rebuilds(&[], &pkg).unwrap();
+        let recursive = std::collections::HashSet::new();
+        let rendered =
+            crate::generated_types::render_py_model_rebuilds(&[], &recursive, &pkg).unwrap();
         assert!(
             !rendered.contains("model_rebuild") && !rendered.contains("Model rebuilds"),
             "no classes should render nothing, got:\n{rendered}"
