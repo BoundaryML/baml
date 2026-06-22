@@ -61,8 +61,10 @@ def render_reports_md(trophies: list[dict[str, Any]]) -> str:
 def render_open_issues_json(issues: list[dict[str, Any]]) -> str:
     """Render open issues into the open_issues.json document fed to the agent.
 
-    Projects each issue down to the id, kind, title, and description fields
-    the agent needs for deduplication.
+    Projects each issue down to just id, kind, and title — the titles are
+    specific enough for the agent to match duplicates, and dropping the (large,
+    ever-growing) descriptions keeps the dedup context bounded so the agent
+    finishes well within its wall-clock budget regardless of board size.
 
     Args:
         issues: The open issue rows to render.
@@ -71,7 +73,7 @@ def render_open_issues_json(issues: list[dict[str, Any]]) -> str:
         The pretty-printed JSON array as a string.
     """
     arr = [
-        {"id": i.get("_id"), "kind": i.get("kind"), "title": i.get("title", ""), "description": i.get("description", "")}
+        {"id": i.get("_id"), "kind": i.get("kind"), "title": i.get("title", "")}
         for i in issues
     ]
     return json.dumps(arr, indent=2)

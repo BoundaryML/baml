@@ -12,7 +12,8 @@ run's transcript, a definitive `suggestion` (the fix the agent proposed), and so
 `## Minimal artifacts (verified)` section: a verified minimal BAML repro. Those are gold, they \
 isolate the language issue. Each report may also end with a `## Suggested improvements` block: \
 standalone skill/language improvement ideas not tied to one error.
-- `open_issues.json`: M currently-open issues. Each has { id, kind, title, description }.
+- `open_issues.json`: M currently-open issues. Each has { id, kind, title }. Match a finding to one \
+of these by its title when it is the same underlying issue, and extend it (emit the issue with its `id`).
 
 # Your job
 Produce a deduplicated issue list. Each issue is either:
@@ -51,11 +52,11 @@ improvement proposal. Default "bug".
 - `suggestion` is a definitive, actionable fix in the skill or the language. Carry the agent's \
 suggestion through; sharpen it if several reports agree. Always set it.
 - Titles under 80 chars.
-- Write `description` as rich, well-structured **Markdown** — this becomes the issue body in \
-Linear. Use short paragraphs, `##` subheadings (e.g. What's wrong / Impact / Context), `-` bullet \
-lists, `**bold**`, and `` `inline code` `` where they make the issue clearer. Be thorough: explain \
-what is wrong, why it matters, and the conditions under which it shows up. Aim for a real bug report, \
-not one terse line.
+- Write `description` as a CONCISE Markdown bug report — this becomes the issue body in Linear. \
+Cover what's wrong and why it matters in ~2-4 sentences or a few short bullets. Be brief and \
+information-dense: no padding, no restating the title, no multi-section essays, no narrating the \
+agent's run. At most one `##` subheading, and only if it genuinely helps. Use `` `inline code` `` for \
+identifiers. The reproduction goes in `repro`, never here. Keep each description well under ~150 words.
 - `repro` is how almost every bug-category issue gets its reproduction. When a finding you cite has \
 a `## Minimal artifacts (verified)` block, COPY that block into the issue's `repro` field VERBATIM — \
 character for character, exactly as it appears in reports.md (the `$ <command>` line, the `--- file \

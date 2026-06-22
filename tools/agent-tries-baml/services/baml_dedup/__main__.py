@@ -80,6 +80,15 @@ class BamlDedup(Processor):
             invocation_timeout_secs=BAML_DEDUP_TIMEOUT_SECS,
         )
         result = await self.proxy.run_agent(req, timeout=BAML_DEDUP_TIMEOUT_SECS + 120)
+        # Never mark the batch done on a run that didn't complete (timeout/error):
+        # the agent writes no issues.json, so upserting nothing and transitioning to
+        # "done" would silently drop every finding in the batch. Raise instead so the
+        # Processor fails the rows (recoverable) rather than losing them.
+        if result.status != "ok":
+            raise RuntimeError(
+                f"dedup agent run did not complete (status={result.status} "
+                f"exit_code={result.exit_code}); leaving {len(batch)} troph(ies) unprocessed"
+            )
         items = self._parse_issues(result)
         log.info("baml-dedup batch=%d -> %d issue items", len(batch), len(items))
 
