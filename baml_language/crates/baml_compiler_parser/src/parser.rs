@@ -11305,6 +11305,21 @@ function f() -> int {
             "diagnostic should mention the non-null assertion operator, got: {msg}"
         );
 
+        // The diagnostic span must target the `!` itself (not the preceding
+        // operand or a downstream brace), so editors underline the offending
+        // character precisely.
+        let span = match &errors[0] {
+            ParseError::InvalidSyntax { span, .. } => *span,
+            other => panic!("expected InvalidSyntax diagnostic, got: {other:?}"),
+        };
+        let start: usize = span.range.start().into();
+        let end: usize = span.range.end().into();
+        assert_eq!(
+            &source[start..end],
+            "!",
+            "diagnostic span should cover exactly the '!' token"
+        );
+
         // No cascade: the `else`/`}` confusion is gone.
         assert!(
             !errors.iter().any(|e| {
