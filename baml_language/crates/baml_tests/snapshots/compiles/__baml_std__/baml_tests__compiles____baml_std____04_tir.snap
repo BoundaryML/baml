@@ -3282,6 +3282,59 @@ class baml.llm.PrimitiveClient$stream {
 }
 
 --- <builtin>/baml/ns_math/math.baml ---
+function baml.math.sum(values: float[]) -> float throws never {
+  { : float | 0.0
+    values.reduce<A, E>((acc: float, x: float) -> float throws never { ... }, 0.0) : float | 0.0
+      (acc: float, x: float) -> float throws never { ... } : (acc: float, x: float) -> float throws never
+        {
+          acc + x
+        }
+  }
+}
+lambda baml.math.sum {
+}
+function baml.math.mean(values: float[]) -> float throws baml.errors.InvalidArgument {
+  { : float
+    let n = values.length() : int
+    if (n == 0 : bool) : void
+      { : never
+        throw root.errors.InvalidArgument { message: "math.mean: cannot..." } : baml.errors.InvalidArgument
+      }
+    sum(values) / n : float
+  }
+}
+function baml.math.median(values: float[]) -> float throws baml.errors.InvalidArgument {
+  { : float
+    let n = values.length() : int
+    if (n == 0 : bool) : void
+      { : never
+        throw root.errors.InvalidArgument { message: "math.median: cann..." } : baml.errors.InvalidArgument
+      }
+    let sorted = values.slice(0, n) : float[]
+    sorted.sort() : float[]
+    let mid = n / 2 : int
+    if (n % 2 == 1 : bool) : float
+      { : float
+        match (sorted.at(mid) : float | null) : float
+          v: float =>
+            v : float
+          null =>
+            root.sys.panic("math.median: unre...") : never
+      }
+    else
+      { : float
+        match (sorted.at(mid - 1) : float | null) : float
+          lo: float =>
+            match (sorted.at(mid) : float | null) : float
+              hi: float =>
+                lo + hi / 2.0 : float
+              null =>
+                root.sys.panic("math.median: unre...") : never
+          null =>
+            root.sys.panic("math.median: unre...") : never
+      }
+  }
+}
 
 --- <builtin>/baml/ns_media/media.baml ---
 class baml.media.Pdf {
