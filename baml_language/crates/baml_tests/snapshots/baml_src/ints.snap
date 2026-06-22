@@ -21,7 +21,7 @@ function ints.$init_test_ns_ints_ints(registry: testing.TestCollector) -> null {
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "int_abs_min_value_wraps"
+    load_const "int_abs_min_value_overflows"
     make_closure .<lambda($init_test_ns_ints_ints, 3)>, 0
     load_const null
     call testing.TestCollector.register_test
@@ -554,6 +554,30 @@ function ints.$init_test_ns_ints_ints(registry: testing.TestCollector) -> null {
     load_const null
     call testing.TestCollector.register_test
     pop 1
+    load_var registry
+    load_const "int_add_at_max_boundary_no_overflow"
+    make_closure .<lambda($init_test_ns_ints_ints, 92)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "int_sub_at_min_boundary_no_overflow"
+    make_closure .<lambda($init_test_ns_ints_ints, 93)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "int_mul_max_by_one_no_overflow"
+    make_closure .<lambda($init_test_ns_ints_ints, 94)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "int_mul_min_by_one_no_overflow"
+    make_closure .<lambda($init_test_ns_ints_ints, 95)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
     load_const null
     return
 }
@@ -567,6 +591,50 @@ function ints.count_zeros_plus_ones(n: int) -> int {
     store_var _3
     load_var2 2 3
     add_int
+    return
+}
+
+function ints.int_abs_catch_(x: int) -> int {
+    load_var x
+    call baml.Int.abs
+    jump L4
+    load_var e
+    is_type baml.panics.IntegerOverflow
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var e
+    is_type baml.errors.InvalidArgument
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var e
+    throw
+
+  L2:
+    load_const 2
+    unary_op -
+    jump L4
+
+  L3:
+    load_const 1
+    unary_op -
+
+  L4:
+    return
+}
+
+function ints.int_add_(a: int, b: int) -> int {
+    load_var2 1 2
+    add_int
+    return
+}
+
+function ints.int_mul_(a: int, b: int) -> int {
+    load_var2 1 2
+    mul_int
     return
 }
 
@@ -800,4 +868,10 @@ function ints.int_random_single_element_range() -> bool {
     add_int
     store_var i
     jump L0
+}
+
+function ints.int_sub_(a: int, b: int) -> int {
+    load_var2 1 2
+    sub_int
+    return
 }

@@ -6186,6 +6186,7 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::IrrefutablePatternInLetElse => DiagnosticId::IrrefutablePatternInLetElse,
         TirTypeError::IrrefutablePatternInWhileLet => DiagnosticId::IrrefutablePatternInWhileLet,
         TirTypeError::InvalidCatchBindingType { .. } => DiagnosticId::InvalidCatchBindingType,
+        TirTypeError::DeferControlFlowEscape { .. } => DiagnosticId::DeferControlFlowEscape,
         TirTypeError::ThrowsContractViolation { .. }
         | TirTypeError::CallbackThrowsContractViolation { .. } => {
             DiagnosticId::ThrowsContractViolation
@@ -6229,6 +6230,7 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::RuntimeIdCompoundAssignment
         | TirTypeError::RuntimeIdMemberAccess { .. }
         | TirTypeError::RuntimeIdCallSiteArgument => DiagnosticId::TypeMismatch,
+        TirTypeError::IntegerLiteralOutOfRange { .. } => DiagnosticId::IntegerLiteralOutOfRange,
     }
 }
 

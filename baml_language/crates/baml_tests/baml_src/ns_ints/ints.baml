@@ -28,11 +28,20 @@ test "int_abs_zero" {
     assert.is_true(baml.deep_equals((0).abs(), 0))
 }
 
-// int.min_value() is -2^62; its abs() (2^62) is one past int.max_value() and
-// wraps back to int.min_value() in the i63 representation — consistent with how
-// int +/-/* wrap two's-complement. abs only throws for the genuine i64::MIN.
-test "int_abs_min_value_wraps" {
-    assert.is_true(baml.deep_equals(int.min_value().abs(), int.min_value()))
+// int.min_value() is -2^62; its abs() (2^62) is one past int.max_value(), so —
+// exactly like `-int.min_value()` — it leaves the i63 range and throws a
+// catchable baml.panics.IntegerOverflow (the int +/-/*/unary- overflow policy).
+// A valid positive int never throws (the original bug misfired its guard here).
+// The InvalidArgument arm covers abs's declared, defensive (unreachable) throw.
+function int_abs_catch_(x: int) -> int {
+    x.abs() catch (e) {
+        baml.panics.IntegerOverflow => -1,
+        baml.errors.InvalidArgument => -2
+    }
+}
+
+test "int_abs_min_value_overflows" {
+    assert.is_true(baml.deep_equals(int_abs_catch_(int.min_value()), -1))
 }
 
 test "int_abs_near_min_value_succeeds" {
@@ -575,4 +584,33 @@ function count_zeros_plus_ones(n: int) -> int {
 test "int_count_zeros_plus_count_ones_equals_64" {
     // 51966 = 0xCAFE — arbitrary mixed bit pattern
     assert.is_true(baml.deep_equals(count_zeros_plus_ones(51966), 64))
+}
+
+// ─── Operator overflow & boundary arithmetic ────────────────────────────────
+//
+// `+`, `-`, `*` and unary `-` throw a catchable `baml.panics.IntegerOverflow`
+// when the result leaves the i63 range (catch tests live in ns_exceptions).
+// Valid arithmetic right up to the boundary must NOT spuriously throw. Helpers
+// take runtime args so the ops aren't constant-folded — they run through the
+// VM's checked AddInt/SubInt/MulInt opcodes.
+function int_add_(a: int, b: int) -> int { a + b }
+function int_sub_(a: int, b: int) -> int { a - b }
+function int_mul_(a: int, b: int) -> int { a * b }
+
+test "int_add_at_max_boundary_no_overflow" {
+    // (MAX - 1) + 1 == MAX
+    assert.is_true(baml.deep_equals(int_add_(int.max_value() - 1, 1), int.max_value()))
+}
+
+test "int_sub_at_min_boundary_no_overflow" {
+    // (MIN + 1) - 1 == MIN
+    assert.is_true(baml.deep_equals(int_sub_(int.min_value() + 1, 1), int.min_value()))
+}
+
+test "int_mul_max_by_one_no_overflow" {
+    assert.is_true(baml.deep_equals(int_mul_(int.max_value(), 1), int.max_value()))
+}
+
+test "int_mul_min_by_one_no_overflow" {
+    assert.is_true(baml.deep_equals(int_mul_(int.min_value(), 1), int.min_value()))
 }

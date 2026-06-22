@@ -902,6 +902,49 @@ impl Value {
         Value(a.0.wrapping_sub(b.0).wrapping_add(1))
     }
 
+    /// Sum of two `Int`-tagged Values, or `None` on i63 overflow — computed
+    /// without untagging.
+    ///
+    /// The result equals [`Value::tagged_int_add`] whenever it is `Some`. The
+    /// overflow test is exact and nearly free: in the tag encoding a value `x`
+    /// is stored as `(x << 1) | 1`, so `a + (b - 1)` (the tagged sum, as a
+    /// *signed* i64) overflows i64 precisely when `x + y` leaves the i63 range
+    /// `[INT_MIN, INT_MAX]`. So the hardware signed-overflow flag of one add is
+    /// the i63 range check — no shift-out/range-compare/re-encode needed.
+    ///
+    /// Same `Int`-tagged safety contract as [`Value::tagged_int_add`].
+    #[inline(always)]
+    pub const fn tagged_int_add_checked(a: Value, b: Value) -> Option<Value> {
+        debug_assert!(
+            a.is_int() && b.is_int(),
+            "tagged_int_add_checked: both inputs must be Int"
+        );
+        let (t, overflow) = (a.0 as i64).overflowing_add((b.0 as i64).wrapping_sub(1));
+        if overflow {
+            None
+        } else {
+            Some(Value(t as u64))
+        }
+    }
+
+    /// Difference of two `Int`-tagged Values, or `None` on i63 overflow.
+    ///
+    /// See [`Value::tagged_int_add_checked`]; the result equals
+    /// [`Value::tagged_int_sub`] whenever it is `Some`.
+    #[inline(always)]
+    pub const fn tagged_int_sub_checked(a: Value, b: Value) -> Option<Value> {
+        debug_assert!(
+            a.is_int() && b.is_int(),
+            "tagged_int_sub_checked: both inputs must be Int"
+        );
+        let (t, overflow) = (a.0 as i64).overflowing_sub((b.0 as i64).wrapping_sub(1));
+        if overflow {
+            None
+        } else {
+            Some(Value(t as u64))
+        }
+    }
+
     // The OpCode::CmpInt* path does signed comparison directly on the
     // tagged bits (`(l.bits() as i64) < (r.bits() as i64)`); we don't
     // need a separate `tagged_int_cmp` helper.

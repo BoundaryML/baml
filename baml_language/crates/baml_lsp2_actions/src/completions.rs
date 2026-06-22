@@ -1604,9 +1604,6 @@ fn completions_for_top_level() -> Vec<Completion> {
         Completion::new("client", CompletionKind::Keyword)
             .with_detail("LLM client declaration")
             .with_sort("03_client"),
-        Completion::new("generator", CompletionKind::Keyword)
-            .with_detail("code generator declaration")
-            .with_sort("04_generator"),
         Completion::new("test", CompletionKind::Keyword)
             .with_detail("test case declaration")
             .with_sort("05_test"),

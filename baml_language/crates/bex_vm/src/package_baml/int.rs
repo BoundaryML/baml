@@ -10,28 +10,42 @@ impl BamlClassInt for PackageBamlImpl {
 
     // ── Comparisons / clamping ────────────────────────────────────────────────
 
+    /// Returns `|int|`, or throws `IntegerOverflow` when the magnitude leaves
+    /// the i63 range.
+    ///
+    /// Operates on the *true* 64-bit value. The only reachable overflow is
+    /// `Value::INT_MIN` (`-2^62`), whose absolute value (`2^62`) is one past
+    /// `Value::INT_MAX` and so cannot be represented. Consistent with the int
+    /// operator overflow policy — and identical to evaluating
+    /// `-int.min_value()` — this throws a catchable
+    /// `baml.panics.IntegerOverflow` rather than wrapping (the prior fix's
+    /// behavior) or raw-crashing. Every other valid `int`, and in particular
+    /// every positive value, has a representable magnitude and never throws —
+    /// fixing the original bug where the guard misfired on a normal positive
+    /// integer.
     fn abs(int: i64) -> Result<i64, VmRustFnError> {
-        // Operate on the *true* 64-bit value. The genuine overflow case is
-        // `i64::MIN`, whose absolute value (`2^63`) cannot be represented; the
-        // old guard wrongly fired at `Value::INT_MIN` (`-2^62`), which is a
-        // perfectly representable value (and, because of the upstream 63-bit
-        // truncation, also what a positive `2^62` literal decodes to). Guarding
-        // there made `(2^62).abs()` throw on a normal positive integer.
+        // Defensive: a genuine `i64::MIN` (`-2^63`) cannot be a well-formed i63
+        // `int`, so this branch is unreachable from BAML, but it keeps the
+        // declared `InvalidArgument` throw honest and avoids a raw negate
+        // panic should a non-i63 value ever reach here.
         if int == i64::MIN {
             return Err(VmBamlError::InvalidArgument {
                 message: "int.abs: cannot represent the absolute value of int.min_value() (would overflow)".to_string(),
             }
             .into());
         }
-        // `int` is stored in the i63 tagged representation, where every int
-        // operation (`+`, `-`, `*`) wraps two's-complement. `abs` wraps the
-        // same way: the absolute value of `Value::INT_MIN` (`-2^62`) is `2^62`,
-        // one past `Value::INT_MAX`, which wraps back to `Value::INT_MIN` —
-        // exactly mirroring `i64::MIN.wrapping_abs() == i64::MIN`.
-        if int == Value::INT_MIN {
-            return Ok(Value::INT_MIN);
+        // `|Value::INT_MIN|` (`2^62`) is exactly one past `Value::INT_MAX`, so
+        // it leaves the i63 range. Mirror the `+`/`-`/`*`/unary-`-` overflow
+        // policy (which throws `IntegerOverflow` instead of wrapping) so that
+        // `int.min_value().abs()` behaves exactly like `-int.min_value()`.
+        let magnitude = int.wrapping_abs();
+        if !(Value::INT_MIN..=Value::INT_MAX).contains(&magnitude) {
+            return Err(VmPanic::IntegerOverflow {
+                message: format!("abs({int}) overflows int"),
+            }
+            .into());
         }
-        Ok(int.wrapping_abs())
+        Ok(magnitude)
     }
 
     fn min(int: i64, other: i64) -> i64 {
@@ -212,11 +226,12 @@ impl BamlClassInt for PackageBamlImpl {
 mod tests {
     use super::*;
 
-    /// `int.abs` returns the magnitude for ordinary values, wraps the i63
-    /// minimum back to itself (consistent with how int `+`/`-`/`*` wrap), and
-    /// only errors for the genuine `i64::MIN`.
+    /// `int.abs` returns the magnitude for ordinary values (in particular it
+    /// never throws for a valid positive int — the original bug), and throws
+    /// `IntegerOverflow` for the genuine i63 overflow (`int.min_value()`),
+    /// mirroring the int operator overflow policy and `-int.min_value()`.
     #[test]
-    fn abs_matches_i63_wrapping_semantics() {
+    fn abs_overflows_at_i63_min_like_negation() {
         let abs = <PackageBamlImpl as BamlClassInt>::abs;
 
         assert_eq!(abs(3).unwrap(), 3);
@@ -224,17 +239,26 @@ mod tests {
         assert_eq!(abs(0).unwrap(), 0);
 
         // `int.max_value()` is its own absolute value; `int.min_value() + 1`
-        // negates to `int.max_value()` without wrapping.
+        // negates to `int.max_value()` without overflowing.
         assert_eq!(abs(Value::INT_MAX).unwrap(), Value::INT_MAX);
         assert_eq!(abs(Value::INT_MIN + 1).unwrap(), Value::INT_MAX);
 
-        // `|int.min_value()|` (`2^62`) is one past `INT_MAX` and wraps back to
-        // `int.min_value()` — it must NOT throw (the old bug fired here, which
-        // is also what a positive `2^62` literal decodes to after the upstream
-        // 63-bit truncation).
-        assert_eq!(abs(Value::INT_MIN).unwrap(), Value::INT_MIN);
+        // `|int.min_value()|` (`2^62`) is one past `INT_MAX`, so it overflows
+        // the i63 range and throws a catchable `IntegerOverflow` — exactly like
+        // `-int.min_value()`. (The original bug instead misfired on this guard
+        // for a *positive* `2^62` literal, which is now a compile error.)
+        assert!(matches!(
+            abs(Value::INT_MIN),
+            Err(VmRustFnError::Panic(VmPanic::IntegerOverflow { .. }))
+        ));
 
-        // The only genuine overflow is `i64::MIN`, whose `|x|` is `2^63`.
-        assert!(abs(i64::MIN).is_err());
+        // The defensive `i64::MIN` guard surfaces as `InvalidArgument`; it is
+        // unreachable for a well-formed i63 `int`.
+        assert!(matches!(
+            abs(i64::MIN),
+            Err(VmRustFnError::BamlError(
+                VmBamlError::InvalidArgument { .. }
+            ))
+        ));
     }
 }

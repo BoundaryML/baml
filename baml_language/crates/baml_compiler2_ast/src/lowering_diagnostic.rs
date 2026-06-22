@@ -54,8 +54,15 @@ pub enum LoweringDiagnostic {
         span: TextRange,
     },
 
-    /// A config block item (client, generator, test, `retry_policy`) has a
-    /// missing key.
+    /// A `generator { … }` block was found in `.baml`. Code generators are
+    /// now configured in `baml.toml` under `[generator.<name>]`; the block is
+    /// ignored. Carries the optional generator name for the message.
+    GeneratorBlockInBaml {
+        name: Option<String>,
+        span: TextRange,
+    },
+
+    /// A config block item (client, test, `retry_policy`) has a missing key.
     MissingConfigKey {
         block_kind: &'static str,
         block_name: String,
@@ -231,6 +238,28 @@ impl LoweringDiagnostic {
                 *span,
                 "malformed attribute",
             ),
+            LoweringDiagnostic::GeneratorBlockInBaml { name, span } => {
+                let what = match name {
+                    Some(n) => format!("`generator {n}`"),
+                    None => "this `generator` block".to_string(),
+                };
+                return Diagnostic::new(
+                    DiagnosticId::GeneratorBlockUnsupported,
+                    Severity::Warning,
+                    format!(
+                        "{what} is ignored: code generators are configured in `baml.toml` now. \
+                         Move it to a `[generator.<name>]` section in baml.toml."
+                    ),
+                )
+                .with_primary(
+                    Span {
+                        file_id,
+                        range: *span,
+                    },
+                    "move this to baml.toml",
+                )
+                .with_phase(DiagnosticPhase::Hir);
+            }
             LoweringDiagnostic::MissingConfigKey {
                 block_kind,
                 block_name,

@@ -180,6 +180,11 @@ fn collect_from_stmt<C: ThrowsAnalysisContext>(
             collect_from_expr(context, *value, body, out);
             collect_value_throw_facts(context, *value, out);
         }
+        Stmt::Defer { body: defer_body } => {
+            // A `throw` inside a defer body propagates, so the defer body's
+            // throws contribute to the enclosing function's throw surface.
+            collect_from_expr(context, *defer_body, body, out);
+        }
         Stmt::Break | Stmt::Continue | Stmt::Missing | Stmt::HeaderComment { .. } => {}
     }
 }

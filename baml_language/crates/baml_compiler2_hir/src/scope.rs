@@ -70,7 +70,7 @@ pub enum ScopeKind {
     Block,
     /// Lambda expression body — own scope for per-scope incremental inference.
     Lambda,
-    /// Client, test, generator, template string, retry policy body.
+    /// Client, test, template string, retry policy body.
     Item,
     /// Match arm body — holds pattern bindings visible to the arm body and guard.
     MatchArm,
