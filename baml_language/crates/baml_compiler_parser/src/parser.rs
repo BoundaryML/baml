@@ -1139,6 +1139,7 @@ impl<'a> Parser<'a> {
                         | TokenKind::Break
                         | TokenKind::Continue
                         | TokenKind::Throw
+                        | TokenKind::Defer
                 )
             )
     }

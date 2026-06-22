@@ -6060,7 +6060,13 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // inside the body are rejected (loop-aware: a `break` targeting
                 // a loop declared *inside* the defer is allowed).
                 self.defer_loop_floors.push(self.loop_depth);
+                // The defer body runs at scope exit, not at the `defer` site, so
+                // isolate its scoped-local narrowing/assignments — they must not
+                // leak into the statements between the `defer` and the scope
+                // exit (mirrors the per-body snapshot the loop arms take).
+                let snapshot = self.snapshot_scoped_locals();
                 self.infer_expr(*defer_body, body);
+                self.restore_scoped_locals(&snapshot);
                 self.defer_loop_floors.pop();
                 false // a `defer` statement does not diverge
             }

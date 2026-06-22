@@ -195,3 +195,163 @@ function main() -> string[] {
     );
     assert_eq!(expect_strings(output.result.unwrap()), vec!["a"]);
 }
+
+// ── Stage 1: the remaining static exit paths ───────────────────────────────
+
+#[tokio::test]
+async fn defer_runs_on_early_return() {
+    // A defer runs when the function `return`s early (observed via a shared
+    // array, since the early return skips the rest of the body).
+    let output = baml_test!(
+        r#"
+function helper(log: string[], early: bool) -> int {
+  defer { log.push("cleanup") }
+  if (early) { return 1 }
+  log.push("after")
+  2
+}
+
+function main() -> string[] {
+  let log: string[] = []
+  helper(log, true)
+  log
+}
+"#
+    );
+    assert_eq!(expect_strings(output.result.unwrap()), vec!["cleanup"]);
+}
+
+#[tokio::test]
+async fn defer_runs_on_break() {
+    // The defer in the loop body runs on the iteration that `break`s.
+    let output = baml_test!(
+        r#"
+function main() -> string[] {
+  let log: string[] = []
+  for (let i in [1, 2, 3]) {
+    defer { log.push("d") }
+    if (i == 2) { break }
+    log.push("i")
+  }
+  log
+}
+"#
+    );
+    // i=1: "i" then "d"; i=2: break → "d".
+    assert_eq!(expect_strings(output.result.unwrap()), vec!["i", "d", "d"]);
+}
+
+#[tokio::test]
+async fn defer_runs_on_continue() {
+    // The defer in the loop body runs on the iteration that `continue`s.
+    let output = baml_test!(
+        r#"
+function main() -> string[] {
+  let log: string[] = []
+  for (let i in [1, 2]) {
+    defer { log.push("d") }
+    if (i == 1) { continue }
+    log.push("body")
+  }
+  log
+}
+"#
+    );
+    // i=1: continue → "d"; i=2: "body" then "d".
+    assert_eq!(
+        expect_strings(output.result.unwrap()),
+        vec!["d", "body", "d"]
+    );
+}
+
+#[tokio::test]
+async fn defer_runs_on_explicit_throw_in_same_function() {
+    // An explicit `throw` in the deferring function runs the defer, then the
+    // throw propagates to the caller's catch.
+    let output = baml_test!(
+        r#"
+function risky(log: string[]) -> void {
+  defer { log.push("cleanup") }
+  throw "boom"
+}
+
+function main() -> string[] {
+  let log: string[] = []
+  risky(log) catch (e) {
+    _ => { log.push("caught") }
+  }
+  log
+}
+"#
+    );
+    assert_eq!(
+        expect_strings(output.result.unwrap()),
+        vec!["cleanup", "caught"]
+    );
+}
+
+// KNOWN LIMITATION: when a defer body ITSELF throws while the scope is already
+// unwinding, the BEP says the remaining (earlier-declared) defers still run. We
+// currently run only the throwing defer and propagate its throw (replace-
+// semantics) — the sibling defer is skipped because the throwing pad's body is
+// laid out past the outer defer region in PC order, so the rethrow escapes it.
+// Fixing this needs the unwind-error rework that the `cause` chain follow-up
+// will do anyway. `#[ignore]`d with the correct (target) assertion.
+#[tokio::test]
+#[ignore = "BEP-042 follow-up: a defer that itself throws mid-unwind skips sibling defers (needs cause-chain unwind rework)"]
+async fn defer_that_throws_still_runs_remaining_defers() {
+    // A defer that throws mid-unwind: the remaining (earlier-declared) defers
+    // still run, and the most-recent throw propagates (replace-semantics).
+    let output = baml_test!(
+        r#"
+function trigger() -> void { throw "X" }
+
+function risky(log: string[]) -> void {
+  defer { log.push("a") }                    // runs LAST
+  defer { log.push("b"); throw "from_b" }    // runs FIRST, throws
+  trigger()                                   // throws "X" -> unwind
+}
+
+function main() -> string[] {
+  let log: string[] = []
+  risky(log) catch (e) {
+    _ => { log.push(e) }
+  }
+  log
+}
+"#
+    );
+    // b runs (push "b", throw from_b), a still runs (push "a"), from_b replaces
+    // X and is what the caller catches.
+    assert_eq!(
+        expect_strings(output.result.unwrap()),
+        vec!["b", "a", "from_b"]
+    );
+}
+
+#[tokio::test]
+async fn await_inside_defer() {
+    // `await` is allowed inside a defer body; it suspends/resumes correctly.
+    let output = baml_test!(
+        r#"
+function work() -> int { 42 }
+
+function main() -> string[] {
+  let log: string[] = []
+  {
+    defer {
+      let f = spawn { work() }
+      await f
+      log.push("awaited")
+    }
+    log.push("body")
+  }
+  log
+}
+"#
+    );
+    assert_eq!(
+        expect_strings(output.result.unwrap()),
+        vec!["body", "awaited"]
+    );
+}
