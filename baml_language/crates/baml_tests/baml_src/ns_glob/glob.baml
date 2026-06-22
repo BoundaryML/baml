@@ -157,7 +157,7 @@ test "glob_scan_returns_empty_for_no_match" {
 
 // Default scan only returns files, not directories, even if the dir name
 // matches the pattern.
-function scan_only_files_by_default_checks() -> bool[] {
+function scan_only_files_by_default() -> string[] {
     let root = "/tmp/baml_glob_only_files_" + baml.json.stringify(baml.sys.now_ms());
     baml.fs.mkdir(root, baml.fs.MkdirOptions { recursive: true });
     let _ = baml.fs.write(root + "/file.txt", "content");
@@ -165,16 +165,16 @@ function scan_only_files_by_default_checks() -> bool[] {
     baml.fs.mkdir(root + "/dir.txt", baml.fs.MkdirOptions { recursive: false });
     let g = baml.glob.new("*.txt");
     let result = g.scan(root);
-    let ok = [
-        result.length() == 1,
-        result.includes("file.txt"),
-    ];
     let _ = baml.sys.shell("rm -rf " + root, null);
-    ok
+    result
 }
 
-test "glob_scan_only_files_by_default" {
-    assert.is_true(baml.deep_equals(scan_only_files_by_default_checks(), [true, true]))
+test "glob_scan_only_files_by_default_length" {
+    assert.is_true(baml.deep_equals(scan_only_files_by_default().length(), 1))
+}
+
+test "glob_scan_only_files_by_default_has_file" {
+    assert.is_true(baml.deep_equals(scan_only_files_by_default().includes("file.txt"), true))
 }
 
 // ─── glob_scan_options_include_dot_absolute_and_directories ──────────────────
@@ -270,7 +270,7 @@ test "glob_scan_dot_pattern_matches_only_dot_files_has_hidden" {
 // ─── glob_scan_default_prunes_dot_directories ────────────────────────────────
 
 // dot=false (default) must skip files inside dot directories (e.g. .git/).
-function scan_default_prunes_dot_directories_checks() -> bool[] {
+function scan_default_prunes_dot_directories() -> string[] {
     let root = "/tmp/baml_glob_prune_dot_" + baml.json.stringify(baml.sys.now_ms());
     baml.fs.mkdir(root, baml.fs.MkdirOptions { recursive: true });
     let _ = baml.fs.write(root + "/visible.txt", "visible");
@@ -280,16 +280,16 @@ function scan_default_prunes_dot_directories_checks() -> bool[] {
     let _ = baml.fs.write(root + "/.git/HEAD", "x");
     let g = baml.glob.new("**/*.txt");
     let result = g.scan(root);
-    let ok = [
-        result.length() == 1,
-        result.includes("visible.txt"),
-    ];
     let _ = baml.sys.shell("rm -rf " + root, null);
-    ok
+    result
 }
 
-test "glob_scan_default_prunes_dot_directories" {
-    assert.is_true(baml.deep_equals(scan_default_prunes_dot_directories_checks(), [true, true]))
+test "glob_scan_default_prunes_dot_directories_length" {
+    assert.is_true(baml.deep_equals(scan_default_prunes_dot_directories().length(), 1))
+}
+
+test "glob_scan_default_prunes_dot_directories_has_visible" {
+    assert.is_true(baml.deep_equals(scan_default_prunes_dot_directories().includes("visible.txt"), true))
 }
 
 // ─── glob_scan_follows_symlinked_directory_when_enabled (unix) ───────────────
