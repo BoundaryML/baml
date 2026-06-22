@@ -153,7 +153,6 @@ ast_node!(MethodSig, METHOD_SIG);
 ast_node!(AssociatedTypeDecl, ASSOCIATED_TYPE_DECL);
 ast_node!(ClientDef, CLIENT_DEF);
 ast_node!(TestDef, TEST_DEF);
-ast_node!(GeneratorDef, GENERATOR_DEF);
 ast_node!(RetryPolicyDef, RETRY_POLICY_DEF);
 ast_node!(TemplateStringDef, TEMPLATE_STRING_DEF);
 ast_node!(TypeAliasDef, TYPE_ALIAS_DEF);
@@ -2377,24 +2376,6 @@ impl RetryPolicyDef {
                 token.kind() == SyntaxKind::WORD && token.parent() == Some(self.syntax.clone())
             })
             .nth(0)
-    }
-
-    /// Get the config block.
-    pub fn config_block(&self) -> Option<ConfigBlock> {
-        self.syntax.children().find_map(ConfigBlock::cast)
-    }
-}
-
-impl GeneratorDef {
-    /// Get the generator name.
-    pub fn name(&self) -> Option<SyntaxToken> {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| {
-                token.kind() == SyntaxKind::WORD && token.parent() == Some(self.syntax.clone())
-            })
-            .nth(0) // Get the first WORD (generator keyword is KW_GENERATOR, not WORD)
     }
 
     /// Get the config block.

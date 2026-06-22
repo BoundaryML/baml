@@ -1162,7 +1162,6 @@ impl CompilerRunner {
                 + item_tree.type_aliases.len()
                 + item_tree.clients.len()
                 + item_tree.tests.len()
-                + item_tree.generators.len()
                 + item_tree.template_strings.len()
                 + item_tree.retry_policies.len();
 
@@ -1328,14 +1327,6 @@ impl CompilerRunner {
 
                 for (_, test) in &item_tree.tests {
                     let line = format!("test {}", test.name);
-                    writeln!(output, "{line}").ok();
-                    output_annotated.push((line, status));
-                    writeln!(output).ok();
-                    output_annotated.push((String::new(), LineStatus::Unknown));
-                }
-
-                for (_, generator) in &item_tree.generators {
-                    let line = format!("generator {}", generator.name);
                     writeln!(output, "{line}").ok();
                     output_annotated.push((line, status));
                     writeln!(output).ok();
@@ -1527,9 +1518,6 @@ impl CompilerRunner {
                 }
                 if items.tests.len() > 0 {
                     parts.push(format!("{} test", items.tests.len()));
-                }
-                if items.generators.len() > 0 {
-                    parts.push(format!("{} gen", items.generators.len()));
                 }
                 if items.template_strings.len() > 0 {
                     parts.push(format!("{} tmpl", items.template_strings.len()));

@@ -100,7 +100,7 @@ pub struct NamespaceItems<'db> {
     /// Type-namespace items (classes, enums, type aliases).
     /// First definition (alphabetically by file path) wins.
     pub types: FxHashMap<Name, Definition<'db>>,
-    /// Value-namespace items (functions, clients, generators, etc.).
+    /// Value-namespace items (functions, clients, etc.).
     /// First definition (alphabetically by file path) wins.
     pub values: FxHashMap<Name, Definition<'db>>,
     /// Conflicts and other rare data. `None` when no conflicts exist.

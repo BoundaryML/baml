@@ -1,0 +1,237 @@
+//! Typed deserialization of the project manifest, `baml.toml`.
+//!
+//! Historically the manifest was poked at as a raw `toml::Table` in two
+//! scattered places — `project_load.rs` for `[package]` and
+//! `run_command.rs` for `[scripts]`. This module replaces that with a
+//! single set of serde structs so every consumer parses the same way.
+//!
+//! Design notes:
+//! - **Warn on unknown fields, don't deny.** serde has no built-in "warn",
+//!   so each table that should surface typos carries a `#[serde(flatten)]`
+//!   catch-all map; [`unknown_field_warnings`] turns those into advisories.
+//!   `deny_unknown_fields` would hard-error (breaking forward-compat
+//!   manifests) and the default would silently swallow typos — the
+//!   catch-all is the middle ground. (`flatten` and `deny_unknown_fields`
+//!   are mutually exclusive anyway.)
+//! - **`toml::Spanned` for diagnostics.** Generator field values are wrapped
+//!   in `Spanned<String>` so codegen validation (`generate.rs`) can point a
+//!   diagnostic at the exact byte range of an offending value, matching the
+//!   per-item span fidelity the old HIR source map gave us.
+
+use indexmap::IndexMap;
+use serde::Deserialize;
+use toml::Spanned;
+
+/// The whole `baml.toml`.
+#[derive(Debug, Deserialize)]
+pub(crate) struct BamlToml {
+    /// `[package]`. Optional at the type level so the lenient
+    /// introspection / `[scripts]` paths can parse a manifest that hasn't
+    /// declared a package; the strict loader still requires it (see
+    /// [`package_name`]).
+    pub package: Option<Package>,
+
+    /// `[scripts]` — cargo-style aliases for `baml run`.
+    #[serde(default)]
+    pub scripts: IndexMap<String, Script>,
+
+    /// `[generator.<name>]` subtables. The table key is the generator name.
+    #[serde(default)]
+    pub generator: IndexMap<String, Spanned<GeneratorManifest>>,
+
+    /// Stray top-level keys. Captured (not denied) so typos surface as
+    /// warnings and forward-compatible manifests still load.
+    #[serde(flatten)]
+    pub unknown: IndexMap<String, toml::Value>,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct Package {
+    /// `[package].name`. Optional here so a missing name produces our own
+    /// guidance-rich error rather than a bare serde "missing field".
+    pub name: Option<String>,
+
+    #[serde(flatten)]
+    pub unknown: IndexMap<String, toml::Value>,
+}
+
+/// A `[scripts]` entry. Mirrors Cargo's `[alias]`: a bare string is
+/// whitespace-tokenized, an array is taken verbatim (so values can contain
+/// spaces).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+pub(crate) enum Script {
+    /// `dev = "-f main"` — split on whitespace.
+    Line(String),
+    /// `dev = ["-f", "main"]` — each element is one argument.
+    Tokens(Vec<String>),
+}
+
+impl Script {
+    /// Expand into `baml run` argument tokens.
+    pub fn tokens(&self) -> Vec<String> {
+        match self {
+            Script::Line(s) => s.split_whitespace().map(str::to_string).collect(),
+            Script::Tokens(t) => t.clone(),
+        }
+    }
+}
+
+/// `[generator.<name>]` — code-generation configuration. Values are kept as
+/// raw `Spanned<String>` here; the string→enum validation (and the spans for
+/// any diagnostics) is performed by `generate.rs`, so non-codegen tooling
+/// never needs to know codegen rules.
+#[derive(Debug, Deserialize)]
+pub(crate) struct GeneratorManifest {
+    /// e.g. `"python/pydantic"`, `"typescript/node"`. Required for codegen;
+    /// `Option` so a missing value yields a precise diagnostic rather than
+    /// aborting the whole parse.
+    pub output_type: Option<Spanned<String>>,
+
+    /// e.g. `"preserve-case"`, `"language"`. Required for codegen.
+    pub naming_convention: Option<Spanned<String>>,
+
+    /// Output directory, resolved relative to the project. Defaults to
+    /// `".."` when omitted.
+    #[serde(default)]
+    pub output_dir: Option<String>,
+
+    #[serde(flatten)]
+    pub unknown: IndexMap<String, toml::Value>,
+}
+
+/// Parse `baml.toml` text into the typed manifest.
+pub(crate) fn parse(content: &str) -> Result<BamlToml, toml::de::Error> {
+    toml::from_str(content)
+}
+
+/// Resolve and validate `[package].name`, reproducing the Cargo-style rule
+/// that a manifest, once written, must name its package. Returns the name so
+/// `baml pack` can reuse it for artifact naming.
+pub(crate) fn package_name(
+    manifest: &BamlToml,
+    toml_path: &std::path::Path,
+) -> anyhow::Result<String> {
+    let package = manifest.package.as_ref().ok_or_else(|| {
+        anyhow::anyhow!(
+            "{}: missing `[package]` table.\n\
+             Add:\n\n    [package]\n    name = \"<your-project-name>\"\n",
+            toml_path.display()
+        )
+    })?;
+    let name = package.name.as_ref().ok_or_else(|| {
+        anyhow::anyhow!(
+            "{}: `[package]` is missing `name = \"<your-project-name>\"`.",
+            toml_path.display()
+        )
+    })?;
+    if name.trim().is_empty() {
+        anyhow::bail!("{}: `[package].name` cannot be empty.", toml_path.display());
+    }
+    Ok(name.clone())
+}
+
+/// Human-readable warnings for keys we didn't recognize, so a typo
+/// (`[scriptz]`, `nmae = ...`, `outpt_type = ...`) surfaces instead of being
+/// silently ignored. Each warning is non-fatal — forward-compatible
+/// manifests must still load.
+pub(crate) fn unknown_field_warnings(manifest: &BamlToml) -> Vec<String> {
+    let mut warnings = Vec::new();
+    for key in manifest.unknown.keys() {
+        warnings.push(format!(
+            "ignoring unrecognized top-level key `{key}` in baml.toml"
+        ));
+    }
+    if let Some(pkg) = &manifest.package {
+        for key in pkg.unknown.keys() {
+            warnings.push(format!("ignoring unrecognized key `{key}` in [package]"));
+        }
+    }
+    for (name, generator) in &manifest.generator {
+        for key in generator.get_ref().unknown.keys() {
+            warnings.push(format!(
+                "ignoring unrecognized key `{key}` in [generator.{name}]"
+            ));
+        }
+    }
+    warnings
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_package_and_scripts() {
+        let m = parse("[package]\nname = \"app\"\n[scripts]\ndev = \"-f main\"\n").unwrap();
+        assert_eq!(m.package.unwrap().name.as_deref(), Some("app"));
+        assert_eq!(m.scripts["dev"].tokens(), vec!["-f", "main"]);
+    }
+
+    #[test]
+    fn script_array_form_preserves_spaces() {
+        let m = parse("[scripts]\ng = [\"--name\", \"Ada Lovelace\"]\n").unwrap();
+        assert_eq!(m.scripts["g"].tokens(), vec!["--name", "Ada Lovelace"]);
+    }
+
+    #[test]
+    fn parsing_succeeds_with_unexpected_key() {
+        // An unrecognized key must not fail deserialization: forward-compatible
+        // manifests still load. The key is captured for a warning (see
+        // `unknown_field_warnings`), never denied.
+        let result = parse("[package]\nname = \"app\"\nfuture_feature = true\n");
+        assert!(
+            result.is_ok(),
+            "manifest with an unexpected key should parse, got: {result:?}"
+        );
+    }
+
+    #[test]
+    fn captures_unknown_top_level_and_package_keys() {
+        let m = parse("[package]\nname = \"a\"\nnmae = \"typo\"\n[wat]\nx = 1\n").unwrap();
+        let warns = unknown_field_warnings(&m);
+        assert!(warns.iter().any(|w| w.contains("nmae")), "got: {warns:?}");
+        assert!(warns.iter().any(|w| w.contains("wat")), "got: {warns:?}");
+    }
+
+    #[test]
+    fn parses_generator_section_with_spans() {
+        let m = parse(
+            "[package]\nname = \"a\"\n\
+             [generator.lang_python]\n\
+             output_type = \"python/pydantic\"\n\
+             naming_convention = \"preserve-case\"\n\
+             output_dir = \"../python\"\n",
+        )
+        .unwrap();
+        let g = &m.generator["lang_python"];
+        assert_eq!(
+            g.get_ref().output_type.as_ref().unwrap().get_ref(),
+            "python/pydantic"
+        );
+        assert_eq!(g.get_ref().output_dir.as_deref(), Some("../python"));
+    }
+
+    #[test]
+    fn package_name_requires_table_and_name() {
+        let path = std::path::Path::new("baml.toml");
+        assert!(
+            package_name(&parse("[scripts]\n").unwrap(), path)
+                .unwrap_err()
+                .to_string()
+                .contains("[package]")
+        );
+        assert!(
+            package_name(&parse("[package]\n").unwrap(), path)
+                .unwrap_err()
+                .to_string()
+                .contains("name")
+        );
+        assert!(
+            package_name(&parse("[package]\nname = \"\"\n").unwrap(), path)
+                .unwrap_err()
+                .to_string()
+                .contains("cannot be empty")
+        );
+    }
+}

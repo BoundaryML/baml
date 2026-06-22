@@ -869,7 +869,6 @@ fn definition_kind_to_lsp_symbol_kind(
         DefinitionKind::TypeAlias => lsp_types::SymbolKind::CLASS,
         DefinitionKind::Client => lsp_types::SymbolKind::STRUCT,
         DefinitionKind::Test => lsp_types::SymbolKind::METHOD,
-        DefinitionKind::Generator => lsp_types::SymbolKind::INTERFACE,
         DefinitionKind::TemplateString => lsp_types::SymbolKind::FUNCTION,
         DefinitionKind::RetryPolicy => lsp_types::SymbolKind::STRUCT,
         DefinitionKind::Let => lsp_types::SymbolKind::CONSTANT,

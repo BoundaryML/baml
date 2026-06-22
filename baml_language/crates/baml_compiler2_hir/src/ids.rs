@@ -26,8 +26,6 @@ pub struct ClientMarker;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TestMarker;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct GeneratorMarker;
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TemplateStringMarker;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct RetryPolicyMarker;
@@ -91,7 +89,6 @@ pub enum ItemKind {
     Interface,
     TypeAlias,
     Client,
-    Generator,
     Test,
     TemplateString,
     RetryPolicy,

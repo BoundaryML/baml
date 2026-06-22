@@ -739,6 +739,7 @@ dependencies = [
  "console",
  "ctrlc",
  "flate2",
+ "indexmap",
  "indicatif",
  "insta",
  "libsui",

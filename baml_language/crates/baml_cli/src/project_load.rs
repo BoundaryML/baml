@@ -216,7 +216,17 @@ fn load_project_from_inner(
     // verb tries to use the name. A manifest-less `baml_src/` project skips
     // this: `baml.toml` is opt-in.
     if has_baml_toml {
-        validate_baml_toml(&toml_path)?;
+        let content = std::fs::read_to_string(&toml_path)
+            .with_context(|| format!("Failed to read {}", toml_path.display()))?;
+        let manifest = crate::manifest::parse(&content)
+            .with_context(|| format!("Failed to parse {}", toml_path.display()))?;
+        crate::manifest::package_name(&manifest, &toml_path)?;
+        // Unknown keys are advisory, not fatal: a typo (`[scriptz]`,
+        // `nmae = ...`) warns rather than silently no-ops, but a
+        // forward-compatible manifest still loads.
+        for warning in crate::manifest::unknown_field_warnings(&manifest) {
+            crate::reporter::print_warning(format_args!("{warning}"));
+        }
     }
 
     build_project_db(canonical, on_file)
@@ -257,32 +267,9 @@ fn build_project_db(
 pub(crate) fn validate_baml_toml(toml_path: &Path) -> Result<String> {
     let content = std::fs::read_to_string(toml_path)
         .with_context(|| format!("Failed to read {}", toml_path.display()))?;
-    let table: toml::Table = content
-        .parse()
+    let manifest = crate::manifest::parse(&content)
         .with_context(|| format!("Failed to parse {}", toml_path.display()))?;
-    let package = table
-        .get("package")
-        .and_then(|v| v.as_table())
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "{}: missing `[package]` table.\n\
-             Add:\n\n    [package]\n    name = \"<your-project-name>\"\n",
-                toml_path.display()
-            )
-        })?;
-    let name = package
-        .get("name")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "{}: `[package]` is missing `name = \"<your-project-name>\"`.",
-                toml_path.display()
-            )
-        })?;
-    if name.trim().is_empty() {
-        anyhow::bail!("{}: `[package].name` cannot be empty.", toml_path.display());
-    }
-    Ok(name.to_string())
+    crate::manifest::package_name(&manifest, toml_path)
 }
 
 /// Resolve the project's name for output-artifact naming (used by `baml

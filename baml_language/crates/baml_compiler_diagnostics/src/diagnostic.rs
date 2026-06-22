@@ -82,7 +82,9 @@ pub enum DiagnosticId {
     DuplicateAttribute,
     UnknownAttribute,
     InvalidAttributeContext,
-    UnknownGeneratorProperty,
+    /// A `generator { … }` block was found in `.baml`; code generators are
+    /// now configured in `baml.toml` under `[generator.<name>]`.
+    GeneratorBlockUnsupported,
     MissingGeneratorProperty,
     InvalidGeneratorPropertyValue,
     ReservedFieldName,
@@ -324,7 +326,7 @@ impl DiagnosticId {
             DiagnosticId::DuplicateAttribute => "E0014",
             DiagnosticId::UnknownAttribute => "E0015",
             DiagnosticId::InvalidAttributeContext => "E0016",
-            DiagnosticId::UnknownGeneratorProperty => "E0017",
+            DiagnosticId::GeneratorBlockUnsupported => "E0017",
             DiagnosticId::MissingGeneratorProperty => "E0018",
             DiagnosticId::InvalidGeneratorPropertyValue => "E0019",
             DiagnosticId::ReservedFieldName => "E0020",
