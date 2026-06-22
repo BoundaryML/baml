@@ -1150,30 +1150,31 @@ fn extract_required_class_deps(
     visiting: &mut HashSet<QualifiedTypeName>,
 ) {
     match ty {
-        Ty::Class(qn, _, _) => {
-            // Only add if the field is truly required
-            if !optional && !in_list_or_map && class_fields.contains_key(qn) {
-                deps.insert(qn.clone());
+        // Only add if the field is truly required.
+        Ty::Class(qn, _, _) if !optional && !in_list_or_map && class_fields.contains_key(qn) => {
+            deps.insert(qn.clone());
+        }
+        Ty::Class(_, _, _) => {}
+        // Resolve through type aliases (only if still required context).
+        Ty::TypeAlias(qn, _) if !optional && !in_list_or_map && !visiting.contains(qn) => {
+            if let Some(alias_ty) = type_aliases.get(qn) {
+                visiting.insert(qn.clone());
+                extract_required_class_deps(
+                    alias_ty,
+                    class_fields,
+                    type_aliases,
+                    deps,
+                    optional,
+                    in_list_or_map,
+                    visiting,
+                );
+                visiting.remove(qn);
             }
         }
-        Ty::TypeAlias(qn, _) => {
-            // Resolve through type aliases (only if still required context)
-            if !optional && !in_list_or_map && !visiting.contains(qn) {
-                if let Some(alias_ty) = type_aliases.get(qn) {
-                    visiting.insert(qn.clone());
-                    extract_required_class_deps(
-                        alias_ty,
-                        class_fields,
-                        type_aliases,
-                        deps,
-                        optional,
-                        in_list_or_map,
-                        visiting,
-                    );
-                    visiting.remove(qn);
-                }
-            }
-        }
+        Ty::TypeAlias(_, _) => {}
+        // `T?` lowers to `Union([T, Null])` (canary removed the `Ty::Optional`
+        // variant), so optionals are handled by the `Ty::Union` arm below —
+        // which already yields no hard dependency (Null breaks it).
         Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
             // List breaks the hard dependency (can be empty)
             extract_required_class_deps(

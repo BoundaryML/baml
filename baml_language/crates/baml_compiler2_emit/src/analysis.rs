@@ -828,6 +828,25 @@ fn collect_uses_in_terminator(
                 }
             }
         }
+        Terminator::VirtualCall {
+            args, destination, ..
+        } => {
+            // No callee operand — the method is resolved at runtime from `iface`.
+            for arg in args {
+                collect_uses_in_operand(arg, block, StatementRef::Terminator, def_use);
+            }
+            // Record the def for the destination (where the call result is stored).
+            if let Place::Local(local) = destination {
+                if let Some(du) = def_use.get_mut(local) {
+                    du.def = Some(DefLocation {
+                        block,
+                        statement_ref: StatementRef::Terminator,
+                        rvalue: Rvalue::Use(Operand::Constant(Constant::Null)),
+                    });
+                    du.all_defs.push((block, StatementRef::Terminator));
+                }
+            }
+        }
         Terminator::SysOp {
             callee,
             args,
@@ -1657,6 +1676,12 @@ fn is_call_result_immediate(local: Local, du: &LocalDefUse, body: &MirFunctionBo
         // into an indexed `await futures[i]`; carrying the result on the stack
         // across that combination misaligns the stack. Always store it to a
         // local instead (correct, marginally less optimal).
+        //
+        // `VirtualCall` is likewise excluded: its result lands on the stack like
+        // `Call`, but the open-world dispatch first pushes the interface type +
+        // method-name operands, and the carry-result/store-elision path is not
+        // wired for that shape. Storing to a local is correct and only
+        // marginally less optimal; carrying can be enabled later.
         Some(Terminator::SysOp { destination, .. }) => {
             matches!(destination, Place::Local(l) if *l == local)
         }

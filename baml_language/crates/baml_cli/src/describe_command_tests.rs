@@ -351,6 +351,18 @@ fn render_builtin_package_listing() {
     let entries = baml_lsp2_actions::list_package_items(&db, pkg_id);
     assert!(!entries.is_empty());
     let output = capture_listing(&entries);
+    let listed_names: Vec<&str> = output
+        .lines()
+        .filter_map(|line| line.split_whitespace().nth(1))
+        .collect();
+    assert!(
+        listed_names.contains(&"baml.iter.Range"),
+        "expected builtin listing to include package-qualified names, got:\n{output}"
+    );
+    assert!(
+        !listed_names.contains(&"iter.Range"),
+        "builtin listing should not emit unqualified names that cannot be described directly, got:\n{output}"
+    );
     insta::assert_snapshot!(output);
 }
 

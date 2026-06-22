@@ -519,6 +519,69 @@ struct OptionalCallContext<'a> {
     is_method_call: bool,
 }
 
+/// Adapter exposing a [`TypeInferenceBuilder`]'s registries to the canonical
+/// type algebra in [`baml_type::normalize`].
+///
+/// The algebra owns the structural reasoning (union absorption, recursion,
+/// variance); this supplies the nominal facts it cannot derive on its own. Each
+/// method delegates to the builder's existing resolution paths so the canonical
+/// checker agrees with the builder's own `is_subtype`/`types_equivalent` on the
+/// facts they share. Bound obligations inside `implements_interface` are proven
+/// by the builder's `is_subtype` (the oracle boundary), not re-derived here.
+struct NormalizeCtx<'a, 'db>(&'a TypeInferenceBuilder<'db>);
+
+impl baml_type::normalize::TypeContext for NormalizeCtx<'_, '_> {
+    fn alias_def(&self, name: &crate::ty::QualifiedTypeName) -> Option<Ty> {
+        self.0.aliases.get(name).cloned()
+    }
+
+    fn implements_interface(&self, concrete: &Ty, interface: &Ty) -> bool {
+        let Ty::Interface(iface_qtn, ..) = interface else {
+            return false;
+        };
+        let b = self.0;
+        let db = b.context.db();
+        let registry_pkg = b.registry_package_for_interface_check(concrete, iface_qtn);
+        let registry = crate::interfaces::package_implements_registry(db, registry_pkg);
+        registry.type_implements_interface_via_rule(
+            concrete,
+            interface,
+            &b.aliases,
+            |actual, bound| b.is_subtype(actual, bound),
+        )
+    }
+
+    fn type_var_bound(&self, name: &Name) -> Option<Ty> {
+        self.0.generic_param_bounds.get(name).cloned()
+    }
+
+    fn interface_requires(&self, sub: &Ty, sup: &Ty) -> bool {
+        let (
+            Ty::Interface(a_qtn, a_args, a_bindings, _),
+            Ty::Interface(b_qtn, b_args, b_bindings, _),
+        ) = (sub, sup)
+        else {
+            return false;
+        };
+        // Interface *equality* is the normalizer's job (structural reflexivity);
+        // this method answers only the proper-requirement case.
+        if a_qtn == b_qtn {
+            return false;
+        }
+        let b = self.0;
+        let registry = crate::interfaces::package_implements_registry(b.context.db(), b.package_id);
+        if registry.interface_requires(a_qtn, b_qtn) && b_args.is_empty() && b_bindings.is_empty() {
+            return true;
+        }
+        b.interface_requires_instantiation(a_qtn, a_args, a_bindings, b_qtn, b_args, b_bindings)
+    }
+
+    fn enum_variants(&self, name: &crate::ty::QualifiedTypeName) -> Option<Vec<Name>> {
+        let variants = self.0.lookup_enum_variants(name);
+        (!variants.is_empty()).then_some(variants)
+    }
+}
+
 /// Per-scope inference builder.
 ///
 /// Created at the start of `infer_scope_types`, discarded when done.
@@ -677,6 +740,15 @@ pub struct TypeInferenceBuilder<'db> {
     /// NOT saved/restored by `infer_lambda_body`, so types from arbitrarily
     /// nested lambdas are visible in the outermost (Function/Let) scope.
     pub nested_lambda_types: FxHashMap<FileScopeId, Ty>,
+    /// Tagged-template body Lambda scope (`is_template_body`) → its tag's
+    /// body-lambda params (BEP-049 §10). These params are injected into
+    /// `self.locals` while typing the desugared `tag_body`, but they have no
+    /// HIR binding (the tag resolves only at TIR time), so a real lambda nested
+    /// inside the interpolations cannot see them when its scope is type-checked
+    /// standalone. Recording them here (like `nested_lambda_types`, bubbling up
+    /// to the owning Function/Let scope) lets that standalone inference seed
+    /// them — see `infer_scope_types`'s `ScopeKind::Lambda` arm.
+    pub template_body_params: FxHashMap<FileScopeId, Vec<FunctionParamTy>>,
     /// Diagnostic-only concrete escaping throws for lambda expressions in the
     /// current scope. Used to explain callback forwarding without affecting
     /// call instantiation or throws checking semantics.
@@ -914,6 +986,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             function_coercions: FxHashMap::default(),
             default_parameter_inference: crate::inference::DefaultParameterInference::empty(),
             nested_lambda_types: FxHashMap::default(),
+            template_body_params: FxHashMap::default(),
             lambda_effective_throws: FxHashMap::default(),
             is_auto_derived_body: false,
         }
@@ -1011,6 +1084,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         FxHashMap<ExprId, Vec<Ty>>,
         FxHashMap<ExprId, crate::inference::FunctionCoercion>,
         FxHashMap<FileScopeId, Ty>,
+        FxHashMap<FileScopeId, Vec<FunctionParamTy>>,
         crate::inference::DefaultParameterInference<'db>,
     ) {
         let diagnostics = self.context.finish();
@@ -1029,6 +1103,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             self.call_type_instantiations,
             self.function_coercions,
             self.nested_lambda_types,
+            self.template_body_params,
             self.default_parameter_inference,
         )
     }
@@ -2882,6 +2957,24 @@ impl<'db> TypeInferenceBuilder<'db> {
                     refs,
                 );
             }
+            Expr::Template { tag, segments } => {
+                if let ast::TemplateTag::Custom { tag, .. } = tag {
+                    Self::collect_default_expr_forward_references(
+                        *tag,
+                        body,
+                        later_params,
+                        shadowed,
+                        refs,
+                    );
+                }
+                Self::collect_default_expr_forward_references_in_template_segments(
+                    segments,
+                    body,
+                    later_params,
+                    shadowed,
+                    refs,
+                );
+            }
             Expr::GenericApply { base, .. } => {
                 Self::collect_default_expr_forward_references(
                     *base,
@@ -2892,6 +2985,138 @@ impl<'db> TypeInferenceBuilder<'db> {
                 );
             }
             Expr::Literal(_) | Expr::ByteStringLiteral(_) | Expr::Null | Expr::Missing => {}
+        }
+    }
+
+    /// Recursive walk over a tagged-template segment tree. Same forward-reference
+    /// collection as `collect_default_expr_forward_references` but threads
+    /// through nested for-bodies and if-branches, pushing for-bindings onto the
+    /// shadowed stack.
+    fn collect_default_expr_forward_references_in_template_segments(
+        segments: &[ast::TemplateSegment],
+        body: &ExprBody,
+        later_params: &FxHashSet<Name>,
+        shadowed: &mut Vec<Name>,
+        refs: &mut Vec<Name>,
+    ) {
+        for seg in segments {
+            match seg {
+                ast::TemplateSegment::Text(_) => {}
+                ast::TemplateSegment::Interp(e) => {
+                    Self::collect_default_expr_forward_references(
+                        *e,
+                        body,
+                        later_params,
+                        shadowed,
+                        refs,
+                    );
+                }
+                ast::TemplateSegment::For {
+                    binding,
+                    collection,
+                    body: inner,
+                } => {
+                    Self::collect_default_expr_forward_references(
+                        *collection,
+                        body,
+                        later_params,
+                        shadowed,
+                        refs,
+                    );
+                    let saved_len = shadowed.len();
+                    Self::push_pattern_bindings(*binding, body, shadowed);
+                    Self::collect_default_expr_forward_references_in_template_segments(
+                        inner,
+                        body,
+                        later_params,
+                        shadowed,
+                        refs,
+                    );
+                    shadowed.truncate(saved_len);
+                }
+                ast::TemplateSegment::CStyleFor {
+                    init,
+                    cond,
+                    body: inner,
+                    ..
+                } => {
+                    // Pull the loop var's pattern + initializer out of the `init`
+                    // `let` (releases the borrow before the collect calls below).
+                    let (init_initializer, init_pattern) = match &body.stmts[*init] {
+                        ast::Stmt::Let {
+                            initializer,
+                            pattern,
+                            ..
+                        } => (*initializer, Some(*pattern)),
+                        _ => (None, None),
+                    };
+                    // The initializer runs before the loop var is bound, so it
+                    // may reference outer names but never the loop var itself —
+                    // process it before shadowing.
+                    if let Some(e) = init_initializer {
+                        Self::collect_default_expr_forward_references(
+                            e,
+                            body,
+                            later_params,
+                            shadowed,
+                            refs,
+                        );
+                    }
+                    // Shadow the loop var, then process `cond` and the body — both
+                    // see the binding (e.g. `i` in `for (let i = 0; i < n; …)`), so
+                    // a later param sharing the name must not flag them as
+                    // forward references.
+                    let saved_len = shadowed.len();
+                    if let Some(p) = init_pattern {
+                        Self::push_pattern_bindings(p, body, shadowed);
+                    }
+                    Self::collect_default_expr_forward_references(
+                        *cond,
+                        body,
+                        later_params,
+                        shadowed,
+                        refs,
+                    );
+                    Self::collect_default_expr_forward_references_in_template_segments(
+                        inner,
+                        body,
+                        later_params,
+                        shadowed,
+                        refs,
+                    );
+                    shadowed.truncate(saved_len);
+                }
+                ast::TemplateSegment::If {
+                    branches,
+                    else_body,
+                } => {
+                    for branch in branches {
+                        Self::collect_default_expr_forward_references(
+                            branch.condition,
+                            body,
+                            later_params,
+                            shadowed,
+                            refs,
+                        );
+                        Self::collect_default_expr_forward_references_in_template_segments(
+                            &branch.body,
+                            body,
+                            later_params,
+                            shadowed,
+                            refs,
+                        );
+                    }
+                    if let Some(eb) = else_body {
+                        Self::collect_default_expr_forward_references_in_template_segments(
+                            eb,
+                            body,
+                            later_params,
+                            shadowed,
+                            refs,
+                        );
+                    }
+                }
+            }
         }
     }
 
@@ -4152,6 +4377,155 @@ impl<'db> TypeInferenceBuilder<'db> {
                 body: spawn_body,
             } => self.infer_spawn_expr(body, *name, with_exprs, *spawn_body),
             Expr::Await { future } => self.infer_await_expr(body, *future),
+            Expr::Template {
+                tag:
+                    ast::TemplateTag::Custom {
+                        tag,
+                        body: tag_body,
+                    },
+                ..
+            } => {
+                // Tagged template (BEP §10). TIR validates the tag (a
+                // `//baml:tagged_string` function whose first parameter is
+                // `body: (...) -> baml.TaggedString`) and type-checks the
+                // desugared `tag_body` flatten block with the tag's body-lambda
+                // parameters — and any `${for}` bindings — in scope.
+                //
+                // The template's RESULT type is the tag fn's return type
+                // (`Unknown` on any tag error). Typing `tag_body` is
+                // side-effecting only — it surfaces interpolation diagnostics,
+                // records each `${expr}` type, and gives MIR the `push` /
+                // `baml.TaggedString` resolutions it needs to lower the closure.
+                // We always type it (even on a tag error) so interps are still
+                // checked; the body-lambda params are bound only when the tag
+                // validated. Interps are NOT strictly coerced —
+                // `TaggedString.values` is `unknown[]`, so values pass through
+                // with their original types (§10/§11).
+                let tag_ty = self.infer_expr(*tag, body);
+                let tag_name = match &body.exprs[*tag] {
+                    Expr::Path(segs) => segs.last().cloned(),
+                    _ => None,
+                }
+                .unwrap_or_else(|| Name::new("<tag>"));
+
+                let (result_ty, body_lambda_params): (Ty, Vec<FunctionParamTy>) = match &tag_ty {
+                    // Unresolved: `infer_path` already reported `UnresolvedName`
+                    // for a bare-path tag — stay quiet to avoid double-reporting.
+                    Ty::Unknown { .. } => (
+                        Ty::Unknown {
+                            attr: TyAttr::default(),
+                        },
+                        Vec::new(),
+                    ),
+                    Ty::Function { params, ret, .. } => {
+                        let validated = self.validate_tagged_tag(*tag, &tag_name, params, ret);
+                        // A non-`Unknown` return means validation succeeded, so
+                        // the first param is `body: (lambda_params) -> ...`; those
+                        // lambda params scope into the interpolations.
+                        let lambda_params = if matches!(validated, Ty::Unknown { .. }) {
+                            Vec::new()
+                        } else {
+                            match params.first().map(|p| &p.ty) {
+                                Some(Ty::Function { params: lp, .. }) => lp.clone(),
+                                _ => Vec::new(),
+                            }
+                        };
+                        (validated, lambda_params)
+                    }
+                    _ => {
+                        self.context.report_simple(
+                            TirTypeError::TaggedTagNotAFunction { name: tag_name },
+                            *tag,
+                        );
+                        (
+                            Ty::Unknown {
+                                attr: TyAttr::default(),
+                            },
+                            Vec::new(),
+                        )
+                    }
+                };
+
+                // Record the body-lambda params against the synthetic
+                // template-body Lambda scope(s) (range == this tagged-template
+                // expr's span) so a real lambda nested in the interpolations can
+                // seed them when its own scope is type-checked standalone — there
+                // the params have no HIR binding and would otherwise be
+                // "unresolved name". Companion functions (an LLM fn and its
+                // `$stream`) can share the span, so record into every match.
+                if !body_lambda_params.is_empty()
+                    && let Some(sm) = self.body_source_map.as_ref()
+                {
+                    let span = sm.expr_span(expr_id);
+                    let db = self.context.db();
+                    let file = self.context.scope().file(db);
+                    let index = baml_compiler2_ppir::file_semantic_index(db, file);
+                    for (i, scope) in index.scopes.iter().enumerate() {
+                        if scope.is_template_body && scope.range == span {
+                            #[allow(clippy::cast_possible_truncation)]
+                            let fsi = FileScopeId::new(i as u32);
+                            self.template_body_params
+                                .insert(fsi, body_lambda_params.clone());
+                        }
+                    }
+                }
+
+                // Bind the body-lambda params, walk the segments, then restore.
+                // Mirrors `infer_lambda_body`'s param binding (direct insert,
+                // `pattern: None`) wrapped in `Stmt::For`-style scope save/restore.
+                let snapshot = self.snapshot_scoped_locals();
+                for param in &body_lambda_params {
+                    if let Some(name) = &param.name {
+                        self.locals.insert(
+                            name.clone(),
+                            LocalBinding {
+                                current_ty: param.ty.clone(),
+                                declared_ty: Some(param.ty.clone()),
+                                pattern: None,
+                            },
+                        );
+                    }
+                }
+                self.infer_expr(*tag_body, body);
+                self.restore_scoped_locals(&snapshot);
+
+                result_ty
+            }
+            Expr::Template {
+                tag: ast::TemplateTag::Default { elaborated },
+                segments,
+            } => {
+                // Untagged backtick (BEP §11). The value is realized by the
+                // desugared `elaborated` concat; type it so codegen has the
+                // `.to_string()` resolutions it needs, but DISCARD its
+                // diagnostics — those describe the synthetic `.to_string()`
+                // calls. The user-facing strict-stringify errors come from the
+                // structured `segments`, anchored on the original `${…}` spans:
+                // each `${expr}` must be non-null and stringable.
+                //
+                // The template's type IS the elaborated tree's type — always a
+                // string, but literal-preserving for a constant template (e.g.
+                // `` `abc` `` infers `Ty::Literal("abc")`), so constant folding
+                // of comparisons on literal backticks (BEP §9) still fires.
+                let saved = self.context.diagnostic_count();
+                let elaborated_ty = self.infer_expr(*elaborated, body);
+                // The elaborated tree wraps each `${expr}` in a synthetic
+                // `.to_string()` and folds the parts with `+` (a side-effect-only
+                // `${ let … }` splices its statements into one shared concat
+                // block). DISCARD the synthetic member/call noise — a nullable or
+                // non-stringable interp makes `expr.to_string()` report
+                // `NotCallable`/`UnresolvedMember` on a synthetic span — but KEEP
+                // genuine `UnresolvedName`s: a name the user wrote (`${ nope }`,
+                // or `nope` on a spliced `let`'s RHS) is never synthesized by the
+                // `.to_string()` wrapping or the accumulator, so retaining it both
+                // surfaces the real error AND stops a `Ty::Unknown` from reaching
+                // MIR (where runtime lowering would ICE). The user-facing
+                // strict-stringify errors still come from the structured
+                // `segments`, anchored on the original `${…}` spans.
+                self.context.retain_user_name_diagnostics(saved);
+                self.check_template_interps_stringable(segments, body);
+                elaborated_ty
+            }
             // A `Missing` node is an unparseable expression: MIR lowers it to a
             // `panic` and the runtime never produces a value, so it diverges.
             // `Never` (bottom) models that precisely — and, unlike the
@@ -7271,25 +7645,33 @@ impl<'db> TypeInferenceBuilder<'db> {
         !item_tree[class_loc.id(db)].generic_params.is_empty()
     }
 
-    fn ty_contains_recovery_unknown(ty: &Ty) -> bool {
+    /// Does `ty` contain an unknown-like leaf? `count_builtin` decides whether
+    /// the builtin `unknown` top type counts: callers that want to *skip* a
+    /// check when a type is unconstrained (or-pattern compat, exhaustiveness)
+    /// pass `true`; the `pattern_expected_ty` gate passes `false`, because a
+    /// genuine `unknown` annotation (e.g. `unknown[]`) is a usable expected
+    /// type — only a true resolution failure (`Unknown`/`Error`) disqualifies.
+    fn ty_contains_unknown_like(ty: &Ty, count_builtin: bool) -> bool {
         match ty {
-            Ty::Unknown { .. } | Ty::BuiltinUnknown { .. } | Ty::Error { .. } => true,
-            Ty::Class(_, args, _) | Ty::Interface(_, args, _, _) | Ty::Union(args, _) => {
-                args.iter().any(Self::ty_contains_recovery_unknown)
-            }
+            Ty::Unknown { .. } | Ty::Error { .. } => true,
+            Ty::BuiltinUnknown { .. } => count_builtin,
+            Ty::Class(_, args, _) | Ty::Interface(_, args, _, _) | Ty::Union(args, _) => args
+                .iter()
+                .any(|arg| Self::ty_contains_unknown_like(arg, count_builtin)),
             Ty::AssociatedTypeProjection {
                 base, interface, ..
             } => {
-                Self::ty_contains_recovery_unknown(base)
-                    || interface
-                        .as_ref()
-                        .is_some_and(|interface| Self::ty_contains_recovery_unknown(interface))
+                Self::ty_contains_unknown_like(base, count_builtin)
+                    || interface.as_ref().is_some_and(|interface| {
+                        Self::ty_contains_unknown_like(interface, count_builtin)
+                    })
             }
             Ty::List(elem, _) | Ty::EvolvingList(elem, _) => {
-                Self::ty_contains_recovery_unknown(elem)
+                Self::ty_contains_unknown_like(elem, count_builtin)
             }
             Ty::Map { key, value, .. } | Ty::EvolvingMap(key, value, _) => {
-                Self::ty_contains_recovery_unknown(key) || Self::ty_contains_recovery_unknown(value)
+                Self::ty_contains_unknown_like(key, count_builtin)
+                    || Self::ty_contains_unknown_like(value, count_builtin)
             }
             Ty::Function {
                 params,
@@ -7299,13 +7681,13 @@ impl<'db> TypeInferenceBuilder<'db> {
             } => {
                 params
                     .iter()
-                    .any(|param| Self::ty_contains_recovery_unknown(&param.ty))
-                    || Self::ty_contains_recovery_unknown(ret)
-                    || Self::ty_contains_recovery_unknown(throws)
+                    .any(|param| Self::ty_contains_unknown_like(&param.ty, count_builtin))
+                    || Self::ty_contains_unknown_like(ret, count_builtin)
+                    || Self::ty_contains_unknown_like(throws, count_builtin)
             }
             Ty::Future(value, error, _) => {
-                Self::ty_contains_recovery_unknown(value)
-                    || Self::ty_contains_recovery_unknown(error)
+                Self::ty_contains_unknown_like(value, count_builtin)
+                    || Self::ty_contains_unknown_like(error, count_builtin)
             }
             // `WatchAccessor` is never built by TIR; the arm exists only so the
             // match stays exhaustive over the shared `baml_type::Ty`.
@@ -7330,6 +7712,22 @@ impl<'db> TypeInferenceBuilder<'db> {
             | Ty::Resource { .. }
             | Ty::PromptAst { .. } => false,
         }
+    }
+
+    /// Recovery-placeholder check that treats the builtin `unknown` top type as
+    /// unconstrained too — for callers that want to *skip* work when a type is
+    /// either a resolution failure or genuinely `unknown`.
+    fn ty_contains_recovery_unknown(ty: &Ty) -> bool {
+        Self::ty_contains_unknown_like(ty, true)
+    }
+
+    /// Strict resolution-failure check: only the recovery placeholders
+    /// (`Unknown`/`Error`) count, NOT the builtin `unknown` top type. A `let`
+    /// annotation like `unknown[]` is a real expected type and must pin the
+    /// binding (so a later heterogeneous `push` type-checks), rather than fall
+    /// back to an evolving `never[]` that locks onto the first pushed value.
+    fn ty_contains_resolution_failure(ty: &Ty) -> bool {
+        Self::ty_contains_unknown_like(ty, false)
     }
 
     fn intersect_pattern_flow_types(&self, incoming: &Ty, constraint: &Ty) -> Ty {
@@ -7441,12 +7839,15 @@ impl<'db> TypeInferenceBuilder<'db> {
         };
 
         // A derived type is a useful bidirectional hint only when it is fully
-        // resolved: not polluted by recovery `Unknown`, and not still carrying
-        // an *unspecialized* generic. Declared generics live on the type as
-        // `TypeVar` args now, so an unspecialized class shows up as a non-rigid
-        // type var; the enclosing function's own rigid params (e.g. the `Err`
-        // in `AllFailed<Err>`) are already bound and so don't disqualify it.
-        if Self::ty_contains_recovery_unknown(&ty)
+        // resolved: not polluted by a recovery placeholder, and not still
+        // carrying an *unspecialized* generic. Declared generics live on the
+        // type as `TypeVar` args now, so an unspecialized class shows up as a
+        // non-rigid type var; the enclosing function's own rigid params (e.g.
+        // the `Err` in `AllFailed<Err>`) are already bound and so don't
+        // disqualify it. A genuine `unknown` annotation (e.g. `unknown[]`) is a
+        // usable expected type, so only a true resolution failure (`Unknown`/
+        // `Error`) disqualifies — not the builtin `unknown` top type.
+        if Self::ty_contains_resolution_failure(&ty)
             || crate::generics::contains_non_rigid_typevar(&ty, &self.generic_params)
         {
             None
@@ -8018,6 +8419,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                     out.extend(crate::throw_inference::flatten_ty_to_facts(error));
                 }
             }
+            Expr::Template { tag, segments } => {
+                if let ast::TemplateTag::Custom { tag, .. } = tag {
+                    self.collect_throw_facts_from_expr(*tag, body, out);
+                }
+                Self::collect_throw_facts_from_template_segments(self, segments, body, out);
+            }
             Expr::GenericApply { base, .. } => {
                 // Referencing a generic callable as a value cannot throw; walk
                 // the base for completeness (it is a path, a no-op).
@@ -8029,6 +8436,60 @@ impl<'db> TypeInferenceBuilder<'db> {
             | Expr::Null
             | Expr::Path(_)
             | Expr::Missing => {}
+        }
+    }
+
+    /// Recursive walk of a tagged-template segment tree collecting throw
+    /// facts from interpolated/condition/iter expressions and any nested
+    /// for/if bodies.
+    fn collect_throw_facts_from_template_segments(
+        &self,
+        segments: &[ast::TemplateSegment],
+        body: &ExprBody,
+        out: &mut BTreeSet<Ty>,
+    ) {
+        for seg in segments {
+            match seg {
+                ast::TemplateSegment::Text(_) => {}
+                ast::TemplateSegment::Interp(e) => {
+                    self.collect_throw_facts_from_expr(*e, body, out);
+                }
+                ast::TemplateSegment::For {
+                    collection,
+                    body: inner,
+                    ..
+                } => {
+                    self.collect_throw_facts_from_expr(*collection, body, out);
+                    self.collect_throw_facts_from_template_segments(inner, body, out);
+                }
+                ast::TemplateSegment::CStyleFor {
+                    init,
+                    cond,
+                    step,
+                    body: inner,
+                } => {
+                    // `init` (a `let`) and `step` (an assignment) are statements
+                    // whose initializer/RHS can throw, so walk them too.
+                    self.collect_throw_facts_from_stmt(*init, body, out);
+                    self.collect_throw_facts_from_expr(*cond, body, out);
+                    if let Some(step_stmt) = step {
+                        self.collect_throw_facts_from_stmt(*step_stmt, body, out);
+                    }
+                    self.collect_throw_facts_from_template_segments(inner, body, out);
+                }
+                ast::TemplateSegment::If {
+                    branches,
+                    else_body,
+                } => {
+                    for branch in branches {
+                        self.collect_throw_facts_from_expr(branch.condition, body, out);
+                        self.collect_throw_facts_from_template_segments(&branch.body, body, out);
+                    }
+                    if let Some(eb) = else_body {
+                        self.collect_throw_facts_from_template_segments(eb, body, out);
+                    }
+                }
+            }
         }
     }
 
@@ -8954,6 +9415,188 @@ impl<'db> TypeInferenceBuilder<'db> {
                 attr: TyAttr::default(),
             }
         }
+    }
+
+    /// BEP-049 §10 (M4d.3): validate a tagged-template tag that resolved to a
+    /// function type, and return the template's type (the tag fn's return type
+    /// on success, `Unknown` on error).
+    ///
+    /// `params`/`ret` are the tag function's already-lowered signature. The
+    /// tag must (1) carry a `//baml:tagged_string` marker and (2) declare a
+    /// first parameter `body: (...) -> baml.TaggedString`. Diagnostics point
+    /// at the tag expression, with a secondary note at the function/param def.
+    fn validate_tagged_tag(
+        &self,
+        tag_expr: ExprId,
+        tag_name: &Name,
+        params: &[FunctionParamTy],
+        ret: &Ty,
+    ) -> Ty {
+        let db = self.context.db();
+
+        // Reach the marker flag via the recorded free-function resolution.
+        let func_loc = match self.resolutions.get(&tag_expr) {
+            Some(crate::inference::MemberResolution::Free { func_loc }) => Some(*func_loc),
+            _ => None,
+        };
+        let is_tagged = func_loc.is_some_and(|fl| {
+            baml_compiler2_hir::file_item_tree(db, fl.file(db))[fl.id(db)].is_tagged_template_tag
+        });
+
+        // (c) resolves to a function, but it isn't a tagged-string tag.
+        if !is_tagged {
+            let related = func_loc
+                .map(|fl| {
+                    vec![RelatedNote::new(
+                        RelatedLocation::Item(Definition::Function(fl)),
+                        "add a `//baml:tagged_string` marker comment above this function",
+                    )]
+                })
+                .unwrap_or_default();
+            self.context.report(
+                TirTypeError::TaggedTagNotMarked {
+                    name: tag_name.clone(),
+                },
+                tag_expr,
+                related,
+            );
+            return Ty::Unknown {
+                attr: TyAttr::default(),
+            };
+        }
+
+        // (d) marked, but the first parameter must be a well-formed
+        //     `body: (...) -> baml.TaggedString`.
+        let body_param_ok = params.first().is_some_and(|p| {
+            let name_ok = p.name.as_ref().is_some_and(|n| n.as_str() == "body");
+            let ret_ok = matches!(
+                &p.ty,
+                Ty::Function { ret: body_ret, .. }
+                    if matches!(
+                        body_ret.as_ref(),
+                        Ty::Class(qtn, _, _) if qtn.is_builtin_root_type("TaggedString")
+                    )
+            );
+            name_ok && ret_ok
+        });
+        if !body_param_ok {
+            let related = func_loc
+                .map(|fl| {
+                    vec![RelatedNote::new(
+                        RelatedLocation::Param(fl, 0),
+                        "the first parameter must be `body: (...) -> baml.TaggedString`",
+                    )]
+                })
+                .unwrap_or_default();
+            self.context.report(
+                TirTypeError::TaggedTagBadBodyParam {
+                    name: tag_name.clone(),
+                },
+                tag_expr,
+                related,
+            );
+            return Ty::Unknown {
+                attr: TyAttr::default(),
+            };
+        }
+
+        // Valid tag: the template evaluates to the tag fn's return type.
+        ret.clone()
+    }
+
+    /// BEP §11 strict-interpolation check for an untagged template. Recurses
+    /// the structured `segments` and, for each `${expr}`, inspects the type
+    /// already recorded by typing the desugared `elaborated` tree — reporting a
+    /// purpose-built error on the interp's own span (no synthetic `.to_string()`
+    /// call for the error to leak through). Read-only: it never re-infers, so
+    /// it can't double-report diagnostics from inside the interpolations.
+    fn check_template_interps_stringable(
+        &mut self,
+        segments: &[ast::TemplateSegment],
+        body: &ExprBody,
+    ) {
+        for seg in segments {
+            match seg {
+                ast::TemplateSegment::Text(_) => {}
+                ast::TemplateSegment::Interp(expr_id) => {
+                    self.check_interp_stringable(*expr_id, body);
+                }
+                ast::TemplateSegment::For { body: inner, .. }
+                | ast::TemplateSegment::CStyleFor { body: inner, .. } => {
+                    self.check_template_interps_stringable(inner, body);
+                }
+                ast::TemplateSegment::If {
+                    branches,
+                    else_body,
+                } => {
+                    for branch in branches {
+                        self.check_template_interps_stringable(&branch.body, body);
+                    }
+                    if let Some(eb) = else_body {
+                        self.check_template_interps_stringable(eb, body);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Is `expr` a syntactically unit-valued (`Ty::Void`) block tail? An
+    /// `if`/`if let` with no `else`, or a nested block whose own tail is unit.
+    /// Mirrors `elaborate_default_interp`'s predicate in the AST crate so the
+    /// §11 segment check and the elaboration agree on which `${…}` render `""`.
+    fn is_unit_tail(body: &ExprBody, expr: ExprId) -> bool {
+        match &body.exprs[expr] {
+            Expr::If {
+                else_branch: None, ..
+            }
+            | Expr::IfLet {
+                else_branch: None, ..
+            } => true,
+            Expr::Block { tail_expr, .. } => tail_expr
+                .map(|t| Self::is_unit_tail(body, t))
+                .unwrap_or(true),
+            _ => false,
+        }
+    }
+
+    /// The per-`${expr}` half of [`check_template_interps_stringable`]. Reads
+    /// the recorded type (from typing the elaborated tree) and requires it to
+    /// be non-null and expose a `to_string` method.
+    fn check_interp_stringable(&mut self, expr_id: ExprId, body: &ExprBody) {
+        let Some(ty) = self.expressions.get(&expr_id).cloned() else {
+            return;
+        };
+        // Unknown/Error already produced their own diagnostics upstream.
+        if matches!(ty, Ty::Unknown { .. } | Ty::Error { .. }) {
+            return;
+        }
+        // A unit-valued block (`${ let x = 1 }`, or one whose tail is an
+        // `if`/`if let` with no `else`) renders as the empty string (BEP §4) —
+        // no `to_string` required. Mirrors the widened unit-tail detection in
+        // the untagged-template elaborator (`elaborate_default_interp`); the
+        // recorded type here is the ORIGINAL segment's, typed independently of
+        // the elaborated `""`, so it must apply the same predicate.
+        if let Expr::Block { tail_expr, .. } = &body.exprs[expr_id] {
+            let tail_is_unit = tail_expr
+                .map(|t| Self::is_unit_tail(body, t))
+                .unwrap_or(true);
+            if tail_is_unit {
+                return;
+            }
+        }
+        // Nullable values can't be stringified directly — the user must
+        // coalesce (`${x ?? "…"}`) or unwrap first. Applies the §7-style
+        // "surface null bugs at type-check time" rule to interpolation.
+        let inner = crate::narrowing::remove_null(&ty);
+        if inner != ty {
+            self.context
+                .report_simple(TirTypeError::InterpolatedValueMaybeNull { ty }, expr_id);
+        }
+        // No `to_string` requirement: a non-null value renders via
+        // `string.from(...)` (BEP-049 §11), which is total — it dispatches the
+        // `baml.ToString` override when the value's runtime class implements it
+        // and otherwise falls back to a structural rendering, so every type is
+        // interpolatable.
     }
 
     /// Resolve a member access on a known base type.
@@ -10889,6 +11532,16 @@ impl<'db> TypeInferenceBuilder<'db> {
             .then(|| Ty::Unknown {
                 attr: TyAttr::default(),
             }),
+            // A union exposes `member` iff EVERY arm does (BEP-044 union member
+            // access — e.g. a field shared across all variants of `A | B | C`).
+            // The real `resolve_member` dispatches per-arm at the call site; this
+            // read-only probe only needs Some/None, so return the first arm's
+            // resolution as a representative type.
+            Ty::Union(members, _) => members
+                .iter()
+                .map(|m| self.try_resolve_member_on_ty(m, member))
+                .collect::<Option<Vec<_>>>()
+                .and_then(|tys| tys.into_iter().next()),
             _ => None,
         }
     }
@@ -14785,6 +15438,56 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
+    /// Widen a top-level literal / enum-variant type to its base (`1` → `int`,
+    /// `Color.Red` → `Color`), leaving everything else unchanged. Comparison validity is
+    /// a property of the base type, not the singleton, so the operator checks normalize
+    /// here first.
+    fn widen_literal_base(ty: &Ty) -> Ty {
+        use baml_base::Literal;
+        match ty {
+            Ty::Literal(Literal::Int(_), _, attr) => Ty::Int { attr: attr.clone() },
+            Ty::Literal(Literal::Bigint(_), _, attr) => Ty::Bigint { attr: attr.clone() },
+            Ty::Literal(Literal::Float(_), _, attr) => Ty::Float { attr: attr.clone() },
+            Ty::Literal(Literal::String(_), _, attr) => Ty::String { attr: attr.clone() },
+            Ty::Literal(Literal::Bool(_), _, attr) => Ty::Bool { attr: attr.clone() },
+            Ty::EnumVariant(name, _, attr) => Ty::Enum(name.clone(), attr.clone()),
+            other => other.clone(),
+        }
+    }
+
+    /// Whether `ty` implements `baml.ops.Compare` (so `<` `<=` `>` `>=` are defined for
+    /// it). `is_subtype` against the `Compare` existential resolves both concrete impls
+    /// (via the registry) and a `T extends Compare` type-variable bound.
+    fn type_is_comparable(&self, ty: &Ty) -> bool {
+        // Ordering needs a *single concrete type* — or a bounded type variable /
+        // associated projection, which realizes to exactly one concrete type — that
+        // implements `baml.ops.Compare`. A union or interface-existential is NOT
+        // orderable even when every member / implementor implements `Compare`: the
+        // two operands could hold different concrete types, which exact-type
+        // ordering forbids and the runtime cannot order (`is_subtype(union, I)` is
+        // member-wise true, so it must be excluded here). `T < T` is fine — both
+        // operands share the one type `T` realizes to.
+        //
+        // Normalize first so a structurally-union-but-collapsible spelling like
+        // `int | 99` (a `catch` result widening a literal back into its base) is
+        // recognized as the single concrete type `int`, not rejected as a union.
+        let ty = baml_type::normalize::normalize(ty, &NormalizeCtx(self));
+        if matches!(ty, Ty::Union(..) | Ty::Interface(..) | Ty::Unknown { .. }) {
+            return false;
+        }
+        let compare = Ty::Interface(
+            crate::ty::QualifiedTypeName::new(
+                Name::new("baml"),
+                vec![Name::new("ops")],
+                Name::new("Compare"),
+            ),
+            Vec::new(),
+            Vec::new(),
+            TyAttr::default(),
+        );
+        self.is_subtype(&ty, &compare)
+    }
+
     fn infer_binary_op(
         &mut self,
         op: baml_compiler2_ast::BinaryOp,
@@ -14798,7 +15501,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             return folded;
         }
         // Peel type aliases once at the entry so downstream classifiers
-        // (`infer_arithmetic`, `infer_bitwise`, `is_float_bigint_mix`) only
+        // (`infer_arithmetic`, `infer_bitwise`, and the comparison helpers) only
         // need to recognise the underlying primitive shapes. Mirrors how
         // `is_subtype` and other type-aware sites expand at their entry.
         let expanded_lhs = self.expand_alias_chains(lhs.clone());
@@ -14806,53 +15509,78 @@ impl<'db> TypeInferenceBuilder<'db> {
         let lhs = &expanded_lhs;
         let rhs = &expanded_rhs;
         match op {
-            // Equality (`==`, `!=`): permissive — any two operands are
-            // accepted and the result is `bool`. This intentionally allows
-            // `x == null` (the canonical null check), `int? == int`
-            // (nullable equality), and numeric cross-type comparisons like
-            // `int == float`. The only rejected pairing is float-vs-bigint:
-            // a `bigint` beyond f64's exactly-representable range cannot be
-            // compared to a `float` without precision loss, so
-            // `is_float_bigint_mix` flags it (matching arithmetic/ordering).
+            // Equality (`==`, `!=`): valid for *any* pair of operands, result `bool`.
+            // This allows `x == null` (the canonical null check), nullable equality, and
+            // erased comparisons (`unknown`, unions, interfaces). It only *warns* when
+            // the operand types are provably disjoint — no value of one can equal a value
+            // of the other — so the comparison is a constant; the `equals_equals`
+            // lowering makes the runtime (concrete-type equality) agree.
             BinaryOp::Eq | BinaryOp::Ne => {
-                if Self::is_float_bigint_mix(lhs, rhs)
-                    && !matches!(lhs, Ty::Unknown { .. } | Ty::Error { .. })
-                    && !matches!(rhs, Ty::Unknown { .. } | Ty::Error { .. })
-                {
-                    self.context.report_simple(
-                        TirTypeError::InvalidBinaryOp {
-                            op,
-                            lhs: lhs.clone(),
-                            rhs: rhs.clone(),
-                        },
-                        at,
-                    );
-                }
-                Ty::Bool {
-                    attr: TyAttr::default(),
+                // When the operand types are provably disjoint (no shared value) or
+                // provably the same single value, `==` is a constant — fold the result
+                // to a `bool` literal so the static type agrees with the
+                // `equals_equals` runtime. Disjoint operands (`Some(false)`) also warn
+                // (the comparison is pointless); a provably-equal pair does not.
+                match baml_type::normalize::constant_equality(lhs, rhs, &NormalizeCtx(self)) {
+                    Some(eq) => {
+                        if !eq {
+                            self.context.report_warning_simple(
+                                TirTypeError::ComparisonAlwaysDisjoint {
+                                    op,
+                                    lhs: lhs.clone(),
+                                    rhs: rhs.clone(),
+                                },
+                                at,
+                            );
+                        }
+                        let value = if matches!(op, BinaryOp::Eq) { eq } else { !eq };
+                        Ty::Literal(
+                            crate::ty::LiteralValue::Bool(value),
+                            crate::ty::Freshness::Fresh,
+                            TyAttr::default(),
+                        )
+                    }
+                    None => Ty::Bool {
+                        attr: TyAttr::default(),
+                    },
                 }
             }
 
-            // Ordering (`<`, `<=`, `>`, `>=`): unlike equality, there is no
-            // meaningful ordering between `null` and a real value. Reject
-            // any operand that could be null (Optional / Union containing
-            // `null` / bare `null`) before the float-bigint mix check.
+            // Ordering (`<`, `<=`, `>`, `>=`): exact-type — both operands must have the
+            // *same* type (subtyping is not enough; only `==` spans types/subtypes), and
+            // that type must implement `baml.ops.Compare`. Operands are widened
+            // (literal→base, enum-variant→enum) first so `x < 5` compares `int` to `int`;
+            // "same type" is `types_equivalent` — the current-context invariant equality
+            // (alias-resolving, union-order-insensitive, attr-tolerant), distinct from the
+            // coherence unifier's "possible-worlds" view. So `int < float`, `Dog < Animal`,
+            // and `int < int?` are all errors even when subtype-related. Error-recovery
+            // operands are skipped to avoid cascading diagnostics.
             BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => {
-                let invalid_null = (Self::may_be_null(lhs) || Self::may_be_null(rhs))
-                    && !matches!(lhs, Ty::Unknown { .. } | Ty::Error { .. })
-                    && !matches!(rhs, Ty::Unknown { .. } | Ty::Error { .. });
-                let invalid_mix = Self::is_float_bigint_mix(lhs, rhs)
-                    && !matches!(lhs, Ty::Unknown { .. } | Ty::Error { .. })
-                    && !matches!(rhs, Ty::Unknown { .. } | Ty::Error { .. });
-                if invalid_null || invalid_mix {
-                    self.context.report_simple(
-                        TirTypeError::InvalidBinaryOp {
-                            op,
-                            lhs: lhs.clone(),
-                            rhs: rhs.clone(),
-                        },
-                        at,
-                    );
+                if !matches!(lhs, Ty::Unknown { .. } | Ty::Error { .. })
+                    && !matches!(rhs, Ty::Unknown { .. } | Ty::Error { .. })
+                {
+                    let lhs_base = Self::widen_literal_base(lhs);
+                    let rhs_base = Self::widen_literal_base(rhs);
+                    // Exact-type equality via the canonical algebra, so equivalent
+                    // spellings agree — e.g. a `catch` result typed `int | 99`
+                    // canonicalizes to `int`, matching `int` on the other side.
+                    let same_type =
+                        baml_type::normalize::equivalent(&lhs_base, &rhs_base, &NormalizeCtx(self));
+                    if !same_type {
+                        self.context.report_simple(
+                            TirTypeError::OrderingDifferentTypes {
+                                op,
+                                lhs: lhs.clone(),
+                                rhs: rhs.clone(),
+                            },
+                            at,
+                        );
+                    } else if !self.type_is_comparable(&lhs_base) {
+                        self.context.report_simple(
+                            TirTypeError::OrderingRequiresCompare { op, ty: lhs_base },
+                            at,
+                        );
+                    }
                 }
                 Ty::Bool {
                     attr: TyAttr::default(),
@@ -15018,7 +15746,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // non-object primitive (int/float/bigint/bool/null) has no object
                 // representation and aborts at runtime. So `string + int` must be
                 // a type error here rather than inferring `string` and crashing
-                // the VM (F4), while `string + uint8array` stays valid.
+                // the VM, while `string + uint8array` stays valid.
                 if matches!(op, baml_compiler2_ast::BinaryOp::Add)
                     && !Self::is_non_object_primitive(lhs)
                     && !Self::is_non_object_primitive(rhs)
@@ -15042,66 +15770,6 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// type is the bare `null` primitive or a union that contains it (a
     /// nullable `T?` lowers to `T | null`).
     ///
-    /// Used by the ordering arms of [`infer_binary_op`] to reject operands
-    /// whose runtime value might be `null`. Arithmetic / bitwise rely on
-    /// their respective `base_ty` classifiers (which return `None` for
-    /// `null` and short-circuit via the catch-all to `Unknown`),
-    /// so they do not need this helper.
-    fn may_be_null(ty: &Ty) -> bool {
-        match ty {
-            Ty::Null { .. } => true,
-            Ty::Union(members, _) => members.iter().any(Self::may_be_null),
-            _ => false,
-        }
-    }
-
-    /// Returns true if the common upcast of `lhs` and `rhs` would contain
-    /// both `float` and `bigint`, which has no sound comparison (bigint
-    /// values past 2^53 don't round-trip through f64).
-    ///
-    /// Models the "is there a valid common type for these two values?"
-    /// question used by the equality and ordering arms of
-    /// [`infer_binary_op`]. `int? == int` upcasts both sides to `int?` and
-    /// is fine; `float? == bigint` upcasts to `float | null | bigint`,
-    /// which still pairs float with bigint inside the upcast — so even
-    /// though only one runtime branch realizes the bad pairing, the type
-    /// itself is unsound.
-    ///
-    /// Note this is conservative for a single union that already contains
-    /// both: `(float | bigint) == (float | bigint)` (and even `x == x` for
-    /// such an `x`) is rejected, because the type admits a float-vs-bigint
-    /// pairing even though any one concrete value is only ever one
-    /// representation. Narrow the operand first if you hit this.
-    fn is_float_bigint_mix(lhs: &Ty, rhs: &Ty) -> bool {
-        /// `(could_be_float, could_be_bigint)` for a primitive/literal/union
-        /// type — i.e. the set of primitive shapes any runtime branch could
-        /// carry. A nullable `T | null` is unwrapped through its members here
-        /// because this helper asks about the *upcast* type, not about whether
-        /// the operand itself is a valid scalar (the latter check belongs at
-        /// the operator's arm entry, e.g. ordering rejecting nullable operands
-        /// via `may_be_null`).
-        fn shape(ty: &Ty) -> (bool, bool) {
-            match ty {
-                Ty::Float { .. } | Ty::Literal(baml_base::Literal::Float(_), _, _) => (true, false),
-                Ty::Bigint { .. } | Ty::Literal(baml_base::Literal::Bigint(_), _, _) => {
-                    (false, true)
-                }
-                Ty::Union(members, _) => members.iter().fold((false, false), |(f, b), m| {
-                    let (mf, mb) = shape(m);
-                    (f || mf, b || mb)
-                }),
-                _ => (false, false),
-            }
-        }
-        let (lhs_float, lhs_bigint) = shape(lhs);
-        let (rhs_float, rhs_bigint) = shape(rhs);
-        // The upcast of the two operands contains both `float` and `bigint`
-        // iff either side could be float **and** either side could be bigint.
-        // (A single side containing both — e.g. `float | bigint` — is just as
-        // unsound as the classic cross-side case `float vs bigint`.)
-        (lhs_float || rhs_float) && (lhs_bigint || rhs_bigint)
-    }
-
     /// Determine the result type of a bitwise operation.
     ///
     /// `(int, int) -> int`, `(bigint, bigint) -> bigint`, `(int, bigint) -> bigint`.
@@ -15649,6 +16317,11 @@ impl<'db> TypeInferenceBuilder<'db> {
         let saved_defer_loop_floors = std::mem::take(&mut self.defer_loop_floors);
         let saved_body_source_map = self.body_source_map.clone();
         self.body_source_map = Some(lambda_source_map.clone());
+        // Diagnostics emitted below carry THIS lambda's arena IDs but are
+        // recorded in the enclosing scope's set; freeze their spans against the
+        // lambda's source map at the end so they don't collapse to `0..0` when
+        // rendered with the enclosing scope's map (see `freeze_diagnostic_spans_from`).
+        let lambda_diag_start = self.context.diagnostic_count();
 
         // Extend generic params with the lambda's own generic params
         let mut new_generic_params = self.generic_params.clone();
@@ -15736,7 +16409,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             warn_extraneous_throws,
         );
         self.context
-            .remap_diagnostics_after(lambda_diagnostics_start, lambda_source_map);
+            .freeze_diagnostic_spans_from(lambda_diagnostics_start, lambda_source_map);
 
         let effective_facts = self.collect_effective_throws(lambda_body);
         let lambda_effective_throws = Self::ty_from_concrete_facts(&effective_facts)
@@ -15792,6 +16465,10 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.generic_params = saved_generic_params;
         self.loop_depth = saved_loop_depth;
         self.defer_loop_floors = saved_defer_loop_floors;
+        // Freeze this lambda's diagnostic spans against its own source map
+        // before restoring the enclosing map (otherwise they render at `0..0`).
+        self.context
+            .freeze_diagnostic_spans_from(lambda_diag_start, lambda_source_map);
         self.body_source_map = saved_body_source_map;
 
         (

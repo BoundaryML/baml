@@ -46,7 +46,7 @@
 //!   exactly the right entry regardless of which runtime registered it. There
 //!   is no per-runtime ambiguity to resolve. (In WASM, `registerHostCallable`
 //!   is a free function the JS encoder calls *while building the proto args*,
-//!   before `callFunction` is even invoked — there is no runtime receiver to
+//!   before a `RunStore` start command is invoked — there is no runtime receiver to
 //!   attribute the registration to. A global registry sidesteps that entirely.)
 //! * The `in_flight` table holds only a `CompletionHandle` (a oneshot sender).
 //!   Resolving it is fully self-contained — it needs no runtime context — and
@@ -71,8 +71,7 @@ use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
 use bex_project::{host_release_dispatch, validate_host_return};
 use bridge_ctypes::{
-    CffiHandleTableOptions, HANDLE_TABLE, baml_core::cffi::InboundValue, external_to_outbound,
-    inbound_to_external,
+    CffiHandleTableOptions, HANDLE_TABLE, baml_core::cffi::InboundValue, inbound_to_external,
 };
 use js_sys::Function;
 use prost::Message;
@@ -435,28 +434,49 @@ impl io::IoNamespaceHost for WasmHost {
             }
         };
 
-        // Encode the args as a type-rich `BamlOutboundValue` list (mirrors
-        // `sys_native::host_impls::call_host_value`): the JS dispatch wrapper
-        // decodes the list of typed args and forwards them as positional
-        // arguments to the user callable.
+        // The VM split the call's args by the callable's declared params and
+        // packed them as `[positional_array, optional_map]` (see
+        // `host_closure_call_sysop`). Unpack and encode them into the
+        // `BamlToHostCall`'s flat `args` list (mirrors
+        // `sys_native::host_impls::call_host_value`): required args first, then
+        // the supplied optionals (tagged + keyed by name). The JS dispatch
+        // wrapper applies its calling convention.
         let options = CffiHandleTableOptions::for_wire();
-        let arg_values = BexExternalValue::Array {
-            element_type: baml_type::RuntimeTy::unknown(),
-            items: args,
-        };
-        let encoded: Vec<u8> = match external_to_outbound(&arg_values, &options) {
-            Ok(value) => value.encode_to_vec(),
-            Err(e) => {
-                // Arg encoding is bridge-side serialization, not a
-                // host-language error. A failure here means the engine
-                // had a `BexExternalValue` it could not put on the wire
-                // — an engine/bridge bug. Surface as a fatal internal
-                // error rather than a catchable `VmBamlError`.
+        let mut pack = args.into_iter();
+        let positional = match pack.next() {
+            Some(BexExternalValue::Array { items, .. }) => items,
+            other => {
                 return SysOpOutput::err(sys_types::VmInternalError::BridgeFailure {
-                    message: format!("failed to encode host-call arguments: {e}"),
+                    message: format!(
+                        "host-call args pack[0] must be the positional array, got {other:?}"
+                    ),
                 });
             }
         };
+        let optional = match pack.next() {
+            Some(BexExternalValue::Map { entries, .. }) => entries,
+            other => {
+                return SysOpOutput::err(sys_types::VmInternalError::BridgeFailure {
+                    message: format!(
+                        "host-call args pack[1] must be the optional map, got {other:?}"
+                    ),
+                });
+            }
+        };
+        let encoded: Vec<u8> =
+            match bridge_ctypes::build_to_host_call(&positional, &optional, &options) {
+                Ok(to_host_call) => to_host_call.encode_to_vec(),
+                Err(e) => {
+                    // Arg encoding is bridge-side serialization, not a
+                    // host-language error. A failure here means the engine
+                    // had a `BexExternalValue` it could not put on the wire
+                    // — an engine/bridge bug. Surface as a fatal internal
+                    // error rather than a catchable `VmBamlError`.
+                    return SysOpOutput::err(sys_types::VmInternalError::BridgeFailure {
+                        message: format!("failed to encode host-call arguments: {e}"),
+                    });
+                }
+            };
 
         // Allocate a fresh (globally-unique) call id and create a
         // CompletionHandle, recorded in the process-global in-flight table so

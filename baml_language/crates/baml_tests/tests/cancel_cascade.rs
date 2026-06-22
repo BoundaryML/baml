@@ -21,7 +21,7 @@ async fn cancel_unblocks_await_on_non_descendant() {
     let program = baml_tests::engine::compile_source_with_opt(
         r#"
         function main() -> int {
-            let slow = spawn { baml.sys.sleep(60000); 42 };
+            let slow = spawn { baml.sys.sleep(baml.time.Duration.from_milliseconds(60000n)); 42 };
             let waiter = spawn { await slow };
             let _ = waiter.cancel();
             // waiter's BexThread is parked in the engine's await on

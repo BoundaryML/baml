@@ -18,10 +18,29 @@ function not_null(value: unknown?) -> null {
   }
 }
 
+/// Converts any assertion operand into a user-facing string.
+///
+/// Parameters:
+/// - `value`: The operand value to render.
+///
+/// Returns:
+/// - A JSON-style string representation for panic messages.
+///
+/// Errors/Panics:
+/// - Never throws. Falls back to a placeholder when serialization fails.
+function format_operand(value: unknown) -> string {
+  string.from(value)
+}
+
 /// Asserts that `actual` equals `expected`. Panics if they differ.
 function equal(actual: unknown, expected: unknown) -> null {
   if (actual != expected) {
-    baml.sys.panic("assertion failed: expected equal values")
+    baml.sys.panic(
+      "assertion failed: left = " +
+      format_operand(actual) +
+      ", right = " +
+      format_operand(expected)
+    )
   } else {
     null
   }

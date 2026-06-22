@@ -970,6 +970,22 @@ fn collect_callee_names_expr(body: &ast::ExprBody, id: ast::ExprId, names: &mut 
         }
         ast::Expr::OptionalChain { expr } => collect_callee_names_expr(body, *expr, names),
 
+        // Backtick template (BEP-049): walk the desugared realization, where
+        // the real calls live — `elaborated` for an untagged `` `…` ``, and the
+        // tag expression plus its closure `body` for a tagged `` tag`…` ``.
+        ast::Expr::Template { tag, .. } => match tag {
+            ast::TemplateTag::Default { elaborated } => {
+                collect_callee_names_expr(body, *elaborated, names);
+            }
+            ast::TemplateTag::Custom {
+                tag,
+                body: tag_body,
+            } => {
+                collect_callee_names_expr(body, *tag, names);
+                collect_callee_names_expr(body, *tag_body, names);
+            }
+        },
+
         // Leaves (no nested expressions in this body's arena). Lambda bodies
         // live in their own ExprBody, so they cannot be walked from here.
         ast::Expr::Literal(_)

@@ -1,11 +1,7 @@
 import { type NodeProps } from '@xyflow/react';
 import { type ComponentType, memo } from 'react';
-import {
-  nodeBackground,
-  nodeShadow,
-  selectionRing,
-  stateColors,
-} from '../constants';
+import { getChrome, nodeBackground, nodeShadow, stateStyle } from '../constants';
+import { useGraphThemeContext } from '../theme';
 import type { WorkflowNodeData } from '../types';
 import { NodeHandles } from './NodeHandles';
 import { NodeOutputPreview } from './NodeOutputPreview';
@@ -91,7 +87,9 @@ const StateIcon = ({ state }: { state: string }) => {
 export const BaseNode: ComponentType<NodeProps> = memo(({ data }) => {
   const d = data as WorkflowNodeData;
   const isHighlighted = d.selected;
-  const colors = stateColors[d.executionState] ?? stateColors['not-started'];
+  const theme = useGraphThemeContext();
+  const chrome = getChrome(theme);
+  const colors = stateStyle(theme, d.executionState);
 
   return (
     <>
@@ -104,9 +102,9 @@ export const BaseNode: ComponentType<NodeProps> = memo(({ data }) => {
           gap: 6,
           padding: '7px 11px 7px 9px',
           borderRadius: 8,
-          background: nodeBackground(colors),
-          border: `1px solid ${isHighlighted ? selectionRing.color : colors.border}`,
-          boxShadow: nodeShadow(colors, !!isHighlighted),
+          background: nodeBackground(colors, theme),
+          border: `1px solid ${isHighlighted ? chrome.selectionRing.color : colors.border}`,
+          boxShadow: nodeShadow(colors, !!isHighlighted, theme),
           width: '100%',
           height: '100%',
           boxSizing: 'border-box',

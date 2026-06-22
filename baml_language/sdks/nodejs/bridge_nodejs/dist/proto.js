@@ -19,6 +19,7 @@ import { getTypeMap } from './typemap.js';
 const CallFunctionArgs = baml_core.cffi.v1.CallFunctionArgs;
 const BamlOutboundValue = baml_core.cffi.v1.BamlOutboundValue;
 const BamlOutboundResult = baml_core.cffi.v1.BamlOutboundResult;
+const BamlToHostCall = baml_core.cffi.v1.BamlToHostCall;
 const InboundValue = baml_core.cffi.v1.InboundValue;
 const InboundClassValue = baml_core.cffi.v1.InboundClassValue;
 const InboundMapEntry = baml_core.cffi.v1.InboundMapEntry;
@@ -431,6 +432,47 @@ export function decodeOutboundValue(data) {
     return decodeValueHolder(msg, getTypeMap());
 }
 /**
+ * Decode the engine→host `BamlToHostCall`. The engine has already resolved the
+ * call against the callee's declared params and dropped omitted optionals, so
+ * `args` is a flat, declared-order list of the supplied args. Partition it back
+ * into the required positional run and the supplied optionals (keyed by
+ * `argName`) using each arg's `isOptionalArg` flag.
+ */
+function decodeHostCall(data) {
+    const msg = BamlToHostCall.decode(data instanceof Buffer ? data : Buffer.from(data));
+    const typeMap = getTypeMap();
+    const positional = [];
+    const optional = {};
+    for (const arg of msg.args ?? []) {
+        const value = arg.value ? decodeValueHolder(arg.value, typeMap) : undefined;
+        if (arg.isOptionalArg) {
+            optional[arg.argName ?? ''] = value;
+        }
+        else {
+            positional.push(value);
+        }
+    }
+    return { positional, optional };
+}
+/**
+ * Reshape the split args into the TypeScript calling convention the callback's
+ * generated type advertises: the required args stay positional and the supplied
+ * optionals are passed as a single trailing `$opts` object — exactly mirroring
+ * how a BAML function is *called* from TypeScript.
+ *
+ * The `$opts` object is appended only when at least one optional was supplied.
+ * With none supplied (or a callback with no optional params at all) the args
+ * stay purely positional — the correct shape for a callback declared without an
+ * `$opts` object, and the shape that lets the callback's own defaults fill any
+ * omitted optionals.
+ */
+function reshapeHostArgs(positional, optional) {
+    if (Object.keys(optional).length === 0) {
+        return positional;
+    }
+    return [...positional, optional];
+}
+/**
  * Decode the thrown value off the wire holder. Returns the fully decoded BAML
  * `value` (a generated class instance when the FQN is mapped, else a plain
  * object / primitive), the class FQN (`className`), and a readable `message`
@@ -442,8 +484,22 @@ export function decodeOutboundValue(data) {
  * the original error/panic, so a decode failure degrades to an undefined value
  * (the formatted message and className are still surfaced).
  */
+/**
+ * Peel any `union_variant_value` wrapper(s) so a metadata read sees the inner
+ * value. The engine wraps a thrown value in `union_variant_value` when the
+ * function declares a multi-member `throws` union; `decodeValueHolder` already
+ * unwraps this for the value itself (see the `unionVariantValue` arm), so the
+ * FQN read below must match or `className` is lost for union throws.
+ */
+function unwrapUnionVariant(holder) {
+    let h = holder;
+    while (h?.unionVariantValue?.value) {
+        h = h.unionVariantValue.value;
+    }
+    return h;
+}
 function decodeThrown(holder) {
-    const className = holder?.classValue?.name?.name ?? undefined;
+    const className = unwrapUnionVariant(holder)?.classValue?.name?.name ?? undefined;
     let value;
     try {
         value = holder ? decodeValueHolder(holder, getTypeMap()) : undefined;
@@ -558,13 +614,12 @@ function makeHostCallableDispatch(userFn) {
         try {
             let args;
             try {
-                // Host-callable args arrive as a bare list-shaped
-                // BamlOutboundValue, not the call-result envelope.
-                const decoded = decodeOutboundValue(argsBytes);
-                if (!Array.isArray(decoded)) {
-                    throw new TypeError(`host-callable args decoded to a non-list value (got ${typeof decoded})`);
-                }
-                args = decoded;
+                // Host-callable args arrive as a `BamlToHostCall` with a flat
+                // `args` list. Partition it into the positional run and the
+                // supplied optionals, then reshape into the `$opts` calling
+                // convention the callback's type advertises.
+                const { positional, optional } = decodeHostCall(argsBytes);
+                args = reshapeHostArgs(positional, optional);
             }
             catch (err) {
                 sendHostCallableError(callId, err);

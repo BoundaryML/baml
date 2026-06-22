@@ -40,17 +40,19 @@ fn create_project(dir: &Path, source: &str) {
     std::fs::write(src.join("main.baml"), source).unwrap();
 }
 
-/// Create a project with a generator block for testing the generate command.
+/// Create a project with a `[generator.py]` section in `baml.toml` for
+/// testing the generate command.
 fn create_project_with_generator(dir: &Path, source: &str) {
-    let generator_block = r#"
-generator py {
-    output_type "python/pydantic"
-    output_dir ".."
-    naming_convention "preserve-case"
-}
-"#;
-    let full_source = format!("{source}\n{generator_block}");
-    create_project(dir, &full_source);
+    create_project(dir, source);
+    std::fs::write(
+        dir.join("baml.toml"),
+        "[package]\nname = \"test-project\"\n\n\
+         [generator.py]\n\
+         output_type = \"python/pydantic\"\n\
+         output_dir = \"..\"\n\
+         naming_convention = \"preserve-case\"\n",
+    )
+    .unwrap();
 }
 
 // ============================================================================
@@ -315,6 +317,48 @@ fn test_no_tests_returns_specific_exit_code() {
         "Expected exit code 5 for no tests found, got: {:?}\nstderr: {}",
         output.status.code(),
         String::from_utf8_lossy(&output.stderr),
+    );
+}
+
+/// Failing `assert.equal` should surface both operand values and keep stack
+/// traces user-facing (no internal `Span`/`FileId` debug structs).
+#[test]
+fn test_assert_equal_failure_shows_values_without_internal_span_debug() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(
+        tmp.path(),
+        r#"
+test "assert-equal-failure" {
+  assert.equal(4611686018427387903, -4611686018427387904)
+}
+"#,
+    );
+
+    let output = run_baml_cli(built, tmp.path(), &["test", "--from", "."]);
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "Expected test failure exit code for failing assert.equal, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr
+            .contains("assertion failed: left = 4611686018427387903, right = -4611686018427387904"),
+        "Expected assert.equal failure message to include left/right values, got: {stderr}",
+    );
+    assert!(
+        !stderr.contains("Span {"),
+        "User-facing test output should not include internal Span debug data: {stderr}",
+    );
+    assert!(
+        !stderr.contains("FileId("),
+        "User-facing test output should not include internal FileId debug data: {stderr}",
     );
 }
 
@@ -871,28 +915,34 @@ fn test_without_baml_toml_using_baml_src_returns_no_tests_code() {
     );
 }
 
-/// `baml generate` runs a generator on a manifest-less `baml_src/` project.
+/// Generators are declared in `baml.toml`'s `[generator.<name>]` sections,
+/// so a manifest-less `baml_src/`-only project has nowhere to declare one:
+/// `baml generate` reports the missing-generator hint rather than producing
+/// output.
 #[test]
-fn generate_without_baml_toml_using_baml_src_succeeds() {
+fn generate_without_baml_toml_reports_no_generators() {
     let built = common::ensure_built();
     let tmp = tempfile::tempdir().unwrap();
     let src = tmp.path().join("baml_src");
     std::fs::create_dir_all(&src).unwrap();
     std::fs::write(
         src.join("main.baml"),
-        "function greet(name: string) -> string {\n  \"Hello, \" + name\n}\n\n\
-         generator py {\n  output_type \"python/pydantic\"\n  output_dir \"..\"\n  \
-         naming_convention \"preserve-case\"\n}\n",
+        "function greet(name: string) -> string {\n  \"Hello, \" + name\n}\n",
     )
     .unwrap();
 
     let output = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
 
-    assert!(
-        output.status.success(),
-        "Expected exit 0 for `baml generate` on a baml_src-only project, got: {:?}\nstdout: {}\nstderr: {}",
+    assert_eq!(
         output.status.code(),
-        String::from_utf8_lossy(&output.stdout),
+        Some(4),
+        "Expected exit 4 for a manifest-less project with no generators, got: {:?}\nstderr: {}",
+        output.status.code(),
         String::from_utf8_lossy(&output.stderr),
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("[generator"),
+        "Expected a missing-generator hint, got: {stderr}",
     );
 }

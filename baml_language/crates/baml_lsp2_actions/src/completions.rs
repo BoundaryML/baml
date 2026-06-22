@@ -279,7 +279,9 @@ fn detect_context(
         let kind = current.kind();
 
         match kind {
-            // Inside a TYPE_EXPR node → type position.
+            // Inside a TYPE_EXPR node → type position. For PARAMETER /
+            // FIELD, only treat as type position if we're specifically in
+            // the type-annotation part (not the name part).
             SyntaxKind::TYPE_EXPR
             | SyntaxKind::UNION_TYPE
             | SyntaxKind::OPTIONAL_TYPE
@@ -287,12 +289,10 @@ fn detect_context(
             | SyntaxKind::MAP_TYPE
             | SyntaxKind::FUNCTION_TYPE
             | SyntaxKind::PARAMETER
-            | SyntaxKind::FIELD => {
-                // Only treat as type position if we're in the type annotation part,
-                // not the name part. Check if any ancestor is specifically TYPE_EXPR.
-                if is_in_type_annotation(&current) {
-                    return CompletionContext::TypePosition;
-                }
+            | SyntaxKind::FIELD
+                if is_in_type_annotation(&current) =>
+            {
+                return CompletionContext::TypePosition;
             }
 
             // Inside an expression function body → value position.
@@ -1552,7 +1552,7 @@ fn completions_for_value_position(
                         baml_compiler2_ast::ast::LetOrigin::RetryPolicy => {
                             (CompletionKind::RetryPolicy, "retry_policy".to_string())
                         }
-                        _ => continue,
+                        baml_compiler2_ast::ast::LetOrigin::Source => continue,
                     }
                 }
                 _ => continue,
@@ -1604,9 +1604,6 @@ fn completions_for_top_level() -> Vec<Completion> {
         Completion::new("client", CompletionKind::Keyword)
             .with_detail("LLM client declaration")
             .with_sort("03_client"),
-        Completion::new("generator", CompletionKind::Keyword)
-            .with_detail("code generator declaration")
-            .with_sort("04_generator"),
         Completion::new("test", CompletionKind::Keyword)
             .with_detail("test case declaration")
             .with_sort("05_test"),

@@ -6,5 +6,5 @@ function user.Foo() -> int throws never {
   { : unknown
     1 + "foo" : unknown
   }
-  !! 26..35: operator `Add` cannot be applied to `1` and `"foo"`
+  !! 26..35: operator `+` cannot be applied to `1` and `"foo"`
 }

@@ -6,6 +6,7 @@ import {
 } from '@xyflow/react';
 import { memo } from 'react';
 import { getMarkerColors } from './Marker';
+import { useGraphThemeContext } from '../theme';
 import type { WorkflowEdgeData } from '../types';
 
 /**
@@ -91,7 +92,8 @@ export const BaseEdge = memo<EdgeProps<Edge<WorkflowEdgeData>>>(
     interactionWidth,
     data,
   }) => {
-    const colors = getMarkerColors();
+    const theme = useGraphThemeContext();
+    const colors = getMarkerColors(theme);
     const edgeColor = data?.color ?? colors.base;
 
     let edgePath: string;

@@ -9,6 +9,7 @@
 //! - `map` — `BamlClassMap` (length, has, keys, values, ...)
 //! - `math` — `BamlNamespaceMath` (trunc)
 //! - `media` — `BamlClassMedia{Pdf,Audio,Video,Image}` + `BamlNamespaceMedia`
+//! - `ops` — `BamlClassOps*` (`Equals`/`Compare` for primitives + containers)
 //! - `unstable` — `BamlNamespaceUnstable` (string)
 //! - `root` — `BamlPackageBaml` (`deep_copy`, `deep_equals`, and the
 //!   `Sortable.sort` shims `_compare_shim` / `_is_primitive_array` /
@@ -30,7 +31,10 @@ pub mod json;
 mod map;
 mod math;
 mod media;
+mod ops;
 mod primitives;
+mod resolve;
+pub(crate) use resolve::{realize_frame, resolve_implements_rule};
 mod root;
 mod spawn;
 mod stack_trace;
@@ -120,6 +124,11 @@ pub trait Continuation: Send {
 #[allow(
     unused_variables,
     unsafe_code,
+    // Synthetic `implement Interface for Type` names aren't strict Rust
+    // casing: trait names like `BamlClassOpsEquals_for_int` aren't
+    // UpperCamelCase, and dispatch methods like
+    // `__dispatch_ops_equals_for_map_k__v_` (from `map<K, V>`) aren't snake_case.
+    non_camel_case_types,
     clippy::wildcard_imports,
     clippy::pub_underscore_fields,
     clippy::used_underscore_binding,
@@ -269,6 +278,38 @@ pub(super) fn make_compare_callee(vm: &mut BexVm, v: Value) -> Result<HeapPtr, V
     })?;
 
     Ok(vm.alloc_bound_method(bex_vm_types::BoundMethod {
+        function: fn_ptr,
+        receiver: v,
+    }))
+}
+
+/// For a value `v` whose runtime class implements `baml.ToString` with an
+/// in-body override, resolve that `to_string` and return a
+/// `BoundMethod { to_string, receiver: v }`. Returns `Ok(None)` when the
+/// runtime class has no in-body override (e.g. an `implements baml.ToString {}`
+/// block inheriting the structural default body, or a non-instance value) — the
+/// caller then renders `v` with the structural default.
+///
+/// User in-body impls register as `{class_fqn}.baml.ToString.to_string`,
+/// matching `make_compare_callee`'s `{class_fqn}.baml.Comparable.compare`. Used
+/// by the native `baml._to_string_shim` (`root.rs`) backing `string.from`.
+pub(super) fn make_to_string_callee(vm: &mut BexVm, v: Value) -> Option<HeapPtr> {
+    use bex_vm_types::ValueKind;
+    let fqn = match v.kind() {
+        ValueKind::Object(ptr) => match vm.get_object(ptr) {
+            Object::Instance(inst) => match vm.get_object(inst.class) {
+                Object::Class(c) => c.name.render_dotted(false),
+                _ => return None,
+            },
+            _ => return None,
+        },
+        _ => return None,
+    };
+
+    let fn_name = format!("{fqn}.baml.ToString.to_string");
+    let fn_ptr = vm.find_function_by_name(&fn_name)?;
+
+    Some(vm.alloc_bound_method(bex_vm_types::BoundMethod {
         function: fn_ptr,
         receiver: v,
     }))

@@ -4,7 +4,7 @@ use baml_base::{Name, SourceFile};
 use text_size::TextRange;
 
 use crate::loc::{
-    ClassLoc, ClientLoc, EnumLoc, FunctionLoc, GeneratorLoc, InterfaceLoc, LetLoc, RetryPolicyLoc,
+    ClassLoc, ClientLoc, EnumLoc, FunctionLoc, InterfaceLoc, LetLoc, RetryPolicyLoc,
     TemplateStringLoc, TestLoc, TypeAliasLoc,
 };
 
@@ -25,7 +25,6 @@ pub enum DefinitionKind {
     Function,
     TemplateString,
     Client,
-    Generator,
     Test,
     RetryPolicy,
     Let,
@@ -49,7 +48,6 @@ impl DefinitionKind {
             Self::Function => "function",
             Self::TemplateString => "template_string",
             Self::Client => "client",
-            Self::Generator => "generator",
             Self::Test => "test",
             Self::RetryPolicy => "retry_policy",
             Self::Let => "let",
@@ -90,7 +88,6 @@ pub enum Definition<'db> {
     Function(FunctionLoc<'db>),
     TemplateString(TemplateStringLoc<'db>),
     Client(ClientLoc<'db>),
-    Generator(GeneratorLoc<'db>),
     Test(TestLoc<'db>),
     RetryPolicy(RetryPolicyLoc<'db>),
     Let(LetLoc<'db>),
@@ -107,7 +104,6 @@ impl<'db> Definition<'db> {
             Definition::Function(loc) => loc.file(db),
             Definition::TemplateString(loc) => loc.file(db),
             Definition::Client(loc) => loc.file(db),
-            Definition::Generator(loc) => loc.file(db),
             Definition::Test(loc) => loc.file(db),
             Definition::RetryPolicy(loc) => loc.file(db),
             Definition::Let(loc) => loc.file(db),
@@ -124,7 +120,6 @@ impl<'db> Definition<'db> {
             Definition::Function(_) => DefinitionKind::Function,
             Definition::TemplateString(_) => DefinitionKind::TemplateString,
             Definition::Client(_) => DefinitionKind::Client,
-            Definition::Generator(_) => DefinitionKind::Generator,
             Definition::Test(_) => DefinitionKind::Test,
             Definition::RetryPolicy(_) => DefinitionKind::RetryPolicy,
             Definition::Let(_) => DefinitionKind::Let,

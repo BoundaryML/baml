@@ -655,6 +655,12 @@ fn expr_desc_spans<'db>(
             spans.push(DetailSpan::Code("await ".into()));
             spans.extend(expr_desc_spans(*future, body, inference));
         }
+        Expr::Template { tag, .. } => {
+            if let baml_compiler2_ast::TemplateTag::Custom { tag, .. } = tag {
+                spans.extend(expr_desc_spans(*tag, body, inference));
+            }
+            spans.push(DetailSpan::Code("`…`".into()));
+        }
         Expr::GenericApply { base, .. } => {
             spans.extend(expr_desc_spans(*base, body, inference));
             spans.push(DetailSpan::Code("<...>".into()));
@@ -1156,7 +1162,6 @@ impl CompilerRunner {
                 + item_tree.type_aliases.len()
                 + item_tree.clients.len()
                 + item_tree.tests.len()
-                + item_tree.generators.len()
                 + item_tree.template_strings.len()
                 + item_tree.retry_policies.len();
 
@@ -1322,14 +1327,6 @@ impl CompilerRunner {
 
                 for (_, test) in &item_tree.tests {
                     let line = format!("test {}", test.name);
-                    writeln!(output, "{line}").ok();
-                    output_annotated.push((line, status));
-                    writeln!(output).ok();
-                    output_annotated.push((String::new(), LineStatus::Unknown));
-                }
-
-                for (_, generator) in &item_tree.generators {
-                    let line = format!("generator {}", generator.name);
                     writeln!(output, "{line}").ok();
                     output_annotated.push((line, status));
                     writeln!(output).ok();
@@ -1521,9 +1518,6 @@ impl CompilerRunner {
                 }
                 if items.tests.len() > 0 {
                     parts.push(format!("{} test", items.tests.len()));
-                }
-                if items.generators.len() > 0 {
-                    parts.push(format!("{} gen", items.generators.len()));
                 }
                 if items.template_strings.len() > 0 {
                     parts.push(format!("{} tmpl", items.template_strings.len()));
@@ -2119,6 +2113,12 @@ impl CompilerRunner {
                     format!("spawn {{ {} }}", expr_desc(*spawn_body, body))
                 }
                 Expr::Await { future } => format!("await {}", expr_desc(*future, body)),
+                Expr::Template { tag, .. } => match tag {
+                    baml_compiler2_ast::TemplateTag::Custom { tag, .. } => {
+                        format!("{}`…`", expr_desc(*tag, body))
+                    }
+                    baml_compiler2_ast::TemplateTag::Default { .. } => "`…`".into(),
+                },
                 Expr::GenericApply { base, .. } => format!("{}<...>", expr_desc(*base, body)),
                 Expr::Missing => "<missing>".into(),
             }

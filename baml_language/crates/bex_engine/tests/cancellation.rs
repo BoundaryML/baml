@@ -81,7 +81,7 @@ async fn cancel_before_call_returns_cancelled() {
 async fn cancel_during_sleep_returns_promptly() {
     let source = r#"
         function main() -> int {
-            baml.sys.sleep(10000);
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(10000n));
             42
         }
     "#;
@@ -213,7 +213,7 @@ async fn cancel_during_http_returns_promptly() {
 async fn selective_cancellation_only_affects_target() {
     let source = r#"
         function slow() -> int {
-            baml.sys.sleep(5000);
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(5000n));
             1
         }
 
@@ -292,10 +292,10 @@ async fn selective_cancellation_only_affects_target() {
 async fn cancel_interrupts_sequential_sleeps() {
     let source = r#"
         function main() -> int {
-            baml.sys.sleep(100);
-            baml.sys.sleep(100);
-            baml.sys.sleep(10000);
-            baml.sys.sleep(10000);
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(100n));
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(100n));
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(10000n));
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(10000n));
             42
         }
     "#;
@@ -353,7 +353,7 @@ async fn cancel_interrupts_sequential_sleeps() {
 async fn non_cancelled_token_completes_normally() {
     let source = r#"
         function main() -> int {
-            baml.sys.sleep(50);
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(50n));
             42
         }
     "#;
@@ -389,7 +389,7 @@ async fn non_cancelled_token_completes_normally() {
 async fn cancel_is_idempotent() {
     let source = r#"
         function main() -> int {
-            baml.sys.sleep(10000);
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(10000n));
             42
         }
     "#;
@@ -447,7 +447,7 @@ async fn cancel_function_call_by_id_actually_cancels() {
     // ~1s.
     let source = r#"
         function main() -> int {
-            baml.sys.sleep(10000);
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(10000n));
             42
         }
     "#;
@@ -540,7 +540,7 @@ async fn duplicate_call_id_is_rejected() {
     // second. The first holds the registry slot via `ActiveCallGuard`.
     let source = r#"
         function main() -> int {
-            baml.sys.sleep(500);
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(500n));
             7
         }
     "#;
@@ -627,7 +627,7 @@ async fn cancelled_panic_shape_equivalence() {
 
     let source = r#"
         function main() -> int {
-            baml.sys.sleep(5000);
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(5000n));
             42
         }
     "#;
@@ -693,7 +693,7 @@ async fn spawn_with_options_cancel_token_propagates() {
         function main() -> int {
             let tok = baml.spawn.CancelToken.new();
             let f = spawn with baml.spawn.options(cancel = tok) {
-                baml.sys.sleep(10000);
+                baml.sys.sleep(baml.time.Duration.from_milliseconds(10000n));
                 42
             };
             let _ = tok.cancel();
@@ -737,7 +737,7 @@ async fn spawn_with_options_cancel_token_is_catchable() {
         function main() -> int {
             let tok = baml.spawn.CancelToken.new();
             let f = spawn with baml.spawn.options(cancel = tok) {
-                baml.sys.sleep(10000);
+                baml.sys.sleep(baml.time.Duration.from_milliseconds(10000n));
                 42
             };
             let _ = tok.cancel();
@@ -815,7 +815,7 @@ async fn spawn_with_options_cancel_token_any_composes() {
             let b = baml.spawn.CancelToken.new();
             let combined = baml.spawn.CancelToken.any([a, b]);
             let f = spawn with baml.spawn.options(cancel = combined) {
-                baml.sys.sleep(10000);
+                baml.sys.sleep(baml.time.Duration.from_milliseconds(10000n));
                 42
             };
             let _ = a.cancel();
@@ -898,7 +898,7 @@ async fn spawn_with_options_detach_still_honors_cancel_token() {
         function main() -> int {
             let tok = baml.spawn.CancelToken.new();
             let f = spawn with baml.spawn.options(cancel = tok, detach = true) {
-                baml.sys.sleep(10000);
+                baml.sys.sleep(baml.time.Duration.from_milliseconds(10000n));
                 42
             };
             let _ = tok.cancel();

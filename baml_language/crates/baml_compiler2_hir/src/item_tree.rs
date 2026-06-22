@@ -12,9 +12,8 @@ use rustc_hash::FxHashMap;
 use text_size::TextRange;
 
 use crate::ids::{
-    ClassMarker, ClientMarker, EnumMarker, FunctionMarker, GeneratorMarker, InterfaceMarker,
-    ItemKind, LetMarker, LocalItemId, RetryPolicyMarker, TemplateStringMarker, TestMarker,
-    TypeAliasMarker, hash_name,
+    ClassMarker, ClientMarker, EnumMarker, FunctionMarker, InterfaceMarker, ItemKind, LetMarker,
+    LocalItemId, RetryPolicyMarker, TemplateStringMarker, TestMarker, TypeAliasMarker, hash_name,
 };
 
 // ── Span-free attribute representation ───────────────────────────────────────
@@ -82,6 +81,10 @@ pub struct Function {
     pub origin: ast::FunctionOrigin,
     /// Joined `///` doc-comment lines preceding this declaration.
     pub docstring: Option<String>,
+    /// BEP-049 §10: set when the fn def had a `//baml:tagged_string` marker.
+    /// Mirrors `ast::FunctionDef::is_tagged_template_tag` so TIR can validate
+    /// tagged-template tags without re-reading the CST.
+    pub is_tagged_template_tag: bool,
     /// Full source span of the function.
     pub span: TextRange,
 }
@@ -296,18 +299,6 @@ pub struct Test {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GeneratorConfigItem {
-    pub key: Name,
-    pub value: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Generator {
-    pub name: Name,
-    pub config_items: Vec<GeneratorConfigItem>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TemplateString {
     pub name: Name,
     /// Template parameters with optional type annotations and spans.
@@ -358,11 +349,6 @@ pub struct ItemTreeSourceMap {
     pub enum_variant_spans: FxHashMap<LocalItemId<EnumMarker>, Vec<TextRange>>,
     /// `name_span` for each function.
     pub function_name_spans: FxHashMap<LocalItemId<FunctionMarker>, TextRange>,
-    /// Whole-block span for each generator (the `generator … { … }` node).
-    pub generator_block_spans: FxHashMap<LocalItemId<GeneratorMarker>, TextRange>,
-    /// Per-config-item span for each generator, parallel to
-    /// `Generator::config_items`.
-    pub generator_config_item_spans: FxHashMap<LocalItemId<GeneratorMarker>, Vec<TextRange>>,
 }
 
 // ── ItemTree ─────────────────────────────────────────────────────────────────
@@ -381,7 +367,6 @@ pub struct ItemTree {
     pub type_aliases: FxHashMap<LocalItemId<TypeAliasMarker>, TypeAlias>,
     pub clients: FxHashMap<LocalItemId<ClientMarker>, Client>,
     pub tests: FxHashMap<LocalItemId<TestMarker>, Test>,
-    pub generators: FxHashMap<LocalItemId<GeneratorMarker>, Generator>,
     pub template_strings: FxHashMap<LocalItemId<TemplateStringMarker>, TemplateString>,
     pub retry_policies: FxHashMap<LocalItemId<RetryPolicyMarker>, RetryPolicy>,
     pub lets: FxHashMap<LocalItemId<LetMarker>, Let>,
@@ -417,7 +402,6 @@ impl ItemTree {
             type_aliases: FxHashMap::default(),
             clients: FxHashMap::default(),
             tests: FxHashMap::default(),
-            generators: FxHashMap::default(),
             template_strings: FxHashMap::default(),
             retry_policies: FxHashMap::default(),
             lets: FxHashMap::default(),
@@ -464,6 +448,7 @@ impl ItemTree {
                 declarative_meta: f.declarative_meta.clone(),
                 origin: f.origin,
                 docstring: f.docstring.clone(),
+                is_tagged_template_tag: f.is_tagged_template_tag,
                 span: f.span,
             },
         );
@@ -750,41 +735,6 @@ impl ItemTree {
         id
     }
 
-    pub fn alloc_generator(&mut self, g: &ast::GeneratorDef) -> LocalItemId<GeneratorMarker> {
-        let id = self.alloc_id(ItemKind::Generator, &g.name);
-        let config_items = g
-            .config_items
-            .iter()
-            .map(|item| GeneratorConfigItem {
-                key: item.key.clone(),
-                value: item.value.clone(),
-            })
-            .collect();
-        self.generators.insert(
-            id,
-            Generator {
-                name: g.name.clone(),
-                config_items,
-            },
-        );
-        id
-    }
-
-    /// Populate source map spans for a generator that was allocated via
-    /// `alloc_generator`. Mirrors `collect_class_spans` / `collect_enum_spans`.
-    pub fn collect_generator_spans(
-        source_map: &mut ItemTreeSourceMap,
-        id: LocalItemId<GeneratorMarker>,
-        gen_def: &ast::GeneratorDef,
-    ) {
-        source_map.generator_block_spans.insert(id, gen_def.span);
-        let item_spans: Vec<TextRange> =
-            gen_def.config_items.iter().map(|item| item.span).collect();
-        source_map
-            .generator_config_item_spans
-            .insert(id, item_spans);
-    }
-
     pub fn alloc_template_string(
         &mut self,
         ts: &ast::TemplateStringDef,
@@ -901,13 +851,6 @@ impl Index<LocalItemId<TestMarker>> for ItemTree {
     type Output = Test;
     fn index(&self, id: LocalItemId<TestMarker>) -> &Test {
         &self.tests[&id]
-    }
-}
-
-impl Index<LocalItemId<GeneratorMarker>> for ItemTree {
-    type Output = Generator;
-    fn index(&self, id: LocalItemId<GeneratorMarker>) -> &Generator {
-        &self.generators[&id]
     }
 }
 

@@ -284,7 +284,7 @@ fn generic_decl(params: &[String]) -> String {
 /// but it must be a legal identifier. Append `_` to reserved words so
 /// `(default: V)` becomes `(default_: V)`. The real BAML name still travels in
 /// the `defineFunction` `paramNames` array for marshalling.
-fn safe_param_name(name: &str) -> String {
+pub(crate) fn safe_param_name(name: &str) -> String {
     if is_js_reserved(name) {
         format!("{name}_")
     } else {
@@ -292,7 +292,7 @@ fn safe_param_name(name: &str) -> String {
     }
 }
 
-fn option_field_name(name: &str) -> String {
+pub(crate) fn option_field_name(name: &str) -> String {
     if is_ts_property_identifier(name) {
         name.to_string()
     } else {
@@ -681,13 +681,13 @@ fn render_method_binding_ts(
     let required_params = m.runtime_required_names();
     let optional_params = m.optional_names();
     let required_params_lit = param_names_literal(&required_params);
-    let optional_params_arg = optional_param_names_arg(&optional_params);
+    let trailing = optional_param_names_arg(&optional_params);
     match m.kind {
         MethodKind::Static => {
             state.uses_define_function = true;
             let _ = writeln!(
                 out,
-                "  static {} = defineFunction(\"{}\", \"{}\", {required_params_lit}{optional_params_arg}) as {sig};",
+                "  static {} = defineFunction(\"{}\", \"{}\", {required_params_lit}{trailing}) as {sig};",
                 m.name,
                 m.baml_fqn,
                 mode_str(m.mode),
@@ -697,7 +697,7 @@ fn render_method_binding_ts(
             state.uses_define_instance = true;
             let _ = writeln!(
                 out,
-                "  {} = defineInstanceFunction(\"{}\", \"{}\", {required_params_lit}{optional_params_arg}).bind(this) as {sig};",
+                "  {} = defineInstanceFunction(\"{}\", \"{}\", {required_params_lit}{trailing}).bind(this) as {sig};",
                 m.name,
                 m.baml_fqn,
                 mode_str(m.mode),
@@ -737,9 +737,9 @@ fn render_function_ts(
     );
     let (required_params, optional_params) = split_param_names(&f.param_names, &f.arg_defaults, 0);
     let required_params_lit = param_names_literal(&required_params);
-    let optional_params_arg = optional_param_names_arg(&optional_params);
+    let trailing = optional_param_names_arg(&optional_params);
     let factory = format!(
-        "defineFunction(\"{}\", \"{}\", {required_params_lit}{optional_params_arg}) as {sig}",
+        "defineFunction(\"{}\", \"{}\", {required_params_lit}{trailing}) as {sig}",
         f.baml_fqn,
         mode_str(f.mode),
     );

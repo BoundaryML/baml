@@ -47,9 +47,9 @@ pub struct DescribeArgs {
     #[arg(long)]
     pub symbols: bool,
 
-    /// Project root directory
-    #[arg(long, default_value = ".")]
-    pub from: PathBuf,
+    /// Project search starting point. Defaults to the current directory.
+    #[arg(long, value_name = "PATH")]
+    pub from: Option<PathBuf>,
 
     /// Soft line budget for output (default 30)
     #[arg(long, default_value_t = 30)]
@@ -87,12 +87,12 @@ pub fn suggest_similar(db: &ProjectDatabase, name: &str, limit: usize) -> Vec<St
         }
     }
 
-    // Builtin packages: bare package name + items + namespaces (prefixed).
+    // Builtin packages: bare package name + item paths + namespaces.
     for pkg_name in baml_lsp2_actions::non_user_package_names(db) {
         all_paths.push(pkg_name.clone());
         let pkg = PackageId::new(db, baml_db::Name::new(&pkg_name));
         for entry in baml_lsp2_actions::list_package_items(db, pkg) {
-            all_paths.push(format!("{}.{}", pkg_name, entry.fqn()));
+            all_paths.push(entry.fqn());
         }
         let pkg_info = package_items(db, pkg);
         for ns_path in pkg_info.namespaces.keys() {
@@ -264,7 +264,7 @@ impl DescribeArgs {
         // baml.String` works anywhere. An empty user-file set is therefore
         // expected, not an error — unresolved names still surface through
         // the per-target "No symbol found" + did-you-mean paths below.
-        let (db, from, _baml_files) = load_project_or_default(&self.from)?;
+        let (db, from, _baml_files) = load_project_or_default(self.from.as_deref())?;
 
         // ── --symbols deprecation ───────────────────────────────────────────
         if self.symbols {

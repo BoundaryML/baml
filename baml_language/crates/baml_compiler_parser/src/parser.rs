@@ -68,6 +68,7 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::Word => SyntaxKind::WORD,
         TokenKind::Quote => SyntaxKind::QUOTE,
         TokenKind::Hash => SyntaxKind::HASH,
+        TokenKind::Backtick => SyntaxKind::BACKTICK,
         TokenKind::BigintLiteral => SyntaxKind::BIGINT_LITERAL,
         TokenKind::IntegerLiteral => SyntaxKind::INTEGER_LITERAL,
         TokenKind::FloatLiteral => SyntaxKind::FLOAT_LITERAL,
@@ -153,6 +154,30 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         // Error
         TokenKind::Error => SyntaxKind::ERROR_TOKEN,
     }
+}
+
+/// BEP-049 §5 first-token dispatch result for `${...}` interpolation
+/// content. Used by `classify_backtick_interp` to decide which parser
+/// path to take without committing tokens.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BacktickInterpForm {
+    /// `${for (...)}` — opens a `for`-loop block-tag. Body lives in the
+    /// surrounding backtick content until a matching `${endfor}`.
+    For,
+    /// `${endfor}` — closes the innermost open `${for}`.
+    Endfor,
+    /// `${if (...)}` — opens an `if` block-tag. Distinguished from an
+    /// if-expression form by post-condition lookahead: `}` closes the
+    /// interp (block-tag), `{` opens a then-block (expression).
+    IfBlockTag,
+    /// `${else if (...)}` — continuation of an open `${if}` block-tag.
+    ElseIfBlockTag,
+    /// `${else}` — continuation of an open `${if}` block-tag.
+    ElseBlockTag,
+    /// `${endif}` — closes the innermost open `${if}`.
+    Endif,
+    /// Anything else — falls through to the M2 block-expression path.
+    Expression,
 }
 
 /// Events for building the syntax tree.
@@ -491,6 +516,11 @@ impl<'a> Parser<'a> {
             || self.at(TokenKind::Extends)
             || self.at(TokenKind::Requires)
             || self.at(TokenKind::Interface)
+            // `client` is a keyword for LLM config/declarations, but stays valid
+            // as a class field name and member-access name so BEP-049 §10's
+            // `ctx.client` (on the `Context` type) parses. Unambiguous here:
+            // class bodies and `.member` access have no `client` construct.
+            || self.at(TokenKind::Client)
     }
 
     /// True for `field as class_field` inside an `implements` block.
@@ -613,9 +643,18 @@ impl<'a> Parser<'a> {
     fn has_newline_ahead(&self) -> bool {
         let mut i = self.current;
         while i < self.tokens.len() {
-            // Skip comments (they're trivia for line termination purposes)
+            // Skip comments (they're trivia for line-termination purposes) — but
+            // a block comment can itself span lines (`/*\n*/`), and that interior
+            // newline still terminates the line, so a tag separated from its
+            // backtick by such a comment must NOT absorb it as a tagged template.
             let new_i = self.skip_comment_at(i);
             if new_i != i {
+                if self.tokens[i..new_i]
+                    .iter()
+                    .any(|t| t.kind == TokenKind::Newline)
+                {
+                    return true;
+                }
                 i = new_i;
                 continue;
             }
@@ -1060,6 +1099,25 @@ impl<'a> Parser<'a> {
         )
     }
 
+    /// Distinguishes a top-level `client<llm> Name { … }` declaration (which,
+    /// inside a class body, signals a missing `}` to recover from) from a class
+    /// field named `client` (BEP-049 §10 `ctx.client`). The declaration form is
+    /// `client<…>`; a field is `client Type` / `client:`.
+    fn looks_like_client_declaration_start(&self) -> bool {
+        let current = self.skip_trivia_and_comments_from(self.current);
+        if self
+            .tokens
+            .get(current)
+            .is_none_or(|t| t.kind != TokenKind::Client)
+        {
+            return false;
+        }
+        let next = self.skip_trivia_and_comments_from(current + 1);
+        self.tokens
+            .get(next)
+            .is_some_and(|t| t.kind == TokenKind::Less)
+    }
+
     fn looks_like_interface_declaration_start(&self) -> bool {
         let current = self.skip_trivia_and_comments_from(self.current);
         if self
@@ -1375,6 +1433,22 @@ impl<'a> Parser<'a> {
     /// This is used when parsing string content where // should not start a comment.
     fn bump_raw(&mut self) {
         self.bump_impl(false);
+    }
+
+    /// Consume exactly the token at `self.current` and emit it, regardless
+    /// of whether it's basic trivia. Unlike `bump_raw`, does NOT first walk
+    /// past whitespace/newlines. Used for the second half of a `\\<char>`
+    /// escape in backtick content, where the next single raw token IS the
+    /// escape target and must not be conflated with leading trivia.
+    fn bump_one_token_raw(&mut self) {
+        if let Some(token) = self.tokens.get(self.current) {
+            let kind = token_kind_to_syntax_kind(token.kind);
+            self.events.push(Event::Token {
+                kind,
+                text: token.text.clone(),
+            });
+            self.current += 1;
+        }
     }
 
     /// Internal: Consume current token with optional comment pattern recognition
@@ -2026,8 +2100,547 @@ impl<'a> Parser<'a> {
             self.parse_raw_string()
         } else if self.at(TokenKind::Quote) {
             self.parse_string()
+        } else if self.at(TokenKind::Backtick) {
+            self.parse_backtick_string()
         } else {
             false
+        }
+    }
+
+    /// Parse a backtick-interpolated string literal (BEP-049).
+    ///
+    /// Lexer emits: Backtick+, (content tokens), Backtick+
+    /// Parser counts opening backticks (N), then scans content until it finds
+    /// a maximal run of backticks where the run length R ≥ N and the next
+    /// token is not a backtick. The trailing N of that run form the close;
+    /// the first R - N are content (anchored-close rule, §8 of BEP-049).
+    ///
+    /// M1: contents are captured verbatim — `${...}` is left as literal tokens
+    /// inside the node, to be lifted into `BACKTICK_INTERPOLATION` segments by
+    /// M2.
+    pub(crate) fn parse_backtick_string(&mut self) -> bool {
+        if !self.at(TokenKind::Backtick) {
+            return false;
+        }
+
+        let opening_ticks = self.count_consecutive_backticks();
+        if opening_ticks == 0 {
+            return false;
+        }
+
+        // BEP-049 §8 case 1: an N-tick opener with N ≥ 2 and no matching
+        // close anywhere ahead would silently consume the rest of the file
+        // looking for one. The classic offender is `` `` ``, which a user
+        // might write meaning "empty string". Detect this at the opener and
+        // emit a clean diagnostic instead of running off the end.
+        if opening_ticks >= 2 {
+            let Some(first_backtick) = self.find_first_backtick_pos() else {
+                return false;
+            };
+            let scan_start = first_backtick + opening_ticks;
+            if !self.has_backtick_close_ahead_from(scan_start, opening_ticks) {
+                let span = self.tokens[first_backtick].span;
+                let ticks = "`".repeat(opening_ticks);
+                self.error(
+                    format!(
+                        "Empty multi-tick backtick string ({ticks}) has no matching {ticks} close. \
+                         Use \"\" for empty strings (BEP-049 §8)."
+                    ),
+                    span,
+                );
+                // Consume the opener as a degenerate BACKTICK_STRING_LITERAL so
+                // the parser advances past it; downstream code keeps parsing
+                // instead of being swallowed by an unclosed multi-tick search.
+                while self.eat_trivia() {}
+                self.with_node(SyntaxKind::BACKTICK_STRING_LITERAL, |p| {
+                    for _ in 0..opening_ticks {
+                        p.bump();
+                    }
+                });
+                return true;
+            }
+        }
+
+        // Emit leading trivia outside the node.
+        while self.eat_trivia() {}
+
+        self.with_node(SyntaxKind::BACKTICK_STRING_LITERAL, |p| {
+            for _ in 0..opening_ticks {
+                p.bump(); // opening `
+            }
+
+            p.parse_backtick_content(opening_ticks);
+        });
+
+        true
+    }
+
+    /// Position of the first `Backtick` token at or after `self.current`
+    /// (after skipping basic trivia *and* comments). Used by the empty-
+    /// multi-tick check; comment-skipping parity with `at(Backtick)` so
+    /// backticks preceded by a comment (`/*c*/ <backtick>ok<backtick>`)
+    /// don't get rejected.
+    fn find_first_backtick_pos(&self) -> Option<usize> {
+        let i = self.skip_trivia_and_comments_from(self.current);
+        if i < self.tokens.len() && self.tokens[i].kind == TokenKind::Backtick {
+            Some(i)
+        } else {
+            None
+        }
+    }
+
+    /// Is there a maximal run of ≥ `n` consecutive `Backtick` tokens somewhere
+    /// from `start` onward, within the CURRENT top-level item, ignoring
+    /// backticks inside `//` and `/* */` comments?
+    ///
+    /// The scope and comment-skip both matter: without them, an unrelated
+    /// backtick literal later in the file (or a backtick run inside a doc
+    /// comment showing a markdown code fence) silently satisfies the
+    /// empty-multi-tick guard, suppressing the targeted diagnostic and
+    /// letting `parse_backtick_content` consume across function boundaries.
+    /// Ultrareview bugs 008 and 002.
+    ///
+    /// Over-approximation: doesn't account for backslash-escape sequences
+    /// inside content (e.g. an escaped backtick), so this can return `true`
+    /// when the actual close lives behind a backslash. That's fine — false
+    /// negatives for the empty-multi-tick check just mean the parser proceeds
+    /// normally and either matches a real close or emits the existing
+    /// "unclosed backtick string" error.
+    fn has_backtick_close_ahead_from(&self, start: usize, n: usize) -> bool {
+        let mut i = start;
+        while i < self.tokens.len() {
+            // Stop at the next top-level item — keywords like `function`,
+            // `class`, etc. that always start a fresh item at module scope.
+            // A backtick literal lives inside one item; close runs from
+            // other items don't count. But this boundary only applies when the
+            // keyword *begins a line* (where module items actually start): a
+            // keyword sitting mid-line is backtick content (e.g.
+            // ````function name````) and must not suppress a valid close run.
+            if matches!(
+                self.tokens[i].kind,
+                TokenKind::Class
+                    | TokenKind::Enum
+                    | TokenKind::Function
+                    | TokenKind::Client
+                    | TokenKind::Generator
+                    | TokenKind::Test
+                    | TokenKind::TestSet
+                    | TokenKind::RetryPolicy
+                    | TokenKind::TemplateString
+                    | TokenKind::TypeBuilder
+            ) && self.token_starts_line(i)
+            {
+                return false;
+            }
+
+            // Skip over comment patterns (the lexer doesn't emit comment
+            // tokens; `//` is two `Slash` tokens, `/* */` is `Slash Star
+            // ... Star Slash`). Without skipping, backticks inside a
+            // markdown code fence in a doc comment defeat the guard.
+            let after_comment = self.skip_comment_at(i);
+            if after_comment != i {
+                i = after_comment;
+                continue;
+            }
+
+            if self.tokens[i].kind == TokenKind::Backtick {
+                let run_start = i;
+                while i < self.tokens.len() && self.tokens[i].kind == TokenKind::Backtick {
+                    i += 1;
+                }
+                if i - run_start >= n {
+                    return true;
+                }
+            } else {
+                i += 1;
+            }
+        }
+        false
+    }
+
+    /// Whether the token at `idx` is the first non-whitespace token on its line
+    /// — preceded only by `Whitespace` back to a `Newline` or the start of
+    /// input. Distinguishes a module-item keyword that begins a line from one
+    /// appearing mid-line as backtick content.
+    fn token_starts_line(&self, idx: usize) -> bool {
+        let mut j = idx;
+        while j > 0 {
+            j -= 1;
+            match self.tokens[j].kind {
+                TokenKind::Whitespace => continue,
+                TokenKind::Newline => return true,
+                _ => return false,
+            }
+        }
+        true
+    }
+
+    /// Count consecutive `Backtick` tokens at `self.current` (after skipping
+    /// basic trivia *and* comments to find the first backtick). The run
+    /// itself is required to be uninterrupted — no whitespace or comments
+    /// permitted inside the delimiter run.
+    ///
+    /// Skipping comments mirrors the entry guard `self.at(TokenKind::Backtick)`,
+    /// which uses comment-skipping `current()`. Without parity here a literal
+    /// like `let s = /*c*/ <backtick>ok<backtick>` would have `at` succeed but
+    /// the helper return 0, falsely rejecting the parse.
+    fn count_consecutive_backticks(&self) -> usize {
+        let mut i = self.skip_trivia_and_comments_from(self.current);
+        let mut count = 0;
+        while i < self.tokens.len() && self.tokens[i].kind == TokenKind::Backtick {
+            count += 1;
+            i += 1;
+        }
+        count
+    }
+
+    fn parse_backtick_content(&mut self, opening_ticks: usize) {
+        let mut loop_counter = 0;
+        loop {
+            loop_counter += 1;
+            if loop_counter > 1_000_000 {
+                self.error_unexpected_token(
+                    "Backtick string parsing exceeded iteration limit".to_string(),
+                );
+                return;
+            }
+
+            if self.at_end_raw() {
+                self.error_unexpected_token(format!(
+                    "Unclosed backtick string (expected {})",
+                    "`".repeat(opening_ticks)
+                ));
+                return;
+            }
+
+            // Backslash escape: consume the `\` and the next raw token as
+            // content so a `\\\`` does not look like a closing delimiter and
+            // `\\${` does not look like an interpolation start.
+            //
+            // The second consume must take EXACTLY one token — not whatever
+            // `bump_raw` happens to land on after skipping trivia. Otherwise
+            // `` `\<space>` `` (backslash, space, closing backtick) overshoots:
+            // `bump_raw` eats the space as leading trivia and then takes the
+            // closing backtick as the escape target, leaving the literal
+            // unclosed (ultrareview bug_011).
+            if self.at_raw(TokenKind::Backslash) {
+                self.bump_raw();
+                if self.current < self.tokens.len() {
+                    self.bump_one_token_raw();
+                }
+                continue;
+            }
+
+            // BEP-049 §3: `${...}` opens an interpolation. Adjacency required —
+            // `$` followed immediately by `{` (no trivia between). A lone `$`
+            // or `$ {` is literal content.
+            if self.at_raw(TokenKind::Dollar) && self.dollar_immediately_followed_by_lbrace() {
+                self.parse_backtick_interpolation();
+                continue;
+            }
+
+            if self.at_raw(TokenKind::Backtick) {
+                let run_len = self.count_consecutive_backticks();
+                if run_len >= opening_ticks {
+                    // Anchored close: trailing `opening_ticks` ticks of the
+                    // run are the close; any leading excess is content.
+                    let content_ticks = run_len - opening_ticks;
+                    for _ in 0..content_ticks {
+                        self.bump_raw();
+                    }
+                    for _ in 0..opening_ticks {
+                        self.bump_raw();
+                    }
+                    return;
+                }
+                // run_len < opening_ticks — all of them are content.
+                for _ in 0..run_len {
+                    self.bump_raw();
+                }
+                continue;
+            }
+
+            // Plain content token (text, whitespace, newline, etc.).
+            self.bump_raw();
+        }
+    }
+
+    /// Inside a backtick string, is the current `$` token immediately
+    /// followed by `{` (no trivia between)? Required for `${...}` to start
+    /// an interpolation per BEP-049 §3.
+    ///
+    /// Uses raw token positions (no trivia/comment skipping) for the
+    /// adjacency check — `$ {` (space) is *not* an interpolation.
+    fn dollar_immediately_followed_by_lbrace(&self) -> bool {
+        // Find the raw position of the next non-basic-trivia token (do NOT
+        // skip comments — inside a backtick string the `//` pattern is
+        // literal text, not a comment).
+        let mut i = self.current;
+        while i < self.tokens.len() && self.is_basic_trivia(self.tokens[i].kind) {
+            i += 1;
+        }
+        if self.tokens.get(i).map(|t| t.kind) != Some(TokenKind::Dollar) {
+            return false;
+        }
+        self.tokens
+            .get(i + 1)
+            .is_some_and(|t| t.kind == TokenKind::LBrace)
+    }
+
+    /// Parse a `${...}` interpolation inside a backtick string.
+    ///
+    /// Three forms exist (BEP §4–§5):
+    ///   - **Block expression** (M2): `${expr}`, `${ let x = ...; x }`. Body
+    ///     is a host block-expression; statements + optional trailing expr.
+    ///   - **Block-tag open** (M3): `${for (...)}`, `${if (...)}`. The
+    ///     interp closes here; the body comes from subsequent backtick
+    ///     content until a matching `${endfor}` / `${endif}`.
+    ///   - **Block-tag close / continuation** (M3): `${endfor}`, `${endif}`,
+    ///     `${else}`, `${else if (...)}`. Only valid as continuations of an
+    ///     open block-tag.
+    ///
+    /// Dispatch is on the first non-trivia token inside `${...}` (after
+    /// `{`). For `if` specifically, the form depends on what follows the
+    /// condition — `{` is an if-expression then-block; `}` closes the
+    /// interp (block-tag form). `for` is always block-tag (no
+    /// for-expression in BAML).
+    ///
+    /// Pre-condition: `self` is at `$` with `{` adjacent.
+    fn parse_backtick_interpolation(&mut self) {
+        // Any whitespace/newlines before `$` belong to the surrounding text,
+        // not the interpolation. Emit them into the parent BACKTICK_STRING_LITERAL
+        // before opening the inner node.
+        while self.eat_basic_trivia() {}
+
+        match self.classify_backtick_interp() {
+            BacktickInterpForm::For => self.parse_backtick_for_open(),
+            BacktickInterpForm::Endfor => {
+                self.parse_backtick_simple_tag(SyntaxKind::BACKTICK_ENDFOR, "endfor");
+            }
+            BacktickInterpForm::IfBlockTag => self.parse_backtick_if_open(),
+            BacktickInterpForm::ElseIfBlockTag => self.parse_backtick_else_if(),
+            BacktickInterpForm::ElseBlockTag => self.parse_backtick_else(),
+            BacktickInterpForm::Endif => {
+                self.parse_backtick_simple_tag(SyntaxKind::BACKTICK_ENDIF, "endif");
+            }
+            BacktickInterpForm::Expression => {
+                self.with_node(SyntaxKind::BACKTICK_INTERPOLATION, |p| {
+                    p.bump_raw(); // $
+                    // `parse_block_expr` consumes its own `{ ... }` and uses
+                    // the normal trivia-skipping `at()`/`bump()` — exactly
+                    // what we want once we're inside `${`: comments and
+                    // whitespace work normally.
+                    p.parse_block_expr();
+                });
+            }
+        }
+    }
+
+    /// Classify the form of a `${...}` interpolation that starts at the
+    /// current `$` token. Cheap pre-parse lookahead — does not consume
+    /// any tokens.
+    fn classify_backtick_interp(&self) -> BacktickInterpForm {
+        // current is at `$`. Peek past `${` to the first interesting token.
+        let Some(dollar_idx) = self.current_non_trivia_index() else {
+            return BacktickInterpForm::Expression;
+        };
+        debug_assert_eq!(self.tokens[dollar_idx].kind, TokenKind::Dollar);
+        // The `{` is immediately after `$` per the adjacency rule. Skip past it.
+        let mut i = dollar_idx + 2;
+        // Skip any whitespace/comments inside the interp.
+        while i < self.tokens.len()
+            && (self.is_basic_trivia(self.tokens[i].kind) || {
+                let new_i = self.skip_comment_at(i);
+                if new_i != i {
+                    i = new_i;
+                    true
+                } else {
+                    false
+                }
+            })
+        {
+            if !self.is_basic_trivia(self.tokens[i].kind) {
+                continue;
+            }
+            i += 1;
+        }
+        if i >= self.tokens.len() {
+            return BacktickInterpForm::Expression;
+        }
+        let first = &self.tokens[i];
+        match first.kind {
+            TokenKind::For => BacktickInterpForm::For,
+            TokenKind::If => {
+                if self.classify_backtick_if_is_block_tag(i + 1) {
+                    BacktickInterpForm::IfBlockTag
+                } else {
+                    BacktickInterpForm::Expression
+                }
+            }
+            TokenKind::Else => {
+                // `${else}` or `${else if (cond)}`. Look past `else` to
+                // disambiguate, skipping comments too (`${else /* c */ if}`) so an
+                // interposed comment doesn't misclassify it as a plain `${else}`.
+                let j = self.skip_trivia_and_comments_from(i + 1);
+                if j < self.tokens.len() && self.tokens[j].kind == TokenKind::If {
+                    BacktickInterpForm::ElseIfBlockTag
+                } else {
+                    BacktickInterpForm::ElseBlockTag
+                }
+            }
+            TokenKind::Word if first.text == "endfor" => BacktickInterpForm::Endfor,
+            TokenKind::Word if first.text == "endif" => BacktickInterpForm::Endif,
+            _ => BacktickInterpForm::Expression,
+        }
+    }
+
+    /// Given the index just past an `if` keyword inside a `${if ...}`, decide
+    /// whether this is a block-tag form (`}` closes the interp) or an
+    /// if-expression form (`{` opens the then-block). Walks tokens with
+    /// paren/bracket depth tracking — first `{` at depth 0 means expression,
+    /// first `}` at depth 0 means block-tag.
+    ///
+    /// Limitation: an object-literal in the condition (e.g. `${if Foo { x: 1 }}`)
+    /// confuses this exactly like the host `if` parser is confused by the
+    /// same shape. Users hitting it should write `${if (Foo { x: 1 })}`.
+    fn classify_backtick_if_is_block_tag(&self, start_after_if: usize) -> bool {
+        let mut i = start_after_if;
+        let mut paren_depth: i32 = 0;
+        let mut bracket_depth: i32 = 0;
+        while i < self.tokens.len() {
+            // Skip comments so a brace inside one (`${if cond /* { */}`) doesn't
+            // get mistaken for the then-block opener / interp close.
+            let new_i = self.skip_comment_at(i);
+            if new_i != i {
+                i = new_i;
+                continue;
+            }
+            match self.tokens[i].kind {
+                TokenKind::LParen => paren_depth += 1,
+                TokenKind::RParen => paren_depth = paren_depth.saturating_sub(1),
+                TokenKind::LBracket => bracket_depth += 1,
+                TokenKind::RBracket => bracket_depth = bracket_depth.saturating_sub(1),
+                TokenKind::LBrace if paren_depth == 0 && bracket_depth == 0 => {
+                    return false;
+                }
+                TokenKind::RBrace if paren_depth == 0 && bracket_depth == 0 => {
+                    return true;
+                }
+                _ => {}
+            }
+            i += 1;
+        }
+        false
+    }
+
+    /// Parse `${for (let x in xs)}` (block-tag opener). The interp closes
+    /// at the `}`; the loop body comes from subsequent backtick content
+    /// until a matching `${endfor}`.
+    fn parse_backtick_for_open(&mut self) {
+        self.with_node(SyntaxKind::BACKTICK_FOR_OPEN, |p| {
+            p.bump_raw(); // $
+            p.bump_raw(); // {
+            p.expect(TokenKind::For);
+            // Reuse the host for-header grammar — handles paren / no-paren,
+            // iterator / C-style. We only consume the HEADER (no body braces).
+            p.parse_for_header_only();
+            p.expect(TokenKind::RBrace);
+        });
+    }
+
+    /// Parse `${if (cond)}` or `${if cond}` (block-tag opener).
+    fn parse_backtick_if_open(&mut self) {
+        self.with_node(SyntaxKind::BACKTICK_IF_OPEN, |p| {
+            p.bump_raw(); // $
+            p.bump_raw(); // {
+            p.expect(TokenKind::If);
+            p.suppress_object_literal_depth += 1;
+            p.parse_expr();
+            p.suppress_object_literal_depth -= 1;
+            p.expect(TokenKind::RBrace);
+        });
+    }
+
+    /// Parse `${else if (cond)}` (continuation of an open `${if}` block-tag).
+    fn parse_backtick_else_if(&mut self) {
+        self.with_node(SyntaxKind::BACKTICK_ELSE_IF, |p| {
+            p.bump_raw(); // $
+            p.bump_raw(); // {
+            p.expect(TokenKind::Else);
+            p.expect(TokenKind::If);
+            p.suppress_object_literal_depth += 1;
+            p.parse_expr();
+            p.suppress_object_literal_depth -= 1;
+            p.expect(TokenKind::RBrace);
+        });
+    }
+
+    /// Parse `${else}` (continuation of an open `${if}` block-tag).
+    fn parse_backtick_else(&mut self) {
+        self.with_node(SyntaxKind::BACKTICK_ELSE, |p| {
+            p.bump_raw(); // $
+            p.bump_raw(); // {
+            p.expect(TokenKind::Else);
+            p.expect(TokenKind::RBrace);
+        });
+    }
+
+    /// Parse a `${endfor}` or `${endif}` close tag — a keyword-only interp
+    /// whose word is contextual (these aren't host language keywords).
+    fn parse_backtick_simple_tag(&mut self, kind: SyntaxKind, expected_word: &str) {
+        self.with_node(kind, |p| {
+            p.bump_raw(); // $
+            p.bump_raw(); // {
+            // `endfor` / `endif` aren't lexer keywords — they appear as
+            // WORD tokens. Validate the text matches what we expected.
+            if p.at(TokenKind::Word) && p.current().map(|t| t.text.as_str()) == Some(expected_word)
+            {
+                p.bump();
+            } else {
+                p.error_unexpected_token(format!("'{expected_word}'"));
+            }
+            p.expect(TokenKind::RBrace);
+        });
+    }
+
+    /// Parse just the *header* of a for-loop (`for (let x in xs)` minus the
+    /// body braces). Used for `${for}` block-tag where the body lives in the
+    /// surrounding backtick content rather than inline braces.
+    fn parse_for_header_only(&mut self) {
+        // Mirrors `parse_for_expr` minus the `expect(For)` and minus the
+        // trailing `parse_block_expr`. Supports parenthesized iterator,
+        // C-style for, AND non-paren iterator form (`for let x in xs`).
+        if self.at(TokenKind::LParen) {
+            self.bump(); // (
+            // Mirror the host `for` parser: a binding intro is `let` OR the
+            // contextual `const`, so `${for (const x in xs)}` parses like host
+            // syntax instead of falling into the C-style path and erroring.
+            if self.at_binding_intro_stmt() {
+                if self.looks_like_for_in_loop() {
+                    self.parse_for_in_pattern();
+                    self.expect(TokenKind::In);
+                    self.parse_expr();
+                } else {
+                    self.parse_let_stmt();
+                    if !self.at(TokenKind::Semicolon) && !self.at(TokenKind::RParen) {
+                        self.parse_expr();
+                    }
+                    self.eat(TokenKind::Semicolon);
+                    if !self.at(TokenKind::RParen) {
+                        self.parse_expr();
+                    }
+                }
+            } else if self.at(TokenKind::Word) || self.at(TokenKind::Semicolon) {
+                self.parse_c_style_for_body();
+            } else {
+                self.error_unexpected_token("'let' or ';'".to_string());
+            }
+            self.expect(TokenKind::RParen);
+        } else {
+            // Non-parenthesized iterator form.
+            self.parse_for_in_pattern();
+            self.expect(TokenKind::In);
+            self.parse_expr();
         }
     }
 
@@ -2243,7 +2856,7 @@ impl<'a> Parser<'a> {
             return;
         }
 
-        // Negative numeric literal type: `-42`, `-3.14`, `-7n`. Recognised before
+        // Negative numeric literal type: `-42`, `-3.14`. Recognised before
         // the unary-`-` falls through to the generic error path so literal
         // unions like `-1 | 0 | 1` and pattern atoms like `match { -42 => ... }`
         // parse uniformly. Floats still error to match the positive case.
@@ -2664,6 +3277,12 @@ impl<'a> Parser<'a> {
                 // assume we missed a closing brace
                 let recover_top_level_item = if p.at(TokenKind::Interface) {
                     p.looks_like_interface_declaration_start()
+                } else if p.at(TokenKind::Client) {
+                    // `client` is a top-level keyword (`client<llm> Name { … }`),
+                    // but also a valid class field name (BEP-049 §10 `ctx.client`
+                    // on `Context`). Only treat it as a missing-brace recovery
+                    // when it's the `client<…>` declaration form.
+                    p.looks_like_client_declaration_start()
                 } else {
                     p.at_top_level_keyword()
                 };
@@ -3853,20 +4472,6 @@ impl<'a> Parser<'a> {
                 p.error_unexpected_token("initializer (=)".to_string());
             }
 
-            // Reject `watch let … else { … }` — the divergence semantics of
-            // let-else don't compose with the auto-rerun semantics of a
-            // watched binding. Emit a parse error but eat the else block so
-            // recovery proceeds cleanly past it.
-            if p.at(TokenKind::Else) {
-                p.error_unexpected_token(
-                    "';' (`watch let` cannot have an `else` clause)".to_string(),
-                );
-                p.bump(); // else
-                if p.at(TokenKind::LBrace) {
-                    p.parse_block_expr();
-                }
-            }
-
             // Consume trailing semicolon
             p.eat(TokenKind::Semicolon);
         });
@@ -4039,17 +4644,27 @@ impl<'a> Parser<'a> {
         self.with_node(SyntaxKind::MATCH_EXPR, |p| {
             p.expect(TokenKind::Match);
 
-            // Scrutinee expression in parentheses
+            // Scrutinee expression — parens are optional, mirroring `if`
+            // and `while`. The `: Type` annotation is only accepted in the
+            // parenthesized form (the non-paren form ends the scrutinee at
+            // the `{` of the match body, so `match x: Type { ... }` would
+            // be ambiguous with a type-ascribed binding).
             if p.at(TokenKind::LParen) {
                 p.bump(); // (
                 p.parse_expr();
-                // Optional type annotation: match (expr : Type)
                 if p.eat(TokenKind::Colon) {
                     p.parse_type();
                 }
                 p.expect(TokenKind::RParen);
             } else {
-                p.error_unexpected_token("'(' after 'match'".to_string());
+                // No-paren form: scrutinee runs until the `{` of the match
+                // body. Suppress the object-literal postfix so a scrutinee
+                // like `match Foo { ... }` (where `Foo` happens to look
+                // like a constructor) doesn't gobble the match body's
+                // brace. Mirrors `spawn`'s approach.
+                p.suppress_object_literal_depth += 1;
+                p.parse_expr();
+                p.suppress_object_literal_depth -= 1;
             }
 
             // Match body with arms
@@ -4901,10 +5516,7 @@ impl<'a> Parser<'a> {
                         p.expect(TokenKind::In);
                         p.parse_expr(); // iterator expression
                     } else {
-                        // C-style: for (let i = 0; cond; update). A
-                        // `let … else` here is unusual but legal — it
-                        // makes the loop unreachable, same as any other
-                        // diverging statement before the loop.
+                        // C-style: for (let i = 0; cond; update)
                         p.parse_let_stmt();
                         // The let statement already consumed the semicolon
                         // Now parse condition
@@ -5122,6 +5734,24 @@ impl<'a> Parser<'a> {
                 let lhs_start = self.find_previous_expr_start_after(expr_start);
                 self.wrap_events_in_node(lhs_start, SyntaxKind::CALL_EXPR);
                 self.parse_call_args();
+                self.finish_node();
+            } else if op == TokenKind::Backtick && !self.has_newline_ahead() {
+                // Tagged template: `tag` ` … ` ` lowers at HIR time to a call
+                // where the body becomes a lambda producing `TaggedString`
+                // (BEP-049 §10). Recognised as a postfix on any expression so
+                // `sql`…`` parses; further restrictions (the target must be a
+                // function marked `//baml:tagged_string`) are enforced later.
+                //
+                // We require no newline between the tag expression and the
+                // backtick — otherwise statement-terminating layouts like
+                //   let name = "world"
+                //   `Hello, ${name}!`
+                // would wrongly absorb the standalone backtick literal as a
+                // postfix on `"world"`. JS uses the same `no-LineTerminator`
+                // restriction here for the same reason.
+                let lhs_start = self.find_previous_expr_start_after(expr_start);
+                self.wrap_events_in_node(lhs_start, SyntaxKind::TAGGED_TEMPLATE_EXPR);
+                self.parse_backtick_string();
                 self.finish_node();
             } else if op == TokenKind::LBracket {
                 // Index expression
@@ -5355,7 +5985,9 @@ impl<'a> Parser<'a> {
         match self.peek(1) {
             Some(t) if t.kind == TokenKind::DotDotDot => true, // spread
             Some(t) if t.kind == TokenKind::RBrace => true,    // empty braces
-            Some(t) if t.kind == TokenKind::Word => {
+            // `client` is a keyword but a valid field name (BEP-049 §10
+            // `Context { client: ... }`), so an object literal can begin with it.
+            Some(t) if t.kind == TokenKind::Word || t.kind == TokenKind::Client => {
                 let mut i = 2;
                 while self.peek(i).map(|t| t.kind) == Some(TokenKind::Dot)
                     && self.peek(i + 1).map(|t| t.kind) == Some(TokenKind::Word)
@@ -5481,7 +6113,7 @@ impl<'a> Parser<'a> {
             || self.at(TokenKind::IntegerLiteral)
             || self.at(TokenKind::FloatLiteral)
         {
-            // Numeric literal (bigint, integer, or float)
+            // Numeric literal
             self.bump();
         } else if self.parse_any_string() {
             // String literal
@@ -6287,8 +6919,10 @@ impl<'a> Parser<'a> {
                         }
                     }
                 }
-            // Check for valid field start
+            // Check for valid field start (`client` is a keyword but a valid
+            // field name — BEP-049 §10 `Context { client: ... }`).
             } else if self.at(TokenKind::Word)
+                || self.at(TokenKind::Client)
                 || self.at(TokenKind::Quote)
                 || self.at(TokenKind::Hash)
             {
@@ -6340,7 +6974,9 @@ impl<'a> Parser<'a> {
     fn parse_object_field(&mut self) {
         self.with_node(SyntaxKind::OBJECT_FIELD, |p| {
             // Field name - can be identifier, qualified identifier, or string literal.
-            if p.at(TokenKind::Word) {
+            // `client` is a keyword but a valid field name (BEP-049 §10
+            // `Context { client: ... }`).
+            if p.at(TokenKind::Word) || p.at(TokenKind::Client) {
                 p.bump(); // identifier field name
                 while p.at(TokenKind::Dot) {
                     p.bump();
@@ -6965,24 +7601,43 @@ impl<'a> Parser<'a> {
 
     // ============ Generator Parsing ============
 
-    /// Parse a generator declaration
+    /// Consume a deprecated top-level `generator NAME { … }` block **without
+    /// parsing its interior**. Code generators are now configured in
+    /// `baml.toml` under `[generator.<name>]`; the body here is swallowed as
+    /// opaque tokens so stale config never produces interior parse errors, and
+    /// CST → AST lowering raises a migration warning when it sees the
+    /// `GENERATOR_DEF` node (see `lower_cst`).
     pub(crate) fn parse_generator(&mut self) {
         self.with_node(SyntaxKind::GENERATOR_DEF, |p| {
             // 'generator' keyword
             p.expect(TokenKind::Generator);
 
-            // Generator name
+            // Optional generator name — kept as the first WORD child so
+            // lowering can name it in the diagnostic.
             if p.at(TokenKind::Word) {
                 p.bump();
-            } else {
-                p.error_unexpected_token("generator name".to_string());
             }
 
-            // Config block
+            // Swallow the `{ … }` body opaquely, tracking brace depth so
+            // nested braces (e.g. option maps) don't terminate early. The
+            // interior is deliberately NOT parsed into config items.
             if p.at(TokenKind::LBrace) {
-                p.parse_config_block();
-            } else {
-                p.error_unexpected_token("generator body".to_string());
+                p.bump(); // consume '{'
+                let mut depth = 1usize;
+                while depth > 0 && !p.at_end() {
+                    if p.at(TokenKind::LBrace) {
+                        depth += 1;
+                    } else if p.at(TokenKind::RBrace) {
+                        depth -= 1;
+                    }
+                    p.bump();
+                }
+                // Reached EOF with the body still open — preserve the
+                // unclosed-brace diagnostic rather than silently swallowing
+                // the rest of the file into this deprecated node.
+                if depth > 0 {
+                    p.error_unexpected_token("'}'".to_string());
+                }
             }
         });
     }
@@ -7053,61 +7708,8 @@ impl<'a> Parser<'a> {
 /// Parse tokens into a green tree.
 ///
 /// Returns the green tree and any parse errors encountered.
-/// Emit a `SyntaxHint` event for any adjacent token pair that visually
-/// resembles a bigint literal but isn't a valid one — `42N` (uppercase suffix),
-/// `42.5n`, `42.5N` (float-with-suffix). The lexer splits these into two
-/// tokens (e.g. `IntegerLiteral("42")` + `Word("N")`) and the user gets a
-/// confusing downstream error otherwise.
-///
-/// Adjacency is checked via source-range endpoints (no intervening whitespace
-/// or comment trivia) so `42 N` or `42.5 n` (with a separator) don't fire.
-fn scan_malformed_bigint_literals(tokens: &[Token], events: &mut Vec<Event>) {
-    for window in tokens.windows(2) {
-        let (a, b) = (&window[0], &window[1]);
-        if b.kind != TokenKind::Word {
-            continue;
-        }
-        if a.span.range.end() != b.span.range.start() {
-            // Separated by whitespace / comment trivia — not "stuck together".
-            continue;
-        }
-        let combined_span = baml_base::Span {
-            file_id: a.span.file_id,
-            range: TextRange::new(a.span.range.start(), b.span.range.end()),
-        };
-        match (a.kind, b.text.as_str()) {
-            (TokenKind::IntegerLiteral, "N") => {
-                events.push(Event::SyntaxHint {
-                    message: format!(
-                        "bigint literal suffix must be lowercase 'n' — did you mean `{}n`?",
-                        a.text
-                    ),
-                    span: combined_span,
-                });
-            }
-            (TokenKind::FloatLiteral, "n" | "N") => {
-                events.push(Event::SyntaxHint {
-                    message: format!(
-                        "bigint literals are integer-only — `{}` is not a valid bigint",
-                        format_args!("{}{}", a.text, b.text)
-                    ),
-                    span: combined_span,
-                });
-            }
-            _ => {}
-        }
-    }
-}
-
 fn parse_impl(tokens: &[Token], cache: Option<&mut NodeCache>) -> (GreenNode, Vec<ParseError>) {
     let mut parser = Parser::new(tokens);
-
-    // Pre-scan for malformed bigint-shaped literals — adjacent tokens that
-    // *look* like a bigint to the user but the lexer split apart. Emits
-    // `SyntaxHint` events so the diagnostics show alongside other parse
-    // errors. Runs before structural parsing so the hints aren't lost if the
-    // surrounding code has additional errors.
-    scan_malformed_bigint_literals(tokens, &mut parser.events);
 
     parser.start_node(SyntaxKind::SOURCE_FILE);
 
@@ -7208,67 +7810,6 @@ mod tests {
             errors.is_empty(),
             "expected no parse errors, got: {errors:#?}"
         );
-    }
-
-    fn assert_diag_message(errors: &[ParseError], needle: &str) {
-        let has = errors.iter().any(|e| match e {
-            ParseError::InvalidSyntax { message, .. } => message.contains(needle),
-            _ => false,
-        });
-        assert!(
-            has,
-            "expected diagnostic containing {needle:?}, got: {errors:#?}"
-        );
-    }
-
-    #[test]
-    fn diagnoses_bigint_with_uppercase_n_suffix() {
-        // `42N` lexes as `[Integer, Word]`. Without the scan, the user sees
-        // no specific guidance about the wrong-case suffix.
-        let source = "function main() -> bigint { 42N }";
-        let (_root, errors) = parse_source(source);
-        assert_diag_message(&errors, "bigint literal suffix must be lowercase 'n'");
-        assert_diag_message(&errors, "did you mean `42n`?");
-    }
-
-    #[test]
-    fn diagnoses_float_with_bigint_suffix() {
-        // `42.5n` lexes as `[Float, Word("n")]`.
-        let source = "function main() -> bigint { 42.5n }";
-        let (_root, errors) = parse_source(source);
-        assert_diag_message(&errors, "bigint literals are integer-only");
-        assert_diag_message(&errors, "`42.5n` is not a valid bigint");
-    }
-
-    #[test]
-    fn diagnoses_float_with_uppercase_bigint_suffix() {
-        let source = "function main() -> bigint { 42.5N }";
-        let (_root, errors) = parse_source(source);
-        assert_diag_message(&errors, "bigint literals are integer-only");
-    }
-
-    #[test]
-    fn accepts_separated_integer_and_word() {
-        // `42 N` is a normal integer followed by an identifier — no diagnostic.
-        let source = "function main(x N) -> int { 42 }";
-        let (_root, errors) = parse_source(source);
-        let has_bigint_diag = errors.iter().any(|e| match e {
-            ParseError::InvalidSyntax { message, .. } => {
-                message.contains("bigint literal suffix") || message.contains("integer-only")
-            }
-            _ => false,
-        });
-        assert!(
-            !has_bigint_diag,
-            "should not emit bigint-shape diagnostic for separated tokens, got: {errors:#?}"
-        );
-    }
-
-    #[test]
-    fn accepts_valid_bigint_literal() {
-        let source = "function main() -> bigint { 42n }";
-        let (_root, errors) = parse_source(source);
-        assert_no_errors(&errors);
     }
 
     #[test]
@@ -8033,6 +8574,73 @@ class InterfaceTwo {
                 .children()
                 .any(|n| n.kind() == SyntaxKind::INTERFACE_DEF),
             "field named `interface` must not create a top-level interface"
+        );
+    }
+
+    #[test]
+    fn client_keyword_can_be_class_field_name() {
+        // BEP-049 §10: `Context` has a `client` field (`ctx.client`), but
+        // `client` is also a top-level keyword (`client<llm> Name { … }`).
+        // A `client Type` field must NOT trigger missing-brace recovery.
+        let source = r#"
+class Ctx {
+  client string
+  tags string
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert!(
+            errors.is_empty(),
+            "`client` field should parse cleanly: {errors:?}"
+        );
+        let class = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::CLASS_DEF)
+            .expect("expected CLASS_DEF");
+        assert_eq!(
+            class
+                .children()
+                .filter(|n| n.kind() == SyntaxKind::FIELD)
+                .count(),
+            2,
+            "both `client` and `tags` should parse as fields"
+        );
+    }
+
+    #[test]
+    fn client_keyword_is_valid_member_access() {
+        // `ctx.client` must parse — `client` stays valid as a member name.
+        let source = r#"
+function f(ctx: Context) -> string {
+  ctx.client.provider
+}
+"#;
+        let (_root, errors) = parse_source(source);
+        assert!(
+            errors.is_empty(),
+            "`ctx.client.provider` member access should parse cleanly: {errors:?}"
+        );
+    }
+
+    #[test]
+    fn client_declaration_still_recovers_inside_class() {
+        // The `client<…>` declaration form must STILL trigger missing-brace
+        // recovery (it is not a field).
+        let source = r#"
+class Broken {
+  name string
+client<llm> Foo {
+  provider "openai"
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert!(
+            !errors.is_empty(),
+            "missing closing brace should produce a parse error"
+        );
+        assert!(
+            root.children().any(|n| n.kind() == SyntaxKind::CLIENT_DEF),
+            "client<llm> should recover as a top-level declaration"
         );
     }
 
@@ -9616,7 +10224,910 @@ type Searcher = (query: string, max_results?: int) -> int
         ));
     }
 
-    // ============ let-else ============
+    // ─── BEP-049: backtick string literals ────────────────────────────────────
+
+    fn find_backtick_literal(root: &SyntaxNode) -> SyntaxNode {
+        root.descendants()
+            .find(|n| n.kind() == SyntaxKind::BACKTICK_STRING_LITERAL)
+            .expect("expected BACKTICK_STRING_LITERAL node")
+    }
+
+    #[test]
+    fn match_scrutinee_parens_optional() {
+        // Host parser inconsistency: `if`/`while` accept parens-optional
+        // conditions, but `match` previously required parens. Bring it in
+        // line with the other control-flow forms.
+        let source = "
+function Demo(x: int) -> int {
+    match x {
+        1 => 10,
+        _ => 0,
+    }
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let m = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::MATCH_EXPR)
+            .expect("expected MATCH_EXPR");
+        assert!(m.text().to_string().contains("match x {"));
+    }
+
+    #[test]
+    fn match_scrutinee_with_type_annotation_no_parens() {
+        // `match (expr : Type)` was the only place the `: Type` annotation
+        // worked. With paren-optional, ensure the annotation still works
+        // when parens ARE present.
+        let source = "
+function Demo(x: int) -> int {
+    match (x : int) {
+        _ => 0,
+    }
+}
+";
+        let (_root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+    }
+
+    #[test]
+    fn match_paren_form_still_works() {
+        let source = "
+function Demo(x: int) -> int {
+    match (x) {
+        1 => 10,
+        _ => 0,
+    }
+}
+";
+        let (_root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+    }
+
+    #[test]
+    fn backtick_m3_for_open_emits_for_node() {
+        let source = "
+function Demo(xs: int[]) -> string {
+    `${for (let x in xs)}- ${x}
+${endfor}`
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let for_open = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::BACKTICK_FOR_OPEN)
+            .expect("expected BACKTICK_FOR_OPEN");
+        assert!(for_open.text().to_string().contains("${for"));
+        let endfor = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::BACKTICK_ENDFOR)
+            .expect("expected BACKTICK_ENDFOR");
+        assert_eq!(endfor.text().to_string(), "${endfor}");
+    }
+
+    #[test]
+    fn backtick_m3_if_block_tag_vs_if_expression() {
+        // Same condition shape, different surface form: `}` after cond
+        // → block-tag; `{` after cond → if-expression.
+        let source = "
+function Demo(c: bool) -> string {
+    let a = `${if (c)}yes${endif}`
+    let b = `${if (c) { \"yes\" } else { \"no\" }}`
+    a + b
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let if_opens: Vec<_> = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::BACKTICK_IF_OPEN)
+            .collect();
+        assert_eq!(
+            if_opens.len(),
+            1,
+            "expected exactly one BACKTICK_IF_OPEN (block-tag form)"
+        );
+        let endifs: Vec<_> = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::BACKTICK_ENDIF)
+            .collect();
+        assert_eq!(endifs.len(), 1);
+        let if_exprs: Vec<_> = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::IF_EXPR)
+            .collect();
+        assert_eq!(
+            if_exprs.len(),
+            1,
+            "expected exactly one IF_EXPR (expression form)"
+        );
+    }
+
+    #[test]
+    fn backtick_m3_if_no_parens_block_tag() {
+        // `${if cond}` (no parens) — should still dispatch as block-tag.
+        let source = "
+function Demo(c: bool) -> string {
+    `${if c}yes${endif}`
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert!(
+            root.descendants()
+                .any(|n| n.kind() == SyntaxKind::BACKTICK_IF_OPEN),
+            "expected BACKTICK_IF_OPEN for `${{if c}}` (no parens)"
+        );
+    }
+
+    #[test]
+    fn backtick_m3_else_and_else_if() {
+        let source = "
+function Demo(n: int) -> string {
+    `${if (n > 0)}pos${else if (n < 0)}neg${else}zero${endif}`
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert!(
+            root.descendants()
+                .any(|n| n.kind() == SyntaxKind::BACKTICK_IF_OPEN)
+        );
+        assert!(
+            root.descendants()
+                .any(|n| n.kind() == SyntaxKind::BACKTICK_ELSE_IF)
+        );
+        assert!(
+            root.descendants()
+                .any(|n| n.kind() == SyntaxKind::BACKTICK_ELSE)
+        );
+        assert!(
+            root.descendants()
+                .any(|n| n.kind() == SyntaxKind::BACKTICK_ENDIF)
+        );
+    }
+
+    #[test]
+    fn backtick_m4_tagged_template_wraps_backtick() {
+        // BEP-049 §10. `name` immediately preceding a backtick parses as
+        // a TAGGED_TEMPLATE_EXPR; the inner BACKTICK_STRING_LITERAL is a
+        // child of the new node so HIR lowering has both the tag callee
+        // and the body in one shape.
+        let source = "
+function Demo() -> string {
+    let q = sql`SELECT * FROM t WHERE id = ${1}`
+    q
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let tagged = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::TAGGED_TEMPLATE_EXPR)
+            .expect("expected TAGGED_TEMPLATE_EXPR");
+        // Tag identifier sits at the start of the tagged expr's text.
+        assert!(tagged.text().to_string().starts_with("sql`"));
+        // The wrapper must enclose a BACKTICK_STRING_LITERAL.
+        assert!(
+            tagged
+                .descendants()
+                .any(|n| n.kind() == SyntaxKind::BACKTICK_STRING_LITERAL)
+        );
+    }
+
+    #[test]
+    fn backtick_m4_untagged_backtick_stays_unwrapped() {
+        // A bare backtick literal — no preceding identifier — should NOT
+        // become a TAGGED_TEMPLATE_EXPR. Guards against the postfix branch
+        // misfiring on prefix-only expressions.
+        let source = "
+function Demo() -> string {
+    `hello`
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert!(
+            !root
+                .descendants()
+                .any(|n| n.kind() == SyntaxKind::TAGGED_TEMPLATE_EXPR),
+            "untagged backtick must not wrap in TAGGED_TEMPLATE_EXPR"
+        );
+        assert!(
+            root.descendants()
+                .any(|n| n.kind() == SyntaxKind::BACKTICK_STRING_LITERAL)
+        );
+    }
+
+    #[test]
+    fn backtick_basic_one_liner() {
+        let source = r#"
+function Demo() -> string {
+    let s = `hello world`
+    s
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let lit = find_backtick_literal(&root);
+        assert_eq!(lit.text().to_string(), "`hello world`");
+    }
+
+    #[test]
+    fn backtick_multiline() {
+        let source = "
+function Demo() -> string {
+    let s = `
+        line one
+        line two
+    `
+    s
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let lit = find_backtick_literal(&root);
+        let text = lit.text().to_string();
+        assert!(text.starts_with('`') && text.ends_with('`'));
+        assert!(text.contains("line one"));
+        assert!(text.contains("line two"));
+    }
+
+    #[test]
+    fn backtick_multi_tick_ladder_two() {
+        // Two-tick delimiter allows a single backtick inside content.
+        let source = "
+function Demo() -> string {
+    let s = ``inline `code` here``
+    s
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let lit = find_backtick_literal(&root);
+        assert_eq!(lit.text().to_string(), "``inline `code` here``");
+    }
+
+    #[test]
+    fn backtick_multi_tick_ladder_three() {
+        // Three-tick delimiter allows up to two consecutive backticks in content.
+        let source = "
+function Demo() -> string {
+    let s = ```nested ``double`` ticks```
+    s
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let lit = find_backtick_literal(&root);
+        assert_eq!(lit.text().to_string(), "```nested ``double`` ticks```");
+    }
+
+    #[test]
+    fn backtick_multi_tick_keyword_content_not_flagged_empty() {
+        // A top-level item keyword (`function`) sitting mid-line as multi-tick
+        // CONTENT must not be treated as an item boundary by the empty-multi-tick
+        // guard — the close run is still ahead, so the literal parses normally.
+        let source = "
+function Demo() -> string {
+    let s = ``function keyword``
+    s
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let lit = find_backtick_literal(&root);
+        assert_eq!(lit.text().to_string(), "``function keyword``");
+    }
+
+    #[test]
+    fn backtick_anchored_close_jep326_trailing_extra() {
+        // §8 case 3: 3-tick opener with 4 trailing backticks.
+        // Anchored-close picks the LAST 3 ticks; one backtick stays in content.
+        let source = "
+function Demo() -> string {
+    let s = ```content````
+    s
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let lit = find_backtick_literal(&root);
+        assert_eq!(lit.text().to_string(), "```content````");
+    }
+
+    #[test]
+    fn backtick_simple_interpolation_emits_interp_node() {
+        let source = "
+function Demo() -> string {
+    let s = `Hello, ${name}!`
+    s
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let interp = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::BACKTICK_INTERPOLATION)
+            .expect("expected a BACKTICK_INTERPOLATION node");
+        assert_eq!(interp.text().to_string(), "${name}");
+    }
+
+    #[test]
+    fn backtick_interpolation_with_method_chain() {
+        let source = "
+function Demo() -> string {
+    let s = `${user.name.upper()}`
+    s
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let interp = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::BACKTICK_INTERPOLATION)
+            .expect("expected a BACKTICK_INTERPOLATION node");
+        assert_eq!(interp.text().to_string(), "${user.name.upper()}");
+    }
+
+    #[test]
+    fn backtick_interpolation_block_body_with_let_and_tail() {
+        // BEP §4: ${...} is a block expression — statements + optional tail.
+        let source = "
+function Demo() -> string {
+    let s = `result: ${ let x = 1; let y = 2; x + y }!`
+    s
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let interp = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::BACKTICK_INTERPOLATION)
+            .expect("expected BACKTICK_INTERPOLATION");
+        // Body is a nested BLOCK_EXPR (from parse_block_expr).
+        let block = interp
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::BLOCK_EXPR)
+            .expect("expected BLOCK_EXPR inside interpolation");
+        let let_count = block
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::LET_STMT)
+            .count();
+        assert_eq!(let_count, 2, "expected two let statements in block body");
+    }
+
+    #[test]
+    fn backtick_interpolation_block_body_no_tail_renders_empty() {
+        // Statement-only body is valid; the lowering will render it as "".
+        let source = "
+function Demo() -> string {
+    let s = `set: ${ let x = 1 }!`
+    s
+}
+";
+        let (_root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+    }
+
+    #[test]
+    fn backtick_segments_handle_u_f8ff_in_user_content() {
+        // Ultrareview bug_006: segments() used U+F8FF (Apple-logo PUA) as
+        // an in-band placeholder for interpolations during dedent. If user
+        // content also contained U+F8FF and the literal was multi-line
+        // with at least one ${...}, split() returned more pieces than
+        // expected → the user's U+F8FF was silently dropped and
+        // interpolations landed at the wrong positions. Fix: pick a
+        // placeholder codepoint that doesn't appear in the joined content.
+        use baml_compiler_syntax::{BacktickSegment, BacktickStringLiteral};
+        use rowan::ast::AstNode;
+
+        let source = "
+function Demo(x: string) -> string {
+    let s = `
+  before\u{F8FF}between
+  ${x}
+  after`
+    s
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let lit = BacktickStringLiteral::cast(
+            root.descendants()
+                .find(|n| n.kind() == SyntaxKind::BACKTICK_STRING_LITERAL)
+                .unwrap(),
+        )
+        .unwrap();
+        let segs = lit.segments();
+        // The interpolation must remain BETWEEN the "between" and "after"
+        // text — not migrated forward — and the user's U+F8FF must survive.
+        let text_parts: Vec<&str> = segs
+            .iter()
+            .filter_map(|s| match s {
+                BacktickSegment::Text(t) => Some(t.as_str()),
+                BacktickSegment::Interp(_) | BacktickSegment::For(_) | BacktickSegment::If(_) => {
+                    None
+                }
+            })
+            .collect();
+        let combined = text_parts.join("|");
+        assert!(
+            combined.contains('\u{F8FF}'),
+            "user's U+F8FF was dropped; text parts: {text_parts:?}"
+        );
+        let interp_count = segs
+            .iter()
+            .filter(|s| matches!(s, BacktickSegment::Interp(_)))
+            .count();
+        assert_eq!(interp_count, 1, "expected exactly one Interp segment");
+    }
+
+    #[test]
+    fn backtick_empty_multi_tick_diagnoses_with_later_real_backtick() {
+        // Ultrareview bug_008: `has_backtick_close_ahead_from` walked to
+        // EOF, so any unrelated backtick literal later in the file
+        // satisfied the look-ahead and disabled the empty-multi-tick
+        // guard. Result: the bad opener silently consumed cross-function
+        // content, replacing the clean targeted diagnostic with cascading
+        // errors.
+        //
+        // Test uses `` ` `` + word + `` ` `` later to make a 2+ tick
+        // adjacent run elsewhere — sufficient to trip the unscoped look-
+        // ahead but not a real 2-tick literal.
+        let source = "
+function Bad() -> string {
+    ``
+}
+
+function OK() -> string {
+    ``twotick``
+}
+";
+        let (_root, errors) = parse_source(source);
+        // The diagnostic must point at Bad's `` (around bytes 32-34),
+        // NOT at some downstream remnant. If the guard is defeated, Bad's
+        // opener silently consumes cross-function content and the empty-
+        // multi-tick diagnostic only fires later from leftover backticks.
+        let bad_opener_diag = errors.iter().find(|e| {
+            let s = format!("{e:?}");
+            s.contains("Empty multi-tick backtick string") && {
+                // Bad's `` is in the first 50 bytes of source; any
+                // diagnostic past that is from a downstream remnant.
+                if let Some(range_start) = s.find("range: ") {
+                    let tail = &s[range_start + 7..];
+                    let end = tail.find('.').unwrap_or(tail.len());
+                    tail[..end].parse::<usize>().is_ok_and(|b| b < 50)
+                } else {
+                    false
+                }
+            }
+        });
+        assert!(
+            bad_opener_diag.is_some(),
+            "expected empty-multi-tick diagnostic AT Bad's `` (bytes <50), got: {errors:#?}"
+        );
+    }
+
+    #[test]
+    fn backtick_empty_multi_tick_diagnoses_with_later_comment_backticks() {
+        // Ultrareview bug_002: backticks inside a `// ... ``` ...`
+        // line-comment payload also satisfied the look-ahead (the lexer
+        // emits them as plain Backtick tokens; only the parser layer
+        // assembles `//` into a comment).
+        let source = "
+function Bad() -> string {
+    ``
+}
+
+// markdown sample: ```code```
+function After() -> string { 1 }
+";
+        let (_root, errors) = parse_source(source);
+        // Same location-based check as bug_008 test: the diagnostic must
+        // point at Bad's `` near the top of the file, not at some downstream
+        // backtick that the unscoped look-ahead happened to find inside
+        // the comment payload.
+        let bad_opener_diag = errors.iter().find(|e| {
+            let s = format!("{e:?}");
+            s.contains("Empty multi-tick backtick string") && {
+                if let Some(range_start) = s.find("range: ") {
+                    let tail = &s[range_start + 7..];
+                    let end = tail.find('.').unwrap_or(tail.len());
+                    tail[..end].parse::<usize>().is_ok_and(|b| b < 50)
+                } else {
+                    false
+                }
+            }
+        });
+        assert!(
+            bad_opener_diag.is_some(),
+            "expected empty-multi-tick diagnostic AT Bad's `` (bytes <50), got: {errors:#?}"
+        );
+    }
+
+    #[test]
+    fn backtick_backslash_followed_by_whitespace_does_not_eat_closer() {
+        // Ultrareview bug_011: after a `\\`, the second `bump_raw()` in
+        // `parse_backtick_content` skipped trivia before consuming the
+        // escape target. So `` `\ ` `` (backslash + space + close) had its
+        // closing backtick silently swallowed as the escaped char, and the
+        // parser emitted a misleading "Unclosed backtick string" error
+        // for a literal that was actually closed.
+        let source = "
+function Demo() -> string {
+    let s = `\\ `
+    s
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let lit = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::BACKTICK_STRING_LITERAL)
+            .expect("expected backtick literal");
+        // Two backticks total: opener and closer.
+        assert_eq!(
+            lit.text().to_string().matches('`').count(),
+            2,
+            "literal should contain opener+closer only, got: {:?}",
+            lit.text().to_string()
+        );
+    }
+
+    #[test]
+    fn backtick_after_block_comment_parses() {
+        // Regression for PR #3577 review (CodeRabbit r3307652890): the
+        // entry guard `self.at(TokenKind::Backtick)` skips comments, so
+        // `let s = /*c*/ \`ok\`` reaches `parse_backtick_string`. But the
+        // helpers `count_consecutive_backticks` and `find_first_backtick_pos`
+        // only skipped *basic* trivia (whitespace + newlines), not comments —
+        // returning 0 and failing the parse.
+        let source = "
+function Demo() -> string {
+    let s = /*c*/ `ok`
+    s
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let lit = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::BACKTICK_STRING_LITERAL)
+            .expect("expected backtick literal");
+        assert_eq!(lit.text().to_string(), "`ok`");
+    }
+
+    #[test]
+    fn backtick_after_line_comment_parses() {
+        let source = "
+function Demo() -> string {
+    let s = // line comment
+        `ok`
+    s
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let lit = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::BACKTICK_STRING_LITERAL)
+            .expect("expected backtick literal");
+        assert_eq!(lit.text().to_string(), "`ok`");
+    }
+
+    #[test]
+    fn backtick_segments_multiline_starts_with_interp() {
+        // Regression for PR #3577 review (CodeRabbit r3312486624): when the
+        // first decoded part is `Interp` and the literal is multi-line (so
+        // dedent runs), the remapping loop previously only advanced the
+        // split iterator for Text parts. The leading empty piece (for "no
+        // Text before first Interp") got assigned to the FIRST Text part,
+        // shifting all subsequent Text parts to the wrong piece. The tail-
+        // append rescued single-Text cases by accident; multi-Text cases
+        // collapsed the wrong pieces together.
+        use baml_compiler_syntax::{BacktickSegment, BacktickStringLiteral};
+        use rowan::ast::AstNode;
+
+        // Source: backtick body begins with `${a}` (no leading whitespace
+        // or newline), followed by multi-line content containing another
+        // interp. decoded = [Interp(a), Text("\nhi "), Interp(b), Text(" bye\nend")].
+        let source = "
+function Demo(a: string, b: string) -> string {
+    let s = `${a}
+hi ${b} bye
+end`
+    s
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let lit = BacktickStringLiteral::cast(
+            root.descendants()
+                .find(|n| n.kind() == SyntaxKind::BACKTICK_STRING_LITERAL)
+                .unwrap(),
+        )
+        .unwrap();
+        let segs = lit.segments();
+        let text_parts: Vec<&str> = segs
+            .iter()
+            .filter_map(|s| match s {
+                BacktickSegment::Text(t) => Some(t.as_str()),
+                BacktickSegment::Interp(_) | BacktickSegment::For(_) | BacktickSegment::If(_) => {
+                    None
+                }
+            })
+            .collect();
+        // Each text *between* interpolations should remain at its own
+        // segment — not all collapse into the last one.
+        assert_eq!(
+            text_parts,
+            vec!["\nhi ", " bye\nend"],
+            "got: {text_parts:?}"
+        );
+    }
+
+    #[test]
+    fn backtick_segments_for_adjacent_interpolations() {
+        // Regression: `${a}${b}` previously returned 0 segments because
+        // `delimiter_count` used `filter_map(into_token).take_while(BACKTICK)`,
+        // which silently skipped past the BACKTICK_INTERPOLATION nodes and
+        // miscounted the closing backtick as part of the opener.
+        use baml_compiler_syntax::{BacktickSegment, BacktickStringLiteral};
+        use rowan::ast::AstNode;
+
+        let source = "
+function Demo() -> string {
+    let a = \"ab\"
+    let b = \"cd\"
+    `${a}${b}`
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let lit = BacktickStringLiteral::cast(
+            root.descendants()
+                .find(|n| n.kind() == SyntaxKind::BACKTICK_STRING_LITERAL)
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(lit.delimiter_count(), 1);
+        let segs = lit.segments();
+        assert_eq!(segs.len(), 2, "expected two Interp segments, got: {segs:?}");
+        assert!(matches!(segs[0], BacktickSegment::Interp(_)));
+        assert!(matches!(segs[1], BacktickSegment::Interp(_)));
+    }
+
+    #[test]
+    fn backtick_interpolation_with_string_literal_inside() {
+        // Regression: with the old lexer regex, `before-$` lexed as a single
+        // Word token (trailing `$` absorbed), masking the Dollar so
+        // interpolation never triggered. Fixed by tightening the Word regex
+        // to disallow trailing `$`.
+        let source = r#"
+function Demo() -> string {
+    `before-${"x"}`
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert!(
+            root.descendants()
+                .any(|n| n.kind() == SyntaxKind::BACKTICK_INTERPOLATION),
+            "expected BACKTICK_INTERPOLATION node for ${{\"x\"}}"
+        );
+    }
+
+    #[test]
+    fn backtick_segments_split_text_and_interpolation() {
+        use baml_compiler_syntax::{BacktickSegment, BacktickStringLiteral};
+        use rowan::ast::AstNode;
+
+        let source = "
+function Demo() -> string {
+    let s = `Hello, ${user.name}!`
+    s
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let lit_node = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::BACKTICK_STRING_LITERAL)
+            .expect("expected backtick string literal");
+        let lit = BacktickStringLiteral::cast(lit_node).expect("cast");
+
+        let segs = lit.segments();
+        assert_eq!(segs.len(), 3, "segments: {segs:?}");
+        match &segs[0] {
+            BacktickSegment::Text(s) => assert_eq!(s, "Hello, "),
+            other => panic!("expected Text, got {other:?}"),
+        }
+        match &segs[1] {
+            BacktickSegment::Interp(node) => {
+                assert_eq!(node.text().to_string(), "${user.name}");
+            }
+            other => panic!("expected Interp, got {other:?}"),
+        }
+        match &segs[2] {
+            BacktickSegment::Text(s) => assert_eq!(s, "!"),
+            other => panic!("expected Text, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn backtick_segments_multiline_dedent_skips_interp() {
+        // BEP §12 rule 8: dedent operates on literal text only; interpolations
+        // are treated as opaque inline content and do not affect min-indent.
+        use baml_compiler_syntax::{BacktickSegment, BacktickStringLiteral};
+        use rowan::ast::AstNode;
+
+        let source = "
+function Demo() -> string {
+    let s = `
+        Hello, ${name}!
+        Welcome.
+    `
+    s
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let lit = BacktickStringLiteral::cast(
+            root.descendants()
+                .find(|n| n.kind() == SyntaxKind::BACKTICK_STRING_LITERAL)
+                .unwrap(),
+        )
+        .unwrap();
+        let segs = lit.segments();
+        // After dedent: leading "Hello, ", interp, "!\nWelcome." (trailing
+        // whitespace stripped by preprocess_template's .trim()).
+        let text_parts: Vec<&str> = segs
+            .iter()
+            .filter_map(|s| match s {
+                BacktickSegment::Text(t) => Some(t.as_str()),
+                BacktickSegment::Interp(_) | BacktickSegment::For(_) | BacktickSegment::If(_) => {
+                    None
+                }
+            })
+            .collect();
+        assert_eq!(
+            text_parts,
+            vec!["Hello, ", "!\nWelcome."],
+            "got: {text_parts:?}"
+        );
+    }
+
+    #[test]
+    fn backtick_lone_dollar_is_literal_text() {
+        // `$` not immediately followed by `{` is content, not interpolation.
+        let source = "
+function Demo() -> string {
+    `cost: $5 and $ {not interp}`
+}
+";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert!(
+            root.descendants()
+                .all(|n| n.kind() != SyntaxKind::BACKTICK_INTERPOLATION),
+            "lone $ should not emit BACKTICK_INTERPOLATION"
+        );
+    }
+
+    #[test]
+    fn backtick_escaped_dollar_does_not_interpolate() {
+        // BEP §8: `\${...}` is literal text inside backticks.
+        let source = r#"
+function Demo() -> string {
+    `literal \${name}`
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert!(
+            root.descendants()
+                .all(|n| n.kind() != SyntaxKind::BACKTICK_INTERPOLATION),
+            "escaped \\${{...}} must not emit BACKTICK_INTERPOLATION"
+        );
+    }
+
+    #[test]
+    fn backtick_empty_multi_tick_emits_diagnostic_without_consuming_downstream() {
+        // BEP-049 §8 case 1: `` `` `` is an empty 2-tick opener with no close
+        // anywhere. The parser must emit a clean diagnostic AT THE OPENER and
+        // leave the rest of the file alone — not silently swallow downstream
+        // functions while searching for a phantom 2-tick close.
+        let source = "
+function Empty() -> string {
+    ``
+}
+
+function After() -> string {
+    \"i should still parse\"
+}
+
+function MoreCode() -> int {
+    1 + 1
+}
+";
+        let (root, errors) = parse_source(source);
+
+        assert!(
+            errors
+                .iter()
+                .any(|e| format!("{e:?}").contains("Empty multi-tick backtick string")),
+            "expected an empty-multi-tick parse error, got: {errors:#?}"
+        );
+
+        // The degenerate BACKTICK_STRING_LITERAL should contain ONLY the two
+        // opener backticks — not the rest of the file.
+        let captured: Vec<String> = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::BACKTICK_STRING_LITERAL)
+            .map(|n| n.text().to_string())
+            .collect();
+        assert_eq!(captured, vec!["``".to_string()], "captured: {captured:?}");
+
+        // All three functions should still appear in the parsed tree.
+        let fns: Vec<String> = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::FUNCTION_DEF)
+            .filter_map(|f| {
+                f.children_with_tokens()
+                    .filter_map(rowan::NodeOrToken::into_token)
+                    .find(|t| t.kind() == SyntaxKind::WORD)
+                    .map(|t| t.text().to_string())
+            })
+            .collect();
+        assert_eq!(fns, vec!["Empty", "After", "MoreCode"]);
+    }
+
+    #[test]
+    fn backtick_empty_three_tick_also_diagnosed() {
+        // Same rule applies to any N ≥ 2.
+        let source = "
+function Bad() -> string {
+    ```
+}
+function Good() -> int { 1 }
+";
+        let (root, errors) = parse_source(source);
+        assert!(
+            errors
+                .iter()
+                .any(|e| format!("{e:?}").contains("Empty multi-tick backtick string")),
+            "expected empty-multi-tick error for 3-tick opener, got: {errors:#?}"
+        );
+        let fns: Vec<String> = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::FUNCTION_DEF)
+            .filter_map(|f| {
+                f.children_with_tokens()
+                    .filter_map(rowan::NodeOrToken::into_token)
+                    .find(|t| t.kind() == SyntaxKind::WORD)
+                    .map(|t| t.text().to_string())
+            })
+            .collect();
+        assert_eq!(fns, vec!["Bad", "Good"]);
+    }
+
+    #[test]
+    fn backtick_unclosed_emits_error() {
+        let source = "
+function Demo() -> string {
+    let s = `not closed
+}
+";
+        let (_root, errors) = parse_source(source);
+        assert!(
+            errors
+                .iter()
+                .any(|e| format!("{e:?}").contains("Unclosed backtick string")),
+            "expected an Unclosed-backtick parse error, got: {errors:#?}"
+        );
+    }
 
     #[test]
     fn let_else_basic_parses() {

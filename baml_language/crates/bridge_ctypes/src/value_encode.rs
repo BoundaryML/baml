@@ -1,16 +1,20 @@
 //! `BexExternalValue` -> `BamlOutboundValue` conversion.
 
 use baml_type::{Literal, Name};
+use base64::Engine as _;
+use bex_events::run::{RunError, RunErrorClass, RunOutcome, RunResult};
 use bex_project::{BexExternalAdt, BexExternalValue, RuntimeTy};
+use indexmap::IndexMap;
+use prost::Message;
 
 use crate::{
     baml_core::cffi::{
-        BamlOutboundHandle, BamlOutboundMapEntry, BamlOutboundValue, BamlTy, BamlTyBigint,
-        BamlTyBool, BamlTyFloat, BamlTyGenericArg, BamlTyInt, BamlTyList, BamlTyLiteral, BamlTyMap,
-        BamlTyMedia, BamlTyName, BamlTyNull, BamlTyOptional, BamlTyString, BamlTyUint8Array,
-        BamlTyUnionVariant, BamlTyUnknown, BamlValueClass, BamlValueEnum, BamlValueList,
-        BamlValueMap, BamlValueUnionVariant, baml_outbound_value::Value as BamlValueVariant,
-        baml_ty::Type as FieldType,
+        BamlOutboundHandle, BamlOutboundMapEntry, BamlOutboundValue, BamlToHostArg, BamlToHostCall,
+        BamlTy, BamlTyBigint, BamlTyBool, BamlTyFloat, BamlTyGenericArg, BamlTyInt, BamlTyList,
+        BamlTyLiteral, BamlTyMap, BamlTyMedia, BamlTyName, BamlTyNull, BamlTyOptional,
+        BamlTyString, BamlTyUint8Array, BamlTyUnionVariant, BamlTyUnknown, BamlValueClass,
+        BamlValueEnum, BamlValueList, BamlValueMap, BamlValueUnionVariant,
+        baml_outbound_value::Value as BamlValueVariant, baml_ty::Type as FieldType,
     },
     error::CtypesError,
     handle_table::{BexRustData, CffiHandleTableEntry, CffiHandleTableOptions},
@@ -184,6 +188,28 @@ pub fn external_to_outbound(
     };
 
     Ok(BamlOutboundValue { value: variant })
+}
+
+pub fn encoded_success_outcome(
+    result: &BexExternalValue,
+    renderer_hint: &'static str,
+) -> RunOutcome {
+    let handle_options = CffiHandleTableOptions::for_wire();
+    match external_to_outbound(result, &handle_options) {
+        Ok(baml_val) => {
+            let b64 = base64::engine::general_purpose::STANDARD.encode(baml_val.encode_to_vec());
+            RunOutcome::Succeeded(RunResult {
+                value: Some(b64),
+                renderer_hint: Some(renderer_hint.to_string()),
+                supporting_payload_ids: Vec::new(),
+            })
+        }
+        Err(e) => RunOutcome::Failed(RunError {
+            class: RunErrorClass::Host,
+            message: format!("Failed to encode result: {e}"),
+            details: None,
+        }),
+    }
 }
 
 fn empty_ty_name() -> BamlTyName {
@@ -429,6 +455,39 @@ fn ty_to_field_type(ty: &RuntimeTy) -> BamlTy {
     };
 
     BamlTy { r#type: field_type }
+}
+
+/// Build the engine→host call for a host-callable invocation. The
+/// engine has already resolved the call against the callee's declared params:
+/// `positional` holds the required (leading) args and `optional` holds the
+/// *supplied* optional args keyed by parameter name (omitted optionals are
+/// absent, so the host's own default applies). The result is a flat,
+/// declared-order list — required args first (`arg_name` empty), then the
+/// supplied optionals (tagged `is_optional_arg`, keyed by name) — each value
+/// encoded type-rich so the bridge can decode it without the callee type on the
+/// wire.
+pub fn build_to_host_call(
+    positional: &[BexExternalValue],
+    optional: &IndexMap<String, BexExternalValue>,
+    options: &CffiHandleTableOptions,
+) -> Result<BamlToHostCall, CtypesError> {
+    let mut args = Vec::with_capacity(positional.len() + optional.len());
+    for v in positional {
+        args.push(BamlToHostArg {
+            value: Some(external_to_outbound(v, options)?),
+            // Positional (required) args are taken by position — no name.
+            arg_name: String::new(),
+            is_optional_arg: false,
+        });
+    }
+    for (name, v) in optional {
+        args.push(BamlToHostArg {
+            value: Some(external_to_outbound(v, options)?),
+            arg_name: name.clone(),
+            is_optional_arg: true,
+        });
+    }
+    Ok(BamlToHostCall { args })
 }
 
 #[cfg(test)]

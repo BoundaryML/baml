@@ -2,11 +2,78 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use baml_project::ProjectDatabase;
-use baml_workspace::discover_baml_files;
+use baml_workspace::{
+    discover_baml_files, find_baml_project_root, project_search_dir, project_source_root,
+    resolve_project_search_start,
+};
 
 use crate::reporter::Reporter;
 
-/// Canonicalize `from` and load all discovered `.baml` files into a fresh
+/// The source location shape shared by `run`, `pack`, and `playground`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum SourceLocation {
+    /// A resolved BAML project root discovered by walking up from `from` or cwd.
+    Project { root: PathBuf, files: Vec<PathBuf> },
+    /// A hermetic single-file source selected through `--file`.
+    StandaloneFile { file: PathBuf, root: PathBuf },
+}
+
+/// `--file` and `--from` both name a source location.
+pub(crate) fn validate_file_from_flags(file: Option<&Path>, from: Option<&Path>) -> Result<()> {
+    if file.is_some() && from.is_some() {
+        anyhow::bail!(
+            "`--file` and `--from` are mutually exclusive — `--file` already names \
+             the single source to load."
+        );
+    }
+    Ok(())
+}
+
+/// Resolve the CLI source location exactly like `baml run` project/file mode.
+pub(crate) fn resolve_source_location(
+    from: Option<&Path>,
+    file: Option<&Path>,
+    reporter: Option<&Reporter>,
+) -> Result<SourceLocation> {
+    validate_file_from_flags(file, from)?;
+
+    if let Some(file) = file {
+        let canonical = resolve_standalone_file(file)?;
+        let root = canonical
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .to_path_buf();
+        return Ok(SourceLocation::StandaloneFile {
+            file: canonical,
+            root,
+        });
+    }
+
+    let (_db, root, files) = match reporter {
+        Some(reporter) => load_project_from_reporting(from, reporter)?,
+        None => load_project_from(from)?,
+    };
+    Ok(SourceLocation::Project { root, files })
+}
+
+pub(crate) fn resolve_standalone_file(file_path: &Path) -> Result<PathBuf> {
+    let display = file_path.display().to_string();
+    let canonical =
+        std::fs::canonicalize(file_path).with_context(|| format!("File not found: {display}"))?;
+    if !canonical.is_file() {
+        anyhow::bail!("`{}` is not a file.", canonical.display());
+    }
+    if canonical.extension().and_then(|ext| ext.to_str()) != Some("baml") {
+        anyhow::bail!(
+            "`{}` is not a BAML source file. Use a `.baml` file with `--file`.",
+            canonical.display()
+        );
+    }
+    Ok(canonical)
+}
+
+/// Resolve `from` (or cwd when omitted), walk up to the BAML project root, and
+/// load all discovered `.baml` files into a fresh
 /// [`ProjectDatabase`]. Returns the database, the canonical project root,
 /// and the list of loaded files. Used by the build/execute commands
 /// (`run`/`test`/`generate`/`pack`).
@@ -26,16 +93,17 @@ use crate::reporter::Reporter;
 ///   stalling while salsa type-infers hundreds of stray fixtures) the old
 ///   "`baml.toml` required" rule guarded against.
 ///
-/// A directory with *neither* marker is rejected with a clear message —
-/// that's the only remaining hard failure, and it points at `baml_src/`,
-/// `baml init`, and `--file`.
+/// If the start path and its ancestors have *neither* marker, this is rejected
+/// with a clear message that points at `baml_src/`, `baml init`, and `--file`.
 ///
 /// Standalone single-file callers (`baml run --file …`, `baml pack --file
 /// …`) skip this path entirely; they don't need a project at all.
 ///
 /// Callers decide how to surface an empty `files` result (e.g. `run` bails,
 /// `test` returns `NoTestsRun`, `generate` returns `Other`).
-pub(crate) fn load_project_from(from: &Path) -> Result<(ProjectDatabase, PathBuf, Vec<PathBuf>)> {
+pub(crate) fn load_project_from(
+    from: Option<&Path>,
+) -> Result<(ProjectDatabase, PathBuf, Vec<PathBuf>)> {
     load_project_from_inner(from, |_| {})
 }
 
@@ -46,7 +114,7 @@ pub(crate) fn load_project_from(from: &Path) -> Result<(ProjectDatabase, PathBuf
 /// instead of a single `Loading <project>` line. `grep`/`describe`
 /// stay on the lenient [`load_project_or_default`].
 pub(crate) fn load_project_from_reporting(
-    from: &Path,
+    from: Option<&Path>,
     reporter: &Reporter,
 ) -> Result<(ProjectDatabase, PathBuf, Vec<PathBuf>)> {
     load_project_from_inner(from, |path| {
@@ -90,12 +158,11 @@ pub(crate) fn load_project_from_reporting(
 ///   marked ones. Manifest-less projects use `baml_src/`, which scopes the
 ///   walk. (See the `walk_up_*` tests.)
 pub(crate) fn load_project_or_default(
-    from: &Path,
+    from: Option<&Path>,
 ) -> Result<(ProjectDatabase, PathBuf, Vec<PathBuf>)> {
-    let canonical = std::fs::canonicalize(from)
-        .with_context(|| format!("Could not resolve path: {}", from.display()))?;
+    let canonical = resolve_search_start(from)?;
 
-    match find_project_root(&canonical) {
+    match find_baml_project_root(&canonical) {
         // Walk-up: load the ancestor project. Manifest validation is
         // intentionally skipped (see the docstring on point 1) — unlike the
         // strict `load_project_from` path, introspection doesn't need a
@@ -103,42 +170,44 @@ pub(crate) fn load_project_or_default(
         Some(root) => build_project_db(root, |_| {}),
         None => {
             let mut db = ProjectDatabase::new();
-            db.set_project_root(&canonical);
-            Ok((db, canonical, Vec::new()))
+            let root = project_search_dir(&canonical);
+            db.set_project_root(&root);
+            Ok((db, root, Vec::new()))
         }
     }
 }
 
-/// Walk `start` and its ancestors looking for the nearest directory that
-/// contains a BAML project marker, stopping at the filesystem root. Returns the
-/// project directory, not the marker path. Cargo-style project discovery.
-fn find_project_root(start: &Path) -> Option<PathBuf> {
-    start
-        .ancestors()
-        .find(|dir| dir.join("baml.toml").is_file() || dir.join("baml_src").is_dir())
-        .map(Path::to_path_buf)
+/// Resolve a path suitable for project discovery. When `from` is omitted,
+/// discovery starts at the current directory.
+fn resolve_search_start(from: Option<&Path>) -> Result<PathBuf> {
+    resolve_project_search_start(from).with_context(|| match from {
+        Some(from) => format!("Could not resolve path: {}", from.display()),
+        None => "Could not resolve current directory".to_string(),
+    })
+}
+
+pub(crate) fn find_project_root_from(from: Option<&Path>) -> Result<Option<PathBuf>> {
+    let canonical = resolve_search_start(from)?;
+    Ok(find_baml_project_root(&canonical))
 }
 
 fn load_project_from_inner(
-    from: &Path,
+    from: Option<&Path>,
     on_file: impl Fn(&Path),
 ) -> Result<(ProjectDatabase, PathBuf, Vec<PathBuf>)> {
-    let canonical = std::fs::canonicalize(from)
-        .with_context(|| format!("Could not resolve path: {}", from.display()))?;
-
-    let toml_path = canonical.join("baml.toml");
-    let has_baml_toml = toml_path.exists();
-    let has_baml_src = canonical.join("baml_src").is_dir();
-
-    if !has_baml_toml && !has_baml_src {
+    let canonical = resolve_search_start(from)?;
+    let Some(canonical) = find_baml_project_root(&canonical) else {
         anyhow::bail!(
-            "`{}` doesn't look like a BAML project — no `baml.toml` and no \
-             `baml_src/` directory found.\n\
+            "`{}` doesn't look like it belongs to a BAML project — no `baml.toml` \
+             and no `baml_src/` directory found in it or its ancestors.\n\
              Add a `baml_src/` directory with your `.baml` files, run `baml init` \
              to create a `baml.toml`, or for a one-off script use `--file <PATH>`.",
             canonical.display()
         );
-    }
+    };
+
+    let toml_path = canonical.join("baml.toml");
+    let has_baml_toml = toml_path.exists();
 
     // Manifest validation, Cargo-style: when a `baml.toml` is present it must
     // be valid (`[package].name` mandatory). Failing here — before any source
@@ -147,7 +216,17 @@ fn load_project_from_inner(
     // verb tries to use the name. A manifest-less `baml_src/` project skips
     // this: `baml.toml` is opt-in.
     if has_baml_toml {
-        validate_baml_toml(&toml_path)?;
+        let content = std::fs::read_to_string(&toml_path)
+            .with_context(|| format!("Failed to read {}", toml_path.display()))?;
+        let manifest = crate::manifest::parse(&content)
+            .with_context(|| format!("Failed to parse {}", toml_path.display()))?;
+        crate::manifest::package_name(&manifest, &toml_path)?;
+        // Unknown keys are advisory, not fatal: a typo (`[scriptz]`,
+        // `nmae = ...`) warns rather than silently no-ops, but a
+        // forward-compatible manifest still loads.
+        for warning in crate::manifest::unknown_field_warnings(&manifest) {
+            crate::reporter::print_warning(format_args!("{warning}"));
+        }
     }
 
     build_project_db(canonical, on_file)
@@ -167,13 +246,7 @@ fn build_project_db(
     canonical: PathBuf,
     on_file: impl Fn(&Path),
 ) -> Result<(ProjectDatabase, PathBuf, Vec<PathBuf>)> {
-    let baml_src = canonical.join("baml_src");
-    let has_baml_src = baml_src.is_dir();
-    let walk_root = if has_baml_src {
-        baml_src
-    } else {
-        canonical.clone()
-    };
+    let walk_root = project_source_root(&canonical);
 
     let mut db = ProjectDatabase::new();
     db.set_project_root(&canonical);
@@ -194,32 +267,9 @@ fn build_project_db(
 pub(crate) fn validate_baml_toml(toml_path: &Path) -> Result<String> {
     let content = std::fs::read_to_string(toml_path)
         .with_context(|| format!("Failed to read {}", toml_path.display()))?;
-    let table: toml::Table = content
-        .parse()
+    let manifest = crate::manifest::parse(&content)
         .with_context(|| format!("Failed to parse {}", toml_path.display()))?;
-    let package = table
-        .get("package")
-        .and_then(|v| v.as_table())
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "{}: missing `[package]` table.\n\
-             Add:\n\n    [package]\n    name = \"<your-project-name>\"\n",
-                toml_path.display()
-            )
-        })?;
-    let name = package
-        .get("name")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "{}: `[package]` is missing `name = \"<your-project-name>\"`.",
-                toml_path.display()
-            )
-        })?;
-    if name.trim().is_empty() {
-        anyhow::bail!("{}: `[package].name` cannot be empty.", toml_path.display());
-    }
-    Ok(name.to_string())
+    crate::manifest::package_name(&manifest, toml_path)
 }
 
 /// Resolve the project's name for output-artifact naming (used by `baml
@@ -228,9 +278,15 @@ pub(crate) fn validate_baml_toml(toml_path: &Path) -> Result<String> {
 /// For a manifest-less `baml_src/` project, falls back to the project
 /// directory's name — the way `cargo` names a target after its directory
 /// when no explicit name is given.
-pub(crate) fn resolve_project_name(root: &Path) -> Result<String> {
-    let canonical = std::fs::canonicalize(root)
-        .with_context(|| format!("Could not resolve path: {}", root.display()))?;
+pub(crate) fn resolve_project_name(from: Option<&Path>) -> Result<String> {
+    let canonical = resolve_search_start(from)?;
+    let Some(canonical) = find_baml_project_root(&canonical) else {
+        anyhow::bail!(
+            "`{}` doesn't look like it belongs to a BAML project — no `baml.toml` \
+             and no `baml_src/` directory found in it or its ancestors.",
+            canonical.display()
+        );
+    };
     let toml_path = canonical.join("baml.toml");
     if toml_path.exists() {
         return validate_baml_toml(&toml_path);
@@ -270,10 +326,10 @@ mod tests {
         )
         .unwrap();
 
-        let err = load_project_from(tmp.path()).unwrap_err();
+        let err = load_project_from(Some(tmp.path())).unwrap_err();
         let msg = format!("{err}");
         assert!(
-            msg.contains("doesn't look like a BAML project"),
+            msg.contains("doesn't look like it belongs to a BAML project"),
             "got: {msg}"
         );
         assert!(msg.contains("baml.toml"), "got: {msg}");
@@ -292,7 +348,7 @@ mod tests {
         fs::create_dir(&src).unwrap();
         fs::write(src.join("main.baml"), "function main() -> int { 1 }").unwrap();
 
-        let (_db, _root, files) = load_project_from(tmp.path()).unwrap();
+        let (_db, _root, files) = load_project_from(Some(tmp.path())).unwrap();
         assert_eq!(files.len(), 1, "got files: {files:?}");
         assert!(files[0].ends_with("main.baml"));
     }
@@ -313,7 +369,7 @@ mod tests {
         )
         .unwrap();
 
-        let (_db, _root, files) = load_project_from(tmp.path()).unwrap();
+        let (_db, _root, files) = load_project_from(Some(tmp.path())).unwrap();
         assert_eq!(files.len(), 1, "got files: {files:?}");
         assert!(files[0].ends_with("main.baml"));
     }
@@ -324,7 +380,7 @@ mod tests {
     fn rejects_baml_toml_without_package_table() {
         let tmp = TempDir::new().unwrap();
         fs::write(tmp.path().join("baml.toml"), "# empty\n").unwrap();
-        let err = load_project_from(tmp.path()).unwrap_err();
+        let err = load_project_from(Some(tmp.path())).unwrap_err();
         let msg = format!("{err}");
         assert!(msg.contains("[package]"), "got: {msg}");
     }
@@ -334,7 +390,7 @@ mod tests {
     fn rejects_baml_toml_with_package_but_no_name() {
         let tmp = TempDir::new().unwrap();
         fs::write(tmp.path().join("baml.toml"), "[package]\n").unwrap();
-        let err = load_project_from(tmp.path()).unwrap_err();
+        let err = load_project_from(Some(tmp.path())).unwrap_err();
         let msg = format!("{err}");
         assert!(msg.contains("name"), "got: {msg}");
     }
@@ -344,7 +400,7 @@ mod tests {
     fn rejects_baml_toml_with_empty_name() {
         let tmp = TempDir::new().unwrap();
         fs::write(tmp.path().join("baml.toml"), "[package]\nname = \"\"\n").unwrap();
-        let err = load_project_from(tmp.path()).unwrap_err();
+        let err = load_project_from(Some(tmp.path())).unwrap_err();
         assert!(format!("{err}").contains("cannot be empty"));
     }
 
@@ -358,7 +414,7 @@ mod tests {
             "[package]\nname = \"my-app\"\n",
         )
         .unwrap();
-        assert_eq!(resolve_project_name(tmp.path()).unwrap(), "my-app");
+        assert_eq!(resolve_project_name(Some(tmp.path())).unwrap(), "my-app");
     }
 
     /// `resolve_project_name` falls back to the directory name for a
@@ -371,7 +427,10 @@ mod tests {
         fs::create_dir(&proj).unwrap();
         fs::create_dir(proj.join("baml_src")).unwrap();
 
-        assert_eq!(resolve_project_name(&proj).unwrap(), "my-cool-project");
+        assert_eq!(
+            resolve_project_name(Some(&proj)).unwrap(),
+            "my-cool-project"
+        );
     }
 
     fn valid_manifest() -> &'static str {
@@ -385,9 +444,59 @@ mod tests {
         fs::write(tmp.path().join("baml.toml"), valid_manifest()).unwrap();
         fs::write(tmp.path().join("a.baml"), "function main() -> int { 1 }").unwrap();
 
-        let (_db, _root, files) = load_project_from(tmp.path()).unwrap();
+        let (_db, _root, files) = load_project_from(Some(tmp.path())).unwrap();
         assert_eq!(files.len(), 1);
         assert!(files[0].ends_with("a.baml"));
+    }
+
+    #[test]
+    fn project_loader_walks_up_from_baml_src_dir() {
+        let tmp = TempDir::new().unwrap();
+        fs::write(tmp.path().join("baml.toml"), valid_manifest()).unwrap();
+        let src = tmp.path().join("baml_src");
+        fs::create_dir(&src).unwrap();
+        fs::write(src.join("main.baml"), "function main() -> int { 1 }").unwrap();
+
+        let (_db, root, files) = load_project_from(Some(&src)).unwrap();
+        assert_eq!(root, std::fs::canonicalize(tmp.path()).unwrap());
+        assert_eq!(files.len(), 1, "got files: {files:?}");
+        assert!(files[0].ends_with("main.baml"));
+    }
+
+    #[test]
+    fn project_loader_walks_up_from_nested_baml_src_dir() {
+        let tmp = TempDir::new().unwrap();
+        fs::write(tmp.path().join("baml.toml"), valid_manifest()).unwrap();
+        let nested = tmp.path().join("baml_src/nested/deeper");
+        fs::create_dir_all(&nested).unwrap();
+        fs::write(
+            tmp.path().join("baml_src/main.baml"),
+            "function main() -> int { 1 }",
+        )
+        .unwrap();
+
+        let (_db, root, files) = load_project_from(Some(&nested)).unwrap();
+        assert_eq!(root, std::fs::canonicalize(tmp.path()).unwrap());
+        assert_eq!(files.len(), 1, "got files: {files:?}");
+        assert!(files[0].ends_with("main.baml"));
+    }
+
+    #[test]
+    fn project_loader_prefers_baml_toml_over_nearer_baml_src_marker() {
+        let tmp = TempDir::new().unwrap();
+        fs::write(tmp.path().join("baml.toml"), valid_manifest()).unwrap();
+        let nested = tmp.path().join("child/baml_src/nested");
+        fs::create_dir_all(&nested).unwrap();
+        fs::write(
+            tmp.path().join("child/baml_src/main.baml"),
+            "function main() -> int { 1 }",
+        )
+        .unwrap();
+
+        let (_db, root, files) = load_project_from(Some(&nested)).unwrap();
+        assert_eq!(root, std::fs::canonicalize(tmp.path()).unwrap());
+        assert_eq!(files.len(), 1, "got files: {files:?}");
+        assert!(files[0].ends_with("main.baml"));
     }
 
     // ── load_project_or_default (read-only / introspection path) ────────────
@@ -405,7 +514,7 @@ mod tests {
         )
         .unwrap();
 
-        let (db, root, files) = load_project_or_default(tmp.path()).unwrap();
+        let (db, root, files) = load_project_or_default(Some(tmp.path())).unwrap();
         assert!(
             files.is_empty(),
             "default state must not slurp loose files: {files:?}"
@@ -428,7 +537,7 @@ mod tests {
         fs::create_dir(&src).unwrap();
         fs::write(src.join("main.baml"), "function main() -> int { 1 }").unwrap();
 
-        let (_db, root, files) = load_project_or_default(tmp.path()).unwrap();
+        let (_db, root, files) = load_project_or_default(Some(tmp.path())).unwrap();
         assert_eq!(root, std::fs::canonicalize(tmp.path()).unwrap());
         assert_eq!(files.len(), 1, "got files: {files:?}");
         assert!(files[0].ends_with("main.baml"));
@@ -447,7 +556,7 @@ mod tests {
         let nested = src.join("nested");
         fs::create_dir(&nested).unwrap();
 
-        let (_db, root, files) = load_project_or_default(&nested).unwrap();
+        let (_db, root, files) = load_project_or_default(Some(&nested)).unwrap();
         assert_eq!(root, std::fs::canonicalize(tmp.path()).unwrap());
         assert_eq!(files.len(), 1, "got files: {files:?}");
         assert!(files[0].ends_with("main.baml"));
@@ -463,7 +572,7 @@ mod tests {
         let nested = src.join("nested");
         fs::create_dir(&nested).unwrap();
 
-        let (_db, root, files) = load_project_or_default(&nested).unwrap();
+        let (_db, root, files) = load_project_or_default(Some(&nested)).unwrap();
         assert_eq!(root, std::fs::canonicalize(tmp.path()).unwrap());
         assert_eq!(files.len(), 1, "got files: {files:?}");
         assert!(files[0].ends_with("main.baml"));
@@ -485,7 +594,7 @@ mod tests {
         let nested = tmp.path().join("sub").join("deeper");
         fs::create_dir_all(&nested).unwrap();
 
-        let (_db, root, files) = load_project_or_default(&nested).unwrap();
+        let (_db, root, files) = load_project_or_default(Some(&nested)).unwrap();
         assert_eq!(root, std::fs::canonicalize(tmp.path()).unwrap());
         assert_eq!(
             files.len(),
@@ -503,9 +612,9 @@ mod tests {
         fs::write(tmp.path().join("a.baml"), "function main() -> int { 1 }").unwrap();
 
         // Strict loader rejects it...
-        assert!(load_project_from(tmp.path()).is_err());
+        assert!(load_project_from(Some(tmp.path())).is_err());
         // ...but the introspection loader still loads the files.
-        let (_db, _root, files) = load_project_or_default(tmp.path()).unwrap();
+        let (_db, _root, files) = load_project_or_default(Some(tmp.path())).unwrap();
         assert_eq!(files.len(), 1, "got files: {files:?}");
     }
 
@@ -526,7 +635,7 @@ mod tests {
         )
         .unwrap();
 
-        let (_db, _root, files) = load_project_from(tmp.path()).unwrap();
+        let (_db, _root, files) = load_project_from(Some(tmp.path())).unwrap();
         assert_eq!(files.len(), 1, "got files: {files:?}");
         assert!(files[0].ends_with("main.baml"));
     }
