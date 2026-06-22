@@ -3399,7 +3399,16 @@ function baml.panics.HostContractViolation.to_json(self: baml.panics.HostContrac
 function baml.panics.HostContractViolation.from_json(j: baml.json.json) -> baml.panics.HostContractViolation throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   HostContractViolation { message: baml.json.from_json<string>(baml.json.field(j, "message")), class_name: baml.json.from_json<string?>(baml.json.field(j, "class_name")), language: baml.json.from_json<string?>(baml.json.field(j, "language")) } : baml.panics.HostContractViolation
 }
-type baml.panics.Panic = baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.InvalidFieldAccess | baml.panics.MapKeyNotFound | baml.panics.StackOverflow | baml.panics.AssertionFailed | baml.panics.Unreachable | baml.panics.Cancelled | baml.panics.UserPanic | baml.panics.Exit | baml.panics.AllocFailure | baml.panics.HostUnavailable | baml.panics.NegativeBitShift | baml.panics.SdkPanic | baml.panics.HostContractViolation
+class baml.panics.IntegerOverflow {
+  message: string
+}
+function baml.panics.IntegerOverflow.to_json(self: baml.panics.IntegerOverflow) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+  map { "message": baml.json.to_json(self.message) } : map<string, baml.json.json>
+}
+function baml.panics.IntegerOverflow.from_json(j: baml.json.json) -> baml.panics.IntegerOverflow throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  IntegerOverflow { message: baml.json.from_json<string>(baml.json.field(j, "message")) } : baml.panics.IntegerOverflow
+}
+type baml.panics.Panic = baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.InvalidFieldAccess | baml.panics.MapKeyNotFound | baml.panics.StackOverflow | baml.panics.AssertionFailed | baml.panics.Unreachable | baml.panics.Cancelled | baml.panics.UserPanic | baml.panics.Exit | baml.panics.AllocFailure | baml.panics.HostUnavailable | baml.panics.NegativeBitShift | baml.panics.SdkPanic | baml.panics.HostContractViolation | baml.panics.IntegerOverflow
 class baml.panics.DivisionByZero$stream {
   dividend: int | null
 }
@@ -3450,7 +3459,10 @@ class baml.panics.HostContractViolation$stream {
   class_name: string | null
   language: string | null
 }
-type baml.panics.Panic$stream = baml.panics.DivisionByZero$stream | baml.panics.IndexOutOfBounds$stream | baml.panics.InvalidFieldAccess$stream | baml.panics.MapKeyNotFound$stream | baml.panics.StackOverflow$stream | baml.panics.AssertionFailed$stream | baml.panics.Unreachable$stream | baml.panics.Cancelled$stream | baml.panics.UserPanic$stream | baml.panics.Exit$stream | baml.panics.AllocFailure$stream | baml.panics.HostUnavailable$stream | baml.panics.NegativeBitShift$stream | baml.panics.SdkPanic$stream | baml.panics.HostContractViolation$stream
+class baml.panics.IntegerOverflow$stream {
+  message: string | null
+}
+type baml.panics.Panic$stream = baml.panics.DivisionByZero$stream | baml.panics.IndexOutOfBounds$stream | baml.panics.InvalidFieldAccess$stream | baml.panics.MapKeyNotFound$stream | baml.panics.StackOverflow$stream | baml.panics.AssertionFailed$stream | baml.panics.Unreachable$stream | baml.panics.Cancelled$stream | baml.panics.UserPanic$stream | baml.panics.Exit$stream | baml.panics.AllocFailure$stream | baml.panics.HostUnavailable$stream | baml.panics.NegativeBitShift$stream | baml.panics.SdkPanic$stream | baml.panics.HostContractViolation$stream | baml.panics.IntegerOverflow$stream
 
 --- <builtin>/baml/ns_spawn/spawn.baml ---
 class baml.spawn.SpawnParams {

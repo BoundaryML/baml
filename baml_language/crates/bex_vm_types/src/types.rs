@@ -831,7 +831,11 @@ impl Value {
             "tagged_int_add_checked: both inputs must be Int"
         );
         let (t, overflow) = (a.0 as i64).overflowing_add((b.0 as i64).wrapping_sub(1));
-        if overflow { None } else { Some(Value(t as u64)) }
+        if overflow {
+            None
+        } else {
+            Some(Value(t as u64))
+        }
     }
 
     /// Difference of two `Int`-tagged Values, or `None` on i63 overflow.
@@ -845,7 +849,11 @@ impl Value {
             "tagged_int_sub_checked: both inputs must be Int"
         );
         let (t, overflow) = (a.0 as i64).overflowing_sub((b.0 as i64).wrapping_sub(1));
-        if overflow { None } else { Some(Value(t as u64)) }
+        if overflow {
+            None
+        } else {
+            Some(Value(t as u64))
+        }
     }
 
     // The OpCode::CmpInt* path does signed comparison directly on the

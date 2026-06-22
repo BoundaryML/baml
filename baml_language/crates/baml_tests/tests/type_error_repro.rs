@@ -136,7 +136,10 @@ async fn negated_int_min_literal_is_valid() {
     "#
     );
     assert!(
-        matches!(output.result, Ok(BexExternalValue::Int(-4611686018427387904))),
+        matches!(
+            output.result,
+            Ok(BexExternalValue::Int(-4611686018427387904))
+        ),
         "expected INT_MIN, got: {:?}",
         output.result
     );

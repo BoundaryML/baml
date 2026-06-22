@@ -17651,6 +17651,28 @@ function baml.panics.IndexOutOfBounds.to_json(self: baml.panics.IndexOutOfBounds
     return
 }
 
+function baml.panics.IntegerOverflow.from_json(j: baml.json.json) -> baml.panics.IntegerOverflow {
+    load_var j
+    load_const "message"
+    call baml.json.field
+    store_var _3
+    load_type string
+    load_var _3
+    call baml.json.from_json
+    init_instance baml.panics.IntegerOverflow .message
+    return
+}
+
+function baml.panics.IntegerOverflow.to_json(self: baml.panics.IntegerOverflow) -> baml.json.json {
+    load_type string
+    load_var self
+    load_field .message
+    call baml.json.to_json
+    load_const "message"
+    alloc_map 1
+    return
+}
+
 function baml.panics.InvalidFieldAccess.from_json(j: baml.json.json) -> baml.panics.InvalidFieldAccess {
     load_var j
     load_const "field_index"
