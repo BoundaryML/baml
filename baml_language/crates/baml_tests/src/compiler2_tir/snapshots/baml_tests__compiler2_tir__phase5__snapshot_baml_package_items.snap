@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/compiler2_tir/phase5.rs
-assertion_line: 389
 expression: output
 ---
 namespace baml:
@@ -211,6 +210,9 @@ namespace baml.llm:
   function render_prompt
   function stream_llm_function<TStream, TFinal>
 namespace baml.math:
+  function mean
+  function median
+  function sum
   function trunc
 namespace baml.media:
   class Audio { methods: [to_json, url, file, base64, mime_type, from_url, from_file, from_base64, from_json] }
