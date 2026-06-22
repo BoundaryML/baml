@@ -5863,6 +5863,38 @@ impl<'a> Parser<'a> {
                 self.parse_pattern();
                 self.wrap_events_in_node(lhs_start, SyntaxKind::IS_EXPR);
                 self.finish_node();
+            } else if op == TokenKind::Not && !self.has_newline_ahead() {
+                // Postfix `!` (TypeScript/Swift/Kotlin non-null assertion).
+                // BAML has no such operator: `!` is only a *prefix* unary
+                // operator (handled in `parse_prefix`). Reaching it here means
+                // the preceding expression is complete and `!` is dangling in
+                // postfix position (e.g. `xs.at(0)!`).
+                //
+                // We must consume it with a targeted diagnostic. Leaving it
+                // unconsumed lets the statement loop re-enter `parse_prefix`,
+                // which would treat the `!` as a *prefix* operator applied to
+                // whatever follows (a `}` or `else`), producing a misleading
+                // "expected expression"/"if without else" error cascade that
+                // never points at the `!` itself.
+                //
+                // The `!self.has_newline_ahead()` guard is essential: BAML
+                // separates statements by newlines (no semicolons), so a `!`
+                // at the *start of the next line* is a legitimate prefix unary
+                // operator on a fresh statement, e.g.
+                //   let v: int | string = "hi"
+                //   !(v is int)
+                // Without the guard the trailing-`!` branch would greedily
+                // absorb that prefix `!` as a postfix on the previous
+                // statement's value. This mirrors the same no-newline
+                // restriction the tagged-template (`Backtick`) branch uses.
+                let bang_span = token.span;
+                self.error(
+                    "unexpected '!'; BAML has no non-null assertion operator — \
+                     unwrap optionals with '?? <default>' or 'if (let x) = opt { ... }'"
+                        .to_string(),
+                    bang_span,
+                );
+                self.bump(); // consume the stray '!'
             } else if let Some((left_bp, right_bp)) = Self::infix_binding_power(op) {
                 // General infix operators (including < when it's not generic args)
                 if left_bp < min_bp {
@@ -11279,5 +11311,119 @@ function f() -> int {
             .filter(|n| n.kind() == SyntaxKind::BLOCK_EXPR)
             .count();
         assert_eq!(block_count, 0, "plain let-stmt should have no BLOCK_EXPR");
+    }
+
+    #[test]
+    fn postfix_bang_emits_targeted_diagnostic_without_cascade() {
+        // Regression: `xs.at(0)!` (TS/Swift/Kotlin non-null assertion) inside
+        // an `if` branch used to leave the `!` unconsumed, which the statement
+        // loop then re-parsed as a *prefix* `!` on the following `}`/`else`,
+        // producing a misleading "expected expression"/"if without else"
+        // cascade pointing at unrelated braces. The parser must instead emit a
+        // single targeted diagnostic at the `!` and not produce the cascade.
+        let source = r#"function f(xs: int[]) -> int {
+    if (xs.length() > 0) {
+        xs.at(0)!
+    } else {
+        0
+    }
+}
+"#;
+        let (root, errors) = parse_source(source);
+
+        // Exactly one diagnostic, and it points at the `!`.
+        assert_eq!(
+            errors.len(),
+            1,
+            "expected exactly one diagnostic at the '!', got: {errors:#?}"
+        );
+        let msg = format!("{:?}", errors[0]);
+        assert!(
+            msg.contains("non-null assertion operator"),
+            "diagnostic should mention the non-null assertion operator, got: {msg}"
+        );
+
+        // The diagnostic span must target the `!` itself (not the preceding
+        // operand or a downstream brace), so editors underline the offending
+        // character precisely.
+        let span = match &errors[0] {
+            ParseError::InvalidSyntax { span, .. } => *span,
+            other => panic!("expected InvalidSyntax diagnostic, got: {other:?}"),
+        };
+        let start: usize = span.range.start().into();
+        let end: usize = span.range.end().into();
+        assert_eq!(
+            &source[start..end],
+            "!",
+            "diagnostic span should cover exactly the '!' token"
+        );
+
+        // No cascade: the `else`/`}` confusion is gone.
+        assert!(
+            !errors.iter().any(|e| {
+                let m = format!("{e:?}");
+                m.contains("found: \"else\"") || m.contains("found: \"'}'\"")
+            }),
+            "should not blame `else` or `}}`, got: {errors:#?}"
+        );
+
+        // The `if`/`else` structure parsed cleanly: the IF_EXPR still has both
+        // its then- and else-block, so downstream layers see a well-formed
+        // value-producing `if`.
+        let if_expr = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::IF_EXPR)
+            .expect("expected IF_EXPR node");
+        let block_count = if_expr
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::BLOCK_EXPR)
+            .count();
+        assert_eq!(
+            block_count, 2,
+            "IF_EXPR should keep both then- and else-blocks"
+        );
+    }
+
+    #[test]
+    fn not_equals_is_unaffected_by_postfix_bang_handling() {
+        // The postfix `!` handling must not disturb `!=`, which lexes as a
+        // single NotEquals token rather than `!` + `=`.
+        let source = r#"function f(a: int, b: int) -> bool {
+    a != b
+}
+"#;
+        let (_root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+    }
+
+    #[test]
+    fn prefix_bang_on_next_line_is_not_treated_as_postfix() {
+        // Regression: BAML separates statements by newlines (no semicolons), so
+        // a `!` at the *start of the next line* is a legitimate prefix unary
+        // operator on a fresh statement — NOT a stray postfix non-null
+        // assertion on the previous statement's value. The trailing-`!` branch
+        // must therefore only fire when the `!` directly follows its operand on
+        // the same line (guarded by `!has_newline_ahead`).
+        let source = r#"function f() -> bool {
+    let v: int | string = "hi"
+    !(v is int)
+}
+"#;
+        let (_root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+    }
+
+    #[test]
+    fn prefix_bang_starting_chained_boolean_is_not_treated_as_postfix() {
+        // The newline-separated prefix `!` must also parse cleanly when it
+        // begins a larger boolean expression, e.g. `!(a is int) || (b is int)`.
+        let source = r#"function f() -> bool {
+    let a: int | string = 1
+    let b: int | string = 2
+    !(a is int) || (b is int)
+}
+"#;
+        let (_root, errors) = parse_source(source);
+        assert_no_errors(&errors);
     }
 }
