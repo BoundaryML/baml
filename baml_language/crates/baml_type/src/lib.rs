@@ -853,7 +853,7 @@ impl Ty {
                     format!(
                         "({} as {}).{}",
                         base.render_with(s),
-                        interface.render_with(s),
+                        interface.to_ty().render_with(s),
                         member
                     )
                 } else {
@@ -920,6 +920,32 @@ impl Interface {
             self.associated_types.clone(),
             TyAttr::default(),
         )
+    }
+
+    /// Iterate every [`Ty`] the constraint carries: its generic arguments
+    /// followed by the type of each associated-type binding (the names are not
+    /// yielded). Lets generic `Ty`-walkers descend into a constraint without
+    /// re-deriving its shape.
+    pub fn tys(&self) -> impl Iterator<Item = &Ty> {
+        self.generics
+            .iter()
+            .chain(self.associated_types.iter().map(|(_, ty)| ty))
+    }
+
+    /// Rebuild the constraint with every carried [`Ty`] (generics and
+    /// associated-type bindings) mapped through `f`. The name and the binding
+    /// names are preserved. The structure-preserving companion to [`tys`](Self::tys),
+    /// for substitution/erasure/normalization passes.
+    pub fn map_tys(&self, mut f: impl FnMut(&Ty) -> Ty) -> Interface {
+        Interface {
+            name: self.name.clone(),
+            generics: self.generics.iter().map(&mut f).collect(),
+            associated_types: self
+                .associated_types
+                .iter()
+                .map(|(name, ty)| (name.clone(), f(ty)))
+                .collect(),
+        }
     }
 }
 
@@ -1032,7 +1058,7 @@ impl fmt::Display for Ty {
                 member,
                 ..
             } => match interface {
-                Some(iface) => write!(f, "({base} as {iface}).{member}"),
+                Some(iface) => write!(f, "({base} as {}).{member}", iface.to_ty()),
                 None => write!(f, "{base}.{member}"),
             },
             Ty::Never { .. } => write!(f, "never"),

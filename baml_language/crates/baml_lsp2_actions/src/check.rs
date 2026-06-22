@@ -4094,7 +4094,9 @@ fn expand_type_alias_rec(
             attr,
         } => Ty::AssociatedTypeProjection {
             base: Box::new(recurse(base, seen)),
-            interface: interface.as_ref().map(|i| Box::new(recurse(i, seen))),
+            interface: interface
+                .as_ref()
+                .map(|i| Box::new(i.map_tys(|t| recurse(t, seen)))),
             member: member.clone(),
             attr: attr.clone(),
         },

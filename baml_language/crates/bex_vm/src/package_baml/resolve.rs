@@ -13,7 +13,9 @@
 
 use std::borrow::Cow;
 
-use baml_type::{Literal, MediaKind, Name, RuntimeTy, TyAttr, TyTemplate, TypeName};
+use baml_type::{
+    Literal, MediaKind, Name, RuntimeInterface, RuntimeTy, TyAttr, TyTemplate, TypeName,
+};
 use bex_vm_types::types::{Object, RuntimeImplRule};
 
 use crate::BexVm;
@@ -552,7 +554,7 @@ pub(super) fn ty_equivalent(a: &RuntimeTy, b: &RuntimeTy) -> bool {
         ) => {
             amember == bmember
                 && ty_equivalent(abase, bbase)
-                && opt_ty_equivalent(aiface.as_deref(), biface.as_deref())
+                && opt_iface_equivalent(aiface.as_deref(), biface.as_deref())
         }
         (
             RuntimeTy::Function {
@@ -584,6 +586,22 @@ pub(super) fn ty_equivalent(a: &RuntimeTy, b: &RuntimeTy) -> bool {
 fn opt_ty_equivalent(a: Option<&RuntimeTy>, b: Option<&RuntimeTy>) -> bool {
     match (a, b) {
         (Some(x), Some(y)) => ty_equivalent(x, y),
+        (None, None) => true,
+        (Some(_), None) | (None, Some(_)) => false,
+    }
+}
+
+/// Equivalence of two optional interface *constraints* (the `as I` annotation of
+/// an associated-type projection), mirroring the `RuntimeTy::Interface` arm of
+/// [`ty_equivalent`]: same name, equivalent generic arguments, and exactly
+/// equivalent associated-type bindings.
+fn opt_iface_equivalent(a: Option<&RuntimeInterface>, b: Option<&RuntimeInterface>) -> bool {
+    match (a, b) {
+        (Some(x), Some(y)) => {
+            x.name == y.name
+                && ty_args_equivalent(&x.generics, &y.generics)
+                && associated_bindings_exactly_equivalent(&x.associated_types, &y.associated_types)
+        }
         (None, None) => true,
         (Some(_), None) | (None, Some(_)) => false,
     }

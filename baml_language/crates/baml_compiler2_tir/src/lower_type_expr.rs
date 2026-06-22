@@ -1002,7 +1002,9 @@ pub fn lower_type_expr_in_ns(
             });
             Ty::AssociatedTypeProjection {
                 base: Box::new(base_ty),
-                interface: interface_ty.map(Box::new),
+                interface: interface_ty
+                    .and_then(|interface| interface.as_interface())
+                    .map(Box::new),
                 member: member.clone(),
                 attr: TyAttr::default(),
             }

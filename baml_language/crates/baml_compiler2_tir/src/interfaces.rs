@@ -1818,10 +1818,12 @@ mod tests {
         Ty::TypeVar(Name::new(name), TyAttr::default())
     }
 
-    fn associated_projection(base: Ty, interface: Ty, member: &str) -> Ty {
+    fn associated_projection(base: Ty, interface: &Ty, member: &str) -> Ty {
         Ty::AssociatedTypeProjection {
             base: Box::new(base),
-            interface: Some(Box::new(interface)),
+            interface: Some(Box::new(interface.as_interface().unwrap_or_else(|| {
+                unreachable!("associated_projection requires an interface")
+            }))),
             member: Name::new(member),
             attr: TyAttr::default(),
         }
@@ -2073,7 +2075,7 @@ mod tests {
             interface_requires: FxHashMap::default(),
         };
         let source = interface("Source", vec![]);
-        let projected_item = associated_projection(type_var("T"), source, "Item");
+        let projected_item = associated_projection(type_var("T"), &source, "Item");
         let rule = InterfaceImplRule {
             generic_params: vec![Name::new("T")],
             generic_param_bounds: vec![None],

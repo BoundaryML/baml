@@ -125,6 +125,8 @@ ty_family! {
         Literal(Literal, Freshness, TyAttr),
         #[axis(concrete)]
         Class(TypeName, Vec<Ty>, TyAttr),
+        /// An interface existential type, equivalent to Rust `dyn Trait`.
+        /// Must specify all generic type args and all associated types.
         #[axis(abstract)]
         Interface(TypeName, Vec<Ty>, Vec<(Name, Ty)>, TyAttr),
         #[axis(concrete)]
@@ -217,7 +219,8 @@ ty_family! {
         #[axis(typevar)]
         AssociatedTypeProjection {
             base: Box<Ty>,
-            interface: Option<Box<Ty>>,
+            /// TODO: Should not be an `Option`; fix once the TIR is able to determine correctly.
+            interface: Option<Box<Interface>>,
             member: Name,
             attr: TyAttr,
         },

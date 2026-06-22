@@ -291,7 +291,7 @@ fn write_ty_identity(out: &mut String, ty: &Ty) {
             write_ty_identity(out, base);
             if let Some(interface) = interface {
                 out.push_str(" as ");
-                write_ty_identity(out, interface);
+                write_ty_identity(out, &interface.to_ty());
             }
             let _ = write!(out, ".{member}>");
         }

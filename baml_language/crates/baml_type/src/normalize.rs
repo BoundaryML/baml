@@ -622,7 +622,7 @@ impl NormalTy {
                 base: Box::new(Self::from_ty(base, ctx, expanding)),
                 interface: interface
                     .as_ref()
-                    .map(|i| Box::new(Self::from_ty(i, ctx, expanding))),
+                    .map(|i| Box::new(Self::from_ty(&i.to_ty(), ctx, expanding))),
                 member: member.clone(),
             },
             Ty::TypeAlias(qn, _) => {
@@ -1056,7 +1056,7 @@ impl NormalTy {
                 member,
             } => Ty::AssociatedTypeProjection {
                 base: Box::new(base.into_ty()),
-                interface: interface.map(|i| Box::new(i.into_ty())),
+                interface: interface.and_then(|i| i.into_interface()).map(Box::new),
                 member,
                 attr,
             },
@@ -1091,6 +1091,23 @@ impl NormalTy {
                 .iter()
                 .map(|(name, ty)| (name.clone(), ty.clone().into_ty()))
                 .collect(),
+        }
+    }
+
+    /// Consume a normalized interface (`NormalTy::Interface`) and rebuild the
+    /// [`Interface`] constraint; `None` for any other variant. Used to put the
+    /// `as I` annotation of an associated-type projection back into a `Ty`.
+    fn into_interface(self) -> Option<Interface> {
+        match self {
+            NormalTy::Interface(name, generics, bindings) => Some(Interface {
+                name,
+                generics: Self::into_tys(generics),
+                associated_types: bindings
+                    .into_iter()
+                    .map(|(name, ty)| (name, ty.into_ty()))
+                    .collect(),
+            }),
+            _ => None,
         }
     }
 

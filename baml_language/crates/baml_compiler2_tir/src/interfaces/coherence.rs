@@ -381,7 +381,7 @@ fn var_under_union(name: &Name, ty: &Ty) -> bool {
                 occurs(name, base, in_union)
                     || interface
                         .as_ref()
-                        .is_some_and(|i| occurs(name, i, in_union))
+                        .is_some_and(|i| i.tys().any(|t| occurs(name, t, in_union)))
             }
             Ty::Function {
                 params,
@@ -488,7 +488,9 @@ fn nf(ty: &Ty, enum_variants: EnumVariants) -> Ty {
             attr,
         } => Ty::AssociatedTypeProjection {
             base: Box::new(nf(base, enum_variants)),
-            interface: interface.as_ref().map(|i| Box::new(nf(i, enum_variants))),
+            interface: interface
+                .as_ref()
+                .map(|i| Box::new(i.map_tys(|t| nf(t, enum_variants)))),
             member: member.clone(),
             attr: attr.clone(),
         },
@@ -1279,7 +1281,7 @@ fn occurs_in(n: &Name, t: &Ty, vars: &[Name], bindings: &TypeBindings) -> bool {
             occurs_in(n, base, vars, bindings)
                 || interface
                     .as_ref()
-                    .is_some_and(|i| occurs_in(n, i, vars, bindings))
+                    .is_some_and(|i| i.tys().any(|t| occurs_in(n, t, vars, bindings)))
         }
         Ty::Function {
             params,
