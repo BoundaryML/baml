@@ -32,6 +32,8 @@ async def launch_agent(
     agent_id: Optional[str] = None,
     auto_create_pr: bool = True,
     model: Optional[str] = None,
+    pr_url: Optional[str] = None,
+    work_on_current_branch: bool = False,
     timeout: float = 60.0,
 ) -> dict[str, Any]:
     """Launch a Cursor cloud agent to work a fix on a GitHub repo.
@@ -50,6 +52,12 @@ async def launch_agent(
         agent_id: Optional client-supplied, stable agent id for idempotent launch.
         auto_create_pr: Whether the agent opens a pull request with its changes.
         model: Optional Cursor model id; omitted to use the account default.
+        pr_url: When set, the agent works on this existing PR's head branch (Cursor
+            ignores `ref`/`startingRef`) — used to UPDATE an existing PR (e.g. resolve
+            its conflict / fix its CI) instead of opening a brand-new one.
+        work_on_current_branch: When True, the agent commits directly to the starting
+            branch instead of cutting a fresh `cursor/...` branch. Pair with `pr_url`
+            (or a `ref` that is the PR's head branch) so the existing PR is updated.
         timeout: HTTP timeout in seconds for the launch request.
 
     Returns:
@@ -63,11 +71,18 @@ async def launch_agent(
     """
     base = os.environ.get("CURSOR_API_BASE", CURSOR_API_BASE)
     auth = base64.b64encode(f"{api_key}:".encode()).decode()
+    repo: dict[str, Any] = {"url": repo_url, "startingRef": ref}
+    if pr_url:
+        # Target an existing PR: Cursor works on that PR's head branch and ignores
+        # startingRef, so commits land on the existing PR instead of a new branch.
+        repo["prUrl"] = pr_url
     body: dict[str, Any] = {
         "prompt": {"text": prompt_text},
-        "repos": [{"url": repo_url, "startingRef": ref}],
+        "repos": [repo],
         "autoCreatePR": auto_create_pr,
     }
+    if work_on_current_branch:
+        body["workOnCurrentBranch"] = True
     if agent_id:
         body["agentId"] = agent_id
     if model:
@@ -181,10 +196,10 @@ async def pr_for_agent(api_key: str, agent_id: str, *,
         timeout: HTTP timeout in seconds.
 
     Returns:
-        ``{prUrl, branch, repoUrl, runStatus, agentStatus}`` when a PR exists, or
-        ``{prUrl: None, ..., runStatus, agentStatus}`` when the agent has no PR yet
-        (so callers can still read the run/agent status); None only when the agent
-        has no run at all.
+        ``{prUrl, branch, repoUrl, runStatus, agentStatus, createdAt}`` when a PR
+        exists, or ``{prUrl: None, ..., runStatus, agentStatus, createdAt}`` when the
+        agent has no PR yet (so callers can still read the run/agent status and the
+        agent's age); None only when the agent has no run at all.
 
     Raises:
         httpx.HTTPStatusError: On a non-2xx response.
@@ -192,6 +207,7 @@ async def pr_for_agent(api_key: str, agent_id: str, *,
     agent = await get_agent(api_key, agent_id, timeout=timeout)
     run_id = agent.get("latestRunId")
     agent_status = agent.get("status")
+    created_at = agent.get("createdAt")
     if not run_id:
         return None
     run = await get_run(api_key, agent_id, run_id, timeout=timeout)
@@ -201,12 +217,12 @@ async def pr_for_agent(api_key: str, agent_id: str, *,
         if b.get("prUrl"):
             return {"prUrl": b["prUrl"], "branch": b.get("branch"),
                     "repoUrl": b.get("repoUrl"), "runStatus": run_status,
-                    "agentStatus": agent_status}
+                    "agentStatus": agent_status, "createdAt": created_at}
     # No PR yet — still surface the run/agent status (and any branch) so the
     # tracker can decide whether to keep waiting or escalate.
     first = branches[0] if branches else {}
     return {"prUrl": None, "branch": first.get("branch"), "repoUrl": first.get("repoUrl"),
-            "runStatus": run_status, "agentStatus": agent_status}
+            "runStatus": run_status, "agentStatus": agent_status, "createdAt": created_at}
 
 
 async def add_followup(api_key: str, agent_id: str, text: str, *,

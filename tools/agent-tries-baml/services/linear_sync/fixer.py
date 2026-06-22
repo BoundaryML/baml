@@ -114,47 +114,40 @@ def _language_workspace_note() -> str:
 
 
 def _language_verification() -> str:
-    """Return the pre-PR check that mirrors the compiler repo's CI gates.
+    """Return the FAST pre-PR check for language fixes (CI owns the heavy gates).
 
-    Draft PRs from earlier runs failed CI for two recurring, avoidable reasons,
-    both of which "the tests pass" alone does not catch:
-
-    1. **Stale insta snapshots.** Adding a builtin/operator changes captured
-       output (e.g. ``baml describe`` listings, bytecode display), so committed
-       ``.snap`` files must be regenerated and committed — otherwise the snapshot
-       suite fails on every platform.
-    2. **Clippy under ``-D warnings``.** The "Pre-commit Checks" job runs clippy
-       with warnings denied, so any non-idiomatic lint (e.g.
-       ``while_let_on_iterator``) fails CI even when all tests pass.
-
-    This block names both gates and the exact commands so the agent clears them
-    locally before opening the draft.
+    The full workspace test suite, insta snapshot regeneration, and
+    ``clippy -D warnings`` are slow and are exactly what CI runs. Rather than make
+    the agent sit through all of that locally (the dispatch bottleneck), it does a
+    quick build + repro + targeted-test check and opens the PR immediately; the
+    cursor-tracker then feeds any CI/CodeRabbit failure back to a follow-up agent
+    that pushes fixes to the same PR until it goes green. This block tells the
+    agent to do the fast check and NOT block on the full suite.
 
     Returns:
-        A multi-line "Before opening the PR" checklist for language fixes.
+        A multi-line "fast check before the PR" checklist for language fixes.
     """
     return "\n".join([
-        "## Before opening the PR — these are the CI gates you MUST clear locally",
-        "Run everything below from inside `baml_language/`. \"Tests pass\" is not "
-        "enough on its own — past PRs were rejected by CI for the two reasons below "
-        "even though the feature worked. Do NOT create the draft until all three pass.",
+        "## Before opening the PR — a FAST local check only (CI is the source of truth)",
+        "Do NOT run the full workspace test suite, full `clippy`, or regenerate all "
+        "snapshots locally — those are slow and CI runs them for you. Do the quick "
+        "check below, then open the PR right away. You will be automatically "
+        "re-invoked with any CI or CodeRabbit failures to push fixes to this same PR.",
         "",
-        "1. **Full test suite.** Run the whole suite, not just the test for your "
-        "change (`cargo test` across the workspace; see "
-        "`baml_language/TEST_INSTRUCTIONS.md`). A new builtin/operator can break a "
-        "snapshot test in a different crate (e.g. `baml describe` listings or "
-        "bytecode display), so a narrow run will miss it.",
-        "2. **Snapshot tests (insta).** If any snapshot test fails, it is because "
-        "your change altered captured output. Inspect each diff, confirm the new "
-        "output is correct, then regenerate and COMMIT the updated snapshots: "
-        "`cargo insta accept --all` (and `UPDATE_EXPECT=1 cargo test --package "
-        "lsp_actions_tests` for inline expectations). Never leave a `.snap` stale "
-        "or delete a failing snapshot test to make it pass.",
-        "3. **Lint + format (the \"Pre-commit Checks\" job).** Run `cargo fmt --all` "
-        "and `cargo clippy --all-targets -- -D warnings`, and fix every warning. "
-        "Clippy runs with warnings DENIED in CI, so a single lint fails the build. "
-        "Fix lints idiomatically (e.g. use a `for` loop instead of "
-        "`while let Some(..) = iter.next()`); do not silence them with `#[allow(...)]`.",
+        "From inside `baml_language/`:",
+        "1. **Build.** Confirm the crate(s) you changed compile (`cargo build -p <crate>`).",
+        "2. **Repro.** Re-run the reproduction from above and confirm the bug is now "
+        "fixed — capture the passing output for the PR's Verification section.",
+        "3. **Targeted tests.** Run only the tests covering what you changed (e.g. "
+        "`cargo test -p <crate>` or `cargo test <module>::`), NOT the whole workspace. "
+        "See `baml_language/TEST_INSTRUCTIONS.md`.",
+        "4. **Format.** Run `cargo fmt --all` (it is cheap and a common CI failure).",
+        "",
+        "Then open the PR. CI runs the full suite, insta snapshots, and "
+        "`clippy -D warnings`; if any fail you'll get the specifics back and push fixes "
+        "here. Note: a new builtin/operator often changes captured output, so expect a "
+        "snapshot failure on the first CI run and regenerate with `cargo insta accept "
+        "--all` when that comes back.",
     ])
 
 
@@ -295,9 +288,11 @@ def cursor_prompt(issue: dict[str, Any]) -> str:
     else:
         parts += [
             "",
-            "## Before opening the PR",
-            "Run the full test suite and make sure all tests pass. Do not create the PR "
-            "draft until every test passes.",
+            "## Before opening the PR — a fast check only (CI is the source of truth)",
+            "Do a quick targeted check — validate the skill change and re-run the "
+            "reproduction from above — then open the PR right away. Do NOT run the full "
+            "test suite locally; CI runs it, and you'll be automatically re-invoked to "
+            "push fixes to this same PR for anything CI or CodeRabbit flags.",
         ]
     # Final gate for every kind: an automated CodeRabbit pass over the agent's own
     # diff, against the same base branch the agent started from.

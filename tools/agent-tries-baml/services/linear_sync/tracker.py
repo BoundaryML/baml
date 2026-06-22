@@ -5,15 +5,22 @@ watches it through:
 
   tocursor  -- poll the agent until it opens a PR -> prprep (or no PR after the run
                finishes -> needs_human)
-  prprep    -- read the PR's CI + CodeRabbit state:
-                 * merged                         -> closed
-                 * CI failing OR CodeRabbit blocks -> dispatch a fix (new agent by
+  prprep    -- read the PR's mergeability + CI + CodeRabbit state:
+                 * merged                          -> closed
+                 * closed without merging (a human
+                   abandoned/rejected the PR)       -> needs_human
+                 * merge conflict (mergeable_state
+                   == "dirty")                     -> dispatch an agent to merge the base
+                   branch in and resolve it, up to CURSOR_MAX_FIX_ATTEMPTS. Checked
+                   BEFORE the ready promotion, since CI can be green on the stale head.
+                 * CI failing OR CodeRabbit blocks  -> dispatch a fix (new agent by
                    default, or a follow-up run), up to CURSOR_MAX_FIX_ATTEMPTS, then
                    -> needs_human; Slack-notify each fix
-                 * CI passing AND CodeRabbit clear -> pr_ready (a human merges); Slack
+                 * CI passing AND CodeRabbit clear  -> pr_ready (a human merges); Slack
                  * otherwise (checks pending / no review yet) -> wait
-  pr_ready  -- keep watching the ready-to-merge PR: a human merge -> closed; late human
-               review comments -> dispatch a fix and pull it back to prprep
+  pr_ready  -- keep watching the ready-to-merge PR: a human merge -> closed; a fresh
+               merge conflict -> resolve it and pull back to prprep; late human review
+               comments -> dispatch a fix and pull it back to prprep
 
 It is a periodic sweep (not a claim loop), mirroring the cohort reconciler
 (services/cron/reconcile.py): idempotent, keyed off the issue ``status``, using only
@@ -23,6 +30,7 @@ generic table verbs so it behaves identically on the real and in-memory backends
 from __future__ import annotations
 
 import asyncio
+import datetime
 import logging
 import os
 import uuid
@@ -47,6 +55,10 @@ TRACK_SECS = int(os.environ.get("CURSOR_TRACK_SECS", "60"))
 REFIX_MODE = os.environ.get("CURSOR_REFIX_MODE", "new_agent")
 MAX_FIX_ATTEMPTS = int(os.environ.get("CURSOR_MAX_FIX_ATTEMPTS", "3"))
 TRACK_LIMIT = int(os.environ.get("CURSOR_TRACK_LIMIT", "100"))
+# An agent ACTIVE longer than this is treated as stuck/orphaned (a hung Cursor run that
+# never reaches a terminal status), so it no longer blocks a conflict resolution or CI
+# refix — the tracker stops deferring and dispatches a fresh agent.
+STALE_AGENT_SECS = int(os.environ.get("CURSOR_STALE_AGENT_SECS", "5400"))  # 90 min
 
 # Linear status-group label ids for the tracker-driven statuses.
 N_PRPREP = lc.LINEAR_STATUS_PR_PREP
@@ -132,6 +144,31 @@ class CursorTracker:
         aid = issue.get("cursorAgentId") or issue.get("fixSlackTs") or ""
         return None if (not aid or aid.startswith("pending:")) else aid
 
+    @staticmethod
+    def _agent_stale(created_at: Optional[str]) -> bool:
+        """True when a Cursor agent has been active past ``STALE_AGENT_SECS``.
+
+        A hung run can sit in a non-terminal status (ACTIVE / RUNNING) indefinitely;
+        once it is older than the cutoff the tracker stops deferring to it so a conflict
+        or CI fix is never blocked forever by a dead agent. Treated as terminal at that
+        point, which lets the tracker dispatch a fresh agent. Parse failures and a
+        missing timestamp count as not-stale (keep deferring).
+
+        Args:
+            created_at: The agent's ISO-8601 ``createdAt``, or None.
+
+        Returns:
+            True if the agent is older than ``STALE_AGENT_SECS``.
+        """
+        if not created_at:
+            return False
+        try:
+            created = datetime.datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+        except ValueError:
+            return False
+        age = (datetime.datetime.now(datetime.timezone.utc) - created).total_seconds()
+        return age > STALE_AGENT_SECS
+
     async def _track_tocursor(self, issue: dict[str, Any]) -> None:
         """Poll a working agent: advance to prprep on a PR, or escalate if it gave up.
 
@@ -198,7 +235,11 @@ class CursorTracker:
         return (pr or {}).get("html_url")
 
     async def _track_prprep(self, issue: dict[str, Any]) -> None:
-        """Read the PR's CI + CodeRabbit state and advance / fix / escalate.
+        """Read the PR's mergeability + CI + CodeRabbit state and advance / fix / escalate.
+
+        A merge conflict (``mergeable_state == "dirty"``) is handled first — before the
+        ready-to-merge promotion, since CI can be green on the stale head — by
+        dispatching an agent to merge the base branch in and resolve it.
 
         Args:
             issue: The ``prprep`` issue row.
@@ -214,7 +255,8 @@ class CursorTracker:
             pr = await cursor_client.pr_for_agent(CURSOR_API_KEY, agent_id)
             if pr:
                 run_terminal = (pr.get("runStatus") in cursor_client.TERMINAL_RUN_STATUSES
-                                or pr.get("agentStatus") in cursor_client.TERMINAL_RUN_STATUSES)
+                                or pr.get("agentStatus") in cursor_client.TERMINAL_RUN_STATUSES
+                                or self._agent_stale(pr.get("createdAt")))
                 if pr.get("prUrl") and pr["prUrl"] != pr_url:
                     pr_url = pr["prUrl"]
                     pr_branch = pr.get("branch")
@@ -235,6 +277,19 @@ class CursorTracker:
             await self._set_linear(issue, N_MERGED)
             await self._notify(issue, f"Merged: *{issue.get('title')}*\n{pr_url}")
             log.info("issue %s prprep -> closed (merged)", issue_id)
+            return
+        # PR closed without merging (a human abandoned/rejected it): the pipeline can't
+        # drive a dead PR — and CI/conflict checks below would mis-handle it — so surface
+        # it for a human (who can re-approve for a fresh attempt).
+        if pr_obj.get("state") == "closed":
+            await self._pr_closed_unmerged(issue, pr_url)
+            return
+        # Merge conflict takes priority over CI/CodeRabbit: a "dirty" PR can't be
+        # merged even when CI is green on the stale head, so resolve it before the
+        # ready-to-merge promotion below would ever fire.
+        if pr_obj.get("mergeable_state") == "dirty":
+            await self._resolve_conflict(issue, owner, repo, pr_obj, pr_url, pr_branch,
+                                         run_terminal=run_terminal, from_pr_ready=False)
             return
         sha = ((pr_obj.get("head") or {}).get("sha")) or ""
         runs = await github_client.check_runs(owner, repo, sha) if sha else []
@@ -299,12 +354,13 @@ class CursorTracker:
         # else: ci pending or CodeRabbit hasn't reviewed yet -> wait for the next tick
 
     async def _track_pr_ready(self, issue: dict[str, Any]) -> None:
-        """Re-check a ready-to-merge PR for late human review and pull it back to prep.
+        """Re-check a ready-to-merge PR for a fresh conflict or late human review.
 
-        A PR can reach ``pr_ready`` and then get human review comments before anyone
-        merges it. On genuinely new human feedback (newer than the persisted
-        high-water mark) it dispatches a fix and moves the issue back to ``prprep``.
-        A human merge in the meantime closes it.
+        A PR can reach ``pr_ready`` and then either conflict (the base branch moved) or
+        get human review comments before anyone merges it. A fresh merge conflict is
+        resolved (dispatch + pull back to ``prprep``); on genuinely new human feedback
+        (newer than the persisted high-water mark) it dispatches a fix and moves the
+        issue back to ``prprep``. A human merge in the meantime closes it.
 
         Args:
             issue: The ``pr_ready`` issue row.
@@ -324,6 +380,26 @@ class CursorTracker:
             await self._set_linear(issue, N_MERGED)
             await self._notify(issue, f"Merged: *{issue.get('title')}*\n{pr_url}")
             log.info("issue %s pr_ready -> closed (merged)", issue_id)
+            return
+        if pr_obj.get("state") == "closed":
+            await self._pr_closed_unmerged(issue, pr_url)
+            return
+        # An agent can still be ACTIVE on a pr_ready PR (it reached ready before its run
+        # ended). Poll it so a fresh conflict defers to that live agent — which may
+        # resolve the conflict itself — instead of dispatching a duplicate resolver.
+        agent_id = self._agent_id(issue)
+        run_terminal = True
+        if agent_id:
+            apr = await cursor_client.pr_for_agent(CURSOR_API_KEY, agent_id)
+            if apr:
+                run_terminal = (apr.get("runStatus") in cursor_client.TERMINAL_RUN_STATUSES
+                                or apr.get("agentStatus") in cursor_client.TERMINAL_RUN_STATUSES
+                                or self._agent_stale(apr.get("createdAt")))
+        # A PR can go green-and-ready and then conflict when the base branch moves.
+        # Resolve the conflict and pull it back to prprep before checking for review.
+        if pr_obj.get("mergeable_state") == "dirty":
+            await self._resolve_conflict(issue, owner, repo, pr_obj, pr_url, pr_branch,
+                                         run_terminal=run_terminal, from_pr_ready=True)
             return
         # Detect human review newer than the last comment we acted on (a persisted
         # high-water mark). This does NOT depend on the 👀 reaction succeeding, so
@@ -352,7 +428,6 @@ class CursorTracker:
             return
         summary = github_client.human_comment_summary(new_review, new_convo)
         sha = ((pr_obj.get("head") or {}).get("sha")) or ""
-        agent_id = self._agent_id(issue)
         new_agent_id = await self._dispatch_refix(
             issue, owner, repo, pr_url, pr_branch, summary, agent_id)
         await self.service.transition("issues", issue_id, "prprep", patch={
@@ -446,7 +521,7 @@ class CursorTracker:
 
     async def _dispatch_refix(self, issue: dict[str, Any], owner: str, repo: str,
                               pr_url: str, pr_branch: Optional[str], summary: str,
-                              agent_id: Optional[str]) -> str:
+                              agent_id: Optional[str], *, prompt: Optional[str] = None) -> str:
         """Dispatch a fix for a red PR and return the agent id now working it.
 
         In ``followup`` mode, posts a new run to the same agent (keeps its PR). In
@@ -461,19 +536,27 @@ class CursorTracker:
             pr_branch: The PR's head branch (the new agent starts from it).
             summary: The assembled CI/CodeRabbit failure text.
             agent_id: The current agent id (reused in followup mode).
+            prompt: A prebuilt instruction to use verbatim (e.g. the conflict-
+                resolution prompt); when None, the CI/review ``_refix_prompt`` is built
+                from ``summary``.
 
         Returns:
             The agent id working the fix after dispatch.
         """
-        prompt = self._refix_prompt(issue, pr_url, pr_branch, summary)
+        prompt = prompt if prompt is not None else self._refix_prompt(issue, pr_url, pr_branch, summary)
         if REFIX_MODE == "followup" and agent_id:
             await cursor_client.add_followup(CURSOR_API_KEY, agent_id, prompt)
             return agent_id
         repo_url = github_client.repo_url_from_pr(owner, repo)
         new_id = f"bc-{uuid.uuid4()}"
+        # Update the EXISTING PR: pass its url + work_on_current_branch so the agent
+        # commits to the PR's head branch instead of cutting a fresh `cursor/...`
+        # branch and opening a duplicate PR. Without this, a conflict/CI refix never
+        # touches the PR it's supposed to fix.
         await cursor_client.launch_agent(
             CURSOR_API_KEY, prompt, repo_url, pr_branch or "main",
             agent_id=new_id, auto_create_pr=True, model=CURSOR_MODEL,
+            pr_url=pr_url, work_on_current_branch=True,
         )
         return new_id
 
@@ -498,8 +581,12 @@ class CursorTracker:
             "The PR has unresolved feedback (failing checks, CodeRabbit, and/or human reviewer "
             "comments). Address EVERYTHING listed below, then commit and "
             f"push to the SAME pull request ({pr_url}) — do not open a new PR if one already exists.",
-            "After pushing, make sure the CI checks pass and all requested changes (CodeRabbit and "
-            "human reviewers) are resolved.",
+            "Verify only what you can quickly: build + the specific tests for what you changed. "
+            "Do NOT run the full test suite locally — CI re-runs it on your push, and you'll be "
+            "re-invoked with anything still failing. Just push the fix.",
+            "If CI reports failing insta snapshot tests, that means your change altered captured "
+            "output: regenerate and commit them (`cargo insta accept --all` from `baml_language/`) "
+            "rather than editing `.snap` files by hand or deleting the test.",
             "If a new PR does get created, give it a precise descriptive title (NEVER the "
             'placeholder "Pull request template") — e.g. `gh pr edit --title "<precise title>"`.',
             "Document every function, method, and type you add or change with a docstring "
@@ -508,6 +595,115 @@ class CursorTracker:
             summary or "(no machine-readable failure detail was available; inspect the PR's failing "
             "checks and CodeRabbit review directly and fix them.)",
         ])
+
+    async def _resolve_conflict(self, issue: dict[str, Any], owner: str, repo: str,
+                                pr_obj: dict[str, Any], pr_url: str, pr_branch: Optional[str],
+                                *, run_terminal: bool, from_pr_ready: bool) -> None:
+        """Dispatch an agent to resolve a PR that conflicts with its base branch.
+
+        GitHub reports ``mergeable_state == "dirty"`` when a PR can no longer merge
+        cleanly. Re-dispatch is guarded exactly like a CI/review refix — only once the
+        prior agent run is terminal, once per head sha (``lastFixedSha``), and within
+        the shared ``MAX_FIX_ATTEMPTS`` cap (escalating to ``needs_human`` at the cap).
+        The base branch comes from the PR object itself, so language (``canary``) and
+        skill (``main``) PRs each get the right merge target. A ``pr_ready`` PR that
+        went conflicted is pulled back to ``prprep``; a ``prprep`` one stays put.
+
+        Args:
+            issue: The conflicted issue row.
+            owner: PR repo owner.
+            repo: PR repo name.
+            pr_obj: The GitHub PR object (for its head sha and base ref).
+            pr_url: The PR URL.
+            pr_branch: The PR's head branch (the resolving agent starts from it).
+            run_terminal: Whether the current agent run has finished (don't pile on a
+                resolution while an agent is still pushing — its push may resolve it).
+            from_pr_ready: True when called from the ``pr_ready`` sweep (pull back to
+                ``prprep``); False when already in ``prprep``.
+        """
+        issue_id = issue["_id"]
+        if not run_terminal:
+            return  # an agent is still pushing; its next commit may resolve the conflict
+        sha = ((pr_obj.get("head") or {}).get("sha")) or ""
+        if sha and sha == issue.get("lastFixedSha"):
+            return  # already dispatched a resolution for this exact commit
+        attempts = issue.get("fixAttempts") or 0
+        if attempts >= MAX_FIX_ATTEMPTS:
+            await self.service.transition("issues", issue_id, "needs_human")
+            await self._set_linear(issue, N_NEEDS_HUMAN)
+            await self._notify(
+                issue,
+                f"*{issue.get('title')}* has a merge conflict but is already at "
+                f"{MAX_FIX_ATTEMPTS} fix attempts — needs a human.\n{pr_url}")
+            log.info("issue %s conflict -> needs_human (cap %d hit)", issue_id, MAX_FIX_ATTEMPTS)
+            return
+        base_branch = (pr_obj.get("base") or {}).get("ref") or "main"
+        prompt = self._conflict_prompt(issue, pr_url, pr_branch, base_branch)
+        new_agent_id = await self._dispatch_refix(
+            issue, owner, repo, pr_url, pr_branch, "", self._agent_id(issue), prompt=prompt)
+        patch = {"cursorAgentId": new_agent_id, "fixAttempts": attempts + 1, "lastFixedSha": sha}
+        if from_pr_ready:
+            await self.service.transition("issues", issue_id, "prprep", patch=patch)
+            await self._set_linear(issue, N_PRPREP)
+        else:
+            await self.service.update("issues", issue_id, patch)
+        await self._notify(
+            issue,
+            f"Merge conflict with `{base_branch}` detected on *{issue.get('title')}* — "
+            f"sent back to Cursor to resolve it (attempt {attempts + 1}/{MAX_FIX_ATTEMPTS}).\n"
+            f"PR: {pr_url}")
+        log.info("issue %s conflict refix #%d (base=%s)", issue_id, attempts + 1, base_branch)
+
+    @staticmethod
+    def _conflict_prompt(issue: dict[str, Any], pr_url: str, pr_branch: Optional[str],
+                         base_branch: str) -> str:
+        """Build the instruction handed to an agent resolving a merge-conflicted PR.
+
+        Args:
+            issue: The issue row (for the title/context).
+            pr_url: The conflicted PR's URL.
+            pr_branch: The PR's head branch.
+            base_branch: The PR's base branch (the merge target to bring in).
+
+        Returns:
+            The full prompt string.
+        """
+        branch_note = (f" (branch `{pr_branch}`)" if pr_branch else "")
+        return "\n".join([
+            f"Pull request {pr_url}{branch_note}, which fixes: {issue.get('title')}, no longer "
+            f"merges cleanly — it has a merge conflict with its base branch `{base_branch}`.",
+            f"Resolve it: bring the latest `{base_branch}` into the PR branch (merge or rebase) and "
+            "resolve EVERY conflict correctly — keep BOTH the base branch's changes and this PR's "
+            "fix; never drop either side's work. Then commit and push to the SAME pull request "
+            f"({pr_url}) — do not open a new PR.",
+            "After pushing, confirm the branch is conflict-free against the base and that it builds "
+            "+ the targeted tests for the touched code pass. Do NOT run the full test suite "
+            "locally — CI re-runs it and you'll be re-invoked with anything that fails. If "
+            "resolving the conflict changed behavior, adjust so the original issue stays fixed.",
+            "Keep the change scoped to the conflict resolution, and put a docstring on anything you "
+            "add or modify.",
+        ])
+
+    async def _pr_closed_unmerged(self, issue: dict[str, Any], pr_url: Optional[str]) -> None:
+        """Escalate an issue whose PR was closed without merging to ``needs_human``.
+
+        A human closing a PR without merging is a deliberate signal (rejected or
+        superseded), so the tracker must not silently keep polling the dead PR, nor
+        auto-reopen it. It surfaces on the board for a human, who can re-approve to
+        trigger a fresh dispatch.
+
+        Args:
+            issue: The issue row whose PR was closed unmerged.
+            pr_url: The closed PR's URL (for the Slack note).
+        """
+        issue_id = issue["_id"]
+        await self.service.transition("issues", issue_id, "needs_human")
+        await self._set_linear(issue, N_NEEDS_HUMAN)
+        await self._notify(
+            issue,
+            f"PR for *{issue.get('title')}* was closed without merging — needs a human "
+            f"(re-approve to retry).\n{pr_url}")
+        log.info("issue %s -> needs_human (PR closed unmerged)", issue_id)
 
     async def _set_linear(self, issue: dict[str, Any], label_id: str) -> None:
         """Swap the issue's Linear status label (no-op without Linear/issue id).

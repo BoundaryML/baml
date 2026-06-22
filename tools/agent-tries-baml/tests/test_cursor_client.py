@@ -34,6 +34,34 @@ async def test_launch_agent_sends_agent_id_and_returns_agent():
 
 
 @respx.mock
+async def test_launch_agent_targets_existing_pr():
+    """pr_url + work_on_current_branch make the agent update the existing PR in place."""
+    route = respx.post(AGENTS_URL).mock(
+        return_value=httpx.Response(200, json={"id": "a", "latestRunId": "r"})
+    )
+    await cursor_client.launch_agent(
+        "key", "resolve conflict", "https://github.com/o/r", "feature-branch",
+        pr_url="https://github.com/o/r/pull/9", work_on_current_branch=True,
+    )
+    sent = json.loads(route.calls.last.request.content)
+    assert sent["repos"][0]["prUrl"] == "https://github.com/o/r/pull/9"
+    assert sent["repos"][0]["startingRef"] == "feature-branch"
+    assert sent["workOnCurrentBranch"] is True
+
+
+@respx.mock
+async def test_launch_agent_default_creates_new_branch():
+    """Without the new params the body has no prUrl / workOnCurrentBranch (new-branch default)."""
+    route = respx.post(AGENTS_URL).mock(
+        return_value=httpx.Response(200, json={"id": "a", "latestRunId": "r"})
+    )
+    await cursor_client.launch_agent("key", "fix it", "https://github.com/o/r", "canary")
+    sent = json.loads(route.calls.last.request.content)
+    assert "prUrl" not in sent["repos"][0]
+    assert "workOnCurrentBranch" not in sent
+
+
+@respx.mock
 async def test_launch_agent_409_is_already_launched():
     """A 409 agent_id_conflict returns a normalized already-launched result without raising."""
     respx.post(AGENTS_URL).mock(

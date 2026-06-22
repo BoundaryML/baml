@@ -84,7 +84,9 @@ def _patch_clients(monkeypatch, *, pr_for_agent, get_pr=None, check_runs=None,
 
     async def _launch(api_key, prompt, repo_url, ref, **k):
         if launches is not None:
-            launches.append({"repo_url": repo_url, "ref": ref, "prompt": prompt})
+            launches.append({"repo_url": repo_url, "ref": ref, "prompt": prompt,
+                             "pr_url": k.get("pr_url"),
+                             "work_on_current_branch": k.get("work_on_current_branch")})
         return {"id": "stub-agent"}
 
     monkeypatch.setattr(T.cursor_client, "pr_for_agent", _pra)
@@ -188,6 +190,37 @@ async def test_prprep_to_pr_ready_on_green(monkeypatch):
     assert svc.issues["i2"]["status"] == "pr_ready"
 
 
+async def test_prprep_closed_unmerged_to_needs_human(monkeypatch):
+    launches: list = []
+    svc = FakeService(_prprep_issue())
+    _patch_clients(
+        monkeypatch, launches=launches,
+        pr_for_agent={"prUrl": PR_URL, "branch": "b", "runStatus": "FINISHED",
+                      "agentStatus": "FINISHED"},
+        # PR closed without merging, CI green on the stale head -> must NOT promote to
+        # pr_ready; the dead PR escalates to a human instead.
+        get_pr={"merged": False, "state": "closed", "head": {"sha": "s1"}},
+        check_runs=[{"name": "t", "status": "completed", "conclusion": "success"}],
+    )
+    tr = T.CursorTracker(svc)
+    await tr._track_one((await svc.list("issues", field="status", value="prprep"))[0])
+    assert svc.issues["i2"]["status"] == "needs_human"
+    assert launches == []  # no refix dispatched against a dead PR
+
+
+async def test_pr_ready_closed_unmerged_to_needs_human(monkeypatch):
+    svc = FakeService(_pr_ready_issue())
+    _patch_clients(
+        monkeypatch,
+        pr_for_agent={"prUrl": PR_URL, "branch": "b", "runStatus": "FINISHED",
+                      "agentStatus": "FINISHED"},
+        get_pr={"merged": False, "state": "closed", "head": {"sha": "s9"}},
+    )
+    tr = T.CursorTracker(svc)
+    await tr._track_one((await svc.list("issues", field="status", value="pr_ready"))[0])
+    assert svc.issues["i3"]["status"] == "needs_human"
+
+
 async def test_prprep_merged_to_closed(monkeypatch):
     svc = FakeService(_prprep_issue())
     _patch_clients(
@@ -215,6 +248,9 @@ async def test_prprep_red_dispatches_refix_and_increments(monkeypatch):
     await tr._track_one((await svc.list("issues", field="status", value="prprep"))[0])
     assert len(launches) == 1
     assert launches[0]["ref"] == "b"  # new agent starts from the PR branch
+    # Updates the EXISTING PR in place (commits to its branch) — not a new PR.
+    assert launches[0]["pr_url"] == PR_URL
+    assert launches[0]["work_on_current_branch"] is True
     assert svc.issues["i2"]["fixAttempts"] == 1
     assert svc.issues["i2"]["lastFixedSha"] == "s1"
     assert svc.issues["i2"]["status"] == "prprep"  # stays, keeps watching
@@ -302,6 +338,139 @@ async def test_prprep_blocked_by_coderabbit_dispatches_refix(monkeypatch):
     assert len(notes) == 1
     assert "Responding to CodeRabbit's requested changes" in notes[0]
     assert "fix the edge case" in notes[0]
+
+
+# ---------------- prprep (merge conflict) ----------------
+
+async def test_prprep_conflict_dispatches_resolution(monkeypatch):
+    launches: list = []
+    svc = FakeService(_prprep_issue())
+    _patch_clients(
+        monkeypatch, launches=launches,
+        pr_for_agent={"prUrl": PR_URL, "branch": "b", "runStatus": "FINISHED",
+                      "agentStatus": "FINISHED"},
+        get_pr={"merged": False, "head": {"sha": "s1"}, "base": {"ref": "canary"},
+                "mergeable_state": "dirty"},
+        # CI would be green — the conflict must still win and trigger a resolution.
+        check_runs=[{"name": "t", "status": "completed", "conclusion": "success"}],
+    )
+    tr = T.CursorTracker(svc)
+    notes = _capture_notify(monkeypatch, tr)
+    await tr._track_one((await svc.list("issues", field="status", value="prprep"))[0])
+    assert len(launches) == 1                       # conflict beats green CI
+    assert launches[0]["ref"] == "b"                # resolve from the PR branch
+    assert launches[0]["pr_url"] == PR_URL          # updates the existing PR…
+    assert launches[0]["work_on_current_branch"] is True  # …on its own branch
+    assert "merge conflict" in launches[0]["prompt"]
+    assert "canary" in launches[0]["prompt"]        # base branch named for the agent
+    assert svc.issues["i2"]["status"] == "prprep"   # stays, keeps watching
+    assert svc.issues["i2"]["fixAttempts"] == 1
+    assert svc.issues["i2"]["lastFixedSha"] == "s1"
+    # Slack thread is told a conflict was detected and the PR went back to Cursor.
+    assert notes and "Merge conflict with `canary`" in notes[0] and "back to Cursor" in notes[0]
+
+
+async def test_prprep_conflict_dispatches_when_agent_stale(monkeypatch):
+    # The original agent is hung ACTIVE for ~years (createdAt long past) -> treated as
+    # terminal so a base-introduced conflict isn't deferred to a dead agent forever.
+    launches: list = []
+    svc = FakeService(_prprep_issue())
+    _patch_clients(
+        monkeypatch, launches=launches,
+        pr_for_agent={"prUrl": PR_URL, "branch": "b", "runStatus": "RUNNING",
+                      "agentStatus": "ACTIVE", "createdAt": "2020-01-01T00:00:00Z"},
+        get_pr={"merged": False, "head": {"sha": "s1"}, "base": {"ref": "canary"},
+                "mergeable_state": "dirty"},
+    )
+    tr = T.CursorTracker(svc)
+    await tr._track_one((await svc.list("issues", field="status", value="prprep"))[0])
+    assert len(launches) == 1                       # hung agent no longer blocks resolution
+    assert svc.issues["i2"]["fixAttempts"] == 1
+
+
+async def test_prprep_conflict_skips_same_sha(monkeypatch):
+    launches: list = []
+    svc = FakeService(_prprep_issue(lastFixedSha="s1", fixAttempts=1))
+    _patch_clients(
+        monkeypatch, launches=launches,
+        pr_for_agent={"prUrl": PR_URL, "branch": "b", "runStatus": "FINISHED",
+                      "agentStatus": "FINISHED"},
+        get_pr={"merged": False, "head": {"sha": "s1"}, "base": {"ref": "canary"},
+                "mergeable_state": "dirty"},
+    )
+    tr = T.CursorTracker(svc)
+    await tr._track_one((await svc.list("issues", field="status", value="prprep"))[0])
+    assert launches == []                           # already resolving s1
+    assert svc.issues["i2"]["fixAttempts"] == 1
+
+
+async def test_prprep_conflict_waits_while_agent_pushing(monkeypatch):
+    launches: list = []
+    svc = FakeService(_prprep_issue())
+    _patch_clients(
+        monkeypatch, launches=launches,
+        pr_for_agent={"prUrl": PR_URL, "branch": "b", "runStatus": "RUNNING",
+                      "agentStatus": "RUNNING"},
+        get_pr={"merged": False, "head": {"sha": "s1"}, "base": {"ref": "canary"},
+                "mergeable_state": "dirty"},
+    )
+    tr = T.CursorTracker(svc)
+    await tr._track_one((await svc.list("issues", field="status", value="prprep"))[0])
+    assert launches == []                           # agent still pushing -> don't pile on
+    assert svc.issues["i2"]["status"] == "prprep"
+
+
+async def test_prprep_conflict_caps_at_max_attempts(monkeypatch):
+    launches: list = []
+    svc = FakeService(_prprep_issue(fixAttempts=3))
+    _patch_clients(
+        monkeypatch, launches=launches,
+        pr_for_agent={"prUrl": PR_URL, "branch": "b", "runStatus": "FINISHED",
+                      "agentStatus": "FINISHED"},
+        get_pr={"merged": False, "head": {"sha": "s2"}, "base": {"ref": "canary"},
+                "mergeable_state": "dirty"},
+    )
+    tr = T.CursorTracker(svc)
+    await tr._track_one((await svc.list("issues", field="status", value="prprep"))[0])
+    assert launches == []
+    assert svc.issues["i2"]["status"] == "needs_human"
+
+
+async def test_pr_ready_conflict_returns_to_prprep(monkeypatch):
+    launches: list = []
+    svc = FakeService(_pr_ready_issue())
+    _patch_clients(
+        monkeypatch, launches=launches,
+        pr_for_agent={"prUrl": PR_URL, "branch": "b", "runStatus": "FINISHED",
+                      "agentStatus": "FINISHED"},
+        get_pr={"merged": False, "head": {"sha": "s9"}, "base": {"ref": "main"},
+                "mergeable_state": "dirty"},
+    )
+    tr = T.CursorTracker(svc)
+    await tr._track_one((await svc.list("issues", field="status", value="pr_ready"))[0])
+    assert svc.issues["i3"]["status"] == "prprep"   # pulled back to resolve
+    assert len(launches) == 1
+    assert "main" in launches[0]["prompt"]
+    assert svc.issues["i3"]["fixAttempts"] == 1
+    assert svc.issues["i3"]["lastFixedSha"] == "s9"
+
+
+async def test_pr_ready_conflict_defers_to_active_agent(monkeypatch):
+    # A conflicted pr_ready PR whose agent is still ACTIVE must NOT dispatch a duplicate
+    # resolver — the live agent may resolve the conflict itself.
+    launches: list = []
+    svc = FakeService(_pr_ready_issue())
+    _patch_clients(
+        monkeypatch, launches=launches,
+        pr_for_agent={"prUrl": PR_URL, "branch": "b", "runStatus": "RUNNING",
+                      "agentStatus": "RUNNING"},
+        get_pr={"merged": False, "head": {"sha": "s9"}, "base": {"ref": "main"},
+                "mergeable_state": "dirty"},
+    )
+    tr = T.CursorTracker(svc)
+    await tr._track_one((await svc.list("issues", field="status", value="pr_ready"))[0])
+    assert launches == []                            # deferred to the live agent
+    assert svc.issues["i3"]["status"] == "pr_ready"  # no duplicate dispatch
 
 
 # ---------------- pr_ready (late human review) ----------------
