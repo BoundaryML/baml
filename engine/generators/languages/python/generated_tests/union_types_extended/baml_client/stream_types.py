@@ -155,26 +155,36 @@ class Warning(BaseModel):
 # #########################################################################
 # Resolve string forward references now that every model above is defined so
 # class declaration order never breaks Pydantic construction (issue #793).
-Admin.model_rebuild()
-ApiError.model_rebuild()
-ApiPending.model_rebuild()
-ApiSuccess.model_rebuild()
-Bird.model_rebuild()
-Cat.model_rebuild()
-Circle.model_rebuild()
-ComplexUnions.model_rebuild()
-DataResponse.model_rebuild()
-DiscriminatedUnions.model_rebuild()
-Dog.model_rebuild()
-Error.model_rebuild()
-ErrorResponse.model_rebuild()
-PrimitiveUnions.model_rebuild()
-Product.model_rebuild()
-Rectangle.model_rebuild()
-RecursiveUnion.model_rebuild()
-Result.model_rebuild()
-Success.model_rebuild()
-Triangle.model_rebuild()
-UnionArrays.model_rebuild()
-User.model_rebuild()
-Warning.model_rebuild()
+# Best-effort: a model that can't be eagerly rebuilt (e.g. one using a
+# recursive type alias Pydantic resolves lazily) is skipped, so importing
+# this module never fails.
+for _model_cls in (
+    Admin,
+    ApiError,
+    ApiPending,
+    ApiSuccess,
+    Bird,
+    Cat,
+    Circle,
+    ComplexUnions,
+    DataResponse,
+    DiscriminatedUnions,
+    Dog,
+    Error,
+    ErrorResponse,
+    PrimitiveUnions,
+    Product,
+    Rectangle,
+    RecursiveUnion,
+    Result,
+    Success,
+    Triangle,
+    UnionArrays,
+    User,
+    Warning,
+):
+    try:
+        _model_cls.model_rebuild()
+    except Exception:
+        pass
+del _model_cls

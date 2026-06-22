@@ -121,13 +121,23 @@ class User(BaseModel):
 # #########################################################################
 # Resolve string forward references now that every model above is defined so
 # class declaration order never breaks Pydantic construction (issue #793).
-ComplexOptional.model_rebuild()
-MixedOptionalNullable.model_rebuild()
-NullableTypes.model_rebuild()
-OptionalData.model_rebuild()
-OptionalFields.model_rebuild()
-OptionalItem.model_rebuild()
-OptionalValue.model_rebuild()
-Product.model_rebuild()
-UnionWithNull.model_rebuild()
-User.model_rebuild()
+# Best-effort: a model that can't be eagerly rebuilt (e.g. one using a
+# recursive type alias Pydantic resolves lazily) is skipped, so importing
+# this module never fails.
+for _model_cls in (
+    ComplexOptional,
+    MixedOptionalNullable,
+    NullableTypes,
+    OptionalData,
+    OptionalFields,
+    OptionalItem,
+    OptionalValue,
+    Product,
+    UnionWithNull,
+    User,
+):
+    try:
+        _model_cls.model_rebuild()
+    except Exception:
+        pass
+del _model_cls

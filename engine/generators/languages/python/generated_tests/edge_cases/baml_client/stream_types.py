@@ -171,20 +171,30 @@ class VeryLongStrings(BaseModel):
 # #########################################################################
 # Resolve string forward references now that every model above is defined so
 # class declaration order never breaks Pydantic construction (issue #793).
-AllNullable.model_rebuild()
-BooleanEdgeCases.model_rebuild()
-CircularReference.model_rebuild()
-DeepRecursion.model_rebuild()
-EmptyCollections.model_rebuild()
-InnerNullable.model_rebuild()
-LargeStructure.model_rebuild()
-MixedEdgeCases.model_rebuild()
-NestedNullable.model_rebuild()
-NullEdgeCases.model_rebuild()
-NumberEdgeCases.model_rebuild()
-OptionalEverything.model_rebuild()
-OuterNullable.model_rebuild()
-SomeNullable.model_rebuild()
-SpecialCharacters.model_rebuild()
-User.model_rebuild()
-VeryLongStrings.model_rebuild()
+# Best-effort: a model that can't be eagerly rebuilt (e.g. one using a
+# recursive type alias Pydantic resolves lazily) is skipped, so importing
+# this module never fails.
+for _model_cls in (
+    AllNullable,
+    BooleanEdgeCases,
+    CircularReference,
+    DeepRecursion,
+    EmptyCollections,
+    InnerNullable,
+    LargeStructure,
+    MixedEdgeCases,
+    NestedNullable,
+    NullEdgeCases,
+    NumberEdgeCases,
+    OptionalEverything,
+    OuterNullable,
+    SomeNullable,
+    SpecialCharacters,
+    User,
+    VeryLongStrings,
+):
+    try:
+        _model_cls.model_rebuild()
+    except Exception:
+        pass
+del _model_cls

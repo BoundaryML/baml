@@ -484,6 +484,12 @@ pub(crate) fn render_py_types<T: askama::Template>(
 /// resolution independent of declaration order — and keeps working when types
 /// are split across files, where no ordering scheme can help.
 ///
+/// Each rebuild is best-effort: a model that can't be eagerly rebuilt (e.g. one
+/// whose field uses a recursive type alias that Pydantic only resolves lazily,
+/// and which would otherwise hit `RecursionError`) is skipped, leaving it in the
+/// same lazily-resolved state as before. This keeps importing the module safe
+/// while still resolving the forward references that issue #793 is about.
+///
 /// ```askama
 /// {%- if !names.is_empty() %}
 /// # #########################################################################
@@ -491,13 +497,23 @@ pub(crate) fn render_py_types<T: askama::Template>(
 /// # #########################################################################
 /// # Resolve string forward references now that every model above is defined so
 /// # class declaration order never breaks Pydantic construction (issue #793).
+/// # Best-effort: a model that can't be eagerly rebuilt (e.g. one using a
+/// # recursive type alias Pydantic resolves lazily) is skipped, so importing
+/// # this module never fails.
+/// for _model_cls in (
 /// {%- for name in names %}
-/// {%- if is_pydantic_2 %}
-/// {{ name }}.model_rebuild()
-/// {%- else %}
-/// {{ name }}.update_forward_refs()
-/// {%- endif %}
+///     {{ name }},
 /// {%- endfor %}
+/// ):
+///     try:
+/// {%- if is_pydantic_2 %}
+///         _model_cls.model_rebuild()
+/// {%- else %}
+///         _model_cls.update_forward_refs()
+/// {%- endif %}
+///     except Exception:
+///         pass
+/// del _model_cls
 /// {%- endif %}
 /// ```
 #[derive(askama::Template)]

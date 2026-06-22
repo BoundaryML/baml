@@ -58,7 +58,17 @@ class SmallThing(BaseModel):
 # #########################################################################
 # Resolve string forward references now that every model above is defined so
 # class declaration order never breaks Pydantic construction (issue #793).
-ClassWithBlockDone.model_rebuild()
-ClassWithoutDone.model_rebuild()
-SemanticContainer.model_rebuild()
-SmallThing.model_rebuild()
+# Best-effort: a model that can't be eagerly rebuilt (e.g. one using a
+# recursive type alias Pydantic resolves lazily) is skipped, so importing
+# this module never fails.
+for _model_cls in (
+    ClassWithBlockDone,
+    ClassWithoutDone,
+    SemanticContainer,
+    SmallThing,
+):
+    try:
+        _model_cls.model_rebuild()
+    except Exception:
+        pass
+del _model_cls

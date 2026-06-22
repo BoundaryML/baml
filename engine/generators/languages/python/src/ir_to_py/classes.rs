@@ -461,13 +461,18 @@ end"#)
         ];
 
         let rendered = crate::generated_types::render_py_model_rebuilds(&classes, &pkg).unwrap();
+        // Both classes are listed in the best-effort rebuild loop, which calls
+        // model_rebuild() on Pydantic 2 and swallows failures so a recursive
+        // type alias can't break import (issue #793).
+        assert!(rendered.contains("A,"), "expected A in rebuild loop, got:\n{rendered}");
+        assert!(rendered.contains("B,"), "expected B in rebuild loop, got:\n{rendered}");
         assert!(
-            rendered.contains("A.model_rebuild()"),
-            "expected A.model_rebuild(), got:\n{rendered}"
+            rendered.contains("_model_cls.model_rebuild()"),
+            "expected model_rebuild() in loop, got:\n{rendered}"
         );
         assert!(
-            rendered.contains("B.model_rebuild()"),
-            "expected B.model_rebuild(), got:\n{rendered}"
+            rendered.contains("except Exception:"),
+            "expected best-effort try/except, got:\n{rendered}"
         );
         assert!(
             !rendered.contains("update_forward_refs"),
@@ -491,7 +496,7 @@ end"#)
 
         let rendered = crate::generated_types::render_py_model_rebuilds(&classes, &pkg).unwrap();
         assert!(
-            rendered.contains("A.update_forward_refs()"),
+            rendered.contains("_model_cls.update_forward_refs()"),
             "pydantic 1 should use update_forward_refs, got:\n{rendered}"
         );
         assert!(!rendered.contains("model_rebuild"));

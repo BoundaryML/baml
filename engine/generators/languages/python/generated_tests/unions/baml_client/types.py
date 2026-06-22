@@ -79,5 +79,15 @@ SystemComponentCategory: typing_extensions.TypeAlias = typing.Union[typing_exten
 # #########################################################################
 # Resolve string forward references now that every model above is defined so
 # class declaration order never breaks Pydantic construction (issue #793).
-ExistingSystemComponent.model_rebuild()
-UseMyUnion.model_rebuild()
+# Best-effort: a model that can't be eagerly rebuilt (e.g. one using a
+# recursive type alias Pydantic resolves lazily) is skipped, so importing
+# this module never fails.
+for _model_cls in (
+    ExistingSystemComponent,
+    UseMyUnion,
+):
+    try:
+        _model_cls.model_rebuild()
+    except Exception:
+        pass
+del _model_cls

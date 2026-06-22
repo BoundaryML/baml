@@ -258,38 +258,48 @@ class Widget(BaseModel):
 # #########################################################################
 # Resolve string forward references now that every model above is defined so
 # class declaration order never breaks Pydantic construction (issue #793).
-Action.model_rebuild()
-Asset.model_rebuild()
-AssetMetadata.model_rebuild()
-ButtonWidget.model_rebuild()
-ComplexData.model_rebuild()
-Condition.model_rebuild()
-Configuration.model_rebuild()
-ContainerWidget.model_rebuild()
-DataObject.model_rebuild()
-Dimensions.model_rebuild()
-Environment.model_rebuild()
-Error.model_rebuild()
-ErrorDetail.model_rebuild()
-Feature.model_rebuild()
-ImageWidget.model_rebuild()
-Item.model_rebuild()
-KitchenSink.model_rebuild()
-Node.model_rebuild()
-NodeMetadata.model_rebuild()
-PrimaryData.model_rebuild()
-Record.model_rebuild()
-ResponseMetadata.model_rebuild()
-Rule.model_rebuild()
-SecondaryData.model_rebuild()
-Setting.model_rebuild()
-SimpleCondition.model_rebuild()
-Success.model_rebuild()
-TertiaryData.model_rebuild()
-TextWidget.model_rebuild()
-UltraComplex.model_rebuild()
-User.model_rebuild()
-UserProfile.model_rebuild()
-UserResponse.model_rebuild()
-Variant.model_rebuild()
-Widget.model_rebuild()
+# Best-effort: a model that can't be eagerly rebuilt (e.g. one using a
+# recursive type alias Pydantic resolves lazily) is skipped, so importing
+# this module never fails.
+for _model_cls in (
+    Action,
+    Asset,
+    AssetMetadata,
+    ButtonWidget,
+    ComplexData,
+    Condition,
+    Configuration,
+    ContainerWidget,
+    DataObject,
+    Dimensions,
+    Environment,
+    Error,
+    ErrorDetail,
+    Feature,
+    ImageWidget,
+    Item,
+    KitchenSink,
+    Node,
+    NodeMetadata,
+    PrimaryData,
+    Record,
+    ResponseMetadata,
+    Rule,
+    SecondaryData,
+    Setting,
+    SimpleCondition,
+    Success,
+    TertiaryData,
+    TextWidget,
+    UltraComplex,
+    User,
+    UserProfile,
+    UserResponse,
+    Variant,
+    Widget,
+):
+    try:
+        _model_cls.model_rebuild()
+    except Exception:
+        pass
+del _model_cls
