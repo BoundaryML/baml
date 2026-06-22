@@ -247,7 +247,6 @@ function testset_child(registry: TestRegistry, ts: TestSetRegistration) -> TestS
             passed: 0,
             failed: 1,
             total: 1,
-            failed_names: [ts.name],
             results: [],
           }
         }
@@ -256,15 +255,11 @@ function testset_child(registry: TestRegistry, ts: TestSetRegistration) -> TestS
   }
 }
 
-function aggregate_reports(named_results: NamedChildReport[]) -> TestSetReport {
+function aggregate_reports(results: ChildReport[]) -> TestSetReport {
   let passed = 0
   let failed = 0
   let has_error = false
-  let failed_names: string[] = []
-  let results: ChildReport[] = []
-  for (let named_result in named_results) {
-    let result = named_result.report
-    results.push(result)
+  for (let result in results) {
     let outcome = match (result) {
       let report: TestReport => report.outcome,
       let report: TestSetReport => report.outcome,
@@ -273,17 +268,6 @@ function aggregate_reports(named_results: NamedChildReport[]) -> TestSetReport {
       passed += 1
     } else {
       failed += 1
-      let child_failed_names = match (result) {
-        let report: TestReport => [named_result.name],
-        let report: TestSetReport => if (report.failed_names.length() > 0) {
-          report.failed_names
-        } else {
-          [named_result.name]
-        },
-      }
-      for (let name in child_failed_names) {
-        failed_names.push(name)
-      }
       if (outcome == "error") {
         has_error = true
       } else {
@@ -297,22 +281,21 @@ function aggregate_reports(named_results: NamedChildReport[]) -> TestSetReport {
     passed: passed,
     failed: failed,
     total: results.length(),
-    failed_names: failed_names,
     results: results,
   }
 }
 
 function run_children_parallel(children: TestSetChild[]) -> TestSetReport {
-  let futures: baml.future.Future<NamedChildReport, null>[] = []
+  let futures: baml.future.Future<ChildReport, null>[] = []
   for (let child in children) {
     futures.push(spawn {
-      NamedChildReport { name: child.name, report: child.run() }
+      child.run()
     })
   }
-  let named_results = (await baml.future.all_complete(futures)) catch_all (e) {
+  let results = (await baml.future.all_complete(futures)) catch_all (e) {
     _ => baml.sys.panic("unexpected test child failure")
   }
-  root.aggregate_reports(named_results)
+  root.aggregate_reports(results)
 }
 
 // Run a single test with error handling and optional runner middleware.
