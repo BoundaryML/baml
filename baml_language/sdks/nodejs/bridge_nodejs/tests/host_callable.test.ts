@@ -269,9 +269,9 @@ describe('host-callable sync-call guard', () => {
         // only trips on a JS `function`. (We avoid encoding a function on
         // the async path here: that would register a `weak::<false>` tsfn
         // which pins the libuv loop and could keep the runner from exiting.)
-        expect(() => encodeCallArgs({ x: 1, s: 'ok' }, /* syncMode */ true)).not.toThrow();
+        expect(() => encodeCallArgs({ x: 1, s: 'ok' }, { syncMode: true, callId: 1n })).not.toThrow();
         // A function in sync mode trips the guard before any registration.
-        expect(() => encodeCallArgs({ cb: () => 0 }, /* syncMode */ true)).toThrow(/host callable/i);
+        expect(() => encodeCallArgs({ cb: () => 0 }, { syncMode: true, callId: 1n })).toThrow(/host callable/i);
     });
 });
 

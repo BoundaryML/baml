@@ -72,7 +72,9 @@ pub fn external_to_outbound(
             }))
         }
         BexExternalValue::Instance {
-            class_name, fields, ..
+            class_name,
+            fields,
+            type_args,
         } => {
             let mut baml_fields = Vec::new();
             for (key, val) in fields {
@@ -81,10 +83,14 @@ pub fn external_to_outbound(
                     value: Some(external_to_outbound(val, options)?),
                 });
             }
+            // Carry a generic instance's concrete class type args (De Bruijn
+            // order) as positional `generic_args` so the host can reconstruct the
+            // parameterized type (Python: `cls[args]`; Node: the `$types` field).
+            // Non-generic instances have empty `type_args` → empty `generic_args`.
             Some(BamlValueVariant::ClassValue(BamlValueClass {
                 name: Some(BamlTyName {
                     name: class_name.clone(),
-                    generic_args: vec![],
+                    generic_args: ty_args_to_baml_generic_args(type_args, &[]),
                 }),
                 fields: baml_fields,
             }))
@@ -229,12 +235,19 @@ fn empty_ty_name() -> BamlTyName {
 /// as named generic args so the wire shape can preserve that metadata too.
 fn ty_to_baml_ty_name(ty: &RuntimeTy) -> BamlTyName {
     match ty {
+        // Canonical FQN (`render_dotted(false)` keeps the `user.` package) so the
+        // name matches the host typemap key — the host resolves a generic arg's
+        // class via `get_class(fqn)`, which is keyed by the canonical FQN (e.g.
+        // `user.generics.Wrapper`). `display_name()` elides the implicit `user.`
+        // package, which only collides for user-defined classes; `baml.*` types
+        // render identically under both. (Mirrors how a top-level instance's
+        // `class_name` already carries the canonical engine FQN.)
         RuntimeTy::Class(tn, args, _) => BamlTyName {
-            name: tn.display_name().to_string(),
+            name: tn.render_dotted(false),
             generic_args: ty_args_to_baml_generic_args(args, &[]),
         },
         RuntimeTy::Interface(tn, args, associated_bindings, _) => BamlTyName {
-            name: tn.display_name().to_string(),
+            name: tn.render_dotted(false),
             generic_args: ty_args_to_baml_generic_args(args, associated_bindings),
         },
         _ => BamlTyName {
