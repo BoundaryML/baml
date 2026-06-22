@@ -4125,7 +4125,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     pub fn infer_expr(&mut self, expr_id: ExprId, body: &ExprBody) -> Ty {
         let expr = &body.exprs[expr_id];
         let ty = match expr {
-            Expr::Literal(lit) => Self::infer_literal(lit),
+            Expr::Literal(lit) => self.infer_literal(lit, expr_id),
             Expr::ByteStringLiteral(_) => Ty::Uint8Array {
                 attr: TyAttr::default(),
             },
@@ -4313,6 +4313,10 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.infer_binary_op(*op, &lhs_ty, &rhs_ty, expr_id)
             }
             Expr::Unary { op, expr } => {
+                // Note: `-<int literal>` is folded into a single negative literal
+                // during AST lowering, so INT_MIN (`-4611686018427387904`) never
+                // produces an out-of-range `+2^62` operand here. A bare `+2^62`
+                // is rejected by `infer_literal`.
                 let operand_ty = self.infer_expr(*expr, body);
                 self.infer_unary_op(*op, &operand_ty, expr_id)
             }
@@ -8654,7 +8658,26 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    fn infer_literal(lit: &baml_base::Literal) -> Ty {
+    fn infer_literal(&mut self, lit: &baml_base::Literal, expr_id: ExprId) -> Ty {
+        // An `int` literal whose value doesn't fit i63 (e.g. 2^62, a valid i64
+        // but out of `int` range) would otherwise reach the VM and panic at
+        // engine load. Reject it here with a diagnostic pointing at `bigint`,
+        // and substitute an in-range placeholder so a failed compile can't carry
+        // the bad value forward.
+        if let baml_base::Literal::Int(v) = lit
+            && !(crate::INT_MIN..=crate::INT_MAX).contains(v)
+        {
+            self.context.report(
+                TirTypeError::IntegerLiteralOutOfRange { value: *v },
+                expr_id,
+                Vec::new(),
+            );
+            return Ty::Literal(
+                baml_base::Literal::Int(0),
+                Freshness::Fresh,
+                TyAttr::default(),
+            );
+        }
         Ty::Literal(lit.clone(), Freshness::Fresh, TyAttr::default())
     }
 
@@ -15857,6 +15880,17 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     /// Try to fold a unary operation on a literal into a new literal.
+    /// Wrap a constant-folded i64 result as an `int` literal type, or `None` if
+    /// it falls outside BAML's i63 range. Returning `None` makes the caller skip
+    /// folding and leave the operation for the VM, which throws a catchable
+    /// `baml.panics.IntegerOverflow` at runtime — so a folded overflow and an
+    /// unfolded one (e.g. through variables) behave identically.
+    fn fold_int(v: i64, f: crate::ty::Freshness) -> Option<Ty> {
+        (crate::INT_MIN..=crate::INT_MAX)
+            .contains(&v)
+            .then(|| Ty::Literal(crate::ty::LiteralValue::Int(v), f, TyAttr::default()))
+    }
+
     fn try_fold_unary(op: baml_compiler2_ast::UnaryOp, operand: &Ty) -> Option<Ty> {
         use crate::ty::LiteralValue;
         let (lit, f) = match operand {
@@ -15865,11 +15899,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         };
         match op {
             baml_compiler2_ast::UnaryOp::Neg => match lit {
-                LiteralValue::Int(n) => Some(Ty::Literal(
-                    LiteralValue::Int(n.checked_neg()?),
-                    f,
-                    TyAttr::default(),
-                )),
+                // `-INT_MIN` = 2^62 overflows i63, so range-check the result.
+                LiteralValue::Int(n) => Self::fold_int(n.checked_neg()?, f),
                 LiteralValue::Float(s) => {
                     let v: f64 = s.parse().ok()?;
                     Some(Ty::Literal(
@@ -15914,31 +15945,15 @@ impl<'db> TypeInferenceBuilder<'db> {
         if let (LiteralValue::Int(a), LiteralValue::Int(b)) = (lhs_lit, rhs_lit) {
             let (a, b) = (*a, *b);
             return match op {
-                BinaryOp::Add => Some(Ty::Literal(
-                    LiteralValue::Int(a.checked_add(b)?),
-                    f,
-                    TyAttr::default(),
-                )),
-                BinaryOp::Sub => Some(Ty::Literal(
-                    LiteralValue::Int(a.checked_sub(b)?),
-                    f,
-                    TyAttr::default(),
-                )),
-                BinaryOp::Mul => Some(Ty::Literal(
-                    LiteralValue::Int(a.checked_mul(b)?),
-                    f,
-                    TyAttr::default(),
-                )),
-                BinaryOp::Div => Some(Ty::Literal(
-                    LiteralValue::Int(a.checked_div(b)?),
-                    f,
-                    TyAttr::default(),
-                )),
-                BinaryOp::Mod => Some(Ty::Literal(
-                    LiteralValue::Int(a.checked_rem(b)?),
-                    f,
-                    TyAttr::default(),
-                )),
+                // Range-check every folded result against i63: `checked_*`
+                // only rules out i64 overflow, so e.g. INT_MAX + 1 (fits i64,
+                // not i63) must still be rejected. `fold_int` returns None on
+                // overflow, deferring to the runtime op's IntegerOverflow throw.
+                BinaryOp::Add => Self::fold_int(a.checked_add(b)?, f),
+                BinaryOp::Sub => Self::fold_int(a.checked_sub(b)?, f),
+                BinaryOp::Mul => Self::fold_int(a.checked_mul(b)?, f),
+                BinaryOp::Div => Self::fold_int(a.checked_div(b)?, f),
+                BinaryOp::Mod => Self::fold_int(a.checked_rem(b)?, f),
                 BinaryOp::BitAnd => {
                     Some(Ty::Literal(LiteralValue::Int(a & b), f, TyAttr::default()))
                 }
@@ -15949,20 +15964,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                     Some(Ty::Literal(LiteralValue::Int(a ^ b), f, TyAttr::default()))
                 }
                 BinaryOp::Shl => {
+                    // `<<` can overflow i63 (e.g. `1 << 62`), so range-check the
+                    // result; out-of-range / negative-count cases return None and
+                    // defer to the runtime op's IntegerOverflow / NegativeBitShift.
                     let shift = u32::try_from(b).ok()?;
-                    Some(Ty::Literal(
-                        LiteralValue::Int(a.checked_shl(shift)?),
-                        f,
-                        TyAttr::default(),
-                    ))
+                    Self::fold_int(a.checked_shl(shift)?, f)
                 }
                 BinaryOp::Shr => {
                     let shift = u32::try_from(b).ok()?;
-                    Some(Ty::Literal(
-                        LiteralValue::Int(a.checked_shr(shift)?),
-                        f,
-                        TyAttr::default(),
-                    ))
+                    Self::fold_int(a.checked_shr(shift)?, f)
                 }
                 BinaryOp::Eq => Some(Ty::Literal(
                     LiteralValue::Bool(a == b),

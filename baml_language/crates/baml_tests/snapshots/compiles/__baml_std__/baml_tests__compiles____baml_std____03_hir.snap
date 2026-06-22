@@ -1739,6 +1739,9 @@ class baml.panics.IndexOutOfBounds {
   index: int
   length: int
 }
+class baml.panics.IntegerOverflow {
+  message: string
+}
 class baml.panics.InvalidFieldAccess {
   field_index: int
   field_count: int
@@ -1761,7 +1764,7 @@ class baml.panics.Unreachable {
 class baml.panics.UserPanic {
   message: string
 }
-type baml.panics.Panic = baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.InvalidFieldAccess | baml.panics.MapKeyNotFound | baml.panics.StackOverflow | baml.panics.AssertionFailed | baml.panics.Unreachable | baml.panics.Cancelled | baml.panics.UserPanic | baml.panics.Exit | baml.panics.AllocFailure | baml.panics.HostUnavailable | baml.panics.NegativeBitShift | baml.panics.SdkPanic | baml.panics.HostContractViolation
+type baml.panics.Panic = baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.InvalidFieldAccess | baml.panics.MapKeyNotFound | baml.panics.StackOverflow | baml.panics.AssertionFailed | baml.panics.Unreachable | baml.panics.Cancelled | baml.panics.UserPanic | baml.panics.Exit | baml.panics.AllocFailure | baml.panics.HostUnavailable | baml.panics.NegativeBitShift | baml.panics.SdkPanic | baml.panics.HostContractViolation | baml.panics.IntegerOverflow
 function baml.panics.from_json(j: baml.json.json) -> baml.panics.HostUnavailable  [expr] {
   baml.panics.HostUnavailable { resource: baml.json.from_json(baml.json.field(j, "resource")), message: baml.json.from_json(baml.json.field(j, "message")) }
 }
@@ -1797,6 +1800,9 @@ function baml.panics.from_json(j: baml.json.json) -> baml.panics.Exit  [expr] {
 }
 function baml.panics.from_json(j: baml.json.json) -> baml.panics.NegativeBitShift  [expr] {
   baml.panics.NegativeBitShift { message: baml.json.from_json(baml.json.field(j, "message")) }
+}
+function baml.panics.from_json(j: baml.json.json) -> baml.panics.IntegerOverflow  [expr] {
+  baml.panics.IntegerOverflow { message: baml.json.from_json(baml.json.field(j, "message")) }
 }
 function baml.panics.from_json(j: baml.json.json) -> baml.panics.InvalidFieldAccess  [expr] {
   baml.panics.InvalidFieldAccess { field_index: baml.json.from_json(baml.json.field(j, "field_index")), field_count: baml.json.from_json(baml.json.field(j, "field_count")) }
@@ -1842,6 +1848,9 @@ function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
   map { "code": baml.json.to_json(self.code) }
+}
+function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
+  map { "message": baml.json.to_json(self.message) }
 }
 function baml.panics.to_json(self: ?) -> baml.json.json  [expr] {
   map { "message": baml.json.to_json(self.message) }

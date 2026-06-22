@@ -6230,6 +6230,7 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::RuntimeIdCompoundAssignment
         | TirTypeError::RuntimeIdMemberAccess { .. }
         | TirTypeError::RuntimeIdCallSiteArgument => DiagnosticId::TypeMismatch,
+        TirTypeError::IntegerLiteralOutOfRange { .. } => DiagnosticId::IntegerLiteralOutOfRange,
     }
 }
 

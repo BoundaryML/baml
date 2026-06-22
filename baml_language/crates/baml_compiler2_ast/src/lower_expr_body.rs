@@ -1274,6 +1274,9 @@ impl LoweringContext {
         let mut op = None;
         let mut operand = None;
         let mut double_op = false;
+        // Value of an `INTEGER_LITERAL` token seen *directly* in this
+        // `UNARY_EXPR` (not via a child node like a parenthesized expr).
+        let mut direct_int_lit: Option<i64> = None;
 
         for elem in node.children_with_tokens() {
             match elem {
@@ -1296,6 +1299,7 @@ impl LoweringContext {
                         }
                         SyntaxKind::INTEGER_LITERAL => {
                             let value = token.text().parse::<i64>().unwrap_or(0);
+                            direct_int_lit = Some(value);
                             operand =
                                 Some(self.alloc_expr(Expr::Literal(Literal::Int(value)), span));
                         }
@@ -1328,6 +1332,32 @@ impl LoweringContext {
         let Some(op) = op else {
             return expr;
         };
+
+        // `-<int literal>` whose magnitude exceeds INT_MAX is folded into a
+        // single negative literal here, so the out-of-range positive
+        // intermediate `+v` (which can't be a valid `int` and would panic the
+        // VM at load) is never created. The classic case is INT_MIN, written
+        // `-4611686018427387904` (= -2^62): `+2^62` is not a valid `int`
+        // literal, but the negative literal is — mirroring the i64::MIN literal
+        // rule in Rust/Java/C#. In-range negative literals (`-42`) keep the
+        // ordinary `Neg(literal)` form and are folded by the MIR optimizer as
+        // before, and a bare `+2^62` stays rejected.
+        //
+        // Gated on the `INTEGER_LITERAL` token seen *directly* in this
+        // `UNARY_EXPR`: a parenthesized `-(2^62)` lowers its operand through a
+        // child node (not this token), so `direct_int_lit` is `None` and it is
+        // correctly NOT treated as a negative literal (the `+2^62` is rejected).
+        // `INT_MAX == bex_vm_types::Value::INT_MAX == i64::MAX >> 1`.
+        if op == UnaryOp::Neg
+            && !double_op
+            && let Some(v) = direct_int_lit
+            && v > (i64::MAX >> 1)
+        {
+            return self.alloc_expr(
+                Expr::Literal(Literal::Int(v.wrapping_neg())),
+                node.text_range(),
+            );
+        }
 
         let result = self.alloc_expr(Expr::Unary { op, expr }, node.text_range());
 
