@@ -40,6 +40,10 @@ primary_region = 'sjc'
   BAML_SKILL_DIR     = '/baml-skill'
   ATB_SKILL_REPO_URL = 'https://github.com/BoundaryML/baml-skill.git'
   BAML_DEDUP_MODEL   = 'claude-sonnet-4-6'
+  # Dedup writes ~10 verbose issues (~60k+ output tokens) per batch; wall time is
+  # large and variable (~17min seen, >30min observed). 600s/1800s killed it before
+  # issues.json was written. Give the full proxy ceiling of headroom.
+  BAML_DEDUP_TIMEOUT_SECS = '3600'
   BAML_REDRAFT_MODEL = 'claude-sonnet-4-6'
   ARENA_MODEL        = 'claude-sonnet-4-6'
   CHANGELOG_MODEL      = 'claude-opus-4-8'
@@ -52,7 +56,7 @@ primary_region = 'sjc'
   CURSOR_BRANCH           = 'canary'
   CURSOR_TRACK_SECS       = '60'
   CURSOR_REFIX_MODE       = 'new_agent'
-  CURSOR_MAX_FIX_ATTEMPTS = '3'
+  CURSOR_MAX_FIX_ATTEMPTS = '6'
   ATB_ARENA_BRANCHES      = 'main'
 
   # --- cron loops run here (reconcile + changelog poll); the daily task cron is
