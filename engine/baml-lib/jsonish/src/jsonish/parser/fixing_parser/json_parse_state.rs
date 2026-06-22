@@ -417,7 +417,14 @@ impl JsonParseState {
                             if keys.len() == values.len() {
                                 (true, false, false)
                             } else {
-                                (false, true, true)
+                                // We're parsing an object *value*: the only structural
+                                // characters that can legitimately follow it are ',' or
+                                // '}'. It is never inside an array, so `in_array` must be
+                                // false -- otherwise a literal ']' inside the string value
+                                // (e.g. "arr = [\"x\", \"y\"]") wrongly closes the string
+                                // and the rest of the input gets merged into this object,
+                                // dropping sibling array elements. See issue #3307.
+                                (false, true, false)
                             }
                         }
                         JsonCollection::Array(_, _) => (false, false, true),

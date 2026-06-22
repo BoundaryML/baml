@@ -451,3 +451,24 @@ fn test_try_cast_union_early_return_preserves_incomplete_flag() {
         has_incomplete_no_hint, has_incomplete_with_hint
     );
 }
+
+// Regression for issue #3307: a literal ']' inside a string object value used to
+// prematurely close the string in the fixing parser, merging the next array element
+// into the same object and silently dropping it. Both WriteTool entries must survive.
+const ISSUE_3307_FILE: &str = r#"
+enum WriteKind { WRITE }
+
+class WriteTool {
+  action WriteKind
+  target string
+  content string
+}
+"#;
+
+test_deserializer!(
+  test_issue_3307_bracket_in_string_drops_element,
+  ISSUE_3307_FILE,
+  r#"[{"action": "WRITE", "target": "a", "content": "arr = ["x", "y"]"}, {"action": "WRITE", "target": "b", "content": "z"}]"#,
+  TypeIR::union(vec![TypeIR::class("WriteTool")]).as_list(),
+  [{"action": "WRITE", "target": "a", "content": "arr = [\"x\", \"y\"]"}, {"action": "WRITE", "target": "b", "content": "z"}]
+);
