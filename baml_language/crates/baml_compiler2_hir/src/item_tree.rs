@@ -12,8 +12,9 @@ use rustc_hash::FxHashMap;
 use text_size::TextRange;
 
 use crate::ids::{
-    ClassMarker, ClientMarker, EnumMarker, FunctionMarker, InterfaceMarker, ItemKind, LetMarker,
-    LocalItemId, RetryPolicyMarker, TemplateStringMarker, TestMarker, TypeAliasMarker, hash_name,
+    ClassMarker, ClientMarker, EnumMarker, FunctionMarker, ImplMarker, InterfaceMarker, ItemKind,
+    LetMarker, LocalItemId, RetryPolicyMarker, TemplateStringMarker, TestMarker, TypeAliasMarker,
+    hash_impl_key, hash_name,
 };
 
 // ── Span-free attribute representation ───────────────────────────────────────
@@ -171,6 +172,64 @@ pub struct InterfaceFieldLink {
     pub span: TextRange,
     pub interface_field_span: TextRange,
     pub class_field_span: TextRange,
+}
+
+impl InterfaceFieldLink {
+    pub(crate) fn from_ast(link: &ast::InterfaceFieldLinkDef) -> Self {
+        Self {
+            interface_field: link.interface_field.clone(),
+            class_field: link.class_field.clone(),
+            span: link.span,
+            interface_field_span: link.interface_field_span,
+            class_field_span: link.class_field_span,
+        }
+    }
+}
+
+/// A generic parameter on an out-of-body `implements` block, paired with its set
+/// of `&`-separated interface bounds (`<T>` → `bounds = []`; `<T extends A & B>`
+/// → `bounds = [A, B]`). Pairing name and bounds makes a length mismatch between
+/// the two unrepresentable. Bounds are unresolved `TypeExpr`s here; they resolve
+/// to `baml_type::Interface` constraints downstream.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GenericParam {
+    pub name: Name,
+    pub bounds: Vec<ast::TypeExpr>,
+}
+
+/// What an `implements` block applies to. Unifying the owner with the for-target
+/// makes "in-body with an explicit for-target" and "out-of-body without one"
+/// both unrepresentable.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ImplSubject {
+    /// `implements I { … }` in a class body (or a simple `implement I for C`
+    /// merged onto `C`). The for-type is the class itself; the generics are the
+    /// class's. `out_of_body` records the syntactic origin for diagnostics only
+    /// — it must NOT influence resolution, dispatch, or coherence.
+    InClass {
+        class: LocalItemId<ClassMarker>,
+        out_of_body: bool,
+    },
+    /// `implement<…> I for <for_target> { … }`: an explicit for-type plus the
+    /// block's own generic parameters.
+    Free {
+        for_target: ast::SpannedTypeExpr,
+        generics: Vec<GenericParam>,
+    },
+}
+
+/// A unified `implements` block (both kinds) stored in the `ItemTree`, keyed by
+/// a stable `LocalItemId<ImplMarker>`. The interface target is kept as a raw
+/// `TypeExpr` here; resolution to an `InterfaceLoc` + `Ty` happens lazily in the
+/// `impl_data` query so HIR construction stays independent of name resolution.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImplBlock {
+    pub subject: ImplSubject,
+    pub interface_target: ast::SpannedTypeExpr,
+    pub field_links: Vec<InterfaceFieldLink>,
+    pub associated_type_bindings: Vec<ast::AssociatedTypeBindingDef>,
+    pub methods: Vec<LocalItemId<FunctionMarker>>,
+    pub span: TextRange,
 }
 
 /// An enum variant stored in the `ItemTree`.
@@ -372,6 +431,16 @@ pub struct ItemTree {
     pub lets: FxHashMap<LocalItemId<LetMarker>, Let>,
     pub implements_for: Vec<ImplementsFor>,
 
+    /// Unified store for every `implements` block (both in-body and
+    /// out-of-body), keyed by a stable `ImplMarker` id. Populated alongside the
+    /// legacy `Class::implements` / `implements_for` representation; downstream
+    /// queries (`impl_data`) read this map.
+    pub impls: FxHashMap<LocalItemId<ImplMarker>, ImplBlock>,
+    /// Index from a class to the impls whose subject is that class
+    /// (`ImplSubject::InClass`). Lets "impls for class C" be answered without a
+    /// scan; populated as impls are allocated.
+    pub class_to_impls: FxHashMap<LocalItemId<ClassMarker>, Vec<LocalItemId<ImplMarker>>>,
+
     /// BEP-044: for a class method declared inside an `implements I {}`
     /// block, record the unresolved interface target path. Empty for
     /// methods declared at the class level (not inside any `implements`
@@ -406,6 +475,8 @@ impl ItemTree {
             retry_policies: FxHashMap::default(),
             lets: FxHashMap::default(),
             implements_for: Vec::new(),
+            impls: FxHashMap::default(),
+            class_to_impls: FxHashMap::default(),
             method_to_iface_target: FxHashMap::default(),
             method_to_iface_associated_type_bindings: FxHashMap::default(),
             next_index: FxHashMap::default(),
@@ -475,13 +546,7 @@ impl ItemTree {
                 field_links: b
                     .field_links
                     .iter()
-                    .map(|link| InterfaceFieldLink {
-                        interface_field: link.interface_field.clone(),
-                        class_field: link.class_field.clone(),
-                        span: link.span,
-                        interface_field_span: link.interface_field_span,
-                        class_field_span: link.class_field_span,
-                    })
+                    .map(InterfaceFieldLink::from_ast)
                     .collect(),
                 associated_type_bindings: b.associated_type_bindings.clone(),
                 is_out_of_body: b.is_out_of_body,
@@ -524,17 +589,17 @@ impl ItemTree {
         let field_links = imp
             .field_links
             .iter()
-            .map(|link| InterfaceFieldLink {
-                interface_field: link.interface_field.clone(),
-                class_field: link.class_field.clone(),
-                span: link.span,
-                interface_field_span: link.interface_field_span,
-                class_field_span: link.class_field_span,
-            })
+            .map(InterfaceFieldLink::from_ast)
             .collect();
         self.implements_for.push(ImplementsFor {
             generic_params: imp.generic_params.iter().map(|(n, _)| n.clone()).collect(),
-            generic_param_bounds: imp.generic_params.iter().map(|(_, b)| b.clone()).collect(),
+            // Legacy single-bound representation: the first `&`-bound only. The
+            // full bound set lives on the new `ImplBlock` (`GenericParam.bounds`).
+            generic_param_bounds: imp
+                .generic_params
+                .iter()
+                .map(|(_, bounds)| bounds.first().cloned())
+                .collect(),
             interface_target: imp.interface_target.clone(),
             for_target: imp.for_target.clone(),
             field_links,
@@ -542,6 +607,27 @@ impl ItemTree {
             methods,
             span: imp.span,
         });
+    }
+
+    /// Allocate a stable id for an `implements` block and store it in the
+    /// unified `impls` map. `iface_head`/`for_head` seed the position-independent
+    /// id (impls have no declared name); the collision index disambiguates impls
+    /// that share both heads. Records the `class_to_impls` edge for `InClass`.
+    pub fn alloc_impl(
+        &mut self,
+        iface_head: &Name,
+        for_head: &Name,
+        block: ImplBlock,
+    ) -> LocalItemId<ImplMarker> {
+        let h = hash_impl_key(iface_head, for_head);
+        let index = self.next_index.entry((ItemKind::Impl, h)).or_insert(0);
+        let id = LocalItemId::new(h, *index);
+        *index += 1;
+        if let ImplSubject::InClass { class, .. } = &block.subject {
+            self.class_to_impls.entry(*class).or_default().push(id);
+        }
+        self.impls.insert(id, block);
+        id
     }
 
     pub fn alloc_enum(&mut self, e: &ast::EnumDef) -> LocalItemId<EnumMarker> {

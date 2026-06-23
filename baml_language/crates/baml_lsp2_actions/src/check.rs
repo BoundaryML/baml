@@ -1785,14 +1785,16 @@ fn validate_associated_type_bindings_in_items(
                     .iter()
                     .map(|(name, _)| name.clone())
                     .collect();
+                // Single-bound view (first `&`-bound only) — unchanged behavior;
+                // the full bound set lives on the new HIR `ImplBlock`.
                 let impl_bound_exprs: Vec<Option<baml_compiler2_ast::TypeExpr>> = imp
                     .generic_params
                     .iter()
-                    .map(|(_, bound)| bound.clone())
+                    .map(|(_, bounds)| bounds.first().cloned())
                     .collect();
                 let impl_bounds = generic_bound_expr_map(&impl_generics, &impl_bound_exprs);
-                for (_, bound) in &imp.generic_params {
-                    if let Some(bound) = bound {
+                for (_, bounds) in &imp.generic_params {
+                    if let Some(bound) = bounds.first() {
                         validate_associated_type_bindings_in_type_expr(
                             db,
                             file_id,
@@ -4191,10 +4193,11 @@ fn validate_implements_for<'db>(
     let target_name = Name::new(format!("{}", imp.for_target.expr));
     let generic_param_names: Vec<Name> =
         imp.generic_params.iter().map(|(n, _)| n.clone()).collect();
+    // Single-bound view (first `&`-bound only) — unchanged behavior.
     let generic_param_bounds: Vec<Option<baml_compiler2_ast::TypeExpr>> = imp
         .generic_params
         .iter()
-        .map(|(_, bound)| bound.clone())
+        .map(|(_, bounds)| bounds.first().cloned())
         .collect();
     let generic_bounds = generic_bound_expr_map(&generic_param_names, &generic_param_bounds);
     let ctx = InterfaceValidationCtx {
