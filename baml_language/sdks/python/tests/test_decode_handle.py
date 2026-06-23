@@ -21,15 +21,15 @@ from baml_core.baml_py import (
 )
 from baml_core.proto import _decode_handle
 from baml_core.typemap import BamlTypeMap
-from baml_core.cffi.v1 import baml_inbound_pb2
+from baml_core.cffi.v1 import baml_handle_pb2
 
 
-def _make_handle(key: int, handle_type: int) -> "baml_inbound_pb2.BamlHandle":
-    h = baml_inbound_pb2.BamlHandle()
+def _make_handle(key: int, handle_type: int) -> "baml_handle_pb2.BamlHandle":
+    h = baml_handle_pb2.BamlHandle()
     h.key = key
     # `BamlHandleType` is an `int` subclass at runtime; the proto field
     # accepts bare ints. Cast for the static checker.
-    h.handle_type = typing.cast(baml_inbound_pb2.BamlHandleType, handle_type)
+    h.handle_type = typing.cast(baml_handle_pb2.BamlHandleType, handle_type)
     return h
 
 

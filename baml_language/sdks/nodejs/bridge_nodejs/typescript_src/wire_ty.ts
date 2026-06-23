@@ -16,7 +16,7 @@
 import { baml_core } from './proto/baml_cffi.js';
 import { getTypeMap } from './typemap.js';
 
-const TyPrimitiveKind = baml_core.cffi.v1.TyPrimitiveKind;
+const TyPrimitiveKind = baml_core.cffi.v1.BamlTyPrimitiveKind;
 
 /**
  * The bottom type (BAML `never`). Pass as a `$types` binding to bind a TypeVar
@@ -61,22 +61,22 @@ export type BamlType =
     | undefined;
 
 const PRIMITIVE_KIND: Record<BamlPrimitiveToken, number> = {
-    int: TyPrimitiveKind.TY_PRIMITIVE_INT,
-    float: TyPrimitiveKind.TY_PRIMITIVE_FLOAT,
-    string: TyPrimitiveKind.TY_PRIMITIVE_STRING,
-    bool: TyPrimitiveKind.TY_PRIMITIVE_BOOL,
-    null: TyPrimitiveKind.TY_PRIMITIVE_NULL,
-    bytes: TyPrimitiveKind.TY_PRIMITIVE_BYTES,
-    bigint: TyPrimitiveKind.TY_PRIMITIVE_BIGINT,
+    int: TyPrimitiveKind.BAML_TY_PRIMITIVE_INT,
+    float: TyPrimitiveKind.BAML_TY_PRIMITIVE_FLOAT,
+    string: TyPrimitiveKind.BAML_TY_PRIMITIVE_STRING,
+    bool: TyPrimitiveKind.BAML_TY_PRIMITIVE_BOOL,
+    null: TyPrimitiveKind.BAML_TY_PRIMITIVE_NULL,
+    bytes: TyPrimitiveKind.BAML_TY_PRIMITIVE_BYTES,
+    bigint: TyPrimitiveKind.BAML_TY_PRIMITIVE_BIGINT,
 };
 
 /**
- * Lower a {@link BamlType} token to a wire `Ty` (an `ITy` plain object the
+ * Lower a {@link BamlType} token to a wire `BamlTy` (an `IBamlTy` plain object the
  * protobufjs `fromObject` path accepts). Mirrors `_fill_wire_ty`: an
  * unrecognized or absent token leaves the unknown/top type, which binds
  * nothing.
  */
-export function lowerTypeToWireTy(token: BamlType): baml_core.cffi.v1.ITy {
+export function lowerTypeToWireTy(token: BamlType): baml_core.cffi.v1.IBamlTy {
     // Absent binding → unknown/top (matches Python's `_fill_wire_ty(None)`).
     if (token === null || token === undefined) {
         return { unknown: {} };
@@ -119,33 +119,40 @@ export function lowerTypeToWireTy(token: BamlType): baml_core.cffi.v1.ITy {
     return { unknown: {} };
 }
 
+const TY_PRIMITIVE_TOKEN: Record<number, BamlPrimitiveToken> = {
+    [TyPrimitiveKind.BAML_TY_PRIMITIVE_INT]: 'int',
+    [TyPrimitiveKind.BAML_TY_PRIMITIVE_FLOAT]: 'float',
+    [TyPrimitiveKind.BAML_TY_PRIMITIVE_STRING]: 'string',
+    [TyPrimitiveKind.BAML_TY_PRIMITIVE_BOOL]: 'bool',
+    [TyPrimitiveKind.BAML_TY_PRIMITIVE_NULL]: 'null',
+    [TyPrimitiveKind.BAML_TY_PRIMITIVE_BYTES]: 'bytes',
+    [TyPrimitiveKind.BAML_TY_PRIMITIVE_BIGINT]: 'bigint',
+};
+
 /**
- * Decode an outbound `BamlTy` (baml_outbound.proto) back to a {@link BamlType}
- * token — the reverse of {@link lowerTypeToWireTy}, used to repopulate a generic
- * instance's `$types` field on decode. Mirrors the BAML→Python type projection
- * (`_baml_ty_to_python_type`) that drives Python's `cls[args]` reparameterize.
- * Unrecognized / dynamic positions (`any`/`unknown`/enum/union/literal/media)
- * decode to `undefined`, i.e. an unbound wildcard.
+ * Decode a wire `Ty` (baml_type.proto) back to a {@link BamlType} token — the
+ * exact inverse of {@link lowerTypeToWireTy}, used to repopulate a generic
+ * instance's `$types` field on decode. Mirrors the engine's
+ * `ty_encode::runtime_ty_to_proto_ty` and Python's `_ty_to_python_type`.
+ * Positions with no concrete JS binding (a structural union, an enum, a type
+ * variable, an opaque/runtime-only type) decode to `undefined`, i.e. an unbound
+ * wildcard.
  */
 export function outboundTyToBamlType(
     ty: baml_core.cffi.v1.IBamlTy | null | undefined,
 ): BamlType {
     if (!ty) return undefined;
-    if (ty.stringType) return 'string';
-    if (ty.intType) return 'int';
-    if (ty.floatType) return 'float';
-    if (ty.boolType) return 'bool';
-    if (ty.nullType) return 'null';
-    if (ty.bigintType) return 'bigint';
-    if (ty.uint8arrayType) return 'bytes';
-    if (ty.listType) return { list: outboundTyToBamlType(ty.listType.itemType) };
-    if (ty.mapType) {
-        return { map: [outboundTyToBamlType(ty.mapType.keyType), outboundTyToBamlType(ty.mapType.valueType)] };
+    if (ty.primitive) {
+        return TY_PRIMITIVE_TOKEN[ty.primitive.kind ?? -1] ?? undefined;
     }
-    if (ty.optionalType) return { optional: outboundTyToBamlType(ty.optionalType.value) };
-    if (ty.classType) {
-        const fqn = ty.classType.name?.name ?? '';
-        const args = (ty.classType.name?.genericArgs ?? []).map((a) => outboundTyToBamlType(a.ty));
+    if (ty.list) return { list: outboundTyToBamlType(ty.list.item) };
+    if (ty.map) {
+        return { map: [outboundTyToBamlType(ty.map.key), outboundTyToBamlType(ty.map.value)] };
+    }
+    if (ty.optional) return { optional: outboundTyToBamlType(ty.optional.inner) };
+    if (ty.classTy) {
+        const fqn = ty.classTy.name ?? '';
+        const args = (ty.classTy.typeArgs ?? []).map((a) => outboundTyToBamlType(a));
         let ctor: BamlClassCtor | undefined;
         try {
             ctor = getTypeMap().getClass(fqn) as BamlClassCtor;
@@ -155,7 +162,8 @@ export function outboundTyToBamlType(
         if (!ctor) return undefined;
         return args.length ? { class: ctor, args } : ctor;
     }
-    // enum / union variant / literal / media / any / unknown → unbound wildcard.
+    // union / enum / literal / media / type_var / unknown / any other →
+    // unbound wildcard (a structural union is unbound for `class<args>`).
     return undefined;
 }
 
@@ -163,7 +171,7 @@ export function outboundTyToBamlType(
  * concrete generic args. The FQN comes from the typemap reverse map; an
  * unmapped constructor lowers to unknown so it can't manufacture a bogus
  * class reference. */
-function classWireTy(ctor: BamlClassCtor, args: BamlType[]): baml_core.cffi.v1.ITy {
+function classWireTy(ctor: BamlClassCtor, args: BamlType[]): baml_core.cffi.v1.IBamlTy {
     const fqn = getTypeMap().jsTypeToBamlType(ctor);
     if (!fqn) {
         return { unknown: {} };

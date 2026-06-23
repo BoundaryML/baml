@@ -45,7 +45,7 @@ interface BuiltArgs {
     types?: unknown;
 }
 
-type WireTypeArg = [string, baml_core.cffi.v1.ITy];
+type WireTypeArg = [string, baml_core.cffi.v1.IBamlTy];
 
 /**
  * Resolve the caller's `$types` option onto the callee's own generic params, in
