@@ -62,6 +62,7 @@ function baml.clear(self: ?) -> null  [builtin]
 function baml.concat(self: ?, other: T[]) -> T[]  [builtin]
 function baml.delete(self: ?, key: K) -> V?  [builtin]
 function baml.every(self: ?, predicate: (T) -> bool throws E) -> bool  [builtin]
+function baml.filled(length: int, value: T) -> T[]  [builtin]
 function baml.filter(self: ?, predicate: (T) -> bool throws E) -> T[]  [builtin]
 function baml.filter_map(self: ?, fn: (T) -> U? throws E) -> U[]  [expr] {
   { let out: U[] = []; for x in self.slice(0, self.length()) {  } match (fn(x)) { null => {  }, y: U => { out.push(y) } } } out

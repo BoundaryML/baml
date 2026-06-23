@@ -1,5 +1,36 @@
 /// An ordered, growable collection of elements of type T.
 class Array<T> {
+  /// Builds a new array of `length` elements, each equal to `value`.
+  ///
+  /// This is the idiomatic way to allocate a runtime-sized, pre-initialized
+  /// buffer — Fenwick trees, DP tables, adjacency lists — without a manual
+  /// `while`/`push` loop. (Remember a 1-indexed structure needs `length + 1`
+  /// slots.)
+  ///
+  /// # Parameters
+  /// - `length`: the number of elements to create. A negative or zero `length`
+  ///   produces an empty array.
+  /// - `value`: the value stored in every slot. The same value is shared by
+  ///   every slot, so for reference types each slot refers to the *same*
+  ///   object and mutating it is visible through all of them.
+  ///
+  /// # Returns
+  /// A fresh `T[]` of length `max(length, 0)` with every element equal to
+  /// `value`.
+  ///
+  /// Never throws.
+  ///
+  /// # Examples
+  /// ```
+  /// Array.filled(3, 0)     // [0, 0, 0]
+  /// Array.filled(0, 0)     // []
+  /// Array.filled(-1, 0)    // []
+  /// Array.filled(2, "x")   // ["x", "x"]
+  /// ```
+  function filled(length: int, value: T) -> T[] throws never {
+    $rust_function
+  }
+
   /// Returns the number of elements in the array.
   function length(self) -> int throws never {
     $rust_function
