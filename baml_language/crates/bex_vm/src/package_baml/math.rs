@@ -93,12 +93,12 @@ impl BamlNamespaceMath for PackageBamlImpl {
             .enumerate()
             .map(|(index, value)| expect_float(vm, *value, "math.median", index))
             .collect();
-        sorted.sort_by(|left, right| left.total_cmp(right));
+        sorted.sort_by(f64::total_cmp);
         let mid = sorted.len() / 2;
         if sorted.len() % 2 == 1 {
             Ok(sorted[mid])
         } else {
-            Ok((sorted[mid - 1] + sorted[mid]) / 2.0)
+            Ok(f64::midpoint(sorted[mid - 1], sorted[mid]))
         }
     }
 }

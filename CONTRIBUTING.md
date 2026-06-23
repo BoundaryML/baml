@@ -116,7 +116,7 @@ The setup script automatically handles all dependencies and version management, 
 
 5. Run the integration tests.
 
-5. **Set up Git hooks (Recommended)**:
+6. **Set up Git hooks (Recommended)**:
    - Install the pre-commit hook to automatically format Rust code:
      ```bash
      ./tools/install-hooks
