@@ -32,6 +32,28 @@ pub(crate) trait ThrowsAnalysisContext {
 
 /// True when `expr` is the bare `$id` special form used as an assignment
 /// target — the shape that lowers to an implicit `baml.id.set` call.
+/// Whether `callee` is the callee of a `recv.to_string()` sugar fallback — a
+/// `to_string` member/path access the type checker left untyped (`Unknown`)
+/// because the receiver has no real `to_string` method. Such a call lowers to
+/// `string.from(recv)`, which is `throws never`.
+fn is_to_string_fallback_callee<C: ThrowsAnalysisContext>(
+    context: &C,
+    callee: ExprId,
+    body: &ExprBody,
+) -> bool {
+    let is_to_string = match &body.exprs[callee] {
+        Expr::MemberAccess { member, .. } => member.as_str() == "to_string",
+        Expr::Path(segs) => {
+            segs.len() >= 2 && segs.last().is_some_and(|s| s.as_str() == "to_string")
+        }
+        _ => false,
+    };
+    is_to_string
+        && context
+            .expression_type(callee)
+            .is_none_or(|t| matches!(t, Ty::Unknown { .. }))
+}
+
 fn is_runtime_id_path(expr_id: ExprId, body: &ExprBody) -> bool {
     matches!(&body.exprs[expr_id], Expr::Path(segments)
         if segments.len() == 1 && segments[0].as_str() == "$id")
@@ -205,6 +227,15 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
             let arg_exprs: Vec<_> = args.iter().map(|arg| arg.expr).collect();
             for arg in args {
                 collect_from_expr(context, arg.expr, body, out);
+            }
+            // A `recv.to_string()` sugar fallback lowers to `string.from(recv)`,
+            // which is `throws never`. Its callee is left untyped (no real method),
+            // so charging it as `unknown` throws (the unaccounted-callee default in
+            // `collect_callee_escaping_throws`) would infect the enclosing
+            // function's inferred throws. Skip it — the receiver's own throws were
+            // already collected by the `*callee` recursion above.
+            if arg_exprs.is_empty() && is_to_string_fallback_callee(context, *callee, body) {
+                return;
             }
             // When the callee is an `OptionalMemberAccess` (`obj?.method`), the
             // inferred callee type is a nullable `Union([Ty::Function { ... }, Null])`

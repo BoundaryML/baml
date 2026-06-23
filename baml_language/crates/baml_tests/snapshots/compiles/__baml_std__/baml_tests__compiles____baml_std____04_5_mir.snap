@@ -19673,22 +19673,22 @@ fn baml.time.PlainTime.to_json(self: baml.time.PlainTime) -> string {
     let _17: bool
 
     bb0: {
-        _2 = is_type(copy _1, baml.TypeValue);
+        _2 = is_type(copy _1, baml.Uint8Array);
         branch copy _2 -> [bb32, bb1];
     }
 
     bb1: {
-        _3 = is_type(copy _1, baml.TypeValue);
+        _3 = is_type(copy _1, baml.Uint8Array);
         branch copy _3 -> [bb31, bb2];
     }
 
     bb2: {
-        _4 = is_type(copy _1, baml.Uint8Array);
+        _4 = is_type(copy _1, baml.TypeValue);
         branch copy _4 -> [bb30, bb3];
     }
 
     bb3: {
-        _5 = is_type(copy _1, baml.Uint8Array);
+        _5 = is_type(copy _1, baml.TypeValue);
         branch copy _5 -> [bb29, bb4];
     }
 
@@ -19809,7 +19809,7 @@ fn baml.time.PlainTime.to_json(self: baml.time.PlainTime) -> string {
     }
 
     bb30: {
-        _0 = call const fn baml.Uint8Array.baml.ToString.to_string(copy _1) -> [bb33];
+        _0 = call const fn baml.TypeValue.baml.ToString.to_string(copy _1) -> [bb33];
     }
 
     bb31: {
@@ -19817,7 +19817,7 @@ fn baml.time.PlainTime.to_json(self: baml.time.PlainTime) -> string {
     }
 
     bb32: {
-        _0 = call const fn baml.TypeValue.baml.ToString.to_string(copy _1) -> [bb33];
+        _0 = call const fn baml.Uint8Array.baml.ToString.to_string(copy _1) -> [bb33];
     }
 
     bb33: {
@@ -21672,6 +21672,8 @@ fn baml.String.split = builtin(vm)
 fn baml.String.starts_with = builtin(vm)
 
 fn baml.String.substring = builtin(vm)
+
+fn baml.String.to = builtin(vm)
 
 fn baml.String.to_json = builtin(vm)
 

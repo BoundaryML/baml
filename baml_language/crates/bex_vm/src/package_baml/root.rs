@@ -121,45 +121,177 @@ impl BamlPackageBaml for PackageBamlImpl {
         }
     }
 
-    /// `baml._to_string_default(value)` — the default-rendering fallback behind
-    /// `string.from`, used for values whose runtime type does not implement
-    /// `baml.ToString`. Primitives render naturally; containers and class
-    /// instances render structurally (nested strings are quoted). Total — the
-    /// `string.from` contract is `throws never`, so this cannot fail.
+    /// `baml._to_string_default(value)` and `baml._to_string_shim(value)` both
+    /// render `value` for `string.from`, honoring `baml.ToString` overrides at
+    /// every depth: `value`'s own override (if any) wins, and any *nested* value
+    /// whose runtime class overrides `to_string` is rendered via that override
+    /// rather than structurally. Everything else renders structurally (primitives
+    /// naturally; containers/instances as `[a, b]` / `Class { f: v }`, with nested
+    /// strings quoted). Total — `string.from` is `throws never`.
     ///
-    /// This is a *structural* walker: nested values are NOT routed back through
-    /// `baml.ToString`, so a nested type's own `to_string` is not honored here.
-    /// (A YieldToCall-based recursive dispatch would be needed for that; out of
-    /// scope for the string proof-of-concept.)
-    fn _to_string_default(vm: &BexVm, value: &Value) -> bex_str::BexStr {
-        bex_str::BexStr::from(to_string_default_recursive(vm, *value, false))
+    /// `_to_string_default` is the `baml.ToString` interface's default body and
+    /// the structural fallback; `_to_string_shim` backs `string.from`. They are
+    /// identical: the walker already applies `value`'s own override when present,
+    /// so an empty `implements baml.ToString {}` (whose runtime class carries no
+    /// in-body override) still serializes structurally with nested overrides
+    /// honored.
+    fn _to_string_default(vm: &mut BexVm, value: &Value) -> NativeCallResult {
+        render_to_string_honoring_overrides(vm, *value)
     }
 
-    /// `baml._to_string_shim(value)` — runtime-class `to_string` dispatch behind
-    /// `string.from`. If `value`'s runtime class carries an in-body `to_string`
-    /// override, yield to it; otherwise render `value` with the structural
-    /// default. See `make_to_string_callee` for why static dispatch can't be
-    /// used here.
     fn _to_string_shim(vm: &mut BexVm, value: &Value) -> NativeCallResult {
-        match make_to_string_callee(vm, *value) {
-            Some(callee) => NativeCallResult::YieldToCall {
-                callee,
-                args: vec![],
-                type_args: vec![],
-                continuation: Box::new(PassThroughContinuation),
-            },
-            None => {
-                // No in-body override (default-body implementor) → structural.
-                let rendered = to_string_default_recursive(vm, *value, false);
-                NativeCallResult::Done(Value::object(vm.alloc_string(rendered)))
+        render_to_string_honoring_overrides(vm, *value)
+    }
+}
+
+/// Whether `value`'s runtime class carries an in-body `baml.ToString` override.
+/// Shares `make_to_string_callee`'s resolution (so the two agree on every value
+/// kind, including the non-instance `type` / `uint8array` implementors) but
+/// allocates nothing on the VM heap, so it is safe to call during the
+/// allocation-free pre-order collection pass.
+fn has_to_string_override(vm: &BexVm, value: Value) -> bool {
+    super::to_string_override_fn_name(vm, value)
+        .and_then(|name| vm.find_function_by_name(&name))
+        .is_some()
+}
+
+/// Pre-order DFS collecting, by heap pointer and in render order, every
+/// sub-value of `value` whose runtime class overrides `baml.ToString`. An
+/// override node is recorded and *not* descended into — its `to_string` owns its
+/// whole subtree. Immutable and allocation-free so the garbage collector cannot
+/// move objects mid-walk. Matches the traversal order of [`render_to_string`] so
+/// the two stay index-aligned. (Like the structural renderer, this does not
+/// guard against reference cycles — recursive *data* would already loop in the
+/// pre-existing walker; recursive *types* such as trees are acyclic.)
+fn collect_to_string_overrides(vm: &BexVm, value: Value, out: &mut Vec<HeapPtr>) {
+    let ValueKind::Object(ptr) = value.kind() else {
+        return;
+    };
+    if has_to_string_override(vm, value) {
+        out.push(ptr);
+        return;
+    }
+    // Snapshot children (owned), dropping the heap borrow / container lock before
+    // recursing — same discipline as `render_to_string`'s `DisplaySnap`. The
+    // child order (array elements, then map values, then instance fields) matches
+    // the renderer so the two stay index-aligned.
+    let children: Vec<Value> = match vm.get_object(ptr) {
+        Object::Array(values) => values.to_vec(),
+        Object::Map(map) => map.to_index_map().values().copied().collect(),
+        Object::Instance(inst) => inst.fields.iter().map(AtomicValueSlot::load).collect(),
+        _ => Vec::new(),
+    };
+    for v in children {
+        collect_to_string_overrides(vm, v, out);
+    }
+}
+
+/// Entry point shared by `_to_string_default` and `_to_string_shim`. Collects the
+/// override-bearing sub-values (pass 1, sync), dispatches `to_string` on each in
+/// order (pass 2, one `YieldToCall` per override via [`ToStringWalkContinuation`]),
+/// then renders structurally splicing in the override results (pass 3). When the
+/// value tree contains no overrides at all, renders fully structurally inline.
+fn render_to_string_honoring_overrides(vm: &mut BexVm, value: Value) -> NativeCallResult {
+    let mut pending: Vec<HeapPtr> = Vec::new();
+    collect_to_string_overrides(vm, value, &mut pending);
+
+    if pending.is_empty() {
+        let mut counter = 0;
+        let rendered = render_to_string(vm, value, false, &[], &mut counter);
+        return NativeCallResult::Done(Value::object(vm.alloc_string(rendered)));
+    }
+
+    let first = Value::object(pending[0]);
+    match make_to_string_callee(vm, first) {
+        Some(callee) => NativeCallResult::YieldToCall {
+            callee,
+            args: vec![],
+            type_args: vec![],
+            continuation: Box::new(ToStringWalkContinuation {
+                root: value,
+                pending,
+                idx: 0,
+                results: Vec::new(),
+            }),
+        },
+        None => {
+            let mut counter = 0;
+            let rendered = render_to_string(vm, value, false, &[], &mut counter);
+            NativeCallResult::Done(Value::object(vm.alloc_string(rendered)))
+        }
+    }
+}
+
+/// Drives pass 2/3 of `render_to_string_honoring_overrides`: accumulates each
+/// override's `to_string` result, dispatches the next, and on completion renders
+/// the structural skeleton with the override results spliced in.
+struct ToStringWalkContinuation {
+    /// The value being rendered (its structural skeleton is walked in pass 3).
+    root: Value,
+    /// Override-bearing sub-values, in render order (pass-1 output).
+    pending: Vec<HeapPtr>,
+    /// Index of the override whose `to_string` result we are awaiting.
+    idx: usize,
+    /// Override results so far, as plain Rust strings (no heap roots to track).
+    results: Vec<String>,
+}
+
+impl Continuation for ToStringWalkContinuation {
+    fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
+        let rendered = vm
+            .as_string(&value)
+            .map(|s| s.as_str().to_string())
+            .unwrap_or_default();
+        self.results.push(rendered);
+
+        let next = self.idx + 1;
+        if next < self.pending.len() {
+            self.idx = next;
+            let next_val = Value::object(self.pending[next]);
+            return match make_to_string_callee(vm, next_val) {
+                Some(callee) => NativeCallResult::YieldToCall {
+                    callee,
+                    args: vec![],
+                    type_args: vec![],
+                    continuation: self,
+                },
+                None => {
+                    let mut counter = 0;
+                    let out = render_to_string(vm, self.root, false, &self.results, &mut counter);
+                    NativeCallResult::Done(Value::object(vm.alloc_string(out)))
+                }
+            };
+        }
+
+        let mut counter = 0;
+        let out = render_to_string(vm, self.root, false, &self.results, &mut counter);
+        NativeCallResult::Done(Value::object(vm.alloc_string(out)))
+    }
+
+    fn gc_roots(&self) -> Vec<HeapPtr> {
+        let mut roots = self.pending.clone();
+        if let Some(ptr) = self.root.as_object_ptr() {
+            roots.push(ptr);
+        }
+        roots
+    }
+
+    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+        if let Some(ptr) = self.root.as_object_ptr() {
+            if let Some(&new_ptr) = forwarding.get(&ptr) {
+                self.root = Value::object(new_ptr);
+            }
+        }
+        for ptr in &mut self.pending {
+            if let Some(&new_ptr) = forwarding.get(ptr) {
+                *ptr = new_ptr;
             }
         }
     }
 }
 
-/// Returns the callee's result unchanged. Used by `_compare_shim` and
-/// `_to_string_shim`, whose only job is to dispatch one call and surface its
-/// value.
+/// Returns the callee's result unchanged. Used by `_compare_shim`, whose only
+/// job is to dispatch one call and surface its value.
 struct PassThroughContinuation;
 
 impl Continuation for PassThroughContinuation {
@@ -188,9 +320,26 @@ enum DisplaySnap {
     Instance(String, Vec<(String, Value)>),
 }
 
-/// Default human-readable rendering used by `string.from`'s `_` arm. Structural
-/// and total: every value type renders to *something* and nothing throws.
-fn to_string_default_recursive(vm: &BexVm, value: Value, nested: bool) -> String {
+/// Human-readable rendering used by `string.from` / the `baml.ToString` default.
+/// Structural and total: every value type renders to *something* and nothing
+/// throws. A node whose runtime class overrides `baml.ToString` is rendered via
+/// that override's precomputed result (`results[*counter]`, produced by pass 2),
+/// spliced in bare regardless of nesting; `counter` advances in pre-order,
+/// matching [`collect_to_string_overrides`]. With an empty `results` (no
+/// overrides anywhere) this is a pure structural walk.
+fn render_to_string(
+    vm: &BexVm,
+    value: Value,
+    nested: bool,
+    results: &[String],
+    counter: &mut usize,
+) -> String {
+    if has_to_string_override(vm, value) {
+        let rendered = results.get(*counter).cloned().unwrap_or_default();
+        *counter += 1;
+        return rendered;
+    }
+
     let ptr = match value.kind() {
         ValueKind::Null => return "null".to_string(),
         ValueKind::Int(i) => return i.to_string(),
@@ -268,29 +417,33 @@ fn to_string_default_recursive(vm: &BexVm, value: Value, nested: bool) -> String
             }
         }
         DisplaySnap::Seq(values) => {
-            let parts: Vec<String> = values
-                .iter()
-                .map(|v| to_string_default_recursive(vm, *v, true))
-                .collect();
+            let mut parts: Vec<String> = Vec::with_capacity(values.len());
+            for v in &values {
+                parts.push(render_to_string(vm, *v, true, results, counter));
+            }
             format!("[{}]", parts.join(", "))
         }
         DisplaySnap::Entries(entries) => {
-            let parts: Vec<String> = entries
-                .iter()
-                .map(|(k, v)| format!("{k}: {}", to_string_default_recursive(vm, *v, true)))
-                .collect();
+            let mut parts: Vec<String> = Vec::with_capacity(entries.len());
+            for (k, v) in &entries {
+                parts.push(format!(
+                    "{k}: {}",
+                    render_to_string(vm, *v, true, results, counter)
+                ));
+            }
             format!("{{{}}}", parts.join(", "))
         }
         DisplaySnap::Instance(class_name, paired) => {
             if paired.is_empty() {
                 class_name
             } else {
-                let parts: Vec<String> = paired
-                    .iter()
-                    .map(|(name, v)| {
-                        format!("{name}: {}", to_string_default_recursive(vm, *v, true))
-                    })
-                    .collect();
+                let mut parts: Vec<String> = Vec::with_capacity(paired.len());
+                for (name, v) in &paired {
+                    parts.push(format!(
+                        "{name}: {}",
+                        render_to_string(vm, *v, true, results, counter)
+                    ));
+                }
                 format!("{class_name} {{ {} }}", parts.join(", "))
             }
         }

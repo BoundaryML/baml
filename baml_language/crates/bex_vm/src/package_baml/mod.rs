@@ -294,6 +294,28 @@ pub(super) fn make_compare_callee(vm: &mut BexVm, v: Value) -> Result<HeapPtr, V
 /// matching `make_compare_callee`'s `{class_fqn}.baml.Comparable.compare`. Used
 /// by the native `baml._to_string_shim` (`root.rs`) backing `string.from`.
 pub(super) fn make_to_string_callee(vm: &mut BexVm, v: Value) -> Option<HeapPtr> {
+    let fn_name = to_string_override_fn_name(vm, v)?;
+    let fn_ptr = vm.find_function_by_name(&fn_name)?;
+
+    Some(vm.alloc_bound_method(bex_vm_types::BoundMethod {
+        function: fn_ptr,
+        receiver: v,
+    }))
+}
+
+/// The `{class_fqn}.baml.ToString.to_string` function name for `v`'s runtime
+/// class, for the value kinds that can carry an in-body `baml.ToString` override.
+/// Returns `None` for kinds that never implement `baml.ToString` (primitives,
+/// arrays, maps) — `string.from` renders those structurally.
+///
+/// Covers `Object::Instance` (user/builtin classes) plus the two builtin
+/// non-instance implementors, `type` (`baml.TypeValue`) and `uint8array`
+/// (`baml.Uint8Array`); without them `string.from(v)` would diverge from
+/// `v.to_string()` (e.g. a `type` rendering structurally instead of as its type
+/// name, or bytes as `[1, 2]` instead of their UTF-8 text). Allocation-free
+/// w.r.t. the VM heap (only builds a Rust `String`), so it is safe to call during
+/// the GC-sensitive override-collection pass.
+pub(super) fn to_string_override_fn_name(vm: &BexVm, v: Value) -> Option<String> {
     use bex_vm_types::ValueKind;
     let fqn = match v.kind() {
         ValueKind::Object(ptr) => match vm.get_object(ptr) {
@@ -301,18 +323,13 @@ pub(super) fn make_to_string_callee(vm: &mut BexVm, v: Value) -> Option<HeapPtr>
                 Object::Class(c) => c.name.render_dotted(false),
                 _ => return None,
             },
+            Object::Type(_) => "baml.TypeValue".to_string(),
+            Object::Uint8Array(_) => "baml.Uint8Array".to_string(),
             _ => return None,
         },
         _ => return None,
     };
-
-    let fn_name = format!("{fqn}.baml.ToString.to_string");
-    let fn_ptr = vm.find_function_by_name(&fn_name)?;
-
-    Some(vm.alloc_bound_method(bex_vm_types::BoundMethod {
-        function: fn_ptr,
-        receiver: v,
-    }))
+    Some(format!("{fqn}.baml.ToString.to_string"))
 }
 
 // =============================================================================

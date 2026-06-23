@@ -5706,6 +5706,65 @@ impl<'db> TypeInferenceBuilder<'db> {
             return result_ty;
         }
 
+        // Operator-style `recv.to_string()` -> `string.from(recv)` fallback. The
+        // AST stays a `Call` (so diagnostics keep saying `.to_string()`, never
+        // `string.from`); MIR lowers it. A 0-arg/0-type-arg `to_string` member or
+        // local-rooted-path call whose receiver has NO real `baml.ToString` method
+        // is typed `string` here. A bare `to_string` method is banned, so the only
+        // source of a real one is an `implements baml.ToString` block — which
+        // resolves cleanly and is left to normal method dispatch. `string.from` is
+        // total (`throws never`, any `T`) and honors overrides via a runtime shim.
+        let to_string_callee = type_args.is_empty()
+            && arg_exprs.is_empty()
+            && match &body.exprs[callee] {
+                Expr::MemberAccess { member, .. } => member.as_str() == "to_string",
+                Expr::Path(segs) => {
+                    segs.len() >= 2
+                        && segs.last().is_some_and(|s| s.as_str() == "to_string")
+                        && self.locals.contains_key(&segs[0])
+                }
+                _ => false,
+            };
+        let mut to_string_probe_ty: Option<Ty> = None;
+        if to_string_callee {
+            let probe_ty = self.infer_expr(callee, body);
+            // A real `to_string` (only via `implements baml.ToString`) resolves to
+            // a usable type; an absent one resolves to `Unknown` (and emits an
+            // `UnresolvedMember`). Decide on the resolved type, NOT the diagnostic
+            // count — the receiver may have raised its own (legitimate) errors.
+            let unresolved = matches!(probe_ty, Ty::Unknown { .. } | Ty::Error { .. });
+            // Apply only when the receiver type is known and non-nullable (or pure
+            // null — `string.from(null)` is `"null"`), so a broken or nullable
+            // receiver keeps its own error instead of being papered over.
+            let recv_ty = match &body.exprs[callee] {
+                Expr::MemberAccess { base, .. } => self.expressions.get(base).cloned(),
+                Expr::Path(segs) => self
+                    .path_segment_types
+                    .get(&(callee, segs.len() - 2))
+                    .cloned(),
+                _ => None,
+            };
+            let recv_ok = recv_ty.as_ref().is_some_and(|t| {
+                !matches!(t, Ty::Unknown { .. } | Ty::Error { .. })
+                    && (matches!(t, Ty::Null { .. }) || crate::narrowing::remove_null(t) == *t)
+            });
+            if unresolved && recv_ok {
+                // Roll back ONLY this call's `to_string` UnresolvedMember (the last
+                // diagnostic, emitted after the receiver); keep any receiver errors.
+                self.context.pop_last_unresolved_member();
+                let ty = Ty::String {
+                    attr: TyAttr::default(),
+                };
+                self.report_result_type_mismatch(expr_id, &ty, expected);
+                self.record_expr_type(expr_id, ty.clone());
+                return ty;
+            }
+            // Real method, or broken/nullable receiver: keep the probe's result
+            // (and its diagnostics) and continue with the normal call machinery,
+            // reusing `probe_ty` instead of re-inferring the callee below.
+            to_string_probe_ty = Some(probe_ty);
+        }
+
         let is_method_call = match &body.exprs[callee] {
             Expr::MemberAccess { base, .. } => match &body.exprs[*base] {
                 Expr::Path(segments) if !segments.is_empty() => {
@@ -5737,7 +5796,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             &body.exprs[callee],
             Expr::Path(segs) if segs.len() == 1 && self.locals.contains_key(&segs[0])
         );
-        let callee_ty = self.infer_expr(callee, body);
+        let callee_ty = to_string_probe_ty.unwrap_or_else(|| self.infer_expr(callee, body));
 
         // When explicit type args are written at the call site (e.g. `foo<int, T>(x)`),
         // validate arity and resolve them to a pre-computed bindings map.

@@ -7119,6 +7119,132 @@ impl<'db> LoweringContext<'db> {
         Operand::Constant(constant)
     }
 
+    /// Operator-style `recv.to_string()` -> `string.from(recv)` desugar, the
+    /// inverse direction of `==` -> `baml.ops.equals_equals` (`lower_equality_via_driver`).
+    /// Fires only for a 0-arg `to_string` call with NO resolved method: the only
+    /// source of a real `to_string` is `implements baml.ToString` (a bare one is
+    /// banned), which resolves to a method and is handled by the dispatch/resolution
+    /// paths in `lower_call`. `string.from` is total (`throws never`) and honors any
+    /// `baml.ToString` override via its runtime shim, so it matches a real call.
+    /// Returns `true` (and emits the call) when it handled the expression.
+    fn try_lower_to_string_fallback(
+        &mut self,
+        expr_id: AstExprId,
+        callee: AstExprId,
+        args: &[AstExprId],
+        dest: &Place,
+    ) -> bool {
+        if !args.is_empty() {
+            return false;
+        }
+        // The fallback fires only when TIR left the `to_string` callee *untyped*
+        // (`Unknown`) — i.e. no real `to_string` method resolved. A real
+        // implementor (any `baml.ToString` / interface impl) types the callee as a
+        // method and is dispatched by the normal paths. Keying on the callee's TIR
+        // type (not on resolution presence) is essential: a generic typevar
+        // receiver records a placeholder resolution yet still has an `Unknown`
+        // callee type, and must take the fallback rather than ICE on the unknown.
+        let callee_unknown = self
+            .expr_types
+            .get(&self.expr_metadata_key(callee))
+            .is_none_or(|t| matches!(t, Tir2Ty::Unknown { .. }));
+        if !callee_unknown {
+            return false;
+        }
+        let callee_expr = self.body.exprs[callee].clone();
+        let (recv_op, recv_tir_ty): (Operand, Option<Tir2Ty>) = match &callee_expr {
+            AstExpr::MemberAccess { base, member } => {
+                if member.as_str() != "to_string" {
+                    return false;
+                }
+                let base_id = *base;
+                let ty = self
+                    .expr_types
+                    .get(&self.expr_metadata_key(base_id))
+                    .cloned();
+                (self.lower_to_operand(base_id), ty)
+            }
+            AstExpr::Path(segments) => {
+                if segments.len() < 2 || segments.last().is_none_or(|s| s.as_str() != "to_string") {
+                    return false;
+                }
+                let Some(&recv_root_local) = self.locals.get(&segments[0]) else {
+                    return false;
+                };
+                let receiver_segments = &segments[..segments.len() - 1];
+                let prefix_idx = segments.len() - 2;
+                let ty = self
+                    .path_segment_types
+                    .get(&(self.current_metadata_scope, callee, prefix_idx))
+                    .cloned();
+                let recv_local =
+                    self.lower_path_receiver_to_local(callee, receiver_segments, recv_root_local);
+                (Operand::Copy(Place::Local(recv_local)), ty)
+            }
+            _ => return false,
+        };
+
+        // `string.from` is the static `from<T>` on `class String` (baml root
+        // package, no namespace). Pass the receiver's static type as the leading
+        // type arg so `T` binds under monomorphization (a generic receiver `t: T`
+        // would otherwise leave `T` undetermined and ICE). The shim ignores `T` at
+        // runtime, so an out-of-scope typevar or unknown receiver type safely
+        // drops to ntypeargs=0 — matching how `string.from(x)` is normally emitted.
+        let caller_generic_params = self.enclosing_generic_params();
+        let type_arg_ops: Vec<Operand> = match &recv_tir_ty {
+            Some(t)
+                if !matches!(t, Tir2Ty::Unknown { .. })
+                    && !baml_compiler2_tir::generics::contains_typevar_where(t, &|name| {
+                        !caller_generic_params.iter().any(|p| p == name)
+                    }) =>
+            {
+                self.emit_frame_type_arg_ops(std::slice::from_ref(t))
+            }
+            _ => Vec::new(),
+        };
+        let ntypeargs = type_arg_ops.len();
+        let mut all_args = type_arg_ops;
+        all_args.push(recv_op);
+
+        let callee_op = Operand::Constant(Constant::Function(ItemRef::Method {
+            package: Name::new("baml"),
+            namespace: vec![],
+            class: Name::new("String"),
+            name: Name::new("from"),
+        }));
+        // `string.from` is `throws never`; the unwind target is harmless/unused.
+        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
+        let target = self.builder.create_block();
+        // The call destination must be a `Place::Local`; route projection/capture
+        // dests through a temp + assign-through (mirrors the normal call path).
+        if let Place::Local(_) = dest {
+            self.builder.call_with_type_args(
+                callee_op,
+                all_args,
+                ntypeargs,
+                dest.clone(),
+                target,
+                unwind,
+            );
+            self.builder.set_current_block(target);
+        } else {
+            let call_ty = self.expr_ty(expr_id);
+            let tmp = self.builder.temp(call_ty);
+            self.builder.call_with_type_args(
+                callee_op,
+                all_args,
+                ntypeargs,
+                Place::local(tmp),
+                target,
+                unwind,
+            );
+            self.builder.set_current_block(target);
+            self.builder
+                .assign(dest.clone(), Rvalue::Use(Operand::Copy(Place::local(tmp))));
+        }
+        true
+    }
+
     fn lower_call(
         &mut self,
         expr_id: AstExprId,
@@ -7441,6 +7567,14 @@ impl<'db> LoweringContext<'db> {
                     }
                 }
             }
+        }
+
+        // Operator-style `recv.to_string()` -> `string.from(recv)` fallback. Runs
+        // after all real dispatch (interface/union above, method resolution below)
+        // has been attempted, so a `baml.ToString` implementor always wins first;
+        // only a `to_string` call with no resolved method reaches the fallback.
+        if self.try_lower_to_string_fallback(expr_id, callee, args, &dest) {
+            return;
         }
 
         // Check if callee is a method call (MemberAccess or multi-segment Path with a

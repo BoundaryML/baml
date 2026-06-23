@@ -13,8 +13,9 @@ function         baml._rust_sort                  <builtin>/baml/comparable.baml
 class            baml.Array                       <builtin>/baml/containers.baml:2
 class            baml.Map                         <builtin>/baml/containers.baml:463
 interface        baml.ToString                    <builtin>/baml/conversions.baml:25
-function         baml._to_string_default          <builtin>/baml/conversions.baml:36
-function         baml._to_string_shim             <builtin>/baml/conversions.baml:54
+interface        baml.FromString                  <builtin>/baml/conversions.baml:52
+function         baml._to_string_default          <builtin>/baml/conversions.baml:64
+function         baml._to_string_shim             <builtin>/baml/conversions.baml:82
 function         baml.deep_copy                   <builtin>/baml/core.baml:3
 function         baml.deep_equals                 <builtin>/baml/core.baml:9
 class            baml.TaggedString                <builtin>/baml/core.baml:20

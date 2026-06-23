@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/compiler2_tir/phase5.rs
-assertion_line: 389
 expression: output
 ---
 namespace baml:
@@ -9,11 +8,12 @@ namespace baml:
   class Bool { methods: [to_json, from_json] }
   type Comparable
   class Float { methods: [to_json, is_nan, is_infinite, is_finite, abs, min, max, clamp, floor, ceil, round, trunc, fract, ifloor, iceil, iround, itrunc, sqrt, pow, log, hypot, sin, cos, tan, asin, acos, atan, atan2, sinh, cosh, tanh, asinh, acosh, atanh, to_radians, to_degrees, parse, random, pi, e, golden_ratio, nan, inf, from_json] }
+  type FromString
   class Int { methods: [to_json, abs, min, max, clamp, isqrt, pow, ilog, leading_zeros, leading_ones, trailing_zeros, trailing_ones, count_zeros, count_ones, parse, random, max_value, min_value, from_json] }
   class Map<K, V> { methods: [length, has, keys, values, set, get, to_json, delete, get_or_insert, clear, from_json] }
   class Null { methods: [to_json, from_json] }
   type Sortable
-  class String { methods: [from, to_json, length, char_count, byte_length, to_lower_case, to_upper_case, trim, trim_start, trim_end, includes, starts_with, ends_with, split, lines, substring, replace, index_of, char_at, repeat, matches, replace_all, is_numeric, is_alphabetic, is_alphanumeric, is_uppercase, is_lowercase, is_whitespace, is_control, is_graphic, is_ascii, is_ascii_numeric, is_ascii_alphabetic, is_ascii_alphanumeric, is_ascii_uppercase, is_ascii_lowercase, is_ascii_whitespace, is_ascii_control, is_ascii_graphic, is_ascii_hex, to_utf8, from_utf8, from_code_points, from_json] }
+  class String { methods: [from, to, to_json, length, char_count, byte_length, to_lower_case, to_upper_case, trim, trim_start, trim_end, includes, starts_with, ends_with, split, lines, substring, replace, index_of, char_at, repeat, matches, replace_all, is_numeric, is_alphabetic, is_alphanumeric, is_uppercase, is_lowercase, is_whitespace, is_control, is_graphic, is_ascii, is_ascii_numeric, is_ascii_alphabetic, is_ascii_alphanumeric, is_ascii_uppercase, is_ascii_lowercase, is_ascii_whitespace, is_ascii_control, is_ascii_graphic, is_ascii_hex, to_utf8, from_utf8, from_code_points, from_json] }
   class TaggedString { methods: [to_json, from_json] }
   type ToString
   class TypeValue { methods: [_to_string_impl, implements, implemented_by, implementors, to_json, from_json, to_string] }

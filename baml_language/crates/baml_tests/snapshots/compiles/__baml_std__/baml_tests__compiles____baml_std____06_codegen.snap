@@ -1574,6 +1574,9 @@ function baml.String.starts_with(self: baml.String, prefix: string) -> bool {
 function baml.String.substring(self: baml.String, start: int, end: int) -> string {
 }
 
+function baml.String.to(s: string) -> T {
+}
+
 function baml.String.to_json(self: baml.String) -> baml.json.json {
 }
 
@@ -14304,25 +14307,25 @@ function baml.time.PlainTime.second(self: baml.time.PlainTime) -> int {
 
 function baml.time.PlainTime.to_json(self: baml.time.PlainTime) -> string {
     load_var self
-    is_type baml.TypeValue
+    is_type baml.Uint8Array
     pop_jump_if_false L0
     jump L29
 
   L0:
     load_var self
-    is_type baml.TypeValue
+    is_type baml.Uint8Array
     pop_jump_if_false L1
     jump L28
 
   L1:
     load_var self
-    is_type baml.Uint8Array
+    is_type baml.TypeValue
     pop_jump_if_false L2
     jump L27
 
   L2:
     load_var self
-    is_type baml.Uint8Array
+    is_type baml.TypeValue
     pop_jump_if_false L3
     jump L26
 
@@ -14462,7 +14465,7 @@ function baml.time.PlainTime.to_json(self: baml.time.PlainTime) -> string {
 
   L27:
     load_var self
-    call baml.Uint8Array.baml.ToString.to_string
+    call baml.TypeValue.baml.ToString.to_string
     jump L30
 
   L28:
@@ -14472,7 +14475,7 @@ function baml.time.PlainTime.to_json(self: baml.time.PlainTime) -> string {
 
   L29:
     load_var self
-    call baml.TypeValue.baml.ToString.to_string
+    call baml.Uint8Array.baml.ToString.to_string
 
   L30:
     return

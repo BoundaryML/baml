@@ -28,11 +28,39 @@ interface ToString {
   }
 }
 
+/// Opt-in parsing of a string into a value — the inverse of `baml.ToString`.
+///
+/// A type implements `baml.FromString` to control how `string.to<T>(s)` parses
+/// it back from text. Unlike `to_string`, there is no structural default:
+/// `string.to<T>` parses the primitive types directly, and otherwise requires
+/// `T` to implement `baml.FromString`. A parse failure throws
+/// `baml.errors.ParseError`.
+///
+/// ```
+/// class Point {
+///   x int
+///   y int
+///   implements baml.FromString {
+///     function from_string(s: string) -> Self throws baml.errors.ParseError {
+///       // parse "(x, y)" back into a Point
+///     }
+///   }
+/// }
+///
+/// string.to<Point>("(1, 2)")  // Point { x: 1, y: 2 }
+/// ```
+interface FromString {
+  function from_string(s: string) -> Self throws baml.errors.ParseError
+}
+
 /// Internal: default structural rendering used by `string.from` for values
 /// whose runtime type does not implement `baml.ToString`. Primitives render
 /// naturally (`5`, `true`, `null`); containers and class instances render
-/// structurally (`[1, 2]`, `Point { x: 1, y: 2 }`). Never throws.
-//baml:vm
+/// structurally (`[1, 2]`, `Point { x: 1, y: 2 }`). A nested value whose runtime
+/// class *does* implement `baml.ToString` is rendered via that override (so the
+/// default honors overrides at every depth, like `string.from`). Never throws.
+//baml:mut_vm
+//baml:may_yield
 function _to_string_default<T>(value: T) -> string throws never {
   $rust_function
 }

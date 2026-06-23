@@ -2,7 +2,7 @@
 source: crates/baml_cli/src/describe_command_tests.rs
 expression: "describe_via_dispatch(&db, \"string\")"
 ---
-class String  (string)  <builtin>/baml/string.baml:5-515
+class String  (string)  <builtin>/baml/string.baml:5-534
 
 /// A UTF-8 encoded string.
 ///
@@ -11,32 +11,32 @@ class String  (string)  <builtin>/baml/string.baml:5-515
 class String {}
 
 methods:
-  function to_json(self) -> json  <builtin>/baml/string.baml:45-47
+  function to_json(self) -> json  <builtin>/baml/string.baml:64-66
   /// Returns the number of **Unicode code points** (characters) in the string.
-  function length(self) -> int  <builtin>/baml/string.baml:62-64
+  function length(self) -> int  <builtin>/baml/string.baml:81-83
   /// Alias for `length()`.
-  function char_count(self) -> int  <builtin>/baml/string.baml:67-69
+  function char_count(self) -> int  <builtin>/baml/string.baml:86-88
   /// Returns the length of the string in **UTF-8 bytes**.
-  function byte_length(self) -> int  <builtin>/baml/string.baml:82-84
+  function byte_length(self) -> int  <builtin>/baml/string.baml:101-103
   /// Returns the string with all Unicode characters converted to lowercase.
-  function to_lower_case(self) -> string  <builtin>/baml/string.baml:87-89
+  function to_lower_case(self) -> string  <builtin>/baml/string.baml:106-108
   /// Returns the string with all Unicode characters converted to uppercase.
-  function to_upper_case(self) -> string  <builtin>/baml/string.baml:92-94
+  function to_upper_case(self) -> string  <builtin>/baml/string.baml:111-113
   /// Returns the string with leading and trailing whitespace removed.
-  function trim(self) -> string  <builtin>/baml/string.baml:107-109
+  function trim(self) -> string  <builtin>/baml/string.baml:126-128
   /// Returns the string with leading whitespace removed (trailing whitespace
-  function trim_start(self) -> string  <builtin>/baml/string.baml:119-121
+  function trim_start(self) -> string  <builtin>/baml/string.baml:138-140
   /// Returns the string with trailing whitespace removed (leading whitespace
-  function trim_end(self) -> string  <builtin>/baml/string.baml:131-133
+  function trim_end(self) -> string  <builtin>/baml/string.baml:150-152
   /// Returns true if `search` appears anywhere in the string.
-  function includes(self, search: string) -> bool  <builtin>/baml/string.baml:136-138
+  function includes(self, search: string) -> bool  <builtin>/baml/string.baml:155-157
   /// Returns true if the string starts with `prefix`.
-  function starts_with(self, prefix: string) -> bool  <builtin>/baml/string.baml:141-143
+  function starts_with(self, prefix: string) -> bool  <builtin>/baml/string.baml:160-162
   /// Returns true if the string ends with `suffix`.
-  function ends_with(self, suffix: string) -> bool  <builtin>/baml/string.baml:146-148
+  function ends_with(self, suffix: string) -> bool  <builtin>/baml/string.baml:165-167
   … 55 more lines (re-run with a higher --budget)
 
 static_methods:
-  … 6 more lines (re-run with a higher --budget)
+  … 7 more lines (re-run with a higher --budget)
 
 references (0):
