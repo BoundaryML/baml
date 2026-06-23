@@ -306,7 +306,7 @@ mod tests {
     #[tokio::test]
     async fn complete_host_call_throw_payload_delivers_external_value() {
         use bridge_ctypes::baml_core::cffi::{
-            InboundClassValue, InboundMapEntry, InboundValue,
+            BamlTyClass, InboundClassValue, InboundMapEntry, InboundValue,
             inbound_map_entry::Key as InboundMapKey, inbound_value::Value as InboundValueVariant,
         };
         use prost::Message;
@@ -323,9 +323,11 @@ mod tests {
         };
         let inbound = InboundValue {
             value: Some(InboundValueVariant::ClassValue(InboundClassValue {
-                name: "baml.errors.HostCallable".to_string(),
                 fields: vec![message_entry],
-                class_ty: None,
+                class_ty: Some(BamlTyClass {
+                    name: "baml.errors.HostCallable".to_string(),
+                    type_args: vec![],
+                }),
             })),
         };
         let encoded = inbound.encode_to_vec();

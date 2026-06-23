@@ -39,19 +39,20 @@ export type BamlType = BamlPrimitiveToken | typeof Never | BamlClassCtor | {
     union: BamlType[];
 } | null | undefined;
 /**
- * Lower a {@link BamlType} token to a wire `Ty` (an `ITy` plain object the
+ * Lower a {@link BamlType} token to a wire `BamlTy` (an `IBamlTy` plain object the
  * protobufjs `fromObject` path accepts). Mirrors `_fill_wire_ty`: an
  * unrecognized or absent token leaves the unknown/top type, which binds
  * nothing.
  */
-export declare function lowerTypeToWireTy(token: BamlType): baml_core.cffi.v1.ITy;
+export declare function lowerTypeToWireTy(token: BamlType): baml_core.cffi.v1.IBamlTy;
 /**
- * Decode an outbound `BamlTy` (baml_outbound.proto) back to a {@link BamlType}
- * token — the reverse of {@link lowerTypeToWireTy}, used to repopulate a generic
- * instance's `$types` field on decode. Mirrors the BAML→Python type projection
- * (`_baml_ty_to_python_type`) that drives Python's `cls[args]` reparameterize.
- * Unrecognized / dynamic positions (`any`/`unknown`/enum/union/literal/media)
- * decode to `undefined`, i.e. an unbound wildcard.
+ * Decode a wire `Ty` (baml_type.proto) back to a {@link BamlType} token — the
+ * exact inverse of {@link lowerTypeToWireTy}, used to repopulate a generic
+ * instance's `$types` field on decode. Mirrors the engine's
+ * `ty_encode::runtime_ty_to_proto_ty` and Python's `_ty_to_python_type`.
+ * Positions with no concrete JS binding (a structural union, an enum, a type
+ * variable, an opaque/runtime-only type) decode to `undefined`, i.e. an unbound
+ * wildcard.
  */
 export declare function outboundTyToBamlType(ty: baml_core.cffi.v1.IBamlTy | null | undefined): BamlType;
 //# sourceMappingURL=wire_ty.d.ts.map
