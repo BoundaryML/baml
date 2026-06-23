@@ -258,14 +258,10 @@ function main() -> baml.llm.PromptAst {
     let ast = match &output.result {
         Ok(BexExternalValue::Instance {
             class_name, fields, ..
-        })
-            if class_name == "baml.llm.PromptAst" =>
-        {
-            match fields.get("_data") {
-                Some(BexExternalValue::Adt(BexExternalAdt::PromptAst(ast))) => ast.clone(),
-                other => panic!("expected `_data` to hold a PromptAst ADT, got {other:?}"),
-            }
-        }
+        }) if class_name == "baml.llm.PromptAst" => match fields.get("_data") {
+            Some(BexExternalValue::Adt(BexExternalAdt::PromptAst(ast))) => ast.clone(),
+            other => panic!("expected `_data` to hold a PromptAst ADT, got {other:?}"),
+        },
         other => panic!("expected a baml.llm.PromptAst instance, got {other:?}"),
     };
     let dbg = format!("{ast:?}");
