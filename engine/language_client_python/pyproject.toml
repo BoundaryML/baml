@@ -1,6 +1,6 @@
 [project]
 name = "baml-py"
-version = "0.222.0"
+version = "0.223.0"
 description = "BAML python bindings (pyproject.toml)"
 readme = "README.md"
 requires-python = ">=3.10"
