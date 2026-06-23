@@ -782,6 +782,28 @@ impl BamlClassArray for PackageBamlImpl {
         resolve_index(index, array.len()).map(|i| array[i])
     }
 
+    /// Builds a new array of `length` elements, each equal to `value`.
+    ///
+    /// Static constructor for `baml.Array.filled`. A negative `length` clamps to
+    /// an empty array. `Value` is `Copy`, so every slot shares the same `value`
+    /// (for reference types, the same underlying object).
+    ///
+    /// The two non-positive cases are handled explicitly so they are not
+    /// conflated:
+    /// - A negative `length` clamps to an empty array, as documented.
+    /// - A `length` that exceeds `usize::MAX` (only possible on 32-bit targets
+    ///   such as `wasm32-unknown-unknown`) is requesting more elements than the
+    ///   platform can address, so it saturates to `usize::MAX`. The subsequent
+    ///   allocation then fails loudly rather than silently producing an empty
+    ///   array.
+    fn filled(length: i64, value: &Value) -> Vec<Value> {
+        if length <= 0 {
+            return Vec::new();
+        }
+        let count = usize::try_from(length).unwrap_or(usize::MAX);
+        vec![*value; count]
+    }
+
     fn concat(array: &[Value], other: &[Value]) -> Vec<Value> {
         array.iter().chain(other.iter()).copied().collect()
     }

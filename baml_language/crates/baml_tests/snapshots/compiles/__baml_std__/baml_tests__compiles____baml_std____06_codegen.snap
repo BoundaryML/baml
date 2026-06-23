@@ -13,6 +13,9 @@ function baml.Array.concat(self: baml.Array<T>, other: T[]) -> T[] {
 function baml.Array.every(self: baml.Array<T>, predicate: (T) -> bool throws E) -> bool {
 }
 
+function baml.Array.filled(length: int, value: T) -> T[] {
+}
+
 function baml.Array.filter(self: baml.Array<T>, predicate: (T) -> bool throws E) -> T[] {
 }
 
