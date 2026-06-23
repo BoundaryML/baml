@@ -256,7 +256,9 @@ function main() -> baml.llm.PromptAst {
 "#
     );
     let ast = match &output.result {
-        Ok(BexExternalValue::Instance { class_name, fields })
+        Ok(BexExternalValue::Instance {
+            class_name, fields, ..
+        })
             if class_name == "baml.llm.PromptAst" =>
         {
             match fields.get("_data") {
