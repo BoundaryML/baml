@@ -79,6 +79,15 @@ impl RuntimeTy {
         RuntimeTy::List(Box::new(inner), TyAttr::default())
     }
 
+    /// `map<K, V>` with default attributes.
+    pub fn map(key: RuntimeTy, value: RuntimeTy) -> Self {
+        RuntimeTy::Map {
+            key: Box::new(key),
+            value: Box::new(value),
+            attr: TyAttr::default(),
+        }
+    }
+
     /// `A | B | ...` (union) with default attributes.
     pub fn union(members: impl IntoIterator<Item = RuntimeTy>) -> Self {
         RuntimeTy::Union(members.into_iter().collect(), TyAttr::default())

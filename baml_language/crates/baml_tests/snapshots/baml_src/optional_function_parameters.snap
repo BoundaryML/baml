@@ -161,6 +161,7 @@ function optional_function_parameters.ofp_source_defaults_named_overrides_and_re
     load_const <omitted>
     load_const <omitted>
     call user.optional_function_parameters.score
+    load_type int
     alloc_array 3
     return
 }
@@ -179,6 +180,7 @@ function optional_function_parameters.push_default(value: int, items: int[]) -> 
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L0
+    load_type never
     alloc_array 0
     store_var items
 

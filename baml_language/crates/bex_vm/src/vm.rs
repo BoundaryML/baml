@@ -1206,6 +1206,48 @@ impl BexVm {
         &self.pending_call_type_args
     }
 
+    /// The declared element type of `value` when it is an `Object::Array`, else
+    /// `unknown`. The generated array-receiver glue calls this to build the
+    /// [`ArrayView`](crate::package_baml::ArrayView) it hands a builtin, so a
+    /// type-preserving builtin (e.g. `filter`) can tag its result array.
+    pub fn array_element_ty(&self, value: &Value) -> baml_type::RuntimeTy {
+        value
+            .as_object_ptr()
+            .and_then(|ptr| match self.get_object(ptr) {
+                Object::Array(arr) => Some((*arr.element_ty).clone()),
+                _ => None,
+            })
+            .unwrap_or_else(baml_type::RuntimeTy::unknown)
+    }
+
+    /// The declared key type of `value` when it is an `Object::Map`, else
+    /// `unknown`. The generated map-receiver glue calls this (with
+    /// [`Self::map_value_ty`]) to build the
+    /// [`MapView`](crate::package_baml::MapView) it hands a builtin, so a
+    /// type-preserving builtin can tag its result map.
+    pub fn map_key_ty(&self, value: &Value) -> baml_type::RuntimeTy {
+        value
+            .as_object_ptr()
+            .and_then(|ptr| match self.get_object(ptr) {
+                Object::Map(map) => Some((*map.key_ty).clone()),
+                _ => None,
+            })
+            .unwrap_or_else(baml_type::RuntimeTy::unknown)
+    }
+
+    /// The declared value type of `value` when it is an `Object::Map`, else
+    /// `unknown`. The map analogue of [`Self::array_element_ty`]; see
+    /// [`Self::map_key_ty`].
+    pub fn map_value_ty(&self, value: &Value) -> baml_type::RuntimeTy {
+        value
+            .as_object_ptr()
+            .and_then(|ptr| match self.get_object(ptr) {
+                Object::Map(map) => Some((*map.value_ty).clone()),
+                _ => None,
+            })
+            .unwrap_or_else(baml_type::RuntimeTy::unknown)
+    }
+
     /// Read an object from the heap via `HeapPtr`.
     ///
     /// # Safety
@@ -2731,7 +2773,12 @@ impl BexVm {
             })
             .collect();
 
-        let frames_array = Value::object(self.tlab.alloc(Object::Array(frames.into())));
+        // Reflection array of `StackFrame` error values; no single declared
+        // element type.
+        let frames_array = Value::object(
+            self.tlab
+                .alloc_array(baml_type::RuntimeTy::unknown(), frames),
+        );
         self.alloc_error_value(ErrorClass::StackTrace, vec![frames_array])
     }
 
@@ -3592,11 +3639,21 @@ impl BexVm {
                 _ => positional.push(val),
             }
         }
-        let positional_ptr = self.tlab.alloc(Object::Array(positional.into()));
-        let optional_ptr = self.tlab.alloc(Object::Map(optional.into()));
-        let args_array_ptr = self.tlab.alloc(Object::Array(
-            vec![Value::object(positional_ptr), Value::object(optional_ptr)].into(),
-        ));
+        // Host-call ABI plumbing: positional args, named args, and the
+        // `[positional, optional]` wrapper are heterogeneous by construction —
+        // a host callable accepts arbitrary argument types.
+        let positional_ptr = self
+            .tlab
+            .alloc_array(baml_type::RuntimeTy::unknown(), positional);
+        let optional_ptr = self.tlab.alloc_map(
+            baml_type::RuntimeTy::string(),
+            baml_type::RuntimeTy::unknown(),
+            optional,
+        );
+        let args_array_ptr = self.tlab.alloc_array(
+            baml_type::RuntimeTy::unknown(),
+            vec![Value::object(positional_ptr), Value::object(optional_ptr)],
+        );
         let ret_ty_ptr = self.tlab.alloc(Object::Type(Box::new(ret_ty)));
         let throws_ty_ptr = self.tlab.alloc(Object::Type(Box::new(throws_ty)));
         // PR4b: host-closure calls ride the sys-op pair too. No Function
@@ -5313,14 +5370,49 @@ impl BexVm {
                 // ── Allocation opcodes ────────────────────────────────────────
                 OpCode::AllocArray => {
                     let size = { read_u32_unchecked(code, pc) as usize };
+                    // The declared element type rides on top of the `size`
+                    // elements: a preceding `LoadType` pushed it, already resolved
+                    // against the frame's type args. Pop it before the values.
+                    let type_slot = self.stack.len() - 1;
+                    let type_value = self.stack[StackIndex::from_raw(type_slot)];
+                    let element_ty = {
+                        let ptr = self.as_object_ptr(type_value, ObjectType::Type)?;
+                        let Object::Type(ty) = self.get_object(ptr) else {
+                            unreachable!("as_object_ptr guarantees Type variant");
+                        };
+                        *ty.clone()
+                    };
+                    self.stack.truncate(type_slot);
                     let drain_range = StackIndex::from_raw(self.stack.len() - size)..;
                     let array: Vec<Value> = self.stack.drain(drain_range).collect();
-                    let array_index = self.tlab.alloc(Object::Array(array.into()));
+                    let array_index = self.tlab.alloc_array(element_ty, array);
                     self.stack.push(Value::object(array_index));
                 }
 
                 OpCode::AllocMap => {
                     let n = { read_u32_unchecked(code, pc) as usize };
+                    // The declared value type rides on top, the key type just
+                    // below it (two `LoadType`s after the entries, already
+                    // resolved against the frame's type args). Pop both before
+                    // the entries.
+                    let value_type_value = self.stack[StackIndex::from_raw(self.stack.len() - 1)];
+                    let key_type_value = self.stack[StackIndex::from_raw(self.stack.len() - 2)];
+                    let value_ty = {
+                        let ptr = self.as_object_ptr(value_type_value, ObjectType::Type)?;
+                        let Object::Type(ty) = self.get_object(ptr) else {
+                            unreachable!("as_object_ptr guarantees Type variant");
+                        };
+                        *ty.clone()
+                    };
+                    let key_ty = {
+                        let ptr = self.as_object_ptr(key_type_value, ObjectType::Type)?;
+                        let Object::Type(ty) = self.get_object(ptr) else {
+                            unreachable!("as_object_ptr guarantees Type variant");
+                        };
+                        *ty.clone()
+                    };
+                    let entries_top = self.stack.len() - 2;
+                    self.stack.truncate(entries_top);
                     let map = if n > 0 {
                         let end_of_values = self.stack.ensure_slot_from_top(2 * n - 1);
                         let end_of_keys = self.stack.ensure_slot_from_top(n - 1);
@@ -5339,7 +5431,7 @@ impl BexVm {
                     } else {
                         IndexMap::new()
                     };
-                    let obj_index = self.tlab.alloc(Object::Map(map.into()));
+                    let obj_index = self.tlab.alloc_map(key_ty, value_ty, map);
                     self.stack.push(Value::object(obj_index));
                 }
 

@@ -4,7 +4,7 @@ use bex_heap::TlabHolder;
 use bex_vm_types::{HeapPtr, Object, ObjectType, types::Value};
 use num_bigint::BigInt;
 
-use super::{BamlClassArray, Continuation, NativeCallResult, PackageBamlImpl};
+use super::{ArrayView, BamlClassArray, Continuation, NativeCallResult, PackageBamlImpl};
 use crate::{
     BexVm,
     array_index::{resolve_index, resolve_insert_index, resolve_slice_bound},
@@ -75,6 +75,18 @@ fn forward_ptr(ptr: &mut HeapPtr, forwarding: &HashMap<HeapPtr, HeapPtr>) {
     if let Some(&new) = forwarding.get(ptr) {
         *ptr = new;
     }
+}
+
+/// The leading runtime type-arg of the currently dispatching call, or
+/// `unknown` if none was supplied. Used by generic transforms (`map`,
+/// `flat_map`) whose result element type is the instantiated `U` they were
+/// called with. Read at dispatch time before any nested callback overwrites
+/// the pending type-args.
+fn first_type_arg(vm: &BexVm) -> baml_type::RuntimeTy {
+    vm.current_call_type_args()
+        .first()
+        .cloned()
+        .unwrap_or_else(baml_type::RuntimeTy::unknown)
 }
 
 /// Extract the callback `HeapPtr` from a `Value` carrying a heap
@@ -391,6 +403,9 @@ struct MapContinuation {
     array: Vec<Value>,
     idx: usize,
     results: Vec<Value>,
+    /// Result element type — the closure's return type `U` from
+    /// `map<U, E>(self, f: (T) -> U) -> U[]`, captured at dispatch time.
+    element_ty: baml_type::RuntimeTy,
 }
 
 impl Continuation for MapContinuation {
@@ -398,7 +413,9 @@ impl Continuation for MapContinuation {
         self.results.push(value);
         self.idx += 1;
         if self.idx >= self.array.len() {
-            return NativeCallResult::Done(Value::object(vm.alloc_array(self.results)));
+            return NativeCallResult::Done(Value::object(
+                vm.alloc_array(self.element_ty, self.results),
+            ));
         }
         let next_arg = self.array[self.idx];
         NativeCallResult::YieldToCall {
@@ -420,6 +437,9 @@ struct FilterContinuation {
     array: Vec<Value>,
     idx: usize,
     results: Vec<Value>,
+    /// The receiver array's element type `T`, captured at dispatch — `filter`
+    /// preserves it (`T[] -> T[]`).
+    element_ty: baml_type::RuntimeTy,
 }
 
 impl Continuation for FilterContinuation {
@@ -433,7 +453,10 @@ impl Continuation for FilterContinuation {
         }
         self.idx += 1;
         if self.idx >= self.array.len() {
-            return NativeCallResult::Done(Value::object(vm.alloc_array(self.results)));
+            // Filter preserves the receiver's element type.
+            return NativeCallResult::Done(Value::object(
+                vm.alloc_array(self.element_ty, self.results),
+            ));
         }
         let next_arg = self.array[self.idx];
         NativeCallResult::YieldToCall {
@@ -630,6 +653,9 @@ struct FlatMapContinuation {
     idx: usize,
     /// Flattened results accumulated so far.
     results: Vec<Value>,
+    /// Result element type — the closure's element return type `U` from
+    /// `flat_map<U, E>(self, f: (T) -> U[]) -> U[]`, captured at dispatch time.
+    element_ty: baml_type::RuntimeTy,
 }
 
 impl Continuation for FlatMapContinuation {
@@ -643,7 +669,9 @@ impl Continuation for FlatMapContinuation {
         self.results.extend(inner);
         self.idx += 1;
         if self.idx >= self.array.len() {
-            return NativeCallResult::Done(Value::object(vm.alloc_array(self.results)));
+            return NativeCallResult::Done(Value::object(
+                vm.alloc_array(self.element_ty, self.results),
+            ));
         }
         let next_arg = self.array[self.idx];
         NativeCallResult::YieldToCall {
@@ -730,7 +758,7 @@ impl Continuation for SortByContinuation {
 
 impl BamlClassArray for PackageBamlImpl {
     #[allow(clippy::cast_possible_wrap)]
-    fn length(array: &[Value]) -> i64 {
+    fn length(array: ArrayView<'_>) -> i64 {
         array.len() as i64
     }
 
@@ -740,7 +768,7 @@ impl BamlClassArray for PackageBamlImpl {
         array.len() as i64
     }
 
-    fn at(array: &[Value], index: i64) -> Option<Value> {
+    fn at(array: ArrayView<'_>, index: i64) -> Option<Value> {
         resolve_index(index, array.len()).map(|i| array[i])
     }
 
@@ -766,7 +794,7 @@ impl BamlClassArray for PackageBamlImpl {
         vec![*value; count]
     }
 
-    fn concat(array: &[Value], other: &[Value]) -> Vec<Value> {
+    fn concat(array: ArrayView<'_>, other: &[Value]) -> Vec<Value> {
         array.iter().chain(other.iter()).copied().collect()
     }
 
@@ -779,20 +807,20 @@ impl BamlClassArray for PackageBamlImpl {
         Some(array.remove(index))
     }
 
-    fn reverse(array: &[Value]) -> Vec<Value> {
+    fn reverse(array: ArrayView<'_>) -> Vec<Value> {
         let mut result = array.to_vec();
         result.reverse();
         result
     }
 
-    fn slice(array: &[Value], start: i64, end: i64) -> Vec<Value> {
+    fn slice(array: ArrayView<'_>, start: i64, end: i64) -> Vec<Value> {
         let start = resolve_slice_bound(start, array.len());
         // An `end` resolving before `start` yields an empty slice.
         let end = resolve_slice_bound(end, array.len()).max(start);
         array[start..end].to_vec()
     }
 
-    fn join(vm: &BexVm, array: &[Value], separator: &bex_str::BexStr) -> bex_str::BexStr {
+    fn join(vm: &BexVm, array: ArrayView<'_>, separator: &bex_str::BexStr) -> bex_str::BexStr {
         let sep = separator.as_str();
         let joined = array
             .iter()
@@ -895,14 +923,17 @@ impl BamlClassArray for PackageBamlImpl {
         }
     }
 
-    fn map(vm: &mut BexVm, array: &[Value], f: &Value) -> NativeCallResult {
+    fn map(vm: &mut BexVm, array: ArrayView<'_>, f: &Value) -> NativeCallResult {
         let f_ptr = match extract_callable(vm, *f) {
             Ok(p) => p,
             Err(e) => return e,
         };
+        // `map<U, E>(self, f: (T) -> U) -> U[]`: the result element type is the
+        // closure return type `U`, the leading call type-arg.
+        let element_ty = first_type_arg(vm);
         let array = array.to_vec();
         if array.is_empty() {
-            return NativeCallResult::Done(Value::object(vm.alloc_array(vec![])));
+            return NativeCallResult::Done(Value::object(vm.alloc_array(element_ty, vec![])));
         }
         let first_arg = array[0];
         let capacity = array.len();
@@ -915,18 +946,22 @@ impl BamlClassArray for PackageBamlImpl {
                 array,
                 idx: 0,
                 results: Vec::with_capacity(capacity),
+                element_ty,
             }),
         }
     }
 
-    fn filter(vm: &mut BexVm, array: &[Value], predicate: &Value) -> NativeCallResult {
+    fn filter(vm: &mut BexVm, array: ArrayView<'_>, predicate: &Value) -> NativeCallResult {
+        // `filter` preserves the receiver's element type (`T[] -> T[]`); capture
+        // it before the `to_vec` below shadows the `ArrayView`.
+        let element_ty = (*array.ty).clone();
         let f_ptr = match extract_callable(vm, *predicate) {
             Ok(p) => p,
             Err(e) => return e,
         };
         let array = array.to_vec();
         if array.is_empty() {
-            return NativeCallResult::Done(Value::object(vm.alloc_array(vec![])));
+            return NativeCallResult::Done(Value::object(vm.alloc_array(element_ty, vec![])));
         }
         let first_arg = array[0];
         let capacity = array.len();
@@ -939,13 +974,14 @@ impl BamlClassArray for PackageBamlImpl {
                 array,
                 idx: 0,
                 results: Vec::with_capacity(capacity),
+                element_ty,
             }),
         }
     }
 
     // ── Predicate scans ───────────────────────────────────────────────────────
 
-    fn some(vm: &mut BexVm, array: &[Value], predicate: &Value) -> NativeCallResult {
+    fn some(vm: &mut BexVm, array: ArrayView<'_>, predicate: &Value) -> NativeCallResult {
         let f_ptr = match extract_callable(vm, *predicate) {
             Ok(p) => p,
             Err(e) => return e,
@@ -967,7 +1003,7 @@ impl BamlClassArray for PackageBamlImpl {
         }
     }
 
-    fn every(vm: &mut BexVm, array: &[Value], predicate: &Value) -> NativeCallResult {
+    fn every(vm: &mut BexVm, array: ArrayView<'_>, predicate: &Value) -> NativeCallResult {
         let f_ptr = match extract_callable(vm, *predicate) {
             Ok(p) => p,
             Err(e) => return e,
@@ -989,7 +1025,7 @@ impl BamlClassArray for PackageBamlImpl {
         }
     }
 
-    fn find(vm: &mut BexVm, array: &[Value], predicate: &Value) -> NativeCallResult {
+    fn find(vm: &mut BexVm, array: ArrayView<'_>, predicate: &Value) -> NativeCallResult {
         let f_ptr = match extract_callable(vm, *predicate) {
             Ok(p) => p,
             Err(e) => return e,
@@ -1012,7 +1048,7 @@ impl BamlClassArray for PackageBamlImpl {
         }
     }
 
-    fn find_index(vm: &mut BexVm, array: &[Value], predicate: &Value) -> NativeCallResult {
+    fn find_index(vm: &mut BexVm, array: ArrayView<'_>, predicate: &Value) -> NativeCallResult {
         let f_ptr = match extract_callable(vm, *predicate) {
             Ok(p) => p,
             Err(e) => return e,
@@ -1035,7 +1071,7 @@ impl BamlClassArray for PackageBamlImpl {
         }
     }
 
-    fn find_last(vm: &mut BexVm, array: &[Value], predicate: &Value) -> NativeCallResult {
+    fn find_last(vm: &mut BexVm, array: ArrayView<'_>, predicate: &Value) -> NativeCallResult {
         let f_ptr = match extract_callable(vm, *predicate) {
             Ok(p) => p,
             Err(e) => return e,
@@ -1059,7 +1095,11 @@ impl BamlClassArray for PackageBamlImpl {
         }
     }
 
-    fn find_last_index(vm: &mut BexVm, array: &[Value], predicate: &Value) -> NativeCallResult {
+    fn find_last_index(
+        vm: &mut BexVm,
+        array: ArrayView<'_>,
+        predicate: &Value,
+    ) -> NativeCallResult {
         let f_ptr = match extract_callable(vm, *predicate) {
             Ok(p) => p,
             Err(e) => return e,
@@ -1083,12 +1123,12 @@ impl BamlClassArray for PackageBamlImpl {
         }
     }
 
-    fn includes(vm: &BexVm, array: &[Value], item: &Value) -> bool {
+    fn includes(vm: &BexVm, array: ArrayView<'_>, item: &Value) -> bool {
         array.iter().any(|v| baml_eq(vm, *v, *item))
     }
 
     #[allow(clippy::cast_possible_wrap)]
-    fn index_of(vm: &BexVm, array: &[Value], item: &Value) -> Option<i64> {
+    fn index_of(vm: &BexVm, array: ArrayView<'_>, item: &Value) -> Option<i64> {
         array
             .iter()
             .position(|v| baml_eq(vm, *v, *item))
@@ -1096,7 +1136,7 @@ impl BamlClassArray for PackageBamlImpl {
     }
 
     #[allow(clippy::cast_possible_wrap)]
-    fn last_index_of(vm: &BexVm, array: &[Value], item: &Value) -> Option<i64> {
+    fn last_index_of(vm: &BexVm, array: ArrayView<'_>, item: &Value) -> Option<i64> {
         array
             .iter()
             .rposition(|v| baml_eq(vm, *v, *item))
@@ -1105,7 +1145,7 @@ impl BamlClassArray for PackageBamlImpl {
 
     fn reduce(
         vm: &mut BexVm,
-        array: &[Value],
+        array: ArrayView<'_>,
         reducer: &Value,
         initial: &Value,
     ) -> NativeCallResult {
@@ -1130,14 +1170,17 @@ impl BamlClassArray for PackageBamlImpl {
         }
     }
 
-    fn flat_map(vm: &mut BexVm, array: &[Value], f: &Value) -> NativeCallResult {
+    fn flat_map(vm: &mut BexVm, array: ArrayView<'_>, f: &Value) -> NativeCallResult {
         let f_ptr = match extract_callable(vm, *f) {
             Ok(p) => p,
             Err(e) => return e,
         };
+        // `flat_map<U, E>(self, f: (T) -> U[]) -> U[]`: the result element type
+        // is the closure's element return type `U`, the leading call type-arg.
+        let element_ty = first_type_arg(vm);
         let array = array.to_vec();
         if array.is_empty() {
-            return NativeCallResult::Done(Value::object(vm.alloc_array(vec![])));
+            return NativeCallResult::Done(Value::object(vm.alloc_array(element_ty, vec![])));
         }
         let first_arg = array[0];
         NativeCallResult::YieldToCall {
@@ -1149,6 +1192,7 @@ impl BamlClassArray for PackageBamlImpl {
                 array,
                 idx: 0,
                 results: Vec::new(),
+                element_ty,
             }),
         }
     }

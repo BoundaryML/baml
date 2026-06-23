@@ -53,6 +53,7 @@ function user.for_loop_restores_outer() -> int {
     load_type int
     load_const 2
     load_const 3
+    load_type int
     alloc_array 2
     call baml.iter.Iterable$for$T[].iter
     store_var _3

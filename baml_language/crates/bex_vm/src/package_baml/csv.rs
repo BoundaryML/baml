@@ -2147,7 +2147,8 @@ impl BamlClassCsvCsvReader for PackageBamlImpl {
                             .into_iter()
                             .map(|n| Value::object(vm.alloc_string(n)))
                             .collect();
-                        Value::object(vm.alloc_array(items))
+                        // CSV header names are always strings.
+                        Value::object(vm.alloc_array(baml_type::RuntimeTy::string(), items))
                     }
                 };
                 Ok(copy::csv::CsvHeaders { names: names_value }.to_value(vm))

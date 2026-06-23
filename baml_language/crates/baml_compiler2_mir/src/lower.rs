@@ -3495,7 +3495,13 @@ impl<'db> LoweringContext<'db> {
                 attr,
             } => Tir2Ty::AssociatedTypeProjection {
                 base: Box::new(Self::erase_compiler_only_ty(*base)),
-                interface: interface.map(|ty| Box::new(Self::erase_compiler_only_ty(*ty))),
+                // The interface annotation carries component types (generics and
+                // associated-type bindings); erase compiler-only types within them
+                // too, matching the `Tir2Ty::Interface` arm above. (The field is an
+                // `Interface` after the interface-object refactor, not a `Ty`.)
+                interface: interface.map(|iface| {
+                    Box::new(iface.map_tys(|ty| Self::erase_compiler_only_ty(ty.clone())))
+                }),
                 member,
                 attr,
             },
@@ -4064,6 +4070,39 @@ impl<'db> LoweringContext<'db> {
                 .map(|t| self.ty_to_template(t, &generic_params))
                 .collect(),
             _ => vec![],
+        }
+    }
+
+    /// The element-type template for an array-literal expression — the `T` of
+    /// its `T[]` static type — for [`Rvalue::Array`]. A generic element maps to
+    /// a `TypeArgRef` so it resolves against the frame's type args at runtime.
+    /// Falls back to `unknown` when the recorded type is not a list (error
+    /// recovery).
+    fn array_element_template(&self, expr_id: AstExprId) -> TyTemplate {
+        let generic_params = self.enclosing_generic_params();
+        match self.expr_types.get(&self.expr_metadata_key(expr_id)) {
+            Some(Tir2Ty::List(elem, _) | Tir2Ty::EvolvingList(elem, _)) => {
+                self.ty_to_template(elem, &generic_params)
+            }
+            _ => TyTemplate::Concrete(RuntimeTy::unknown()),
+        }
+    }
+
+    /// The key/value type templates for a map-literal expression — the `K`/`V`
+    /// of its `map<K, V>` static type — for [`Rvalue::Map`]. Falls back to
+    /// `map<string, unknown>` when the recorded type is not a map (error
+    /// recovery); map keys are always strings.
+    fn map_kv_templates(&self, expr_id: AstExprId) -> (TyTemplate, TyTemplate) {
+        let generic_params = self.enclosing_generic_params();
+        match self.expr_types.get(&self.expr_metadata_key(expr_id)) {
+            Some(Tir2Ty::Map { key, value, .. } | Tir2Ty::EvolvingMap(key, value, _)) => (
+                self.ty_to_template(key, &generic_params),
+                self.ty_to_template(value, &generic_params),
+            ),
+            _ => (
+                TyTemplate::Concrete(RuntimeTy::string()),
+                TyTemplate::Concrete(RuntimeTy::unknown()),
+            ),
         }
     }
 
@@ -5204,8 +5243,11 @@ impl LoweringContext<'_> {
                     None,
                     false,
                 );
-                self.builder
-                    .assign(Place::local(parts_local), Rvalue::Array(parts_ops));
+                self.builder.assign(
+                    Place::local(parts_local),
+                    // Tagged-template literal parts are always strings.
+                    Rvalue::Array(TyTemplate::Concrete(RuntimeTy::string()), parts_ops),
+                );
 
                 // Interps lower in the closure scope (body-param refs →
                 // Place::Local, enclosing-local refs → Place::Capture), but
@@ -5234,8 +5276,11 @@ impl LoweringContext<'_> {
                     None,
                     false,
                 );
-                self.builder
-                    .assign(Place::local(values_local), Rvalue::Array(value_ops));
+                self.builder.assign(
+                    Place::local(values_local),
+                    // Tagged-template interpolated values are heterogeneous.
+                    Rvalue::Array(TyTemplate::Concrete(RuntimeTy::unknown()), value_ops),
+                );
 
                 self.builder.assign(
                     Place::local(ret),
@@ -5584,7 +5629,9 @@ impl LoweringContext<'_> {
             AstExpr::Array { elements } => {
                 let operands: Vec<Operand> =
                     elements.iter().map(|&e| self.lower_to_operand(e)).collect();
-                self.builder.assign(dest, Rvalue::Array(operands));
+                let element_ty = self.array_element_template(expr_id);
+                self.builder
+                    .assign(dest, Rvalue::Array(element_ty, operands));
             }
 
             AstExpr::Map { entries } => {
@@ -5592,7 +5639,9 @@ impl LoweringContext<'_> {
                     .iter()
                     .map(|&(k, v)| (self.lower_to_operand(k), self.lower_to_operand(v)))
                     .collect();
-                self.builder.assign(dest, Rvalue::Map(pairs));
+                let (key_ty, value_ty) = self.map_kv_templates(expr_id);
+                self.builder
+                    .assign(dest, Rvalue::Map(key_ty, value_ty, pairs));
             }
 
             AstExpr::Object {

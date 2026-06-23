@@ -6,7 +6,7 @@ use indexmap::IndexMap;
 use crate::{
     ArrayContainer, BoundMethod, Class, CollectorRef, Enum, Function, GenericFunction, HostClosure,
     Instance, MapContainer, Uint8ArrayContainer, UnscheduledFuture, Value, Variant,
-    types::{Cell, Closure, FunctionType, FutureType},
+    types::{Array, Cell, Closure, FunctionType, FutureType, Map},
 };
 
 /// Any data that the Baml program can reference and is allocated on heap.
@@ -83,12 +83,12 @@ pub enum Object {
     /// List of values. Wrapped in [`ArrayContainer`] so the underlying
     /// `Vec<Value>` is protected by a [`LazyBiasedMutex`] against racing
     /// mutation under `spawn`.
-    Array(ArrayContainer),
+    Array(Array),
 
     /// Map of values. Wrapped in [`MapContainer`] so the underlying
     /// `IndexMap` is protected by a [`LazyBiasedMutex`] against racing
     /// mutation under `spawn`.
-    Map(MapContainer),
+    Map(Map),
 
     /// Boxed 64-bit float. Floats are heap-allocated because `Value`
     /// itself is a single tagged 64-bit word with no inline encoding
@@ -148,8 +148,12 @@ enum ObjectWire {
         num_bigint::BigInt,
     ),
     Uint8Array(Vec<u8>),
-    Array(Vec<Value>),
-    Map(IndexMap<String, Value>),
+    Array(Box<baml_type::RuntimeTy>, Vec<Value>),
+    Map(
+        Box<baml_type::RuntimeTy>,
+        Box<baml_type::RuntimeTy>,
+        IndexMap<String, Value>,
+    ),
     Float(f64),
     Future(crate::Future),
     UnscheduledFuture(UnscheduledFuture),
@@ -171,8 +175,10 @@ impl BorshSerialize for Object {
             Self::String(v) => ObjectWire::String(v.to_string()),
             Self::Bigint(v) => ObjectWire::Bigint((**v).clone()),
             Self::Uint8Array(v) => ObjectWire::Uint8Array(v.lock().clone()),
-            Self::Array(v) => ObjectWire::Array(v.lock().clone()),
+            Self::Array(v) => ObjectWire::Array(v.element_ty.clone(), v.data.lock().clone()),
             Self::Map(v) => ObjectWire::Map(
+                v.key_ty.clone(),
+                v.value_ty.clone(),
                 v.to_index_map()
                     .into_iter()
                     .map(|(k, v)| (k.to_string(), v))
@@ -228,13 +234,20 @@ impl BorshDeserialize for Object {
             ObjectWire::String(v) => Self::String(bex_str::BexStr::from(v)),
             ObjectWire::Bigint(v) => Self::Bigint(std::sync::Arc::new(v)),
             ObjectWire::Uint8Array(v) => Self::Uint8Array(Uint8ArrayContainer::new(v)),
-            ObjectWire::Array(v) => Self::Array(ArrayContainer::new(v)),
-            ObjectWire::Map(v) => Self::Map(
-                v.into_iter()
-                    .map(|(k, v)| (bex_str::BexStr::from(k), v))
-                    .collect::<IndexMap<bex_str::BexStr, Value>>()
-                    .into(),
-            ),
+            ObjectWire::Array(ty, data) => Self::Array(Array {
+                element_ty: ty,
+                data: ArrayContainer::new(data),
+            }),
+            ObjectWire::Map(key_ty, value_ty, data) => Self::Map(Map {
+                key_ty,
+                value_ty,
+                data: MapContainer::new(
+                    data.into_iter()
+                        .map(|(k, v)| (bex_str::BexStr::from(k), v))
+                        .collect::<IndexMap<bex_str::BexStr, Value>>()
+                        .into(),
+                ),
+            }),
             ObjectWire::Float(v) => Self::Float(v),
             ObjectWire::Future(v) => Self::Future(v),
             ObjectWire::UnscheduledFuture(v) => Self::UnscheduledFuture(Box::new(v)),
@@ -264,8 +277,19 @@ impl std::fmt::Display for Object {
             Object::String(string) => string.fmt(f),
             Object::Bigint(bi) => write!(f, "{bi}"),
             Object::Uint8Array(bytes) => write!(f, "<uint8array len={}>", bytes.len()),
-            Object::Array(array) => write!(f, "<array len={}>", array.lock().len()),
-            Object::Map(map) => write!(f, "<map len={}>", map.lock().len()),
+            Object::Array(array) => write!(
+                f,
+                "<array[{}] len={}>",
+                array.element_ty,
+                array.data.lock().len()
+            ),
+            Object::Map(map) => write!(
+                f,
+                "<map[{}: {}] len={}>",
+                map.key_ty,
+                map.value_ty,
+                map.data.lock().len()
+            ),
             Object::RustData(_) => write!(f, "<rust_data>"),
             Object::Collector(_) => write!(f, "<collector>"),
             Object::Type(ty) => write!(f, "<type: {ty}>"),

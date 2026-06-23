@@ -20,7 +20,7 @@
 //! projection used for every outbound type position, including a tagged
 //! handle's `BamlOutboundHandle.ty`.
 
-use baml_type::{Literal, MediaKind, RuntimeTy};
+use baml_type::{Literal, MediaKind, Name, RuntimeTy, TypeName};
 
 use crate::baml_core::cffi::{
     BamlTy, BamlTyAssociatedBinding, BamlTyAssociatedTypeProjection, BamlTyClass, BamlTyEnum,
@@ -39,6 +39,29 @@ pub fn runtime_ty_to_proto_ty(ty: &RuntimeTy) -> BamlTy {
 
 fn primitive(kind: BamlTyPrimitiveKind) -> TyVariant {
     TyVariant::Primitive(BamlTyPrimitive { kind: kind as i32 })
+}
+
+/// Encode an interface constraint — its name, generic input arguments, and
+/// associated-type bindings — into the wire `BamlTyInterface`. Shared by the
+/// `RuntimeTy::Interface` existential and an associated-type projection's
+/// declaring interface (`Interface` after the interface-object refactor) so the
+/// two encodings never drift.
+fn interface_to_proto(
+    name: &TypeName,
+    type_args: &[RuntimeTy],
+    bindings: &[(Name, RuntimeTy)],
+) -> BamlTyInterface {
+    BamlTyInterface {
+        name: name.render_dotted(false),
+        type_args: type_args.iter().map(runtime_ty_to_proto_ty).collect(),
+        bindings: bindings
+            .iter()
+            .map(|(n, t)| BamlTyAssociatedBinding {
+                name: n.as_str().to_string(),
+                ty: Some(runtime_ty_to_proto_ty(t)),
+            })
+            .collect(),
+    }
 }
 
 fn runtime_ty_to_variant(ty: &RuntimeTy) -> TyVariant {
@@ -99,17 +122,9 @@ fn runtime_ty_to_variant(ty: &RuntimeTy) -> TyVariant {
         RuntimeTy::Media(kind, _) => TyVariant::Media(crate::baml_core::cffi::BamlTyMedia {
             kind: media_kind_to_proto(*kind) as i32,
         }),
-        RuntimeTy::Interface(name, args, bindings, _) => TyVariant::Interface(BamlTyInterface {
-            name: name.render_dotted(false),
-            type_args: args.iter().map(runtime_ty_to_proto_ty).collect(),
-            bindings: bindings
-                .iter()
-                .map(|(n, t)| BamlTyAssociatedBinding {
-                    name: n.as_str().to_string(),
-                    ty: Some(runtime_ty_to_proto_ty(t)),
-                })
-                .collect(),
-        }),
+        RuntimeTy::Interface(name, args, bindings, _) => {
+            TyVariant::Interface(interface_to_proto(name, args, bindings))
+        }
 
         // A function/arrow type. In practice a function never crosses the
         // boundary as outbound *type metadata* (the old `ty_to_field_type`
@@ -161,9 +176,15 @@ fn runtime_ty_to_variant(ty: &RuntimeTy) -> TyVariant {
             ..
         } => TyVariant::AssociatedTypeProjection(Box::new(BamlTyAssociatedTypeProjection {
             base: Some(Box::new(runtime_ty_to_proto_ty(base))),
-            interface: interface
-                .as_deref()
-                .map(|i| Box::new(runtime_ty_to_proto_ty(i))),
+            interface: interface.as_deref().map(|iface| {
+                Box::new(BamlTy {
+                    ty: Some(TyVariant::Interface(interface_to_proto(
+                        &iface.name,
+                        &iface.generics,
+                        &iface.associated_types,
+                    ))),
+                })
+            }),
             member: member.as_str().to_string(),
         })),
 

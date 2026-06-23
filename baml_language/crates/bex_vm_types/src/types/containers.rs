@@ -185,6 +185,76 @@ impl<T> std::ops::DerefMut for LockedWriteGuard<'_, T> {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct Array {
+    pub element_ty: Box<baml_type::RuntimeTy>,
+    pub data: ArrayContainer,
+}
+
+impl Array {
+    /// Build an array of `element_ty` from its backing values.
+    pub fn new(element_ty: baml_type::RuntimeTy, data: Vec<Value>) -> Self {
+        Self {
+            element_ty: Box::new(element_ty),
+            data: ArrayContainer::new(data),
+        }
+    }
+
+    /// Lock the backing store for reading (see [`LockedContainer::lock`]).
+    pub fn lock(&self) -> ArrayReadGuard<'_> {
+        self.data.lock()
+    }
+
+    /// Lock the backing store for writing (see [`LockedContainer::lock_mut`]).
+    pub fn lock_mut(&self) -> ArrayWriteGuard<'_> {
+        self.data.lock_mut()
+    }
+
+    /// Locked convenience: number of elements.
+    pub fn len(&self) -> usize {
+        self.data.len()
+    }
+
+    /// Locked convenience: whether the array is empty.
+    pub fn is_empty(&self) -> bool {
+        self.data.is_empty()
+    }
+
+    /// Locked convenience: copy the element at `idx`, or `None` if out of bounds.
+    pub fn get(&self, idx: usize) -> Option<Value> {
+        self.data.get(idx)
+    }
+
+    /// Locked convenience: snapshot the backing `Vec<Value>`.
+    pub fn to_vec(&self) -> Vec<Value> {
+        self.data.to_vec()
+    }
+
+    /// Unlocked read of the backing store. See [`LockedContainer::data_unchecked`].
+    ///
+    /// # Safety
+    ///
+    /// The caller must uphold the no-concurrent-writer contract documented on
+    /// [`LockedContainer::data_unchecked`].
+    pub unsafe fn data_unchecked(&self) -> &Vec<Value> {
+        // SAFETY: forwarded to the caller's obligation.
+        unsafe { self.data.data_unchecked() }
+    }
+
+    /// Unlocked mutable access to the backing store. See
+    /// [`LockedContainer::data_unchecked_mut`].
+    ///
+    /// # Safety
+    ///
+    /// The caller must uphold the contract documented on
+    /// [`LockedContainer::data_unchecked_mut`].
+    #[allow(clippy::mut_from_ref)]
+    pub unsafe fn data_unchecked_mut(&self) -> &mut Vec<Value> {
+        // SAFETY: forwarded to the caller's obligation.
+        unsafe { self.data.data_unchecked_mut() }
+    }
+}
+
 /// Heap-mutable array container.
 ///
 /// Held inline by `Object::Array`. Size: 24 (Vec) + 1 (mutex) + padding = 32 bytes.
@@ -198,6 +268,12 @@ pub type Uint8ArrayContainer = LockedContainer<Vec<u8>>;
 pub type Uint8ArrayReadGuard<'a> = LockedReadGuard<'a, Vec<u8>>;
 pub type Uint8ArrayWriteGuard<'a> = LockedWriteGuard<'a, Vec<u8>>;
 
+#[derive(Clone, Debug)]
+pub struct Map {
+    pub key_ty: Box<baml_type::RuntimeTy>,
+    pub value_ty: Box<baml_type::RuntimeTy>,
+    pub data: MapContainer,
+}
 /// Heap-mutable map container. Pairs a boxed `IndexMap<BexStr, Value>` with
 /// the generic [`LockedContainer`] lock/guard machinery.
 ///
@@ -212,36 +288,75 @@ pub type MapWriteGuard<'a> = LockedWriteGuard<'a, Box<IndexMap<bex_str::BexStr, 
 impl MapReadGuard<'_> {
     /// Snapshot the underlying `IndexMap`.
     pub fn to_index_map(&self) -> IndexMap<bex_str::BexStr, Value> {
-        self.as_ref().clone()
+        self.data.as_ref().clone()
     }
 }
 
-impl LockedContainer<Box<IndexMap<bex_str::BexStr, Value>>> {
+impl Map {
+    /// Build a map of `key_ty`/`value_ty` from its backing entries.
+    pub fn new(
+        key_ty: baml_type::RuntimeTy,
+        value_ty: baml_type::RuntimeTy,
+        data: IndexMap<bex_str::BexStr, Value>,
+    ) -> Self {
+        Self {
+            key_ty: Box::new(key_ty),
+            value_ty: Box::new(value_ty),
+            data: MapContainer::new(Box::new(data)),
+        }
+    }
+
+    /// Lock the backing store for reading (see [`LockedContainer::lock`]).
+    pub fn lock(&self) -> MapReadGuard<'_> {
+        self.data.lock()
+    }
+
+    /// Lock the backing store for writing (see [`LockedContainer::lock_mut`]).
+    pub fn lock_mut(&self) -> MapWriteGuard<'_> {
+        self.data.lock_mut()
+    }
+
+    /// Unlocked read of the backing store. See [`LockedContainer::data_unchecked`].
+    ///
+    /// # Safety
+    ///
+    /// The caller must uphold the no-concurrent-writer contract documented on
+    /// [`LockedContainer::data_unchecked`].
+    pub unsafe fn data_unchecked(&self) -> &IndexMap<bex_str::BexStr, Value> {
+        // SAFETY: forwarded to the caller's obligation.
+        unsafe { self.data.data_unchecked() }
+    }
+
+    /// Unlocked mutable access to the backing store. See
+    /// [`LockedContainer::data_unchecked_mut`].
+    ///
+    /// # Safety
+    ///
+    /// The caller must uphold the contract documented on
+    /// [`LockedContainer::data_unchecked_mut`].
+    #[allow(clippy::mut_from_ref)]
+    pub unsafe fn data_unchecked_mut(&self) -> &mut IndexMap<bex_str::BexStr, Value> {
+        // SAFETY: forwarded to the caller's obligation.
+        unsafe { self.data.data_unchecked_mut() }
+    }
+
     /// Locked convenience: number of entries.
     pub fn len(&self) -> usize {
-        self.lock().len()
+        self.data.lock().data.len()
     }
 
     /// Locked convenience: whether the map is empty.
     pub fn is_empty(&self) -> bool {
-        self.lock().is_empty()
+        self.data.lock().data.is_empty()
     }
 
     /// Locked convenience: copy the value at `key`, or `None` if absent.
     pub fn get(&self, key: &str) -> Option<Value> {
-        self.lock().get(key).copied()
+        self.data.lock().data.get(key).copied()
     }
 
     /// Locked convenience: snapshot the underlying `IndexMap`.
     pub fn to_index_map(&self) -> IndexMap<bex_str::BexStr, Value> {
-        self.lock().to_index_map()
-    }
-}
-
-impl From<IndexMap<bex_str::BexStr, Value>>
-    for LockedContainer<Box<IndexMap<bex_str::BexStr, Value>>>
-{
-    fn from(data: IndexMap<bex_str::BexStr, Value>) -> Self {
-        Self::new(Box::new(data))
+        self.data.lock().to_index_map()
     }
 }

@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 use bex_heap::TlabHolder;
 use bex_vm_types::{
     FutureRead, HeapPtr, ValueKind,
-    types::{AtomicValueSlot, Instance, Object, Value},
+    types::{Array, AtomicValueSlot, Instance, Map, Object, Value},
 };
 use indexmap::IndexMap;
 
@@ -481,7 +481,11 @@ fn deep_copy_value_recursive(
                 Object::Uint8Array(bytes) => vm.tlab.alloc(Object::Uint8Array(bytes)),
 
                 Object::Array(values) => {
-                    let placeholder_ptr = vm.tlab.alloc(Object::Array(Vec::new().into()));
+                    // A deep copy preserves the source array's element type.
+                    let element_ty = values.element_ty.as_ref().clone();
+                    let placeholder_ptr = vm
+                        .tlab
+                        .alloc(Object::Array(Array::new(element_ty.clone(), Vec::new())));
                     copied_objects.insert(ptr, placeholder_ptr);
 
                     // Snapshot under the source's lock; the recursive call
@@ -493,12 +497,20 @@ fn deep_copy_value_recursive(
                     }
 
                     // no GC write barrier because it is all in gen0
-                    *vm.get_object_mut(placeholder_ptr) = Object::Array(new_values.into());
+                    *vm.get_object_mut(placeholder_ptr) =
+                        Object::Array(Array::new(element_ty, new_values));
                     placeholder_ptr
                 }
 
                 Object::Map(map) => {
-                    let placeholder_ptr = vm.tlab.alloc(Object::Map(IndexMap::new().into()));
+                    // A deep copy preserves the source map's key/value types.
+                    let key_ty = map.key_ty.as_ref().clone();
+                    let value_ty = map.value_ty.as_ref().clone();
+                    let placeholder_ptr = vm.tlab.alloc(Object::Map(Map::new(
+                        key_ty.clone(),
+                        value_ty.clone(),
+                        IndexMap::new(),
+                    )));
                     copied_objects.insert(ptr, placeholder_ptr);
 
                     let snapshot = map.to_index_map();
@@ -509,7 +521,8 @@ fn deep_copy_value_recursive(
                     }
 
                     // no GC write barrier because it is all in gen0
-                    *vm.get_object_mut(placeholder_ptr) = Object::Map(new_map.into());
+                    *vm.get_object_mut(placeholder_ptr) =
+                        Object::Map(Map::new(key_ty, value_ty, new_map));
                     placeholder_ptr
                 }
 

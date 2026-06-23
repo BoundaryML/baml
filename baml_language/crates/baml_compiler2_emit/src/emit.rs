@@ -702,7 +702,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 self.operand_reads_spawn_captured_local(left, seen)
                     || self.operand_reads_spawn_captured_local(right, seen)
             }
-            Rvalue::Array(elements)
+            Rvalue::Array(_, elements)
             | Rvalue::Aggregate {
                 fields: elements, ..
             } => elements
@@ -714,7 +714,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Rvalue::MakeGenericFunctionFromValue { value, .. } => {
                 self.operand_reads_spawn_captured_local(value, seen)
             }
-            Rvalue::Map(entries) => entries.iter().any(|(key, value)| {
+            Rvalue::Map(_, _, entries) => entries.iter().any(|(key, value)| {
                 self.operand_reads_spawn_captured_local(key, seen)
                     || self.operand_reads_spawn_captured_local(value, seen)
             }),
@@ -2962,7 +2962,11 @@ impl PullSink for StackifyCodegen<'_, '_> {
         Ok(())
     }
 
-    fn alloc_array(&mut self, len: usize) -> Result<(), Self::Error> {
+    fn alloc_array(&mut self, element_ty: &TyTemplate, len: usize) -> Result<(), Self::Error> {
+        // Push the (frame-resolved) element type on top of the `len` elements;
+        // the VM's `AllocArray` pops it before draining the values, mirroring how
+        // `AllocInstance` consumes its leading type args.
+        self.load_type(element_ty)?;
         self.emit(Instruction::AllocArray(len));
         Ok(())
     }
@@ -2994,7 +2998,16 @@ impl PullSink for StackifyCodegen<'_, '_> {
         Ok(())
     }
 
-    fn alloc_map(&mut self, len: usize) -> Result<(), Self::Error> {
+    fn alloc_map(
+        &mut self,
+        key_ty: &TyTemplate,
+        value_ty: &TyTemplate,
+        len: usize,
+    ) -> Result<(), Self::Error> {
+        // Push key then value type on top of the entries; the VM's `AllocMap`
+        // pops value then key before processing the pairs.
+        self.load_type(key_ty)?;
+        self.load_type(value_ty)?;
         self.emit(Instruction::AllocMap(len));
         Ok(())
     }

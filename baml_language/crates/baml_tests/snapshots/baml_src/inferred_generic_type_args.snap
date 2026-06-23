@@ -352,6 +352,7 @@ function inferred_generic_type_args.Named.tname(self: inferred_generic_type_args
 }
 
 function inferred_generic_type_args.NextIter.collect2(self: inferred_generic_type_args.NextIter<T, E>) -> T[] {
+    load_type #0
     alloc_array 0
     store_var out
 
@@ -437,6 +438,7 @@ function inferred_generic_type_args.ProbeB.TypeProbe.seen(self: inferred_generic
 
 function inferred_generic_type_args.SelfEcho.nested_self_type(self: inferred_generic_type_args.SelfEcho) -> string {
     load_var self
+    load_type void
     alloc_array 1
     call user.inferred_generic_type_args.echo_type
     return
@@ -507,6 +509,7 @@ function inferred_generic_type_args.class_method_builds_generic() -> int {
     load_const 5
     load_const 6
     load_const 7
+    load_type int
     alloc_array 3
     load_const 0
     load_type int
@@ -536,6 +539,7 @@ function inferred_generic_type_args.default_method_typevar_name() -> string {
     load_const 5
     load_const 6
     load_const 7
+    load_type int
     alloc_array 3
     load_const 0
     load_type int
@@ -559,6 +563,7 @@ function inferred_generic_type_args.free_fn_inferred_t() -> string {
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
     call user.inferred_generic_type_args.free_fn_tname
     return
@@ -587,6 +592,7 @@ function inferred_generic_type_args.inferred_ctor_collect_count() -> int {
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
     call user.inferred_generic_type_args.ArrIter.of
     load_type inferred_generic_type_args.NextIter<int, never>
@@ -603,6 +609,7 @@ function inferred_generic_type_args.inferred_ctor_instance_is_typed() -> int {
     load_const 5
     load_const 6
     load_const 7
+    load_type int
     alloc_array 3
     call user.inferred_generic_type_args.ArrBag.make
     store_var s
@@ -637,6 +644,7 @@ function inferred_generic_type_args.inferred_static_ctor_first() -> int {
     load_const 5
     load_const 6
     load_const 7
+    load_type int
     alloc_array 3
     call user.inferred_generic_type_args.ArrBag.make
     load_type inferred_generic_type_args.Bag<int>
@@ -687,6 +695,7 @@ function inferred_generic_type_args.take_one_then_head() -> int {
     load_const 10
     load_const 20
     load_const 30
+    load_type int
     alloc_array 3
     call user.inferred_generic_type_args.ArrayCursor.of
     load_type inferred_generic_type_args.Cursor<int>

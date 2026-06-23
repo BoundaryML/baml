@@ -139,6 +139,7 @@ function assignments.array_element_field() -> int {
     init_instance user.assignments.Item .count
     load_const 30
     init_instance user.assignments.Item .count
+    load_type assignments.Item
     alloc_array 3
     store_var items
     load_var items

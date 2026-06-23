@@ -20,6 +20,7 @@ function baml.Array.filter(self: baml.Array<T>, predicate: (T) -> bool throws E)
 }
 
 function baml.Array.filter_map(self: baml.Array<T>, fn: (T) -> U | null throws E) -> U[] {
+    load_type #1
     alloc_array 0
     store_var out
     load_type #0
@@ -474,6 +475,7 @@ function baml.Array.sort_by_key(self: baml.Array<T>, key: (T) -> U throws E) -> 
     load_var n
     call baml.Array.slice
     store_var items
+    load_type #1
     alloc_array 0
     store_deref ?5
     load_type #0
@@ -642,6 +644,7 @@ function baml.Array.sort_by_key(self: baml.Array<T>, key: (T) -> U throws E) -> 
     jump L1
 
   L24:
+    load_type int
     alloc_array 0
     store_var order
     load_const 0
@@ -664,6 +667,7 @@ function baml.Array.sort_by_key(self: baml.Array<T>, key: (T) -> U throws E) -> 
     make_closure .<lambda(Array.sort_by_key, 0)>, captures=1, ntypeargs=3
     call baml.Array.sort_by
     pop 1
+    load_type #0
     alloc_array 0
     store_var sorted
     load_type int
@@ -3145,6 +3149,7 @@ function baml.csv.parse(source: string | uint8array, options: baml.csv.ReaderOpt
     load_var2 1 2
     call baml.csv.reader
     store_var r
+    load_type string[]
     alloc_array 0
     store_var out
 
@@ -7063,6 +7068,7 @@ function baml.iter.Iterator.chain(self: baml.iter.Iterator, other: baml.iter.Ite
 }
 
 function baml.iter.Iterator.collect(self: baml.iter.Iterator) -> Self.Item[] {
+    load_type #0
     alloc_array 0
     store_var r
 
@@ -8189,6 +8195,7 @@ function baml.llm.Client.__make_stream(self: baml.llm.Client, sse: baml.http.Sse
 
 function baml.llm.Client.build_attempt(self: baml.llm.Client) -> baml.llm.OrchestrationStep[] {
     load_var self
+    load_type string
     alloc_array 0
     init_instance baml.llm.PlannerState .rr_client_names
     call baml.llm.Client.build_attempt_with_state
@@ -8244,10 +8251,12 @@ function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner
     jump L49
 
   L3:
+    load_type never
     alloc_array 0
     jump L49
 
   L4:
+    load_type baml.llm.OrchestrationStep
     alloc_array 0
     store_var steps
     load_var self
@@ -8560,6 +8569,7 @@ function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner
     load_var primitive
     load_const 0
     init_instance baml.llm.OrchestrationStep .primitive_client, .delay_ms
+    load_type baml.llm.OrchestrationStep
     alloc_array 1
 
   L49:
@@ -8571,6 +8581,7 @@ function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner
 
 function baml.llm.Client.build_plan(self: baml.llm.Client) -> baml.llm.OrchestrationStep[] {
     load_var self
+    load_type string
     alloc_array 0
     init_instance baml.llm.PlannerState .rr_client_names
     call baml.llm.Client.build_plan_with_state
@@ -8593,6 +8604,7 @@ function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_st
   L1:
     load_var _3
     store_var r
+    load_type baml.llm.OrchestrationStep
     alloc_array 0
     store_var result
     load_var r
@@ -10377,6 +10389,7 @@ function baml.llm.build_prompt_context(primitive: baml.llm.PrimitiveClient, retu
     load_const null
     cmp_op ==
     pop_jump_if_false L1
+    load_type never
     alloc_array 0
     store_var _9
 
@@ -10392,6 +10405,8 @@ function baml.llm.build_prompt_context(primitive: baml.llm.PrimitiveClient, retu
     sys_op baml.llm.build_output_format
     store_var _14
     load_var _3
+    load_type string
+    load_type unknown
     alloc_map 0
     load_var2 10 11
     init_instance baml.llm.Context .client, .tags, .output_format, ._output_format
@@ -10503,6 +10518,8 @@ function baml.llm.get_return_type(function_name: string) -> type {
 
 function baml.llm.make_role(name: string) -> baml.llm.Role {
     load_var name
+    load_type string
+    load_type unknown
     alloc_map 0
     init_instance baml.llm.Role .name, .metadata
     return
