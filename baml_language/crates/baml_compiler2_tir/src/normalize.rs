@@ -1344,8 +1344,6 @@ mod tests {
             attr: TyAttr::default(),
         };
         let lhs = Ty::Function {
-            generic_params: Vec::new(),
-            generic_param_bounds: Vec::new(),
             params: vec![FunctionParamTy::required(Some(Name::new("x")), int.clone())],
             ret: Box::new(string.clone()),
             throws: Box::new(Ty::Never {
@@ -1354,8 +1352,6 @@ mod tests {
             attr: TyAttr::default(),
         };
         let rhs = Ty::Function {
-            generic_params: Vec::new(),
-            generic_param_bounds: Vec::new(),
             params: vec![FunctionParamTy::required(Some(Name::new("y")), int)],
             ret: Box::new(string),
             throws: Box::new(Ty::Never {
@@ -1380,8 +1376,6 @@ mod tests {
             attr: TyAttr::default(),
         };
         let lhs = Ty::Function {
-            generic_params: Vec::new(),
-            generic_param_bounds: Vec::new(),
             params: vec![
                 FunctionParamTy::optional(Some(Name::new("a")), int.clone()),
                 FunctionParamTy::optional(Some(Name::new("b")), string.clone()),
@@ -1393,8 +1387,6 @@ mod tests {
             attr: TyAttr::default(),
         };
         let rhs = Ty::Function {
-            generic_params: Vec::new(),
-            generic_param_bounds: Vec::new(),
             params: vec![
                 FunctionParamTy::optional(Some(Name::new("b")), string),
                 FunctionParamTy::optional(Some(Name::new("a")), int),
@@ -1703,8 +1695,6 @@ mod tests {
         let aliases = HashMap::new();
 
         let returns_literal_string = Ty::Function {
-            generic_params: Vec::new(),
-            generic_param_bounds: Vec::new(),
             params: vec![required_param(Ty::Int {
                 attr: TyAttr::default(),
             })],
@@ -1719,8 +1709,6 @@ mod tests {
             attr: TyAttr::default(),
         };
         let returns_string = Ty::Function {
-            generic_params: Vec::new(),
-            generic_param_bounds: Vec::new(),
             params: vec![required_param(Ty::Int {
                 attr: TyAttr::default(),
             })],
@@ -1744,8 +1732,6 @@ mod tests {
         ));
 
         let returns_variant = Ty::Function {
-            generic_params: Vec::new(),
-            generic_param_bounds: Vec::new(),
             params: vec![],
             ret: Box::new(Ty::EnumVariant(
                 qn("Color"),
@@ -1758,8 +1744,6 @@ mod tests {
             attr: TyAttr::default(),
         };
         let returns_enum = Ty::Function {
-            generic_params: Vec::new(),
-            generic_param_bounds: Vec::new(),
             params: vec![],
             ret: Box::new(Ty::Enum(qn("Color"), TyAttr::default())),
             throws: Box::new(Ty::Never {
@@ -1773,8 +1757,6 @@ mod tests {
         // `fn() -> int` is NOT usable as `fn() -> bigint`: there is no site to
         // insert the `int → bigint` coercion on the returned value.
         let returns_int = Ty::Function {
-            generic_params: Vec::new(),
-            generic_param_bounds: Vec::new(),
             params: vec![],
             ret: Box::new(Ty::Int {
                 attr: TyAttr::default(),
@@ -1785,8 +1767,6 @@ mod tests {
             attr: TyAttr::default(),
         };
         let returns_bigint = Ty::Function {
-            generic_params: Vec::new(),
-            generic_param_bounds: Vec::new(),
             params: vec![],
             ret: Box::new(Ty::Bigint {
                 attr: TyAttr::default(),
@@ -1809,8 +1789,6 @@ mod tests {
         let aliases = HashMap::new();
 
         let accepts_string = Ty::Function {
-            generic_params: Vec::new(),
-            generic_param_bounds: Vec::new(),
             params: vec![required_param(Ty::String {
                 attr: TyAttr::default(),
             })],
@@ -1823,8 +1801,6 @@ mod tests {
             attr: TyAttr::default(),
         };
         let accepts_literal_string = Ty::Function {
-            generic_params: Vec::new(),
-            generic_param_bounds: Vec::new(),
             params: vec![required_param(Ty::Literal(
                 LiteralValue::String("hi".into()),
                 Freshness::Fresh,
@@ -1850,8 +1826,6 @@ mod tests {
         ));
 
         let accepts_enum = Ty::Function {
-            generic_params: Vec::new(),
-            generic_param_bounds: Vec::new(),
             params: vec![required_param(Ty::Enum(qn("Color"), TyAttr::default()))],
             ret: Box::new(Ty::String {
                 attr: TyAttr::default(),
@@ -1862,8 +1836,6 @@ mod tests {
             attr: TyAttr::default(),
         };
         let accepts_variant = Ty::Function {
-            generic_params: Vec::new(),
-            generic_param_bounds: Vec::new(),
             params: vec![required_param(Ty::EnumVariant(
                 qn("Color"),
                 Name::new("Red"),
@@ -1883,8 +1855,6 @@ mod tests {
         // `fn(bigint)` is NOT usable as `fn(int)`: the caller's `int` argument
         // has no site at which to widen before reaching the `bigint` callee.
         let accepts_bigint = Ty::Function {
-            generic_params: Vec::new(),
-            generic_param_bounds: Vec::new(),
             params: vec![required_param(Ty::Bigint {
                 attr: TyAttr::default(),
             })],
@@ -1897,8 +1867,6 @@ mod tests {
             attr: TyAttr::default(),
         };
         let accepts_int = Ty::Function {
-            generic_params: Vec::new(),
-            generic_param_bounds: Vec::new(),
             params: vec![required_param(Ty::Int {
                 attr: TyAttr::default(),
             })],
@@ -1918,8 +1886,6 @@ mod tests {
     fn test_function_covariant_throws() {
         let aliases = HashMap::new();
         let f1 = Ty::Function {
-            generic_params: Vec::new(),
-            generic_param_bounds: Vec::new(),
             params: vec![required_param(Ty::Int {
                 attr: TyAttr::default(),
             })],
@@ -1932,8 +1898,6 @@ mod tests {
             attr: TyAttr::default(),
         };
         let f2 = Ty::Function {
-            generic_params: Vec::new(),
-            generic_param_bounds: Vec::new(),
             params: vec![required_param(Ty::Int {
                 attr: TyAttr::default(),
             })],
@@ -1957,8 +1921,6 @@ mod tests {
     fn test_function_optional_param_dropping_subtyping() {
         let aliases = HashMap::new();
         let with_two_optionals = Ty::Function {
-            generic_params: Vec::new(),
-            generic_param_bounds: Vec::new(),
             params: vec![
                 required_param(Ty::String {
                     attr: TyAttr::default(),
@@ -1985,8 +1947,6 @@ mod tests {
             attr: TyAttr::default(),
         };
         let with_one_optional = Ty::Function {
-            generic_params: Vec::new(),
-            generic_param_bounds: Vec::new(),
             params: vec![
                 required_param(Ty::String {
                     attr: TyAttr::default(),
@@ -2023,8 +1983,6 @@ mod tests {
     fn test_function_optional_param_order_is_insignificant() {
         let aliases = HashMap::new();
         let f1 = Ty::Function {
-            generic_params: Vec::new(),
-            generic_param_bounds: Vec::new(),
             params: vec![
                 required_param(Ty::String {
                     attr: TyAttr::default(),
@@ -2051,8 +2009,6 @@ mod tests {
             attr: TyAttr::default(),
         };
         let f2 = Ty::Function {
-            generic_params: Vec::new(),
-            generic_param_bounds: Vec::new(),
             params: vec![
                 required_param(Ty::String {
                     attr: TyAttr::default(),
@@ -2087,8 +2043,6 @@ mod tests {
     fn test_function_optional_and_required_params_are_incomparable() {
         let aliases = HashMap::new();
         let optional = Ty::Function {
-            generic_params: Vec::new(),
-            generic_param_bounds: Vec::new(),
             params: vec![optional_param(
                 "value",
                 Ty::Int {
@@ -2104,8 +2058,6 @@ mod tests {
             attr: TyAttr::default(),
         };
         let required = Ty::Function {
-            generic_params: Vec::new(),
-            generic_param_bounds: Vec::new(),
             params: vec![FunctionParamTy::required(
                 Some(Name::new("value")),
                 Ty::Int {

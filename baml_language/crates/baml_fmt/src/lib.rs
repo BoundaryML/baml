@@ -81,6 +81,23 @@ pub enum FormatterError {
 mod lambda_format_tests {
     use super::*;
 
+    /// A `#!` shebang must survive formatting verbatim as the first line —
+    /// otherwise `baml fmt` would silently break an executable `.baml`
+    /// script. The shebang is treated as a leading line comment.
+    #[test]
+    fn test_shebang_preserved_as_first_line() {
+        let source =
+            "#!/usr/bin/env -S baml run --file\nfunction main() -> string {\n    \"hi\"\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should accept a shebang");
+        assert!(
+            formatted.starts_with("#!/usr/bin/env -S baml run --file\n"),
+            "shebang must remain the literal first line, got:\n{formatted}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
     #[test]
     fn test_lambda_basic_formatting() {
         let source = "function test_annotated() -> int {\n    let double = (x: int) -> int { x * 2 }\n    double(21)\n}\n";
@@ -160,20 +177,10 @@ implements<T extends Named> Printable for Box<T> {
         );
     }
 
-    #[test]
-    fn test_generic_lambda_formatting() {
-        let source = "function test_generic() -> int {\n    let identity = <T>(x: T) -> T { x }\n    identity(42)\n}\n";
-        let options = FormatOptions::default();
-        let formatted =
-            format(source, &options).expect("formatter should succeed on generic lambda");
-        let second = format(&formatted, &options).expect("formatter should be idempotent");
-        assert_eq!(formatted, second, "formatter should be idempotent");
-    }
-
-    /// Generic instantiation expressions in every accepted base form must format
-    /// without error and be idempotent. Covers path / qualified-path bases
-    /// (carried by `PathExpr`) and non-path bases (`Expression::GenericApply`,
-    /// e.g. a parenthesized inline generic lambda).
+    /// Generic instantiation as a value (`foo<int>`) formats without error and is
+    /// idempotent. Only a path base is a valid instantiation target; a generic
+    /// *lambda* and a parenthesized base (`(foo)<int>`) are rejected by the
+    /// compiler, so they are not exercised here.
     #[test]
     fn test_generic_instantiation_formatting() {
         let options = FormatOptions::default();
@@ -181,8 +188,6 @@ implements<T extends Named> Printable for Box<T> {
             "function f() -> int {\n    let g = foo<int>\n    g(5)\n}\n",
             "function f() -> int {\n    foo<int>(5)\n}\n",
             "function f() -> int {\n    let g = a.b.foo<int, string>\n    5\n}\n",
-            "function f() -> int {\n    let g = (foo)<int>\n    5\n}\n",
-            "function f() -> int {\n    let g = (<T>(x: T) -> T { x })<int>\n    g(5)\n}\n",
         ];
         for source in cases {
             let formatted = format(source, &options).unwrap_or_else(|e| {
@@ -194,18 +199,6 @@ implements<T extends Named> Printable for Box<T> {
                 "formatter should be idempotent for:\n{source}"
             );
         }
-    }
-
-    /// The trailing `<...>` is preserved (not dropped) for a parenthesized base.
-    #[test]
-    fn test_generic_instantiation_paren_base_keeps_args() {
-        let options = FormatOptions::default();
-        let source = "function f() -> int {\n    let g = (foo)<int>\n    5\n}\n";
-        let formatted = format(source, &options).expect("formatter should succeed");
-        assert!(
-            formatted.contains("(foo)<int>"),
-            "expected `(foo)<int>` in:\n{formatted}"
-        );
     }
 }
 

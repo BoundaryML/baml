@@ -1,31 +1,22 @@
 # Contributing to BAML
 
-First off, thanks for your interest in contributing to BAML! We appreciate all the help we can get in making it the best way to build any AI agents or applications.
+Thanks for your interest in contributing to BAML! We appreciate all the help we
+can get in making it the best way to build any AI agents or applications.
 
-> **📚 For comprehensive development setup instructions, see our [Development Setup Guide](./README-DEV.md)**
+Please join our [Discord](https://discord.gg/BTNBeXGuaS) and introduce yourself
+in the `#contributing` channel. Let us know what you're interested in working
+on, and we can help you get started.
 
-## Table of Contents
+# AI Usage
 
-- [Contributing to BAML](#contributing-to-baml)
-  - [Table of Contents](#table-of-contents)
-  - [How to Contribute](#how-to-contribute)
-    - [Examples of Merged PRs:](#examples-of-merged-prs)
-  - [Quick Start - Development Setup](#quick-start---development-setup)
-  - [Setting up the BAML Compiler and Runtime](#setting-up-the-baml-compiler-and-runtime)
-      - [Compiler Architecture Overview](#compiler-architecture-overview)
-    - [Steps to Build and Test Locally](#steps-to-build-and-test-locally)
-  - [Running Integration Tests](#running-integration-tests)
-    - [Prerequisites for All Tests](#prerequisites-for-all-tests)
-      - [Environment Variables](#environment-variables)
-    - [TypeScript Integration Tests](#typescript-integration-tests)
-    - [Python Integration Tests](#python-integration-tests)
-    - [Ruby Integration Tests](#ruby-integration-tests)
-    - [Adding New Tests](#adding-new-tests)
-    - [Debugging Tests](#debugging-tests)
-    - [OpenAPI Server Tests](#openapi-server-tests)
-  - [Grammar Testing](#grammar-testing)
-  - [VSCode Extension Testing](#vscode-extension-testing)
-  - [Testing promptfiddle.com](#testing-promptfiddlecom)
+We welcome and encourage contributors to use AI to support BAML development.
+However, be warned that due to excessive spam on our repo, robot-generated
+**drive-by pull requests will be rejected**.
+
+Please remember that BAML is maintained by humans and is used in production
+for a wide range of critical use cases. We expect our contributors to be
+thoughtful about their work and engage with us, either in our Discord or on
+the issue or pull request.
 
 ## How to Contribute
 

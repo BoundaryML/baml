@@ -799,29 +799,11 @@ impl Ty {
             }
             Ty::Literal(lit, _freshness, _) => lit.to_string(),
             Ty::Function {
-                generic_params,
-                generic_param_bounds,
                 params,
                 ret,
                 throws,
                 ..
             } => {
-                use std::fmt::Write as _;
-
-                let mut out = String::new();
-                if !generic_params.is_empty() {
-                    out.push('<');
-                    for (i, param) in generic_params.iter().enumerate() {
-                        if i > 0 {
-                            out.push_str(", ");
-                        }
-                        out.push_str(param.as_ref());
-                        if let Some(bound) = generic_param_bounds.get(i).and_then(Option::as_ref) {
-                            let _ = write!(out, " extends {}", bound.render_with(s));
-                        }
-                    }
-                    out.push('>');
-                }
                 let ps: Vec<String> = params
                     .iter()
                     .map(|param| {
@@ -834,7 +816,7 @@ impl Ty {
                     })
                     .collect();
                 format!(
-                    "{out}({}) -> {} throws {}",
+                    "({}) -> {} throws {}",
                     ps.join(", "),
                     ret.render_as_function_result(s),
                     throws.render_with(s),
@@ -1114,8 +1096,6 @@ mod tests {
             // `Future<T>` for-type errors rather than baking an undispatchable rule.
             Ty::Future(boxed(ty_int()), boxed(Ty::null()), TyAttr::default()),
             Ty::Function {
-                generic_params: vec![],
-                generic_param_bounds: vec![],
                 params: vec![],
                 ret: boxed(Ty::null()),
                 throws: boxed(Ty::null()),
@@ -1329,8 +1309,6 @@ mod tests {
     #[test]
     fn test_function_display_uses_never_for_void_throws_sentinel() {
         let ty = Ty::Function {
-            generic_params: vec![],
-            generic_param_bounds: vec![],
             params: vec![FunctionParamTy::required(None, ty_int())],
             ret: Box::new(ty_string()),
             throws: Box::new(Ty::Void {
@@ -1346,12 +1324,8 @@ mod tests {
     #[test]
     fn test_function_display_parenthesizes_nested_function_returns() {
         let ty = Ty::Function {
-            generic_params: vec![],
-            generic_param_bounds: vec![],
             params: vec![],
             ret: Box::new(Ty::Function {
-                generic_params: vec![],
-                generic_param_bounds: vec![],
                 params: vec![FunctionParamTy::required(None, ty_int())],
                 ret: Box::new(ty_string()),
                 throws: Box::new(Ty::Void {
@@ -1374,8 +1348,6 @@ mod tests {
     #[test]
     fn test_function_display_parenthesizes_function_postfix_types() {
         let callback = Ty::Function {
-            generic_params: vec![],
-            generic_param_bounds: vec![],
             params: vec![FunctionParamTy::required(None, ty_int())],
             ret: Box::new(ty_string()),
             throws: Box::new(Ty::Void {

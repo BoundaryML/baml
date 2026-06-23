@@ -36,14 +36,6 @@ function test_multi_param() -> int {
     add(20, 22)
 }
 
-// Generic fat arrow.
-function test_generic() -> int {
-    let identity = <T>(x: T) -> T {
-        x
-    };
-    identity(42)
-}
-
 // Fat arrow inside match arm — fat arrow of match vs fat arrow of lambda.
 function test_in_match(x: int) -> int {
     match (x) {

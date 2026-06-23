@@ -21,14 +21,6 @@ function user.test_capture() -> int {
     return
 }
 
-function user.test_generic_lambda() -> int {
-    load_type int
-    load_const 42
-    make_closure .<lambda(test_generic_lambda, 0)>, 0
-    call_indirect
-    return
-}
-
 function user.test_inferred_return() -> int {
     load_const 21
     make_closure .<lambda(test_inferred_return, 0)>, 0
