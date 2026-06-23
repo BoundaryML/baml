@@ -7,7 +7,7 @@
 //! - `int` — `BamlClassInt` (abs, min, max, clamp, bit ops, ...)
 //! - `string` — `BamlClassString` (length, trim, split, ...)
 //! - `map` — `BamlClassMap` (length, has, keys, values, ...)
-//! - `math` — `BamlNamespaceMath` (trunc)
+//! - `math` — `BamlNamespaceMath` (trunc, sum, mean, median)
 //! - `media` — `BamlClassMedia{Pdf,Audio,Video,Image}` + `BamlNamespaceMedia`
 //! - `ops` — `BamlClassOps*` (`Equals`/`Compare` for primitives + containers)
 //! - `unstable` — `BamlNamespaceUnstable` (string)

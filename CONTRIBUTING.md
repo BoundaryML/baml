@@ -114,7 +114,16 @@ The setup script automatically handles all dependencies and version management, 
 
    - `cd engine/baml-lib/baml/` and run `cargo test` to execute grammar linting tests.
 
-4. Run the integration tests.
+4. If snapshot tests fail (`insta` diffs):
+
+   - Install the tool once: `cargo install cargo-insta`
+   - Regenerate accepted snapshots from `baml_language/`:
+     ```bash
+     cargo insta accept --all
+     ```
+   - Re-run the failing test target to verify the snapshot updates.
+
+5. Run the integration tests.
 
 5. **Set up Git hooks (Recommended)**:
    - Install the pre-commit hook to automatically format Rust code:

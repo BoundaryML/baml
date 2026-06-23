@@ -1533,15 +1533,9 @@ function baml.llm.validate_finish_reason(self: ?, finish_reason: string) -> null
 lambda (ctx) in prompt: captures [body]
 
 --- <builtin>/baml/ns_math/math.baml ---
-function baml.math.mean(values: float[]) -> float  [expr] {
-  { let n = values.length(); if (n Eq 0) { throw root.errors.InvalidArgument { message: "math.mean: cannot..." } } } sum(values) Div n
-}
-function baml.math.median(values: float[]) -> float  [expr] {
-  { let n = values.length(); if (n Eq 0) { throw root.errors.InvalidArgument { message: "math.median: cann..." } }; let sorted = values.slice(0, n); sorted.sort(); let mid = n Div 2 } if (n Mod 2 Eq 1) {  } match (sorted.at(mid)) { v: float => v, null => root.sys.panic("math.median: unre...") } else {  } match (sorted.at(mid Sub 1)) { lo: float => match (sorted.at(mid)) { hi: float => lo Add hi Div 2.0, null => root.sys.panic("math.median: unre...") }, null => root.sys.panic("math.median: unre...") }
-}
-function baml.math.sum(values: float[]) -> float  [expr] {
-  {  } values.reduce((acc: float, x: float) -> float throws never { {  } acc Add x }, 0.0)
-}
+function baml.math.mean(values: float[]) -> float  [builtin]
+function baml.math.median(values: float[]) -> float  [builtin]
+function baml.math.sum(values: float[]) -> float  [builtin]
 function baml.math.trunc(value: float) -> int  [builtin]
 
 --- <builtin>/baml/ns_media/media.baml ---

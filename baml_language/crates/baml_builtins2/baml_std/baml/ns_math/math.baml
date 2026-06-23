@@ -18,8 +18,9 @@ function trunc(value: float) -> int throws never {
 /// baml.math.sum([-1.0, 2.0])       // 1.0
 /// baml.math.sum([])                // 0.0
 /// ```
+//baml:vm
 function sum(values: float[]) -> float throws never {
-  values.reduce((acc: float, x: float) -> float throws never { acc + x }, 0.0)
+  $rust_function
 }
 
 /// Returns the arithmetic mean (average) of `values`.
@@ -34,12 +35,9 @@ function sum(values: float[]) -> float throws never {
 /// baml.math.mean([5.0])                  // 5.0
 /// baml.math.mean([])                     // throws InvalidArgument
 /// ```
+//baml:vm
 function mean(values: float[]) -> float throws root.errors.InvalidArgument {
-  let n = values.length();
-  if (n == 0) {
-    throw root.errors.InvalidArgument { message: "math.mean: cannot take the mean of an empty array" };
-  }
-  sum(values) / n
+  $rust_function
 }
 
 /// Returns the median (the middle value) of `values`.
@@ -58,28 +56,7 @@ function mean(values: float[]) -> float throws root.errors.InvalidArgument {
 /// baml.math.median([1.0, 2.0, 3.0, 4.0])   // 2.5  (mean of the two middles)
 /// baml.math.median([])                     // throws InvalidArgument
 /// ```
+//baml:vm
 function median(values: float[]) -> float throws root.errors.InvalidArgument {
-  let n = values.length();
-  if (n == 0) {
-    throw root.errors.InvalidArgument { message: "math.median: cannot take the median of an empty array" };
-  }
-  // Copy first: `sort()` is in place, and `median` must not mutate the caller's
-  // array. `float[].sort()` is total and infallible (IEEE 754 `totalOrder`).
-  let sorted = values.slice(0, n);
-  sorted.sort();
-  let mid = n / 2;
-  if (n % 2 == 1) {
-    match (sorted.at(mid)) {
-      let v: float => v,
-      null => root.sys.panic("math.median: unreachable null at a valid index"),
-    }
-  } else {
-    match (sorted.at(mid - 1)) {
-      let lo: float => match (sorted.at(mid)) {
-        let hi: float => (lo + hi) / 2.0,
-        null => root.sys.panic("math.median: unreachable null at a valid index"),
-      },
-      null => root.sys.panic("math.median: unreachable null at a valid index"),
-    }
-  }
+  $rust_function
 }

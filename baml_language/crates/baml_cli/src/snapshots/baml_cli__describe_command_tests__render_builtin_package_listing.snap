@@ -195,9 +195,9 @@ function         baml.llm.get_return_type         <builtin>/baml/ns_llm/llm_type
 function         baml.llm.__sap_parse_final       <builtin>/baml/ns_llm/llm_types.baml:795
 function         baml.llm.__sap_parse_partial     <builtin>/baml/ns_llm/llm_types.baml:800
 function         baml.math.trunc                  <builtin>/baml/ns_math/math.baml:2
-function         baml.math.sum                    <builtin>/baml/ns_math/math.baml:21
-function         baml.math.mean                   <builtin>/baml/ns_math/math.baml:37
-function         baml.math.median                 <builtin>/baml/ns_math/math.baml:61
+function         baml.math.sum                    <builtin>/baml/ns_math/math.baml:22
+function         baml.math.mean                   <builtin>/baml/ns_math/math.baml:39
+function         baml.math.median                 <builtin>/baml/ns_math/math.baml:60
 class            baml.media.Pdf                   <builtin>/baml/ns_media/media.baml:2
 class            baml.media.Audio                 <builtin>/baml/ns_media/media.baml:53
 class            baml.media.Video                 <builtin>/baml/ns_media/media.baml:104
