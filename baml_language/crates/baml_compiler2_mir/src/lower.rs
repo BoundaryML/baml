@@ -861,15 +861,20 @@ pub fn tir2_to_template(
             .map(|n| {
                 TyTemplate::TypeArgRef(u32::try_from(n).expect("generic param index fits in u32"))
             })
+            // The member is a frame generic only inside interface-default-method
+            // bodies (where `enclosing_generic_params` adds the interface's
+            // associated types). Otherwise the projection — e.g. `T.CompareError`
+            // passed as a call's type argument — is kept faithfully, exactly like
+            // `Self` below: `convert` resolves it against the bound, or preserves
+            // it for the runtime to resolve from the receiver's actual type. Never
+            // an error, never erased.
             .unwrap_or_else(|| TyTemplate::Concrete(resolved.convert(ty))),
+        Tir2Ty::TypeVar(name, _) if name == "Self" => TyTemplate::Concrete(resolved.convert(ty)),
         Tir2Ty::TypeVar(name, _) => {
-            if let Some(n) = generic_params.iter().position(|p| p == name) {
-                TyTemplate::TypeArgRef(u32::try_from(n).expect("generic param index fits in u32"))
-            } else {
-                TyTemplate::Concrete(RuntimeTy::Void {
-                    attr: baml_type::TyAttr::default(),
-                })
-            }
+            let Some(n) = generic_params.iter().position(|p| p == name) else {
+                unreachable!("type variable not found in type args: {}", name)
+            };
+            TyTemplate::TypeArgRef(u32::try_from(n).expect("generic param index fits in u32"))
         }
         Tir2Ty::List(inner, _) => {
             TyTemplate::Array(Box::new(tir2_to_template(inner, resolved, generic_params)))

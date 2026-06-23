@@ -839,7 +839,7 @@ function f() -> null {
     insta::assert_snapshot!(render_tir(&db, file), @r#"
     function user.f() -> null throws never {
       { : never
-        let xs = [] : never[] -> int[] (evolving)
+        let xs = [] : _[] -> int[] (evolving)
         xs?.push?.(1) : int | null
         xs.push("a") : int
         return null : null
@@ -848,6 +848,31 @@ function f() -> null {
       !! 70..73: type mismatch: expected int, got string
     }
     "#);
+}
+
+#[test]
+fn empty_array_reassignment_keeps_declared_element_type() {
+    // Regression: `x = []` must not drop `x`'s declared `int[]`. The assigned
+    // empty would otherwise become an adoptable evolving-never local, and a
+    // later `push` would establish a wrong element type under the declared one
+    // (unsound). `push("hello")` must be rejected against the retained `int[]`.
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f() -> null {
+    let x: int[] = [1]
+    x = []
+    x.push("hello")
+    return null
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("type mismatch: expected int, got string"),
+        "expected `x.push(\"hello\")` to be rejected after `x = []`; got:\n{tir}"
+    );
 }
 
 #[test]
@@ -867,7 +892,7 @@ function f() -> null {
     insta::assert_snapshot!(render_tir(&db, file), @r#"
     function user.f() -> null throws never {
       { : never
-        let xs = [] : never[] -> int[] (evolving)
+        let xs = [] : _[] -> int[] (evolving)
         xs?.push(1) : int | null
         xs.push("a") : int
         return null : null
@@ -923,7 +948,7 @@ function f() -> null {
     }
     function user.f() -> null throws never {
       { : never
-        let callbacks = [] : never[] -> (() -> int throws never)[] (evolving)
+        let callbacks = [] : _[] -> (() -> int throws never)[] (evolving)
         callbacks.push(cb) : int
         return null : null
       }
@@ -1517,7 +1542,7 @@ function f() -> int {
     let output = render_tir(&db, file);
 
     assert!(
-        output.contains("let xs = [] : never[] -> int[] (evolving)"),
+        output.contains("let xs = [] : _[] -> int[] (evolving)"),
         "expected indexed assignment to sync the let binding type, got:\n{output}"
     );
     assert!(
@@ -1547,7 +1572,7 @@ function f() -> int {
     let output = render_tir(&db, file);
 
     assert!(
-        output.contains("let xs = [] : never[] -> int[] (evolving)"),
+        output.contains("let xs = [] : _[] -> int[] (evolving)"),
         "expected parent xs binding to be established by parent push, got:\n{output}"
     );
     assert!(
@@ -1575,7 +1600,7 @@ function f() -> int {
     let output = render_tir(&db, file);
 
     assert!(
-        output.contains("let xs = [] : never[] -> string[] (evolving)"),
+        output.contains("let xs = [] : _[] -> string[] (evolving)"),
         "expected xs to be established by the first push in the loop body, got:\n{output}"
     );
     assert!(

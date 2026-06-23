@@ -15,7 +15,7 @@ function user.MayFailIntOrString(x: int) -> string throws never {
 }
 function user.PartialCatch(x: int) -> string throws never {
   { : string | "caught string"
-    catch (MayFailIntOrString(x) : string) : unknown
+    catch (MayFailIntOrString(x) : string) : string | "caught string"
       catch (e)
         string =>
           "caught string" : "caught string"
@@ -23,7 +23,7 @@ function user.PartialCatch(x: int) -> string throws never {
 }
 function user.CatchAllWildcard(x: int) -> string throws never {
   { : string | "caught all"
-    catch (MayFailIntOrString(x) : string) : unknown
+    catch (MayFailIntOrString(x) : string) : string | "caught all"
       catch_all (e)
         _ =>
           "caught all" : "caught all"
@@ -31,7 +31,7 @@ function user.CatchAllWildcard(x: int) -> string throws never {
 }
 function user.CatchAllTyped(x: int) -> string throws never {
   { : string | "caught string" | "caught int"
-    catch (MayFailIntOrString(x) : string) : unknown
+    catch (MayFailIntOrString(x) : string) : string | "caught string" | "caught int"
       catch_all (e)
         string =>
           "caught string" : "caught string"
@@ -41,7 +41,7 @@ function user.CatchAllTyped(x: int) -> string throws never {
 }
 function user.CatchThenCatchAll(x: int) -> string throws never {
   { : string | "caught string" | "caught rest"
-    catch (MayFailIntOrString(x) : string) : unknown
+    catch (MayFailIntOrString(x) : string) : string | "caught string" | "caught rest"
       catch (e)
         string =>
           "caught string" : "caught string"

@@ -1904,8 +1904,8 @@ function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bo
   !! 10814..10938: non-exhaustive match on `int`; missing: _
   !! 10938..11058: non-exhaustive match on `int`; missing: _
   !! 11058..11179: non-exhaustive match on `int`; missing: _
+  !! 11732..11733: type mismatch: expected string, got 0
   !! 11575..11739: non-exhaustive match on `int`; missing: _
-  !! 11575..11739: type mismatch: expected string, got 0
 }
 class user.MatchSuccess$stream {
   data: string | null
@@ -1970,7 +1970,7 @@ function user.OtherExprs(a: int, b: int) -> int throws never {
     Not a > b : bool
     Neg a : int
     Neg a : int
-    [] : never[]
+    [] : _[]
     [1] : int[]
     [1, 2, 3] : int[]
     [1, 2, 3, 4, 5] : int[]

@@ -74,12 +74,12 @@ function user.Encoder.from_json(j: baml.json.json) -> user.Encoder throws baml.j
 class user.Box {
   value: T
 }
-function user.Box.unwrap(self: user.Box) -> unknown throws never {
+function user.Box.unwrap(self: user.Box<T>) -> T throws never {
   { : T
     self.value : T
   }
 }
-function user.Box.from_json(j: baml.json.json) -> user.Box<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function user.Box.from_json(j: baml.json.json) -> user.Box<T> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Box { value: baml.json.from_json<T>(baml.json.field(j, "value")) } : user.Box<T>
 }
 class user.Calculator {

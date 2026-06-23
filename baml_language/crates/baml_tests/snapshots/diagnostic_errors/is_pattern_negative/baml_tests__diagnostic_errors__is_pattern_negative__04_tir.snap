@@ -48,7 +48,7 @@ function user.unresolved_class_head(v: user.WrapNonGeneric) -> bool throws never
 class user.WrapGeneric {
   val: T
 }
-function user.WrapGeneric.from_json(j: baml.json.json) -> user.WrapGeneric<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function user.WrapGeneric.from_json(j: baml.json.json) -> user.WrapGeneric<T> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   WrapGeneric { val: baml.json.from_json<T>(baml.json.field(j, "val")) } : user.WrapGeneric<T>
 }
 function user.unresolved_generic_arg(v: user.WrapGeneric<int>) -> bool throws never {

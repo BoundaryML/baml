@@ -2255,7 +2255,7 @@ mod tests {
         let output = generate_native_trait(&builtins, &class_defs);
 
         assert!(
-            output.contains("fn length(array: &[Value]) -> i64;"),
+            output.contains("fn length(array: ArrayView<'_>) -> i64;"),
             "BamlClassArray should have bare `length` method:\n{output}"
         );
         assert!(
@@ -2263,8 +2263,8 @@ mod tests {
             "BamlClassString should have bare `to_lower_case` method:\n{output}"
         );
         assert!(
-            output.contains("fn trunc(value: f64) -> i64;"),
-            "BamlNamespaceMath should have bare `trunc` method:\n{output}"
+            output.contains("fn trunc(float: f64) -> f64;"),
+            "BamlClassFloat should have bare `trunc` method:\n{output}"
         );
     }
 

@@ -2591,10 +2591,24 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .unwrap_or(Ty::Unknown {
                         attr: TyAttr::default(),
                     });
+            // Validate the default against the parameter's declared type. On a
+            // mismatch we report at the precise default span (the defaults body
+            // carries its own source map, which `check_expr`'s expr-id-based
+            // diagnostics would not resolve correctly). For a container *literal*
+            // default declared with a structural-container type, we re-run
+            // `check_expr`, which adopts the declared element/key/value types
+            // *recursively* (so an empty `[]`/`{}` — even nested, e.g.
+            // `int[][] = [[]]` — emits the declared types instead of `never`) and
+            // emits no diagnostic for an already-matching default. The gate is
+            // restricted to literals with a structural-container declared type so
+            // `check_expr`'s array/map arm is guaranteed to adopt — never the
+            // `is_subtype` fallback, which (unlike `argument_matches_expected`)
+            // would reject e.g. an `int[]` default against the `baml.Array<int>`
+            // spelling of the same parameter.
             let got_ty = self.infer_expr(default_expr, &defaults.exprs);
-            if !matches!(expected_ty, Ty::Unknown { .. } | Ty::Error { .. })
-                && !self.argument_matches_expected(&got_ty, &expected_ty)
-            {
+            if matches!(expected_ty, Ty::Unknown { .. } | Ty::Error { .. }) {
+                // No declared type to check against or adopt.
+            } else if !self.argument_matches_expected(&got_ty, &expected_ty) {
                 self.report_at_span(
                     TirTypeError::TypeMismatch {
                         expected: expected_ty,
@@ -2602,6 +2616,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                     },
                     default_span,
                 );
+            } else if matches!(
+                defaults.exprs.exprs[default_expr],
+                Expr::Array { .. } | Expr::Map { .. }
+            ) && matches!(
+                expected_ty,
+                Ty::List(..) | Ty::EvolvingList(..) | Ty::Map { .. } | Ty::EvolvingMap(..)
+            ) {
+                self.check_expr(default_expr, &defaults.exprs, &expected_ty);
             }
 
             let later_params: FxHashSet<Name> = params
@@ -3850,6 +3872,25 @@ impl<'db> TypeInferenceBuilder<'db> {
                             *arg,
                             Vec::new(),
                         );
+                    } else if matches!(body.exprs[*arg], Expr::Array { .. } | Expr::Map { .. })
+                        && matches!(
+                            expected_arg_ty,
+                            Ty::List(..)
+                                | Ty::EvolvingList(..)
+                                | Ty::Map { .. }
+                                | Ty::EvolvingMap(..)
+                        )
+                    {
+                        // An empty container *literal* (`[]`/`map {}`) adopts the
+                        // now generic-substituted parameter type, so its
+                        // element/key/value types come from the call instead of
+                        // committing to `never`. Restricted to literals with a
+                        // structural-container expected so `check_expr`'s array/map
+                        // arm is guaranteed to adopt — never the `is_subtype`
+                        // fallback, which (unlike `argument_matches_expected`)
+                        // would reject e.g. an `int[]` arg against the explicit
+                        // `baml.Array<int>` spelling of the same parameter.
+                        self.check_expr(*arg, body, &expected_arg_ty);
                     } else {
                         self.record_function_coercion_if_needed(*arg, &arg_ty, &expected_arg_ty);
                     }
@@ -4353,10 +4394,16 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.infer_optional_member_access_expr(expr_id, body, *base, member)
             }
             Expr::Array { elements } => {
-                let elem_types: Vec<Ty> =
-                    elements.iter().map(|e| self.infer_expr(*e, body)).collect();
-                let elem_ty = Self::join_all(&elem_types).widen_fresh();
-                Ty::List(Box::new(elem_ty), TyAttr::default())
+                // An empty array literal evolves to fit its use rather than
+                // committing to the unsound `never[]` (see `empty_evolving_list`).
+                if elements.is_empty() {
+                    Self::empty_evolving_list()
+                } else {
+                    let elem_types: Vec<Ty> =
+                        elements.iter().map(|e| self.infer_expr(*e, body)).collect();
+                    let elem_ty = Self::join_all(&elem_types).widen_fresh();
+                    Ty::List(Box::new(elem_ty), TyAttr::default())
+                }
             }
             Expr::Map { entries } => {
                 let mut key_types = Vec::new();
@@ -4436,7 +4483,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             Expr::Match {
                 scrutinee, arms, ..
-            } => self.infer_match_expr(expr_id, *scrutinee, arms, body),
+            } => self.infer_match_expr(expr_id, *scrutinee, arms, body, None),
             Expr::Is { scrutinee, pattern } => self.infer_is_expr(*scrutinee, *pattern, body),
             Expr::Catch { base, clauses } => {
                 self.infer_catch_expr(expr_id, *base, clauses, body, None)
@@ -5404,6 +5451,20 @@ impl<'db> TypeInferenceBuilder<'db> {
             && matches!(type_name.segments(), [name] if name.as_str() == "map")
     }
 
+    /// The type of an empty array literal: an `EvolvingList` over `never`. An
+    /// empty array has no elements to fix its element type, so — like the empty
+    /// map `{}` — it evolves to fit its use (annotation or later mutation)
+    /// rather than committing to the unsound `never[]`: generics are invariant,
+    /// so `never[]` is a subtype of no other array type.
+    fn empty_evolving_list() -> Ty {
+        Ty::EvolvingList(
+            Box::new(Ty::Never {
+                attr: TyAttr::default(),
+            }),
+            TyAttr::default(),
+        )
+    }
+
     /// The type of an empty map literal: an `EvolvingMap` over `never`. An empty
     /// map has no entries to fix its key/value types, so — like the empty array
     /// `[]` — it evolves to fit its use (annotation or later mutation) rather
@@ -6346,17 +6407,24 @@ impl<'db> TypeInferenceBuilder<'db> {
                 ty
             }
             Expr::Array { elements } => {
-                let elem_ty = match expected {
-                    Ty::List(e, _) | Ty::EvolvingList(e, _) => Some(e),
-                    _ => None,
+                // Adopt the declared element type, looking through a nullable
+                // wrapper (`int[]?` is `int[] | null`) so an empty array still
+                // adopts `int`. The literal is recorded as the (non-null)
+                // container — the array itself is `int[]`, assignable to `int[]?`.
+                let container = match expected {
+                    Ty::List(..) | Ty::EvolvingList(..) => Some(expected.clone()),
+                    _ => Self::nullable_non_null_part(expected)
+                        .filter(|t| matches!(t, Ty::List(..) | Ty::EvolvingList(..))),
                 };
-                if let Some(elem_ty) = elem_ty {
+                if let Some(container) = container {
+                    let (Ty::List(elem_ty, _) | Ty::EvolvingList(elem_ty, _)) = &container else {
+                        unreachable!("container is List/EvolvingList by construction")
+                    };
                     for e in elements {
                         self.check_expr(*e, body, elem_ty);
                     }
-                    let ty = expected.clone();
-                    self.record_expr_type(expr_id, ty.clone());
-                    ty
+                    self.record_expr_type(expr_id, container.clone());
+                    container
                 } else {
                     let inferred = self.infer_expr(expr_id, body);
                     if !matches!(expected, Ty::Unknown { .. } | Ty::Error { .. })
@@ -6397,24 +6465,43 @@ impl<'db> TypeInferenceBuilder<'db> {
                 ..
             } => self.check_object_expr(expr_id, body, expected, fields, type_name, type_args),
             Expr::Map { entries } => {
-                let kv = match expected {
-                    Ty::Map {
-                        key: k, value: v, ..
-                    }
-                    | Ty::EvolvingMap(k, v, _) => Some((k, v)),
-                    _ => None,
+                // Look through a nullable wrapper (`map<string, int>?`) so an
+                // empty map still adopts the declared key/value types; the literal
+                // is recorded as the (non-null) container.
+                let container = match expected {
+                    Ty::Map { .. } | Ty::EvolvingMap(..) => Some(expected.clone()),
+                    _ => Self::nullable_non_null_part(expected)
+                        .filter(|t| matches!(t, Ty::Map { .. } | Ty::EvolvingMap(..))),
                 };
-                if let Some((key_ty, val_ty)) = kv {
+                if let Some(container) = container {
+                    let (Ty::Map {
+                        key: key_ty,
+                        value: val_ty,
+                        ..
+                    }
+                    | Ty::EvolvingMap(key_ty, val_ty, _)) = &container
+                    else {
+                        unreachable!("container is Map/EvolvingMap by construction")
+                    };
                     for (k, v) in entries {
                         self.check_expr(*k, body, key_ty);
                         self.check_expr(*v, body, val_ty);
                     }
-                    let ty = expected.clone();
-                    self.record_expr_type(expr_id, ty.clone());
-                    ty
+                    self.record_expr_type(expr_id, container.clone());
+                    container
                 } else {
                     self.infer_expr(expr_id, body)
                 }
+            }
+            Expr::Match {
+                scrutinee, arms, ..
+            } => {
+                // Checking position: each arm body is checked against the
+                // expected type (so an empty `[]`/`{}` arm adopts it), then the
+                // joined result is recorded — mirroring the `if`/`if let` arms.
+                let ty = self.infer_match_expr(expr_id, *scrutinee, arms, body, Some(expected));
+                self.record_expr_type(expr_id, ty.clone());
+                ty
             }
             // Literal checked against a literal type: compare values directly.
             // On match, strip freshness → Regular. On mismatch, fall through
@@ -6457,7 +6544,13 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             // Catch: propagate expected type to the base expression
             Expr::Catch { base, clauses } => {
-                self.infer_catch_expr(expr_id, *base, clauses, body, Some(expected))
+                // Record the result like the other check_expr arms — `infer_catch_expr`
+                // does not record, and unlike the synthesis path there is no
+                // `infer_expr` wrapper here to do it, so the catch expr type would
+                // otherwise be left unrecorded (and render as `unknown`).
+                let ty = self.infer_catch_expr(expr_id, *base, clauses, body, Some(expected));
+                self.record_expr_type(expr_id, ty.clone());
+                ty
             }
             // Lambda: bidirectional checking against expected function type
             Expr::Lambda(func_def) => self.check_lambda_expr(expr_id, body, expected, func_def),
@@ -6901,9 +6994,25 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                     // Update the local to the assigned value's type (invalidates
                     // narrowing). `$id` is not a local — don't create one.
+                    //
+                    // An evolving-empty container (`x = []`) assigned to a
+                    // declared container local must adopt the *declared* type, not
+                    // the bare `EvolvingList(Never)`: otherwise the local loses
+                    // its declaration and a later `x.push(v)` re-establishes the
+                    // element type from `v` — accepting a value of the wrong type
+                    // under the declared one (unsound). Mirror the declared type
+                    // onto the literal so the empty array also emits it.
+                    let assigned_ty = match (&value_ty, decl_ty) {
+                        (Ty::EvolvingList(..), Ty::List(..) | Ty::EvolvingList(..))
+                        | (Ty::EvolvingMap(..), Ty::Map { .. } | Ty::EvolvingMap(..)) => {
+                            self.record_expr_type(*value, decl_ty.clone());
+                            decl_ty.clone()
+                        }
+                        _ => value_ty,
+                    };
                     if let Expr::Path(segments) = &body.exprs[*target] {
                         if segments.len() == 1 && segments[0].as_str() != "$id" {
-                            self.assign_local(segments[0].clone(), value_ty);
+                            self.assign_local(segments[0].clone(), assigned_ty);
                         }
                     }
                 } else {
@@ -7239,6 +7348,11 @@ impl<'db> TypeInferenceBuilder<'db> {
         scrutinee_expr_id: ExprId,
         arms: &[baml_compiler2_ast::MatchArmId],
         body: &ExprBody,
+        // When the match is in a checking position, the expected type each arm
+        // body is checked against — so e.g. an empty `[]` arm adopts the
+        // declared element type (like `if`'s branches), instead of leaving the
+        // arm `never[]`. `None` in synthesis position.
+        expected: Option<&Ty>,
     ) -> Ty {
         let scrutinee_ty = self.infer_expr(scrutinee_expr_id, body);
         let scrutinee_name = match &body.exprs[scrutinee_expr_id] {
@@ -7280,7 +7394,10 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.infer_expr(guard_expr, body);
             }
 
-            let arm_ty = self.infer_expr(arm.body, body);
+            let arm_ty = match expected {
+                Some(expected) => self.check_expr(arm.body, body, expected),
+                None => self.infer_expr(arm.body, body),
+            };
             arm_types.push(arm_ty);
 
             self.restore_scoped_locals(&snapshot);

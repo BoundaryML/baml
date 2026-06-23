@@ -77,14 +77,22 @@ fn forward_ptr(ptr: &mut HeapPtr, forwarding: &HashMap<HeapPtr, HeapPtr>) {
     }
 }
 
-/// The leading runtime type-arg of the currently dispatching call, or
-/// `unknown` if none was supplied. Used by generic transforms (`map`,
-/// `flat_map`) whose result element type is the instantiated `U` they were
-/// called with. Read at dispatch time before any nested callback overwrites
-/// the pending type-args.
-fn first_type_arg(vm: &BexVm) -> baml_type::RuntimeTy {
-    vm.current_call_type_args()
-        .first()
+/// The result element type `U` for the `<U, E>` array transforms (`map`,
+/// `flat_map`), read at dispatch time before any nested callback overwrites the
+/// pending type-args.
+///
+/// `current_call_type_args()` is laid out `[<receiver class args>.., U, E]`: MIR
+/// prepends the receiver array's element type ahead of the method's own `<U, E>`
+/// (the receiver-class-type-arg prepend in `lower_call`). So `U` is *not*
+/// `.first()` — that is the receiver's `T` — it is the first of the method's two
+/// own generics, i.e. the second-to-last arg. Counting from the back makes it
+/// correct whether or not the prepend fired (e.g. an `unknown`-typed receiver).
+fn map_result_element_ty(vm: &BexVm) -> baml_type::RuntimeTy {
+    let type_args = vm.current_call_type_args();
+    type_args
+        .len()
+        .checked_sub(2)
+        .and_then(|u_index| type_args.get(u_index))
         .cloned()
         .unwrap_or_else(baml_type::RuntimeTy::unknown)
 }
@@ -929,8 +937,8 @@ impl BamlClassArray for PackageBamlImpl {
             Err(e) => return e,
         };
         // `map<U, E>(self, f: (T) -> U) -> U[]`: the result element type is the
-        // closure return type `U`, the leading call type-arg.
-        let element_ty = first_type_arg(vm);
+        // closure return type `U` (not the receiver's `T`).
+        let element_ty = map_result_element_ty(vm);
         let array = array.to_vec();
         if array.is_empty() {
             return NativeCallResult::Done(Value::object(vm.alloc_array(element_ty, vec![])));
@@ -1176,8 +1184,8 @@ impl BamlClassArray for PackageBamlImpl {
             Err(e) => return e,
         };
         // `flat_map<U, E>(self, f: (T) -> U[]) -> U[]`: the result element type
-        // is the closure's element return type `U`, the leading call type-arg.
-        let element_ty = first_type_arg(vm);
+        // is the closure's element return type `U` (not the receiver's `T`).
+        let element_ty = map_result_element_ty(vm);
         let array = array.to_vec();
         if array.is_empty() {
             return NativeCallResult::Done(Value::object(vm.alloc_array(element_ty, vec![])));

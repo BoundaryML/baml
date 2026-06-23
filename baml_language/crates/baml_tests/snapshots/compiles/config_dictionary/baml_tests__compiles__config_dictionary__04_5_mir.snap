@@ -12,7 +12,7 @@ fn user.MyClient$new() -> null {
     let _5: string[]
     let _6: string[]
     let _7: string[]
-    let _8: null[]
+    let _8: int[]
     let _9: map<string, string | string[] | int>
     let _10: string[]
     let _11: never[]
@@ -23,7 +23,7 @@ fn user.MyClient$new() -> null {
         _5 = [const "abc", const "abc", const "ccc"];
         _6 = [const "one", const "two"];
         _7 = [const "one", const "two"];
-        _8 = [const null, const null, const null];
+        _8 = [const 1_i64, const 2_i64, const 3_i64];
         _10 = [const "yes", const "queen"];
         _9 = { const "key": const "value", const "key2": const "value2", const "nestedArray": copy _10, const "number": const 10_i64 };
         _11 = [];

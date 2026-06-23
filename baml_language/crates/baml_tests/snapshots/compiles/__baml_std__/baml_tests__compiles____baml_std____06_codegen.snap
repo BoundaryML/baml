@@ -8251,7 +8251,7 @@ function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner
     jump L49
 
   L3:
-    load_type never
+    load_type baml.llm.OrchestrationStep
     alloc_array 0
     jump L49
 

@@ -592,15 +592,13 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] error: type mismatch: expected string, got 0
-     ╭─[ match_exprs.baml:416:6 ]
+     ╭─[ match_exprs.baml:420:68 ]
      │
- 416 │ ╭─▶     }
-     ┆ ┆   
- 421 │ ├─▶     }
-     │ │           
-     │ ╰─────────── type mismatch: expected string, got 0
-     │     
-     │     Note: Error code: E0001
+ 420 │         (1 /* inner1 */ | 2 /* inner2 */) /* outer-trail */ | 3 => 0
+     │                                                                    ┬  
+     │                                                                    ╰── type mismatch: expected string, got 0
+     │ 
+     │ Note: Error code: E0001
 ─────╯
 
   [validation] error: Name `ManyParams` defined 2 times as: function, template_string
