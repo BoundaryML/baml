@@ -226,3 +226,41 @@ function main() -> baml.llm.PromptAst {
         "rendered schema should list the Person fields: {dbg}"
     );
 }
+
+#[tokio::test]
+async fn prompt_output_format_with_can_render_null_as_omit() {
+    let output = baml_test!(
+        r#"
+class Person {
+  name string
+  nickname string?
+}
+
+function main() -> baml.llm.PromptAst {
+  let cc = baml.llm.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
+  let rt = reflect.type_of<Person>()
+  let ctx = baml.llm.Context { client: cc, tags: {}, output_format: baml.llm.render_output_format(rt), _output_format: baml.llm.build_output_format(rt) }
+  let render = baml.llm.prompt`${ctx.output_format_with(render_null_as = "omit")}`
+  render(ctx)
+}
+"#
+    );
+    let ast = match &output.result {
+        Ok(BexExternalValue::Instance {
+            class_name, fields, ..
+        }) if class_name == "baml.llm.PromptAst" => match fields.get("_data") {
+            Some(BexExternalValue::Adt(BexExternalAdt::PromptAst(ast))) => ast.clone(),
+            other => panic!("expected `_data` to hold a PromptAst ADT, got {other:?}"),
+        },
+        other => panic!("expected a baml.llm.PromptAst instance, got {other:?}"),
+    };
+    let dbg = format!("{ast:?}");
+    assert!(
+        dbg.contains("nickname: string or omit,"),
+        "custom null rendering should apply to output_format_with: {dbg}"
+    );
+    assert!(
+        !dbg.contains("string or null"),
+        "default null rendering should be replaced: {dbg}"
+    );
+}

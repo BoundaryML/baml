@@ -68,6 +68,7 @@ class Context {
     quote_class_fields: bool? = null,
     hoist_classes: string[]? = null,
     map_style: string? = null,
+    render_null_as: string? = null,
   ) -> string throws never {
     $rust_io_function
   }
