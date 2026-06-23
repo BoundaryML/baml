@@ -1967,26 +1967,56 @@ impl BexEngine {
                 );
             }
         }
-        let type_args = type_args;
-
-        // Always fold the recovered bindings into the return type. This is the
-        // pre-existing streaming fix (a generic `self` method's return type
-        // carries the class's type vars; the receiver binds them concretely)
-        // and is a no-op when `type_args` is empty.
-        return_type = crate::conversion::substitute_type_vars(&return_type, &type_args);
-
         // A call is generic iff the callee declares any generic params, OR a
         // TypeVar appears in a parameter / the return type. The declared-params
         // list also catches type params used only in the body (e.g.
         // `one_type_arg<T>()` reflecting `T`), which a signature scan misses.
         // Non-generic calls bypass all type-var work and keep the existing
         // permissive coercion path untouched (no regression, zero extra cost).
+        // Computed here (before the `type_args` freeze) because the inference
+        // step below mutates `type_args` and is gated on this flag. The
+        // (unsubstituted) `return_type` is used; self-receiver substitution does
+        // not change whether the callee is generic.
         let declared_generic_params = self.function_generic_params(function_name);
         let callee_is_generic = !declared_generic_params.is_empty()
             || declared_param_types
                 .iter()
                 .chain(std::iter::once(&return_type))
                 .any(crate::conversion::contains_type_var);
+
+        // ── VALUE INFERENCE (01a/01b) — source (c). For a generic call whose
+        // wire left some TypeVar unbound, solve it from the argument *values*:
+        // synthesize each provided arg's concrete `RuntimeTy` and unify it
+        // against the declared param type. Accumulate into a fresh, union-merged
+        // map, then fold in with `or_insert` so the explicit `_types=` (source
+        // b) and self-receiver (source a) bindings already in `type_args` WIN.
+        // Inference only ever *adds* bindings — a var no value can carry
+        // (return/body-only, empty-collection, out-of-scope union-param) stays
+        // unbound and Gate A rejects it exactly as before.
+        if callee_is_generic {
+            let mut inferred: indexmap::IndexMap<String, RuntimeTy> = indexmap::IndexMap::new();
+            for (idx, arg) in args.iter().enumerate() {
+                if let (Some(declared), BexCallArg::Provided(value)) =
+                    (declared_param_types.get(idx), arg)
+                {
+                    if let Some(actual) = self.synth_ty_from_value(value).into_runtime_ty() {
+                        crate::conversion::infer_bindings_runtime(declared, &actual, &mut inferred);
+                    }
+                }
+            }
+            for (name, ty) in inferred {
+                type_args.entry(name).or_insert(ty);
+            }
+        }
+
+        let type_args = type_args;
+
+        // Always fold the recovered bindings into the return type. This is the
+        // pre-existing streaming fix (a generic `self` method's return type
+        // carries the class's type vars; the receiver binds them concretely),
+        // now also applying any inferred bindings, and is a no-op when
+        // `type_args` is empty.
+        return_type = crate::conversion::substitute_type_vars(&return_type, &type_args);
 
         // Strict generic handling — substitution + full-binding enforcement
         // (Gate A) + per-arg structural check (Gate B) — applies to *every*

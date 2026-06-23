@@ -17449,9 +17449,41 @@ impl TypeInferenceBuilder<'_> {
         // structural overlap check that respects runtime tag identity:
         // primitives must agree on head, classes must agree on qtn AND
         // overlap pairwise on their generic args.
+        // A `TypeVar` scrutinee member (e.g. the `T` in `T | string | null`)
+        // is an *open* type: at runtime it stands for whatever concrete type
+        // `T` is instantiated to. `atoms_overlap` deliberately reports a
+        // `TypeVar` as overlapping *everything* (a `let v: T` pattern can
+        // match any value). That symmetry is correct for a `TypeVar`
+        // *pattern* but wrong for a `TypeVar` *member*: a purely-concrete
+        // pattern (`string`, `null`, a bare class) must not over-claim the
+        // open `T` member, or it shadows the dedicated `let v: T` arm and
+        // that arm is then reported unreachable (the `tag_or_value<T>` bug).
+        //
+        // So make the overlap directional for `TypeVar` members: claim a
+        // `TypeVar` member only when the pattern itself can genuinely match
+        // open-`T` values — i.e. some atom of the pattern's natural type is a
+        // `TypeVar` (a `let v: T` pattern), or an `Unknown`/`Error` recovery
+        // atom. A pattern whose natural type is a union that *includes* a
+        // `TypeVar` (e.g. a `let p: T | Concrete` binding, as in the
+        // streaming `TStream | StreamNoYield` case) still claims it, because
+        // one of its atoms is a `TypeVar`. Concrete patterns skip the member.
+        let natural_atoms = {
+            let mut atoms = Vec::new();
+            self.collect_overlap_atoms(&natural, &mut atoms);
+            atoms
+        };
+        let pattern_claims_typevar = natural_atoms
+            .iter()
+            .any(|a| matches!(a, Ty::TypeVar(..) | Ty::Unknown { .. } | Ty::Error { .. }));
         union_members
             .iter()
-            .filter(|m| self.types_overlap(&natural, m))
+            .filter(|m| {
+                if matches!(m, Ty::TypeVar(..)) {
+                    pattern_claims_typevar
+                } else {
+                    self.types_overlap(&natural, m)
+                }
+            })
             .cloned()
             .collect()
     }

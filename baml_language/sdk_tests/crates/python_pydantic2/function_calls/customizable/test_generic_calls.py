@@ -16,6 +16,7 @@ covered here yet.)
 import pytest
 
 import baml_sdk  # noqa: F401  — initializes the BAML runtime
+from baml_sdk.baml import BamlPanic
 from baml_sdk.generic_tests import (
     StringIntPair,
     GenericPair,
@@ -115,20 +116,19 @@ def test_two_type_args_explicit():
 
 
 def test_generic_free_fn_requires_binding():
-    # A generic free function called with NO binding (no subscript) is a hard
-    # error, not silent inference.
-    with pytest.raises(TypeError) as exc:
+    # Inbound-inference is now on, so a bare generic call no longer raises in the
+    # SDK. But `one_type_arg<T>()` / `two_type_args<A,B>()` are return/body-only:
+    # NO argument carries the TypeVar, so inference finds no evidence and the
+    # *engine* (Gate A) rejects the call — surfaced as a `BamlError`. The
+    # rejection moved from the SDK to the engine; it's still a hard error
+    # (a `BamlPanic`/SdkPanic from the engine's bind-time Gate A check).
+    # (Binding via `_types=` / subscript remains the way to call these — see
+    # test_one_type_arg_explicit / test_two_type_args_explicit. Inference of
+    # value-carried TypeVars lives in test_generic_inference.py.)
+    with pytest.raises(BamlPanic):
         one_type_arg()
-    assert str(exc.value) == (
-        "_types= is required for this generic call: bind every type parameter "
-        "in ['T'] with a dict, e.g. _types={'T': int}"
-    )
-    with pytest.raises(TypeError) as exc:
+    with pytest.raises(BamlPanic):
         two_type_args()
-    assert str(exc.value) == (
-        "_types= is required for this generic call: bind every type parameter "
-        "in ['A', 'B'] with a dict, e.g. _types={'A': int}"
-    )
 
 
 def test_subscript_wrong_arity_raises():
@@ -184,14 +184,14 @@ def test_genericbox_new_static_explicit():
     assert box.value == 5
 
 
-def test_generic_static_requires_binding():
-    # A generic static method called with no binding (no subscript) raises.
-    with pytest.raises(TypeError) as exc:
-        GenericBox.new(value=5)
-    assert str(exc.value) == (
-        "_types= is required for this generic call: bind every type parameter "
-        "in ['V'] with a dict, e.g. _types={'V': int}"
-    )
+def test_generic_static_infers_binding():
+    # A generic static method's own `V` appears in a parameter (`value: V`), so
+    # a bare call now INFERS it from the value — no subscript needed. (Was a hard
+    # SDK error pre-inference; see test_generic_inference.py for the inference
+    # suite. The explicit subscript form still works above.)
+    box = GenericBox.new(value=5)
+    assert isinstance(box, GenericBox)
+    assert box.value == 5
 
 
 # --- NamedStatic<A,B,C>.make<D,E> : static TypeVar names DIFFER from the class -
