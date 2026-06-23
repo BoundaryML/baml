@@ -216,6 +216,7 @@ impl TestArgs {
         };
         let mut passed = 0usize;
         let mut failed = 0usize;
+        let mut command_failed = false;
 
         let run_ctx = RunCtx {
             engine: &engine,
@@ -231,7 +232,9 @@ impl TestArgs {
         for t in &selected {
             match &t.kind {
                 TestKind::Legacy { .. } => {
+                    let failed_before = failed;
                     run_legacy_test(&run_ctx, t, &mut passed, &mut failed);
+                    command_failed |= failed > failed_before;
                 }
                 TestKind::Testset { full_path } => {
                     if aggregate_new_style {
@@ -243,9 +246,12 @@ impl TestArgs {
                             t.function_name, t.test_name
                         );
                         failed += 1;
+                        command_failed = true;
                         continue;
                     };
+                    let failed_before = failed;
                     run_testset_test(&run_ctx, reg_value, full_path, t, &mut passed, &mut failed);
+                    command_failed |= failed > failed_before;
                 }
             }
         }
@@ -259,11 +265,12 @@ impl TestArgs {
                 crate::reporter::print_error(format_args!("test failures — {summary}"));
                 return Ok(crate::ExitCode::TestFailure);
             };
-            run_testset_registry(&run_ctx, reg_value, &mut passed, &mut failed, &mut total);
+            command_failed |=
+                run_testset_registry(&run_ctx, reg_value, &mut passed, &mut failed, &mut total);
         }
 
         let summary = format!("{passed} passed, {failed} failed, {total} total");
-        if failed > 0 {
+        if command_failed {
             // `reporter.finish` styles success — print as an error so
             // the bold-red `Error:` carries the visual weight of "tests
             // failed" instead of dressing it up as a clean finish.
@@ -596,7 +603,7 @@ fn run_testset_registry(
     passed: &mut usize,
     failed: &mut usize,
     total: &mut usize,
-) {
+) -> bool {
     let call_ctx = FunctionCallContextBuilder::new(CallId::next())
         .with_cancel_token(ctx.cancel.clone())
         .build();
@@ -607,29 +614,35 @@ fn run_testset_registry(
         true,
     )) {
         Ok(report) => {
-            if let Some((outcome, report_passed, report_failed, report_total)) =
-                extract_testset_summary(&report)
+            let outcome = extract_outcome(&report).unwrap_or_else(|| "unknown".to_string());
+            let aggregate_failed = outcome != "pass";
+            if let Some((report_passed, report_failed, report_total)) =
+                extract_leaf_summary(&report).or_else(|| {
+                    extract_testset_summary(&report)
+                        .map(|(_, passed, failed, total)| (passed, failed, total))
+                })
             {
                 *passed += report_passed;
                 *failed += report_failed;
                 *total += report_total;
-                if outcome == "pass" {
+                if !aggregate_failed {
                     println!("PASS testing::*");
                 } else {
                     println!("FAIL testing::* [outcome={outcome}]");
                     print_failed_names(&report);
                     // A testset runner can fail the aggregate without marking
-                    // individual children failed; count that runner-level
-                    // verdict as one failure so the CLI exit code reflects it.
+                    // individual children failed. Count that runner-level
+                    // verdict as one displayed failure so the summary does not
+                    // say "0 failed" when the aggregate itself failed.
                     if report_failed == 0 {
                         *failed += 1;
                         *total += 1;
                     }
                 }
+                aggregate_failed
             } else {
-                let outcome = extract_outcome(&report).unwrap_or_else(|| "unknown".to_string());
                 *total += 1;
-                if outcome == "pass" {
+                if !aggregate_failed {
                     println!("PASS testing::*");
                     *passed += 1;
                 } else {
@@ -637,6 +650,7 @@ fn run_testset_registry(
                     print_failed_names(&report);
                     *failed += 1;
                 }
+                aggregate_failed
             }
         }
         Err(e) => {
@@ -644,6 +658,7 @@ fn run_testset_registry(
             eprintln!("  => {e:?}");
             *failed += 1;
             *total += 1;
+            true
         }
     }
 }
@@ -680,6 +695,45 @@ fn extract_testset_summary(value: &BexExternalValue) -> Option<(String, usize, u
     } else {
         None
     }
+}
+
+fn extract_leaf_summary(value: &BexExternalValue) -> Option<(usize, usize, usize)> {
+    let v = unwrap_union(value);
+    if let BexExternalValue::Instance { class_name, fields } = v {
+        if class_matches(class_name, "TestReport") {
+            let outcome = fields
+                .get("outcome")
+                .and_then(|v| as_string(unwrap_union(v)))?;
+            return Some(if outcome == "pass" {
+                (1, 0, 1)
+            } else {
+                (0, 1, 1)
+            });
+        }
+
+        if class_matches(class_name, "TestSetReport") {
+            if let Some(results) = fields.get("results") {
+                if let BexExternalValue::Array { items, .. } = unwrap_union(results) {
+                    if !items.is_empty() {
+                        let mut passed = 0usize;
+                        let mut failed = 0usize;
+                        let mut total = 0usize;
+                        for item in items {
+                            let (child_passed, child_failed, child_total) =
+                                extract_leaf_summary(item)?;
+                            passed += child_passed;
+                            failed += child_failed;
+                            total += child_total;
+                        }
+                        return Some((passed, failed, total));
+                    }
+                }
+            }
+            return extract_testset_summary(value)
+                .map(|(_, passed, failed, total)| (passed, failed, total));
+        }
+    }
+    None
 }
 
 fn print_failed_names(value: &BexExternalValue) {
