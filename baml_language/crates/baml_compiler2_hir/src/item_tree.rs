@@ -437,9 +437,13 @@ pub struct ItemTree {
     /// queries (`impl_data`) read this map.
     pub impls: FxHashMap<LocalItemId<ImplMarker>, ImplBlock>,
     /// Index from a class to the impls whose subject is that class
-    /// (`ImplSubject::InClass`). Lets "impls for class C" be answered without a
-    /// scan; populated as impls are allocated.
+    /// (`ImplSubject::InClass`), in source order. Lets "impls for class C" be
+    /// answered without a scan; parallel to `Class::implements`.
     pub class_to_impls: FxHashMap<LocalItemId<ClassMarker>, Vec<LocalItemId<ImplMarker>>>,
+    /// Out-of-body (`ImplSubject::Free`) impl ids in source order, parallel to
+    /// `implements_for`. Gives consumers a deterministic iteration order over
+    /// free impls (the unified `impls` map is unordered).
+    pub free_impls: Vec<LocalItemId<ImplMarker>>,
 
     /// BEP-044: for a class method declared inside an `implements I {}`
     /// block, record the unresolved interface target path. Empty for
@@ -477,6 +481,7 @@ impl ItemTree {
             implements_for: Vec::new(),
             impls: FxHashMap::default(),
             class_to_impls: FxHashMap::default(),
+            free_impls: Vec::new(),
             method_to_iface_target: FxHashMap::default(),
             method_to_iface_associated_type_bindings: FxHashMap::default(),
             next_index: FxHashMap::default(),
@@ -623,8 +628,11 @@ impl ItemTree {
         let index = self.next_index.entry((ItemKind::Impl, h)).or_insert(0);
         let id = LocalItemId::new(h, *index);
         *index += 1;
-        if let ImplSubject::InClass { class, .. } = &block.subject {
-            self.class_to_impls.entry(*class).or_default().push(id);
+        match &block.subject {
+            ImplSubject::InClass { class, .. } => {
+                self.class_to_impls.entry(*class).or_default().push(id);
+            }
+            ImplSubject::Free { .. } => self.free_impls.push(id),
         }
         self.impls.insert(id, block);
         id

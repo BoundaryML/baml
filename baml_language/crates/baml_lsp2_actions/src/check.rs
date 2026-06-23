@@ -637,6 +637,40 @@ fn check_interfaces<'db>(
         );
     }
 
+    // E0145 + impl-resolution lowering errors: `impl_data` owns these (the
+    // single compiler-side source); check.rs only surfaces them, mapping each
+    // diagnostic's span-free origin to a precise source range.
+    {
+        use baml_compiler2_tir::interfaces::ImplDiagnosticLocation;
+        let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+        for impl_id in item_tree.impls.keys() {
+            let impl_loc = baml_compiler2_hir::loc::ImplLoc::new(db, file, *impl_id);
+            let Ok(data) = baml_compiler2_tir::interfaces::impl_data(db, impl_loc).as_ref() else {
+                continue;
+            };
+            if data.diagnostics.is_empty() {
+                continue;
+            }
+            let Some(sm) =
+                baml_compiler2_tir::interfaces::impl_data_source_map(db, impl_loc).as_ref()
+            else {
+                continue;
+            };
+            for (error, loc) in &data.diagnostics {
+                let span = match loc {
+                    ImplDiagnosticLocation::InterfaceTarget => sm.interface_target_span,
+                    ImplDiagnosticLocation::ForTarget => sm.for_target_span.unwrap_or(sm.impl_span),
+                    ImplDiagnosticLocation::Bound => sm.impl_span,
+                };
+                diagnostics.push(
+                    Diagnostic::error(tir_type_error_to_diagnostic_id(error), error.to_string())
+                        .with_primary_span(span)
+                        .with_phase(DiagnosticPhase::Type),
+                );
+            }
+        }
+    }
+
     for item in items {
         if let baml_compiler2_ast::Item::Interface(iface) = item {
             for method in &iface.default_methods {
@@ -4206,6 +4240,11 @@ fn validate_implements_for<'db>(
         namespace_path,
         aliases,
     };
+    // Lower the for-target purely to drive the concreteness/orphan logic below.
+    // Lowering diagnostics (unresolved types, etc.) are emitted by `impl_data`
+    // (the single source for impl type-expr diagnostics) and surfaced once at the
+    // impl span — so they are collected into a throwaway sink here, not re-emitted.
+    // An unresolvable target can't be orphan-checked, so bail.
     let mut target_type_errors = Vec::new();
     let target_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
         db,
@@ -4216,16 +4255,6 @@ fn validate_implements_for<'db>(
         &mut target_type_errors,
     );
     if !target_type_errors.is_empty() {
-        for error in target_type_errors {
-            diagnostics.push(
-                Diagnostic::error(tir_type_error_to_diagnostic_id(&error), error.to_string())
-                    .with_primary_span(Span {
-                        file_id,
-                        range: imp.for_target.span,
-                    })
-                    .with_phase(DiagnosticPhase::Type),
-            );
-        }
         return;
     }
 
@@ -6206,6 +6235,7 @@ fn tir_type_error_to_diagnostic_id(
         | TirTypeError::RuntimeIdMemberAccess { .. }
         | TirTypeError::RuntimeIdCallSiteArgument => DiagnosticId::TypeMismatch,
         TirTypeError::IntegerLiteralOutOfRange { .. } => DiagnosticId::IntegerLiteralOutOfRange,
+        TirTypeError::GenericBoundNotInterface { .. } => DiagnosticId::GenericBoundNotInterface,
     }
 }
 

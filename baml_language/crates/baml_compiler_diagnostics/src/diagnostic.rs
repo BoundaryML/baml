@@ -291,6 +291,9 @@ pub enum DiagnosticId {
     OverlappingImplements,
     /// An interface `requires` a type that is not an interface (e.g. a class or enum).
     InterfaceRequiresNonInterface,
+    /// A generic parameter's bound (`T extends X`) is not an interface. Bounds
+    /// must be interfaces (BEP-044).
+    GenericBoundNotInterface,
     /// A class declares a `to_string` method directly; it must be provided by
     /// implementing the `baml.ToString` interface instead.
     ToStringMustImplementInterface,
@@ -498,6 +501,7 @@ impl DiagnosticId {
             DiagnosticId::ToJsonMustImplementInterface => "E0142",
             DiagnosticId::FromJsonMustImplementInterface => "E0143",
             DiagnosticId::CleanupMagicMethodSignature => "E0144",
+            DiagnosticId::GenericBoundNotInterface => "E0145",
         }
     }
 }

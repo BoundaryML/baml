@@ -6324,6 +6324,27 @@ fn implements_for_optional_target_is_rejected() {
 }
 
 #[test]
+fn impl_generic_bound_must_be_an_interface() {
+    // BEP-044: a generic bound (`T extends X`) must be an interface. A class
+    // bound resolves to a concrete non-interface type and is rejected (E0145),
+    // rather than being silently dropped from the resolved bound set.
+    assert_compile_error_code(
+        r#"
+        interface Printable {
+            function print(self) -> string
+        }
+        class Widget {
+            name: string
+        }
+        implements<T extends Widget> Printable for T {
+            function print(self) -> string { return "w" }
+        }
+        "#,
+        "E0145",
+    );
+}
+
+#[test]
 fn implements_for_unknown_target_is_rejected() {
     // The user-facing top type `unknown` denotes "any type" — it has no single
     // concrete implementor for dispatch to recover, so it is rejected like a
