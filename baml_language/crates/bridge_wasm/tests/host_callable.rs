@@ -19,9 +19,10 @@ use base64::Engine;
 use bridge_wasm::{
     BamlWasmRuntime, LspNotification,
     baml_core::cffi::{
-        BamlHandle, BamlHandleType, BamlOutboundValue, BamlToHostCall, InboundClassValue,
-        InboundMapEntry, InboundValue, baml_outbound_value::Value as OutboundValue,
-        inbound_map_entry::Key as MapKeyVariant, inbound_value::Value as InboundVariant,
+        BamlHandle, BamlHandleType, BamlOutboundValue, BamlToHostCall, BamlTyClass,
+        InboundClassValue, InboundMapEntry, InboundValue,
+        baml_outbound_value::Value as OutboundValue, inbound_map_entry::Key as MapKeyVariant,
+        inbound_value::Value as InboundVariant,
     },
 };
 // Sentinel `_handle` key used in test fixtures that synthesize a
@@ -466,8 +467,10 @@ fn make_dispatch_error() -> js_sys::Function {
             };
             let inbound = InboundValue {
                 value: Some(InboundVariant::ClassValue(InboundClassValue {
-                    class_ty: None,
-                    name: "baml.errors.HostCallable".to_string(),
+                    class_ty: Some(BamlTyClass {
+                        name: "baml.errors.HostCallable".to_string(),
+                        type_args: vec![],
+                    }),
                     fields: vec![
                         field("message", "test boom"),
                         field("class_name", "RuntimeError"),

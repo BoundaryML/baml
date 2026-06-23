@@ -36,7 +36,7 @@ describe('decodeCallResult — thrown value carries structured detail', () => {
     // generated typemap), so `.value` is `{ message }` and `.className` is the FQN.
     const thrown: baml_core.cffi.v1.IBamlOutboundValue = {
         classValue: {
-            name: { name: 'baml.errors.GenericSdkError' },
+            name: 'baml.errors.GenericSdkError',
             fields: [{ key: 'message', value: { stringValue: 'boom' } }],
         },
     };

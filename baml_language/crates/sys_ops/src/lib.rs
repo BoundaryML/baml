@@ -608,6 +608,7 @@ impl<T> io::IoClassLlmContext for T {
         quote_class_fields: Option<bool>,
         hoist_classes: Option<Vec<String>>,
         map_style: Option<String>,
+        render_null_as: Option<String>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
         // Render the prebuilt schema handle with the caller's options. The
@@ -624,6 +625,7 @@ impl<T> io::IoClassLlmContext for T {
             quote_class_fields,
             hoist_classes,
             map_style,
+            render_null_as,
         ))
     }
 }

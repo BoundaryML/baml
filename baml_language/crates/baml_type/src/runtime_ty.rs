@@ -357,26 +357,15 @@ pub fn lower_to_runtime(ty: &Ty, resolved: &ResolvedAliases) -> Result<RuntimeTy
             attr: attr.clone(),
         },
 
-        // Functions — preserve the declared generics + param metadata (kept at
-        // runtime for reflection); body type-vars are resolved faithfully by
-        // the recursive `lower_to_runtime` calls.
+        // Functions — preserve the param metadata; body type-vars (captured from
+        // the enclosing context) are resolved faithfully by the recursive
+        // `lower_to_runtime` calls.
         Ty::Function {
-            generic_params,
-            generic_param_bounds,
             params,
             ret,
             throws,
             attr,
         } => RuntimeTy::Function {
-            generic_params: generic_params.clone(),
-            generic_param_bounds: generic_param_bounds
-                .iter()
-                .map(|b| {
-                    b.as_ref()
-                        .map(|t| lower_to_runtime(t, resolved))
-                        .transpose()
-                })
-                .collect::<Result<Vec<_>, NotRuntimeTy>>()?,
             params: params
                 .iter()
                 .map(|param| {
@@ -495,8 +484,6 @@ mod tests {
     #[test]
     fn round_trip_function() {
         let ty = Ty::Function {
-            generic_params: vec![Name::new("T")],
-            generic_param_bounds: vec![Some(Ty::String { attr: def() })],
             params: vec![
                 crate::FunctionParamTy::required(Some(Name::new("a")), Ty::Int { attr: def() }),
                 crate::FunctionParamTy::optional(
@@ -575,8 +562,6 @@ mod tests {
     #[test]
     fn nested_evolving_map_in_function_ret_blocks_conversion() {
         let ty = Ty::Function {
-            generic_params: vec![],
-            generic_param_bounds: vec![],
             params: vec![],
             ret: Box::new(Ty::EvolvingMap(
                 Box::new(Ty::Never { attr: def() }),

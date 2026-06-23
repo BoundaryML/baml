@@ -16,6 +16,7 @@ import { BamlStream } from './stream.js';
 import { BamlAbortError, BamlCancelledError, BamlError, BamlPanic } from './errors.js';
 import { registerHostOpaque, tryRehydrateHostValueByKey, } from './host_value_registry.js';
 import { getTypeMap } from './typemap.js';
+import { lowerTypeToWireTy, outboundTyToBamlType } from './wire_ty.js';
 const CallFunctionArgs = baml_core.cffi.v1.CallFunctionArgs;
 const BamlOutboundValue = baml_core.cffi.v1.BamlOutboundValue;
 const BamlOutboundResult = baml_core.cffi.v1.BamlOutboundResult;
@@ -35,6 +36,20 @@ export class HostCallableSyncError extends Error {
         super(message);
         this.name = 'HostCallableSyncError';
     }
+}
+/**
+ * Generic-class instances declare their TypeVar names (declaration order) in a
+ * static `$generic` field that codegen emits; this reads it back. Returns the
+ * param-name list for a generic class instance, or `null` for a non-generic
+ * one. The value-level type args ride a sibling `$types` instance field.
+ */
+function genericParamNames(value) {
+    const ctor = value.constructor;
+    const g = ctor?.$generic;
+    if (Array.isArray(g) && g.length > 0 && g.every((x) => typeof x === 'string')) {
+        return g;
+    }
+    return null;
 }
 function setInboundValue(iv, value, ctx) {
     if (value === null || value === undefined) {
@@ -165,7 +180,39 @@ function setInboundValue(iv, value, ctx) {
                     setInboundValue(childVal, v, ctx);
                     classFields.push({ stringKey: k, value: childVal });
                 }
-                iv.classValue = { name: fqn, fields: classFields };
+                iv.classValue = { classTy: { name: fqn }, fields: classFields };
+                return;
+            }
+        }
+        // Generic class instance → a FQN-tagged `class_value` carrying the
+        // value-level class type-args channel (`class_ty`). Unlike a non-generic
+        // class instance (which encodes as a bare `map_value` for the engine to
+        // reshape against the declared param type), a generic instance MUST send
+        // its concrete type args: the engine strictly rejects coercing a bare map
+        // into a generic class slot ("a bare map carries no class type
+        // arguments"). The args come from the optional `$types` instance field;
+        // an absent binding lowers to the unknown/top type. Mirrors
+        // bridge_python's pydantic-generic-metadata path in proto.py, which sets
+        // `class_value.class_ty` for a generic instance.
+        if (isClassInstance) {
+            const params = genericParamNames(value);
+            if (params) {
+                const fqn = getTypeMap().jsTypeToBamlType(value.constructor);
+                const userTypes = value.$types;
+                const typeArgs = params.map((p) => lowerTypeToWireTy(userTypes?.[p]));
+                const classFields = [];
+                for (const [k, v] of Object.entries(value)) {
+                    // Skip method bindings (behavior, not state) and the synthetic
+                    // `$types` carrier (it rides `class_ty`, not the field list).
+                    if (typeof v === 'function')
+                        continue;
+                    if (k === '$types')
+                        continue;
+                    const childVal = {};
+                    setInboundValue(childVal, v, ctx);
+                    classFields.push({ stringKey: k, value: childVal });
+                }
+                iv.classValue = { classTy: { name: fqn, typeArgs }, fields: classFields };
                 return;
             }
         }
@@ -217,7 +264,15 @@ export function encodeCallArgs(kwargs, options) {
             entry.value = iv;
             entries.push(entry);
         }
-        const msg = CallFunctionArgs.fromObject({ kwargs: entries, callId: callId.toString() });
+        const typeArgs = (options.typeArgs ?? []).map(([typeVar, typeValue]) => ({
+            typeVar,
+            typeValue,
+        }));
+        const msg = CallFunctionArgs.fromObject({
+            kwargs: entries,
+            callId: callId.toString(),
+            typeArgs,
+        });
         return Buffer.from(CallFunctionArgs.encode(msg).finish());
     }
     catch (err) {
@@ -283,22 +338,24 @@ function decodeValueHolder(holder, typeMap) {
         return decodeEnum(holder.enumValue, typeMap);
     }
     if (holder.literalValue) {
-        if (holder.literalValue.stringLiteral != null)
-            return holder.literalValue.stringLiteral.value;
-        if (holder.literalValue.intLiteral != null)
-            return Number(holder.literalValue.intLiteral.value);
-        if (holder.literalValue.boolLiteral != null)
-            return holder.literalValue.boolLiteral.value;
-        // Hex / base sixteen on the wire, matching `bigint_value`. `value`
-        // is a required field on `BamlTyLiteralBigint`, so its absence
-        // indicates a corrupted / malformed wire message — reject loudly
-        // rather than silently coercing a missing field to `0n`.
-        if (holder.literalValue.bigintLiteral != null) {
-            const hex = holder.literalValue.bigintLiteral.value;
-            if (hex == null) {
-                throw new Error('wire message: BamlTyLiteralBigint missing required `value`');
-            }
-            return parseHexBigint(hex);
+        // Inline scalars in a oneof (mirrors `BamlTyLiteral`); dispatch on the
+        // protobufjs oneof virtual getter (only on the decoded class instance,
+        // not the `I`-interface) since scalar fields default to a non-null zero
+        // value rather than `null`.
+        const lit = holder.literalValue;
+        switch (lit.literal) {
+            case 'stringValue':
+                return lit.stringValue;
+            case 'intValue':
+                return Number(lit.intValue);
+            case 'boolValue':
+                return lit.boolValue;
+            // Hex / base sixteen on the wire, matching `bigint_value`.
+            case 'bigintValue':
+                return parseHexBigint(lit.bigintValue ?? '');
+            // Source text on the wire (mirrors `BamlTyLiteral.float_value`).
+            case 'floatValue':
+                return Number(lit.floatValue);
         }
     }
     if (holder.listValue) {
@@ -340,7 +397,9 @@ function decodeValueHolder(holder, typeMap) {
             // `baml.llm.Stream → BamlStream`), so any class is reachable without
             // special-casing here. Mirrors bridge_python's `_decode_handle`
             // ADT_TAGGED_HEAP_HANDLE arm (sdks/python/.../proto.py).
-            const fqn = holder.handleValue.name?.name ?? '';
+            // The handle's `ty` is a full `BamlTy`; the typed-wrapper FQN lives
+            // on its class variant (a non-class `ty` reads back as `''`).
+            const fqn = holder.handleValue.ty?.classTy?.name ?? '';
             const Cls = typeMap.getClass(fqn);
             return Cls._fromHandle(handle);
         }
@@ -374,7 +433,7 @@ function decodeClass(classValue, typeMap) {
             fieldDict[entry.key] = decodeValueHolder(entry.value, typeMap);
         }
     }
-    const fqn = classValue.name?.name ?? '';
+    const fqn = classValue.name ?? '';
     if (fqn) {
         let Cls;
         try {
@@ -392,7 +451,28 @@ function decodeClass(classValue, typeMap) {
                 return fieldDict._data;
             }
             const Ctor = Cls;
-            return new Ctor(fieldDict);
+            const instance = new Ctor(fieldDict);
+            // Repopulate a generic instance's `$types` from the wire's positional
+            // `type_args` (the value-level type channel), keyed by the class's
+            // static `$generic` param names — the decode-side mirror of the
+            // encoder's `class_ty`. Defined non-enumerable so it neither perturbs
+            // structural equality (`toEqual`) nor re-encodes as a data field,
+            // while still being readable by a later generic instance-method call.
+            const params = Array.isArray(Ctor.$generic) ? Ctor.$generic : null;
+            const typeArgs = classValue.typeArgs;
+            if (params && typeArgs && typeArgs.length) {
+                const types = {};
+                params.forEach((p, i) => {
+                    types[p] = outboundTyToBamlType(typeArgs[i]);
+                });
+                Object.defineProperty(instance, '$types', {
+                    value: types,
+                    enumerable: false,
+                    writable: true,
+                    configurable: true,
+                });
+            }
+            return instance;
         }
     }
     // Fallback: plain object (null-prototype, matching the prior behavior).
@@ -406,7 +486,7 @@ function decodeClass(classValue, typeMap) {
  * the raw variant string when the FQN is unmapped (bare bridge / unmapped enum).
  */
 function decodeEnum(enumValue, typeMap) {
-    const fqn = enumValue.name?.name ?? '';
+    const fqn = enumValue.name ?? '';
     const variant = enumValue.value;
     if (fqn && variant != null) {
         let En;
@@ -499,7 +579,7 @@ function unwrapUnionVariant(holder) {
     return h;
 }
 function decodeThrown(holder) {
-    const className = unwrapUnionVariant(holder)?.classValue?.name?.name ?? undefined;
+    const className = unwrapUnionVariant(holder)?.classValue?.name ?? undefined;
     let value;
     try {
         value = holder ? decodeValueHolder(holder, getTypeMap()) : undefined;
@@ -722,7 +802,7 @@ function buildHostCallableInbound(className, message, traceback, handleKey) {
     fields.push(handleField);
     return InboundValue.create({
         classValue: InboundClassValue.create({
-            name: 'baml.errors.HostCallable',
+            classTy: { name: 'baml.errors.HostCallable' },
             fields,
         }),
     });

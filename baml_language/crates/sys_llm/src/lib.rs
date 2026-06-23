@@ -145,6 +145,7 @@ pub fn render_output_format_content(
     quote_class_fields: Option<bool>,
     hoist_classes: Option<Vec<String>>,
     map_style: Option<String>,
+    render_null_as: Option<String>,
 ) -> String {
     use types::{HoistClasses, MapStyle, RenderOptions, RenderSetting};
     fn setting<V>(o: Option<V>) -> RenderSetting<V> {
@@ -162,6 +163,7 @@ pub fn render_output_format_content(
             Some("object_literal") => MapStyle::ObjectLiteral,
             _ => MapStyle::TypeParameters,
         },
+        render_null_as: setting(render_null_as),
     };
     content.render(&options).ok().flatten().unwrap_or_default()
 }

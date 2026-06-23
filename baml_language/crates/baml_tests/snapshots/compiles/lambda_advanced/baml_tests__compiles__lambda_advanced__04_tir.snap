@@ -88,20 +88,6 @@ lambda user.test_deep_capture {
 }
 lambda user.test_deep_capture {
 }
-function user.test_generic_multi_instantiation() -> int throws never {
-  { : int
-    let id = : <T>(x: T) -> T throws never
-      <T>(x: T) -> T { ... } : <T>(x: T) -> T throws never
-        {
-          x
-        }
-    let a: int = id<T>(42) : int | 42 -> int
-    let b: string = id<T>("hello") : string | "hello" -> string
-    a : int
-  }
-}
-lambda user.test_generic_multi_instantiation {
-}
 function user.test_lambda_with_match() -> string throws never {
   { : string
     let describe = : (n: int) -> string throws never
@@ -347,24 +333,6 @@ function user.test_deep_capture_inferred() -> int throws never {
 lambda user.test_deep_capture_inferred {
 }
 lambda user.test_deep_capture_inferred {
-}
-function user.test_generic_apply_inferred() -> int throws never {
-  { : int
-    let apply = : <T, U>(f: (T) -> U throws never, x: T) -> U throws never
-      <T, U>(f: (T) -> U, x: T) -> U { ... } : <T, U>(f: (T) -> U throws never, x: T) -> U throws never
-        {
-          f(x)
-        }
-    apply<T, U>((x) -> { ... }, 21) : int
-      (x) -> { ... } : (x: 21) -> int throws never
-        {
-          x * 2
-        }
-  }
-}
-lambda user.test_generic_apply_inferred {
-}
-lambda user.test_generic_apply_inferred {
 }
 function user.test_two_transforms_inferred() -> int throws never {
   { : int

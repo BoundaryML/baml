@@ -164,6 +164,11 @@ pub enum LoweringDiagnostic {
         field_name: String,
         span: TextRange,
     },
+
+    /// Type arguments (`<...>`) were applied to an expression that is not a
+    /// plain function reference (e.g. `(foo)<int>`). Only a path reference to a
+    /// generic function may be specialized into a value (`foo<int>`).
+    TypeArgsOnNonPathBase { span: TextRange },
 }
 
 impl LoweringDiagnostic {
@@ -467,6 +472,13 @@ impl LoweringDiagnostic {
                 ),
                 *span,
                 "add a class field, or link it with `field as class_field`",
+            ),
+            LoweringDiagnostic::TypeArgsOnNonPathBase { span } => (
+                DiagnosticId::InvalidSyntax,
+                Severity::Error,
+                "type arguments can only be applied to a function reference".to_string(),
+                *span,
+                "specialize a generic function directly, e.g. `foo<int>`",
             ),
         };
 

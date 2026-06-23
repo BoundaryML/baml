@@ -332,8 +332,6 @@ fn rewrite_dispatch_request_ty(actual: &Tir2Ty, requested: &Tir2Ty) -> Tir2Ty {
                 ..
             },
             Tir2Ty::Function {
-                generic_params,
-                generic_param_bounds,
                 params: requested_params,
                 ret: requested_ret,
                 throws: requested_throws,
@@ -346,8 +344,6 @@ fn rewrite_dispatch_request_ty(actual: &Tir2Ty, requested: &Tir2Ty) -> Tir2Ty {
                 .all(|(actual, requested)| actual.mode == requested.mode) =>
         {
             Tir2Ty::Function {
-                generic_params: generic_params.clone(),
-                generic_param_bounds: generic_param_bounds.clone(),
                 params: actual_params
                     .iter()
                     .zip(requested_params.iter())

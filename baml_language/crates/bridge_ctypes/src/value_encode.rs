@@ -1,20 +1,16 @@
 //! `BexExternalValue` -> `BamlOutboundValue` conversion.
 
-use baml_type::{Literal, Name};
 use base64::Engine as _;
 use bex_events::run::{RunError, RunErrorClass, RunOutcome, RunResult};
-use bex_project::{BexExternalAdt, BexExternalValue, RuntimeTy};
+use bex_project::{BexExternalAdt, BexExternalValue};
 use indexmap::IndexMap;
 use prost::Message;
 
 use crate::{
     baml_core::cffi::{
         BamlOutboundHandle, BamlOutboundMapEntry, BamlOutboundValue, BamlToHostArg, BamlToHostCall,
-        BamlTy, BamlTyBigint, BamlTyBool, BamlTyFloat, BamlTyGenericArg, BamlTyInt, BamlTyList,
-        BamlTyLiteral, BamlTyMap, BamlTyMedia, BamlTyName, BamlTyNull, BamlTyOptional,
-        BamlTyString, BamlTyUint8Array, BamlTyUnionVariant, BamlTyUnknown, BamlValueClass,
-        BamlValueEnum, BamlValueList, BamlValueMap, BamlValueUnionVariant,
-        baml_outbound_value::Value as BamlValueVariant, baml_ty::Type as FieldType,
+        BamlValueClass, BamlValueEnum, BamlValueList, BamlValueMap, BamlValueUnionVariant,
+        baml_outbound_value::Value as BamlValueVariant,
     },
     error::CtypesError,
     handle_table::{BexRustData, CffiHandleTableEntry, CffiHandleTableOptions},
@@ -24,8 +20,9 @@ use crate::{
 ///
 /// Opaque types (Handle, Resource, `FunctionRef`, Adt) are inserted into `handle_table`
 /// and encoded as `BamlOutboundHandle` messages so the host can round-trip them back.
-/// For `BexExternalAdt::TaggedHeapHandle { ty, .. }` the wire `name` is projected
-/// from `ty` so the host sees the underlying class FQN + concrete generic args.
+/// For `BexExternalAdt::TaggedHeapHandle { ty, .. }` the underlying type is encoded
+/// as a full `BamlTy` on the handle's `ty` field so the host sees the class FQN +
+/// concrete generic args (and an interface keeps its bindings).
 pub fn external_to_outbound(
     value: &BexExternalValue,
     options: &CffiHandleTableOptions,
@@ -49,7 +46,7 @@ pub fn external_to_outbound(
                 .map(|v| external_to_outbound(v, options))
                 .collect();
             Some(BamlValueVariant::ListValue(BamlValueList {
-                item_type: Some(ty_to_field_type(element_type)),
+                item_type: Some(crate::ty_encode::runtime_ty_to_proto_ty(element_type)),
                 items: values?,
             }))
         }
@@ -66,13 +63,15 @@ pub fn external_to_outbound(
                 });
             }
             Some(BamlValueVariant::MapValue(BamlValueMap {
-                key_type: Some(ty_to_field_type(key_type)),
-                value_type: Some(ty_to_field_type(value_type)),
+                key_type: Some(crate::ty_encode::runtime_ty_to_proto_ty(key_type)),
+                value_type: Some(crate::ty_encode::runtime_ty_to_proto_ty(value_type)),
                 entries: baml_entries,
             }))
         }
         BexExternalValue::Instance {
-            class_name, fields, ..
+            class_name,
+            fields,
+            type_args,
         } => {
             let mut baml_fields = Vec::new();
             for (key, val) in fields {
@@ -81,22 +80,24 @@ pub fn external_to_outbound(
                     value: Some(external_to_outbound(val, options)?),
                 });
             }
+            // Carry a generic instance's concrete class type args (De Bruijn
+            // order) as positional `type_args` so the host can reconstruct the
+            // parameterized type (Python: `cls[args]`; Node: the `$types` field).
+            // Non-generic instances have empty `type_args`.
             Some(BamlValueVariant::ClassValue(BamlValueClass {
-                name: Some(BamlTyName {
-                    name: class_name.clone(),
-                    generic_args: vec![],
-                }),
+                name: class_name.clone(),
                 fields: baml_fields,
+                type_args: type_args
+                    .iter()
+                    .map(crate::ty_encode::runtime_ty_to_proto_ty)
+                    .collect(),
             }))
         }
         BexExternalValue::Variant {
             enum_name,
             variant_name,
         } => Some(BamlValueVariant::EnumValue(BamlValueEnum {
-            name: Some(BamlTyName {
-                name: enum_name.clone(),
-                generic_args: vec![],
-            }),
+            name: enum_name.clone(),
             value: variant_name.clone(),
             is_dynamic: false,
         })),
@@ -104,13 +105,12 @@ pub fn external_to_outbound(
             let inner = external_to_outbound(value, options)?;
             Some(BamlValueVariant::UnionVariantValue(Box::new(
                 BamlValueUnionVariant {
-                    name: metadata.name.as_ref().map(|n| BamlTyName {
-                        name: n.clone(),
-                        generic_args: vec![],
-                    }),
+                    name: metadata.name.clone().unwrap_or_default(),
                     is_optional: metadata.is_optional,
                     is_single_pattern: metadata.is_single_pattern,
-                    self_type: Some(ty_to_field_type(&metadata.union_type)),
+                    self_type: Some(crate::ty_encode::runtime_ty_to_proto_ty(
+                        &metadata.union_type,
+                    )),
                     value_option_name: format!("{}", metadata.selected_option),
                     value: Some(Box::new(inner)),
                 },
@@ -141,7 +141,7 @@ pub fn external_to_outbound(
             Some(BamlValueVariant::HandleValue(BamlOutboundHandle {
                 key,
                 handle_type: ht as i32,
-                name: Some(empty_ty_name()),
+                ty: None,
             }))
         }
 
@@ -157,24 +157,33 @@ pub fn external_to_outbound(
             Some(BamlValueVariant::HandleValue(BamlOutboundHandle {
                 key: arc.key,
                 handle_type: ht,
-                name: Some(empty_ty_name()),
+                ty: None,
             }))
         }
+
+        // A reflected BAML type returned as a value (`reflect.type_of<T>()`)
+        // crosses the boundary as a first-class `Ty`, sharing the inbound
+        // representation. Must precede the opaque-ADT catch-all, which would
+        // otherwise box it into a handle.
+        BexExternalValue::Adt(BexExternalAdt::Type(rt)) => Some(BamlValueVariant::TyValue(
+            crate::ty_encode::runtime_ty_to_proto_ty(rt),
+        )),
 
         // All opaque types → insert into handle table, encode as BamlOutboundHandle.
         BexExternalValue::Handle(_)
         | BexExternalValue::FunctionRef { .. }
         | BexExternalValue::Adt(_) => {
-            // For `TaggedHeapHandle` the underlying class FQN + concrete generic
-            // args ride on the wire so the host can pick a typed wrapper.
-            // Other ADTs are discriminated purely by `handle_type` and emit an
-            // empty `name`. Read `ty` directly off the variant — no heap permit
-            // needed (plan 23a §"Outbound encode").
-            let name = match value {
+            // For `TaggedHeapHandle` the underlying type rides on the wire as a
+            // full `BamlTy` so the host can pick a typed wrapper (from the class
+            // FQN) and the wire form stays faithful (an interface keeps its
+            // bindings). Other ADTs are discriminated purely by `handle_type`
+            // and leave `ty` unset. Read `ty` directly off the variant — no heap
+            // permit needed (plan 23a §"Outbound encode").
+            let ty = match value {
                 BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle { ty, .. }) => {
-                    ty_to_baml_ty_name(ty)
+                    Some(crate::ty_encode::runtime_ty_to_proto_ty(ty))
                 }
-                _ => empty_ty_name(),
+                _ => None,
             };
             let table_value = CffiHandleTableEntry::try_from(value.clone()).map_err(|e| {
                 CtypesError::InternalError(format!("handle table insertion failed: {e}"))
@@ -184,7 +193,7 @@ pub fn external_to_outbound(
             Some(BamlValueVariant::HandleValue(BamlOutboundHandle {
                 key,
                 handle_type: ht as i32,
-                name: Some(name),
+                ty,
             }))
         }
     };
@@ -211,75 +220,6 @@ pub fn encoded_success_outcome(
             message: format!("Failed to encode result: {e}"),
             details: None,
         }),
-    }
-}
-
-fn empty_ty_name() -> BamlTyName {
-    BamlTyName {
-        name: String::new(),
-        generic_args: vec![],
-    }
-}
-
-/// Project a `RuntimeTy` to its `BamlTyName` wire shape.
-///
-/// Canonically called with `RuntimeTy::Class(tn, args, _)` from `TaggedHeapHandle.ty`,
-/// where the class FQN becomes `BamlTyName.name` and each `arg` becomes a
-/// positional `BamlTyGenericArg`. Interface associated type bindings are encoded
-/// as named generic args so the wire shape can preserve that metadata too.
-fn ty_to_baml_ty_name(ty: &RuntimeTy) -> BamlTyName {
-    match ty {
-        RuntimeTy::Class(tn, args, _) => BamlTyName {
-            name: tn.display_name().to_string(),
-            generic_args: ty_args_to_baml_generic_args(args, &[]),
-        },
-        RuntimeTy::Interface(tn, args, associated_bindings, _) => BamlTyName {
-            name: tn.display_name().to_string(),
-            generic_args: ty_args_to_baml_generic_args(args, associated_bindings),
-        },
-        _ => BamlTyName {
-            name: format!("{ty}"),
-            generic_args: vec![],
-        },
-    }
-}
-
-fn ty_args_to_baml_generic_args(
-    args: &[RuntimeTy],
-    associated_bindings: &[(Name, RuntimeTy)],
-) -> Vec<BamlTyGenericArg> {
-    args.iter()
-        .map(|arg| BamlTyGenericArg {
-            name: String::new(),
-            ty: Some(ty_to_field_type(arg)),
-        })
-        .chain(
-            associated_bindings
-                .iter()
-                .map(|(name, arg)| BamlTyGenericArg {
-                    name: name.as_str().to_string(),
-                    ty: Some(ty_to_field_type(arg)),
-                }),
-        )
-        .collect()
-}
-
-fn literal_to_field_type_literal(lit: &Literal) -> BamlTyLiteral {
-    use crate::baml_core::cffi::{
-        BamlLiteralBigint, BamlLiteralBool, BamlLiteralInt, BamlLiteralString,
-        baml_ty_literal::Literal as LiteralOneof,
-    };
-    let literal = match lit {
-        Literal::String(s) => LiteralOneof::StringLiteral(BamlLiteralString { value: s.clone() }),
-        Literal::Int(i) => LiteralOneof::IntLiteral(BamlLiteralInt { value: *i }),
-        Literal::Bigint(n) => LiteralOneof::BigintLiteral(BamlLiteralBigint {
-            value: format!("{n:x}"),
-        }),
-        Literal::Bool(b) => LiteralOneof::BoolLiteral(BamlLiteralBool { value: *b }),
-        Literal::Float(s) => LiteralOneof::StringLiteral(BamlLiteralString { value: s.clone() }),
-    };
-    BamlTyLiteral {
-        literal: Some(literal),
     }
 }
 
@@ -382,81 +322,6 @@ fn bex_prompt_ast_simple_to_proto_prompt_ast_simple(
             )),
         },
     }
-}
-
-fn ty_to_field_type(ty: &RuntimeTy) -> BamlTy {
-    let field_type = match ty {
-        RuntimeTy::Null { .. } => Some(FieldType::NullType(BamlTyNull {})),
-        RuntimeTy::Int { .. } => Some(FieldType::IntType(BamlTyInt {})),
-        RuntimeTy::Float { .. } => Some(FieldType::FloatType(BamlTyFloat {})),
-        RuntimeTy::Bool { .. } => Some(FieldType::BoolType(BamlTyBool {})),
-        RuntimeTy::String { .. } => Some(FieldType::StringType(BamlTyString {})),
-        RuntimeTy::List(inner, _) => Some(FieldType::ListType(Box::new(BamlTyList {
-            item_type: Some(Box::new(ty_to_field_type(inner))),
-        }))),
-        RuntimeTy::Map { key, value, .. } => Some(FieldType::MapType(Box::new(BamlTyMap {
-            key_type: Some(Box::new(ty_to_field_type(key))),
-            value_type: Some(Box::new(ty_to_field_type(value))),
-        }))),
-        RuntimeTy::Class(..) | RuntimeTy::Interface(..) => {
-            Some(FieldType::ClassType(crate::baml_core::cffi::BamlTyClass {
-                name: Some(ty_to_baml_ty_name(ty)),
-            }))
-        }
-        RuntimeTy::EnumVariant(tn, ..) | RuntimeTy::Enum(tn, _) => {
-            Some(FieldType::EnumType(crate::baml_core::cffi::BamlTyEnum {
-                name: tn.display_name().to_string(),
-            }))
-        }
-        // A nullable union (`T | null`) preserves the old `Optional` wire format:
-        // detect it before the general union case and encode it as an
-        // `OptionalType` wrapping the non-null part.
-        RuntimeTy::Union(members, _) if members.iter().any(baml_type::RuntimeTy::is_null) => {
-            Some(FieldType::OptionalType(Box::new(BamlTyOptional {
-                value: Some(Box::new(ty_to_field_type(&ty.strip_null()))),
-            })))
-        }
-        RuntimeTy::Union(_, _) => Some(FieldType::UnionVariantType(BamlTyUnionVariant {
-            name: None,
-        })),
-        RuntimeTy::Media(kind, _) => Some(FieldType::MediaType(BamlTyMedia {
-            media: media_kind_to_proto_enum(*kind).into(),
-        })),
-        RuntimeTy::Literal(lit, _, _) => {
-            Some(FieldType::LiteralType(literal_to_field_type_literal(lit)))
-        }
-        RuntimeTy::Resource { .. } | RuntimeTy::PromptAst { .. } => {
-            unreachable!("runtime-only opaque type should not reach FFI type encoding")
-        }
-        RuntimeTy::Uint8Array { .. } => Some(FieldType::Uint8arrayType(BamlTyUint8Array {})),
-        // Dynamic / no-statically-known-shape positions all encode as the
-        // `UnknownType`; the concrete value crossing the boundary still carries
-        // its own runtime tag.
-        //   - `BuiltinUnknown`: an unannotated element type (map value, array
-        //     element) not known at compile time.
-        //   - `TypeVar` / `AssociatedTypeProjection`: a generic position the
-        //     compiler now keeps faithfully. The pre-de-erasure lowering erased
-        //     these to `BuiltinUnknown`, so encoding them as `UnknownType` here
-        //     preserves the original FFI behavior.
-        //   - `Never`: the uninhabited bottom (e.g. an empty `never[]`'s element
-        //     type). No value can inhabit it, so the encoding is a placeholder.
-        RuntimeTy::BuiltinUnknown { .. }
-        | RuntimeTy::TypeVar(..)
-        | RuntimeTy::AssociatedTypeProjection { .. }
-        | RuntimeTy::Never { .. } => Some(FieldType::UnknownType(BamlTyUnknown {})),
-        RuntimeTy::Bigint { .. } => Some(FieldType::BigintType(BamlTyBigint {})),
-        RuntimeTy::TypeAlias(_, _)
-        | RuntimeTy::Future(..)
-        | RuntimeTy::Function { .. }
-        | RuntimeTy::Void { .. }
-        | RuntimeTy::WatchAccessor(_, _)
-        | RuntimeTy::RustType { .. }
-        | RuntimeTy::Type { .. } => {
-            unreachable!("non-data type should not reach FFI type encoding")
-        }
-    };
-
-    BamlTy { r#type: field_type }
 }
 
 /// Build the engine→host call for a host-callable invocation. The

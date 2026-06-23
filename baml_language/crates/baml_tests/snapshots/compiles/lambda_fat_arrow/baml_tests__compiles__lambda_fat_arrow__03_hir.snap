@@ -5,9 +5,6 @@ source: crates/baml_tests/src/generated_tests.rs
 function user.test_annotated() -> int  [expr] {
   { let double = (x: int) -> int { {  } x Mul 2 } } double(21)
 }
-function user.test_generic() -> int  [expr] {
-  { let identity = <T>(x: T) -> T { {  } x } } identity(42)
-}
 function user.test_in_match(x: int) -> int  [expr] {
   {  } match (x) { 0 => { let inc = (y: int) -> int { {  } y Add 1 } } inc(10), _ => 0 }
 }

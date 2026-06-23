@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 13457
 ---
 === TIR2 ===
 function user.test_annotated() -> int throws never {
@@ -98,18 +97,6 @@ function user.test_nested() -> int throws never {
 lambda user.test_nested {
 }
 lambda user.test_nested {
-}
-function user.test_generic_lambda() -> int throws never {
-  { : int | 42
-    let identity = : <T>(x: T) -> T throws never
-      <T>(x: T) -> T { ... } : <T>(x: T) -> T throws never
-        {
-          x
-        }
-    identity<T>(42) : int | 42
-  }
-}
-lambda user.test_generic_lambda {
 }
 function user.test_multi_param() -> int throws never {
   { : int

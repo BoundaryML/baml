@@ -405,6 +405,10 @@ impl PredefinedTypes {
                                 "quote_class_fields".into(),
                                 Type::merge(vec![Type::Bool, Type::None]),
                             ),
+                            (
+                                "render_null_as".into(),
+                                Type::merge(vec![Type::String, Type::None]),
+                            ),
                         ],
                     ),
                 ),

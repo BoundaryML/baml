@@ -97,33 +97,25 @@ pub fn substitute_ty(ty: &Ty, bindings: &FxHashMap<Name, Ty>) -> Ty {
             attr.clone(),
         ),
         Ty::Function {
-            generic_params,
-            generic_param_bounds,
             params,
             ret,
             throws,
             attr,
         } => {
-            let mut nested_bindings = bindings.clone();
-            for generic_param in generic_params {
-                nested_bindings.remove(generic_param);
-            }
+            // Function values are realized: a function type carries no generics of
+            // its own, only free typevars from the enclosing context — so there is
+            // nothing to shadow and substitution recurses with the same bindings.
             Ty::Function {
-                generic_params: generic_params.clone(),
-                generic_param_bounds: generic_param_bounds
-                    .iter()
-                    .map(|bound| bound.as_ref().map(|ty| substitute_ty(ty, &nested_bindings)))
-                    .collect(),
                 params: params
                     .iter()
                     .map(|param| FunctionParamTy {
                         name: param.name.clone(),
-                        ty: substitute_ty(&param.ty, &nested_bindings),
+                        ty: substitute_ty(&param.ty, bindings),
                         mode: param.mode,
                     })
                     .collect(),
-                ret: Box::new(substitute_ty(ret, &nested_bindings)),
-                throws: Box::new(substitute_ty(throws, &nested_bindings)),
+                ret: Box::new(substitute_ty(ret, bindings)),
+                throws: Box::new(substitute_ty(throws, bindings)),
                 attr: attr.clone(),
             }
         }
@@ -288,35 +280,14 @@ pub fn lower_type_expr_with_generics(
             TyAttr::default(),
         ),
         TypeExpr::Function {
-            generic_params,
-            generic_param_bounds,
             params,
             ret,
             throws,
             ..
         } => {
-            let mut nested_bindings = bindings.clone();
-            for param in generic_params {
-                nested_bindings
-                    .insert(param.clone(), Ty::TypeVar(param.clone(), TyAttr::default()));
-            }
+            // A function type carries no generics of its own; its type variables
+            // come from the enclosing context (already in `bindings`).
             Ty::Function {
-                generic_params: generic_params.clone(),
-                generic_param_bounds: generic_param_bounds
-                    .iter()
-                    .map(|bound| {
-                        bound.as_ref().map(|bound| {
-                            lower_type_expr_with_generics(
-                                db,
-                                bound,
-                                package_items,
-                                ns_context,
-                                &nested_bindings,
-                                diagnostics,
-                            )
-                        })
-                    })
-                    .collect(),
                 params: params
                     .iter()
                     .map(|p| FunctionParamTy {
@@ -326,7 +297,7 @@ pub fn lower_type_expr_with_generics(
                             &p.ty,
                             package_items,
                             ns_context,
-                            &nested_bindings,
+                            bindings,
                             diagnostics,
                         ),
                         mode: if p.optional {
@@ -341,7 +312,7 @@ pub fn lower_type_expr_with_generics(
                     ret,
                     package_items,
                     ns_context,
-                    &nested_bindings,
+                    bindings,
                     diagnostics,
                 )),
                 throws: Box::new(
@@ -353,7 +324,7 @@ pub fn lower_type_expr_with_generics(
                                 throws,
                                 package_items,
                                 ns_context,
-                                &nested_bindings,
+                                bindings,
                                 diagnostics,
                             )
                         })
@@ -461,16 +432,12 @@ pub fn contains_typevar(ty: &Ty) -> bool {
         Ty::Union(tys, _) => tys.iter().any(contains_typevar),
         Ty::Future(value, error, _) => contains_typevar(value) || contains_typevar(error),
         Ty::Function {
-            generic_param_bounds,
             params,
             ret,
             throws,
             ..
         } => {
-            generic_param_bounds
-                .iter()
-                .any(|bound| bound.as_ref().is_some_and(contains_typevar))
-                || params.iter().any(|param| contains_typevar(&param.ty))
+            params.iter().any(|param| contains_typevar(&param.ty))
                 || contains_typevar(ret)
                 || contains_typevar(throws)
         }
@@ -527,27 +494,20 @@ pub fn contains_typevar_where(ty: &Ty, pred: &dyn Fn(&Name) -> bool) -> bool {
             contains_typevar_where(value, pred) || contains_typevar_where(error, pred)
         }
         Ty::Function {
-            generic_params,
-            generic_param_bounds,
             params,
             ret,
             throws,
             ..
         } => {
-            // A function type's own generic params are local binders: a type var
-            // bound here is not the caller-scope/rigid var the outer `pred`
-            // reasons about, so shadow them out before recursing into its body.
-            let shadowed = |name: &Name| !generic_params.iter().any(|g| g == name) && pred(name);
-            let shadowed: &dyn Fn(&Name) -> bool = &shadowed;
-            generic_param_bounds.iter().any(|bound| {
-                bound
-                    .as_ref()
-                    .is_some_and(|b| contains_typevar_where(b, shadowed))
-            }) || params
+            // A function type carries no generic binders of its own (function
+            // values are realized): every type var in its body is the
+            // caller-scope/rigid var the outer `pred` reasons about, so recurse
+            // with `pred` unchanged.
+            params
                 .iter()
-                .any(|param| contains_typevar_where(&param.ty, shadowed))
-                || contains_typevar_where(ret, shadowed)
-                || contains_typevar_where(throws, shadowed)
+                .any(|param| contains_typevar_where(&param.ty, pred))
+                || contains_typevar_where(ret, pred)
+                || contains_typevar_where(throws, pred)
         }
         Ty::Class(_, type_args, _) => type_args.iter().any(|t| contains_typevar_where(t, pred)),
         Ty::Interface(_, type_args, associated_bindings, _) => {
@@ -922,33 +882,24 @@ pub fn erase_typevars_where(ty: &Ty, pred: &dyn Fn(&Name) -> bool) -> Ty {
             attr.clone(),
         ),
         Ty::Function {
-            generic_params,
-            generic_param_bounds,
             params,
             ret,
             throws,
             attr,
         } => {
-            // A function type's own generic params are local binders —
-            // shadow them out of the predicate before recursing.
-            let shadowed = |name: &Name| !generic_params.iter().any(|g| g == name) && pred(name);
-            let shadowed: &dyn Fn(&Name) -> bool = &shadowed;
+            // A function type carries no generic binders of its own (function
+            // values are realized), so recurse with `pred` unchanged.
             Ty::Function {
-                generic_params: generic_params.clone(),
-                generic_param_bounds: generic_param_bounds
-                    .iter()
-                    .map(|b| b.as_ref().map(|t| erase_typevars_where(t, shadowed)))
-                    .collect(),
                 params: params
                     .iter()
                     .map(|p| FunctionParamTy {
                         name: p.name.clone(),
-                        ty: erase_typevars_where(&p.ty, shadowed),
+                        ty: erase_typevars_where(&p.ty, pred),
                         mode: p.mode,
                     })
                     .collect(),
-                ret: Box::new(erase_typevars_where(ret, shadowed)),
-                throws: Box::new(erase_typevars_where(throws, shadowed)),
+                ret: Box::new(erase_typevars_where(ret, pred)),
+                throws: Box::new(erase_typevars_where(throws, pred)),
                 attr: attr.clone(),
             }
         }
@@ -995,22 +946,11 @@ pub fn erase_unresolved_typevars(
             attr: attr.clone(),
         },
         Ty::Function {
-            generic_params,
-            generic_param_bounds,
             params,
             ret,
             throws,
             attr,
         } => Ty::Function {
-            generic_params: generic_params.clone(),
-            generic_param_bounds: generic_param_bounds
-                .iter()
-                .map(|bound| {
-                    bound
-                        .as_ref()
-                        .map(|ty| erase_unresolved_typevars(ty, diagnostics))
-                })
-                .collect(),
             params: params
                 .iter()
                 .map(|param| FunctionParamTy {
@@ -1120,22 +1060,11 @@ pub fn erase_typevars_matching(ty: &Ty, should_erase: &impl Fn(&Name) -> bool) -
             attr: attr.clone(),
         },
         Ty::Function {
-            generic_params,
-            generic_param_bounds,
             params,
             ret,
             throws,
             attr,
         } => Ty::Function {
-            generic_params: generic_params.clone(),
-            generic_param_bounds: generic_param_bounds
-                .iter()
-                .map(|bound| {
-                    bound
-                        .as_ref()
-                        .map(|ty| erase_typevars_matching(ty, should_erase))
-                })
-                .collect(),
             params: params
                 .iter()
                 .map(|param| FunctionParamTy {

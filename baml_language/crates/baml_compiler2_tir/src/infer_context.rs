@@ -218,6 +218,11 @@ pub enum TirTypeError {
     /// Type arguments were supplied for a type that is not generic
     /// (enums and type aliases cannot take type parameters).
     TypeIsNotGeneric { type_name: Name, kind: &'static str },
+    /// A generic function was referenced as a value without specialization
+    /// (`let f = identity` where `identity<T>`). A generic function is a type
+    /// constructor — it must be specialized (`identity<int>`) or have its type
+    /// arguments inferable from context before it becomes a usable value.
+    GenericFunctionValueNotSpecialized { name: Name },
     /// A lambda parameter has no type annotation and no expected type context
     /// to infer the type from.
     CannotInferLambdaParamType { param_name: Name },
@@ -692,6 +697,13 @@ impl fmt::Display for TirTypeError {
                 write!(
                     f,
                     "{kind} `{type_name}` is not generic and cannot take type arguments"
+                )
+            }
+            TirTypeError::GenericFunctionValueNotSpecialized { name } => {
+                write!(
+                    f,
+                    "generic function `{name}` must be specialized before it is used \
+                    as a value (e.g. `{name}<int>`)"
                 )
             }
             TirTypeError::TypeParamShadowed {

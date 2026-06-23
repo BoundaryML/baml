@@ -20,16 +20,6 @@ streams, no `StreamFinished` union — just `WrapperMethods<T>.get_value(self)
 fix lands, this test goes green without touching the streaming path.
 """
 
-import pytest
-
-
-@pytest.mark.skip(
-    reason="Phase 4 (engine boundary substitution) not yet landed — "
-    "WrapperMethods<T>.get_value_or_marker's `T | WrapperMarker` return type "
-    "still lowers `T` to `Ty::Void`, so a concrete `string` payload "
-    "fails the union-member check. Tracked in 23a §'Engine boundary "
-    "substitution' / 22f. Flip back to enabled when Ty::TypeVar lands."
-)
 def test_generic():
     """`WrapperMethods<string>.get_value_or_marker()` should still round-trip
     a string when the declared return is `T | WrapperMarker`.
@@ -57,17 +47,6 @@ def test_generic():
     assert w.get_value_or_marker() == "hello"
 
 
-@pytest.mark.skip(
-    reason="Engine now strictly enforces full TypeVar binding on inbound "
-    "generic instance-method calls (Gate A). The receiver here comes from a "
-    "BAML return value (`make_wrapper_methods`); outbound generic decoding "
-    "does not yet preserve the `WrapperMethods<string>` parameterization "
-    "(deferred per 00b), so the re-encoded receiver arrives with empty class "
-    "type args and the engine correctly rejects the unbound class `T` with "
-    "'missing a type binding for type parameter `T`'. A receiver that can't "
-    "supply its class type args is a host/SDK gap, not a language fallback to "
-    "paper over. Re-enable once outbound decoding sends receiver type args."
-)
 def test_generic_wrapper_get_value():
     """`WrapperMethods<string>.get_value()` should round-trip a string.
 

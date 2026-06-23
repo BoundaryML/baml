@@ -60,6 +60,7 @@ impl minijinja::value::Object for OutputFormatObject {
         let hoist_classes = parse_hoist_classes_kwarg(&kwargs)?;
         let map_style = parse_map_style_kwarg(&kwargs)?;
         let quote_class_fields = parse_render_setting_bool(&kwargs, "quote_class_fields")?;
+        let render_null_as = parse_render_null_as_kwarg(&kwargs, "render_null_as")?;
 
         kwargs.assert_all_used().map_err(|_| {
             Error::new(
@@ -77,6 +78,7 @@ impl minijinja::value::Object for OutputFormatObject {
             always_hoist_enums,
             map_style,
             quote_class_fields,
+            render_null_as,
         };
 
         let rendered = self
@@ -111,6 +113,26 @@ fn parse_render_setting_string(
     match kwargs.get::<Option<String>>(name) {
         Ok(Some(v)) => Ok(RenderSetting::Always(v)),
         Ok(None) => Ok(RenderSetting::Never),
+        Err(e) => Err(minijinja::Error::new(
+            ErrorKind::SyntaxError,
+            format!("Invalid value for {name}: {e}"),
+        )),
+    }
+}
+
+/// Parse the `render_null_as` kwarg:
+/// - Not present or null/None -> Auto (`null`)
+/// - Present with value -> Always(value)
+fn parse_render_null_as_kwarg(
+    kwargs: &Kwargs,
+    name: &str,
+) -> Result<RenderSetting<String>, minijinja::Error> {
+    if !kwargs.has(name) {
+        return Ok(RenderSetting::Auto);
+    }
+    match kwargs.get::<Option<String>>(name) {
+        Ok(Some(v)) => Ok(RenderSetting::Always(v)),
+        Ok(None) => Ok(RenderSetting::Auto),
         Err(e) => Err(minijinja::Error::new(
             ErrorKind::SyntaxError,
             format!("Invalid value for {name}: {e}"),

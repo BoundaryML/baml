@@ -18,28 +18,27 @@ import {
 } from "./baml_sdk/generics/index.js";
 
 describe("roundtrip generics", () => {
-  // NOTE: the four tests below pass a *generic* class instance directly as a
-  // function argument. The TS encoder emits class instances as bare maps and
-  // does not yet send the value-level class type-args channel (TS generics are
-  // out of scope — Python only), so the engine now strictly rejects coercing a
-  // bare map into a generic class slot ("a bare map carries no class type
-  // arguments"). Re-enable once the TS SDK encodes generic class type args.
-  // (`round_trip_nested_generics` / `round_trip_differing_instantiation` stay
-  // enabled: their top-level param is a *non-generic* class, so the bare-map
-  // promotion is still allowed.)
-  it.skip("round_trip_wrapper_int", () => {
+  // The four tests below pass a *generic* class instance directly as a function
+  // argument. The TS encoder now emits a generic instance as a FQN-tagged
+  // `class_value` carrying the value-level class type-args channel (`class_ty`),
+  // built from each generic class's static `$generic` param list and optional
+  // `$types` field — so the engine decodes it to an `Instance` instead of a
+  // bare map and accepts it into the generic class slot. (No `$types` is passed
+  // here, so each arg lowers to the unknown/top type, which is a compatible
+  // wildcard against the declared concrete args.)
+  it("round_trip_wrapper_int", () => {
     const w = new Wrapper({ value: 5 });
     expect(round_trip_wrapper_int(w)).toEqual(w);
   });
-  it.skip("round_trip_generic_linked_list_int", () => {
+  it("round_trip_generic_linked_list_int", () => {
     const ll = new GenericLinkedList({ value: 1, next: new GenericLinkedList({ value: 2, next: null }) });
     expect(round_trip_generic_linked_list_int(ll)).toEqual(ll);
   });
-  it.skip("round_trip_generic_binary_tree_int", () => {
+  it("round_trip_generic_binary_tree_int", () => {
     const t = new GenericBinaryTree({ value: 1, left: null, right: null });
     expect(round_trip_generic_binary_tree_int(t)).toEqual(t);
   });
-  it.skip("round_trip_box_int", () => {
+  it("round_trip_box_int", () => {
     const b = new Box({ value: 3, wrapped: new Wrapper({ value: 4 }) });
     expect(round_trip_box_int(b)).toEqual(b);
   });

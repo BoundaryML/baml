@@ -13,6 +13,9 @@ function baml.Array.concat(self: baml.Array<T>, other: T[]) -> T[] {
 function baml.Array.every(self: baml.Array<T>, predicate: (T) -> bool throws E) -> bool {
 }
 
+function baml.Array.filled(length: int, value: T) -> T[] {
+}
+
 function baml.Array.filter(self: baml.Array<T>, predicate: (T) -> bool throws E) -> T[] {
 }
 
@@ -10642,7 +10645,7 @@ function baml.llm.Context.from_json(j: baml.json.json) -> baml.llm.Context {
     return
 }
 
-function baml.llm.Context.output_format_with(self: baml.llm.Context, prefix: string | null, or_splitter: string | null, enum_value_prefix: string | null, hoisted_class_prefix: string | null, always_hoist_enums: bool | null, quote_class_fields: bool | null, hoist_classes: string[] | null, map_style: string | null) -> string {
+function baml.llm.Context.output_format_with(self: baml.llm.Context, prefix: string | null, or_splitter: string | null, enum_value_prefix: string | null, hoisted_class_prefix: string | null, always_hoist_enums: bool | null, quote_class_fields: bool | null, hoist_classes: string[] | null, map_style: string | null, render_null_as: string | null) -> string {
 }
 
 function baml.llm.Context.to_json(self: baml.llm.Context) -> baml.json.json {

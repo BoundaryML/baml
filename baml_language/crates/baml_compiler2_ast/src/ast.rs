@@ -115,10 +115,10 @@ pub enum TypeExpr {
         value: baml_base::Literal,
         attrs: Vec<RawAttribute>,
     },
-    /// Function type: (params) -> return
+    /// Function type: `(params) -> return throws E`. Function *values* are
+    /// realized, so a function type carries no generic parameters of its own —
+    /// it may only reference type variables from the enclosing context.
     Function {
-        generic_params: Vec<Name>,
-        generic_param_bounds: Vec<Option<TypeExpr>>,
         params: Vec<FunctionTypeParam>,
         ret: Box<TypeExpr>,
         throws: Option<Box<TypeExpr>>,
@@ -301,26 +301,11 @@ impl std::fmt::Display for TypeExpr {
             }
             TypeExpr::Literal { value, .. } => write!(f, "{value}"),
             TypeExpr::Function {
-                generic_params,
-                generic_param_bounds,
                 params,
                 ret,
                 throws,
                 ..
             } => {
-                if !generic_params.is_empty() {
-                    write!(f, "<")?;
-                    for (i, param) in generic_params.iter().enumerate() {
-                        if i > 0 {
-                            write!(f, ", ")?;
-                        }
-                        write!(f, "{}", param.as_str())?;
-                        if let Some(bound) = generic_param_bounds.get(i).and_then(Option::as_ref) {
-                            write!(f, " extends {bound}")?;
-                        }
-                    }
-                    write!(f, ">")?;
-                }
                 write!(f, "(")?;
                 for (i, p) in params.iter().enumerate() {
                     if i > 0 {

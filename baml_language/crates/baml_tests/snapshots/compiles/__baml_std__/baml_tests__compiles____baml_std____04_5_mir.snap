@@ -260,6 +260,8 @@ fn baml.Map.delete = builtin(vm)
 
 fn baml.Array.every = builtin(vm)
 
+fn baml.Array.filled = builtin(vm)
+
 fn baml.Array.filter = builtin(vm)
 
 fn baml.Array.filter_map(self: baml.Array, fn: (T) -> U | null throws E) -> U[] {

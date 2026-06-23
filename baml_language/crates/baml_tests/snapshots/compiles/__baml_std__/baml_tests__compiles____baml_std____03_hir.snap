@@ -62,6 +62,7 @@ function baml.clear(self: ?) -> null  [builtin]
 function baml.concat(self: ?, other: T[]) -> T[]  [builtin]
 function baml.delete(self: ?, key: K) -> V?  [builtin]
 function baml.every(self: ?, predicate: (T) -> bool throws E) -> bool  [builtin]
+function baml.filled(length: int, value: T) -> T[]  [builtin]
 function baml.filter(self: ?, predicate: (T) -> bool throws E) -> T[]  [builtin]
 function baml.filter_map(self: ?, fn: (T) -> U? throws E) -> U[]  [expr] {
   { let out: U[] = []; for x in self.slice(0, self.length()) {  } match (fn(x)) { null => {  }, y: U => { out.push(y) } } } out
@@ -1461,7 +1462,7 @@ function baml.llm.new_stream_accumulator(self: ?) -> baml.llm.StreamAccumulator 
 function baml.llm.next(self: ?) -> TStream | root.stream.StreamFinished  [expr] {
   { while true { let next = match (self._sse.next()) { null => { return root.stream.StreamFinished {  } }, next: string => next }; self._acc.add_events(next); if (self._acc.is_done()) { self._sse.close(); return root.stream.StreamFinished {  } }; let content = self._acc.content(); let parsed: TStream | root.stream.StreamNoYield = __sap_parse_partial(content, self._cache) } match (parsed) { root.stream.StreamNoYield => { continue }, parsed: TStream => { return parsed } } } root.sys.panic("Unreachable")
 }
-function baml.llm.output_format_with(self: ?, prefix: string? = null, or_splitter: string? = null, enum_value_prefix: string? = null, hoisted_class_prefix: string? = null, always_hoist_enums: bool? = null, quote_class_fields: bool? = null, hoist_classes: string[]? = null, map_style: string? = null) -> string  [builtin]
+function baml.llm.output_format_with(self: ?, prefix: string? = null, or_splitter: string? = null, enum_value_prefix: string? = null, hoisted_class_prefix: string? = null, always_hoist_enums: bool? = null, quote_class_fields: bool? = null, hoist_classes: string[]? = null, map_style: string? = null, render_null_as: string? = null) -> string  [builtin]
 function baml.llm.output_tokens(self: ?) -> int?  [builtin]
 function baml.llm.parse(self: ?, http_response_body: string) -> T  [builtin]
 function baml.llm.prompt(body: (role: (string) -> baml.llm.Role, ctx: baml.llm.Context) -> baml.TaggedString throws never) -> (baml.llm.Context) -> baml.llm.PromptAst throws never  [expr] {
