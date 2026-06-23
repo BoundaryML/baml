@@ -238,14 +238,34 @@ function glob.glob_matches_negated_pattern_fn() -> bool[] {
     return
 }
 
-function glob.scan_default_prunes_dot_directories_checks() -> bool[] {
+function glob.glob_tmp(name: string) -> string {
     call baml.sys.now_ms
     call baml.json.stringify
-    store_var _2
-    load_const "/tmp/baml_glob_prune_dot_"
-    load_var _2
+    store_var _6
+    load_const 0
+    load_const 1000000000
+    call baml.Int.random
+    call baml.json.stringify
+    store_var _8
+    load_const "/tmp/baml_glob_"
+    load_var name
     bin_op +
-    store_var_load_var root
+    load_const "_"
+    bin_op +
+    load_var _6
+    bin_op +
+    load_const "_"
+    bin_op +
+    load_var _8
+    bin_op +
+    return
+}
+
+function glob.scan_default_prunes_dot_directories_checks() -> bool[] {
+    load_const "prune_dot"
+    call user.glob.glob_tmp
+    store_var root
+    load_var root
     load_const true
     init_instance baml.fs.MkdirOptions .recursive
     sys_op baml.fs.mkdir
@@ -291,7 +311,7 @@ function glob.scan_default_prunes_dot_directories_checks() -> bool[] {
     load_var result
     load_const "visible.txt"
     call baml.Array.includes
-    store_var _30
+    store_var _28
     load_const "rm -rf "
     load_var root
     bin_op +
@@ -302,19 +322,16 @@ function glob.scan_default_prunes_dot_directories_checks() -> bool[] {
     container_len
     load_const 1
     cmp_int_op ==
-    load_var _30
+    load_var _28
     alloc_array 2
     return
 }
 
 function glob.scan_dot_pattern_matches_only_dot_files() -> string[] {
-    call baml.sys.now_ms
-    call baml.json.stringify
-    store_var _2
-    load_const "/tmp/baml_glob_dotpat_"
-    load_var _2
-    bin_op +
-    store_var_load_var root
+    load_const "dotpat"
+    call user.glob.glob_tmp
+    store_var root
+    load_var root
     load_const true
     init_instance baml.fs.MkdirOptions .recursive
     sys_op baml.fs.mkdir
@@ -334,7 +351,7 @@ function glob.scan_dot_pattern_matches_only_dot_files() -> string[] {
     load_const ".*"
     sys_op baml.glob.new
     store_var g
-    load_var2 3 1
+    load_var2 2 1
     load_const true
     load_const null
     load_const null
@@ -354,13 +371,10 @@ function glob.scan_dot_pattern_matches_only_dot_files() -> string[] {
 }
 
 function glob.scan_finds_txt_files() -> string[] {
-    call baml.sys.now_ms
-    call baml.json.stringify
-    store_var _2
-    load_const "/tmp/baml_glob_scan_txt_"
-    load_var _2
-    bin_op +
-    store_var_load_var root
+    load_const "scan_txt"
+    call user.glob.glob_tmp
+    store_var root
+    load_var root
     load_const true
     init_instance baml.fs.MkdirOptions .recursive
     sys_op baml.fs.mkdir
@@ -399,16 +413,11 @@ function glob.scan_finds_txt_files() -> string[] {
 }
 
 function glob.scan_follows_symlinked_directory_checks() -> bool[] {
-    call baml.sys.now_ms
-    call baml.json.stringify
-    store_var ts
-    load_const "/tmp/baml_glob_sym_outer_"
-    load_var ts
-    bin_op +
+    load_const "sym_outer"
+    call user.glob.glob_tmp
     store_var outer_root
-    load_const "/tmp/baml_glob_sym_target_"
-    load_var ts
-    bin_op +
+    load_const "sym_target"
+    call user.glob.glob_tmp
     store_var target
     load_var outer_root
     load_const true
@@ -441,7 +450,7 @@ function glob.scan_follows_symlinked_directory_checks() -> bool[] {
     load_const "**/*.txt"
     sys_op baml.glob.new
     store_var g
-    load_var2 4 2
+    load_var2 3 1
     load_const null
     load_const null
     load_const true
@@ -454,7 +463,7 @@ function glob.scan_follows_symlinked_directory_checks() -> bool[] {
     load_var result
     load_const "link_dir/hidden_via_link.txt"
     call baml.Array.includes
-    store_var _30
+    store_var _26
     load_const "rm -rf "
     load_var outer_root
     bin_op +
@@ -469,19 +478,16 @@ function glob.scan_follows_symlinked_directory_checks() -> bool[] {
     container_len
     load_const 1
     cmp_int_op ==
-    load_var _30
+    load_var _26
     alloc_array 2
     return
 }
 
 function glob.scan_matches_absolute_pattern_checks() -> bool[] {
-    call baml.sys.now_ms
-    call baml.json.stringify
-    store_var _2
-    load_const "/tmp/baml_glob_abs_pat_"
-    load_var _2
-    bin_op +
-    store_var_load_var root
+    load_const "abs_pat"
+    call user.glob.glob_tmp
+    store_var root
+    load_var root
     load_const true
     init_instance baml.fs.MkdirOptions .recursive
     sys_op baml.fs.mkdir
@@ -497,7 +503,7 @@ function glob.scan_matches_absolute_pattern_checks() -> bool[] {
     bin_op +
     sys_op baml.glob.new
     store_var g
-    load_var2 3 1
+    load_var2 2 1
     load_const null
     load_const true
     load_const null
@@ -507,11 +513,11 @@ function glob.scan_matches_absolute_pattern_checks() -> bool[] {
     sys_op baml.glob.Glob.scan
     store_var result
     load_type string
-    load_var2 4 1
+    load_var2 3 1
     load_const "/file.txt"
     bin_op +
     call baml.Array.includes
-    store_var _20
+    store_var _18
     load_const "rm -rf "
     load_var root
     bin_op +
@@ -522,19 +528,16 @@ function glob.scan_matches_absolute_pattern_checks() -> bool[] {
     container_len
     load_const 1
     cmp_int_op ==
-    load_var _20
+    load_var _18
     alloc_array 2
     return
 }
 
 function glob.scan_matches_dot_slash_pattern() -> string[] {
-    call baml.sys.now_ms
-    call baml.json.stringify
-    store_var _2
-    load_const "/tmp/baml_glob_dotslash_"
-    load_var _2
-    bin_op +
-    store_var_load_var root
+    load_const "dotslash"
+    call user.glob.glob_tmp
+    store_var root
+    load_var root
     load_const true
     init_instance baml.fs.MkdirOptions .recursive
     sys_op baml.fs.mkdir
@@ -561,13 +564,10 @@ function glob.scan_matches_dot_slash_pattern() -> string[] {
 }
 
 function glob.scan_only_files_by_default_checks() -> bool[] {
-    call baml.sys.now_ms
-    call baml.json.stringify
-    store_var _2
-    load_const "/tmp/baml_glob_only_files_"
-    load_var _2
-    bin_op +
-    store_var_load_var root
+    load_const "only_files"
+    call user.glob.glob_tmp
+    store_var root
+    load_var root
     load_const true
     init_instance baml.fs.MkdirOptions .recursive
     sys_op baml.fs.mkdir
@@ -594,7 +594,7 @@ function glob.scan_only_files_by_default_checks() -> bool[] {
     load_var result
     load_const "file.txt"
     call baml.Array.includes
-    store_var _20
+    store_var _18
     load_const "rm -rf "
     load_var root
     bin_op +
@@ -605,19 +605,16 @@ function glob.scan_only_files_by_default_checks() -> bool[] {
     container_len
     load_const 1
     cmp_int_op ==
-    load_var _20
+    load_var _18
     alloc_array 2
     return
 }
 
 function glob.scan_opts_include_dot_absolute_and_dirs_checks() -> bool[] {
-    call baml.sys.now_ms
-    call baml.json.stringify
-    store_var _2
-    load_const "/tmp/baml_glob_scan_opts2_"
-    load_var _2
-    bin_op +
-    store_var_load_var root
+    load_const "scan_opts2"
+    call user.glob.glob_tmp
+    store_var root
+    load_var root
     load_const true
     init_instance baml.fs.MkdirOptions .recursive
     sys_op baml.fs.mkdir
@@ -644,7 +641,7 @@ function glob.scan_opts_include_dot_absolute_and_dirs_checks() -> bool[] {
     load_const "**/*.txt"
     sys_op baml.glob.new
     store_var g
-    load_var2 3 1
+    load_var2 2 1
     load_const true
     load_const true
     load_const null
@@ -654,23 +651,23 @@ function glob.scan_opts_include_dot_absolute_and_dirs_checks() -> bool[] {
     sys_op baml.glob.Glob.scan
     store_var result
     load_type string
-    load_var2 4 1
+    load_var2 3 1
     load_const "/.hidden.txt"
     bin_op +
     call baml.Array.includes
-    store_var _24
+    store_var _22
     load_type string
-    load_var2 4 1
+    load_var2 3 1
     load_const "/dir.txt"
     bin_op +
     call baml.Array.includes
-    store_var _28
+    store_var _26
     load_type string
-    load_var2 4 1
+    load_var2 3 1
     load_const "/file.txt"
     bin_op +
     call baml.Array.includes
-    store_var _32
+    store_var _30
     load_const "rm -rf "
     load_var root
     bin_op +
@@ -681,20 +678,17 @@ function glob.scan_opts_include_dot_absolute_and_dirs_checks() -> bool[] {
     container_len
     load_const 3
     cmp_int_op ==
-    load_var2 5 6
-    load_var _32
+    load_var2 4 5
+    load_var _30
     alloc_array 4
     return
 }
 
 function glob.scan_returns_empty_for_no_match() -> string[] {
-    call baml.sys.now_ms
-    call baml.json.stringify
-    store_var _2
-    load_const "/tmp/baml_glob_scan_empty_"
-    load_var _2
-    bin_op +
-    store_var_load_var root
+    load_const "scan_empty"
+    call user.glob.glob_tmp
+    store_var root
+    load_var root
     load_const true
     init_instance baml.fs.MkdirOptions .recursive
     sys_op baml.fs.mkdir
@@ -727,13 +721,10 @@ function glob.scan_returns_empty_for_no_match() -> string[] {
 }
 
 function glob.scan_skips_broken_symlinks_by_default() -> string[] {
-    call baml.sys.now_ms
-    call baml.json.stringify
-    store_var _2
-    load_const "/tmp/baml_glob_broken_sym_"
-    load_var _2
-    bin_op +
-    store_var_load_var root
+    load_const "broken_sym"
+    call user.glob.glob_tmp
+    store_var root
+    load_var root
     load_const true
     init_instance baml.fs.MkdirOptions .recursive
     sys_op baml.fs.mkdir
@@ -759,7 +750,7 @@ function glob.scan_skips_broken_symlinks_by_default() -> string[] {
     load_const "*.txt"
     sys_op baml.glob.new
     store_var g
-    load_var2 3 1
+    load_var2 2 1
     load_const null
     load_const null
     load_const true

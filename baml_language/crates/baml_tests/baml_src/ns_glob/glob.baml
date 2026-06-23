@@ -3,7 +3,7 @@
 // Converted from crates/baml_tests/tests/glob.rs.
 //
 // HERMETICITY: every scan test creates a unique temp directory under /tmp
-// (using baml.sys.now_ms() as a discriminator), writes fixture files with
+// (using baml.sys.now_ms() and int.random as discriminators), writes fixture files with
 // baml.fs.write / baml.fs.mkdir, runs the assertions, then removes the
 // directory tree with baml.sys.shell("rm -rf …"). All filesystem work is
 // done inside top-level functions (not in test-block locals) to avoid the
@@ -24,6 +24,10 @@
 // ============================================================================
 // baml.glob.new + Glob.matches — no filesystem needed
 // ============================================================================
+
+function glob_tmp(name: string) -> string {
+    "/tmp/baml_glob_" + name + "_" + baml.json.stringify(baml.sys.now_ms()) + "_" + baml.json.stringify(int.random(0, 1000000000))
+}
 
 test "glob_matches_basic" {
     let g = baml.glob.new("*.txt");
@@ -113,7 +117,7 @@ test "glob_matches_negated_pattern" {
 // Returns [length, has_a_txt, has_b_txt] encoded as bools in int form —
 // simpler: return the result directly so callers can chain .length()/.includes().
 function scan_finds_txt_files() -> string[] {
-    let root = "/tmp/baml_glob_scan_txt_" + baml.json.stringify(baml.sys.now_ms());
+    let root = glob_tmp("scan_txt");
     baml.fs.mkdir(root, baml.fs.MkdirOptions { recursive: true });
     let _ = baml.fs.write(root + "/a.txt", "a");
     let _ = baml.fs.write(root + "/b.txt", "b");
@@ -139,7 +143,7 @@ test "glob_scan_finds_txt_files_has_b" {
 // ─── glob_scan_returns_empty_for_no_match ────────────────────────────────────
 
 function scan_returns_empty_for_no_match() -> string[] {
-    let root = "/tmp/baml_glob_scan_empty_" + baml.json.stringify(baml.sys.now_ms());
+    let root = glob_tmp("scan_empty");
     baml.fs.mkdir(root, baml.fs.MkdirOptions { recursive: true });
     let _ = baml.fs.write(root + "/a.rs", "rust");
     let _ = baml.fs.write(root + "/b.rs", "rust");
@@ -158,7 +162,7 @@ test "glob_scan_returns_empty_for_no_match" {
 // Default scan only returns files, not directories, even if the dir name
 // matches the pattern.
 function scan_only_files_by_default_checks() -> bool[] {
-    let root = "/tmp/baml_glob_only_files_" + baml.json.stringify(baml.sys.now_ms());
+    let root = glob_tmp("only_files");
     baml.fs.mkdir(root, baml.fs.MkdirOptions { recursive: true });
     let _ = baml.fs.write(root + "/file.txt", "content");
     // Create a directory named dir.txt — should be excluded from *.txt results.
@@ -183,7 +187,7 @@ test "glob_scan_only_files_by_default" {
 // encode all assertions in one bool[] return [length_ok, has_hidden, has_dir,
 // has_file] so a single hermetic run (unique temp root) covers the test.
 function scan_opts_include_dot_absolute_and_dirs_checks() -> bool[] {
-    let root = "/tmp/baml_glob_scan_opts2_" + baml.json.stringify(baml.sys.now_ms());
+    let root = glob_tmp("scan_opts2");
     baml.fs.mkdir(root, baml.fs.MkdirOptions { recursive: true });
     let _ = baml.fs.write(root + "/file.txt", "content");
     let _ = baml.fs.write(root + "/.hidden.txt", "hidden");
@@ -207,7 +211,7 @@ test "glob_scan_options_include_dot_absolute_and_directories" {
 // ─── glob_scan_matches_dot_slash_pattern ─────────────────────────────────────
 
 function scan_matches_dot_slash_pattern() -> string[] {
-    let root = "/tmp/baml_glob_dotslash_" + baml.json.stringify(baml.sys.now_ms());
+    let root = glob_tmp("dotslash");
     baml.fs.mkdir(root, baml.fs.MkdirOptions { recursive: true });
     let _ = baml.fs.write(root + "/file.txt", "content");
     let g = baml.glob.new("./*.txt");
@@ -227,7 +231,7 @@ test "glob_scan_matches_dot_slash_pattern_has_file" {
 // ─── glob_scan_matches_absolute_pattern ──────────────────────────────────────
 
 function scan_matches_absolute_pattern_checks() -> bool[] {
-    let root = "/tmp/baml_glob_abs_pat_" + baml.json.stringify(baml.sys.now_ms());
+    let root = glob_tmp("abs_pat");
     baml.fs.mkdir(root, baml.fs.MkdirOptions { recursive: true });
     let _ = baml.fs.write(root + "/file.txt", "content");
     let pattern = root + "/**/*.txt";
@@ -249,7 +253,7 @@ test "glob_scan_matches_absolute_pattern" {
 
 // Regression: `.*` must match `.hidden` but NOT `regular.txt`.
 function scan_dot_pattern_matches_only_dot_files() -> string[] {
-    let root = "/tmp/baml_glob_dotpat_" + baml.json.stringify(baml.sys.now_ms());
+    let root = glob_tmp("dotpat");
     baml.fs.mkdir(root, baml.fs.MkdirOptions { recursive: true });
     let _ = baml.fs.write(root + "/.hidden", "h");
     let _ = baml.fs.write(root + "/regular.txt", "r");
@@ -271,7 +275,7 @@ test "glob_scan_dot_pattern_matches_only_dot_files_has_hidden" {
 
 // dot=false (default) must skip files inside dot directories (e.g. .git/).
 function scan_default_prunes_dot_directories_checks() -> bool[] {
-    let root = "/tmp/baml_glob_prune_dot_" + baml.json.stringify(baml.sys.now_ms());
+    let root = glob_tmp("prune_dot");
     baml.fs.mkdir(root, baml.fs.MkdirOptions { recursive: true });
     let _ = baml.fs.write(root + "/visible.txt", "visible");
     baml.fs.mkdir(root + "/.git", baml.fs.MkdirOptions { recursive: false });
@@ -297,9 +301,8 @@ test "glob_scan_default_prunes_dot_directories" {
 // follow_symlinks=true: a symlinked directory is traversed and its contents matched.
 // Uses baml.sys.shell to create the symlink (no native BAML symlink API).
 function scan_follows_symlinked_directory_checks() -> bool[] {
-    let ts = baml.json.stringify(baml.sys.now_ms());
-    let outer_root = "/tmp/baml_glob_sym_outer_" + ts;
-    let target = "/tmp/baml_glob_sym_target_" + ts;
+    let outer_root = glob_tmp("sym_outer");
+    let target = glob_tmp("sym_target");
     baml.fs.mkdir(outer_root, baml.fs.MkdirOptions { recursive: true });
     baml.fs.mkdir(target, baml.fs.MkdirOptions { recursive: true });
     let _ = baml.fs.write(target + "/hidden_via_link.txt", "x");
@@ -324,7 +327,7 @@ test "glob_scan_follows_symlinked_directory_when_enabled" {
 // follow_symlinks=true + a broken symlink: default behaviour is to skip it
 // and still return the real files.
 function scan_skips_broken_symlinks_by_default() -> string[] {
-    let root = "/tmp/baml_glob_broken_sym_" + baml.json.stringify(baml.sys.now_ms());
+    let root = glob_tmp("broken_sym");
     baml.fs.mkdir(root, baml.fs.MkdirOptions { recursive: true });
     let _ = baml.fs.write(root + "/real.txt", "content");
     // Create a dangling symlink pointing to a non-existent file.
