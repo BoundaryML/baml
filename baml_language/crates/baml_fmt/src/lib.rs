@@ -81,6 +81,23 @@ pub enum FormatterError {
 mod lambda_format_tests {
     use super::*;
 
+    /// A `#!` shebang must survive formatting verbatim as the first line —
+    /// otherwise `baml fmt` would silently break an executable `.baml`
+    /// script. The shebang is treated as a leading line comment.
+    #[test]
+    fn test_shebang_preserved_as_first_line() {
+        let source =
+            "#!/usr/bin/env -S baml run --file\nfunction main() -> string {\n    \"hi\"\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should accept a shebang");
+        assert!(
+            formatted.starts_with("#!/usr/bin/env -S baml run --file\n"),
+            "shebang must remain the literal first line, got:\n{formatted}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
     #[test]
     fn test_lambda_basic_formatting() {
         let source = "function test_annotated() -> int {\n    let double = (x: int) -> int { x * 2 }\n    double(21)\n}\n";

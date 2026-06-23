@@ -845,6 +845,14 @@ impl<'a> Parser<'a> {
             }
             return true;
         }
+        // A `#!` shebang is treated just like `//`, so .baml files can be shebang'd
+        //   #!/usr/bin/env -S baml run --file
+        if i + 1 < self.tokens.len()
+            && self.tokens[i].kind == TokenKind::Hash
+            && self.tokens[i + 1].kind == TokenKind::Not
+        {
+            return true;
+        }
         false
     }
 
@@ -7856,6 +7864,65 @@ mod tests {
         assert!(
             errors.is_empty(),
             "expected no parse errors, got: {errors:#?}"
+        );
+    }
+
+    /// A leading `#!` shebang line parses as a comment, so the file behind
+    /// it is valid BAML — this is what makes `.baml` files executable via
+    /// `#!/usr/bin/env -S baml run --file`.
+    #[test]
+    fn leading_shebang_is_treated_as_a_line_comment() {
+        let source =
+            "#!/usr/bin/env -S baml run --file\nfunction main() -> string {\n  \"hi\"\n}\n";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        // The shebang is emitted as a LINE_COMMENT trivia token, and the
+        // function after it is parsed normally.
+        let has_line_comment = root.descendants_with_tokens().any(|elem| {
+            matches!(
+                elem,
+                rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::LINE_COMMENT
+                    && t.text().starts_with("#!")
+            )
+        });
+        assert!(has_line_comment, "shebang should lex as a LINE_COMMENT");
+        assert_eq!(
+            SourceFile::cast(root)
+                .map(|sf| sf.items().count())
+                .unwrap_or(0),
+            1,
+            "the function after the shebang should still parse"
+        );
+    }
+
+    /// Parsing must stay lossless: the original source — shebang included —
+    /// reconstructs exactly from the syntax tree. If `baml fmt` ever dropped
+    /// or moved the shebang, the file would stop being executable.
+    #[test]
+    fn shebang_round_trips_losslessly() {
+        let source = "#!/usr/bin/env -S baml run --file\nfunction main() -> string { \"hi\" }\n";
+        let (root, _errors) = parse_source(source);
+        assert_eq!(root.text().to_string(), source);
+    }
+
+    /// `#!` is only a comment delimiter outside string bodies — a `#!`
+    /// inside a regular string stays literal, never swallowing the rest of
+    /// the line.
+    #[test]
+    fn hash_bang_inside_string_is_not_a_comment() {
+        let source = "function main() -> string {\n  \"a #! b\"\n}\n";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let has_line_comment = root.descendants_with_tokens().any(|elem| {
+            matches!(
+                elem,
+                rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::LINE_COMMENT
+            )
+        });
+        assert!(
+            !has_line_comment,
+            "`#!` inside a string must not be treated as a comment"
         );
     }
 

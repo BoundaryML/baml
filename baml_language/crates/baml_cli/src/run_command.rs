@@ -377,6 +377,10 @@ impl RunArgs {
             return self.print_list(&engine, &scripts, &namespaces, &self.output_format);
         }
 
+        if self.file.is_some() && self.target.is_none() && self.functions.is_empty() {
+            return self.run_single_target("main", reporter);
+        }
+
         // No target → print help and exit non-zero. (Implicit `main` no
         // longer exists.)
         if self.target.is_none() && self.functions.is_empty() {
