@@ -459,10 +459,14 @@ impl OutputFormatContent {
             ft: &TypeIR,
             options: &RenderOptions,
             render_state: &RenderCtx,
-            _output_format_content: &OutputFormatContent,
+            output_format_content: &OutputFormatContent,
         ) -> Option<String> {
             match ft {
                 TypeIR::Primitive(TypeValue::String, _) => None,
+                TypeIR::Primitive(TypeValue::Null, _) => Some(format!(
+                    "Answer ONLY with {}:\n",
+                    output_format_content.render_null_type(options)
+                )),
                 TypeIR::Primitive(p, _) => Some(format!(
                     "Answer as {article} ",
                     article = indefinite_article_a_or_an(&p.to_string())
@@ -496,7 +500,10 @@ impl OutputFormatContent {
                     "Answer with a JSON Array using this schema:\n",
                 )),
                 TypeIR::Union(items, _) => match items.view() {
-                    UnionTypeViewGeneric::Null => Some(String::from("Answer ONLY with null:\n")),
+                    UnionTypeViewGeneric::Null => Some(format!(
+                        "Answer ONLY with {}:\n",
+                        output_format_content.render_null_type(options)
+                    )),
                     UnionTypeViewGeneric::Optional(_) => {
                         Some(String::from("Answer in JSON using this schema:\n"))
                     }
@@ -1120,6 +1127,31 @@ mod tests {
             ))
             .unwrap();
         assert_eq!(rendered, Some("string or omit".into()));
+    }
+
+    #[test]
+    fn render_null_only_prefix_uses_custom_null_value() {
+        let content = OutputFormatContent::target(TypeIR::union(vec![TypeIR::null()])).build();
+        let rendered = content
+            .render(RenderOptions::new(
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                Some(Some("omit".to_string())),
+            ))
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(rendered, "Answer ONLY with omit:\nomit");
+        assert!(
+            !rendered.contains("null"),
+            "custom null rendering should apply to the null-only prefix: {rendered}"
+        );
     }
 
     #[test]
