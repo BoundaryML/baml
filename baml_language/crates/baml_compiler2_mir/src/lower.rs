@@ -11498,20 +11498,25 @@ impl<'db> LoweringContext<'db> {
                         origin: baml_compiler2_tir::interfaces::InterfaceImplOrigin::OutOfBody,
                         source_span: None,
                     };
+                    // Bindings of the impl's generic params from the receiver
+                    // class (`for` target matched against the concrete class),
+                    // so a param that lives only in the `for` target seeds the
+                    // callee frame faithfully instead of erasing to `unknown`.
+                    let for_target_bindings = baml_compiler2_tir::interfaces::match_ty_pattern(
+                        &rule.for_ty_pattern,
+                        &candidate_class_ty,
+                        &rule.generic_params,
+                        &self.resolved_aliases.aliases,
+                    );
                     let candidate_ty =
                         if matches!(rule.for_ty_pattern, baml_compiler2_tir::ty::Ty::TypeVar(..))
-                            || baml_compiler2_tir::interfaces::match_ty_pattern(
-                                &rule.for_ty_pattern,
-                                &candidate_class_ty,
-                                &rule.generic_params,
-                                &self.resolved_aliases.aliases,
-                            )
-                            .is_some()
+                            || for_target_bindings.is_some()
                         {
                             Some(&candidate_class_ty)
                         } else {
                             None
                         };
+                    let for_target_bindings = for_target_bindings.unwrap_or_default();
                     let registry = baml_compiler2_tir::interfaces::package_implements_registry(
                         self.db,
                         PackageId::new(self.db, file_pkg_info.package.clone()),
@@ -11642,6 +11647,7 @@ impl<'db> LoweringContext<'db> {
                                     &instantiation,
                                     &rule.interface_ty,
                                     &requested_iface_ty,
+                                    &for_target_bindings,
                                 );
                                 out.push((
                                     requested_idx,
@@ -11808,6 +11814,7 @@ impl<'db> LoweringContext<'db> {
         instantiation: &baml_compiler2_tir::interfaces::InterfaceImplInstantiation,
         rule_iface_ty: &Tir2Ty,
         requested_iface_ty: &Tir2Ty,
+        for_target_bindings: &baml_compiler2_tir::interfaces::TypeBindings,
     ) -> Vec<Tir2Ty> {
         generic_params
             .iter()
@@ -11823,6 +11830,18 @@ impl<'db> LoweringContext<'db> {
                             rule_iface_ty,
                             requested_iface_ty,
                         )
+                    })
+                    .or_else(|| {
+                        // The receiver pins params the interface request omits
+                        // (`T` of `Sortable for T[]`): the `for` target matched
+                        // against the concrete `self` type binds `T` directly.
+                        // For a generic caller (`U[]`) this is the caller's own
+                        // type var `U`, which lowers to a `TypeArgRef` — still a
+                        // faithful type, never erased.
+                        for_target_bindings
+                            .get(param)
+                            .filter(|ty| !Self::is_unresolved_impl_binding_for_param(param, ty))
+                            .cloned()
                     })
                     .unwrap_or_else(|| Tir2Ty::BuiltinUnknown {
                         attr: baml_compiler2_tir::ty::TyAttr::default(),
@@ -11977,24 +11996,34 @@ impl<'db> LoweringContext<'db> {
                     &mut diags,
                 );
 
-                let target_matches_implementor = if imp.generic_params.is_empty() {
-                    baml_compiler2_tir::normalize::is_same_normalized_type(
+                // Bindings of the impl's generic params recovered from the
+                // receiver (`for` target `T[]` matched against the concrete
+                // `self` type, e.g. `bigint[]`, binds `T = bigint`). This is the
+                // authoritative source for params the requested interface does
+                // not itself carry — `Sortable for T[]` is the canonical case:
+                // `T` lives only in the `for` target and `SortError =
+                // T.CompareError`, never in `Sortable`'s own (empty) args, so
+                // without this the seeded `T` would erase to `unknown`.
+                let for_target_bindings = if imp.generic_params.is_empty() {
+                    if !baml_compiler2_tir::normalize::is_same_normalized_type(
                         &target_ty_tir,
                         impl_ty_tir,
                         &self.resolved_aliases.aliases,
-                    )
+                    ) {
+                        continue;
+                    }
+                    baml_compiler2_tir::interfaces::TypeBindings::default()
                 } else {
-                    baml_compiler2_tir::interfaces::match_ty_pattern(
+                    let Some(bindings) = baml_compiler2_tir::interfaces::match_ty_pattern(
                         &target_ty_tir,
                         impl_ty_tir,
                         &imp.generic_params,
                         &self.resolved_aliases.aliases,
-                    )
-                    .is_some()
+                    ) else {
+                        continue;
+                    };
+                    bindings
                 };
-                if !target_matches_implementor {
-                    continue;
-                }
 
                 let Some(root_iface_loc) =
                     baml_compiler2_tir::interfaces::resolve_path_to_interface(
@@ -12186,6 +12215,7 @@ impl<'db> LoweringContext<'db> {
                                 &instantiation,
                                 &rule.interface_ty,
                                 &requested_iface_ty,
+                                &for_target_bindings,
                             );
                             return Some((
                                 def_to_item_ref(self.db, Definition::Function(func_loc)),
