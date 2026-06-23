@@ -5604,23 +5604,32 @@ impl<'db> TypeInferenceBuilder<'db> {
                                 &mut bindings,
                             );
                         }
+                        // Bind each class parameter from the fields. A parameter
+                        // no field determines (e.g. `T` in `Box { items: [] }`
+                        // for `class Box<T> { items: T[] }`) is reported like an
+                        // unbound callee generic in the call path, then recovered
+                        // with `BuiltinUnknown` so this under-specialized class
+                        // never reaches MIR lowering carrying a bare type variable
+                        // — which would trip `tir2_to_template`'s `unreachable!`.
                         let inferred_type_args: Vec<Ty> = class_data
                             .generic_params
                             .iter()
-                            .map(|param| {
-                                bindings.get(param).cloned().unwrap_or(Ty::Unknown {
-                                    attr: TyAttr::default(),
-                                })
+                            .map(|param| match bindings.get(param) {
+                                Some(bound) => bound.clone(),
+                                None => {
+                                    self.context.report_simple(
+                                        TirTypeError::CannotInferTypeParameter {
+                                            name: param.clone(),
+                                        },
+                                        expr_id,
+                                    );
+                                    Ty::BuiltinUnknown {
+                                        attr: TyAttr::default(),
+                                    }
+                                }
                             })
                             .collect();
-                        if inferred_type_args
-                            .iter()
-                            .any(|ty| !matches!(ty, Ty::Unknown { .. }))
-                        {
-                            Ty::Class(class_name, inferred_type_args, attr)
-                        } else {
-                            Ty::Class(class_name, type_args, attr)
-                        }
+                        Ty::Class(class_name, inferred_type_args, attr)
                     } else {
                         Ty::Class(class_name, type_args, attr)
                     }

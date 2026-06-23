@@ -876,6 +876,34 @@ function f() -> null {
 }
 
 #[test]
+fn generic_construction_cannot_infer_param_from_empty_field() {
+    // Regression (F6): constructing a generic class whose parameter no field
+    // determines — here `T` from `Box { items: [] }` — must report `cannot infer
+    // type parameter`, not silently produce an unspecialized `Box`. The
+    // unspecialized form would otherwise reach MIR lowering carrying a bare type
+    // variable and trip `tir2_to_template`'s `unreachable!`; the diagnostic keeps
+    // the program out of lowering (which only runs error-free).
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Box<T> {
+    items: T[]
+}
+function f() -> int {
+    let b = Box { items: [] }
+    0
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("cannot infer type parameter `T`"),
+        "expected `Box {{ items: [] }}` to report an uninferrable `T`; got:\n{tir}"
+    );
+}
+
+#[test]
 fn direct_optional_push_establishes_element_type() {
     let mut db = make_db();
     let file = db.add_file(

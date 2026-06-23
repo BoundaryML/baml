@@ -539,6 +539,13 @@ pub fn lower_type_expr_in_ns(
                             .get(&class_loc.id(db))
                             .map(|class| class.generic_params.len())
                             .unwrap_or(0);
+                        // A bare generic name (`generic_args.is_empty()`) is left
+                        // unchecked here: it is a deliberate wildcard in several
+                        // positions (`reflect.type_of<Box>()`, construction
+                        // `Box { .. }` where args infer from fields, an interface's
+                        // own `Self` type). Object construction that cannot infer
+                        // its args is reported by `infer_object_expr`
+                        // (`CannotInferTypeParameter`) instead.
                         if !generic_args.is_empty() && generic_args.len() != expected_type_args {
                             diagnostics.push(TirTypeError::WrongNumberOfTypeArgs {
                                 type_name: short.clone(),
