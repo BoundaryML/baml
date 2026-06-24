@@ -527,6 +527,7 @@ export type WebSocketOutMessage =
   | { type: 'commandAck'; requestId: number; outcome: string }
   | { type: 'commandError'; requestId: number; code: string; message: string }
   | { type: 'runList'; requestId: number; runs: RunSummary[] }
+  | { type: 'historyList'; requestId: number; runs: RunSummary[] }
   | { type: 'runSnapshot'; requestId?: number; boundaryId: BoundaryId; snapshot: Run }
   | ({ type: 'valueBody' } & ValueBodyResponse)
   | {
@@ -614,6 +615,8 @@ export type WebSocketInMessage =
       value?: string;
     }
   | { type: 'listRuns'; requestId: number; filter?: RunListFilter }
+  | { type: 'listHistory'; requestId: number; filter?: RunListFilter }
+  | { type: 'openHistory'; requestId: number; boundaryId: BoundaryId }
   | { type: 'snapshot'; requestId: number; boundaryId: BoundaryId }
   | {
       type: 'readValue';
@@ -667,6 +670,7 @@ export type WorkerOutMessage =
     }
   | { type: 'commandError'; requestId: number; code: string; message: string }
   | { type: 'runList'; requestId: number; runs: RunSummary[] }
+  | { type: 'historyList'; requestId: number; runs: RunSummary[] }
   | { type: 'runSnapshot'; requestId?: number; boundaryId: BoundaryId; snapshot: Run }
   | ({ type: 'valueBody' } & ValueBodyResponse)
   | {
@@ -746,6 +750,8 @@ export type WorkerInMessage =
       value?: string;
     }
   | { type: 'listRuns'; requestId: number; filter?: RunListFilter }
+  | { type: 'listHistory'; requestId: number; filter?: RunListFilter }
+  | { type: 'openHistory'; requestId: number; boundaryId: BoundaryId }
   | { type: 'snapshot'; requestId: number; boundaryId: BoundaryId }
   | {
       type: 'readValue';

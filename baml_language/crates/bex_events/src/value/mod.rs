@@ -20,7 +20,12 @@ pub mod pb {
     include!(concat!(env!("OUT_DIR"), "/baml.value.v1.rs"));
 }
 
-pub use artifact::{ByteValueArtifactSink, ValueArtifactRef, ValueArtifactSink};
+pub use artifact::{
+    ByteValueArtifactSink, FileValueArtifactSink, ValueArtifactRef, ValueArtifactSink,
+};
 pub use read::{BamlvalueContents, read_bamlvalue_from_bytes, read_bamlvalue_from_reader};
-pub use record::{ValueAvailability, ValueCodec, ValueRecord, ValueRef};
+pub use record::{
+    RunCompletedRecord, RunStartedRecord, ValueAvailability, ValueCapture, ValueCaptureKind,
+    ValueCodec, ValueFileRecord, ValueRecord, ValueRef,
+};
 pub use writer::{ValueWriteOutcome, ValueWriter};

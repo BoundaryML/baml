@@ -144,6 +144,11 @@ pub enum PlaygroundNotification {
         runs: Vec<serde_json::Value>,
     },
     #[serde(rename_all = "camelCase")]
+    HistoryList {
+        request_id: u64,
+        runs: Vec<serde_json::Value>,
+    },
+    #[serde(rename_all = "camelCase")]
     RunCursorExpired {
         #[serde(skip_serializing_if = "Option::is_none")]
         request_id: Option<u64>,

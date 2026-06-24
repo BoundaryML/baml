@@ -1,4 +1,5 @@
 pub mod collector;
+pub mod history;
 pub mod ids;
 pub mod metadata;
 pub mod prof;

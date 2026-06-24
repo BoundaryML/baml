@@ -36,7 +36,12 @@
 //! runtime.startRun(1, "/project", "Greet", argsBytes);
 //! ```
 
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{
+    cell::RefCell,
+    collections::{HashMap, HashSet},
+    io,
+    rc::Rc,
+};
 
 mod error;
 mod handle;
@@ -60,16 +65,25 @@ mod wasm_time;
 // and `completeHostCall` in the generated `.d.ts` / module exports.
 use base64::Engine as _;
 use bex_events::{
+    history::{
+        HistoryProfileSegment, HistoryValueBody, HistoryValueSegment, history_run_matches_filter,
+        open_boundary_from_segments, read_value_from_segments,
+        router::{BoundaryTraceRouter, HistoryProfileRecord},
+        summarize_history_run,
+    },
     prof::{CooperativeProfileDrain, CooperativeProfileDrainOptions},
     run::{
         AttachRootTraceResult, BoundaryId, CancellationState, EnvResolutionStatus,
         ExecutionRequest, HostCallId, InMemoryRunStore, ProjectGeneration, ProjectId, RequestId,
         RunCursor, RunCursorExpiredReason, RunDiagnostic, RunError, RunErrorClass, RunFilter,
-        RunKind, RunOutcome, RunRequestState, RunResult, RunSubscription, RunTarget,
-        RunVisibilityFilter, RuntimeTarget, StartedHostRun, patch_to_wire, run_summary_to_wire,
-        run_to_wire,
+        RunKind, RunOutcome, RunRequestState, RunResult, RunSubscription, RunSummary, RunTarget,
+        RunVisibilityFilter, RuntimeTarget, StartRunContext, StartedHostRun, TraceCallKey,
+        patch_to_wire, run_summary_to_wire, run_to_wire,
     },
-    value::{ByteValueArtifactSink, ValueCodec, ValueRef, ValueWriter},
+    value::{
+        ByteValueArtifactSink, RunCompletedRecord, RunStartedRecord, ValueCapture,
+        ValueCaptureKind, ValueCodec, ValueRef, ValueWriteOutcome, ValueWriter,
+    },
 };
 pub use bridge_ctypes::{
     HANDLE_TABLE, baml_core, external_to_outbound, playground_run_args_to_bex_values,
@@ -122,6 +136,7 @@ struct WasmValueRef {
 }
 
 type WasmLiveValueStore = Rc<RefCell<HashMap<(BoundaryId, String), WasmLiveValueBody>>>;
+type WasmHistoryStore = Rc<RefCell<WasmHistoryStoreInner>>;
 
 #[derive(Clone)]
 struct WasmLiveValueBody {
@@ -129,10 +144,308 @@ struct WasmLiveValueBody {
     body: Vec<u8>,
 }
 
+#[derive(Debug, Default)]
+struct WasmHistoryStoreInner {
+    router: BoundaryTraceRouter,
+    boundaries: HashMap<BoundaryId, WasmHistoryBoundary>,
+}
+
+#[derive(Debug)]
+struct WasmHistoryBoundary {
+    value_writer: ValueWriter<ByteValueArtifactSink>,
+    started_at_epoch_ns: u128,
+    root_trace: Option<TraceCallKey>,
+    claimed_profile_indices: HashSet<usize>,
+    profile_writers: HashMap<u64, WasmProfileSegmentWriter>,
+}
+
+#[derive(Debug)]
+struct WasmProfileSegmentWriter {
+    label: String,
+    bytes: Vec<u8>,
+    scratch: Vec<u8>,
+}
+
 #[derive(Default)]
 struct RootValueRefs {
     output: Option<ValueRef>,
     error: Option<ValueRef>,
+}
+
+impl WasmHistoryStoreInner {
+    fn begin(&mut self, start: &StartRunContext) -> io::Result<()> {
+        let mut value_writer = ValueWriter::new(ByteValueArtifactSink::new(), start.boundary_id)?;
+        value_writer.append_run_started(&RunStartedRecord {
+            request: start.request.clone(),
+            created_at_ms: start.created_at_ms,
+            time_anchor: start.time_anchor,
+        })?;
+        self.boundaries.insert(
+            start.boundary_id,
+            WasmHistoryBoundary {
+                value_writer,
+                started_at_epoch_ns: u128::from(start.created_at_ms).saturating_mul(1_000_000),
+                root_trace: None,
+                claimed_profile_indices: HashSet::new(),
+                profile_writers: HashMap::new(),
+            },
+        );
+        Ok(())
+    }
+
+    fn attach_root_trace(
+        &mut self,
+        boundary_id: BoundaryId,
+        root_call_ref: bex_events::ids::CallRef,
+    ) -> io::Result<()> {
+        let root_trace = TraceCallKey {
+            process_euid: root_call_ref.process_euid,
+            engine_id: root_call_ref.engine_id,
+            thread_id: root_call_ref.thread_id,
+            call_id: root_call_ref.call_id,
+        };
+        let Some(boundary) = self.boundaries.get_mut(&boundary_id) else {
+            return Ok(());
+        };
+        match boundary.root_trace {
+            Some(existing) if existing == root_trace => {}
+            Some(existing) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!(
+                        "WASM history root trace conflict for {}: existing {}, new {}",
+                        boundary_id.to_wire_string(),
+                        existing.call_ref().encode(),
+                        root_trace.call_ref().encode()
+                    ),
+                ));
+            }
+            None => boundary.root_trace = Some(root_trace),
+        }
+        self.route_claimed(boundary_id)
+    }
+
+    fn ingest_profile_records(
+        &mut self,
+        records: impl IntoIterator<Item = HistoryProfileRecord>,
+    ) -> io::Result<()> {
+        for record in records {
+            self.router.ingest(record.envelope, record.disk_event);
+        }
+        let boundary_ids = self.boundaries.keys().copied().collect::<Vec<_>>();
+        for boundary_id in boundary_ids {
+            self.route_claimed(boundary_id)?;
+        }
+        Ok(())
+    }
+
+    fn append_value_body(
+        &mut self,
+        boundary_id: BoundaryId,
+        capture: ValueCapture,
+        codec: ValueCodec,
+        body: Vec<u8>,
+    ) -> io::Result<ValueWriteOutcome> {
+        let boundary = self.boundaries.get_mut(&boundary_id).ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                format!(
+                    "WASM history boundary {} was not begun",
+                    boundary_id.to_wire_string()
+                ),
+            )
+        })?;
+        boundary
+            .value_writer
+            .append_body_with_capture(codec, body, Some(capture))
+    }
+
+    fn complete(
+        &mut self,
+        boundary_id: BoundaryId,
+        outcome: &RunOutcome,
+        completed_at_ms: u64,
+    ) -> io::Result<()> {
+        let Some(boundary) = self.boundaries.get_mut(&boundary_id) else {
+            return Ok(());
+        };
+        let record = RunCompletedRecord {
+            status: outcome.status(),
+            completed_at_ms,
+            renderer_hint: match outcome {
+                RunOutcome::Succeeded(result) => result.renderer_hint.clone(),
+                RunOutcome::Failed(_) | RunOutcome::Cancelled(_) | RunOutcome::Panicked(_) => None,
+            },
+            error: match outcome {
+                RunOutcome::Failed(error) | RunOutcome::Panicked(error) => Some(error.clone()),
+                RunOutcome::Succeeded(_) | RunOutcome::Cancelled(_) => None,
+            },
+            cancellation: match outcome {
+                RunOutcome::Cancelled(cancellation) => Some(cancellation.clone()),
+                RunOutcome::Succeeded(_) | RunOutcome::Failed(_) | RunOutcome::Panicked(_) => None,
+            },
+        };
+        boundary.value_writer.append_run_completed(&record)?;
+        boundary.value_writer.flush()?;
+        Ok(())
+    }
+
+    fn list(&self, filter: &RunFilter) -> Vec<RunSummary> {
+        let mut summaries = self
+            .boundaries
+            .keys()
+            .filter_map(|boundary_id| self.open(*boundary_id).ok())
+            .filter(|run| history_run_matches_filter(run, filter))
+            .map(|run| summarize_history_run(&run))
+            .collect::<Vec<_>>();
+        summaries.sort_by_key(|summary| std::cmp::Reverse(summary.created_at_ms));
+        summaries
+    }
+
+    fn open(&self, boundary_id: BoundaryId) -> io::Result<bex_events::run::Run> {
+        let boundary = self.boundaries.get(&boundary_id).ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                format!(
+                    "WASM history boundary {} was not found",
+                    boundary_id.to_wire_string()
+                ),
+            )
+        })?;
+        let profile_segments = boundary.profile_segments();
+        let value_segments = boundary.value_segments();
+        open_boundary_from_segments(&profile_segments, &value_segments)
+    }
+
+    fn read_value(
+        &self,
+        boundary_id: BoundaryId,
+        value_ref_id: &str,
+    ) -> io::Result<Option<HistoryValueBody>> {
+        let Some(boundary) = self.boundaries.get(&boundary_id) else {
+            return Ok(None);
+        };
+        read_value_from_segments(&boundary.value_segments(), value_ref_id)
+    }
+
+    fn route_claimed(&mut self, boundary_id: BoundaryId) -> io::Result<()> {
+        let Some(root_trace) = self
+            .boundaries
+            .get(&boundary_id)
+            .and_then(|boundary| boundary.root_trace)
+        else {
+            return Ok(());
+        };
+        let component_indices = self.router.component_indices(root_trace);
+        let records = component_indices
+            .iter()
+            .filter_map(|index| {
+                self.router
+                    .record(*index)
+                    .cloned()
+                    .map(|record| (*index, record))
+            })
+            .collect::<Vec<_>>();
+        let Some(boundary) = self.boundaries.get_mut(&boundary_id) else {
+            return Ok(());
+        };
+        for (index, record) in records {
+            if !boundary.claimed_profile_indices.insert(index) {
+                continue;
+            }
+            boundary.write_profile_record(&record)?;
+        }
+        Ok(())
+    }
+}
+
+impl WasmHistoryBoundary {
+    fn write_profile_record(&mut self, record: &HistoryProfileRecord) -> io::Result<()> {
+        let Some(thread_id) = thread_id_for_profile_record(record) else {
+            return Ok(());
+        };
+        if !self.profile_writers.contains_key(&thread_id) {
+            let writer = WasmProfileSegmentWriter::new(
+                thread_id,
+                &record.envelope,
+                self.started_at_epoch_ns,
+            )?;
+            self.profile_writers.insert(thread_id, writer);
+        }
+        self.profile_writers
+            .get_mut(&thread_id)
+            .expect("profile writer inserted above")
+            .write_event(&record.disk_event)
+    }
+
+    fn profile_segments(&self) -> Vec<HistoryProfileSegment> {
+        let mut segments = self
+            .profile_writers
+            .values()
+            .map(WasmProfileSegmentWriter::segment)
+            .collect::<Vec<_>>();
+        segments.sort_by(|left, right| left.label.cmp(&right.label));
+        segments
+    }
+
+    fn value_segments(&self) -> Vec<HistoryValueSegment> {
+        vec![HistoryValueSegment {
+            label: "wasm-value-0.bamlvalue".to_string(),
+            bytes: self.value_writer.sink().bytes().to_vec(),
+        }]
+    }
+}
+
+impl WasmProfileSegmentWriter {
+    fn new(
+        thread_id: u64,
+        envelope: &bex_events::run::ProfileEventEnvelope,
+        started_at_epoch_ns: u128,
+    ) -> io::Result<Self> {
+        let mut bytes = Vec::new();
+        let meta = bex_events::prof::metadata::get_engine_metadata(envelope.engine_id.0);
+        let header = bex_events::prof::encode::build_header(
+            envelope.process_euid.0,
+            envelope.engine_id.0,
+            started_at_epoch_ns,
+            meta.as_ref(),
+            &bex_events::prof::clock::TickConverter::identity(),
+        );
+        bex_events::prof::encode::encode_length_delimited_message(&mut bytes, &header)
+            .map_err(io::Error::other)?;
+        Ok(Self {
+            label: format!(
+                "wasm-thread-{thread_id}-engine-{}-{}.bamlprof",
+                envelope.engine_id.0,
+                hex_process_id(envelope.process_euid.0)
+            ),
+            bytes,
+            scratch: Vec::new(),
+        })
+    }
+
+    fn write_event(&mut self, disk_event: &bex_events::prof::pb::DiskEventV1) -> io::Result<()> {
+        bex_events::prof::encode::encode_disk_event(&mut self.scratch, disk_event);
+        self.bytes.extend_from_slice(&self.scratch);
+        self.scratch.clear();
+        Ok(())
+    }
+
+    fn segment(&self) -> HistoryProfileSegment {
+        HistoryProfileSegment {
+            label: self.label.clone(),
+            bytes: self.bytes.clone(),
+        }
+    }
+}
+
+fn thread_id_for_profile_record(record: &HistoryProfileRecord) -> Option<u64> {
+    match &record.envelope.event.kind {
+        bex_events::run::ProfileEventKind::StartThread { thread_id, .. }
+        | bex_events::run::ProfileEventKind::EndThread { thread_id, .. }
+        | bex_events::run::ProfileEventKind::CallFunction { thread_id, .. }
+        | bex_events::run::ProfileEventKind::EndFunction { thread_id, .. } => Some(thread_id.0),
+    }
 }
 
 fn run_filter_from_js(filter: JsValue) -> Result<RunFilter, String> {
@@ -316,6 +629,7 @@ extern "C" {
 pub struct BamlWasmRuntime {
     bex: std::sync::Arc<dyn bex_project::BexLsp>,
     run_store: std::sync::Arc<InMemoryRunStore>,
+    history_store: WasmHistoryStore,
     profile_drain: Rc<RefCell<CooperativeProfileDrain>>,
     value_store: WasmLiveValueStore,
     playground_callback: send_wrapper::SendWrapper<Function>,
@@ -361,6 +675,7 @@ impl BamlWasmRuntime {
         #[allow(clippy::arc_with_non_send_sync)]
         let wasm_vfs_arc = std::sync::Arc::new(wasm_vfs);
         let run_store = std::sync::Arc::new(InMemoryRunStore::default());
+        let history_store = Rc::new(RefCell::new(WasmHistoryStoreInner::default()));
         let value_store = Rc::new(RefCell::new(HashMap::new()));
         let profile_drain = Rc::new(RefCell::new(CooperativeProfileDrain::new(
             CooperativeProfileDrainOptions {
@@ -426,6 +741,7 @@ impl BamlWasmRuntime {
         Ok(BamlWasmRuntime {
             bex: std::sync::Arc::from(bex),
             run_store,
+            history_store,
             profile_drain,
             value_store,
             playground_callback,
@@ -478,9 +794,16 @@ impl BamlWasmRuntime {
             &started,
             Some(u64::from(request_id)),
         );
+        begin_wasm_history(
+            &self.playground_callback,
+            &self.run_store,
+            &self.history_store,
+            &started.start,
+        );
 
         let run_store = self.run_store.clone();
         let callback = self.playground_callback.clone();
+        let history_store = self.history_store.clone();
         let profile_drain = self.profile_drain.clone();
         let value_store = self.value_store.clone();
         let function_name = name.to_string();
@@ -500,26 +823,41 @@ impl BamlWasmRuntime {
             {
                 Ok(traced) => {
                     publish_root_trace(&callback, &run_store, boundary_id, traced.entry_call_ref);
+                    attach_wasm_history_root_trace(
+                        &callback,
+                        &run_store,
+                        &history_store,
+                        boundary_id,
+                        traced.entry_call_ref,
+                    );
                     let refs = drain_wasm_captured_values(
                         &callback,
                         &run_store,
+                        &history_store,
                         &value_store,
                         boundary_id,
                         &value_capture,
                     );
-                    drain_wasm_profiles(&callback, &run_store, &profile_drain, Some(boundary_id));
+                    drain_wasm_profiles(
+                        &callback,
+                        &run_store,
+                        &history_store,
+                        &profile_drain,
+                        Some(boundary_id),
+                    );
                     let outcome = match traced.value {
                         Ok(_result) => {
                             root_value_success_outcome(refs.output, "baml.outbound.base64")
                         }
                         Err(e) => runtime_error_outcome_with_ref(&e, refs.error),
                     };
-                    complete_wasm_run(&callback, &run_store, boundary_id, outcome);
+                    complete_wasm_run(&callback, &run_store, &history_store, boundary_id, outcome);
                 }
                 Err(e) => {
                     let refs = drain_wasm_captured_values(
                         &callback,
                         &run_store,
+                        &history_store,
                         &value_store,
                         boundary_id,
                         &value_capture,
@@ -527,10 +865,17 @@ impl BamlWasmRuntime {
                     complete_wasm_run(
                         &callback,
                         &run_store,
+                        &history_store,
                         boundary_id,
                         runtime_error_outcome_with_ref(&e, refs.error),
                     );
-                    drain_wasm_profiles(&callback, &run_store, &profile_drain, Some(boundary_id));
+                    drain_wasm_profiles(
+                        &callback,
+                        &run_store,
+                        &history_store,
+                        &profile_drain,
+                        Some(boundary_id),
+                    );
                 }
             }
         });
@@ -584,9 +929,16 @@ impl BamlWasmRuntime {
             &started,
             Some(u64::from(request_id)),
         );
+        begin_wasm_history(
+            &self.playground_callback,
+            &self.run_store,
+            &self.history_store,
+            &started.start,
+        );
 
         let run_store = self.run_store.clone();
         let callback = self.playground_callback.clone();
+        let history_store = self.history_store.clone();
         let profile_drain = self.profile_drain.clone();
         let value_store = self.value_store.clone();
         let function_name = function_name.to_string();
@@ -606,26 +958,41 @@ impl BamlWasmRuntime {
             {
                 Ok(traced) => {
                     publish_root_trace(&callback, &run_store, boundary_id, traced.entry_call_ref);
+                    attach_wasm_history_root_trace(
+                        &callback,
+                        &run_store,
+                        &history_store,
+                        boundary_id,
+                        traced.entry_call_ref,
+                    );
                     let refs = drain_wasm_captured_values(
                         &callback,
                         &run_store,
+                        &history_store,
                         &value_store,
                         boundary_id,
                         &value_capture,
                     );
-                    drain_wasm_profiles(&callback, &run_store, &profile_drain, Some(boundary_id));
+                    drain_wasm_profiles(
+                        &callback,
+                        &run_store,
+                        &history_store,
+                        &profile_drain,
+                        Some(boundary_id),
+                    );
                     let outcome = match traced.value {
                         Ok(_result) => {
                             root_value_success_outcome(refs.output, "baml.outbound.base64")
                         }
                         Err(e) => runtime_error_outcome_with_ref(&e, refs.error),
                     };
-                    complete_wasm_run(&callback, &run_store, boundary_id, outcome);
+                    complete_wasm_run(&callback, &run_store, &history_store, boundary_id, outcome);
                 }
                 Err(e) => {
                     let refs = drain_wasm_captured_values(
                         &callback,
                         &run_store,
+                        &history_store,
                         &value_store,
                         boundary_id,
                         &value_capture,
@@ -633,10 +1000,17 @@ impl BamlWasmRuntime {
                     complete_wasm_run(
                         &callback,
                         &run_store,
+                        &history_store,
                         boundary_id,
                         runtime_error_outcome_with_ref(&e, refs.error),
                     );
-                    drain_wasm_profiles(&callback, &run_store, &profile_drain, Some(boundary_id));
+                    drain_wasm_profiles(
+                        &callback,
+                        &run_store,
+                        &history_store,
+                        &profile_drain,
+                        Some(boundary_id),
+                    );
                 }
             }
         });
@@ -790,6 +1164,83 @@ impl BamlWasmRuntime {
         );
     }
 
+    #[wasm_bindgen(js_name = listHistory)]
+    pub fn list_history(&self, request_id: u32, filter: JsValue) {
+        let filter = match run_filter_from_js(filter) {
+            Ok(filter) => filter,
+            Err(error) => {
+                send_command_error(
+                    &self.playground_callback,
+                    u64::from(request_id),
+                    "invalidHistoryListFilter",
+                    format!("Invalid history list filter: {error}"),
+                );
+                return;
+            }
+        };
+        let runs = self
+            .history_store
+            .borrow()
+            .list(&filter)
+            .into_iter()
+            .map(|summary| run_summary_to_wire(&summary))
+            .collect();
+        send_wasm_notification(
+            &self.playground_callback,
+            wasm_playground::PlaygroundNotification::HistoryList {
+                request_id: u64::from(request_id),
+                runs,
+            },
+        );
+    }
+
+    #[wasm_bindgen(js_name = openHistory)]
+    pub fn open_history(&self, request_id: u32, boundary_id: String) -> Result<(), JsValue> {
+        let parsed = parse_boundary_id(&boundary_id)?;
+        if let Some(snapshot) = self.run_store.snapshot(parsed) {
+            send_wasm_notification(
+                &self.playground_callback,
+                wasm_playground::PlaygroundNotification::RunSnapshot {
+                    request_id: Some(u64::from(request_id)),
+                    boundary_id,
+                    snapshot: run_to_wire(&snapshot),
+                },
+            );
+            return Ok(());
+        }
+        let replayed = match self.history_store.borrow().open(parsed) {
+            Ok(run) => run,
+            Err(err) => {
+                let code = if err.kind() == io::ErrorKind::NotFound {
+                    "historyMissing"
+                } else {
+                    "historyOpenFailed"
+                };
+                send_command_error(
+                    &self.playground_callback,
+                    u64::from(request_id),
+                    code,
+                    err.to_string(),
+                );
+                return Ok(());
+            }
+        };
+        let snapshot = if self.run_store.insert_replayed_run(replayed.clone()) {
+            replayed
+        } else {
+            self.run_store.snapshot(parsed).unwrap_or(replayed)
+        };
+        send_wasm_notification(
+            &self.playground_callback,
+            wasm_playground::PlaygroundNotification::RunSnapshot {
+                request_id: Some(u64::from(request_id)),
+                boundary_id,
+                snapshot: run_to_wire(&snapshot),
+            },
+        );
+        Ok(())
+    }
+
     #[wasm_bindgen(js_name = snapshot)]
     pub fn snapshot(&self, request_id: u32, boundary_id: String) -> Result<(), JsValue> {
         let parsed = parse_boundary_id(&boundary_id)?;
@@ -829,6 +1280,18 @@ impl BamlWasmRuntime {
             .borrow()
             .get(&(parsed, value_ref_id.clone()))
             .cloned();
+        let stored = match stored {
+            Some(stored) => Some(stored),
+            None => self
+                .history_store
+                .borrow()
+                .read_value(parsed, &value_ref_id)
+                .map_err(|err| JsError::new(&format!("Failed to read retained value: {err}")))?
+                .map(|body| WasmLiveValueBody {
+                    codec: body.codec,
+                    body: body.body,
+                }),
+        };
         if let Some(stored) = stored {
             send_wasm_notification(
                 &self.playground_callback,
@@ -1002,10 +1465,17 @@ impl BamlWasmRuntime {
             &started,
             Some(u64::from(request_id)),
         );
+        begin_wasm_history(
+            &self.playground_callback,
+            &self.run_store,
+            &self.history_store,
+            &started.start,
+        );
 
         let bex = self.bex.clone();
         let run_store = self.run_store.clone();
         let callback = self.playground_callback.clone();
+        let history_store = self.history_store.clone();
         let profile_drain = self.profile_drain.clone();
         let value_store = self.value_store.clone();
         let project = project.to_string();
@@ -1027,24 +1497,39 @@ impl BamlWasmRuntime {
             {
                 Ok(traced) => {
                     publish_root_trace(&callback, &run_store, boundary_id, traced.entry_call_ref);
+                    attach_wasm_history_root_trace(
+                        &callback,
+                        &run_store,
+                        &history_store,
+                        boundary_id,
+                        traced.entry_call_ref,
+                    );
                     let refs = drain_wasm_captured_values(
                         &callback,
                         &run_store,
+                        &history_store,
                         &value_store,
                         boundary_id,
                         &value_capture,
                     );
-                    drain_wasm_profiles(&callback, &run_store, &profile_drain, Some(boundary_id));
+                    drain_wasm_profiles(
+                        &callback,
+                        &run_store,
+                        &history_store,
+                        &profile_drain,
+                        Some(boundary_id),
+                    );
                     let outcome = match traced.value {
                         Ok(_result) => root_value_success_outcome(refs.output, "testReport"),
                         Err(e) => runtime_error_outcome_with_ref(&e, refs.error),
                     };
-                    complete_wasm_run(&callback, &run_store, boundary_id, outcome);
+                    complete_wasm_run(&callback, &run_store, &history_store, boundary_id, outcome);
                 }
                 Err(e) => {
                     let refs = drain_wasm_captured_values(
                         &callback,
                         &run_store,
+                        &history_store,
                         &value_store,
                         boundary_id,
                         &value_capture,
@@ -1052,10 +1537,17 @@ impl BamlWasmRuntime {
                     complete_wasm_run(
                         &callback,
                         &run_store,
+                        &history_store,
                         boundary_id,
                         runtime_error_outcome_with_ref(&e, refs.error),
                     );
-                    drain_wasm_profiles(&callback, &run_store, &profile_drain, Some(boundary_id));
+                    drain_wasm_profiles(
+                        &callback,
+                        &run_store,
+                        &history_store,
+                        &profile_drain,
+                        Some(boundary_id),
+                    );
                 }
             }
         });
@@ -1211,6 +1703,32 @@ fn send_command_error(
     );
 }
 
+fn begin_wasm_history(
+    callback: &send_wrapper::SendWrapper<Function>,
+    run_store: &InMemoryRunStore,
+    history_store: &WasmHistoryStore,
+    start: &StartRunContext,
+) {
+    if let Err(err) = history_store.borrow_mut().begin(start) {
+        send_wasm_history_diagnostic(callback, run_store, start.boundary_id, err);
+    }
+}
+
+fn attach_wasm_history_root_trace(
+    callback: &send_wrapper::SendWrapper<Function>,
+    run_store: &InMemoryRunStore,
+    history_store: &WasmHistoryStore,
+    boundary_id: BoundaryId,
+    entry_call_ref: bex_events::ids::CallRef,
+) {
+    if let Err(err) = history_store
+        .borrow_mut()
+        .attach_root_trace(boundary_id, entry_call_ref)
+    {
+        send_wasm_history_diagnostic(callback, run_store, boundary_id, err);
+    }
+}
+
 fn publish_root_trace(
     callback: &send_wrapper::SendWrapper<Function>,
     run_store: &InMemoryRunStore,
@@ -1240,10 +1758,18 @@ fn publish_root_trace(
 fn complete_wasm_run(
     callback: &send_wrapper::SendWrapper<Function>,
     run_store: &InMemoryRunStore,
+    history_store: &WasmHistoryStore,
     boundary_id: BoundaryId,
     outcome: RunOutcome,
 ) {
-    if let Some(patch) = run_store.complete_run_now(boundary_id, outcome) {
+    let completed_at_ms = epoch_ms();
+    if let Err(err) = history_store
+        .borrow_mut()
+        .complete(boundary_id, &outcome, completed_at_ms)
+    {
+        send_wasm_history_diagnostic(callback, run_store, boundary_id, err);
+    }
+    if let Some(patch) = run_store.complete_run(boundary_id, outcome, completed_at_ms) {
         send_run_patch(callback, &patch);
     }
 }
@@ -1251,6 +1777,7 @@ fn complete_wasm_run(
 fn drain_wasm_profiles(
     callback: &send_wrapper::SendWrapper<Function>,
     run_store: &InMemoryRunStore,
+    history_store: &WasmHistoryStore,
     profile_drain: &Rc<RefCell<CooperativeProfileDrain>>,
     boundary_id: Option<BoundaryId>,
 ) {
@@ -1258,6 +1785,14 @@ fn drain_wasm_profiles(
         let mut drain = profile_drain.borrow_mut();
         bex_events::prof::drain::drain_global_until_idle(&mut drain, WASM_PROFILE_DRAIN_MAX_SWEEPS)
     };
+
+    if let Err(err) = history_store
+        .borrow_mut()
+        .ingest_profile_records(output.history_records)
+        && let Some(boundary_id) = boundary_id
+    {
+        send_wasm_history_diagnostic(callback, run_store, boundary_id, err);
+    }
 
     for event in output.events {
         for patch in run_store.ingest_profile_event(event) {
@@ -1324,6 +1859,7 @@ fn root_value_success_outcome(value_ref: Option<ValueRef>, renderer_hint: &str) 
 fn drain_wasm_captured_values(
     callback: &send_wrapper::SendWrapper<Function>,
     run_store: &InMemoryRunStore,
+    history_store: &WasmHistoryStore,
     value_store: &WasmLiveValueStore,
     boundary_id: BoundaryId,
     producer: &bex_project::TraceCaptureProducer,
@@ -1335,13 +1871,39 @@ fn drain_wasm_captured_values(
             return RootValueRefs::default();
         }
     };
-    let encoded_values = match producer.drain_to_value_writer(&mut writer) {
+    let mut history_errors = Vec::new();
+    let encoded_values = match producer.drain_to_value_recorder(|draft, body| {
+        let capture = ValueCapture {
+            kind: value_capture_kind_from_bex(draft.kind),
+            call: draft.call,
+        };
+        match history_store.borrow_mut().append_value_body(
+            draft.boundary_id,
+            capture.clone(),
+            ValueCodec::BamlOutboundValue,
+            body.clone(),
+        ) {
+            Ok(outcome) => Ok(outcome),
+            Err(err) => {
+                history_errors.push(err.to_string());
+                writer.append_body_with_capture(ValueCodec::BamlOutboundValue, body, Some(capture))
+            }
+        }
+    }) {
         Ok(encoded_values) => encoded_values,
         Err(err) => {
             send_value_capture_diagnostic(callback, run_store, boundary_id, err);
             return RootValueRefs::default();
         }
     };
+    for err in history_errors {
+        send_wasm_history_diagnostic(
+            callback,
+            run_store,
+            boundary_id,
+            format!("history value retention failed; retained live bytes only: {err}"),
+        );
+    }
 
     let mut refs = RootValueRefs::default();
     for encoded in encoded_values {
@@ -1372,6 +1934,34 @@ fn drain_wasm_captured_values(
     }
 
     refs
+}
+
+fn value_capture_kind_from_bex(kind: bex_project::CaptureKind) -> ValueCaptureKind {
+    match kind {
+        bex_project::CaptureKind::RootInput => ValueCaptureKind::RootInput,
+        bex_project::CaptureKind::RootOutput => ValueCaptureKind::RootOutput,
+        bex_project::CaptureKind::RootError => ValueCaptureKind::RootError,
+    }
+}
+
+fn send_wasm_history_diagnostic(
+    callback: &send_wrapper::SendWrapper<Function>,
+    run_store: &InMemoryRunStore,
+    boundary_id: BoundaryId,
+    err: impl std::fmt::Display,
+) {
+    if let Some(patch) = run_store.add_diagnostic(
+        boundary_id,
+        RunDiagnostic {
+            severity: bex_events::run::DiagnosticSeverity::Warning,
+            code: Some("historyRetentionFailed".to_string()),
+            message: format!("Failed to retain WASM history bytes: {err}"),
+            call_node_id: None,
+            payload_id: None,
+        },
+    ) {
+        send_run_patch(callback, &patch);
+    }
 }
 
 fn send_value_capture_diagnostic(
@@ -1413,5 +2003,143 @@ fn runtime_error_outcome_with_ref(
             details: None,
             value_ref,
         })
+    }
+}
+
+#[cfg(test)]
+mod history_tests {
+    use super::*;
+    use bex_events::{
+        ids::{BexCallId, BexThreadId, EngineId, ProcessEuid},
+        prof::pb,
+        run::{
+            ProfileEventSource, ProjectGeneration, RunRequestSummary, RunStatus, RunTimeAnchor,
+            StartGuard, profile_event_envelope_from_disk_event,
+        },
+    };
+
+    fn start_context(boundary_id: BoundaryId) -> StartRunContext {
+        StartRunContext {
+            boundary_id,
+            request_id: RequestId(1),
+            request: RunRequestSummary {
+                project_id: ProjectId("wasm-project".to_string()),
+                project_generation: ProjectGeneration(1),
+                target: RunTarget::Function {
+                    function_name: "user.Extract".to_string(),
+                },
+                args_summary: None,
+                options_summary: None,
+            },
+            created_at_ms: 10,
+            time_anchor: RunTimeAnchor {
+                epoch_created_at_ms: 10,
+                trace_zero_ns: 0,
+            },
+            start_guard: StartGuard::new(),
+        }
+    }
+
+    fn root_trace() -> TraceCallKey {
+        TraceCallKey {
+            process_euid: ProcessEuid([4; 16]),
+            engine_id: EngineId(9),
+            thread_id: BexThreadId(1),
+            call_id: BexCallId(2),
+        }
+    }
+
+    fn call_event() -> pb::DiskEventV1 {
+        pb::DiskEventV1 {
+            event: Some(pb::disk_event_v1::Event::CallFunction(pb::CallFunction {
+                thread_id: 1,
+                call_id: 2,
+                parent_call_id: None,
+                function_id: 0,
+                timestamp_ns: 4,
+                call_site_file_id: None,
+                call_site_start_offset: None,
+                call_site_end_offset: None,
+                call_site_line: None,
+            })),
+        }
+    }
+
+    #[test]
+    fn warm_history_replays_profile_and_value_bytes_without_live_runstore() {
+        let boundary_id = BoundaryId::from_bytes([3; 16]);
+        let start = start_context(boundary_id);
+        let trace = root_trace();
+        let event = call_event();
+        let envelope = profile_event_envelope_from_disk_event(
+            ProfileEventSource::Replay {
+                artifact_id: "wasm-history-test".to_string(),
+            },
+            trace.process_euid,
+            trace.engine_id,
+            &event,
+        )
+        .unwrap();
+
+        let mut store = WasmHistoryStoreInner::default();
+        store.begin(&start).unwrap();
+        store
+            .ingest_profile_records(vec![HistoryProfileRecord {
+                envelope,
+                disk_event: event,
+            }])
+            .unwrap();
+        store
+            .attach_root_trace(boundary_id, trace.call_ref())
+            .unwrap();
+        let outcome = store
+            .append_value_body(
+                boundary_id,
+                ValueCapture {
+                    kind: ValueCaptureKind::RootOutput,
+                    call: trace,
+                },
+                ValueCodec::BamlOutboundValue,
+                vec![1, 2, 3],
+            )
+            .unwrap();
+        store
+            .complete(
+                boundary_id,
+                &RunOutcome::Succeeded(RunResult {
+                    value_ref: Some(outcome.value_ref.clone()),
+                    renderer_hint: Some("baml.outbound.base64".to_string()),
+                    supporting_payload_ids: Vec::new(),
+                }),
+                20,
+            )
+            .unwrap();
+
+        let summaries = store.list(&RunFilter::default());
+        assert_eq!(summaries.len(), 1);
+        assert_eq!(summaries[0].boundary_id, boundary_id);
+
+        let replayed = store.open(boundary_id).unwrap();
+        assert_eq!(replayed.status, RunStatus::Succeeded);
+        assert_eq!(replayed.calls.len(), 1);
+        assert_eq!(
+            replayed
+                .result
+                .as_ref()
+                .unwrap()
+                .value_ref
+                .as_ref()
+                .unwrap()
+                .id,
+            outcome.value_ref.id
+        );
+        assert_eq!(
+            store
+                .read_value(boundary_id, &outcome.value_ref.id)
+                .unwrap()
+                .unwrap()
+                .body,
+            vec![1, 2, 3]
+        );
     }
 }

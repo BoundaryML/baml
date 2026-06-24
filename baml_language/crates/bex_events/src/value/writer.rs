@@ -5,8 +5,9 @@ use std::io;
 use crate::{
     ids::BoundaryId,
     value::{
-        ValueArtifactRef, ValueArtifactSink, ValueCodec, ValueRecord, ValueRef,
-        encode::{encode_header, encode_record},
+        RunCompletedRecord, RunStartedRecord, ValueArtifactRef, ValueArtifactSink, ValueCapture,
+        ValueCodec, ValueRecord, ValueRef,
+        encode::{encode_header, encode_record, encode_run_completed, encode_run_started},
     },
 };
 
@@ -38,18 +39,42 @@ impl<S: ValueArtifactSink> ValueWriter<S> {
         codec: ValueCodec,
         body: Vec<u8>,
     ) -> io::Result<ValueWriteOutcome> {
+        self.append_body_with_capture(codec, body, None)
+    }
+
+    pub fn append_body_with_capture(
+        &mut self,
+        codec: ValueCodec,
+        body: Vec<u8>,
+        capture: Option<ValueCapture>,
+    ) -> io::Result<ValueWriteOutcome> {
         let id = format!("value_{}", self.next_value_id);
         self.next_value_id = self.next_value_id.saturating_add(1);
         let value_ref = ValueRef::available(id, codec, body.len(), body.len());
         let record = ValueRecord {
             value_ref: value_ref.clone(),
             body,
+            capture,
         };
         let mut encoded = Vec::new();
         encode_record(&mut encoded, &record)
             .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
         self.sink.write_chunk(&encoded)?;
         Ok(ValueWriteOutcome { value_ref })
+    }
+
+    pub fn append_run_started(&mut self, record: &RunStartedRecord) -> io::Result<()> {
+        let mut encoded = Vec::new();
+        encode_run_started(&mut encoded, record)
+            .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
+        self.sink.write_chunk(&encoded)
+    }
+
+    pub fn append_run_completed(&mut self, record: &RunCompletedRecord) -> io::Result<()> {
+        let mut encoded = Vec::new();
+        encode_run_completed(&mut encoded, record)
+            .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
+        self.sink.write_chunk(&encoded)
     }
 
     pub fn flush(&mut self) -> io::Result<ValueArtifactRef> {
@@ -70,7 +95,7 @@ mod tests {
     use crate::{
         ids::BoundaryId,
         value::{
-            ByteValueArtifactSink, ValueArtifactRef, ValueCodec, ValueWriter,
+            ByteValueArtifactSink, ValueArtifactRef, ValueCodec, ValueFileRecord, ValueWriter,
             read_bamlvalue_from_bytes,
         },
     };
@@ -95,6 +120,9 @@ mod tests {
 
         let parsed = read_bamlvalue_from_bytes(writer.sink().bytes()).unwrap();
         assert_eq!(parsed.records.len(), 1);
-        assert_eq!(parsed.records[0].body, vec![1, 2, 3]);
+        let ValueFileRecord::CapturedValue(record) = &parsed.records[0] else {
+            panic!("expected value record");
+        };
+        assert_eq!(record.body, vec![1, 2, 3]);
     }
 }

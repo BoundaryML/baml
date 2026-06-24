@@ -10,6 +10,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::{
+    history::router::HistoryProfileRecord,
     ids::{EngineId, ProcessEuid},
     prof::{
         artifact::{
@@ -59,6 +60,7 @@ struct EngineDrain {
 pub struct CooperativeProfileDrainOutput {
     pub progress: bool,
     pub events: Vec<ProfileEventEnvelope>,
+    pub history_records: Vec<HistoryProfileRecord>,
     pub chunks: Vec<ProfileArtifactChunk>,
     pub artifacts: Vec<ProfileArtifactSnapshot>,
     pub diagnostics: Vec<ProfileDrainDiagnostic>,
@@ -193,6 +195,11 @@ impl CooperativeProfileDrain {
                         EngineId(engine_id),
                         &event,
                     ) {
+                        crate::history::publish_history_profile_event(&envelope, &event);
+                        output.history_records.push(HistoryProfileRecord {
+                            envelope: envelope.clone(),
+                            disk_event: event.clone(),
+                        });
                         output.events.push(envelope);
                     }
                     encode_disk_event(&mut chunk, &event);

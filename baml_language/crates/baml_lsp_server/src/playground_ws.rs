@@ -70,6 +70,19 @@ pub enum WsInMessage {
         request_id: u64,
         filter: Option<RunListFilter>,
     },
+    #[serde(rename = "listHistory")]
+    ListHistory {
+        #[serde(rename = "requestId")]
+        request_id: u64,
+        filter: Option<RunListFilter>,
+    },
+    #[serde(rename = "openHistory")]
+    OpenHistory {
+        #[serde(rename = "requestId")]
+        request_id: u64,
+        #[serde(rename = "boundaryId")]
+        boundary_id: String,
+    },
     #[serde(rename = "snapshot")]
     Snapshot {
         #[serde(rename = "requestId")]
@@ -237,6 +250,12 @@ pub enum WsOutMessage {
     },
     #[serde(rename = "runList")]
     RunList {
+        #[serde(rename = "requestId")]
+        request_id: u64,
+        runs: Vec<serde_json::Value>,
+    },
+    #[serde(rename = "historyList")]
+    HistoryList {
         #[serde(rename = "requestId")]
         request_id: u64,
         runs: Vec<serde_json::Value>,

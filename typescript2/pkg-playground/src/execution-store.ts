@@ -44,6 +44,8 @@ export interface ExecutionStore {
     value?: string,
   ): Promise<RequestCommandOutcome | string>;
   listRuns(filter?: RunListFilter): Promise<RunSummary[]>;
+  listHistory(filter?: RunListFilter): Promise<RunSummary[]>;
+  openHistory(boundaryId: BoundaryId): Promise<Run>;
   snapshotRun(boundaryId: BoundaryId): Promise<Run>;
   followRun(boundaryId: BoundaryId, cursor?: RunCursor): string;
   applySnapshot(run: Run): void;
@@ -190,6 +192,16 @@ export function createExecutionStore(client: RunStoreClient): ExecutionStore {
 
     listRuns(filter) {
       return client.listRuns(filter);
+    },
+
+    listHistory(filter) {
+      return client.listHistory(filter);
+    },
+
+    async openHistory(boundaryId) {
+      const run = await client.openHistory(boundaryId);
+      applySnapshot(run);
+      return run;
     },
 
     async snapshotRun(boundaryId) {

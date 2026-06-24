@@ -304,6 +304,7 @@ impl ConsumerState {
                         &event,
                     ) {
                         crate::run::publish_profile_event(&envelope);
+                        crate::history::publish_history_profile_event(&envelope, &event);
                     }
                     writer.encode_event(&event);
                 }

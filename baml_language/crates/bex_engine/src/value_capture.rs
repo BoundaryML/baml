@@ -9,7 +9,10 @@ use std::{
 use bex_events::{
     ids::BoundaryId,
     run::TraceCallKey,
-    value::{ValueArtifactSink, ValueCodec, ValueRef, ValueWriter},
+    value::{
+        ValueArtifactSink, ValueCapture, ValueCaptureKind, ValueCodec, ValueRef, ValueWriteOutcome,
+        ValueWriter,
+    },
 };
 
 use crate::{
@@ -180,6 +183,22 @@ impl TraceCaptureProducer {
         &self,
         writer: &mut ValueWriter<S>,
     ) -> io::Result<Vec<EncodedTraceValue>> {
+        self.drain_to_value_recorder(|draft, body| {
+            writer.append_body_with_capture(
+                ValueCodec::BamlOutboundValue,
+                body,
+                Some(ValueCapture {
+                    kind: value_capture_kind(draft.kind),
+                    call: draft.call,
+                }),
+            )
+        })
+    }
+
+    pub fn drain_to_value_recorder(
+        &self,
+        mut record_value: impl FnMut(&TraceValueDraft, Vec<u8>) -> io::Result<ValueWriteOutcome>,
+    ) -> io::Result<Vec<EncodedTraceValue>> {
         let mut encoded = Vec::new();
         for draft in self.drain() {
             let snapshot = self.trace_heap.get(draft.snapshot).ok_or_else(|| {
@@ -198,7 +217,7 @@ impl TraceCaptureProducer {
                     return Err(io::Error::new(io::ErrorKind::InvalidData, err));
                 }
             };
-            let outcome = writer.append_body(ValueCodec::BamlOutboundValue, body.clone());
+            let outcome = record_value(&draft, body.clone());
             let _ = self.trace_heap.release(draft.snapshot);
             let outcome = outcome?;
             encoded.push(EncodedTraceValue {
@@ -210,6 +229,14 @@ impl TraceCaptureProducer {
             });
         }
         Ok(encoded)
+    }
+}
+
+fn value_capture_kind(kind: CaptureKind) -> ValueCaptureKind {
+    match kind {
+        CaptureKind::RootInput => ValueCaptureKind::RootInput,
+        CaptureKind::RootOutput => ValueCaptureKind::RootOutput,
+        CaptureKind::RootError => ValueCaptureKind::RootError,
     }
 }
 

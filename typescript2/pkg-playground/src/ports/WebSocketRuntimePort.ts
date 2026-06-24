@@ -204,6 +204,10 @@ export class WebSocketRuntimePort implements RuntimePort {
         };
       case 'listRuns':
         return { type: 'listRuns', requestId: msg.requestId, filter: msg.filter };
+      case 'listHistory':
+        return { type: 'listHistory', requestId: msg.requestId, filter: msg.filter };
+      case 'openHistory':
+        return { type: 'openHistory', requestId: msg.requestId, boundaryId: msg.boundaryId };
       case 'snapshot':
         return { type: 'snapshot', requestId: msg.requestId, boundaryId: msg.boundaryId };
       case 'readValue':

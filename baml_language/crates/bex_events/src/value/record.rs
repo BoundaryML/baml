@@ -1,5 +1,13 @@
 use std::io;
 
+use crate::{
+    ids::{BexCallId, BexThreadId, BoundaryId, EngineId, ProcessEuid},
+    run::{
+        CancellationState, ProjectGeneration, ProjectId, RunError, RunErrorClass,
+        RunRequestSummary, RunStatus, RunTarget, RunTimeAnchor, TraceCallKey,
+    },
+};
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ValueCodec {
     BamlOutboundValue,
@@ -89,10 +97,58 @@ impl ValueRef {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ValueCaptureKind {
+    RootInput,
+    RootOutput,
+    RootError,
+}
+
+impl ValueCaptureKind {
+    #[must_use]
+    pub fn as_wire_str(self) -> &'static str {
+        match self {
+            Self::RootInput => "rootInput",
+            Self::RootOutput => "rootOutput",
+            Self::RootError => "rootError",
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ValueCapture {
+    pub kind: ValueCaptureKind,
+    pub call: TraceCallKey,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RunStartedRecord {
+    pub request: RunRequestSummary,
+    pub created_at_ms: u64,
+    pub time_anchor: RunTimeAnchor,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RunCompletedRecord {
+    pub status: RunStatus,
+    pub completed_at_ms: u64,
+    pub renderer_hint: Option<String>,
+    pub error: Option<RunError>,
+    pub cancellation: Option<CancellationState>,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ValueRecord {
     pub value_ref: ValueRef,
     pub body: Vec<u8>,
+    pub capture: Option<ValueCapture>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ValueFileRecord {
+    CapturedValue(ValueRecord),
+    RunStarted(RunStartedRecord),
+    RunCompleted(RunCompletedRecord),
 }
 
 impl TryFrom<crate::value::pb::ValueMetadataV1> for ValueRef {
@@ -176,5 +232,314 @@ impl From<&ValueRef> for crate::value::pb::ValueMetadataV1 {
                 .and_then(|value| u64::try_from(value).ok()),
             diagnostic: value_ref.diagnostic.clone(),
         }
+    }
+}
+
+impl TryFrom<crate::value::pb::TraceCallKeyV1> for TraceCallKey {
+    type Error = io::Error;
+
+    fn try_from(value: crate::value::pb::TraceCallKeyV1) -> Result<Self, Self::Error> {
+        let process_id: [u8; 16] = value.process_id.as_slice().try_into().map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "trace call process id must be 16 bytes, got {}",
+                    value.process_id.len()
+                ),
+            )
+        })?;
+        Ok(Self {
+            process_euid: ProcessEuid(process_id),
+            engine_id: EngineId(value.engine_id),
+            thread_id: BexThreadId(value.thread_id),
+            call_id: BexCallId(value.call_id),
+        })
+    }
+}
+
+impl From<TraceCallKey> for crate::value::pb::TraceCallKeyV1 {
+    fn from(value: TraceCallKey) -> Self {
+        Self {
+            process_id: value.process_euid.0.to_vec(),
+            engine_id: value.engine_id.0,
+            thread_id: value.thread_id.0,
+            call_id: value.call_id.0,
+        }
+    }
+}
+
+impl TryFrom<crate::value::pb::ValueCaptureV1> for ValueCapture {
+    type Error = io::Error;
+
+    fn try_from(value: crate::value::pb::ValueCaptureV1) -> Result<Self, Self::Error> {
+        let kind = match value.kind() {
+            crate::value::pb::ValueCaptureKind::RootInput => ValueCaptureKind::RootInput,
+            crate::value::pb::ValueCaptureKind::RootOutput => ValueCaptureKind::RootOutput,
+            crate::value::pb::ValueCaptureKind::RootError => ValueCaptureKind::RootError,
+            crate::value::pb::ValueCaptureKind::Unspecified => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "value capture omitted kind",
+                ));
+            }
+        };
+        let call = value.call.ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidData, "value capture omitted call")
+        })?;
+        Ok(Self {
+            kind,
+            call: call.try_into()?,
+        })
+    }
+}
+
+impl From<&ValueCapture> for crate::value::pb::ValueCaptureV1 {
+    fn from(value: &ValueCapture) -> Self {
+        Self {
+            kind: match value.kind {
+                ValueCaptureKind::RootInput => crate::value::pb::ValueCaptureKind::RootInput as i32,
+                ValueCaptureKind::RootOutput => {
+                    crate::value::pb::ValueCaptureKind::RootOutput as i32
+                }
+                ValueCaptureKind::RootError => crate::value::pb::ValueCaptureKind::RootError as i32,
+            },
+            call: Some(value.call.into()),
+        }
+    }
+}
+
+impl TryFrom<crate::value::pb::RunStartedV1> for RunStartedRecord {
+    type Error = io::Error;
+
+    fn try_from(value: crate::value::pb::RunStartedV1) -> Result<Self, Self::Error> {
+        let target = value.target.ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "run started record omitted target",
+            )
+        })?;
+        let time_anchor = value.time_anchor.ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "run started record omitted time anchor",
+            )
+        })?;
+        Ok(Self {
+            request: RunRequestSummary {
+                project_id: ProjectId(value.project_id),
+                project_generation: ProjectGeneration(value.project_generation),
+                target: run_target_from_proto(target)?,
+                args_summary: value.args_summary,
+                options_summary: value.options_summary,
+            },
+            created_at_ms: value.created_at_ms,
+            time_anchor: RunTimeAnchor {
+                epoch_created_at_ms: time_anchor.epoch_created_at_ms,
+                trace_zero_ns: time_anchor.trace_zero_ns,
+            },
+        })
+    }
+}
+
+impl From<&RunStartedRecord> for crate::value::pb::RunStartedV1 {
+    fn from(value: &RunStartedRecord) -> Self {
+        Self {
+            project_id: value.request.project_id.0.clone(),
+            project_generation: value.request.project_generation.0,
+            target: Some(run_target_to_proto(&value.request.target)),
+            args_summary: value.request.args_summary.clone(),
+            options_summary: value.request.options_summary.clone(),
+            created_at_ms: value.created_at_ms,
+            time_anchor: Some(crate::value::pb::TimeAnchorV1 {
+                epoch_created_at_ms: value.time_anchor.epoch_created_at_ms,
+                trace_zero_ns: value.time_anchor.trace_zero_ns,
+            }),
+        }
+    }
+}
+
+impl TryFrom<crate::value::pb::RunCompletedV1> for RunCompletedRecord {
+    type Error = io::Error;
+
+    fn try_from(value: crate::value::pb::RunCompletedV1) -> Result<Self, Self::Error> {
+        let status = match value.status() {
+            crate::value::pb::RunStatus::Pending => RunStatus::Pending,
+            crate::value::pb::RunStatus::Running => RunStatus::Running,
+            crate::value::pb::RunStatus::WaitingForInput => RunStatus::WaitingForInput,
+            crate::value::pb::RunStatus::WaitingForEnv => RunStatus::WaitingForEnv,
+            crate::value::pb::RunStatus::Cancelling => RunStatus::Cancelling,
+            crate::value::pb::RunStatus::Succeeded => RunStatus::Succeeded,
+            crate::value::pb::RunStatus::Failed => RunStatus::Failed,
+            crate::value::pb::RunStatus::Cancelled => RunStatus::Cancelled,
+            crate::value::pb::RunStatus::Panicked => RunStatus::Panicked,
+            crate::value::pb::RunStatus::Unspecified => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "run completed record omitted status",
+                ));
+            }
+        };
+        Ok(Self {
+            status,
+            completed_at_ms: value.completed_at_ms,
+            renderer_hint: value.renderer_hint,
+            error: value.error.map(run_error_from_proto).transpose()?,
+            cancellation: value.cancellation.map(cancellation_from_proto),
+        })
+    }
+}
+
+impl From<&RunCompletedRecord> for crate::value::pb::RunCompletedV1 {
+    fn from(value: &RunCompletedRecord) -> Self {
+        Self {
+            status: run_status_to_proto(value.status) as i32,
+            completed_at_ms: value.completed_at_ms,
+            renderer_hint: value.renderer_hint.clone(),
+            error: value.error.as_ref().map(run_error_to_proto),
+            cancellation: value.cancellation.as_ref().map(cancellation_to_proto),
+        }
+    }
+}
+
+fn run_target_from_proto(value: crate::value::pb::RunTargetV1) -> io::Result<RunTarget> {
+    use crate::value::pb::run_target_v1::Target;
+    match value
+        .target
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "run target omitted variant"))?
+    {
+        Target::Function(target) => Ok(RunTarget::Function {
+            function_name: target.function_name,
+        }),
+        Target::Test(target) => Ok(RunTarget::Test {
+            generation: ProjectGeneration(target.generation),
+            test_name: target.test_name,
+        }),
+        Target::Preview(target) => Ok(RunTarget::Preview {
+            parent_function_name: target.parent_function_name,
+            helper: target.helper,
+        }),
+        Target::Companion(target) => Ok(RunTarget::Companion {
+            parent_boundary_id: target
+                .parent_boundary_id
+                .map(boundary_id_from_vec)
+                .transpose()?,
+            function_name: target.function_name,
+        }),
+        Target::Internal(target) => Ok(RunTarget::Internal { name: target.name }),
+    }
+}
+
+fn run_target_to_proto(value: &RunTarget) -> crate::value::pb::RunTargetV1 {
+    use crate::value::pb::run_target_v1::Target;
+    crate::value::pb::RunTargetV1 {
+        target: Some(match value {
+            RunTarget::Function { function_name } => {
+                Target::Function(crate::value::pb::FunctionRunTargetV1 {
+                    function_name: function_name.clone(),
+                })
+            }
+            RunTarget::Test {
+                generation,
+                test_name,
+            } => Target::Test(crate::value::pb::TestRunTargetV1 {
+                generation: generation.0,
+                test_name: test_name.clone(),
+            }),
+            RunTarget::Preview {
+                parent_function_name,
+                helper,
+            } => Target::Preview(crate::value::pb::PreviewRunTargetV1 {
+                parent_function_name: parent_function_name.clone(),
+                helper: helper.clone(),
+            }),
+            RunTarget::Companion {
+                parent_boundary_id,
+                function_name,
+            } => Target::Companion(crate::value::pb::CompanionRunTargetV1 {
+                parent_boundary_id: parent_boundary_id.map(|id| id.as_bytes().to_vec()),
+                function_name: function_name.clone(),
+            }),
+            RunTarget::Internal { name } => {
+                Target::Internal(crate::value::pb::InternalRunTargetV1 { name: name.clone() })
+            }
+        }),
+    }
+}
+
+fn boundary_id_from_vec(value: Vec<u8>) -> io::Result<BoundaryId> {
+    let bytes: [u8; 16] = value.as_slice().try_into().map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("boundary id must be 16 bytes, got {}", value.len()),
+        )
+    })?;
+    Ok(BoundaryId::from_bytes(bytes))
+}
+
+fn run_status_to_proto(status: RunStatus) -> crate::value::pb::RunStatus {
+    match status {
+        RunStatus::Pending => crate::value::pb::RunStatus::Pending,
+        RunStatus::Running => crate::value::pb::RunStatus::Running,
+        RunStatus::WaitingForInput => crate::value::pb::RunStatus::WaitingForInput,
+        RunStatus::WaitingForEnv => crate::value::pb::RunStatus::WaitingForEnv,
+        RunStatus::Cancelling => crate::value::pb::RunStatus::Cancelling,
+        RunStatus::Succeeded => crate::value::pb::RunStatus::Succeeded,
+        RunStatus::Failed => crate::value::pb::RunStatus::Failed,
+        RunStatus::Cancelled => crate::value::pb::RunStatus::Cancelled,
+        RunStatus::Panicked => crate::value::pb::RunStatus::Panicked,
+    }
+}
+
+fn run_error_from_proto(value: crate::value::pb::RunErrorV1) -> io::Result<RunError> {
+    Ok(RunError {
+        class: match value.class.as_str() {
+            "validation" => RunErrorClass::Validation,
+            "runtime" => RunErrorClass::Runtime,
+            "host" => RunErrorClass::Host,
+            "panic" => RunErrorClass::Panic,
+            "cancelled" => RunErrorClass::Cancelled,
+            "internal" => RunErrorClass::Internal,
+            other => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("unknown run error class: {other}"),
+                ));
+            }
+        },
+        message: value.message,
+        details: value.details,
+        value_ref: None,
+    })
+}
+
+fn run_error_to_proto(value: &RunError) -> crate::value::pb::RunErrorV1 {
+    crate::value::pb::RunErrorV1 {
+        class: match value.class {
+            RunErrorClass::Validation => "validation",
+            RunErrorClass::Runtime => "runtime",
+            RunErrorClass::Host => "host",
+            RunErrorClass::Panic => "panic",
+            RunErrorClass::Cancelled => "cancelled",
+            RunErrorClass::Internal => "internal",
+        }
+        .to_string(),
+        message: value.message.clone(),
+        details: value.details.clone(),
+    }
+}
+
+fn cancellation_from_proto(value: crate::value::pb::RunCancellationV1) -> CancellationState {
+    CancellationState {
+        requested_at_ms: value.requested_at_ms,
+        completed_at_ms: value.completed_at_ms,
+        reason: value.reason,
+    }
+}
+
+fn cancellation_to_proto(value: &CancellationState) -> crate::value::pb::RunCancellationV1 {
+    crate::value::pb::RunCancellationV1 {
+        requested_at_ms: value.requested_at_ms,
+        completed_at_ms: value.completed_at_ms,
+        reason: value.reason.clone(),
     }
 }

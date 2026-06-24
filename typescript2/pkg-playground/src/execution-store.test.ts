@@ -203,6 +203,8 @@ function mockRunStoreClient(): RunStoreClient {
     respondToInput: vi.fn(),
     respondToEnv: vi.fn(),
     listRuns: vi.fn(),
+    listHistory: vi.fn(),
+    openHistory: vi.fn(),
     snapshot: vi.fn(),
     readValue: vi.fn(),
     subscribe: vi.fn(),

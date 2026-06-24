@@ -16,6 +16,26 @@ enum ValueAvailability {
   VALUE_AVAILABILITY_LOST = 5;
 }
 
+enum ValueCaptureKind {
+  VALUE_CAPTURE_KIND_UNSPECIFIED = 0;
+  VALUE_CAPTURE_KIND_ROOT_INPUT = 1;
+  VALUE_CAPTURE_KIND_ROOT_OUTPUT = 2;
+  VALUE_CAPTURE_KIND_ROOT_ERROR = 3;
+}
+
+enum RunStatus {
+  RUN_STATUS_UNSPECIFIED = 0;
+  RUN_STATUS_PENDING = 1;
+  RUN_STATUS_RUNNING = 2;
+  RUN_STATUS_WAITING_FOR_INPUT = 3;
+  RUN_STATUS_WAITING_FOR_ENV = 4;
+  RUN_STATUS_CANCELLING = 5;
+  RUN_STATUS_SUCCEEDED = 6;
+  RUN_STATUS_FAILED = 7;
+  RUN_STATUS_CANCELLED = 8;
+  RUN_STATUS_PANICKED = 9;
+}
+
 message ValueFileHeaderV1 {
   bytes boundary_id = 1;
 }
@@ -29,7 +49,90 @@ message ValueMetadataV1 {
   optional string diagnostic = 6;
 }
 
+message TraceCallKeyV1 {
+  bytes process_id = 1;
+  uint64 engine_id = 2;
+  uint64 thread_id = 3;
+  uint64 call_id = 4;
+}
+
+message ValueCaptureV1 {
+  ValueCaptureKind kind = 1;
+  TraceCallKeyV1 call = 2;
+}
+
+message TimeAnchorV1 {
+  uint64 epoch_created_at_ms = 1;
+  uint64 trace_zero_ns = 2;
+}
+
+message FunctionRunTargetV1 {
+  string function_name = 1;
+}
+
+message TestRunTargetV1 {
+  uint64 generation = 1;
+  string test_name = 2;
+}
+
+message PreviewRunTargetV1 {
+  string parent_function_name = 1;
+  string helper = 2;
+}
+
+message CompanionRunTargetV1 {
+  optional bytes parent_boundary_id = 1;
+  string function_name = 2;
+}
+
+message InternalRunTargetV1 {
+  string name = 1;
+}
+
+message RunTargetV1 {
+  oneof target {
+    FunctionRunTargetV1 function = 1;
+    TestRunTargetV1 test = 2;
+    PreviewRunTargetV1 preview = 3;
+    CompanionRunTargetV1 companion = 4;
+    InternalRunTargetV1 internal = 5;
+  }
+}
+
+message RunStartedV1 {
+  string project_id = 1;
+  uint64 project_generation = 2;
+  RunTargetV1 target = 3;
+  optional string args_summary = 4;
+  optional string options_summary = 5;
+  uint64 created_at_ms = 6;
+  TimeAnchorV1 time_anchor = 7;
+}
+
+message RunErrorV1 {
+  string class = 1;
+  string message = 2;
+  optional string details = 3;
+}
+
+message RunCancellationV1 {
+  uint64 requested_at_ms = 1;
+  optional uint64 completed_at_ms = 2;
+  optional string reason = 3;
+}
+
+message RunCompletedV1 {
+  RunStatus status = 1;
+  uint64 completed_at_ms = 2;
+  optional string renderer_hint = 3;
+  RunErrorV1 error = 4;
+  RunCancellationV1 cancellation = 5;
+}
+
 message ValueRecordV1 {
   ValueMetadataV1 metadata = 1;
   bytes body = 2;
+  ValueCaptureV1 capture = 3;
+  RunStartedV1 run_started = 10;
+  RunCompletedV1 run_completed = 11;
 }

@@ -4,12 +4,12 @@ use std::io::{self, Read};
 
 use prost::Message;
 
-use crate::value::{ValueRecord, pb};
+use crate::value::{ValueFileRecord, ValueRecord, pb};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BamlvalueContents {
     pub header: pb::ValueFileHeaderV1,
-    pub records: Vec<ValueRecord>,
+    pub records: Vec<ValueFileRecord>,
     pub truncated: bool,
 }
 
@@ -45,13 +45,7 @@ pub fn read_bamlvalue_from_bytes(bytes: &[u8]) -> io::Result<BamlvalueContents> 
         let (frame, rest) = buf.split_at(frame_len);
         let record = pb::ValueRecordV1::decode(frame)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-        let metadata = record.metadata.ok_or_else(|| {
-            io::Error::new(io::ErrorKind::InvalidData, "value record omitted metadata")
-        })?;
-        records.push(ValueRecord {
-            value_ref: metadata.try_into()?,
-            body: record.body,
-        });
+        records.push(file_record_from_proto(record)?);
         buf = rest;
     }
 
@@ -60,6 +54,30 @@ pub fn read_bamlvalue_from_bytes(bytes: &[u8]) -> io::Result<BamlvalueContents> 
         records,
         truncated,
     })
+}
+
+fn file_record_from_proto(record: pb::ValueRecordV1) -> io::Result<ValueFileRecord> {
+    let has_lifecycle = record.run_started.is_some() || record.run_completed.is_some();
+    if has_lifecycle && record.metadata.is_some() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "value record mixed body metadata with lifecycle metadata",
+        ));
+    }
+    if let Some(started) = record.run_started {
+        return Ok(ValueFileRecord::RunStarted(started.try_into()?));
+    }
+    if let Some(completed) = record.run_completed {
+        return Ok(ValueFileRecord::RunCompleted(completed.try_into()?));
+    }
+    let metadata = record.metadata.ok_or_else(|| {
+        io::Error::new(io::ErrorKind::InvalidData, "value record omitted metadata")
+    })?;
+    Ok(ValueFileRecord::CapturedValue(ValueRecord {
+        value_ref: metadata.try_into()?,
+        body: record.body,
+        capture: record.capture.map(TryInto::try_into).transpose()?,
+    }))
 }
 
 #[cfg(test)]
@@ -79,6 +97,7 @@ mod tests {
         let record = ValueRecord {
             value_ref: ValueRef::available("value_1", ValueCodec::BamlOutboundValue, 3, 3),
             body: vec![1, 2, 3],
+            capture: None,
         };
         let start = bytes.len();
         encode_record(&mut bytes, &record).unwrap();

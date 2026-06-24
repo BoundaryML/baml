@@ -1176,6 +1176,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
         case 'commandAck':
         case 'commandError':
         case 'runList':
+        case 'historyList':
         case 'runSnapshot':
         case 'valueBody':
         case 'runCursorExpired':

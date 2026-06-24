@@ -444,6 +444,13 @@ function onPlaygroundNotification(notification: PlaygroundNotification): void {
         runs: notification.runs,
       } as WorkerOutMessage);
       break;
+    case "historyList":
+      postOut({
+        type: "historyList",
+        requestId: notification.requestId,
+        runs: notification.runs,
+      } as WorkerOutMessage);
+      break;
     case "runCursorExpired":
       postOut({
         type: "runCursorExpired",
@@ -858,6 +865,40 @@ self.onmessage = async (event: MessageEvent) => {
             type: "commandError",
             requestId: msg.requestId,
             code: "wasmListRunsFailed",
+            message: e instanceof Error ? e.message : String(e),
+          });
+        }
+        return;
+      }
+
+    case "listHistory":
+      {
+        const rt = runtimeForCommand(msg.requestId, "wasmRuntimeNotReady");
+        if (!rt) return;
+        try {
+          rt.listHistory(msg.requestId, msg.filter);
+        } catch (e) {
+          postOut({
+            type: "commandError",
+            requestId: msg.requestId,
+            code: "wasmListHistoryFailed",
+            message: e instanceof Error ? e.message : String(e),
+          });
+        }
+        return;
+      }
+
+    case "openHistory":
+      {
+        const rt = runtimeForCommand(msg.requestId, "wasmRuntimeNotReady");
+        if (!rt) return;
+        try {
+          rt.openHistory(msg.requestId, msg.boundaryId);
+        } catch (e) {
+          postOut({
+            type: "commandError",
+            requestId: msg.requestId,
+            code: "wasmOpenHistoryFailed",
             message: e instanceof Error ? e.message : String(e),
           });
         }

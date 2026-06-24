@@ -921,6 +921,36 @@ impl InMemoryRunStore {
             .map(|record| record.run.clone())
     }
 
+    pub fn insert_replayed_run(&self, run: Run) -> bool {
+        let mut inner = self
+            .inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if inner.runs.contains_key(&run.boundary_id) {
+            return false;
+        }
+        let root_trace = run
+            .root_call_node_id
+            .and_then(|root_id| run.calls.iter().find(|call| call.id == root_id))
+            .map(|call| call.trace_key);
+        let domain_diagnostics = run.diagnostics.clone();
+        inner.runs.insert(
+            run.boundary_id,
+            RunRecord {
+                run,
+                host_call_id: None,
+                root_trace,
+                profile_function_table: Vec::new(),
+                start_guard: StartGuard::new(),
+                patches: Vec::new(),
+                domain_diagnostics,
+                pending_input_requests: HashSet::new(),
+                pending_env_requests: HashSet::new(),
+            },
+        );
+        true
+    }
+
     #[must_use]
     pub fn list_runs(&self, filter: &RunFilter) -> Vec<RunSummary> {
         let mut runs: Vec<_> = self
@@ -2563,6 +2593,16 @@ fn component_events_for_root(
     events: &[ProfileEventEnvelope],
     root_trace: TraceCallKey,
 ) -> Vec<ProfileEventEnvelope> {
+    component_event_indices_for_root(events, root_trace)
+        .into_iter()
+        .map(|index| events[index].clone())
+        .collect()
+}
+
+pub(crate) fn component_event_indices_for_root(
+    events: &[ProfileEventEnvelope],
+    root_trace: TraceCallKey,
+) -> Vec<usize> {
     let mut adjacency: HashMap<TraceGraphNode, HashSet<TraceGraphNode>> = HashMap::new();
     let mut event_nodes = Vec::<Vec<TraceGraphNode>>::with_capacity(events.len());
 
@@ -2675,15 +2715,14 @@ fn component_events_for_root(
         }
     }
 
-    events
-        .iter()
-        .cloned()
-        .zip(event_nodes)
-        .filter_map(|(event, nodes)| {
+    event_nodes
+        .into_iter()
+        .enumerate()
+        .filter_map(|(index, nodes)| {
             nodes
                 .iter()
                 .any(|node| visited.contains(node))
-                .then_some(event)
+                .then_some(index)
         })
         .collect()
 }
@@ -3153,7 +3192,7 @@ fn thread_node_id(key: &TraceThreadKey) -> ThreadNodeId {
     ThreadNodeId(hash.finish())
 }
 
-fn call_node_id(key: &TraceCallKey) -> CallNodeId {
+pub(crate) fn call_node_id(key: &TraceCallKey) -> CallNodeId {
     let mut hash = StableHasher::new(b"baml-call-node");
     hash.write(&key.process_euid.0);
     hash.write_u64(key.engine_id.0);
@@ -3344,7 +3383,7 @@ pub mod bamlprof {
         Ok(ProcessEuid(bytes))
     }
 
-    fn function_table(header: &pb::EventFileHeaderV1) -> Vec<ProfileFunctionMetadata> {
+    pub(crate) fn function_table(header: &pb::EventFileHeaderV1) -> Vec<ProfileFunctionMetadata> {
         header
             .function_table
             .as_ref()

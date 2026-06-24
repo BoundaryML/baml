@@ -66,6 +66,8 @@ export interface RunStoreClient {
     value?: string,
   ): Promise<RequestCommandOutcome | string>;
   listRuns(filter?: RunListFilter): Promise<RunSummary[]>;
+  listHistory(filter?: RunListFilter): Promise<RunSummary[]>;
+  openHistory(boundaryId: BoundaryId): Promise<Run>;
   snapshot(boundaryId: BoundaryId): Promise<Run>;
   readValue(boundaryId: BoundaryId, valueRef: ValueRef): Promise<ValueBodyResponse>;
   subscribe(boundaryId: BoundaryId, cursor?: RunCursor): RunSubscriptionHandle;
@@ -77,6 +79,7 @@ type PendingRequest =
   | { kind: 'startRun'; resolve: (boundaryId: BoundaryId) => void; reject: (error: Error) => void }
   | { kind: 'command'; resolve: (outcome: RequestCommandOutcome | string) => void; reject: (error: Error) => void }
   | { kind: 'listRuns'; resolve: (runs: RunSummary[]) => void; reject: (error: Error) => void }
+  | { kind: 'historyList'; resolve: (runs: RunSummary[]) => void; reject: (error: Error) => void }
   | { kind: 'snapshot'; resolve: (run: Run) => void; reject: (error: Error) => void }
   | { kind: 'valueBody'; resolve: (body: ValueBodyResponse) => void; reject: (error: Error) => void }
   | { kind: 'subscribe'; subscriptionId: string; reject: (error: Error) => void };
@@ -165,6 +168,13 @@ export function createRunStoreClient(port: RuntimePort): RunStoreClient {
       case 'runList': {
         const waiter = pending.get(msg.requestId);
         if (!waiter || waiter.kind !== 'listRuns') return;
+        pending.delete(msg.requestId);
+        waiter.resolve(msg.runs);
+        return;
+      }
+      case 'historyList': {
+        const waiter = pending.get(msg.requestId);
+        if (!waiter || waiter.kind !== 'historyList') return;
         pending.delete(msg.requestId);
         waiter.resolve(msg.runs);
         return;
@@ -331,6 +341,22 @@ export function createRunStoreClient(port: RuntimePort): RunStoreClient {
       return new Promise((resolve, reject) => {
         pending.set(id, { kind: 'listRuns', resolve, reject });
         port.postMessage({ type: 'listRuns', requestId: id, filter });
+      });
+    },
+
+    listHistory(filter) {
+      const id = requestId();
+      return new Promise((resolve, reject) => {
+        pending.set(id, { kind: 'historyList', resolve, reject });
+        port.postMessage({ type: 'listHistory', requestId: id, filter });
+      });
+    },
+
+    openHistory(boundaryId) {
+      const id = requestId();
+      return new Promise((resolve, reject) => {
+        pending.set(id, { kind: 'snapshot', resolve, reject });
+        port.postMessage({ type: 'openHistory', requestId: id, boundaryId });
       });
     },
 

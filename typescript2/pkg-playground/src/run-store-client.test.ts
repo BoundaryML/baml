@@ -270,6 +270,57 @@ describe('run-store-client', () => {
     await expect(pending).resolves.toHaveLength(1);
     client.dispose();
   });
+
+  it('lists persisted history with an explicit history command', async () => {
+    const port = new FakeRuntimePort();
+    const client = createRunStoreClient(port);
+
+    const pending = client.listHistory({ visibility: 'historyOnly' });
+
+    expect(port.sent).toEqual([
+      {
+        type: 'listHistory',
+        requestId: 1,
+        filter: { visibility: 'historyOnly' },
+      },
+    ]);
+
+    port.emit({
+      type: 'historyList',
+      requestId: 1,
+      runs: [],
+    });
+
+    await expect(pending).resolves.toEqual([]);
+    client.dispose();
+  });
+
+  it('opens persisted history through the normal snapshot response', async () => {
+    const port = new FakeRuntimePort();
+    const client = createRunStoreClient(port);
+    const boundaryId = 'baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ';
+
+    const pending = client.openHistory(boundaryId);
+
+    expect(port.sent).toEqual([
+      {
+        type: 'openHistory',
+        requestId: 1,
+        boundaryId,
+      },
+    ]);
+
+    const run = runFixture(boundaryId);
+    port.emit({
+      type: 'runSnapshot',
+      requestId: 1,
+      boundaryId,
+      snapshot: run,
+    });
+
+    await expect(pending).resolves.toEqual(run);
+    client.dispose();
+  });
 });
 
 class FakeRuntimePort implements RuntimePort {

@@ -28,13 +28,16 @@ use axum::{
     routing::{get, get_service},
 };
 use base64::Engine as _;
+use bex_events::history::{HistoryObserverRegistration, HistoryStore, register_history_observer};
 use bex_events::run::{
     AttachRootTraceResult, BoundaryId, CancellationState, DiagnosticSeverity, ExecutionRequest,
     HostCallId, InMemoryRunStore, ProjectGeneration, ProjectId, RequestId, RunCursor,
     RunCursorExpiredReason, RunDiagnostic, RunError, RunErrorClass, RunFilter, RunKind, RunOutcome,
     RunResult, RunSubscription, RunTarget, RunVisibilityFilter, StartedHostRun,
 };
-use bex_events::value::{ByteValueArtifactSink, ValueCodec, ValueRef, ValueWriter};
+use bex_events::value::{
+    ByteValueArtifactSink, ValueCapture, ValueCaptureKind, ValueCodec, ValueRef, ValueWriter,
+};
 use bex_project::{is_cancelled_engine_error, is_cancelled_runtime_error};
 use futures::{SinkExt, stream::StreamExt};
 use tokio::{net::TcpListener, sync::broadcast};
@@ -107,10 +110,17 @@ fn broadcast_started_host_run(
 fn broadcast_root_trace_attachment(
     broadcast_tx: &broadcast::Sender<WsOutMessage>,
     run_store: &InMemoryRunStore,
+    history_store: &HistoryStore,
     boundary_id: BoundaryId,
     entry_call_ref: bex_events::ids::CallRef,
     label: &str,
 ) {
+    if let Err(err) = history_store.attach_root_trace(boundary_id, entry_call_ref) {
+        tracing::warn!(
+            "History root trace attachment failed for {}: {err}",
+            boundary_id.to_wire_string()
+        );
+    }
     match run_store.attach_root_trace(boundary_id, entry_call_ref) {
         AttachRootTraceResult::Attached { patches } => {
             for patch in patches {
@@ -157,10 +167,18 @@ fn engine_error_outcome_with_ref(
 fn complete_run_and_broadcast(
     broadcast_tx: &broadcast::Sender<WsOutMessage>,
     run_store: &InMemoryRunStore,
+    history_store: &HistoryStore,
     boundary_id: BoundaryId,
     outcome: RunOutcome,
 ) {
-    if let Some(patch) = run_store.complete_run_now(boundary_id, outcome) {
+    let completed_at_ms = epoch_ms();
+    if let Err(err) = history_store.complete(boundary_id, &outcome, completed_at_ms) {
+        tracing::warn!(
+            "History completion failed for {}: {err}",
+            boundary_id.to_wire_string()
+        );
+    }
+    if let Some(patch) = run_store.complete_run(boundary_id, outcome, completed_at_ms) {
         broadcast_run_patch(broadcast_tx, &patch);
     }
 }
@@ -352,6 +370,8 @@ struct WsState {
     env_state: Arc<PlaygroundEnvState>,
     io_state: Arc<PlaygroundIoState>,
     run_store: Arc<InMemoryRunStore>,
+    history_store: Arc<HistoryStore>,
+    _history_observer_registration: Arc<HistoryObserverRegistration>,
     value_store: LiveValueStore,
     /// LSP output (responses + publishDiagnostics) destined for `/api/lsp`.
     lsp_out_tx: broadcast::Sender<lsp_server::Message>,
@@ -386,24 +406,55 @@ fn root_value_success_outcome(value_ref: Option<ValueRef>, renderer_hint: &str) 
 fn drain_captured_values_and_broadcast(
     broadcast_tx: &broadcast::Sender<WsOutMessage>,
     run_store: &InMemoryRunStore,
+    history_store: &HistoryStore,
     value_store: &LiveValueStore,
     boundary_id: BoundaryId,
     producer: &bex_project::TraceCaptureProducer,
 ) -> RootValueRefs {
-    let mut writer = match ValueWriter::new(ByteValueArtifactSink::new(), boundary_id) {
+    let mut fallback_writer = match ValueWriter::new(ByteValueArtifactSink::new(), boundary_id) {
         Ok(writer) => writer,
         Err(err) => {
             broadcast_value_capture_diagnostic(broadcast_tx, run_store, boundary_id, err);
             return RootValueRefs::default();
         }
     };
-    let encoded_values = match producer.drain_to_value_writer(&mut writer) {
+    let mut history_errors = Vec::new();
+    let encoded_values = match producer.drain_to_value_recorder(|draft, body| {
+        let capture = ValueCapture {
+            kind: value_capture_kind_from_bex(draft.kind),
+            call: draft.call,
+        };
+        match history_store.append_value_body(
+            draft.boundary_id,
+            capture.clone(),
+            ValueCodec::BamlOutboundValue,
+            body.clone(),
+        ) {
+            Ok(outcome) => Ok(outcome),
+            Err(err) => {
+                history_errors.push(err.to_string());
+                fallback_writer.append_body_with_capture(
+                    ValueCodec::BamlOutboundValue,
+                    body,
+                    Some(capture),
+                )
+            }
+        }
+    }) {
         Ok(encoded_values) => encoded_values,
         Err(err) => {
             broadcast_value_capture_diagnostic(broadcast_tx, run_store, boundary_id, err);
             return RootValueRefs::default();
         }
     };
+    for err in history_errors {
+        broadcast_value_capture_diagnostic(
+            broadcast_tx,
+            run_store,
+            boundary_id,
+            format!("history value persistence failed; retained live bytes only: {err}"),
+        );
+    }
 
     let mut refs = RootValueRefs::default();
     for encoded in encoded_values {
@@ -437,6 +488,14 @@ fn drain_captured_values_and_broadcast(
     }
 
     refs
+}
+
+fn value_capture_kind_from_bex(kind: bex_project::CaptureKind) -> ValueCaptureKind {
+    match kind {
+        bex_project::CaptureKind::RootInput => ValueCaptureKind::RootInput,
+        bex_project::CaptureKind::RootOutput => ValueCaptureKind::RootOutput,
+        bex_project::CaptureKind::RootError => ValueCaptureKind::RootError,
+    }
 }
 
 fn broadcast_value_capture_diagnostic(
@@ -594,12 +653,16 @@ fn build_router(
     access_guard: PlaygroundAccessGuard,
 ) -> anyhow::Result<Router> {
     let value_store = Arc::new(Mutex::new(HashMap::new()));
+    let history_store = Arc::new(HistoryStore::new((*workspace_roots).clone()));
+    let history_observer_registration = Arc::new(register_history_observer(history_store.clone()));
     let ws_state = WsState {
         bex,
         broadcast_tx,
         env_state,
         io_state,
         run_store,
+        history_store,
+        _history_observer_registration: history_observer_registration,
         value_store,
         lsp_out_tx,
         doc_mirror,
@@ -638,6 +701,11 @@ fn build_router(
     };
 
     Ok(api.fallback_service(fallback))
+}
+
+fn history_project_root_for_project(project: &str) -> PathBuf {
+    let fs_path = bex_project::FsPath::from_str(project.to_string());
+    bex_events::history::path::resolve_project_root(fs_path.as_path())
 }
 
 // ---------------------------------------------------------------------------
@@ -1259,6 +1327,7 @@ async fn handle_function_run(
     };
 
     let run_store = state.run_store.clone();
+    let history_store = state.history_store.clone();
     let value_store = state.value_store.clone();
     let started = run_store.create_attached_run(
         boundary_id,
@@ -1272,6 +1341,14 @@ async fn handle_function_run(
         RequestId(client.request_id()),
         HostCallId::Native(call_id),
     );
+    let project_root =
+        history_project_root_for_project(fs_path.as_path().to_string_lossy().as_ref());
+    if let Err(err) = history_store.begin(&project_root, &started.start) {
+        tracing::warn!(
+            "History begin failed for {}: {err}",
+            started.start.boundary_id.to_wire_string()
+        );
+    }
     broadcast_started_host_run(
         &broadcast_tx,
         &run_store,
@@ -1289,6 +1366,7 @@ async fn handle_function_run(
                 broadcast_root_trace_attachment(
                     &broadcast_tx,
                     &run_store,
+                    &history_store,
                     boundary_id,
                     traced.entry_call_ref,
                     "",
@@ -1296,6 +1374,7 @@ async fn handle_function_run(
                 let refs = drain_captured_values_and_broadcast(
                     &broadcast_tx,
                     &run_store,
+                    &history_store,
                     &value_store,
                     boundary_id,
                     &value_capture,
@@ -1304,12 +1383,19 @@ async fn handle_function_run(
                     Ok(_result) => root_value_success_outcome(refs.output, "baml.outbound.base64"),
                     Err(e) => runtime_error_outcome_with_ref(&e, refs.error),
                 };
-                complete_run_and_broadcast(&broadcast_tx, &run_store, boundary_id, outcome);
+                complete_run_and_broadcast(
+                    &broadcast_tx,
+                    &run_store,
+                    &history_store,
+                    boundary_id,
+                    outcome,
+                );
             }
             Err(e) => {
                 let refs = drain_captured_values_and_broadcast(
                     &broadcast_tx,
                     &run_store,
+                    &history_store,
                     &value_store,
                     boundary_id,
                     &value_capture,
@@ -1317,6 +1403,7 @@ async fn handle_function_run(
                 complete_run_and_broadcast(
                     &broadcast_tx,
                     &run_store,
+                    &history_store,
                     boundary_id,
                     runtime_error_outcome_with_ref(&e, refs.error),
                 );
@@ -1346,6 +1433,7 @@ fn handle_test_run(
     let broadcast_tx = state.broadcast_tx.clone();
     let bex = state.bex.clone();
     let run_store = state.run_store.clone();
+    let history_store = state.history_store.clone();
     let value_store = state.value_store.clone();
     let started = run_store.create_attached_run(
         boundary_id,
@@ -1362,6 +1450,13 @@ fn handle_test_run(
         RequestId(client.request_id()),
         HostCallId::Native(call_id),
     );
+    let project_root = history_project_root_for_project(&project);
+    if let Err(err) = history_store.begin(&project_root, &started.start) {
+        tracing::warn!(
+            "History begin failed for {}: {err}",
+            started.start.boundary_id.to_wire_string()
+        );
+    }
     broadcast_started_host_run(
         &broadcast_tx,
         &run_store,
@@ -1378,6 +1473,7 @@ fn handle_test_run(
                 broadcast_root_trace_attachment(
                     &broadcast_tx,
                     &run_store,
+                    &history_store,
                     boundary_id,
                     traced.entry_call_ref,
                     "test ",
@@ -1385,6 +1481,7 @@ fn handle_test_run(
                 let refs = drain_captured_values_and_broadcast(
                     &broadcast_tx,
                     &run_store,
+                    &history_store,
                     &value_store,
                     boundary_id,
                     &value_capture,
@@ -1393,12 +1490,19 @@ fn handle_test_run(
                     Ok(_result) => root_value_success_outcome(refs.output, "testReport"),
                     Err(e) => engine_error_outcome_with_ref(&e, refs.error),
                 };
-                complete_run_and_broadcast(&broadcast_tx, &run_store, boundary_id, outcome);
+                complete_run_and_broadcast(
+                    &broadcast_tx,
+                    &run_store,
+                    &history_store,
+                    boundary_id,
+                    outcome,
+                );
             }
             Err(e) => {
                 let refs = drain_captured_values_and_broadcast(
                     &broadcast_tx,
                     &run_store,
+                    &history_store,
                     &value_store,
                     boundary_id,
                     &value_capture,
@@ -1406,6 +1510,7 @@ fn handle_test_run(
                 complete_run_and_broadcast(
                     &broadcast_tx,
                     &run_store,
+                    &history_store,
                     boundary_id,
                     engine_error_outcome_with_ref(&e, refs.error),
                 );
@@ -1543,6 +1648,61 @@ async fn handle_ws_in_message(
             send_ws(sink, &WsOutMessage::RunList { request_id, runs }).await;
         }
 
+        WsInMessage::ListHistory { request_id, filter } => {
+            let runs = state
+                .history_store
+                .list(&run_filter_from_wire(filter))
+                .iter()
+                .map(run_summary_to_wire)
+                .collect();
+            send_ws(sink, &WsOutMessage::HistoryList { request_id, runs }).await;
+        }
+
+        WsInMessage::OpenHistory {
+            request_id,
+            boundary_id,
+        } => {
+            let boundary_id = match parse_boundary_id_for_request(request_id, &boundary_id) {
+                Ok(boundary_id) => boundary_id,
+                Err(msg) => {
+                    send_ws(sink, &msg).await;
+                    return;
+                }
+            };
+            let snapshot = match state.run_store.snapshot(boundary_id) {
+                Some(snapshot) => Ok(snapshot),
+                None => state.history_store.open(boundary_id).map(|run| {
+                    let snapshot = run.clone();
+                    let _ = state.run_store.insert_replayed_run(run);
+                    snapshot
+                }),
+            };
+            match snapshot {
+                Ok(snapshot) => {
+                    send_ws(
+                        sink,
+                        &WsOutMessage::RunSnapshot {
+                            request_id: Some(request_id),
+                            boundary_id: boundary_id.to_wire_string(),
+                            snapshot: run_to_wire(&snapshot),
+                        },
+                    )
+                    .await;
+                }
+                Err(err) => {
+                    send_ws(
+                        sink,
+                        &WsOutMessage::CommandError {
+                            request_id,
+                            code: "historyOpenFailed".to_string(),
+                            message: format!("{err}"),
+                        },
+                    )
+                    .await;
+                }
+            }
+        }
+
         WsInMessage::Snapshot {
             request_id,
             boundary_id,
@@ -1598,7 +1758,34 @@ async fn handle_ws_in_message(
                 .lock()
                 .ok()
                 .and_then(|store| store.get(&(boundary_id, value_ref_id.clone())).cloned());
+            let history_stored = if stored.is_none() {
+                match state.history_store.read_value(boundary_id, &value_ref_id) {
+                    Ok(value) => value,
+                    Err(err) => {
+                        tracing::warn!(
+                            "History readValue failed for {} {}: {err}",
+                            boundary_id.to_wire_string(),
+                            value_ref_id
+                        );
+                        None
+                    }
+                }
+            } else {
+                None
+            };
             let response = if let Some(stored) = stored {
+                WsOutMessage::ValueBody {
+                    request_id,
+                    boundary_id: boundary_id.to_wire_string(),
+                    value_ref_id,
+                    codec: stored.codec.as_wire_str().to_string(),
+                    availability: "available".to_string(),
+                    body_base64: Some(
+                        base64::engine::general_purpose::STANDARD.encode(stored.body),
+                    ),
+                    diagnostic: None,
+                }
+            } else if let Some(stored) = history_stored {
                 WsOutMessage::ValueBody {
                     request_id,
                     boundary_id: boundary_id.to_wire_string(),
@@ -2268,5 +2455,24 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(&root);
         let _ = std::fs::remove_dir_all(&outside);
+    }
+
+    #[test]
+    fn history_project_root_for_project_uses_manifestless_project_owner() {
+        let root = unique_temp_dir("baml-lsp-history-root");
+        let source_dir = root.join("baml_src/ns");
+        std::fs::create_dir_all(&source_dir).expect("source dir should be created");
+        std::fs::write(
+            source_dir.join("main.baml"),
+            "function Test() -> int { 1 }\n",
+        )
+        .expect("source file should be created");
+
+        assert_eq!(
+            history_project_root_for_project(&source_dir.to_string_lossy()),
+            root
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

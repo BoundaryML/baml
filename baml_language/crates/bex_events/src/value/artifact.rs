@@ -1,6 +1,10 @@
 //! Target-neutral value artifact sink abstractions.
 
-use std::io;
+use std::{
+    fs::{self, File},
+    io::{self, Write},
+    path::{Path, PathBuf},
+};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ValueArtifactRef {
@@ -18,6 +22,51 @@ pub enum ValueArtifactRef {
 pub trait ValueArtifactSink {
     fn write_chunk(&mut self, bytes: &[u8]) -> io::Result<()>;
     fn flush(&mut self) -> io::Result<ValueArtifactRef>;
+}
+
+#[derive(Debug)]
+pub struct FileValueArtifactSink {
+    file: File,
+    path: PathBuf,
+}
+
+impl FileValueArtifactSink {
+    pub fn create(path: impl AsRef<Path>) -> io::Result<Self> {
+        let path = path.as_ref();
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        Ok(Self {
+            file: File::create(path)?,
+            path: path.to_path_buf(),
+        })
+    }
+
+    #[must_use]
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    pub fn sync(&mut self) -> io::Result<ValueArtifactRef> {
+        self.file.flush()?;
+        self.file.sync_all()?;
+        Ok(ValueArtifactRef::NativeFile {
+            path: self.path.clone(),
+        })
+    }
+}
+
+impl ValueArtifactSink for FileValueArtifactSink {
+    fn write_chunk(&mut self, bytes: &[u8]) -> io::Result<()> {
+        self.file.write_all(bytes)
+    }
+
+    fn flush(&mut self) -> io::Result<ValueArtifactRef> {
+        self.file.flush()?;
+        Ok(ValueArtifactRef::NativeFile {
+            path: self.path.clone(),
+        })
+    }
 }
 
 #[derive(Debug, Default)]
@@ -95,7 +144,9 @@ impl ValueArtifactSink for ByteValueArtifactSink {
 
 #[cfg(test)]
 mod tests {
-    use super::{ByteValueArtifactSink, ValueArtifactRef, ValueArtifactSink};
+    use super::{
+        ByteValueArtifactSink, FileValueArtifactSink, ValueArtifactRef, ValueArtifactSink,
+    };
 
     #[test]
     fn bounded_sink_truncates_with_drop_diagnostics() {
@@ -113,5 +164,25 @@ mod tests {
                 dropped_chunks: 1,
             }
         );
+    }
+
+    #[test]
+    fn file_sink_writes_native_artifact() {
+        let path = std::env::temp_dir().join(format!(
+            "bamlvalue-file-sink-{}-{:?}.bamlvalue",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let mut sink = FileValueArtifactSink::create(&path).unwrap();
+        sink.write_chunk(b"abc").unwrap();
+        assert_eq!(
+            sink.flush().unwrap(),
+            ValueArtifactRef::NativeFile { path: path.clone() }
+        );
+        assert_eq!(std::fs::read(&path).unwrap(), b"abc");
+        let _ = std::fs::remove_file(path);
     }
 }
