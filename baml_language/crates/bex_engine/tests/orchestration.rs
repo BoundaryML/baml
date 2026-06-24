@@ -46,7 +46,10 @@ fn extract_steps(result: &BexExternalValue) -> Vec<(&str, i64)> {
     items
         .iter()
         .map(|step| {
-            let BexExternalValue::Instance { class_name, fields } = step else {
+            let BexExternalValue::Instance {
+                class_name, fields, ..
+            } = step
+            else {
                 panic!("expected OrchestrationStep Instance, got {step:?}");
             };
             assert_eq!(
@@ -63,6 +66,7 @@ fn extract_steps(result: &BexExternalValue) -> Vec<(&str, i64)> {
                 Some(BexExternalValue::Instance {
                     class_name: pc_class,
                     fields: pc_fields,
+                    ..
                 }) => {
                     assert_eq!(
                         pc_class, "baml.llm.PrimitiveClient",

@@ -158,6 +158,10 @@ fn is_js_reserved(name: &str) -> bool {
 
 /// State accumulated while rendering a leaf's symbol bodies, used to build
 /// the file's import preamble.
+// Each flag tracks a distinct runtime import the leaf may need; they're
+// independent presence bits, not a state enum, so the bool-count lint
+// (`struct_excessive_bools`) doesn't apply cleanly here.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Default)]
 struct RenderState {
     /// Cross-leaf references, as routed `LeafPath`s (root-relative).
@@ -167,6 +171,9 @@ struct RenderState {
     /// Set when any rendered type expression references the runtime opaque
     /// handle token `_BamlHandle` (`Ty::RustType`).
     uses_baml_handle: bool,
+    /// Set when a generic class emits a `$types` field, which references the
+    /// runtime `BamlType` token type.
+    uses_baml_type: bool,
 }
 
 impl RenderState {
@@ -284,7 +291,7 @@ fn generic_decl(params: &[String]) -> String {
 /// but it must be a legal identifier. Append `_` to reserved words so
 /// `(default: V)` becomes `(default_: V)`. The real BAML name still travels in
 /// the `defineFunction` `paramNames` array for marshalling.
-fn safe_param_name(name: &str) -> String {
+pub(crate) fn safe_param_name(name: &str) -> String {
     if is_js_reserved(name) {
         format!("{name}_")
     } else {
@@ -292,7 +299,7 @@ fn safe_param_name(name: &str) -> String {
     }
 }
 
-fn option_field_name(name: &str) -> String {
+pub(crate) fn option_field_name(name: &str) -> String {
     if is_ts_property_identifier(name) {
         name.to_string()
     } else {
@@ -460,6 +467,12 @@ fn runtime_import_line(state: &RenderState, extra: &[&str]) -> String {
     if state.uses_define_instance {
         names.push("defineInstanceFunction");
     }
+    // Type-only import (inline `type` modifier) for the generic `$types` field
+    // token. Sorted alongside the value imports; TS accepts a mixed
+    // value/type-only named import.
+    if state.uses_baml_type {
+        names.push("type BamlType");
+    }
     if names.is_empty() {
         return String::new();
     }
@@ -577,22 +590,57 @@ fn render_class_ts(out: &mut String, c: &NodeClass, ctx: &TranslateCtx, state: &
         })
         .collect();
 
+    // A generic class carries its concrete TypeVar bindings in an optional
+    // `$types` field — the value-level type channel the inbound encoder reads to
+    // build `class_ty` (TS erases generics, so the metadata Python recovers from
+    // Pydantic must be spelled explicitly here). It is optional: an absent
+    // binding lowers to the unknown/top type at encode time.
+    let is_generic = !c.generic_params.is_empty();
+    let types_field = is_generic.then(|| {
+        let fields = c
+            .generic_params
+            .iter()
+            .map(|p| format!("{p}?: BamlType"))
+            .collect::<Vec<_>>()
+            .join("; ");
+        format!("{{ {fields} }}")
+    });
+
     let _ = writeln!(out, "export class {}{generics} {{", c.name);
     for (name, t) in &props {
         // `!` definite-assignment assertion: fields are populated via the
         // constructor's `Object.assign`, which tsc's flow analysis can't see.
         let _ = writeln!(out, "  {name}!: {};", t.expr);
     }
+    if let Some(types_ty) = &types_field {
+        state.uses_baml_type = true;
+        let _ = writeln!(out, "  $types?: {types_ty};");
+    }
 
     // Constructor.
-    if props.is_empty() {
+    if props.is_empty() && types_field.is_none() {
         out.push_str("  constructor(init: {}) {\n    Object.assign(this, init);\n  }\n");
     } else {
         out.push_str("  constructor(init: {\n");
         for (name, t) in &props {
             let _ = writeln!(out, "    {name}: {};", t.expr);
         }
+        if let Some(types_ty) = &types_field {
+            let _ = writeln!(out, "    $types?: {types_ty};");
+        }
         out.push_str("  }) {\n    Object.assign(this, init);\n  }\n");
+    }
+
+    // Static `$generic`: the TypeVar names in declaration order, read back by
+    // the inbound encoder to position the `$types` bindings as `class_ty` args.
+    if is_generic {
+        let params = c
+            .generic_params
+            .iter()
+            .map(|p| crate::ts_string(p))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let _ = writeln!(out, "  static readonly $generic = [{params}] as const;");
     }
 
     // Static + instance method bindings, as class fields.
@@ -681,13 +729,22 @@ fn render_method_binding_ts(
     let required_params = m.runtime_required_names();
     let optional_params = m.optional_names();
     let required_params_lit = param_names_literal(&required_params);
-    let optional_params_arg = optional_param_names_arg(&optional_params);
+    let optional_arg = optional_param_names_arg(&optional_params);
+    // A static method binds only its own `<...>` params (a generic static never
+    // re-binds the class params — the compiler forbids that ambiguity); an
+    // instance method also binds the enclosing class's params, recovered from
+    // the `self` receiver. Mirrors the Python SDK's `class_type_params` rule.
+    let class_type_params: &[String] = match m.kind {
+        MethodKind::Static => &[],
+        MethodKind::Instance => class_generics,
+    };
+    let tail = factory_tail(&optional_arg, &m.generic_params, class_type_params);
     match m.kind {
         MethodKind::Static => {
             state.uses_define_function = true;
             let _ = writeln!(
                 out,
-                "  static {} = defineFunction(\"{}\", \"{}\", {required_params_lit}{optional_params_arg}) as {sig};",
+                "  static {} = defineFunction(\"{}\", \"{}\", {required_params_lit}{tail}) as {sig};",
                 m.name,
                 m.baml_fqn,
                 mode_str(m.mode),
@@ -697,7 +754,7 @@ fn render_method_binding_ts(
             state.uses_define_instance = true;
             let _ = writeln!(
                 out,
-                "  {} = defineInstanceFunction(\"{}\", \"{}\", {required_params_lit}{optional_params_arg}).bind(this) as {sig};",
+                "  {} = defineInstanceFunction(\"{}\", \"{}\", {required_params_lit}{tail}).bind(this) as {sig};",
                 m.name,
                 m.baml_fqn,
                 mode_str(m.mode),
@@ -737,9 +794,11 @@ fn render_function_ts(
     );
     let (required_params, optional_params) = split_param_names(&f.param_names, &f.arg_defaults, 0);
     let required_params_lit = param_names_literal(&required_params);
-    let optional_params_arg = optional_param_names_arg(&optional_params);
+    let optional_arg = optional_param_names_arg(&optional_params);
+    // Free functions bind only their own `<...>` params (no generic receiver).
+    let tail = factory_tail(&optional_arg, &f.generic_params, &[]);
     let factory = format!(
-        "defineFunction(\"{}\", \"{}\", {required_params_lit}{optional_params_arg}) as {sig}",
+        "defineFunction(\"{}\", \"{}\", {required_params_lit}{tail}) as {sig}",
         f.baml_fqn,
         mode_str(f.mode),
     );
@@ -764,6 +823,52 @@ fn optional_param_names_arg(names: &[String]) -> String {
         String::new()
     } else {
         format!(", {}", param_names_literal(names))
+    }
+}
+
+/// The `{ typeParams, classTypeParams }` literal passed to the runtime factory
+/// to turn on host-side `TypeVar` binding. `type_params` are the callee's own
+/// `<...>` params (bound via the caller's `$types` option); `class_type_params`
+/// are the enclosing generic class's params (bound from the `self` receiver).
+/// `None` when the callee binds nothing (the non-generic fast path). Mirrors
+/// the Python SDK's `render_generic_kwargs`.
+fn generics_object_literal(type_params: &[String], class_type_params: &[String]) -> Option<String> {
+    if type_params.is_empty() && class_type_params.is_empty() {
+        return None;
+    }
+    let mut parts = Vec::new();
+    if !type_params.is_empty() {
+        parts.push(format!("typeParams: {}", param_names_literal(type_params)));
+    }
+    if !class_type_params.is_empty() {
+        parts.push(format!(
+            "classTypeParams: {}",
+            param_names_literal(class_type_params)
+        ));
+    }
+    Some(format!("{{ {} }}", parts.join(", ")))
+}
+
+/// The trailing factory arguments after the required-param-names list: the
+/// optional-param-names list (if any) followed by the generics object (if the
+/// callee is generic). When a callee is generic but has no optional params, the
+/// optional slot is filled with `undefined` so the generics object lands in the
+/// correct positional slot.
+fn factory_tail(
+    optional_arg: &str,
+    type_params: &[String],
+    class_type_params: &[String],
+) -> String {
+    match generics_object_literal(type_params, class_type_params) {
+        None => optional_arg.to_string(),
+        Some(generics) => {
+            let optional = if optional_arg.is_empty() {
+                ", undefined"
+            } else {
+                optional_arg
+            };
+            format!("{optional}, {generics}")
+        }
     }
 }
 

@@ -190,6 +190,7 @@ impl BexEngine {
 
                 Ok(BexExternalValue::Instance {
                     class_name: class.name.to_string(),
+                    type_args: instance.class_type_args.clone(),
                     fields: fields?,
                 })
             }
@@ -375,8 +376,14 @@ impl BexEngine {
             BexExternalValue::RustData(data) => {
                 Value::object(holder.holder_mut().tlab_mut().alloc_rust_data(data))
             }
-            // Allocate instance by looking up class and converting fields
-            BexExternalValue::Instance { class_name, fields } => {
+            // Allocate instance by looking up class and converting fields.
+            // The wire-supplied class `type_args` are landed into the VM
+            // `Object::Instance::class_type_args` via `alloc_instance_with_type_args`.
+            BexExternalValue::Instance {
+                class_name,
+                type_args,
+                fields,
+            } => {
                 let class_ptr = self
                     .resolved_class_names
                     .get(&class_name)
@@ -423,7 +430,7 @@ impl BexEngine {
                     holder
                         .holder_mut()
                         .tlab_mut()
-                        .alloc_instance(*class_ptr, values),
+                        .alloc_instance_with_type_args(*class_ptr, type_args, values),
                 )
             }
             BexExternalValue::Variant {
@@ -585,6 +592,10 @@ impl BexEngine {
                     ret_ty: Box::new(ret),
                     throws_ty: Box::new(normalized_throws),
                     arity: params.len(),
+                    // Capture the declared params (names + optionality) so the VM
+                    // can split the call args into positional + supplied-optional
+                    // (by name) on dispatch, for the per-bridge argument reshape.
+                    params: Box::new(params.clone()),
                 };
                 Value::object(
                     holder
@@ -734,6 +745,159 @@ pub(crate) fn maybe_wrap_union(
             })
         }
         _ => Ok(value),
+    }
+}
+
+/// Recover `TypeVar(name) -> concrete` bindings by walking a declared type and
+/// the matching concrete type in parallel.
+///
+/// Used to recover a generic method's class type arguments from the *actual*
+/// `self` value at a host call: the declared `self` type still mentions the
+/// class's type variables (e.g. `Stream<TStream, TFinal>`), while the inbound
+/// receiver carries them concretely (e.g. `Stream<null | string, string>`).
+/// Zipping the two yields `{TStream -> null | string, TFinal -> string}`, which
+/// [`substitute_type_vars`] then applies to the method's declared return type so
+/// the host-return conversion sees concrete arms instead of bare type variables.
+pub(crate) fn collect_type_var_bindings(
+    declared: &RuntimeTy,
+    concrete: &RuntimeTy,
+    out: &mut indexmap::IndexMap<String, RuntimeTy>,
+) {
+    match (declared, concrete) {
+        // A type-var position binds to whatever concrete type sits opposite it.
+        // First binding wins (a type var should be consistent across positions).
+        (RuntimeTy::TypeVar(name, _), _) => {
+            out.entry(name.to_string())
+                .or_insert_with(|| concrete.clone());
+        }
+        (RuntimeTy::Class(_, da, _), RuntimeTy::Class(_, ca, _)) => {
+            for (d, c) in da.iter().zip(ca.iter()) {
+                collect_type_var_bindings(d, c, out);
+            }
+        }
+        (RuntimeTy::List(d, _), RuntimeTy::List(c, _)) => collect_type_var_bindings(d, c, out),
+        (
+            RuntimeTy::Map {
+                key: dk, value: dv, ..
+            },
+            RuntimeTy::Map {
+                key: ck, value: cv, ..
+            },
+        ) => {
+            collect_type_var_bindings(dk, ck, out);
+            collect_type_var_bindings(dv, cv, out);
+        }
+        (RuntimeTy::Union(dm, _), RuntimeTy::Union(cm, _)) => {
+            for (d, c) in dm.iter().zip(cm.iter()) {
+                collect_type_var_bindings(d, c, out);
+            }
+        }
+        (RuntimeTy::Future(dv, de, _), RuntimeTy::Future(cv, ce, _)) => {
+            collect_type_var_bindings(dv, cv, out);
+            collect_type_var_bindings(de, ce, out);
+        }
+        _ => {}
+    }
+}
+
+/// Replace `TypeVar` leaves named in `bindings` with their concrete types,
+/// recursing through container/aggregate positions. Type variables absent from
+/// `bindings` (e.g. a method's own, unbound type params) are left as-is.
+///
+/// This is the fix for the host-driven streaming `TStream`-typevar bug: a
+/// generic method's declared return type (e.g. `Stream.next`'s
+/// `TStream | StreamFinished`) reaches the FFI return conversion with `TStream`
+/// unsubstituted, so a concrete partial value matched no union member and the
+/// conversion panicked. Substituting from the receiver's bound type args (see
+/// [`collect_type_var_bindings`]) makes the concrete arm present.
+pub(crate) fn substitute_type_vars(
+    ty: &RuntimeTy,
+    bindings: &indexmap::IndexMap<String, RuntimeTy>,
+) -> RuntimeTy {
+    if bindings.is_empty() {
+        return ty.clone();
+    }
+    match ty {
+        RuntimeTy::TypeVar(name, _) => bindings
+            .get(name.as_str())
+            .cloned()
+            .unwrap_or_else(|| ty.clone()),
+        RuntimeTy::Class(tn, args, attr) => RuntimeTy::Class(
+            tn.clone(),
+            args.iter()
+                .map(|a| substitute_type_vars(a, bindings))
+                .collect(),
+            attr.clone(),
+        ),
+        RuntimeTy::List(inner, attr) => RuntimeTy::List(
+            Box::new(substitute_type_vars(inner, bindings)),
+            attr.clone(),
+        ),
+        RuntimeTy::Map { key, value, attr } => RuntimeTy::Map {
+            key: Box::new(substitute_type_vars(key, bindings)),
+            value: Box::new(substitute_type_vars(value, bindings)),
+            attr: attr.clone(),
+        },
+        RuntimeTy::Union(members, attr) => RuntimeTy::Union(
+            members
+                .iter()
+                .map(|m| substitute_type_vars(m, bindings))
+                .collect(),
+            attr.clone(),
+        ),
+        RuntimeTy::Future(value, error, attr) => RuntimeTy::Future(
+            Box::new(substitute_type_vars(value, bindings)),
+            Box::new(substitute_type_vars(error, bindings)),
+            attr.clone(),
+        ),
+        RuntimeTy::WatchAccessor(inner, attr) => RuntimeTy::WatchAccessor(
+            Box::new(substitute_type_vars(inner, bindings)),
+            attr.clone(),
+        ),
+        // Other positions (leaves, opaque handles, Function/Interface/projection)
+        // don't carry a class's type vars in a host-callable return type, so they
+        // pass through unchanged.
+        _ => ty.clone(),
+    }
+}
+
+/// Return the name of the first unbound `TypeVar` reachable in `ty` (walking the
+/// same aggregate positions [`substitute_type_vars`] does), or `None` if the
+/// type is fully concrete. After substituting a generic callee's bindings, any
+/// `TypeVar` that remains is unbound — the host failed to supply it. The
+/// engine rejects such calls (the wire must be fully bound).
+pub(crate) fn first_unbound_type_var(ty: &RuntimeTy) -> Option<String> {
+    match ty {
+        RuntimeTy::TypeVar(name, _) => Some(name.to_string()),
+        RuntimeTy::Class(_, args, _) => args.iter().find_map(first_unbound_type_var),
+        RuntimeTy::List(inner, _) | RuntimeTy::WatchAccessor(inner, _) => {
+            first_unbound_type_var(inner)
+        }
+        RuntimeTy::Map { key, value, .. } => {
+            first_unbound_type_var(key).or_else(|| first_unbound_type_var(value))
+        }
+        RuntimeTy::Union(members, _) => members.iter().find_map(first_unbound_type_var),
+        RuntimeTy::Future(value, error, _) => {
+            first_unbound_type_var(value).or_else(|| first_unbound_type_var(error))
+        }
+        _ => None,
+    }
+}
+
+/// Whether `ty` mentions any `TypeVar` (i.e. the callee is generic at this
+/// position). Thin wrapper over [`first_unbound_type_var`].
+pub(crate) fn contains_type_var(ty: &RuntimeTy) -> bool {
+    first_unbound_type_var(ty).is_some()
+}
+
+/// The concrete `RuntimeTy` carried by a typed heap-handle argument (e.g. a
+/// `Stream` receiver passed as `self`), if any. The handle's `ty` is canonically
+/// `Class { name, args }` with the instance's bound type args — the concrete
+/// side that [`collect_type_var_bindings`] zips against the declared `self` type.
+pub(crate) fn tagged_handle_runtime_ty(value: &BexExternalValue) -> Option<&RuntimeTy> {
+    match value {
+        BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle { ty, .. }) => Some(ty),
+        _ => None,
     }
 }
 
@@ -947,14 +1111,23 @@ fn value_matches_type(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
         // `Instance` during materialization. This lets a host-built class
         // value satisfy a union's class member (e.g. `T | string`).
         (BexExternalValue::Map { .. }, RuntimeTy::Class(..)) => true,
-        // For FFI-boundary matching we only compare class names because
-        // `BexExternalValue::Instance` does not carry class_type_args (that
-        // field lives on the VM-side `Object::Instance`).  Fine-grained
-        // generic disambiguation (e.g. `Foo<int>` vs `Foo<string>`) is
-        // handled in-VM via `IsType` instructions (Phase 8.6) and
-        // `find_matching_union_member` below.
-        (BexExternalValue::Instance { class_name, .. }, RuntimeTy::Class(tn, _, _)) => {
+        // `BexExternalValue::Instance` now carries its wire-supplied class
+        // type args, so we can disambiguate `Foo<int>` from `Foo<string>` at
+        // the FFI boundary instead of name-only. The comparison is name-only
+        // where the *declared* `Class`'s args are absent/erased (a non-generic
+        // class, or args still bare TypeVars); against a concrete generic slot
+        // the wire instance must supply matching args — see
+        // `class_type_args_compatible`.
+        (
+            BexExternalValue::Instance {
+                class_name,
+                type_args,
+                ..
+            },
+            RuntimeTy::Class(tn, expected_args, _),
+        ) => {
             type_name_matches_external_name(class_name, tn)
+                && class_type_args_compatible(type_args, expected_args)
         }
         (BexExternalValue::Variant { enum_name, .. }, RuntimeTy::Enum(tn, _)) => {
             type_name_matches_external_name(enum_name, tn)
@@ -967,6 +1140,155 @@ fn value_matches_type(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
             members.iter().any(|m| value_matches_type(value, m))
         }
         _ => false,
+    }
+}
+
+/// Compare a generic instance's wire-supplied class type args against a declared
+/// `Class`'s args at the FFI boundary. Strict where the declared type is
+/// *concrete*: a generic instance must arrive fully bound (Phase 2/3), so an
+/// instance that omits the args a concrete generic slot requires — or whose
+/// arity disagrees — is a positive mismatch, not a shape surprise to wave
+/// through.
+///
+/// - `expected_args` empty → compatible: the declared class is non-generic, so
+///   there is nothing to check (fall back to name-only).
+/// - `wire_args` empty against a non-empty `expected_args`: reject only if the
+///   expected args are concrete. If they are still erased/unconcretized
+///   wildcards (`TypeVar`/`BuiltinUnknown` — e.g. an instance method's class
+///   param that couldn't be bound, lowered to runtime `unknown`), there is
+///   nothing concrete to contradict, so stay lenient.
+/// - differing (non-zero) arity → reject.
+/// - per-arg: an expected `TypeVar`/`BuiltinUnknown` is a wildcard; otherwise the
+///   wire arg must be compatible with the expected arg.
+fn class_type_args_compatible(wire_args: &[RuntimeTy], expected_args: &[RuntimeTy]) -> bool {
+    if expected_args.is_empty() {
+        return true;
+    }
+    if wire_args.is_empty() {
+        return expected_args.iter().all(is_wildcard_ty);
+    }
+    if wire_args.len() != expected_args.len() {
+        return false;
+    }
+    wire_args
+        .iter()
+        .zip(expected_args)
+        .all(|(wire, expected)| runtime_ty_compatible(wire, expected))
+}
+
+/// A type-arg position that imposes no concrete constraint: an unsubstituted
+/// `TypeVar` or the `unknown` sentinel. Such a position can't positively
+/// contradict a wire arg, so the structural matcher treats it as a wildcard.
+fn is_wildcard_ty(ty: &RuntimeTy) -> bool {
+    matches!(
+        ty,
+        RuntimeTy::TypeVar(..) | RuntimeTy::BuiltinUnknown { .. }
+    )
+}
+
+/// Structural compatibility of a wire-supplied type against a declared
+/// (substituted) type, used to disambiguate generic instances at the FFI
+/// boundary without depending on `TyAttr` equality or full subtyping. Lenient:
+/// only a *positive* leaf/shape mismatch returns `false`.
+///
+/// - an expected `TypeVar`/`BuiltinUnknown` is a wildcard;
+/// - two primitives must be the same primitive (this is what separates
+///   `Foo<int>` from `Foo<string>`);
+/// - matching containers recurse; class names must match, then args recurse;
+/// - anything else is treated as compatible (don't over-reject).
+fn runtime_ty_compatible(wire: &RuntimeTy, expected: &RuntimeTy) -> bool {
+    use RuntimeTy as T;
+    match (wire, expected) {
+        (_, T::TypeVar(..) | T::BuiltinUnknown { .. }) => true,
+        (T::TypeVar(..) | T::BuiltinUnknown { .. }, _) => true,
+        (T::Int { .. }, T::Int { .. })
+        | (T::String { .. }, T::String { .. })
+        | (T::Bool { .. }, T::Bool { .. })
+        | (T::Float { .. }, T::Float { .. })
+        | (T::Null { .. }, T::Null { .. })
+        | (T::Bigint { .. }, T::Bigint { .. })
+        | (T::Uint8Array { .. }, T::Uint8Array { .. }) => true,
+        // Distinct primitives: a positive mismatch.
+        (
+            T::Int { .. }
+            | T::String { .. }
+            | T::Bool { .. }
+            | T::Float { .. }
+            | T::Null { .. }
+            | T::Bigint { .. }
+            | T::Uint8Array { .. },
+            T::Int { .. }
+            | T::String { .. }
+            | T::Bool { .. }
+            | T::Float { .. }
+            | T::Null { .. }
+            | T::Bigint { .. }
+            | T::Uint8Array { .. },
+        ) => false,
+        (T::List(w, _), T::List(e, _)) => runtime_ty_compatible(w, e),
+        (
+            T::Map {
+                key: wk, value: wv, ..
+            },
+            T::Map {
+                key: ek, value: ev, ..
+            },
+        ) => runtime_ty_compatible(wk, ek) && runtime_ty_compatible(wv, ev),
+        (T::Class(wn, wa, _), T::Class(en, ea, _)) => {
+            wn == en && class_type_args_compatible(wa, ea)
+        }
+        // Everything else (unions, enums, aliases, opaque, mixed kinds) is
+        // treated leniently as compatible.
+        _ => true,
+    }
+}
+
+/// Structurally check a generic call's **instance** argument against its
+/// now-concrete expected parameter type, returning a human-readable error on a
+/// positive mismatch. Scoped to `BexExternalValue::Instance` — the value kind
+/// whose wire-supplied `type_args` carry generic information that the signature
+/// can check (e.g. a `GenericBox<string>` arriving at a `GenericBox<int>`
+/// param). Opaque handles/Adts/host values and bare maps keep the permissive
+/// path (their types aren't comparable at this boundary). Also rejects an
+/// instance smuggling an unbound `TypeVar` in its wire args (the wire must be
+/// fully bound).
+pub(crate) fn check_generic_arg(
+    value: &BexExternalValue,
+    expected: &RuntimeTy,
+) -> Result<(), String> {
+    let BexExternalValue::Instance { type_args, .. } = value else {
+        return Ok(());
+    };
+    if let Some(name) = type_args.iter().find_map(first_unbound_type_var) {
+        return Err(format!(
+            "generic argument carries an unbound type variable `{name}`; the host must \
+             send fully-bound generic instances"
+        ));
+    }
+    // Compare against the expected type, peeling optional/union wrappers so an
+    // instance bound for a `T?`/`T | ...` slot still validates against the
+    // class member. Lenient where the expected type isn't a concrete class.
+    if expected_admits_instance(value, expected) {
+        Ok(())
+    } else {
+        Err(format!(
+            "argument of runtime type `{}` does not satisfy the expected type `{expected:?}`",
+            value.type_name(),
+        ))
+    }
+}
+
+/// Whether an `Instance` value is admitted by `expected`, peeling `Union`
+/// (covers `Optional`, which lowers to `T | null`) so a class instance matches
+/// its union/optional member. Defers the actual class+args comparison to
+/// [`value_matches_type`].
+fn expected_admits_instance(value: &BexExternalValue, expected: &RuntimeTy) -> bool {
+    match expected {
+        RuntimeTy::Union(members, _) => members.iter().any(|m| expected_admits_instance(value, m)),
+        // Only a `Class` slot can definitively reject an instance; against any
+        // other expected shape (TypeVar/unknown/opaque) stay lenient.
+        RuntimeTy::Class(..) => value_matches_type(value, expected),
+        _ => true,
     }
 }
 
@@ -1061,7 +1383,9 @@ impl BexEngine {
             // the declared return type. A host returning a class must encode it
             // as a class value (→ `Instance`), not a plain map.
             RuntimeTy::Class(tn, expected_args, _) => match value {
-                BexExternalValue::Instance { class_name, fields } => {
+                BexExternalValue::Instance {
+                    class_name, fields, ..
+                } => {
                     if !type_name_matches_external_name(class_name, tn) {
                         return Err(format!(
                             "host callable returned an instance of `{class_name}` where class \
@@ -1356,7 +1680,11 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: Value) -> BexExternalValue {
                         })
                         .collect();
 
-                    BexExternalValue::Instance { class_name, fields }
+                    BexExternalValue::Instance {
+                        class_name,
+                        type_args: instance.class_type_args.clone(),
+                        fields,
+                    }
                 }
                 Object::Bigint(bi) => BexExternalValue::Bigint((**bi).clone()),
                 Object::Uint8Array(bytes) => BexExternalValue::Uint8Array(bytes.to_vec()),
@@ -1410,7 +1738,9 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: Value) -> BexExternalValue {
 /// 1. **Class / enum naming:** host encoders carry an informational class or
 ///    variant name (e.g. `root.lorem.MyLorem`); rewrite it to the
 ///    engine-registered FQN (`user.lorem.MyLorem`) so VM heap lookups hit. A
-///    plain `Map` arriving at a class slot is also promoted to `Instance`.
+///    plain `Map` arriving at a *non-generic* class slot is also promoted to
+///    `Instance`; against a *generic* class slot the promotion is rejected (a
+///    bare map can't supply the required class type args).
 /// 2. **Numeric / optional / union coercion:** see `coerce_numeric_to_declared_type`.
 ///
 /// Nested container types (arrays/maps with mismatched element types) are not
@@ -1421,15 +1751,39 @@ pub(crate) fn coerce_arg_to_declared_type(
 ) -> Result<BexExternalValue, EngineError> {
     match (value, ty) {
         // ── Class / enum naming (incoming only) ──────────────────────────
-        (BexExternalValue::Map { entries, .. }, RuntimeTy::Class(type_name, _, _)) => {
+        (BexExternalValue::Map { entries, .. }, RuntimeTy::Class(type_name, class_args, _)) => {
+            // Promoting a bare `Map` to an `Instance` fabricates a class value
+            // with NO class type args (a map carries none). That's only sound
+            // for a *non-generic* class slot. Against a generic class the slot
+            // demands concrete type args the map can't supply, so promotion
+            // would manufacture an under-specified generic instance — reject
+            // instead and require the host to send a fully-bound instance.
+            if !class_args.is_empty() {
+                return Err(EngineError::TypeMismatch {
+                    message: format!(
+                        "cannot coerce a host map into the generic class `{type_name}`: a bare \
+                         map carries no class type arguments. Send a fully-bound generic \
+                         instance instead."
+                    ),
+                });
+            }
             Ok(BexExternalValue::Instance {
                 class_name: type_name.to_string(),
+                type_args: vec![],
                 fields: entries,
             })
         }
-        (BexExternalValue::Instance { fields, .. }, RuntimeTy::Class(type_name, _, _)) => {
+        (
+            BexExternalValue::Instance {
+                fields, type_args, ..
+            },
+            RuntimeTy::Class(type_name, _, _),
+        ) => {
+            // FQN rewrite only — carry the wire-supplied class type args through
+            // unchanged (Phase 3 checks them against `expected_args`).
             Ok(BexExternalValue::Instance {
                 class_name: type_name.to_string(),
+                type_args,
                 fields,
             })
         }
@@ -1729,8 +2083,6 @@ mod peel_function_ty_tests {
     /// `(int) -> string` — the canonical concrete function shape.
     fn fn_ty() -> RuntimeTy {
         RuntimeTy::Function {
-            generic_params: vec![],
-            generic_param_bounds: vec![],
             params: vec![RuntimeFunctionParamTy::required(
                 None,
                 RuntimeTy::Int {
@@ -1751,8 +2103,6 @@ mod peel_function_ty_tests {
     /// uniqueness rule rejects two function members in a union.
     fn other_fn_ty() -> RuntimeTy {
         RuntimeTy::Function {
-            generic_params: vec![],
-            generic_param_bounds: vec![],
             params: vec![],
             ret: Box::new(RuntimeTy::Int {
                 attr: TyAttr::default(),

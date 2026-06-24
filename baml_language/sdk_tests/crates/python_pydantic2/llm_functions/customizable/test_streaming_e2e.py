@@ -1,236 +1,136 @@
-"""End-to-end streaming smokes against OpenAI for *string-typed* `T`.
+"""Keyless streaming smokes — string-typed and class-typed `T`.
 
-`StreamE2EExtract(text) -> string`, so the synthesized `$stream`
-companion is `Stream<null | string, string>`. The host-side stream
-object is `BamlStream` (a `BamlPyHandle` wrapper); `next()`/`final()`
-round-trip through `baml.llm.Stream.next` / `.final` on the bridge.
-Class-typed `T` (multi-field classes) is covered by
-`test_streaming_class_e2e.py`.
+Exercises the full streaming path — bridge → BAML LLM client → HTTP → SSE →
+StreamAccumulator → SAP → `Stream.next()/final()` → bridge — without hitting
+OpenAI. The `@replay_server` decorator (see `replay_harness.py`) runs each test
+against an in-process BAML server replaying a checked-in SSE recording, with the
+env-driven `StreamStub` client pointed at it:
 
-Skipped unless OPENAI_API_KEY is set. Run via:
+  * string `T` — `stream_e2e_extract(text) -> string` (Stream<null | string, string>)
+  * class  `T` — `stream_e2e_extract_doc(text) -> StreamingDoc { title, body, word_count }`
 
-    infisical run -- cargo nextest run -p sdk_test_python_pydantic2 llm_functions::pytest
+The recordings stream many SSE chunks, so each `next()` yields >= 10 partials
+before `StreamFinished` (asserted below). The class-typed tests are the
+deterministic, bridge-level regression guard for the class-typed streaming bug
+(thoughts/sam-projects/bridge-generics/streaming, doc 00).
 
-The 100-input parametrize case is gated behind the BAML_STREAM_E2E_FULL
-env var (≈5min wall clock, ≈$0.50/run against gpt-4o-mini), so default
-CI runs only the four single-shot smokes below.
+Re-record the SSE fixtures (needs a real key):
+
+    INSTA_UPDATE=always infisical run -- cargo nextest run -p sdk_test_llm_recordings
 """
-import os
-import pytest
-
-requires_api_key = pytest.mark.skipif(
-    not os.environ.get("OPENAI_API_KEY"),
-    reason="streaming smoke needs OPENAI_API_KEY (use `infisical run --`)",
-)
+from replay_harness import replay_server
 
 
 # ---------------------------------------------------------------------------
-# 100 distinct ~50-word resume blurbs. Generated programmatically so the
-# file stays small; each varies role, years, skills, and an adjective so
-# the model produces visibly different summaries.
+# String-typed `T` — Stream<null | string, string>.
 # ---------------------------------------------------------------------------
 
 
-def _generate_resumes() -> list[str]:
-    roles = [
-        "software engineer", "data scientist", "product manager",
-        "designer", "DevOps engineer", "ML researcher",
-        "frontend developer", "backend developer", "SRE",
-        "security engineer",
-    ]
-    adjectives = [
-        "seasoned", "junior", "principal", "staff", "lead", "senior",
-        "associate", "consulting", "freelance", "tenured",
-    ]
-    skills = [
-        "Python and Rust", "Go and Kubernetes", "TypeScript and React",
-        "SQL and Snowflake", "PyTorch and CUDA", "Terraform and AWS",
-        "Swift and SwiftUI", "Kotlin and Android",
-        "C++ and embedded systems", "Elixir and Phoenix",
-    ]
-    out = []
-    for i in range(100):
-        role = roles[i % len(roles)]
-        adj = adjectives[(i // len(roles)) % len(adjectives)]
-        primary = skills[(i * 7) % len(skills)]
-        secondary = skills[(i * 3) % len(skills)]
-        years = 2 + (i % 18)
-        out.append(
-            f"{adj.capitalize()} {role} with {years} years of "
-            f"experience. Specializes in {primary}. Currently based in "
-            f"city #{i + 1}. Interests include {secondary}."
-        )
-    assert len(out) == 100
-    assert len(set(out)) == 100, "resumes must be distinct"
-    return out
-
-
-RESUMES = _generate_resumes()
-
-
-# ---------------------------------------------------------------------------
-# Single-shot smokes (always run when OPENAI_API_KEY is set).
-# ---------------------------------------------------------------------------
-
-
-@requires_api_key
-def test_stream_next_reaches_finished():
-    """`next()` drives the stream to completion via the bridge path.
-
-    Calling `stream.next()` repeatedly must terminate with a
-    `StreamFinished` instance — proving the stream handle round-trips
-    through `bex.call_function("baml.llm.Stream.next", ...)` without
-    crashing or leaking handles.
-
-    Note: with `S = null | string`, the SAP partial parser typically
-    returns `StreamNoYield` for plain-text content until the stream is
-    done — so `Stream.next()`'s inner loop drains all SSE events and
-    returns `StreamFinished` on the first call. That's a streaming-
-    parser concern (engine-side), not a bridge concern; this test only
-    pins the bridge contract.
-    """
-    from baml_sdk.lorem import StreamE2EExtract_stream
+@replay_server(recording_path="replay_extract_string")
+def test_stream():
+    """Sync `next()` yields a stream of partials and drains to `StreamFinished`."""
     from baml_sdk.baml.stream import StreamFinished
+    from baml_sdk.lorem import stream_e2e_extract_stream
 
-    stream = StreamE2EExtract_stream(RESUMES[0])
-    iterations = 0
+    stream = stream_e2e_extract_stream("ignored-by-replay-server")
+    results = 0
     while True:
         v = stream.next()
-        iterations += 1
         if isinstance(v, StreamFinished):
             break
-        # Accept either None (in-progress, S = null) or string partials.
-        assert v is None or isinstance(v, str), (
-            f"unexpected stream.next() return type: {type(v).__name__}"
-        )
-        assert iterations < 10_000, "stream.next() failed to terminate"
-    assert iterations >= 1
+        results += 1
+        assert v is None or isinstance(v, str)
+        assert results < 10_000, "stream.next() failed to terminate"
+    assert results >= 10, "expected stream.next() to yield at least 10 partials"
+    assert isinstance(stream.final(), str)
 
 
-@requires_api_key
-def test_stream_final_returns_complete_value():
-    """`final()` after exhausting `next()` returns the full string."""
-    from baml_sdk.lorem import StreamE2EExtract_stream
+@replay_server(recording_path="replay_extract_string")
+async def test_stream_async():
+    """Async sibling over the pyo3-tokio path: `next_async()` / `final_async()`."""
     from baml_sdk.baml.stream import StreamFinished
+    from baml_sdk.lorem import stream_e2e_extract_stream_async
 
-    stream = StreamE2EExtract_stream(RESUMES[1])
-    while not isinstance(stream.next(), StreamFinished):
-        pass
-    final = stream.final()
-
-    assert isinstance(final, str)
-    assert len(final) > 50, f"expected a multi-line summary; got {final!r}"
-    # Sanity: the bullet-point format should make this true for
-    # anything but a degenerate response.
-    assert "-" in final or "\n" in final, (
-        f"expected bullet/newline structure; got: {final!r}"
-    )
-
-
-@requires_api_key
-def test_stream_collect_in_baml():
-    """BAML-driven counterpart to `test_stream_next_reaches_finished`.
-
-    `StreamE2ECollect` calls `stream.next()` in a BAML `while` loop,
-    collecting every non-`StreamFinished` yield into an `(null |
-    string)[]`, then calls `stream.final()` once. Returns the aggregate
-    as `StreamE2ECollectResult { next_calls, final_call }` — a normal
-    user class with concrete field types.
-
-    Where this differs from the host-driven tests: the `S |
-    StreamFinished` union never crosses the FFI boundary — only the
-    aggregate with its concrete field types does. Useful for bisecting
-    engine-side vs bridge-side streaming failures.
-    """
-    from baml_sdk.lorem import StreamE2ECollect, StreamE2ECollectResult
-
-    result = StreamE2ECollect(RESUMES[3])
-
-    assert isinstance(result, StreamE2ECollectResult)
-    assert isinstance(result.next_calls, list)
-    assert len(result.next_calls) >= 1, (
-        f"expected at least one yield before StreamFinished, got {result.next_calls!r}"
-    )
-    for i, item in enumerate(result.next_calls):
-        assert item is None or isinstance(item, str), (
-            f"next_calls[{i}] has unexpected type {type(item).__name__}: {item!r}"
-        )
-
-    assert isinstance(result.final_call, str)
-    assert len(result.final_call) > 50, (
-        f"expected a multi-line summary; got {result.final_call!r}"
-    )
-    assert "-" in result.final_call or "\n" in result.final_call, (
-        f"expected bullet/newline structure; got: {result.final_call!r}"
-    )
-
-
-@requires_api_key
-async def test_stream_async_reaches_finished():
-    """Async sibling of `test_stream_next_reaches_finished`.
-
-    Exercises the `pyo3_async_runtimes::tokio::future_into_py` path so
-    we know the async bridge round-trip works. Same caveat as the sync
-    test: parser-yielding semantics for `null | string` partials are an
-    engine concern; this only pins the bridge contract.
-
-    `pytest-asyncio` with `asyncio_mode = "auto"` (set in build.rs)
-    runs `async def test_*` without an explicit decorator.
-    """
-    from baml_sdk.lorem import StreamE2EExtract_stream_async
-    from baml_sdk.baml.stream import StreamFinished
-
-    stream = await StreamE2EExtract_stream_async(RESUMES[2])
-    iterations = 0
+    stream = await stream_e2e_extract_stream_async("ignored-by-replay-server")
+    results = 0
     while True:
         v = await stream.next_async()
-        iterations += 1
         if isinstance(v, StreamFinished):
             break
-        assert v is None or isinstance(v, str), (
-            f"unexpected stream.next_async() return type: {type(v).__name__}"
-        )
-        assert iterations < 10_000, "stream.next_async() failed to terminate"
-    assert iterations >= 1
+        results += 1
+        assert v is None or isinstance(v, str)
+        assert results < 10_000, "stream.next_async() failed to terminate"
+    assert results >= 10, "expected stream.next_async() to yield at least 10 partials"
+    assert isinstance(await stream.final_async(), str)
+
+
+@replay_server(recording_path="replay_extract_string")
+def test_stream_collect_in_baml():
+    """BAML-driven counterpart: the `S | StreamFinished` union stays engine-side."""
+    from baml_sdk.lorem import stream_e2e_collect, StreamE2ECollectResult
+
+    result = stream_e2e_collect("ignored-by-replay-server")
+    assert isinstance(result, StreamE2ECollectResult)
+    assert len(result.next_calls) >= 10, "expected at least 10 collected partials"
+    for item in result.next_calls:
+        assert item is None or isinstance(item, str)
+    assert isinstance(result.final_call, str)
 
 
 # ---------------------------------------------------------------------------
-# Heavy fan-out — 100 distinct inputs. ~5min wall clock at $0.50/run on
-# gpt-4o-mini. Gated behind BAML_STREAM_E2E_FULL=1 so default CI runs
-# only the single-shot smokes.
+# Class-typed `T` — Stream<StreamingDoc$stream, StreamingDoc>. The case the
+# plain-`string` tests above deliberately avoid; the regression guard for the
+# class-typed streaming bug (doc 00).
 # ---------------------------------------------------------------------------
 
 
-full_run_only = pytest.mark.skipif(
-    not os.environ.get("BAML_STREAM_E2E_FULL"),
-    reason="set BAML_STREAM_E2E_FULL=1 to run the 100-input fan-out",
-)
-
-
-@requires_api_key
-@full_run_only
-@pytest.mark.parametrize("idx", range(100))
-def test_stream_100_distinct_inputs(idx: int):
-    """100 distinct inputs × 100 distinct outputs.
-
-    Each call must:
-      (a) drain `next()` to `StreamFinished` without crashing
-          (proves the bridge round-trip is robust across inputs),
-      (b) produce a non-empty `final()` string (proves the typed decode
-          path round-tripped end-to-end).
-
-    Parameterizing surfaces input-specific bridge bugs a single-shot
-    smoke would miss. The intermediate-partial yield is engine
-    parser-side and not asserted here — see
-    `test_stream_next_reaches_finished` for the rationale.
-    """
-    from baml_sdk.lorem import StreamE2EExtract_stream
+@replay_server(recording_path="replay_extract_doc")
+def test_stream_doc():
+    """Sync `next()` yields >= 10 doc partials; `final()` is a typed `StreamingDoc`."""
     from baml_sdk.baml.stream import StreamFinished
+    from baml_sdk.lorem import stream_e2e_extract_doc_stream, StreamingDoc
 
-    stream = StreamE2EExtract_stream(RESUMES[idx])
-    while not isinstance(stream.next(), StreamFinished):
-        pass
+    stream = stream_e2e_extract_doc_stream("ignored-by-replay-server")
+    results = 0
+    while True:
+        v = stream.next()
+        if isinstance(v, StreamFinished):
+            break
+        results += 1
+        if v is not None:
+            assert hasattr(v, "title"), f"unexpected partial: {v!r}"
+        assert results < 10_000, "stream.next() failed to terminate"
+    assert results >= 10, "expected stream.next() to yield at least 10 partials"
+    assert isinstance(stream.final(), StreamingDoc)
 
-    final = stream.final()
-    assert isinstance(final, str)
-    assert len(final) > 20, f"resume #{idx} produced trivial final: {final!r}"
+
+@replay_server(recording_path="replay_extract_doc")
+async def test_stream_doc_async():
+    """Async sibling over the pyo3-tokio path for a class `T`."""
+    from baml_sdk.baml.stream import StreamFinished
+    from baml_sdk.lorem import stream_e2e_extract_doc_stream_async, StreamingDoc
+
+    stream = await stream_e2e_extract_doc_stream_async("ignored-by-replay-server")
+    results = 0
+    while True:
+        v = await stream.next_async()
+        if isinstance(v, StreamFinished):
+            break
+        results += 1
+        if v is not None:
+            assert hasattr(v, "title"), f"unexpected partial: {v!r}"
+        assert results < 10_000, "stream.next_async() failed to terminate"
+    assert results >= 10, "expected stream.next_async() to yield at least 10 partials"
+    assert isinstance(await stream.final_async(), StreamingDoc)
+
+
+@replay_server(recording_path="replay_extract_doc")
+def test_stream_doc_collect_in_baml():
+    """BAML-driven counterpart: the `S | StreamFinished` union stays engine-side;
+    only the concrete `StreamingDoc` crosses the FFI boundary."""
+    from baml_sdk.lorem import stream_e2e_collect_doc, StreamingDoc
+    from baml_sdk.stream_types.lorem import StreamingDoc as StreamingDocPartial
+
+    result = stream_e2e_collect_doc("ignored-by-replay-server")
+    assert isinstance(result, (StreamingDoc, StreamingDocPartial))
+    assert hasattr(result, "title")

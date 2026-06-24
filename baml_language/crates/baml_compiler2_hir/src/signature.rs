@@ -220,18 +220,11 @@ fn fill_omitted_nested_throws_with_never(type_expr: TypeExpr) -> TypeExpr {
             attrs,
         },
         TypeExpr::Function {
-            generic_params,
-            generic_param_bounds,
             params,
             ret,
             throws,
             attrs,
         } => TypeExpr::Function {
-            generic_params,
-            generic_param_bounds: generic_param_bounds
-                .into_iter()
-                .map(|bound| bound.map(fill_omitted_nested_throws_with_never))
-                .collect(),
             params: params
                 .into_iter()
                 .map(|param| FunctionTypeParam {
@@ -259,8 +252,6 @@ fn elaborate_immediate_callback_param(
     effect_param: Name,
 ) -> TypeExpr {
     TypeExpr::Function {
-        generic_params: Vec::new(),
-        generic_param_bounds: Vec::new(),
         params: params
             .into_iter()
             .map(|param| FunctionTypeParam {
@@ -298,8 +289,6 @@ fn elaborate_immediate_function_return_root(
         .map(|param| {
             let ty = match param.ty {
                 TypeExpr::Function {
-                    generic_params,
-                    generic_param_bounds,
                     params,
                     ret,
                     throws,
@@ -315,11 +304,6 @@ fn elaborate_immediate_function_return_root(
                     };
                     immediate_effects.push(callback_throws.clone());
                     TypeExpr::Function {
-                        generic_params,
-                        generic_param_bounds: generic_param_bounds
-                            .into_iter()
-                            .map(|bound| bound.map(fill_omitted_nested_throws_with_never))
-                            .collect(),
                         params: params
                             .into_iter()
                             .map(|param| FunctionTypeParam {
@@ -344,8 +328,6 @@ fn elaborate_immediate_function_return_root(
         .collect();
 
     TypeExpr::Function {
-        generic_params: Vec::new(),
-        generic_param_bounds: Vec::new(),
         params,
         ret: Box::new(fill_omitted_nested_throws_with_never(ret)),
         throws: Some(Box::new(if immediate_effects.is_empty() {
@@ -374,27 +356,21 @@ pub fn elaborate_function_signature_parts(
         .map(|param| {
             let elaborated = match param.ty {
                 TypeExpr::Function {
-                    generic_params,
-                    generic_param_bounds: _,
                     params,
                     ret,
                     throws: None,
                     attrs,
-                } if generic_params.is_empty() => {
+                } => {
                     let effect_param = fresh_effect_param_name(&mut used_names);
                     synthetic_effect_params.push(effect_param.clone());
                     elaborate_immediate_callback_param(params, *ret, attrs, effect_param)
                 }
                 TypeExpr::Function {
-                    generic_params,
-                    generic_param_bounds,
                     params,
                     ret,
                     throws,
                     attrs,
                 } => fill_omitted_nested_throws_with_never(TypeExpr::Function {
-                    generic_params,
-                    generic_param_bounds,
                     params,
                     ret,
                     throws,
@@ -411,13 +387,11 @@ pub fn elaborate_function_signature_parts(
         .collect();
     let return_type = return_type.map(|return_type| match return_type {
         TypeExpr::Function {
-            generic_params,
-            generic_param_bounds: _,
             params,
             ret,
             throws: None,
             attrs,
-        } if generic_params.is_empty() => elaborate_immediate_function_return_root(
+        } => elaborate_immediate_function_return_root(
             params,
             *ret,
             attrs,
@@ -425,15 +399,11 @@ pub fn elaborate_function_signature_parts(
             &mut synthetic_effect_params,
         ),
         TypeExpr::Function {
-            generic_params,
-            generic_param_bounds,
             params,
             ret,
             throws,
             attrs,
         } => fill_omitted_nested_throws_with_never(TypeExpr::Function {
-            generic_params,
-            generic_param_bounds,
             params,
             ret,
             throws,

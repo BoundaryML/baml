@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 28656
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -76,10 +75,15 @@ SOURCE_FILE
             WORD "y"
           SEMICOLON ";"
         CALL_EXPR
-          PATH_EXPR "z.to_string"
+          PATH_EXPR "// Synthetic error: this project lives in diagnostic_errors/ and must
+    // carry at least one error for tier classification. M2 added
+    // Int.to_string (BEP-049 §11), which was previously the failing call
+    // here. Renamed to a guaranteed-missing method so the project's real
+    // purpose — control-flow visualization snapshots — keeps working.
+    z.to_string_BAML_NOT_A_METHOD"
             WORD "z"
             DOT "."
-            WORD "to_string"
+            WORD "to_string_BAML_NOT_A_METHOD"
           CALL_ARGS "()"
             L_PAREN "("
             R_PAREN ")"

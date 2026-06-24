@@ -315,6 +315,11 @@ fn test_output_format() {
     );
 
     assert_eq!(
+        assert_evaluates_to!("ctx.output_format(render_null_as='omit')", &types),
+        Type::String
+    );
+
+    assert_eq!(
         assert_fails_to!(
             "ctx.output_format(prefix='1', always_hoist_enums=1)",
             &types
@@ -338,6 +343,13 @@ fn test_output_format() {
         assert_fails_to!("ctx.output_format(hoist_classes=1)", &types),
         vec![
             "Function 'baml::OutputFormat' expects argument 'hoist_classes' to be of type (none | bool | literal[\"auto\"] | list[string]), but got literal[1]"
+        ]
+    );
+
+    assert_eq!(
+        assert_fails_to!("ctx.output_format(render_null_as=1)", &types),
+        vec![
+            "Function 'baml::OutputFormat' expects argument 'render_null_as' to be of type (none | string), but got literal[1]"
         ]
     );
 

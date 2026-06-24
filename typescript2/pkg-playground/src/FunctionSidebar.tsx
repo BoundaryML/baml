@@ -1,5 +1,5 @@
 import type { FC } from 'react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Collapsible,
   CollapsibleContent,
@@ -17,30 +17,17 @@ import {
   Loader2,
   FlaskConical,
   Wrench,
+  Folder,
 } from 'lucide-react';
-import type { FunctionInfo, RunEntry } from './worker-protocol';
-
-// ---------------------------------------------------------------------------
-// SerializedTestDef — the proto-decoded shape from TestRegistry.serialize()
-// ---------------------------------------------------------------------------
-
-/** A single test: { type: "test", name: string } */
-export type SerializedTest = { type: 'test'; name: string };
-
-/** A lazy (not-yet-expanded) testset: { type: "lazyTestSet", name: string } */
-export type SerializedLazyTestSet = { type: 'lazyTestSet'; name: string };
-
-/** An expanded testset: { name: string, items: SerializedTestDef[], loadingTimeMs: number } */
-export type SerializedTestSet = {
-  name: string;
-  items: SerializedTestDef[];
-  loadingTimeMs: number;
-};
-
-export type SerializedTestDef =
-  | SerializedTest
-  | SerializedLazyTestSet
-  | SerializedTestSet;
+import {
+  buildFunctionSidebarTree,
+  type FunctionSidebarTreeNode,
+} from './function-sidebar-tree';
+import type {
+  SerializedTestDef,
+  SerializedTestSet,
+} from './serialized-test-tree';
+import type { FunctionInfo } from './worker-protocol';
 
 // ---------------------------------------------------------------------------
 // TestTreeNode — recursive tree renderer for SerializedTestDef items
@@ -204,7 +191,8 @@ export interface FunctionSidebarProps {
    * panel's settings gear menu) — used only for the empty-state message. */
   showInternalFunctions: boolean;
   internalFunctionCount: number;
-  testTree?: any; // SerializedTestDef[] from BAML TestRegistry.serialize()
+  isLoadingProject?: boolean;
+  testTree?: SerializedTestDef[] | null;
   selectedFn: string | null;
   onSelectFn: (name: string | null) => void;
   onRefreshTests: () => void;
@@ -214,12 +202,107 @@ export interface FunctionSidebarProps {
   failedExpands?: Set<string>;
   /** Called when the user clicks retry on a failed testset expansion */
   onRetryExpand?: (name: string) => void;
-  /** The synthetic collection RunEntry (if any) — used to show fetch log count badge */
-  collectionRun?: RunEntry | null;
+  /** Number of debug fetch logs captured while collecting or expanding tests. */
+  collectionLogCount?: number;
   /** True when the main panel is showing the collection view */
   viewingCollection?: boolean;
   /** Called when the user clicks the collection debug icon */
   onSelectCollectionView?: () => void;
+}
+
+type FunctionFolderOpenState = Record<string, boolean>;
+
+interface FunctionTreeNodeProps {
+  node: FunctionSidebarTreeNode;
+  depth?: number;
+  selectedFn: string | null;
+  openFolderKeys: FunctionFolderOpenState;
+  forcedOpenFolderKeys: Set<string>;
+  onFolderOpenChange: (key: string, open: boolean) => void;
+  onSelectFn: (name: string | null) => void;
+}
+
+function FunctionTreeNode({
+  node,
+  depth = 0,
+  selectedFn,
+  openFolderKeys,
+  forcedOpenFolderKeys,
+  onFolderOpenChange,
+  onSelectFn,
+}: FunctionTreeNodeProps) {
+  const indent = 8 + depth * 12;
+
+  if (node.type === 'folder') {
+    const forcedOpen = forcedOpenFolderKeys.has(node.key);
+    const open = forcedOpen || (openFolderKeys[node.key] ?? false);
+    return (
+      <Collapsible
+        open={open}
+        onOpenChange={(nextOpen) => onFolderOpenChange(node.key, nextOpen)}
+      >
+        <CollapsibleTrigger
+          className="flex items-center gap-1 w-full pr-2 py-0.5 cursor-pointer text-[10px] font-vsc-mono text-vsc-text-muted hover:bg-vsc-hover"
+          style={{ paddingLeft: indent }}
+          title={node.path.join('.')}
+        >
+          <ChevronRight
+            className={cn(
+              'h-3 w-3 text-vsc-text-faint transition-transform',
+              open && 'rotate-90',
+            )}
+          />
+          <Folder className="h-3.5 w-3.5 shrink-0 text-vsc-text-faint" />
+          <span className="truncate text-[11px] font-medium">
+            {node.name}
+          </span>
+          <span className="text-vsc-text-faint ml-1">
+            ({node.functionCount})
+          </span>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          {node.children.map((child) => (
+            <FunctionTreeNode
+              key={child.key}
+              node={child}
+              depth={depth + 1}
+              selectedFn={selectedFn}
+              openFolderKeys={openFolderKeys}
+              forcedOpenFolderKeys={forcedOpenFolderKeys}
+              onFolderOpenChange={onFolderOpenChange}
+              onSelectFn={onSelectFn}
+            />
+          ))}
+        </CollapsibleContent>
+      </Collapsible>
+    );
+  }
+
+  const isSelected = selectedFn === node.fullName;
+  const isInternal = node.functionInfo.origin !== 'userDefined';
+  const Icon = node.functionInfo.kind === 'llm' ? Bot : FunctionSquare;
+  return (
+    <button
+      type="button"
+      className={cn(
+        'flex items-center gap-1 w-full pr-2 py-1 cursor-pointer text-[11px] font-vsc-mono text-left',
+        isSelected
+          ? 'bg-vsc-accent/15 text-vsc-text font-semibold'
+          : 'text-vsc-text-muted hover:bg-vsc-hover',
+      )}
+      style={{ paddingLeft: 20 + depth * 12 }}
+      title={node.fullName}
+      onClick={() => onSelectFn(isSelected ? null : node.fullName)}
+    >
+      <Icon className="h-3.5 w-3.5 shrink-0 text-vsc-text-faint" />
+      <span className="truncate">{node.label}</span>
+      {isInternal && (
+        <span className="ml-auto shrink-0 rounded border border-vsc-border px-1 py-0 text-[9px] text-vsc-text-faint">
+          {node.functionInfo.origin}
+        </span>
+      )}
+    </button>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -230,6 +313,7 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
   functions,
   showInternalFunctions,
   internalFunctionCount,
+  isLoadingProject = false,
   testTree,
   selectedFn,
   onSelectFn,
@@ -238,28 +322,35 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
   testRunResults,
   failedExpands,
   onRetryExpand,
-  collectionRun,
+  collectionLogCount,
   viewingCollection,
   onSelectCollectionView,
 }) => {
   const [search, setSearch] = useState('');
   // Accordion state: tests are the primary view; functions start collapsed.
   const [functionsOpen, setFunctionsOpen] = useState(false);
+  const [openFolderKeys, setOpenFolderKeys] =
+    useState<FunctionFolderOpenState>({});
   const [testsOpen, setTestsOpen] = useState(true);
 
-  const lowerSearch = search.toLowerCase();
+  const functionTree = useMemo(
+    () =>
+      buildFunctionSidebarTree(functions, {
+        search,
+        selectedFunctionName: selectedFn,
+      }),
+    [functions, search, selectedFn],
+  );
+  const hasFunctionSearch = search.trim() !== '';
+  const setFunctionFolderOpen = (key: string, open: boolean) => {
+    setOpenFolderKeys((prev) => ({ ...prev, [key]: open }));
+  };
 
-  // Filter functions: visible if name matches search
-  const filteredFns = functions.filter((fn) => {
-    if (!search) return true;
-    return fn.name.toLowerCase().includes(lowerSearch);
-  });
-
-  const treeItems: SerializedTestDef[] = Array.isArray(testTree)
-    ? testTree
-    : [];
+  const treeItems = testTree ?? [];
   let emptyFunctionMessage = 'No matches';
-  if (functions.length === 0) {
+  if (isLoadingProject) {
+    emptyFunctionMessage = 'Loading project...';
+  } else if (functions.length === 0) {
     emptyFunctionMessage =
       internalFunctionCount > 0 && !showInternalFunctions
         ? 'No user functions'
@@ -285,56 +376,44 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
       <div className="flex-1 overflow-y-auto py-0.5">
         {/* Functions section — typing in the filter forces it open */}
         <Collapsible
-          open={functionsOpen || search !== ''}
+          open={functionsOpen || hasFunctionSearch}
           onOpenChange={setFunctionsOpen}
         >
           <CollapsibleTrigger className="flex items-center gap-1 w-full px-2 py-1 cursor-pointer text-[11px] font-semibold text-vsc-text-muted hover:bg-vsc-hover">
             <ChevronRight
               className={cn(
                 'h-3 w-3 text-vsc-text-faint transition-transform',
-                (functionsOpen || search !== '') && 'rotate-90',
+                (functionsOpen || hasFunctionSearch) && 'rotate-90',
               )}
             />
             <FunctionSquare size={12} />
             <span>Functions</span>
-            <span className="text-vsc-text-faint ml-1">
-              ({filteredFns.length})
-            </span>
+            {isLoadingProject ? (
+              <Loader2 className="ml-1 h-3 w-3 animate-spin text-vsc-text-faint" />
+            ) : (
+              <span className="text-vsc-text-faint ml-1">
+                ({functionTree.functionCount})
+              </span>
+            )}
           </CollapsibleTrigger>
           <CollapsibleContent>
-            {filteredFns.length === 0 && (
+            {functionTree.functionCount === 0 && (
               <div className="px-2 py-3 text-center text-vsc-text-faint text-[11px]">
                 {emptyFunctionMessage}
               </div>
             )}
 
-            {filteredFns.map((fn) => {
-              const isSelected = selectedFn === fn.name;
-              const isInternal = fn.origin !== 'userDefined';
-              const Icon = fn.kind === 'llm' ? Bot : FunctionSquare;
-
-              return (
-                <button
-                  type="button"
-                  key={fn.name}
-                  className={`flex items-center gap-1 w-full px-2 py-1 cursor-pointer text-[11px] font-vsc-mono text-left ${
-                    isSelected
-                      ? 'bg-vsc-accent/15 text-vsc-text font-semibold'
-                      : 'text-vsc-text-muted hover:bg-vsc-hover'
-                  }`}
-                  onClick={() => onSelectFn(isSelected ? null : fn.name)}
-                >
-                  <span className="w-4 shrink-0" />
-                  <Icon className="h-3.5 w-3.5 shrink-0 text-vsc-text-faint" />
-                  <span className="truncate">{fn.name}</span>
-                  {isInternal && (
-                    <span className="ml-auto shrink-0 rounded border border-vsc-border px-1 py-0 text-[9px] text-vsc-text-faint">
-                      {fn.origin}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
+            {functionTree.nodes.map((node) => (
+              <FunctionTreeNode
+                key={node.key}
+                node={node}
+                selectedFn={selectedFn}
+                openFolderKeys={openFolderKeys}
+                forcedOpenFolderKeys={functionTree.forcedOpenFolderKeys}
+                onFolderOpenChange={setFunctionFolderOpen}
+                onSelectFn={onSelectFn}
+              />
+            ))}
           </CollapsibleContent>
         </Collapsible>
 
@@ -359,8 +438,8 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
                   className={`ml-auto h-5 w-5 ${viewingCollection ? 'text-vsc-accent' : 'text-vsc-text-faint hover:text-vsc-text'}`}
                   onClick={onSelectCollectionView}
                   title={
-                    collectionRun && collectionRun.fetchLogs.length > 0
-                      ? `View collection logs (${collectionRun.fetchLogs.length} request${collectionRun.fetchLogs.length !== 1 ? 's' : ''})`
+                    collectionLogCount && collectionLogCount > 0
+                      ? `View collection logs (${collectionLogCount} request${collectionLogCount !== 1 ? 's' : ''})`
                       : 'View collection logs'
                   }
                 >

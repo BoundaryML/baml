@@ -16,7 +16,8 @@ use crate::{
         ArrayRestPat, AssignOp, AstSourceMap, BinaryOp, CallArg, CatchArm, CatchArmId, CatchClause,
         CatchClauseKind, DefaultExprId, Expr, ExprBody, ExprId, FieldPat, FunctionBodyDef,
         FunctionDef, FunctionDefaults, LetOrigin, Literal, LoopOrigin, MatchArm, MatchArmId, Param,
-        PatId, Pattern, SpannedTypeExpr, SpreadField, Stmt, StmtId, TypeAnnotId, TypeExpr, UnaryOp,
+        PatId, Pattern, SpannedTypeExpr, SpreadField, Stmt, StmtId, TemplateIfBranch,
+        TemplateSegment, TemplateTag, TypeAnnotId, TypeExpr, UnaryOp,
     },
 };
 
@@ -249,35 +250,13 @@ pub(crate) fn lower_runner_element(
 /// directly into the same arena (no IIFE indirection needed).
 pub(crate) struct InitTestContext {
     inner: LoweringContext,
-    /// Counter for generating unique synthetic spans for lambda expressions.
-    /// Synthesized lambdas all share span `0..0`, which causes the HIR scope
-    /// builder and MIR lowering to confuse them. Each lambda gets a unique
-    /// synthetic span at offset `(counter * 2)..(counter * 2 + 1)` to make
-    /// them distinguishable.
-    synthetic_lambda_counter: u32,
 }
 
 impl InitTestContext {
     pub(crate) fn new() -> Self {
         let mut inner = LoweringContext::new();
         inner.names_in_scope.insert("registry".to_string());
-        Self {
-            inner,
-            synthetic_lambda_counter: 0,
-        }
-    }
-
-    /// Generate a unique synthetic span for a lambda expression.
-    /// Each call returns a different 1-byte span to ensure that HIR Lambda
-    /// scopes can be distinguished by their `range` field.
-    pub(crate) fn next_lambda_span(&mut self) -> text_size::TextRange {
-        let offset = self.synthetic_lambda_counter;
-        self.synthetic_lambda_counter += 1;
-        // Use offsets starting at 1 to avoid collision with the default 0..0 span
-        // used for the function itself and non-lambda expressions.
-        let start = text_size::TextSize::from((offset + 1) * 2);
-        let end = start + text_size::TextSize::from(1);
-        text_size::TextRange::new(start, end)
+        Self { inner }
     }
 
     pub(crate) fn alloc_expr(&mut self, expr: Expr, span: text_size::TextRange) -> ExprId {
@@ -303,6 +282,115 @@ impl InitTestContext {
     ) {
         self.inner.finish(root_expr)
     }
+}
+
+/// BEP-049 §10 (M5f). Synthesize a NEW-MODE (backtick) LLM function body:
+/// `baml.llm.<builtin>(<client>, "Fn", {params}, <prompt-tag closure>)`.
+/// Identical to `lower_cst::synthesize_llm_builtin_call` except it appends the
+/// synthesized prompt-tag closure as a 4th argument (the orchestrator invokes it
+/// per attempt; legacy Jinja prompts pass 3 args and a `null` closure). Built in one
+/// `LoweringContext` so the closure shares the call's arena; the closure's
+/// `${…}` interps keep their real source spans, so interp diagnostics point at
+/// the user's prompt. Lowering diagnostics / `env.X` refs from the prompt are
+/// returned for the caller to merge.
+pub(crate) fn synthesize_llm_call_with_prompt(
+    builtin_name: &str,
+    function_name: &str,
+    param_names: &[Name],
+    client_name: Option<&str>,
+    type_args: Vec<crate::ast::TypeExpr>,
+    prompt_backtick: &baml_compiler_syntax::BacktickStringLiteral,
+    span: TextRange,
+) -> (
+    ExprBody,
+    AstSourceMap,
+    Vec<LoweringDiagnostic>,
+    Vec<EnvVarRef>,
+) {
+    use crate::ast::{CallArg, Literal};
+
+    let mut ctx = LoweringContext::new();
+
+    let fn_name_expr = ctx.alloc_expr(
+        Expr::Literal(Literal::String(function_name.to_string())),
+        span,
+    );
+
+    let entries: Vec<(ExprId, ExprId)> = param_names
+        .iter()
+        .map(|name| {
+            let key = ctx.alloc_expr(
+                Expr::Literal(Literal::String(name.as_str().to_string())),
+                span,
+            );
+            let value = ctx.alloc_expr(Expr::Path(vec![name.clone()]), span);
+            (key, value)
+        })
+        .collect();
+    let args_map = ctx.alloc_expr(Expr::Map { entries }, span);
+
+    let callee = ctx.alloc_expr(
+        Expr::Path(vec![
+            Name::new("baml"),
+            Name::new("llm"),
+            Name::new(builtin_name),
+        ]),
+        span,
+    );
+
+    let client_arg = match client_name {
+        Some(name) if name.contains('/') => {
+            let name_lit = ctx.alloc_expr(Expr::Literal(Literal::String(name.to_string())), span);
+            let ct_variant = ctx.alloc_expr(
+                Expr::Path(vec![
+                    Name::new("baml"),
+                    Name::new("llm"),
+                    Name::new("ClientType"),
+                    Name::new("Primitive"),
+                ]),
+                span,
+            );
+            let sub = ctx.alloc_expr(Expr::Array { elements: vec![] }, span);
+            let retry = ctx.alloc_expr(Expr::Null, span);
+            let counter = ctx.alloc_expr(Expr::Literal(Literal::Int(0)), span);
+            ctx.alloc_expr(
+                Expr::Object {
+                    type_name: baml_base::TypePath::from_dotted("baml.llm.Client"),
+                    type_args: vec![],
+                    fields: vec![
+                        (Name::new("name"), name_lit),
+                        (Name::new("client_type"), ct_variant),
+                        (Name::new("sub_clients"), sub),
+                        (Name::new("retry"), retry),
+                        (Name::new("counter"), counter),
+                    ],
+                    spreads: vec![],
+                },
+                span,
+            )
+        }
+        Some(name) => ctx.alloc_expr(Expr::Path(vec![Name::new(name)]), span),
+        None => ctx.alloc_expr(Expr::Null, span),
+    };
+
+    let prompt_closure = ctx.build_prompt_tag_closure(prompt_backtick, span);
+
+    let call = ctx.alloc_expr(
+        Expr::Call {
+            callee,
+            type_args,
+            args: vec![
+                CallArg::positional(client_arg),
+                CallArg::positional(fn_name_expr),
+                CallArg::positional(args_map),
+                // `prompt_closure` is a defaulted param → must be passed by name.
+                CallArg::named("prompt_closure", prompt_closure),
+            ],
+        },
+        span,
+    );
+
+    ctx.finish(Some(call))
 }
 
 struct LoweringContext {
@@ -334,6 +422,23 @@ struct LoweringContext {
     /// args aren't double-counted. Only standalone, value-position `<...>` (e.g.
     /// `let f = foo<int>`) becomes a `GenericApply`.
     consumed_generic_args: std::collections::HashSet<TextRange>,
+    /// When set, every node allocated via `alloc_expr`/`alloc_stmt`/
+    /// `alloc_pattern` is recorded as compiler-synthesized in the source map.
+    /// Scoped on around desugarings (e.g. backtick-template elaboration) so the
+    /// generated nodes are distinguishable from the user-written ones they wrap
+    /// — see [`AstSourceMap::synthetic_exprs`]. Consumed by inlay hints.
+    synthesizing: bool,
+}
+
+/// The elaborated form of a single `${…}` interpolation in an untagged
+/// backtick template (see [`LoweringContext::elaborate_default_interp`]):
+/// either a *value* to concatenate, or — for a side-effect-only `${ let … }` —
+/// the raw statements it runs (which yield ""). Returning the statements lets
+/// the caller splice them into one enclosing concat scope so a `let` in one
+/// segment is visible to later segments (BEP-049 §4 cross-site `let`).
+enum InterpPart {
+    Value(ExprId),
+    Stmts(Vec<StmtId>),
 }
 
 impl LoweringContext {
@@ -352,6 +457,7 @@ impl LoweringContext {
             env_var_refs: Vec::new(),
             needs_chain_wrap: std::collections::HashSet::new(),
             consumed_generic_args: std::collections::HashSet::new(),
+            synthesizing: false,
         }
     }
 
@@ -381,18 +487,27 @@ impl LoweringContext {
     fn alloc_expr(&mut self, expr: Expr, range: TextRange) -> ExprId {
         let id = self.exprs.alloc(expr);
         self.source_map.expr_spans.alloc(range);
+        if self.synthesizing {
+            self.source_map.synthetic_exprs.insert(id);
+        }
         id
     }
 
     fn alloc_stmt(&mut self, stmt: Stmt, range: TextRange) -> StmtId {
         let id = self.stmts.alloc(stmt);
         self.source_map.stmt_spans.alloc(range);
+        if self.synthesizing {
+            self.source_map.synthetic_stmts.insert(id);
+        }
         id
     }
 
     fn alloc_pattern(&mut self, pattern: Pattern, range: TextRange) -> PatId {
         let id = self.patterns.alloc(pattern);
         self.source_map.pattern_spans.alloc(range);
+        if self.synthesizing {
+            self.source_map.synthetic_patterns.insert(id);
+        }
         id
     }
 
@@ -551,6 +666,7 @@ impl LoweringContext {
                         SyntaxKind::CONTINUE_STMT => {
                             self.alloc_stmt(Stmt::Continue, node.text_range())
                         }
+                        SyntaxKind::DEFER_STMT => self.lower_defer_stmt(node),
                         SyntaxKind::TEST_EXPR_DEF => {
                             if self.testset_collector_var.is_some() {
                                 let expr_id = self.lower_test_expr_as_register_call(node);
@@ -685,6 +801,7 @@ impl LoweringContext {
             SyntaxKind::INDEX_EXPR => self.lower_index_expr(node),
             SyntaxKind::OPTIONAL_INDEX_EXPR => self.lower_optional_index_expr(node),
             SyntaxKind::OPTIONAL_CALL_EXPR => self.lower_optional_call_expr(node),
+            SyntaxKind::TAGGED_TEMPLATE_EXPR => self.lower_tagged_template_expr(node),
             SyntaxKind::PAREN_EXPR => {
                 if let Some(inner) = node.children().next() {
                     self.lower_expr(&inner)
@@ -696,6 +813,7 @@ impl LoweringContext {
             SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
                 self.lower_string_literal(node)
             }
+            SyntaxKind::BACKTICK_STRING_LITERAL => self.lower_backtick_string_literal(node),
             SyntaxKind::BYTE_STRING_LITERAL => self.lower_byte_string_literal(node),
             SyntaxKind::ARRAY_LITERAL => self.lower_array_literal(node),
             SyntaxKind::OBJECT_LITERAL => self.lower_object_literal(node),
@@ -807,6 +925,7 @@ impl LoweringContext {
                         origin: crate::ast::FunctionOrigin::Internal,
                         attributes: Vec::new(),
                         docstring: None,
+                        is_tagged_template_tag: false,
                         span: child.text_range(),
                         name_span: child.text_range(),
                     }
@@ -1155,6 +1274,9 @@ impl LoweringContext {
         let mut op = None;
         let mut operand = None;
         let mut double_op = false;
+        // Value of an `INTEGER_LITERAL` token seen *directly* in this
+        // `UNARY_EXPR` (not via a child node like a parenthesized expr).
+        let mut direct_int_lit: Option<i64> = None;
 
         for elem in node.children_with_tokens() {
             match elem {
@@ -1177,6 +1299,7 @@ impl LoweringContext {
                         }
                         SyntaxKind::INTEGER_LITERAL => {
                             let value = token.text().parse::<i64>().unwrap_or(0);
+                            direct_int_lit = Some(value);
                             operand =
                                 Some(self.alloc_expr(Expr::Literal(Literal::Int(value)), span));
                         }
@@ -1209,6 +1332,32 @@ impl LoweringContext {
         let Some(op) = op else {
             return expr;
         };
+
+        // `-<int literal>` whose magnitude exceeds INT_MAX is folded into a
+        // single negative literal here, so the out-of-range positive
+        // intermediate `+v` (which can't be a valid `int` and would panic the
+        // VM at load) is never created. The classic case is INT_MIN, written
+        // `-4611686018427387904` (= -2^62): `+2^62` is not a valid `int`
+        // literal, but the negative literal is — mirroring the i64::MIN literal
+        // rule in Rust/Java/C#. In-range negative literals (`-42`) keep the
+        // ordinary `Neg(literal)` form and are folded by the MIR optimizer as
+        // before, and a bare `+2^62` stays rejected.
+        //
+        // Gated on the `INTEGER_LITERAL` token seen *directly* in this
+        // `UNARY_EXPR`: a parenthesized `-(2^62)` lowers its operand through a
+        // child node (not this token), so `direct_int_lit` is `None` and it is
+        // correctly NOT treated as a negative literal (the `+2^62` is rejected).
+        // `INT_MAX == bex_vm_types::Value::INT_MAX == i64::MAX >> 1`.
+        if op == UnaryOp::Neg
+            && !double_op
+            && let Some(v) = direct_int_lit
+            && v > (i64::MAX >> 1)
+        {
+            return self.alloc_expr(
+                Expr::Literal(Literal::Int(v.wrapping_neg())),
+                node.text_range(),
+            );
+        }
 
         let result = self.alloc_expr(Expr::Unary { op, expr }, node.text_range());
 
@@ -2377,6 +2526,23 @@ impl LoweringContext {
         if type_args.is_empty() {
             return base;
         }
+        // Only a bare path reference to a generic function may be specialized into
+        // a value (`foo<int>`, `a.b.foo<int>`). A *parenthesized* base (`(foo)<int>`)
+        // is rejected even though its inner expression is a path — the paren lowers
+        // transparently, so it must be detected on the CST node — as is any other
+        // non-path base (`(a + b)<int>`, `g().foo<int>`).
+        let parenthesized_base = node.children().any(|n| n.kind() == SyntaxKind::PAREN_EXPR);
+        let path_base = matches!(self.exprs[base], Expr::Path(_));
+        if parenthesized_base || !path_base {
+            self.diags
+                .push(LoweringDiagnostic::TypeArgsOnNonPathBase { span: range });
+            // Recover by still specializing the inner reference when it is a path
+            // (`(foo)<int>`), so a downstream "must be specialized" error does not
+            // pile on; a genuinely non-path base cannot be specialized.
+            if !path_base {
+                return base;
+            }
+        }
         self.alloc_expr(Expr::GenericApply { base, type_args }, range)
     }
 
@@ -2738,6 +2904,1059 @@ impl LoweringContext {
         self.alloc_expr(Expr::Literal(Literal::String(content)), node.text_range())
     }
 
+    /// Lower a BEP-049 untagged backtick string literal to a first-class
+    /// [`Expr::Template`] with [`TemplateTag::Default`].
+    ///
+    /// Like the tagged path (`lower_tagged_template_expr`), we keep the
+    /// `${for}`/`${if}`/`${expr}` structure as [`TemplateSegment`]s rather
+    /// than desugaring to a concat chain here, so TIR can type-check each
+    /// `${…}` natively and point diagnostics at its own span (BEP §11's
+    /// implicit `.to_string()` coercion is enforced as a TIR rule and the
+    /// concat lowering is MIR's job). Interp payloads are the raw inner
+    /// block expressions — identical to the tagged path; the `Default` vs
+    /// `Custom` tag is what drives the divergent value handling downstream.
+    fn lower_backtick_string_literal(&mut self, node: &SyntaxNode) -> ExprId {
+        use baml_compiler_syntax::BacktickStringLiteral;
+        use rowan::ast::AstNode;
+
+        let span = node.text_range();
+        let Some(lit) = BacktickStringLiteral::cast(node.clone()) else {
+            return self.alloc_expr(Expr::Missing, span);
+        };
+        let segments = self.lower_template_segments_checked(&lit);
+        // Build the desugared realization (a `+` concat with implicit
+        // `.to_string()`) from the *same* segment `ExprId`s. HIR/MIR/codegen
+        // consume `elaborated`; TIR types it (quietly) and uses `segments`
+        // only for the strict per-`${…}` diagnostics (BEP §11).
+        //
+        // The elaboration is entirely compiler-generated — mark every node it
+        // allocates as synthetic so consumers (e.g. inlay hints) can skip it.
+        // The segments were lowered above as real user code and keep their
+        // non-synthetic ids; nested backtick strings save/restore the flag.
+        let prev_synth = std::mem::replace(&mut self.synthesizing, true);
+        let elaborated = self.elaborate_default_segments(&segments, span);
+        self.synthesizing = prev_synth;
+        self.alloc_expr(
+            Expr::Template {
+                tag: TemplateTag::Default { elaborated },
+                segments,
+            },
+            span,
+        )
+    }
+
+    /// Build the desugared realization of an untagged backtick template: a
+    /// left-folded `+` concatenation of the segments, with each `${expr}`
+    /// wrapped in an implicit `.to_string()` (BEP §11), `${for}` lowered to an
+    /// accumulator block, and `${if}` to a host if-chain. Operates on the
+    /// already-lowered [`TemplateSegment`]s (reusing their `ExprId`s /
+    /// `PatId`s), so the interpolation expressions are shared with the node's
+    /// `segments` rather than re-lowered.
+    fn elaborate_default_segments(
+        &mut self,
+        segments: &[TemplateSegment],
+        span: TextRange,
+    ) -> ExprId {
+        if segments.is_empty() {
+            return self.alloc_expr(Expr::Literal(Literal::String(String::new())), span);
+        }
+        // Lower each segment to either a *value* part (concatenated with `+`)
+        // or, for a side-effect-only `${ let … }` interpolation, the raw
+        // statements it declares. Hoisting those statements into one enclosing
+        // concat scope (below) — rather than re-wrapping each in its own block —
+        // is what lets a `let` in one segment be seen by a later `${…}` (BEP-049
+        // §4 cross-site `let`), mirroring the single-scope discipline the
+        // `${for}` accumulator already uses.
+        let mut parts: Vec<InterpPart> = Vec::with_capacity(segments.len());
+        let mut any_stmts = false;
+        for seg in segments {
+            let part = match seg {
+                TemplateSegment::Text(s) => InterpPart::Value(
+                    self.alloc_expr(Expr::Literal(Literal::String(s.clone())), span),
+                ),
+                TemplateSegment::Interp(e) => self.elaborate_default_interp(*e, span),
+                TemplateSegment::For {
+                    binding,
+                    collection,
+                    body,
+                } => {
+                    InterpPart::Value(self.elaborate_default_for(*binding, *collection, body, span))
+                }
+                TemplateSegment::CStyleFor {
+                    init,
+                    cond,
+                    step,
+                    body,
+                } => InterpPart::Value(
+                    self.elaborate_default_cstyle_for(*init, *cond, *step, body, span),
+                ),
+                TemplateSegment::If {
+                    branches,
+                    else_body,
+                } => InterpPart::Value(self.elaborate_default_if(
+                    branches,
+                    else_body.as_deref(),
+                    span,
+                )),
+            };
+            if matches!(part, InterpPart::Stmts(_)) {
+                any_stmts = true;
+            }
+            parts.push(part);
+        }
+
+        // Fast path: no side-effect-only segment, so there is nothing to hoist.
+        // Keep the plain `+` fold — this preserves `Ty::Literal` for a constant
+        // template (`` `abc` `` infers `Ty::Literal("abc")` so BEP §9 constant
+        // folding still fires).
+        if !any_stmts {
+            let mut iter = parts.into_iter().map(|p| match p {
+                InterpPart::Value(v) => v,
+                InterpPart::Stmts(_) => unreachable!("no Stmts parts when !any_stmts"),
+            });
+            let first = iter.next().expect("non-empty by guard above");
+            return iter.fold(first, |acc, next| {
+                self.alloc_expr(
+                    Expr::Binary {
+                        op: BinaryOp::Add,
+                        lhs: acc,
+                        rhs: next,
+                    },
+                    span,
+                )
+            });
+        }
+
+        // Hoisting path: build `{ let acc = ""; <…>; acc }` where each value
+        // part appends `acc = acc + part` and each side-effect-only segment
+        // splices its statements in directly, so a `let` it binds stays visible
+        // to every later segment. The accumulator name leads with a space so it
+        // is unparseable as a user identifier and can never collide; name
+        // resolution is plain string equality, so the synthesized references
+        // still resolve to it.
+        let after_span = TextRange::empty(span.end());
+        let acc_name = Name::new(" __m3_concat");
+        let acc_pat = self.alloc_pattern(
+            Pattern::Bind {
+                name: acc_name.clone(),
+                subpat: None,
+            },
+            span,
+        );
+        let empty_init = self.alloc_expr(Expr::Literal(Literal::String(String::new())), span);
+        let acc_let = self.alloc_stmt(
+            Stmt::Let {
+                pattern: acc_pat,
+                initializer: Some(empty_init),
+                is_watched: false,
+                origin: LetOrigin::Source,
+                else_branch: None,
+            },
+            span,
+        );
+        let mut block_stmts: Vec<StmtId> = vec![acc_let];
+        for part in parts {
+            match part {
+                InterpPart::Value(value) => {
+                    let acc_lhs = self.alloc_expr(Expr::Path(vec![acc_name.clone()]), after_span);
+                    let acc_rhs = self.alloc_expr(Expr::Path(vec![acc_name.clone()]), after_span);
+                    let concat = self.alloc_expr(
+                        Expr::Binary {
+                            op: BinaryOp::Add,
+                            lhs: acc_rhs,
+                            rhs: value,
+                        },
+                        after_span,
+                    );
+                    let assign = self.alloc_stmt(
+                        Stmt::Assign {
+                            target: acc_lhs,
+                            value: concat,
+                        },
+                        after_span,
+                    );
+                    block_stmts.push(assign);
+                }
+                InterpPart::Stmts(stmts) => block_stmts.extend(stmts),
+            }
+        }
+        let acc_tail = self.alloc_expr(Expr::Path(vec![acc_name]), after_span);
+        self.alloc_expr(
+            Expr::Block {
+                stmts: block_stmts,
+                tail_expr: Some(acc_tail),
+            },
+            span,
+        )
+    }
+
+    /// Elaborate a `${expr}` for the untagged path: wrap the inner block with
+    /// `.to_string()` (BEP §11). A statement-only (unit) block — or one whose
+    /// tail is itself a unit-valued expression (e.g. an `if`/`if let` with no
+    /// `else`) — renders `""` while still running its statements and tail for
+    /// their side effects.
+    fn elaborate_default_interp(&mut self, inner: ExprId, span: TextRange) -> InterpPart {
+        if let Expr::Block { stmts, tail_expr } = &self.exprs[inner] {
+            // A block is unit-valued when it has no tail, or its tail is a
+            // syntactically-unit expression. It renders "" but still runs its
+            // statements (and its tail, for side effects). Return the raw
+            // statements so the caller can splice them into the enclosing concat
+            // scope — keeping any `let` they bind visible to later segments
+            // (BEP-049 §4 cross-site `let`), instead of confining them to a
+            // per-segment block.
+            let tail_is_unit = tail_expr.map(|t| self.is_unit_tail(t)).unwrap_or(true);
+            if tail_is_unit {
+                let mut stmts = stmts.clone();
+                if let Some(t) = *tail_expr {
+                    let tail_stmt = self.alloc_stmt(Stmt::Expr(t), span);
+                    stmts.push(tail_stmt);
+                }
+                return InterpPart::Stmts(stmts);
+            }
+        }
+        // Render the value via `string.from(...)` — BAML's universal renderer
+        // (BEP-049 §11). It dispatches `to_string` on the value's runtime class
+        // when that class implements `baml.ToString`, otherwise falls back to a
+        // structural rendering, so any `${expr}` renders without the type having
+        // to opt into the interface.
+        let callee = self.alloc_expr(
+            Expr::Path(vec![Name::new("string"), Name::new("from")]),
+            span,
+        );
+        InterpPart::Value(self.alloc_expr(
+            Expr::Call {
+                callee,
+                type_args: Vec::new(),
+                args: vec![CallArg::positional(inner)],
+            },
+            span,
+        ))
+    }
+
+    /// Is `expr` a syntactically unit-valued expression when it sits in a
+    /// block's tail position? Only expressions that TIR types as `Ty::Void`
+    /// qualify: an `if`/`if let` with no `else` branch (their missing arm is
+    /// `void`), or a nested block whose own tail is unit. `while`/`for`/
+    /// assignment/`let`/`return`/`throw`/`break`/`continue` are lowered as
+    /// `Stmt`s (never a `tail_expr`), so they're already covered by the
+    /// no-tail case and need not appear here.
+    fn is_unit_tail(&self, expr: ExprId) -> bool {
+        match &self.exprs[expr] {
+            Expr::If {
+                else_branch: None, ..
+            }
+            | Expr::IfLet {
+                else_branch: None, ..
+            } => true,
+            Expr::Block { tail_expr, .. } => {
+                tail_expr.map(|t| self.is_unit_tail(t)).unwrap_or(true)
+            }
+            _ => false,
+        }
+    }
+
+    /// Elaborate a `${for (p in c)}…${endfor}` to an accumulator block:
+    /// `{ let acc = ""; for (p in c) { acc = acc + <body>; } acc }`.
+    fn elaborate_default_for(
+        &mut self,
+        binding: PatId,
+        collection: ExprId,
+        body: &[TemplateSegment],
+        span: TextRange,
+    ) -> ExprId {
+        let body_string = self.elaborate_default_segments(body, span);
+
+        // Accumulator binding. The leading space makes the name unparseable as
+        // a user identifier, so it can never collide with a user binding; name
+        // resolution is plain string equality, so the synthesized references
+        // below still resolve to it. References sit at an empty range after the
+        // template so they land inside the let binding's visibility window.
+        let after_span = TextRange::empty(span.end());
+        let acc_name = Name::new(" __m3_for");
+        let acc_pat = self.alloc_pattern(
+            Pattern::Bind {
+                name: acc_name.clone(),
+                subpat: None,
+            },
+            span,
+        );
+        let empty_init = self.alloc_expr(Expr::Literal(Literal::String(String::new())), span);
+        let let_stmt = self.alloc_stmt(
+            Stmt::Let {
+                pattern: acc_pat,
+                initializer: Some(empty_init),
+                is_watched: false,
+                origin: LetOrigin::Source,
+                else_branch: None,
+            },
+            span,
+        );
+
+        let acc_path_lhs = self.alloc_expr(Expr::Path(vec![acc_name.clone()]), after_span);
+        let acc_path_rhs = self.alloc_expr(Expr::Path(vec![acc_name.clone()]), after_span);
+        let concat = self.alloc_expr(
+            Expr::Binary {
+                op: BinaryOp::Add,
+                lhs: acc_path_rhs,
+                rhs: body_string,
+            },
+            after_span,
+        );
+        let assign_stmt = self.alloc_stmt(
+            Stmt::Assign {
+                target: acc_path_lhs,
+                value: concat,
+            },
+            after_span,
+        );
+        let loop_body = self.alloc_expr(
+            Expr::Block {
+                stmts: vec![assign_stmt],
+                tail_expr: None,
+            },
+            after_span,
+        );
+        let for_stmt = self.alloc_stmt(
+            Stmt::For {
+                binding,
+                collection,
+                body: loop_body,
+            },
+            after_span,
+        );
+        let acc_tail = self.alloc_expr(Expr::Path(vec![acc_name]), after_span);
+        self.alloc_expr(
+            Expr::Block {
+                stmts: vec![let_stmt, for_stmt],
+                tail_expr: Some(acc_tail),
+            },
+            span,
+        )
+    }
+
+    /// Elaborate a C-style `${for (let i = 0; cond; step)}…${endfor}` to an
+    /// accumulator block, mirroring [`Self::elaborate_default_for`] but with the
+    /// host C-style loop shape: `{ let acc = ""; let i = 0; while cond { acc =
+    /// acc + <body>; } after { step }; acc }`. The `init` `let` declares the
+    /// loop variable in scope for `cond`/body/`step` (same as `lower_c_style_for`).
+    fn elaborate_default_cstyle_for(
+        &mut self,
+        init: StmtId,
+        cond: ExprId,
+        step: Option<StmtId>,
+        body: &[TemplateSegment],
+        span: TextRange,
+    ) -> ExprId {
+        let body_string = self.elaborate_default_segments(body, span);
+
+        let after_span = TextRange::empty(span.end());
+        let acc_name = Name::new(" __m3_for");
+        let acc_pat = self.alloc_pattern(
+            Pattern::Bind {
+                name: acc_name.clone(),
+                subpat: None,
+            },
+            span,
+        );
+        let empty_init = self.alloc_expr(Expr::Literal(Literal::String(String::new())), span);
+        let acc_let = self.alloc_stmt(
+            Stmt::Let {
+                pattern: acc_pat,
+                initializer: Some(empty_init),
+                is_watched: false,
+                origin: LetOrigin::Source,
+                else_branch: None,
+            },
+            span,
+        );
+
+        let acc_path_lhs = self.alloc_expr(Expr::Path(vec![acc_name.clone()]), after_span);
+        let acc_path_rhs = self.alloc_expr(Expr::Path(vec![acc_name.clone()]), after_span);
+        let concat = self.alloc_expr(
+            Expr::Binary {
+                op: BinaryOp::Add,
+                lhs: acc_path_rhs,
+                rhs: body_string,
+            },
+            after_span,
+        );
+        let assign_stmt = self.alloc_stmt(
+            Stmt::Assign {
+                target: acc_path_lhs,
+                value: concat,
+            },
+            after_span,
+        );
+        let loop_body = self.alloc_expr(
+            Expr::Block {
+                stmts: vec![assign_stmt],
+                tail_expr: None,
+            },
+            after_span,
+        );
+        let while_stmt = self.alloc_stmt(
+            Stmt::While {
+                condition: cond,
+                body: loop_body,
+                after: step,
+                origin: LoopOrigin::For,
+            },
+            after_span,
+        );
+        let acc_tail = self.alloc_expr(Expr::Path(vec![acc_name]), after_span);
+        self.alloc_expr(
+            Expr::Block {
+                stmts: vec![acc_let, init, while_stmt],
+                tail_expr: Some(acc_tail),
+            },
+            span,
+        )
+    }
+
+    /// Elaborate a `${if (c)}…${else if}…${else}…${endif}` chain to a host
+    /// if-expression whose branch bodies are the concat of their segments.
+    fn elaborate_default_if(
+        &mut self,
+        branches: &[TemplateIfBranch],
+        else_body: Option<&[TemplateSegment]>,
+        span: TextRange,
+    ) -> ExprId {
+        let mut current_else = match else_body {
+            Some(b) => self.elaborate_default_segments(b, span),
+            None => self.alloc_expr(Expr::Literal(Literal::String(String::new())), span),
+        };
+        for branch in branches.iter().rev() {
+            let then_branch = self.elaborate_default_segments(&branch.body, span);
+            current_else = self.alloc_expr(
+                Expr::If {
+                    condition: branch.condition,
+                    then_branch,
+                    else_branch: Some(current_else),
+                },
+                span,
+            );
+        }
+        current_else
+    }
+
+    /// Lower a `TAGGED_TEMPLATE_EXPR` (BEP-049 §10) — a tag expression
+    /// immediately followed by a backtick string — to a first-class
+    /// [`Expr::Template`] with [`TemplateTag::Custom`].
+    ///
+    /// CST shape (see the `parse_backtick_string` call site in the parser):
+    /// the tag expression is wrapped as the first child, followed by the
+    /// `BACKTICK_STRING_LITERAL`. The structure is kept as
+    /// [`TemplateSegment`]s — shared verbatim with the untagged path
+    /// (`lower_backtick_string_literal`) — so TIR can apply tag-aware rules
+    /// and point diagnostics at the original `${…}` spans.
+    fn lower_tagged_template_expr(&mut self, node: &SyntaxNode) -> ExprId {
+        use baml_compiler_syntax::BacktickStringLiteral;
+
+        let span = node.text_range();
+
+        // The backtick literal child; the tag is the first *other* child node.
+        let backtick_node = node
+            .children()
+            .find(|n| n.kind() == SyntaxKind::BACKTICK_STRING_LITERAL);
+        let tag = node
+            .children()
+            .find(|n| n.kind() != SyntaxKind::BACKTICK_STRING_LITERAL)
+            .map(|n| self.lower_expr(&n))
+            .or_else(|| {
+                // Defensive: if the parser ever leaves a bare-token tag
+                // (a lone identifier/literal) un-wrapped, lower it directly.
+                node.children_with_tokens()
+                    .filter_map(rowan::NodeOrToken::into_token)
+                    .find_map(|t| self.try_lower_bare_token(&t))
+            })
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, span));
+
+        // BEP-049 ergonomic hack: a bare `` prompt`...` `` tag resolves to the
+        // stdlib `baml.llm.prompt`. `prompt` lives in the `baml.llm` namespace
+        // and BAML has no prelude, so the unqualified form (which the BEP §10
+        // examples use) would otherwise be an unresolved name. Rewriting the bare
+        // path here — same `ExprId`, so the source span is preserved — means every
+        // downstream stage (TIR typing/tag-validation, MIR lowering) sees the
+        // qualified tag and the body-lambda bindings (`role`, `ctx`) resolve. A
+        // caller who needs a different `prompt` tag can write it qualified.
+        if matches!(&self.exprs[tag], Expr::Path(segs) if segs.len() == 1 && segs[0].as_str() == "prompt")
+        {
+            self.exprs[tag] = Expr::Path(vec![
+                Name::new("baml"),
+                Name::new("llm"),
+                Name::new("prompt"),
+            ]);
+        }
+
+        let segments = backtick_node
+            .and_then(BacktickStringLiteral::cast)
+            .map(|lit| self.lower_template_segments_checked(&lit))
+            .unwrap_or_default();
+
+        // Desugared closure body: flatten segments into a `baml.TaggedString`.
+        // MIR lowers this for the dynamic (`${for}`/`${if}`) case and keeps a
+        // fixed-array fast-path off `segments` for purely-static templates.
+        // The desugared closure body is entirely compiler-generated — mark its
+        // nodes synthetic, mirroring the untagged path. The segments were lowered
+        // above as real user code and keep their non-synthetic ids.
+        let prev_synth = std::mem::replace(&mut self.synthesizing, true);
+        let body = self.elaborate_tagged_body(&segments, span);
+        self.synthesizing = prev_synth;
+
+        self.alloc_expr(
+            Expr::Template {
+                tag: TemplateTag::Custom { tag, body },
+                segments,
+            },
+            span,
+        )
+    }
+
+    /// BEP-049 §10 (M5f). Build a `baml.llm.prompt`-tagged closure over the
+    /// segments for a new-mode LLM prompt — a *bare* backtick literal (no written tag), so the
+    /// `baml.llm.prompt` tag is synthesized here. Mirrors `lower_tagged_template_expr`
+    /// but with the synthetic tag; the segment interps keep their real source
+    /// spans (so `${…}` diagnostics point at the user's prompt). The result is a
+    /// `(Context) -> PromptAst`-producing expression the orchestrator invokes.
+    pub(crate) fn build_prompt_tag_closure(
+        &mut self,
+        backtick: &baml_compiler_syntax::BacktickStringLiteral,
+        span: TextRange,
+    ) -> ExprId {
+        let tag = self.alloc_expr(
+            Expr::Path(vec![
+                Name::new("baml"),
+                Name::new("llm"),
+                Name::new("prompt"),
+            ]),
+            span,
+        );
+        let segments = self.lower_template_segments_checked(backtick);
+        // The desugared closure body is entirely compiler-generated — mark its
+        // nodes synthetic, mirroring the untagged path. The segments were lowered
+        // above as real user code and keep their non-synthetic ids.
+        let prev_synth = std::mem::replace(&mut self.synthesizing, true);
+        let body = self.elaborate_tagged_body(&segments, span);
+        self.synthesizing = prev_synth;
+        self.alloc_expr(
+            Expr::Template {
+                tag: TemplateTag::Custom { tag, body },
+                segments,
+            },
+            span,
+        )
+    }
+
+    /// Build the desugared body of a tagged template — the closure the tag is
+    /// invoked with. Produces a block that flattens the segments into
+    /// `baml.TaggedString { parts, values }` (BEP §10): text runs accumulate
+    /// into a `cur` string flushed into `parts` at each interpolation, each
+    /// `${expr}` is pushed *raw* (uncoerced — §11) into `values`, and
+    /// `${for}`/`${if}` drive runtime growth via real loops/branches.
+    ///
+    /// Built from the already-lowered [`TemplateSegment`]s (reusing their
+    /// `ExprId`s/`PatId`s for interps, for-bindings, collections, conditions).
+    /// The `parts`/`values`/`cur` synthetic locals use leading-space names so
+    /// they can never collide with user identifiers; their references sit at an
+    /// empty range after the template so they land inside each `let`'s
+    /// visibility window (mirrors the untagged accumulator in
+    /// `elaborate_default_for`).
+    fn elaborate_tagged_body(&mut self, segments: &[TemplateSegment], span: TextRange) -> ExprId {
+        let parts = Name::new(" __tt_parts");
+        let values = Name::new(" __tt_values");
+        let cur = Name::new(" __tt_cur");
+
+        let mut stmts: Vec<StmtId> = Vec::new();
+        // let __tt_parts: string[] = [];
+        stmts.push(self.tt_let_typed_empty_list(
+            &parts,
+            TypeExpr::String { attrs: Vec::new() },
+            span,
+        ));
+        // let __tt_values: unknown[] = [];
+        stmts.push(self.tt_let_typed_empty_list(
+            &values,
+            TypeExpr::BuiltinUnknown { attrs: Vec::new() },
+            span,
+        ));
+        // let __tt_cur = "";
+        let at = TextRange::empty(span.start());
+        let cur_init = self.alloc_expr(Expr::Literal(Literal::String(String::new())), at);
+        let cur_pat = self.alloc_pattern(
+            Pattern::Bind {
+                name: cur.clone(),
+                subpat: None,
+            },
+            at,
+        );
+        stmts.push(self.alloc_stmt(
+            Stmt::Let {
+                pattern: cur_pat,
+                initializer: Some(cur_init),
+                is_watched: false,
+                origin: LetOrigin::Source,
+                else_branch: None,
+            },
+            at,
+        ));
+
+        self.elaborate_tagged_walk(segments, &parts, &values, &cur, &mut stmts, span);
+
+        // __tt_parts.push(__tt_cur);  — flush the trailing text run.
+        let cur_ref = self.tt_path(&cur, span);
+        stmts.push(self.tt_push_stmt(&parts, cur_ref, span));
+
+        // baml.TaggedString { parts: __tt_parts, values: __tt_values }
+        let parts_ref = self.tt_path(&parts, span);
+        let values_ref = self.tt_path(&values, span);
+        let tail = self.alloc_expr(
+            Expr::Object {
+                type_name: baml_base::TypePath::from_dotted("baml.TaggedString"),
+                type_args: Vec::new(),
+                fields: vec![
+                    (Name::new("parts"), parts_ref),
+                    (Name::new("values"), values_ref),
+                ],
+                spreads: Vec::new(),
+            },
+            span,
+        );
+
+        self.alloc_expr(
+            Expr::Block {
+                stmts,
+                tail_expr: Some(tail),
+            },
+            span,
+        )
+    }
+
+    /// Emit the per-segment flatten statements into `stmts`. Recurses through
+    /// `${for}` bodies and `${if}` branches, threading the same accumulator
+    /// locals so the resulting `(parts, values)` honour the alternating
+    /// `parts.len() == values.len() + 1` invariant across data-dependent
+    /// lengths.
+    fn elaborate_tagged_walk(
+        &mut self,
+        segments: &[TemplateSegment],
+        parts: &Name,
+        values: &Name,
+        cur: &Name,
+        stmts: &mut Vec<StmtId>,
+        span: TextRange,
+    ) {
+        for seg in segments {
+            match seg {
+                TemplateSegment::Text(s) => {
+                    // __tt_cur = __tt_cur + "<text>";
+                    let lhs = self.tt_path(cur, span);
+                    let rhs = self.alloc_expr(Expr::Literal(Literal::String(s.clone())), span);
+                    let concat = self.alloc_expr(
+                        Expr::Binary {
+                            op: BinaryOp::Add,
+                            lhs,
+                            rhs,
+                        },
+                        span,
+                    );
+                    stmts.push(self.tt_assign(cur, concat, span));
+                }
+                TemplateSegment::Interp(e) => {
+                    // __tt_parts.push(__tt_cur); __tt_cur = ""; __tt_values.push(<e>);
+                    let cur_ref = self.tt_path(cur, span);
+                    stmts.push(self.tt_push_stmt(parts, cur_ref, span));
+                    let empty =
+                        self.alloc_expr(Expr::Literal(Literal::String(String::new())), span);
+                    stmts.push(self.tt_assign(cur, empty, span));
+                    stmts.push(self.tt_push_stmt(values, *e, span));
+                }
+                TemplateSegment::For {
+                    binding,
+                    collection,
+                    body,
+                } => {
+                    // for (let p in c) { <walk body> }
+                    let mut inner: Vec<StmtId> = Vec::new();
+                    self.elaborate_tagged_walk(body, parts, values, cur, &mut inner, span);
+                    let loop_body = self.alloc_expr(
+                        Expr::Block {
+                            stmts: inner,
+                            tail_expr: None,
+                        },
+                        span,
+                    );
+                    stmts.push(self.alloc_stmt(
+                        Stmt::For {
+                            binding: *binding,
+                            collection: *collection,
+                            body: loop_body,
+                        },
+                        span,
+                    ));
+                }
+                TemplateSegment::CStyleFor {
+                    init,
+                    cond,
+                    step,
+                    body,
+                } => {
+                    // { let i = 0; while cond { <walk body> } after { step } }
+                    let mut inner: Vec<StmtId> = Vec::new();
+                    self.elaborate_tagged_walk(body, parts, values, cur, &mut inner, span);
+                    let loop_body = self.alloc_expr(
+                        Expr::Block {
+                            stmts: inner,
+                            tail_expr: None,
+                        },
+                        span,
+                    );
+                    let while_stmt = self.alloc_stmt(
+                        Stmt::While {
+                            condition: *cond,
+                            body: loop_body,
+                            after: *step,
+                            origin: LoopOrigin::For,
+                        },
+                        span,
+                    );
+                    // Wrap `init` + `while` in a block so the loop variable is
+                    // scoped to the loop, not the surrounding flatten body.
+                    let block = self.alloc_expr(
+                        Expr::Block {
+                            stmts: vec![*init, while_stmt],
+                            tail_expr: None,
+                        },
+                        span,
+                    );
+                    stmts.push(self.alloc_stmt(Stmt::Expr(block), span));
+                }
+                TemplateSegment::If {
+                    branches,
+                    else_body,
+                } => {
+                    // Build the if/else-if chain inside-out, each branch body a
+                    // block of the walked statements (unit-valued).
+                    let mut current_else: Option<ExprId> = else_body.as_deref().map(|eb| {
+                        let mut s: Vec<StmtId> = Vec::new();
+                        self.elaborate_tagged_walk(eb, parts, values, cur, &mut s, span);
+                        self.alloc_expr(
+                            Expr::Block {
+                                stmts: s,
+                                tail_expr: None,
+                            },
+                            span,
+                        )
+                    });
+                    for branch in branches.iter().rev() {
+                        let mut s: Vec<StmtId> = Vec::new();
+                        self.elaborate_tagged_walk(&branch.body, parts, values, cur, &mut s, span);
+                        let then_branch = self.alloc_expr(
+                            Expr::Block {
+                                stmts: s,
+                                tail_expr: None,
+                            },
+                            span,
+                        );
+                        let if_expr = self.alloc_expr(
+                            Expr::If {
+                                condition: branch.condition,
+                                then_branch,
+                                else_branch: current_else,
+                            },
+                            span,
+                        );
+                        current_else = Some(if_expr);
+                    }
+                    if let Some(if_expr) = current_else {
+                        stmts.push(self.alloc_stmt(Stmt::Expr(if_expr), span));
+                    }
+                }
+            }
+        }
+    }
+
+    /// `let <name>: <elem>[] = []` with a leading-space (non-collidable) name.
+    fn tt_let_typed_empty_list(&mut self, name: &Name, elem: TypeExpr, span: TextRange) -> StmtId {
+        // Anchor the binding at the template start so its visibility window
+        // (`visible_from == let.span.end`) begins at `span.start`, letting the
+        // start-anchored accumulator references (see `tt_path`) resolve to it.
+        let at = TextRange::empty(span.start());
+        let list_ty = TypeExpr::List {
+            inner: Box::new(elem),
+            attrs: Vec::new(),
+        };
+        let type_pat = self.alloc_pattern(Pattern::Type(list_ty), at);
+        let pat = self.alloc_pattern(
+            Pattern::Bind {
+                name: name.clone(),
+                subpat: Some(type_pat),
+            },
+            at,
+        );
+        let empty = self.alloc_expr(
+            Expr::Array {
+                elements: Vec::new(),
+            },
+            at,
+        );
+        self.alloc_stmt(
+            Stmt::Let {
+                pattern: pat,
+                initializer: Some(empty),
+                is_watched: false,
+                origin: LetOrigin::Source,
+                else_branch: None,
+            },
+            at,
+        )
+    }
+
+    /// A `Path` reference to a synthetic accumulator local. Anchored at an
+    /// empty range at the *start* of the template — inside the closure's
+    /// `ScopeKind::Lambda` range `[span.start, span.end)` (so it resolves) and
+    /// `>=` each accumulator `let`'s visibility (also anchored at the start).
+    /// `span.end` would be the exclusive scope boundary → out of scope.
+    fn tt_path(&mut self, name: &Name, span: TextRange) -> ExprId {
+        let at = TextRange::empty(span.start());
+        self.alloc_expr(Expr::Path(vec![name.clone()]), at)
+    }
+
+    /// `<name> = <value>;`
+    fn tt_assign(&mut self, name: &Name, value: ExprId, span: TextRange) -> StmtId {
+        let at = TextRange::empty(span.start());
+        let target = self.alloc_expr(Expr::Path(vec![name.clone()]), at);
+        self.alloc_stmt(Stmt::Assign { target, value }, at)
+    }
+
+    /// `<name>.push(<arg>);` as a statement.
+    fn tt_push_stmt(&mut self, name: &Name, arg: ExprId, span: TextRange) -> StmtId {
+        let at = TextRange::empty(span.start());
+        let recv = self.alloc_expr(Expr::Path(vec![name.clone()]), at);
+        let callee = self.alloc_expr(
+            Expr::MemberAccess {
+                base: recv,
+                member: Name::new("push"),
+            },
+            at,
+        );
+        let call = self.alloc_expr(
+            Expr::Call {
+                callee,
+                type_args: Vec::new(),
+                args: vec![CallArg::positional(arg)],
+            },
+            at,
+        );
+        self.alloc_stmt(Stmt::Expr(call), at)
+    }
+
+    /// Walk backtick segments into [`TemplateSegment`]s, preserving `${for}` /
+    /// `${if}` structure (no desugaring). Shared by both the untagged
+    /// (`Default`) and tagged (`Custom`) paths — the tag, not the segments,
+    /// drives the divergent downstream handling.
+    /// Lower a backtick literal's segments, first reporting structural
+    /// block-tag diagnostics (unclosed / mismatched / stray `${for}`/`${if}`)
+    /// so a malformed template surfaces an error instead of silently
+    /// miscompiling. Use this at every top-level `segments()` call site.
+    fn lower_template_segments_checked(
+        &mut self,
+        lit: &baml_compiler_syntax::BacktickStringLiteral,
+    ) -> Vec<TemplateSegment> {
+        let (segs, errors) = lit.segments_with_errors();
+        for e in errors {
+            self.diags.push(LoweringDiagnostic::MalformedTemplateBlock {
+                kind: e.kind,
+                span: e.span,
+            });
+        }
+        self.lower_template_segments(segs)
+    }
+
+    fn lower_template_segments(
+        &mut self,
+        segments: Vec<baml_compiler_syntax::BacktickSegment>,
+    ) -> Vec<TemplateSegment> {
+        use baml_compiler_syntax::BacktickSegment;
+
+        let mut out = Vec::with_capacity(segments.len());
+        for seg in segments {
+            match seg {
+                BacktickSegment::Text(s) => out.push(TemplateSegment::Text(s)),
+                BacktickSegment::Interp(interp_node) => {
+                    out.push(TemplateSegment::Interp(
+                        self.lower_template_interp(&interp_node),
+                    ));
+                }
+                BacktickSegment::For(for_seg) => {
+                    if let Some(s) = self.lower_template_for(for_seg) {
+                        out.push(s);
+                    }
+                }
+                BacktickSegment::If(if_seg) => {
+                    out.push(self.lower_template_if(if_seg));
+                }
+            }
+        }
+        out
+    }
+
+    /// Lower a `${expr}` interpolation. The `TemplateSegment::Interp` payload
+    /// is the *raw* lowered block expression — no `.to_string()` wrapping.
+    /// For the `Default` form MIR inserts the BEP §11 coercion; for the
+    /// `Custom` form the tag's body decides how each value is rendered, so it
+    /// receives the unmodified inner expression (values stay typed, §10/§11).
+    fn lower_template_interp(&mut self, interp_node: &SyntaxNode) -> ExprId {
+        // Detect an empty `${}` / `${ }` (no expression) from the node text —
+        // robust to whether it parses to a missing or an empty block.
+        let raw = interp_node.text().to_string();
+        let inner_empty = raw
+            .strip_prefix("${")
+            .and_then(|s| s.strip_suffix('}'))
+            .is_some_and(|inner| inner.trim().is_empty());
+        if inner_empty {
+            self.diags.push(LoweringDiagnostic::EmptyInterpolation {
+                span: interp_node.text_range(),
+            });
+        }
+        match interp_node
+            .children()
+            .find(|c| c.kind() == SyntaxKind::BLOCK_EXPR)
+        {
+            Some(b) => self.lower_expr(&b),
+            None => self.alloc_expr(Expr::Missing, interp_node.text_range()),
+        }
+    }
+
+    /// Lower a `${for (let p in c)}…${endfor}` block, keeping structure.
+    ///
+    /// Extracts the loop header and emits `TemplateSegment::For`. The HIR
+    /// walker (`walk_template_segment`) pushes the loop scope and registers
+    /// the binding itself, so a plain `lower_pattern` `PatId` is all we emit
+    /// here. A malformed header (missing binding or collection) drops the
+    /// segment.
+    fn lower_template_for(
+        &mut self,
+        for_seg: baml_compiler_syntax::BacktickForSegment,
+    ) -> Option<TemplateSegment> {
+        // Iterator form has an `in`; C-style (`for (let i = 0; cond; step)`)
+        // does not. The header is the same one the host `for` parses
+        // (`parse_for_header_only`), so we reuse `lower_let_stmt` /
+        // `try_lower_assignment` for the C-style pieces (BEP §4).
+        let is_cstyle = !for_seg
+            .open
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .any(|t| t.kind() == SyntaxKind::KW_IN);
+
+        if is_cstyle {
+            let child_nodes: Vec<SyntaxNode> = for_seg.open.children().collect();
+            // Initializer is a `let` statement (declares the loop variable).
+            let init_node = child_nodes
+                .iter()
+                .find(|n| n.kind() == SyntaxKind::LET_STMT)?;
+            let init = self.lower_let_stmt(init_node, false);
+            // The remaining expression nodes, in order, are [cond, step].
+            let expr_nodes: Vec<&SyntaxNode> = child_nodes
+                .iter()
+                .filter(|n| n.kind() != SyntaxKind::LET_STMT)
+                .collect();
+            let cond = expr_nodes
+                .first()
+                .map(|n| self.lower_expr(n))
+                .unwrap_or_else(|| self.alloc_expr(Expr::Missing, for_seg.open.text_range()));
+            // Step is an assignment (`i += 1`) or a bare expression; absent for
+            // `for (let i = 0; cond; )`.
+            let step = expr_nodes.get(1).map(|n| {
+                let r = n.text_range();
+                self.try_lower_assignment(n).unwrap_or_else(|| {
+                    let e = self.lower_expr(n);
+                    self.alloc_stmt(Stmt::Expr(e), r)
+                })
+            });
+            let body = self.lower_template_segments(for_seg.body);
+            return Some(TemplateSegment::CStyleFor {
+                init,
+                cond,
+                step,
+                body,
+            });
+        }
+
+        let mut pattern_node = None;
+        let mut collection: Option<ExprId> = None;
+        let mut seen_in = false;
+        for elem in for_seg.open.children_with_tokens() {
+            match elem {
+                rowan::NodeOrToken::Token(t) => match t.kind() {
+                    SyntaxKind::KW_IN => seen_in = true,
+                    _ => {
+                        if seen_in && collection.is_none() {
+                            collection = self.try_lower_bare_token(&t);
+                        }
+                    }
+                },
+                rowan::NodeOrToken::Node(child) => {
+                    if !seen_in && pattern_node.is_none() && child.kind() == SyntaxKind::LET_STMT {
+                        pattern_node = child.children().find(|n| n.kind() == SyntaxKind::PATTERN);
+                    } else if seen_in && collection.is_none() {
+                        collection = Some(self.lower_expr(&child));
+                    }
+                }
+            }
+        }
+
+        let pattern_node = pattern_node?;
+        let collection = collection?;
+        let binding = self.lower_pattern(&pattern_node);
+        let body = self.lower_template_segments(for_seg.body);
+
+        Some(TemplateSegment::For {
+            binding,
+            collection,
+            body,
+        })
+    }
+
+    /// Lower a `${if (c)}…${else if (c)}…${else}…${endif}` chain, keeping
+    /// structure; bodies recurse via `lower_template_segments`. The host
+    /// if-chain fold is deliberately NOT performed — TIR/MIR consume the
+    /// branch structure.
+    fn lower_template_if(
+        &mut self,
+        if_seg: baml_compiler_syntax::BacktickIfSegment,
+    ) -> TemplateSegment {
+        let mut branches = Vec::with_capacity(if_seg.branches.len());
+        for branch in if_seg.branches {
+            let header_span = branch.header.text_range();
+            let mut cond: Option<ExprId> = None;
+            for elem in branch.header.children_with_tokens() {
+                match elem {
+                    rowan::NodeOrToken::Node(c) if c.kind() != SyntaxKind::PATTERN => {
+                        cond = Some(self.lower_expr(&c));
+                        break;
+                    }
+                    rowan::NodeOrToken::Node(_) => {}
+                    rowan::NodeOrToken::Token(t) => {
+                        if let Some(expr) = self.try_lower_bare_token(&t) {
+                            cond = Some(expr);
+                            break;
+                        }
+                    }
+                }
+            }
+            let condition = cond.unwrap_or_else(|| self.alloc_expr(Expr::Missing, header_span));
+            let body = self.lower_template_segments(branch.body);
+            branches.push(TemplateIfBranch { condition, body });
+        }
+
+        let else_body = if_seg.else_body.map(|b| self.lower_template_segments(b));
+
+        TemplateSegment::If {
+            branches,
+            else_body,
+        }
+    }
+
     fn lower_byte_string_literal(&mut self, node: &SyntaxNode) -> ExprId {
         let text = node.text().to_string();
         // Strip the b"..." delimiters: remove leading `b"` and trailing `"`
@@ -2968,8 +4187,10 @@ impl LoweringContext {
     fn lower_lambda_expr(&mut self, node: &SyntaxNode) -> ExprId {
         use baml_compiler_syntax::ast;
 
-        // Extract optional generic params: <T>, <K, V>, etc.
-        let generic_params = crate::lower_cst::extract_generic_params(node);
+        // A lambda is a function *value* and cannot declare generic parameters
+        // (rejected by the parser). Any leading `<...>` is left in the CST for
+        // recovery and ignored here, so the lambda carries no generics.
+        let generic_params = Vec::new();
 
         // Lower parameter list — gives us Vec<Param>
         let (params, defaults) = node
@@ -3060,6 +4281,7 @@ impl LoweringContext {
             origin: crate::ast::FunctionOrigin::Internal,
             attributes: Vec::new(),
             docstring: None,
+            is_tagged_template_tag: false,
             span: node.text_range(),
             name_span: node.text_range(), // synthetic: use the lambda span
         };
@@ -3268,6 +4490,21 @@ impl LoweringContext {
             result
         };
         self.alloc_stmt(Stmt::Return(expr), node.text_range())
+    }
+
+    /// Lower `defer { BODY }` (BEP-042). The CST shape is
+    /// `DEFER_STMT [ KW_DEFER BLOCK_EXPR ]`. Unlike `spawn`, the body is NOT a
+    /// lambda — it is lowered inline as an [`Expr::Block`] in the enclosing
+    /// `ExprBody`, so deferred code reads the live enclosing scope at exit
+    /// rather than a captured snapshot. MIR replays this block at every exit
+    /// edge of the enclosing scope.
+    fn lower_defer_stmt(&mut self, node: &SyntaxNode) -> StmtId {
+        let body = node
+            .children()
+            .find(|c| c.kind() == SyntaxKind::BLOCK_EXPR)
+            .map(|block| self.lower_expr(&block))
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
+        self.alloc_stmt(Stmt::Defer { body }, node.text_range())
     }
 
     fn lower_while_stmt(&mut self, node: &SyntaxNode) -> StmtId {
@@ -3536,6 +4773,7 @@ impl LoweringContext {
             origin: crate::ast::FunctionOrigin::Internal,
             attributes: vec![],
             docstring: None,
+            is_tagged_template_tag: false,
             span,
             name_span: span,
         };
@@ -3634,6 +4872,7 @@ impl LoweringContext {
             origin: crate::ast::FunctionOrigin::Internal,
             attributes: vec![],
             docstring: None,
+            is_tagged_template_tag: false,
             span,
             name_span: span,
         };

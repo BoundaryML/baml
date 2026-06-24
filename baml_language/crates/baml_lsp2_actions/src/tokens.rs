@@ -214,7 +214,7 @@ fn visit_node(db: &dyn Db, file: SourceFile, node: &SyntaxNode, out: &mut Vec<Se
             visit_word_as(db, file, node, SemanticTokenType::Type, out);
         }
         SyntaxKind::CONFIG_ITEM => visit_config_item(db, file, node, out),
-        SyntaxKind::CLIENT_DEF | SyntaxKind::GENERATOR_DEF | SyntaxKind::RETRY_POLICY_DEF => {
+        SyntaxKind::CLIENT_DEF | SyntaxKind::RETRY_POLICY_DEF => {
             visit_word_as(db, file, node, SemanticTokenType::Struct, out);
         }
         SyntaxKind::TEST_DEF => visit_word_as(db, file, node, SemanticTokenType::Struct, out),

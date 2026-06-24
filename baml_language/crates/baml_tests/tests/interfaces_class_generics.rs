@@ -804,3 +804,51 @@ fn class_generic_bound_is_enforced_in_required_interface_method_annotations() {
         "Named",
     );
 }
+
+// A method's own generic bound may reference the enclosing class param
+// (`<U extends Eq<C>>` on a method of `class Wrapper<C>`). On a bound-method
+// call the value of `C` is supplied by the receiver, so the bound must be
+// resolved against the receiver's class type arg before it is checked.
+#[test]
+fn method_generic_bound_referencing_class_param_is_satisfied() {
+    assert_no_compile_errors(
+        r#"
+        interface Eq<T> { function equal(self, other: T) -> bool }
+        class Wrapper<C> {
+            inner: C
+            function compare_with<U extends Eq<C>>(self, u: U) -> bool { return true }
+        }
+        class IntEq {
+            implements Eq<int> { function equal(self, other: int) -> bool { return true } }
+        }
+        function main() -> bool {
+            let w = Wrapper<int> { inner: 5 }
+            return w.compare_with<IntEq>(IntEq {})
+        }
+        "#,
+    );
+}
+
+#[test]
+fn method_generic_bound_referencing_class_param_is_enforced() {
+    // The same call with an argument that satisfies `Eq<string>` (not `Eq<int>`,
+    // the receiver's specialization) must be rejected — the bound resolves to
+    // `Eq<int>` via the receiver, so `StrEq` does not satisfy it.
+    assert_compile_error_contains(
+        r#"
+        interface Eq<T> { function equal(self, other: T) -> bool }
+        class Wrapper<C> {
+            inner: C
+            function compare_with<U extends Eq<C>>(self, u: U) -> bool { return true }
+        }
+        class StrEq {
+            implements Eq<string> { function equal(self, other: string) -> bool { return true } }
+        }
+        function main() -> bool {
+            let w = Wrapper<int> { inner: 5 }
+            return w.compare_with<StrEq>(StrEq {})
+        }
+        "#,
+        "Eq<int>",
+    );
+}

@@ -413,8 +413,8 @@ function testing.run_test(body: testing.TestBody, runner: testing.TestRunner | n
         {
           let start = baml.sys.now_ms()
           let result = ...
-            { 1 stmts + tail } catch_all (e) { baml.panics.Panic => { 0 stmts + tail }, _ => { 0 stmts + tail } }
-          TestReport { outcome: result.outcome, runs: [RunReport { outcome: result.outcome, duration_ms: baml.sys.now_ms() - start }] }
+            { 1 stmts + tail } catch_all (e) { p: baml.panics.UserPanic => { 0 stmts + tail }, p: baml.panics.AssertionFailed => { 0 stmts + tail }, baml.panics.Panic => { 0 stmts + tail }, _ => { 0 stmts + tail } }
+          TestReport { outcome: result.outcome, runs: [RunReport { outcome: result.outcome, duration_ms: baml.sys.now_ms() - start, message: result.message }] }
         }
     match (runner : testing.TestRunner | null) : testing.TestReport
       null =>
@@ -676,12 +676,13 @@ type testing.Outcome = "pass" | "fail" | "error"
 class testing.RunReport {
   outcome: testing.Outcome
   duration_ms: int
+  message: string | null
 }
 function testing.RunReport.to_json(self: testing.RunReport) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "outcome": baml.json.to_json(self.outcome), "duration_ms": baml.json.to_json(self.duration_ms) } : map<string, baml.json.json>
+  map { "outcome": baml.json.to_json(self.outcome), "duration_ms": baml.json.to_json(self.duration_ms), "message": baml.json.to_json(self.message) } : map<string, baml.json.json>
 }
 function testing.RunReport.from_json(j: baml.json.json) -> testing.RunReport throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  RunReport { outcome: baml.json.from_json<Outcome>(baml.json.field(j, "outcome")), duration_ms: baml.json.from_json<int>(baml.json.field(j, "duration_ms")) } : testing.RunReport
+  RunReport { outcome: baml.json.from_json<Outcome>(baml.json.field(j, "outcome")), duration_ms: baml.json.from_json<int>(baml.json.field(j, "duration_ms")), message: baml.json.from_json<string?>(baml.json.field(j, "message")) } : testing.RunReport
 }
 class testing.TestReport {
   outcome: testing.Outcome
@@ -739,6 +740,7 @@ type testing.Outcome$stream = "pass" | "fail" | "error"
 class testing.RunReport$stream {
   outcome: testing.Outcome$stream | null
   duration_ms: int | null
+  message: string | null
 }
 class testing.TestReport$stream {
   outcome: testing.Outcome$stream | null

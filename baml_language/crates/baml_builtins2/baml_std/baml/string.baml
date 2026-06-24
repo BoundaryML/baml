@@ -3,6 +3,43 @@
 /// String literals use double quotes: `"hello"`. Multiline strings use the `#"..."#` syntax.
 /// All methods returning a new string do not mutate `self` unless noted otherwise.
 class String {
+  /// Renders any value as a human-readable string.
+  ///
+  /// If `value`'s runtime type implements `baml.ToString`, its `to_string`
+  /// override is used; otherwise a default structural rendering is produced.
+  /// Never throws.
+  ///
+  /// ```
+  /// string.from(42)            // "42"
+  /// string.from(true)          // "true"
+  /// string.from([1, 2, 3])     // "[1, 2, 3]"
+  /// ```
+  ///
+  /// Ideally this would read:
+  ///
+  /// ```
+  /// if (value is baml.ToString) { value.to_string() }
+  /// else { root._to_string_default(value) }
+  /// ```
+  ///
+  /// but that does not work from the stdlib today. `is <interface>` and
+  /// interface method dispatch are resolved at *compile time* by expanding the
+  /// interface to its known implementor classes, and that implementor set is
+  /// per-package: it is built from the package's dependencies + itself, never
+  /// its dependents. `string.from` lives in the `baml` package, which a user's
+  /// `implements baml.ToString` sits *above*, so from here the implementor set
+  /// for `baml.ToString` is empty — the `is` test folds to constant `false` and
+  /// the override never dispatches. (Same boundary `Sortable.sort`'s
+  /// `_compare_shim` and `baml.json.to_json` work around.)
+  ///
+  /// So dispatch is resolved on `value`'s *runtime* class via
+  /// `baml._to_string_shim` instead. TODO: once Kai's TIR rework lands (it moves
+  /// interface conformance checks to runtime), replace this with the literal
+  /// `is baml.ToString` form above and drop `_to_string_shim`.
+  function from<T>(value: T) -> string throws never {
+    root._to_string_shim(value)
+  }
+
   /// Serializes this string to a JSON value.
   //baml:mut_vm
   function to_json(self) -> baml.json.json throws never {
@@ -140,19 +177,20 @@ class String {
 
   /// Returns the substring between two **character** offsets `[start, end)`.
   ///
-  /// Both `start` and `end` are codepoint indices, matching `length()`. They
-  /// are clamped to the range `[0, length()]`, and `end` is further clamped
-  /// so that `end >= start`. Out-of-bounds indices are silently clamped —
-  /// this method never throws.
+  /// Both `start` and `end` are codepoint indices, matching `length()`. Negative
+  /// indices count from the end. The resolved offsets are clamped to
+  /// `[0, length()]`, and an `end` that resolves at or before `start` yields an
+  /// empty string. Never throws.
   ///
   /// # Examples
   /// ```
   /// "hello world".substring(0, 5)   // "hello"
   /// "hello".substring(2, 100)       // "llo" (end clamped)
+  /// "hello".substring(-3, -1)       // "ll" (counts from the end)
   /// "😀hello".substring(0, 1)       // "😀"
   /// "😀hello".substring(1, 4)       // "hel"
   /// ```
-  function substring(self, start: int, end: int) -> string throws root.errors.InvalidArgument {
+  function substring(self, start: int, end: int) -> string throws never {
     $rust_function
   }
 
@@ -178,18 +216,20 @@ class String {
   /// Returns the character at the given **codepoint index** as a
   /// one-character string.
   ///
-  /// Returns an empty string if `index >= length()`. Throws
-  /// `InvalidArgument` if `index` is negative.
+  /// Negative indices count from the end: `-1` is the last character. Raises
+  /// `IndexOutOfBounds` when the index is out of range after counting from the
+  /// end, so a successful call always returns exactly one character.
   ///
   /// # Examples
   /// ```
   /// "hello".char_at(0)   // "h"
   /// "héllo".char_at(1)   // "é"
-  /// "héllo".char_at(2)   // "l"
   /// "😀hello".char_at(0) // "😀"
-  /// "hi".char_at(99)     // ""
+  /// "hello".char_at(-1)  // "o"
+  /// "hi".char_at(99)     // raises IndexOutOfBounds
   /// ```
-  function char_at(self, index: int) -> string throws root.errors.InvalidArgument {
+  //baml:fallible
+  function char_at(self, index: int) -> string throws never {
     $rust_function
   }
 

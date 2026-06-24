@@ -125,6 +125,29 @@ def test_classify_sentiment_factory_bindings():
 
 
 # ---------------------------------------------------------------------------
+# Replay-harness surface (bridge-generics/streaming/02). Codegen-shape only;
+# the keyless behavioral tests live in `test_streaming_e2e.py` (string- and
+# class-typed `T`). The replay client is the unified env-driven `StreamStub`
+# (no separate Replay* functions).
+# ---------------------------------------------------------------------------
+
+
+def test_replay_server_namespace_bindings():
+    # The BAML-implemented replay server lives in the `replay` namespace
+    # (ns_replay/). Both invocation entry points get sync + async siblings.
+    from baml_sdk import replay
+
+    for name in (
+        "replay_serve_until_shutdown",
+        "replay_serve_until_shutdown_async",
+        "replay_serve_detached",
+        "replay_serve_detached_async",
+    ):
+        binding = getattr(replay, name)
+        assert callable(binding), f"missing replay-server binding {name}"
+
+
+# ---------------------------------------------------------------------------
 # Shorthand-client api_key wiring
 #
 # `client "openai/gpt-4o-mini"` and `client "anthropic/..."` lower into

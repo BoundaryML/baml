@@ -108,9 +108,69 @@ pub fn execute_render_prompt_from_owned(
     Ok(std::sync::Arc::new(prompt_ast))
 }
 
+/// BEP-049 §10 (M5b). Render `return_type`'s schema with default options — the
+/// string a `prompt` body reads as `ctx.output_format`. Equivalent to the Jinja
+/// path's `{{ ctx.output_format }}` (`OutputFormatObject`'s `Display`): build the
+/// `OutputFormatContent`, render with `RenderOptions::default()`. An empty/`None`
+/// render (e.g. a primitive return type with no schema) becomes the empty string.
+pub fn render_output_format(
+    return_type: &baml_type::RuntimeTy,
+    ctx: &::sys_types::SysOpContext,
+) -> String {
+    build_output_format_content(return_type, ctx)
+        .render(&types::RenderOptions::default())
+        .ok()
+        .flatten()
+        .unwrap_or_default()
+}
+
+/// BEP-049 §10 (M5b.2). Render a prebuilt [`OutputFormatContent`] with
+/// caller-supplied options — backs the parameterized `ctx.output_format_with(...)`
+/// accessor (the rare `{{ ctx.output_format(...) }}` Jinja form). The content is
+/// carried as an opaque handle on `Context` (built once by
+/// [`build_output_format_content`]); this only re-renders. The option mapping
+/// (`RenderSetting`/`RenderOptions`) stays crate-internal: a value overrides
+/// that aspect (`Always`), `None` keeps the default (`Auto`).
+// Options arrive by value from the sys-op glue; most are moved into
+// `RenderOptions`, `map_style` is only read — taking it by ref too would just
+// shift the clone to the caller.
+#[allow(clippy::too_many_arguments, clippy::needless_pass_by_value)]
+pub fn render_output_format_content(
+    content: &types::OutputFormatContent,
+    prefix: Option<String>,
+    or_splitter: Option<String>,
+    enum_value_prefix: Option<String>,
+    hoisted_class_prefix: Option<String>,
+    always_hoist_enums: Option<bool>,
+    quote_class_fields: Option<bool>,
+    hoist_classes: Option<Vec<String>>,
+    map_style: Option<String>,
+    render_null_as: Option<String>,
+) -> String {
+    use types::{HoistClasses, MapStyle, RenderOptions, RenderSetting};
+    fn setting<V>(o: Option<V>) -> RenderSetting<V> {
+        o.map_or(RenderSetting::Auto, RenderSetting::Always)
+    }
+    let options = RenderOptions {
+        prefix: setting(prefix),
+        or_splitter: setting(or_splitter),
+        enum_value_prefix: setting(enum_value_prefix),
+        hoisted_class_prefix: setting(hoisted_class_prefix),
+        always_hoist_enums: setting(always_hoist_enums),
+        quote_class_fields: setting(quote_class_fields),
+        hoist_classes: hoist_classes.map_or(HoistClasses::Auto, HoistClasses::Subset),
+        map_style: match map_style.as_deref() {
+            Some("object_literal") => MapStyle::ObjectLiteral,
+            _ => MapStyle::TypeParameters,
+        },
+        render_null_as: setting(render_null_as),
+    };
+    content.render(&options).ok().flatten().unwrap_or_default()
+}
+
 /// Build an `OutputFormatContent` by walking a `RuntimeTy` and collecting all
 /// referenced class/enum/type-alias definitions from `SysOpContext`.
-fn build_output_format_content(
+pub fn build_output_format_content(
     ty: &baml_type::RuntimeTy,
     ctx: &::sys_types::SysOpContext,
 ) -> types::OutputFormatContent {
@@ -979,7 +1039,7 @@ mod tests {
 
     use super::{
         build_output_format_content, execute_build_request_from_owned,
-        execute_parse_response_from_owned,
+        execute_parse_response_from_owned, render_output_format,
     };
     use crate::baml_std;
 
@@ -1654,6 +1714,58 @@ mod tests {
             Some("Full name")
         );
         assert!(content.recursive_classes.is_empty());
+    }
+
+    #[test]
+    fn render_output_format_renders_class_schema() {
+        // BEP-049 M5b: `render_output_format` is the `ctx.output_format` backing.
+        // For a class return type it must emit the schema (field names), matching
+        // what `OutputFormatObject`'s `Display` (the Jinja `{{ ctx.output_format }}`)
+        // produces from the same `OutputFormatContent`.
+        let ctx = ctx_with(
+            vec![(
+                tn("User"),
+                ClassDefinition {
+                    name: "User".into(),
+                    description: None,
+                    alias: None,
+                    fields: vec![
+                        ClassFieldDefinition {
+                            name: "name".into(),
+                            field_type: ty_string(),
+                            description: None,
+                            alias: None,
+                            skip: false,
+                        },
+                        ClassFieldDefinition {
+                            name: "age".into(),
+                            field_type: baml_type::RuntimeTy::Int {
+                                attr: TyAttr::default(),
+                            },
+                            description: None,
+                            alias: None,
+                            skip: false,
+                        },
+                    ],
+                },
+            )],
+            vec![],
+        );
+        let rendered = render_output_format(&ty_class("User"), &ctx);
+        assert!(
+            rendered.contains("name"),
+            "schema must list fields: {rendered}"
+        );
+        assert!(
+            rendered.contains("age"),
+            "schema must list fields: {rendered}"
+        );
+        // Parity check: identical to a default-options render of the same content.
+        let direct = build_output_format_content(&ty_class("User"), &ctx)
+            .render(&crate::types::RenderOptions::default())
+            .unwrap()
+            .unwrap_or_default();
+        assert_eq!(rendered, direct);
     }
 
     #[test]

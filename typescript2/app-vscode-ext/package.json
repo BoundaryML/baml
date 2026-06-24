@@ -94,7 +94,10 @@
     }
   },
   "scripts": {
+    "sync:grammar": "node ../pkg-grammar/scripts/sync.mjs",
+    "predev": "pnpm run sync:grammar",
     "dev": "tsup --watch --sourcemap",
+    "prebuild": "pnpm run sync:grammar",
     "build": "pnpm run typecheck && tsup",
     "build:cli": "cargo build -p baml_cli --manifest-path ../../baml_language/Cargo.toml",
     "typecheck": "tsc --noEmit",
@@ -105,6 +108,7 @@
     "vscode-languageclient": "^9.0.0"
   },
   "devDependencies": {
+    "@b/pkg-grammar": "workspace:*",
     "@types/node": "^22.0.0",
     "@types/vscode": "^1.63.0",
     "tsup": "^8.0.0",

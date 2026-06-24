@@ -51,14 +51,14 @@ use std::{
 
 use bridge_cffi::complete_host_call;
 use bridge_ctypes::baml_core::cffi::{
-    BamlHandle, BamlHandleType, InboundClassValue, InboundMapEntry, InboundValue,
+    BamlHandle, BamlHandleType, BamlTyClass, InboundClassValue, InboundMapEntry, InboundValue,
     inbound_map_entry::Key as InboundMapKey, inbound_value::Value as InboundValueVariant,
 };
 use prost::Message;
 use pyo3::{
     Py, PyAny, PyResult, Python,
     prelude::*,
-    types::{PyAnyMethods, PyModule, PyTuple},
+    types::{PyAnyMethods, PyDict, PyModule, PyTuple},
 };
 use pyo3_stub_gen::derive::gen_stub_pyfunction;
 
@@ -331,12 +331,14 @@ fn panic_message(panic: &(dyn std::any::Any + Send)) -> String {
 /// earlier in `host_dispatch_callback`).
 fn dispatch_in_python(callable: Py<PyAny>, call_id: u32, args_bytes: Vec<u8>) {
     let result = Python::attach(|py| -> PyResult<Vec<u8>> {
-        // Decode the engine-side `BamlOutboundValue` (a list shape) into
-        // Python positional args via `baml_core.proto._decode_value_holder`.
-        let positional = decode_args(py, &args_bytes)?;
+        // Decode the engine-side `BamlToHostCall` into the callable's
+        // positional args + supplied-optional kwargs.
+        let (positional, kwargs) = decode_args(py, &args_bytes)?;
 
-        // Invoke the user callable with the decoded positional args.
-        let result_obj = callable.call1(py, &positional)?;
+        // Invoke the user callable: required args positionally, supplied
+        // optionals by keyword. Omitted optionals are absent, so the callable's
+        // own defaults apply.
+        let result_obj = callable.call(py, &positional, Some(&kwargs))?;
 
         // If the callable returned a coroutine (async function), run it to
         // completion on a fresh asyncio loop. Sync callables fall through.
@@ -354,34 +356,41 @@ fn dispatch_in_python(callable: Py<PyAny>, call_id: u32, args_bytes: Vec<u8>) {
     }
 }
 
-/// Decode the protobuf `BamlOutboundValue` args (a list shape) into a
-/// Python `tuple` of positional arguments by calling
-/// `baml_core.proto.decode_value`.
-fn decode_args<'py>(py: Python<'py>, bytes: &[u8]) -> PyResult<Bound<'py, PyTuple>> {
+/// Decode the protobuf `BamlToHostCall` into the callable's positional args
+/// (a `tuple`) and supplied-optional kwargs (a `dict`), each value decoded via
+/// `baml_core.proto.decode_value`. The engine already resolved the call against
+/// the callable's declared params and dropped omitted optionals, so `args` is a
+/// flat declared-order list; partition it by each arg's `is_optional_arg` flag —
+/// required args go positional, supplied optionals become kwargs keyed by
+/// `arg_name`. Omitted optionals are absent, so the callable's own defaults
+/// apply.
+fn decode_args<'py>(
+    py: Python<'py>,
+    bytes: &[u8],
+) -> PyResult<(Bound<'py, PyTuple>, Bound<'py, PyDict>)> {
     let outbound_pb2 = PyModule::import(py, "baml_core.cffi.v1.baml_outbound_pb2")?;
     let proto = PyModule::import(py, "baml_core.proto")?;
-
-    // Parse the outer BamlOutboundValue.
-    let holder = outbound_pb2.getattr("BamlOutboundValue")?.call0()?;
-    holder.call_method1("ParseFromString", (bytes,))?;
-
-    // The args list lives in `holder.list_value.items`. `proto.decode_value`
-    // decodes a `BamlOutboundValue` into a Python value given the active type
-    // map; for the args holder (a `list_value`) it yields a Python list.
     let type_map = proto.getattr("get_type_map")?.call0()?;
-    let decoded = proto.getattr("decode_value")?.call1((holder, type_map))?;
+    let decode_value = proto.getattr("decode_value")?;
 
-    // `decode_value` returns `list` for a list-value. Convert to
-    // tuple for `callable.call1(args)`.
-    let positional: Bound<'py, PyTuple> = match decoded.extract::<Vec<Py<PyAny>>>() {
-        Ok(items) => PyTuple::new(py, items)?,
-        Err(_) => {
-            return Err(pyo3::exceptions::PyTypeError::new_err(
-                "host-callable args decoded to a non-list value",
-            ));
+    let to_host_call = outbound_pb2.getattr("BamlToHostCall")?.call0()?;
+    to_host_call.call_method1("ParseFromString", (bytes,))?;
+
+    let mut positional_items: Vec<Bound<'py, PyAny>> = Vec::new();
+    let kwargs = PyDict::new(py);
+    for arg in to_host_call.getattr("args")?.try_iter()? {
+        let arg = arg?;
+        let value = decode_value.call1((arg.getattr("value")?, &type_map))?;
+        if arg.getattr("is_optional_arg")?.extract::<bool>()? {
+            let name: String = arg.getattr("arg_name")?.extract()?;
+            kwargs.set_item(name, value)?;
+        } else {
+            positional_items.push(value);
         }
-    };
-    Ok(positional)
+    }
+    let positional = PyTuple::new(py, positional_items)?;
+
+    Ok((positional, kwargs))
 }
 
 /// If `value` is a coroutine, run it to completion on a fresh asyncio loop
@@ -503,8 +512,11 @@ fn build_host_callable_inbound(
     fields.push(handle_field);
     InboundValue {
         value: Some(InboundValueVariant::ClassValue(InboundClassValue {
-            name: "baml.errors.HostCallable".to_string(),
             fields,
+            class_ty: Some(BamlTyClass {
+                name: "baml.errors.HostCallable".to_string(),
+                type_args: vec![],
+            }),
         })),
     }
 }

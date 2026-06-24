@@ -11,6 +11,12 @@
       "@/*": [
         "src/*"
       ],
+      "@b/pkg-editor": [
+        "../pkg-editor/src"
+      ],
+      "@b/pkg-editor/*": [
+        "../pkg-editor/src/*"
+      ],
       "@b/pkg-playground": [
         "../pkg-playground/src"
       ],

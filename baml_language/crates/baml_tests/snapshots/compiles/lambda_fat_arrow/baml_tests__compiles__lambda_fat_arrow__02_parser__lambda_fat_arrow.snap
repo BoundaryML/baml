@@ -182,53 +182,6 @@ SOURCE_FILE
         R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
-    WORD "test_generic"
-    PARAMETER_LIST "()"
-      L_PAREN "("
-      R_PAREN ")"
-    ARROW "->"
-    TYPE_EXPR "int"
-      WORD "int"
-    EXPR_FUNCTION_BODY
-      BLOCK_EXPR
-        L_BRACE "{"
-        LET_STMT
-          PATTERN
-            BINDING_PATTERN "let identity"
-              KW_LET "let"
-              WORD "identity"
-          EQUALS "="
-          LAMBDA_EXPR
-            GENERIC_PARAM_LIST
-              LESS "<"
-              GENERIC_PARAM "T"
-                WORD "T"
-              GREATER ">"
-            PARAMETER_LIST
-              L_PAREN "("
-              PARAMETER
-                WORD "x"
-                COLON ":"
-                TYPE_EXPR "T"
-                  WORD "T"
-              R_PAREN ")"
-            FAT_ARROW "=>"
-            TYPE_EXPR "T"
-              WORD "T"
-            BLOCK_EXPR "{ x }"
-              L_BRACE "{"
-              WORD "x"
-              R_BRACE "}"
-        CALL_EXPR
-          WORD "identity"
-          CALL_ARGS
-            L_PAREN "("
-            CALL_ARG "42"
-              INTEGER_LITERAL "42"
-            R_PAREN ")"
-        R_BRACE "}"
-  FUNCTION_DEF
-    KW_FUNCTION "function"
     WORD "test_in_match"
     PARAMETER_LIST
       L_PAREN "("

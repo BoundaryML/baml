@@ -172,22 +172,11 @@ impl<'a, 'db, B: TypeVarBounds + ?Sized> AssociatedProjectionResolver<'a, 'db, B
                 attr.clone(),
             ),
             Ty::Function {
-                generic_params,
-                generic_param_bounds,
                 params,
                 ret,
                 throws,
                 attr,
             } => Ty::Function {
-                generic_params: generic_params.clone(),
-                generic_param_bounds: generic_param_bounds
-                    .iter()
-                    .map(|bound| {
-                        bound
-                            .as_ref()
-                            .map(|bound| self.resolve_deep_inner(bound, resolving))
-                    })
-                    .collect(),
                 params: params
                     .iter()
                     .map(|param| FunctionParamTy {

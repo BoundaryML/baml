@@ -356,31 +356,11 @@ pub fn display_type_expr(te: &TypeExpr) -> String {
         }
         TypeExpr::Literal { value, .. } => value.to_string(),
         TypeExpr::Function {
-            generic_params,
-            generic_param_bounds,
             params,
             ret,
             throws,
             ..
         } => {
-            let generics = if generic_params.is_empty() {
-                String::new()
-            } else {
-                let params = generic_params
-                    .iter()
-                    .enumerate()
-                    .map(|(idx, param)| {
-                        if let Some(bound) = generic_param_bounds.get(idx).and_then(Option::as_ref)
-                        {
-                            format!("{param} extends {}", display_type_expr(bound))
-                        } else {
-                            param.to_string()
-                        }
-                    })
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                format!("<{params}>")
-            };
             let ps: Vec<String> = params
                 .iter()
                 .map(|p| {
@@ -399,7 +379,7 @@ pub fn display_type_expr(te: &TypeExpr) -> String {
                 .map(|throws| format!(" throws {throws}"))
                 .unwrap_or_default();
             format!(
-                "{generics}({}) -> {}{}",
+                "({}) -> {}{}",
                 ps.join(", "),
                 display_type_expr_as_function_result(ret),
                 throws

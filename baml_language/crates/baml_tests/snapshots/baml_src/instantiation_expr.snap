@@ -63,68 +63,14 @@ function instantiation_expr.$init_test_ns_instantiation_expr_instantiation_expr(
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "local_value_specialization_runs"
+    load_const "bound_method_value_runs"
     make_closure .<lambda($init_test_ns_instantiation_expr_instantiation_expr, 10)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "local_value_specialization_reflects_T"
-    make_closure .<lambda($init_test_ns_instantiation_expr_instantiation_expr, 11)>, 0
-    load_const null
-    call testing.TestCollector.register_test
-    pop 1
-    load_var registry
-    load_const "local_value_param_dependent_reflects_T"
-    make_closure .<lambda($init_test_ns_instantiation_expr_instantiation_expr, 12)>, 0
-    load_const null
-    call testing.TestCollector.register_test
-    pop 1
-    load_var registry
-    load_const "native_through_local_value_seeds_T"
-    make_closure .<lambda($init_test_ns_instantiation_expr_instantiation_expr, 13)>, 0
-    load_const null
-    call testing.TestCollector.register_test
-    pop 1
-    load_var registry
-    load_const "bound_method_value_runs"
-    make_closure .<lambda($init_test_ns_instantiation_expr_instantiation_expr, 14)>, 0
-    load_const null
-    call testing.TestCollector.register_test
-    pop 1
-    load_var registry
-    load_const "paren_generic_lambda_value_runs"
-    make_closure .<lambda($init_test_ns_instantiation_expr_instantiation_expr, 15)>, 0
-    load_const null
-    call testing.TestCollector.register_test
-    pop 1
-    load_var registry
-    load_const "paren_generic_lambda_direct_runs"
-    make_closure .<lambda($init_test_ns_instantiation_expr_instantiation_expr, 16)>, 0
-    load_const null
-    call testing.TestCollector.register_test
-    pop 1
-    load_var registry
-    load_const "bound_generic_lambda_runs"
-    make_closure .<lambda($init_test_ns_instantiation_expr_instantiation_expr, 17)>, 0
-    load_const null
-    call testing.TestCollector.register_test
-    pop 1
-    load_var registry
-    load_const "reflecting_generic_lambda_resolves_T"
-    make_closure .<lambda($init_test_ns_instantiation_expr_instantiation_expr, 18)>, 0
-    load_const null
-    call testing.TestCollector.register_test
-    pop 1
-    load_var registry
-    load_const "lambda_in_generic_fn_resolves_own_T"
-    make_closure .<lambda($init_test_ns_instantiation_expr_instantiation_expr, 19)>, 0
-    load_const null
-    call testing.TestCollector.register_test
-    pop 1
-    load_var registry
     load_const "lambda_reflects_enclosing_U_resolves"
-    make_closure .<lambda($init_test_ns_instantiation_expr_instantiation_expr, 20)>, 0
+    make_closure .<lambda($init_test_ns_instantiation_expr_instantiation_expr, 11)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
@@ -134,15 +80,6 @@ function instantiation_expr.$init_test_ns_instantiation_expr_instantiation_expr(
 
 function instantiation_expr.GenBox.pick(self: instantiation_expr.GenBox, x: T) -> T {
     load_var x
-    return
-}
-
-function instantiation_expr.bound_generic_lambda() -> int {
-    load_const 9
-    load_type int
-    make_closure .<lambda(bound_generic_lambda, 0)>, 0
-    make_generic_function_from_value ntypeargs=1
-    call_indirect
     return
 }
 
@@ -159,28 +96,12 @@ function instantiation_expr.bound_method_value() -> int {
 
 function instantiation_expr.describe() -> string {
     load_type #0
-    call baml.TypeValue.to_string
+    call baml.TypeValue.baml.ToString.to_string
     return
 }
 
 function instantiation_expr.describe_user_value_fn() -> string {
     load_const user.instantiation_expr.describe<...>
-    call_indirect
-    return
-}
-
-function instantiation_expr.describe_via_local_value() -> string {
-    load_type instantiation_expr.User
-    load_global user.instantiation_expr.describe
-    make_generic_function_from_value ntypeargs=1
-    call_indirect
-    return
-}
-
-function instantiation_expr.describe_via_local_value_param() -> string {
-    load_type #0
-    load_global user.instantiation_expr.describe
-    make_generic_function_from_value ntypeargs=1
     call_indirect
     return
 }
@@ -203,15 +124,6 @@ function instantiation_expr.forward_reflect() -> string {
 function instantiation_expr.from_string_value_fn() -> instantiation_expr.User {
     load_const "{\"name\":\"Ada\"}"
     load_const baml.json.from_string<...>
-    call_indirect
-    return
-}
-
-function instantiation_expr.from_string_via_local_value() -> instantiation_expr.User {
-    load_const "{\"name\":\"Ada\"}"
-    load_type instantiation_expr.User
-    load_global baml.json.from_string
-    make_generic_function_from_value ntypeargs=1
     call_indirect
     return
 }
@@ -248,24 +160,6 @@ function instantiation_expr.identity_same_specialization() -> bool {
     return
 }
 
-function instantiation_expr.identity_via_local_value() -> int {
-    load_const 9
-    load_type int
-    load_global user.instantiation_expr.identity
-    make_generic_function_from_value ntypeargs=1
-    call_indirect
-    return
-}
-
-function instantiation_expr.lambda_in_generic_fn() -> string {
-    load_type string
-    load_type #0
-    make_closure .<lambda(lambda_in_generic_fn, 0)>, captures=0, ntypeargs=1
-    make_generic_function_from_value ntypeargs=1
-    call_indirect
-    return
-}
-
 function instantiation_expr.lambda_reflects_enclosing_U() -> string {
     load_type #0
     make_closure .<lambda(lambda_reflects_enclosing_U, 0)>, captures=0, ntypeargs=1
@@ -286,23 +180,6 @@ function instantiation_expr.pair_value_fn() -> string {
     return
 }
 
-function instantiation_expr.paren_generic_lambda_direct() -> int {
-    load_type int
-    load_const 7
-    make_closure .<lambda(paren_generic_lambda_direct, 0)>, 0
-    call_indirect
-    return
-}
-
-function instantiation_expr.paren_generic_lambda_value() -> int {
-    load_const 5
-    load_type int
-    make_closure .<lambda(paren_generic_lambda_value, 0)>, 0
-    make_generic_function_from_value ntypeargs=1
-    call_indirect
-    return
-}
-
 function instantiation_expr.qualified_value_fn() -> string {
     load_const user.instantiation_expr.qualified.q_describe<...>
     call_indirect
@@ -312,14 +189,6 @@ function instantiation_expr.qualified_value_fn() -> string {
 function instantiation_expr.qualified_value_id_fn() -> int {
     load_const 7
     load_const user.instantiation_expr.qualified.q_id<...>
-    call_indirect
-    return
-}
-
-function instantiation_expr.reflecting_generic_lambda() -> string {
-    load_type int
-    make_closure .<lambda(reflecting_generic_lambda, 0)>, 0
-    make_generic_function_from_value ntypeargs=1
     call_indirect
     return
 }

@@ -3,7 +3,8 @@
 syntax = "proto3";
 package baml_core.cffi.v1;
 
-import "baml_core/cffi/v1/baml_inbound.proto";
+import "baml_core/cffi/v1/baml_handle.proto";
+import "baml_core/cffi/v1/baml_type.proto";
 
 option go_package = "./cffi";
 
@@ -66,7 +67,7 @@ message BamlOutboundValue {
     bool bool_value = 6;
     BamlValueClass class_value = 7;
     BamlValueEnum enum_value = 8;
-    BamlTyLiteral literal_value = 9;
+    BamlLiteralValue literal_value = 9;
     BamlValueList list_value = 11;
     BamlValueMap map_value = 12;
     BamlValueUnionVariant union_variant_value = 13;
@@ -75,29 +76,21 @@ message BamlOutboundValue {
     BamlValuePromptAst prompt_ast_value = 18;
     bytes uint8array_value = 19;
     string bigint_value = 20;
+    // A reflected BAML type returned as a value (e.g. `reflect.type_of<T>()`).
+    // Shares the `BamlTy` representation with the inbound side.
+    BamlTy ty_value = 21;
   }
 }
 
-// Outbound handle envelope. Mirrors `BamlHandle` (inbound) but carries
-// an extra `BamlTyName` naming the underlying class + concrete generic
-// args. Currently only `ADT_TAGGED_HEAP_HANDLE` populates `name`
-// meaningfully; other handle types leave it as the default empty name.
+// Outbound handle envelope. Mirrors `BamlHandle` (inbound) but carries an
+// extra `ty` describing the underlying tagged type as a full `BamlTy` — the
+// faithful wire form, so an interface keeps its associated-type bindings even
+// though readers only consume the class FQN for typed-wrapper dispatch. Only
+// `ADT_TAGGED_HEAP_HANDLE` populates it; other handle types leave it unset.
 message BamlOutboundHandle {
   uint64 key = 1;
   BamlHandleType handle_type = 2;
-  BamlTyName name = 3;
-}
-
-// wrapper for the name of a type
-message BamlTyName {
-  // the name of the type
-  string name = 2;
-  repeated BamlTyGenericArg generic_args = 3;
-}
-
-message BamlTyGenericArg {
-  string name = 1;
-  BamlTy ty = 2;
+  BamlTy ty = 3;
 }
 
 message BamlValueNull {}
@@ -121,19 +114,26 @@ message BamlValueMap {
 }
 
 message BamlValueClass {
-  BamlTyName name = 1;
+  string name = 1;
   repeated BamlOutboundMapEntry fields = 2;
+  // Positional concrete generic args (De Bruijn order) so the host can
+  // reconstruct the parameterized type. Empty for non-generic instances.
+  repeated BamlTy type_args = 3;
 }
 
 message BamlValueEnum {
-  BamlTyName name = 1;
+  // Enums are never generic, so the name is a bare FQN (no type args).
+  string name = 1;
   string value = 2;
   bool is_dynamic = 3;
 }
 
-// For the Rust variant `Union(Vec<BamlTy>, Box<BamlOutboundValue>)`
+// A union value: the selected variant's value plus its `self_type` (the full
+// union type as a `BamlTy`). Hosts decode purely by recursing into `value` — the
+// `self_type` metadata is written for completeness but read by no host.
 message BamlValueUnionVariant {
-  BamlTyName name = 1;
+  // Optional union name; unions carry their full type in `self_type`.
+  string name = 1;
   bool is_optional = 2;
   bool is_single_pattern = 3;
   BamlTy self_type = 4;
@@ -196,104 +196,42 @@ message BamlValuePromptAstSimpleMultiple {
   repeated BamlValuePromptAstSimple items = 1;
 }
 
-// -----------------------------------------------------------------------------
-// BamlTy definition
-// -----------------------------------------------------------------------------
-
-// The wrapper message for BamlTy.
-message BamlTy {
-  oneof type {
-    BamlTyString string_type = 1;
-    BamlTyInt int_type = 2;
-    BamlTyFloat float_type = 3;
-    BamlTyBool bool_type = 4;
-    BamlTyNull null_type = 5;
-    BamlTyLiteral literal_type = 6;
-    BamlTyMedia media_type = 7;
-    BamlTyEnum enum_type = 8;
-    BamlTyClass class_type = 9;
-    BamlTyTypeAlias type_alias_type = 10;
-    BamlTyList list_type = 11;
-    BamlTyMap map_type = 12;
-    BamlTyUnionVariant union_variant_type = 14;
-    BamlTyOptional optional_type = 15;
-    BamlTyAny any_type = 18;
-    BamlTyUint8Array uint8array_type = 19;
-    BamlTyUnknown unknown_type = 20;
-    BamlTyBigint bigint_type = 21;
-  }
+// Engine→host call of a host-callable. The engine has already resolved the call
+// against the callee's declared parameters and dropped any omitted optionals, so
+// `args` is a flat, declared-order list of the *supplied* args. Each arg carries
+// enough for a bridge to apply its own calling convention without the callee
+// type on the wire — `is_optional_arg` says whether it belongs in the positional
+// run or the host's optional/keyword bucket, and `arg_name` keys that bucket.
+// Omitted optionals are simply absent (the host's own language-level default
+// then applies). TypeScript folds the optional args into the trailing `$opts`
+// object; Python passes them as keyword arguments. Replaces the bare
+// `BamlOutboundValue` list previously passed to the dispatch FFI.
+message BamlToHostCall {
+  repeated BamlToHostArg args = 1;
 }
 
-// Simple marker messages for primitive types.
-message BamlTyString {}
-message BamlTyInt {}
-message BamlTyFloat {}
-message BamlTyBool {}
-message BamlTyNull {}
-message BamlTyUint8Array {}
-message BamlTyAny {}
-message BamlTyUnknown {}
-message BamlTyBigint {}
-
-// Literal: wraps a literal oneof.
-message BamlLiteralString {
-  string value = 1;
+message BamlToHostArg {
+  BamlOutboundValue value = 1;
+  // The parameter name, used to key the host's optional/keyword bucket. We
+  // leave `arg_name` empty for positional (required) args, which the host takes
+  // by position.
+  string arg_name = 2;
+  // Whether this is a supplied optional arg (→ the host's `$opts`/kwargs
+  // bucket) rather than a required positional arg.
+  bool is_optional_arg = 3;
 }
 
-message BamlLiteralInt {
-  int64 value = 1;
-}
-
-message BamlLiteralBool {
-  bool value = 1;
-}
-
-// `value` is a base-sixteen hex string with an optional leading minus sign
-// (matches the wire format used for runtime bigint values via
-// `BamlOutboundValue.bigint_value`).
-message BamlLiteralBigint {
-  string value = 1;
-}
-
-message BamlTyLiteral {
+// The literal value carried by `BamlOutboundValue.literal_value`. Mirrors the
+// shape of `baml_type.proto`'s `BamlTyLiteral` — inline scalars in a oneof, with
+// no separate message per variant. `bigint_value` is a base-sixteen hex string
+// with an optional leading minus sign (matching the value channel's
+// `BamlOutboundValue.bigint_value`); `float_value` is the float's source text.
+message BamlLiteralValue {
   oneof literal {
-    BamlLiteralString string_literal = 1;
-    BamlLiteralInt int_literal = 2;
-    BamlLiteralBool bool_literal = 3;
-    BamlLiteralBigint bigint_literal = 4;
+    string string_value = 1;
+    int64 int_value = 2;
+    bool bool_value = 3;
+    string bigint_value = 4;
+    string float_value = 5;
   }
-}
-
-// For Media, reuse the BamlMediaType message.
-message BamlTyMedia {
-  MediaTypeEnum media = 1;
-}
-
-message BamlTyEnum {
-  string name = 1;
-}
-
-message BamlTyClass {
-  BamlTyName name = 1;
-}
-
-message BamlTyTypeAlias {
-  BamlTyName name = 1;
-}
-
-message BamlTyList {
-  BamlTy item_type = 1;
-}
-
-message BamlTyMap {
-  BamlTy key_type = 1;
-  BamlTy value_type = 2;
-}
-
-message BamlTyUnionVariant {
-  BamlTyName name = 1;
-}
-
-message BamlTyOptional {
-  BamlTy value = 1;
 }

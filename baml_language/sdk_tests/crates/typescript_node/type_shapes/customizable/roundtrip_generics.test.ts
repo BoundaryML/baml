@@ -18,6 +18,14 @@ import {
 } from "./baml_sdk/generics/index.js";
 
 describe("roundtrip generics", () => {
+  // The four tests below pass a *generic* class instance directly as a function
+  // argument. The TS encoder now emits a generic instance as a FQN-tagged
+  // `class_value` carrying the value-level class type-args channel (`class_ty`),
+  // built from each generic class's static `$generic` param list and optional
+  // `$types` field — so the engine decodes it to an `Instance` instead of a
+  // bare map and accepts it into the generic class slot. (No `$types` is passed
+  // here, so each arg lowers to the unknown/top type, which is a compatible
+  // wildcard against the declared concrete args.)
   it("round_trip_wrapper_int", () => {
     const w = new Wrapper({ value: 5 });
     expect(round_trip_wrapper_int(w)).toEqual(w);

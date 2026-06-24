@@ -94,7 +94,7 @@ function testing.run_test(self: ?, name: string) -> TestReport  [expr] {
   { for t in self.collector.tests {  } if (t.name Eq name) { return root.run_test(t.body, t.runner) }; for k in self.expansions.keys() { let sub = self.expansions[k] } if (name.starts_with(k Add "/")) { return sub.run_test(name) }; throw "Test not found: " Add name }
 }
 function testing.run_test(body: TestBody, runner: TestRunner?) -> TestReport  [expr] {
-  { let base_run: TestReportThunk = () -> TestReport { { let start = baml.sys.now_ms(); let result = { body() } RunReport { outcome: "pass", duration_ms: 0 } catch_all (e) { baml.panics.Panic => {  } RunReport { outcome: "fail", duration_ms: 0 }, _ => {  } RunReport { outcome: "fail", duration_ms: 0 } } } TestReport { outcome: result.outcome, runs: [RunReport { outcome: result.outcome, duration_ms: baml.sys.now_ms() Sub start }] } } } match (runner) { null => base_run(), r: TestRunner => { let wrapped: TestReportThunk = r(base_run) } wrapped() }
+  { let base_run: TestReportThunk = () -> TestReport { { let start = baml.sys.now_ms(); let result = { body() } RunReport { outcome: "pass", duration_ms: 0, message: null } catch_all (e) { p: baml.panics.UserPanic => {  } RunReport { outcome: "fail", duration_ms: 0, message: p.message }, p: baml.panics.AssertionFailed => {  } RunReport { outcome: "fail", duration_ms: 0, message: p.message }, baml.panics.Panic => {  } RunReport { outcome: "fail", duration_ms: 0, message: null }, _ => {  } RunReport { outcome: "fail", duration_ms: 0, message: null } } } TestReport { outcome: result.outcome, runs: [RunReport { outcome: result.outcome, duration_ms: baml.sys.now_ms() Sub start, message: result.message }] } } } match (runner) { null => base_run(), r: TestRunner => { let wrapped: TestReportThunk = r(base_run) } wrapped() }
 }
 function testing.run_testset(children: TestSetChild[], runner: TestSetRunner?) -> TestSetReport  [expr] {
   {  } match (runner) { null => root.run_children_parallel(children), r: TestSetRunner => r(children) }
@@ -175,6 +175,7 @@ class testing.NamedChildReport {
 class testing.RunReport {
   outcome: testing.Outcome
   duration_ms: int
+  message: string?
 }
 class testing.TestReport {
   outcome: testing.Outcome
@@ -202,7 +203,7 @@ type testing.TestSetBody = (TestCollector) -> void throws unknown
 type testing.TestSetReportThunk = () -> testing.TestSetReport throws never
 type testing.TestSetRunner = (testing.TestSetChild[]) -> testing.TestSetReport throws never
 function testing.from_json(j: baml.json.json) -> testing.RunReport  [expr] {
-  testing.RunReport { outcome: baml.json.from_json(baml.json.field(j, "outcome")), duration_ms: baml.json.from_json(baml.json.field(j, "duration_ms")) }
+  testing.RunReport { outcome: baml.json.from_json(baml.json.field(j, "outcome")), duration_ms: baml.json.from_json(baml.json.field(j, "duration_ms")), message: baml.json.from_json(baml.json.field(j, "message")) }
 }
 function testing.from_json(j: baml.json.json) -> testing.NamedChildReport  [expr] {
   testing.NamedChildReport { name: baml.json.from_json(baml.json.field(j, "name")), report: baml.json.from_json(baml.json.field(j, "report")) }
@@ -223,7 +224,7 @@ function testing.to_json(self: ?) -> baml.json.json  [expr] {
   map { "name": baml.json.to_json(self.name), "run": baml.json.to_json(self.run) }
 }
 function testing.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "outcome": baml.json.to_json(self.outcome), "duration_ms": baml.json.to_json(self.duration_ms) }
+  map { "outcome": baml.json.to_json(self.outcome), "duration_ms": baml.json.to_json(self.duration_ms), "message": baml.json.to_json(self.message) }
 }
 function testing.to_json(self: ?) -> baml.json.json  [expr] {
   map { "name": baml.json.to_json(self.name), "report": baml.json.to_json(self.report) }

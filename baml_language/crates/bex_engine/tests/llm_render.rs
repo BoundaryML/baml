@@ -231,6 +231,30 @@ class Sentiment {
     );
 }
 
+#[tokio::test]
+async fn test_output_format_can_render_null_as_omit() {
+    let rendered = common::render_output_format_with_opts(
+        r#"
+class Person {
+    name string
+    nickname string?
+}
+"#,
+        "Person",
+        "render_null_as='omit'",
+    )
+    .await;
+
+    assert!(
+        rendered.contains("nickname: string or omit,"),
+        "nullable field should use the custom null label:\n{rendered}"
+    );
+    assert!(
+        !rendered.contains("string or null"),
+        "custom null label should replace default null rendering:\n{rendered}"
+    );
+}
+
 /// Test the full `render_prompt` flow through the engine.
 ///
 /// This test:
@@ -382,7 +406,9 @@ function get_prompt() -> baml.llm.PromptAst {
         Ok(value) => {
             // Verify it's a PromptAst (wrapped in Adt)
             match &value {
-                BexExternalValue::Instance { class_name, fields } => {
+                BexExternalValue::Instance {
+                    class_name, fields, ..
+                } => {
                     assert!(
                         class_name == "baml.llm.PromptAst",
                         "Expected class name 'baml.llm.PromptAst', got {class_name}"
@@ -656,6 +682,7 @@ fn prompt_ast_message(role: &str, content: &str) -> BexExternalValue {
     use bex_external_types::BexExternalAdt;
     BexExternalValue::Instance {
         class_name: "baml.llm.PromptAst".to_string(),
+        type_args: vec![],
         fields: indexmap::indexmap! {
             "_data".to_string() => BexExternalValue::Adt(BexExternalAdt::PromptAst(
                 std::sync::Arc::new(BuiltinPromptAst::Message {
@@ -915,7 +942,9 @@ function get_prompt() -> baml.llm.PromptAst {
 
     // Extract the rendered text from the PromptAst.
     let rendered_text = match &result {
-        BexExternalValue::Instance { class_name, fields } => {
+        BexExternalValue::Instance {
+            class_name, fields, ..
+        } => {
             assert_eq!(class_name, "baml.llm.PromptAst");
             match fields.get("_data") {
                 Some(BexExternalValue::Adt(adt)) => format!("{adt:?}"),

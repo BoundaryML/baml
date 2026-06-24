@@ -7,6 +7,8 @@
 mod error;
 mod handle_table;
 mod traceback;
+mod ty_decode;
+mod ty_encode;
 mod utils;
 mod value_decode;
 mod value_encode;
@@ -24,6 +26,10 @@ pub use handle_table::{
     CffiHandleTable, CffiHandleTableEntry, CffiHandleTableOptions, HANDLE_TABLE,
 };
 pub use traceback::format_traceback_lines;
+pub use ty_decode::{proto_ty_args_to_named, proto_ty_to_external, proto_ty_to_runtime_ty};
+pub use ty_encode::runtime_ty_to_proto_ty;
 pub use utils::DecodeFromBuffer;
-pub use value_decode::{inbound_to_external, kwargs_to_bex_values};
-pub use value_encode::external_to_outbound;
+pub use value_decode::{
+    inbound_to_external, kwargs_to_bex_values, playground_run_args_to_bex_values,
+};
+pub use value_encode::{build_to_host_call, encoded_success_outcome, external_to_outbound};

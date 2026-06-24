@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 9596
 ---
 === HIR2 ===
 function user.test_annotated() -> int  [expr] {
@@ -8,9 +7,6 @@ function user.test_annotated() -> int  [expr] {
 }
 function user.test_capture() -> int  [expr] {
   { let offset = 10; let add_offset = (x: int) -> int { {  } x Add offset } } add_offset(32)
-}
-function user.test_generic_lambda() -> int  [expr] {
-  { let identity = <T>(x: T) -> T { {  } x } } identity(42)
 }
 function user.test_inferred_return() -> int  [expr] {
   { let double = (x: int) -> { {  } x Mul 2 } } double(21)

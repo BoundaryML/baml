@@ -20,16 +20,6 @@ streams, no `StreamFinished` union — just `WrapperMethods<T>.get_value(self)
 fix lands, this test goes green without touching the streaming path.
 """
 
-import pytest
-
-
-@pytest.mark.skip(
-    reason="Phase 4 (engine boundary substitution) not yet landed — "
-    "WrapperMethods<T>.get_value_or_marker's `T | WrapperMarker` return type "
-    "still lowers `T` to `Ty::Void`, so a concrete `string` payload "
-    "fails the union-member check. Tracked in 23a §'Engine boundary "
-    "substitution' / 22f. Flip back to enabled when Ty::TypeVar lands."
-)
 def test_generic():
     """`WrapperMethods<string>.get_value_or_marker()` should still round-trip
     a string when the declared return is `T | WrapperMarker`.
@@ -71,11 +61,11 @@ def test_generic_wrapper_get_value():
           WrapperMethods<string> { value: text }
         }
 
-    On the buggy path the lifted return type for `get_value` is
-    `Ty::Void` (TypeVar `T` never gets substituted with `string`), so
-    decoding the actual `"hello"` payload raises a BamlClientError
-    with the "does not match any member of union [Void { ... }]"
-    shape from the issue description.
+    The engine-side strict path (full-binding Gate A on instance methods)
+    requires the receiver to carry its concrete class type args on the wire.
+    Until outbound decoding preserves the generic parameterization of a
+    returned `WrapperMethods<string>`, the re-encoded receiver has empty
+    class args and the call is rejected at the inbound boundary.
     """
     from baml_sdk.generics import make_wrapper_methods
 

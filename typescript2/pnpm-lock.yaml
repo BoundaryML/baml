@@ -27,6 +27,9 @@ importers:
       '@b/bridge_wasm':
         specifier: link:../pkg-playground/wasm
         version: link:../pkg-playground/wasm
+      '@b/pkg-editor':
+        specifier: workspace:*
+        version: link:../pkg-editor
       '@b/pkg-playground':
         specifier: workspace:*
         version: link:../pkg-playground
@@ -225,6 +228,9 @@ importers:
         specifier: ^9.0.0
         version: 9.0.1
     devDependencies:
+      '@b/pkg-grammar':
+        specifier: workspace:*
+        version: link:../pkg-grammar
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.3
@@ -243,18 +249,81 @@ importers:
 
   app-vscode-webview:
     dependencies:
+      '@b/pkg-editor':
+        specifier: workspace:*
+        version: link:../pkg-editor
       '@b/pkg-playground':
         specifier: workspace:*
         version: link:../pkg-playground
       '@b/pkg-proto':
         specifier: workspace:*
         version: link:../pkg-proto
+      '@codingame/monaco-vscode-api':
+        specifier: ^25.1.2
+        version: 25.1.2
+      '@codingame/monaco-vscode-environment-service-override':
+        specifier: ^25.1.2
+        version: 25.1.2
+      '@codingame/monaco-vscode-explorer-service-override':
+        specifier: ^25.1.2
+        version: 25.1.2
+      '@codingame/monaco-vscode-files-service-override':
+        specifier: ^25.1.2
+        version: 25.1.2
+      '@codingame/monaco-vscode-keybindings-service-override':
+        specifier: ^25.1.2
+        version: 25.1.2
+      '@codingame/monaco-vscode-lifecycle-service-override':
+        specifier: ^25.1.2
+        version: 25.1.2
+      '@codingame/monaco-vscode-localization-service-override':
+        specifier: ^25.1.2
+        version: 25.1.2
+      '@codingame/monaco-vscode-outline-service-override':
+        specifier: ^25.1.2
+        version: 25.1.2
+      '@codingame/monaco-vscode-remote-agent-service-override':
+        specifier: ^25.1.2
+        version: 25.1.2
+      '@codingame/monaco-vscode-search-service-override':
+        specifier: ^25.1.2
+        version: 25.1.2
+      '@codingame/monaco-vscode-secret-storage-service-override':
+        specifier: ^25.1.2
+        version: 25.1.2
+      '@codingame/monaco-vscode-storage-service-override':
+        specifier: ^25.1.2
+        version: 25.1.2
+      '@codingame/monaco-vscode-view-banner-service-override':
+        specifier: ^25.1.2
+        version: 25.1.2
+      '@codingame/monaco-vscode-view-status-bar-service-override':
+        specifier: ^25.1.2
+        version: 25.1.2
+      '@codingame/monaco-vscode-view-title-bar-service-override':
+        specifier: ^25.1.2
+        version: 25.1.2
+      '@codingame/monaco-vscode-views-service-override':
+        specifier: ^25.1.2
+        version: 25.1.2
+      monaco-editor:
+        specifier: ^0.55.1
+        version: 0.55.1
+      monaco-languageclient:
+        specifier: ^10.7.0
+        version: 10.7.0
       react:
         specifier: ^18.3.1
         version: 18.3.1
       react-dom:
         specifier: ^18.3.1
         version: 18.3.1(react@18.3.1)
+      vscode:
+        specifier: npm:@codingame/monaco-vscode-extension-api@^25.1.2
+        version: '@codingame/monaco-vscode-extension-api@25.1.2'
+      vscode-languageclient:
+        specifier: ^9.0.1
+        version: 9.0.1
     devDependencies:
       '@tailwindcss/vite':
         specifier: ^4.1.18
@@ -304,6 +373,93 @@ importers:
       vitest:
         specifier: ^4.0.16
         version: 4.0.16(@types/node@24.12.4)(@vitest/browser-playwright@4.0.16)(jiti@2.6.1)(jsdom@25.0.1)(lightningcss@1.32.0)(msw@2.14.6(@types/node@24.12.4)(typescript@5.9.3))(yaml@2.8.3)
+
+  pkg-editor:
+    dependencies:
+      '@b/pkg-grammar':
+        specifier: workspace:*
+        version: link:../pkg-grammar
+      '@b/pkg-playground':
+        specifier: workspace:*
+        version: link:../pkg-playground
+      '@codingame/monaco-vscode-api':
+        specifier: ^25.1.2
+        version: 25.1.2
+      '@codingame/monaco-vscode-environment-service-override':
+        specifier: ^25.1.2
+        version: 25.1.2
+      '@codingame/monaco-vscode-explorer-service-override':
+        specifier: ^25.1.2
+        version: 25.1.2
+      '@codingame/monaco-vscode-files-service-override':
+        specifier: ^25.1.2
+        version: 25.1.2
+      '@codingame/monaco-vscode-keybindings-service-override':
+        specifier: ^25.1.2
+        version: 25.1.2
+      '@codingame/monaco-vscode-lifecycle-service-override':
+        specifier: ^25.1.2
+        version: 25.1.2
+      '@codingame/monaco-vscode-localization-service-override':
+        specifier: ^25.1.2
+        version: 25.1.2
+      '@codingame/monaco-vscode-outline-service-override':
+        specifier: ^25.1.2
+        version: 25.1.2
+      '@codingame/monaco-vscode-remote-agent-service-override':
+        specifier: ^25.1.2
+        version: 25.1.2
+      '@codingame/monaco-vscode-search-service-override':
+        specifier: ^25.1.2
+        version: 25.1.2
+      '@codingame/monaco-vscode-secret-storage-service-override':
+        specifier: ^25.1.2
+        version: 25.1.2
+      '@codingame/monaco-vscode-storage-service-override':
+        specifier: ^25.1.2
+        version: 25.1.2
+      '@codingame/monaco-vscode-view-banner-service-override':
+        specifier: ^25.1.2
+        version: 25.1.2
+      '@codingame/monaco-vscode-view-status-bar-service-override':
+        specifier: ^25.1.2
+        version: 25.1.2
+      '@codingame/monaco-vscode-view-title-bar-service-override':
+        specifier: ^25.1.2
+        version: 25.1.2
+      '@codingame/monaco-vscode-views-service-override':
+        specifier: ^25.1.2
+        version: 25.1.2
+      monaco-editor:
+        specifier: ^0.55.1
+        version: 0.55.1
+      monaco-languageclient:
+        specifier: ^10.7.0
+        version: 10.7.0
+      vscode:
+        specifier: npm:@codingame/monaco-vscode-extension-api@^25.1.2
+        version: '@codingame/monaco-vscode-extension-api@25.1.2'
+      vscode-languageclient:
+        specifier: ^9.0.1
+        version: 9.0.1
+    devDependencies:
+      '@types/react':
+        specifier: 18.3.26
+        version: 18.3.26
+      '@types/react-dom':
+        specifier: 18.3.7
+        version: 18.3.7(@types/react@18.3.26)
+      react:
+        specifier: ^18.3.1
+        version: 18.3.1
+      react-dom:
+        specifier: ^18.3.1
+        version: 18.3.1(react@18.3.1)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  pkg-grammar: {}
 
   pkg-playground:
     dependencies:

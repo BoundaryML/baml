@@ -21,7 +21,16 @@ pub enum VmPanic {
     #[error("division by zero: {left:?} / {right:?}")]
     DivisionByZero { left: Value, right: Value },
 
-    #[error("array index out of bounds: {index} of {length}")]
+    /// An `int` (i63) arithmetic operation overflowed the representable
+    /// range `[INT_MIN, INT_MAX]`. Carries a human-readable description of
+    /// the operation (e.g. `"4611686018427387903 + 1"`); built only on the
+    /// cold overflow path, so the `String` alloc never touches hot code.
+    #[error("integer overflow: {message}")]
+    IntegerOverflow { message: String },
+
+    // Raised by array/byte-array subscripting and `string.char_at`, so the
+    // message stays generic ("index", not "array index").
+    #[error("index out of bounds: {index} of {length}")]
     IndexOutOfBounds { index: i64, length: usize },
 
     #[error("invalid field access: field {field_index} of {field_count}")]
@@ -283,6 +292,14 @@ pub enum VmInternalError {
     /// catchable `VmBamlError` or `VmPanic`.
     #[error("bridge failure: {message}")]
     BridgeFailure { message: String },
+
+    /// A `VirtualCall` could not resolve an implementation of `method` for the
+    /// receiver's runtime concrete type. The type checker only emits a virtual
+    /// call once it has proved the receiver implements the interface, so the
+    /// baked interface-impl registry being unable to resolve the method is a
+    /// compiler/VM inconsistency, not a user-reachable condition.
+    #[error("virtual call could not resolve interface method `{method}`")]
+    UnresolvedVirtualCall { method: String },
 }
 
 /// Any kind of virtual machine error.

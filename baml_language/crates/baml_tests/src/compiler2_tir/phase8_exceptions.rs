@@ -1076,3 +1076,79 @@ function f() -> int {
         "wrong-param variable transformer must report the link input, got:\n{output}"
     );
 }
+
+#[test]
+fn defer_return_escape_reports_error() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function f() -> int {
+  defer { return 1 }
+  0
+}"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("`return` cannot leave a `defer` body"),
+        "expected DeferControlFlowEscape error for return, got:\n{output}"
+    );
+}
+
+#[test]
+fn defer_break_escape_reports_error() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function f() -> int {
+  for (let i in [1, 2]) {
+    defer { break }
+  }
+  0
+}"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("`break` cannot leave a `defer` body"),
+        "expected DeferControlFlowEscape error for break escaping to the outer loop, got:\n{output}"
+    );
+}
+
+#[test]
+fn defer_inner_loop_break_is_allowed() {
+    // BEP-042 loop-aware rule: a break targeting a loop declared INSIDE the
+    // defer body does not escape the defer and must be accepted.
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function f() -> int {
+  defer {
+    for (let x in [1, 2]) {
+      break
+    }
+  }
+  0
+}"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        !output.contains("cannot leave a `defer` body"),
+        "break targeting a loop inside the defer should be allowed, got:\n{output}"
+    );
+}
+
+#[test]
+fn defer_throw_is_allowed() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function f() -> int {
+  defer { throw "x" }
+  0
+}"#,
+    );
+    let output = render_tir(&db, file);
+    assert!(
+        !output.contains("cannot leave a `defer` body"),
+        "throw inside a defer should be allowed, got:\n{output}"
+    );
+}

@@ -39,11 +39,12 @@ export default function nextConfig(phase) {
     experimental: {
       typedRoutes: true
     },
-    transpilePackages: ['pkg-playground', 'pkg-proto'],
+    transpilePackages: ['pkg-editor', 'pkg-playground', 'pkg-proto'],
     webpack: (config, { webpack }) => {
       config.resolve = config.resolve || {};
       config.resolve.alias = {
         ...config.resolve.alias,
+        'pkg-editor': path.resolve(projectDir, '../pkg-editor/src'),
         'pkg-playground': path.resolve(projectDir, '../pkg-playground/src'),
         'pkg-proto': path.resolve(projectDir, '../pkg-proto/src')
       };

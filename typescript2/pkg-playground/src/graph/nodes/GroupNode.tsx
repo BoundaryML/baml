@@ -1,7 +1,8 @@
 import { type NodeProps } from '@xyflow/react';
 import { Repeat } from 'lucide-react';
 import { type ComponentType, memo } from 'react';
-import { selectionRing, stateColors } from '../constants';
+import { getChrome, stateStyle } from '../constants';
+import { useGraphThemeContext } from '../theme';
 import type { WorkflowNodeData } from '../types';
 import { NodeHandles } from './NodeHandles';
 
@@ -17,17 +18,18 @@ import { NodeHandles } from './NodeHandles';
 export const GroupNode: ComponentType<NodeProps> = memo(({ data, id }) => {
   const d = data as WorkflowNodeData;
   const isHighlighted = d.selected;
-  const stateStyle =
-    stateColors[d.executionState] ?? stateColors['not-started'];
-  const stateAccent = stateStyle.accent;
+  const theme = useGraphThemeContext();
+  const chrome = getChrome(theme);
+  const style = stateStyle(theme, d.executionState);
+  const stateAccent = style.accent;
   const isStateful =
     d.executionState !== 'not-started' && d.executionState !== 'skipped';
 
   const borderColor = isHighlighted
-    ? selectionRing.color
+    ? chrome.selectionRing.color
     : isStateful
-      ? stateStyle.border
-      : 'rgba(26,22,18,0.28)';
+      ? style.border
+      : chrome.groupBorderIdle;
 
   return (
     <div
@@ -42,7 +44,7 @@ export const GroupNode: ComponentType<NodeProps> = memo(({ data, id }) => {
         background: 'transparent',
         border: `1.5px ${isStateful || isHighlighted ? 'solid' : 'dashed'} ${borderColor}`,
         boxShadow: isHighlighted
-          ? `0 0 0 1px ${selectionRing.glow}`
+          ? `0 0 0 1px ${chrome.selectionRing.glow}`
           : undefined,
         transition: 'border-color 150ms ease, box-shadow 150ms ease',
       }}
@@ -67,16 +69,18 @@ export const GroupNode: ComponentType<NodeProps> = memo(({ data, id }) => {
           fontWeight: 600,
           fontSize: 11,
           letterSpacing: '-0.005em',
-          color: isHighlighted ? '#1D4ED8' : '#1A1612',
+          color: isHighlighted
+            ? chrome.groupLabelTextSelected
+            : chrome.groupLabelText,
           background: isHighlighted
-            ? 'rgba(234,241,254,0.94)'
-            : 'rgba(255,253,246,0.94)',
-          border: `1px solid ${isHighlighted ? selectionRing.color : '#D8CFBD'}`,
+            ? chrome.groupLabelBgSelected
+            : chrome.groupLabelBg,
+          border: `1px solid ${isHighlighted ? chrome.selectionRing.color : chrome.groupLabelBorder}`,
           backdropFilter: 'blur(8px)',
           WebkitBackdropFilter: 'blur(8px)',
           boxShadow: isHighlighted
-            ? `0 0 0 2px ${selectionRing.glow}, 0 1px 2px rgba(26,22,18,0.15)`
-            : '0 1px 2px rgba(26,22,18,0.12)',
+            ? `0 0 0 2px ${chrome.selectionRing.glow}, ${chrome.groupLabelShadow}`
+            : chrome.groupLabelShadow,
           transition: 'all 150ms ease',
           fontFamily:
             'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
@@ -105,12 +109,12 @@ export const GroupNode: ComponentType<NodeProps> = memo(({ data, id }) => {
               marginLeft: 2,
               padding: '1px 6px',
               borderRadius: 999,
-              background: 'rgba(37,99,235,0.10)',
-              color: '#1D4ED8',
+              background: chrome.iterationBg,
+              color: chrome.iterationText,
               fontSize: 10,
               fontWeight: 600,
               fontVariantNumeric: 'tabular-nums',
-              border: '1px solid rgba(59,130,246,0.30)',
+              border: `1px solid ${chrome.iterationBorder}`,
             }}
           >
             <Repeat size={9} strokeWidth={2.5} />

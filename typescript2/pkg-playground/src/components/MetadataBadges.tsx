@@ -1,14 +1,18 @@
 import type { FC } from 'react';
-import type { FetchLogEntry } from '../worker-protocol';
 import { Clock, Cpu, Hash } from 'lucide-react';
 import { Badge } from './ui/badge';
 
+export interface MetadataFetchLog {
+  responseHeaders: Record<string, string> | null;
+  responseBody: string | null;
+}
+
 interface MetadataBadgesProps {
-  fetchLogs: FetchLogEntry[];
+  fetchLogs: MetadataFetchLog[];
   durationMs?: number | null;
 }
 
-function extractMetadata(logs: FetchLogEntry[]) {
+function extractMetadata(logs: MetadataFetchLog[]) {
   let model: string | null = null;
   let totalTokens: number | null = null;
   let processingMs: number | null = null;

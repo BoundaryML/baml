@@ -39,7 +39,7 @@ function boom_io() -> int throws baml.errors.Io {
 // catch (Cancelled) { 0 }` → 0. Confirms the full round-trip from user-side
 // cancel → await throws Cancelled → user catches.
 function cancel_from_handle_then_await_catches_cancelled() -> int {
-    let f = spawn { baml.sys.sleep(60000); 42 };
+    let f = spawn { baml.sys.sleep(baml.time.Duration.from_milliseconds(60000n)); 42 };
     let _ = f.cancel();
     (await f) catch (e) { baml.panics.Cancelled => 0 }
 }
@@ -51,7 +51,7 @@ test "cancel_from_handle_then_await_catches_cancelled" {
 // State observation: after `waiter` is cancelled mid-await, its Future state
 // must reflect Cancelled (not stay Pending).
 function cancelled_child_future_state_is_cancelled() -> baml.future.FutureState {
-    let slow = spawn { baml.sys.sleep(60000); 42 };
+    let slow = spawn { baml.sys.sleep(baml.time.Duration.from_milliseconds(60000n)); 42 };
     let waiter = spawn { await slow };
     let _ = waiter.cancel();
     waiter.state()

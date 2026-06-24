@@ -46,6 +46,7 @@ function user.TestFunc(input: string, client: baml.llm.Client) -> string {
     load_var input
     load_const "input"
     alloc_map 1
+    load_const <omitted>
     call baml.llm.call_llm_function
     return
 }
@@ -64,6 +65,7 @@ function user.TestFunc$build_request(input: string, client: baml.llm.Client) -> 
     load_var input
     load_const "input"
     alloc_map 1
+    load_const <omitted>
     call baml.llm.build_request
     return
 }
@@ -82,6 +84,7 @@ function user.TestFunc$build_request_stream(input: string, client: baml.llm.Clie
     load_var input
     load_const "input"
     alloc_map 1
+    load_const <omitted>
     call baml.llm.build_request_stream
     return
 }
@@ -132,6 +135,7 @@ function user.TestFunc$render_prompt(input: string, client: baml.llm.Client) -> 
     load_var input
     load_const "input"
     alloc_map 1
+    load_const <omitted>
     call baml.llm.render_prompt
     return
 }
@@ -152,6 +156,7 @@ function user.TestFunc$stream(input: string, client: baml.llm.Client) -> baml.ll
     load_var input
     load_const "input"
     alloc_map 1
+    load_const <omitted>
     call baml.llm.stream_llm_function
     return
 }
@@ -164,6 +169,7 @@ function user.call_stream_inferred() -> baml.llm.Stream<null | string, string> {
     load_const "world"
     load_const "input"
     alloc_map 1
+    load_const <omitted>
     call baml.llm.stream_llm_function
     return
 }

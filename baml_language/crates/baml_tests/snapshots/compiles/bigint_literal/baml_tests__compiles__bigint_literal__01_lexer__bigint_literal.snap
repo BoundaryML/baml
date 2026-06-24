@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 5901
 ---
 Slash "/"
 Slash "/"
@@ -8,9 +9,9 @@ IntegerLiteral "3"
 Word "snapshot"
 Test "test"
 Colon ":"
-Error "`"
+Backtick "`"
 BigintLiteral "42n"
-Error "`"
+Backtick "`"
 Word "bigint"
 Word "literal"
 Word "syntax"

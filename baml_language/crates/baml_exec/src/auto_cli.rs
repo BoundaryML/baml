@@ -295,8 +295,6 @@ mod tests {
     #[test]
     fn parse_cli_value_engine_internal_type_rejected() {
         let ty = RuntimeTy::Function {
-            generic_params: vec![],
-            generic_param_bounds: vec![],
             params: vec![],
             ret: Box::new(RuntimeTy::Int {
                 attr: TyAttr::default(),

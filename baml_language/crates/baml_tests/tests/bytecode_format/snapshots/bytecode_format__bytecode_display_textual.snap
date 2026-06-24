@@ -22,7 +22,8 @@ function assert.contains(haystack: string, needle: string) -> null {
 
 function assert.equal(actual: unknown, expected: unknown) -> null {
     load_var2 1 2
-    cmp_op !=
+    call baml.ops.equals_equals
+    unary_op !
     pop_jump_if_false L0
     jump L1
 
@@ -31,10 +32,28 @@ function assert.equal(actual: unknown, expected: unknown) -> null {
     jump L2
 
   L1:
-    load_const "assertion failed: expected equal values"
+    load_var actual
+    call assert.format_operand
+    store_var _8
+    load_var expected
+    call assert.format_operand
+    store_var _9
+    load_const "assertion failed: left = "
+    load_var _8
+    bin_op +
+    load_const ", right = "
+    bin_op +
+    load_var _9
+    bin_op +
     call baml.sys.panic
 
   L2:
+    return
+}
+
+function assert.format_operand(value: unknown) -> string {
+    load_var value
+    call baml.String.from
     return
 }
 
@@ -59,7 +78,7 @@ function assert.is_true(condition: bool) -> null {
 function assert.not_null(value: unknown | null) -> null {
     load_var value
     load_const null
-    cmp_op ==
+    call baml.ops.equals_equals
     pop_jump_if_false L0
     jump L1
 
@@ -225,7 +244,14 @@ function testing.RunReport.from_json(j: baml.json.json) -> testing.RunReport {
     load_type int
     load_var _6
     call baml.json.from_json
-    init_instance testing.RunReport .outcome, .duration_ms
+    load_var j
+    load_const "message"
+    call baml.json.field
+    store_var _9
+    load_type string | null
+    load_var _9
+    call baml.json.from_json
+    init_instance testing.RunReport .outcome, .duration_ms, .message
     return
 }
 
@@ -238,9 +264,14 @@ function testing.RunReport.to_json(self: testing.RunReport) -> baml.json.json {
     load_var self
     load_field .duration_ms
     call baml.json.to_json
+    load_type string | null
+    load_var self
+    load_field .message
+    call baml.json.to_json
     load_const "outcome"
     load_const "duration_ms"
-    alloc_map 2
+    load_const "message"
+    alloc_map 3
     return
 }
 
@@ -3115,7 +3146,7 @@ function testing.aggregate_reports(named_results: testing.NamedChildReport[]) ->
   L23:
     load_var outcome
     load_const "pass"
-    cmp_op ==
+    call baml.ops.equals_equals
     pop_jump_if_false L24
     jump L52
 
@@ -3310,7 +3341,7 @@ function testing.aggregate_reports(named_results: testing.NamedChildReport[]) ->
   L51:
     load_var outcome
     load_const "error"
-    cmp_op ==
+    call baml.ops.equals_equals
     pop_jump_if_false L0
     load_const true
     store_var has_error
@@ -3729,7 +3760,8 @@ function testing.run_children_sequential(children: testing.TestSetChild[], fail_
     pop 1
     load_var outcome
     load_const "pass"
-    cmp_op !=
+    call baml.ops.equals_equals
+    unary_op !
 
   L24:
     pop_jump_if_false L0

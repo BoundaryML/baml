@@ -150,6 +150,69 @@ function get_body() -> string {
 }
 
 // ============================================================================
+// New-mode (backtick) prompts — the render_prompt / build_request companions
+// must render through the compiled prompt closure, exactly like execution.
+// Regression: previously these went through the Jinja-only path and rendered
+// nothing for new-mode functions (empty playground preview / cURL).
+// ============================================================================
+
+// A new-mode LLM function `F` + a helper that yields its client value, so a test
+// can call the `F$render_prompt` / `F$build_request` companions exactly like the
+// host (the appended `client` param has no default applied by `call_function`).
+const NEW_MODE_FN: &str = r#"
+function F(name: string) -> string {
+    client C
+    prompt `Hello, ${name}!`
+}
+function client_value() -> baml.llm.Client { C }
+"#;
+
+#[tokio::test]
+async fn test_openai_new_mode_render_prompt_companion() {
+    let source = [OPENAI_CLIENT, NEW_MODE_FN].join("\n");
+    let client = run_baml(&source, "client_value").await;
+
+    // The playground preview calls the generated `F$render_prompt` companion.
+    let prompt = run_baml_with_args(
+        &source,
+        "F$render_prompt",
+        vec![BexExternalValue::String("Alice".into()), client],
+    )
+    .await;
+    let text = common::prompt_ast_to_string(&prompt);
+    assert!(
+        text.contains("Hello, Alice!"),
+        "new-mode render_prompt companion should render the backtick prompt, got: {text:?}"
+    );
+}
+
+#[tokio::test]
+async fn test_openai_new_mode_build_request_companion() {
+    let source = [OPENAI_CLIENT, NEW_MODE_FN].join("\n");
+    let client = run_baml(&source, "client_value").await;
+
+    // The playground "generate cURL" calls the generated `F$build_request`
+    // companion; its body must include the rendered prompt.
+    let req = run_baml_with_args(
+        &source,
+        "F$build_request",
+        vec![BexExternalValue::String("Alice".into()), client],
+    )
+    .await;
+    let body = match &req {
+        BexExternalValue::Instance { fields, .. } => match fields.get("body") {
+            Some(BexExternalValue::String(s)) => s.to_string(),
+            other => panic!("expected Request.body string, got {other:?}"),
+        },
+        other => panic!("expected http.Request instance, got {other:?}"),
+    };
+    assert!(
+        body.contains("Hello, Alice!"),
+        "new-mode build_request companion should render the backtick prompt into the body, got: {body}"
+    );
+}
+
+// ============================================================================
 // Struct args — verify they render into the prompt correctly
 // ============================================================================
 

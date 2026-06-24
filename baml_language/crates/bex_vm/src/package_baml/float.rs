@@ -38,6 +38,7 @@ impl BamlClassFloat for PackageBamlImpl {
     fn to_json(vm: &mut BexVm, float: f64) -> Value {
         Value::object(vm.alloc_float(float))
     }
+
     // ── Predicates ────────────────────────────────────────────────────────────
 
     fn is_nan(float: f64) -> bool {

@@ -5,6 +5,7 @@ import type {
 } from './generated/baml_core/cffi/v1/baml_inbound';
 import {
   CallFunctionArgs,
+  InboundMapEntry as InboundMapEntryMessage,
 } from './generated/baml_core/cffi/v1/baml_inbound';
 import type { BamlSerializable } from './types';
 
@@ -86,7 +87,11 @@ function serializeValue(val: unknown): InboundValue {
       return {
         value: {
           $case: 'classValue',
-          classValue: { name: className, fields },
+          // `classTy` binds the class: `classTy.name` is the FQN and
+          // `classTy.type_args` would carry a generic instance's concrete args.
+          // The webview encoder does not yet support generic class instances, so
+          // `type_args` is always empty here.
+          classValue: { fields, classTy: { name: className, typeArgs: [] } },
         },
       };
     }
@@ -120,9 +125,46 @@ export function encodeCallArgs(
   const args: CallFunctionArgsType = {
     kwargs: entries,
     callId,
+    // Generic TypeVar bindings (`type_args`) — unused by this playground
+    // encoder, which only sends positional kwargs.
+    typeArgs: [],
   };
 
   return CallFunctionArgs.encode(args).finish();
+}
+
+export function encodeRunArgs(kwargs: Record<string, unknown>): Uint8Array {
+  const chunks = Object.entries(kwargs).map(([k, v]) => {
+    const entry: InboundMapEntry = {
+      key: { $case: 'stringKey' as const, stringKey: k },
+      value: serializeValue(v),
+    };
+    const bytes = InboundMapEntryMessage.encode(entry).finish();
+    return concatBytes([encodeVarint(bytes.length), bytes]);
+  });
+  return concatBytes(chunks);
+}
+
+function encodeVarint(value: number): Uint8Array {
+  const bytes: number[] = [];
+  let remaining = value;
+  while (remaining >= 0x80) {
+    bytes.push((remaining & 0x7f) | 0x80);
+    remaining = Math.floor(remaining / 0x80);
+  }
+  bytes.push(remaining);
+  return new Uint8Array(bytes);
+}
+
+function concatBytes(chunks: Uint8Array[]): Uint8Array {
+  const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return out;
 }
 
 export { serializeValue };

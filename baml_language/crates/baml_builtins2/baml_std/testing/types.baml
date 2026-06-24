@@ -7,6 +7,7 @@ type Outcome = "pass" | "fail" | "error"
 class RunReport {
   outcome Outcome
   duration_ms int
+  message string?
   // TODO: extras map<string, unknown>
   // Commented out: Ty::BuiltinUnknown is not handled by ty_to_field_type in
   // value_encode.rs, so deep-copying a TestReport for FFI panics when it

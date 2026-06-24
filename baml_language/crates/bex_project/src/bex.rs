@@ -1,11 +1,16 @@
 use ::bex_heap::HeapPermit as _;
 use ::std::sync::Arc;
 use async_trait::async_trait;
-use bex_engine::{BexCallArg, BexEngine, FunctionCallContext};
+use bex_engine::{BexCallArg, BexEngine, CallRef, FunctionCallContext};
 use bex_heap::{BexExternalValue, BexValue};
 use sys_types::CallId;
 
 use crate::{BexArgs, RuntimeError, project::BexProject};
+
+pub struct BexCallTraceResult {
+    pub value: Result<BexExternalValue, RuntimeError>,
+    pub entry_call_ref: CallRef,
+}
 
 /// Core runtime API: call functions and introspect parameters.
 #[async_trait]
@@ -18,7 +23,36 @@ pub trait Bex: Send + Sync {
         call_ctx: FunctionCallContext,
     ) -> Result<BexExternalValue, RuntimeError>;
 
+    /// Execute a function by name and surface the BEX entry trace identity once
+    /// the VM has actually started. Pre-entry failures return `Err`; runtime
+    /// success/failure returns `Ok` with the traced outcome.
+    async fn call_function_with_trace(
+        self: Arc<Self>,
+        function_name: &str,
+        args: BexArgs,
+        call_ctx: FunctionCallContext,
+    ) -> Result<BexCallTraceResult, RuntimeError>;
+
+    /// Run-vocabulary alias for the traced function entry path. `call_ctx`
+    /// carries adapter-owned host plumbing; durable run identity stays in
+    /// `RunStore`.
+    async fn start_run(
+        self: Arc<Self>,
+        function_name: &str,
+        args: BexArgs,
+        call_ctx: FunctionCallContext,
+    ) -> Result<BexCallTraceResult, RuntimeError> {
+        self.call_function_with_trace(function_name, args, call_ctx)
+            .await
+    }
+
     fn cancel_function_call(&self, call_id: CallId) -> Result<(), RuntimeError>;
+
+    /// Run-vocabulary alias for host-call cancellation. The parameter is still
+    /// the adapter-owned `HostCallId` backing value, not a `RunId`.
+    fn cancel_run(&self, host_call_id: CallId) -> Result<(), RuntimeError> {
+        self.cancel_function_call(host_call_id)
+    }
 }
 
 #[async_trait]
@@ -31,6 +65,16 @@ impl Bex for BexProject {
     ) -> Result<BexExternalValue, RuntimeError> {
         let bex = self.get_bex()?;
         Bex::call_function(bex, function_name, args, call_ctx).await
+    }
+
+    async fn call_function_with_trace(
+        self: Arc<Self>,
+        function_name: &str,
+        args: BexArgs,
+        call_ctx: FunctionCallContext,
+    ) -> Result<BexCallTraceResult, RuntimeError> {
+        let bex = self.get_bex()?;
+        Bex::call_function_with_trace(bex, function_name, args, call_ctx).await
     }
 
     fn cancel_function_call(&self, call_id: CallId) -> Result<(), RuntimeError> {
@@ -47,9 +91,22 @@ impl Bex for BexEngine {
     async fn call_function(
         self: Arc<Self>,
         function_name: &str,
-        BexArgs(mut args): BexArgs,
+        BexArgs(args): BexArgs,
         call_ctx: FunctionCallContext,
     ) -> Result<BexExternalValue, RuntimeError> {
+        let result =
+            Bex::call_function_with_trace(self, function_name, BexArgs(args), call_ctx).await?;
+        result.value
+    }
+
+    /// Resolve named `BexArgs` into the positional `Vec<BexExternalValue>` that
+    /// `BexEngine::call_function` expects, using the engine's parameter metadata.
+    async fn call_function_with_trace(
+        self: Arc<Self>,
+        function_name: &str,
+        BexArgs(mut args): BexArgs,
+        call_ctx: FunctionCallContext,
+    ) -> Result<BexCallTraceResult, RuntimeError> {
         let params = self
             .function_params(function_name)
             .map_err(RuntimeError::from)?;
@@ -80,20 +137,34 @@ impl Bex for BexEngine {
             });
         }
 
-        let result =
-            BexEngine::call_function_bound_args(&self, function_name, ordered_args, call_ctx, true)
-                .await?;
+        let result = BexEngine::call_function_bound_args_with_trace(
+            &self,
+            function_name,
+            ordered_args,
+            call_ctx,
+            true,
+        )
+        .await?;
 
-        let permit = self
-            .heap_permit_manager()
-            .new_permit(())
-            .await
-            .acquire()
-            .await;
-        let owned_result =
-            BexValue::from(&result).as_owned_but_very_slow(self.heap(), permit.proof())?;
+        let value = match result.value {
+            Ok(result) => {
+                let permit = self
+                    .heap_permit_manager()
+                    .new_permit(())
+                    .await
+                    .acquire()
+                    .await;
+                let owned_result =
+                    BexValue::from(&result).as_owned_but_very_slow(self.heap(), permit.proof())?;
+                Ok(owned_result)
+            }
+            Err(err) => Err(RuntimeError::from(err)),
+        };
 
-        Ok(owned_result)
+        Ok(BexCallTraceResult {
+            value,
+            entry_call_ref: result.entry_call_ref,
+        })
     }
 
     fn cancel_function_call(&self, call_id: CallId) -> Result<(), RuntimeError> {

@@ -20,6 +20,7 @@ function user.Fn(client: baml.llm.Client) -> string {
     load_var client
     load_const "Fn"
     alloc_map 0
+    load_const <omitted>
     call baml.llm.call_llm_function
     return
 }
@@ -42,6 +43,7 @@ function user.Fn$build_request(client: baml.llm.Client) -> baml.http.Request {
     load_var client
     load_const "Fn"
     alloc_map 0
+    load_const <omitted>
     call baml.llm.build_request
     return
 }
@@ -64,6 +66,7 @@ function user.Fn$build_request_stream(client: baml.llm.Client) -> baml.http.Requ
     load_var client
     load_const "Fn"
     alloc_map 0
+    load_const <omitted>
     call baml.llm.build_request_stream
     return
 }
@@ -130,6 +133,7 @@ function user.Fn$render_prompt(client: baml.llm.Client) -> baml.llm.PromptAst {
     load_var client
     load_const "Fn"
     alloc_map 0
+    load_const <omitted>
     call baml.llm.render_prompt
     return
 }
@@ -154,6 +158,7 @@ function user.Fn$stream(client: baml.llm.Client) -> baml.llm.Stream<string | nul
     load_var client
     load_const "Fn"
     alloc_map 0
+    load_const <omitted>
     call baml.llm.stream_llm_function
     return
 }

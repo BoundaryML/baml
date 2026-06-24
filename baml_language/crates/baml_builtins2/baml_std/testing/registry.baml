@@ -321,18 +321,24 @@ function run_test(body: TestBody, runner: TestRunner?) -> TestReport {
     let start = baml.sys.now_ms()
     let result = {
       body()
-      RunReport { outcome: "pass", duration_ms: 0 }
+      RunReport { outcome: "pass", duration_ms: 0, message: null }
     } catch_all (e) {
+      let p: baml.panics.UserPanic => {
+        RunReport { outcome: "fail", duration_ms: 0, message: p.message }
+      },
+      let p: baml.panics.AssertionFailed => {
+        RunReport { outcome: "fail", duration_ms: 0, message: p.message }
+      },
       baml.panics.Panic => {
-        RunReport { outcome: "fail", duration_ms: 0 }
+        RunReport { outcome: "fail", duration_ms: 0, message: null }
       },
       _ => {
-        RunReport { outcome: "fail", duration_ms: 0 }
+        RunReport { outcome: "fail", duration_ms: 0, message: null }
       }
     }
     TestReport {
       outcome: result.outcome,
-      runs: [RunReport { outcome: result.outcome, duration_ms: baml.sys.now_ms() - start }],
+      runs: [RunReport { outcome: result.outcome, duration_ms: baml.sys.now_ms() - start, message: result.message }],
     }
   }
   match (runner) {

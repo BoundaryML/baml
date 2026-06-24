@@ -590,6 +590,46 @@ impl<T> io::IoClassLlmStreamCache for T {
     }
 }
 
+/// Blanket impl — `Context.output_format_with(...)` re-renders the return
+/// type's schema with caller options (BEP-049 §10 / M5b.2). `Context._output_format`
+/// carries the prebuilt schema as an opaque handle, so this only re-renders it.
+impl<T> io::IoClassLlmContext for T {
+    #[allow(clippy::too_many_arguments)]
+    fn output_format_with(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        context: io::owned::llm::Context,
+        prefix: Option<String>,
+        or_splitter: Option<String>,
+        enum_value_prefix: Option<String>,
+        hoisted_class_prefix: Option<String>,
+        always_hoist_enums: Option<bool>,
+        quote_class_fields: Option<bool>,
+        hoist_classes: Option<Vec<String>>,
+        map_style: Option<String>,
+        render_null_as: Option<String>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        // Render the prebuilt schema handle with the caller's options. The
+        // `Option → RenderOptions` mapping lives inside sys_llm (those option
+        // types are crate-internal there).
+        let content = unwrap_output_format(&context._output_format);
+        SysOpOutput::ok(sys_llm::render_output_format_content(
+            &content,
+            prefix,
+            or_splitter,
+            enum_value_prefix,
+            hoisted_class_prefix,
+            always_hoist_enums,
+            quote_class_fields,
+            hoist_classes,
+            map_style,
+            render_null_as,
+        ))
+    }
+}
+
 impl<T> io::IoNamespaceLlm for T {
     fn get_jinja_template(
         &self,
@@ -615,6 +655,43 @@ impl<T> io::IoNamespaceLlm for T {
             format!("{}\n{}", ctx.template_strings_macros, dedented)
         };
         SysOpOutput::ok(template)
+    }
+
+    fn assemble_prompt_ast(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        parts: Vec<String>,
+        values: Vec<BexExternalValue>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::llm::PromptAst> {
+        // BEP-049 §10 (M5d): structural PromptAst assembly — no magic delimiters.
+        let ast = std::sync::Arc::new(assemble_prompt_ast_impl(&parts, &values)).merge_adjacent();
+        SysOpOutput::ok(wrap_prompt_ast(ast))
+    }
+
+    fn render_output_format(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        return_type: baml_type::RuntimeTy,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        // BEP-049 §10 (M5b): the `ctx.output_format` schema string.
+        SysOpOutput::ok(sys_llm::render_output_format(&return_type, ctx))
+    }
+
+    fn build_output_format(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        return_type: baml_type::RuntimeTy,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::llm::OutputFormat> {
+        // BEP-049 §10 (M5b.2): build the opaque schema handle `Context._output_format`
+        // carries; `output_format_with(...)` renders it with caller options.
+        let content = sys_llm::build_output_format_content(&return_type, ctx);
+        SysOpOutput::ok(wrap_output_format(std::sync::Arc::new(content)))
     }
 
     fn get_return_type(
@@ -714,6 +791,87 @@ impl<T> io::IoNamespaceLlm for T {
     }
 }
 
+/// Role name of an interpolated value if it is a `baml.llm.Role` instance (set
+/// by the in-template `role(...)` constructor), else `None`.
+fn prompt_role_name(v: &BexExternalValue) -> Option<String> {
+    if let BexExternalValue::Instance {
+        class_name, fields, ..
+    } = v
+        && (class_name == "baml.llm.Role" || class_name.ends_with(".Role"))
+        && let Some(BexExternalValue::String(name)) = fields.get("name")
+    {
+        return Some(name.to_string());
+    }
+    None
+}
+
+/// Best-effort text form of a non-`Role` interpolated value (M5d slice: scalars;
+/// media / complex values are deferred).
+fn prompt_value_text(v: &BexExternalValue) -> String {
+    match v {
+        BexExternalValue::String(s) => s.to_string(),
+        BexExternalValue::Int(i) => i.to_string(),
+        BexExternalValue::Float(f) => f.to_string(),
+        BexExternalValue::Bool(b) => b.to_string(),
+        _ => String::new(),
+    }
+}
+
+/// BEP-049 §10 (M5d): fold a tagged template's `parts`/`values` into a
+/// `PromptAst`. Walks them interleaved — a `Role` value starts a new chat
+/// message; strings (and scalar values) accumulate into the current message's
+/// content. With no `Role` values the whole template is a single
+/// `PromptAst::Simple`. Mirrors the message-folding of `parse_chat_prompt` but
+/// off the structured arrays instead of magic-delimiter string parsing.
+fn assemble_prompt_ast_impl(
+    parts: &[String],
+    values: &[BexExternalValue],
+) -> baml_builtins2::PromptAst {
+    use baml_builtins2::{PromptAst, PromptAstSimple};
+    let mk_msg = |role: String, content: String| -> std::sync::Arc<PromptAst> {
+        std::sync::Arc::new(PromptAst::Message {
+            role,
+            content: std::sync::Arc::new(PromptAstSimple::String(content)),
+            // `metadata` is `serde_json::Value`, not a direct dep here, so it
+            // can't be named for `Value::default()`; its `Default` is
+            // `Value::Null`. Role metadata threading lands later.
+            #[allow(clippy::default_trait_access)]
+            metadata: Default::default(),
+        })
+    };
+    let mut messages: Vec<std::sync::Arc<PromptAst>> = Vec::new();
+    let mut current_role: Option<String> = None;
+    let mut content = String::new();
+    for (i, value) in values.iter().enumerate() {
+        if let Some(p) = parts.get(i) {
+            content.push_str(p);
+        }
+        if let Some(role) = prompt_role_name(value) {
+            if let Some(prev) = current_role.take() {
+                messages.push(mk_msg(prev, std::mem::take(&mut content)));
+            }
+            current_role = Some(role);
+        } else {
+            content.push_str(&prompt_value_text(value));
+        }
+    }
+    if let Some(p) = parts.get(values.len()) {
+        content.push_str(p);
+    }
+    match current_role {
+        Some(role) => {
+            messages.push(mk_msg(role, content));
+            if messages.len() == 1 {
+                std::sync::Arc::try_unwrap(messages.pop().unwrap())
+                    .unwrap_or_else(|arc| (*arc).clone())
+            } else {
+                PromptAst::Vec(messages)
+            }
+        }
+        None => PromptAst::Simple(std::sync::Arc::new(PromptAstSimple::String(content))),
+    }
+}
+
 /// Wrap a `bex_vm_types::PromptAst` (Arc) into the generated `owned::llm::PromptAst`.
 fn wrap_prompt_ast(ast: bex_vm_types::PromptAst) -> io::owned::llm::PromptAst {
     io::owned::llm::PromptAst {
@@ -729,6 +887,27 @@ fn unwrap_prompt_ast(owned: &io::owned::llm::PromptAst) -> bex_vm_types::PromptA
         .clone()
         .downcast::<baml_builtins2::PromptAst>()
         .expect("PromptAst._data downcast failed: expected Arc<baml_builtins2::PromptAst>. This indicates a bug in wrap_prompt_ast or a type mismatch.")
+}
+
+/// Wrap an `OutputFormatContent` into the generated `owned::llm::OutputFormat` handle.
+fn wrap_output_format(
+    content: std::sync::Arc<sys_llm::OutputFormatContent>,
+) -> io::owned::llm::OutputFormat {
+    io::owned::llm::OutputFormat {
+        _data: content as std::sync::Arc<dyn std::any::Any + Send + Sync>,
+    }
+}
+
+/// Unwrap a generated `owned::llm::OutputFormat` handle back to its `OutputFormatContent`.
+#[allow(clippy::used_underscore_binding)]
+fn unwrap_output_format(
+    owned: &io::owned::llm::OutputFormat,
+) -> std::sync::Arc<sys_llm::OutputFormatContent> {
+    owned
+        ._data
+        .clone()
+        .downcast::<sys_llm::OutputFormatContent>()
+        .expect("OutputFormat._data downcast failed: expected Arc<OutputFormatContent>. This indicates a bug in wrap_output_format or a type mismatch.")
 }
 
 /// Convert the generated IO `PrimitiveClient` to the `sys_llm::baml_std::PrimitiveClient`.
@@ -1016,6 +1195,41 @@ impl io::IoClassHttpResponse for DefaultIoOps {
         _body: Vec<u8>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::Response> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+    fn new_streaming(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _status_code: i64,
+        _headers: indexmap::IndexMap<String, String>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::http::Response> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+    fn write(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _r: io::owned::http::Response,
+        _data: Vec<u8>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+    fn end(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _r: io::owned::http::Response,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
         SysOpOutput::err(VmBamlError::Unsupported {
             message: "Operation not supported on this platform".to_string(),
         })
@@ -1379,7 +1593,7 @@ impl io::IoNamespaceSys for DefaultIoOps {
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
-        _ms: i64,
+        _delay: BexExternalValue,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
         SysOpOutput::err(VmBamlError::Unsupported {
@@ -1799,6 +2013,24 @@ impl IoSysOpsBuilder {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
                 t.__glue_baml_http_response_new(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_http_response_new_streaming = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_http_response_new_streaming(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_http_response_write = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_http_response_write(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_http_response_end = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_http_response_end(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_http_tlsconfig__new = {

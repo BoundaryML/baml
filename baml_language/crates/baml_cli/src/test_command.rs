@@ -18,8 +18,8 @@ use crate::{
 
 #[derive(Args, Clone, Debug)]
 pub struct TestArgs {
-    #[arg(long, help = "path/to/baml_src", default_value = ".")]
-    pub from: PathBuf,
+    #[arg(long, help = "Project search starting point", value_name = "PATH")]
+    pub from: Option<PathBuf>,
 
     /// Only list selected tests
     #[arg(long, default_value_t = false)]
@@ -94,7 +94,7 @@ impl TestArgs {
     pub fn run(&self) -> Result<crate::ExitCode> {
         let reporter = Reporter::new();
         // ── 1. Load project ────────────────────────────────────────────────
-        let (db, from, baml_files) = load_project_from_reporting(&self.from, &reporter)?;
+        let (db, from, baml_files) = load_project_from_reporting(self.from.as_deref(), &reporter)?;
         if baml_files.is_empty() {
             reporter.abandon();
             crate::reporter::print_error(format_args!(
@@ -287,6 +287,20 @@ impl TestArgs {
 // Legacy test execution (unchanged from the original implementation)
 // ---------------------------------------------------------------------------
 
+/// Execute one legacy (`function + test block`) test case.
+///
+/// Parameters:
+/// - `ctx`: Shared runtime context containing engine/runtime/cancellation state.
+/// - `t`: Discovered test metadata (`function_name::test_name`) to execute.
+/// - `passed`: Counter incremented when the test passes.
+/// - `failed`: Counter incremented when the test fails or cannot execute.
+///
+/// Returns:
+/// - `()`; results are emitted to stdout/stderr and reflected in counters.
+///
+/// Errors/Panics:
+/// - Does not return errors; execution/argument failures are reported as `FAIL`.
+/// - Does not panic under normal operation.
 fn run_legacy_test(ctx: &RunCtx, t: &DiscoveredTest, passed: &mut usize, failed: &mut usize) {
     let test_case = match ctx.engine.test_case(&t.function_name, &t.test_name) {
         Some(tc) => tc,
@@ -326,7 +340,7 @@ fn run_legacy_test(ctx: &RunCtx, t: &DiscoveredTest, passed: &mut usize, failed:
         }
         Err(e) => {
             eprintln!("FAIL {}::{}", t.function_name, t.test_name);
-            eprintln!("  => {e:?}");
+            eprintln!("  => {e}");
             *failed += 1;
         }
     }
@@ -494,7 +508,9 @@ fn flatten_tree(value: &BexExternalValue, out: &mut Vec<DiscoveredTest>) {
                 flatten_tree(item, out);
             }
         }
-        BexExternalValue::Instance { class_name, fields } => {
+        BexExternalValue::Instance {
+            class_name, fields, ..
+        } => {
             if class_matches(class_name, "SerializedTest") {
                 let kind = fields.get("type").and_then(as_string).unwrap_or_default();
                 if kind == "test" {
@@ -534,7 +550,9 @@ fn collect_lazy_names_inner(value: &BexExternalValue, out: &mut Vec<String>) {
                 collect_lazy_names_inner(item, out);
             }
         }
-        BexExternalValue::Instance { class_name, fields } => {
+        BexExternalValue::Instance {
+            class_name, fields, ..
+        } => {
             if class_matches(class_name, "SerializedTest") {
                 let kind = fields.get("type").and_then(as_string).unwrap_or_default();
                 if kind == "lazyTestSet" {
@@ -556,6 +574,22 @@ fn collect_lazy_names_inner(value: &BexExternalValue, out: &mut Vec<String>) {
 // Testset test execution
 // ---------------------------------------------------------------------------
 
+/// Execute one test discovered from the testset runtime registry.
+///
+/// Parameters:
+/// - `ctx`: Shared runtime context containing engine/runtime/cancellation state.
+/// - `registry`: Live `testing.TestRegistry` handle/value returned by discovery.
+/// - `full_path`: Slash-delimited runtime path for the test (e.g. `suite/case`).
+/// - `t`: Human-facing discovered test metadata used for CLI labels.
+/// - `passed`: Counter incremented when the test passes.
+/// - `failed`: Counter incremented when the test fails or errors.
+///
+/// Returns:
+/// - `()`; prints pass/fail lines and updates counters.
+///
+/// Errors/Panics:
+/// - Does not return errors; runtime failures are rendered as `FAIL`.
+/// - Does not panic under normal operation.
 fn run_testset_test(
     ctx: &RunCtx,
     registry: &BexExternalValue,
@@ -586,12 +620,13 @@ fn run_testset_test(
                     "FAIL {}::{} [outcome={outcome}]",
                     t.function_name, t.test_name
                 );
+                print_failure_messages(&report);
                 *failed += 1;
             }
         }
         Err(e) => {
             eprintln!("FAIL {}::{}", t.function_name, t.test_name);
-            eprintln!("  => {e:?}");
+            eprintln!("  => {e}");
             *failed += 1;
         }
     }
@@ -630,6 +665,7 @@ fn run_testset_registry(
                 } else {
                     println!("FAIL testing::* [outcome={outcome}]");
                     print_failed_names(&report);
+                    print_failure_messages(&report);
                     // A testset runner can fail the aggregate without marking
                     // individual children failed. Count that runner-level
                     // verdict as one displayed failure so the summary does not
@@ -648,6 +684,7 @@ fn run_testset_registry(
                 } else {
                     println!("FAIL testing::* [outcome={outcome}]");
                     print_failed_names(&report);
+                    print_failure_messages(&report);
                     *failed += 1;
                 }
                 aggregate_failed
@@ -680,7 +717,10 @@ fn extract_outcome(value: &BexExternalValue) -> Option<String> {
 
 fn extract_testset_summary(value: &BexExternalValue) -> Option<(String, usize, usize, usize)> {
     let v = unwrap_union(value);
-    if let BexExternalValue::Instance { class_name, fields } = v {
+    if let BexExternalValue::Instance {
+        class_name, fields, ..
+    } = v
+    {
         if !class_matches(class_name, "TestSetReport") {
             return None;
         }
@@ -699,7 +739,10 @@ fn extract_testset_summary(value: &BexExternalValue) -> Option<(String, usize, u
 
 fn extract_leaf_summary(value: &BexExternalValue) -> Option<(usize, usize, usize)> {
     let v = unwrap_union(value);
-    if let BexExternalValue::Instance { class_name, fields } = v {
+    if let BexExternalValue::Instance {
+        class_name, fields, ..
+    } = v
+    {
         if class_matches(class_name, "TestReport") {
             let outcome = fields
                 .get("outcome")
@@ -755,6 +798,53 @@ fn extract_failed_names(value: &BexExternalValue) -> Vec<String> {
         }
     }
     Vec::new()
+}
+
+fn print_failure_messages(value: &BexExternalValue) {
+    for message in extract_failure_messages(value) {
+        eprintln!("  => {message}");
+    }
+}
+
+fn extract_failure_messages(value: &BexExternalValue) -> Vec<String> {
+    let mut messages = Vec::new();
+    collect_failure_messages(value, &mut messages);
+    messages
+}
+
+fn collect_failure_messages(value: &BexExternalValue, messages: &mut Vec<String>) {
+    let v = unwrap_union(value);
+    match v {
+        BexExternalValue::Array { items, .. } => {
+            for item in items {
+                collect_failure_messages(item, messages);
+            }
+        }
+        BexExternalValue::Instance {
+            class_name, fields, ..
+        } => {
+            if class_matches(class_name, "RunReport")
+                && fields
+                    .get("outcome")
+                    .and_then(|v| as_string(unwrap_union(v)))
+                    .is_some_and(|outcome| outcome != "pass")
+            {
+                if let Some(message) = fields
+                    .get("message")
+                    .and_then(|v| as_string(unwrap_union(v)))
+                {
+                    messages.push(message.to_string());
+                }
+            }
+            if let Some(runs) = fields.get("runs") {
+                collect_failure_messages(runs, messages);
+            }
+            if let Some(results) = fields.get("results") {
+                collect_failure_messages(results, messages);
+            }
+        }
+        _ => {}
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -831,6 +921,7 @@ mod tests {
     fn instance(class_name: &str, fields: Vec<(&str, BexExternalValue)>) -> BexExternalValue {
         BexExternalValue::Instance {
             class_name: class_name.to_string(),
+            type_args: Vec::new(),
             fields: fields
                 .into_iter()
                 .map(|(name, value)| (name.to_string(), value))
@@ -842,6 +933,29 @@ mod tests {
         instance(
             "testing.TestReport",
             vec![("outcome", string(outcome)), ("runs", array(Vec::new()))],
+        )
+    }
+
+    fn run_report(outcome: &str, message: Option<&str>) -> BexExternalValue {
+        instance(
+            "testing.RunReport",
+            vec![
+                ("outcome", string(outcome)),
+                ("duration_ms", int(0)),
+                (
+                    "message",
+                    message
+                        .map(string)
+                        .unwrap_or_else(|| BexExternalValue::Null),
+                ),
+            ],
+        )
+    }
+
+    fn test_report_with_runs(outcome: &str, runs: Vec<BexExternalValue>) -> BexExternalValue {
+        instance(
+            "testing.TestReport",
+            vec![("outcome", string(outcome)), ("runs", array(runs))],
         )
     }
 
@@ -933,5 +1047,29 @@ mod tests {
             vec![("failed_names", string("suite/two"))],
         );
         assert!(extract_failed_names(&report).is_empty());
+    }
+
+    #[test]
+    fn extract_failure_messages_recurses_into_failed_child_runs() {
+        let report = testset_report(
+            "fail",
+            0,
+            1,
+            1,
+            Vec::new(),
+            vec![test_report_with_runs(
+                "fail",
+                vec![
+                    run_report("pass", Some("ignored")),
+                    run_report("fail", Some("assertion failed: expected true")),
+                    run_report("error", None),
+                ],
+            )],
+        );
+
+        assert_eq!(
+            extract_failure_messages(&report),
+            vec!["assertion failed: expected true".to_string()]
+        );
     }
 }
