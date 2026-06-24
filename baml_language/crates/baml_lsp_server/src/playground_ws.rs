@@ -41,15 +41,15 @@ pub enum WsInMessage {
     CancelRun {
         #[serde(rename = "requestId")]
         request_id: u64,
-        #[serde(rename = "runId")]
-        run_id: String,
+        #[serde(rename = "boundaryId")]
+        boundary_id: String,
     },
     #[serde(rename = "respondToInput")]
     RespondToInput {
         #[serde(rename = "requestId")]
         request_id: u64,
-        #[serde(rename = "runId")]
-        run_id: String,
+        #[serde(rename = "boundaryId")]
+        boundary_id: String,
         #[serde(rename = "inputRequestId")]
         input_request_id: String,
         value: String,
@@ -58,8 +58,8 @@ pub enum WsInMessage {
     RespondToEnv {
         #[serde(rename = "requestId")]
         request_id: u64,
-        #[serde(rename = "runId")]
-        run_id: String,
+        #[serde(rename = "boundaryId")]
+        boundary_id: String,
         #[serde(rename = "envRequestId")]
         env_request_id: String,
         value: Option<String>,
@@ -74,8 +74,8 @@ pub enum WsInMessage {
     Snapshot {
         #[serde(rename = "requestId")]
         request_id: u64,
-        #[serde(rename = "runId")]
-        run_id: String,
+        #[serde(rename = "boundaryId")]
+        boundary_id: String,
     },
     #[serde(rename = "subscribe")]
     Subscribe {
@@ -83,8 +83,8 @@ pub enum WsInMessage {
         request_id: u64,
         #[serde(rename = "subscriptionId")]
         subscription_id: String,
-        #[serde(rename = "runId")]
-        run_id: String,
+        #[serde(rename = "boundaryId")]
+        boundary_id: String,
         #[serde(rename = "afterCursor")]
         after_cursor: Option<u64>,
     },
@@ -230,8 +230,8 @@ pub enum WsOutMessage {
     RunSnapshot {
         #[serde(rename = "requestId", skip_serializing_if = "Option::is_none")]
         request_id: Option<u64>,
-        #[serde(rename = "runId")]
-        run_id: String,
+        #[serde(rename = "boundaryId")]
+        boundary_id: String,
         snapshot: serde_json::Value,
     },
     #[serde(rename = "runCursorExpired")]
@@ -240,8 +240,8 @@ pub enum WsOutMessage {
         request_id: Option<u64>,
         #[serde(rename = "subscriptionId", skip_serializing_if = "Option::is_none")]
         subscription_id: Option<String>,
-        #[serde(rename = "runId")]
-        run_id: String,
+        #[serde(rename = "boundaryId")]
+        boundary_id: String,
         reason: String,
     },
     #[serde(rename = "envVarRequest")]
@@ -322,7 +322,7 @@ mod tests {
         let cancel = serde_json::from_value::<WsInMessage>(json!({
             "type": "cancelRun",
             "requestId": 7,
-            "runId": "baml_run_1_00000000000000000000000000000001"
+            "boundaryId": "baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ"
         }))
         .unwrap();
         assert!(matches!(
@@ -334,7 +334,7 @@ mod tests {
             "type": "subscribe",
             "requestId": 8,
             "subscriptionId": "sub-1",
-            "runId": "baml_run_1_00000000000000000000000000000001",
+            "boundaryId": "baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ",
             "afterCursor": 3
         }))
         .unwrap();
@@ -408,7 +408,7 @@ mod tests {
         let input = serde_json::from_value::<WsInMessage>(json!({
             "type": "respondToInput",
             "requestId": 11,
-            "runId": "baml_run_1_00000000000000000000000000000001",
+            "boundaryId": "baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ",
             "inputRequestId": "4",
             "value": "hello"
         }))
@@ -426,7 +426,7 @@ mod tests {
         let env = serde_json::from_value::<WsInMessage>(json!({
             "type": "respondToEnv",
             "requestId": 12,
-            "runId": "baml_run_1_00000000000000000000000000000001",
+            "boundaryId": "baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ",
             "envRequestId": "5",
             "value": "secret"
         }))
@@ -473,13 +473,14 @@ mod tests {
         let msg = WsOutMessage::RunCursorExpired {
             request_id: Some(8),
             subscription_id: Some("sub-1".to_string()),
-            run_id: "baml_run_1_00000000000000000000000000000001".to_string(),
+            boundary_id: "baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ".to_string(),
             reason: "compacted".to_string(),
         };
         let wire = serde_json::to_value(msg).unwrap();
         assert_eq!(wire["type"], "runCursorExpired");
         assert_eq!(wire["requestId"], 8);
         assert_eq!(wire["subscriptionId"], "sub-1");
+        assert_eq!(wire["boundaryId"], "baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ");
         assert_eq!(wire["reason"], "compacted");
     }
 }

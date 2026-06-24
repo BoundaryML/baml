@@ -5,12 +5,12 @@ import type {
   FetchLogEntry,
   PayloadEvent,
   Run,
-  RunId,
+  BoundaryId,
   RunTarget,
 } from './worker-protocol';
 
 export type RunStoreDisplayRun = {
-  id: RunId;
+  id: BoundaryId;
   kind: RunTarget['kind'];
   projectId: string;
   projectGeneration: number;
@@ -82,18 +82,18 @@ export type ExecutionProfileFilters = {
 
 export function runToDisplayRun(
   run: Run,
-  argsJsonByRunId: Record<string, string>,
+  argsJsonByBoundaryId: Record<string, string>,
 ): RunStoreDisplayRun | null {
   const identity = runDisplayIdentity(run);
   if (!identity) return null;
   return {
-    id: run.runId,
+    id: run.boundaryId,
     kind: run.target.kind,
     projectId: run.request.projectId,
     projectGeneration: run.request.projectGeneration,
     functionName: identity.functionName,
     testName: identity.testName,
-    argsJson: argsJsonByRunId[run.runId] ?? run.request.argsSummary ?? '',
+    argsJson: argsJsonByBoundaryId[run.boundaryId] ?? run.request.argsSummary ?? '',
     fetchLogs: payloadsToFetchLogs(run.payloads),
     inputRequests: payloadsToPendingInputs(run.payloads),
     result: decodeRunResultValue(run),

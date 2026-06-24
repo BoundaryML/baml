@@ -28,9 +28,9 @@ use axum::{
 };
 use base64::Engine as _;
 use bex_events::run::{
-    AttachRootTraceResult, CancellationState, ExecutionRequest, HostCallId, InMemoryRunStore,
-    ProjectGeneration, ProjectId, RequestId, RunCursor, RunCursorExpiredReason, RunError,
-    RunErrorClass, RunFilter, RunId, RunKind, RunOutcome, RunSubscription, RunTarget,
+    AttachRootTraceResult, BoundaryId, CancellationState, ExecutionRequest, HostCallId,
+    InMemoryRunStore, ProjectGeneration, ProjectId, RequestId, RunCursor, RunCursorExpiredReason,
+    RunError, RunErrorClass, RunFilter, RunKind, RunOutcome, RunSubscription, RunTarget,
     RunVisibilityFilter, StartedHostRun,
 };
 use bex_project::{is_cancelled_engine_error, is_cancelled_runtime_error};
@@ -66,10 +66,10 @@ fn epoch_ms() -> u64 {
 fn broadcast_run_started(
     broadcast_tx: &broadcast::Sender<WsOutMessage>,
     run_store: &InMemoryRunStore,
-    run_id: bex_events::run::RunId,
+    boundary_id: bex_events::run::BoundaryId,
     request_id: Option<u64>,
 ) {
-    if let Some(run) = run_store.snapshot(run_id) {
+    if let Some(run) = run_store.snapshot(boundary_id) {
         let _ = broadcast_tx.send(WsOutMessage::RunStarted {
             request_id,
             run: run_to_wire(&run),
@@ -92,7 +92,12 @@ fn broadcast_started_host_run(
     started: &StartedHostRun,
     request_id: Option<u64>,
 ) {
-    broadcast_run_started(broadcast_tx, run_store, started.start.run_id, request_id);
+    broadcast_run_started(
+        broadcast_tx,
+        run_store,
+        started.start.boundary_id,
+        request_id,
+    );
     if let Some(patch) = &started.started_patch {
         broadcast_run_patch(broadcast_tx, patch);
     }
@@ -101,11 +106,11 @@ fn broadcast_started_host_run(
 fn broadcast_root_trace_attachment(
     broadcast_tx: &broadcast::Sender<WsOutMessage>,
     run_store: &InMemoryRunStore,
-    run_id: RunId,
+    boundary_id: BoundaryId,
     entry_call_ref: bex_events::ids::CallRef,
     label: &str,
 ) {
-    match run_store.attach_root_trace(run_id, entry_call_ref) {
+    match run_store.attach_root_trace(boundary_id, entry_call_ref) {
         AttachRootTraceResult::Attached { patches } => {
             for patch in patches {
                 broadcast_run_patch(broadcast_tx, &patch);
@@ -113,12 +118,15 @@ fn broadcast_root_trace_attachment(
         }
         AttachRootTraceResult::AlreadyAttached => {}
         AttachRootTraceResult::RunMissing => {
-            tracing::warn!("RunStore missing {label}run {}", run_id.to_wire_string());
+            tracing::warn!(
+                "RunStore missing {label}run {}",
+                boundary_id.to_wire_string()
+            );
         }
         AttachRootTraceResult::Conflict { existing } => {
             tracing::warn!(
                 "RunStore {label}root trace conflict for {}: existing {}",
-                run_id.to_wire_string(),
+                boundary_id.to_wire_string(),
                 existing.encode()
             );
         }
@@ -144,10 +152,10 @@ fn engine_error_outcome(err: &bex_project::EngineError) -> RunOutcome {
 fn complete_run_and_broadcast(
     broadcast_tx: &broadcast::Sender<WsOutMessage>,
     run_store: &InMemoryRunStore,
-    run_id: RunId,
+    boundary_id: BoundaryId,
     outcome: RunOutcome,
 ) {
-    if let Some(patch) = run_store.complete_run_now(run_id, outcome) {
+    if let Some(patch) = run_store.complete_run_now(boundary_id, outcome) {
         broadcast_run_patch(broadcast_tx, &patch);
     }
 }
@@ -207,11 +215,14 @@ impl FunctionRunTarget {
 }
 
 #[allow(clippy::result_large_err)]
-fn parse_run_id_for_request(request_id: u64, run_id: &str) -> Result<RunId, WsOutMessage> {
-    RunId::from_wire_str(run_id).ok_or_else(|| WsOutMessage::CommandError {
+fn parse_boundary_id_for_request(
+    request_id: u64,
+    boundary_id: &str,
+) -> Result<BoundaryId, WsOutMessage> {
+    BoundaryId::from_wire_str(boundary_id).ok_or_else(|| WsOutMessage::CommandError {
         request_id,
-        code: "invalidRunId".to_string(),
-        message: format!("Invalid runId: {run_id}"),
+        code: "invalidBoundaryId".to_string(),
+        message: format!("Invalid boundaryId: {boundary_id}"),
     })
 }
 
@@ -981,10 +992,10 @@ async fn playground_ws_session(socket: WebSocket, state: WsState) {
 
     if let Some(hello) = to_ws_text(&WsOutMessage::Hello {
         toolchain_version: baml_version::CANONICAL_VERSION.to_string(),
-        playground_protocol: 1,
-        min_client_playground_protocol: 1,
+        playground_protocol: 2,
+        min_client_playground_protocol: 2,
         capabilities: vec![
-            "playgroundWebSocket.v1".to_string(),
+            "playgroundWebSocket.v2".to_string(),
             "callFunction.v1".to_string(),
             "collectTests.v1".to_string(),
             "sourceFiles.v1".to_string(),
@@ -1112,7 +1123,9 @@ async fn handle_function_run(
     let broadcast_tx = state.broadcast_tx.clone();
     let project_generation = state.bex.project_generation(&project).unwrap_or(0);
     let fs_path = bex_project::FsPath::from_str(project);
-    let function_call_ctx = bex_project::FunctionCallContextBuilder::new(call_id);
+    let boundary_id = BoundaryId::new_random();
+    let function_call_ctx =
+        bex_project::FunctionCallContextBuilder::new(call_id).with_boundary_id(boundary_id);
 
     let bex = match state.bex.get_bex_for_project(&fs_path) {
         Ok(bex) => bex,
@@ -1131,6 +1144,7 @@ async fn handle_function_run(
 
     let run_store = state.run_store.clone();
     let started = run_store.create_attached_run(
+        boundary_id,
         ExecutionRequest {
             project_id: ProjectId(fs_path.as_path().to_string_lossy().to_string()),
             project_generation: ProjectGeneration(project_generation),
@@ -1147,7 +1161,6 @@ async fn handle_function_run(
         &started,
         client.run_started_request_id(),
     );
-    let run_id = started.start.run_id;
 
     tokio::spawn(async move {
         let function_name = target.call_function_name;
@@ -1159,7 +1172,7 @@ async fn handle_function_run(
                 broadcast_root_trace_attachment(
                     &broadcast_tx,
                     &run_store,
-                    run_id,
+                    boundary_id,
                     traced.entry_call_ref,
                     "",
                 );
@@ -1167,13 +1180,13 @@ async fn handle_function_run(
                     Ok(result) => encoded_success_outcome(&result, "baml.outbound.base64"),
                     Err(e) => runtime_error_outcome(&e),
                 };
-                complete_run_and_broadcast(&broadcast_tx, &run_store, run_id, outcome);
+                complete_run_and_broadcast(&broadcast_tx, &run_store, boundary_id, outcome);
             }
             Err(e) => {
                 complete_run_and_broadcast(
                     &broadcast_tx,
                     &run_store,
-                    run_id,
+                    boundary_id,
                     runtime_error_outcome(&e),
                 );
             }
@@ -1189,11 +1202,15 @@ fn handle_test_run(
     call_id: sys_types::CallId,
     state: &WsState,
 ) {
-    let ctx = bex_project::FunctionCallContextBuilder::new(call_id).build();
+    let boundary_id = BoundaryId::new_random();
+    let ctx = bex_project::FunctionCallContextBuilder::new(call_id)
+        .with_boundary_id(boundary_id)
+        .build();
     let broadcast_tx = state.broadcast_tx.clone();
     let bex = state.bex.clone();
     let run_store = state.run_store.clone();
     let started = run_store.create_attached_run(
+        boundary_id,
         ExecutionRequest {
             project_id: ProjectId(project.clone()),
             project_generation: ProjectGeneration(generation),
@@ -1213,7 +1230,6 @@ fn handle_test_run(
         &started,
         client.run_started_request_id(),
     );
-    let run_id = started.start.run_id;
 
     tokio::spawn(async move {
         match bex
@@ -1224,7 +1240,7 @@ fn handle_test_run(
                 broadcast_root_trace_attachment(
                     &broadcast_tx,
                     &run_store,
-                    run_id,
+                    boundary_id,
                     traced.entry_call_ref,
                     "test ",
                 );
@@ -1232,13 +1248,13 @@ fn handle_test_run(
                     Ok(result) => encoded_success_outcome(&result, "testReport"),
                     Err(e) => engine_error_outcome(&e),
                 };
-                complete_run_and_broadcast(&broadcast_tx, &run_store, run_id, outcome);
+                complete_run_and_broadcast(&broadcast_tx, &run_store, boundary_id, outcome);
             }
             Err(e) => {
                 complete_run_and_broadcast(
                     &broadcast_tx,
                     &run_store,
-                    run_id,
+                    boundary_id,
                     engine_error_outcome(&e),
                 );
             }
@@ -1290,9 +1306,12 @@ async fn handle_ws_in_message(
             .await;
         }
 
-        WsInMessage::CancelRun { request_id, run_id } => {
-            let run_id = match parse_run_id_for_request(request_id, &run_id) {
-                Ok(run_id) => run_id,
+        WsInMessage::CancelRun {
+            request_id,
+            boundary_id,
+        } => {
+            let boundary_id = match parse_boundary_id_for_request(request_id, &boundary_id) {
+                Ok(boundary_id) => boundary_id,
                 Err(msg) => {
                     send_ws(sink, &msg).await;
                     return;
@@ -1300,10 +1319,10 @@ async fn handle_ws_in_message(
             };
             let project_id = state
                 .run_store
-                .snapshot(run_id)
+                .snapshot(boundary_id)
                 .map(|run| run.request.project_id.0);
 
-            let response = match state.run_store.cancel_run(run_id, epoch_ms(), None) {
+            let response = match state.run_store.cancel_run(boundary_id, epoch_ms(), None) {
                 bex_events::run::CancelRunEffect::CancelHostCall {
                     host_call_id,
                     patch,
@@ -1372,21 +1391,24 @@ async fn handle_ws_in_message(
             send_ws(sink, &WsOutMessage::RunList { request_id, runs }).await;
         }
 
-        WsInMessage::Snapshot { request_id, run_id } => {
-            let run_id = match parse_run_id_for_request(request_id, &run_id) {
-                Ok(run_id) => run_id,
+        WsInMessage::Snapshot {
+            request_id,
+            boundary_id,
+        } => {
+            let boundary_id = match parse_boundary_id_for_request(request_id, &boundary_id) {
+                Ok(boundary_id) => boundary_id,
                 Err(msg) => {
                     send_ws(sink, &msg).await;
                     return;
                 }
             };
-            match state.run_store.snapshot(run_id) {
+            match state.run_store.snapshot(boundary_id) {
                 Some(snapshot) => {
                     send_ws(
                         sink,
                         &WsOutMessage::RunSnapshot {
                             request_id: Some(request_id),
-                            run_id: run_id.to_wire_string(),
+                            boundary_id: boundary_id.to_wire_string(),
                             snapshot: run_to_wire(&snapshot),
                         },
                     )
@@ -1409,11 +1431,11 @@ async fn handle_ws_in_message(
         WsInMessage::Subscribe {
             request_id,
             subscription_id,
-            run_id,
+            boundary_id,
             after_cursor,
         } => {
-            let run_id = match parse_run_id_for_request(request_id, &run_id) {
-                Ok(run_id) => run_id,
+            let boundary_id = match parse_boundary_id_for_request(request_id, &boundary_id) {
+                Ok(boundary_id) => boundary_id,
                 Err(msg) => {
                     send_ws(sink, &msg).await;
                     return;
@@ -1421,14 +1443,14 @@ async fn handle_ws_in_message(
             };
             match state
                 .run_store
-                .subscribe(run_id, after_cursor.map(RunCursor))
+                .subscribe(boundary_id, after_cursor.map(RunCursor))
             {
                 RunSubscription::Snapshot { snapshot, patches } => {
                     send_ws(
                         sink,
                         &WsOutMessage::RunSnapshot {
                             request_id: Some(request_id),
-                            run_id: run_id.to_wire_string(),
+                            boundary_id: boundary_id.to_wire_string(),
                             snapshot: run_to_wire(&snapshot),
                         },
                     )
@@ -1449,7 +1471,7 @@ async fn handle_ws_in_message(
                         &WsOutMessage::RunCursorExpired {
                             request_id: Some(request_id),
                             subscription_id: Some(subscription_id),
-                            run_id: run_id.to_wire_string(),
+                            boundary_id: boundary_id.to_wire_string(),
                             reason: cursor_expired_reason_to_wire(reason).to_string(),
                         },
                     )
@@ -1511,12 +1533,12 @@ async fn handle_ws_in_message(
 
         WsInMessage::RespondToInput {
             request_id,
-            run_id,
+            boundary_id,
             input_request_id,
             value,
         } => {
-            let run_id = match parse_run_id_for_request(request_id, &run_id) {
-                Ok(run_id) => run_id,
+            let boundary_id = match parse_boundary_id_for_request(request_id, &boundary_id) {
+                Ok(boundary_id) => boundary_id,
                 Err(msg) => {
                     send_ws(sink, &msg).await;
                     return;
@@ -1539,7 +1561,7 @@ async fn handle_ws_in_message(
             };
             let outcome = state
                 .io_state
-                .resolve_for_run(run_id, input_request_id, value);
+                .resolve_for_run(boundary_id, input_request_id, value);
             send_ws(
                 sink,
                 &WsOutMessage::CommandAck {
@@ -1552,12 +1574,12 @@ async fn handle_ws_in_message(
 
         WsInMessage::RespondToEnv {
             request_id,
-            run_id,
+            boundary_id,
             env_request_id,
             value,
         } => {
-            let run_id = match parse_run_id_for_request(request_id, &run_id) {
-                Ok(run_id) => run_id,
+            let boundary_id = match parse_boundary_id_for_request(request_id, &boundary_id) {
+                Ok(boundary_id) => boundary_id,
                 Err(msg) => {
                     send_ws(sink, &msg).await;
                     return;
@@ -1580,7 +1602,7 @@ async fn handle_ws_in_message(
             };
             let outcome = state
                 .env_state
-                .resolve_for_run(run_id, env_request_id, value);
+                .resolve_for_run(boundary_id, env_request_id, value);
             send_ws(
                 sink,
                 &WsOutMessage::CommandAck {

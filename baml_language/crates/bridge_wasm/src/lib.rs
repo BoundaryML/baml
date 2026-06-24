@@ -62,10 +62,10 @@ use base64::Engine as _;
 use bex_events::{
     prof::{CooperativeProfileDrain, CooperativeProfileDrainOptions},
     run::{
-        AttachRootTraceResult, CancellationState, EnvResolutionStatus, ExecutionRequest,
-        HostCallId, InMemoryRunStore, ProjectGeneration, ProjectId, RequestId, RunCursor,
-        RunCursorExpiredReason, RunDiagnostic, RunError, RunErrorClass, RunFilter, RunId, RunKind,
-        RunOutcome, RunRequestState, RunSubscription, RunTarget, RunVisibilityFilter,
+        AttachRootTraceResult, BoundaryId, CancellationState, EnvResolutionStatus,
+        ExecutionRequest, HostCallId, InMemoryRunStore, ProjectGeneration, ProjectId, RequestId,
+        RunCursor, RunCursorExpiredReason, RunDiagnostic, RunError, RunErrorClass, RunFilter,
+        RunKind, RunOutcome, RunRequestState, RunSubscription, RunTarget, RunVisibilityFilter,
         RuntimeTarget, StartedHostRun, patch_to_wire, run_summary_to_wire, run_to_wire,
     },
 };
@@ -427,6 +427,7 @@ impl BamlWasmRuntime {
             u32::try_from(call_id.0)
                 .map_err(|_| JsError::new("Function call ID overflowed u32"))?,
         );
+        let boundary_id = BoundaryId::new_random();
         let fs_path = bex_project::FsPath::from_str(project.clone());
         let bex = self
             .bex
@@ -434,6 +435,7 @@ impl BamlWasmRuntime {
             .map_err(|e| JsError::new(&format!("Failed to get Bex for project: {e}")))?;
         let project_generation = self.bex.project_generation(&project).unwrap_or(0);
         let started = self.run_store.create_attached_run(
+            boundary_id,
             ExecutionRequest {
                 project_id: ProjectId(fs_path.as_path().to_string_lossy().to_string()),
                 project_generation: ProjectGeneration(project_generation),
@@ -452,30 +454,36 @@ impl BamlWasmRuntime {
             &started,
             Some(u64::from(request_id)),
         );
-        let run_id = started.start.run_id;
 
         let run_store = self.run_store.clone();
         let callback = self.playground_callback.clone();
         let profile_drain = self.profile_drain.clone();
         let function_name = name.to_string();
-        let ctx = bex_project::FunctionCallContextBuilder::new(call_id).build();
+        let ctx = bex_project::FunctionCallContextBuilder::new(call_id)
+            .with_boundary_id(boundary_id)
+            .build();
         wasm_bindgen_futures::spawn_local(async move {
             match bex
                 .call_function_with_trace(&function_name, kwargs.into(), ctx)
                 .await
             {
                 Ok(traced) => {
-                    publish_root_trace(&callback, &run_store, run_id, traced.entry_call_ref);
-                    drain_wasm_profiles(&callback, &run_store, &profile_drain, Some(run_id));
+                    publish_root_trace(&callback, &run_store, boundary_id, traced.entry_call_ref);
+                    drain_wasm_profiles(&callback, &run_store, &profile_drain, Some(boundary_id));
                     let outcome = match traced.value {
                         Ok(result) => encoded_success_outcome(&result, "baml.outbound.base64"),
                         Err(e) => runtime_error_outcome(&e),
                     };
-                    complete_wasm_run(&callback, &run_store, run_id, outcome);
+                    complete_wasm_run(&callback, &run_store, boundary_id, outcome);
                 }
                 Err(e) => {
-                    complete_wasm_run(&callback, &run_store, run_id, runtime_error_outcome(&e));
-                    drain_wasm_profiles(&callback, &run_store, &profile_drain, Some(run_id));
+                    complete_wasm_run(
+                        &callback,
+                        &run_store,
+                        boundary_id,
+                        runtime_error_outcome(&e),
+                    );
+                    drain_wasm_profiles(&callback, &run_store, &profile_drain, Some(boundary_id));
                 }
             }
         });
@@ -501,6 +509,7 @@ impl BamlWasmRuntime {
             u32::try_from(call_id.0)
                 .map_err(|_| JsError::new("Function call ID overflowed u32"))?,
         );
+        let boundary_id = BoundaryId::new_random();
         let fs_path = bex_project::FsPath::from_str(project.clone());
         let bex = self
             .bex
@@ -508,6 +517,7 @@ impl BamlWasmRuntime {
             .map_err(|e| JsError::new(&format!("Failed to get Bex for project: {e}")))?;
         let project_generation = self.bex.project_generation(&project).unwrap_or(0);
         let started = self.run_store.create_attached_run(
+            boundary_id,
             ExecutionRequest {
                 project_id: ProjectId(fs_path.as_path().to_string_lossy().to_string()),
                 project_generation: ProjectGeneration(project_generation),
@@ -527,30 +537,36 @@ impl BamlWasmRuntime {
             &started,
             Some(u64::from(request_id)),
         );
-        let run_id = started.start.run_id;
 
         let run_store = self.run_store.clone();
         let callback = self.playground_callback.clone();
         let profile_drain = self.profile_drain.clone();
         let function_name = function_name.to_string();
-        let ctx = bex_project::FunctionCallContextBuilder::new(call_id).build();
+        let ctx = bex_project::FunctionCallContextBuilder::new(call_id)
+            .with_boundary_id(boundary_id)
+            .build();
         wasm_bindgen_futures::spawn_local(async move {
             match bex
                 .call_function_with_trace(&function_name, kwargs.into(), ctx)
                 .await
             {
                 Ok(traced) => {
-                    publish_root_trace(&callback, &run_store, run_id, traced.entry_call_ref);
-                    drain_wasm_profiles(&callback, &run_store, &profile_drain, Some(run_id));
+                    publish_root_trace(&callback, &run_store, boundary_id, traced.entry_call_ref);
+                    drain_wasm_profiles(&callback, &run_store, &profile_drain, Some(boundary_id));
                     let outcome = match traced.value {
                         Ok(result) => encoded_success_outcome(&result, "baml.outbound.base64"),
                         Err(e) => runtime_error_outcome(&e),
                     };
-                    complete_wasm_run(&callback, &run_store, run_id, outcome);
+                    complete_wasm_run(&callback, &run_store, boundary_id, outcome);
                 }
                 Err(e) => {
-                    complete_wasm_run(&callback, &run_store, run_id, runtime_error_outcome(&e));
-                    drain_wasm_profiles(&callback, &run_store, &profile_drain, Some(run_id));
+                    complete_wasm_run(
+                        &callback,
+                        &run_store,
+                        boundary_id,
+                        runtime_error_outcome(&e),
+                    );
+                    drain_wasm_profiles(&callback, &run_store, &profile_drain, Some(boundary_id));
                 }
             }
         });
@@ -566,13 +582,13 @@ impl BamlWasmRuntime {
 
     /// Cancel a RunStore-owned WASM run.
     #[wasm_bindgen(js_name = cancelRun)]
-    pub fn cancel_run(&self, request_id: u32, run_id: String) -> Result<(), JsValue> {
-        let run_id = parse_run_id(&run_id)?;
+    pub fn cancel_run(&self, request_id: u32, boundary_id: String) -> Result<(), JsValue> {
+        let boundary_id = parse_boundary_id(&boundary_id)?;
         let project_id = self
             .run_store
-            .snapshot(run_id)
+            .snapshot(boundary_id)
             .map(|run| run.request.project_id.0);
-        match self.run_store.cancel_run(run_id, epoch_ms(), None) {
+        match self.run_store.cancel_run(boundary_id, epoch_ms(), None) {
             bex_events::run::CancelRunEffect::CancelHostCall {
                 host_call_id,
                 patch,
@@ -631,13 +647,13 @@ impl BamlWasmRuntime {
     pub fn respond_to_input(
         &self,
         request_id: u32,
-        run_id: String,
+        boundary_id: String,
         input_request_id: String,
     ) -> Result<String, JsValue> {
-        let run_id = parse_run_id(&run_id)?;
+        let boundary_id = parse_boundary_id(&boundary_id)?;
         let input_request_id = parse_request_id(&input_request_id)?;
         let result = self.run_store.resolve_input_request_for_run(
-            run_id,
+            boundary_id,
             input_request_id,
             RunRequestState::Resolved,
         );
@@ -653,11 +669,11 @@ impl BamlWasmRuntime {
     pub fn respond_to_env(
         &self,
         request_id: u32,
-        run_id: String,
+        boundary_id: String,
         env_request_id: String,
         value: Option<String>,
     ) -> Result<String, JsValue> {
-        let run_id = parse_run_id(&run_id)?;
+        let boundary_id = parse_boundary_id(&boundary_id)?;
         let env_request_id = parse_request_id(&env_request_id)?;
         let status = if value.is_some() {
             EnvResolutionStatus::ResolvedFromUser
@@ -666,7 +682,7 @@ impl BamlWasmRuntime {
         };
         let result =
             self.run_store
-                .resolve_env_request_for_run(run_id, env_request_id, status, None);
+                .resolve_env_request_for_run(boundary_id, env_request_id, status, None);
         if let Some(patch) = result.patch {
             send_run_patch(&self.playground_callback, &patch);
         }
@@ -705,8 +721,8 @@ impl BamlWasmRuntime {
     }
 
     #[wasm_bindgen(js_name = snapshot)]
-    pub fn snapshot(&self, request_id: u32, run_id: String) -> Result<(), JsValue> {
-        let parsed = parse_run_id(&run_id)?;
+    pub fn snapshot(&self, request_id: u32, boundary_id: String) -> Result<(), JsValue> {
+        let parsed = parse_boundary_id(&boundary_id)?;
         let Some(snapshot) = self.run_store.snapshot(parsed) else {
             send_command_error(
                 &self.playground_callback,
@@ -720,7 +736,7 @@ impl BamlWasmRuntime {
             &self.playground_callback,
             wasm_playground::PlaygroundNotification::RunSnapshot {
                 request_id: Some(u64::from(request_id)),
-                run_id,
+                boundary_id,
                 snapshot: run_to_wire(&snapshot),
             },
         );
@@ -732,10 +748,10 @@ impl BamlWasmRuntime {
         &self,
         request_id: u32,
         subscription_id: String,
-        run_id: String,
+        boundary_id: String,
         after_cursor: Option<u64>,
     ) -> Result<(), JsValue> {
-        let parsed = parse_run_id(&run_id)?;
+        let parsed = parse_boundary_id(&boundary_id)?;
         match self
             .run_store
             .subscribe(parsed, after_cursor.map(RunCursor))
@@ -753,7 +769,7 @@ impl BamlWasmRuntime {
                     &self.playground_callback,
                     Some(u64::from(request_id)),
                     subscription_id,
-                    run_id,
+                    boundary_id,
                     reason,
                 );
             }
@@ -762,7 +778,7 @@ impl BamlWasmRuntime {
                     &self.playground_callback,
                     wasm_playground::PlaygroundNotification::RunSnapshot {
                         request_id: Some(u64::from(request_id)),
-                        run_id,
+                        boundary_id,
                         snapshot: run_to_wire(&snapshot),
                     },
                 );
@@ -844,7 +860,9 @@ impl BamlWasmRuntime {
             u32::try_from(call_id.0)
                 .map_err(|_| JsError::new("Function call ID overflowed u32"))?,
         );
+        let boundary_id = BoundaryId::new_random();
         let started = self.run_store.create_attached_run(
+            boundary_id,
             ExecutionRequest {
                 project_id: ProjectId(project.to_string()),
                 project_generation: ProjectGeneration(u64::from(generation)),
@@ -864,7 +882,6 @@ impl BamlWasmRuntime {
             &started,
             Some(u64::from(request_id)),
         );
-        let run_id = started.start.run_id;
 
         let bex = self.bex.clone();
         let run_store = self.run_store.clone();
@@ -873,24 +890,31 @@ impl BamlWasmRuntime {
         let project = project.to_string();
         let test_name = test_name.to_string();
         let generation = u64::from(generation);
-        let ctx = bex_project::FunctionCallContextBuilder::new(call_id).build();
+        let ctx = bex_project::FunctionCallContextBuilder::new(call_id)
+            .with_boundary_id(boundary_id)
+            .build();
         wasm_bindgen_futures::spawn_local(async move {
             match bex
                 .call_test_function_with_trace(&project, generation, &test_name, ctx)
                 .await
             {
                 Ok(traced) => {
-                    publish_root_trace(&callback, &run_store, run_id, traced.entry_call_ref);
-                    drain_wasm_profiles(&callback, &run_store, &profile_drain, Some(run_id));
+                    publish_root_trace(&callback, &run_store, boundary_id, traced.entry_call_ref);
+                    drain_wasm_profiles(&callback, &run_store, &profile_drain, Some(boundary_id));
                     let outcome = match traced.value {
                         Ok(result) => encoded_success_outcome(&result, "testReport"),
                         Err(e) => runtime_error_outcome(&e),
                     };
-                    complete_wasm_run(&callback, &run_store, run_id, outcome);
+                    complete_wasm_run(&callback, &run_store, boundary_id, outcome);
                 }
                 Err(e) => {
-                    complete_wasm_run(&callback, &run_store, run_id, runtime_error_outcome(&e));
-                    drain_wasm_profiles(&callback, &run_store, &profile_drain, Some(run_id));
+                    complete_wasm_run(
+                        &callback,
+                        &run_store,
+                        boundary_id,
+                        runtime_error_outcome(&e),
+                    );
+                    drain_wasm_profiles(&callback, &run_store, &profile_drain, Some(boundary_id));
                 }
             }
         });
@@ -921,9 +945,9 @@ fn epoch_ms() -> u64 {
     u64::try_from(millis).unwrap_or(u64::MAX)
 }
 
-fn parse_run_id(run_id: &str) -> Result<RunId, JsValue> {
-    RunId::from_wire_str(run_id)
-        .ok_or_else(|| JsError::new(&format!("Invalid RunId: {run_id}")).into())
+fn parse_boundary_id(boundary_id: &str) -> Result<BoundaryId, JsValue> {
+    BoundaryId::from_wire_str(boundary_id)
+        .ok_or_else(|| JsError::new(&format!("Invalid BoundaryId: {boundary_id}")).into())
 }
 
 fn parse_request_id(request_id: &str) -> Result<u64, JsValue> {
@@ -949,10 +973,10 @@ fn send_wasm_notification(
 fn send_run_started(
     callback: &send_wrapper::SendWrapper<Function>,
     run_store: &InMemoryRunStore,
-    run_id: RunId,
+    boundary_id: BoundaryId,
     request_id: Option<u64>,
 ) {
-    if let Some(run) = run_store.snapshot(run_id) {
+    if let Some(run) = run_store.snapshot(boundary_id) {
         send_wasm_notification(
             callback,
             wasm_playground::PlaygroundNotification::RunStarted {
@@ -969,7 +993,7 @@ fn send_started_host_run(
     started: &StartedHostRun,
     request_id: Option<u64>,
 ) {
-    send_run_started(callback, run_store, started.start.run_id, request_id);
+    send_run_started(callback, run_store, started.start.boundary_id, request_id);
     if let Some(patch) = &started.started_patch {
         send_run_patch(callback, patch);
     }
@@ -995,7 +1019,7 @@ fn send_run_cursor_expired(
     callback: &send_wrapper::SendWrapper<Function>,
     request_id: Option<u64>,
     subscription_id: String,
-    run_id: String,
+    boundary_id: String,
     reason: RunCursorExpiredReason,
 ) {
     let reason = match reason {
@@ -1010,7 +1034,7 @@ fn send_run_cursor_expired(
         wasm_playground::PlaygroundNotification::RunCursorExpired {
             request_id,
             subscription_id,
-            run_id,
+            boundary_id,
             reason: reason.to_string(),
         },
     );
@@ -1049,10 +1073,10 @@ fn send_command_error(
 fn publish_root_trace(
     callback: &send_wrapper::SendWrapper<Function>,
     run_store: &InMemoryRunStore,
-    run_id: RunId,
+    boundary_id: BoundaryId,
     entry_call_ref: bex_events::ids::CallRef,
 ) {
-    match run_store.attach_root_trace(run_id, entry_call_ref) {
+    match run_store.attach_root_trace(boundary_id, entry_call_ref) {
         AttachRootTraceResult::Attached { patches } => {
             for patch in patches {
                 send_run_patch(callback, &patch);
@@ -1060,12 +1084,12 @@ fn publish_root_trace(
         }
         AttachRootTraceResult::AlreadyAttached => {}
         AttachRootTraceResult::RunMissing => {
-            log::warn!("WASM RunStore missing run {}", run_id.to_wire_string());
+            log::warn!("WASM RunStore missing run {}", boundary_id.to_wire_string());
         }
         AttachRootTraceResult::Conflict { existing } => {
             log::warn!(
                 "WASM RunStore root trace conflict for {}: existing {}",
-                run_id.to_wire_string(),
+                boundary_id.to_wire_string(),
                 existing.encode()
             );
         }
@@ -1075,10 +1099,10 @@ fn publish_root_trace(
 fn complete_wasm_run(
     callback: &send_wrapper::SendWrapper<Function>,
     run_store: &InMemoryRunStore,
-    run_id: RunId,
+    boundary_id: BoundaryId,
     outcome: RunOutcome,
 ) {
-    if let Some(patch) = run_store.complete_run_now(run_id, outcome) {
+    if let Some(patch) = run_store.complete_run_now(boundary_id, outcome) {
         send_run_patch(callback, &patch);
     }
 }
@@ -1087,7 +1111,7 @@ fn drain_wasm_profiles(
     callback: &send_wrapper::SendWrapper<Function>,
     run_store: &InMemoryRunStore,
     profile_drain: &Rc<RefCell<CooperativeProfileDrain>>,
-    run_id: Option<RunId>,
+    boundary_id: Option<BoundaryId>,
 ) {
     let output = {
         let mut drain = profile_drain.borrow_mut();
@@ -1101,9 +1125,9 @@ fn drain_wasm_profiles(
     }
 
     for diagnostic in output.diagnostics {
-        if let Some(run_id) = run_id {
+        if let Some(boundary_id) = boundary_id {
             if let Some(patch) = run_store.add_diagnostic(
-                run_id,
+                boundary_id,
                 RunDiagnostic {
                     severity: bex_events::run::DiagnosticSeverity::Warning,
                     code: Some(diagnostic.code.to_string()),
@@ -1126,7 +1150,7 @@ fn drain_wasm_profiles(
         send_wasm_notification(
             callback,
             wasm_playground::PlaygroundNotification::ProfileArtifactChunk {
-                run_id: run_id.map(RunId::to_wire_string),
+                boundary_id: boundary_id.map(BoundaryId::to_wire_string),
                 engine_id: chunk.engine_id.0,
                 process_id: hex_process_id(chunk.process_euid.0),
                 bytes_base64: base64::engine::general_purpose::STANDARD.encode(chunk.bytes),

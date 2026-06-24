@@ -1,7 +1,7 @@
 import type {
   Run,
   RunCursor,
-  RunId,
+  BoundaryId,
   RunListFilter,
   RunPatch,
   RunPatchChange,
@@ -19,7 +19,7 @@ import type {
 
 export interface ExecutionStoreSnapshot {
   runs: Run[];
-  selectedRunId: RunId | null;
+  selectedBoundaryId: BoundaryId | null;
 }
 
 export type ExecutionStoreListener = (
@@ -29,31 +29,31 @@ export type ExecutionStoreListener = (
 export interface ExecutionStore {
   getSnapshot(): ExecutionStoreSnapshot;
   subscribe(listener: ExecutionStoreListener): () => void;
-  startRun(request: StartRunRequest): Promise<RunId>;
-  startPreviewRun(request: StartPreviewRunRequest): Promise<RunId>;
-  startTestRun(request: StartTestRunRequest): Promise<RunId>;
-  cancelRun(runId: RunId): Promise<RequestCommandOutcome | string>;
+  startRun(request: StartRunRequest): Promise<BoundaryId>;
+  startPreviewRun(request: StartPreviewRunRequest): Promise<BoundaryId>;
+  startTestRun(request: StartTestRunRequest): Promise<BoundaryId>;
+  cancelRun(boundaryId: BoundaryId): Promise<RequestCommandOutcome | string>;
   respondToInput(
-    runId: RunId,
+    boundaryId: BoundaryId,
     inputRequestId: string,
     value: string,
   ): Promise<RequestCommandOutcome | string>;
   respondToEnv(
-    runId: RunId,
+    boundaryId: BoundaryId,
     envRequestId: string,
     value?: string,
   ): Promise<RequestCommandOutcome | string>;
   listRuns(filter?: RunListFilter): Promise<RunSummary[]>;
-  snapshotRun(runId: RunId): Promise<Run>;
-  followRun(runId: RunId, cursor?: RunCursor): string;
+  snapshotRun(boundaryId: BoundaryId): Promise<Run>;
+  followRun(boundaryId: BoundaryId, cursor?: RunCursor): string;
   applySnapshot(run: Run): void;
   applyPatch(patch: RunPatch): void;
-  selectRun(runId: RunId | null): void;
+  selectRun(boundaryId: BoundaryId | null): void;
   dispose(): void;
 }
 
 export function applyRunPatch(run: Run, patch: RunPatch): Run {
-  if (run.runId !== patch.runId) {
+  if (run.boundaryId !== patch.boundaryId) {
     return cloneRun(run);
   }
 
@@ -65,10 +65,10 @@ export function applyRunPatch(run: Run, patch: RunPatch): Run {
 }
 
 export function createExecutionStore(client: RunStoreClient): ExecutionStore {
-  const runsById = new Map<RunId, Run>();
-  const subscriptionsByRunId = new Map<RunId, RunSubscriptionHandle>();
+  const runsById = new Map<BoundaryId, Run>();
+  const subscriptionsByBoundaryId = new Map<BoundaryId, RunSubscriptionHandle>();
   const listeners = new Set<ExecutionStoreListener>();
-  let selectedRunId: RunId | null = null;
+  let selectedBoundaryId: BoundaryId | null = null;
   let disposed = false;
 
   function snapshot(): ExecutionStoreSnapshot {
@@ -76,7 +76,7 @@ export function createExecutionStore(client: RunStoreClient): ExecutionStore {
       runs: [...runsById.values()]
         .map(cloneRun)
         .sort((a, b) => b.createdAtMs - a.createdAtMs),
-      selectedRunId,
+      selectedBoundaryId,
     };
   }
 
@@ -89,16 +89,16 @@ export function createExecutionStore(client: RunStoreClient): ExecutionStore {
 
   function applySnapshot(run: Run): void {
     if (disposed) return;
-    runsById.set(run.runId, cloneRun(run));
-    if (selectedRunId == null) selectedRunId = run.runId;
+    runsById.set(run.boundaryId, cloneRun(run));
+    if (selectedBoundaryId == null) selectedBoundaryId = run.boundaryId;
     notify();
   }
 
   function applyPatch(patch: RunPatch): void {
     if (disposed) return;
-    const run = runsById.get(patch.runId);
+    const run = runsById.get(patch.boundaryId);
     if (!run) return;
-    runsById.set(patch.runId, applyRunPatch(run, patch));
+    runsById.set(patch.boundaryId, applyRunPatch(run, patch));
     notify();
   }
 
@@ -118,7 +118,7 @@ export function createExecutionStore(client: RunStoreClient): ExecutionStore {
         applyPatch(event.patch);
         return;
       case 'cursorExpired': {
-        const recovered = await client.snapshot(event.runId);
+        const recovered = await client.snapshot(event.boundaryId);
         applySnapshot(recovered);
         return;
       }
@@ -127,15 +127,15 @@ export function createExecutionStore(client: RunStoreClient): ExecutionStore {
     }
   }
 
-  function followRun(runId: RunId, cursor?: RunCursor): string {
-    const existing = subscriptionsByRunId.get(runId);
+  function followRun(boundaryId: BoundaryId, cursor?: RunCursor): string {
+    const existing = subscriptionsByBoundaryId.get(boundaryId);
     if (existing) return existing.subscriptionId;
 
-    const handle = client.subscribe(runId, cursor);
-    subscriptionsByRunId.set(runId, handle);
+    const handle = client.subscribe(boundaryId, cursor);
+    subscriptionsByBoundaryId.set(boundaryId, handle);
     void consumeSubscription(handle).finally(() => {
-      if (subscriptionsByRunId.get(runId) === handle) {
-        subscriptionsByRunId.delete(runId);
+      if (subscriptionsByBoundaryId.get(boundaryId) === handle) {
+        subscriptionsByBoundaryId.delete(boundaryId);
       }
     });
     return handle.subscriptionId;
@@ -153,47 +153,47 @@ export function createExecutionStore(client: RunStoreClient): ExecutionStore {
     },
 
     async startRun(request) {
-      const runId = await client.startRun(request);
-      const run = await client.snapshot(runId);
+      const boundaryId = await client.startRun(request);
+      const run = await client.snapshot(boundaryId);
       applySnapshot(run);
-      followRun(runId, run.cursor);
-      return runId;
+      followRun(boundaryId, run.cursor);
+      return boundaryId;
     },
 
     async startPreviewRun(request) {
-      const runId = await client.startPreviewRun(request);
-      const run = await client.snapshot(runId);
+      const boundaryId = await client.startPreviewRun(request);
+      const run = await client.snapshot(boundaryId);
       applySnapshot(run);
-      followRun(runId, run.cursor);
-      return runId;
+      followRun(boundaryId, run.cursor);
+      return boundaryId;
     },
 
     async startTestRun(request) {
-      const runId = await client.startTestRun(request);
-      const run = await client.snapshot(runId);
+      const boundaryId = await client.startTestRun(request);
+      const run = await client.snapshot(boundaryId);
       applySnapshot(run);
-      followRun(runId, run.cursor);
-      return runId;
+      followRun(boundaryId, run.cursor);
+      return boundaryId;
     },
 
-    async cancelRun(runId) {
-      return client.cancelRun(runId);
+    async cancelRun(boundaryId) {
+      return client.cancelRun(boundaryId);
     },
 
-    async respondToInput(runId, inputRequestId, value) {
-      return client.respondToInput(runId, inputRequestId, value);
+    async respondToInput(boundaryId, inputRequestId, value) {
+      return client.respondToInput(boundaryId, inputRequestId, value);
     },
 
-    async respondToEnv(runId, envRequestId, value) {
-      return client.respondToEnv(runId, envRequestId, value);
+    async respondToEnv(boundaryId, envRequestId, value) {
+      return client.respondToEnv(boundaryId, envRequestId, value);
     },
 
     listRuns(filter) {
       return client.listRuns(filter);
     },
 
-    async snapshotRun(runId) {
-      const run = await client.snapshot(runId);
+    async snapshotRun(boundaryId) {
+      const run = await client.snapshot(boundaryId);
       applySnapshot(run);
       return run;
     },
@@ -202,17 +202,17 @@ export function createExecutionStore(client: RunStoreClient): ExecutionStore {
     applySnapshot,
     applyPatch,
 
-    selectRun(runId) {
-      selectedRunId = runId;
+    selectRun(boundaryId) {
+      selectedBoundaryId = boundaryId;
       notify();
     },
 
     dispose() {
       disposed = true;
-      for (const handle of subscriptionsByRunId.values()) {
+      for (const handle of subscriptionsByBoundaryId.values()) {
         void handle.unsubscribe().catch(() => {});
       }
-      subscriptionsByRunId.clear();
+      subscriptionsByBoundaryId.clear();
       listeners.clear();
       client.dispose();
     },

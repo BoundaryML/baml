@@ -41,7 +41,7 @@ import type {
   FunctionInfo,
   ProjectUpdate,
   Run,
-  RunId,
+  BoundaryId,
   RunStatus,
   SourceNavigationTarget,
   WorkerOutMessage,
@@ -104,7 +104,7 @@ function isTerminalRunStatus(status: RunStatus): boolean {
   );
 }
 
-type RunScopedEnvRequest = { runId: RunId; envRequestId: string };
+type RunScopedEnvRequest = { boundaryId: BoundaryId; envRequestId: string };
 type PendingEnvDialogRequest = {
   variable: string;
   runScoped: RunScopedEnvRequest | null;
@@ -124,7 +124,7 @@ function findPendingEnvRequest(
         kind.key === variable &&
         kind.state === 'pending'
       ) {
-        return { runId: run.runId, envRequestId: kind.requestId };
+        return { boundaryId: run.boundaryId, envRequestId: kind.requestId };
       }
     }
   }
@@ -551,7 +551,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   );
   const [executionSnapshot, setExecutionSnapshot] =
     useState<ExecutionStoreSnapshot>(() => executionStore.getSnapshot());
-  const [argsJsonByRunId, setArgsJsonByRunId] = useState<
+  const [argsJsonByBoundaryId, setArgsJsonByBoundaryId] = useState<
     Record<string, string>
   >({});
 
@@ -610,12 +610,12 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   const displayRuns = useMemo(
     () =>
       executionSnapshot.runs
-        .map((run) => runToDisplayRun(run, argsJsonByRunId))
+        .map((run) => runToDisplayRun(run, argsJsonByBoundaryId))
         .filter(
           (run): run is RunStoreDisplayRun =>
             run != null,
         ),
-    [executionSnapshot.runs, argsJsonByRunId],
+    [executionSnapshot.runs, argsJsonByBoundaryId],
   );
   const functionRuns = useMemo(
     () =>
@@ -1229,7 +1229,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
           if (cached !== undefined) {
             if (runScoped) {
               void executionStore
-                .respondToEnv(runScoped.runId, runScoped.envRequestId, cached)
+                .respondToEnv(runScoped.boundaryId, runScoped.envRequestId, cached)
                 .catch((error) => {
                   console.warn('[ExecutionPanel] respondToEnv failed:', error);
                 });
@@ -1415,10 +1415,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
 
     let cancelled = false;
     const timer = setTimeout(async () => {
-      const waitForPreviewRun = (runId: RunId): Promise<Run> => {
+      const waitForPreviewRun = (boundaryId: BoundaryId): Promise<Run> => {
         const existing = executionStore
           .getSnapshot()
-          .runs.find((run) => run.runId === runId);
+          .runs.find((run) => run.boundaryId === boundaryId);
         if (existing && isTerminalRunStatus(existing.status)) {
           return Promise.resolve(existing);
         }
@@ -1439,7 +1439,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
           };
 
           unsubscribe = executionStore.subscribe((snapshot) => {
-            const run = snapshot.runs.find((entry) => entry.runId === runId);
+            const run = snapshot.runs.find((entry) => entry.boundaryId === boundaryId);
             if (run && isTerminalRunStatus(run.status)) {
               finish(run);
             }
@@ -1453,14 +1453,14 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
       try {
         const previewFunctionName = companionFunctionName(selectedFn, subFn);
         const argsBytes = encodeRunArgs(parsed as Record<string, unknown>);
-        const runId = await executionStore.startPreviewRun({
+        const boundaryId = await executionStore.startPreviewRun({
           project: selectedProject,
           parentFunctionName: selectedFn,
           helper: subFn,
           functionName: previewFunctionName,
           argsBytes: new Uint8Array(argsBytes),
         });
-        const run = await waitForPreviewRun(runId);
+        const run = await waitForPreviewRun(boundaryId);
         if (run.error) {
           throw new Error(run.error.message);
         }
@@ -1513,8 +1513,8 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   const isRunning = functionRuns[0]?.status === 'running';
 
   const onCancelFunctionRun = useCallback(
-    (runId: RunId) => {
-      void executionStore.cancelRun(runId).catch((error) => {
+    (boundaryId: BoundaryId) => {
+      void executionStore.cancelRun(boundaryId).catch((error) => {
         console.warn('[ExecutionPanel] cancelRun failed:', error);
       });
     },
@@ -1522,9 +1522,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   );
 
   const submitRunInput = useCallback(
-    (runId: RunId, inputRequestId: string, value: string) => {
+    (boundaryId: BoundaryId, inputRequestId: string, value: string) => {
       void executionStore
-        .respondToInput(runId, inputRequestId, value)
+        .respondToInput(boundaryId, inputRequestId, value)
         .catch((error) => {
           console.warn('[ExecutionPanel] respondToInput failed:', error);
         });
@@ -1532,10 +1532,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     [executionStore],
   );
 
-  const toggleResultMode = useCallback((runId: string) => {
+  const toggleResultMode = useCallback((boundaryId: string) => {
     setResultModes((prev) => ({
       ...prev,
-      [runId]: (prev[runId] ?? 'parsed') === 'parsed' ? 'raw' : 'parsed',
+      [boundaryId]: (prev[boundaryId] ?? 'parsed') === 'parsed' ? 'raw' : 'parsed',
     }));
   }, []);
 
@@ -1614,12 +1614,12 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
       }
       const argsBytes = encodeRunArgs(parsed as Record<string, unknown>);
 
-      const runId = await executionStore.startRun({
+      const boundaryId = await executionStore.startRun({
         project: selectedProject,
         functionName: selectedFn,
         argsBytes: new Uint8Array(argsBytes),
       });
-      setArgsJsonByRunId((prev) => ({ ...prev, [runId]: argsJson }));
+      setArgsJsonByBoundaryId((prev) => ({ ...prev, [boundaryId]: argsJson }));
     } catch (e) {
       const errMsg = e instanceof Error ? e.message : String(e);
       setRunValidationError(errMsg);
@@ -1659,10 +1659,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   }, [initialTestName, initialTestsetName, selectedProject, port]);
 
   const waitForTerminalRun = useCallback(
-    (runId: RunId) => {
+    (boundaryId: BoundaryId) => {
       const existing = executionStore
         .getSnapshot()
-        .runs.find((run) => run.runId === runId);
+        .runs.find((run) => run.boundaryId === boundaryId);
       if (existing && isTerminalRunStatus(existing.status)) {
         return Promise.resolve();
       }
@@ -1679,7 +1679,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
         };
 
         unsubscribe = executionStore.subscribe((snapshot) => {
-          const run = snapshot.runs.find((entry) => entry.runId === runId);
+          const run = snapshot.runs.find((entry) => entry.boundaryId === boundaryId);
           if (run && isTerminalRunStatus(run.status)) {
             finish();
           }
@@ -1703,12 +1703,12 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
         return next;
       });
       try {
-        const runId = await executionStore.startTestRun({
+        const boundaryId = await executionStore.startTestRun({
           project: selectedProject,
           generation,
           testName: name,
         });
-        await waitForTerminalRun(runId);
+        await waitForTerminalRun(boundaryId);
       } catch (e) {
         setTestStartErrors(
           (prev) =>
@@ -2476,8 +2476,8 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                     No test runs yet
                   </div>
                 )}
-                {testRuns.map((run, runIdx) => {
-                  const isLatest = runIdx === 0;
+                {testRuns.map((run, boundaryIdx) => {
+                  const isLatest = boundaryIdx === 0;
                   const statusCls =
                     run.status === 'error'
                       ? 'bg-vsc-red'
@@ -2858,8 +2858,8 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                       </div>
                     )}
 
-                    {functionRuns.map((run, runIdx) => {
-                      const isLatest = runIdx === 0;
+                    {functionRuns.map((run, boundaryIdx) => {
+                      const isLatest = boundaryIdx === 0;
                       const isLlmFunctionRun = llmFunctionNames.has(
                         run.functionName,
                       );
@@ -3141,7 +3141,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
               if (pending.runScoped) {
                 void executionStore
                   .respondToEnv(
-                    pending.runScoped.runId,
+                    pending.runScoped.boundaryId,
                     pending.runScoped.envRequestId,
                     value,
                   )

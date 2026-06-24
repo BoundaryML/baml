@@ -8,7 +8,7 @@ use crate::run::{
 
 pub fn run_to_wire(run: &Run) -> Value {
     json!({
-        "runId": run.run_id.to_wire_string(),
+        "boundaryId": run.boundary_id.to_wire_string(),
         "target": target_to_wire(&run.target),
         "visibility": visibility_to_wire(&run.visibility),
         "status": status_to_wire(run.status),
@@ -53,7 +53,7 @@ pub fn run_to_wire(run: &Run) -> Value {
 
 pub fn patch_to_wire(patch: &RunPatch) -> Value {
     json!({
-        "runId": patch.run_id.to_wire_string(),
+        "boundaryId": patch.boundary_id.to_wire_string(),
         "cursor": patch.cursor.0,
         "changes": patch.changes.iter().map(patch_change_to_wire).collect::<Vec<_>>(),
     })
@@ -61,7 +61,7 @@ pub fn patch_to_wire(patch: &RunPatch) -> Value {
 
 pub fn run_summary_to_wire(summary: &RunSummary) -> Value {
     json!({
-        "runId": summary.run_id.to_wire_string(),
+        "boundaryId": summary.boundary_id.to_wire_string(),
         "target": target_to_wire(&summary.target),
         "visibility": visibility_to_wire(&summary.visibility),
         "status": status_to_wire(summary.status),
@@ -95,11 +95,11 @@ fn target_to_wire(target: &RunTarget) -> Value {
             json!({ "kind": "preview", "parentFunctionName": parent_function_name, "helper": helper })
         }
         RunTarget::Companion {
-            parent_run_id,
+            parent_boundary_id,
             function_name,
         } => json!({
             "kind": "companion",
-            "parentRunId": parent_run_id.map(super::run::RunId::to_wire_string),
+            "parentBoundaryId": parent_boundary_id.map(super::run::BoundaryId::to_wire_string),
             "functionName": function_name,
         }),
         RunTarget::Internal { name } => json!({ "kind": "internal", "name": name }),
@@ -176,7 +176,7 @@ fn call_to_wire(call: &CallNode) -> Value {
 
 fn graph_runtime_overlay_to_wire(overlay: &crate::run::GraphRuntimeOverlay) -> Value {
     json!({
-        "runId": overlay.run_id.to_wire_string(),
+        "boundaryId": overlay.boundary_id.to_wire_string(),
         "projectGeneration": overlay.project_generation.0,
         "entries": overlay.entries.iter().map(|entry| json!({
             "cfgNodeId": entry.cfg_node_id.0,

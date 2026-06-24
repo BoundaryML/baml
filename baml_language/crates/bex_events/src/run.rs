@@ -20,6 +20,7 @@ use std::{
 #[cfg(target_arch = "wasm32")]
 use web_time::{SystemTime, UNIX_EPOCH};
 
+pub use crate::ids::BoundaryId;
 use crate::ids::{BexCallId, BexThreadId, CallRef, EngineId, FunctionId, ProcessEuid, ThreadRef};
 pub use crate::run_wire::{patch_to_wire, run_summary_to_wire, run_to_wire};
 
@@ -86,52 +87,6 @@ fn profile_observers() -> &'static Mutex<ProfileObserverState> {
     })
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct RunId([u8; 16]);
-
-impl RunId {
-    #[must_use]
-    pub fn new_opaque() -> Self {
-        Self(*uuid::Uuid::new_v4().as_bytes())
-    }
-
-    #[must_use]
-    pub fn from_bytes(bytes: [u8; 16]) -> Self {
-        Self(bytes)
-    }
-
-    #[must_use]
-    pub fn as_bytes(self) -> [u8; 16] {
-        self.0
-    }
-
-    #[must_use]
-    pub fn to_wire_string(self) -> String {
-        let mut s = String::with_capacity("baml_run_1_".len() + 32);
-        s.push_str("baml_run_1_");
-        for b in self.0 {
-            use std::fmt::Write as _;
-            let _ = write!(s, "{b:02x}");
-        }
-        s
-    }
-
-    #[must_use]
-    pub fn from_wire_str(value: &str) -> Option<Self> {
-        const PREFIX: &str = "baml_run_1_";
-        let hex = value.strip_prefix(PREFIX)?;
-        if hex.len() != 32 {
-            return None;
-        }
-        let mut bytes = [0_u8; 16];
-        for (idx, chunk) in hex.as_bytes().chunks_exact(2).enumerate() {
-            let chunk = std::str::from_utf8(chunk).ok()?;
-            bytes[idx] = u8::from_str_radix(chunk, 16).ok()?;
-        }
-        Some(Self(bytes))
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum HostCallId {
     Native(sys_types::CallId),
@@ -177,7 +132,7 @@ pub enum RunTarget {
         helper: String,
     },
     Companion {
-        parent_run_id: Option<RunId>,
+        parent_boundary_id: Option<BoundaryId>,
         function_name: FunctionName,
     },
     Internal {
@@ -281,7 +236,7 @@ impl From<ExecutionRequest> for RunRequestSummary {
 
 #[derive(Clone, Debug)]
 pub struct StartRunContext {
-    pub run_id: RunId,
+    pub boundary_id: BoundaryId,
     pub request_id: RequestId,
     pub request: RunRequestSummary,
     pub created_at_ms: u64,
@@ -297,7 +252,7 @@ pub struct StartedHostRun {
 
 #[derive(Clone, Debug)]
 pub struct RunContext {
-    pub run_id: RunId,
+    pub boundary_id: BoundaryId,
     pub request: RunRequestSummary,
     pub time_anchor: RunTimeAnchor,
     pub host_call_id: Option<HostCallId>,
@@ -575,7 +530,7 @@ pub struct PayloadBodyRef {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RunPatch {
-    pub run_id: RunId,
+    pub boundary_id: BoundaryId,
     pub cursor: RunCursor,
     pub changes: Vec<RunPatchChange>,
 }
@@ -603,7 +558,7 @@ pub struct RunDiagnostic {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Run {
-    pub run_id: RunId,
+    pub boundary_id: BoundaryId,
     pub target: RunTarget,
     pub visibility: RunVisibility,
     pub status: RunStatus,
@@ -626,7 +581,7 @@ pub struct Run {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GraphRuntimeOverlay {
-    pub run_id: RunId,
+    pub boundary_id: BoundaryId,
     pub project_generation: ProjectGeneration,
     pub entries: Vec<GraphRuntimeOverlayEntry>,
     pub unattached_call_node_ids: Vec<CallNodeId>,
@@ -662,7 +617,7 @@ pub enum GraphRuntimeOverlaySpanResolution {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RunSummary {
-    pub run_id: RunId,
+    pub boundary_id: BoundaryId,
     pub target: RunTarget,
     pub visibility: RunVisibility,
     pub status: RunStatus,
@@ -731,11 +686,11 @@ pub enum RunSubscription {
         patches: Vec<RunPatch>,
     },
     CursorExpired {
-        run_id: RunId,
+        boundary_id: BoundaryId,
         reason: RunCursorExpiredReason,
     },
     Missing {
-        run_id: RunId,
+        boundary_id: BoundaryId,
     },
 }
 
@@ -799,8 +754,8 @@ impl std::fmt::Debug for InMemoryRunStore {
 
 #[derive(Debug)]
 struct RunStoreInner {
-    runs: HashMap<RunId, RunRecord>,
-    host_call_index: HashMap<HostCallId, RunId>,
+    runs: HashMap<BoundaryId, RunRecord>,
+    host_call_index: HashMap<HostCallId, BoundaryId>,
     profile_events: Vec<ProfileEventEnvelope>,
     retention: RunRetentionPolicy,
     next_payload_id: u64,
@@ -850,9 +805,15 @@ impl InMemoryRunStore {
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(provider);
     }
 
-    pub fn create_run(&self, request: ExecutionRequest, request_id: RequestId) -> StartRunContext {
+    pub fn create_run(
+        &self,
+        boundary_id: BoundaryId,
+        request: ExecutionRequest,
+        request_id: RequestId,
+    ) -> StartRunContext {
         let now_ms = epoch_ms();
         self.create_run_at(
+            boundary_id,
             request,
             request_id,
             RunTimeAnchor {
@@ -864,16 +825,16 @@ impl InMemoryRunStore {
 
     pub fn create_run_at(
         &self,
+        boundary_id: BoundaryId,
         request: ExecutionRequest,
         request_id: RequestId,
         time_anchor: RunTimeAnchor,
     ) -> StartRunContext {
-        let run_id = RunId::new_opaque();
         let request_summary = RunRequestSummary::from(request);
         let visibility = request_summary.target.default_visibility(None);
         let start_guard = StartGuard::new();
         let run = Run {
-            run_id,
+            boundary_id,
             target: request_summary.target.clone(),
             visibility,
             status: RunStatus::Pending,
@@ -908,10 +869,10 @@ impl InMemoryRunStore {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .runs
-            .insert(run_id, record);
+            .insert(boundary_id, record);
 
         StartRunContext {
-            run_id,
+            boundary_id,
             request_id,
             request: request_summary,
             created_at_ms: time_anchor.epoch_created_at_ms,
@@ -922,12 +883,13 @@ impl InMemoryRunStore {
 
     pub fn create_attached_run(
         &self,
+        boundary_id: BoundaryId,
         request: ExecutionRequest,
         request_id: RequestId,
         host_call_id: HostCallId,
     ) -> StartedHostRun {
-        let start = self.create_run(request, request_id);
-        let started_patch = self.attach_host_call(start.run_id, host_call_id);
+        let start = self.create_run(boundary_id, request, request_id);
+        let started_patch = self.attach_host_call(start.boundary_id, host_call_id);
         StartedHostRun {
             start,
             started_patch,
@@ -935,12 +897,12 @@ impl InMemoryRunStore {
     }
 
     #[must_use]
-    pub fn snapshot(&self, run_id: RunId) -> Option<Run> {
+    pub fn snapshot(&self, boundary_id: BoundaryId) -> Option<Run> {
         self.inner
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .runs
-            .get(&run_id)
+            .get(&boundary_id)
             .map(|record| record.run.clone())
     }
 
@@ -960,13 +922,13 @@ impl InMemoryRunStore {
     }
 
     #[must_use]
-    pub fn subscribe(&self, run_id: RunId, cursor: Option<RunCursor>) -> RunSubscription {
+    pub fn subscribe(&self, boundary_id: BoundaryId, cursor: Option<RunCursor>) -> RunSubscription {
         let inner = self
             .inner
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let Some(record) = inner.runs.get(&run_id) else {
-            return RunSubscription::Missing { run_id };
+        let Some(record) = inner.runs.get(&boundary_id) else {
+            return RunSubscription::Missing { boundary_id };
         };
         let Some(cursor) = cursor else {
             return RunSubscription::Snapshot {
@@ -976,7 +938,7 @@ impl InMemoryRunStore {
         };
         if cursor > record.run.cursor {
             return RunSubscription::CursorExpired {
-                run_id,
+                boundary_id,
                 reason: RunCursorExpiredReason::Future,
             };
         }
@@ -988,13 +950,13 @@ impl InMemoryRunStore {
         }
         let Some(oldest) = record.patches.first().map(|patch| patch.cursor) else {
             return RunSubscription::CursorExpired {
-                run_id,
+                boundary_id,
                 reason: RunCursorExpiredReason::Expired,
             };
         };
         if cursor.0.saturating_add(1) < oldest.0 {
             return RunSubscription::CursorExpired {
-                run_id,
+                boundary_id,
                 reason: RunCursorExpiredReason::Compacted,
             };
         }
@@ -1010,14 +972,18 @@ impl InMemoryRunStore {
         }
     }
 
-    pub fn attach_host_call(&self, run_id: RunId, host_call_id: HostCallId) -> Option<RunPatch> {
+    pub fn attach_host_call(
+        &self,
+        boundary_id: BoundaryId,
+        host_call_id: HostCallId,
+    ) -> Option<RunPatch> {
         let mut inner = self
             .inner
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let retention = inner.retention.clone();
         let patch = {
-            let record = inner.runs.get_mut(&run_id)?;
+            let record = inner.runs.get_mut(&boundary_id)?;
             record.host_call_id = Some(host_call_id.clone());
             record.run.started_at_ms = record.run.started_at_ms.or_else(|| Some(epoch_ms()));
             matches!(record.run.status, RunStatus::Pending).then(|| {
@@ -1028,12 +994,12 @@ impl InMemoryRunStore {
                 )
             })
         };
-        inner.host_call_index.insert(host_call_id, run_id);
+        inner.host_call_index.insert(host_call_id, boundary_id);
         patch
     }
 
     #[must_use]
-    pub fn run_id_for_host_call(&self, host_call_id: &HostCallId) -> Option<RunId> {
+    pub fn boundary_id_for_host_call(&self, host_call_id: &HostCallId) -> Option<BoundaryId> {
         self.inner
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -1044,7 +1010,7 @@ impl InMemoryRunStore {
 
     pub fn attach_root_trace(
         &self,
-        run_id: RunId,
+        boundary_id: BoundaryId,
         root_call_ref: CallRef,
     ) -> AttachRootTraceResult {
         let graph_overlay_span_provider = self
@@ -1064,7 +1030,7 @@ impl InMemoryRunStore {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let profile_events = inner.profile_events.clone();
         let retention = inner.retention.clone();
-        let Some(record) = inner.runs.get_mut(&run_id) else {
+        let Some(record) = inner.runs.get_mut(&boundary_id) else {
             return AttachRootTraceResult::RunMissing;
         };
         match record.root_trace {
@@ -1100,14 +1066,14 @@ impl InMemoryRunStore {
         inner.profile_events.push(envelope);
         let profile_events = inner.profile_events.clone();
         let retention = inner.retention.clone();
-        let roots: Vec<RunId> = inner
+        let roots: Vec<BoundaryId> = inner
             .runs
             .iter()
-            .filter_map(|(run_id, record)| record.root_trace.map(|_| *run_id))
+            .filter_map(|(boundary_id, record)| record.root_trace.map(|_| *boundary_id))
             .collect();
         let mut patches = Vec::new();
-        for run_id in roots {
-            if let Some(record) = inner.runs.get_mut(&run_id) {
+        for boundary_id in roots {
+            if let Some(record) = inner.runs.get_mut(&boundary_id) {
                 patches.extend(recompute_record_profile(
                     record,
                     &profile_events,
@@ -1121,7 +1087,7 @@ impl InMemoryRunStore {
 
     pub fn complete_run(
         &self,
-        run_id: RunId,
+        boundary_id: BoundaryId,
         outcome: RunOutcome,
         completed_at_ms: u64,
     ) -> Option<RunPatch> {
@@ -1130,7 +1096,7 @@ impl InMemoryRunStore {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let retention = inner.retention.clone();
-        let record = inner.runs.get_mut(&run_id)?;
+        let record = inner.runs.get_mut(&boundary_id)?;
         if record.run.status.is_terminal() {
             return None;
         }
@@ -1164,17 +1130,25 @@ impl InMemoryRunStore {
         ))
     }
 
-    pub fn complete_run_now(&self, run_id: RunId, outcome: RunOutcome) -> Option<RunPatch> {
-        self.complete_run(run_id, outcome, epoch_ms())
+    pub fn complete_run_now(
+        &self,
+        boundary_id: BoundaryId,
+        outcome: RunOutcome,
+    ) -> Option<RunPatch> {
+        self.complete_run(boundary_id, outcome, epoch_ms())
     }
 
-    pub fn add_diagnostic(&self, run_id: RunId, diagnostic: RunDiagnostic) -> Option<RunPatch> {
+    pub fn add_diagnostic(
+        &self,
+        boundary_id: BoundaryId,
+        diagnostic: RunDiagnostic,
+    ) -> Option<RunPatch> {
         let mut inner = self
             .inner
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let retention = inner.retention.clone();
-        let record = inner.runs.get_mut(&run_id)?;
+        let record = inner.runs.get_mut(&boundary_id)?;
         record.domain_diagnostics.push(diagnostic.clone());
         record.run.diagnostics.push(diagnostic.clone());
         Some(push_patch(
@@ -1186,7 +1160,7 @@ impl InMemoryRunStore {
 
     pub fn ingest_payload(
         &self,
-        run_id: RunId,
+        boundary_id: BoundaryId,
         kind: PayloadKind,
         call_node_id: Option<CallNodeId>,
         body: Option<PayloadBody>,
@@ -1198,7 +1172,7 @@ impl InMemoryRunStore {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let payload_id = inner.allocate_payload_id();
         let retention = inner.retention.clone();
-        let record = inner.runs.get_mut(&run_id)?;
+        let record = inner.runs.get_mut(&boundary_id)?;
         let payload = PayloadEvent {
             id: payload_id,
             call_node_id,
@@ -1223,10 +1197,10 @@ impl InMemoryRunStore {
             .inner
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let run_id = *inner.host_call_index.get(host_call_id)?;
+        let boundary_id = *inner.host_call_index.get(host_call_id)?;
         let payload_id = inner.allocate_payload_id();
         let retention = inner.retention.clone();
-        let record = inner.runs.get_mut(&run_id)?;
+        let record = inner.runs.get_mut(&boundary_id)?;
         let payload = PayloadEvent {
             id: payload_id,
             call_node_id: None,
@@ -1260,10 +1234,10 @@ impl InMemoryRunStore {
             .inner
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let run_id = *inner.host_call_index.get(host_call_id)?;
+        let boundary_id = *inner.host_call_index.get(host_call_id)?;
         let payload_id = inner.allocate_payload_id();
         let retention = inner.retention.clone();
-        let record = inner.runs.get_mut(&run_id)?;
+        let record = inner.runs.get_mut(&boundary_id)?;
         let payload = PayloadEvent {
             id: payload_id,
             call_node_id: None,
@@ -1293,10 +1267,10 @@ impl InMemoryRunStore {
             .inner
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let run_id = *inner.host_call_index.get(host_call_id)?;
+        let boundary_id = *inner.host_call_index.get(host_call_id)?;
         let payload_id = inner.allocate_payload_id();
         let retention = inner.retention.clone();
-        let record = inner.runs.get_mut(&run_id)?;
+        let record = inner.runs.get_mut(&boundary_id)?;
         record.pending_input_requests.insert(request_id);
         let payload = PayloadEvent {
             id: payload_id,
@@ -1324,10 +1298,10 @@ impl InMemoryRunStore {
             .inner
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let run_id = *inner.host_call_index.get(host_call_id)?;
+        let boundary_id = *inner.host_call_index.get(host_call_id)?;
         let payload_id = inner.allocate_payload_id();
         let retention = inner.retention.clone();
-        let record = inner.runs.get_mut(&run_id)?;
+        let record = inner.runs.get_mut(&boundary_id)?;
         record.pending_input_requests.remove(&request_id);
         let state = request_state_for_record(record, state);
         let payload = PayloadEvent {
@@ -1352,10 +1326,10 @@ impl InMemoryRunStore {
             .inner
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let run_id = *inner.host_call_index.get(host_call_id)?;
+        let boundary_id = *inner.host_call_index.get(host_call_id)?;
         let payload_id = inner.allocate_payload_id();
         let retention = inner.retention.clone();
-        let record = inner.runs.get_mut(&run_id)?;
+        let record = inner.runs.get_mut(&boundary_id)?;
         record.pending_env_requests.insert(request_id);
         let payload = PayloadEvent {
             id: payload_id,
@@ -1386,10 +1360,10 @@ impl InMemoryRunStore {
             .inner
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let run_id = *inner.host_call_index.get(host_call_id)?;
+        let boundary_id = *inner.host_call_index.get(host_call_id)?;
         let payload_id = inner.allocate_payload_id();
         let retention = inner.retention.clone();
-        let record = inner.runs.get_mut(&run_id)?;
+        let record = inner.runs.get_mut(&boundary_id)?;
         record.pending_env_requests.remove(&request_id);
         let state = request_state_for_record(record, RunRequestState::Resolved);
         let redacted = display_value.is_none();
@@ -1421,14 +1395,14 @@ impl InMemoryRunStore {
     #[must_use]
     pub fn input_request_outcome_for_run(
         &self,
-        run_id: RunId,
+        boundary_id: BoundaryId,
         request_id: u64,
     ) -> RequestCommandOutcome {
         let inner = self
             .inner
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let Some(record) = inner.runs.get(&run_id) else {
+        let Some(record) = inner.runs.get(&boundary_id) else {
             return RequestCommandOutcome::Missing;
         };
         input_request_outcome(record, request_id)
@@ -1436,7 +1410,7 @@ impl InMemoryRunStore {
 
     pub fn resolve_input_request_for_run(
         &self,
-        run_id: RunId,
+        boundary_id: BoundaryId,
         request_id: u64,
         state: RunRequestState,
     ) -> RequestCommandResult {
@@ -1448,7 +1422,7 @@ impl InMemoryRunStore {
         let host_call_id;
         let resolved_state;
         {
-            let Some(record) = inner.runs.get_mut(&run_id) else {
+            let Some(record) = inner.runs.get_mut(&boundary_id) else {
                 return RequestCommandResult::outcome(RequestCommandOutcome::Missing);
             };
             let outcome = input_request_outcome(record, request_id);
@@ -1464,7 +1438,7 @@ impl InMemoryRunStore {
         }
 
         let payload_id = inner.allocate_payload_id();
-        let Some(record) = inner.runs.get_mut(&run_id) else {
+        let Some(record) = inner.runs.get_mut(&boundary_id) else {
             return RequestCommandResult::outcome(RequestCommandOutcome::Missing);
         };
         let payload = PayloadEvent {
@@ -1486,14 +1460,14 @@ impl InMemoryRunStore {
     #[must_use]
     pub fn env_request_outcome_for_run(
         &self,
-        run_id: RunId,
+        boundary_id: BoundaryId,
         request_id: u64,
     ) -> RequestCommandOutcome {
         let inner = self
             .inner
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let Some(record) = inner.runs.get(&run_id) else {
+        let Some(record) = inner.runs.get(&boundary_id) else {
             return RequestCommandOutcome::Missing;
         };
         env_request_outcome(record, request_id)
@@ -1501,7 +1475,7 @@ impl InMemoryRunStore {
 
     pub fn resolve_env_request_for_run(
         &self,
-        run_id: RunId,
+        boundary_id: BoundaryId,
         request_id: u64,
         status: EnvResolutionStatus,
         display_value: Option<String>,
@@ -1515,7 +1489,7 @@ impl InMemoryRunStore {
         let resolved_state;
         let key;
         {
-            let Some(record) = inner.runs.get_mut(&run_id) else {
+            let Some(record) = inner.runs.get_mut(&boundary_id) else {
                 return RequestCommandResult::outcome(RequestCommandOutcome::Missing);
             };
             let outcome = env_request_outcome(record, request_id);
@@ -1535,7 +1509,7 @@ impl InMemoryRunStore {
         }
 
         let payload_id = inner.allocate_payload_id();
-        let Some(record) = inner.runs.get_mut(&run_id) else {
+        let Some(record) = inner.runs.get_mut(&boundary_id) else {
             return RequestCommandResult::outcome(RequestCommandOutcome::Missing);
         };
         let redacted = display_value.is_none();
@@ -1567,7 +1541,7 @@ impl InMemoryRunStore {
 
     pub fn cancel_run(
         &self,
-        run_id: RunId,
+        boundary_id: BoundaryId,
         requested_at_ms: u64,
         reason: Option<String>,
     ) -> CancelRunEffect {
@@ -1576,7 +1550,7 @@ impl InMemoryRunStore {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let retention = inner.retention.clone();
-        let Some(record) = inner.runs.get_mut(&run_id) else {
+        let Some(record) = inner.runs.get_mut(&boundary_id) else {
             return CancelRunEffect::RunMissing;
         };
         if record.run.status.is_terminal() {
@@ -1607,7 +1581,7 @@ impl InMemoryRunStore {
                 body: None,
             })
             .collect::<Vec<_>>();
-        let Some(record) = inner.runs.get_mut(&run_id) else {
+        let Some(record) = inner.runs.get_mut(&boundary_id) else {
             return CancelRunEffect::RunMissing;
         };
         record
@@ -1990,7 +1964,7 @@ fn summarize_run(run: &Run) -> RunSummary {
         }
     }
     RunSummary {
-        run_id: run.run_id,
+        boundary_id: run.boundary_id,
         target: run.target.clone(),
         visibility: run.visibility.clone(),
         status: run.status,
@@ -2017,7 +1991,7 @@ fn push_patch(
     }
     record.run.cursor = RunCursor(record.run.cursor.0.saturating_add(1));
     let patch = RunPatch {
-        run_id: record.run.run_id,
+        boundary_id: record.run.boundary_id,
         cursor: record.run.cursor,
         changes,
     };
@@ -2319,7 +2293,7 @@ fn build_unattached_graph_runtime_overlay(
     }
 
     GraphRuntimeOverlay {
-        run_id: run.run_id,
+        boundary_id: run.boundary_id,
         project_generation: run.request.project_generation,
         entries,
         unattached_call_node_ids,
@@ -2424,7 +2398,7 @@ pub fn build_graph_runtime_overlay_from_cfg_spans(
     }
 
     GraphRuntimeOverlay {
-        run_id: run.run_id,
+        boundary_id: run.boundary_id,
         project_generation: run.request.project_generation,
         entries,
         unattached_call_node_ids,
@@ -3349,18 +3323,18 @@ mod tests {
 
     #[test]
     fn run_contract_keeps_identity_spaces_separate() {
-        let run_id = RunId::from_bytes([7; 16]);
+        let boundary_id = test_boundary_id(7);
         let host_call_id = HostCallId::Native(sys_types::CallId(7));
-        assert_eq!(run_id.as_bytes(), [7; 16]);
+        assert_eq!(boundary_id.as_bytes(), [7; 16]);
         assert_eq!(
-            run_id.to_wire_string(),
-            "baml_run_1_07070707070707070707070707070707"
+            boundary_id.to_wire_string(),
+            "baml_id_1_BwcHBwcHBwcHBwcHBwcHBw"
         );
         assert_eq!(
-            RunId::from_wire_str("baml_run_1_07070707070707070707070707070707"),
-            Some(run_id)
+            BoundaryId::from_wire_str("baml_id_1_BwcHBwcHBwcHBwcHBwcHBw"),
+            Some(boundary_id)
         );
-        assert_eq!(RunId::from_wire_str("7"), None);
+        assert_eq!(BoundaryId::from_wire_str("7"), None);
         assert_eq!(host_call_id, HostCallId::Native(sys_types::CallId(7)));
     }
 
@@ -3434,6 +3408,27 @@ mod tests {
         }
     }
 
+    fn test_boundary_id(byte: u8) -> BoundaryId {
+        BoundaryId::from_bytes([byte; 16])
+    }
+
+    fn create_test_run(
+        store: &InMemoryRunStore,
+        request: ExecutionRequest,
+        request_id: RequestId,
+    ) -> StartRunContext {
+        store.create_run(BoundaryId::new_random(), request, request_id)
+    }
+
+    fn create_test_run_at(
+        store: &InMemoryRunStore,
+        request: ExecutionRequest,
+        request_id: RequestId,
+        time_anchor: RunTimeAnchor,
+    ) -> StartRunContext {
+        store.create_run_at(BoundaryId::new_random(), request, request_id, time_anchor)
+    }
+
     fn root_call_ref(thread_id: u64, call_id: u64) -> CallRef {
         CallRef {
             process_euid: ProcessEuid([1; 16]),
@@ -3500,8 +3495,8 @@ mod tests {
 
     fn run_with_calls(calls: Vec<CallNode>) -> Run {
         let store = InMemoryRunStore::default();
-        let start = store.create_run(request("main"), RequestId(1));
-        let mut run = store.snapshot(start.run_id).unwrap();
+        let start = create_test_run(&store, request("main"), RequestId(1));
+        let mut run = store.snapshot(start.boundary_id).unwrap();
         run.calls = calls;
         run
     }
@@ -3664,7 +3659,8 @@ mod tests {
             patch_window_capacity: 8,
             ..RunRetentionPolicy::default()
         });
-        let start = store.create_run_at(
+        let start = create_test_run_at(
+            &store,
             request("main"),
             RequestId(1),
             RunTimeAnchor {
@@ -3673,37 +3669,38 @@ mod tests {
             },
         );
         assert_eq!(
-            store.snapshot(start.run_id).unwrap().status,
+            store.snapshot(start.boundary_id).unwrap().status,
             RunStatus::Pending
         );
 
         let host_call_id = HostCallId::Native(sys_types::CallId(42));
         let patch = store
-            .attach_host_call(start.run_id, host_call_id.clone())
+            .attach_host_call(start.boundary_id, host_call_id.clone())
             .expect("pending run transitions to running");
         assert_eq!(patch.cursor, RunCursor(1));
         assert_eq!(
-            store.run_id_for_host_call(&host_call_id),
-            Some(start.run_id)
+            store.boundary_id_for_host_call(&host_call_id),
+            Some(start.boundary_id)
         );
         assert_eq!(
-            store.snapshot(start.run_id).unwrap().status,
+            store.snapshot(start.boundary_id).unwrap().status,
             RunStatus::Running
         );
 
         let RunSubscription::Snapshot { snapshot, patches } =
-            store.subscribe(start.run_id, Some(RunCursor(0)))
+            store.subscribe(start.boundary_id, Some(RunCursor(0)))
         else {
             panic!("expected snapshot plus retained patches");
         };
-        assert_eq!(snapshot.run_id, start.run_id);
+        assert_eq!(snapshot.boundary_id, start.boundary_id);
         assert_eq!(patches, vec![patch]);
     }
 
     #[test]
     fn list_runs_filters_by_project_generation_kind_and_touched_function() {
         let store = InMemoryRunStore::default();
-        let main = store.create_run_at(
+        let main = create_test_run_at(
+            &store,
             request("main"),
             RequestId(1),
             RunTimeAnchor {
@@ -3711,7 +3708,8 @@ mod tests {
                 trace_zero_ns: 0,
             },
         );
-        let other = store.create_run_at(
+        let other = create_test_run_at(
+            &store,
             request("other"),
             RequestId(2),
             RunTimeAnchor {
@@ -3722,8 +3720,10 @@ mod tests {
 
         let all = store.list_runs(&RunFilter::default());
         assert_eq!(
-            all.iter().map(|summary| summary.run_id).collect::<Vec<_>>(),
-            vec![other.run_id, main.run_id]
+            all.iter()
+                .map(|summary| summary.boundary_id)
+                .collect::<Vec<_>>(),
+            vec![other.boundary_id, main.boundary_id]
         );
 
         let summaries = store.list_runs(&RunFilter {
@@ -3736,7 +3736,7 @@ mod tests {
         });
 
         assert_eq!(summaries.len(), 1);
-        assert_eq!(summaries[0].run_id, main.run_id);
+        assert_eq!(summaries[0].boundary_id, main.boundary_id);
         assert_eq!(summaries[0].touched_functions, vec!["main"]);
 
         let wrong_generation = store.list_runs(&RunFilter {
@@ -3793,7 +3793,7 @@ mod tests {
         );
 
         let store = InMemoryRunStore::default();
-        let start = store.create_run(request("main"), RequestId(1));
+        let start = create_test_run(&store, request("main"), RequestId(1));
         let root = CallRef {
             process_euid: ProcessEuid([9; 16]),
             engine_id: EngineId(ENGINE),
@@ -3801,7 +3801,7 @@ mod tests {
             call_id: BexCallId(1),
         };
         assert!(matches!(
-            store.attach_root_trace(start.run_id, root),
+            store.attach_root_trace(start.boundary_id, root),
             AttachRootTraceResult::Attached { .. }
         ));
 
@@ -3849,7 +3849,7 @@ mod tests {
             store.ingest_profile_event(event);
         }
 
-        let snapshot = store.snapshot(start.run_id).unwrap();
+        let snapshot = store.snapshot(start.boundary_id).unwrap();
         let child = snapshot
             .calls
             .iter()
@@ -3891,7 +3891,7 @@ mod tests {
             },
             40,
         ));
-        let after_metadata_removal = store.snapshot(start.run_id).unwrap();
+        let after_metadata_removal = store.snapshot(start.boundary_id).unwrap();
         let child = after_metadata_removal
             .calls
             .iter()
@@ -3903,8 +3903,8 @@ mod tests {
     #[test]
     fn run_store_pre_host_cancel_trips_start_guard_and_seals_run() {
         let store = InMemoryRunStore::default();
-        let start = store.create_run(request("main"), RequestId(1));
-        let effect = store.cancel_run(start.run_id, 500, Some("user".to_string()));
+        let start = create_test_run(&store, request("main"), RequestId(1));
+        let effect = store.cancel_run(start.boundary_id, 500, Some("user".to_string()));
 
         let CancelRunEffect::CancelledBeforeHost { patch } = effect else {
             panic!("expected pre-host cancellation");
@@ -3917,7 +3917,7 @@ mod tests {
                 RunPatchChange::Complete(RunOutcome::Cancelled(_))
             ]
         ));
-        let snapshot = store.snapshot(start.run_id).unwrap();
+        let snapshot = store.snapshot(start.boundary_id).unwrap();
         assert_eq!(snapshot.status, RunStatus::Cancelled);
         assert_eq!(snapshot.root_call_node_id, None);
     }
@@ -3925,11 +3925,11 @@ mod tests {
     #[test]
     fn run_store_cancel_after_host_returns_adapter_owned_host_id() {
         let store = InMemoryRunStore::default();
-        let start = store.create_run(request("main"), RequestId(1));
+        let start = create_test_run(&store, request("main"), RequestId(1));
         let host_call_id = HostCallId::Native(sys_types::CallId(42));
-        store.attach_host_call(start.run_id, host_call_id.clone());
+        store.attach_host_call(start.boundary_id, host_call_id.clone());
 
-        let effect = store.cancel_run(start.run_id, 500, None);
+        let effect = store.cancel_run(start.boundary_id, 500, None);
         let CancelRunEffect::CancelHostCall {
             host_call_id: routed,
             patch,
@@ -3939,7 +3939,7 @@ mod tests {
         };
         assert_eq!(routed, host_call_id);
         assert_eq!(
-            store.snapshot(start.run_id).unwrap().status,
+            store.snapshot(start.boundary_id).unwrap().status,
             RunStatus::Cancelling
         );
         assert_eq!(
@@ -3951,12 +3951,12 @@ mod tests {
     #[test]
     fn run_store_routes_payloads_through_host_call_index() {
         let store = InMemoryRunStore::default();
-        let start_a = store.create_run(request("first"), RequestId(1));
-        let start_b = store.create_run(request("second"), RequestId(2));
+        let start_a = create_test_run(&store, request("first"), RequestId(1));
+        let start_b = create_test_run(&store, request("second"), RequestId(2));
         let host_a = HostCallId::Native(sys_types::CallId(11));
         let host_b = HostCallId::Native(sys_types::CallId(12));
-        store.attach_host_call(start_a.run_id, host_a);
-        store.attach_host_call(start_b.run_id, host_b.clone());
+        store.attach_host_call(start_a.boundary_id, host_a);
+        store.attach_host_call(start_b.boundary_id, host_b.clone());
 
         let patch = store
             .ingest_fetch_started(
@@ -3979,8 +3979,8 @@ mod tests {
             })]
         ));
 
-        let first = store.snapshot(start_a.run_id).unwrap();
-        let second = store.snapshot(start_b.run_id).unwrap();
+        let first = store.snapshot(start_a.boundary_id).unwrap();
+        let second = store.snapshot(start_b.boundary_id).unwrap();
         assert!(first.payloads.is_empty());
         assert_eq!(second.payloads.len(), 1);
         assert!(second.payloads[0].redaction.value_redacted);
@@ -4001,15 +4001,15 @@ mod tests {
     #[test]
     fn run_store_input_and_env_requests_drive_wait_status() {
         let store = InMemoryRunStore::default();
-        let start = store.create_run(request("main"), RequestId(1));
+        let start = create_test_run(&store, request("main"), RequestId(1));
         let host = HostCallId::Native(sys_types::CallId(42));
-        store.attach_host_call(start.run_id, host.clone());
+        store.attach_host_call(start.boundary_id, host.clone());
 
         store
             .ingest_input_requested(&host, 1, Some("name?".to_string()))
             .unwrap();
         assert_eq!(
-            store.snapshot(start.run_id).unwrap().status,
+            store.snapshot(start.boundary_id).unwrap().status,
             RunStatus::WaitingForInput
         );
 
@@ -4020,7 +4020,7 @@ mod tests {
             .ingest_input_resolved(&host, 1, RunRequestState::Resolved)
             .unwrap();
         assert_eq!(
-            store.snapshot(start.run_id).unwrap().status,
+            store.snapshot(start.boundary_id).unwrap().status,
             RunStatus::WaitingForEnv
         );
 
@@ -4033,7 +4033,7 @@ mod tests {
                 None,
             )
             .unwrap();
-        let snapshot = store.snapshot(start.run_id).unwrap();
+        let snapshot = store.snapshot(start.boundary_id).unwrap();
         assert_eq!(snapshot.status, RunStatus::Running);
         assert_eq!(snapshot.payloads.len(), 4);
         assert!(matches!(
@@ -4050,32 +4050,32 @@ mod tests {
     #[test]
     fn run_store_request_commands_are_idempotent_and_run_scoped() {
         let store = InMemoryRunStore::default();
-        let start_a = store.create_run(request("first"), RequestId(1));
-        let start_b = store.create_run(request("second"), RequestId(2));
+        let start_a = create_test_run(&store, request("first"), RequestId(1));
+        let start_b = create_test_run(&store, request("second"), RequestId(2));
         let host_a = HostCallId::Native(sys_types::CallId(41));
         let host_b = HostCallId::Native(sys_types::CallId(42));
-        store.attach_host_call(start_a.run_id, host_a.clone());
-        store.attach_host_call(start_b.run_id, host_b);
+        store.attach_host_call(start_a.boundary_id, host_a.clone());
+        store.attach_host_call(start_b.boundary_id, host_b);
         store
             .ingest_input_requested(&host_a, 7, Some("name?".to_string()))
             .unwrap();
 
         assert_eq!(
-            store.input_request_outcome_for_run(start_b.run_id, 7),
+            store.input_request_outcome_for_run(start_b.boundary_id, 7),
             RequestCommandOutcome::Missing
         );
 
         let result =
-            store.resolve_input_request_for_run(start_a.run_id, 7, RunRequestState::Resolved);
+            store.resolve_input_request_for_run(start_a.boundary_id, 7, RunRequestState::Resolved);
         assert_eq!(result.outcome, RequestCommandOutcome::Accepted);
         assert_eq!(result.host_call_id, Some(host_a));
         assert!(result.patch.is_some());
         assert_eq!(
-            store.input_request_outcome_for_run(start_a.run_id, 7),
+            store.input_request_outcome_for_run(start_a.boundary_id, 7),
             RequestCommandOutcome::AlreadyResolved
         );
         let duplicate =
-            store.resolve_input_request_for_run(start_a.run_id, 7, RunRequestState::Resolved);
+            store.resolve_input_request_for_run(start_a.boundary_id, 7, RunRequestState::Resolved);
         assert_eq!(duplicate.outcome, RequestCommandOutcome::AlreadyResolved);
         assert!(duplicate.patch.is_none());
     }
@@ -4083,15 +4083,15 @@ mod tests {
     #[test]
     fn run_store_env_request_commands_resolve_with_redacted_payloads() {
         let store = InMemoryRunStore::default();
-        let start = store.create_run(request("main"), RequestId(1));
+        let start = create_test_run(&store, request("main"), RequestId(1));
         let host = HostCallId::Native(sys_types::CallId(42));
-        store.attach_host_call(start.run_id, host.clone());
+        store.attach_host_call(start.boundary_id, host.clone());
         store
             .ingest_env_requested(&host, 9, "API_KEY".to_string())
             .unwrap();
 
         let result = store.resolve_env_request_for_run(
-            start.run_id,
+            start.boundary_id,
             9,
             EnvResolutionStatus::ResolvedFromUser,
             None,
@@ -4099,7 +4099,7 @@ mod tests {
         assert_eq!(result.outcome, RequestCommandOutcome::Accepted);
         assert_eq!(result.host_call_id, Some(host));
 
-        let snapshot = store.snapshot(start.run_id).unwrap();
+        let snapshot = store.snapshot(start.boundary_id).unwrap();
         assert_eq!(snapshot.status, RunStatus::Running);
         assert!(matches!(
             snapshot.payloads.last().map(|payload| &payload.kind),
@@ -4114,7 +4114,7 @@ mod tests {
         ));
 
         let duplicate = store.resolve_env_request_for_run(
-            start.run_id,
+            start.boundary_id,
             9,
             EnvResolutionStatus::DeclinedMissing,
             None,
@@ -4126,9 +4126,9 @@ mod tests {
     #[test]
     fn run_store_request_commands_report_terminal_and_cancelled_state() {
         let store = InMemoryRunStore::default();
-        let start_terminal = store.create_run(request("main"), RequestId(1));
+        let start_terminal = create_test_run(&store, request("main"), RequestId(1));
         store.complete_run(
-            start_terminal.run_id,
+            start_terminal.boundary_id,
             RunOutcome::Succeeded(RunResult {
                 value: Some("ok".to_string()),
                 renderer_hint: None,
@@ -4137,20 +4137,20 @@ mod tests {
             200,
         );
         assert_eq!(
-            store.input_request_outcome_for_run(start_terminal.run_id, 77),
+            store.input_request_outcome_for_run(start_terminal.boundary_id, 77),
             RequestCommandOutcome::AlreadyTerminal
         );
 
-        let start_cancelling = store.create_run(request("cancel_me"), RequestId(2));
+        let start_cancelling = create_test_run(&store, request("cancel_me"), RequestId(2));
         let host = HostCallId::Native(sys_types::CallId(42));
-        store.attach_host_call(start_cancelling.run_id, host.clone());
+        store.attach_host_call(start_cancelling.boundary_id, host.clone());
         store
             .ingest_input_requested(&host, 88, Some("name?".to_string()))
             .unwrap();
         store
             .ingest_env_requested(&host, 89, "API_KEY".to_string())
             .unwrap();
-        let effect = store.cancel_run(start_cancelling.run_id, 300, None);
+        let effect = store.cancel_run(start_cancelling.boundary_id, 300, None);
         let CancelRunEffect::CancelHostCall { patch, .. } = effect else {
             panic!("expected host-routed cancellation");
         };
@@ -4176,11 +4176,11 @@ mod tests {
             })
         )));
         assert_eq!(
-            store.env_request_outcome_for_run(start_cancelling.run_id, 89),
+            store.env_request_outcome_for_run(start_cancelling.boundary_id, 89),
             RequestCommandOutcome::Cancelled
         );
         assert_eq!(
-            store.input_request_outcome_for_run(start_cancelling.run_id, 88),
+            store.input_request_outcome_for_run(start_cancelling.boundary_id, 88),
             RequestCommandOutcome::Cancelled
         );
     }
@@ -4191,10 +4191,10 @@ mod tests {
             patch_window_capacity: 1,
             ..RunRetentionPolicy::default()
         });
-        let start = store.create_run(request("main"), RequestId(1));
-        store.attach_host_call(start.run_id, HostCallId::Native(sys_types::CallId(1)));
+        let start = create_test_run(&store, request("main"), RequestId(1));
+        store.attach_host_call(start.boundary_id, HostCallId::Native(sys_types::CallId(1)));
         store.complete_run(
-            start.run_id,
+            start.boundary_id,
             RunOutcome::Succeeded(RunResult {
                 value: Some("ok".to_string()),
                 renderer_hint: None,
@@ -4204,7 +4204,7 @@ mod tests {
         );
 
         let RunSubscription::CursorExpired { reason, .. } =
-            store.subscribe(start.run_id, Some(RunCursor(0)))
+            store.subscribe(start.boundary_id, Some(RunCursor(0)))
         else {
             panic!("old cursor should be outside the retained patch window");
         };
@@ -4214,9 +4214,9 @@ mod tests {
     #[test]
     fn run_store_root_trace_claims_only_connected_profile_component() {
         let store = InMemoryRunStore::default();
-        let start = store.create_run(request("main"), RequestId(1));
+        let start = create_test_run(&store, request("main"), RequestId(1));
         let AttachRootTraceResult::Attached { patches } =
-            store.attach_root_trace(start.run_id, root_call_ref(1, 1))
+            store.attach_root_trace(start.boundary_id, root_call_ref(1, 1))
         else {
             panic!("root trace should attach");
         };
@@ -4313,7 +4313,7 @@ mod tests {
             store.ingest_profile_event(event);
         }
 
-        let snapshot = store.snapshot(start.run_id).unwrap();
+        let snapshot = store.snapshot(start.boundary_id).unwrap();
         assert_eq!(
             snapshot.root_call_node_id,
             Some(call_node_id(&TraceCallKey {
@@ -4341,9 +4341,9 @@ mod tests {
     #[test]
     fn graph_overlay_leaves_calls_unattached_without_call_site_provenance() {
         let store = InMemoryRunStore::default();
-        let start = store.create_run(request("main"), RequestId(1));
+        let start = create_test_run(&store, request("main"), RequestId(1));
         let AttachRootTraceResult::Attached { patches } =
-            store.attach_root_trace(start.run_id, root_call_ref(1, 1))
+            store.attach_root_trace(start.boundary_id, root_call_ref(1, 1))
         else {
             panic!("root trace should attach");
         };
@@ -4373,7 +4373,7 @@ mod tests {
             store.ingest_profile_event(event);
         }
 
-        let snapshot = store.snapshot(start.run_id).unwrap();
+        let snapshot = store.snapshot(start.boundary_id).unwrap();
         let overlay = snapshot
             .graph_runtime_overlay
             .expect("profile reconstruction should set graph overlay");
@@ -4400,9 +4400,9 @@ mod tests {
     #[test]
     fn graph_overlay_keeps_call_site_calls_unattached_until_project_store_join() {
         let store = InMemoryRunStore::default();
-        let start = store.create_run(request("main"), RequestId(1));
+        let start = create_test_run(&store, request("main"), RequestId(1));
         let AttachRootTraceResult::Attached { patches } =
-            store.attach_root_trace(start.run_id, root_call_ref(1, 1))
+            store.attach_root_trace(start.boundary_id, root_call_ref(1, 1))
         else {
             panic!("root trace should attach");
         };
@@ -4442,7 +4442,7 @@ mod tests {
             store.ingest_profile_event(event);
         }
 
-        let snapshot = store.snapshot(start.run_id).unwrap();
+        let snapshot = store.snapshot(start.boundary_id).unwrap();
         assert_eq!(snapshot.calls[0].call_site_source, Some(call_site_source));
         let overlay = snapshot
             .graph_runtime_overlay
@@ -4483,9 +4483,9 @@ mod tests {
                 end_offset: 51,
             }],
         }));
-        let start = store.create_run(request("main"), RequestId(1));
+        let start = create_test_run(&store, request("main"), RequestId(1));
         let AttachRootTraceResult::Attached { patches } =
-            store.attach_root_trace(start.run_id, root_call_ref(1, 1))
+            store.attach_root_trace(start.boundary_id, root_call_ref(1, 1))
         else {
             panic!("root trace should attach");
         };
@@ -4525,7 +4525,7 @@ mod tests {
             store.ingest_profile_event(event);
         }
 
-        let snapshot = store.snapshot(start.run_id).unwrap();
+        let snapshot = store.snapshot(start.boundary_id).unwrap();
         let overlay = snapshot
             .graph_runtime_overlay
             .expect("profile reconstruction should set graph overlay");
@@ -4544,7 +4544,7 @@ mod tests {
     fn registered_profile_observer_feeds_run_store_before_root_attach() {
         let store = Arc::new(InMemoryRunStore::default());
         let _registration = register_profile_observer(store.clone());
-        let start = store.create_run(request("main"), RequestId(1));
+        let start = create_test_run(&store, request("main"), RequestId(1));
 
         for event in [
             envelope(
@@ -4586,7 +4586,7 @@ mod tests {
         }
 
         let AttachRootTraceResult::Attached { patches } =
-            store.attach_root_trace(start.run_id, root_call_ref(1, 1))
+            store.attach_root_trace(start.boundary_id, root_call_ref(1, 1))
         else {
             panic!("root trace should attach");
         };
@@ -4595,7 +4595,7 @@ mod tests {
             !patches.is_empty(),
             "retained live events should reconstruct"
         );
-        let snapshot = store.snapshot(start.run_id).unwrap();
+        let snapshot = store.snapshot(start.boundary_id).unwrap();
         assert_eq!(snapshot.threads.len(), 1);
         assert_eq!(snapshot.calls.len(), 1);
         assert_eq!(

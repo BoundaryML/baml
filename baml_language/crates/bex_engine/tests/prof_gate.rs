@@ -795,14 +795,47 @@ async fn set_function_id_recorded() {
     let (header, events) = load_profile("user.sid_work");
     assert_balance(&header, &events);
 
-    let set_events: Vec<_> = events
+    let sid_work_function_id = header
+        .function_table
+        .as_ref()
+        .and_then(|table| {
+            table
+                .functions
+                .iter()
+                .find(|f| f.fqn == "user.sid_work")
+                .map(|f| f.function_id)
+        })
+        .expect("sid_work must be present in the function table");
+    let sid_work_calls: Vec<_> = events
         .iter()
         .filter_map(|e| match e {
-            Event::SetFunctionId(s) => Some(s),
+            Event::CallFunction(cf) if cf.function_id == sid_work_function_id => Some(cf),
             _ => None,
         })
         .collect();
-    assert_eq!(set_events.len(), 1, "exactly one SetFunctionId expected");
+    assert_eq!(
+        sid_work_calls.len(),
+        1,
+        "expected exactly one sid_work call"
+    );
+    let sid_work_call = sid_work_calls[0];
+
+    let set_events: Vec<_> = events
+        .iter()
+        .filter_map(|e| match e {
+            Event::SetFunctionId(s)
+                if s.thread_id == sid_work_call.thread_id && s.call_id == sid_work_call.call_id =>
+            {
+                Some(s)
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        set_events.len(),
+        1,
+        "exactly one SetFunctionId expected for sid_work"
+    );
     let set = set_events[0];
     assert_eq!(set.id.len(), 16);
 
@@ -820,8 +853,8 @@ async fn set_function_id_recorded() {
     let decoded =
         bex_events::ids::RuntimeId::decode(returned_id.as_str()).expect("returned $id decodes");
     match decoded {
-        bex_events::ids::RuntimeId::OverrideUuid(uuid) => {
-            assert_eq!(uuid.as_slice(), set.id.as_slice());
+        bex_events::ids::RuntimeId::Boundary(boundary_id) => {
+            assert_eq!(boundary_id.as_bytes().as_slice(), set.id.as_slice());
         }
         other @ bex_events::ids::RuntimeId::DefaultCall(_) => {
             panic!("expected an override id, got {other:?}")

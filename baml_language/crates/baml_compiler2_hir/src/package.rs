@@ -244,6 +244,9 @@ pub fn package_dependencies<'db>(
         "log" => vec![],
         // "reflect" has no deps — it only uses the `type` primitive.
         "reflect" => vec![],
+        // "boundary" has no deps — it only returns the current boundary id as
+        // a primitive string.
+        "boundary" => vec![],
         // "baml" depends on "log" and "reflect" so stdlib code can call
         // log.info/debug/etc. and reflect.type_of<T>() inside ns_llm.
         "baml" => vec![
@@ -252,9 +255,10 @@ pub fn package_dependencies<'db>(
         ],
         // The "testing" and "assert" packages depend on "baml" only.
         "testing" | "assert" => vec![PackageId::new(db, Name::new("baml"))],
-        // User packages depend on "baml", "testing", "assert", "log", and "reflect".
+        // User packages depend on public builtin packages.
         _ => vec![
             PackageId::new(db, Name::new("baml")),
+            PackageId::new(db, Name::new("boundary")),
             PackageId::new(db, Name::new("testing")),
             PackageId::new(db, Name::new("assert")),
             PackageId::new(db, Name::new("log")),

@@ -103,7 +103,7 @@ export type PlaygroundNotification =
     }
   | {
       type: 'profileArtifactChunk';
-      runId?: RunId;
+      boundaryId?: BoundaryId;
       engineId: number;
       processId: string;
       bytesBase64: string;
@@ -208,7 +208,7 @@ export interface EnvVarRequest {
 // RunStore snapshot protocol
 // ---------------------------------------------------------------------------
 
-export type RunId = string;
+export type BoundaryId = string;
 export type RunCursor = number;
 
 export type RunStatus =
@@ -226,7 +226,7 @@ export type RunTarget =
   | { kind: 'function'; functionName: string }
   | { kind: 'test'; generation: number; testName: string }
   | { kind: 'preview'; parentFunctionName: string; helper: string }
-  | { kind: 'companion'; parentRunId: RunId | null; functionName: string }
+  | { kind: 'companion'; parentBoundaryId: BoundaryId | null; functionName: string }
   | { kind: 'internal'; name: string };
 
 export type RunVisibility =
@@ -378,7 +378,7 @@ export interface PayloadEvent {
 }
 
 export interface Run {
-  runId: RunId;
+  boundaryId: BoundaryId;
   target: RunTarget;
   visibility: RunVisibility;
   status: RunStatus;
@@ -400,7 +400,7 @@ export interface Run {
 }
 
 export interface GraphRuntimeOverlay {
-  runId: RunId;
+  boundaryId: BoundaryId;
   projectGeneration: number;
   entries: GraphRuntimeOverlayEntry[];
   unattachedCallNodeIds: string[];
@@ -413,7 +413,7 @@ export interface GraphRuntimeOverlayEntry {
 }
 
 export interface RunSummary {
-  runId: RunId;
+  boundaryId: BoundaryId;
   target: RunTarget;
   visibility: RunVisibility;
   status: RunStatus;
@@ -450,7 +450,7 @@ export type RunPatchChange =
     };
 
 export interface RunPatch {
-  runId: RunId;
+  boundaryId: BoundaryId;
   cursor: RunCursor;
   changes: RunPatchChange[];
 }
@@ -490,12 +490,12 @@ export type WebSocketOutMessage =
   | { type: 'commandAck'; requestId: number; outcome: string }
   | { type: 'commandError'; requestId: number; code: string; message: string }
   | { type: 'runList'; requestId: number; runs: RunSummary[] }
-  | { type: 'runSnapshot'; requestId?: number; runId: RunId; snapshot: Run }
+  | { type: 'runSnapshot'; requestId?: number; boundaryId: BoundaryId; snapshot: Run }
   | {
       type: 'runCursorExpired';
       requestId?: number;
       subscriptionId?: string;
-      runId: RunId;
+      boundaryId: BoundaryId;
       reason: RunCursorExpiredReason;
     }
   | { type: 'envVarRequest'; id: number; variable: string }
@@ -560,28 +560,28 @@ export type WebSocketInMessage =
       generation: number;
       testName: string;
     }
-  | { type: 'cancelRun'; requestId: number; runId: RunId }
+  | { type: 'cancelRun'; requestId: number; boundaryId: BoundaryId }
   | {
       type: 'respondToInput';
       requestId: number;
-      runId: RunId;
+      boundaryId: BoundaryId;
       inputRequestId: string;
       value: string;
     }
   | {
       type: 'respondToEnv';
       requestId: number;
-      runId: RunId;
+      boundaryId: BoundaryId;
       envRequestId: string;
       value?: string;
     }
   | { type: 'listRuns'; requestId: number; filter?: RunListFilter }
-  | { type: 'snapshot'; requestId: number; runId: RunId }
+  | { type: 'snapshot'; requestId: number; boundaryId: BoundaryId }
   | {
       type: 'subscribe';
       requestId: number;
       subscriptionId: string;
-      runId: RunId;
+      boundaryId: BoundaryId;
       afterCursor?: RunCursor;
     }
   | { type: 'unsubscribe'; requestId: number; subscriptionId: string }
@@ -623,12 +623,12 @@ export type WorkerOutMessage =
     }
   | { type: 'commandError'; requestId: number; code: string; message: string }
   | { type: 'runList'; requestId: number; runs: RunSummary[] }
-  | { type: 'runSnapshot'; requestId?: number; runId: RunId; snapshot: Run }
+  | { type: 'runSnapshot'; requestId?: number; boundaryId: BoundaryId; snapshot: Run }
   | {
       type: 'runCursorExpired';
       requestId?: number;
       subscriptionId?: string;
-      runId: RunId;
+      boundaryId: BoundaryId;
       reason: RunCursorExpiredReason;
     }
   | { type: 'fetchLogNew'; callId: number; entry: FetchLogEntry }
@@ -685,28 +685,28 @@ export type WorkerInMessage =
       generation: number;
       testName: string;
     }
-  | { type: 'cancelRun'; requestId: number; runId: RunId }
+  | { type: 'cancelRun'; requestId: number; boundaryId: BoundaryId }
   | {
       type: 'respondToInput';
       requestId: number;
-      runId: RunId;
+      boundaryId: BoundaryId;
       inputRequestId: string;
       value: string;
     }
   | {
       type: 'respondToEnv';
       requestId: number;
-      runId: RunId;
+      boundaryId: BoundaryId;
       envRequestId: string;
       value?: string;
     }
   | { type: 'listRuns'; requestId: number; filter?: RunListFilter }
-  | { type: 'snapshot'; requestId: number; runId: RunId }
+  | { type: 'snapshot'; requestId: number; boundaryId: BoundaryId }
   | {
       type: 'subscribe';
       requestId: number;
       subscriptionId: string;
-      runId: RunId;
+      boundaryId: BoundaryId;
       afterCursor?: RunCursor;
     }
   | { type: 'unsubscribe'; requestId: number; subscriptionId: string }

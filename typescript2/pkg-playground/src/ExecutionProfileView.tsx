@@ -81,7 +81,7 @@ export const ExecutionProfileView: FC<ExecutionProfileViewProps> = ({ run }) => 
 
   const baseProfile = useMemo(
     () => buildExecutionProfileProjection(run),
-    [run?.runId, run?.cursor],
+    [run?.boundaryId, run?.cursor],
   );
   const visibleProfile = useMemo(
     () =>

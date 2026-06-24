@@ -185,12 +185,12 @@ export class WebSocketRuntimePort implements RuntimePort {
           testName: msg.testName,
         };
       case 'cancelRun':
-        return { type: 'cancelRun', requestId: msg.requestId, runId: msg.runId };
+        return { type: 'cancelRun', requestId: msg.requestId, boundaryId: msg.boundaryId };
       case 'respondToInput':
         return {
           type: 'respondToInput',
           requestId: msg.requestId,
-          runId: msg.runId,
+          boundaryId: msg.boundaryId,
           inputRequestId: msg.inputRequestId,
           value: msg.value,
         };
@@ -198,20 +198,20 @@ export class WebSocketRuntimePort implements RuntimePort {
         return {
           type: 'respondToEnv',
           requestId: msg.requestId,
-          runId: msg.runId,
+          boundaryId: msg.boundaryId,
           envRequestId: msg.envRequestId,
           value: msg.value,
         };
       case 'listRuns':
         return { type: 'listRuns', requestId: msg.requestId, filter: msg.filter };
       case 'snapshot':
-        return { type: 'snapshot', requestId: msg.requestId, runId: msg.runId };
+        return { type: 'snapshot', requestId: msg.requestId, boundaryId: msg.boundaryId };
       case 'subscribe':
         return {
           type: 'subscribe',
           requestId: msg.requestId,
           subscriptionId: msg.subscriptionId,
-          runId: msg.runId,
+          boundaryId: msg.boundaryId,
           afterCursor: msg.afterCursor,
         };
       case 'unsubscribe':
@@ -327,7 +327,7 @@ export class WebSocketRuntimePort implements RuntimePort {
         return {
           type: 'runSnapshot',
           requestId: raw.requestId,
-          runId: raw.runId,
+          boundaryId: raw.boundaryId,
           snapshot: raw.snapshot,
         };
       case 'runCursorExpired':
@@ -335,7 +335,7 @@ export class WebSocketRuntimePort implements RuntimePort {
           type: 'runCursorExpired',
           requestId: raw.requestId,
           subscriptionId: raw.subscriptionId,
-          runId: raw.runId,
+          boundaryId: raw.boundaryId,
           reason: raw.reason,
         };
       case 'envVarRequest':

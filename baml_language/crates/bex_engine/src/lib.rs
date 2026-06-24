@@ -106,7 +106,10 @@ use bex_vm_types::{
 };
 pub use conversion::test_arg_to_external;
 // Re-export CancellationToken for callers.
-pub use function_call_context::{FunctionCallContext, FunctionCallContextBuilder};
+pub use function_call_context::{
+    BoundaryContext, BoundaryStorageContext, CaptureDefaults, FunctionCallContext,
+    FunctionCallContextBuilder,
+};
 pub use sys_types::{CallId, ClassDefinition, ClassFieldDefinition};
 use sys_types::{OpError, SysOpResult};
 use thiserror::Error;
@@ -1837,6 +1840,7 @@ impl BexEngine {
         args: Vec<BexExternalValue>,
         FunctionCallContext {
             host_call_id,
+            boundary,
             cancel,
             profile_enabled,
             type_args,
@@ -1852,6 +1856,7 @@ impl BexEngine {
             args,
             FunctionCallContext {
                 host_call_id,
+                boundary,
                 cancel,
                 profile_enabled,
                 type_args,
@@ -1863,7 +1868,7 @@ impl BexEngine {
 
     /// Run-vocabulary alias for the traced function entry path. The
     /// `FunctionCallContext` still carries host-call plumbing; `RunStore` owns
-    /// the durable `RunId` outside the engine.
+    /// the public `BoundaryId` outside the engine.
     pub async fn start_run(
         self: &Arc<Self>,
         function_name: &str,
@@ -1893,6 +1898,7 @@ impl BexEngine {
         args: Vec<BexCallArg>,
         FunctionCallContext {
             host_call_id,
+            boundary,
             cancel,
             profile_enabled,
             type_args,
@@ -2098,6 +2104,7 @@ impl BexEngine {
             return_type,
             throws_type,
             host_call_id,
+            boundary,
             cancel,
             copy_objects,
         )
@@ -2164,6 +2171,7 @@ impl BexEngine {
         return_type: RuntimeTy,
         throws_type: Option<RuntimeTy>,
         host_call_id: CallId,
+        boundary: BoundaryContext,
         cancel: CancellationToken,
         copy_objects: bool,
     ) -> Result<BexCallResult, EngineError> {
@@ -2195,6 +2203,9 @@ impl BexEngine {
         thread
             .vm
             .set_entry_point_with_type_args(entry_ptr, &vm_args, type_args);
+        thread
+            .vm
+            .install_boundary_id_for_current_call(boundary.boundary_id);
         let entry_call_ref = CallRef {
             process_euid: self.process_euid,
             engine_id: self.engine_id,
@@ -2275,6 +2286,7 @@ impl BexEngine {
         args: Vec<BexExternalValue>,
         FunctionCallContext {
             host_call_id,
+            boundary,
             cancel,
             profile_enabled,
             type_args: _,
@@ -2451,6 +2463,7 @@ impl BexEngine {
             return_type,
             throws_type,
             host_call_id,
+            boundary,
             cancel,
             copy_objects,
         )
@@ -2468,7 +2481,7 @@ impl BexEngine {
     }
 
     /// Run-vocabulary alias for host-call cancellation. The parameter is the
-    /// adapter-owned host call id backing value, not a `RunId`.
+    /// adapter-owned host call id backing value, not a `BoundaryId`.
     pub fn cancel_run(&self, host_call_id: CallId) -> Result<(), EngineError> {
         self.cancel_function_call(host_call_id)
     }

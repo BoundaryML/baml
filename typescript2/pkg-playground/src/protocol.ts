@@ -1,5 +1,5 @@
-export const BAML_PLAYGROUND_PROTOCOL_MIN = 1;
-export const BAML_PLAYGROUND_PROTOCOL_MAX = 1;
+export const BAML_PLAYGROUND_PROTOCOL_MIN = 2;
+export const BAML_PLAYGROUND_PROTOCOL_MAX = 2;
 
 export function isPlaygroundProtocolCompatible(
   serverProtocol: number,

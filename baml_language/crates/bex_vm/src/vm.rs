@@ -3245,6 +3245,25 @@ impl BexVm {
         self.current_call_id
     }
 
+    pub fn install_boundary_id_for_current_call(
+        &mut self,
+        boundary_id: bex_events::ids::BoundaryId,
+    ) {
+        let call_id = self.current_call_id();
+        if call_id == 0 {
+            return;
+        }
+        let encoded = boundary_id.to_wire_string();
+        if let Some(top) = self.id_overrides.last_mut()
+            && top.0 == call_id
+        {
+            top.1 = encoded;
+        } else {
+            self.id_overrides.push((call_id, encoded));
+        }
+        self.prof_push_set_function_id(call_id, boundary_id.as_bytes());
+    }
+
     /// Mints the next per-call id. Unconditional — call ids are `$id`
     /// language semantics (M1 reads them); only ring writes are gated.
     #[inline]

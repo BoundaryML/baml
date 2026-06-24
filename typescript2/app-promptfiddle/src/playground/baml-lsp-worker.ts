@@ -421,7 +421,7 @@ function onPlaygroundNotification(notification: PlaygroundNotification): void {
       postOut({
         type: "runSnapshot",
         requestId: notification.requestId,
-        runId: notification.runId,
+        boundaryId: notification.boundaryId,
         snapshot: notification.snapshot,
       } as WorkerOutMessage);
       break;
@@ -437,7 +437,7 @@ function onPlaygroundNotification(notification: PlaygroundNotification): void {
         type: "runCursorExpired",
         requestId: notification.requestId,
         subscriptionId: notification.subscriptionId,
-        runId: notification.runId,
+        boundaryId: notification.boundaryId,
         reason: notification.reason,
       } as WorkerOutMessage);
       break;
@@ -716,7 +716,7 @@ self.onmessage = async (event: MessageEvent) => {
         try {
           const outcome = rt.respondToInput(
             msg.requestId,
-            msg.runId,
+            msg.boundaryId,
             msg.inputRequestId,
           );
           if (outcome === "accepted") {
@@ -747,7 +747,7 @@ self.onmessage = async (event: MessageEvent) => {
         try {
           const outcome = rt.respondToEnv(
             msg.requestId,
-            msg.runId,
+            msg.boundaryId,
             msg.envRequestId,
             msg.value,
           );
@@ -823,7 +823,7 @@ self.onmessage = async (event: MessageEvent) => {
         const rt = runtimeForCommand(msg.requestId, "wasmRuntimeNotReady");
         if (!rt) return;
         try {
-          rt.cancelRun(msg.requestId, msg.runId);
+          rt.cancelRun(msg.requestId, msg.boundaryId);
         } catch (e) {
           postOut({
             type: "commandError",
@@ -857,7 +857,7 @@ self.onmessage = async (event: MessageEvent) => {
         const rt = runtimeForCommand(msg.requestId, "wasmRuntimeNotReady");
         if (!rt) return;
         try {
-          rt.snapshot(msg.requestId, msg.runId);
+          rt.snapshot(msg.requestId, msg.boundaryId);
         } catch (e) {
           postOut({
             type: "commandError",
@@ -877,7 +877,7 @@ self.onmessage = async (event: MessageEvent) => {
           rt.subscribe(
             msg.requestId,
             msg.subscriptionId,
-            msg.runId,
+            msg.boundaryId,
             msg.afterCursor == null ? undefined : BigInt(msg.afterCursor),
           );
         } catch (e) {

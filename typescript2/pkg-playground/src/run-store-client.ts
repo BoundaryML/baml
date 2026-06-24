@@ -4,7 +4,7 @@ import type {
   Run,
   RunCursor,
   RunCursorExpiredReason,
-  RunId,
+  BoundaryId,
   RunListFilter,
   RunPatch,
   RunSummary,
@@ -33,7 +33,7 @@ export interface StartTestRunRequest {
 
 export interface RunCursorExpiredEvent {
   type: 'cursorExpired';
-  runId: RunId;
+  boundaryId: BoundaryId;
   reason: RunCursorExpiredReason;
 }
 
@@ -49,29 +49,29 @@ export interface RunSubscriptionHandle {
 }
 
 export interface RunStoreClient {
-  startRun(request: StartRunRequest): Promise<RunId>;
-  startPreviewRun(request: StartPreviewRunRequest): Promise<RunId>;
-  startTestRun(request: StartTestRunRequest): Promise<RunId>;
-  cancelRun(runId: RunId): Promise<RequestCommandOutcome | string>;
+  startRun(request: StartRunRequest): Promise<BoundaryId>;
+  startPreviewRun(request: StartPreviewRunRequest): Promise<BoundaryId>;
+  startTestRun(request: StartTestRunRequest): Promise<BoundaryId>;
+  cancelRun(boundaryId: BoundaryId): Promise<RequestCommandOutcome | string>;
   respondToInput(
-    runId: RunId,
+    boundaryId: BoundaryId,
     inputRequestId: string,
     value: string,
   ): Promise<RequestCommandOutcome | string>;
   respondToEnv(
-    runId: RunId,
+    boundaryId: BoundaryId,
     envRequestId: string,
     value?: string,
   ): Promise<RequestCommandOutcome | string>;
   listRuns(filter?: RunListFilter): Promise<RunSummary[]>;
-  snapshot(runId: RunId): Promise<Run>;
-  subscribe(runId: RunId, cursor?: RunCursor): RunSubscriptionHandle;
+  snapshot(boundaryId: BoundaryId): Promise<Run>;
+  subscribe(boundaryId: BoundaryId, cursor?: RunCursor): RunSubscriptionHandle;
   unsubscribe(subscriptionId: string): Promise<RequestCommandOutcome | string>;
   dispose(): void;
 }
 
 type PendingRequest =
-  | { kind: 'startRun'; resolve: (runId: RunId) => void; reject: (error: Error) => void }
+  | { kind: 'startRun'; resolve: (boundaryId: BoundaryId) => void; reject: (error: Error) => void }
   | { kind: 'command'; resolve: (outcome: RequestCommandOutcome | string) => void; reject: (error: Error) => void }
   | { kind: 'listRuns'; resolve: (runs: RunSummary[]) => void; reject: (error: Error) => void }
   | { kind: 'snapshot'; resolve: (run: Run) => void; reject: (error: Error) => void }
@@ -117,7 +117,7 @@ class AsyncQueue<T> implements AsyncIterable<T> {
 }
 
 interface SubscriptionRecord {
-  runId: RunId;
+  boundaryId: BoundaryId;
   queue: AsyncQueue<RunSubscriptionEvent>;
 }
 
@@ -145,7 +145,7 @@ export function createRunStoreClient(port: RuntimePort): RunStoreClient {
         const waiter = pending.get(msg.requestId);
         if (!waiter || waiter.kind !== 'startRun') return;
         pending.delete(msg.requestId);
-        waiter.resolve(msg.run.runId);
+        waiter.resolve(msg.run.boundaryId);
         return;
       }
       case 'commandAck': {
@@ -182,7 +182,7 @@ export function createRunStoreClient(port: RuntimePort): RunStoreClient {
           }
         }
         for (const subscription of subscriptions.values()) {
-          if (subscription.runId === msg.runId) {
+          if (subscription.boundaryId === msg.boundaryId) {
             subscription.queue.push({ type: 'snapshot', snapshot: msg.snapshot });
           }
         }
@@ -190,7 +190,7 @@ export function createRunStoreClient(port: RuntimePort): RunStoreClient {
       }
       case 'runPatch':
         for (const subscription of subscriptions.values()) {
-          if (subscription.runId === msg.patch.runId) {
+          if (subscription.boundaryId === msg.patch.boundaryId) {
             subscription.queue.push({ type: 'patch', patch: msg.patch });
           }
         }
@@ -198,7 +198,7 @@ export function createRunStoreClient(port: RuntimePort): RunStoreClient {
       case 'runCursorExpired': {
         const event: RunCursorExpiredEvent = {
           type: 'cursorExpired',
-          runId: msg.runId,
+          boundaryId: msg.boundaryId,
           reason: msg.reason,
         };
         if (msg.requestId != null) {
@@ -211,7 +211,7 @@ export function createRunStoreClient(port: RuntimePort): RunStoreClient {
           subscriptions.get(msg.subscriptionId)?.queue.push(event);
         } else {
           for (const subscription of subscriptions.values()) {
-            if (subscription.runId === msg.runId) subscription.queue.push(event);
+            if (subscription.boundaryId === msg.boundaryId) subscription.queue.push(event);
           }
         }
         return;
@@ -223,18 +223,18 @@ export function createRunStoreClient(port: RuntimePort): RunStoreClient {
 
   function command(
     msg:
-      | { type: 'cancelRun'; requestId: number; runId: RunId }
+      | { type: 'cancelRun'; requestId: number; boundaryId: BoundaryId }
       | {
           type: 'respondToInput';
           requestId: number;
-          runId: RunId;
+          boundaryId: BoundaryId;
           inputRequestId: string;
           value: string;
         }
       | {
           type: 'respondToEnv';
           requestId: number;
-          runId: RunId;
+          boundaryId: BoundaryId;
           envRequestId: string;
           value?: string;
         }
@@ -291,25 +291,25 @@ export function createRunStoreClient(port: RuntimePort): RunStoreClient {
       });
     },
 
-    cancelRun(runId) {
-      return command({ type: 'cancelRun', requestId: requestId(), runId });
+    cancelRun(boundaryId) {
+      return command({ type: 'cancelRun', requestId: requestId(), boundaryId });
     },
 
-    respondToInput(runId, inputRequestId, value) {
+    respondToInput(boundaryId, inputRequestId, value) {
       return command({
         type: 'respondToInput',
         requestId: requestId(),
-        runId,
+        boundaryId,
         inputRequestId,
         value,
       });
     },
 
-    respondToEnv(runId, envRequestId, value) {
+    respondToEnv(boundaryId, envRequestId, value) {
       return command({
         type: 'respondToEnv',
         requestId: requestId(),
-        runId,
+        boundaryId,
         envRequestId,
         value,
       });
@@ -323,30 +323,30 @@ export function createRunStoreClient(port: RuntimePort): RunStoreClient {
       });
     },
 
-    snapshot(runId) {
+    snapshot(boundaryId) {
       const id = requestId();
       return new Promise((resolve, reject) => {
         pending.set(id, { kind: 'snapshot', resolve, reject });
-        port.postMessage({ type: 'snapshot', requestId: id, runId });
+        port.postMessage({ type: 'snapshot', requestId: id, boundaryId });
       });
     },
 
-    subscribe(runId, cursor) {
+    subscribe(boundaryId, cursor) {
       const id = requestId();
       const subscriptionId = `run_sub_${nextSubscriptionId++}`;
       const queue = new AsyncQueue<RunSubscriptionEvent>();
-      subscriptions.set(subscriptionId, { runId, queue });
+      subscriptions.set(subscriptionId, { boundaryId, queue });
       pending.set(id, {
         kind: 'subscribe',
         subscriptionId,
         reject: () =>
-          queue.push({ type: 'cursorExpired', runId, reason: 'unavailable' }),
+          queue.push({ type: 'cursorExpired', boundaryId, reason: 'unavailable' }),
       });
       port.postMessage({
         type: 'subscribe',
         requestId: id,
         subscriptionId,
-        runId,
+        boundaryId,
         afterCursor: cursor,
       });
       return {

@@ -32,11 +32,11 @@ describe('run-store-client', () => {
     port.emit({
       type: 'runStarted',
       requestId: 1,
-      run: runFixture('baml_run_1_00000000000000000000000000000001'),
+      run: runFixture('baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ'),
     });
 
     await expect(pending).resolves.toBe(
-      'baml_run_1_00000000000000000000000000000001',
+      'baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ',
     );
     client.dispose();
   });
@@ -64,11 +64,11 @@ describe('run-store-client', () => {
     port.emit({
       type: 'runStarted',
       requestId: 1,
-      run: runFixture('baml_run_1_00000000000000000000000000000001'),
+      run: runFixture('baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ'),
     });
 
     await expect(pending).resolves.toBe(
-      'baml_run_1_00000000000000000000000000000001',
+      'baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ',
     );
     client.dispose();
   });
@@ -78,7 +78,7 @@ describe('run-store-client', () => {
     const client = createRunStoreClient(port);
 
     const pending = client.respondToInput(
-      'baml_run_1_00000000000000000000000000000001',
+      'baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ',
       '3',
       'answer',
     );
@@ -87,7 +87,7 @@ describe('run-store-client', () => {
       {
         type: 'respondToInput',
         requestId: 1,
-        runId: 'baml_run_1_00000000000000000000000000000001',
+        boundaryId: 'baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ',
         inputRequestId: '3',
         value: 'answer',
       },
@@ -108,7 +108,7 @@ describe('run-store-client', () => {
     const client = createRunStoreClient(port);
 
     const pending = client.respondToEnv(
-      'baml_run_1_00000000000000000000000000000001',
+      'baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ',
       '4',
       'secret',
     );
@@ -117,7 +117,7 @@ describe('run-store-client', () => {
       {
         type: 'respondToEnv',
         requestId: 1,
-        runId: 'baml_run_1_00000000000000000000000000000001',
+        boundaryId: 'baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ',
         envRequestId: '4',
         value: 'secret',
       },
@@ -136,9 +136,9 @@ describe('run-store-client', () => {
   it('clears pending subscribe requests after initial cursor expiration', async () => {
     const port = new FakeRuntimePort();
     const client = createRunStoreClient(port);
-    const runId = 'baml_run_1_00000000000000000000000000000001';
+    const boundaryId = 'baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ';
 
-    const handle = client.subscribe(runId, 99);
+    const handle = client.subscribe(boundaryId, 99);
     const iterator = handle.events[Symbol.asyncIterator]();
 
     expect(port.sent).toEqual([
@@ -146,7 +146,7 @@ describe('run-store-client', () => {
         type: 'subscribe',
         requestId: 1,
         subscriptionId: handle.subscriptionId,
-        runId,
+        boundaryId,
         afterCursor: 99,
       },
     ]);
@@ -155,12 +155,12 @@ describe('run-store-client', () => {
       type: 'runCursorExpired',
       requestId: 1,
       subscriptionId: handle.subscriptionId,
-      runId,
+      boundaryId,
       reason: 'future',
     });
 
     await expect(iterator.next()).resolves.toEqual({
-      value: { type: 'cursorExpired', runId, reason: 'future' },
+      value: { type: 'cursorExpired', boundaryId, reason: 'future' },
       done: false,
     });
 
@@ -202,7 +202,7 @@ describe('run-store-client', () => {
       requestId: 1,
       runs: [
         {
-          runId: 'baml_run_1_00000000000000000000000000000001',
+          boundaryId: 'baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ',
           target: { kind: 'function', functionName: 'Extract' },
           visibility: { kind: 'history' },
           status: 'succeeded',
@@ -252,9 +252,9 @@ class FakeRuntimePort implements RuntimePort {
   }
 }
 
-function runFixture(runId: string): Run {
+function runFixture(boundaryId: string): Run {
   return {
-    runId,
+    boundaryId,
     target: { kind: 'test', generation: 2, testName: 'suite/test' },
     visibility: { kind: 'history' },
     status: 'running',

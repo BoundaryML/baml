@@ -486,7 +486,7 @@ describe('run-store-projections', () => {
 
 function runFixture(overrides: Partial<Run>): Run {
   return {
-    runId: 'run-1',
+    boundaryId: 'run-1',
     target: { kind: 'function', functionName: 'main' },
     visibility: { kind: 'history' },
     status: 'running',

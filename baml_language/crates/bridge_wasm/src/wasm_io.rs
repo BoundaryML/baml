@@ -182,9 +182,12 @@ fn publish_input_resolved(
     let Some(host_call_id) = host_call_id else {
         return;
     };
-    if let Some(run_id) = run_store.run_id_for_host_call(host_call_id) {
-        let result =
-            run_store.resolve_input_request_for_run(run_id, request_id, RunRequestState::Resolved);
+    if let Some(boundary_id) = run_store.boundary_id_for_host_call(host_call_id) {
+        let result = run_store.resolve_input_request_for_run(
+            boundary_id,
+            request_id,
+            RunRequestState::Resolved,
+        );
         if result.outcome == RequestCommandOutcome::Accepted
             && let Some(patch) = result.patch
         {
