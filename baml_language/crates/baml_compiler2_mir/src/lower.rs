@@ -3415,7 +3415,92 @@ impl<'db> LoweringContext<'db> {
                 &self.generic_param_bounds,
             )
             .resolve_deep(ty);
-        self.resolved_aliases.convert(&resolved)
+        let runtime_ready = Self::erase_compiler_only_ty(resolved);
+        self.resolved_aliases.convert(&runtime_ready)
+    }
+
+    fn erase_compiler_only_ty(ty: Tir2Ty) -> Tir2Ty {
+        match ty {
+            Tir2Ty::Unknown { attr } | Tir2Ty::Error { attr } => Tir2Ty::BuiltinUnknown { attr },
+            Tir2Ty::EvolvingList(inner, attr) => {
+                Tir2Ty::List(Box::new(Self::erase_compiler_only_ty(*inner)), attr)
+            }
+            Tir2Ty::EvolvingMap(key, value, attr) => Tir2Ty::Map {
+                key: Box::new(Self::erase_compiler_only_ty(*key)),
+                value: Box::new(Self::erase_compiler_only_ty(*value)),
+                attr,
+            },
+            Tir2Ty::Literal(lit, _freshness, attr) => {
+                Tir2Ty::Literal(lit, baml_compiler2_tir::ty::Freshness::Regular, attr)
+            }
+            Tir2Ty::Class(name, args, attr) => Tir2Ty::Class(
+                name,
+                args.into_iter().map(Self::erase_compiler_only_ty).collect(),
+                attr,
+            ),
+            Tir2Ty::Interface(name, args, bindings, attr) => Tir2Ty::Interface(
+                name,
+                args.into_iter().map(Self::erase_compiler_only_ty).collect(),
+                bindings
+                    .into_iter()
+                    .map(|(name, ty)| (name, Self::erase_compiler_only_ty(ty)))
+                    .collect(),
+                attr,
+            ),
+            Tir2Ty::List(inner, attr) => {
+                Tir2Ty::List(Box::new(Self::erase_compiler_only_ty(*inner)), attr)
+            }
+            Tir2Ty::Map { key, value, attr } => Tir2Ty::Map {
+                key: Box::new(Self::erase_compiler_only_ty(*key)),
+                value: Box::new(Self::erase_compiler_only_ty(*value)),
+                attr,
+            },
+            Tir2Ty::Union(types, attr) => Tir2Ty::Union(
+                types
+                    .into_iter()
+                    .map(Self::erase_compiler_only_ty)
+                    .collect(),
+                attr,
+            ),
+            Tir2Ty::Function {
+                params,
+                ret,
+                throws,
+                attr,
+            } => Tir2Ty::Function {
+                params: params
+                    .into_iter()
+                    .map(|param| Tir2FunctionParamTy {
+                        name: param.name,
+                        ty: Self::erase_compiler_only_ty(param.ty),
+                        mode: param.mode,
+                    })
+                    .collect(),
+                ret: Box::new(Self::erase_compiler_only_ty(*ret)),
+                throws: Box::new(Self::erase_compiler_only_ty(*throws)),
+                attr,
+            },
+            Tir2Ty::Future(value, error, attr) => Tir2Ty::Future(
+                Box::new(Self::erase_compiler_only_ty(*value)),
+                Box::new(Self::erase_compiler_only_ty(*error)),
+                attr,
+            ),
+            Tir2Ty::WatchAccessor(inner, attr) => {
+                Tir2Ty::WatchAccessor(Box::new(Self::erase_compiler_only_ty(*inner)), attr)
+            }
+            Tir2Ty::AssociatedTypeProjection {
+                base,
+                interface,
+                member,
+                attr,
+            } => Tir2Ty::AssociatedTypeProjection {
+                base: Box::new(Self::erase_compiler_only_ty(*base)),
+                interface: interface.map(|ty| Box::new(Self::erase_compiler_only_ty(*ty))),
+                member,
+                attr,
+            },
+            other => other,
+        }
     }
 
     /// Lower a method-signature type expression (a parameter or return type) to
