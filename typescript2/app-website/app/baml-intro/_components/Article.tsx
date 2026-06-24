@@ -259,7 +259,7 @@ const WORKFLOW_EXAMPLES = [
     from: 2,
     id: 'tally',
     label: 'summarize · tally (runnable)',
-    to: 17,
+    to: 18,
   },
   {
     code: BAML_WF_FANOUT,

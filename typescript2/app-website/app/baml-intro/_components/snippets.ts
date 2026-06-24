@@ -418,9 +418,10 @@ client AiGatewayImagen {
 }`;
 
 // Non-LLM, runnable workflow: classify each line, then tally the results.
-// `//#` comments add nodes to the playground graph (the graph renders
-// header-anchored nodes + LLM calls). Entry point `summarize` is lines 2-17.
-// Verified `baml check`/`baml test` pass.
+// `//#` comments add nodes to the playground graph (it renders header-anchored
+// nodes + LLM calls + branch arms under a header). `sentiment` is bound to a
+// `let` so the call gets its own node and expands inline (showing its own
+// `//#` nodes). Entry point `summarize` is lines 2-18; verified check/test pass.
 export const BAML_WF_TALLY = `// a non-LLM workflow: classify each line, then tally the results
 function summarize(raw: string) -> Tally {
   //# split the input into lines
@@ -429,7 +430,8 @@ function summarize(raw: string) -> Tally {
   let neg = 0;
   for (let line in lines) {
     //# classify each line
-    if (sentiment(line) == "positive") {
+    let label = sentiment(line);
+    if (label == "positive") {
       pos += 1;
     } else {
       neg += 1;
@@ -442,6 +444,7 @@ function summarize(raw: string) -> Tally {
 //# classify one line of text
 function sentiment(text: string) -> string {
   let t = text.to_lower_case();
+  //# check sentiment
   if (t.includes("love") || t.includes("great") || t.includes("amazing")) {
     "positive"
   } else {
