@@ -7164,18 +7164,49 @@ impl<'db> LoweringContext<'db> {
                 if segments.len() < 2 || segments.last().is_none_or(|s| s.as_str() != "to_string") {
                     return false;
                 }
-                let Some(&recv_root_local) = self.locals.get(&segments[0]) else {
-                    return false;
-                };
                 let receiver_segments = &segments[..segments.len() - 1];
+                // Lower the receiver, mirroring normal path-method receiver
+                // handling: a single-segment root may be a local OR a closure
+                // capture; a multi-segment receiver is a field chain off either.
+                // (Can't reuse `lower_path_receiver_to_local`: it assumes a local
+                // root and `expr_ty(callee)` would ICE on the Unknown callee.)
+                let recv_op = if receiver_segments.len() == 1 {
+                    if let Some(&recv_local) = self.locals.get(&receiver_segments[0]) {
+                        Operand::Copy(Place::Local(recv_local))
+                    } else if let Some(cap_idx) =
+                        self.capture_index_for_name_at(callee, &receiver_segments[0])
+                    {
+                        Operand::Copy(Place::Capture(cap_idx))
+                    } else {
+                        return false;
+                    }
+                } else {
+                    let recv_ty = self
+                        .path_segment_types
+                        .get(&(
+                            self.current_metadata_scope,
+                            callee,
+                            receiver_segments.len() - 1,
+                        ))
+                        .cloned()
+                        .map(|t| self.convert_tir_ty_for_runtime(&t))
+                        .unwrap_or_else(|| RuntimeTy::BuiltinUnknown {
+                            attr: TyAttr::default(),
+                        });
+                    let recv_local = self.builder.temp(recv_ty);
+                    self.lower_multi_segment_path_as_field_chain(
+                        callee,
+                        receiver_segments,
+                        Place::local(recv_local),
+                    );
+                    Operand::Copy(Place::local(recv_local))
+                };
                 let prefix_idx = segments.len() - 2;
                 let ty = self
                     .path_segment_types
                     .get(&(self.current_metadata_scope, callee, prefix_idx))
                     .cloned();
-                let recv_local =
-                    self.lower_path_receiver_to_local(callee, receiver_segments, recv_root_local);
-                (Operand::Copy(Place::Local(recv_local)), ty)
+                (recv_op, ty)
             }
             _ => return false,
         };

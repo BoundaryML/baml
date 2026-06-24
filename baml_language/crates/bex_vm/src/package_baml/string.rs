@@ -304,7 +304,7 @@ impl BamlClassString for PackageBamlImpl {
 /// interface `T` is dispatched to its `{fqn}.baml.FromString.from_string`
 /// override (threading `T`'s own type args into the callee frame, like
 /// `baml.json.from_json`). Anything else, or a parse failure, throws
-/// `baml.StringParseError`.
+/// `baml.errors.ParseError`.
 fn string_to_dispatch(vm: &mut BexVm, s: &str, ty: &RuntimeTy) -> NativeCallResult {
     match ty {
         RuntimeTy::String { .. } => {

@@ -258,3 +258,22 @@ async fn zzz_throws_never2() {
     .await;
     assert_eq!(out, "42");
 }
+
+#[tokio::test]
+async fn captured_root_to_string() {
+    // `.to_string()` on a *captured* (closure) root must lower through the
+    // fallback too — the MIR hook handles captured roots via Place::Capture,
+    // matching how TIR/throws treat them (regression: previously ICE'd).
+    let out = expect_string(
+        r#"
+        class Point { x int  y int }
+        function main() -> string {
+            let p = Point { x: 1, y: 2 }
+            let f = () -> string { p.to_string() }
+            return f()
+        }
+    "#,
+    )
+    .await;
+    assert_eq!(out, "Point { x: 1, y: 2 }");
+}
