@@ -249,6 +249,27 @@ mod backtick_format_tests {
 }
 
 #[cfg(test)]
+mod linear_formatter_regression_tests {
+    use super::*;
+
+    #[test]
+    fn keyword_path_segments_format() {
+        let source = "function repro() -> int {\n    let g = baml.spawn.TaskGroup.new(2, name = \"fmt-repro\");\n    let f = spawn with baml.spawn.options(group = g) {\n        42\n    };\n    await f\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options)
+            .expect("formatter should accept keyword path segments after `.`");
+
+        assert!(
+            formatted.contains("baml.spawn.TaskGroup.new")
+                && formatted.contains("baml.spawn.options"),
+            "keyword path segments should round-trip, got:\n{formatted}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+}
+
+#[cfg(test)]
 mod pattern_format_tests {
     use super::*;
 

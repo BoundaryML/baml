@@ -132,8 +132,9 @@ pub const ALL: &[BuiltinFile] = &[
     // --- reflect package (standalone, accessible as `reflect.type_of(...)`) ---
     builtin!("reflect", "reflect.baml"),
     // --- testing package ---
-    builtin!("testing", "registry.baml"),
     builtin!("testing", "types.baml"),
+    builtin!("testing", "registry.baml"),
+    builtin!("testing", "runners.baml"),
     // --- assert package ---
     builtin!("assert", "assert.baml"),
     // --- log package ---

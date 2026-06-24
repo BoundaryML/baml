@@ -3,6 +3,7 @@
     clippy::for_kv_map,
     clippy::len_zero,
     clippy::needless_borrow,
+    clippy::print_stdout,
     clippy::redundant_closure,
     dead_code
 )]

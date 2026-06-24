@@ -30,6 +30,36 @@ pub(crate) trait ThrowsAnalysisContext {
     fn runtime_id_set_throws(&self) -> Option<BTreeSet<Ty>>;
 }
 
+/// Whether `expr` has the shape of a `recv.to_string()` call callee: a
+/// `to_string` member access, or a dotted path whose last segment is `to_string`.
+/// This is the syntactic trigger shared by the `obj.to_string()` sugar across TIR
+/// (type inference + this throws pass) and MIR lowering; each site layers its own
+/// guards on top (in-scope-local root, callee left untyped, etc.).
+pub fn is_to_string_call_callee(expr: &Expr) -> bool {
+    match expr {
+        Expr::MemberAccess { member, .. } => member.as_str() == "to_string",
+        Expr::Path(segs) => {
+            segs.len() >= 2 && segs.last().is_some_and(|s| s.as_str() == "to_string")
+        }
+        _ => false,
+    }
+}
+
+/// Whether `callee` is the callee of a `recv.to_string()` sugar fallback — a
+/// `to_string` call shape the type checker left untyped (`Unknown`/`Error`)
+/// because the receiver has no real `to_string` method. Such a call lowers to
+/// `string.from(recv)`, which is `throws never`.
+fn is_to_string_fallback_callee<C: ThrowsAnalysisContext>(
+    context: &C,
+    callee: ExprId,
+    body: &ExprBody,
+) -> bool {
+    is_to_string_call_callee(&body.exprs[callee])
+        && context
+            .expression_type(callee)
+            .is_none_or(|t| matches!(t, Ty::Unknown { .. } | Ty::Error { .. }))
+}
+
 /// True when `expr` is the bare `$id` special form used as an assignment
 /// target — the shape that lowers to an implicit `baml.id.set` call.
 fn is_runtime_id_path(expr_id: ExprId, body: &ExprBody) -> bool {
@@ -205,6 +235,15 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
             let arg_exprs: Vec<_> = args.iter().map(|arg| arg.expr).collect();
             for arg in args {
                 collect_from_expr(context, arg.expr, body, out);
+            }
+            // A `recv.to_string()` sugar fallback lowers to `string.from(recv)`,
+            // which is `throws never`. Its callee is left untyped (no real method),
+            // so charging it as `unknown` throws (the unaccounted-callee default in
+            // `collect_callee_escaping_throws`) would infect the enclosing
+            // function's inferred throws. Skip it — the receiver's own throws were
+            // already collected by the `*callee` recursion above.
+            if arg_exprs.is_empty() && is_to_string_fallback_callee(context, *callee, body) {
+                return;
             }
             // When the callee is an `OptionalMemberAccess` (`obj?.method`), the
             // inferred callee type is a nullable `Union([Ty::Function { ... }, Null])`

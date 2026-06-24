@@ -172,6 +172,7 @@ impl TestArgs {
             self.include.iter().map(|s| s.as_str()),
             self.exclude.iter().map(|s| s.as_str()),
         );
+        let has_filters = !self.include.is_empty() || !self.exclude.is_empty();
         let selected: Vec<DiscoveredTest> = discovered
             .into_iter()
             .filter(|t| filter.includes(&t.function_name, &t.test_name))
@@ -201,9 +202,21 @@ impl TestArgs {
         }
 
         // ── 7. Execute ─────────────────────────────────────────────────────
-        let total = selected.len();
+        let aggregate_new_style = !has_filters
+            && selected
+                .iter()
+                .any(|t| matches!(&t.kind, TestKind::Testset { .. }));
+        let mut total = if aggregate_new_style {
+            selected
+                .iter()
+                .filter(|t| matches!(&t.kind, TestKind::Legacy { .. }))
+                .count()
+        } else {
+            selected.len()
+        };
         let mut passed = 0usize;
         let mut failed = 0usize;
+        let mut command_failed = false;
 
         let run_ctx = RunCtx {
             engine: &engine,
@@ -219,24 +232,45 @@ impl TestArgs {
         for t in &selected {
             match &t.kind {
                 TestKind::Legacy { .. } => {
+                    let failed_before = failed;
                     run_legacy_test(&run_ctx, t, &mut passed, &mut failed);
+                    command_failed |= failed > failed_before;
                 }
                 TestKind::Testset { full_path } => {
+                    if aggregate_new_style {
+                        continue;
+                    }
                     let Some(reg_value) = registry_value.as_ref() else {
                         eprintln!(
                             "FAIL {}::{} - testset registry unavailable",
                             t.function_name, t.test_name
                         );
                         failed += 1;
+                        command_failed = true;
                         continue;
                     };
+                    let failed_before = failed;
                     run_testset_test(&run_ctx, reg_value, full_path, t, &mut passed, &mut failed);
+                    command_failed |= failed > failed_before;
                 }
             }
         }
 
+        if aggregate_new_style {
+            let Some(reg_value) = registry_value.as_ref() else {
+                eprintln!("FAIL testing::* - testset registry unavailable");
+                failed += 1;
+                total += 1;
+                let summary = format!("{passed} passed, {failed} failed, {total} total");
+                crate::reporter::print_error(format_args!("test failures — {summary}"));
+                return Ok(crate::ExitCode::TestFailure);
+            };
+            command_failed |=
+                run_testset_registry(&run_ctx, reg_value, &mut passed, &mut failed, &mut total);
+        }
+
         let summary = format!("{passed} passed, {failed} failed, {total} total");
-        if failed > 0 {
+        if command_failed {
             // `reporter.finish` styles success — print as an error so
             // the bold-red `Error:` carries the visual weight of "tests
             // failed" instead of dressing it up as a clean finish.
@@ -586,6 +620,7 @@ fn run_testset_test(
                     "FAIL {}::{} [outcome={outcome}]",
                     t.function_name, t.test_name
                 );
+                print_failure_messages(&report);
                 *failed += 1;
             }
         }
@@ -593,6 +628,74 @@ fn run_testset_test(
             eprintln!("FAIL {}::{}", t.function_name, t.test_name);
             eprintln!("  => {e}");
             *failed += 1;
+        }
+    }
+}
+
+fn run_testset_registry(
+    ctx: &RunCtx,
+    registry: &BexExternalValue,
+    passed: &mut usize,
+    failed: &mut usize,
+    total: &mut usize,
+) -> bool {
+    let call_ctx = FunctionCallContextBuilder::new(CallId::next())
+        .with_cancel_token(ctx.cancel.clone())
+        .build();
+    match ctx.rt.block_on(ctx.engine.call_function(
+        "testing.TestRegistry.run_all",
+        vec![registry.clone()],
+        call_ctx,
+        true,
+    )) {
+        Ok(report) => {
+            let outcome = extract_outcome(&report).unwrap_or_else(|| "unknown".to_string());
+            let aggregate_failed = outcome != "pass";
+            if let Some((report_passed, report_failed, report_total)) =
+                extract_leaf_summary(&report).or_else(|| {
+                    extract_testset_summary(&report)
+                        .map(|(_, passed, failed, total)| (passed, failed, total))
+                })
+            {
+                *passed += report_passed;
+                *failed += report_failed;
+                *total += report_total;
+                if !aggregate_failed {
+                    println!("PASS testing::*");
+                } else {
+                    println!("FAIL testing::* [outcome={outcome}]");
+                    print_failed_names(&report);
+                    print_failure_messages(&report);
+                    // A testset runner can fail the aggregate without marking
+                    // individual children failed. Count that runner-level
+                    // verdict as one displayed failure so the summary does not
+                    // say "0 failed" when the aggregate itself failed.
+                    if report_failed == 0 {
+                        *failed += 1;
+                        *total += 1;
+                    }
+                }
+                aggregate_failed
+            } else {
+                *total += 1;
+                if !aggregate_failed {
+                    println!("PASS testing::*");
+                    *passed += 1;
+                } else {
+                    println!("FAIL testing::* [outcome={outcome}]");
+                    print_failed_names(&report);
+                    print_failure_messages(&report);
+                    *failed += 1;
+                }
+                aggregate_failed
+            }
+        }
+        Err(e) => {
+            eprintln!("FAIL testing::*");
+            eprintln!("  => {e:?}");
+            *failed += 1;
+            *total += 1;
+            true
         }
     }
 }
@@ -610,6 +713,138 @@ fn extract_outcome(value: &BexExternalValue) -> Option<String> {
         }
     }
     None
+}
+
+fn extract_testset_summary(value: &BexExternalValue) -> Option<(String, usize, usize, usize)> {
+    let v = unwrap_union(value);
+    if let BexExternalValue::Instance {
+        class_name, fields, ..
+    } = v
+    {
+        if !class_matches(class_name, "TestSetReport") {
+            return None;
+        }
+        let outcome = fields
+            .get("outcome")
+            .and_then(|v| as_string(unwrap_union(v)))?
+            .to_string();
+        let passed = fields.get("passed").and_then(as_usize)?;
+        let failed = fields.get("failed").and_then(as_usize)?;
+        let total = fields.get("total").and_then(as_usize)?;
+        Some((outcome, passed, failed, total))
+    } else {
+        None
+    }
+}
+
+fn extract_leaf_summary(value: &BexExternalValue) -> Option<(usize, usize, usize)> {
+    let v = unwrap_union(value);
+    if let BexExternalValue::Instance {
+        class_name, fields, ..
+    } = v
+    {
+        if class_matches(class_name, "TestReport") {
+            let outcome = fields
+                .get("outcome")
+                .and_then(|v| as_string(unwrap_union(v)))?;
+            return Some(if outcome == "pass" {
+                (1, 0, 1)
+            } else {
+                (0, 1, 1)
+            });
+        }
+
+        if class_matches(class_name, "TestSetReport") {
+            if let Some(results) = fields.get("results") {
+                if let BexExternalValue::Array { items, .. } = unwrap_union(results) {
+                    if !items.is_empty() {
+                        let mut passed = 0usize;
+                        let mut failed = 0usize;
+                        let mut total = 0usize;
+                        for item in items {
+                            let (child_passed, child_failed, child_total) =
+                                extract_leaf_summary(item)?;
+                            passed += child_passed;
+                            failed += child_failed;
+                            total += child_total;
+                        }
+                        return Some((passed, failed, total));
+                    }
+                }
+            }
+            return extract_testset_summary(value)
+                .map(|(_, passed, failed, total)| (passed, failed, total));
+        }
+    }
+    None
+}
+
+fn print_failed_names(value: &BexExternalValue) {
+    for name in extract_failed_names(value) {
+        println!("  failed: {name}");
+    }
+}
+
+fn extract_failed_names(value: &BexExternalValue) -> Vec<String> {
+    let v = unwrap_union(value);
+    if let BexExternalValue::Instance { fields, .. } = v {
+        if let Some(names) = fields.get("failed_names") {
+            if let BexExternalValue::Array { items, .. } = unwrap_union(names) {
+                return items
+                    .iter()
+                    .filter_map(|item| as_string(unwrap_union(item)).map(str::to_string))
+                    .collect();
+            }
+        }
+    }
+    Vec::new()
+}
+
+fn print_failure_messages(value: &BexExternalValue) {
+    for message in extract_failure_messages(value) {
+        eprintln!("  => {message}");
+    }
+}
+
+fn extract_failure_messages(value: &BexExternalValue) -> Vec<String> {
+    let mut messages = Vec::new();
+    collect_failure_messages(value, &mut messages);
+    messages
+}
+
+fn collect_failure_messages(value: &BexExternalValue, messages: &mut Vec<String>) {
+    let v = unwrap_union(value);
+    match v {
+        BexExternalValue::Array { items, .. } => {
+            for item in items {
+                collect_failure_messages(item, messages);
+            }
+        }
+        BexExternalValue::Instance {
+            class_name, fields, ..
+        } => {
+            if class_matches(class_name, "RunReport")
+                && fields
+                    .get("outcome")
+                    .and_then(|v| as_string(unwrap_union(v)))
+                    .is_some_and(|outcome| outcome != "pass")
+            {
+                if let Some(message) = fields
+                    .get("message")
+                    .and_then(|v| as_string(unwrap_union(v)))
+                {
+                    messages.push(message.to_string());
+                }
+            }
+            if let Some(runs) = fields.get("runs") {
+                collect_failure_messages(runs, messages);
+            }
+            if let Some(results) = fields.get("results") {
+                collect_failure_messages(results, messages);
+            }
+        }
+        _ => {}
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -634,6 +869,13 @@ fn as_string(value: &BexExternalValue) -> Option<&str> {
     }
 }
 
+fn as_usize(value: &BexExternalValue) -> Option<usize> {
+    match unwrap_union(value) {
+        BexExternalValue::Int(i) => usize::try_from(*i).ok(),
+        _ => None,
+    }
+}
+
 /// Match the last segment of a namespaced class name, ignoring any leading
 /// `testing.` / `user.` / similar prefix. `testing.SerializedTest` and
 /// `SerializedTest` both match `"SerializedTest"`.
@@ -652,5 +894,182 @@ fn split_top(full_path: &str) -> (String, String) {
     match full_path.split_once('/') {
         Some((head, tail)) => (head.to_string(), tail.to_string()),
         None => (String::new(), full_path.to_string()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use baml_type::RuntimeTy;
+
+    use super::*;
+
+    fn string(value: &str) -> BexExternalValue {
+        BexExternalValue::String(value.into())
+    }
+
+    fn int(value: i64) -> BexExternalValue {
+        BexExternalValue::Int(value)
+    }
+
+    fn array(items: Vec<BexExternalValue>) -> BexExternalValue {
+        BexExternalValue::Array {
+            element_type: RuntimeTy::unknown(),
+            items,
+        }
+    }
+
+    fn instance(class_name: &str, fields: Vec<(&str, BexExternalValue)>) -> BexExternalValue {
+        BexExternalValue::Instance {
+            class_name: class_name.to_string(),
+            type_args: Vec::new(),
+            fields: fields
+                .into_iter()
+                .map(|(name, value)| (name.to_string(), value))
+                .collect(),
+        }
+    }
+
+    fn test_report(outcome: &str) -> BexExternalValue {
+        instance(
+            "testing.TestReport",
+            vec![("outcome", string(outcome)), ("runs", array(Vec::new()))],
+        )
+    }
+
+    fn run_report(outcome: &str, message: Option<&str>) -> BexExternalValue {
+        instance(
+            "testing.RunReport",
+            vec![
+                ("outcome", string(outcome)),
+                ("duration_ms", int(0)),
+                (
+                    "message",
+                    message
+                        .map(string)
+                        .unwrap_or_else(|| BexExternalValue::Null),
+                ),
+            ],
+        )
+    }
+
+    fn test_report_with_runs(outcome: &str, runs: Vec<BexExternalValue>) -> BexExternalValue {
+        instance(
+            "testing.TestReport",
+            vec![("outcome", string(outcome)), ("runs", array(runs))],
+        )
+    }
+
+    fn testset_report(
+        outcome: &str,
+        passed: i64,
+        failed: i64,
+        total: i64,
+        failed_names: Vec<BexExternalValue>,
+        results: Vec<BexExternalValue>,
+    ) -> BexExternalValue {
+        instance(
+            "testing.TestSetReport",
+            vec![
+                ("outcome", string(outcome)),
+                ("passed", int(passed)),
+                ("failed", int(failed)),
+                ("total", int(total)),
+                ("failed_names", array(failed_names)),
+                ("results", array(results)),
+            ],
+        )
+    }
+
+    #[test]
+    fn extract_leaf_summary_counts_test_reports() {
+        assert_eq!(extract_leaf_summary(&test_report("pass")), Some((1, 0, 1)));
+        assert_eq!(extract_leaf_summary(&test_report("fail")), Some((0, 1, 1)));
+        assert_eq!(extract_leaf_summary(&test_report("error")), Some((0, 1, 1)));
+    }
+
+    #[test]
+    fn extract_leaf_summary_recurses_over_testset_results() {
+        let nested = testset_report(
+            "fail",
+            99,
+            99,
+            99,
+            Vec::new(),
+            vec![test_report("fail"), test_report("error")],
+        );
+        let root = testset_report(
+            "fail",
+            99,
+            99,
+            99,
+            Vec::new(),
+            vec![test_report("pass"), nested],
+        );
+
+        assert_eq!(extract_leaf_summary(&root), Some((1, 2, 3)));
+    }
+
+    #[test]
+    fn extract_leaf_summary_falls_back_to_testset_totals_without_results() {
+        let report = testset_report("fail", 2, 1, 3, Vec::new(), Vec::new());
+
+        assert_eq!(extract_leaf_summary(&report), Some((2, 1, 3)));
+    }
+
+    #[test]
+    fn extract_failed_names_reads_string_names_and_unwraps_unions() {
+        let wrapped = BexExternalValue::union(
+            string("suite/three"),
+            [RuntimeTy::string(), RuntimeTy::int()],
+            RuntimeTy::string(),
+        );
+        let report = testset_report(
+            "fail",
+            1,
+            2,
+            3,
+            vec![string("suite/two"), int(42), wrapped],
+            Vec::new(),
+        );
+
+        assert_eq!(
+            extract_failed_names(&report),
+            vec!["suite/two".to_string(), "suite/three".to_string()]
+        );
+    }
+
+    #[test]
+    fn extract_failed_names_returns_empty_for_missing_or_malformed_names() {
+        assert!(extract_failed_names(&test_report("fail")).is_empty());
+
+        let report = instance(
+            "testing.TestSetReport",
+            vec![("failed_names", string("suite/two"))],
+        );
+        assert!(extract_failed_names(&report).is_empty());
+    }
+
+    #[test]
+    fn extract_failure_messages_recurses_into_failed_child_runs() {
+        let report = testset_report(
+            "fail",
+            0,
+            1,
+            1,
+            Vec::new(),
+            vec![test_report_with_runs(
+                "fail",
+                vec![
+                    run_report("pass", Some("ignored")),
+                    run_report("fail", Some("assertion failed: expected true")),
+                    run_report("error", None),
+                ],
+            )],
+        );
+
+        assert_eq!(
+            extract_failure_messages(&report),
+            vec!["assertion failed: expected true".to_string()]
+        );
     }
 }

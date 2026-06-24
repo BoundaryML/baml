@@ -12,16 +12,6 @@ source: crates/baml_tests/src/generated_tests.rs
    │ Note: Error code: E0003
 ───╯
 
-  [type] error: unresolved name: Quorum
-    ╭─[ main.baml:13:24 ]
-    │
- 13 │ test "call runner" with testing.Quorum(5, 3) {
-    │                        ───────┬───────  
-    │                               ╰───────── unresolved name: Quorum
-    │ 
-    │ Note: Error code: E0003
-────╯
-
   [type] error: type mismatch: expected testing.TestRunner | null, got MyRunner
     ╭─[ main.baml:23:32 ]
     │
