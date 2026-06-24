@@ -41,3 +41,15 @@ source: crates/baml_tests/src/generated_tests.rs
     │ 
     │ Note: Error code: E0002
 ────╯
+
+  [type] error: cannot access field `email` on `unknown`
+    ╭─[ unknown_type_error.baml:31:7 ]
+    │
+ 31 │   raw.email.to_lower_case()
+    │   ─┬─ ──┬──  
+    │    ╰───────── this value has type `unknown`
+    │         │    
+    │         ╰──── use `match` to narrow this value before accessing `email`
+    │ 
+    │ Note: Error code: E0007
+────╯

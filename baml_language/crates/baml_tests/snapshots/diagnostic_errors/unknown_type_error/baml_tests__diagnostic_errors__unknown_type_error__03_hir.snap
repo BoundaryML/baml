@@ -15,3 +15,6 @@ function user.Foo() -> blah  [expr] {
 function user.StatusTypoInTypePosition(s: user.Status.Typo) -> int  [expr] {
   {  } 1
 }
+function user.UnknownFieldAccess(raw: unknown) -> string  [expr] {
+  {  } raw.email.to_lower_case()
+}

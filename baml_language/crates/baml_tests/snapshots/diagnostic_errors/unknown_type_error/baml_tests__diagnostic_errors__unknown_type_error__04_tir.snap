@@ -27,3 +27,9 @@ function user.StatusTypoInTypePosition(s: unknown) -> int throws never {
   }
   !! 669..681: unresolved type: Status.Typo
 }
+function user.UnknownFieldAccess(raw: unknown) -> string throws never {
+  { : unknown
+    raw.email.to_lower_case() : unknown
+  }
+  !! 759..764: cannot access field `email` on `unknown`
+}

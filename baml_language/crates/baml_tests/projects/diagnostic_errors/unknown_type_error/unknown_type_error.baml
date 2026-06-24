@@ -26,3 +26,7 @@ enum Status {
 function StatusTypoInTypePosition(s: Status.Typo) -> int {
   1
 }
+
+function UnknownFieldAccess(raw: unknown) -> string {
+  raw.email.to_lower_case()
+}

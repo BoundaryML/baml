@@ -368,10 +368,30 @@ pub struct PathExpr {
     pub generic_args: Option<GenericArgs>,
 }
 
+fn is_path_segment_kind(kind: SyntaxKind) -> bool {
+    matches!(
+        kind,
+        SyntaxKind::WORD | SyntaxKind::KW_CLIENT | SyntaxKind::KW_SPAWN | SyntaxKind::KW_AWAIT
+    )
+}
+
+fn path_segment_from_cst(elem: SyntaxElement) -> Result<t::Word, StrongAstError> {
+    let token = StrongAstError::assert_is_token(elem)?;
+    if is_path_segment_kind(token.kind()) {
+        Ok(t::Word::new_from_span(token.text_range()))
+    } else {
+        Err(StrongAstError::UnexpectedKindDesc {
+            expected_desc: "path segment".into(),
+            found: token.kind(),
+            at: token.text_range(),
+        })
+    }
+}
+
 impl FromCST for PathExpr {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        if elem.kind() == SyntaxKind::WORD {
-            let first = t::Word::from_cst(elem)?;
+        if is_path_segment_kind(elem.kind()) {
+            let first = path_segment_from_cst(elem)?;
             return Ok(PathExpr {
                 first,
                 rest: Vec::new(),
@@ -390,7 +410,7 @@ impl FromCST for PathExpr {
             .ok_or_else(|| StrongAstError::missing(SyntaxKind::WORD, it.parent))?;
 
         let (first, mut rest) = match next.kind() {
-            SyntaxKind::WORD => (t::Word::from_cst(next)?, Vec::new()),
+            kind if is_path_segment_kind(kind) => (path_segment_from_cst(next)?, Vec::new()),
             SyntaxKind::PATH_EXPR => {
                 let nested = PathExpr::from_cst(next)?;
                 if nested.generic_args.is_some() {
@@ -419,7 +439,7 @@ impl FromCST for PathExpr {
             match elem.kind() {
                 SyntaxKind::DOT => {
                     let dot = t::Dot::from_cst(elem)?;
-                    let word = it.expect_parse()?;
+                    let word = path_segment_from_cst(it.expect_next("path segment after `.`")?)?;
                     rest.push((dot, word));
                 }
                 SyntaxKind::GENERIC_ARGS => {

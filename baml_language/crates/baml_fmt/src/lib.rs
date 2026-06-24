@@ -249,6 +249,41 @@ mod backtick_format_tests {
 }
 
 #[cfg(test)]
+mod linear_formatter_regression_tests {
+    use super::*;
+
+    #[test]
+    fn raw_string_contents_are_opaque() {
+        let source = "function csv_blob() -> string {\n    #\"id,en\na,hello\n\"#\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+
+        assert_eq!(
+            formatted, source,
+            "formatter must not reindent raw string contents"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    #[test]
+    fn keyword_path_segments_format() {
+        let source = "function repro() -> int {\n    let g = baml.spawn.TaskGroup.new(2, name = \"fmt-repro\");\n    let f = spawn with baml.spawn.options(group = g) {\n        42\n    };\n    await f\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options)
+            .expect("formatter should accept keyword path segments after `.`");
+
+        assert!(
+            formatted.contains("baml.spawn.TaskGroup.new")
+                && formatted.contains("baml.spawn.options"),
+            "keyword path segments should round-trip, got:\n{formatted}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+}
+
+#[cfg(test)]
 mod pattern_format_tests {
     use super::*;
 

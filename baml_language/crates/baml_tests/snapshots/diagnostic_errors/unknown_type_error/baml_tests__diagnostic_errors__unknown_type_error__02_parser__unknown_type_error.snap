@@ -89,6 +89,34 @@ SOURCE_FILE
         L_BRACE "{"
         INTEGER_LITERAL "1"
         R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "UnknownFieldAccess"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "raw"
+        COLON ":"
+        TYPE_EXPR "unknown"
+          WORD "unknown"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          PATH_EXPR "raw.email.to_lower_case"
+            WORD "raw"
+            DOT "."
+            WORD "email"
+            DOT "."
+            WORD "to_lower_case"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        R_BRACE "}"
 
 === ERRORS ===
 None

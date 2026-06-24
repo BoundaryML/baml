@@ -11256,6 +11256,23 @@ impl<'db> TypeInferenceBuilder<'db> {
                     attr: TyAttr::default(),
                 }
             }
+            Ty::BuiltinUnknown { .. } => {
+                self.context.report_at_segment(
+                    TirTypeError::UnresolvedMember {
+                        base_type: base_ty.clone(),
+                        member: member.clone(),
+                    },
+                    path_id,
+                    seg_idx,
+                    vec![RelatedNote::new(
+                        RelatedLocation::ExprSegment(path_id, 0),
+                        "this value has type `unknown`",
+                    )],
+                );
+                Ty::Unknown {
+                    attr: TyAttr::default(),
+                }
+            }
             _ => {
                 // For List, Map, String, primitives, etc. — fall through
                 // to resolve_member which handles them with proper error reporting.

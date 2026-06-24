@@ -5908,6 +5908,13 @@ fn tir_rendered_to_diagnostic(
     rendered: baml_compiler2_tir::infer_context::RenderedTirDiagnostic,
     file_id: FileId,
 ) -> Diagnostic {
+    let unknown_member_access_member = match &rendered.error {
+        TirTypeError::UnresolvedMember {
+            base_type: Ty::BuiltinUnknown { .. },
+            member,
+        } => Some(member.clone()),
+        _ => None,
+    };
     let span = Span {
         file_id,
         range: rendered.range,
@@ -5922,17 +5929,29 @@ fn tir_rendered_to_diagnostic(
             rendered.message,
         ),
     };
+    let diag = if let Some(member) = &unknown_member_access_member {
+        diag.with_primary(
+            span,
+            format!("use `match` to narrow this value before accessing `{member}`"),
+        )
+    } else {
+        diag.with_primary_span(span)
+    };
     rendered
         .related
         .into_iter()
-        .fold(diag.with_primary_span(span), |diag, related| {
-            diag.with_related(
-                Span {
-                    file_id: related.file_id,
-                    range: related.range,
-                },
-                related.message,
-            )
+        .fold(diag, |diag, related| {
+            let span = Span {
+                file_id: related.file_id,
+                range: related.range,
+            };
+            let message = related.message;
+            let diag = if unknown_member_access_member.is_some() {
+                diag.with_secondary(span, message.clone())
+            } else {
+                diag
+            };
+            diag.with_related(span, message)
         })
         .with_phase(DiagnosticPhase::Type)
 }
@@ -5955,6 +5974,12 @@ fn source_aware_tir_type_error_message(
     match error {
         TirTypeError::TypeMismatch { expected, got } => {
             format!("type mismatch: expected {}, got {}", ty(expected), ty(got))
+        }
+        TirTypeError::UnresolvedMember {
+            base_type: Ty::BuiltinUnknown { .. },
+            member,
+        } => {
+            format!("cannot access field `{member}` on `unknown`")
         }
         TirTypeError::UnresolvedMember { base_type, member } => {
             format!("type `{}` has no member `{member}`", ty(base_type))
