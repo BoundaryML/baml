@@ -11257,6 +11257,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
             }
             Ty::BuiltinUnknown { .. } => {
+                let receiver_seg_idx = seg_idx.saturating_sub(1);
                 self.context.report_at_segment(
                     TirTypeError::UnresolvedMember {
                         base_type: base_ty.clone(),
@@ -11265,7 +11266,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     path_id,
                     seg_idx,
                     vec![RelatedNote::new(
-                        RelatedLocation::ExprSegment(path_id, 0),
+                        RelatedLocation::ExprSegment(path_id, receiver_seg_idx),
                         "this value has type `unknown`",
                     )],
                 );

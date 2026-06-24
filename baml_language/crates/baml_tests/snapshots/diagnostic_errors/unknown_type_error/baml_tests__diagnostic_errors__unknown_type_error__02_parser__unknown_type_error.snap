@@ -117,6 +117,39 @@ SOURCE_FILE
             L_PAREN "("
             R_PAREN ")"
         R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "Envelope"
+    L_BRACE "{"
+    FIELD
+      WORD "payload"
+      TYPE_EXPR "unknown"
+        WORD "unknown"
+    R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "UnknownNestedFieldAccess"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "envelope"
+        COLON ":"
+        TYPE_EXPR "Envelope"
+          WORD "Envelope"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        PATH_EXPR "envelope.payload.email"
+          WORD "envelope"
+          DOT "."
+          WORD "payload"
+          DOT "."
+          WORD "email"
+        R_BRACE "}"
 
 === ERRORS ===
 None
