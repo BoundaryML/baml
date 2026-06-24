@@ -1380,45 +1380,43 @@ mod tests {
     use super::*;
 
     #[test]
-    fn diag_nested_header_nodes() {
+    fn header_above_if_keeps_all_branch_arms() {
+        use baml_compiler2_visualization::control_flow::{
+            NodeType, prepare_control_flow_graph_for_visualization,
+        };
         let mut db = ProjectDatabase::new();
         db.set_project_root(std::path::Path::new("/tmp"));
         db.add_or_update_file(
             std::path::Path::new("/tmp/wf.baml"),
             r#"
-function summarize(raw: string) -> Tally {
-  //# split the input into lines
-  let lines = raw.split("\n");
-  let pos = 0;
-  let neg = 0;
-  for (let line in lines) {
-    //# classify each line
-    if (sentiment(line) == "positive") { pos += 1; } else { neg += 1; };
-  }
-  //# build the tally
-  Tally { positive: pos, negative: neg }
-}
-
-//# classify one line of text
-function sentiment(text: string) -> string {
+function classify(text: string) -> string {
   let t = text.to_lower_case();
   //# check sentiment
   if (t.includes("love")) { "positive" } else { "negative" }
 }
-
-class Tally { positive: int, negative: int }
 "#,
         );
-        for fname in ["summarize", "sentiment"] {
-            let g = db.ast_control_flow_graph(fname);
-            println!("=== graph for {fname} ===");
-            match g {
-                None => println!("  <none>"),
-                Some(g) => for n in g.nodes.values() {
-                    println!("  {:?}  label={:?}", n.node_type, n.label);
-                },
-            }
-        }
+        let graph = db.ast_control_flow_graph("classify").unwrap();
+        let prepared = prepare_control_flow_graph_for_visualization(&graph);
+        // The `//# check sentiment` header sits directly above the if, so the
+        // whole branch group and both arms must survive pruning, even though
+        // neither arm holds its own anchor (header / LLM call).
+        let arms = prepared
+            .nodes
+            .values()
+            .filter(|n| matches!(n.node_type, NodeType::BranchArm))
+            .count();
+        assert!(
+            arms >= 2,
+            "a header directly above an if should keep all its branch arms; got {arms}"
+        );
+        assert!(
+            prepared
+                .nodes
+                .values()
+                .any(|n| matches!(n.node_type, NodeType::BranchGroup)),
+            "the annotated branch group should survive pruning"
+        );
     }
 
 
