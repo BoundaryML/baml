@@ -806,3 +806,132 @@ fn split_top(full_path: &str) -> (String, String) {
         None => (String::new(), full_path.to_string()),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use baml_type::RuntimeTy;
+
+    use super::*;
+
+    fn string(value: &str) -> BexExternalValue {
+        BexExternalValue::String(value.into())
+    }
+
+    fn int(value: i64) -> BexExternalValue {
+        BexExternalValue::Int(value)
+    }
+
+    fn array(items: Vec<BexExternalValue>) -> BexExternalValue {
+        BexExternalValue::Array {
+            element_type: RuntimeTy::unknown(),
+            items,
+        }
+    }
+
+    fn instance(class_name: &str, fields: Vec<(&str, BexExternalValue)>) -> BexExternalValue {
+        BexExternalValue::Instance {
+            class_name: class_name.to_string(),
+            fields: fields
+                .into_iter()
+                .map(|(name, value)| (name.to_string(), value))
+                .collect(),
+        }
+    }
+
+    fn test_report(outcome: &str) -> BexExternalValue {
+        instance(
+            "testing.TestReport",
+            vec![("outcome", string(outcome)), ("runs", array(Vec::new()))],
+        )
+    }
+
+    fn testset_report(
+        outcome: &str,
+        passed: i64,
+        failed: i64,
+        total: i64,
+        failed_names: Vec<BexExternalValue>,
+        results: Vec<BexExternalValue>,
+    ) -> BexExternalValue {
+        instance(
+            "testing.TestSetReport",
+            vec![
+                ("outcome", string(outcome)),
+                ("passed", int(passed)),
+                ("failed", int(failed)),
+                ("total", int(total)),
+                ("failed_names", array(failed_names)),
+                ("results", array(results)),
+            ],
+        )
+    }
+
+    #[test]
+    fn extract_leaf_summary_counts_test_reports() {
+        assert_eq!(extract_leaf_summary(&test_report("pass")), Some((1, 0, 1)));
+        assert_eq!(extract_leaf_summary(&test_report("fail")), Some((0, 1, 1)));
+        assert_eq!(extract_leaf_summary(&test_report("error")), Some((0, 1, 1)));
+    }
+
+    #[test]
+    fn extract_leaf_summary_recurses_over_testset_results() {
+        let nested = testset_report(
+            "fail",
+            99,
+            99,
+            99,
+            Vec::new(),
+            vec![test_report("fail"), test_report("error")],
+        );
+        let root = testset_report(
+            "fail",
+            99,
+            99,
+            99,
+            Vec::new(),
+            vec![test_report("pass"), nested],
+        );
+
+        assert_eq!(extract_leaf_summary(&root), Some((1, 2, 3)));
+    }
+
+    #[test]
+    fn extract_leaf_summary_falls_back_to_testset_totals_without_results() {
+        let report = testset_report("fail", 2, 1, 3, Vec::new(), Vec::new());
+
+        assert_eq!(extract_leaf_summary(&report), Some((2, 1, 3)));
+    }
+
+    #[test]
+    fn extract_failed_names_reads_string_names_and_unwraps_unions() {
+        let wrapped = BexExternalValue::union(
+            string("suite/three"),
+            [RuntimeTy::string(), RuntimeTy::int()],
+            RuntimeTy::string(),
+        );
+        let report = testset_report(
+            "fail",
+            1,
+            2,
+            3,
+            vec![string("suite/two"), int(42), wrapped],
+            Vec::new(),
+        );
+
+        assert_eq!(
+            extract_failed_names(&report),
+            vec!["suite/two".to_string(), "suite/three".to_string()]
+        );
+    }
+
+    #[test]
+    fn extract_failed_names_returns_empty_for_missing_or_malformed_names() {
+        assert!(extract_failed_names(&test_report("fail")).is_empty());
+
+        let report = instance(
+            "testing.TestSetReport",
+            vec![("failed_names", string("suite/two"))],
+        );
+        assert!(extract_failed_names(&report).is_empty());
+    }
+}

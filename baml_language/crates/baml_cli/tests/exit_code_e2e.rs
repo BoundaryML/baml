@@ -402,7 +402,6 @@ testset "suite" {
     let output = run_baml_cli(built, tmp.path(), &["test", "--from", "."]);
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
-    let combined = format!("{stdout}{stderr}");
 
     assert_eq!(
         output.status.code(),
@@ -415,10 +414,6 @@ testset "suite" {
     assert!(
         stdout.contains("failed: suite/two"),
         "Expected aggregate output to include the failed child name, got:\n{stdout}"
-    );
-    assert!(
-        combined.contains("1 passed, 1 failed, 2 total"),
-        "Expected unfiltered failing testset output to report leaf test totals, got:\n{combined}"
     );
 }
 
