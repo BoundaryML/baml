@@ -4,9 +4,10 @@ mod notification;
 mod request;
 mod wasm_helpers;
 
-use std::collections::HashMap;
+use std::{collections::HashMap, io::Read};
 
 use ::std::sync::Arc;
+use baml_workspace::{BAML_SRC_DIR, BAML_TOML, find_baml_project_root_from_ancestors};
 pub use wasm_helpers::BackgroundSpawner;
 
 /// Factory that creates [`sys_ops::SysOps`] for a given project root.
@@ -160,59 +161,14 @@ impl BexMulitProject {
     }
 
     fn get_baml_project_root(path: &vfs::VfsPath) -> Result<vfs::VfsPath, LspError> {
-        // Baml project live in one of three places:
-        // 1. inside a baml_src directory
-        // 2. inside a folder which has a baml.toml file
-        // 3. (internal development only) as standalone files inside a folder named baml_language
-
-        let file_name = path.filename();
-
-        match file_name.as_str() {
-            "baml_src"
-                if path.is_dir().map_err(|e| LspError::InvalidVFSPath {
-                    path: path.clone(),
-                    message: format!("Failed to check if path is a directory: {e}"),
-                })? =>
-            {
-                return Ok(path.clone());
-            }
-            "baml.toml"
-                if path.is_file().map_err(|e| LspError::InvalidVFSPath {
-                    path: path.clone(),
-                    message: format!("Failed to check if path is a file: {e}"),
-                })? =>
-            {
-                return Ok(path.parent());
-            }
-            _ => {}
-        }
-
-        let mut current = path.parent();
-        while !current.is_root() {
-            let parent = current;
-            // check if parent is baml_src directory
-            if parent.filename().as_str() == "baml_src"
-                && parent.is_dir().map_err(|e| LspError::InvalidVFSPath {
-                    path: parent.clone(),
-                    message: format!("Failed to check if path is a directory: {e}"),
-                })?
-            {
-                return Ok(parent);
-            }
-
-            // check if parent has a baml.toml file
-            let baml_toml_path =
-                parent
-                    .join("baml.toml")
-                    .map_err(|e| LspError::InvalidVFSPath {
-                        path: parent.clone(),
-                        message: format!("Failed to join path: {e}"),
-                    })?;
-            if baml_toml_path.exists().unwrap_or(false) {
-                return Ok(parent);
-            }
-
-            current = parent.parent();
+        let start = Self::project_search_start(path);
+        let root = find_baml_project_root_from_ancestors(
+            vfs_ancestors(start),
+            Self::has_baml_toml,
+            Self::has_baml_src_dir,
+        );
+        if let Some(root) = root {
+            return Ok(root);
         }
 
         // In some special cases, .baml files are treated as their own projects
@@ -239,7 +195,42 @@ impl BexMulitProject {
         &self,
         project_root: &vfs::VfsPath,
     ) -> Result<HashMap<crate::fs::FsPath, String>, LspError> {
-        let glob = format!("{}/**/*.baml", project_root.as_str());
+        if project_root
+            .is_file()
+            .map_err(|e| LspError::InvalidVFSPath {
+                path: project_root.clone(),
+                message: format!("Failed to check if path is a file: {e}"),
+            })?
+        {
+            if project_root
+                .extension()
+                .is_some_and(|e| e.as_str() == "baml")
+            {
+                let mut reader =
+                    project_root
+                        .open_file()
+                        .map_err(|e| LspError::InvalidVFSPath {
+                            path: project_root.clone(),
+                            message: format!("Failed to open file: {e}"),
+                        })?;
+                let mut bytes = Vec::new();
+                reader
+                    .read_to_end(&mut bytes)
+                    .map_err(|e| LspError::InvalidVFSPath {
+                        path: project_root.clone(),
+                        message: format!("Failed to read file: {e}"),
+                    })?;
+                let mut files = HashMap::new();
+                files.insert(
+                    crate::fs::FsPath::from_vfs(project_root),
+                    String::from_utf8(bytes).unwrap_or_default(),
+                );
+                return Ok(files);
+            }
+        }
+
+        let source_root = Self::project_source_root(project_root)?;
+        let glob = format!("{}/**/*.baml", source_root.as_str());
         let entries = self
             .fs
             .read_many(&glob)
@@ -259,6 +250,111 @@ impl BexMulitProject {
 
     fn refresh_project(&self, project_root: &vfs::VfsPath, refresh_mode: ProjectRefreshMode) {
         self.refresh_project_async(project_root, refresh_mode);
+    }
+
+    fn has_baml_toml(path: &vfs::VfsPath) -> bool {
+        path.join(BAML_TOML)
+            .ok()
+            .and_then(|path| path.is_file().ok())
+            .unwrap_or(false)
+    }
+
+    fn has_baml_src_dir(path: &vfs::VfsPath) -> bool {
+        path.join(BAML_SRC_DIR)
+            .ok()
+            .and_then(|path| path.is_dir().ok())
+            .unwrap_or(false)
+    }
+
+    fn project_source_root(project_root: &vfs::VfsPath) -> Result<vfs::VfsPath, LspError> {
+        let baml_src = project_root
+            .join(BAML_SRC_DIR)
+            .map_err(|e| LspError::InvalidVFSPath {
+                path: project_root.clone(),
+                message: format!("Failed to join path: {e}"),
+            })?;
+        if baml_src.is_dir().unwrap_or(false) {
+            Ok(baml_src)
+        } else {
+            Ok(project_root.clone())
+        }
+    }
+
+    fn project_search_start(path: &vfs::VfsPath) -> vfs::VfsPath {
+        if path.filename().as_str() == BAML_TOML
+            || path.extension().is_some_and(|ext| ext.as_str() == "baml")
+            || path.is_file().unwrap_or(false)
+        {
+            path.parent()
+        } else {
+            path.clone()
+        }
+    }
+
+    fn discover_workspace_projects(&self, workspace_roots: &[vfs::VfsPath]) -> Vec<vfs::VfsPath> {
+        workspace_roots.clone_into(&mut self.workspace_roots.lock().unwrap());
+
+        if workspace_roots.is_empty() {
+            tracing::warn!(
+                "No workspace roots provided during initialize — skipping project discovery"
+            );
+            return Vec::new();
+        }
+
+        let mut project_roots = Vec::new();
+        for root in workspace_roots {
+            if root.is_file().unwrap_or(false)
+                && root.extension().is_some_and(|e| e.as_str() == "baml")
+            {
+                project_roots.push(root.clone());
+                continue;
+            }
+
+            if let Ok(pr) = Self::get_baml_project_root(root) {
+                project_roots.push(pr);
+            }
+
+            let Ok(dirs) = root.walk_dir() else {
+                tracing::warn!("Failed to walk workspace root: {}", root.as_str());
+                continue;
+            };
+            for entry in dirs.filter_map(Result::ok) {
+                if let Ok(pr) = Self::get_baml_project_root(&entry) {
+                    project_roots.push(pr);
+                }
+            }
+        }
+
+        project_roots.sort_by_key(|path| path.as_str().to_string());
+        project_roots.dedup_by(|a, b| a.as_str() == b.as_str());
+        let manifest_roots = project_roots
+            .iter()
+            .filter(|path| Self::has_baml_toml(path))
+            .map(|path| path.as_str().trim_end_matches('/').to_string())
+            .collect::<Vec<_>>();
+        project_roots.retain(|candidate| {
+            if Self::has_baml_toml(candidate) {
+                return true;
+            }
+            let candidate = candidate.as_str().trim_end_matches('/');
+            !manifest_roots.iter().any(|manifest_root| {
+                candidate != manifest_root
+                    && candidate
+                        .strip_prefix(manifest_root)
+                        .is_some_and(|suffix| suffix.starts_with('/'))
+            })
+        });
+
+        tracing::info!("Discovered {} BAML project(s)", project_roots.len());
+
+        for project_root in &project_roots {
+            let Ok(_) = self.get_or_create_project(project_root.clone()) else {
+                continue;
+            };
+            self.refresh_project(project_root, ProjectRefreshMode::Full);
+        }
+
+        project_roots
     }
 
     fn refresh_project_async(&self, project_root: &vfs::VfsPath, refresh_mode: ProjectRefreshMode) {
@@ -511,11 +607,12 @@ impl BexMulitProject {
             (engine, project.project.test_state())
         };
 
-        // Bump generation, cancel in-flight tasks, and clear stale registry
+        // Cancel in-flight collection tasks and clear stale registry. The
+        // generation tracks compiled project snapshots and is bumped only when a
+        // new BexEngine/CFG snapshot is installed.
         let (generation, cancel) = {
             let mut state = test_state.lock().unwrap();
             state.cancel.cancel();
-            state.generation += 1;
             state.cancel = sys_types::CancellationToken::new();
             state.registry = None;
             (state.generation, state.cancel.clone())
@@ -580,6 +677,7 @@ impl BexMulitProject {
                     // Serialize the full test tree via TestRegistry.serialize
                     let ctx = bex_engine::FunctionCallContextBuilder::new(call_id)
                         .with_cancel_token(cancel)
+                        .with_profile_enabled(false)
                         .build();
                     match engine
                         .call_function(
@@ -641,7 +739,7 @@ impl BexMulitProject {
         generation: u64,
         test_name: &str,
         ctx: bex_engine::FunctionCallContext,
-    ) -> Result<bex_engine::BexExternalValue, bex_engine::EngineError> {
+    ) -> Result<bex_engine::BexCallResult, bex_engine::EngineError> {
         let (engine, registry_value) = {
             let projects = self.projects.lock().unwrap();
             let project = projects
@@ -677,7 +775,7 @@ impl BexMulitProject {
         log::info!("[call_test_function] test_name={test_name} generation={generation}");
 
         let result = engine
-            .call_function(
+            .call_function_with_trace(
                 "testing.TestRegistry.run_test",
                 vec![
                     registry_value,
@@ -730,6 +828,7 @@ impl BexMulitProject {
         self.spawner.spawn(async move {
             let ctx = bex_engine::FunctionCallContextBuilder::new(call_id)
                 .with_cancel_token(cancel.clone())
+                .with_profile_enabled(false)
                 .build();
 
             // Expand — mutates registry.expansions in-place on the heap
@@ -752,6 +851,7 @@ impl BexMulitProject {
                 let ctx_resend =
                     bex_engine::FunctionCallContextBuilder::new(sys_types::CallId::next())
                         .with_cancel_token(cancel)
+                        .with_profile_enabled(false)
                         .build();
                 let data = match engine
                     .call_function(
@@ -791,6 +891,7 @@ impl BexMulitProject {
             // Re-serialize full state
             let ctx2 = bex_engine::FunctionCallContextBuilder::new(sys_types::CallId::next())
                 .with_cancel_token(cancel)
+                .with_profile_enabled(false)
                 .build();
             match engine
                 .call_function(
@@ -855,7 +956,9 @@ fn bex_value_to_json(v: &bex_engine::BexExternalValue) -> serde_json::Value {
             }
             serde_json::Value::Object(map)
         }
-        bex_engine::BexExternalValue::Instance { class_name, fields } => {
+        bex_engine::BexExternalValue::Instance {
+            class_name, fields, ..
+        } => {
             let mut map = serde_json::Map::new();
             map.insert("$type".to_string(), serde_json::json!(class_name));
             for (k, v) in fields {
@@ -872,6 +975,102 @@ fn bex_value_to_json(v: &bex_engine::BexExternalValue) -> serde_json::Value {
         bex_engine::BexExternalValue::Union { value, .. } => bex_value_to_json(value),
         _ => serde_json::Value::Null,
     }
+}
+
+fn relative_source_path(project_root: &vfs::VfsPath, path: &crate::fs::FsPath) -> String {
+    let root_path = std::path::Path::new(project_root.as_str());
+    let path = path.as_path();
+    if path == root_path {
+        return path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| path.to_string_lossy().into_owned());
+    }
+    path.strip_prefix(root_path)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .into_owned()
+}
+
+fn vfs_ancestors(start: vfs::VfsPath) -> impl Iterator<Item = vfs::VfsPath> {
+    let mut ancestors = Vec::new();
+    let mut current = start;
+    loop {
+        ancestors.push(current.clone());
+        if current.is_root() {
+            break;
+        }
+        let parent = current.parent();
+        if parent.as_str() == current.as_str() {
+            break;
+        }
+        current = parent;
+    }
+    ancestors.into_iter()
+}
+
+fn resolve_source_path_for_project(
+    project_root: &vfs::VfsPath,
+    path: &str,
+) -> Result<vfs::VfsPath, LspError> {
+    let raw = std::path::Path::new(path);
+    if raw.is_absolute() {
+        return Err(LspError::InvalidVFSPath {
+            path: project_root.clone(),
+            message: format!("Expected a project-relative source path, got {path}"),
+        });
+    }
+
+    if raw
+        .components()
+        .any(|component| !matches!(component, std::path::Component::Normal(_)))
+    {
+        return Err(LspError::InvalidVFSPath {
+            path: project_root.clone(),
+            message: format!("Unsafe relative source path: {path}"),
+        });
+    }
+
+    if project_root.is_file().unwrap_or(false) {
+        return Ok(project_root.clone());
+    }
+
+    project_root
+        .join(path)
+        .map_err(|e| LspError::InvalidVFSPath {
+            path: project_root.clone(),
+            message: format!("Failed to join path: {e}"),
+        })
+}
+
+fn ensure_source_belongs_to_project(
+    project_root: &vfs::VfsPath,
+    source_path: &vfs::VfsPath,
+) -> Result<(), LspError> {
+    let expected_root;
+    if project_root.is_file().unwrap_or(false) {
+        if source_path.as_str() == project_root.as_str() {
+            return Ok(());
+        }
+        expected_root = project_root.as_str().to_string();
+    } else {
+        let source_root = BexMulitProject::project_source_root(project_root)?;
+        expected_root = source_root.as_str().to_string();
+        let root = source_root.as_str().trim_end_matches('/');
+        let source = source_path.as_str();
+        if source == root
+            || source
+                .strip_prefix(root)
+                .is_some_and(|suffix| suffix.starts_with('/'))
+        {
+            return Ok(());
+        }
+    }
+
+    Err(LspError::InvalidVFSPath {
+        path: source_path.clone(),
+        message: format!("Source file is outside project source root {expected_root}"),
+    })
 }
 
 #[async_trait::async_trait]
@@ -894,6 +1093,86 @@ impl super::BexLsp for BexMulitProject {
             }
         }
         names.into_iter().collect()
+    }
+
+    fn playground_source_files(
+        &self,
+        project: &str,
+    ) -> Result<Vec<crate::bex_lsp::PlaygroundSourceFile>, LspError> {
+        let project_root = self
+            .fs
+            .get_path_from_path(std::path::Path::new(project), "playground source files")?;
+        let project_handle = self.get_or_create_project(project_root.clone())?;
+        let mut sources = self.load_project_sources(&project_root)?;
+        {
+            let in_memory_changes = project_handle.in_memory_changes.lock().unwrap();
+            for (path, source) in in_memory_changes.iter() {
+                sources.insert(path.clone(), source.clone());
+            }
+        }
+
+        let mut files = sources
+            .into_iter()
+            .map(|(path, content)| {
+                let relative_path = relative_source_path(&project_root, &path);
+                crate::bex_lsp::PlaygroundSourceFile {
+                    path: path.as_path().to_string_lossy().into_owned(),
+                    relative_path,
+                    content,
+                }
+            })
+            .collect::<Vec<_>>();
+        files.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
+        Ok(files)
+    }
+
+    fn playground_update_source_file(
+        &self,
+        project: &str,
+        path: &str,
+        content: String,
+    ) -> Result<(), LspError> {
+        let project_root = self.fs.get_path_from_path(
+            std::path::Path::new(project),
+            "playground update source file",
+        )?;
+        let raw_path = std::path::Path::new(path);
+        let source_path = if raw_path.is_absolute() {
+            self.fs
+                .get_path_from_path(raw_path, "playground update source file path")?
+        } else {
+            resolve_source_path_for_project(&project_root, path)?
+        };
+        if source_path.extension().is_none_or(|e| e.as_str() != "baml") {
+            return Err(LspError::InvalidVFSPath {
+                path: source_path,
+                message: "Only .baml files can be edited from the playground".to_string(),
+            });
+        }
+        ensure_source_belongs_to_project(&project_root, &source_path)?;
+
+        let project_handle = self.get_or_create_project(project_root.clone())?;
+        let mut in_memory_changes = project_handle.in_memory_changes.lock().unwrap();
+        in_memory_changes.insert(crate::fs::FsPath::from_vfs(&source_path), content);
+        drop(in_memory_changes);
+
+        self.refresh_project(&project_root, ProjectRefreshMode::InMemoryChangesOnly);
+        Ok(())
+    }
+
+    fn initialize_workspace_roots(
+        &self,
+        roots: Vec<std::path::PathBuf>,
+    ) -> Result<Vec<String>, LspError> {
+        let roots = roots
+            .into_iter()
+            .map(|root| self.fs.get_path_from_path(&root, "lsp --workspace"))
+            .collect::<Result<Vec<_>, _>>()?;
+        let projects = self.discover_workspace_projects(&roots);
+        Ok(projects
+            .into_iter()
+            .map(|project| project.as_str().to_string())
+            .collect())
     }
 
     fn request_playground_state(&self) {
@@ -925,6 +1204,31 @@ impl super::BexLsp for BexMulitProject {
             }
         }
         None
+    }
+
+    fn project_generation(&self, project_root: &str) -> Option<u64> {
+        let projects = self.projects.lock().ok()?;
+        projects
+            .iter()
+            .find(|(path, _)| path.as_path().to_string_lossy() == project_root)
+            .map(|(_, project)| project.project.current_generation())
+    }
+
+    fn control_flow_graph_for_generation(
+        &self,
+        project_root: &str,
+        generation: u64,
+        function_name: &str,
+    ) -> Option<baml_compiler2_visualization::control_flow::ControlFlowGraph> {
+        let projects = self.projects.lock().ok()?;
+        projects
+            .iter()
+            .find(|(path, _)| path.as_path().to_string_lossy() == project_root)
+            .and_then(|(_, project)| {
+                project
+                    .project
+                    .control_flow_graph_for_generation(generation, function_name)
+            })
     }
 
     fn request_control_flow_graph(&self, function_name: &str) {
@@ -1008,6 +1312,18 @@ impl super::BexLsp for BexMulitProject {
         test_name: &str,
         ctx: bex_engine::FunctionCallContext,
     ) -> Result<bex_engine::BexExternalValue, bex_engine::EngineError> {
+        self.call_test_function_impl(project, generation, test_name, ctx)
+            .await
+            .and_then(|result| result.value)
+    }
+
+    async fn call_test_function_with_trace(
+        &self,
+        project: &str,
+        generation: u64,
+        test_name: &str,
+        ctx: bex_engine::FunctionCallContext,
+    ) -> Result<bex_engine::BexCallResult, bex_engine::EngineError> {
         self.call_test_function_impl(project, generation, test_name, ctx)
             .await
     }

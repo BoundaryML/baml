@@ -166,22 +166,11 @@ fn substitute_paths_walk(
             attrs: attrs.clone(),
         },
         TypeExpr::Function {
-            generic_params,
-            generic_param_bounds,
             params,
             ret,
             throws,
             attrs,
         } => TypeExpr::Function {
-            generic_params: generic_params.clone(),
-            generic_param_bounds: generic_param_bounds
-                .iter()
-                .map(|bound| {
-                    bound
-                        .as_ref()
-                        .map(|bound| substitute_paths_walk(bound, subst))
-                })
-                .collect(),
             params: params
                 .iter()
                 .map(|param| {
@@ -271,22 +260,11 @@ fn substitute_self(type_expr: &TypeExpr, replacement: &TypeExpr) -> TypeExpr {
             attrs: attrs.clone(),
         },
         TypeExpr::Function {
-            generic_params,
-            generic_param_bounds,
             params,
             ret,
             throws,
             attrs,
         } => TypeExpr::Function {
-            generic_params: generic_params.clone(),
-            generic_param_bounds: generic_param_bounds
-                .iter()
-                .map(|bound| {
-                    bound
-                        .as_ref()
-                        .map(|bound| substitute_self(bound, replacement))
-                })
-                .collect(),
             params: params
                 .iter()
                 .map(|param| {
@@ -401,22 +379,11 @@ fn substitute_self_preserving_associated_projections(
             attrs: attrs.clone(),
         },
         TypeExpr::Function {
-            generic_params,
-            generic_param_bounds,
             params,
             ret,
             throws,
             attrs,
         } => TypeExpr::Function {
-            generic_params: generic_params.clone(),
-            generic_param_bounds: generic_param_bounds
-                .iter()
-                .map(|bound| {
-                    bound.as_ref().map(|bound| {
-                        substitute_self_preserving_associated_projections(bound, replacement)
-                    })
-                })
-                .collect(),
             params: params
                 .iter()
                 .map(|param| {
@@ -954,32 +921,14 @@ pub fn lower_type_expr_in_ns(
             TyAttr::default(),
         ),
         TypeExpr::Function {
-            generic_params: function_generic_params,
-            generic_param_bounds,
             params,
             ret,
             throws,
             ..
         } => {
-            let mut all_generic_params = generic_params.to_vec();
-            all_generic_params.extend(function_generic_params.iter().cloned());
+            // A function type carries no generics of its own; its type variables
+            // come from the enclosing context (`generic_params`).
             Ty::Function {
-                generic_params: function_generic_params.clone(),
-                generic_param_bounds: generic_param_bounds
-                    .iter()
-                    .map(|bound| {
-                        bound.as_ref().map(|bound| {
-                            lower_type_expr_in_ns(
-                                db,
-                                bound,
-                                package_items,
-                                ns_context,
-                                &all_generic_params,
-                                diagnostics,
-                            )
-                        })
-                    })
-                    .collect(),
                 params: params
                     .iter()
                     .map(|p| FunctionParamTy {
@@ -989,7 +938,7 @@ pub fn lower_type_expr_in_ns(
                             &p.ty,
                             package_items,
                             ns_context,
-                            &all_generic_params,
+                            generic_params,
                             diagnostics,
                         ),
                         mode: if p.optional {
@@ -1004,7 +953,7 @@ pub fn lower_type_expr_in_ns(
                     ret,
                     package_items,
                     ns_context,
-                    &all_generic_params,
+                    generic_params,
                     diagnostics,
                 )),
                 throws: Box::new(
@@ -1016,7 +965,7 @@ pub fn lower_type_expr_in_ns(
                                 throws,
                                 package_items,
                                 ns_context,
-                                &all_generic_params,
+                                generic_params,
                                 diagnostics,
                             )
                         })
@@ -1149,8 +1098,6 @@ mod tests {
     #[test]
     fn substitute_paths_recurses_into_function_type() {
         let type_expr = TypeExpr::Function {
-            generic_params: Vec::new(),
-            generic_param_bounds: Vec::new(),
             params: vec![FunctionTypeParam {
                 name: Some(Name::new("value")),
                 optional: false,
@@ -1204,8 +1151,6 @@ mod tests {
     #[test]
     fn substitute_self_recurses_into_function_type() {
         let type_expr = TypeExpr::Function {
-            generic_params: Vec::new(),
-            generic_param_bounds: Vec::new(),
             params: vec![FunctionTypeParam {
                 name: Some(Name::new("value")),
                 optional: false,
@@ -1266,8 +1211,6 @@ mod tests {
             extra: None,
         };
         let type_expr = TypeExpr::Function {
-            generic_params: Vec::new(),
-            generic_param_bounds: Vec::new(),
             params: vec![
                 FunctionTypeParam {
                     name: Some(Name::new("query")),

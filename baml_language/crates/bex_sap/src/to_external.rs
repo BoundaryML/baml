@@ -224,6 +224,7 @@ fn baml_value_inner_to_external(
                 .collect();
             BexExternalValue::Instance {
                 class_name: c.name.to_string(),
+                type_args: vec![],
                 fields,
             }
         }
@@ -245,6 +246,7 @@ fn stream_state_to_external(state: &BamlStreamState<'_, '_, '_, TypeName>) -> Be
     );
     BexExternalValue::Instance {
         class_name: "StreamState".to_string(),
+        type_args: vec![],
         fields,
     }
 }

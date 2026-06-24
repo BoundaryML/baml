@@ -168,7 +168,7 @@ function server_reserve_after_cancel() -> string {
     let served = baml.http.fetch("http://" + server.addr + "/").text();
 
     firstTask.cancel();
-    baml.sys.sleep(100);  // let the cancelled serve release the "serving" flag
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(100n));  // let the cancelled serve release the "serving" flag
 
     let secondTask = spawn {
         server.serve((req: baml.http.Request) -> baml.http.Response {

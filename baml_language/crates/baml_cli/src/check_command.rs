@@ -8,15 +8,15 @@ use crate::{project_load::load_project_from_reporting, reporter::Reporter};
 
 #[derive(Args, Debug)]
 pub struct CheckArgs {
-    /// Project root to check. Defaults to the current directory.
-    #[arg(long, default_value = ".")]
-    pub from: PathBuf,
+    /// Project search starting point. Defaults to the current directory.
+    #[arg(long, value_name = "PATH")]
+    pub from: Option<PathBuf>,
 }
 
 impl CheckArgs {
     pub fn run(&self) -> Result<crate::ExitCode> {
         let reporter = Reporter::new();
-        let (db, from, baml_files) = load_project_from_reporting(&self.from, &reporter)?;
+        let (db, from, baml_files) = load_project_from_reporting(self.from.as_deref(), &reporter)?;
         if baml_files.is_empty() {
             reporter.abandon();
             crate::reporter::print_error(format_args!(

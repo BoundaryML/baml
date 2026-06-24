@@ -61,6 +61,123 @@ async fn baml_id_inside_spawn_uses_child_thread_root_call() {
 }
 
 #[tokio::test]
+async fn call_function_with_trace_surfaces_entry_call_ref() {
+    let source = r#"
+        function main() -> string {
+            $id
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new()).unwrap(),
+    );
+
+    let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next()).build();
+    let result = engine
+        .call_function_with_trace("main", vec![], call_ctx, true)
+        .await
+        .unwrap();
+
+    assert_eq!(result.entry_call_ref.process_euid, engine.process_euid());
+    assert_eq!(result.entry_call_ref.engine_id, engine.engine_id());
+    assert_eq!(result.entry_call_ref.thread_id, bex_engine::BexThreadId(1));
+    assert_eq!(result.entry_call_ref.call_id, bex_engine::BexCallId(1));
+
+    let BexExternalValue::String(id) = result.value.unwrap() else {
+        panic!("expected $id string result");
+    };
+    let RuntimeId::DefaultCall(call_ref) = RuntimeId::decode(id.as_str()).unwrap() else {
+        panic!("expected default call runtime ID");
+    };
+    assert_eq!(call_ref, result.entry_call_ref);
+}
+
+#[tokio::test]
+async fn call_callable_with_trace_surfaces_callable_entry_call_ref() {
+    let source = r#"
+        function get_callable() -> () -> string {
+            callable
+        }
+
+        function callable() -> string {
+            $id
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new()).unwrap(),
+    );
+
+    let handle = match engine
+        .call_function(
+            "get_callable",
+            vec![],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            false,
+        )
+        .await
+        .unwrap()
+    {
+        BexExternalValue::Handle(handle) => handle,
+        other => panic!("expected callable handle, got {other:?}"),
+    };
+
+    let result = engine
+        .call_callable_with_trace(
+            handle,
+            vec![],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(result.entry_call_ref.process_euid, engine.process_euid());
+    assert_eq!(result.entry_call_ref.engine_id, engine.engine_id());
+    assert_eq!(result.entry_call_ref.thread_id, bex_engine::BexThreadId(2));
+    assert_eq!(result.entry_call_ref.call_id, bex_engine::BexCallId(1));
+
+    let BexExternalValue::String(id) = result.value.unwrap() else {
+        panic!("expected callable $id string result");
+    };
+    let RuntimeId::DefaultCall(call_ref) = RuntimeId::decode(id.as_str()).unwrap() else {
+        panic!("expected default call runtime ID");
+    };
+    assert_eq!(call_ref, result.entry_call_ref);
+}
+
+#[tokio::test]
+async fn call_function_with_trace_keeps_entry_call_ref_for_runtime_error() {
+    let source = r#"
+        function main() -> int {
+            throw "boom"
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new()).unwrap(),
+    );
+
+    let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next()).build();
+    let result = engine
+        .call_function_with_trace("main", vec![], call_ctx, true)
+        .await
+        .unwrap();
+
+    assert_eq!(result.entry_call_ref.process_euid, engine.process_euid());
+    assert_eq!(result.entry_call_ref.engine_id, engine.engine_id());
+    assert_eq!(result.entry_call_ref.thread_id, bex_engine::BexThreadId(1));
+    assert_eq!(result.entry_call_ref.call_id, bex_engine::BexCallId(1));
+    assert!(
+        result.value.is_err(),
+        "runtime failure should be the traced outcome, not a pre-entry error"
+    );
+}
+
+#[tokio::test]
 async fn baml_id_inside_nested_expression_call_uses_nested_call_id() {
     let source = r#"
         function inner() -> string {

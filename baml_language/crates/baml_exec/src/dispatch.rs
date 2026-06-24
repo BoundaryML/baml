@@ -229,7 +229,7 @@ async fn deserialize_via_baml_json(
             "baml.json.deserialize",
             vec![BexExternalValue::String(json_text.into())],
             FunctionCallContextBuilder::new(CallId::next())
-                .with_type_args(vec![ty.clone()])
+                .with_type_args(indexmap::IndexMap::from([("T".to_string(), ty.clone())]))
                 .build(),
             true,
         )

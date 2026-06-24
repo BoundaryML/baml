@@ -10,6 +10,7 @@ use clap::Args;
 
 use crate::project_load::load_project_or_default;
 
+/// Parsed documentation entry for a BAML keyword topic.
 #[derive(serde::Deserialize)]
 struct BamlKeywordDoc {
     summary: String,
@@ -19,6 +20,7 @@ struct BamlKeywordDoc {
     details: Option<String>,
 }
 
+/// Parsed documentation entry for a TypeScript/JavaScript keyword topic.
 #[derive(serde::Deserialize)]
 struct TsKeywordDoc {
     message: String,
@@ -45,9 +47,9 @@ pub struct DescribeArgs {
     #[arg(long)]
     pub symbols: bool,
 
-    /// Project root directory
-    #[arg(long, default_value = ".")]
-    pub from: PathBuf,
+    /// Project search starting point. Defaults to the current directory.
+    #[arg(long, value_name = "PATH")]
+    pub from: Option<PathBuf>,
 
     /// Soft line budget for output (default 30)
     #[arg(long, default_value_t = 30)]
@@ -85,12 +87,12 @@ pub fn suggest_similar(db: &ProjectDatabase, name: &str, limit: usize) -> Vec<St
         }
     }
 
-    // Builtin packages: bare package name + items + namespaces (prefixed).
+    // Builtin packages: bare package name + item paths + namespaces.
     for pkg_name in baml_lsp2_actions::non_user_package_names(db) {
         all_paths.push(pkg_name.clone());
         let pkg = PackageId::new(db, baml_db::Name::new(&pkg_name));
         for entry in baml_lsp2_actions::list_package_items(db, pkg) {
-            all_paths.push(format!("{}.{}", pkg_name, entry.fqn()));
+            all_paths.push(entry.fqn());
         }
         let pkg_info = package_items(db, pkg);
         for ns_path in pkg_info.namespaces.keys() {
@@ -205,7 +207,11 @@ pub fn dispatch<'db>(db: &'db ProjectDatabase, name: &str) -> Option<ResolvedTar
 
     // User package.
     let user_pkg = baml_compiler2_hir::package::PackageId::new(db, baml_db::Name::new("user"));
-    baml_lsp2_actions::resolve_target(db, user_pkg, name)
+    if let Some(target) = baml_lsp2_actions::resolve_target(db, user_pkg, name) {
+        return Some(target);
+    }
+
+    resolve_unqualified_builtin_member(db, name)
 }
 
 /// Map a lowercase primitive/keyword alias to the path of its builtin `baml`
@@ -229,14 +235,36 @@ fn builtin_alias_class_path(name: &str) -> Option<&'static str> {
     })
 }
 
+/// Resolve `Array.reduce`/`String.split`-style builtin class member lookups.
+///
+/// Bare builtin class names are discoverable through the describe fallback, but
+/// dotted member paths need a structural target before rendering can drill into
+/// the method. This retry is intentionally after user-package lookup so a user
+/// class named `Array` still owns `Array.foo`; `baml.Array.foo` remains the
+/// explicit builtin spelling.
+fn resolve_unqualified_builtin_member<'db>(
+    db: &'db ProjectDatabase,
+    name: &str,
+) -> Option<ResolvedTarget<'db>> {
+    let (class_name, _) = name.split_once('.')?;
+    let baml_pkg = baml_compiler2_hir::package::PackageId::new(db, baml_db::Name::new("baml"));
+    let baml_items = baml_compiler2_hir::package::package_items(db, baml_pkg);
+    let root_ns: Vec<baml_db::Name> = Vec::new();
+    let class_name = baml_db::Name::new(class_name);
+
+    baml_items.lookup_type(&root_ns, &class_name)?;
+    baml_lsp2_actions::resolve_target(db, baml_pkg, name)
+}
+
 impl DescribeArgs {
+    /// Run the describe command and return the CLI exit code.
     pub fn run(&self) -> Result<crate::ExitCode> {
         // Introspection never requires a `baml.toml`: with no project, we
         // fall back to a stdlib-only "default state" so `baml describe
         // baml.String` works anywhere. An empty user-file set is therefore
         // expected, not an error — unresolved names still surface through
         // the per-target "No symbol found" + did-you-mean paths below.
-        let (db, from, _baml_files) = load_project_or_default(&self.from)?;
+        let (db, from, _baml_files) = load_project_or_default(self.from.as_deref())?;
 
         // ── --symbols deprecation ───────────────────────────────────────────
         if self.symbols {

@@ -19,6 +19,11 @@ pub(crate) mod lower_type_expr;
 pub mod lowering_diagnostic;
 
 pub use ast::*;
+/// Decode common escape sequences in a quoted string literal body.
+///
+/// Re-exported from [`baml_base::escape::unescape_string_literal`] so existing
+/// callers don't need to change their import path.
+pub use baml_base::escape::unescape_string_literal;
 pub use companions::llm_parse as llm_parse_companion;
 pub use disambiguate::is_field_attr;
 pub use docstring::extract_docstring;
@@ -59,32 +64,9 @@ pub fn parse_bigint_literal_token(text: &str) -> num_bigint::BigInt {
     parse_bigint_literal_digits(digits)
 }
 
-/// Decode common escape sequences in a quoted string literal body.
-pub fn unescape_string_literal(input: &str) -> String {
-    let mut result = String::with_capacity(input.len());
-    let mut chars = input.chars();
-    while let Some(c) = chars.next() {
-        if c == '\\' {
-            match chars.next() {
-                Some('n') => result.push('\n'),
-                Some('t') => result.push('\t'),
-                Some('r') => result.push('\r'),
-                Some('0') => result.push('\0'),
-                Some('\\') => result.push('\\'),
-                Some('"') => result.push('"'),
-                Some(other) => {
-                    result.push('\\');
-                    result.push(other);
-                }
-                None => result.push('\\'),
-            }
-        } else {
-            result.push(c);
-        }
-    }
-    result
-}
-
+// `unescape_string_literal` lives in `baml_base::escape` and is re-exported
+// above. The pre-merge canary copy was dropped here in favor of the shared
+// implementation introduced by BEP-049 M1.
 #[cfg(test)]
 mod tests {
     use baml_base::FileId;
@@ -306,18 +288,11 @@ mod tests {
                 attrs: strip_attrs(attrs),
             },
             TypeExpr::Function {
-                generic_params,
-                generic_param_bounds,
                 params,
                 ret,
                 throws,
                 attrs,
             } => TypeExpr::Function {
-                generic_params: generic_params.clone(),
-                generic_param_bounds: generic_param_bounds
-                    .iter()
-                    .map(|bound| bound.as_ref().map(strip_spans))
-                    .collect(),
                 params: params
                     .iter()
                     .map(|p| crate::ast::FunctionTypeParam {
@@ -490,6 +465,162 @@ function Search(query: string, max_results: int = 10) -> int {
             args[1].label.as_ref().map(smol_str::SmolStr::as_str),
             Some("max_results")
         );
+    }
+
+    #[test]
+    fn ast_tagged_template_body_marked_synthetic() {
+        // The desugared closure body of a tagged template is compiler-generated,
+        // so every node it allocates is recorded in the source map's synthetic
+        // sets — while the user-written tag expr and `${…}` interp expressions
+        // (reused from `segments`) stay non-synthetic. This is what lets inlay
+        // hints skip the `__tt_*` accumulators / `.push(...)` calls robustly,
+        // independent of their (incidental) empty spans / type annotations.
+        use crate::ast::{TemplateSegment, TemplateTag};
+        let source = r#"
+function Demo(items: string[]) -> string {
+  sql`a ${1} ${for (let x in items)}${x},${endfor}`
+}
+"#;
+        let function = first_function(parse_and_lower(source));
+        let Some(FunctionBodyDef::Expr(body, source_map)) = &function.body else {
+            panic!("expected expression body");
+        };
+        let root = body.root_expr.expect("expected body root expression");
+        let Expr::Block {
+            tail_expr: Some(tail),
+            ..
+        } = &body.exprs[root]
+        else {
+            panic!("expected block root");
+        };
+        let Expr::Template {
+            tag: TemplateTag::Custom { tag, body: tbody },
+            segments,
+        } = &body.exprs[*tail]
+        else {
+            panic!("expected Custom Template tail");
+        };
+
+        // The elaborated closure body block and all of its statements are synthetic.
+        assert!(
+            source_map.is_synthetic_expr(*tbody),
+            "tagged-template body block should be marked synthetic"
+        );
+        let Expr::Block { stmts, .. } = &body.exprs[*tbody] else {
+            panic!("tagged body should be a block");
+        };
+        assert!(
+            !stmts.is_empty() && stmts.iter().all(|s| source_map.is_synthetic_stmt(*s)),
+            "every statement in the tagged-template body should be marked synthetic"
+        );
+
+        // The tag expr and the user's `${…}` interp expression stay non-synthetic.
+        assert!(
+            !source_map.is_synthetic_expr(*tag),
+            "user-written tag expr must not be marked synthetic"
+        );
+        let interp = segments
+            .iter()
+            .find_map(|s| match s {
+                TemplateSegment::Interp(e) => Some(*e),
+                _ => None,
+            })
+            .expect("expected a top-level ${…} interp segment");
+        assert!(
+            !source_map.is_synthetic_expr(interp),
+            "user ${{…}} interpolation expression must stay non-synthetic"
+        );
+    }
+
+    #[test]
+    fn ast_tagged_template_lowers_to_template_expr() {
+        // BEP-049 §10. `tag`...`` lowers to a first-class `Expr::Template`
+        // with `TemplateTag::Custom`, PRESERVING segment structure (text /
+        // interp / for / if). The tag itself lowers as an ordinary expression
+        // (here the bare path `sql`).
+        use crate::ast::{TemplateIfBranch, TemplateSegment, TemplateTag};
+        let source = r#"
+function Demo(items: string[]) -> string {
+  sql`a ${1} ${for (let x in items)}${x},${endfor}${if (true)}w${else}e${endif}`
+}
+"#;
+        let function = first_function(parse_and_lower(source));
+        let Some(FunctionBodyDef::Expr(body, _source_map)) = &function.body else {
+            panic!("expected expression body");
+        };
+        let root = body.root_expr.expect("expected body root expression");
+        let Expr::Block {
+            tail_expr: Some(tail),
+            ..
+        } = &body.exprs[root]
+        else {
+            panic!("expected block root, got {:?}", &body.exprs[root]);
+        };
+        let Expr::Template { tag, segments } = &body.exprs[*tail] else {
+            panic!("expected Template tail, got {:?}", &body.exprs[*tail]);
+        };
+
+        // A tagged template carries `TemplateTag::Custom`, whose tag expr
+        // lowers to the bare path `sql` (TIR validates it resolves to a
+        // `//baml:tagged_string` fn; lowering only handles it structurally).
+        let TemplateTag::Custom { tag, .. } = tag else {
+            panic!("expected Custom tag, got {tag:?}");
+        };
+        assert!(
+            matches!(&body.exprs[*tag], Expr::Path(p) if p.len() == 1 && p[0].as_str() == "sql"),
+            "tag should lower to Path([sql]), got {:?}",
+            &body.exprs[*tag]
+        );
+
+        // Top-level segments include a leading Text, an Interp, a For block
+        // and an If chain (whitespace Text segments interleave them).
+        assert!(
+            matches!(segments.first(), Some(TemplateSegment::Text(_))),
+            "first segment should be literal text, got {:?}",
+            segments.first()
+        );
+        assert!(
+            segments
+                .iter()
+                .any(|s| matches!(s, TemplateSegment::Interp(_))),
+            "expected a top-level Interp segment"
+        );
+
+        let TemplateSegment::For { body: for_body, .. } = segments
+            .iter()
+            .find(|s| matches!(s, TemplateSegment::For { .. }))
+            .expect("expected a For segment")
+        else {
+            unreachable!()
+        };
+        assert!(
+            for_body
+                .iter()
+                .any(|s| matches!(s, TemplateSegment::Interp(_))),
+            "for body should contain the ${{x}} interpolation, got {for_body:?}"
+        );
+
+        let TemplateSegment::If {
+            branches,
+            else_body,
+        } = segments
+            .iter()
+            .find(|s| matches!(s, TemplateSegment::If { .. }))
+            .expect("expected an If segment")
+        else {
+            unreachable!()
+        };
+        assert_eq!(branches.len(), 1, "expected a single if-branch");
+        let TemplateIfBranch {
+            body: then_body, ..
+        } = &branches[0];
+        assert!(
+            then_body
+                .iter()
+                .any(|s| matches!(s, TemplateSegment::Text(_))),
+            "then-branch should contain text"
+        );
+        assert!(else_body.is_some(), "if should carry an else body");
     }
 
     #[test]
@@ -2052,5 +2183,160 @@ class C {
         let (_, diags) = parse_lower_validate(source);
         assert_eq!(diags.len(), 1, "expected 1 diagnostic, got {diags:?}");
         assert_eq!(diags[0].0, "alias");
+    }
+
+    // ─── BEP-049: backtick string literal lowering ────────────────────────────
+
+    fn extract_first_string_literal(items: Vec<Item>) -> String {
+        let function = first_function(items);
+        let Some(FunctionBodyDef::Expr(body, _sm)) = &function.body else {
+            panic!("expected expression body");
+        };
+        let root = body.root_expr.expect("expected root expr");
+        // Body is wrapped in a Block; find the tail or first statement string.
+        let candidate = match &body.exprs[root] {
+            Expr::Block {
+                tail_expr: Some(tail),
+                ..
+            } => *tail,
+            Expr::Block { stmts, .. } => match &body.stmts[stmts[0]] {
+                Stmt::Expr(expr_id) => *expr_id,
+                Stmt::Let {
+                    initializer: Some(init),
+                    ..
+                } => *init,
+                other => panic!("unexpected stmt: {other:?}"),
+            },
+            _ => root,
+        };
+        // An untagged backtick lowers to `Expr::Template`; its desugared
+        // realization (a string literal, for pure-text templates) lives in
+        // `TemplateTag::Default { elaborated }`.
+        let candidate = match &body.exprs[candidate] {
+            Expr::Template {
+                tag: crate::ast::TemplateTag::Default { elaborated },
+                ..
+            } => *elaborated,
+            _ => candidate,
+        };
+        match &body.exprs[candidate] {
+            Expr::Literal(baml_base::Literal::String(s)) => s.clone(),
+            other => panic!("expected string literal, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn backtick_one_liner_lowers_to_string_literal() {
+        let source = "
+function Demo() -> string {
+    `hello world`
+}
+";
+        let items = parse_and_lower(source);
+        assert_eq!(extract_first_string_literal(items), "hello world");
+    }
+
+    #[test]
+    fn backtick_decodes_standard_escapes() {
+        let source = r#"
+function Demo() -> string {
+    `line\nbreak`
+}
+"#;
+        let items = parse_and_lower(source);
+        assert_eq!(extract_first_string_literal(items), "line\nbreak");
+    }
+
+    #[test]
+    fn backtick_escapes_backtick_and_dollar() {
+        let source = r#"
+function Demo() -> string {
+    `a\`b\${name}c`
+}
+"#;
+        let items = parse_and_lower(source);
+        assert_eq!(extract_first_string_literal(items), "a`b${name}c");
+    }
+
+    #[test]
+    fn backtick_multiline_dedents() {
+        let source = "
+function Demo() -> string {
+    `
+        line one
+        line two
+    `
+}
+";
+        let items = parse_and_lower(source);
+        assert_eq!(extract_first_string_literal(items), "line one\nline two");
+    }
+
+    #[test]
+    fn backtick_multi_tick_ladder_preserves_inner_ticks() {
+        let source = "
+function Demo() -> string {
+    ``inline `code` here``
+}
+";
+        let items = parse_and_lower(source);
+        assert_eq!(extract_first_string_literal(items), "inline `code` here");
+    }
+
+    #[test]
+    fn backtick_interpolation_lowers_to_concat_chain() {
+        // BEP §11: `Hello, ${name}!` is an untagged `Expr::Template` whose
+        // `Default { elaborated }` realization is the left-folded Binary Add
+        // chain ("Hello, " + name.to_string()) + "!" over the segments.
+        let source = "
+function Demo(name: string) -> string {
+    `Hello, ${name}!`
+}
+";
+        let items = parse_and_lower(source);
+        let function = first_function(items);
+        let Some(FunctionBodyDef::Expr(body, _)) = &function.body else {
+            panic!("expected expression body");
+        };
+        let root = body.root_expr.expect("root");
+        let Expr::Block {
+            tail_expr: Some(tail),
+            ..
+        } = &body.exprs[root]
+        else {
+            panic!("expected Block at root, got {:?}", &body.exprs[root]);
+        };
+        let Expr::Template {
+            tag: crate::ast::TemplateTag::Default { elaborated },
+            ..
+        } = &body.exprs[*tail]
+        else {
+            panic!(
+                "expected untagged Template at tail, got {:?}",
+                &body.exprs[*tail]
+            );
+        };
+        let Expr::Binary { op, lhs, rhs } = &body.exprs[*elaborated] else {
+            panic!(
+                "expected Binary at elaborated root, got {:?}",
+                &body.exprs[*elaborated]
+            );
+        };
+        assert!(matches!(op, crate::ast::BinaryOp::Add));
+        assert!(matches!(
+            &body.exprs[*rhs],
+            Expr::Literal(baml_base::Literal::String(s)) if s == "!"
+        ));
+        let Expr::Binary {
+            op: op2, lhs: lhs2, ..
+        } = &body.exprs[*lhs]
+        else {
+            panic!("expected nested Binary on lhs");
+        };
+        assert!(matches!(op2, crate::ast::BinaryOp::Add));
+        assert!(matches!(
+            &body.exprs[*lhs2],
+            Expr::Literal(baml_base::Literal::String(s)) if s == "Hello, "
+        ));
     }
 }

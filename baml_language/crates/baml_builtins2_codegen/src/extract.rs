@@ -10,7 +10,7 @@ use baml_base::FileId;
 use baml_compiler_diagnostics::ToDiagnostic;
 use baml_compiler_syntax::{NodeOrToken, SyntaxKind, SyntaxNode};
 use baml_compiler2_ast::ast::{
-    BuiltinKind, ClassDef, FunctionBodyDef, FunctionDef, Item, TypeExpr,
+    BuiltinKind, ClassDef, FunctionBodyDef, FunctionDef, ImplementsForDef, Item, TypeExpr,
 };
 
 use crate::types::{
@@ -147,6 +147,15 @@ pub fn extract_native_builtins()
                         func_def,
                         &namespace_prefix,
                         &cst_root,
+                        &path,
+                        &mut vm_builtins,
+                        &mut io_builtins,
+                    );
+                }
+                Item::ImplementsFor(impl_def) => {
+                    extract_from_implements_for(
+                        impl_def,
+                        &namespace_prefix,
                         &path,
                         &mut vm_builtins,
                         &mut io_builtins,
@@ -466,6 +475,192 @@ fn extract_from_free_function(
     match pipeline {
         BuiltinPipeline::Vm => vm_builtins.push(builtin),
         BuiltinPipeline::Io => io_builtins.push(builtin),
+    }
+}
+
+/// Extract `$rust_function` methods from a top-level `implement Interface for Type`
+/// block (e.g. `implement Equals for int { function eq(...) { $rust_function } }`).
+///
+/// These are dispatched at runtime under the synthetic class name
+/// `<Interface>$for$<for_target>`, which MUST match the name the MIR lowering
+/// assigns to such methods (see `baml_compiler2_mir::lower`'s
+/// `definition_item_ref` / `{iface}$for${for}` formatting) so that
+/// `get_native_fn` resolves the function the VM looks up.
+///
+/// The receiver (`self`) and any `Self`-typed parameters are mapped to the
+/// `for` target's primitive class so the existing receiver/argument extraction
+/// machinery applies (`int` → `i64`, `bigint` → `Arc<BigInt>`, etc.). Only
+/// blocks implemented for a built-in primitive or container are native-backed;
+/// blocks for user-defined types compile as ordinary bytecode and are skipped.
+fn extract_from_implements_for(
+    impl_def: &ImplementsForDef,
+    namespace_prefix: &str,
+    source_file: &str,
+    vm_builtins: &mut Vec<NativeBuiltin>,
+    io_builtins: &mut Vec<NativeBuiltin>,
+) {
+    let Some(recv_class) = receiver_class_for_target(&impl_def.for_target.expr) else {
+        return;
+    };
+
+    // The synthetic class segment must match MIR's `{iface}$for${for}` exactly.
+    let synthetic_class = format!(
+        "{}$for${}",
+        impl_def.interface_target.expr, impl_def.for_target.expr
+    );
+
+    let impl_generics: Vec<String> = impl_def
+        .generic_params
+        .iter()
+        .map(|(n, _)| n.as_str().to_string())
+        .collect();
+
+    // `Self` inside method signatures resolves to the `for` target.
+    let self_baml = type_expr_to_baml_type(&impl_def.for_target.expr, &impl_generics);
+
+    // Container element comparison reads heap values, so it needs a `&BexVm`;
+    // scalar comparisons operate on `Copy`/`Arc` receivers and need no VM.
+    let vm_usage = match recv_class {
+        "Array" | "Map" => VmUsage::Ref,
+        _ => VmUsage::None,
+    };
+
+    for method in &impl_def.methods {
+        let Some(pipeline) = extract_builtin_pipeline(method) else {
+            continue;
+        };
+
+        // Merge the `implement` block's generics with method-level generics so a
+        // method type parameter resolves to `BamlType::Generic`, not a `Named`.
+        let method_generics: Vec<String> = method
+            .generic_params
+            .iter()
+            .map(|n| n.as_str().to_string())
+            .collect();
+        let mut all_generics = impl_generics.clone();
+        for g in &method_generics {
+            if !all_generics.contains(g) {
+                all_generics.push(g.clone());
+            }
+        }
+
+        let path = format!(
+            "{namespace_prefix}.{synthetic_class}.{}",
+            method.name.as_str()
+        );
+        let fn_name = path_to_fn_name(&path);
+
+        let receiver = Some(Receiver {
+            class_name: recv_class.to_string(),
+            namespace: namespace_prefix
+                .strip_prefix("baml.")
+                .unwrap_or("")
+                .to_string(),
+            instance_backed: false,
+            class_generics: impl_generics.clone(),
+            receiver_type: ReceiverType::RefSelf,
+        });
+
+        let params: Vec<Param> = method
+            .params
+            .iter()
+            .skip(1) // skip `self`
+            .map(|p| Param {
+                name: p.name.as_str().to_string(),
+                ty: p
+                    .type_expr
+                    .as_ref()
+                    .map(|te| type_expr_to_baml_type_with_self(&te.expr, &all_generics, &self_baml))
+                    .unwrap_or(BamlType::Named("unknown".to_string())),
+            })
+            .collect();
+
+        let return_type = method
+            .return_type
+            .as_ref()
+            .map(|te| type_expr_to_baml_type_with_self(&te.expr, &all_generics, &self_baml))
+            .unwrap_or(BamlType::Null);
+
+        let builtin = NativeBuiltin {
+            path,
+            fn_name,
+            params,
+            return_type,
+            generics: all_generics,
+            receiver,
+            vm_usage,
+            may_yield: false,
+            fallible: false,
+            pipeline,
+            throws: extract_throws(method),
+            source_file: source_file.to_string(),
+        };
+
+        match pipeline {
+            BuiltinPipeline::Vm => vm_builtins.push(builtin),
+            BuiltinPipeline::Io => io_builtins.push(builtin),
+        }
+    }
+}
+
+/// Map a `for` target type expression to the receiver class name whose
+/// extraction logic the codegen already knows. Returns `None` for targets that
+/// are not native-backed primitives/containers.
+fn receiver_class_for_target(ty: &TypeExpr) -> Option<&'static str> {
+    Some(match ty {
+        TypeExpr::Int { .. } => "Int",
+        TypeExpr::Bigint { .. } => "Bigint",
+        TypeExpr::Float { .. } => "Float",
+        TypeExpr::Bool { .. } => "Bool",
+        TypeExpr::Null { .. } => "Null",
+        TypeExpr::String { .. } => "String",
+        TypeExpr::Uint8Array { .. } => "Uint8Array",
+        TypeExpr::List { .. } => "Array",
+        TypeExpr::Map { .. } => "Map",
+        _ => return None,
+    })
+}
+
+/// Like [`type_expr_to_baml_type`] but resolves a `Self` path to `self_baml`
+/// (the `for` target of the enclosing `implement` block) at any nesting depth,
+/// e.g. `Self[]`, `Self?`, or `map<K, Self>`.
+///
+/// Container shapes are reconstructed here rather than deferring to
+/// [`type_expr_to_baml_type`], which has no notion of `Self` and would emit
+/// `BamlType::Named("Self")` for a nested occurrence. The container arms mirror
+/// `type_expr_to_baml_type` exactly so the only behavioural difference is the
+/// `Self` substitution. `Self?` parses as `Union(Self, null)`, so the `Union`
+/// arm replicates the single-non-null-variant → `Optional` collapse while
+/// recursing into the variant to catch a nested `Self`.
+fn type_expr_to_baml_type_with_self(
+    ty: &TypeExpr,
+    generics: &[String],
+    self_baml: &BamlType,
+) -> BamlType {
+    let recurse = |inner: &TypeExpr| type_expr_to_baml_type_with_self(inner, generics, self_baml);
+    match ty {
+        TypeExpr::Path { segments, .. }
+            if segments.len() == 1 && segments[0].as_str() == "Self" =>
+        {
+            self_baml.clone()
+        }
+        TypeExpr::Optional { inner, .. } => BamlType::Optional(Box::new(recurse(inner))),
+        TypeExpr::List { inner, .. } => BamlType::List(Box::new(recurse(inner))),
+        TypeExpr::Map { key, value, .. } => {
+            BamlType::Map(Box::new(recurse(key)), Box::new(recurse(value)))
+        }
+        TypeExpr::Union { variants, .. } => {
+            let non_null: Vec<_> = variants
+                .iter()
+                .filter(|v| !matches!(v, TypeExpr::Null { .. }))
+                .collect();
+            if non_null.len() == 1 && non_null.len() < variants.len() {
+                BamlType::Optional(Box::new(recurse(non_null[0])))
+            } else {
+                BamlType::Named("union".to_string())
+            }
+        }
+        _ => type_expr_to_baml_type(ty, generics),
     }
 }
 
@@ -1048,15 +1243,17 @@ mod tests {
             .unwrap();
         assert_eq!(fs_open.throws, throws(&["Io", "InvalidArgument"]));
 
+        // `connect`/`fetch` are now thin BAML wrappers that resolve the optional
+        // `timeout` default; the underlying sys-ops are the `_`-prefixed forms.
         let net_connect = io_builtins
             .iter()
-            .find(|b| b.path == "baml.net.TcpStream.connect")
+            .find(|b| b.path == "baml.net.TcpStream._connect")
             .unwrap();
         assert_eq!(net_connect.throws, throws(&["Io", "Timeout"]));
 
         let http_fetch = io_builtins
             .iter()
-            .find(|b| b.path == "baml.http.fetch")
+            .find(|b| b.path == "baml.http._fetch")
             .unwrap();
         assert_eq!(http_fetch.throws, throws(&["Io", "Timeout"]));
 

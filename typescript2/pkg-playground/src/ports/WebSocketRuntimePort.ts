@@ -3,7 +3,7 @@
  *
  * Used in the VS Code webview where the Rust LSP server runs the BAML runtime.
  * Communicates over ws://localhost:{port}/api/ws with JSON messages.
- * Proto bytes (argsProto / result) are base64-encoded for transit.
+ * Argument/result bytes are base64-encoded for transit.
  *
  * Features:
  *   - Queues outgoing messages while WebSocket is connecting
@@ -15,111 +15,10 @@ import type { RuntimePort } from '../runtime-port';
 import type {
   WorkerOutMessage,
   WorkerInMessage,
-  PlaygroundNotification,
-  LogLevel,
-  LogDecoration,
+  WebSocketInMessage,
+  WebSocketOutMessage,
 } from '../worker-protocol';
-import { decodeCallResult, RuntimeEvent } from '@b/pkg-proto';
-import { truncateMessage, normalizeLogLevel } from '../shared/log-decorations';
-import { formatValue } from '../shared/format-value';
-import { deserializeRuntimeEvent } from '../shared/deserialize-event';
 import { isPlaygroundProtocolCompatible } from '../protocol';
-
-/** Server → Client message shapes (must match playground_ws.rs WsOutMessage) */
-type WsOutMessage =
-  | {
-      type: 'hello';
-      toolchainVersion: string;
-      playgroundProtocol: number;
-      minClientPlaygroundProtocol: number;
-      capabilities: string[];
-    }
-  | { type: 'ready' }
-  | { type: 'playgroundNotification'; notification: PlaygroundNotification }
-  | { type: 'callFunctionResult'; id: number; result: string }
-  | {
-      type: 'callFunctionError';
-      id: number;
-      error: string;
-      cancelled?: boolean;
-    }
-  | { type: 'nextFunctionCallResult'; id: number; callId: number }
-  | { type: 'nextFunctionCallError'; id: number; error: string }
-  | { type: 'envVarRequest'; id: number; variable: string }
-  | { type: 'processEnvVars'; vars: Record<string, string> }
-  | { type: 'envVarFromShell'; variable: string; value: string }
-  | { type: 'knownEnvVarNames'; names: string[] }
-  | {
-      type: 'inputRequest';
-      id: number;
-      prompt: string | undefined;
-      callId: number;
-    }
-  | { type: 'inputResolved'; id: number; callId: number }
-  | {
-      type: 'fetchLogNew';
-      callId: number;
-      id: number;
-      method: string;
-      url: string;
-      requestHeaders: Record<string, string>;
-      requestBody: string;
-    }
-  | {
-      type: 'fetchLogUpdate';
-      callId: number;
-      logId: number;
-      status?: number;
-      durationMs?: number;
-      responseBody?: string;
-      error?: string;
-      responseHeaders?: Record<string, string>;
-    }
-  | {
-      type: 'controlFlowGraphResult';
-      functionName: string;
-      graph: unknown | null;
-    }
-  | { type: 'cursorContext'; context: unknown }
-  | { type: 'runtimeEvent'; data: string; callId: number };
-
-/** Client → Server message shapes (must match playground_ws.rs WsInMessage) */
-type WsInMessage =
-  | { type: 'nextFunctionCall'; id: number }
-  | {
-      type: 'callFunction';
-      id: number;
-      project: string;
-      name: string;
-      argsProto: string;
-    }
-  | { type: 'cancelCall'; id: number; project: string }
-  | {
-      type: 'callTestFunction';
-      id: number;
-      project: string;
-      generation: number;
-      testName: string;
-    }
-  | {
-      type: 'expandTestSet';
-      project: string;
-      generation: number;
-      testsetName: string;
-    }
-  | {
-      type: 'envVarResponse';
-      id: number;
-      value: string | undefined;
-      variable?: string;
-    }
-  | { type: 'inputResponse'; id: number; value: string; callId: number }
-  | { type: 'setEnvVar'; key: string; value: string }
-  | { type: 'deleteEnvVar'; key: string }
-  | { type: 'requestState' }
-  | { type: 'requestCollectTests'; project: string }
-  | { type: 'requestControlFlowGraph'; project: string; functionName: string }
-  | { type: 'cursorPosition'; file: string; line: number; column: number };
 
 const MAX_RECONNECT_DELAY = 5000;
 
@@ -132,17 +31,7 @@ export class WebSocketRuntimePort implements RuntimePort {
   private disposed = false;
   private reconnectDelay = 500;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-  private decorationsByLine = new Map<
-    number,
-    { level: LogLevel; message: string; count: number }
-  >();
-  private textEncoder = new TextEncoder();
   private playgroundCompatible = true;
-  private nextFunctionCallRequestId = 1;
-  private pendingNextFunctionCalls = new Map<
-    number,
-    { resolve: (callId: number) => void; reject: (error: Error) => void }
-  >();
 
   constructor(url: string) {
     this.url = url;
@@ -166,30 +55,14 @@ export class WebSocketRuntimePort implements RuntimePort {
         this.ws!.send(msg);
       }
       this.outQueue = [];
+      this.ws!.send(JSON.stringify({ type: 'requestState' }));
     };
 
     this.ws.onmessage = (event: MessageEvent) => {
       try {
-        const raw: WsOutMessage = JSON.parse(event.data as string);
+        const raw: WebSocketOutMessage = JSON.parse(event.data as string);
         const msg = this.fromServer(raw);
         if (!msg) return;
-
-        if (msg.type === 'nextFunctionCallResult') {
-          const pending = this.pendingNextFunctionCalls.get(msg.id);
-          if (pending) {
-            this.pendingNextFunctionCalls.delete(msg.id);
-            pending.resolve(msg.callId);
-          }
-          return;
-        }
-        if (msg.type === 'nextFunctionCallError') {
-          const pending = this.pendingNextFunctionCalls.get(msg.id);
-          if (pending) {
-            this.pendingNextFunctionCalls.delete(msg.id);
-            pending.reject(new Error(msg.error));
-          }
-          return;
-        }
 
         if (this.handlers.size === 0) {
           // No handler registered yet — buffer the message.
@@ -231,15 +104,7 @@ export class WebSocketRuntimePort implements RuntimePort {
     this.sendServerMessage(serverMsg);
   }
 
-  nextFunctionCall(): Promise<number> {
-    const id = this.nextFunctionCallRequestId++;
-    return new Promise((resolve, reject) => {
-      this.pendingNextFunctionCalls.set(id, { resolve, reject });
-      this.sendServerMessage({ type: 'nextFunctionCall', id });
-    });
-  }
-
-  private sendServerMessage(serverMsg: WsInMessage): void {
+  private sendServerMessage(serverMsg: WebSocketInMessage): void {
     const raw = JSON.stringify(serverMsg);
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(raw);
@@ -280,33 +145,81 @@ export class WebSocketRuntimePort implements RuntimePort {
       this.ws = null;
     }
     this.handlers.clear();
-    for (const pending of this.pendingNextFunctionCalls.values()) {
-      pending.reject(new Error('Runtime port disposed'));
-    }
-    this.pendingNextFunctionCalls.clear();
     this.outQueue = [];
     this.inBuffer = [];
   }
 
   // ---------------------------------------------------------------------------
-  // Convert WorkerInMessage → WsInMessage (base64-encode argsProto)
+  // Convert WorkerInMessage → WsInMessage (base64-encode argsBytes)
   // ---------------------------------------------------------------------------
 
-  private toServer(msg: WorkerInMessage): WsInMessage | null {
+  private toServer(msg: WorkerInMessage): WebSocketInMessage | null {
     switch (msg.type) {
-      case 'nextFunctionCall':
-        return { type: 'nextFunctionCall', id: msg.id };
-      case 'callFunction':
+      case 'startRun':
         this.clearLogDecorations();
         return {
-          type: 'callFunction',
-          id: msg.id,
+          type: 'startRun',
+          requestId: msg.requestId,
           project: msg.project,
-          name: msg.name,
-          argsProto: uint8ArrayToBase64(msg.argsProto),
+          functionName: msg.functionName,
+          argsBytes: uint8ArrayToBase64(msg.argsBytes),
         };
-      case 'cancelCall':
-        return { type: 'cancelCall', id: msg.id, project: msg.project };
+      case 'startPreviewRun':
+        this.clearLogDecorations();
+        return {
+          type: 'startPreviewRun',
+          requestId: msg.requestId,
+          project: msg.project,
+          parentFunctionName: msg.parentFunctionName,
+          helper: msg.helper,
+          functionName: msg.functionName,
+          argsBytes: uint8ArrayToBase64(msg.argsBytes),
+        };
+      case 'startTestRun':
+        this.clearLogDecorations();
+        return {
+          type: 'startTestRun',
+          requestId: msg.requestId,
+          project: msg.project,
+          generation: msg.generation,
+          testName: msg.testName,
+        };
+      case 'cancelRun':
+        return { type: 'cancelRun', requestId: msg.requestId, runId: msg.runId };
+      case 'respondToInput':
+        return {
+          type: 'respondToInput',
+          requestId: msg.requestId,
+          runId: msg.runId,
+          inputRequestId: msg.inputRequestId,
+          value: msg.value,
+        };
+      case 'respondToEnv':
+        return {
+          type: 'respondToEnv',
+          requestId: msg.requestId,
+          runId: msg.runId,
+          envRequestId: msg.envRequestId,
+          value: msg.value,
+        };
+      case 'listRuns':
+        return { type: 'listRuns', requestId: msg.requestId, filter: msg.filter };
+      case 'snapshot':
+        return { type: 'snapshot', requestId: msg.requestId, runId: msg.runId };
+      case 'subscribe':
+        return {
+          type: 'subscribe',
+          requestId: msg.requestId,
+          subscriptionId: msg.subscriptionId,
+          runId: msg.runId,
+          afterCursor: msg.afterCursor,
+        };
+      case 'unsubscribe':
+        return {
+          type: 'unsubscribe',
+          requestId: msg.requestId,
+          subscriptionId: msg.subscriptionId,
+        };
       case 'envVarResponse':
         return {
           type: 'envVarResponse',
@@ -339,15 +252,6 @@ export class WebSocketRuntimePort implements RuntimePort {
         };
       case 'requestCollectTests':
         return { type: 'requestCollectTests', project: msg.project };
-      case 'callTestFunction':
-        this.clearLogDecorations();
-        return {
-          type: 'callTestFunction',
-          id: msg.id,
-          project: msg.project,
-          generation: msg.generation,
-          testName: msg.testName,
-        };
       case 'expandTestSet':
         return {
           type: 'expandTestSet',
@@ -362,8 +266,6 @@ export class WebSocketRuntimePort implements RuntimePort {
           value: msg.value,
           callId: msg.callId,
         };
-      case 'clearHandles':
-        return null; // handles live in the Rust process; no TS-side cleanup needed
       case 'dispose':
         return null; // worker-only; no server equivalent
     }
@@ -372,10 +274,10 @@ export class WebSocketRuntimePort implements RuntimePort {
   }
 
   // ---------------------------------------------------------------------------
-  // Convert WsOutMessage → WorkerOutMessage (base64-decode resultProto)
+  // Convert WebSocketOutMessage → WorkerOutMessage.
   // ---------------------------------------------------------------------------
 
-  private fromServer(raw: WsOutMessage): WorkerOutMessage | null {
+  private fromServer(raw: WebSocketOutMessage): WorkerOutMessage | null {
     switch (raw.type) {
       case 'hello':
         this.playgroundCompatible = isPlaygroundProtocolCompatible(
@@ -383,10 +285,9 @@ export class WebSocketRuntimePort implements RuntimePort {
           raw.minClientPlaygroundProtocol,
         );
         if (!this.playgroundCompatible) {
-          return {
-            type: 'runtimeEventError',
-            error: `BAML playground protocol ${raw.playgroundProtocol} from toolchain ${raw.toolchainVersion} is incompatible with this extension.`,
-          };
+          console.warn(
+            `BAML playground protocol ${raw.playgroundProtocol} from toolchain ${raw.toolchainVersion} is incompatible with this extension.`,
+          );
         }
         return null;
       case 'ready':
@@ -399,41 +300,44 @@ export class WebSocketRuntimePort implements RuntimePort {
           type: 'playgroundNotification',
           notification: raw.notification,
         };
-      case 'callFunctionResult': {
-        try {
-          const bytes = base64ToUint8Array(raw.result);
-          const decoded = decodeCallResult(
-            bytes,
-            (key, handleType, typeName) => ({
-              handle_key: key,
-              handle_type: handleType,
-              type_name: typeName,
-            }),
-          );
-          return {
-            type: 'callFunctionResult',
-            id: raw.id,
-            result: decoded,
-          };
-        } catch (e) {
-          return {
-            type: 'callFunctionError',
-            id: raw.id,
-            error: `Failed to decode result: ${e instanceof Error ? e.message : String(e)}`,
-          };
-        }
-      }
-      case 'callFunctionError':
+      case 'runStarted':
         return {
-          type: 'callFunctionError',
-          id: raw.id,
-          error: raw.error,
-          cancelled: raw.cancelled,
+          type: 'runStarted',
+          requestId: raw.requestId,
+          run: raw.run,
         };
-      case 'nextFunctionCallResult':
-        return { type: 'nextFunctionCallResult', id: raw.id, callId: raw.callId };
-      case 'nextFunctionCallError':
-        return { type: 'nextFunctionCallError', id: raw.id, error: raw.error };
+      case 'runPatch':
+        return { type: 'runPatch', patch: raw.patch };
+      case 'commandAck':
+        return {
+          type: 'commandAck',
+          requestId: raw.requestId,
+          outcome: raw.outcome,
+        };
+      case 'commandError':
+        return {
+          type: 'commandError',
+          requestId: raw.requestId,
+          code: raw.code,
+          message: raw.message,
+        };
+      case 'runList':
+        return { type: 'runList', requestId: raw.requestId, runs: raw.runs };
+      case 'runSnapshot':
+        return {
+          type: 'runSnapshot',
+          requestId: raw.requestId,
+          runId: raw.runId,
+          snapshot: raw.snapshot,
+        };
+      case 'runCursorExpired':
+        return {
+          type: 'runCursorExpired',
+          requestId: raw.requestId,
+          subscriptionId: raw.subscriptionId,
+          runId: raw.runId,
+          reason: raw.reason,
+        };
       case 'envVarRequest':
         return { type: 'envVarRequest', id: raw.id, variable: raw.variable };
       case 'processEnvVars':
@@ -458,9 +362,9 @@ export class WebSocketRuntimePort implements RuntimePort {
       case 'fetchLogNew':
         return {
           type: 'fetchLogNew',
+          callId: raw.callId,
           entry: {
             id: raw.id,
-            callId: raw.callId,
             timestamp: Date.now(),
             method: raw.method,
             url: raw.url,
@@ -504,49 +408,6 @@ export class WebSocketRuntimePort implements RuntimePort {
           type: 'cursorContext',
           context: raw.context as import('../worker-protocol').CursorContext,
         };
-      case 'runtimeEvent': {
-        try {
-          const bytes = base64ToUint8Array(raw.data);
-          const event = RuntimeEvent.decode(bytes);
-          const deserialized = deserializeRuntimeEvent(event);
-          // Forward the decoded event via the buffer-or-dispatch path
-          this.deliver({
-            type: 'runtimeEventNew',
-            event: deserialized,
-            callId: raw.callId ?? null,
-          });
-
-          // Extract log decorations (same logic as baml-lsp-worker.ts)
-          const kind = deserialized.event;
-          if (kind?.$case === 'log' && kind.log.source) {
-            const source = kind.log.source;
-            const line = source.line;
-            const level = normalizeLogLevel(kind.log.level);
-            const message = formatValue(kind.log.data, 'inline-hint');
-            const sourceSpanLength = source.endOffset - source.startOffset;
-            // Compare UTF-8 byte lengths since source offsets are byte offsets from Rust
-            const messageByteLen = this.textEncoder.encode(message).length;
-            const isLikelyVariable = messageByteLen > sourceSpanLength + 5;
-            if (isLikelyVariable) {
-              const existing = this.decorationsByLine.get(line);
-              if (existing) {
-                existing.message = message;
-                existing.level = level;
-                existing.count += 1;
-              } else {
-                this.decorationsByLine.set(line, { level, message, count: 1 });
-              }
-              this.emitLogDecorations();
-            }
-          }
-          return null; // already dispatched via handlers above
-        } catch (e) {
-          return {
-            type: 'runtimeEventError' as const,
-            error: `Failed to decode runtime event: ${e instanceof Error ? e.message : String(e)}`,
-          } as WorkerOutMessage;
-        }
-      }
       default:
         return null;
     }
@@ -561,21 +422,7 @@ export class WebSocketRuntimePort implements RuntimePort {
     }
   }
 
-  private emitLogDecorations(): void {
-    const decorations: LogDecoration[] = [];
-    for (const [line, entry] of this.decorationsByLine) {
-      decorations.push({
-        line,
-        level: entry.level,
-        message: truncateMessage(entry.message),
-        count: entry.count,
-      });
-    }
-    this.deliver({ type: 'logDecorations', decorations });
-  }
-
   private clearLogDecorations(): void {
-    this.decorationsByLine.clear();
     this.deliver({ type: 'clearLogDecorations' });
   }
 }
@@ -590,13 +437,4 @@ function uint8ArrayToBase64(bytes: Uint8Array): string {
     binary += String.fromCharCode(bytes[i]!);
   }
   return btoa(binary);
-}
-
-function base64ToUint8Array(b64: string): Uint8Array {
-  const binary = atob(b64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
 }

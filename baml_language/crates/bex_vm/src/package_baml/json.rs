@@ -659,7 +659,10 @@ fn serialize_class_instance(
     Ok(serde_json::Value::Object(out))
 }
 
-fn media_kind_from_fqn(fqn: &str) -> Option<MediaKind> {
+/// The [`MediaKind`] of a media class FQN, or `None` for a non-media class. A
+/// runtime media value is an `Object::Instance` of one of these std classes
+/// (carrying a `$rust_type` `_data` field); there is no `Generic` media *value*.
+pub(crate) fn media_kind_from_fqn(fqn: &str) -> Option<MediaKind> {
     match fqn {
         "baml.media.Image" => Some(MediaKind::Image),
         "baml.media.Audio" => Some(MediaKind::Audio),

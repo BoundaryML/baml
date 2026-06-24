@@ -1144,6 +1144,7 @@ fn emit_owned_struct(
             fn into_bex_external_value(self) -> BexExternalValue {
                 BexExternalValue::Instance {
                     class_name: #full_path.to_string(),
+                    type_args: vec![],
                     fields: indexmap::indexmap! {
                         #(#as_bex_entries,)*
                     },

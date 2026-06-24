@@ -77,7 +77,9 @@ async fn fs_file_write_on_readonly_errors() {
     let Err(bex_engine::EngineError::UnhandledThrow { value, .. }) = &output.result else {
         panic!("expected UnhandledThrow, got: {:?}", output.result);
     };
-    let bex_external_types::BexExternalValue::Instance { class_name, fields } = value.as_ref()
+    let bex_external_types::BexExternalValue::Instance {
+        class_name, fields, ..
+    } = value.as_ref()
     else {
         panic!("expected exception Instance, got: {value:?}");
     };

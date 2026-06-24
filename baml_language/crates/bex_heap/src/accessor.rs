@@ -399,7 +399,9 @@ impl<'a> BexValue<'a> {
         expected_class_name: &'static str,
     ) -> Result<BexClass<'a>, AccessError> {
         match self {
-            BexValue::ExternalValue(BexExternalValue::Instance { class_name, fields }) => {
+            BexValue::ExternalValue(BexExternalValue::Instance {
+                class_name, fields, ..
+            }) => {
                 if class_name != expected_class_name {
                     return Err(AccessError::TypeMismatch {
                         expected: expected_class_name,
@@ -684,8 +686,13 @@ fn owned_inner(
                     })
                     .collect::<Result<_, _>>()?,
             }),
-            BexExternalValue::Instance { class_name, fields } => Ok(BexExternalValue::Instance {
+            BexExternalValue::Instance {
+                class_name,
+                type_args,
+                fields,
+            } => Ok(BexExternalValue::Instance {
                 class_name: class_name.clone(),
+                type_args: type_args.clone(),
                 fields: fields
                     .iter()
                     .map(|(k, v)| {
@@ -816,6 +823,7 @@ fn convert_object(
                 .collect::<Result<_, _>>()?;
             Ok(BexExternalValue::Instance {
                 class_name: class.name.to_string(),
+                type_args: instance.class_type_args.clone(),
                 fields,
             })
         }

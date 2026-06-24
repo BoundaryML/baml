@@ -161,6 +161,14 @@ pub enum BexExternalValue {
     /// Class instance with class name and field values.
     Instance {
         class_name: String,
+        /// Concrete class type arguments for a generic class instance, in De
+        /// Bruijn (declaration) order; empty for non-generic classes. Carries a
+        /// `GenericBox<int>` instance's `[int]` across the FFI boundary (the
+        /// value-level type channel — distinct from a call's
+        /// `CallFunctionArgs.type_args`). Populated inbound from
+        /// `InboundClassValue.class_ty`; landed into the VM
+        /// `Object::Instance::class_type_args` in Phase 3.
+        type_args: Vec<RuntimeTy>,
         fields: IndexMap<String, BexExternalValue>,
     },
 
@@ -239,9 +247,14 @@ impl std::fmt::Debug for BexExternalValue {
                 .field("value_type", value_type)
                 .field("entries", entries)
                 .finish(),
-            Self::Instance { class_name, fields } => f
+            Self::Instance {
+                class_name,
+                type_args,
+                fields,
+            } => f
                 .debug_struct("Instance")
                 .field("class_name", class_name)
+                .field("type_args", type_args)
                 .field("fields", fields)
                 .finish(),
             Self::Variant {
@@ -308,13 +321,15 @@ impl PartialEq for BexExternalValue {
             (
                 Self::Instance {
                     class_name: c1,
+                    type_args: t1,
                     fields: f1,
                 },
                 Self::Instance {
                     class_name: c2,
+                    type_args: t2,
                     fields: f2,
                 },
-            ) => c1 == c2 && f1 == f2,
+            ) => c1 == c2 && t1 == t2 && f1 == f2,
             (
                 Self::Variant {
                     enum_name: e1,
@@ -402,13 +417,25 @@ impl BexExternalValue {
         }
     }
 
-    /// Construct a class instance value.
+    /// Construct a non-generic class instance value (empty `type_args`).
     pub fn instance(
         class_name: impl Into<String>,
         fields: IndexMap<&str, BexExternalValue>,
     ) -> Self {
+        Self::instance_generic(class_name, vec![], fields)
+    }
+
+    /// Construct a class instance value carrying concrete class type arguments
+    /// (De Bruijn order). Use for generic class instances; `instance` is the
+    /// terse non-generic shorthand.
+    pub fn instance_generic(
+        class_name: impl Into<String>,
+        type_args: Vec<RuntimeTy>,
+        fields: IndexMap<&str, BexExternalValue>,
+    ) -> Self {
         BexExternalValue::Instance {
             class_name: class_name.into(),
+            type_args,
             fields: fields
                 .into_iter()
                 .map(|(k, v)| (k.to_string(), v))

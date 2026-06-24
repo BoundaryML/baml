@@ -479,15 +479,6 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
             }
         }
 
-        Definition::Generator(loc) => {
-            let item_tree = baml_compiler2_hir::file_item_tree(db, loc.file(db));
-            let data = &item_tree[loc.id(db)];
-            TypeInfo::OtherItem {
-                name: data.name.as_str().to_string(),
-                kind: "generator",
-            }
-        }
-
         Definition::Test(loc) => {
             let item_tree = baml_compiler2_hir::file_item_tree(db, loc.file(db));
             let data = &item_tree[loc.id(db)];
@@ -512,7 +503,7 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
             let kind = match data.origin {
                 baml_compiler2_ast::ast::LetOrigin::Client => "client",
                 baml_compiler2_ast::ast::LetOrigin::RetryPolicy => "retry_policy",
-                _ => "let",
+                baml_compiler2_ast::ast::LetOrigin::Source => "let",
             };
             TypeInfo::OtherItem {
                 name: data.name.as_str().to_string(),

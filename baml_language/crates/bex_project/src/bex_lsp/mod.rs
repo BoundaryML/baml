@@ -7,6 +7,8 @@ mod request;
 mod multi_project;
 mod protocol;
 
+use std::{path::PathBuf, sync::Arc};
+
 use async_trait::async_trait;
 
 #[derive(Debug, thiserror::Error)]
@@ -162,13 +164,6 @@ pub enum PlaygroundNotification {
         #[serde(skip_serializing_if = "Option::is_none")]
         expand_error: Option<TestExpandError>,
     },
-    /// A runtime event was emitted during execution (protobuf-encoded).
-    #[serde(rename_all = "camelCase")]
-    RuntimeEvent {
-        /// Protobuf-encoded `RuntimeEvent` bytes (decode with `RuntimeEvent.decode()`)
-        data: Vec<u8>,
-        call_id: u64,
-    },
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -176,6 +171,14 @@ pub enum PlaygroundNotification {
 pub struct TestExpandError {
     pub testset_name: String,
     pub message: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlaygroundSourceFile {
+    pub path: String,
+    pub relative_path: String,
+    pub content: String,
 }
 
 pub trait PlaygroundSender: Send + Sync {
@@ -197,8 +200,21 @@ pub trait BexLsp: Send + Sync + notification::BexLspNotification + request::BexL
 
     fn request_playground_state(&self);
 
+    /// Seed workspace roots when the LSP is launched without an editor client
+    /// that can provide `initialize.workspaceFolders`.
+    fn initialize_workspace_roots(&self, roots: Vec<PathBuf>) -> Result<Vec<String>, LspError>;
+
     fn ast_control_flow_graph(
         &self,
+        function_name: &str,
+    ) -> Option<baml_compiler2_visualization::control_flow::ControlFlowGraph>;
+
+    fn project_generation(&self, project_root: &str) -> Option<u64>;
+
+    fn control_flow_graph_for_generation(
+        &self,
+        project_root: &str,
+        generation: u64,
         function_name: &str,
     ) -> Option<baml_compiler2_visualization::control_flow::ControlFlowGraph>;
 
@@ -228,6 +244,18 @@ pub trait BexLsp: Send + Sync + notification::BexLspNotification + request::BexL
     /// Collect all unique env var names referenced in BAML source across all projects.
     fn all_env_var_names(&self) -> Vec<String>;
 
+    /// Source files currently visible to the playground for a project.
+    fn playground_source_files(&self, project: &str)
+    -> Result<Vec<PlaygroundSourceFile>, LspError>;
+
+    /// Apply an in-memory source edit from the browser playground.
+    fn playground_update_source_file(
+        &self,
+        project: &str,
+        path: &str,
+        content: String,
+    ) -> Result<(), LspError>;
+
     fn request_collect_tests(&self, project: &str);
 
     /// Run a specific test by name. Request-response — returns the serialized
@@ -240,6 +268,15 @@ pub trait BexLsp: Send + Sync + notification::BexLspNotification + request::BexL
         ctx: bex_engine::FunctionCallContext,
     ) -> Result<bex_external_types::BexExternalValue, bex_engine::EngineError>;
 
+    /// Run a specific test by name and surface the BEX entry trace identity.
+    async fn call_test_function_with_trace(
+        &self,
+        project: &str,
+        generation: u64,
+        test_name: &str,
+        ctx: bex_engine::FunctionCallContext,
+    ) -> Result<bex_engine::BexCallResult, bex_engine::EngineError>;
+
     /// Expand a lazy test set by name. Fire-and-forget — result comes via a
     /// `TestCollectionResult` playground notification with the full serialized tree.
     fn expand_test_set(&self, project: &str, generation: u64, testset_name: &str);
@@ -251,5 +288,4 @@ pub trait BexLsp: Send + Sync + notification::BexLspNotification + request::BexL
     fn resolve_file_id(&self, file_id: u32) -> Option<String>;
 }
 
-use ::std::sync::Arc;
 pub use multi_project::{BackgroundSpawner, LspClientSenderTrait, new_lsp};

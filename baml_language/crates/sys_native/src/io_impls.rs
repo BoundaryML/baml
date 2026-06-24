@@ -1116,15 +1116,50 @@ impl io::IoNamespaceSys for NativeSysOps {
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        ms: i64,
+        delay: BexExternalValue,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        #[allow(clippy::cast_sign_loss)]
-        let millis = ms.max(0) as u64;
+        let nanos = match sleep_nanos_from_delay(delay) {
+            Ok(nanos) => nanos,
+            Err(err) => return SysOpOutput::err(err),
+        };
         SysOpOutput::async_op(async move {
-            tokio::time::sleep(std::time::Duration::from_millis(millis)).await;
+            tokio::time::sleep(std::time::Duration::from_nanos(nanos)).await;
             Ok(())
         })
+    }
+}
+
+fn sleep_nanos_from_delay(delay: BexExternalValue) -> Result<u64, VmRustFnError> {
+    match delay {
+        BexExternalValue::Instance {
+            class_name,
+            mut fields,
+            ..
+        } if class_name == "baml.time.Duration" => {
+            let Some(nanos) = fields.swap_remove("_nanoseconds") else {
+                return Err(VmRustFnError::from(VmBamlError::Io {
+                    message: "sleep delay is missing Duration._nanoseconds".to_string(),
+                }));
+            };
+            let BexExternalValue::Bigint(nanos) = nanos else {
+                return Err(VmRustFnError::from(VmBamlError::Io {
+                    message: "sleep delay Duration._nanoseconds is not a bigint".to_string(),
+                }));
+            };
+            if nanos.sign() == num_bigint::Sign::Plus {
+                Ok(u64::try_from(&nanos).unwrap_or(u64::MAX))
+            } else {
+                Ok(0)
+            }
+        }
+        BexExternalValue::Union { value, .. } => sleep_nanos_from_delay(*value),
+        other => Err(VmRustFnError::from(VmBamlError::Io {
+            message: format!(
+                "sleep delay must be baml.time.Duration, got {}",
+                other.type_name()
+            ),
+        })),
     }
 }
 
@@ -1145,14 +1180,20 @@ type NetTcpStreamHandle = tokio::sync::Mutex<Option<tokio::net::TcpStream>>;
 type NetTcpListenerHandle = tokio::sync::Mutex<Option<Arc<tokio::net::TcpListener>>>;
 type NetUdpSocketHandle = tokio::sync::Mutex<Option<Arc<tokio::net::UdpSocket>>>;
 
-// Default connect deadline. Without it, connecting to an unresponsive host
-// (e.g. one behind silent DDoS filtering) blocks forever; this makes the
-// `throws root.errors.Timeout` clause on `connect` actually fire.
-//
-// TODO(net-timeout): make this configurable per call — `connect(addr, timeout)`
-// and `read(timeout)` / `write(..., timeout)` — once we have a datetime/Duration
-// type to pass a timeout through the BAML API. For now it's a fixed default.
-const DEFAULT_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+/// Convert a `Duration._nanoseconds` value (carried as a bigint across the
+/// sys-op boundary) into an operation timeout. Zero or negative disables it
+/// (`None` — block indefinitely, matching Rust's `Option<Duration>` socket
+/// timeouts); a value too large for `u64` nanoseconds (~584 years) clamps to the
+/// maximum. Shared by the net sys-ops and the HTTP server, so it lives here
+/// (always compiled) rather than behind the `bundle-http` feature.
+pub(crate) fn timeout_from_nanos(nanos: &num_bigint::BigInt) -> Option<std::time::Duration> {
+    if nanos.sign() != num_bigint::Sign::Plus {
+        return None;
+    }
+    Some(std::time::Duration::from_nanos(
+        u64::try_from(nanos).unwrap_or(u64::MAX),
+    ))
+}
 
 fn downcast_tcpstream(
     stream: &owned::net::TcpStream,
@@ -1191,50 +1232,53 @@ fn downcast_udpsocket(
 }
 
 impl io::IoClassNetTcpStream for NativeSysOps {
-    fn connect(
+    fn _connect(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         addr: String,
+        timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::net::TcpStream> {
+        // `timeout = null` in BAML arrives as `0n`; `timeout_from_nanos` maps it
+        // to `None`, leaving the connect bounded only by the OS default (matching
+        // Rust's plain `TcpStream::connect`).
+        let timeout = timeout_from_nanos(&timeout_nanos);
         SysOpOutput::async_op(async move {
-            let stream = match tokio::time::timeout(
-                DEFAULT_CONNECT_TIMEOUT,
-                tokio::net::TcpStream::connect(&addr),
-            )
-            .await
-            {
-                Ok(Ok(stream)) => stream,
-                Ok(Err(e)) => {
-                    return Err(VmBamlError::Io {
-                        message: format!("Failed to connect to '{addr}': {e}"),
+            let connect = tokio::net::TcpStream::connect(&addr);
+            let stream = match timeout {
+                Some(dur) => match tokio::time::timeout(dur, connect).await {
+                    Ok(result) => result,
+                    Err(_elapsed) => {
+                        return Err(VmBamlError::Timeout {
+                            message: format!("Connecting to '{addr}' timed out"),
+                            duration_ms: i64::try_from(dur.as_millis()).ok(),
+                        }
+                        .into());
                     }
-                    .into());
-                }
-                Err(_elapsed) => {
-                    return Err(VmBamlError::Timeout {
-                        message: format!("Connecting to '{addr}' timed out"),
-                        duration_ms: i64::try_from(DEFAULT_CONNECT_TIMEOUT.as_millis()).ok(),
-                    }
-                    .into());
-                }
-            };
+                },
+                None => connect.await,
+            }
+            .map_err(|e| VmBamlError::Io {
+                message: format!("Failed to connect to '{addr}': {e}"),
+            })?;
             let handle: Arc<dyn std::any::Any + Send + Sync> =
                 Arc::new(tokio::sync::Mutex::new(Some(stream)));
             Ok(owned::net::TcpStream { _handle: handle })
         })
     }
 
-    fn read(
+    fn _read(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         stream: owned::net::TcpStream,
+        timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Vec<u8>> {
         use tokio::io::AsyncReadExt;
 
+        let timeout = timeout_from_nanos(&timeout_nanos);
         SysOpOutput::async_op(async move {
             let handle = downcast_tcpstream(&stream)?;
             let mut guard = handle.lock().await;
@@ -1242,39 +1286,69 @@ impl io::IoClassNetTcpStream for NativeSysOps {
                 message: "TcpStream is closed".to_string(),
             })?;
             let mut buffer = vec![0u8; 4096];
-            let n = stream
-                .read(&mut buffer)
-                .await
-                .map_err(|e| VmBamlError::Io {
-                    message: format!("Failed to read from socket: {e}"),
-                })?;
+            let read = stream.read(&mut buffer);
+            let n = match timeout {
+                Some(dur) => match tokio::time::timeout(dur, read).await {
+                    Ok(result) => result,
+                    Err(_elapsed) => {
+                        return Err(VmBamlError::Timeout {
+                            message: "Reading from socket timed out".to_string(),
+                            duration_ms: i64::try_from(dur.as_millis()).ok(),
+                        }
+                        .into());
+                    }
+                },
+                None => read.await,
+            }
+            .map_err(|e| VmBamlError::Io {
+                message: format!("Failed to read from socket: {e}"),
+            })?;
             buffer.truncate(n);
             Ok(buffer)
         })
     }
 
-    fn write(
+    fn _write(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         stream: owned::net::TcpStream,
         data: Vec<u8>,
+        timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
         use tokio::io::AsyncWriteExt;
 
+        let timeout = timeout_from_nanos(&timeout_nanos);
         SysOpOutput::async_op(async move {
             let handle = downcast_tcpstream(&stream)?;
             let mut guard = handle.lock().await;
             let stream = guard.as_mut().ok_or_else(|| VmBamlError::Io {
                 message: "TcpStream is closed".to_string(),
             })?;
-            stream.write_all(&data).await.map_err(|e| VmBamlError::Io {
-                message: format!("Failed to write to socket: {e}"),
-            })?;
-            stream.flush().await.map_err(|e| VmBamlError::Io {
-                message: format!("Failed to flush socket: {e}"),
-            })?;
+            // The whole write (every byte flushed) shares one deadline.
+            let write = async {
+                stream.write_all(&data).await.map_err(|e| VmBamlError::Io {
+                    message: format!("Failed to write to socket: {e}"),
+                })?;
+                stream.flush().await.map_err(|e| VmBamlError::Io {
+                    message: format!("Failed to flush socket: {e}"),
+                })?;
+                Ok::<(), VmBamlError>(())
+            };
+            match timeout {
+                Some(dur) => match tokio::time::timeout(dur, write).await {
+                    Ok(result) => result?,
+                    Err(_elapsed) => {
+                        return Err(VmBamlError::Timeout {
+                            message: "Writing to socket timed out".to_string(),
+                            duration_ms: i64::try_from(dur.as_millis()).ok(),
+                        }
+                        .into());
+                    }
+                },
+                None => write.await?,
+            }
             Ok(())
         })
     }
@@ -1400,15 +1474,17 @@ impl io::IoClassNetUdpSocket for NativeSysOps {
         })
     }
 
-    fn send_to(
+    fn _send_to(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         socket: owned::net::UdpSocket,
         data: Vec<u8>,
         addr: String,
+        timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
+        let timeout = timeout_from_nanos(&timeout_nanos);
         SysOpOutput::async_op(async move {
             let handle = downcast_udpsocket(&socket)?;
             let inner = handle
@@ -1419,23 +1495,36 @@ impl io::IoClassNetUdpSocket for NativeSysOps {
                 .ok_or_else(|| VmBamlError::Io {
                     message: "UdpSocket is closed".to_string(),
                 })?;
-            let n = inner
-                .send_to(&data, &addr)
-                .await
-                .map_err(|e| VmBamlError::Io {
-                    message: format!("Failed to send to '{addr}': {e}"),
-                })?;
+            let send = inner.send_to(&data, &addr);
+            let n = match timeout {
+                Some(dur) => match tokio::time::timeout(dur, send).await {
+                    Ok(result) => result,
+                    Err(_elapsed) => {
+                        return Err(VmBamlError::Timeout {
+                            message: format!("Sending to '{addr}' timed out"),
+                            duration_ms: i64::try_from(dur.as_millis()).ok(),
+                        }
+                        .into());
+                    }
+                },
+                None => send.await,
+            }
+            .map_err(|e| VmBamlError::Io {
+                message: format!("Failed to send to '{addr}': {e}"),
+            })?;
             Ok(i64::try_from(n).unwrap_or(i64::MAX))
         })
     }
 
-    fn recv_from(
+    fn _recv_from(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         socket: owned::net::UdpSocket,
+        timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::net::Datagram> {
+        let timeout = timeout_from_nanos(&timeout_nanos);
         SysOpOutput::async_op(async move {
             let handle = downcast_udpsocket(&socket)?;
             let inner = handle
@@ -1449,12 +1538,23 @@ impl io::IoClassNetUdpSocket for NativeSysOps {
             // A single datagram can be up to 65507 bytes for IPv4; size the
             // buffer to the max so we never silently truncate a packet.
             let mut buffer = vec![0u8; 65_536];
-            let (n, peer) = inner
-                .recv_from(&mut buffer)
-                .await
-                .map_err(|e| VmBamlError::Io {
-                    message: format!("Failed to receive datagram: {e}"),
-                })?;
+            let recv = inner.recv_from(&mut buffer);
+            let (n, peer) = match timeout {
+                Some(dur) => match tokio::time::timeout(dur, recv).await {
+                    Ok(result) => result,
+                    Err(_elapsed) => {
+                        return Err(VmBamlError::Timeout {
+                            message: "Receiving datagram timed out".to_string(),
+                            duration_ms: i64::try_from(dur.as_millis()).ok(),
+                        }
+                        .into());
+                    }
+                },
+                None => recv.await,
+            }
+            .map_err(|e| VmBamlError::Io {
+                message: format!("Failed to receive datagram: {e}"),
+            })?;
             buffer.truncate(n);
             Ok(owned::net::Datagram {
                 data: buffer,
@@ -1580,6 +1680,98 @@ impl io::IoClassHttpResponse for NativeSysOps {
             message: "Operation not supported on this platform".to_string(),
         })
     }
+
+    #[cfg(feature = "bundle-http")]
+    fn new_streaming(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        status_code: i64,
+        headers: indexmap::IndexMap<String, String>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::http::Response> {
+        SysOpOutput::ok(crate::http_server::build_streaming_response(
+            status_code,
+            headers,
+        ))
+    }
+
+    #[cfg(not(feature = "bundle-http"))]
+    fn new_streaming(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _status_code: i64,
+        _headers: indexmap::IndexMap<String, String>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::http::Response> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    #[cfg(feature = "bundle-http")]
+    fn write(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        response: owned::http::Response,
+        data: Vec<u8>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::async_op(async move {
+            crate::http_server::downcast_body(&response._body)?
+                .write_chunk(data)
+                .await
+                .map_err(VmRustFnError::from)
+        })
+    }
+
+    #[cfg(not(feature = "bundle-http"))]
+    fn write(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _response: owned::http::Response,
+        _data: Vec<u8>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    #[cfg(feature = "bundle-http")]
+    fn end(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        response: owned::http::Response,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::async_op(async move {
+            crate::http_server::downcast_body(&response._body)?
+                .end_stream()
+                .await
+                .map_err(VmRustFnError::from)
+        })
+    }
+
+    #[cfg(not(feature = "bundle-http"))]
+    fn end(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _response: owned::http::Response,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
 }
 
 /// Map a `reqwest` transport error to a category the HTTP ops declare they can
@@ -1599,6 +1791,22 @@ fn http_transport_error(context: &str, e: &reqwest::Error) -> VmBamlError {
         VmBamlError::Io {
             message: format!("{context}: {e}"),
         }
+    }
+}
+
+/// Applies the optional total-request timeout (carried as bigint nanos across
+/// the sys-op boundary) to a `reqwest` request builder. `0n`/negative means no
+/// deadline (`timeout_from_nanos` returns `None`); a configured deadline that
+/// elapses surfaces as `reqwest::Error::is_timeout`, which `http_transport_error`
+/// maps to `baml.errors.Timeout`.
+#[cfg(feature = "bundle-http")]
+fn apply_http_timeout(
+    builder: reqwest::RequestBuilder,
+    timeout_nanos: &num_bigint::BigInt,
+) -> reqwest::RequestBuilder {
+    match timeout_from_nanos(timeout_nanos) {
+        Some(dur) => builder.timeout(dur),
+        None => builder,
     }
 }
 
@@ -1822,18 +2030,18 @@ impl io::IoClassHttpSseStream for NativeSysOps {
 
 impl io::IoNamespaceHttp for NativeSysOps {
     #[cfg(feature = "bundle-http")]
-    fn fetch(
+    fn _fetch(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         url: String,
+        timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::Response> {
         SysOpOutput::async_op(async move {
             crate::ensure_rustls_crypto_provider();
             let client = reqwest::Client::new();
-            let response = client
-                .get(&url)
+            let response = apply_http_timeout(client.get(&url), &timeout_nanos)
                 .send()
                 .await
                 .map_err(|e| http_transport_error("HTTP fetch failed", &e))?;
@@ -1843,11 +2051,12 @@ impl io::IoNamespaceHttp for NativeSysOps {
     }
 
     #[cfg(not(feature = "bundle-http"))]
-    fn fetch(
+    fn _fetch(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         _url: String,
+        _timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::Response> {
         SysOpOutput::err(VmPanic::HostUnavailable {
@@ -1857,11 +2066,12 @@ impl io::IoNamespaceHttp for NativeSysOps {
     }
 
     #[cfg(feature = "bundle-http")]
-    fn send(
+    fn _send(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         request: owned::http::Request,
+        timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::Response> {
         SysOpOutput::async_op(async move {
@@ -1883,7 +2093,7 @@ impl io::IoNamespaceHttp for NativeSysOps {
                 builder = builder.body(request.body);
             }
 
-            let response = builder
+            let response = apply_http_timeout(builder, &timeout_nanos)
                 .send()
                 .await
                 .map_err(|e| http_transport_error("HTTP send failed", &e))?;
@@ -1893,11 +2103,12 @@ impl io::IoNamespaceHttp for NativeSysOps {
     }
 
     #[cfg(not(feature = "bundle-http"))]
-    fn send(
+    fn _send(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         _request: owned::http::Request,
+        _timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::Response> {
         SysOpOutput::err(VmPanic::HostUnavailable {

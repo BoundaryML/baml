@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.223.0](https://github.com/boundaryml/baml/compare/0.222.0..0.223.0) - 2026-06-23
+
+- Add render_null_as output format option (#3822) - ([e32d2df](https://github.com/boundaryml/baml/commit/e32d2df278f1b9cca345bcf89e57151a91e19b5e)) - aaronvg
+- Bump version to 0.223.0 - ([9c53075](https://github.com/boundaryml/baml/commit/9c530754087f5913d40384055a6eee115991fbed)) - Aaron Villalpando
+
 ## [0.222.0](https://github.com/boundaryml/baml/compare/0.221.0..0.222.0) - 2026-04-27
 
 - Bump version to 0.222.0 - ([d3ddbfa](https://github.com/boundaryml/baml/commit/d3ddbfa0d95671c84f120719da193401a08650da)) - Aaron Villalpando

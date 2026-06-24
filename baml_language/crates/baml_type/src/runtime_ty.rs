@@ -1,17 +1,11 @@
-//! Deep runtime-facing subset of [`Ty`].
+//! Inherent impls and conversions for [`RuntimeTy`], the deep runtime-facing
+//! subset of [`Ty`].
 //!
-//! [`RuntimeTy`] is a hand-written deep mirror of [`Ty`] that contains only the
-//! variants which can legitimately exist outside the compiler. Its nested
-//! positions hold `RuntimeTy` (not `Ty`), so a `RuntimeTy` value is statically
-//! guaranteed to be free of compiler-only variants all the way down.
-//!
-//! [`ConcreteTy`] and [`RealizedTy`] are `subenum`-generated subsets *of*
-//! `RuntimeTy`, giving the taxonomy `ConcreteTy ⊆ RealizedTy ⊆ RuntimeTy`:
-//! - **ConcreteTy** — types with concrete memory layouts and method
-//!   implementations.
-//! - **RealizedTy** — realized types (excludes type aliases and unrealized type
-//!   args).
-//! - **RuntimeTy** — every type that can exist outside the compiler.
+//! [`RuntimeTy`] (and [`ConcreteTy`]) are *defined* in [`crate::family`] by the
+//! `ty_family!` macro; this module holds their hand-written behaviour. A
+//! `RuntimeTy` contains only the variants that can legitimately exist outside
+//! the compiler, and its nested positions hold `RuntimeTy` (not `Ty`), so a
+//! value is statically free of compiler-only variants all the way down.
 //!
 //! Conversions:
 //! - [`RuntimeTy::try_from`] (`&Ty`/`Ty`) is fallible: it rejects the four
@@ -21,250 +15,12 @@
 
 use std::collections::{HashMap, HashSet};
 
-use borsh::{BorshDeserialize, BorshSerialize};
-use subenum::subenum;
-
 use crate::{
-    Freshness, FunctionParamMode, Literal, MediaKind, Name, QualifiedTypeName, Ty, TyAttr, TypeName,
+    Freshness, Name, NotRuntimeTy, QualifiedTypeName, RuntimeFunctionParamTy, RuntimeTy, Ty,
+    TyAttr, TypeName,
 };
 
-/// A single parameter of a [`RuntimeTy::Function`] — the runtime mirror of
-/// [`crate::FunctionParamTy`], holding a [`RuntimeTy`] instead of a [`Ty`].
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, BorshSerialize, BorshDeserialize)]
-pub struct RuntimeFunctionParamTy {
-    pub name: Option<Name>,
-    pub ty: RuntimeTy,
-    pub mode: FunctionParamMode,
-}
-
-impl RuntimeFunctionParamTy {
-    pub fn required(name: Option<Name>, ty: RuntimeTy) -> Self {
-        Self {
-            name,
-            ty,
-            mode: FunctionParamMode::Required,
-        }
-    }
-
-    pub fn optional(name: Option<Name>, ty: RuntimeTy) -> Self {
-        Self {
-            name,
-            ty,
-            mode: FunctionParamMode::Optional,
-        }
-    }
-
-    pub fn is_required(&self) -> bool {
-        matches!(self.mode, FunctionParamMode::Required)
-    }
-
-    pub fn is_optional(&self) -> bool {
-        matches!(self.mode, FunctionParamMode::Optional)
-    }
-}
-
-/// Deep runtime-facing subset of [`Ty`]. See the module docs for the taxonomy
-/// and conversion contract.
-#[subenum(
-    ConcreteTy(
-        doc = "Concrete types that have concrete memory layouts and method implementations."
-    ),
-    RealizedTy(doc = "Realized types (excludes type aliases and unrealized type args)")
-)]
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, BorshSerialize, BorshDeserialize)]
-pub enum RuntimeTy {
-    #[subenum(ConcreteTy, RealizedTy)]
-    Int { attr: TyAttr },
-    #[subenum(ConcreteTy, RealizedTy)]
-    Bigint { attr: TyAttr },
-    #[subenum(ConcreteTy, RealizedTy)]
-    Float { attr: TyAttr },
-    #[subenum(ConcreteTy, RealizedTy)]
-    String { attr: TyAttr },
-    #[subenum(ConcreteTy, RealizedTy)]
-    Bool { attr: TyAttr },
-    #[subenum(ConcreteTy, RealizedTy)]
-    Null { attr: TyAttr },
-    #[subenum(ConcreteTy, RealizedTy)]
-    Uint8Array { attr: TyAttr },
-    #[subenum(ConcreteTy, RealizedTy)]
-    Media(MediaKind, TyAttr),
-    /// A literal type — a single value (`1`, `"hi"`, `true`) as a type.
-    #[subenum(RealizedTy)]
-    Literal(Literal, Freshness, TyAttr),
-    #[subenum(ConcreteTy, RealizedTy)]
-    Class(TypeName, Vec<RuntimeTy>, TyAttr),
-    #[subenum(RealizedTy)]
-    Interface(TypeName, Vec<RuntimeTy>, Vec<(Name, RuntimeTy)>, TyAttr),
-    #[subenum(ConcreteTy, RealizedTy)]
-    Enum(TypeName, TyAttr),
-    /// A specific enum variant — `Status.HttpError`.
-    #[subenum(RealizedTy)]
-    EnumVariant(TypeName, Name, TyAttr),
-    #[subenum(ConcreteTy, RealizedTy)]
-    List(Box<RuntimeTy>, TyAttr),
-    #[subenum(ConcreteTy, RealizedTy)]
-    Map {
-        key: Box<RuntimeTy>,
-        value: Box<RuntimeTy>,
-        attr: TyAttr,
-    },
-    #[subenum(RealizedTy)]
-    Union(Vec<RuntimeTy>, TyAttr),
-
-    /// Function/arrow type: `<G…>(T1, T2, ...) -> R throws E`.
-    #[subenum(ConcreteTy, RealizedTy)]
-    Function {
-        generic_params: Vec<Name>,
-        generic_param_bounds: Vec<Option<RuntimeTy>>,
-        params: Vec<RuntimeFunctionParamTy>,
-        ret: Box<RuntimeTy>,
-        throws: Box<RuntimeTy>,
-        attr: TyAttr,
-    },
-    /// A future handle — the result of `schedule_future` or `spawn` before
-    /// `await`. Carries both the resolved value type and the error type.
-    #[subenum(ConcreteTy, RealizedTy)]
-    Future(Box<RuntimeTy>, Box<RuntimeTy>, TyAttr),
-    /// Opaque Rust-managed state (`$rust_type` fields in builtin class stubs).
-    #[subenum(ConcreteTy, RealizedTy)]
-    RustType { attr: TyAttr },
-    /// The `type` metatype keyword — a runtime value that wraps a `Ty`.
-    #[subenum(ConcreteTy, RealizedTy)]
-    Type { attr: TyAttr },
-    /// Opaque resource handle — file, socket, or HTTP response body.
-    #[subenum(ConcreteTy, RealizedTy)]
-    Resource { attr: TyAttr },
-    /// Opaque structured prompt tree for LLM calls.
-    #[subenum(ConcreteTy, RealizedTy)]
-    PromptAst { attr: TyAttr },
-
-    /// Void type — the type of effectful expressions (was VIR `Unit`).
-    #[subenum(RealizedTy)]
-    Void { attr: TyAttr },
-    /// Watch accessor type: represents `x.$watch` on a watched variable.
-    #[subenum(RealizedTy)]
-    WatchAccessor(Box<RuntimeTy>, TyAttr),
-
-    /// Only recursive aliases survive lower_ty; non-recursive are expanded.
-    TypeAlias(TypeName, TyAttr),
-    /// A type variable (generic parameter) — e.g. `T` in `Array<T>`.
-    TypeVar(Name, TyAttr),
-    /// Associated type projection, e.g. `P.Output` or `(T as Iterator).Item`.
-    AssociatedTypeProjection {
-        base: Box<RuntimeTy>,
-        interface: Option<Box<RuntimeTy>>,
-        member: Name,
-        attr: TyAttr,
-    },
-
-    /// The top type — may have any concrete value.
-    #[subenum(RealizedTy)]
-    BuiltinUnknown { attr: TyAttr },
-    /// The bottom type — an expression that never produces a value.
-    #[subenum(RealizedTy)]
-    Never { attr: TyAttr },
-}
-
 impl RuntimeTy {
-    // --- TyAttr accessor ---
-
-    /// Get the [`TyAttr`] for this type.
-    pub fn attr(&self) -> &TyAttr {
-        match self {
-            RuntimeTy::Int { attr }
-            | RuntimeTy::Bigint { attr }
-            | RuntimeTy::Float { attr }
-            | RuntimeTy::String { attr }
-            | RuntimeTy::Bool { attr }
-            | RuntimeTy::Null { attr }
-            | RuntimeTy::Uint8Array { attr }
-            | RuntimeTy::Map { attr, .. }
-            | RuntimeTy::Function { attr, .. }
-            | RuntimeTy::AssociatedTypeProjection { attr, .. }
-            | RuntimeTy::RustType { attr }
-            | RuntimeTy::Type { attr }
-            | RuntimeTy::Resource { attr }
-            | RuntimeTy::PromptAst { attr }
-            | RuntimeTy::Void { attr }
-            | RuntimeTy::BuiltinUnknown { attr }
-            | RuntimeTy::Never { attr } => attr,
-            RuntimeTy::Media(_, attr)
-            | RuntimeTy::Literal(_, _, attr)
-            | RuntimeTy::Class(_, _, attr)
-            | RuntimeTy::Interface(_, _, _, attr)
-            | RuntimeTy::Enum(_, attr)
-            | RuntimeTy::EnumVariant(_, _, attr)
-            | RuntimeTy::List(_, attr)
-            | RuntimeTy::Union(_, attr)
-            | RuntimeTy::Future(_, _, attr)
-            | RuntimeTy::WatchAccessor(_, attr)
-            | RuntimeTy::TypeAlias(_, attr)
-            | RuntimeTy::TypeVar(_, attr) => attr,
-        }
-    }
-
-    /// Replace the [`TyAttr`] on this type, returning a new value with `attr`.
-    pub fn with_attr(self, attr: TyAttr) -> RuntimeTy {
-        match self {
-            RuntimeTy::Int { .. } => RuntimeTy::Int { attr },
-            RuntimeTy::Bigint { .. } => RuntimeTy::Bigint { attr },
-            RuntimeTy::Float { .. } => RuntimeTy::Float { attr },
-            RuntimeTy::String { .. } => RuntimeTy::String { attr },
-            RuntimeTy::Bool { .. } => RuntimeTy::Bool { attr },
-            RuntimeTy::Null { .. } => RuntimeTy::Null { attr },
-            RuntimeTy::Uint8Array { .. } => RuntimeTy::Uint8Array { attr },
-            RuntimeTy::Media(kind, _) => RuntimeTy::Media(kind, attr),
-            RuntimeTy::Literal(lit, freshness, _) => RuntimeTy::Literal(lit, freshness, attr),
-            RuntimeTy::Class(tn, args, _) => RuntimeTy::Class(tn, args, attr),
-            RuntimeTy::Interface(tn, args, bindings, _) => {
-                RuntimeTy::Interface(tn, args, bindings, attr)
-            }
-            RuntimeTy::Enum(tn, _) => RuntimeTy::Enum(tn, attr),
-            RuntimeTy::EnumVariant(tn, v, _) => RuntimeTy::EnumVariant(tn, v, attr),
-            RuntimeTy::List(inner, _) => RuntimeTy::List(inner, attr),
-            RuntimeTy::Map { key, value, .. } => RuntimeTy::Map { key, value, attr },
-            RuntimeTy::Union(members, _) => RuntimeTy::Union(members, attr),
-            RuntimeTy::Function {
-                generic_params,
-                generic_param_bounds,
-                params,
-                ret,
-                throws,
-                ..
-            } => RuntimeTy::Function {
-                generic_params,
-                generic_param_bounds,
-                params,
-                ret,
-                throws,
-                attr,
-            },
-            RuntimeTy::Future(value, error, _) => RuntimeTy::Future(value, error, attr),
-            RuntimeTy::RustType { .. } => RuntimeTy::RustType { attr },
-            RuntimeTy::Type { .. } => RuntimeTy::Type { attr },
-            RuntimeTy::Resource { .. } => RuntimeTy::Resource { attr },
-            RuntimeTy::PromptAst { .. } => RuntimeTy::PromptAst { attr },
-            RuntimeTy::Void { .. } => RuntimeTy::Void { attr },
-            RuntimeTy::WatchAccessor(inner, _) => RuntimeTy::WatchAccessor(inner, attr),
-            RuntimeTy::TypeAlias(tn, _) => RuntimeTy::TypeAlias(tn, attr),
-            RuntimeTy::TypeVar(name, _) => RuntimeTy::TypeVar(name, attr),
-            RuntimeTy::AssociatedTypeProjection {
-                base,
-                interface,
-                member,
-                ..
-            } => RuntimeTy::AssociatedTypeProjection {
-                base,
-                interface,
-                member,
-                attr,
-            },
-            RuntimeTy::BuiltinUnknown { .. } => RuntimeTy::BuiltinUnknown { attr },
-            RuntimeTy::Never { .. } => RuntimeTy::Never { attr },
-        }
-    }
-
     // --- Primitive constructors (default TyAttr) ---
 
     /// `int` with default attributes.
@@ -483,269 +239,9 @@ impl std::fmt::Display for RuntimeTy {
     }
 }
 
-/// Error returned by [`RuntimeTy::try_from`] when a [`Ty`] (or one of its
-/// nested children) is a compiler-only variant that cannot exist at runtime.
-///
-/// Records only the *name* of the offending variant — never the value itself —
-/// to keep the diagnostic bounded (a `Ty` may hold arbitrarily large literals
-/// or deeply nested children).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct NotRuntimeTy {
-    pub variant: &'static str,
-}
-
-impl std::fmt::Display for NotRuntimeTy {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "`Ty::{}` is a compiler-only type and has no runtime representation",
-            self.variant
-        )
-    }
-}
-
-impl std::error::Error for NotRuntimeTy {}
-
-impl TryFrom<&Ty> for RuntimeTy {
-    type Error = NotRuntimeTy;
-
-    fn try_from(ty: &Ty) -> Result<Self, Self::Error> {
-        Ok(match ty {
-            Ty::Int { attr } => RuntimeTy::Int { attr: attr.clone() },
-            Ty::Bigint { attr } => RuntimeTy::Bigint { attr: attr.clone() },
-            Ty::Float { attr } => RuntimeTy::Float { attr: attr.clone() },
-            Ty::String { attr } => RuntimeTy::String { attr: attr.clone() },
-            Ty::Bool { attr } => RuntimeTy::Bool { attr: attr.clone() },
-            Ty::Null { attr } => RuntimeTy::Null { attr: attr.clone() },
-            Ty::Uint8Array { attr } => RuntimeTy::Uint8Array { attr: attr.clone() },
-            Ty::Media(kind, attr) => RuntimeTy::Media(*kind, attr.clone()),
-            Ty::Literal(lit, freshness, attr) => {
-                RuntimeTy::Literal(lit.clone(), *freshness, attr.clone())
-            }
-            Ty::Class(name, args, attr) => {
-                RuntimeTy::Class(name.clone(), try_vec(args)?, attr.clone())
-            }
-            Ty::Interface(name, args, bindings, attr) => {
-                let args = try_vec(args)?;
-                let bindings = bindings
-                    .iter()
-                    .map(|(n, t)| Ok((n.clone(), RuntimeTy::try_from(t)?)))
-                    .collect::<Result<Vec<_>, NotRuntimeTy>>()?;
-                RuntimeTy::Interface(name.clone(), args, bindings, attr.clone())
-            }
-            Ty::Enum(name, attr) => RuntimeTy::Enum(name.clone(), attr.clone()),
-            Ty::EnumVariant(name, variant, attr) => {
-                RuntimeTy::EnumVariant(name.clone(), variant.clone(), attr.clone())
-            }
-            Ty::List(inner, attr) => {
-                RuntimeTy::List(Box::new(RuntimeTy::try_from(&**inner)?), attr.clone())
-            }
-            Ty::Map { key, value, attr } => RuntimeTy::Map {
-                key: Box::new(RuntimeTy::try_from(&**key)?),
-                value: Box::new(RuntimeTy::try_from(&**value)?),
-                attr: attr.clone(),
-            },
-            Ty::Union(members, attr) => RuntimeTy::Union(try_vec(members)?, attr.clone()),
-            Ty::Function {
-                generic_params,
-                generic_param_bounds,
-                params,
-                ret,
-                throws,
-                attr,
-            } => {
-                let generic_param_bounds = generic_param_bounds
-                    .iter()
-                    .map(|b| b.as_ref().map(RuntimeTy::try_from).transpose())
-                    .collect::<Result<Vec<_>, NotRuntimeTy>>()?;
-                let params = params
-                    .iter()
-                    .map(|p| {
-                        Ok(RuntimeFunctionParamTy {
-                            name: p.name.clone(),
-                            ty: RuntimeTy::try_from(&p.ty)?,
-                            mode: p.mode,
-                        })
-                    })
-                    .collect::<Result<Vec<_>, NotRuntimeTy>>()?;
-                RuntimeTy::Function {
-                    generic_params: generic_params.clone(),
-                    generic_param_bounds,
-                    params,
-                    ret: Box::new(RuntimeTy::try_from(&**ret)?),
-                    throws: Box::new(RuntimeTy::try_from(&**throws)?),
-                    attr: attr.clone(),
-                }
-            }
-            Ty::Future(value, error, attr) => RuntimeTy::Future(
-                Box::new(RuntimeTy::try_from(&**value)?),
-                Box::new(RuntimeTy::try_from(&**error)?),
-                attr.clone(),
-            ),
-            Ty::RustType { attr } => RuntimeTy::RustType { attr: attr.clone() },
-            Ty::Type { attr } => RuntimeTy::Type { attr: attr.clone() },
-            Ty::Resource { attr } => RuntimeTy::Resource { attr: attr.clone() },
-            Ty::PromptAst { attr } => RuntimeTy::PromptAst { attr: attr.clone() },
-            Ty::Void { attr } => RuntimeTy::Void { attr: attr.clone() },
-            Ty::WatchAccessor(inner, attr) => {
-                RuntimeTy::WatchAccessor(Box::new(RuntimeTy::try_from(&**inner)?), attr.clone())
-            }
-            Ty::TypeAlias(name, attr) => RuntimeTy::TypeAlias(name.clone(), attr.clone()),
-            Ty::TypeVar(name, attr) => RuntimeTy::TypeVar(name.clone(), attr.clone()),
-            Ty::AssociatedTypeProjection {
-                base,
-                interface,
-                member,
-                attr,
-            } => RuntimeTy::AssociatedTypeProjection {
-                base: Box::new(RuntimeTy::try_from(&**base)?),
-                interface: interface
-                    .as_ref()
-                    .map(|i| Ok::<_, NotRuntimeTy>(Box::new(RuntimeTy::try_from(&**i)?)))
-                    .transpose()?,
-                member: member.clone(),
-                attr: attr.clone(),
-            },
-            Ty::BuiltinUnknown { attr } => RuntimeTy::BuiltinUnknown { attr: attr.clone() },
-            Ty::Never { attr } => RuntimeTy::Never { attr: attr.clone() },
-
-            // Compiler-only variants have no runtime representation.
-            Ty::Unknown { .. } => return Err(NotRuntimeTy { variant: "Unknown" }),
-            Ty::Error { .. } => return Err(NotRuntimeTy { variant: "Error" }),
-            Ty::EvolvingList(..) => {
-                return Err(NotRuntimeTy {
-                    variant: "EvolvingList",
-                });
-            }
-            Ty::EvolvingMap(..) => {
-                return Err(NotRuntimeTy {
-                    variant: "EvolvingMap",
-                });
-            }
-        })
-    }
-}
-
-impl TryFrom<Ty> for RuntimeTy {
-    type Error = NotRuntimeTy;
-
-    fn try_from(ty: Ty) -> Result<Self, Self::Error> {
-        RuntimeTy::try_from(&ty)
-    }
-}
-
-/// Convert each [`Ty`] in `tys` to a [`RuntimeTy`], short-circuiting on the
-/// first compiler-only variant encountered (at any nesting depth).
-fn try_vec(tys: &[Ty]) -> Result<Vec<RuntimeTy>, NotRuntimeTy> {
-    tys.iter().map(RuntimeTy::try_from).collect()
-}
-
-impl From<&RuntimeTy> for Ty {
-    fn from(ty: &RuntimeTy) -> Self {
-        match ty {
-            RuntimeTy::Int { attr } => Ty::Int { attr: attr.clone() },
-            RuntimeTy::Bigint { attr } => Ty::Bigint { attr: attr.clone() },
-            RuntimeTy::Float { attr } => Ty::Float { attr: attr.clone() },
-            RuntimeTy::String { attr } => Ty::String { attr: attr.clone() },
-            RuntimeTy::Bool { attr } => Ty::Bool { attr: attr.clone() },
-            RuntimeTy::Null { attr } => Ty::Null { attr: attr.clone() },
-            RuntimeTy::Uint8Array { attr } => Ty::Uint8Array { attr: attr.clone() },
-            RuntimeTy::Media(kind, attr) => Ty::Media(*kind, attr.clone()),
-            RuntimeTy::Literal(lit, freshness, attr) => {
-                Ty::Literal(lit.clone(), *freshness, attr.clone())
-            }
-            RuntimeTy::Class(name, args, attr) => {
-                Ty::Class(name.clone(), from_vec(args), attr.clone())
-            }
-            RuntimeTy::Interface(name, args, bindings, attr) => {
-                let bindings = bindings
-                    .iter()
-                    .map(|(n, t)| (n.clone(), Ty::from(t)))
-                    .collect();
-                Ty::Interface(name.clone(), from_vec(args), bindings, attr.clone())
-            }
-            RuntimeTy::Enum(name, attr) => Ty::Enum(name.clone(), attr.clone()),
-            RuntimeTy::EnumVariant(name, variant, attr) => {
-                Ty::EnumVariant(name.clone(), variant.clone(), attr.clone())
-            }
-            RuntimeTy::List(inner, attr) => Ty::List(Box::new(Ty::from(&**inner)), attr.clone()),
-            RuntimeTy::Map { key, value, attr } => Ty::Map {
-                key: Box::new(Ty::from(&**key)),
-                value: Box::new(Ty::from(&**value)),
-                attr: attr.clone(),
-            },
-            RuntimeTy::Union(members, attr) => Ty::Union(from_vec(members), attr.clone()),
-            RuntimeTy::Function {
-                generic_params,
-                generic_param_bounds,
-                params,
-                ret,
-                throws,
-                attr,
-            } => Ty::Function {
-                generic_params: generic_params.clone(),
-                generic_param_bounds: generic_param_bounds
-                    .iter()
-                    .map(|b| b.as_ref().map(Ty::from))
-                    .collect(),
-                params: params
-                    .iter()
-                    .map(|p| crate::FunctionParamTy {
-                        name: p.name.clone(),
-                        ty: Ty::from(&p.ty),
-                        mode: p.mode,
-                    })
-                    .collect(),
-                ret: Box::new(Ty::from(&**ret)),
-                throws: Box::new(Ty::from(&**throws)),
-                attr: attr.clone(),
-            },
-            RuntimeTy::Future(value, error, attr) => Ty::Future(
-                Box::new(Ty::from(&**value)),
-                Box::new(Ty::from(&**error)),
-                attr.clone(),
-            ),
-            RuntimeTy::RustType { attr } => Ty::RustType { attr: attr.clone() },
-            RuntimeTy::Type { attr } => Ty::Type { attr: attr.clone() },
-            RuntimeTy::Resource { attr } => Ty::Resource { attr: attr.clone() },
-            RuntimeTy::PromptAst { attr } => Ty::PromptAst { attr: attr.clone() },
-            RuntimeTy::Void { attr } => Ty::Void { attr: attr.clone() },
-            RuntimeTy::WatchAccessor(inner, attr) => {
-                Ty::WatchAccessor(Box::new(Ty::from(&**inner)), attr.clone())
-            }
-            RuntimeTy::TypeAlias(name, attr) => Ty::TypeAlias(name.clone(), attr.clone()),
-            RuntimeTy::TypeVar(name, attr) => Ty::TypeVar(name.clone(), attr.clone()),
-            RuntimeTy::AssociatedTypeProjection {
-                base,
-                interface,
-                member,
-                attr,
-            } => Ty::AssociatedTypeProjection {
-                base: Box::new(Ty::from(&**base)),
-                interface: interface.as_ref().map(|i| Box::new(Ty::from(&**i))),
-                member: member.clone(),
-                attr: attr.clone(),
-            },
-            RuntimeTy::BuiltinUnknown { attr } => Ty::BuiltinUnknown { attr: attr.clone() },
-            RuntimeTy::Never { attr } => Ty::Never { attr: attr.clone() },
-        }
-    }
-}
-
-impl From<RuntimeTy> for Ty {
-    fn from(ty: RuntimeTy) -> Self {
-        Ty::from(&ty)
-    }
-}
-
-/// Infallibly convert each [`RuntimeTy`] back into a [`Ty`].
-fn from_vec(tys: &[RuntimeTy]) -> Vec<Ty> {
-    tys.iter().map(Ty::from).collect()
-}
-
 // ── Ty → RuntimeTy erasure ───────────────────────────────────────────────────
 // The erasing counterpart of `RuntimeTy::try_from`: where `try_from` *rejects*
-// compiler-only variants, `convert_tir_ty_for_runtime` *erases* them and additionally
+// compiler-only variants, `lower_to_runtime` *erases* them and additionally
 // expands non-recursive type aliases inline. This is the single boundary the
 // compiler crosses to hand a `Ty` to the runtime.
 
@@ -861,26 +357,15 @@ pub fn lower_to_runtime(ty: &Ty, resolved: &ResolvedAliases) -> Result<RuntimeTy
             attr: attr.clone(),
         },
 
-        // Functions — preserve the declared generics + param metadata (kept at
-        // runtime for reflection); body type-vars are resolved faithfully by
-        // the recursive `lower_to_runtime` calls.
+        // Functions — preserve the param metadata; body type-vars (captured from
+        // the enclosing context) are resolved faithfully by the recursive
+        // `lower_to_runtime` calls.
         Ty::Function {
-            generic_params,
-            generic_param_bounds,
             params,
             ret,
             throws,
             attr,
         } => RuntimeTy::Function {
-            generic_params: generic_params.clone(),
-            generic_param_bounds: generic_param_bounds
-                .iter()
-                .map(|b| {
-                    b.as_ref()
-                        .map(|t| lower_to_runtime(t, resolved))
-                        .transpose()
-                })
-                .collect::<Result<Vec<_>, NotRuntimeTy>>()?,
             params: params
                 .iter()
                 .map(|param| {
@@ -943,20 +428,6 @@ fn lower_vec(tys: &[Ty], resolved: &ResolvedAliases) -> Result<Vec<RuntimeTy>, N
     tys.iter().map(|t| lower_to_runtime(t, resolved)).collect()
 }
 
-// ── Subset-hierarchy upcast ──────────────────────────────────────────────────
-// `subenum` generates `From<ConcreteTy> for RuntimeTy`, `From<RealizedTy> for
-// RuntimeTy`, and each subset's `TryFrom<RuntimeTy>`, but not the child→child
-// cast. `ConcreteTy ⊆ RealizedTy` is guaranteed by the membership tags, so this
-// upcast is infallible: round through `RuntimeTy`; the `TryFrom` cannot fail for
-// a value already in the subset.
-impl From<ConcreteTy> for RealizedTy {
-    fn from(value: ConcreteTy) -> Self {
-        RuntimeTy::from(value)
-            .try_into()
-            .unwrap_or_else(|_| unreachable!("every ConcreteTy is a RealizedTy"))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1013,8 +484,6 @@ mod tests {
     #[test]
     fn round_trip_function() {
         let ty = Ty::Function {
-            generic_params: vec![Name::new("T")],
-            generic_param_bounds: vec![Some(Ty::String { attr: def() })],
             params: vec![
                 crate::FunctionParamTy::required(Some(Name::new("a")), Ty::Int { attr: def() }),
                 crate::FunctionParamTy::optional(
@@ -1093,8 +562,6 @@ mod tests {
     #[test]
     fn nested_evolving_map_in_function_ret_blocks_conversion() {
         let ty = Ty::Function {
-            generic_params: vec![],
-            generic_param_bounds: vec![],
             params: vec![],
             ret: Box::new(Ty::EvolvingMap(
                 Box::new(Ty::Never { attr: def() }),
@@ -1110,12 +577,5 @@ mod tests {
                 variant: "EvolvingMap"
             })
         );
-    }
-
-    #[test]
-    fn concrete_upcasts_to_realized() {
-        let concrete = ConcreteTy::Int { attr: def() };
-        let realized: RealizedTy = concrete.into();
-        assert_eq!(realized, RealizedTy::Int { attr: def() });
     }
 }

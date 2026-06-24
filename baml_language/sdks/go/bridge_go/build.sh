@@ -23,6 +23,8 @@ protoc \
     --proto_path="${PROTO_DIR}" \
     --go_out="${OUT_DIR}" \
     --go_opt=paths=source_relative \
+    "${PROTO_DIR}/baml_core/cffi/v1/baml_type.proto" \
+    "${PROTO_DIR}/baml_core/cffi/v1/baml_handle.proto" \
     "${PROTO_DIR}/baml_core/cffi/v1/baml_inbound.proto" \
     "${PROTO_DIR}/baml_core/cffi/v1/baml_outbound.proto"
 

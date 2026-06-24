@@ -196,7 +196,9 @@ impl OpErrorPayload {
         match self {
             Self::Vm(e) => std::fmt::Display::fmt(e, f),
             Self::HostThrown(boxed) => match boxed.as_ref() {
-                BexExternalValue::Instance { class_name, fields } => {
+                BexExternalValue::Instance {
+                    class_name, fields, ..
+                } => {
                     let message = fields.get("message").and_then(|v| match v {
                         BexExternalValue::String(s) => Some(s.as_str()),
                         _ => None,
@@ -1018,7 +1020,9 @@ mod tests {
 
     #[test]
     fn contract_allows_declared_category() {
-        let op = bex_vm_types::sys_op_for_path("baml.http.fetch").unwrap();
+        // `baml.http.fetch` is a thin BAML wrapper; the sys-op (which carries
+        // the `throws Io | Timeout` contract) is `baml.http._fetch`.
+        let op = bex_vm_types::sys_op_for_path("baml.http._fetch").unwrap();
         let err: bex_vm_types::errors::VmRustFnError = bex_vm_types::errors::VmBamlError::Timeout {
             message: "timed out".into(),
             duration_ms: Some(30_000),
@@ -1043,7 +1047,9 @@ mod tests {
 
     #[test]
     fn contract_allows_devother_when_declared() {
-        let op = bex_vm_types::sys_op_for_path("baml.http.fetch").unwrap();
+        // `baml.http.fetch` is a thin BAML wrapper; the sys-op (which carries
+        // the `throws Io | Timeout` contract) is `baml.http._fetch`.
+        let op = bex_vm_types::sys_op_for_path("baml.http._fetch").unwrap();
         let err: bex_vm_types::errors::VmRustFnError =
             bex_vm_types::errors::VmBamlError::DevOther {
                 message: "some debug detail".into(),

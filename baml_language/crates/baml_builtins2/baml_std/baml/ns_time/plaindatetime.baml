@@ -57,8 +57,19 @@ class PlainDateTime {
     /// Sub-second precision is supported; trailing subsecond zeros are
     /// truncated.
     ///
-    /// Throws `root.errors.InvalidArgument` if the year is outside ±9999.
-    function to_string(self) -> string throws root.errors.InvalidArgument {
+    /// Panics if the year is outside ±9999.
+    implements baml.ToString {
+        function to_string(self) -> string throws never {
+            self._to_string_impl() catch (_) {
+                root.errors.InvalidArgument { message } => root.sys.panic("PlainDateTime.to_string: " + message),
+            }
+        }
+    }
+
+    /// Internal ISO 8601 formatter. Throws `InvalidArgument` when the year is
+    /// outside ±9999; `baml.ToString.to_string` turns that into a panic, while
+    /// `to_json` surfaces it as a `JsonSerializationError`.
+    function _to_string_impl(self) -> string throws root.errors.InvalidArgument {
         $rust_function
     }
 
@@ -170,7 +181,7 @@ class PlainDateTime {
         }
     }
     function to_json(self) -> string throws root.json.JsonSerializationError {
-        self.to_string() catch (_) {
+        self._to_string_impl() catch (_) {
             root.errors.InvalidArgument { message } => throw root.json.JsonSerializationError { message: message, path: "" },
         }
     }

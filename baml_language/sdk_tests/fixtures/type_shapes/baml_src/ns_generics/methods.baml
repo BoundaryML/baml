@@ -8,10 +8,16 @@
 // TypeVar. When Python calls `w.get_value()`, the host-side
 // `tir2_to_template` path can't substitute the class's `T` into the
 // declared return type, so the lifted return type still mentions
-// `Ty::TypeVar`. Older lowering treated that as no value, causing the
-// concrete return value (a `string` here) to fail runtime decode;
-// current lowering uses runtime `unknown` when the type var cannot be
-// concretized.
+// `Ty::TypeVar`.
+//
+// As of the strict inbound generics path, the engine rejects this call
+// *before* return-type lowering matters: an inbound generic instance
+// method must arrive fully bound (Gate A), and the receiver here (a BAML
+// return value) does not yet carry its `WrapperMethods<string>` class
+// type args on the wire — outbound generic decoding preserving them is
+// deferred (00b). So `test_generic_wrapper_get_value` is skipped pending
+// that host-side work; the engine no longer falls back to runtime
+// `unknown` for an unconcretizable class TypeVar.
 //
 // Renamed from `Wrapper<T>` to `WrapperMethods<T>` to avoid colliding
 // with the bare `Wrapper<T>` shape fixture in types.baml.

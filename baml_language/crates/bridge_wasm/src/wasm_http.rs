@@ -4,8 +4,12 @@
 //! reqwest directly for SSE streaming. Each `BamlWasmRuntime` gets its own
 //! `WasmHttp` instance, so there are no globals.
 
-use std::sync::Arc;
+use std::sync::{
+    Arc,
+    atomic::{AtomicU64, Ordering},
+};
 
+use bex_events::run::{HeaderObservation, InMemoryRunStore};
 use js_sys::{Function, Object, Promise, Reflect};
 use sys_ops::io::{self, IoClassHttpResponse, IoNamespaceHttp};
 use sys_types::{BexHeap, CallId, SysOpContext, SysOpOutput, VmBamlError, VmPanic, VmRustFnError};
@@ -27,13 +31,23 @@ pub(crate) struct WasmHttp {
     fetch_fn: crate::send_wrapper::SendWrapper<Function>,
     /// Registry for HTTP response bodies for this instance.
     registry: Arc<WasmRegistry>,
+    run_store: Arc<InMemoryRunStore>,
+    notification_callback: crate::send_wrapper::SendWrapper<Function>,
+    next_fetch_id: AtomicU64,
 }
 
 impl WasmHttp {
-    pub(crate) fn new(fetch_fn: Function) -> Self {
+    pub(crate) fn new(
+        fetch_fn: Function,
+        run_store: Arc<InMemoryRunStore>,
+        notification_callback: crate::send_wrapper::SendWrapper<Function>,
+    ) -> Self {
         Self {
             fetch_fn: crate::send_wrapper::SendWrapper::new(fetch_fn),
             registry: Arc::new(WasmRegistry::new()),
+            run_store,
+            notification_callback,
+            next_fetch_id: AtomicU64::new(1),
         }
     }
 
@@ -49,6 +63,22 @@ impl WasmHttp {
     ) -> SysOpOutput<io::owned::http::Response> {
         let fetch_fn = self.fetch_fn().clone();
         let registry = Arc::clone(&self.registry);
+        let run_store = self.run_store.clone();
+        let notification_callback = self.notification_callback.clone();
+        let fetch_id = self.next_fetch_id.fetch_add(1, Ordering::Relaxed);
+        let host_call_id = crate::wasm_host_call_id(call_id);
+        if let Some(host_call_id) = &host_call_id
+            && let Some(patch) = self.run_store.ingest_fetch_started(
+                host_call_id,
+                fetch_id,
+                request.method.clone(),
+                request.url.clone(),
+                header_observations(&request.headers),
+                Some(request.body.len()),
+            )
+        {
+            crate::send_run_patch(&self.notification_callback, &patch);
+        }
 
         SysOpOutput::async_op(SendFuture(async move {
             let headers_json =
@@ -77,18 +107,34 @@ impl WasmHttp {
                 message: "Fetch function did not return a Promise".into(),
             })?;
 
-            let result = JsFuture::from(promise).await.map_err(|e| {
-                let msg = e
-                    .as_string()
-                    .or_else(|| {
-                        e.dyn_ref::<js_sys::Error>()
-                            .map(|err| String::from(err.message()))
-                    })
-                    .unwrap_or_else(|| format!("{e:?}"));
-                VmBamlError::Io {
-                    message: format!("HTTP request failed: {msg}"),
+            let result = match JsFuture::from(promise).await {
+                Ok(result) => result,
+                Err(e) => {
+                    let msg = e
+                        .as_string()
+                        .or_else(|| {
+                            e.dyn_ref::<js_sys::Error>()
+                                .map(|err| String::from(err.message()))
+                        })
+                        .unwrap_or_else(|| format!("{e:?}"));
+                    if let Some(host_call_id) = &host_call_id
+                        && let Some(patch) = run_store.ingest_fetch_updated(
+                            host_call_id,
+                            fetch_id,
+                            None,
+                            None,
+                            Vec::new(),
+                            None,
+                            Some(msg.clone()),
+                        )
+                    {
+                        crate::send_run_patch(&notification_callback, &patch);
+                    }
+                    return Err(VmRustFnError::from(VmBamlError::Io {
+                        message: format!("HTTP request failed: {msg}"),
+                    }));
                 }
-            })?;
+            };
 
             let obj: Object = result.dyn_into().map_err(|_| VmBamlError::Io {
                 message: "Fetch response is not an object".into(),
@@ -150,6 +196,19 @@ impl WasmHttp {
                 .map_err(|e| VmBamlError::ParseError {
                     message: format!("Failed to parse headersJson: {e}"),
                 })?;
+            if let Some(host_call_id) = &host_call_id
+                && let Some(patch) = run_store.ingest_fetch_updated(
+                    host_call_id,
+                    fetch_id,
+                    Some(status),
+                    None,
+                    header_observations(&headers),
+                    None,
+                    None,
+                )
+            {
+                crate::send_run_patch(&notification_callback, &patch);
+            }
 
             let key = registry.store_body_promise(body_promise);
             let body: Arc<dyn std::any::Any + Send + Sync> =
@@ -273,6 +332,47 @@ impl IoClassHttpResponse for WasmHttp {
         _body: Vec<u8>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::Response> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    fn new_streaming(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _status_code: i64,
+        _headers: indexmap::IndexMap<String, String>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::http::Response> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    fn write(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _response: io::owned::http::Response,
+        _data: Vec<u8>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    fn end(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _response: io::owned::http::Response,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
         SysOpOutput::err(VmPanic::HostUnavailable {
             resource: "http".to_string(),
             message: "Operation not supported on this platform".to_string(),
@@ -543,11 +643,17 @@ async fn sse_background_task(
 }
 
 impl IoNamespaceHttp for WasmHttp {
-    fn fetch(
+    // `timeout_nanos` is accepted for parity with the native ops but not yet
+    // honored: the browser `fetch` backend behind reqwest's wasm client has no
+    // straightforward per-request timeout hook. A `null` BAML timeout (the
+    // default) is unbounded regardless, so omitting it only affects explicit
+    // deadlines on the playground/wasm path.
+    fn _fetch(
         &self,
         _heap: &Arc<BexHeap>,
         call_id: CallId,
         url: String,
+        _timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::Response> {
         let req = io::owned::http::Request {
@@ -559,11 +665,12 @@ impl IoNamespaceHttp for WasmHttp {
         self.do_send(call_id, req)
     }
 
-    fn send(
+    fn _send(
         &self,
         _heap: &Arc<BexHeap>,
         call_id: CallId,
         request: io::owned::http::Request,
+        _timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::Response> {
         self.do_send(call_id, request)
@@ -625,4 +732,14 @@ impl IoNamespaceHttp for WasmHttp {
             })
         }))
     }
+}
+
+fn header_observations(headers: &indexmap::IndexMap<String, String>) -> Vec<HeaderObservation> {
+    headers
+        .keys()
+        .map(|name| HeaderObservation {
+            name: name.clone(),
+            value_redacted: true,
+        })
+        .collect()
 }

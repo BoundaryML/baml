@@ -31,6 +31,7 @@ bex_project = { workspace = true }
 bridge_cffi = { workspace = true }
 bridge_ctypes = { workspace = true }
 sys_native = { workspace = true }
+indexmap = { workspace = true }
 log = { workspace = true }
 prost = { workspace = true }
 pyo3 = { workspace = true, features = [ "abi3-py310", "indexmap", "multiple-pymethods" ] }

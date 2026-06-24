@@ -120,8 +120,8 @@ async fn all_rethrows_failure_to_catch() {
 #[tokio::test]
 async fn race_returns_first_to_settle() {
     let source = r#"
-        function slow() -> int { baml.sys.sleep(300); 2 }
-        function fast() -> int { baml.sys.sleep(20); 1 }
+        function slow() -> int { baml.sys.sleep(baml.time.Duration.from_milliseconds(300n)); 2 }
+        function fast() -> int { baml.sys.sleep(baml.time.Duration.from_milliseconds(20n)); 1 }
         function main() -> int {
             let fs = [spawn { slow() }, spawn { fast() }];
             await baml.future.race(fs)
@@ -137,7 +137,7 @@ async fn race_returns_first_to_settle() {
 async fn any_returns_first_success() {
     let source = r#"
         function bad() -> int throws string { throw "boom" }
-        function good() -> int { baml.sys.sleep(80); 42 }
+        function good() -> int { baml.sys.sleep(baml.time.Duration.from_milliseconds(80n)); 42 }
         function main() -> int {
             let fs = [spawn { bad() }, spawn { good() }];
             await baml.future.any(fs) catch (e) {
@@ -192,7 +192,7 @@ async fn await_catch_binds_to_await_not_future() {
 async fn all_complete_runs_concurrently() {
     let source = r#"
         function work() -> int {
-            baml.sys.sleep(200);
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(200n));
             1
         }
         function main() -> int {
@@ -252,7 +252,7 @@ async fn any_all_fail_errors_in_input_order() {
         function bad_slow() -> int throws string {
             // sleep's own `throws baml.errors.Io` is swallowed so the declared
             // surface stays exactly `string`.
-            baml.sys.sleep(120) catch (e) { let e => null };
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(120n)) catch (e) { let e => null };
             throw "a"
         }
         function bad_fast() -> int throws string { throw "b" }
@@ -279,7 +279,7 @@ async fn any_all_fail_errors_in_input_order() {
 async fn all_rethrows_first_input_failure_not_first_settled() {
     let source = r#"
         function bad_slow() -> int throws string {
-            baml.sys.sleep(120) catch (e) { let e => null };
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(120n)) catch (e) { let e => null };
             throw "first"
         }
         function bad_fast() -> int throws string { throw "second" }

@@ -7,6 +7,7 @@ use std::collections::HashMap;
 
 use bex_project::{BexExternalValue, RuntimeTy};
 use indexmap::IndexMap;
+use prost::Message;
 
 use crate::{
     baml_core::cffi::{
@@ -54,6 +55,8 @@ pub fn inbound_to_external(
             InboundValueVariant::ClassValue(class) => convert_class(class, handle_table),
             InboundValueVariant::EnumValue(e) => Ok(convert_enum(e)),
             InboundValueVariant::Uint8arrayValue(bytes) => Ok(BexExternalValue::Uint8Array(bytes)),
+            // A reflected BAML type passed as an argument value.
+            InboundValueVariant::TyValue(ty) => crate::ty_decode::proto_ty_to_external(&ty),
             InboundValueVariant::Handle(handle) => {
                 // HOST_VALUE_* keys do NOT live in HANDLE_TABLE. The host
                 // bridge owns the lookup; we construct the Arc stub here so
@@ -153,8 +156,24 @@ fn convert_class(
             .unwrap_or(BexExternalValue::Null);
         fields.insert(key, value);
     }
+    // The class binds via `class_ty`: `class_ty.name` is the FQN and
+    // `class_ty.type_args` (De Bruijn order) a generic instance's concrete
+    // args. A well-formed class value always sets `class_ty`; an absent one
+    // decodes to an unnamed class with no type args.
+    let (class_name, type_args) = match class.class_ty {
+        Some(ty_class) => {
+            let args = ty_class
+                .type_args
+                .iter()
+                .map(crate::ty_decode::proto_ty_to_runtime_ty)
+                .collect::<Result<Vec<_>, _>>()?;
+            (ty_class.name, args)
+        }
+        None => (String::new(), vec![]),
+    };
     Ok(BexExternalValue::Instance {
-        class_name: class.name,
+        class_name,
+        type_args,
         fields,
     })
 }
@@ -193,6 +212,23 @@ pub fn kwargs_to_bex_values(
         result.insert(key, value);
     }
     Ok(result)
+}
+
+/// Decode playground run arguments from a host-call-free byte envelope.
+///
+/// The envelope is a sequence of length-delimited `InboundMapEntry` records.
+/// It deliberately does not reuse `CallFunctionArgs`, because that CFFI
+/// request type also carries a host call id. `RunStore` adapters allocate host
+/// plumbing separately after the run identity exists.
+pub fn playground_run_args_to_bex_values(
+    mut bytes: &[u8],
+    handle_table: &CffiHandleTable,
+) -> Result<HashMap<String, BexExternalValue>, CtypesError> {
+    let mut kwargs = Vec::new();
+    while !bytes.is_empty() {
+        kwargs.push(InboundMapEntry::decode_length_delimited(&mut bytes)?);
+    }
+    kwargs_to_bex_values(kwargs, handle_table)
 }
 
 #[cfg(test)]
@@ -368,5 +404,67 @@ mod tests {
         );
         // Sanity: the error message does not embed the megabyte-scale input.
         assert!(message.len() < 200);
+    }
+
+    /// Phase 2 gate: a generic class instance carries its concrete class type
+    /// args over the wire in `InboundClassValue.class_ty`, and `convert_class`
+    /// lands them in `BexExternalValue::Instance::type_args`.
+    #[test]
+    fn convert_class_decodes_generic_type_args() {
+        use crate::baml_core::cffi::{
+            BamlTy, BamlTyClass, BamlTyPrimitive, BamlTyPrimitiveKind, InboundClassValue,
+            baml_ty::Ty as TyVariant,
+        };
+        let int_ty = BamlTy {
+            ty: Some(TyVariant::Primitive(BamlTyPrimitive {
+                kind: BamlTyPrimitiveKind::BamlTyPrimitiveInt as i32,
+            })),
+        };
+        let class = InboundClassValue {
+            fields: vec![],
+            class_ty: Some(BamlTyClass {
+                name: "generic_tests.GenericBox".to_string(),
+                type_args: vec![int_ty],
+            }),
+        };
+        let table = CffiHandleTable::new();
+        let result = convert_class(class, &table).expect("decode succeeds");
+        match result {
+            BexExternalValue::Instance {
+                class_name,
+                type_args,
+                ..
+            } => {
+                assert_eq!(class_name, "generic_tests.GenericBox");
+                assert_eq!(type_args, vec![RuntimeTy::int()]);
+            }
+            other => panic!("expected Instance, got: {other:?}"),
+        }
+    }
+
+    /// A non-generic instance binds its FQN from `class_ty` with empty `type_args`.
+    #[test]
+    fn convert_class_non_generic_has_empty_type_args() {
+        use crate::baml_core::cffi::{BamlTyClass, InboundClassValue};
+        let class = InboundClassValue {
+            fields: vec![],
+            class_ty: Some(BamlTyClass {
+                name: "user.Plain".to_string(),
+                type_args: vec![],
+            }),
+        };
+        let table = CffiHandleTable::new();
+        let result = convert_class(class, &table).expect("decode succeeds");
+        match result {
+            BexExternalValue::Instance {
+                class_name,
+                type_args,
+                ..
+            } => {
+                assert_eq!(class_name, "user.Plain");
+                assert!(type_args.is_empty());
+            }
+            other => panic!("expected Instance, got: {other:?}"),
+        }
     }
 }

@@ -1,4 +1,10 @@
-import type { WasmVfsDirEntry, WasmVfsMetadata } from "@b/bridge_wasm";
+import type { WasmVfsMetadata } from "@b/bridge_wasm";
+
+type WasmVfsDirEntry = {
+  name: string;
+  file_type: string;
+  is_symlink: boolean;
+};
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();

@@ -16,9 +16,9 @@ from __future__ import annotations
 import enum
 import os
 import typing
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
-from .cffi.v1 import baml_inbound_pb2, baml_outbound_pb2
+from .cffi.v1 import baml_handle_pb2, baml_inbound_pb2, baml_outbound_pb2, baml_type_pb2
 from .baml_py import (
     BamlAudio,
     BamlImage,
@@ -227,7 +227,7 @@ def _set_inbound_value(
         # `int` subclass so the runtime accepts a bare int — cast for
         # the static checker.
         inbound_value.handle.handle_type = typing.cast(
-            baml_inbound_pb2.BamlHandleType, ht
+            baml_handle_pb2.BamlHandleType, ht
         )
         return
 
@@ -250,7 +250,7 @@ def _set_inbound_value(
     # typemap's reverse-map seeded overrides (25b2 §"reverse map").
     if isinstance(value, _MEDIA_PYO3_TYPES):
         cv = inbound_value.class_value
-        cv.name = get_type_map().py_type_to_baml_type(type(value))
+        cv.class_ty.name = get_type_map().py_type_to_baml_type(type(value))
         data_entry = cv.fields.add()
         data_entry.string_key = "_data"
         _set_inbound_value(
@@ -278,18 +278,27 @@ def _set_inbound_value(
             registered.append(key)
         inbound_value.handle.key = key
         inbound_value.handle.handle_type = typing.cast(
-            baml_inbound_pb2.BamlHandleType,
-            baml_inbound_pb2.BamlHandleType.HOST_VALUE_CALLABLE,
+            baml_handle_pb2.BamlHandleType,
+            baml_handle_pb2.BamlHandleType.HOST_VALUE_CALLABLE,
         )
         return
 
     if _is_pydantic_model(value):
         cv = inbound_value.class_value
-        # Pydantic generic subclasses (`Box[int]`) keep `__module__` from
-        # the base, but we still want the *base* `Box`'s FQN on the wire —
-        # `13b` §2.1. The Rust-side type checker already knows the
-        # declared parameter type from the function signature.
-        cv.name = get_type_map().py_type_to_baml_type(_base_class_for_fqn(type(value)))
+        # Bind the class via `class_ty`. Pydantic generic subclasses (`Box[int]`)
+        # keep `__module__` from the base, but we still want the *base* `Box`'s
+        # FQN on the wire — `13b` §2.1. The Rust-side type checker already knows
+        # the declared parameter type from the function signature.
+        cv.class_ty.name = get_type_map().py_type_to_baml_type(
+            _base_class_for_fqn(type(value))
+        )
+        # For a *generic* instance (`Box[int]`), also carry its concrete class
+        # type args (the value-level type channel) so the engine can recover and
+        # type-check `Box<int>` against a declared generic param. Recovered from
+        # Pydantic's generic metadata, in declaration order; empty for
+        # non-generic instances (no metadata args).
+        for arg in pydantic_instance_type_args(value):
+            _fill_inner(cv.class_ty.type_args.add(), arg)
         # Walk fields by attribute access (Pydantic v2's `__iter__`
         # yields `(name, value)` without recursive serialization).
         # `model_dump()` would flatten nested Pydantic instances into
@@ -343,7 +352,135 @@ def _set_inbound_map_entry(
     _set_inbound_value(entry.value, value, kwarg_name=kwarg_name, registered=registered)
 
 
-def encode_call_args(kwargs: Dict[str, Any], call_id: int) -> bytes:
+# ---------------------------------------------------------------------------
+# Type-as-value encoding: Python type → wire `BamlTy` (baml_type.proto)
+# ---------------------------------------------------------------------------
+#
+# Used to bind a generic function/method's TypeVars at a host call: the host
+# supplies an explicit type (`_types=`) and/or a generic receiver carries its
+# class type args. Each Python type is lowered to a wire `BamlTy`, sent in
+# `CallFunctionArgs.type_args`, and seeded into the engine's entry frame.
+
+
+def python_type_to_wire_ty(py_type: Any) -> "baml_type_pb2.BamlTy":
+    """Lower a Python type (or `None` = unbound) to a wire `BamlTy`."""
+    ty = baml_type_pb2.BamlTy()
+    _fill_wire_ty(ty, py_type)
+    return ty
+
+
+_PRIMITIVE_KINDS = {
+    bool: baml_type_pb2.BAML_TY_PRIMITIVE_BOOL,
+    int: baml_type_pb2.BAML_TY_PRIMITIVE_INT,
+    float: baml_type_pb2.BAML_TY_PRIMITIVE_FLOAT,
+    str: baml_type_pb2.BAML_TY_PRIMITIVE_STRING,
+    bytes: baml_type_pb2.BAML_TY_PRIMITIVE_BYTES,
+    type(None): baml_type_pb2.BAML_TY_PRIMITIVE_NULL,
+}
+
+
+def _collect_never_types() -> tuple:
+    """`Never` (BAML's bottom type) may be imported from `typing` (3.11+) or
+    `typing_extensions`; codegen emits the `typing_extensions` form. Collect
+    every available spelling so a host's `_types={"T": Never}` matches whichever
+    it imported."""
+    found = []
+    for mod_name in ("typing", "typing_extensions"):
+        try:
+            mod = __import__(mod_name)
+        except ImportError:
+            continue
+        never = getattr(mod, "Never", None)
+        if never is not None:
+            found.append(never)
+    return tuple(found)
+
+
+_NEVER_TYPES = _collect_never_types()
+
+
+def _fill_wire_ty(ty: "baml_type_pb2.BamlTy", py_type: Any) -> None:
+    # `None` (the sentinel, not `type(None)`) means "unbound" → unknown/top.
+    if py_type is None:
+        ty.unknown.SetInParent()
+        return
+
+    # `Never` (bottom type). Identity check (not `in`) so unhashable special
+    # forms can't raise.
+    if any(py_type is never for never in _NEVER_TYPES):
+        ty.never.SetInParent()
+        return
+
+    # Primitives by identity. `bool` must precede `int` (bool ⊂ int), which the
+    # dict ordering and `is` identity handle since we key on the type object.
+    kind = _PRIMITIVE_KINDS.get(py_type)
+    if kind is not None:
+        ty.primitive.kind = kind
+        return
+
+    # typing constructs: list[X], dict[K, V], Optional[X], Union[...].
+    origin = typing.get_origin(py_type)
+    if origin is not None:
+        targs = typing.get_args(py_type)
+        if origin in (list, typing.List):
+            _fill_inner(ty.list.item, targs[0] if targs else None)
+            return
+        if origin in (dict, typing.Dict):
+            _fill_inner(ty.map.key, targs[0] if targs else None)
+            _fill_inner(ty.map.value, targs[1] if len(targs) > 1 else None)
+            return
+        if origin is typing.Union:
+            non_none = [a for a in targs if a is not type(None)]
+            if len(non_none) == 1 and len(non_none) != len(targs):
+                _fill_inner(ty.optional.inner, non_none[0])
+                return
+            for arg in targs:
+                _fill_inner(ty.union.options.add(), arg)
+            return
+        # Any other generic origin: fall through to the unknown default.
+
+    if isinstance(py_type, type):
+        # Parameterized Pydantic generic (`Box[int]`): the base FQN plus the
+        # concrete args recovered from Pydantic's generic metadata.
+        meta = getattr(py_type, "__pydantic_generic_metadata__", None)
+        if meta and meta.get("origin") is not None:
+            base = meta["origin"]
+            ty.class_ty.name = get_type_map().py_type_to_baml_type(base)
+            for arg in meta.get("args") or ():
+                _fill_inner(ty.class_ty.type_args.add(), arg)
+            return
+        if issubclass(py_type, enum.Enum):
+            fqn = get_type_map().py_type_to_baml_type(py_type)
+            if fqn:
+                ty.enum.name = fqn
+                return
+        fqn = get_type_map().py_type_to_baml_type(py_type)
+        if fqn:
+            ty.class_ty.name = fqn
+            return
+
+    # Unrecognized: leave as the unknown/top type (binds nothing).
+    ty.unknown.SetInParent()
+
+
+def _fill_inner(ty: "baml_type_pb2.BamlTy", py_type: Any) -> None:
+    _fill_wire_ty(ty, py_type)
+
+
+def pydantic_instance_type_args(value: Any) -> List[Any]:
+    """Concrete class type args of a Pydantic generic *instance* (`Box[int](...)`),
+    in declaration order. Empty for non-generic or unparameterized instances."""
+    meta = getattr(type(value), "__pydantic_generic_metadata__", None)
+    if meta and meta.get("args"):
+        return list(meta["args"])
+    return []
+
+
+def encode_call_args(
+    kwargs: Dict[str, Any],
+    call_id: int,
+    type_args: Optional[List[Tuple[str, "baml_type_pb2.BamlTy"]]] = None,
+) -> bytes:
     """Encode function keyword arguments as `CallFunctionArgs` protobuf.
 
     Release tradeoff: a callable that encodes successfully is registered in
@@ -367,6 +504,11 @@ def encode_call_args(kwargs: Dict[str, Any], call_id: int) -> bytes:
             _set_inbound_map_entry(
                 args.kwargs.add(), key, value, kwarg_name=key, registered=registered
             )
+        if type_args:
+            for type_var, wire_ty in type_args:
+                entry = args.type_args.add()
+                entry.type_var = type_var
+                entry.type_value.CopyFrom(wire_ty)
         return args.SerializeToString()
     except BaseException:
         # Roll back any host callables registered before the failure.
@@ -383,94 +525,125 @@ def encode_call_args(kwargs: Dict[str, Any], call_id: int) -> bytes:
 # ---------------------------------------------------------------------------
 
 
-_MEDIA_KIND_SUBPATHS = {
-    baml_outbound_pb2.MediaTypeEnum.IMAGE: "baml.media.Image",
-    baml_outbound_pb2.MediaTypeEnum.AUDIO: "baml.media.Audio",
-    baml_outbound_pb2.MediaTypeEnum.VIDEO: "baml.media.Video",
-    baml_outbound_pb2.MediaTypeEnum.PDF: "baml.media.Pdf",
+_TY_PRIMITIVE_PY = {
+    baml_type_pb2.BAML_TY_PRIMITIVE_STRING: str,
+    baml_type_pb2.BAML_TY_PRIMITIVE_INT: int,
+    baml_type_pb2.BAML_TY_PRIMITIVE_FLOAT: float,
+    baml_type_pb2.BAML_TY_PRIMITIVE_BOOL: bool,
+    baml_type_pb2.BAML_TY_PRIMITIVE_NULL: type(None),
+    baml_type_pb2.BAML_TY_PRIMITIVE_BYTES: bytes,
+    # Python's `int` is arbitrary-precision; BAML's `bigint` shares the same
+    # surface, distinguished only by the proto type tag (mirrors `translate_ty`).
+    baml_type_pb2.BAML_TY_PRIMITIVE_BIGINT: int,
+}
+
+_TY_MEDIA_FQN = {
+    baml_type_pb2.BAML_TY_MEDIA_KIND_IMAGE: "baml.media.Image",
+    baml_type_pb2.BAML_TY_MEDIA_KIND_AUDIO: "baml.media.Audio",
+    baml_type_pb2.BAML_TY_MEDIA_KIND_VIDEO: "baml.media.Video",
+    baml_type_pb2.BAML_TY_MEDIA_KIND_PDF: "baml.media.Pdf",
 }
 
 
-def _baml_ty_to_python_type(baml_ty: baml_outbound_pb2.BamlTy, type_map: BamlTypeMap) -> Any:
-    """Walk a `BamlTy` proto and return the corresponding Python type.
+def _ty_to_python_type(ty: "baml_type_pb2.BamlTy", type_map: BamlTypeMap) -> Any:
+    """Walk a wire `BamlTy` (`baml_type.proto`) and return the corresponding Python
+    type, used for `cls[args]` parameterization on decode.
 
-    Runtime mirror of codegen-time `translate_ty` (`13a` §3): same BAML→
-    Python mapping, but produces a `type` object (used for
-    `cls[args]` parameterization) rather than a source string. The two
-    share the mapping table — keep them in sync when adding new
-    `BamlTy` variants. See `13b` §3.3.
+    The runtime inverse of `python_type_to_wire_ty` / `_fill_wire_ty` in the
+    same module (the inbound writer) and the mirror of the engine's
+    `ty_encode::runtime_ty_to_proto_ty`. A position with no concrete Python
+    binding (a structural union, a type variable, an opaque/runtime-only type)
+    widens to `typing.Any` — an unbound wildcard for parameterization purposes
+    (02a §5).
     """
-    which = baml_ty.WhichOneof("type")
-    if which is None:
+    which = ty.WhichOneof("ty")
+    # Absent variant or the unknown/top type → wildcard.
+    if which is None or which == "unknown":
         return typing.Any
-    if which == "string_type":
-        return str
-    if which == "int_type":
-        return int
-    if which == "bigint_type":
-        # Python's `int` is arbitrary-precision; BAML's `bigint` shares the
-        # same surface, distinguished only by the proto type tag for
-        # round-trips (mirrors `translate_ty.rs` for codegen-time).
-        return int
-    if which == "float_type":
-        return float
-    if which == "bool_type":
-        return bool
-    if which == "null_type":
-        return type(None)
-    if which == "uint8array_type":
-        return bytes
-    if which == "any_type" or which == "unknown_type":
-        return typing.Any
-    if which == "literal_type":
-        inner = _decode_literal(baml_ty.literal_type)
+    if which == "primitive":
+        return _TY_PRIMITIVE_PY.get(ty.primitive.kind, typing.Any)
+    if which == "class_ty":
+        cls = type_map.get_class(ty.class_ty.name)
+        return _parameterize_tys(cls, ty.class_ty.type_args, type_map)
+    if which == "enum":
+        return type_map.get_enum(ty.enum.name)
+    if which == "type_alias":
+        alias = type_map.get_type_alias(ty.type_alias.name)
+        return _parameterize_tys(alias, ty.type_alias.type_args, type_map)
+    if which == "list":
+        return List[_ty_to_python_type(ty.list.item, type_map)]  # type: ignore[valid-type]
+    if which == "map":
+        return Dict[  # type: ignore[valid-type]
+            _ty_to_python_type(ty.map.key, type_map),
+            _ty_to_python_type(ty.map.value, type_map),
+        ]
+    if which == "optional":
+        return Optional[_ty_to_python_type(ty.optional.inner, type_map)]  # type: ignore[valid-type]
+    if which == "union":
+        # Preserve structural unions through the boundary so a generic arg like
+        # `Box[int | str]` round-trips as `typing.Union[int, str]` rather than
+        # collapsing to a wildcard. Members decode positionally; `typing.Union`
+        # flattens/dedups, a single surviving member unwraps to itself, and a
+        # null member naturally yields `Optional[...]`. A member that can't bind
+        # decodes to `typing.Any` and rides along as a `typing.Any` arm.
+        members = tuple(
+            _ty_to_python_type(opt, type_map) for opt in ty.union.options
+        )
+        if not members:
+            return typing.Any
+        return typing.Union[members]  # type: ignore[valid-type]
+    if which == "literal":
+        inner = _decode_ty_literal(ty.literal)
+        if inner is None:
+            return typing.Any
         return typing.Literal[inner]  # type: ignore[valid-type]
-    if which == "media_type":
-        fqn = _MEDIA_KIND_SUBPATHS.get(baml_ty.media_type.media)
+    if which == "media":
+        fqn = _TY_MEDIA_FQN.get(ty.media.kind)
         if fqn is None:
             return typing.Any
         try:
             return type_map.get_class(fqn)
         except BamlError:
             return typing.Any
-    if which == "class_type":
-        cls = type_map.get_class(baml_ty.class_type.name.name)
-        return _parameterize(cls, baml_ty.class_type.name.generic_args, type_map)
-    if which == "enum_type":
-        return type_map.get_enum(baml_ty.enum_type.name)
-    if which == "type_alias_type":
-        alias = type_map.get_type_alias(baml_ty.type_alias_type.name.name)
-        return _parameterize(alias, baml_ty.type_alias_type.name.generic_args, type_map)
-    if which == "list_type":
-        return List[_baml_ty_to_python_type(baml_ty.list_type.item_type, type_map)]  # type: ignore[valid-type]
-    if which == "map_type":
-        return Dict[  # type: ignore[valid-type]
-            _baml_ty_to_python_type(baml_ty.map_type.key_type, type_map),
-            _baml_ty_to_python_type(baml_ty.map_type.value_type, type_map),
-        ]
-    if which == "optional_type":
-        return Optional[_baml_ty_to_python_type(baml_ty.optional_type.value, type_map)]  # type: ignore[valid-type]
-    if which == "union_variant_type":
-        cls = type_map.get_class(baml_ty.union_variant_type.name.name)
-        return _parameterize(cls, baml_ty.union_variant_type.name.generic_args, type_map)
-    raise BamlError(f"Unsupported BamlTy variant {which!r} in generic arg")
+    # enum_variant / interface / function / future / rust_type / meta_type /
+    # resource / prompt_ast / void / watch_accessor / type_var /
+    # associated_type_projection / never — no concrete Python binding in a
+    # generic-arg position; treat as an unbound wildcard.
+    return typing.Any
 
 
-def _parameterize(cls, generic_args, type_map: BamlTypeMap):
-    """Apply BAML generic args to a symbol via `cls[arg_types…]`.
+def _decode_ty_literal(literal) -> Any:
+    """Decode a wire `BamlTyLiteral` to its Python literal value (for
+    `typing.Literal[...]`). Distinct from `_decode_literal`, which decodes the
+    value-level `BamlTyLiteral` riding on `BamlOutboundValue.literal_value`."""
+    which = literal.WhichOneof("literal")
+    if which == "string_value":
+        return literal.string_value
+    if which == "int_value":
+        return literal.int_value
+    if which == "bool_value":
+        return literal.bool_value
+    if which == "bigint_value":
+        # Decimal string on the wire (the `BamlTy` convention; see baml_type.proto).
+        return int(literal.bigint_value)
+    if which == "float_value":
+        return float(literal.float_value)
+    return None
 
-    Works for any subscriptable symbol — Pydantic generics, generic
-    type aliases (PEP 695 `TypeAliasType` or `typing` aliases like
-    `List[T]`), `typing.Generic` subclasses, etc. The try/except
-    catches the failure modes (arity mismatch, non-generic class,
-    fully-bound alias) and falls back to the unparameterized `cls`.
 
-    No-op when `generic_args` is empty (the rollout-safe path: works
-    before the Rust producer is updated to populate them — `13b` §3.5).
+def _parameterize_tys(cls, type_args, type_map: BamlTypeMap):
+    """Apply a list of wire `BamlTy` generic args to a symbol via `cls[arg_types…]`.
+
+    Works for any subscriptable symbol — Pydantic generics, generic type
+    aliases (PEP 695 `TypeAliasType` or `typing` aliases like `List[T]`),
+    `typing.Generic` subclasses, etc. The try/except catches the failure modes
+    (arity mismatch, non-generic class, fully-bound alias) and falls back to the
+    unparameterized `cls`.
     """
-    if not generic_args:
+    type_args = list(type_args)
+    if not type_args:
         return cls
-    py_args = tuple(_baml_ty_to_python_type(g.ty, type_map) for g in generic_args)
+    py_args = tuple(_ty_to_python_type(t, type_map) for t in type_args)
     try:
         if len(py_args) == 1:
             return cls[py_args[0]]
@@ -501,7 +674,7 @@ def _decode_class(class_value, type_map: BamlTypeMap) -> Any:
     # Emit always fully qualifies, so the engine FQN already matches
     # what the typemap consumes (`12a-namespace-rules.md §5`).
     try:
-        cls = type_map.get_class(class_value.name.name)
+        cls = type_map.get_class(class_value.name)
     except BamlError:
         # Bare bridge tests and other non-generated runtimes may receive
         # stdlib/user error classes without a generated typemap installed.
@@ -518,7 +691,7 @@ def _decode_class(class_value, type_map: BamlTypeMap) -> Any:
     if cls in _MEDIA_PYO3_TYPES and "_data" in field_dict:
         return field_dict["_data"]
 
-    parameterized = _parameterize(cls, class_value.name.generic_args, type_map)
+    parameterized = _parameterize_tys(cls, class_value.type_args, type_map)
     if not _is_pydantic_model_class(cls):
         # Not a BaseModel — shouldn't happen for a well-formed SDK; fall
         # back to a plain dict so callers aren't silently lied to.
@@ -542,7 +715,7 @@ def _decode_class(class_value, type_map: BamlTypeMap) -> Any:
 def _decode_enum(enum_value, type_map: BamlTypeMap) -> Any:
     """Resolve a `BamlValueEnum` to a member of the generated enum class."""
     variant = enum_value.value
-    fqn = enum_value.name.name
+    fqn = enum_value.name
     cls = type_map.get_enum(fqn)
     try:
         return cls(variant)
@@ -561,13 +734,13 @@ def _decode_handle(handle, type_map: BamlTypeMap) -> Any:
     table; we read directly from the wire here to avoid a redundant
     field access.
 
-    `handle` is either an outbound `BamlOutboundHandle` (carries `name`
+    `handle` is either an outbound `BamlOutboundHandle` (carries `ty`
     for `ADT_TAGGED_HEAP_HANDLE` dispatch — see 23a) or an inbound
-    `BamlHandle` shape (no `name`). The tests pass the inbound shape
-    directly; the production path goes through `_decode_value_holder`,
-    which hands us the outbound shape.
+    `BamlHandle` shape (no `ty`). The tests pass the inbound shape
+    directly for non-tagged kinds; the production path goes through
+    `_decode_value_holder`, which hands us the outbound shape.
     """
-    HT = baml_inbound_pb2.BamlHandleType
+    HT = baml_handle_pb2.BamlHandleType
     ht = handle.handle_type
     pyhandle = BamlPyHandle(handle.key, int(ht))
 
@@ -583,8 +756,10 @@ def _decode_handle(handle, type_map: BamlTypeMap) -> Any:
         # Dispatch via the typemap: every tagged-handle class self-
         # registers under its engine FQN (25b §2), so any future class
         # is reachable without touching this arm.
-        name = getattr(handle, "name", None)
-        class_fqn = name.name if name is not None else ""
+        # The handle's `ty` is a full `BamlTy`; the typed-wrapper FQN lives on
+        # its class variant. A non-class `ty` (e.g. an interface) or unset `ty`
+        # reads back as an empty class (`.name == ""`).
+        class_fqn = handle.ty.class_ty.name
         cls = type_map.get_class(class_fqn)
         return cls._from_pyhandle(pyhandle)
     if ht == HT.HANDLE_UNSPECIFIED:
@@ -625,16 +800,19 @@ def _parse_hex_bigint(s: str) -> int:
 
 def _decode_literal(literal) -> Any:
     which = literal.WhichOneof("literal")
-    if which == "string_literal":
-        return literal.string_literal.value
-    if which == "int_literal":
-        return literal.int_literal.value
-    if which == "bool_literal":
-        return literal.bool_literal.value
-    if which == "bigint_literal":
+    if which == "string_value":
+        return literal.string_value
+    if which == "int_value":
+        return literal.int_value
+    if which == "bool_value":
+        return literal.bool_value
+    if which == "bigint_value":
         # Hex / base sixteen on the wire, matching `bigint_value`. The
         # helper guards against megabyte-scale payloads before parsing.
-        return _parse_hex_bigint(literal.bigint_literal.value)
+        return _parse_hex_bigint(literal.bigint_value)
+    if which == "float_value":
+        # Source text on the wire (mirrors `BamlTyLiteral.float_value`).
+        return float(literal.float_value)
     return None
 
 
@@ -712,12 +890,24 @@ def _try_rehydrate_host_value(decoded: Any) -> Optional[BaseException]:
     return None
 
 
+def _unwrap_union_variant(holder):
+    """Peel any `union_variant_value` wrapper(s) so a metadata read sees the
+    inner value. The engine wraps a thrown value in `union_variant_value` when
+    the function declares a multi-member `throws` union; `decode_value` already
+    unwraps this for the value itself, so the FQN read must match or
+    `class_name` is lost for union throws."""
+    while holder.WhichOneof("value") == "union_variant_value":
+        holder = holder.union_variant_value.value
+    return holder
+
+
 def _outbound_class_fqn(holder) -> Optional[str]:
     """The BAML FQN of a `BamlOutboundValue` that is a class instance (e.g.
     `baml.json.JsonParseError`), else `None`. Used only to build a readable
     `BamlError` / `BamlPanic` message."""
+    holder = _unwrap_union_variant(holder)
     if holder.WhichOneof("value") == "class_value":
-        return holder.class_value.name.name
+        return holder.class_value.name
     return None
 
 

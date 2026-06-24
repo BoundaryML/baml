@@ -83,6 +83,7 @@ pub const ALL: &[BuiltinFile] = &[
     // --- Root namespace (no ns_* prefix) ---
     builtin!("baml", "containers.baml"),
     builtin!("baml", "comparable.baml"),
+    builtin!("baml", "conversions.baml"),
     builtin!("baml", "core.baml"),
     builtin!("baml", "int.baml"),
     builtin!("baml", "bigint.baml"),
@@ -127,6 +128,7 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_time/plaindate.baml"),
     builtin!("baml", "ns_time/plaindatetime.baml"),
     builtin!("baml", "ns_time/zoneddatetime.baml"),
+    builtin!("baml", "ns_ops/comparison.baml"),
     // --- reflect package (standalone, accessible as `reflect.type_of(...)`) ---
     builtin!("reflect", "reflect.baml"),
     // --- testing package ---

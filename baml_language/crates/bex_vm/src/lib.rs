@@ -10,6 +10,7 @@
 //!
 //! The instructions that the VM runs are defined in [`bex_vm_types::bytecode::Instruction`] enum.
 
+pub(crate) mod array_index;
 pub mod debug;
 pub mod errors;
 pub mod indexable;

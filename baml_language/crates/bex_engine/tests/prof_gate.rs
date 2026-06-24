@@ -29,7 +29,12 @@ use std::{
 use bex_engine::{
     BexEngine, BexExternalValue, CancellationToken, EngineError, FunctionCallContextBuilder,
 };
-use bex_events::prof::{file::read_bamlprof, pb};
+use bex_events::{
+    prof::{file::read_bamlprof, pb},
+    run::{
+        self, CallNodeId, CallStatus, ReconstructedProfile, TraceCallKey, TraceThreadKey, bamlprof,
+    },
+};
 use common::compile_for_engine;
 use pb::disk_event_v1::Event;
 use sys_native::SysOpsExt;
@@ -38,6 +43,15 @@ use sys_native::SysOpsExt;
 /// `UNKNOWN_FUNCTION_FQN`).
 const SPAWN_CLOSURE_FQN: &str = "baml.<spawn-closure>";
 const UNKNOWN_FUNCTION_FQN: &str = "baml.<unknown-function>";
+const PROFILE_PARITY_SOURCE: &str = r#"
+    function parity_leaf(n: int) -> int { n + 1 }
+    function parity_mid(n: int) -> int {
+        parity_leaf(n) + parity_leaf(n + 10)
+    }
+    function main() -> int {
+        parity_mid(1) + parity_leaf(5)
+    }
+"#;
 
 fn prof_dir() -> PathBuf {
     // pid + startup nonce: pid reuse must not let a stale run's profiles
@@ -138,6 +152,35 @@ fn load_profile(marker_fqn: &str) -> (pb::EventFileHeaderV1, Vec<Event>) {
     found.unwrap_or_else(|| panic!("no profile contains {marker_fqn}"))
 }
 
+/// Returns whether any readable profile file contains `marker_fqn` in its
+/// function table. Unlike [`load_profile`], absence is a valid result: tests
+/// use this to assert a suppressed entry call did not create a profile
+/// component.
+fn profile_contains_marker(marker_fqn: &str) -> bool {
+    assert!(
+        bex_events::prof::flush_and_join(Duration::from_mins(1)),
+        "consumer never acked the flush"
+    );
+    let Ok(entries) = std::fs::read_dir(prof_dir()) else {
+        return false;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Ok(contents) = read_bamlprof(&path) else {
+            continue;
+        };
+        let has_marker = contents
+            .header
+            .function_table
+            .as_ref()
+            .is_some_and(|t| t.functions.iter().any(|f| f.fqn == marker_fqn));
+        if has_marker {
+            return true;
+        }
+    }
+    false
+}
+
 /// [`load_profile`] for tests whose program SPAWNS children: a spawned
 /// thread's `EndThread` is emitted by its own tokio task after the parent
 /// observes the settle, so nothing orders it before this test's flush.
@@ -169,6 +212,143 @@ fn load_profile_quiesced(marker_fqn: &str) -> (pb::EventFileHeaderV1, Vec<Event>
     // Quiescence never arrived: return the last read; the caller's balance
     // asserts will fail with the truncated stream visible.
     load_profile(marker_fqn)
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn profile_suppressed_context_does_not_emit_records() {
+    let _guard = test_lock().await;
+    init_prof_env();
+    let source = r#"
+        function psc_marker() -> int { 41 }
+    "#;
+    let program = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("engine construction"),
+    );
+
+    let value = engine
+        .call_function(
+            "psc_marker",
+            vec![],
+            FunctionCallContextBuilder::new(sys_types::CallId::next())
+                .with_profile_enabled(false)
+                .build(),
+            true,
+        )
+        .await
+        .expect("profile-disabled call succeeds");
+    assert_eq!(value, BexExternalValue::Int(41));
+    assert!(
+        !profile_contains_marker("user.psc_marker"),
+        "profile-disabled call must not emit records or create an orphan profile component"
+    );
+
+    let value = engine
+        .call_function(
+            "psc_marker",
+            vec![],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("profile-enabled call succeeds");
+    assert_eq!(value, BexExternalValue::Int(41));
+    drop(engine);
+
+    let (header, events) = load_profile("user.psc_marker");
+    let (counts, threads) = assert_balance(&header, &events);
+    assert_eq!(threads.len(), 1, "enabled call creates one root thread");
+    assert_eq!(
+        counts.get("user.psc_marker"),
+        Some(&1),
+        "enabled control call proves profiling is still active"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn native_profile_reconstructs_canonical_parity_shape() {
+    let _guard = test_lock().await;
+    init_prof_env();
+    run_main(PROFILE_PARITY_SOURCE)
+        .await
+        .expect("profile parity program runs");
+
+    let (header, events) = load_profile("user.parity_mid");
+    assert_balance(&header, &events);
+    let contents = bex_events::prof::file::BamlprofContents {
+        header,
+        events: events
+            .into_iter()
+            .map(|event| pb::DiskEventV1 { event: Some(event) })
+            .collect(),
+        truncated: false,
+    };
+    let reconstructed =
+        bamlprof::reconstruct_bamlprof(&contents).expect("native profile reconstructs");
+    assert_canonical_profile_parity_shape(&reconstructed);
+}
+
+fn assert_canonical_profile_parity_shape(reconstructed: &ReconstructedProfile) {
+    assert!(
+        reconstructed.diagnostics.is_empty(),
+        "profile parity reconstruction diagnostics: {:#?}",
+        reconstructed.diagnostics
+    );
+
+    let calls_by_id: HashMap<_, _> = reconstructed
+        .calls
+        .iter()
+        .map(|call| (call.id, call))
+        .collect();
+    let mut counts: HashMap<String, usize> = HashMap::new();
+    let mut edges: HashMap<(String, String), usize> = HashMap::new();
+
+    for call in &reconstructed.calls {
+        assert_eq!(
+            call.status,
+            CallStatus::Ok,
+            "parity fixture should have only successful calls"
+        );
+        let start = call.started_at_ns.expect("call has start timestamp");
+        let end = call.ended_at_ns.expect("call has end timestamp");
+        assert!(end >= start, "call timestamps are monotonic");
+
+        let function_name = call
+            .function_name
+            .clone()
+            .unwrap_or_else(|| "<unknown>".to_string());
+        *counts.entry(function_name.clone()).or_default() += 1;
+        let parent_name = call
+            .parent_id
+            .and_then(|parent_id| calls_by_id.get(&parent_id))
+            .and_then(|parent| parent.function_name.clone())
+            .unwrap_or_else(|| "<root>".to_string());
+        *edges.entry((parent_name, function_name)).or_default() += 1;
+    }
+
+    assert_eq!(counts.get("user.main"), Some(&1));
+    assert_eq!(counts.get("user.parity_mid"), Some(&1));
+    assert_eq!(counts.get("user.parity_leaf"), Some(&3));
+    assert_eq!(
+        edges.get(&("<root>".to_string(), "user.main".to_string())),
+        Some(&1)
+    );
+    assert_eq!(
+        edges.get(&("user.main".to_string(), "user.parity_mid".to_string())),
+        Some(&1)
+    );
+    assert_eq!(
+        edges.get(&(
+            "user.parity_mid".to_string(),
+            "user.parity_leaf".to_string()
+        )),
+        Some(&2)
+    );
+    assert_eq!(
+        edges.get(&("user.main".to_string(), "user.parity_leaf".to_string())),
+        Some(&1)
+    );
 }
 
 /// Asserts the G3 balance invariants and returns per-fqn `CallFunction`
@@ -310,6 +490,106 @@ async fn reconstruction_smoke() {
     let (header, events) = load_profile_quiesced("user.rc_mid");
     assert_balance(&header, &events);
 
+    let contents = bex_events::prof::file::BamlprofContents {
+        header,
+        events: events
+            .iter()
+            .cloned()
+            .map(|event| pb::DiskEventV1 { event: Some(event) })
+            .collect(),
+        truncated: false,
+    };
+    let reconstructed = bamlprof::reconstruct_bamlprof(&contents)
+        .expect("profile reconstructs through production module");
+    assert!(
+        reconstructed.diagnostics.is_empty(),
+        "production reconstruction diagnostics: {:#?}",
+        reconstructed.diagnostics
+    );
+    assert_eq!(
+        reconstructed.threads.len(),
+        2,
+        "root plus one spawned thread"
+    );
+    let calls_by_id: HashMap<CallNodeId, _> = reconstructed
+        .calls
+        .iter()
+        .map(|call| (call.id, call))
+        .collect();
+    for call in &reconstructed.calls {
+        if let Some(parent_id) = call.parent_id {
+            let parent = calls_by_id
+                .get(&parent_id)
+                .expect("same-thread parent call exists");
+            assert_eq!(
+                parent.thread_id, call.thread_id,
+                "CallNode.parent_id is same-thread only"
+            );
+        }
+    }
+    let child_threads: Vec<_> = reconstructed
+        .threads
+        .iter()
+        .filter(|thread| thread.parent_thread_id.is_some())
+        .collect();
+    assert_eq!(child_threads.len(), 1, "exactly one spawned thread");
+    assert!(
+        child_threads[0].parent_call_node_id.is_some(),
+        "spawn edge keeps parent call provenance"
+    );
+    let reconstructed_counts =
+        reconstructed
+            .calls
+            .iter()
+            .fold(HashMap::<&str, usize>::new(), |mut counts, call| {
+                if let Some(name) = call.function_name.as_deref() {
+                    *counts.entry(name).or_default() += 1;
+                }
+                counts
+            });
+    assert_eq!(reconstructed_counts.get("user.rc_mid"), Some(&2));
+    assert_eq!(reconstructed_counts.get("user.rc_leaf"), Some(&2));
+
+    let normalized_events =
+        bamlprof::normalized_events(&contents).expect("profile events normalize from .bamlprof");
+    let reversed = run::reconstruct_with_function_table(
+        normalized_events.iter().cloned().rev(),
+        reconstructed.function_table.clone(),
+    );
+    assert!(
+        reversed.diagnostics.is_empty(),
+        "reverse-order reconstruction diagnostics: {:#?}",
+        reversed.diagnostics
+    );
+    let call_ids = reconstructed
+        .calls
+        .iter()
+        .map(|call| (call.trace_key, call.id))
+        .collect::<HashMap<TraceCallKey, CallNodeId>>();
+    let reversed_call_ids = reversed
+        .calls
+        .iter()
+        .map(|call| (call.trace_key, call.id))
+        .collect::<HashMap<TraceCallKey, CallNodeId>>();
+    assert_eq!(
+        call_ids, reversed_call_ids,
+        "CallNodeId is trace-derived, not arrival-order-derived"
+    );
+    let thread_ids = reconstructed
+        .threads
+        .iter()
+        .map(|thread| (thread.trace_key, thread.id))
+        .collect::<HashMap<TraceThreadKey, _>>();
+    let reversed_thread_ids = reversed
+        .threads
+        .iter()
+        .map(|thread| (thread.trace_key, thread.id))
+        .collect::<HashMap<TraceThreadKey, _>>();
+    assert_eq!(
+        thread_ids, reversed_thread_ids,
+        "ThreadNodeId is trace-derived, not arrival-order-derived"
+    );
+
     // Group events per thread, sorted by timestamp (events for one logical
     // thread can arrive via several rings when the task migrates OS
     // threads; the clock orders them).
@@ -404,7 +684,7 @@ async fn sysop_pair_emitted() {
     init_prof_env();
     let source = r#"
         function sy_wait() -> int {
-            baml.sys.sleep(2);
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(2n));
             7
         }
         function main() -> int { sy_wait() }
@@ -795,7 +1075,7 @@ async fn root_cancellation_ends_thread_cancelled() {
         function rcx_pin() -> int { 1 }
         function main() -> int {
             rcx_pin();
-            baml.sys.sleep(5000);
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(5000n));
             2
         }
     "#;
@@ -856,7 +1136,7 @@ async fn spawned_child_cancellation_ends_child_cancelled() {
             scc_pin();
             let tok = baml.spawn.CancelToken.new();
             let f = spawn with baml.spawn.options(cancel = tok) {
-                baml.sys.sleep(10000);
+                baml.sys.sleep(baml.time.Duration.from_milliseconds(10000n));
                 42
             };
             let _ = tok.cancel();
@@ -924,7 +1204,7 @@ async fn unobserved_child_error_drains_parent_frames() {
     let source = r#"
         function uce_pin() -> int { 0 }
         function uce_bad() -> int throws string { throw "boom" }
-        function uce_other() -> int { baml.sys.sleep(50); 1 }
+        function uce_other() -> int { baml.sys.sleep(baml.time.Duration.from_milliseconds(50n)); 1 }
         function main() -> int {
             uce_pin();
             spawn { uce_bad() };
@@ -1393,7 +1673,7 @@ async fn dropped_call_future_truncates_stream_by_policy() {
         function dft_pin() -> int { 0 }
         function main() -> int {
             dft_pin();
-            baml.sys.sleep(400);
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(400n));
             1
         }
     "#;

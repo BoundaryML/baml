@@ -13,6 +13,7 @@
   "dependencies": {
     "@b/bridge_wasm": "link:../pkg-playground/wasm",
     "just-bash": "^2.14.3",
+    "@b/pkg-editor": "workspace:*",
     "@b/pkg-playground": "workspace:*",
     "@codingame/monaco-vscode-api": "^25.1.2",
     "@codingame/monaco-vscode-environment-service-override": "^25.1.2",

@@ -34,6 +34,7 @@ async fn parse_companion_allows_missing_optional_class_field() {
         output.result,
         Ok(BexExternalValue::Instance {
             class_name: "user.Payload".to_string(),
+            type_args: vec![],
             fields: indexmap! {
                 "text".to_string() => BexExternalValue::Null,
             },
@@ -78,6 +79,7 @@ async fn parse_companion_allows_missing_nullable_alias_field() {
         output.result,
         Ok(BexExternalValue::Instance {
             class_name: "user.Payload".to_string(),
+            type_args: vec![],
             fields: indexmap! {
                 "text".to_string() => BexExternalValue::Null,
             },

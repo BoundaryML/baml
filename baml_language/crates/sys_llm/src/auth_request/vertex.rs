@@ -142,7 +142,8 @@ impl google_cloud_auth::TokenIo for BamlTokenIo {
         };
         let resp = self
             .io
-            .http_send(request)
+            // Unbounded, as before: `0n` -> no deadline.
+            .http__send(request, std::sync::Arc::new(num_bigint::BigInt::from(0i64)))
             .await
             .map_err(|e| google_cloud_auth::AuthError::Io(e.to_string()))?;
         let resp_body = self
@@ -403,7 +404,10 @@ async fn project_id_from_credentials(
         },
         body: String::new(),
     };
-    if let Ok(resp) = io.http_send(req).await {
+    if let Ok(resp) = io
+        .http__send(req, std::sync::Arc::new(num_bigint::BigInt::from(0i64)))
+        .await
+    {
         if resp.status_code == 200 {
             if let Ok(body) = io.http_response_text(&resp).await {
                 let pid = body.trim().to_string();
@@ -512,9 +516,10 @@ mod tests {
     }
 
     impl RuntimeIo for StubIo {
-        fn http_send(
+        fn http__send(
             &self,
             _request: sys_types::generated::owned::http::Request,
+            _timeout_nanos: std::sync::Arc<num_bigint::BigInt>,
         ) -> Pin<
             Box<
                 dyn Future<
@@ -598,9 +603,10 @@ mod tests {
     }
 
     impl RuntimeIo for FsIo {
-        fn http_send(
+        fn http__send(
             &self,
             _request: sys_types::generated::owned::http::Request,
+            _timeout_nanos: std::sync::Arc<num_bigint::BigInt>,
         ) -> Pin<
             Box<
                 dyn Future<
@@ -694,9 +700,10 @@ mod tests {
     }
 
     impl RuntimeIo for AdcIo {
-        fn http_send(
+        fn http__send(
             &self,
             _request: sys_types::generated::owned::http::Request,
+            _timeout_nanos: std::sync::Arc<num_bigint::BigInt>,
         ) -> Pin<
             Box<
                 dyn Future<
@@ -873,9 +880,10 @@ mod tests {
     struct NoCredsIo;
 
     impl RuntimeIo for NoCredsIo {
-        fn http_send(
+        fn http__send(
             &self,
             _request: sys_types::generated::owned::http::Request,
+            _timeout_nanos: std::sync::Arc<num_bigint::BigInt>,
         ) -> Pin<
             Box<
                 dyn Future<

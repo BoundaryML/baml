@@ -370,6 +370,41 @@ pub enum Terminator {
         unwind: Option<BlockId>,
     },
 
+    /// Open-world virtual interface-method dispatch.
+    ///
+    /// Used when the receiver's concrete type is not statically known — a
+    /// bounded type-var `T extends I`, an interface-existential `I`, a union,
+    /// or `Self` inside an interface default body. The implementation is
+    /// resolved **at runtime** from the receiver's concrete `Self` type against
+    /// `iface` (coherence makes `(Self, iface)` pick at most one impl), then
+    /// invoked exactly like a direct [`Terminator::Call`] — no value is
+    /// materialized. This is the open-world replacement for the old
+    /// compile-time type-tag switch.
+    VirtualCall {
+        /// The interface to resolve against, as a template the emitter pushes
+        /// with `LoadType`. Non-generic today (`baml.ops.Equals`/`Compare`); a
+        /// parameterized interface bakes its arguments into the template.
+        iface: TyTemplate,
+        /// The interface method to dispatch (e.g. `"eq"`, `"lt"`, `"neq"`).
+        method: String,
+        /// `args[..ntypeargs]` are the method-level type-argument values
+        /// (`Object::Type`, for a generic interface method like
+        /// `Iterator.map<R, E2>`); `args[ntypeargs..]` are the value args,
+        /// **receiver first**. The receiver's runtime concrete type is the `Self`
+        /// the method resolves on; the type args are appended to the resolved
+        /// frame.
+        args: Vec<Operand>,
+        /// Number of leading `args` entries that are method-level type arguments.
+        /// Zero for a non-generic method.
+        ntypeargs: usize,
+        /// Where to store the result.
+        destination: Place,
+        /// Block to jump to after the call returns normally.
+        target: BlockId,
+        /// Block to jump to if the call throws (for catch).
+        unwind: Option<BlockId>,
+    },
+
     /// Unreachable code (for exhaustive match).
     ///
     /// Indicates this block should never be reached. If execution reaches
@@ -508,6 +543,7 @@ impl Terminator {
             Terminator::Unreachable => vec![],
             Terminator::Spawn { resume, .. } => vec![*resume],
             Terminator::Call { target, unwind, .. }
+            | Terminator::VirtualCall { target, unwind, .. }
             | Terminator::SysOp { target, unwind, .. }
             | Terminator::Await { target, unwind, .. }
             | Terminator::AwaitAny { target, unwind, .. } => {

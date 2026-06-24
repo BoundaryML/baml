@@ -45,6 +45,49 @@ class Response {
   ) -> Response throws never {
     $rust_io_function
   }
+
+  /// Builds a *streaming* response to return from an `http.Server` handler: the
+  /// status line and `headers` are sent immediately, then the body is written
+  /// incrementally with successive `write` calls and ended with `end`. The
+  /// response is framed with chunked transfer-encoding, so each `write` is
+  /// flushed to the client as its own chunk — a slow producer streams in real
+  /// time (e.g. for Server-Sent Events). Do not set `Content-Length`; it is
+  /// omitted for a streamed body.
+  ///
+  /// Because hyper only reads the response body *after* the handler returns, the
+  /// writes must run after the handler hands the response back — typically from a
+  /// `spawn`ed task that captures it, mirroring hyper's channel-backed body:
+  /// ```baml
+  /// let resp = baml.http.Response.new_streaming(200, { "content-type": "text/event-stream" });
+  /// spawn {
+  ///   resp.write("data: one\n\n".to_utf8());
+  ///   resp.write("data: two\n\n".to_utf8());
+  ///   resp.end();
+  /// };
+  /// resp
+  /// ```
+  function new_streaming(
+    status_code: int,
+    headers: map<string, string>,
+  ) -> Response throws never {
+    $rust_io_function
+  }
+
+  /// Writes one chunk to a streaming response body (see `new_streaming`),
+  /// flushing it to the client. Applies backpressure: `write` suspends until the
+  /// previous chunk has been accepted by the connection. Raises `Io` if the
+  /// response was not created with `new_streaming`, if it has been `end`ed, or
+  /// if the client has hung up.
+  function write(self, data: uint8array) -> null throws root.errors.Io {
+    $rust_io_function
+  }
+
+  /// Ends a streaming response body (see `new_streaming`), signaling
+  /// end-of-stream to the client so the chunked response completes. Subsequent
+  /// `write` calls raise `Io`. A no-op on an already-ended response.
+  function end(self) -> null throws root.errors.Io {
+    $rust_io_function
+  }
 }
 
 /// A Server-Sent Events (SSE) stream. Created by `baml.http.fetch_sse`.
@@ -64,13 +107,40 @@ class SseStream {
   }
 }
 
+/// Converts an optional timeout into the nanosecond count carried across the
+/// sys-op boundary. `null` (no deadline) becomes `0n`, which the native layer
+/// treats as unbounded. Modeled on Rust's `Option<Duration>`.
+function _timeout_nanos(timeout: root.time.Duration?) -> bigint throws never {
+  match (timeout) {
+    null => 0n,
+    let t: root.time.Duration => t.to_nanoseconds(),
+  }
+}
+
 /// Sends a GET request to `url` and returns the response.
-function fetch(url: string) -> Response throws root.errors.Io | root.errors.Timeout {
+///
+/// `timeout` is the total deadline for the request (connection + response
+/// headers + body). `null` (the default) imposes no deadline. On expiry this
+/// throws `root.errors.Timeout`.
+function fetch(url: string, timeout: root.time.Duration? = null) -> Response throws root.errors.Io | root.errors.Timeout {
+  // Thin wrapper resolving the default: `$rust_io_function` sys-ops don't fill
+  // omitted args, so `fetch` forwards to the all-required `_fetch` sys-op.
+  _fetch(url, _timeout_nanos(timeout))
+}
+
+function _fetch(url: string, timeout_nanos: bigint) -> Response throws root.errors.Io | root.errors.Timeout {
   $rust_io_function
 }
 
 /// Sends an HTTP request and returns the response.
-function send(request: Request) -> Response throws root.errors.Io | root.errors.Timeout {
+///
+/// `timeout` is the total deadline for the request, as in `fetch`. `null` (the
+/// default) imposes no deadline.
+function send(request: Request, timeout: root.time.Duration? = null) -> Response throws root.errors.Io | root.errors.Timeout {
+  _send(request, _timeout_nanos(timeout))
+}
+
+function _send(request: Request, timeout_nanos: bigint) -> Response throws root.errors.Io | root.errors.Timeout {
   $rust_io_function
 }
 

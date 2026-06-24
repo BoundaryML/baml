@@ -17,6 +17,6 @@ describe('BamlStream', () => {
         expect(innerH).toBeInstanceOf(BamlHandle);
 
         // Encoding a stream-typed value should not throw.
-        expect(() => encodeCallArgs({ self: stream })).not.toThrow();
+        expect(() => encodeCallArgs({ self: stream }, { callId: 1n })).not.toThrow();
     });
 });

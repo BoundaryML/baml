@@ -351,6 +351,18 @@ fn render_builtin_package_listing() {
     let entries = baml_lsp2_actions::list_package_items(&db, pkg_id);
     assert!(!entries.is_empty());
     let output = capture_listing(&entries);
+    let listed_names: Vec<&str> = output
+        .lines()
+        .filter_map(|line| line.split_whitespace().nth(1))
+        .collect();
+    assert!(
+        listed_names.contains(&"baml.iter.Range"),
+        "expected builtin listing to include package-qualified names, got:\n{output}"
+    );
+    assert!(
+        !listed_names.contains(&"iter.Range"),
+        "builtin listing should not emit unqualified names that cannot be described directly, got:\n{output}"
+    );
     insta::assert_snapshot!(output);
 }
 
@@ -831,6 +843,71 @@ fn describe_builtin_method_drill_in_via_alias() {
     assert!(
         !output.starts_with("NOT FOUND") && !output.starts_with("NO DESCRIPTION"),
         "`string.length` should resolve via the alias:\n{output}"
+    );
+}
+
+/// Drilling into builtin methods by their class name (`Array.reduce`,
+/// `String.split`, `Map.get`) resolves the unqualified class against the stdlib.
+#[test]
+fn describe_builtin_method_drill_in_via_class_name() {
+    let db = simple_project();
+
+    let cases = [
+        (
+            "Array.reduce",
+            "function reduce(self, reducer: (A, T) -> A throws E, initial: A) -> A throws E",
+        ),
+        (
+            "String.split",
+            "function split(self, delimiter: string) -> string[]",
+        ),
+        ("Map.get", "function get(self, key: K) -> V | null"),
+    ];
+
+    for (name, expected_signature) in cases {
+        let output = describe_via_dispatch(&db, name);
+        assert!(
+            output.contains(expected_signature),
+            "expected resolved builtin method signature for `{name}`:\n{output}",
+        );
+        assert!(
+            !output.starts_with("NOT FOUND") && !output.starts_with("NO DESCRIPTION"),
+            "`{name}` should resolve via the unqualified builtin class name:\n{output}",
+        );
+    }
+}
+
+/// User-defined class methods still resolve before the stdlib fallback, even
+/// when the class name matches a builtin class such as `Array`.
+#[test]
+fn describe_user_defined_class_method_takes_precedence_over_builtin_fallback() {
+    let db = make_db(&[(
+        "shadow_builtin.baml",
+        r#"
+/// A user-defined class that intentionally shares a builtin class name.
+class Array {
+    value string
+
+    /// Return a user-defined reduction marker.
+    function reduce(self) -> string {
+        "user reduce"
+    }
+}
+"#,
+    )]);
+
+    let output = describe_via_dispatch(&db, "Array.reduce");
+    assert!(
+        output.contains("function reduce(self) -> string"),
+        "expected user-defined method signature:\n{output}",
+    );
+    assert!(
+        output.contains("\"user reduce\""),
+        "user-defined method body should be rendered:\n{output}",
+    );
+    assert!(
+        !output.contains("reducer: (A, T) -> A throws E"),
+        "builtin `Array.reduce` must not shadow the user-defined class method:\n{output}",
     );
 }
 

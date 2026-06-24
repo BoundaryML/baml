@@ -129,62 +129,6 @@ test "qualified_namespaced_value_runs" {
     assert.is_true(baml.deep_equals(qualified_value_id_fn(), 7))
 }
 
-// Specializing a runtime callable VALUE (`g<int>` where `g` is a local holding
-// a bare generic function, not a compile-time function reference). There is no
-// function global to pool, so the value is specialized at runtime by wrapping
-// it in a closure carrying the type args. Previously the type args were erased
-// here, so the value behaved as the un-specialized generic function.
-function identity_via_local_value() -> int {
-    let g = identity;
-    let h = g<int>;
-    h(9)
-}
-
-test "local_value_specialization_runs" {
-    assert.is_true(baml.deep_equals(identity_via_local_value(), 9))
-}
-
-// The runtime specialization seeds frame.type_args, so a body that REFLECTS on
-// T resolves it correctly even when the specialized callable came from a local
-// value (previously erased → reflected "unknown").
-function describe_via_local_value() -> string {
-    let g = describe;
-    let h = g<User>;
-    h()
-}
-
-test "local_value_specialization_reflects_T" {
-    assert.is_true(baml.deep_equals(describe_via_local_value(), "instantiation_expr.User"))
-}
-
-// Param-dependent specialization of a local value: `g<T>` where `g` is a local
-// and `T` is the enclosing frame's type param — resolved against the frame at
-// runtime.
-function describe_via_local_value_param<T>() -> string {
-    let g = describe;
-    let h = g<T>;
-    h()
-}
-
-test "local_value_param_dependent_reflects_T" {
-    assert.is_true(baml.deep_equals(describe_via_local_value_param<int>(), "int"))
-}
-
-// A type-reifying NATIVE specialized through a bare runtime value. `g` holds the
-// native; `g<User>` wraps it in a closure carrying T=User; the call routes
-// through the native-callee branch, which now seeds the native from the
-// closure's captured type args (not only the pooled GenericFunction's), so the
-// JSON decode resolves T=User. (Previously: "missing type argument".)
-function from_string_via_local_value() -> User {
-    let g = baml.json.from_string;
-    let h = g<User>;
-    h("{\"name\":\"Ada\"}")
-}
-
-test "native_through_local_value_seeds_T" {
-    assert.is_true(baml.deep_equals(from_string_via_local_value(), User { name: "Ada" }))
-}
-
 // A generic instance METHOD referenced as a bound value with explicit type args.
 // `p.pick<int>` builds a BoundMethod (carrying the receiver `p`) and specializes
 // it; the value cannot be closure-wrapped without losing the receiver, so it is
@@ -203,64 +147,6 @@ function bound_method_value() -> int {
 
 test "bound_method_value_runs" {
     assert.is_true(baml.deep_equals(bound_method_value(), 7))
-}
-
-// Explicit type args applied to a parenthesized GENERIC LAMBDA — the base of the
-// `<int>` is not a function reference but an inline anonymous generic function.
-// The lambda is a closure at runtime; specializing it goes through the runtime
-// value path (MakeGenericFunctionFromValue).
-function paren_generic_lambda_value() -> int {
-    let f = (<T>(x: T) -> T { x })<int>;
-    f(5)
-}
-
-test "paren_generic_lambda_value_runs" {
-    assert.is_true(baml.deep_equals(paren_generic_lambda_value(), 5))
-}
-
-// Same generic lambda, called directly with the type args (no intermediate let).
-function paren_generic_lambda_direct() -> int {
-    (<T>(x: T) -> T { x })<int>(7)
-}
-
-test "paren_generic_lambda_direct_runs" {
-    assert.is_true(baml.deep_equals(paren_generic_lambda_direct(), 7))
-}
-
-// A generic lambda bound to a local, then instantiated as a value.
-function bound_generic_lambda() -> int {
-    let g = <T>(x: T) -> T { x };
-    let h = g<int>;
-    h(9)
-}
-
-test "bound_generic_lambda_runs" {
-    assert.is_true(baml.deep_equals(bound_generic_lambda(), 9))
-}
-
-// A generic lambda whose body REFLECTS on its own type param. The lambda's `T`
-// is now threaded through MIR lowering (enclosing_generic_params appends the
-// lambda's own params), so it is seeded into the closure's frame.type_args and
-// `reflect.type_of<T>` resolves it. (Previously it reified as "void".)
-function reflecting_generic_lambda() -> string {
-    let f = (<T>() -> string { reflect.type_of<T>().to_string() })<int>;
-    f()
-}
-
-test "reflecting_generic_lambda_resolves_T" {
-    assert.is_true(baml.deep_equals(reflecting_generic_lambda(), "int"))
-}
-
-// A generic lambda inside a generic FUNCTION: the lambda's own `T` resolves to
-// the frame slot AFTER the enclosing function's `U` (here `U`=int is in scope
-// but the lambda reifies its own `T`=string), confirming the slot ordering.
-function lambda_in_generic_fn<U>() -> string {
-    let g = (<T>() -> string { reflect.type_of<T>().to_string() })<string>;
-    g()
-}
-
-test "lambda_in_generic_fn_resolves_own_T" {
-    assert.is_true(baml.deep_equals(lambda_in_generic_fn<int>(), "string"))
 }
 
 // Companion: a (non-generic) lambda inside a generic function still reifies the

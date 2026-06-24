@@ -6,6 +6,7 @@
 
 import atexit
 import asyncio
+import functools
 from typing import Any, Callable, Dict, List, Literal, Optional, Sequence
 
 from .baml_py import (
@@ -34,7 +35,12 @@ from .errors import (
 )
 from ._stream import BamlStream
 from .ctx_manager import CtxManager as BamlCtxManager
-from .proto import decode_call_result, encode_call_args
+from .proto import (
+    decode_call_result,
+    encode_call_args,
+    pydantic_instance_type_args,
+    python_type_to_wire_ty,
+)
 from .typemap import (
     BamlTypeMap,
     set_type_map,
@@ -253,11 +259,168 @@ def _build_kwargs(
     return built
 
 
+def _resolve_types_kwarg(types_kwarg: Any, type_params: List[str]) -> List[Any]:
+    """Map the user-facing `_types=` value onto the callee's own generic params,
+    in declaration order.
+
+    `_types=` is a `{param_name: type}` dict and is **required iff** the callee
+    declares its own generic params (`type_params`); it is the *only* accepted
+    shape (the legacy single-type / positional tuple/list forms are gone — one
+    name-keyed shape keeps binding unambiguous and matches the named `BamlTyArg`
+    wire). Class type params (bound from a generic receiver) are *not* part of
+    `_types=`.
+    """
+    if not type_params:
+        # No own generic params: `_types=` must not be supplied. (Class type
+        # params, if any, ride the receiver instance, not `_types=`.)
+        if types_kwarg is not None:
+            raise TypeError(
+                "_types= is not accepted here: this function/method declares no "
+                "generic type parameters of its own"
+            )
+        return []
+    example = f"{{{type_params[0]!r}: int}}"
+    if types_kwarg is None:
+        raise TypeError(
+            f"_types= is required for this generic call: bind every type parameter "
+            f"in {type_params!r} with a dict, e.g. _types={example}"
+        )
+    if not isinstance(types_kwarg, dict):
+        raise TypeError(
+            f"_types= must be a dict mapping type-parameter names to types "
+            f"(e.g. _types={example}); got {type(types_kwarg).__name__}. The "
+            f"single-type and positional tuple/list forms are no longer accepted."
+        )
+    missing = [n for n in type_params if n not in types_kwarg]
+    if missing:
+        raise TypeError(
+            f"_types= is missing binding(s) for {missing!r}: every type parameter "
+            f"in {type_params!r} must be bound."
+        )
+    extra = [k for k in types_kwarg if k not in type_params]
+    if extra:
+        raise TypeError(
+            f"_types= has unknown type parameter(s) {extra!r}; expected exactly "
+            f"{type_params!r}."
+        )
+    return [types_kwarg[name] for name in type_params]
+
+
+def _build_type_args(
+    merged: Dict[str, Any],
+    types_kwarg: Any,
+    type_params: List[str],
+    class_type_params: List[str],
+) -> List[Any]:
+    """Build the named, order-preserving `BamlTyArg` list for a generic call: each
+    entry is `(type_var_name, wire_ty)`. Enclosing class params (recovered from
+    the `self` receiver's Pydantic generic metadata) come first, then the
+    callee's own `<...>` params (`_types=`) — De Bruijn order. The engine maps
+    each entry onto the entry frame's `type_args` slot by TypeVar name. Returns
+    `[]` when the call binds nothing.
+
+    Class params are seeded only when concrete args are actually recovered from
+    a Pydantic generic *instance*. For builtin/handle receivers (no Pydantic
+    generic metadata) nothing is sent, so the engine keeps recovering class
+    type args from the receiver itself — preserving pre-existing behavior for
+    stdlib generic methods (`baml.llm.Array`, `Stream`, …)."""
+    wire: List[Any] = []
+    class_args = (
+        pydantic_instance_type_args(merged.get("self")) if class_type_params else []
+    )
+    if class_args:
+        for i, name in enumerate(class_type_params):
+            arg = class_args[i] if i < len(class_args) else None
+            wire.append((name, python_type_to_wire_ty(arg)))
+
+    resolved = _resolve_types_kwarg(types_kwarg, type_params)
+    if any(r is not None for r in resolved):
+        if class_type_params and not class_args:
+            # The method's own params sit *after* the class prefix in De Bruijn
+            # order; without recovered class args we can't position them. This
+            # combined shape (a method-level TypeVar on a non-Pydantic generic
+            # receiver, bound via `_types=`) isn't supported yet.
+            raise TypeError(
+                "_types= on a generic method requires a Pydantic generic "
+                "receiver so the class type args can be recovered"
+            )
+        wire.extend(
+            (name, python_type_to_wire_ty(r)) for name, r in zip(type_params, resolved)
+        )
+    return wire
+
+
+class _GenericCallable(staticmethod):
+    """Subscriptable wrapper for a generic free function / method (Phase 6).
+
+    `fn[X, Y](...)` is pure sugar for `fn(..., _types={p0: X, p1: Y})`, where
+    `p0, p1, …` are the callee's OWN generic params (`type_param_names`, in
+    declaration order). The subscript binds them positionally; the resulting
+    partial delegates to the same `_types=`-based call path as Phase 4/5, so the
+    two forms produce identical wire payloads. The explicit `_types=` form keeps
+    working via `__call__` (subscript is sugar, not a replacement).
+
+    It subclasses `staticmethod` for two reasons: (1) Pydantic ignores
+    `staticmethod` attributes, so a generic *instance* method bound bare in a
+    generated `pydantic.BaseModel` class body isn't mistaken for a model field;
+    (2) it carries the wrapped callable in `__func__`. The overridden `__get__`
+    *does* bind the receiver (unlike a plain `staticmethod`) so a generic
+    instance method works as `k.method(...)` / `k.method[U](...)`. A true static
+    method is wrapped by codegen in an outer `staticmethod(...)`, whose `__get__`
+    returns this object unbound — so no receiver is injected there.
+    """
+
+    def __new__(cls, call: Callable[..., Any], type_param_names: List[str]):
+        return super().__new__(cls, call)
+
+    def __init__(self, call: Callable[..., Any], type_param_names: List[str]) -> None:
+        super().__init__(call)
+        self._type_param_names = type_param_names
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        return self.__func__(*args, **kwargs)
+
+    def __getitem__(self, key: Any) -> Callable[..., Any]:
+        types = key if isinstance(key, tuple) else (key,)
+        if len(types) != len(self._type_param_names):
+            raise TypeError(
+                f"expected {len(self._type_param_names)} type argument(s) for "
+                f"{self._type_param_names!r}, got {len(types)}"
+            )
+        bound = dict(zip(self._type_param_names, types))
+        return functools.partial(self.__func__, _types=bound)
+
+    def __get__(self, obj: Any, objtype: Any = None) -> "_GenericCallable":
+        # Unbound access (`Cls.method`) returns the wrapper itself; bound access
+        # (`inst.method`) pre-binds the receiver so the subscript/`__call__`
+        # forms both forward `self` like an ordinary bound method.
+        if obj is None:
+            return self
+        return _GenericCallable(
+            functools.partial(self.__func__, obj), self._type_param_names
+        )
+
+
+def _maybe_generic_callable(
+    call: Callable[..., Any], own_type_params: List[str]
+) -> Callable[..., Any]:
+    """Wrap `call` so it accepts the `fn[...]` subscript form when the callee
+    declares its OWN generic params; otherwise return it unchanged (non-generic
+    functions and methods whose only TypeVars ride the receiver stay plain
+    callables, avoiding any behavior change)."""
+    if own_type_params:
+        return _GenericCallable(call, own_type_params)
+    return call
+
+
 def define_function(
     baml_fqn: str,
     mode: Mode,
     required_param_names: List[str],
     optional_param_names: Optional[List[str]] = None,
+    *,
+    type_params: Optional[List[str]] = None,
+    class_type_params: Optional[List[str]] = None,
 ) -> Callable[..., Any]:
     """Factory for a BAML callable (free function, static method, or
     instance method). Captures the call contract by closure; returns a
@@ -270,33 +433,59 @@ def define_function(
     the returned callable is installed as a class attribute. Static
     methods are wrapped in `staticmethod(...)` by codegen to suppress
     that injection.
+
+    Generics: `type_params` are the callee's own `<...>` param names (bound
+    by an explicit `_types=` kwarg), and `class_type_params` are the
+    enclosing generic class's param names (bound from the `self` receiver's
+    runtime type args). When either is set, a named, order-preserving `BamlTyArg`
+    list (`(type_var, type_value)` per TypeVar) is sent in
+    `CallFunctionArgs.type_args` for the engine to seed the entry frame.
     """
     # Codegen always emits fully-qualified `<pkg>.<ns…>.<name>` FQNs and
     # the engine stores user functions under the same form (see
     # `12a-namespace-rules.md §5`); no translation step needed.
     required_names = list(required_param_names)
     optional_names = list(optional_param_names or [])
+    type_param_names = list(type_params or [])
+    class_type_param_names = list(class_type_params or [])
+    is_generic = bool(type_param_names or class_type_param_names)
     if mode == "sync":
         def _sync(*args: Any, **kwargs: Any) -> Any:
             call_ctx = kwargs.pop("_ctx", None)
+            types_kwarg = kwargs.pop("_types", None)
             merged = _build_kwargs(args, kwargs, required_names, optional_names)
+            type_args = (
+                _build_type_args(
+                    merged, types_kwarg, type_param_names, class_type_param_names
+                )
+                if is_generic
+                else None
+            )
             rt = get_runtime()
             call_id = new_function_call()
-            args_proto = encode_call_args(merged, call_id)
+            args_proto = encode_call_args(merged, call_id, type_args)
             _attach_call_ctx(call_ctx, call_id)
             try:
                 result_bytes = rt.call_function_sync(baml_fqn, args_proto, None, None)
             finally:
                 _detach_call_ctx(call_ctx, call_id)
             return decode_call_result(result_bytes)
-        return _sync
+        return _maybe_generic_callable(_sync, type_param_names)
     elif mode == "async":
         async def _async(*args: Any, **kwargs: Any) -> Any:
             call_ctx = kwargs.pop("_ctx", None)
+            types_kwarg = kwargs.pop("_types", None)
             merged = _build_kwargs(args, kwargs, required_names, optional_names)
+            type_args = (
+                _build_type_args(
+                    merged, types_kwarg, type_param_names, class_type_param_names
+                )
+                if is_generic
+                else None
+            )
             rt = get_runtime()
             call_id = new_function_call()
-            args_proto = encode_call_args(merged, call_id)
+            args_proto = encode_call_args(merged, call_id, type_args)
             _attach_call_ctx(call_ctx, call_id)
             try:
                 try:
@@ -307,7 +496,7 @@ def define_function(
             finally:
                 _detach_call_ctx(call_ctx, call_id)
             return _decode_call_result_async(result_bytes)
-        return _async
+        return _maybe_generic_callable(_async, type_param_names)
     else:
         raise ValueError(f"mode must be 'sync' or 'async', got {mode!r}")
 

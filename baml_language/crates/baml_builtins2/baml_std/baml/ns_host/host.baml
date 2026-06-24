@@ -10,6 +10,13 @@
 /// throw rides the VM's normal exception unwinder. A host value left
 /// untyped at the boundary erases `E` to `unknown`, which accepts any
 /// thrown value — including an opaque `baml.errors.HostCallable`.
+///
+/// `args` is a two-element pack the VM builds in `host_closure_call_sysop`:
+/// `[positional_required_args, { optional_name: value }]`. The VM has already
+/// split the call by the callable's declared params (using the captured
+/// `Object::HostClosure`), dropping omitted optionals — so each bridge applies
+/// its own calling convention (TS `$opts`, Python kwargs) without needing the
+/// callee type on the wire.
 function call_host_value<T, E>(handle: HostValue, args: unknown[])
     -> T throws E {
   $rust_io_function

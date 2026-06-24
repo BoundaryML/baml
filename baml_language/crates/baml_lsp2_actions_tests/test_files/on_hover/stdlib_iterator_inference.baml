@@ -82,7 +82,7 @@ function throwing_mapper<[CURSOR]() -> string[] throws unknown {
 // ```
 // hover at stdlib_iterator_inference.baml:8:16
 // ```baml
-// mapMethod: <R, E2>(fn: (int) -> R throws E2) -> baml.iter.Iterator<Item = R, Error = E2> throws never
+// mapMethod: (fn: (int) -> R throws E2) -> baml.iter.Iterator<Item = R, Error = E2> throws never
 // ```
 // hover at stdlib_iterator_inference.baml:9:17
 // ```baml

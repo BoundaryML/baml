@@ -14,6 +14,7 @@ mod test_maps;
 mod test_partials;
 mod test_streaming;
 mod test_unions;
+mod test_word_bug;
 
 use crate::{baml_db, baml_tyannotated, sap_model::*};
 

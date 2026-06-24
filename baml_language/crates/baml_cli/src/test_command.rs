@@ -18,8 +18,8 @@ use crate::{
 
 #[derive(Args, Clone, Debug)]
 pub struct TestArgs {
-    #[arg(long, help = "path/to/baml_src", default_value = ".")]
-    pub from: PathBuf,
+    #[arg(long, help = "Project search starting point", value_name = "PATH")]
+    pub from: Option<PathBuf>,
 
     /// Only list selected tests
     #[arg(long, default_value_t = false)]
@@ -94,7 +94,7 @@ impl TestArgs {
     pub fn run(&self) -> Result<crate::ExitCode> {
         let reporter = Reporter::new();
         // ── 1. Load project ────────────────────────────────────────────────
-        let (db, from, baml_files) = load_project_from_reporting(&self.from, &reporter)?;
+        let (db, from, baml_files) = load_project_from_reporting(self.from.as_deref(), &reporter)?;
         if baml_files.is_empty() {
             reporter.abandon();
             crate::reporter::print_error(format_args!(
@@ -253,6 +253,20 @@ impl TestArgs {
 // Legacy test execution (unchanged from the original implementation)
 // ---------------------------------------------------------------------------
 
+/// Execute one legacy (`function + test block`) test case.
+///
+/// Parameters:
+/// - `ctx`: Shared runtime context containing engine/runtime/cancellation state.
+/// - `t`: Discovered test metadata (`function_name::test_name`) to execute.
+/// - `passed`: Counter incremented when the test passes.
+/// - `failed`: Counter incremented when the test fails or cannot execute.
+///
+/// Returns:
+/// - `()`; results are emitted to stdout/stderr and reflected in counters.
+///
+/// Errors/Panics:
+/// - Does not return errors; execution/argument failures are reported as `FAIL`.
+/// - Does not panic under normal operation.
 fn run_legacy_test(ctx: &RunCtx, t: &DiscoveredTest, passed: &mut usize, failed: &mut usize) {
     let test_case = match ctx.engine.test_case(&t.function_name, &t.test_name) {
         Some(tc) => tc,
@@ -292,7 +306,7 @@ fn run_legacy_test(ctx: &RunCtx, t: &DiscoveredTest, passed: &mut usize, failed:
         }
         Err(e) => {
             eprintln!("FAIL {}::{}", t.function_name, t.test_name);
-            eprintln!("  => {e:?}");
+            eprintln!("  => {e}");
             *failed += 1;
         }
     }
@@ -460,7 +474,9 @@ fn flatten_tree(value: &BexExternalValue, out: &mut Vec<DiscoveredTest>) {
                 flatten_tree(item, out);
             }
         }
-        BexExternalValue::Instance { class_name, fields } => {
+        BexExternalValue::Instance {
+            class_name, fields, ..
+        } => {
             if class_matches(class_name, "SerializedTest") {
                 let kind = fields.get("type").and_then(as_string).unwrap_or_default();
                 if kind == "test" {
@@ -500,7 +516,9 @@ fn collect_lazy_names_inner(value: &BexExternalValue, out: &mut Vec<String>) {
                 collect_lazy_names_inner(item, out);
             }
         }
-        BexExternalValue::Instance { class_name, fields } => {
+        BexExternalValue::Instance {
+            class_name, fields, ..
+        } => {
             if class_matches(class_name, "SerializedTest") {
                 let kind = fields.get("type").and_then(as_string).unwrap_or_default();
                 if kind == "lazyTestSet" {
@@ -522,6 +540,22 @@ fn collect_lazy_names_inner(value: &BexExternalValue, out: &mut Vec<String>) {
 // Testset test execution
 // ---------------------------------------------------------------------------
 
+/// Execute one test discovered from the testset runtime registry.
+///
+/// Parameters:
+/// - `ctx`: Shared runtime context containing engine/runtime/cancellation state.
+/// - `registry`: Live `testing.TestRegistry` handle/value returned by discovery.
+/// - `full_path`: Slash-delimited runtime path for the test (e.g. `suite/case`).
+/// - `t`: Human-facing discovered test metadata used for CLI labels.
+/// - `passed`: Counter incremented when the test passes.
+/// - `failed`: Counter incremented when the test fails or errors.
+///
+/// Returns:
+/// - `()`; prints pass/fail lines and updates counters.
+///
+/// Errors/Panics:
+/// - Does not return errors; runtime failures are rendered as `FAIL`.
+/// - Does not panic under normal operation.
 fn run_testset_test(
     ctx: &RunCtx,
     registry: &BexExternalValue,
@@ -557,7 +591,7 @@ fn run_testset_test(
         }
         Err(e) => {
             eprintln!("FAIL {}::{}", t.function_name, t.test_name);
-            eprintln!("  => {e:?}");
+            eprintln!("  => {e}");
             *failed += 1;
         }
     }

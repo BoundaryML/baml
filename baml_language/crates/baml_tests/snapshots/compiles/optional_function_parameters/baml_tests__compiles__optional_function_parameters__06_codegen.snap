@@ -42,6 +42,7 @@ function user.AskDocs(query: string, max_results: int, filter: string, client: b
     load_const "max_results"
     load_const "filter"
     alloc_map 3
+    load_const <omitted>
     call baml.llm.call_llm_function
     return
 }
@@ -79,6 +80,7 @@ function user.AskDocs$build_request(query: string, max_results: int, filter: str
     load_const "max_results"
     load_const "filter"
     alloc_map 3
+    load_const <omitted>
     call baml.llm.build_request
     return
 }
@@ -116,6 +118,7 @@ function user.AskDocs$build_request_stream(query: string, max_results: int, filt
     load_const "max_results"
     load_const "filter"
     alloc_map 3
+    load_const <omitted>
     call baml.llm.build_request_stream
     return
 }
@@ -185,6 +188,7 @@ function user.AskDocs$render_prompt(query: string, max_results: int, filter: str
     load_const "max_results"
     load_const "filter"
     alloc_map 3
+    load_const <omitted>
     call baml.llm.render_prompt
     return
 }
@@ -224,6 +228,7 @@ function user.AskDocs$stream(query: string, max_results: int, filter: string, cl
     load_const "max_results"
     load_const "filter"
     alloc_map 3
+    load_const <omitted>
     call baml.llm.stream_llm_function
     return
 }
@@ -252,7 +257,7 @@ function user.HostEntry(query: string, max_results: int, filter: string | null) 
   L1:
     load_var filter
     load_const null
-    cmp_op ==
+    call baml.ops.equals_equals
     pop_jump_if_false L2
     jump L3
 

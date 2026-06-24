@@ -373,25 +373,23 @@ impl ConcatNode {
                     buf.extend_from_slice(&parent.data[o..o + l]);
                 }
                 BexStr::Concat(c) => {
-                    let mut inner_guard = c.state.lock().unwrap();
+                    let inner_guard = c.state.lock().unwrap();
                     match &*inner_guard {
                         ConcatState::Flattened(f) => {
                             buf.extend_from_slice(&f.data);
                         }
-                        ConcatState::Deferred { .. } => {
-                            let inner_old = std::mem::replace(
-                                &mut *inner_guard,
-                                ConcatState::Flattened(Arc::new(FlatStr {
-                                    hash: AtomicU64::new(0),
-                                    char_count: 0,
-                                    data: Box::new([]),
-                                })),
-                            );
+                        ConcatState::Deferred { left, right } => {
+                            // Clone the child handles (O(1): Arc bump or inline
+                            // memcpy) and leave this node's `Deferred` state
+                            // intact. The node may be shared (Arc refcount > 1,
+                            // e.g. `let n = a + b; let p = n + c`); destructively
+                            // emptying it here would corrupt every *other*
+                            // reference to it. (B-262 / B-233)
+                            let left = left.clone();
+                            let right = right.clone();
                             drop(inner_guard);
-                            if let ConcatState::Deferred { left, right } = inner_old {
-                                stack.push(right);
-                                stack.push(left);
-                            }
+                            stack.push(right);
+                            stack.push(left);
                         }
                     }
                 }
@@ -625,7 +623,13 @@ fn byte_offset_of_nth_codepoint(bytes: &[u8], n: usize) -> usize {
         let word = u64::from_ne_bytes(bytes[i..i + 8].try_into().unwrap());
         let hi = word & 0x8080_8080_8080_8080;
         let lo = word & 0x4040_4040_4040_4040;
-        let cont_mask = hi & !lo;
+        // A continuation byte is `10xxxxxx`: bit 7 set, bit 6 clear. We read
+        // only bit 7 below (`>> 7`), so the bit-6 information has to be shifted
+        // up into the bit-7 lane — `!(lo << 1)` clears bit 7 for multibyte
+        // *leading* bytes (`11xxxxxx`), leaving only true continuations.
+        // (`hi & !lo` left bit 7 untouched, counting every multibyte lead as a
+        // continuation and undercounting codepoint starts by one per char.)
+        let cont_mask = hi & !(lo << 1);
         let num_leading = 8 - (cont_mask >> 7).count_ones() as usize;
 
         if remaining <= num_leading {

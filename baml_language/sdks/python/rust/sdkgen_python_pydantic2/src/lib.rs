@@ -3350,12 +3350,16 @@ mod tests {
             pyi.contains("T = typing.TypeVar(\"T\")"),
             "pyi missing TypeVar:\n{pyi}",
         );
+        // A generic free function requires the caller to bind every TypeVar
+        // via a keyword-only `_types=` dict (the runtime enforces it; the stub
+        // mirrors it). See `sdkgen_python_pydantic2::leaf` and the engine's
+        // Gate A full-binding enforcement.
         assert!(
-            pyi.contains("def echo(value: T) -> T: ..."),
+            pyi.contains("def echo(value: T, *, _types: dict[str, type]) -> T: ..."),
             "pyi missing typed echo signature:\n{pyi}",
         );
         assert!(
-            pyi.contains("async def echo_async(value: T) -> T: ..."),
+            pyi.contains("async def echo_async(value: T, *, _types: dict[str, type]) -> T: ..."),
             "pyi missing async echo signature:\n{pyi}",
         );
     }

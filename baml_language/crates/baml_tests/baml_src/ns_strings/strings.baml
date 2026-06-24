@@ -19,8 +19,8 @@ function strings_concat() -> string {
 // non-string-literal expression; otherwise the parser treats the opening `{` as
 // a map literal when the first token is a string literal.
 
-function strings_char_at_negative() -> string {
-    "hi".char_at(-1)
+function strings_char_at(index: int) -> string {
+    "hello".char_at(index)
 }
 
 function strings_from_utf8_invalid() -> string {
@@ -175,8 +175,15 @@ test "string_substring_after_emoji" {
     assert.is_true(baml.deep_equals("😀hello".substring(1, 4), "hel"))
 }
 
+// Negative indices count from the end (length 5): -3 → 2, -1 → 4.
+test "string_substring_negative_counts_from_end" {
+    assert.is_true(baml.deep_equals("hello".substring(-3, 4), "ll"));
+    assert.is_true(baml.deep_equals("hello".substring(-3, -1), "ll"))
+}
+
+// A negative index past the start clamps to 0.
 test "string_substring_negative_clamps_to_zero" {
-    assert.is_true(baml.deep_equals("hello".substring(-3, 4), "hell"))
+    assert.is_true(baml.deep_equals("hello".substring(-100, 4), "hell"))
 }
 
 test "string_substring_empty_when_start_past_end" {
@@ -204,21 +211,39 @@ test "string_char_at_after_emoji" {
     assert.is_true(baml.deep_equals("😀hello".char_at(1), "h"))
 }
 
-// char_at past the end returns empty string.
-test "string_char_at_end_returns_empty" {
-    assert.is_true(baml.deep_equals("hi".char_at(2), ""))
-}
-
-test "string_char_at_past_end_returns_empty" {
-    assert.is_true(baml.deep_equals("hi".char_at(99), ""))
-}
-
-test "string_char_at_negative_throws" {
+// char_at at or past the end raises IndexOutOfBounds ("hello" has length 5).
+test "string_char_at_at_length_panics" {
     {
-        let _ = strings_char_at_negative();
+        strings_char_at(5);
         baml.sys.panic("expected char_at to throw")
     } catch (e) {
-        baml.errors.InvalidArgument => null
+        baml.panics.IndexOutOfBounds => null
+    }
+}
+
+test "string_char_at_past_end_panics" {
+    {
+        strings_char_at(99);
+        baml.sys.panic("expected char_at to throw")
+    } catch (e) {
+        baml.panics.IndexOutOfBounds => null
+    }
+}
+
+// Negative indices count from the end: -1 is the last character.
+test "string_char_at_negative_counts_from_end" {
+    assert.is_true(baml.deep_equals("hello".char_at(-1), "o"));
+    // "héllo" = h é l l o; -4 normalizes to codepoint 1.
+    assert.is_true(baml.deep_equals("héllo".char_at(-4), "é"))
+}
+
+// Past the start (normalizes before index 0) also raises IndexOutOfBounds.
+test "string_char_at_past_start_panics" {
+    {
+        strings_char_at(-6);
+        baml.sys.panic("expected char_at to throw")
+    } catch (e) {
+        baml.panics.IndexOutOfBounds => null
     }
 }
 

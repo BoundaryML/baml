@@ -7,6 +7,7 @@ use num_bigint::BigInt;
 use super::{BamlClassArray, Continuation, NativeCallResult, PackageBamlImpl, make_to_json_callee};
 use crate::{
     BexVm,
+    array_index::{resolve_index, resolve_insert_index, resolve_slice_bound},
     errors::{VmBamlError, VmInternalError, VmRustFnError},
 };
 
@@ -777,9 +778,30 @@ impl BamlClassArray for PackageBamlImpl {
         array.len() as i64
     }
 
-    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
     fn at(array: &[Value], index: i64) -> Option<Value> {
-        array.get(index as usize).copied()
+        resolve_index(index, array.len()).map(|i| array[i])
+    }
+
+    /// Builds a new array of `length` elements, each equal to `value`.
+    ///
+    /// Static constructor for `baml.Array.filled`. A negative `length` clamps to
+    /// an empty array. `Value` is `Copy`, so every slot shares the same `value`
+    /// (for reference types, the same underlying object).
+    ///
+    /// The two non-positive cases are handled explicitly so they are not
+    /// conflated:
+    /// - A negative `length` clamps to an empty array, as documented.
+    /// - A `length` that exceeds `usize::MAX` (only possible on 32-bit targets
+    ///   such as `wasm32-unknown-unknown`) is requesting more elements than the
+    ///   platform can address, so it saturates to `usize::MAX`. The subsequent
+    ///   allocation then fails loudly rather than silently producing an empty
+    ///   array.
+    fn filled(length: i64, value: &Value) -> Vec<Value> {
+        if length <= 0 {
+            return Vec::new();
+        }
+        let count = usize::try_from(length).unwrap_or(usize::MAX);
+        vec![*value; count]
     }
 
     fn concat(array: &[Value], other: &[Value]) -> Vec<Value> {
@@ -791,14 +813,8 @@ impl BamlClassArray for PackageBamlImpl {
     }
 
     fn remove_at(array: &mut Vec<Value>, index: i64) -> Option<Value> {
-        let Ok(index) = usize::try_from(index) else {
-            return None;
-        };
-        if index >= array.len() {
-            None
-        } else {
-            Some(array.remove(index))
-        }
+        let index = resolve_index(index, array.len())?;
+        Some(array.remove(index))
     }
 
     fn reverse(array: &[Value]) -> Vec<Value> {
@@ -807,16 +823,10 @@ impl BamlClassArray for PackageBamlImpl {
         result
     }
 
-    #[allow(
-        clippy::cast_sign_loss,
-        clippy::cast_possible_truncation,
-        clippy::cast_possible_wrap
-    )]
     fn slice(array: &[Value], start: i64, end: i64) -> Vec<Value> {
-        let len = array.len() as i64;
-        let start = start.max(0).min(len) as usize;
-        let end = end.max(0).min(len) as usize;
-        let end = end.max(start);
+        let start = resolve_slice_bound(start, array.len());
+        // An `end` resolving before `start` yields an empty slice.
+        let end = resolve_slice_bound(end, array.len()).max(start);
         array[start..end].to_vec()
     }
 
@@ -853,36 +863,21 @@ impl BamlClassArray for PackageBamlImpl {
         array.len() as i64
     }
 
-    #[allow(
-        clippy::cast_sign_loss,
-        clippy::cast_possible_truncation,
-        clippy::cast_possible_wrap
-    )]
+    #[allow(clippy::cast_possible_wrap)]
     fn insert(array: &mut Vec<Value>, item: &Value, idx: i64) -> Result<i64, VmRustFnError> {
         let len = array.len();
-        let Ok(idx_usize) = usize::try_from(idx) else {
+        // A negative `idx` counts from the end; `[0, len]` is the valid range
+        // (inserting at `len` appends).
+        let Some(idx) = resolve_insert_index(idx, len) else {
             return Err(VmBamlError::InvalidArgument {
-                message: format!("array.insert: idx ({idx}) is negative"),
+                message: format!("array.insert: idx ({idx}) is out of range for length {len}"),
             }
             .into());
         };
-        if idx_usize > len {
-            return Err(VmBamlError::InvalidArgument {
-                message: format!(
-                    "array.insert: idx ({idx_usize}) is beyond the array length ({len})"
-                ),
-            }
-            .into());
-        }
-        array.insert(idx_usize, *item);
+        array.insert(idx, *item);
         Ok(array.len() as i64)
     }
 
-    #[allow(
-        clippy::unused_unit,
-        clippy::cast_sign_loss,
-        clippy::cast_possible_truncation
-    )]
     fn splice(
         array: &mut Vec<Value>,
         start: i64,
@@ -890,28 +885,21 @@ impl BamlClassArray for PackageBamlImpl {
         replace: &[Value],
     ) -> Result<(), VmRustFnError> {
         let len = array.len();
-        let Ok(start_usize) = usize::try_from(start) else {
+        // A negative `start` counts from the end; `[0, len]` is the valid range.
+        let Some(start) = resolve_insert_index(start, len) else {
             return Err(VmBamlError::InvalidArgument {
-                message: format!("array.splice: start ({start}) is negative"),
+                message: format!("array.splice: start ({start}) is out of range for length {len}"),
             }
             .into());
         };
-        if start_usize > len {
-            return Err(VmBamlError::InvalidArgument {
-                message: format!(
-                    "array.splice: start ({start_usize}) is beyond the array length ({len})"
-                ),
-            }
-            .into());
-        }
-        let Ok(count_usize) = usize::try_from(count) else {
+        let Ok(count) = usize::try_from(count) else {
             return Err(VmBamlError::InvalidArgument {
                 message: format!("array.splice: count ({count}) is negative"),
             }
             .into());
         };
-        let end = start_usize.saturating_add(count_usize).min(len);
-        array.splice(start_usize..end, replace.iter().copied());
+        let end = start.saturating_add(count).min(len);
+        array.splice(start..end, replace.iter().copied());
         Ok(())
     }
 

@@ -17,15 +17,132 @@ import {
     newFunctionCall as nativeNewFunctionCall,
 } from './native.js';
 import { encodeCallArgs, decodeCallResult } from './proto.js';
+import { baml_core } from './proto/baml_cffi.js';
+import { lowerTypeToWireTy, type BamlType } from './wire_ty.js';
 
 export type Mode = 'sync' | 'async';
 
 /** Sentinel for "argument not supplied" so optional kwargs can be skipped. */
 export const UNSET: unique symbol = Symbol('baml.UNSET');
 
+/**
+ * Generic-binding contract for a callable. `typeParams` are the callee's OWN
+ * `<...>` param names (bound by the caller's `$types` option); `classTypeParams`
+ * are the enclosing generic class's params (bound from the `self` receiver's
+ * `$types` field). Mirrors `define_function`'s `type_params` /
+ * `class_type_params` kwargs in the Python SDK. Omitted/empty ⇒ non-generic.
+ */
+export interface GenericParams {
+    typeParams?: readonly string[];
+    classTypeParams?: readonly string[];
+}
+
 interface BuiltArgs {
     kwargs: Record<string, unknown>;
     ctx?: BamlCallContext;
+    /** The `$types` call option (TypeVar bindings), captured from the trailing
+     * options object. `undefined` when not supplied. */
+    types?: unknown;
+}
+
+type WireTypeArg = [string, baml_core.cffi.v1.IBamlTy];
+
+/**
+ * Resolve the caller's `$types` option onto the callee's own generic params, in
+ * declaration order. Mirrors Python's `_resolve_types_kwarg`: `$types` is an
+ * object keyed by param name and is required iff the callee declares its own
+ * generic params; it must bind exactly those params (no missing, no extras).
+ */
+function resolveTypesOption(typesOpt: unknown, typeParams: readonly string[]): BamlType[] {
+    if (typeParams.length === 0) {
+        if (typesOpt !== undefined && typesOpt !== null) {
+            throw new TypeError(
+                '$types is not accepted here: this function/method declares no generic type ' +
+                'parameters of its own',
+            );
+        }
+        return [];
+    }
+    const example = `{ ${JSON.stringify(typeParams[0])}: 'int' }`;
+    if (typesOpt === undefined || typesOpt === null) {
+        throw new TypeError(
+            `$types is required for this generic call: bind every type parameter in ` +
+            `${JSON.stringify(typeParams)} with an object, e.g. $types: ${example}`,
+        );
+    }
+    if (typeof typesOpt !== 'object' || Array.isArray(typesOpt)) {
+        throw new TypeError(
+            `$types must be an object mapping type-parameter names to types (e.g. ` +
+            `$types: ${example}); got ${typeof typesOpt}`,
+        );
+    }
+    const obj = typesOpt as Record<string, BamlType>;
+    const missing = typeParams.filter((n) => !(n in obj));
+    if (missing.length) {
+        throw new TypeError(
+            `$types is missing binding(s) for ${JSON.stringify(missing)}: every type parameter ` +
+            `in ${JSON.stringify(typeParams)} must be bound.`,
+        );
+    }
+    const extra = Object.keys(obj).filter((k) => !typeParams.includes(k));
+    if (extra.length) {
+        throw new TypeError(
+            `$types has unknown type parameter(s) ${JSON.stringify(extra)}; expected exactly ` +
+            `${JSON.stringify(typeParams)}.`,
+        );
+    }
+    return typeParams.map((n) => obj[n]);
+}
+
+/** The `$types` field of a generic receiver instance (its class TypeVar
+ * bindings), or `undefined` when the receiver carries none. The TS analog of
+ * Python's `pydantic_instance_type_args(self)`. */
+function receiverTypes(self: unknown): Record<string, BamlType> | undefined {
+    if (self != null && typeof self === 'object') {
+        const t = (self as { $types?: unknown }).$types;
+        if (t != null && typeof t === 'object') {
+            return t as Record<string, BamlType>;
+        }
+    }
+    return undefined;
+}
+
+/**
+ * Build the named, order-preserving wire `type_args` for a generic call. Mirrors
+ * Python's `_build_type_args`: enclosing class params (recovered from the `self`
+ * receiver's `$types`) come first, then the callee's own params (`$types`
+ * option) — De Bruijn order. Class params are seeded only when the receiver
+ * actually carries them, so a non-generic receiver keeps the engine's
+ * recover-from-receiver behavior. Returns `[]` when the call binds nothing.
+ */
+function buildTypeArgs(
+    self: unknown,
+    typesOpt: unknown,
+    typeParams: readonly string[],
+    classTypeParams: readonly string[],
+): WireTypeArg[] {
+    const wire: WireTypeArg[] = [];
+    const classTypes = classTypeParams.length ? receiverTypes(self) : undefined;
+    if (classTypes) {
+        for (const name of classTypeParams) {
+            wire.push([name, lowerTypeToWireTy(classTypes[name])]);
+        }
+    }
+    const resolved = resolveTypesOption(typesOpt, typeParams);
+    if (typeParams.length > 0) {
+        if (classTypeParams.length && !classTypes) {
+            // The method's own params sit after the class prefix in De Bruijn
+            // order; without recovered class args we can't position them.
+            throw new TypeError(
+                '$types on a generic method requires a generic receiver carrying its class type ' +
+                'args (a `$types` field on the instance)',
+            );
+        }
+        typeParams.forEach((name, i) => {
+            wire.push([name, lowerTypeToWireTy(resolved[i])]);
+        });
+    }
+    return wire;
 }
 
 interface CallContextBinding {
@@ -63,6 +180,7 @@ function buildArgs(
         built[requiredParamNames[i]] = args[i];
     }
     let ctx: BamlCallContext | undefined;
+    let types: unknown;
     if (args.length > positionalLimit) {
         const opts = args[positionalLimit];
         if (opts === undefined || opts === UNSET) {
@@ -79,6 +197,14 @@ function buildArgs(
                 }
                 continue;
             }
+            if (key === '$types') {
+                // Generic-call TypeVar bindings — captured here and lowered to
+                // wire `type_args` by the factory, never sent as a kwarg value.
+                if (value !== undefined && value !== UNSET) {
+                    types = value;
+                }
+                continue;
+            }
             if (!optionNames.has(key)) {
                 throw new TypeError(`unknown optional argument ${JSON.stringify(key)}`);
             }
@@ -86,7 +212,7 @@ function buildArgs(
             built[key] = value;
         }
     }
-    return { kwargs: built, ctx };
+    return { kwargs: built, ctx, types };
 }
 
 /**
@@ -99,16 +225,26 @@ export function defineFunction(
     mode: Mode,
     requiredParamNames: readonly string[],
     optionalParamNames?: readonly string[] | undefined,
+    generics?: GenericParams | undefined,
 ): (...args: unknown[]) => unknown {
     const requiredNames = [...requiredParamNames];
     const optionNames = [...(optionalParamNames ?? [])];
+    // A free function / static method binds only its OWN generic params (a
+    // generic receiver is never in play here), so `classTypeParams` is unused.
+    const typeParams = generics?.typeParams ?? [];
+    const isGeneric = typeParams.length > 0;
+    // Eagerly reject `$types` on a non-generic call, matching the generic path's
+    // strict binding contract (mirrors Python's `is_generic` gate).
+    const typeArgsFor = (built: BuiltArgs): WireTypeArg[] =>
+        isGeneric ? buildTypeArgs(undefined, built.types, typeParams, []) : [];
     if (mode === 'sync') {
         return (...args: unknown[]): unknown => {
-            const { kwargs: merged, ctx } = buildArgs(args, requiredNames, optionNames);
+            const built = buildArgs(args, requiredNames, optionNames);
+            const typeArgs = typeArgsFor(built);
             const rt = getRuntime();
             const callId = newFunctionCall();
-            const argsProto = encodeCallArgs(merged, { syncMode: true, callId });
-            const callCtxBinding = attachCallContext(ctx, callId);
+            const argsProto = encodeCallArgs(built.kwargs, { syncMode: true, callId, typeArgs });
+            const callCtxBinding = attachCallContext(built.ctx, callId);
             let resultBytes: Buffer;
             try {
                 resultBytes = rt.callFunctionSync(bamlFqn, argsProto, null, null);
@@ -120,11 +256,12 @@ export function defineFunction(
     }
     if (mode === 'async') {
         return async (...args: unknown[]): Promise<unknown> => {
-            const { kwargs: merged, ctx } = buildArgs(args, requiredNames, optionNames);
+            const built = buildArgs(args, requiredNames, optionNames);
+            const typeArgs = typeArgsFor(built);
             const rt = getRuntime();
             const callId = newFunctionCall();
-            const argsProto = encodeCallArgs(merged, { callId });
-            const callCtxBinding = attachCallContext(ctx, callId);
+            const argsProto = encodeCallArgs(built.kwargs, { callId, typeArgs });
+            const callCtxBinding = attachCallContext(built.ctx, callId);
             let resultBytes: Buffer;
             try {
                 resultBytes = await rt.callFunction(bamlFqn, argsProto, null, null);
@@ -149,11 +286,18 @@ export function defineInstanceFunction(
     mode: Mode,
     requiredParamNames: readonly string[],
     optionalParamNames?: readonly string[] | undefined,
+    generics?: GenericParams | undefined,
 ): { bind(self: unknown): (...args: unknown[]) => unknown } {
     const requiredNames = [...requiredParamNames];
     const optionNames = [...(optionalParamNames ?? [])];
     const selfName = requiredNames[0] ?? 'self';
     const rest = requiredNames.slice(1);
+    // An instance method binds its own `<...>` params (caller's `$types`) AND
+    // the enclosing class's params, recovered from the `self` receiver's
+    // `$types` field. Mirrors Python's `class_type_params` for instance methods.
+    const typeParams = generics?.typeParams ?? [];
+    const classTypeParams = generics?.classTypeParams ?? [];
+    const isGeneric = typeParams.length > 0 || classTypeParams.length > 0;
 
     const makeArgs = (self: unknown, args: unknown[]): BuiltArgs => {
         const built = buildArgs(args, rest, optionNames);
@@ -163,13 +307,16 @@ export function defineInstanceFunction(
 
     return {
         bind(self: unknown): (...args: unknown[]) => unknown {
+            const typeArgsFor = (built: BuiltArgs): WireTypeArg[] =>
+                isGeneric ? buildTypeArgs(self, built.types, typeParams, classTypeParams) : [];
             if (mode === 'sync') {
                 return (...args: unknown[]): unknown => {
-                    const { kwargs: merged, ctx } = makeArgs(self, args);
+                    const built = makeArgs(self, args);
+                    const typeArgs = typeArgsFor(built);
                     const rt = getRuntime();
                     const callId = newFunctionCall();
-                    const argsProto = encodeCallArgs(merged, { syncMode: true, callId });
-                    const callCtxBinding = attachCallContext(ctx, callId);
+                    const argsProto = encodeCallArgs(built.kwargs, { syncMode: true, callId, typeArgs });
+                    const callCtxBinding = attachCallContext(built.ctx, callId);
                     let resultBytes: Buffer;
                     try {
                         resultBytes = rt.callFunctionSync(bamlFqn, argsProto, null, null);
@@ -181,11 +328,12 @@ export function defineInstanceFunction(
             }
             if (mode === 'async') {
                 return async (...args: unknown[]): Promise<unknown> => {
-                    const { kwargs: merged, ctx } = makeArgs(self, args);
+                    const built = makeArgs(self, args);
+                    const typeArgs = typeArgsFor(built);
                     const rt = getRuntime();
                     const callId = newFunctionCall();
-                    const argsProto = encodeCallArgs(merged, { callId });
-                    const callCtxBinding = attachCallContext(ctx, callId);
+                    const argsProto = encodeCallArgs(built.kwargs, { callId, typeArgs });
+                    const callCtxBinding = attachCallContext(built.ctx, callId);
                     let resultBytes: Buffer;
                     try {
                         resultBytes = await rt.callFunction(bamlFqn, argsProto, null, null);

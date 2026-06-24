@@ -57,7 +57,8 @@ async fn http_fetch_and_text() {
     insta::assert_snapshot!(stabilize_bytecode(&output.bytecode, &uri), @r#"
     function main() -> string {
         load_const "{URI}/data"
-        sys_op baml.http.fetch
+        load_const <omitted>
+        call baml.http.fetch
         sys_op baml.http.Response.text
         return
     }
@@ -91,7 +92,8 @@ async fn http_response_status() {
     insta::assert_snapshot!(stabilize_bytecode(&output.bytecode, &uri), @r#"
     function main() -> int {
         load_const "{URI}/status"
-        sys_op baml.http.fetch
+        load_const <omitted>
+        call baml.http.fetch
         load_field .status_code
         return
     }
@@ -124,7 +126,8 @@ async fn foreign_class_field_access_compiles_correctly() {
     insta::assert_snapshot!(stabilize_bytecode(&output.bytecode, &uri), @r#"
     function main() -> int {
         load_const "{URI}/test"
-        sys_op baml.http.fetch
+        load_const <omitted>
+        call baml.http.fetch
         load_field .status_code
         return
     }
@@ -153,7 +156,8 @@ async fn http_response_ok_true() {
     insta::assert_snapshot!(stabilize_bytecode(&output.bytecode, &uri), @r#"
     function main() -> bool {
         load_const "{URI}/ok"
-        sys_op baml.http.fetch
+        load_const <omitted>
+        call baml.http.fetch
         call baml.http.Response.ok
         return
     }
@@ -182,7 +186,8 @@ async fn http_response_ok_false() {
     insta::assert_snapshot!(stabilize_bytecode(&output.bytecode, &uri), @r#"
     function main() -> bool {
         load_const "{URI}/notfound"
-        sys_op baml.http.fetch
+        load_const <omitted>
+        call baml.http.fetch
         call baml.http.Response.ok
         return
     }
@@ -212,7 +217,8 @@ async fn http_response_url() {
     insta::assert_snapshot!(stabilize_bytecode(&output.bytecode, &uri), @r#"
     function main() -> string {
         load_const "{URI}/endpoint"
-        sys_op baml.http.fetch
+        load_const <omitted>
+        call baml.http.fetch
         load_field .url
         return
     }
@@ -248,6 +254,48 @@ async fn http_fetch_network_error() {
 }
 
 #[tokio::test]
+async fn http_fetch_timeout_fires() {
+    // A raw TCP listener that accepts connections but never writes an HTTP
+    // response, so the request hangs after connecting. A short total timeout
+    // must surface as baml.errors.Timeout.
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap().to_string();
+    let server = tokio::spawn(async move {
+        loop {
+            if let Ok((conn, _)) = listener.accept().await {
+                // Hold the connection open, silent, past the client's deadline.
+                tokio::spawn(async move {
+                    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+                    drop(conn);
+                });
+            }
+        }
+    });
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> string {{
+                let response = baml.http.fetch(
+                    "http://{addr}/",
+                    timeout = baml.time.Duration.from_milliseconds(100n),
+                );
+                response.text()
+            }}
+        "#
+    ));
+    server.abort();
+
+    let err = output
+        .result
+        .expect_err("fetch with a 100ms timeout against a silent server should time out")
+        .to_string();
+    assert!(
+        err.contains("baml.errors.Timeout"),
+        "expected a baml.errors.Timeout throw, got: {err}"
+    );
+}
+
+#[tokio::test]
 async fn http_response_text_consumed() {
     let (_server, uri) = mock(&[MockEndpoint {
         path: "/once",
@@ -270,7 +318,8 @@ async fn http_response_text_consumed() {
     insta::assert_snapshot!(stabilize_bytecode(&output.bytecode, &uri), @r#"
     function main() -> string {
         load_const "{URI}/once"
-        sys_op baml.http.fetch
+        load_const <omitted>
+        call baml.http.fetch
         store_var response
         load_var response
         sys_op baml.http.Response.text
@@ -283,6 +332,6 @@ async fn http_response_text_consumed() {
     insta::assert_snapshot!(output.result.unwrap_err().to_string(), @r#"
     Traceback (most recent call last):
       File "test.baml", line 5, in user.main
-    uncaught throw: Instance { class_name: "baml.errors.Io", fields: {"message": String("Response body has already been consumed")} }
+    uncaught throw: Instance { class_name: "baml.errors.Io", type_args: [], fields: {"message": String("Response body has already been consumed")} }
     "#);
 }

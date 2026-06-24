@@ -82,7 +82,9 @@ pub enum DiagnosticId {
     DuplicateAttribute,
     UnknownAttribute,
     InvalidAttributeContext,
-    UnknownGeneratorProperty,
+    /// A `generator { … }` block was found in `.baml`; code generators are
+    /// now configured in `baml.toml` under `[generator.<name>]`.
+    GeneratorBlockUnsupported,
     MissingGeneratorProperty,
     InvalidGeneratorPropertyValue,
     ReservedFieldName,
@@ -140,6 +142,9 @@ pub enum DiagnosticId {
 
     // Type literal errors (E0033)
     UnsupportedFloatLiteral,
+
+    // Integer literal out of `int` (i63) range (E0139)
+    IntegerLiteralOutOfRange,
 
     // Map type errors (E0039)
     InvalidMapArity,
@@ -256,6 +261,14 @@ pub enum DiagnosticId {
     /// only be implemented for a concrete type (or a concrete type constructor
     /// such as `T[]` / `map<K, V>`, or a blanket type parameter).
     ImplTargetNotConcrete,
+    /// `return`/`break`/`continue` inside a `defer` body that would escape the
+    /// defer (BEP-042). Only `throw` may leave a defer.
+    DeferControlFlowEscape,
+    /// An out-of-body `implement<P..> I<args..> for T` violates the orphan rule
+    /// (BEP-044, Rust's RFC 2451 "covered" rule): the interface is foreign and no
+    /// type local to this package appears in `[T, args..]` before any uncovered
+    /// type parameter.
+    ImplViolatesOrphanRule,
     /// An `implements` block is missing a required interface field.
     MissingInterfaceField,
     /// A class implements an interface that `requires` other interfaces,
@@ -278,6 +291,9 @@ pub enum DiagnosticId {
     OverlappingImplements,
     /// An interface `requires` a type that is not an interface (e.g. a class or enum).
     InterfaceRequiresNonInterface,
+    /// A class declares a `to_string` method directly; it must be provided by
+    /// implementing the `baml.ToString` interface instead.
+    ToStringMustImplementInterface,
 }
 
 impl DiagnosticId {
@@ -316,7 +332,7 @@ impl DiagnosticId {
             DiagnosticId::DuplicateAttribute => "E0014",
             DiagnosticId::UnknownAttribute => "E0015",
             DiagnosticId::InvalidAttributeContext => "E0016",
-            DiagnosticId::UnknownGeneratorProperty => "E0017",
+            DiagnosticId::GeneratorBlockUnsupported => "E0017",
             DiagnosticId::MissingGeneratorProperty => "E0018",
             DiagnosticId::InvalidGeneratorPropertyValue => "E0019",
             DiagnosticId::ReservedFieldName => "E0020",
@@ -364,6 +380,7 @@ impl DiagnosticId {
 
             // Type literal errors
             DiagnosticId::UnsupportedFloatLiteral => "E0033",
+            DiagnosticId::IntegerLiteralOutOfRange => "E0139",
 
             // Map type errors
             DiagnosticId::InvalidMapArity => "E0039",
@@ -466,6 +483,9 @@ impl DiagnosticId {
             DiagnosticId::SelfInInterfaceField => "E0136",
             // E0137 is taken by `IrrefutablePatternInWhileLet`; use the next free code.
             DiagnosticId::ImplTargetNotConcrete => "E0138",
+            DiagnosticId::ImplViolatesOrphanRule => "E0139",
+            DiagnosticId::ToStringMustImplementInterface => "E0140",
+            DiagnosticId::DeferControlFlowEscape => "E0141",
         }
     }
 }

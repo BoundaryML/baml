@@ -47,7 +47,9 @@ async fn registry_new_copy_objects_true_returns_instance() {
         .expect("testing.TestCollector.new should succeed");
 
     match &result {
-        BexExternalValue::Instance { class_name, fields } => {
+        BexExternalValue::Instance {
+            class_name, fields, ..
+        } => {
             assert_eq!(
                 class_name, "testing.TestCollector",
                 "expected class_name 'testing.TestCollector', got '{class_name}'"

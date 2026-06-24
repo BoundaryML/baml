@@ -66,6 +66,29 @@ pub enum TirTypeError {
         lhs: Ty,
         rhs: Ty,
     },
+    /// Ordering (`<` `<=` `>` `>=`) between two different types. Ordering is exact-type:
+    /// both operands must have the same type (subtyping is not enough — only `==` spans
+    /// types), so this fires even when one operand is a subtype of the other.
+    OrderingDifferentTypes {
+        op: baml_compiler2_ast::BinaryOp,
+        lhs: Ty,
+        rhs: Ty,
+    },
+    /// Ordering (`<` `<=` `>` `>=`) on a common type that does not implement
+    /// `baml.ops.Compare`, so no ordering is defined for it.
+    OrderingRequiresCompare {
+        op: baml_compiler2_ast::BinaryOp,
+        ty: Ty,
+    },
+    /// An equality (`==` / `!=`) whose operand types are provably disjoint — no
+    /// value of one can ever equal a value of the other — so the result is a
+    /// constant (`==` always `false`, `!=` always `true`). A warning, not an
+    /// error: the comparison is valid, just pointless.
+    ComparisonAlwaysDisjoint {
+        op: baml_compiler2_ast::BinaryOp,
+        lhs: Ty,
+        rhs: Ty,
+    },
     /// Invalid operand type for a unary operator (e.g. `-"hello"`).
     InvalidUnaryOp {
         op: baml_compiler2_ast::UnaryOp,
@@ -154,6 +177,10 @@ pub enum TirTypeError {
     /// loop never exits via pattern failure (an unconditional infinite loop).
     /// Suggest a plain `while`/`loop` instead.
     IrrefutablePatternInWhileLet,
+    /// `return`/`break`/`continue` inside a `defer` body that would escape the
+    /// defer (BEP-042). Only `throw` may leave a defer. `keyword` is the
+    /// offending control-flow keyword.
+    DeferControlFlowEscape { keyword: &'static str },
     /// Catch binding cannot be typed as `any` or `unknown`.
     InvalidCatchBindingType { type_name: String },
     /// Inferred escaping throws are not covered by the declared throws contract.
@@ -191,6 +218,11 @@ pub enum TirTypeError {
     /// Type arguments were supplied for a type that is not generic
     /// (enums and type aliases cannot take type parameters).
     TypeIsNotGeneric { type_name: Name, kind: &'static str },
+    /// A generic function was referenced as a value without specialization
+    /// (`let f = identity` where `identity<T>`). A generic function is a type
+    /// constructor — it must be specialized (`identity<int>`) or have its type
+    /// arguments inferable from context before it becomes a usable value.
+    GenericFunctionValueNotSpecialized { name: Name },
     /// A lambda parameter has no type annotation and no expected type context
     /// to infer the type from.
     CannotInferLambdaParamType { param_name: Name },
@@ -230,6 +262,23 @@ pub enum TirTypeError {
         /// The full expression text (e.g. `a.name`)
         expr: String,
     },
+    /// BEP-049 §10: a backtick template was attached to a tag that resolves to
+    /// something that isn't a function (so it can't be a tagged-string tag).
+    TaggedTagNotAFunction { name: Name },
+    /// BEP-049 §10: the tag resolves to a function, but it lacks the
+    /// `//baml:tagged_string` marker that makes it usable as a tagged-template tag.
+    TaggedTagNotMarked { name: Name },
+    /// BEP-049 §10: a `//baml:tagged_string` tag's first parameter is not a
+    /// well-formed `body: (...) -> baml.TaggedString` (missing / wrong name /
+    /// not a lambda / lambda return type isn't `baml.TaggedString`).
+    TaggedTagBadBodyParam { name: Name },
+    /// BEP-049 §11: an untagged `${expr}` interpolates a nullable value. The
+    /// implicit `.to_string()` can't run on a possibly-null value; the user
+    /// must coalesce (`${x ?? "…"}`) or unwrap first.
+    InterpolatedValueMaybeNull { ty: Ty },
+    /// BEP-049 §11: an untagged `${expr}` interpolates a value whose type has
+    /// no `to_string` method, so it can't be implicitly stringified.
+    TypeNotInterpolatable { ty: Ty },
 
     /// BEP-044 §"Method Disambiguation": an unqualified call resolves to
     /// a method declared by two or more interfaces — the receiver carries
@@ -330,6 +379,10 @@ pub enum TirTypeError {
     /// `$id` used as a call-site argument label (`foo($id = x)`). Overrides
     /// are set inside the callee body with `$id = ...`, not by the caller.
     RuntimeIdCallSiteArgument,
+    /// An integer literal (or a constant-folded integer expression) is outside
+    /// the representable `int` range `[-2^62, 2^62-1]`. `int` is 63-bit; larger
+    /// magnitudes need a `bigint` literal (`n` suffix).
+    IntegerLiteralOutOfRange { value: i64 },
 }
 
 impl fmt::Display for TirTypeError {
@@ -397,7 +450,36 @@ impl fmt::Display for TirTypeError {
             TirTypeError::InvalidBinaryOp { op, lhs, rhs } => {
                 write!(
                     f,
-                    "operator `{op:?}` cannot be applied to `{}` and `{}`",
+                    "operator `{op}` cannot be applied to `{}` and `{}`",
+                    lhs.render_user_facing(),
+                    rhs.render_user_facing()
+                )
+            }
+            TirTypeError::OrderingDifferentTypes { op, lhs, rhs } => {
+                write!(
+                    f,
+                    "cannot order `{}` and `{}` with `{op}`: ordering requires both operands \
+                     to have the same type",
+                    lhs.render_user_facing(),
+                    rhs.render_user_facing()
+                )
+            }
+            TirTypeError::OrderingRequiresCompare { op, ty } => {
+                write!(
+                    f,
+                    "`{}` does not implement `Compare`, so it cannot be ordered with `{op}`",
+                    ty.render_user_facing()
+                )
+            }
+            TirTypeError::ComparisonAlwaysDisjoint { op, lhs, rhs } => {
+                let always = if matches!(op, baml_compiler2_ast::BinaryOp::Ne) {
+                    "true"
+                } else {
+                    "false"
+                };
+                write!(
+                    f,
+                    "`{}` and `{}` share no value, so this comparison is always {always}",
                     lhs.render_user_facing(),
                     rhs.render_user_facing()
                 )
@@ -405,7 +487,7 @@ impl fmt::Display for TirTypeError {
             TirTypeError::InvalidUnaryOp { op, operand } => {
                 write!(
                     f,
-                    "operator `{op:?}` cannot be applied to `{}`",
+                    "operator `{op}` cannot be applied to `{}`",
                     operand.render_user_facing()
                 )
             }
@@ -539,6 +621,10 @@ impl fmt::Display for TirTypeError {
                 f,
                 "irrefutable `while let` pattern; the loop never exits by pattern failure — use a plain `while`/`loop` instead"
             ),
+            TirTypeError::DeferControlFlowEscape { keyword } => write!(
+                f,
+                "`{keyword}` cannot leave a `defer` body; only `throw` may propagate out of a defer"
+            ),
             TirTypeError::InvalidCatchBindingType { type_name } => write!(
                 f,
                 "invalid catch binding type `{type_name}`; use a concrete type instead"
@@ -613,6 +699,13 @@ impl fmt::Display for TirTypeError {
                     "{kind} `{type_name}` is not generic and cannot take type arguments"
                 )
             }
+            TirTypeError::GenericFunctionValueNotSpecialized { name } => {
+                write!(
+                    f,
+                    "generic function `{name}` must be specialized before it is used \
+                    as a value (e.g. `{name}<int>`)"
+                )
+            }
             TirTypeError::TypeParamShadowed {
                 param_name,
                 class_name,
@@ -685,6 +778,28 @@ impl fmt::Display for TirTypeError {
                     "did you mean `{suggested}`? `{expr}` does not handle the case when `{base}` is null"
                 )
             }
+            TirTypeError::TaggedTagNotAFunction { name } => write!(
+                f,
+                "`{name}` is not a function — a tagged-template tag must be a function marked `//baml:tagged_string`"
+            ),
+            TirTypeError::TaggedTagNotMarked { name } => write!(
+                f,
+                "`{name}` is not a tagged-string function — only functions marked `//baml:tagged_string` can be used as a tagged-template tag"
+            ),
+            TirTypeError::TaggedTagBadBodyParam { name } => write!(
+                f,
+                "the first parameter of tagged-string function `{name}` must be `body: (...) -> baml.TaggedString`"
+            ),
+            TirTypeError::InterpolatedValueMaybeNull { ty } => write!(
+                f,
+                "cannot interpolate a value of type `{}` — it may be null; coalesce with `?? \"…\"` or unwrap it first",
+                ty.render_user_facing()
+            ),
+            TirTypeError::TypeNotInterpolatable { ty } => write!(
+                f,
+                "cannot interpolate a value of type `{}` — it has no `to_string` method",
+                ty.render_user_facing()
+            ),
             TirTypeError::AmbiguousInterfaceMethod {
                 class_name,
                 method_name,
@@ -820,6 +935,12 @@ impl fmt::Display for TirTypeError {
                 f,
                 "`$id` cannot be set at the call site; assign `$id = ...` inside the function \
                  body instead"
+            ),
+            TirTypeError::IntegerLiteralOutOfRange { value } => write!(
+                f,
+                "integer literal `{value}` is out of range for `int` \
+                 (which holds -4611686018427387904 to 4611686018427387903); \
+                 append `n` to write it as a `bigint`"
             ),
         }
     }
@@ -1122,20 +1243,67 @@ impl<'db> InferContext<'db> {
         self.diagnostics.borrow_mut().diagnostics.truncate(n);
     }
 
-    pub fn remap_diagnostics_after(&self, n: usize, source_map: &AstSourceMap) {
-        let mut diagnostics = self.diagnostics.borrow_mut();
-        for diagnostic in diagnostics.diagnostics.iter_mut().skip(n) {
-            diagnostic.primary = DiagnosticLocation::Span(match diagnostic.primary {
-                DiagnosticLocation::Expr(id) => source_map.expr_span(id),
-                DiagnosticLocation::ExprMember(id) => source_map.member_access_member_span(id),
-                DiagnosticLocation::ExprSegment(id, segment_idx) => {
-                    source_map.path_segment_span(id, segment_idx)
-                }
-                DiagnosticLocation::Stmt(id) => source_map.stmt_span(id),
-                DiagnosticLocation::TypeAnnot(id) => source_map.type_annotation_span(id),
-                DiagnosticLocation::Span(range) => range,
-            });
+    /// Drop every diagnostic recorded after index `n` EXCEPT genuine
+    /// `UnresolvedName`s. Used by the untagged-backtick (`Default` template)
+    /// path: inferring the desugared `elaborated` concat synthesizes
+    /// `expr.to_string()` member calls and a `+`-fold, whose failures
+    /// (`NotCallable`/`UnresolvedMember`) are noise pointing at synthetic spans
+    /// (the strict-stringify errors are re-reported on the original `${…}` spans
+    /// by [`check_template_interps_stringable`](crate::builder)). But a bare
+    /// unresolved *name* — `${ nope }`, or `nope` on a spliced `let`'s RHS — is
+    /// never introduced by that desugaring (it emits member/call nodes and a
+    /// guaranteed-bound accumulator, never a fresh name reference), so an
+    /// `UnresolvedName` here is always genuine user code. Keeping it surfaces the
+    /// real error and prevents the unresolved `Ty::Unknown` from slipping through
+    /// to MIR, where runtime lowering of an error-recovery type ICEs.
+    pub fn retain_user_name_diagnostics(&self, n: usize) {
+        let mut diags = self.diagnostics.borrow_mut();
+        let len = diags.diagnostics.len();
+        if n >= len {
+            return;
         }
+        // Keep `[..n]` verbatim; from `[n..]` keep only `UnresolvedName`.
+        let tail: Vec<TirDiagnostic<'db>> = diags
+            .diagnostics
+            .drain(n..)
+            .filter(|d| matches!(d.error, TirTypeError::UnresolvedName { .. }))
+            .collect();
+        diags.diagnostics.extend(tail);
+    }
+
+    /// Freeze the source spans of diagnostics recorded at index `[start..]`,
+    /// resolving their arena-relative locations against `source_map` and
+    /// replacing them with absolute [`DiagnosticLocation::Span`]s.
+    ///
+    /// Used when a nested lambda body is inferred *inline* in an enclosing
+    /// scope (`infer_lambda_body`): those diagnostics carry the lambda's own
+    /// arena IDs but are recorded in the enclosing scope's diagnostic set, so
+    /// at render time they'd be resolved against the *enclosing* scope's source
+    /// map — which can't resolve a nested-arena ID, collapsing the span to
+    /// `0..0`. Resolving them here, while the lambda's source map is in hand,
+    /// makes them render correctly regardless of which scope renders them.
+    /// Already-frozen (`Span`) locations and deeper-lambda diagnostics (frozen
+    /// by their own `infer_lambda_body`) are left unchanged.
+    pub fn freeze_diagnostic_spans_from(&self, start: usize, source_map: &AstSourceMap) {
+        let mut diags = self.diagnostics.borrow_mut();
+        let len = diags.diagnostics.len();
+        for d in &mut diags.diagnostics[start.min(len)..] {
+            d.primary = Self::freeze_location(&d.primary, source_map);
+        }
+    }
+
+    fn freeze_location(loc: &DiagnosticLocation, sm: &AstSourceMap) -> DiagnosticLocation {
+        let span = match loc {
+            DiagnosticLocation::Expr(id) => sm.expr_span(*id),
+            DiagnosticLocation::ExprMember(id) => sm.member_access_member_span(*id),
+            DiagnosticLocation::ExprSegment(id, seg) => sm.path_segment_span(*id, *seg),
+            DiagnosticLocation::Stmt(id) => sm.stmt_span(*id),
+            DiagnosticLocation::TypeAnnot(id) => sm.type_annotation_span(*id),
+            // Already absolute (e.g. a deeper lambda's frozen diagnostic, or a
+            // class-field span) — leave it.
+            DiagnosticLocation::Span(r) => *r,
+        };
+        DiagnosticLocation::Span(span)
     }
 
     pub fn scope(&self) -> ScopeId<'db> {

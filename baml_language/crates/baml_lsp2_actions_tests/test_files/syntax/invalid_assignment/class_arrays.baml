@@ -49,26 +49,44 @@ function ClassArrayAssignments() -> int {
 //     ╭─[ invalid_assignment_class_arrays.baml:25:6 ]
 //     │
 //  25 │     p1 = [Animal { species: "Bird", legs: 2 }];
-//     │         ───────────────────┬──────────────────  
+//     │         ───────────────────┬──────────────────
 //     │                            ╰──────────────────── type mismatch: expected Person[], got Animal[]
-//     │ 
+//     │
 //     │ Note: Error code: E0001
 // ────╯
 // error: type mismatch: expected Animal[], got Person[]
 //     ╭─[ invalid_assignment_class_arrays.baml:29:6 ]
 //     │
 //  29 │     a1 = [Person { name: "D", age: 4 }];
-//     │         ───────────────┬───────────────  
+//     │         ───────────────┬───────────────
 //     │                        ╰───────────────── type mismatch: expected Animal[], got Person[]
-//     │ 
+//     │
 //     │ Note: Error code: E0001
 // ────╯
 // error: type mismatch: expected Person[], got Person
 //     ╭─[ invalid_assignment_class_arrays.baml:33:7 ]
 //     │
 //  33 │     p2 = Person { name: "F", age: 6 };
-//     │          ──────────────┬─────────────  
+//     │          ──────────────┬─────────────
 //     │                        ╰─────────────── type mismatch: expected Person[], got Person
-//     │ 
+//     │
+//     │ Note: Error code: E0001
+// ────╯
+// error: type mismatch: expected Person, got Person[]
+//     ╭─[ invalid_assignment_class_arrays.baml:37:6 ]
+//     │
+//  37 │     p3 = [Person { name: "H", age: 8 }];
+//     │         ───────────────┬───────────────
+//     │                        ╰───────────────── type mismatch: expected Person, got Person[]
+//     │
+//     │ Note: Error code: E0001
+// ────╯
+// error: type mismatch: expected int[], got Person[]
+//     ╭─[ invalid_assignment_class_arrays.baml:41:8 ]
+//     │
+//  41 │     nums = [Person { name: "I", age: 9 }];
+//     │           ───────────────┬───────────────
+//     │                          ╰───────────────── type mismatch: expected int[], got Person[]
+//     │
 //     │ Note: Error code: E0001
 // ────╯
