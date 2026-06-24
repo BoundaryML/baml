@@ -278,7 +278,7 @@ async fn nested_override_in_map_is_honored() {
     "#
     ))
     .await;
-    assert_eq!(out, "{a: (1, 2)}");
+    assert_eq!(out, "{\"a\": (1, 2)}");
 }
 
 #[tokio::test]

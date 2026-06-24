@@ -293,7 +293,8 @@ enum DisplaySnap {
     Str(String),
     /// An array (or `uint8array`) — elements rendered as `[a, b, c]`.
     Seq(Vec<Value>),
-    /// A map — entries rendered as `{k: v, ...}` (keys are always strings).
+    /// A map — entries rendered as `{"k": v, ...}` (keys are always strings, and
+    /// are quoted so keys containing `:`/`,` stay unambiguous).
     Entries(Vec<(String, Value)>),
     /// A class instance — `ClassName { field: value, ... }`.
     Instance(String, Vec<(String, Value)>),
@@ -410,7 +411,7 @@ fn render_to_string(
             let mut parts: Vec<String> = Vec::with_capacity(entries.len());
             for (k, v) in &entries {
                 parts.push(format!(
-                    "{k}: {}",
+                    "{k:?}: {}",
                     render_to_string(vm, *v, true, pending, results, counter)
                 ));
             }
