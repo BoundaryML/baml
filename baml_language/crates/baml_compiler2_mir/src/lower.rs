@@ -7230,10 +7230,17 @@ impl<'db> LoweringContext<'db> {
         // normal paths. Key on the callee's TIR type, not on resolution presence: a
         // generic typevar receiver records a placeholder resolution yet still has an
         // untyped callee, and must take the fallback rather than ICE on it.
+        // A nullable receiver types the missing member as `Unknown | null`, so test
+        // the non-null part (matches the TIR fallback gate).
         let callee_untyped = self
             .expr_types
             .get(&self.expr_metadata_key(callee))
-            .is_none_or(|t| matches!(t, Tir2Ty::Unknown { .. } | Tir2Ty::Error { .. }));
+            .is_none_or(|t| {
+                matches!(
+                    baml_compiler2_tir::narrowing::remove_null(t),
+                    Tir2Ty::Unknown { .. } | Tir2Ty::Error { .. }
+                )
+            });
         if !callee_untyped {
             return false;
         }

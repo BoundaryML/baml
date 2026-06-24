@@ -260,6 +260,36 @@ async fn zzz_throws_never2() {
 }
 
 #[tokio::test]
+async fn optional_receiver_to_string() {
+    // `.to_string()` works on an optional receiver: a present value renders
+    // normally, and `null` renders as "null" (string.from is total over null).
+    assert_eq!(
+        expect_string(
+            r#"
+        function main() -> string {
+            let x: int? = 5
+            return x.to_string()
+        }
+    "#,
+        )
+        .await,
+        "5"
+    );
+    assert_eq!(
+        expect_string(
+            r#"
+        function main() -> string {
+            let x: int? = null
+            return x.to_string()
+        }
+    "#,
+        )
+        .await,
+        "null"
+    );
+}
+
+#[tokio::test]
 async fn captured_root_to_string() {
     // `.to_string()` on a *captured* (closure) root must lower through the
     // fallback too — the MIR hook handles captured roots via Place::Capture,

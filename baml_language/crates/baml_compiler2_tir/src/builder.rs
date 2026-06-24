@@ -5825,17 +5825,32 @@ impl<'db> TypeInferenceBuilder<'db> {
                 Expr::Path(segs) => self.locals.contains_key(&segs[0]),
                 _ => true,
             };
-        let mut to_string_probe_ty: Option<Ty> = None;
         if to_string_callee {
+            // Probe whether a real `to_string` resolves. Snapshot the diagnostic
+            // count at the start and again after the receiver: a MemberAccess base
+            // may be a complex expr (`f(bad).to_string()`) that legitimately errors
+            // while still typing to a known type, so infer it first and keep its
+            // errors across a fallback. A Path receiver is a pure dotted name
+            // (errors only by failing to resolve), so it shares the start baseline.
+            let start = self.context.diagnostic_count();
+            let after_recv = match &body.exprs[callee] {
+                Expr::MemberAccess { base, .. } => {
+                    self.infer_expr(*base, body);
+                    self.context.diagnostic_count()
+                }
+                _ => start,
+            };
             let probe_ty = self.infer_expr(callee, body);
-            // A real `to_string` (only via `implements baml.ToString`) resolves to
-            // a usable type; an absent one resolves to `Unknown` (and emits an
-            // `UnresolvedMember`). Decide on the resolved type, NOT the diagnostic
-            // count — the receiver may have raised its own (legitimate) errors.
-            let unresolved = matches!(probe_ty, Ty::Unknown { .. } | Ty::Error { .. });
-            // Apply only when the receiver type is known and non-nullable (or pure
-            // null — `string.from(null)` is `"null"`), so a broken or nullable
-            // receiver keeps its own error instead of being papered over.
+            // No real `to_string` (only `implements baml.ToString` provides one)
+            // leaves the callee `Unknown`/`Error`; a nullable receiver makes the
+            // member access `Unknown | null`, so test the non-null part.
+            let unresolved = matches!(
+                crate::narrowing::remove_null(&probe_ty),
+                Ty::Unknown { .. } | Ty::Error { .. }
+            );
+            // Fire on any known receiver type, including nullable, since
+            // `string.from` is total and renders `null` as `"null"`. A broken
+            // (`Unknown`/`Error`) receiver is left to its own error.
             let recv_ty = match &body.exprs[callee] {
                 Expr::MemberAccess { base, .. } => self.expressions.get(base).cloned(),
                 Expr::Path(segs) => self
@@ -5844,14 +5859,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .cloned(),
                 _ => None,
             };
-            let recv_ok = recv_ty.as_ref().is_some_and(|t| {
-                !matches!(t, Ty::Unknown { .. } | Ty::Error { .. })
-                    && (matches!(t, Ty::Null { .. }) || crate::narrowing::remove_null(t) == *t)
-            });
-            if unresolved && recv_ok {
-                // Roll back ONLY this call's `to_string` UnresolvedMember (the last
-                // diagnostic, emitted after the receiver); keep any receiver errors.
-                self.context.pop_last_unresolved_member();
+            let recv_known = recv_ty
+                .as_ref()
+                .is_some_and(|t| !matches!(t, Ty::Unknown { .. } | Ty::Error { .. }));
+            if unresolved && recv_known {
+                // Drop the `to_string` member-resolution errors (the
+                // `UnresolvedMember`, plus the "handle null first" hint for a
+                // nullable receiver); keep the receiver's own errors (before
+                // `after_recv`).
+                self.context.truncate_diagnostics(after_recv);
                 let ty = Ty::String {
                     attr: TyAttr::default(),
                 };
@@ -5859,10 +5875,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.record_expr_type(expr_id, ty.clone());
                 return ty;
             }
-            // Real method, or broken/nullable receiver: keep the probe's result
-            // (and its diagnostics) and continue with the normal call machinery,
-            // reusing `probe_ty` instead of re-inferring the callee below.
-            to_string_probe_ty = Some(probe_ty);
+            // Not the sugar (real method, or broken receiver): discard everything
+            // the probe emitted and let the normal call machinery below re-infer
+            // the callee once, so a complex receiver's errors are not double-
+            // reported (the explicit receiver infer above would otherwise duplicate
+            // them).
+            self.context.truncate_diagnostics(start);
         }
 
         let is_method_call = match &body.exprs[callee] {
@@ -5896,7 +5914,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             &body.exprs[callee],
             Expr::Path(segs) if segs.len() == 1 && self.locals.contains_key(&segs[0])
         );
-        let callee_ty = to_string_probe_ty.unwrap_or_else(|| self.infer_expr(callee, body));
+        let callee_ty = self.infer_expr(callee, body);
 
         // When explicit type args are written at the call site (e.g. `foo<int, T>(x)`),
         // validate arity and resolve them to a pre-computed bindings map.

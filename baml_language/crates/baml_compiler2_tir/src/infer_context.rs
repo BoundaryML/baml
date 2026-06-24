@@ -1243,26 +1243,6 @@ impl<'db> InferContext<'db> {
         self.diagnostics.borrow_mut().diagnostics.truncate(n);
     }
 
-    /// If the most recently recorded diagnostic is an `UnresolvedMember`, drop it
-    /// and return `true`; otherwise leave the buffer untouched and return `false`.
-    ///
-    /// Used by the `to_string` sugar probe to roll back exactly its own member-
-    /// lookup error — which, because the member resolves *after* the receiver, is
-    /// always the last diagnostic emitted — while preserving any errors raised
-    /// while inferring the receiver (e.g. a bad argument in `foo(bad).to_string()`).
-    pub fn pop_last_unresolved_member(&self) -> bool {
-        let mut diags = self.diagnostics.borrow_mut();
-        if matches!(
-            diags.diagnostics.last().map(|d| &d.error),
-            Some(TirTypeError::UnresolvedMember { .. })
-        ) {
-            diags.diagnostics.pop();
-            true
-        } else {
-            false
-        }
-    }
-
     /// Drop every diagnostic recorded after index `n` EXCEPT genuine
     /// `UnresolvedName`s. Used by the untagged-backtick (`Default` template)
     /// path: inferring the desugared `elaborated` concat synthesizes
