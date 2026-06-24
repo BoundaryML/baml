@@ -74,7 +74,7 @@ fn .<lambda($init_test_main, 0)>(testset: testing.TestCollector) -> null {
     let _37: () -> void throws unknown
 
     bb0: {
-        _2 = [const "hello", const "world", const "foo"];
+        _2 = [const "hello", const "world", const "foo"]: string[];
         _3 = copy _2;
         goto -> bb1;
     }

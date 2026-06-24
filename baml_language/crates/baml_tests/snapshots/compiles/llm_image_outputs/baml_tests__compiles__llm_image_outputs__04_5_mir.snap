@@ -22,7 +22,7 @@ fn user.GenerateImage(prompt: string, client: baml.llm.Client) -> image {
     }
 
     bb2: {
-        _4 = { const "prompt": copy _1 };
+        _4 = { const "prompt": copy _1 }: map<string, unknown>;
         _5 = load_type(image);
         _0 = call const fn baml.llm.call_llm_function<copy _5>(copy _2, const "GenerateImage", copy _4, const <omitted>) -> [bb3];
     }
@@ -51,7 +51,7 @@ fn user.GenerateImage$build_request(prompt: string, client: baml.llm.Client) -> 
     }
 
     bb2: {
-        _4 = { const "prompt": copy _1 };
+        _4 = { const "prompt": copy _1 }: map<string, unknown>;
         _0 = call const fn baml.llm.build_request(copy _2, const "GenerateImage", copy _4, const <omitted>) -> [bb3];
     }
 
@@ -79,7 +79,7 @@ fn user.GenerateImage$build_request_stream(prompt: string, client: baml.llm.Clie
     }
 
     bb2: {
-        _4 = { const "prompt": copy _1 };
+        _4 = { const "prompt": copy _1 }: map<string, unknown>;
         _0 = call const fn baml.llm.build_request_stream(copy _2, const "GenerateImage", copy _4, const <omitted>) -> [bb3];
     }
 
@@ -107,7 +107,7 @@ fn user.GenerateImage$render_prompt(prompt: string, client: baml.llm.Client) -> 
     }
 
     bb2: {
-        _4 = { const "prompt": copy _1 };
+        _4 = { const "prompt": copy _1 }: map<string, unknown>;
         _0 = call const fn baml.llm.render_prompt(copy _2, const "GenerateImage", copy _4, const <omitted>) -> [bb3];
     }
 
@@ -136,7 +136,7 @@ fn user.GenerateImageSet(prompt: string, client: baml.llm.Client) -> image[] {
     }
 
     bb2: {
-        _4 = { const "prompt": copy _1 };
+        _4 = { const "prompt": copy _1 }: map<string, unknown>;
         _5 = load_type(image[]);
         _0 = call const fn baml.llm.call_llm_function<copy _5>(copy _2, const "GenerateImageSet", copy _4, const <omitted>) -> [bb3];
     }
@@ -165,7 +165,7 @@ fn user.GenerateImageSet$build_request(prompt: string, client: baml.llm.Client) 
     }
 
     bb2: {
-        _4 = { const "prompt": copy _1 };
+        _4 = { const "prompt": copy _1 }: map<string, unknown>;
         _0 = call const fn baml.llm.build_request(copy _2, const "GenerateImageSet", copy _4, const <omitted>) -> [bb3];
     }
 
@@ -193,7 +193,7 @@ fn user.GenerateImageSet$build_request_stream(prompt: string, client: baml.llm.C
     }
 
     bb2: {
-        _4 = { const "prompt": copy _1 };
+        _4 = { const "prompt": copy _1 }: map<string, unknown>;
         _0 = call const fn baml.llm.build_request_stream(copy _2, const "GenerateImageSet", copy _4, const <omitted>) -> [bb3];
     }
 
@@ -221,7 +221,7 @@ fn user.GenerateImageSet$render_prompt(prompt: string, client: baml.llm.Client) 
     }
 
     bb2: {
-        _4 = { const "prompt": copy _1 };
+        _4 = { const "prompt": copy _1 }: map<string, unknown>;
         _0 = call const fn baml.llm.render_prompt(copy _2, const "GenerateImageSet", copy _4, const <omitted>) -> [bb3];
     }
 
@@ -250,7 +250,7 @@ fn user.GenerateMixedImageNarrative(prompt: string, client: baml.llm.Client) -> 
     }
 
     bb2: {
-        _4 = { const "prompt": copy _1 };
+        _4 = { const "prompt": copy _1 }: map<string, unknown>;
         _5 = load_type(image | string[]);
         _0 = call const fn baml.llm.call_llm_function<copy _5>(copy _2, const "GenerateMixedImageNarrative", copy _4, const <omitted>) -> [bb3];
     }
@@ -279,7 +279,7 @@ fn user.GenerateMixedImageNarrative$build_request(prompt: string, client: baml.l
     }
 
     bb2: {
-        _4 = { const "prompt": copy _1 };
+        _4 = { const "prompt": copy _1 }: map<string, unknown>;
         _0 = call const fn baml.llm.build_request(copy _2, const "GenerateMixedImageNarrative", copy _4, const <omitted>) -> [bb3];
     }
 
@@ -307,7 +307,7 @@ fn user.GenerateMixedImageNarrative$build_request_stream(prompt: string, client:
     }
 
     bb2: {
-        _4 = { const "prompt": copy _1 };
+        _4 = { const "prompt": copy _1 }: map<string, unknown>;
         _0 = call const fn baml.llm.build_request_stream(copy _2, const "GenerateMixedImageNarrative", copy _4, const <omitted>) -> [bb3];
     }
 
@@ -335,7 +335,7 @@ fn user.GenerateMixedImageNarrative$render_prompt(prompt: string, client: baml.l
     }
 
     bb2: {
-        _4 = { const "prompt": copy _1 };
+        _4 = { const "prompt": copy _1 }: map<string, unknown>;
         _0 = call const fn baml.llm.render_prompt(copy _2, const "GenerateMixedImageNarrative", copy _4, const <omitted>) -> [bb3];
     }
 
@@ -359,10 +359,10 @@ fn user.OpenAIImageResponses$new() -> null {
     }
 
     bb1: {
-        _3 = {  };
-        _4 = {  };
-        _6 = [];
-        _5 = { const "tools": copy _6 };
+        _3 = {  }: map<string, string>;
+        _4 = {  }: map<string, string>;
+        _6 = []: never[];
+        _5 = { const "tools": copy _6 }: map<string, unknown>;
         _1 = baml.llm.PrimitiveClientOptions { const "gpt-4.1", const null, const null, const null, const null, const null, const null, const null, const null, copy _2, const null, const null, copy _3, copy _4, copy _5 };
         _0 = baml.llm.PrimitiveClient { const "OpenAIImageResponses", const "openai-responses", copy _1 };
         goto -> bb2;

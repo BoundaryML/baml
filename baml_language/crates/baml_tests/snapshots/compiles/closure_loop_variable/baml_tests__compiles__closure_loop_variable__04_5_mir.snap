@@ -81,7 +81,7 @@ fn user.sum_array(arr: int[]) -> int {
 
     bb0: {
         _2 = const 0_i64;
-        _3 = [];
+        _3 = []: never[];
         goto -> bb1;
     }
 

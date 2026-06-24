@@ -103,21 +103,21 @@ function NominalTypingAssignments() -> int {
 //     │
 //     │ Note: Error code: E0001
 // ────╯
-// error: type mismatch: expected Person[], got Human[]
-//     ╭─[ invalid_assignment_nominal_typing.baml:59:10 ]
+// error: type mismatch: expected Person, got Human
+//     ╭─[ invalid_assignment_nominal_typing.baml:59:12 ]
 //     │
 //  59 │     people = [Human { name: "J", age: 10 }];
-//     │             ───────────────┬───────────────
-//     │                            ╰───────────────── type mismatch: expected Person[], got Human[]
+//     │               ──────────────┬─────────────
+//     │                             ╰─────────────── type mismatch: expected Person, got Human
 //     │
 //     │ Note: Error code: E0001
 // ────╯
-// error: type mismatch: expected Human[], got Person[]
-//     ╭─[ invalid_assignment_nominal_typing.baml:63:10 ]
+// error: type mismatch: expected Human, got Person
+//     ╭─[ invalid_assignment_nominal_typing.baml:63:12 ]
 //     │
 //  63 │     humans = [Person { name: "L", age: 12 }];
-//     │             ────────────────┬───────────────
-//     │                             ╰───────────────── type mismatch: expected Human[], got Person[]
+//     │               ──────────────┬──────────────
+//     │                             ╰──────────────── type mismatch: expected Human, got Person
 //     │
 //     │ Note: Error code: E0001
 // ────╯

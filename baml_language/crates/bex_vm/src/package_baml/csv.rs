@@ -1637,6 +1637,11 @@ fn decode_record_to_instance(
 }
 
 fn current_type_arg(vm: &mut BexVm, who: &str) -> Result<baml_type::RuntimeTy, VmRustFnError> {
+    // `.first()` is the method's own first generic only because `CsvRecord` is
+    // non-generic, so MIR's receiver-class-type-arg prepend (which would push
+    // class args ahead of the method's) contributes nothing here. A generic
+    // receiver class would shift the index — see `map_result_element_ty`'s
+    // back-indexing in `array.rs`.
     vm.current_call_type_args().first().cloned().ok_or_else(|| {
         VmRustFnError::InternalError(VmInternalError::MissingNativeFunction {
             name: format!("{who}: missing type argument"),

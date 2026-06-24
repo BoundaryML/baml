@@ -248,7 +248,7 @@ impl Array {
     ///
     /// The caller must uphold the contract documented on
     /// [`LockedContainer::data_unchecked_mut`].
-    #[allow(clippy::mut_from_ref)]
+    #[expect(clippy::mut_from_ref)]
     pub unsafe fn data_unchecked_mut(&self) -> &mut Vec<Value> {
         // SAFETY: forwarded to the caller's obligation.
         unsafe { self.data.data_unchecked_mut() }
@@ -334,7 +334,7 @@ impl Map {
     ///
     /// The caller must uphold the contract documented on
     /// [`LockedContainer::data_unchecked_mut`].
-    #[allow(clippy::mut_from_ref)]
+    #[expect(clippy::mut_from_ref)]
     pub unsafe fn data_unchecked_mut(&self) -> &mut IndexMap<bex_str::BexStr, Value> {
         // SAFETY: forwarded to the caller's obligation.
         unsafe { self.data.data_unchecked_mut() }

@@ -21,7 +21,7 @@ fn user.BigintLiteralArray() -> bigint[] {
     let _0: bigint[] // _0 // return
 
     bb0: {
-        _0 = [const 1n, const 2n];
+        _0 = [const 1n, const 2n]: bigint[];
         goto -> bb1;
     }
 
@@ -35,7 +35,7 @@ fn user.BigintMapLiteral() -> map<string, bigint> {
     let _0: map<string, bigint> // _0 // return
 
     bb0: {
-        _0 = { const "a": const 1n };
+        _0 = { const "a": const 1n }: map<string, bigint>;
         goto -> bb1;
     }
 
@@ -49,7 +49,7 @@ fn user.EmptyBigintArray() -> bigint[] {
     let _0: bigint[] // _0 // return
 
     bb0: {
-        _0 = [];
+        _0 = []: bigint[];
         goto -> bb1;
     }
 
@@ -64,7 +64,7 @@ fn user.EvolvingRetype() -> bigint[] {
     let _1: bigint[] // a
 
     bb0: {
-        _1 = [];
+        _1 = []: never[];
         _0 = copy _1;
         goto -> bb1;
     }
@@ -80,7 +80,7 @@ fn user.IntArrayIdentity() -> int[] {
     let _1: int[] // a
 
     bb0: {
-        _1 = [const 1_i64, const 2_i64];
+        _1 = [const 1_i64, const 2_i64]: int[];
         _0 = copy _1;
         goto -> bb1;
     }

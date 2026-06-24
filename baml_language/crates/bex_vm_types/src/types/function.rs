@@ -297,8 +297,8 @@ pub struct GenericFunction {
 /// `SysOp::BamlHostCallHostValue`, which fires the bridge's
 /// `HostDispatchFn` and awaits the host's response.
 ///
-/// `Box<RuntimeTy>` keeps the `Object` enum within its `<= 80`-byte budget
-/// (see the `size_of::<Object>()` assertion below).
+/// `Box<RuntimeTy>` keeps the `Object` enum within its `<= 64`-byte budget
+/// (see the `size_of::<Object>()` assertion in `object.rs`).
 #[derive(Clone, Debug)]
 pub struct HostClosure {
     /// Opaque handle to the host-owned callable. `Drop` of the last clone

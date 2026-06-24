@@ -1861,9 +1861,15 @@ fn runtime_ty_expr(ty: &BamlType, generics: &[String]) -> String {
             )
         }
         BamlType::Generic(name) => match generics.iter().position(|g| g == name) {
+            // The frame's call type args are populated by MIR's
+            // receiver-class-type-arg prepend, which fires for `Class`/`List`/
+            // `Map` receivers. If a container method is ever reached with the arg
+            // absent (an unforeseen dispatch / unknown-typed receiver), degrade to
+            // `unknown` rather than aborting the VM — the element type is a
+            // best-effort tag, not a correctness invariant worth a hard panic.
             Some(idx) => format!(
                 "vm.current_call_type_args().get({idx}).cloned()\
-                    .unwrap_or_else(|| unreachable!(\"type arg `{name}` not found at index {idx}\"))"
+                    .unwrap_or_else(baml_type::RuntimeTy::unknown)"
             ),
             None => format!("compile_error!(\"unknown type arg `{name}`\")"),
         },

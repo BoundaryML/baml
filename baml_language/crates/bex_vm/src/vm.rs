@@ -1472,23 +1472,15 @@ impl BexVm {
             Object::Type(_) => RuntimeTy::Type {
                 attr: TyAttr::default(),
             },
-            // Unreachable by construction: a container receiver never reaches a
-            // virtual call. Arrays/maps store only `Vec<Value>` /
-            // `IndexMap<Value, Value>` at runtime (`ArrayContainer =
-            // LockedContainer<Vec<Value>>`) with no element type, so `list<T>` /
-            // `map<K, V>` cannot be reconstructed from the value alone — `Self`
-            // would have to be read from a value that does not carry its element
-            // type. MIR lowering routes container-backed interface dispatch to the
+            // Arrays/maps carry their element/key/value types, so the faithful
+            // `list<T>` / `map<K, V>` is reconstructed from the value itself. In
+            // practice MIR routes container-backed interface dispatch to the
             // closed-world type-tag switch (the `iface_may_be_container_backed`
-            // gate) precisely so the element type comes from static typing rather
-            // than the runtime value, leaving virtual calls (the sole caller of
-            // this function) to receivers that do carry their own concrete type.
-            kind @ (Object::Array(_) | Object::Map(_)) => unreachable!(
-                "container receiver ({:?}) reached a virtual call: arrays/maps are \
-                 routed to closed-world interface-dispatch switches during MIR \
-                 lowering and so never reach virtual dispatch",
-                ObjectType::of(kind)
-            ),
+            // gate), so a container receiver does not actually reach a virtual
+            // call (the sole caller) — but should one ever arrive, return its real
+            // type rather than aborting the VM.
+            Object::Array(arr) => RuntimeTy::list((*arr.element_ty).clone()),
+            Object::Map(map) => RuntimeTy::map((*map.key_ty).clone(), (*map.value_ty).clone()),
             // Functions/closures/futures are not valid impl subjects, and
             // `resource`/`prompt_ast` (also impl subjects) have no runtime value
             // representation — none can be an interface-dispatch receiver, so the
