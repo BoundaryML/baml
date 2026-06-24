@@ -71,8 +71,28 @@ function user.MyClient$new() -> null {
     alloc_map 4
     load_const "value"
     load_const 100
-    load_type never
-    alloc_array 0
+    load_const "parallel_web_search"
+    load_const "https://example.com"
+    load_const "Bearertoken"
+    load_const "authorization"
+    load_type string
+    load_type string
+    alloc_map 1
+    load_const "mcp"
+    load_const "server_label"
+    load_const "server_url"
+    load_const "headers"
+    load_const "type"
+    load_type string
+    load_type string | map<string, string>
+    alloc_map 4
+    load_const "value"
+    load_const "another_tool"
+    load_type string
+    load_type string
+    alloc_map 1
+    load_type map<string, string | map<string, string>> | map<string, string>
+    alloc_array 2
     load_const "#hellotheremyfriend{#acommentinaprompt#}#"
     load_const "max_tokens"
     load_const "array_key_with_quoted_unquoted"

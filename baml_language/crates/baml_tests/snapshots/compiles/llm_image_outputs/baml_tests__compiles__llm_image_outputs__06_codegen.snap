@@ -452,8 +452,17 @@ function user.OpenAIImageResponses$new() -> null {
     load_type string
     load_type string
     alloc_map 0
-    load_type never
-    alloc_array 0
+    load_const "image_generation"
+    load_const "1024x1024"
+    load_const "low"
+    load_const "type"
+    load_const "size"
+    load_const "quality"
+    load_type string
+    load_type string
+    alloc_map 3
+    load_type map<string, string>
+    alloc_array 1
     load_const "tools"
     load_type string
     load_type unknown

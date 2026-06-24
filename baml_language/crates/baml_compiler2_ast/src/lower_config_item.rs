@@ -62,10 +62,23 @@ fn lower_config_value_node(
     {
         let elements: Vec<ExprId> = array_literal
             .children()
-            .filter(|child| child.kind() == SyntaxKind::CONFIG_VALUE)
-            .map(|element| {
-                let element_range = element.text_range();
-                lower_config_value_node(&element, element_range, alloc, env_var_refs)
+            .filter_map(|element| match element.kind() {
+                SyntaxKind::CONFIG_VALUE => {
+                    let element_range = element.text_range();
+                    Some(lower_config_value_node(
+                        &element,
+                        element_range,
+                        alloc,
+                        env_var_refs,
+                    ))
+                }
+                // A `{ … }` array element (e.g. `tools [{ url "…" }]`) is a bare
+                // `CONFIG_BLOCK`; lower it to an untyped map like a nested block
+                // value, instead of silently dropping it.
+                SyntaxKind::CONFIG_BLOCK => cst::ConfigBlock::cast(element).map(|block| {
+                    lower_config_block_to_map_with_env_refs(&block, alloc, env_var_refs)
+                }),
+                _ => None,
             })
             .collect();
         return alloc(Expr::Array { elements });
@@ -74,6 +87,14 @@ fn lower_config_value_node(
     // Scalar — classify by token kind. Using `.all()` ensures mixed-token values
     // like `"anthropic.claude-3-haiku-20240307-v1:0"` (which contains an
     // INTEGER_LITERAL `0` among other tokens) are NOT misclassified as numbers.
+    //
+    // BUG: a few scalar forms still lower to a wrong-typed string rather than
+    // their literal because the config grammar/lexer doesn't surface them here:
+    // a negative number (`-5`) tokenizes as `MINUS` + `INTEGER_LITERAL`, so
+    // `is_int` is false and it becomes `String("-5")`; a bigint literal (`42n`)
+    // and an out-of-`i64`-range integer also fall through to a string; and an
+    // `env.X` reference *inside an array* mis-parses upstream. Fixing these
+    // belongs in the parser/lexer, not this lowering.
     let non_trivia = || {
         cv_node
             .descendants_with_tokens()
@@ -348,6 +369,42 @@ client MyClient {
         assert_eq!(
             exprs[elements[2]],
             Expr::Literal(Literal::String("assistant".to_string()))
+        );
+    }
+
+    #[test]
+    fn array_keeps_config_block_elements() {
+        // Regression (M7): a `{ … }` array element is a bare CONFIG_BLOCK; it must
+        // lower to an untyped map, not be silently dropped from the array.
+        let source = r#"
+client MyClient {
+  provider openai
+  options {
+    tools [{ url "https://example.com" }, "plain"]
+  }
+}
+"#;
+        let root = parse(source);
+        let tools = find_config_item(&root, "tools");
+
+        let mut exprs: la_arena::Arena<Expr> = la_arena::Arena::new();
+        let mut alloc = |expr: Expr| -> ExprId { exprs.alloc(expr) };
+
+        let result_id = lower_config_value_with_env_refs(&tools, &mut alloc, &mut Vec::new());
+
+        let elements = match &exprs[result_id] {
+            Expr::Array { elements } => elements.clone(),
+            other => panic!("expected Expr::Array, got {other:?}"),
+        };
+        assert_eq!(elements.len(), 2, "the block element must not be dropped");
+        assert!(
+            matches!(exprs[elements[0]], Expr::Map { .. }),
+            "block array element should lower to a map, got {:?}",
+            exprs[elements[0]]
+        );
+        assert_eq!(
+            exprs[elements[1]],
+            Expr::Literal(Literal::String("plain".to_string()))
         );
     }
 }

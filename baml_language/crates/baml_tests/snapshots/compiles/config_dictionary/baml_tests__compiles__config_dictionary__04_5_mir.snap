@@ -15,7 +15,10 @@ fn user.MyClient$new() -> null {
     let _8: int[]
     let _9: map<string, string | string[] | int>
     let _10: string[]
-    let _11: never[]
+    let _11: (map<string, string | map<string, string>> | map<string, string>)[]
+    let _12: map<string, string | map<string, string>>
+    let _13: map<string, string>
+    let _14: map<string, string>
 
     bb0: {
         _2 = {  }: map<string, string>;
@@ -26,7 +29,10 @@ fn user.MyClient$new() -> null {
         _8 = [const 1_i64, const 2_i64, const 3_i64]: int[];
         _10 = [const "yes", const "queen"]: string[];
         _9 = { const "key": const "value", const "key2": const "value2", const "nestedArray": copy _10, const "number": const 10_i64 }: map<string, string | string[] | int>;
-        _11 = []: never[];
+        _13 = { const "authorization": const "Bearertoken" }: map<string, string>;
+        _12 = { const "server_label": const "parallel_web_search", const "server_url": const "https://example.com", const "headers": copy _13, const "type": const "mcp" }: map<string, string | map<string, string>>;
+        _14 = { const "another_tool": const "value" }: map<string, string>;
+        _11 = [copy _12, copy _14]: map<string, string | map<string, string>> | map<string, string>[];
         _4 = { const "max_tokens": const 100_i64, const "array_key_with_quoted_unquoted": copy _5, const "key2": const "somerandomvalue", const "hello": const "world", const "thing": const "hello", const "block_string": const "#hellotheremyfriend#", const "inline_raw_string": const "#inlinerawstring,,#", const "booleanValue": const true, const "stringKey": const true, const "array1": copy _6, const "array2": copy _7, const "array3Numbers": copy _8, const "nestedKey": copy _9, const "oneMoreValueToTestBrokenness": const "value", const "myInteger": const 100_i64, const "tools": copy _11, const "block_string": const "#hellotheremyfriend{#acommentinaprompt#}#" }: map<string, unknown>;
         _1 = baml.llm.PrimitiveClientOptions { const null, const null, const null, const null, const null, const null, const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
         _0 = baml.llm.PrimitiveClient { const "MyClient", const "openai", copy _1 };

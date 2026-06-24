@@ -39,5 +39,5 @@ function user.GenerateMixedImageNarrative$render_prompt(prompt: string, client: 
   baml.llm.render_prompt(client, "GenerateMixedImag...", map { "prompt": prompt })
 }
 function user.OpenAIImageResponses$new() -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "OpenAIImageResponses", provider: "openai-responses", options: baml.llm.PrimitiveClientOptions { model: "gpt-4.1", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get_or_panic("OPENAI_API_KEY"), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "tools": [] } } }
+  baml.llm.PrimitiveClient { name: "OpenAIImageResponses", provider: "openai-responses", options: baml.llm.PrimitiveClientOptions { model: "gpt-4.1", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get_or_panic("OPENAI_API_KEY"), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "tools": [map { "type": "image_generation", "size": "1024x1024", "quality": "low" }] } } }
 }

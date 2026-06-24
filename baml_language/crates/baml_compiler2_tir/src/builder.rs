@@ -554,7 +554,12 @@ impl baml_type::normalize::TypeContext for NormalizeCtx<'_, '_> {
         // A type variable's bound is a conjunction of interfaces. The bound side
         // table currently holds a single lowered bound `Ty` per var (the AST
         // surfaces only the first interface of an `A & B` bound today); widen it
-        // to the constraint list, dropping any non-interface bound.
+        // to the constraint list, dropping any non-interface bound. Dropping is
+        // sound because this is consulted only by the interface-subtype rule: a
+        // non-interface bound (e.g. `T extends int`) constrains `T` by
+        // substitution earlier and never reaches that rule. If multi-interface
+        // bounds ever start being stored, this `.and_then` must collect *all*
+        // interface members so the conjunction isn't silently weakened.
         self.0
             .generic_param_bounds
             .get(name)
@@ -4804,11 +4809,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         if let Ty::Interface(iface_qtn, iface_args, associated_bindings, attr) = &target_ty
             && associated_bindings.is_empty()
         {
-            let projected_interface = baml_type::Interface {
-                name: iface_qtn.clone(),
-                generics: iface_args.clone(),
-                associated_types: vec![],
-            };
+            let projected_interface =
+                baml_type::Interface::new(iface_qtn.clone(), iface_args.clone(), vec![]);
             let projection_resolver =
                 crate::associated_projection::AssociatedProjectionResolver::with_resolution_context(
                     self.context.db(),
@@ -12080,9 +12082,9 @@ impl<'db> TypeInferenceBuilder<'db> {
             if inputs.prefer_symbolic_projections
                 && let Some(base) = inputs.receiver_projection_base
             {
-                let projection_interface = baml_type::Interface {
-                    name: inputs.iface_name.clone(),
-                    generics: if inputs.iface_type_args.is_empty() {
+                let projection_interface = baml_type::Interface::new(
+                    inputs.iface_name.clone(),
+                    if inputs.iface_type_args.is_empty() {
                         inputs
                             .iface_data
                             .generic_params
@@ -12092,8 +12094,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                     } else {
                         inputs.iface_type_args.to_vec()
                     },
-                    associated_types: inputs.associated_bindings.to_vec(),
-                };
+                    inputs.associated_bindings.to_vec(),
+                );
                 bindings.insert(
                     assoc.name.clone(),
                     Ty::AssociatedTypeProjection {
@@ -12120,9 +12122,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                 continue;
             }
             if let Some(base) = inputs.receiver_projection_base {
-                let projection_interface = baml_type::Interface {
-                    name: inputs.iface_name.clone(),
-                    generics: if inputs.iface_type_args.is_empty() {
+                let projection_interface = baml_type::Interface::new(
+                    inputs.iface_name.clone(),
+                    if inputs.iface_type_args.is_empty() {
                         inputs
                             .iface_data
                             .generic_params
@@ -12132,8 +12134,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                     } else {
                         inputs.iface_type_args.to_vec()
                     },
-                    associated_types: inputs.associated_bindings.to_vec(),
-                };
+                    inputs.associated_bindings.to_vec(),
+                );
                 bindings.insert(
                     assoc.name.clone(),
                     Ty::AssociatedTypeProjection {

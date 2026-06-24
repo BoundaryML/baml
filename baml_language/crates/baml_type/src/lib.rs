@@ -431,11 +431,11 @@ impl Ty {
     /// [`Interface::to_ty`].
     pub fn as_interface(&self) -> Option<Interface> {
         match self {
-            Ty::Interface(name, generics, associated_types, _) => Some(Interface {
-                name: name.clone(),
-                generics: generics.clone(),
-                associated_types: associated_types.clone(),
-            }),
+            Ty::Interface(name, generics, associated_types, _) => Some(Interface::new(
+                name.clone(),
+                generics.clone(),
+                associated_types.clone(),
+            )),
             _ => None,
         }
     }
@@ -906,6 +906,20 @@ impl TyRenderStrategy for CanonicalTyRender {
 }
 
 impl Interface {
+    /// Build an interface constraint, sorting `associated_types` by name so the
+    /// derived `Eq`/`Hash`/`Ord` are order-insensitive — the invariant the
+    /// `associated_types` field documents. Normalization sorts the bindings
+    /// identically (`sort_by(|(a, _), (b, _)| a.cmp(b))`), so a constraint built
+    /// here compares equal to its normalized form.
+    pub fn new(name: TypeName, generics: Vec<Ty>, mut associated_types: Vec<(Name, Ty)>) -> Self {
+        associated_types.sort_by(|(a, _), (b, _)| a.cmp(b));
+        Self {
+            name,
+            generics,
+            associated_types,
+        }
+    }
+
     /// The interface *existential* type ([`Ty::Interface`]) denoted by this
     /// constraint, with default attributes. The inverse of
     /// [`Ty::as_interface`].
