@@ -40,25 +40,6 @@ class String {
     root._to_string_shim(value)
   }
 
-  /// Parses a string into a value of type `T` — the inverse of `string.from`.
-  ///
-  /// The primitive types are parsed directly: `int`, `float`, `bool`, and
-  /// `string` (identity). For any other type, `T` must implement
-  /// `baml.FromString`, and its `from_string` override is used. Throws
-  /// `baml.errors.ParseError` if `s` cannot be parsed into `T`, or if `T` is a
-  /// type with no parser.
-  ///
-  /// ```
-  /// string.to<int>("42")        // 42
-  /// string.to<bool>("true")     // true
-  /// string.to<Point>("(1, 2)")  // via Point's baml.FromString impl
-  /// ```
-  //baml:mut_vm
-  //baml:may_yield
-  function to<T>(s: string) -> T throws baml.errors.ParseError {
-    $rust_function
-  }
-
   /// Serializes this string to a JSON value.
   //baml:mut_vm
   function to_json(self) -> baml.json.json throws never {

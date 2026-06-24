@@ -2397,7 +2397,6 @@ function baml.replace_all(self: ?, search: string, replacement: string) -> strin
 function baml.split(self: ?, delimiter: string) -> string[]  [builtin]
 function baml.starts_with(self: ?, prefix: string) -> bool  [builtin]
 function baml.substring(self: ?, start: int, end: int) -> string  [builtin]
-function baml.to(s: string) -> T  [builtin]
 function baml.to_json(self: ?) -> baml.json.json  [builtin]
 function baml.to_lower_case(self: ?) -> string  [builtin]
 function baml.to_upper_case(self: ?) -> string  [builtin]

@@ -1,31 +1,15 @@
-use baml_type::RuntimeTy;
 use bex_heap::TlabHolder;
 use bex_str::BexStr;
 use bex_vm_types::types::Value;
 
-use super::{BamlClassString, NativeCallResult, PackageBamlImpl, PassThroughContinuation};
+use super::{BamlClassString, PackageBamlImpl};
 use crate::{
     BexVm, VmPanic,
     array_index::{resolve_index, resolve_slice_bound},
-    errors::{VmBamlError, VmInternalError, VmRustFnError},
+    errors::{VmBamlError, VmRustFnError},
 };
 
 impl BamlClassString for PackageBamlImpl {
-    /// `string.to<T>(s)` — parse `s` into a value of type `T`. Primitive `T`
-    /// (int/float/bool/string) is parsed directly; a class `T` that implements
-    /// `baml.FromString` is dispatched to its `from_string`. The type arg `T` is
-    /// read from `vm.current_call_type_args()` (mirrors `baml.json.from_json`).
-    fn to(vm: &mut BexVm, s: &BexStr) -> NativeCallResult {
-        let Some(ty) = vm.current_call_type_args().first().cloned() else {
-            return NativeCallResult::Error(VmRustFnError::InternalError(
-                VmInternalError::MissingNativeFunction {
-                    name: "string.to: missing type argument".to_string(),
-                },
-            ));
-        };
-        string_to_dispatch(vm, s.as_str(), &ty)
-    }
-
     fn to_json(vm: &mut BexVm, string: &BexStr) -> Value {
         // `string` is already a valid `json` arm — BAML's `json` type alias
         // includes `string` as one of its union members.  Wrap the BexStr
@@ -296,54 +280,4 @@ impl BamlClassString for PackageBamlImpl {
         }
         Ok(BexStr::from(result))
     }
-}
-
-/// Dispatch for `string.to<T>(s)`. Primitive `T` is parsed inline; a class /
-/// interface `T` is dispatched to its `{fqn}.baml.FromString.from_string`
-/// override (threading `T`'s own type args into the callee frame, like
-/// `baml.json.from_json`). Anything else, or a parse failure, throws
-/// `baml.errors.ParseError`.
-fn string_to_dispatch(vm: &mut BexVm, s: &str, ty: &RuntimeTy) -> NativeCallResult {
-    match ty {
-        RuntimeTy::String { .. } => {
-            NativeCallResult::Done(Value::object(vm.alloc_string(s.to_string())))
-        }
-        RuntimeTy::Int { .. } => match s.parse::<i64>() {
-            Ok(n) if (Value::INT_MIN..=Value::INT_MAX).contains(&n) => {
-                NativeCallResult::Done(Value::int(n))
-            }
-            _ => parse_error(format!("cannot parse {s:?} as int")),
-        },
-        RuntimeTy::Float { .. } => match s.parse::<f64>() {
-            Ok(f) => NativeCallResult::Done(Value::object(vm.alloc_float(f))),
-            Err(_) => parse_error(format!("cannot parse {s:?} as float")),
-        },
-        RuntimeTy::Bool { .. } => match s {
-            "true" => NativeCallResult::Done(Value::bool(true)),
-            "false" => NativeCallResult::Done(Value::bool(false)),
-            _ => parse_error(format!("cannot parse {s:?} as bool")),
-        },
-        RuntimeTy::Class(qtn, type_args, _) | RuntimeTy::Interface(qtn, type_args, _, _) => {
-            let fqn = qtn.render_dotted(false);
-            let fn_name = format!("{fqn}.baml.FromString.from_string");
-            match vm.find_function_by_name(&fn_name) {
-                Some(callee) => {
-                    let arg = Value::object(vm.alloc_string(s.to_string()));
-                    NativeCallResult::YieldToCall {
-                        callee,
-                        args: vec![arg],
-                        type_args: type_args.clone(),
-                        continuation: Box::new(PassThroughContinuation),
-                    }
-                }
-                None => parse_error(format!("{fqn} does not implement baml.FromString")),
-            }
-        }
-        other => parse_error(format!("cannot parse a string into {other:?}")),
-    }
-}
-
-/// Throw `baml.errors.ParseError { message }` from `string.to<T>`.
-fn parse_error(message: String) -> NativeCallResult {
-    NativeCallResult::Error(VmBamlError::ParseError { message }.into())
 }

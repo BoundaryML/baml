@@ -825,25 +825,25 @@ function csv.csv_decode_all_cell_types() -> string {
     load_var r
     load_field .at
     store_var_load_var _31
-    is_type baml.Uint8Array
+    is_type baml.TypeValue
     pop_jump_if_false L4
     jump L33
 
   L4:
     load_var _31
-    is_type baml.Uint8Array
+    is_type baml.TypeValue
     pop_jump_if_false L5
     jump L32
 
   L5:
     load_var _31
-    is_type baml.TypeValue
+    is_type baml.Uint8Array
     pop_jump_if_false L6
     jump L31
 
   L6:
     load_var _31
-    is_type baml.TypeValue
+    is_type baml.Uint8Array
     pop_jump_if_false L7
     jump L30
 
@@ -996,7 +996,7 @@ function csv.csv_decode_all_cell_types() -> string {
 
   L31:
     load_var _31
-    call baml.TypeValue.baml.ToString.to_string
+    call baml.Uint8Array.baml.ToString.to_string
     store_var _30
     jump L34
 
@@ -1008,7 +1008,7 @@ function csv.csv_decode_all_cell_types() -> string {
 
   L33:
     load_var _31
-    call baml.Uint8Array.baml.ToString.to_string
+    call baml.TypeValue.baml.ToString.to_string
     store_var _30
 
   L34:
@@ -4751,25 +4751,25 @@ function csv.csv_plaindate_cells_roundtrip() -> string {
     load_var r
     load_field .day
     store_var_load_var _10
-    is_type baml.Uint8Array
+    is_type baml.TypeValue
     pop_jump_if_false L1
     jump L30
 
   L1:
     load_var _10
-    is_type baml.Uint8Array
+    is_type baml.TypeValue
     pop_jump_if_false L2
     jump L29
 
   L2:
     load_var _10
-    is_type baml.TypeValue
+    is_type baml.Uint8Array
     pop_jump_if_false L3
     jump L28
 
   L3:
     load_var _10
-    is_type baml.TypeValue
+    is_type baml.Uint8Array
     pop_jump_if_false L4
     jump L27
 
@@ -4909,7 +4909,7 @@ function csv.csv_plaindate_cells_roundtrip() -> string {
 
   L28:
     load_var _10
-    call baml.TypeValue.baml.ToString.to_string
+    call baml.Uint8Array.baml.ToString.to_string
     jump L31
 
   L29:
@@ -4919,7 +4919,7 @@ function csv.csv_plaindate_cells_roundtrip() -> string {
 
   L30:
     load_var _10
-    call baml.Uint8Array.baml.ToString.to_string
+    call baml.TypeValue.baml.ToString.to_string
 
   L31:
     load_const " "
@@ -4928,25 +4928,25 @@ function csv.csv_plaindate_cells_roundtrip() -> string {
     load_var r
     load_field .at
     store_var_load_var _28
-    is_type baml.Uint8Array
+    is_type baml.TypeValue
     pop_jump_if_false L32
     jump L61
 
   L32:
     load_var _28
-    is_type baml.Uint8Array
+    is_type baml.TypeValue
     pop_jump_if_false L33
     jump L60
 
   L33:
     load_var _28
-    is_type baml.TypeValue
+    is_type baml.Uint8Array
     pop_jump_if_false L34
     jump L59
 
   L34:
     load_var _28
-    is_type baml.TypeValue
+    is_type baml.Uint8Array
     pop_jump_if_false L35
     jump L58
 
@@ -5099,7 +5099,7 @@ function csv.csv_plaindate_cells_roundtrip() -> string {
 
   L59:
     load_var _28
-    call baml.TypeValue.baml.ToString.to_string
+    call baml.Uint8Array.baml.ToString.to_string
     store_var _27
     jump L62
 
@@ -5111,7 +5111,7 @@ function csv.csv_plaindate_cells_roundtrip() -> string {
 
   L61:
     load_var _28
-    call baml.Uint8Array.baml.ToString.to_string
+    call baml.TypeValue.baml.ToString.to_string
     store_var _27
 
   L62:
