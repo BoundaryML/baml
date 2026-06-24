@@ -1772,8 +1772,9 @@ pub struct Bytecode {
     /// Contains `ObjectIndex` for object references.
     pub constants: Vec<ConstValue>,
 
-    /// Resolved constants (runtime, populated at load time).
+    /// Resolved constants (resolved from `constants` at load time via [`Bytecode::resolve_constants`]).
     /// Contains `HeapPtr` for object references. Used by `LoadConst`.
+    /// Set to `null` for types.
     #[borsh(skip)]
     pub resolved_constants: Vec<crate::Value>,
 

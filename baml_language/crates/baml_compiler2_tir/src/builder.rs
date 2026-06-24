@@ -2560,6 +2560,11 @@ impl<'db> TypeInferenceBuilder<'db> {
         let saved_locals = self.locals.clone();
         let saved_scoped_local_declarations_len = self.scoped_local_declarations.len();
         let saved_scoped_local_assignments_len = self.scoped_local_assignments.len();
+        // Diagnostics emitted while checking defaults carry defaults-arena
+        // `ExprId`s; freeze their spans against the defaults source map after the
+        // loop so they don't resolve against the function body's map (wrong
+        // offsets — see the `freeze_diagnostic_spans_from` call below).
+        let defaults_diag_start = self.context.diagnostic_count();
 
         for (index, param) in params.iter().enumerate() {
             let Some(default_ref) = parameter_defaults.param_default(index) else {
@@ -2591,39 +2596,38 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .unwrap_or(Ty::Unknown {
                         attr: TyAttr::default(),
                     });
-            // Validate the default against the parameter's declared type. On a
-            // mismatch we report at the precise default span (the defaults body
-            // carries its own source map, which `check_expr`'s expr-id-based
-            // diagnostics would not resolve correctly). For a container *literal*
-            // default declared with a structural-container type, we re-run
-            // `check_expr`, which adopts the declared element/key/value types
-            // *recursively* (so an empty `[]`/`{}` — even nested, e.g.
-            // `int[][] = [[]]` — emits the declared types instead of `never`) and
-            // emits no diagnostic for an already-matching default. The gate is
-            // restricted to literals with a structural-container declared type so
-            // `check_expr`'s array/map arm is guaranteed to adopt — never the
-            // `is_subtype` fallback, which (unlike `argument_matches_expected`)
-            // would reject e.g. an `int[]` default against the `baml.Array<int>`
-            // spelling of the same parameter.
-            let got_ty = self.infer_expr(default_expr, &defaults.exprs);
+            // Type each default exactly once against the parameter's declared
+            // type. A container *literal* whose kind matches a structural
+            // container declared type goes through `check_expr`, which both
+            // adopts empty `[]`/`{}` (even nested, e.g. `int[][] = [[]]`) and
+            // reports any element mismatch — once, at the offending element.
+            // Everything else infers and validates with
+            // `argument_matches_expected` (looser than `check_expr`'s
+            // `is_subtype`, so e.g. an `int[]` default against the
+            // `baml.Array<int>` spelling of the same parameter is not falsely
+            // rejected). Both paths' spans are fixed against the defaults source
+            // map after the loop.
+            let adopt_container_literal = matches!(
+                (&defaults.exprs.exprs[default_expr], &expected_ty),
+                (Expr::Array { .. }, Ty::List(..) | Ty::EvolvingList(..))
+                    | (Expr::Map { .. }, Ty::Map { .. } | Ty::EvolvingMap(..))
+            );
             if matches!(expected_ty, Ty::Unknown { .. } | Ty::Error { .. }) {
-                // No declared type to check against or adopt.
-            } else if !self.argument_matches_expected(&got_ty, &expected_ty) {
-                self.report_at_span(
-                    TirTypeError::TypeMismatch {
-                        expected: expected_ty,
-                        got: got_ty,
-                    },
-                    default_span,
-                );
-            } else if matches!(
-                defaults.exprs.exprs[default_expr],
-                Expr::Array { .. } | Expr::Map { .. }
-            ) && matches!(
-                expected_ty,
-                Ty::List(..) | Ty::EvolvingList(..) | Ty::Map { .. } | Ty::EvolvingMap(..)
-            ) {
+                // No declared type to check against or adopt — just record a type.
+                self.infer_expr(default_expr, &defaults.exprs);
+            } else if adopt_container_literal {
                 self.check_expr(default_expr, &defaults.exprs, &expected_ty);
+            } else {
+                let got_ty = self.infer_expr(default_expr, &defaults.exprs);
+                if !self.argument_matches_expected(&got_ty, &expected_ty) {
+                    self.report_at_span(
+                        TirTypeError::TypeMismatch {
+                            expected: expected_ty,
+                            got: got_ty,
+                        },
+                        default_span,
+                    );
+                }
             }
 
             let later_params: FxHashSet<Name> = params
@@ -2673,6 +2677,11 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.call_type_instantiations = saved_call_type_instantiations;
         self.function_coercions = saved_function_coercions;
         self.lambda_effective_throws = saved_lambda_effective_throws;
+        // Resolve all default-checking diagnostics against the defaults source
+        // map before restoring the function body's map (otherwise their
+        // defaults-arena `ExprId`s render at the wrong offsets).
+        self.context
+            .freeze_diagnostic_spans_from(defaults_diag_start, &defaults.source_map);
         self.body_source_map = saved_body_source_map;
         self.locals = saved_locals;
         self.scoped_local_declarations
@@ -5604,25 +5613,44 @@ impl<'db> TypeInferenceBuilder<'db> {
                                 &mut bindings,
                             );
                         }
-                        // Bind each class parameter from the fields. A parameter
-                        // no field determines (e.g. `T` in `Box { items: [] }`
-                        // for `class Box<T> { items: T[] }`) is reported like an
-                        // unbound callee generic in the call path, then recovered
-                        // with `BuiltinUnknown` so this under-specialized class
-                        // never reaches MIR lowering carrying a bare type variable
-                        // — which would trip `tir2_to_template`'s `unreachable!`.
+                        // Params that appear in some field's declared type are
+                        // inferable in principle, so leaving one unbound (e.g. `T`
+                        // from `Box { items: [] }`) is a real `CannotInfer` error.
+                        // A *phantom* param used by no field can never be
+                        // determined by construction and is not an error — it is
+                        // recovered silently as `BuiltinUnknown` below.
+                        let field_constrained_params: FxHashSet<Name> = class_data
+                            .generic_params
+                            .iter()
+                            .filter(|param| {
+                                field_types.values().any(|field_ty| {
+                                    crate::generics::contains_typevar_where(field_ty, &|name| {
+                                        name == *param
+                                    })
+                                })
+                            })
+                            .cloned()
+                            .collect();
+                        // Bind each class parameter from the fields. A field-used
+                        // parameter no field determines is reported like an unbound
+                        // callee generic in the call path, then recovered with
+                        // `BuiltinUnknown` so this under-specialized class never
+                        // reaches MIR lowering carrying a bare type variable — which
+                        // would trip `tir2_to_template`'s `unreachable!`.
                         let inferred_type_args: Vec<Ty> = class_data
                             .generic_params
                             .iter()
                             .map(|param| match bindings.get(param) {
                                 Some(bound) => bound.clone(),
                                 None => {
-                                    self.context.report_simple(
-                                        TirTypeError::CannotInferTypeParameter {
-                                            name: param.clone(),
-                                        },
-                                        expr_id,
-                                    );
+                                    if field_constrained_params.contains(param) {
+                                        self.context.report_simple(
+                                            TirTypeError::CannotInferTypeParameter {
+                                                name: param.clone(),
+                                            },
+                                            expr_id,
+                                        );
+                                    }
                                     Ty::BuiltinUnknown {
                                         attr: TyAttr::default(),
                                     }
@@ -6984,40 +7012,67 @@ impl<'db> TypeInferenceBuilder<'db> {
                 } else {
                     self.get_declared_type(*target, body)
                 };
-                let value_ty = self.infer_expr(*value, body);
+                // A container literal assigned to a matching structural declared
+                // type is typed by `check_expr`, which adopts the declared
+                // element/key/value types *recursively* (so nested `[[]]` does not
+                // leak `EvolvingList(Never)` under an `int[][]` declaration) and
+                // reports any mismatch once. Everything else infers and
+                // subtype-checks. Typing exactly once avoids duplicate diagnostics.
+                let adopt_container_literal = declared_ty.as_ref().is_some_and(|decl_ty| {
+                    !matches!(decl_ty, Ty::Unknown { .. } | Ty::Error { .. })
+                        && matches!(
+                            (&body.exprs[*value], decl_ty),
+                            (Expr::Array { .. }, Ty::List(..) | Ty::EvolvingList(..))
+                                | (Expr::Map { .. }, Ty::Map { .. } | Ty::EvolvingMap(..))
+                        )
+                });
+                let value_ty = if adopt_container_literal {
+                    let decl_ty = declared_ty
+                        .as_ref()
+                        .expect("adopt_container_literal implies a declared type");
+                    self.check_expr(*value, body, decl_ty);
+                    decl_ty.clone()
+                } else {
+                    self.infer_expr(*value, body)
+                };
                 if let Some(ref decl_ty) = declared_ty {
-                    if !matches!(decl_ty, Ty::Unknown { .. } | Ty::Error { .. })
-                        && !matches!(value_ty, Ty::Unknown { .. } | Ty::Error { .. })
-                        && !self.is_subtype(&value_ty, decl_ty)
-                    {
-                        self.context.report(
-                            TirTypeError::TypeMismatch {
-                                expected: decl_ty.clone(),
-                                got: value_ty.clone(),
-                            },
-                            *value,
-                            Vec::new(),
-                        );
-                    } else {
-                        self.record_function_coercion_if_needed(*value, &value_ty, decl_ty);
+                    if !adopt_container_literal {
+                        if !matches!(decl_ty, Ty::Unknown { .. } | Ty::Error { .. })
+                            && !matches!(value_ty, Ty::Unknown { .. } | Ty::Error { .. })
+                            && !self.is_subtype(&value_ty, decl_ty)
+                        {
+                            self.context.report(
+                                TirTypeError::TypeMismatch {
+                                    expected: decl_ty.clone(),
+                                    got: value_ty.clone(),
+                                },
+                                *value,
+                                Vec::new(),
+                            );
+                        } else {
+                            self.record_function_coercion_if_needed(*value, &value_ty, decl_ty);
+                        }
                     }
                     // Update the local to the assigned value's type (invalidates
                     // narrowing). `$id` is not a local — don't create one.
                     //
-                    // An evolving-empty container (`x = []`) assigned to a
-                    // declared container local must adopt the *declared* type, not
-                    // the bare `EvolvingList(Never)`: otherwise the local loses
-                    // its declaration and a later `x.push(v)` re-establishes the
-                    // element type from `v` — accepting a value of the wrong type
-                    // under the declared one (unsound). Mirror the declared type
-                    // onto the literal so the empty array also emits it.
-                    let assigned_ty = match (&value_ty, decl_ty) {
-                        (Ty::EvolvingList(..), Ty::List(..) | Ty::EvolvingList(..))
-                        | (Ty::EvolvingMap(..), Ty::Map { .. } | Ty::EvolvingMap(..)) => {
-                            self.record_expr_type(*value, decl_ty.clone());
-                            decl_ty.clone()
+                    // A non-literal evolving-empty value (`x = y` where `y` stayed
+                    // `EvolvingList(Never)`) still mirrors the declared type so the
+                    // local keeps its declaration; otherwise a later `x.push(v)`
+                    // would re-establish the element type from `v`, accepting a
+                    // wrong-typed value under the declared one (unsound). The
+                    // literal case was already adopted recursively above.
+                    let assigned_ty = if adopt_container_literal {
+                        value_ty
+                    } else {
+                        match (&value_ty, decl_ty) {
+                            (Ty::EvolvingList(..), Ty::List(..) | Ty::EvolvingList(..))
+                            | (Ty::EvolvingMap(..), Ty::Map { .. } | Ty::EvolvingMap(..)) => {
+                                self.record_expr_type(*value, decl_ty.clone());
+                                decl_ty.clone()
+                            }
+                            _ => value_ty,
                         }
-                        _ => value_ty,
                     };
                     if let Expr::Path(segments) = &body.exprs[*target] {
                         if segments.len() == 1 && segments[0].as_str() != "$id" {
@@ -7831,7 +7886,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self.analyze_and_lower_no_subtype_check(arm.pattern, &arm_flow, body, arm.body);
                 self.finalize_pattern_lowering(arm.pattern, &arm_result, None, None, &arm_flow);
 
-                let arm_ty = self.infer_expr(arm.body, body);
+                // In a checking position, adopt the expected type into the
+                // handler body too (not just the catch base) — so e.g. an empty
+                // `[]` handler adopts the declared element type rather than
+                // leaking `EvolvingList(Never)`. Mirrors the base above.
+                let arm_ty = match expected {
+                    Some(expected) => self.check_expr(arm.body, body, expected),
+                    None => self.infer_expr(arm.body, body),
+                };
                 result_members.push(arm_ty);
 
                 self.restore_scoped_locals(&arm_snapshot);
