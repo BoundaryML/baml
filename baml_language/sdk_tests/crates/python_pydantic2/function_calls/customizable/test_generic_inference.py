@@ -37,6 +37,12 @@ from baml_sdk.generic_tests import (
     wrap,
     parse_as,
     one_type_arg,
+    pair,
+    merge,
+    combine,
+    glue,
+    triple_choose,
+    two_in_union,
 )
 
 
@@ -231,3 +237,104 @@ def test_body_only_var_still_requires_binding():
     # §E: one_type_arg<T>() reflects T but takes no argument ⇒ uninferable.
     with pytest.raises(BamlPanic):
         one_type_arg()
+
+
+# ===========================================================================
+# §J — variance soundness (02d/02e): conflicting occurrences of one TypeVar
+# across invariant/covariant positions have no consistent binding ⇒ REJECT,
+# instead of fabricating an unsound union. Agreeing occurrences still bind.
+# ===========================================================================
+
+
+def test_pair_invariant_list_conflict_rejects():
+    # J4/E1: pair(int[], string[]) ⇒ a⇒T==int, b⇒T==string (both invariant list
+    # elements) ⇒ no consistent T ⇒ reject (the old unifier fabricated
+    # `(int|string)[]`).
+    with pytest.raises(BamlPanic):
+        pair([1, 2], ["a", "b"])
+
+
+def test_pair_invariant_list_agree_binds():
+    # J9/G1: pair(int[], int[]) ⇒ two invariant occurrences that AGREE ⇒ T = int.
+    # The fix narrows behavior, so this must still succeed.
+    assert pair([1, 2], [3, 4]) == "int"
+
+
+def test_choose_union_outside_container_is_sound():
+    # J10/G2: choose(int[], string[]) — both occurrences are covariant (bare `T`),
+    # so the union forms OUTSIDE the container (T = int[] | string[]) and the call
+    # SUCCEEDS, returning `left`. Proves the fix keys on position variance, not
+    # "arrays are involved." (Contrast pair, where T is under the container.)
+    assert choose([1, 2], ["a"]) == [1, 2]
+
+
+def test_merge_invariant_map_value_conflict_rejects():
+    # J5/E2: merge(map<string,int>, map<string,string>) ⇒ conflicting invariant
+    # map-value type ⇒ reject.
+    with pytest.raises(BamlPanic):
+        merge({"k": 1}, {"k": "a"})
+
+
+def test_combine_invariant_class_arg_conflict_rejects():
+    # J6/E3: combine(GenericBox[int], GenericBox[string]) ⇒ Box<T> invariant,
+    # int ≠ string ⇒ reject.
+    with pytest.raises(BamlPanic):
+        combine(GenericBox[int](value=1), GenericBox[str](value="x"))
+
+
+def test_glue_invariant_vs_covariant_conflict_rejects():
+    # J7/E4: glue(int, string[]) ⇒ arr⇒T==string (invariant) but bare⇒int <: T
+    # (covariant); int <: string is false ⇒ reject (the key cross-variance case).
+    with pytest.raises(BamlPanic):
+        glue(1, ["a"])
+
+
+def test_glue_invariant_and_covariant_agree_binds():
+    # J11/G4: glue(int, int[]) ⇒ invariant (T==int) + covariant (int <: int)
+    # AGREE ⇒ T = int; must still succeed.
+    assert glue(1, [2, 3]) == "int"
+
+
+def test_two_typevar_union_is_uninferrable_rejects():
+    # J12: two_in_union<T,U>(x: T | U | int) ⇒ two free vars in one union have no
+    # principled split without an explicit hint ⇒ reject (distinct from §H, which
+    # is ONE var beside concrete members).
+    with pytest.raises(BamlPanic):
+        two_in_union("hello")
+
+
+# ===========================================================================
+# §D — n-ary covariant join, and §B heterogeneous container element
+# ===========================================================================
+
+
+def test_triple_choose_three_covariant_join():
+    # D3: triple_choose(5, "asdf", True) ⇒ T = int | string | bool — three
+    # covariant bare-arg occurrences union-merge (n-ary, not pairwise).
+    assert triple_choose(5, "asdf", True) == "int | string | bool"
+
+
+def test_make_triple_heterogeneous_list_element_unions():
+    # B8: make_triple(1, [1, "x"], {"k": True}) ⇒ B = int | string — the list's
+    # mixed elements union-merge while synthesizing ONE container's element type
+    # (the §D join applied INSIDE a container; distinct from §J's invariant
+    # conflict between two separate args). The heterogeneous list round-trips.
+    t = make_triple(1, [1, "x"], {"k": True})
+    assert isinstance(t, GenericTriple)
+    assert t.second == [1, "x"]
+
+
+def test_choose_divergent_generic_instances_union():
+    # D2: choose(GenericBox[int], GenericBox[str]) ⇒ T = GenericBox<int> |
+    # GenericBox<string>, the union OUTSIDE the box (both occurrences covariant).
+    # Body returns `left`, so the int box comes back. Contrast `combine`, where T
+    # is INSIDE the box and the same actuals conflict (§J).
+    left = GenericBox[int](value=1)
+    assert choose(left, GenericBox[str](value="x")) == left
+
+
+def test_tag_or_value_binds_generic_instance():
+    # H2: tag_or_value(GenericBox[str]) ⇒ the instance is not absorbed by the
+    # `string`/`null` siblings, so it routes to T ⇒ T = GenericBox<string>.
+    rendered = tag_or_value(GenericBox[str](value="asdf"))
+    assert "GenericBox" in rendered and "string" in rendered

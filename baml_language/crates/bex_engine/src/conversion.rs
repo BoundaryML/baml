@@ -6,10 +6,9 @@
 
 use ::bex_heap::{BexValue, HeapPermit, PermitProof, TlabHolder};
 use ::bex_vm_types::{HeapPtr, Object, ObjectType, RootHaver, Value, ValueKind};
-use baml_type::{Literal, Name, Ty};
+use baml_type::{Literal, Ty};
 use bex_external_types::{BexExternalAdt, BexExternalValue, RuntimeTy, UnionMetadata};
 use bex_vm::BexVm;
-use rustc_hash::FxHashMap;
 
 use crate::{BexEngine, EngineError};
 
@@ -277,8 +276,9 @@ impl BexEngine {
     /// disambiguation is needed. A generic instance's type is read from its
     /// wire-supplied `type_args` (the value-level source of truth); class/enum
     /// `TypeName`s are resolved against the engine registry so the binding
-    /// survives Gate B's name match. Opaque host values are `HostOnly` (Case 2,
-    /// → `rust_type`); null-less empty containers are `NoEvidence`.
+    /// survives Gate B's name match. Opaque host values — and anything else with
+    /// no readable BAML type, including empty containers — are `HostOnly`
+    /// (Case 2, → `rust_type`).
     pub(crate) fn synth_ty_from_value(&self, value: &BexExternalValue) -> SynthTy {
         let attr = baml_type::TyAttr::default;
         match value {
@@ -295,33 +295,29 @@ impl BexEngine {
             // A bare `null` binds `T = null` (TIR-faithful; 00b3 T33/T47).
             BexExternalValue::Null => SynthTy::Known(RuntimeTy::null()),
             BexExternalValue::Array { items, .. } => {
-                match synth_collection_element(self, items.iter()) {
-                    Some(elem) => SynthTy::Known(RuntimeTy::List(Box::new(elem), attr())),
-                    None => SynthTy::NoEvidence,
-                }
+                // An array always inhabits a list. When its elements carry no
+                // evidence (an empty `[]`, or elements that are themselves
+                // evidence-free), the element type is the host-only `rust_type`
+                // rather than no-evidence — `identity<T>([])` binds
+                // `T = rust_type[]`, never leaving `T` for Gate A.
+                let elem = synth_collection_element(self, items.iter())
+                    .unwrap_or_else(|| RuntimeTy::RustType { attr: attr() });
+                SynthTy::Known(RuntimeTy::List(Box::new(elem), attr()))
             }
             BexExternalValue::Map { entries, .. } => {
-                // A NON-empty map always carries key evidence: every wire entry
-                // is string-keyed, so the map-key TypeVar binds to `string` even
-                // when the *values* give no evidence (e.g. `{"a": []}`). Only a
-                // genuinely empty map is NoEvidence. The value position synthesizes
-                // its own evidence; when the values give none, we leave the value
-                // as the top type so it binds nothing for the value TypeVar
-                // (`skip_top` in the value-inference walker) while the key still
-                // binds. A truly empty map carries no key evidence ⇒ NoEvidence.
-                match synth_collection_element(self, entries.values()) {
-                    Some(value_ty) => SynthTy::Known(RuntimeTy::Map {
-                        key: Box::new(RuntimeTy::string()),
-                        value: Box::new(value_ty),
-                        attr: attr(),
-                    }),
-                    None if !entries.is_empty() => SynthTy::Known(RuntimeTy::Map {
-                        key: Box::new(RuntimeTy::string()),
-                        value: Box::new(RuntimeTy::unknown()),
-                        attr: attr(),
-                    }),
-                    None => SynthTy::NoEvidence,
-                }
+                // A map always inhabits `map<string, _>`: every wire entry is
+                // string-keyed, so the key is always `string`. When the values
+                // carry no evidence (a genuinely empty `{}`, or values that are
+                // themselves evidence-free), the value type is the host-only
+                // `rust_type` — an empty map binds `Map<string, rust_type>`,
+                // never leaving the value TypeVar for Gate A.
+                let value_ty = synth_collection_element(self, entries.values())
+                    .unwrap_or_else(|| RuntimeTy::RustType { attr: attr() });
+                SynthTy::Known(RuntimeTy::Map {
+                    key: Box::new(RuntimeTy::string()),
+                    value: Box::new(value_ty),
+                    attr: attr(),
+                })
             }
             // A fully-bound generic instance carries its concrete args on the
             // wire (`GenericBox[int]` → `[int]`). An instance whose class can't
@@ -336,9 +332,13 @@ impl BexEngine {
                 None => SynthTy::HostOnly,
             },
             BexExternalValue::Variant { enum_name, .. } => {
+                // A resolvable enum binds its concrete type; an unresolved enum
+                // name (no such enum registered) is an opaque carrier with no
+                // BAML type ⇒ host-only (`rust_type`), mirroring the unresolved
+                // `Instance` arm above.
                 match self.resolve_enum_type_name(enum_name) {
                     Some(tn) => SynthTy::Known(RuntimeTy::Enum(tn, attr())),
-                    None => SynthTy::NoEvidence,
+                    None => SynthTy::HostOnly,
                 }
             }
             // A reflected type passed as a value inhabits the `type` metatype.
@@ -1079,18 +1079,23 @@ pub(crate) fn union_runtime_ty(a: &RuntimeTy, b: &RuntimeTy) -> RuntimeTy {
 /// Recover `TypeVar(name) -> concrete` bindings from a `(formal, actual)` pair,
 /// **union-merging** repeat bindings of the same variable across calls. The
 /// `RuntimeTy` seam over the shared [`baml_type_runtime::infer_value_bindings`]
-/// — the runtime variant of the TIR unifier, which treats the top type as
-/// carrying no information and zips `Class` args name-agnostically (the wire
-/// instance type is ground truth).
+/// — the runtime variant of the TIR unifier, which binds a `Class` arm only when
+/// the formal and actual name the same class.
 ///
 /// Contrast [`collect_type_var_bindings`], the *first-wins* self-receiver path,
 /// which is intentionally a separate, simpler walk.
+///
+/// Superseded at the call seam by [`infer_bindings_runtime_checked`] (which
+/// solves all arguments together with variance tracking); retained as a
+/// best-effort per-pair primitive exercised by the unit tests below.
+#[cfg(test)]
 pub(crate) fn infer_bindings_runtime(
     formal: &RuntimeTy,
     actual: &RuntimeTy,
     out: &mut indexmap::IndexMap<String, RuntimeTy>,
 ) {
-    let mut bindings: FxHashMap<Name, Ty> = FxHashMap::default();
+    let mut bindings: rustc_hash::FxHashMap<baml_type::Name, Ty> =
+        rustc_hash::FxHashMap::default();
     baml_type_runtime::infer_value_bindings(&Ty::from(formal), &Ty::from(actual), &mut bindings);
     for (name, ty) in bindings {
         // A binding is always a subterm/union of a runtime-derived actual, so the
@@ -1104,51 +1109,79 @@ pub(crate) fn infer_bindings_runtime(
     }
 }
 
+/// Variance-aware inference over *all* arguments of a generic call at once
+/// (`02d`/`02e`). Accumulates every `(formal, actual)` pair into one
+/// [`baml_type_runtime::InferenceConstraints`] and solves with variance
+/// tracking, so a `TypeVar` used at conflicting variances across arguments —
+/// `pair<T>(a: T[], b: T[])` over `int[]`/`string[]`, or `glue<T>(bare: T, arr:
+/// T[])` over `int`/`string[]` — is *rejected* (returns `Err`) rather than
+/// silently union-merged into an unsound binding. The error string is the
+/// solver's "no consistent `T`" reason, surfaced by the caller as a Gate-A
+/// `TypeMismatch`.
+///
+/// Contrast [`infer_bindings_runtime`], the per-argument best-effort merge kept
+/// for the self-receiver and callable-summary paths.
+pub(crate) fn infer_bindings_runtime_checked(
+    pairs: &[(RuntimeTy, RuntimeTy)],
+) -> Result<indexmap::IndexMap<String, RuntimeTy>, String> {
+    let mut cons = baml_type_runtime::InferenceConstraints::new();
+    for (formal, actual) in pairs {
+        cons.record(&Ty::from(formal), &Ty::from(actual));
+    }
+    let bindings = cons.solve().map_err(|e| e.message)?;
+    let mut out = indexmap::IndexMap::new();
+    for (name, ty) in bindings {
+        // A binding is always a subterm/union of a runtime-derived actual, so the
+        // narrow cannot fail; skip defensively rather than panic if it ever does.
+        if let Ok(rt) = RuntimeTy::try_from(ty) {
+            out.insert(name.to_string(), rt);
+        }
+    }
+    Ok(out)
+}
+
 /// The outcome of synthesizing a `RuntimeTy` from a runtime argument value —
 /// the value→type bridge the TIR never needs (it sees typed expressions, not
-/// values). Synthesis can be incomplete, hence three cases.
+/// values). Every value yields a `RuntimeTy`: a concrete BAML type when one can
+/// be read, else the host-only `rust_type` fallback.
 pub(crate) enum SynthTy {
     /// A concrete BAML type was synthesized (Case 1).
     Known(RuntimeTy),
     /// An opaque host value with no BAML type (Case 2) — binds `rust_type` and
     /// rides through as an `Object::RustData` heap handle.
     HostOnly,
-    /// Null-less empty container etc. — this value cannot inform a `TypeVar` at
-    /// this position. Contributes no binding; Gate A decides the var's fate.
-    NoEvidence,
 }
 
 impl SynthTy {
-    /// The `RuntimeTy` to feed [`infer_bindings_runtime`], or `None` when the
-    /// value carries no evidence. `HostOnly` lowers to `RustType` (the
-    /// recommended host-only default — round-trips as `Object::RustData` with no
-    /// materializer change; see `convert_external_to_vm_value_with_ty`).
-    pub(crate) fn into_runtime_ty(self) -> Option<RuntimeTy> {
+    /// The `RuntimeTy` to feed [`infer_bindings_runtime`]. `HostOnly` lowers to
+    /// `RustType` (the recommended host-only default — round-trips as
+    /// `Object::RustData` with no materializer change; see
+    /// `convert_external_to_vm_value_with_ty`).
+    pub(crate) fn into_runtime_ty(self) -> RuntimeTy {
         match self {
-            SynthTy::Known(ty) => Some(ty),
-            SynthTy::HostOnly => Some(RuntimeTy::RustType {
+            SynthTy::Known(ty) => ty,
+            SynthTy::HostOnly => RuntimeTy::RustType {
                 attr: baml_type::TyAttr::default(),
-            }),
-            SynthTy::NoEvidence => None,
+            },
         }
     }
 }
 
 /// Union-fold the element/value synths of a collection into a single element
-/// type. `None` when the collection is empty or every element is `NoEvidence`
-/// (00b3 T43/T44). Host-only elements contribute `rust_type`.
+/// type. `None` only when the collection is empty (every value synthesizes to a
+/// concrete type or the host-only `rust_type`, so non-empty collections always
+/// yield evidence).
 fn synth_collection_element<'a>(
     engine: &BexEngine,
     items: impl Iterator<Item = &'a BexExternalValue>,
 ) -> Option<RuntimeTy> {
     let mut acc: Option<RuntimeTy> = None;
     for item in items {
-        if let Some(ty) = engine.synth_ty_from_value(item).into_runtime_ty() {
-            acc = Some(match acc {
-                None => ty,
-                Some(prev) => union_runtime_ty(&prev, &ty),
-            });
-        }
+        let ty = engine.synth_ty_from_value(item).into_runtime_ty();
+        acc = Some(match acc {
+            None => ty,
+            Some(prev) => union_runtime_ty(&prev, &ty),
+        });
     }
     acc
 }
@@ -2578,9 +2611,14 @@ mod inference_unifier_tests {
         assert!(infer(&tv("T"), &tv("U")).is_empty());
     }
     #[test]
-    fn infer_skips_unknown_actual() {
+    fn infer_binds_top_type_actual() {
+        // The runtime unifier no longer special-cases the top type `unknown`
+        // (the `skip_top` knob was removed): it binds like any concrete actual,
+        // matching compile-time inference. In practice the synth layer never
+        // feeds `unknown` here — a no-evidence value becomes host-only
+        // `rust_type` instead — so this binding does not arise end-to-end.
         let unknown = RuntimeTy::unknown();
-        assert!(infer(&tv("T"), &unknown).is_empty());
+        assert_eq!(infer(&tv("T"), &unknown).get("T"), Some(&unknown));
     }
     #[test]
     fn infer_through_list() {

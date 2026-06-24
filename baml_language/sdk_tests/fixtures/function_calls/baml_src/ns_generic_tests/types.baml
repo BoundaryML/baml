@@ -214,3 +214,47 @@ function parse_as<T>(source: string) -> T throws baml.json.JsonParseError | baml
 function consume_int_wrapper(x: GenericBox<int>) -> int {
   x.value
 }
+
+// ---------------------------------------------------------------------------
+// §J variance soundness (02d/02e): a `TypeVar` that occurs at more than one
+// position whose variances conflict has no consistent binding and the call must
+// REJECT, instead of fabricating an unsound union. The invariant-container
+// shapes below (`T[]`, `map<_, T>`, `GenericBox<T>`) are reachable from inbound
+// values; the contravariant function-parameter cases live at the unifier layer
+// (a host callable crosses the FFI as an opaque handle, not a structural
+// function type — see 02d / J13). Each body just reflects `T` so the regression
+// (agreeing-occurrence) twins can read the bound type back.
+// ---------------------------------------------------------------------------
+
+// Two invariant list-element occurrences: pair(int[], string[]) rejects;
+// pair(int[], int[]) binds T = int.
+function pair<T>(a: T[], b: T[]) -> string {
+  reflect.type_of<T>().to_string()
+}
+
+// Two invariant map-value occurrences: conflicting value types reject.
+function merge<T>(a: map<string, T>, b: map<string, T>) -> string {
+  reflect.type_of<T>().to_string()
+}
+
+// Two invariant generic-class-arg occurrences: GenericBox<int> vs GenericBox<string> rejects.
+function combine<T>(x: GenericBox<T>, y: GenericBox<T>) -> string {
+  reflect.type_of<T>().to_string()
+}
+
+// Invariant (`arr: T[]`) × covariant (`bare: T`) in one call: glue(int, string[])
+// rejects; glue(int, int[]) binds T = int.
+function glue<T>(bare: T, arr: T[]) -> string {
+  reflect.type_of<T>().to_string()
+}
+
+// §D n-ary covariant join: three covariant bare-arg occurrences union-merge.
+function triple_choose<T>(a: T, b: T, c: T) -> string {
+  reflect.type_of<T>().to_string()
+}
+
+// §J multiple unconstrained TypeVars in one union: un-inferrable ⇒ reject (two
+// free vars beside a concrete `int` member have no principled split).
+function two_in_union<T, U>(x: T | U | int) -> string {
+  reflect.type_of<T | U>().to_string()
+}

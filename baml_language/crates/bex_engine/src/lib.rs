@@ -994,6 +994,56 @@ fn derive_lambda_metadata(fqn: &str) -> (Option<bex_events::DefinitionKey>, Opti
     (parent_function, lambda_path)
 }
 
+// ── Friendly generic-inference errors ───────────────────────────────────────
+//
+// Inbound generic-call failures are surfaced to host callers, so their messages
+// must read for someone with no type-theory background. Two distinct shapes:
+//
+//   - *must-specify* — BAML found no evidence to infer `var` (a return-/body-only
+//     var, or a value position that came up empty). The fix is for the caller to
+//     name the type, so the message shows how.
+//   - *conflict* — the arguments demand mutually incompatible types for `var`;
+//     naming a type would not help (the args still wouldn't match), so the
+//     message explains the clash instead of suggesting a binding.
+//
+// Host call syntax is Python for now (subscript `f[int](...)` / `_types=`); a
+// per-host renderer is future work (see `03c-impl-guide`).
+
+/// The bare name the host caller used (e.g. `one_type_arg`), stripped of the
+/// engine's namespace/package qualification (`user.generic_tests.one_type_arg`)
+/// so the call examples in an error message match what the user actually typed.
+fn host_display_name(function_name: &str) -> &str {
+    function_name.rsplit('.').next().unwrap_or(function_name)
+}
+
+/// A generic call whose `var` could not be inferred from the arguments — tell the
+/// caller to specify it, with the Python subscript and `_types=` forms.
+fn friendly_must_specify(function_name: &str, generic_params: &[String], var: &str) -> String {
+    let name = host_display_name(function_name);
+    let placeholders = if generic_params.is_empty() {
+        "int".to_string()
+    } else {
+        generic_params
+            .iter()
+            .map(|_| "int")
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    format!(
+        "`{name}` is a generic BAML function, and BAML could not infer a type for its type \
+         parameter `{var}` from the call arguments. Python callers must specify it explicitly \
+         as a subscript — e.g. `{name}[{placeholders}](...)`."
+    )
+}
+
+/// A generic call whose arguments demand incompatible types for some `TypeVar`.
+/// `detail` is the plain-language clash from the unifier; we only add the call
+/// frame.
+fn friendly_inference_conflict(function_name: &str, detail: &str) -> String {
+    let name = host_display_name(function_name);
+    format!("`{name}` was called with arguments whose types can't be reconciled. {detail}")
+}
+
 impl BexEngine {
     fn next_engine_id() -> EngineId {
         static NEXT_ENGINE_ID: AtomicU64 = AtomicU64::new(1);
@@ -1991,19 +2041,30 @@ impl BexEngine {
         // map, then fold in with `or_insert` so the explicit `_types=` (source
         // b) and self-receiver (source a) bindings already in `type_args` WIN.
         // Inference only ever *adds* bindings — a var no value can carry
-        // (return/body-only, empty-collection, out-of-scope union-param) stays
-        // unbound and Gate A rejects it exactly as before.
+        // (return/body-only, out-of-scope union-param) stays unbound and Gate A
+        // rejects it exactly as before.
         if callee_is_generic {
-            let mut inferred: indexmap::IndexMap<String, RuntimeTy> = indexmap::IndexMap::new();
-            for (idx, arg) in args.iter().enumerate() {
-                if let (Some(declared), BexCallArg::Provided(value)) =
-                    (declared_param_types.get(idx), arg)
-                {
-                    if let Some(actual) = self.synth_ty_from_value(value).into_runtime_ty() {
-                        crate::conversion::infer_bindings_runtime(declared, &actual, &mut inferred);
+            // Synthesize each provided arg's `RuntimeTy` and pair it with its
+            // declared formal, then solve every var across all arguments at once
+            // with variance tracking (`02d`/`02e`): a `TypeVar` used at
+            // conflicting variances — contravariant function params, invariant
+            // container/class args — has no consistent binding and is rejected
+            // here rather than fabricated into an unsound union.
+            let pairs: Vec<(RuntimeTy, RuntimeTy)> = args
+                .iter()
+                .enumerate()
+                .filter_map(|(idx, arg)| match (declared_param_types.get(idx), arg) {
+                    (Some(declared), BexCallArg::Provided(value)) => {
+                        let actual = self.synth_ty_from_value(value).into_runtime_ty();
+                        Some((declared.clone(), actual))
                     }
-                }
-            }
+                    _ => None,
+                })
+                .collect();
+            let inferred = crate::conversion::infer_bindings_runtime_checked(&pairs)
+                .map_err(|detail| EngineError::TypeMismatch {
+                    message: friendly_inference_conflict(function_name, &detail),
+                })?;
             for (name, ty) in inferred {
                 type_args.entry(name).or_insert(ty);
             }
@@ -2069,10 +2130,10 @@ impl BexEngine {
             });
             if let Some(name) = unbound {
                 return Err(EngineError::TypeMismatch {
-                    message: format!(
-                        "generic function `{function_name}` is missing a type binding for \
-                         type parameter `{name}` (every TypeVar must be bound, e.g. via \
-                         `_types=`)"
+                    message: friendly_must_specify(
+                        function_name,
+                        &declared_generic_params,
+                        name.as_str(),
                     ),
                 });
             }
