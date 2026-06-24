@@ -463,9 +463,9 @@ fn function_type_throws_direct_callback_violation_is_humanized() {
     );
     assert!(
         output.contains(
-            "Add an explicit `throws` to the callback, catch the call, or make the callback non-throwing."
+            "The callback type does not say what it can throw. If `cb` is an infallible host callback, annotate it with `throws never`; otherwise catch the call or let the enclosing function declare/propagate the callback's throws."
         ),
-        "expected direct callback violation to use callback-oriented wording, got:\n{output}"
+        "expected direct callback violation to frame `throws never` as the infallible-host-callback case, got:\n{output}"
     );
 }
 

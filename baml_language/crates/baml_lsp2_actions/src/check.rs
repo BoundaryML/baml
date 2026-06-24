@@ -6097,7 +6097,7 @@ fn source_aware_tir_type_error_message(
                 )
             } else {
                 format!(
-                    "this body may throw through callback `{callback_name}`, but declared throws is `{}`. Add an explicit `throws` to the callback, catch the call, or make the callback non-throwing.",
+                    "this body may throw through callback `{callback_name}`, but declared throws is `{}`. The callback type does not say what it can throw. If `{callback_name}` is an infallible host callback, annotate it with `throws never`; otherwise catch the call or let the enclosing function declare/propagate the callback's throws.",
                     ty(declared)
                 )
             }

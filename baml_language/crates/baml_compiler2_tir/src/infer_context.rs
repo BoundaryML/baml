@@ -663,7 +663,7 @@ impl fmt::Display for TirTypeError {
                 } else {
                     write!(
                         f,
-                        "Add an explicit `throws` to the callback, catch the call, or make the callback non-throwing."
+                        "The callback type does not say what it can throw. If `{callback_name}` is an infallible host callback, annotate it with `throws never`; otherwise catch the call or let the enclosing function declare/propagate the callback's throws."
                     )
                 }
             }
