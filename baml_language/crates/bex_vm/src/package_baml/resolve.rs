@@ -321,6 +321,7 @@ fn match_template(
         TyTemplate::Wildcard => true,
         // `TypeArgRefOrWildcard` is a de Bruijn ref like `TypeArgRef` (substitution
         // treats them identically); bind it the same way here.
+        #[expect(deprecated)]
         TyTemplate::TypeArgRef(n) | TyTemplate::TypeArgRefOrWildcard(n) => {
             match bindings.get_mut(*n as usize) {
                 Some(slot @ None) => {
@@ -720,6 +721,7 @@ fn substitute_checked(template: &TyTemplate, env: &[RuntimeTy]) -> RuntimeTy {
 /// The largest `TypeArgRef` de Bruijn index anywhere in `t`, if any.
 fn max_type_arg_ref(t: &TyTemplate) -> Option<u32> {
     match t {
+        #[expect(deprecated)]
         TyTemplate::TypeArgRef(n) | TyTemplate::TypeArgRefOrWildcard(n) => Some(*n),
         TyTemplate::Concrete(_) | TyTemplate::Wildcard => None,
         TyTemplate::Array(inner) => max_type_arg_ref(inner),
@@ -737,6 +739,7 @@ fn max_type_arg_ref(t: &TyTemplate) -> Option<u32> {
 /// Whether a template references any impl generic parameter (a `TypeArgRef`).
 fn template_has_type_arg_ref(t: &TyTemplate) -> bool {
     match t {
+        #[expect(deprecated)]
         TyTemplate::TypeArgRef(_) | TyTemplate::TypeArgRefOrWildcard(_) => true,
         TyTemplate::Concrete(_) | TyTemplate::Wildcard => false,
         TyTemplate::Array(inner) => template_has_type_arg_ref(inner),

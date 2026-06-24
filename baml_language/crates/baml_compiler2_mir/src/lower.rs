@@ -975,6 +975,7 @@ fn tir2_to_dispatch_guard_template(
             .iter()
             .position(|p| p == name)
             .map(|n| {
+                #[expect(deprecated)]
                 TyTemplate::TypeArgRefOrWildcard(
                     u32::try_from(n).expect("generic param index fits in u32"),
                 )
