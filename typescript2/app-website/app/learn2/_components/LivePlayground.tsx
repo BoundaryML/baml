@@ -33,6 +33,8 @@ interface LivePlaygroundProps {
   fill?: boolean;
   /** Whether the panel's function/tests sidebar starts open (default true). */
   initialSidebarOpen?: boolean;
+  /** Lines to tint (whole-line) on the initial code — e.g. the entry function. */
+  highlightLines?: number[];
 }
 
 type EditorInstance = Parameters<OnMount>[0];
@@ -79,6 +81,7 @@ export default function LivePlayground({
   argsByFunction,
   fill,
   initialSidebarOpen,
+  highlightLines,
 }: LivePlaygroundProps) {
   const [port, setPort] = useState<RuntimePort | null>(null);
   const [version, setVersion] = useState(0);
@@ -195,6 +198,17 @@ export default function LivePlayground({
       monacoRef.current = monaco;
       monaco.editor.setTheme('baml-paper');
 
+      // Showcase highlight: a static whole-line tint marking the entry
+      // function of the shipped snippet (not tracked across edits).
+      if (highlightLines?.length) {
+        editor.createDecorationsCollection(
+          highlightLines.map((line) => ({
+            options: { className: 'l6-wf-hl', isWholeLine: true },
+            range: new monaco.Range(line, 1, line, 1),
+          })),
+        );
+      }
+
       // Forward caret moves (debounced) so clicking in the code selects the
       // matching function/test in the playground panel.
       editor.onDidChangeCursorPosition(() => {
@@ -229,7 +243,7 @@ export default function LivePlayground({
         })
         .catch(() => setFailed(true));
     },
-    [applyDiagnostics, postCursor],
+    [applyDiagnostics, postCursor, highlightLines],
   );
 
   const onChange = useCallback((value?: string) => {

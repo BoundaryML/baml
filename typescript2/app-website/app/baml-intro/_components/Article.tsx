@@ -24,6 +24,8 @@ import {
   BAML_SPAWN,
   BAML_UNKNOWN,
   BAML_UNREACHABLE,
+  BAML_WF_FANOUT,
+  BAML_WF_TALLY,
   BENCH_BAML,
   DESCRIBE_EVENTS,
   GREP_EVENTS,
@@ -234,6 +236,79 @@ function TestExampleTabs() {
   );
 }
 
+/* Native LLM Functions playground — a button row switches the editor +
+ * runtime between workflow examples. `illustrate` (the LLM image pipeline) is
+ * the default; the others are non-LLM workflows you can actually run. Each
+ * example highlights its entry function's lines. The LivePlayground is
+ * remounted on switch (Monaco is uncontrolled, so new code only loads via a
+ * key change). */
+const WORKFLOW_EXAMPLES = [
+  {
+    code: BAML_IMAGE,
+    filename: 'pipeline.baml',
+    fn: 'illustrate',
+    from: 2,
+    id: 'illustrate',
+    label: 'illustrate · LLM image pipeline',
+    to: 5,
+  },
+  {
+    code: BAML_WF_TALLY,
+    filename: 'tally.baml',
+    fn: 'summarize',
+    from: 2,
+    id: 'tally',
+    label: 'summarize · tally (runnable)',
+    to: 17,
+  },
+  {
+    code: BAML_WF_FANOUT,
+    filename: 'fanout.baml',
+    fn: 'analyze',
+    from: 2,
+    id: 'fanout',
+    label: 'analyze · parallel fan-out (runnable)',
+    to: 9,
+  },
+] as const;
+
+function lineRange(from: number, to: number): number[] {
+  return Array.from({ length: to - from + 1 }, (_, i) => from + i);
+}
+
+function WorkflowPlayground() {
+  const [id, setId] = useState<(typeof WORKFLOW_EXAMPLES)[number]['id']>(
+    WORKFLOW_EXAMPLES[0].id,
+  );
+  const ex = WORKFLOW_EXAMPLES.find((e) => e.id === id) ?? WORKFLOW_EXAMPLES[0];
+  return (
+    <div className="l6-breakout l6-breakout--xl">
+      <div aria-label="Workflow example" className="l6-wf-tabs" role="tablist">
+        {WORKFLOW_EXAMPLES.map((e) => (
+          <button
+            aria-selected={id === e.id}
+            className={`l6-wf-tab font-mono${id === e.id ? ' l6-wf-tab--on' : ''}`}
+            key={e.id}
+            onClick={() => setId(e.id)}
+            role="tab"
+            type="button"
+          >
+            {e.label}
+          </button>
+        ))}
+      </div>
+      <LivePlayground
+        filename={ex.filename}
+        highlightLines={lineRange(ex.from, ex.to)}
+        initialCode={ex.code}
+        initialFunction={ex.fn}
+        initialSidebarOpen={false}
+        key={ex.id}
+      />
+    </div>
+  );
+}
+
 export function Article() {
   const [activeId, setActiveId] = useState('workflows');
 
@@ -354,14 +429,7 @@ export function Article() {
               'BAML ships with tooling to observe LLM function inputs and outputs, like our workflow visualizer in VSCode. It’s especially helpful when working with multimodal outputs, like images.'
             }
           </p>
-          <div className="l6-breakout l6-breakout--xl">
-            <LivePlayground
-              filename="pipeline.baml"
-              initialCode={BAML_IMAGE}
-              initialFunction="illustrate"
-              initialSidebarOpen={false}
-            />
-          </div>
+          <WorkflowPlayground />
         </Sub>
 
         <Sub id="wf-tests" num="2" title="BAML Tests">

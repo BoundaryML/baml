@@ -564,6 +564,38 @@
   letter-spacing: 0.08em;
 }
 
+/* ---- Native LLM Functions: example switcher above the playground ---- */
+.l6-wf-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-bottom: 0.6rem;
+}
+.l6-wf-tab {
+  padding: 0.32rem 0.8rem;
+  font-size: 12.5px;
+  color: var(--l6-muted);
+  cursor: pointer;
+  background: #fffdf6;
+  border: 1px solid var(--l6-rule);
+  border-radius: 8px;
+  transition:
+    border-color 120ms ease,
+    color 120ms ease;
+}
+.l6-wf-tab:hover {
+  color: var(--l6-ink);
+}
+.l6-wf-tab--on {
+  color: var(--l6-ink);
+  border-color: var(--l6-accent);
+  box-shadow: inset 0 0 0 1px var(--l6-accent);
+}
+/* entry-function highlight (whole-line tint) inside the live playground */
+.l6-wf-hl {
+  background: rgba(109, 40, 217, 0.1);
+}
+
 /* =========================================================================
    Recursive self-improvement — "the sweep". Ripples of refinement radiate
    from the center (per-cell animation-delay = distance from center); the

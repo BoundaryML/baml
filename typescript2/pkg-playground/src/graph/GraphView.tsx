@@ -331,7 +331,7 @@ function GraphViewInner({
           refitAfterLayoutRef.current = false;
           // Wait a frame so ReactFlow has measured the re-laid nodes.
           requestAnimationFrame(() => {
-            fitView({ padding: 0.2, minZoom: 0.3, maxZoom: 0.85, duration: 250 });
+            fitView({ padding: 0.2, minZoom: 0.3, maxZoom: 1.5, duration: 250 });
           });
         }
       })
@@ -528,7 +528,7 @@ function GraphViewInner({
         panOnScroll
         panActivationKeyCode={null}
         fitView
-        fitViewOptions={{ minZoom: 0.3, maxZoom: 0.85, padding: 0.2 }}
+        fitViewOptions={{ minZoom: 0.3, maxZoom: 1.5, padding: 0.2 }}
         proOptions={{ hideAttribution: true }}
         colorMode={theme}
       >

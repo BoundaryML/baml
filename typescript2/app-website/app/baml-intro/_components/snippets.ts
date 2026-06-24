@@ -384,7 +384,15 @@ function classify(text: string) -> Verdict {
   "#
 }`;
 
-export const BAML_IMAGE = `function generate_image(thing: string) -> image {
+// `illustrate` lives at the top so the entry point is the first thing you
+// read; the WorkflowPlayground highlights its lines (2-5) by default.
+export const BAML_IMAGE = `// the pipeline: generate an image, then have an LLM describe it
+function illustrate(thing: string) -> string {
+  let img = generate_image(thing);
+  describe(img)
+}
+
+function generate_image(thing: string) -> image {
   client: AiGatewayImagen
   prompt: #"
     Create an image from this prompt: {{ thing }}
@@ -401,18 +409,81 @@ function describe(img: image) -> string {
   "#
 }
 
-// the pipeline: generate an image, then have an LLM describe it
-function illustrate(thing: string) -> string {
-  let img = generate_image(thing);
-  describe(img)
-}
-
 client AiGatewayImagen {
   provider: ai-gateway-images,
   options: {
     model: "google/imagen-4.0-fast-generate-001",
     api_key: env.AI_GATEWAY_API_KEY,
   }
+}`;
+
+// Non-LLM, runnable workflow: classify each line, then tally the results.
+// `//#` comments add nodes to the playground graph (the graph renders
+// header-anchored nodes + LLM calls). Entry point `summarize` is lines 2-17.
+// Verified `baml check`/`baml test` pass.
+export const BAML_WF_TALLY = `// a non-LLM workflow: classify each line, then tally the results
+function summarize(raw: string) -> Tally {
+  //# split the input into lines
+  let lines = raw.split("\\n");
+  let pos = 0;
+  let neg = 0;
+  for (let line in lines) {
+    //# classify each line
+    if (sentiment(line) == "positive") {
+      pos += 1;
+    } else {
+      neg += 1;
+    };
+  }
+  //# build the tally
+  Tally { positive: pos, negative: neg }
+}
+
+//# classify one line of text
+function sentiment(text: string) -> string {
+  let t = text.to_lower_case();
+  if (t.includes("love") || t.includes("great") || t.includes("amazing")) {
+    "positive"
+  } else {
+    "negative"
+  }
+}
+
+class Tally {
+  positive: int,
+  negative: int,
+}
+
+test "summarize tallies sentiment" {
+  let t = summarize("loved it\\nterrible\\ngreat job");
+  assert.equal(t.positive, 2);
+  assert.equal(t.negative, 1);
+}`;
+
+// Non-LLM, runnable workflow: fan three tasks across green threads, then
+// combine. `//#` comments add graph nodes. Entry point `analyze` is lines 2-9.
+// Verified `baml check`/`baml test` pass.
+export const BAML_WF_FANOUT = `// fan three tasks out across green threads, then combine the results
+function analyze(n: int) -> int {
+  //# fan out across green threads
+  let a = spawn { score(n) };
+  let b = spawn { score(n + 1) };
+  let c = spawn { score(n + 2) };
+  //# join and combine the results
+  (await a) + (await b) + (await c)
+}
+
+//# crunch one shard of work
+function score(seed: int) -> int {
+  let total = 0;
+  for (let i = 0; i < seed * 1000; i += 1) {
+    total += i % 7;
+  }
+  total
+}
+
+test "analyze fans out and combines" {
+  assert.is_true(analyze(3) > 0);
 }`;
 
 export const BAML_CSV_TESTS = `function classify(text: string) -> string {
