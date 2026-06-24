@@ -23,6 +23,22 @@ const HARDCODED_EXTENSION_CONFIG: HardcodedExtensionConfig = HardcodedExtensionC
 
 const GITHUB_REPO: &str = "BoundaryML/baml";
 
+/// The extension version, kept in sync with `extension.toml`. The `engine/`
+/// release pipeline tags each release as `X.Y.Z` and publishes the matching
+/// `baml-cli-X.Y.Z-<target>` assets, so the extension fetches the GitHub
+/// release whose tag equals its own version via `github_release_by_tag_name`
+/// (which hits `/releases/tags/<tag>` directly).
+///
+/// We deliberately do NOT use `latest_github_release` here. This repo carries
+/// two release streams: `engine/` (`X.Y.Z` tags, our `baml-cli-*` assets) and
+/// `baml_language/` (`baml-language-*` tags, published frequently and NOT as
+/// pre-releases). `latest_github_release` only inspects the first page of
+/// `/releases` (the 30 most-recent) and has no asset-name filter, so the
+/// high-cadence `baml-language-*` releases bury our latest `engine/` release and
+/// it returns a tag with no `baml-cli-*` asset. Pinning to our own version sticks
+/// to the `engine/` stream regardless of what the other pipeline publishes.
+const EXTENSION_VERSION: &str = env!("CARGO_PKG_VERSION");
+
 fn language_server_binary(
     language_server_id: &LanguageServerId,
     _worktree: &zed::Worktree,
@@ -52,13 +68,7 @@ fn language_server_binary(
                 &zed::LanguageServerInstallationStatus::CheckingForUpdate,
             );
 
-            let release = zed::latest_github_release(
-                GITHUB_REPO,
-                zed::GithubReleaseOptions {
-                    require_assets: true,
-                    pre_release: false,
-                },
-            )?;
+            let release = zed::github_release_by_tag_name(GITHUB_REPO, EXTENSION_VERSION)?;
 
             let (platform, arch) = zed::current_platform();
             let asset_name = format!(
@@ -77,7 +87,7 @@ fn language_server_binary(
                     zed::Os::Mac | zed::Os::Linux => ".tar.gz",
                     zed::Os::Windows => ".zip",
                 },
-                version = release.version,
+                version = EXTENSION_VERSION,
             );
 
             let asset = release
@@ -86,7 +96,7 @@ fn language_server_binary(
                 .find(|asset| asset.name == asset_name)
                 .ok_or_else(|| format!("no asset found matching {:?}", asset_name))?;
 
-            let version_dir = format!("baml-cli-{}", release.version);
+            let version_dir = format!("baml-cli-{}", EXTENSION_VERSION);
             let binary_path = format!(
                 "{version_dir}/baml-cli{}",
                 match platform {
