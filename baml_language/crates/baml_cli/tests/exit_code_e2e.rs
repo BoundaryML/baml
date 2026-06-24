@@ -335,13 +335,20 @@ testset "suite" with testing.PassRate(0.6) {
     );
 
     let output = run_baml_cli(built, tmp.path(), &["test", "--from", "."]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined = format!("{stdout}{stderr}");
 
     assert!(
         output.status.success(),
         "Expected unfiltered `baml test` to honor PassRate and pass, got: {:?}\nstdout: {}\nstderr: {}",
         output.status.code(),
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr),
+        stdout,
+        stderr,
+    );
+    assert!(
+        combined.contains("2 passed, 1 failed, 3 total"),
+        "Expected unfiltered aggregate output to report leaf test totals, got:\n{combined}"
     );
 }
 
@@ -378,6 +385,39 @@ testset "suite" with testing.PassRate(0.6) {
 }
 
 #[test]
+fn test_unfiltered_testset_run_reports_failed_child_name() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(
+        tmp.path(),
+        r#"
+testset "suite" {
+  test "one" { assert.is_true(true) }
+  test "two" { assert.is_true(false) }
+}
+"#,
+    );
+
+    let output = run_baml_cli(built, tmp.path(), &["test", "--from", "."]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "Expected unfiltered failing testset to fail, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        stdout,
+        stderr,
+    );
+    assert!(
+        stdout.contains("failed: suite/two"),
+        "Expected aggregate output to include the failed child name, got:\n{stdout}"
+    );
+}
+
+#[test]
 fn test_unfiltered_testset_run_fails_when_aggregate_outcome_fails() {
     let built = common::ensure_built();
     let tmp = tempfile::tempdir().unwrap();
@@ -392,6 +432,7 @@ function AlwaysFail(children: testing.TestSetChild[]) -> testing.TestSetReport {
     passed: report.passed,
     failed: 0,
     total: report.total,
+    failed_names: report.failed_names,
     results: report.results,
   }
 }

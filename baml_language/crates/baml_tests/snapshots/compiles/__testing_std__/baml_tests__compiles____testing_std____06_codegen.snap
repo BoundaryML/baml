@@ -12,6 +12,40 @@ function testing.FailFast() -> (testing.TestSetChild[]) -> testing.TestSetReport
     return
 }
 
+function testing.NamedChildReport.from_json(j: baml.json.json) -> testing.NamedChildReport {
+    load_var j
+    load_const "name"
+    call baml.json.field
+    store_var _3
+    load_type string
+    load_var _3
+    call baml.json.from_json
+    load_var j
+    load_const "report"
+    call baml.json.field
+    store_var _6
+    load_type testing.TestReport | testing.TestSetReport
+    load_var _6
+    call baml.json.from_json
+    init_instance testing.NamedChildReport .name, .report
+    return
+}
+
+function testing.NamedChildReport.to_json(self: testing.NamedChildReport) -> baml.json.json {
+    load_type string
+    load_var self
+    load_field .name
+    call baml.json.to_json
+    load_type testing.TestReport | testing.TestSetReport
+    load_var self
+    load_field .report
+    call baml.json.to_json
+    load_const "name"
+    load_const "report"
+    alloc_map 2
+    return
+}
+
 function testing.PassRate(threshold: float) -> (testing.TestSetChild[]) -> testing.TestSetReport throws never {
     load_var ?1
     make_cell
@@ -2758,13 +2792,20 @@ function testing.TestSetReport.from_json(j: baml.json.json) -> testing.TestSetRe
     load_var _12
     call baml.json.from_json
     load_var j
-    load_const "results"
+    load_const "failed_names"
     call baml.json.field
     store_var _15
-    load_type testing.TestReport | testing.TestSetReport[]
+    load_type string[]
     load_var _15
     call baml.json.from_json
-    init_instance testing.TestSetReport .outcome, .passed, .failed, .total, .results
+    load_var j
+    load_const "results"
+    call baml.json.field
+    store_var _18
+    load_type testing.TestReport | testing.TestSetReport[]
+    load_var _18
+    call baml.json.from_json
+    init_instance testing.TestSetReport .outcome, .passed, .failed, .total, .failed_names, .results
     return
 }
 
@@ -2785,6 +2826,10 @@ function testing.TestSetReport.to_json(self: testing.TestSetReport) -> baml.json
     load_var self
     load_field .total
     call baml.json.to_json
+    load_type string[]
+    load_var self
+    load_field .failed_names
+    call baml.json.to_json
     load_type testing.TestReport | testing.TestSetReport[]
     load_var self
     load_field .results
@@ -2793,8 +2838,9 @@ function testing.TestSetReport.to_json(self: testing.TestSetReport) -> baml.json
     load_const "passed"
     load_const "failed"
     load_const "total"
+    load_const "failed_names"
     load_const "results"
-    alloc_map 5
+    alloc_map 6
     return
 }
 
@@ -2813,159 +2859,170 @@ function testing._int_to_float(value: int) -> float {
     return
 }
 
-function testing.aggregate_reports(results: (testing.TestReport | testing.TestSetReport)[]) -> testing.TestSetReport {
+function testing.aggregate_reports(named_results: testing.NamedChildReport[]) -> testing.TestSetReport {
     load_const 0
     store_var passed
     load_const 0
     store_var failed
     load_const false
     store_var has_error
-    load_type testing.TestReport | testing.TestSetReport
-    load_var results
+    alloc_array 0
+    store_var failed_names
+    alloc_array 0
+    store_var results
+    load_type testing.NamedChildReport
+    load_var named_results
     call baml.iter.Iterable$for$T[].iter
-    store_var _5
+    store_var _7
 
   L0:
-    load_var _5
+    load_var _7
     is_type baml.iter.Flatten<...>
     pop_jump_if_false L1
     jump L18
 
   L1:
-    load_var _5
+    load_var _7
     is_type baml.iter.ArrayIterator<...>
     pop_jump_if_false L2
     jump L17
 
   L2:
-    load_var _5
+    load_var _7
     is_type baml.iter.StepBy<...>
     pop_jump_if_false L3
     jump L16
 
   L3:
-    load_var _5
+    load_var _7
     is_type baml.iter.Chain<...>
     pop_jump_if_false L4
     jump L15
 
   L4:
-    load_var _5
+    load_var _7
     is_type baml.iter.Repeat<...>
     pop_jump_if_false L5
     jump L14
 
   L5:
-    load_var _5
+    load_var _7
     is_type baml.iter.Map<...>
     pop_jump_if_false L6
     jump L13
 
   L6:
-    load_var _5
+    load_var _7
     is_type baml.iter.Filter<...>
     pop_jump_if_false L7
     jump L12
 
   L7:
-    load_var _5
+    load_var _7
     is_type baml.iter.FilterMap<...>
     pop_jump_if_false L8
     jump L11
 
   L8:
-    load_var _5
+    load_var _7
     is_type baml.iter.FlatMap<...>
     pop_jump_if_false L9
     jump L10
 
   L9:
-    load_var _5
+    load_var _7
     is_type baml.iter.Peekable<...>
-    pop_jump_if_false L32
-    load_type testing.TestReport | testing.TestSetReport
+    pop_jump_if_false L59
+    load_type testing.NamedChildReport
     load_type never
-    load_var _5
+    load_var _7
     call baml.iter.Peekable.Iterator.next
-    store_var _7
+    store_var _9
     jump L19
 
   L10:
-    load_var _5
+    load_var _7
     make_bound_method baml.iter.FlatMap.Iterator.next
     call_indirect
-    store_var _7
+    store_var _9
     jump L19
 
   L11:
-    load_var _5
+    load_var _7
     make_bound_method baml.iter.FilterMap.Iterator.next
     call_indirect
-    store_var _7
+    store_var _9
     jump L19
 
   L12:
-    load_type testing.TestReport | testing.TestSetReport
+    load_type testing.NamedChildReport
     load_type never
     load_type never
-    load_var _5
+    load_var _7
     call baml.iter.Filter.Iterator.next
-    store_var _7
+    store_var _9
     jump L19
 
   L13:
-    load_var _5
+    load_var _7
     make_bound_method baml.iter.Map.Iterator.next
     call_indirect
-    store_var _7
+    store_var _9
     jump L19
 
   L14:
-    load_type testing.TestReport | testing.TestSetReport
-    load_var _5
+    load_type testing.NamedChildReport
+    load_var _7
     call baml.iter.Repeat.Iterator.next
-    store_var _7
+    store_var _9
     jump L19
 
   L15:
-    load_type testing.TestReport | testing.TestSetReport
+    load_type testing.NamedChildReport
     load_type never
     load_type never
-    load_var _5
+    load_var _7
     call baml.iter.Chain.Iterator.next
-    store_var _7
+    store_var _9
     jump L19
 
   L16:
-    load_type testing.TestReport | testing.TestSetReport
+    load_type testing.NamedChildReport
     load_type never
-    load_var _5
+    load_var _7
     call baml.iter.StepBy.Iterator.next
-    store_var _7
+    store_var _9
     jump L19
 
   L17:
-    load_type testing.TestReport | testing.TestSetReport
-    load_var _5
+    load_type testing.NamedChildReport
+    load_var _7
     call baml.iter.ArrayIterator.Iterator.next
-    store_var _7
+    store_var _9
     jump L19
 
   L18:
-    load_var _5
+    load_var _7
     make_bound_method baml.iter.Flatten.Iterator.next
     call_indirect
-    store_var _7
+    store_var _9
 
   L19:
-    load_var _7
+    load_var _9
     is_type baml.iter.Done
     pop_jump_if_false L20
-    jump L26
+    jump L53
 
   L20:
-    load_var _7
-    store_var_load_var result
+    load_var _9
+    store_var named_result
+    load_var named_result
+    load_field .report
+    store_var result
+    load_var2 6 10
+    call baml.Array.push
+    pop 1
+    load_var result
     is_type testing.TestReport
     pop_jump_if_false L21
     jump L22
@@ -2986,13 +3043,197 @@ function testing.aggregate_reports(results: (testing.TestReport | testing.TestSe
     load_const "pass"
     cmp_op ==
     pop_jump_if_false L24
-    jump L25
+    jump L52
 
   L24:
     load_var failed
     load_const 1
     add_int
     store_var failed
+    load_var result
+    is_type testing.TestReport
+    pop_jump_if_false L25
+    jump L28
+
+  L25:
+    load_var result
+    store_var report
+    load_var report
+    load_field .failed_names
+    container_len
+    load_const 0
+    cmp_int_op >
+    pop_jump_if_false L26
+    jump L27
+
+  L26:
+    load_var named_result
+    load_field .name
+    alloc_array 1
+    jump L29
+
+  L27:
+    load_var report
+    load_field .failed_names
+    jump L29
+
+  L28:
+    load_var named_result
+    load_field .name
+    alloc_array 1
+
+  L29:
+    store_var _56
+    load_type string
+    load_var _56
+    call baml.iter.Iterable$for$T[].iter
+    store_var _57
+
+  L30:
+    load_var _57
+    is_type baml.iter.Flatten<...>
+    pop_jump_if_false L31
+    jump L48
+
+  L31:
+    load_var _57
+    is_type baml.iter.ArrayIterator<...>
+    pop_jump_if_false L32
+    jump L47
+
+  L32:
+    load_var _57
+    is_type baml.iter.StepBy<...>
+    pop_jump_if_false L33
+    jump L46
+
+  L33:
+    load_var _57
+    is_type baml.iter.Chain<...>
+    pop_jump_if_false L34
+    jump L45
+
+  L34:
+    load_var _57
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L35
+    jump L44
+
+  L35:
+    load_var _57
+    is_type baml.iter.Map<...>
+    pop_jump_if_false L36
+    jump L43
+
+  L36:
+    load_var _57
+    is_type baml.iter.Filter<...>
+    pop_jump_if_false L37
+    jump L42
+
+  L37:
+    load_var _57
+    is_type baml.iter.FilterMap<...>
+    pop_jump_if_false L38
+    jump L41
+
+  L38:
+    load_var _57
+    is_type baml.iter.FlatMap<...>
+    pop_jump_if_false L39
+    jump L40
+
+  L39:
+    load_var _57
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L59
+    load_type string
+    load_type never
+    load_var _57
+    call baml.iter.Peekable.Iterator.next
+    store_var _59
+    jump L49
+
+  L40:
+    load_var _57
+    make_bound_method baml.iter.FlatMap.Iterator.next
+    call_indirect
+    store_var _59
+    jump L49
+
+  L41:
+    load_var _57
+    make_bound_method baml.iter.FilterMap.Iterator.next
+    call_indirect
+    store_var _59
+    jump L49
+
+  L42:
+    load_type string
+    load_type never
+    load_type never
+    load_var _57
+    call baml.iter.Filter.Iterator.next
+    store_var _59
+    jump L49
+
+  L43:
+    load_var _57
+    make_bound_method baml.iter.Map.Iterator.next
+    call_indirect
+    store_var _59
+    jump L49
+
+  L44:
+    load_type string
+    load_var _57
+    call baml.iter.Repeat.Iterator.next
+    store_var _59
+    jump L49
+
+  L45:
+    load_type string
+    load_type never
+    load_type never
+    load_var _57
+    call baml.iter.Chain.Iterator.next
+    store_var _59
+    jump L49
+
+  L46:
+    load_type string
+    load_type never
+    load_var _57
+    call baml.iter.StepBy.Iterator.next
+    store_var _59
+    jump L49
+
+  L47:
+    load_type string
+    load_var _57
+    call baml.iter.ArrayIterator.Iterator.next
+    store_var _59
+    jump L49
+
+  L48:
+    load_var _57
+    make_bound_method baml.iter.Flatten.Iterator.next
+    call_indirect
+    store_var _59
+
+  L49:
+    load_var _59
+    is_type baml.iter.Done
+    pop_jump_if_false L50
+    jump L51
+
+  L50:
+    load_var2 5 15
+    call baml.Array.push
+    pop 1
+    jump L30
+
+  L51:
     load_var outcome
     load_const "error"
     cmp_op ==
@@ -3001,50 +3242,50 @@ function testing.aggregate_reports(results: (testing.TestReport | testing.TestSe
     store_var has_error
     jump L0
 
-  L25:
+  L52:
     load_var passed
     load_const 1
     add_int
     store_var passed
     jump L0
 
-  L26:
+  L53:
     load_var has_error
-    pop_jump_if_false L27
-    jump L30
+    pop_jump_if_false L54
+    jump L57
 
-  L27:
+  L54:
     load_var failed
     load_const 0
     cmp_int_op ==
-    pop_jump_if_false L28
-    jump L29
+    pop_jump_if_false L55
+    jump L56
 
-  L28:
+  L55:
     load_const "fail"
-    jump L31
+    jump L58
 
-  L29:
+  L56:
     load_const "pass"
-    jump L31
+    jump L58
 
-  L30:
+  L57:
     load_const "error"
 
-  L31:
-    store_var _49
+  L58:
+    store_var _97
     load_var passed
-    store_var _50
+    store_var _98
     load_var failed
-    store_var _51
-    load_var2 9 10
-    load_var2 11 1
+    store_var _99
+    load_var2 16 17
+    load_var2 18 6
     container_len
-    load_var results
-    init_instance testing.TestSetReport .outcome, .passed, .failed, .total, .results
+    load_var2 5 6
+    init_instance testing.TestSetReport .outcome, .passed, .failed, .total, .failed_names, .results
     return
 
-  L32:
+  L59:
     unreachable
 }
 
@@ -3215,7 +3456,7 @@ function testing.run_children_parallel(children: testing.TestSetChild[]) -> test
     jump L0
 
   L21:
-    load_type testing.TestReport | testing.TestSetReport
+    load_type testing.NamedChildReport
     load_type null
     load_var futures
     call baml.future.all_complete
@@ -3236,7 +3477,7 @@ function testing.run_children_parallel(children: testing.TestSetChild[]) -> test
 
 function testing.run_children_sequential(children: testing.TestSetChild[], fail_fast: bool) -> testing.TestSetReport {
     alloc_array 0
-    store_var results
+    store_var named_results
     load_type testing.TestSetChild
     load_var children
     call baml.iter.Iterable$for$T[].iter
@@ -3382,10 +3623,14 @@ function testing.run_children_sequential(children: testing.TestSetChild[], fail_
 
   L20:
     load_var _6
+    store_var_load_var child
     load_field .run
     call_indirect
     store_var report
     load_var2 3 6
+    load_field .name
+    load_var report
+    init_instance testing.NamedChildReport .name, .report
     call baml.Array.push
     pop 1
     load_var report
@@ -3414,12 +3659,12 @@ function testing.run_children_sequential(children: testing.TestSetChild[], fail_
 
   L24:
     pop_jump_if_false L0
-    load_var results
+    load_var named_results
     call testing.aggregate_reports
     jump L26
 
   L25:
-    load_var results
+    load_var named_results
     call testing.aggregate_reports
 
   L26:

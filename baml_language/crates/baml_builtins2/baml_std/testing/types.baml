@@ -27,12 +27,19 @@ class TestSetReport {
   passed int
   failed int
   total int
+  failed_names string[]
   results ChildReport[]
   // TODO: extras map<string, unknown> — see RunReport comment
 }
 
 /// A report for a single child — either a `TestReport` or a `TestSetReport`.
 type ChildReport = TestReport | TestSetReport
+
+/// A named child report used internally when aggregating testset children.
+class NamedChildReport {
+  name string
+  report ChildReport
+}
 
 // Runner type aliases — lambda transformers.
 // TestRunner wraps "run test once" into a new execution lambda.
