@@ -1,3 +1,12 @@
+import {
+  applyRunPatch,
+  createRunStoreClient,
+  decodeRunResultValue,
+  type Run,
+  type RunStoreClient,
+  type RunSubscriptionEvent,
+  WorkerRuntimePort,
+} from '@b/pkg-playground';
 import { createRawBamlWorker } from '@/playground/spawnBamlWorker';
 
 /**
@@ -85,8 +94,27 @@ let workerPromise: Promise<Worker> | null = null;
 let nextReqId = 1;
 const cells = new Map<string, Cell>();
 const pendingCodeLens = new Map<number, (lenses: CodeLensItem[]) => void>();
-const pendingRuns = new Map<number, (r: RunResult) => void>();
 const pendingLsp = new Map<number, (result: unknown) => void>();
+
+// Test runs go through the shared RunStore client — the same execution path the
+// playground's ExecutionPanel uses — layered over the existing worker via
+// WorkerRuntimePort (which uses addEventListener, so it coexists with the raw
+// diagnostics/codelens listener below).
+let runClientPromise: Promise<RunStoreClient> | null = null;
+const TERMINAL_RUN_STATUS = new Set([
+  'succeeded',
+  'failed',
+  'cancelled',
+  'panicked',
+]);
+
+function ensureRunClient(): Promise<RunStoreClient> {
+  if (runClientPromise) return runClientPromise;
+  runClientPromise = ensureWorker().then((worker) =>
+    createRunStoreClient(new WorkerRuntimePort(worker)),
+  );
+  return runClientPromise;
+}
 
 function projectMatchesCell(projectKey: string, id: string): boolean {
   return projectKey.split('/').includes(id);
@@ -161,22 +189,6 @@ function ensureWorker(): Promise<Worker> {
         }
         return;
       }
-      if (d?.type === 'callFunctionResult') {
-        const cb = pendingRuns.get(d.id);
-        if (cb) {
-          pendingRuns.delete(d.id);
-          cb({ ok: true, value: d.result });
-        }
-        return;
-      }
-      if (d?.type === 'callFunctionError') {
-        const cb = pendingRuns.get(d.id);
-        if (cb) {
-          pendingRuns.delete(d.id);
-          cb({ ok: false, error: d.error ?? 'run failed' });
-        }
-        return;
-      }
       if (d?.type === 'playgroundNotification') {
         const n = d.notification;
         if (n?.type === 'updateProject' && typeof n.project === 'string') {
@@ -205,29 +217,57 @@ function ensureWorker(): Promise<Worker> {
   return workerPromise;
 }
 
-function callOneTest(
-  worker: Worker,
+async function callOneTest(
   project: string,
   generation: number,
   testName: string,
 ): Promise<RunResult> {
-  const reqId = nextReqId++;
-  return new Promise<RunResult>((resolve) => {
-    pendingRuns.set(reqId, resolve);
-    worker.postMessage({
-      type: 'callTestFunction',
-      id: reqId,
-      project,
-      generation,
-      testName,
-    });
-    setTimeout(() => {
-      if (pendingRuns.has(reqId)) {
-        pendingRuns.delete(reqId);
-        resolve({ ok: false, error: 'timed out' });
-      }
-    }, 30000);
-  });
+  const client = await ensureRunClient();
+  let runId: string;
+  try {
+    runId = await client.startTestRun({ project, generation, testName });
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'run failed' };
+  }
+
+  // Apply the snapshot + patch stream until the run hits a terminal status,
+  // racing a timeout so a hung run can't wedge the codelens forever.
+  const handle = client.subscribe(runId);
+  const iterator = handle.events[Symbol.asyncIterator]();
+  const timeout = new Promise<'timeout'>((resolve) =>
+    setTimeout(() => resolve('timeout'), 30000),
+  );
+  let run: Run | null = null;
+  try {
+    while (true) {
+      const next = await Promise.race([iterator.next(), timeout]);
+      if (next === 'timeout') return { ok: false, error: 'timed out' };
+      if (next.done) break;
+      const event = next.value as RunSubscriptionEvent;
+      if (event.type === 'snapshot') run = event.snapshot;
+      else if (event.type === 'patch' && run)
+        run = applyRunPatch(run, event.patch);
+      else if (event.type === 'cursorExpired')
+        run = await client.snapshot(runId);
+      if (run && TERMINAL_RUN_STATUS.has(run.status)) break;
+    }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'run failed' };
+  } finally {
+    void handle.unsubscribe();
+  }
+
+  if (!run || !TERMINAL_RUN_STATUS.has(run.status)) {
+    return { ok: false, error: 'run did not complete' };
+  }
+  if (run.status === 'cancelled') return { ok: false, error: 'cancelled' };
+  // A failed assertion still produces a decodable TestReport (outcome 'fail');
+  // only a runtime error / panic leaves no value.
+  const value = decodeRunResultValue(run);
+  if (value == null) {
+    return { ok: false, error: run.error?.message ?? 'run failed' };
+  }
+  return { ok: true, value };
 }
 
 function lspRequest(
@@ -325,7 +365,7 @@ export function registerCell(id: string, initialCode: string): CellHandle {
     }
     let passed = 0;
     for (const leaf of leaves) {
-      const r = await callOneTest(worker, project, cell.generation ?? 0, leaf);
+      const r = await callOneTest(project, cell.generation ?? 0, leaf);
       if (r.ok && testPassed(r.value)) passed += 1;
     }
     const total = leaves.length;
@@ -417,7 +457,6 @@ export function registerCell(id: string, initialCode: string): CellHandle {
         return runTestSet(worker, name);
       }
       return callOneTest(
-        worker,
         cell.project ?? fallbackProject,
         cell.generation ?? 0,
         name,

@@ -16,7 +16,6 @@
 
 import initWasm, {
   BamlWasmRuntime,
-  BamlHandle,
   type LspResponse,
   type PlaygroundNotification,
   start as setupLogger,
@@ -28,8 +27,6 @@ import type {
   WorkerInMessage,
   PlaygroundNotification as WorkerPlaygroundNotification,
 } from '@b/pkg-playground';
-
-import { decodeCallResult } from '@b/pkg-proto';
 
 import { BamlVfs } from './vfs';
 
@@ -53,8 +50,6 @@ let disposed = false;
 let runtime: BamlWasmRuntime | null = null;
 let vfs: BamlVfs = new BamlVfs('/workspace');
 let rootPath = '/workspace';
-
-const liveHandles = new Map<number, BamlHandle[]>();
 
 const envVars: Record<string, string> = {};
 let nextEnvReqId = 0;
@@ -87,6 +82,23 @@ function postOut(msg: WorkerOutMessage, transfer?: Transferable[]): void {
   } else {
     self.postMessage(msg);
   }
+}
+
+// RunStore commands carry a requestId and report failures via `commandError`
+// (not a thrown promise). Guard the runtime once, here, so each handler stays
+// a thin pass-through to the wasm runtime.
+function runtimeForCommand(
+  requestId: number,
+  code: string,
+): BamlWasmRuntime | null {
+  if (runtime) return runtime;
+  postOut({
+    type: 'commandError',
+    requestId,
+    code,
+    message: 'WASM runtime is not initialized.',
+  });
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -128,8 +140,8 @@ async function loggingFetch(
 
   postOut({
     type: 'fetchLogNew',
+    callId,
     entry: {
-      callId,
       id: logId,
       timestamp: Date.now(),
       method,
@@ -248,6 +260,66 @@ function onPlaygroundNotification(notification: PlaygroundNotification): void {
         type: 'cursorContext',
         context: notification.context,
       });
+      break;
+    // RunStore protocol: the runtime owns run state and pushes snapshots +
+    // patches. Unwrap each to a top-level WorkerOutMessage so the panel's
+    // RunStoreClient (over WorkerRuntimePort) consumes them. The wasm-generated
+    // types use `Value` for run/patch/snapshot; the cast lands them on the
+    // narrower worker-protocol types (runtime values are always valid).
+    case 'runStarted':
+      postOut({
+        type: 'runStarted',
+        requestId: notification.requestId,
+        run: notification.run,
+      } as WorkerOutMessage);
+      break;
+    case 'runPatch':
+      postOut({
+        type: 'runPatch',
+        patch: notification.patch,
+      } as WorkerOutMessage);
+      break;
+    case 'runSnapshot':
+      postOut({
+        type: 'runSnapshot',
+        requestId: notification.requestId,
+        runId: notification.runId,
+        snapshot: notification.snapshot,
+      } as WorkerOutMessage);
+      break;
+    case 'runList':
+      postOut({
+        type: 'runList',
+        requestId: notification.requestId,
+        runs: notification.runs,
+      } as WorkerOutMessage);
+      break;
+    case 'runCursorExpired':
+      postOut({
+        type: 'runCursorExpired',
+        requestId: notification.requestId,
+        subscriptionId: notification.subscriptionId,
+        runId: notification.runId,
+        reason: notification.reason,
+      } as WorkerOutMessage);
+      break;
+    case 'commandAck':
+      postOut({
+        type: 'commandAck',
+        requestId: notification.requestId,
+        outcome: notification.outcome,
+      });
+      break;
+    case 'commandError':
+      postOut({
+        type: 'commandError',
+        requestId: notification.requestId,
+        code: notification.code,
+        message: notification.message,
+      });
+      break;
+    case 'profileArtifactChunk':
+      postOut(notification as WorkerOutMessage);
       break;
     default:
       postOut({
@@ -490,88 +562,202 @@ self.onmessage = async (event: MessageEvent) => {
   const msg = data as WorkerInMessage;
 
   switch (msg.type) {
-    case 'nextFunctionCall': {
-      if (!runtime) {
-        postOut({
-          type: 'nextFunctionCallError',
-          id: msg.id,
-          error: 'Runtime not initialized',
-        });
-        return;
-      }
+    // ── RunStore protocol: execution lives in the runtime, results stream
+    //    back as runStarted/runPatch notifications (see onPlaygroundNotification).
+    case 'startRun': {
+      const rt = runtimeForCommand(msg.requestId, 'wasmRuntimeNotReady');
+      if (!rt) return;
       try {
-        postOut({
-          type: 'nextFunctionCallResult',
-          id: msg.id,
-          callId: (
-            runtime as unknown as { nextFunctionCall(): number }
-          ).nextFunctionCall(),
-        });
+        rt.startRun(msg.requestId, msg.project, msg.functionName, msg.argsBytes);
       } catch (e) {
         postOut({
-          type: 'nextFunctionCallError',
-          id: msg.id,
-          error: e instanceof Error ? e.message : String(e),
+          type: 'commandError',
+          requestId: msg.requestId,
+          code: 'wasmStartRunFailed',
+          message: e instanceof Error ? e.message : String(e),
         });
       }
       return;
     }
 
-    case 'callFunction': {
-      if (!runtime) {
-        postOut({
-          type: 'callFunctionError',
-          id: msg.id,
-          error: 'Runtime not initialized',
-        });
-        return;
-      }
+    case 'startPreviewRun': {
+      const rt = runtimeForCommand(msg.requestId, 'wasmRuntimeNotReady');
+      if (!rt) return;
       try {
-        const resultBytes = await runtime.callFunction(
-          msg.id,
+        rt.startPreviewRun(
+          msg.requestId,
           msg.project,
-          msg.name,
-          msg.argsProto,
+          msg.parentFunctionName,
+          msg.helper,
+          msg.functionName,
+          msg.argsBytes,
         );
-        const bytes = new Uint8Array(resultBytes);
-        const handles: BamlHandle[] = [];
-        // Return a plain handle descriptor (postMessage-cloneable) instead of
-        // the BamlHandle WASM object. We keep the BamlHandle alive in
-        // liveHandles so its Drop fires when the run is cleared.
-        const decoded = decodeCallResult(bytes, (key, handleType, typeName) => {
-          const h = new BamlHandle(key.toString(), handleType);
-          handles.push(h);
-          return {
-            handle_key: key,
-            handle_type: handleType,
-            type_name: typeName,
-          };
-        });
-        const existing = liveHandles.get(msg.id);
-        if (existing) for (const h of existing) h.free();
-        if (handles.length > 0) liveHandles.set(msg.id, handles);
-        else liveHandles.delete(msg.id);
-        // Send the decoded BamlJsValue directly — canary's worker-protocol
-        // expects `result: BamlJsValue<PlainHandleDescriptor>`, not a string.
-        postOut({ type: 'callFunctionResult', id: msg.id, result: decoded });
       } catch (e) {
-        const isCancelled =
-          e instanceof Error && (e as any).name === 'BamlCancelledError';
         postOut({
-          type: 'callFunctionError',
-          id: msg.id,
-          error: e instanceof Error ? e.message : String(e),
-          cancelled: isCancelled || undefined,
+          type: 'commandError',
+          requestId: msg.requestId,
+          code: 'wasmStartPreviewRunFailed',
+          message: e instanceof Error ? e.message : String(e),
         });
       }
       return;
     }
 
-    case 'cancelCall':
+    case 'startTestRun': {
+      const rt = runtimeForCommand(msg.requestId, 'wasmRuntimeNotReady');
+      if (!rt) return;
       try {
-        runtime?.cancelCall(msg.project, msg.id);
-      } catch {}
+        rt.startTestRun(
+          msg.requestId,
+          msg.project,
+          msg.generation,
+          msg.testName,
+        );
+      } catch (e) {
+        postOut({
+          type: 'commandError',
+          requestId: msg.requestId,
+          code: 'wasmStartTestRunFailed',
+          message: e instanceof Error ? e.message : String(e),
+        });
+      }
       return;
+    }
+
+    case 'cancelRun': {
+      const rt = runtimeForCommand(msg.requestId, 'wasmRuntimeNotReady');
+      if (!rt) return;
+      try {
+        rt.cancelRun(msg.requestId, msg.runId);
+      } catch (e) {
+        postOut({
+          type: 'commandError',
+          requestId: msg.requestId,
+          code: 'wasmCancelRunFailed',
+          message: e instanceof Error ? e.message : String(e),
+        });
+      }
+      return;
+    }
+
+    case 'respondToInput': {
+      const rt = runtimeForCommand(msg.requestId, 'wasmRuntimeNotReady');
+      if (!rt) return;
+      try {
+        rt.respondToInput(msg.requestId, msg.runId, msg.inputRequestId);
+      } catch (e) {
+        postOut({
+          type: 'commandError',
+          requestId: msg.requestId,
+          code: 'wasmRespondToInputFailed',
+          message: e instanceof Error ? e.message : String(e),
+        });
+      }
+      return;
+    }
+
+    case 'respondToEnv': {
+      const rt = runtimeForCommand(msg.requestId, 'wasmRuntimeNotReady');
+      if (!rt) return;
+      try {
+        const outcome = rt.respondToEnv(
+          msg.requestId,
+          msg.runId,
+          msg.envRequestId,
+          msg.value,
+        );
+        // The runtime's `env` callback (resolveEnv) posts envVarRequest with a
+        // numeric id; the panel echoes it back as envRequestId. Resolve that
+        // pending promise so an in-flight run unblocks.
+        if (outcome === 'accepted') {
+          const id = Number(msg.envRequestId);
+          const resolve = Number.isFinite(id)
+            ? pendingEnvResolvers.get(id)
+            : undefined;
+          if (resolve) {
+            pendingEnvResolvers.delete(id);
+            resolve(msg.value);
+          }
+        }
+      } catch (e) {
+        postOut({
+          type: 'commandError',
+          requestId: msg.requestId,
+          code: 'wasmRespondToEnvFailed',
+          message: e instanceof Error ? e.message : String(e),
+        });
+      }
+      return;
+    }
+
+    case 'listRuns': {
+      const rt = runtimeForCommand(msg.requestId, 'wasmRuntimeNotReady');
+      if (!rt) return;
+      try {
+        rt.listRuns(msg.requestId, msg.filter);
+      } catch (e) {
+        postOut({
+          type: 'commandError',
+          requestId: msg.requestId,
+          code: 'wasmListRunsFailed',
+          message: e instanceof Error ? e.message : String(e),
+        });
+      }
+      return;
+    }
+
+    case 'snapshot': {
+      const rt = runtimeForCommand(msg.requestId, 'wasmRuntimeNotReady');
+      if (!rt) return;
+      try {
+        rt.snapshot(msg.requestId, msg.runId);
+      } catch (e) {
+        postOut({
+          type: 'commandError',
+          requestId: msg.requestId,
+          code: 'wasmSnapshotFailed',
+          message: e instanceof Error ? e.message : String(e),
+        });
+      }
+      return;
+    }
+
+    case 'subscribe': {
+      const rt = runtimeForCommand(msg.requestId, 'wasmRuntimeNotReady');
+      if (!rt) return;
+      try {
+        rt.subscribe(
+          msg.requestId,
+          msg.subscriptionId,
+          msg.runId,
+          msg.afterCursor == null ? undefined : BigInt(msg.afterCursor),
+        );
+      } catch (e) {
+        postOut({
+          type: 'commandError',
+          requestId: msg.requestId,
+          code: 'wasmSubscribeFailed',
+          message: e instanceof Error ? e.message : String(e),
+        });
+      }
+      return;
+    }
+
+    case 'unsubscribe': {
+      const rt = runtimeForCommand(msg.requestId, 'wasmRuntimeNotReady');
+      if (!rt) return;
+      try {
+        rt.unsubscribe(msg.requestId, msg.subscriptionId);
+      } catch (e) {
+        postOut({
+          type: 'commandError',
+          requestId: msg.requestId,
+          code: 'wasmUnsubscribeFailed',
+          message: e instanceof Error ? e.message : String(e),
+        });
+      }
+      return;
+    }
 
     case 'envVarResponse': {
       const resolve = pendingEnvResolvers.get(msg.id);
@@ -633,61 +819,8 @@ self.onmessage = async (event: MessageEvent) => {
       runtime?.requestCollectTests(msg.project);
       return;
 
-    case 'callTestFunction': {
-      if (!runtime) {
-        postOut({
-          type: 'callFunctionError',
-          id: msg.id,
-          error: 'Runtime not initialized',
-        });
-        return;
-      }
-      try {
-        const resultBytes = await runtime.callTestFunction(
-          msg.id,
-          msg.project,
-          msg.generation,
-          msg.testName,
-        );
-        const bytes = new Uint8Array(resultBytes);
-        const handles: BamlHandle[] = [];
-        const decoded = decodeCallResult(bytes, (key, handleType, typeName) => {
-          const h = new BamlHandle(key.toString(), handleType);
-          handles.push(h);
-          return {
-            handle_key: key,
-            handle_type: handleType,
-            type_name: typeName,
-          };
-        });
-        const existing = liveHandles.get(msg.id);
-        if (existing) for (const h of existing) h.free();
-        if (handles.length > 0) liveHandles.set(msg.id, handles);
-        else liveHandles.delete(msg.id);
-        postOut({ type: 'callFunctionResult', id: msg.id, result: decoded });
-      } catch (e) {
-        const isCancelled =
-          e instanceof Error && (e as any).name === 'BamlCancelledError';
-        postOut({
-          type: 'callFunctionError',
-          id: msg.id,
-          error: e instanceof Error ? e.message : String(e),
-          cancelled: isCancelled || undefined,
-        });
-      }
-      return;
-    }
-
     case 'expandTestSet':
       runtime?.expandTestSet(msg.project, msg.generation, msg.testsetName);
-      return;
-
-    case 'clearHandles':
-      for (const id of msg.runIds) {
-        const handles = liveHandles.get(id);
-        if (handles) for (const h of handles) h.free();
-        liveHandles.delete(id);
-      }
       return;
 
     case 'dispose':
