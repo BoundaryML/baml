@@ -5818,14 +5818,12 @@ impl<'db> TypeInferenceBuilder<'db> {
         // total (`throws never`, any `T`) and honors overrides via a runtime shim.
         let to_string_callee = type_args.is_empty()
             && arg_exprs.is_empty()
+            && crate::throws_analysis::is_to_string_call_callee(&body.exprs[callee])
+            // A dotted-path callee is the sugar only when its root is an in-scope
+            // value (a local), not a package/module path like `Mod.to_string()`.
             && match &body.exprs[callee] {
-                Expr::MemberAccess { member, .. } => member.as_str() == "to_string",
-                Expr::Path(segs) => {
-                    segs.len() >= 2
-                        && segs.last().is_some_and(|s| s.as_str() == "to_string")
-                        && self.locals.contains_key(&segs[0])
-                }
-                _ => false,
+                Expr::Path(segs) => self.locals.contains_key(&segs[0]),
+                _ => true,
             };
         let mut to_string_probe_ty: Option<Ty> = None;
         if to_string_callee {

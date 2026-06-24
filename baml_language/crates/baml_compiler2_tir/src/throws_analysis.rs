@@ -30,10 +30,23 @@ pub(crate) trait ThrowsAnalysisContext {
     fn runtime_id_set_throws(&self) -> Option<BTreeSet<Ty>>;
 }
 
-/// True when `expr` is the bare `$id` special form used as an assignment
-/// target — the shape that lowers to an implicit `baml.id.set` call.
+/// Whether `expr` has the shape of a `recv.to_string()` call callee: a
+/// `to_string` member access, or a dotted path whose last segment is `to_string`.
+/// This is the syntactic trigger shared by the `obj.to_string()` sugar across TIR
+/// (type inference + this throws pass) and MIR lowering; each site layers its own
+/// guards on top (in-scope-local root, callee left untyped, etc.).
+pub fn is_to_string_call_callee(expr: &Expr) -> bool {
+    match expr {
+        Expr::MemberAccess { member, .. } => member.as_str() == "to_string",
+        Expr::Path(segs) => {
+            segs.len() >= 2 && segs.last().is_some_and(|s| s.as_str() == "to_string")
+        }
+        _ => false,
+    }
+}
+
 /// Whether `callee` is the callee of a `recv.to_string()` sugar fallback — a
-/// `to_string` member/path access the type checker left untyped (`Unknown`)
+/// `to_string` call shape the type checker left untyped (`Unknown`/`Error`)
 /// because the receiver has no real `to_string` method. Such a call lowers to
 /// `string.from(recv)`, which is `throws never`.
 fn is_to_string_fallback_callee<C: ThrowsAnalysisContext>(
@@ -41,19 +54,14 @@ fn is_to_string_fallback_callee<C: ThrowsAnalysisContext>(
     callee: ExprId,
     body: &ExprBody,
 ) -> bool {
-    let is_to_string = match &body.exprs[callee] {
-        Expr::MemberAccess { member, .. } => member.as_str() == "to_string",
-        Expr::Path(segs) => {
-            segs.len() >= 2 && segs.last().is_some_and(|s| s.as_str() == "to_string")
-        }
-        _ => false,
-    };
-    is_to_string
+    is_to_string_call_callee(&body.exprs[callee])
         && context
             .expression_type(callee)
-            .is_none_or(|t| matches!(t, Ty::Unknown { .. }))
+            .is_none_or(|t| matches!(t, Ty::Unknown { .. } | Ty::Error { .. }))
 }
 
+/// True when `expr` is the bare `$id` special form used as an assignment
+/// target — the shape that lowers to an implicit `baml.id.set` call.
 fn is_runtime_id_path(expr_id: ExprId, body: &ExprBody) -> bool {
     matches!(&body.exprs[expr_id], Expr::Path(segments)
         if segments.len() == 1 && segments[0].as_str() == "$id")

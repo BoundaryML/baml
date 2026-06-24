@@ -117,6 +117,21 @@ pub trait Continuation: Send {
     fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>);
 }
 
+/// Returns the dispatched callee's result unchanged. Shared by the single-call
+/// shims (`_compare_shim`, `string.to<T>`'s `from_string` dispatch) whose only
+/// job is to dispatch one call and surface its value.
+pub(super) struct PassThroughContinuation;
+
+impl Continuation for PassThroughContinuation {
+    fn call(self: Box<Self>, _vm: &mut BexVm, value: Value) -> NativeCallResult {
+        NativeCallResult::Done(value)
+    }
+    fn gc_roots(&self) -> Vec<HeapPtr> {
+        Vec::new()
+    }
+    fn apply_forwarding(&mut self, _forwarding: &HashMap<HeapPtr, HeapPtr>) {}
+}
+
 // Generate the BamlClass*/BamlNamespace*/BamlPackageBaml trait hierarchy.
 // `unsafe_code` is intentional: float-boxed Object reads use `ptr.get()`
 // which is unsafe; the surrounding accessors uphold the heap-permit

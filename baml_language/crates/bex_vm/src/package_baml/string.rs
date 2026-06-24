@@ -1,11 +1,9 @@
-use std::collections::HashMap;
-
 use baml_type::RuntimeTy;
 use bex_heap::TlabHolder;
 use bex_str::BexStr;
-use bex_vm_types::{HeapPtr, types::Value};
+use bex_vm_types::types::Value;
 
-use super::{BamlClassString, Continuation, NativeCallResult, PackageBamlImpl};
+use super::{BamlClassString, NativeCallResult, PackageBamlImpl, PassThroughContinuation};
 use crate::{
     BexVm, VmPanic,
     array_index::{resolve_index, resolve_slice_bound},
@@ -335,7 +333,7 @@ fn string_to_dispatch(vm: &mut BexVm, s: &str, ty: &RuntimeTy) -> NativeCallResu
                         callee,
                         args: vec![arg],
                         type_args: type_args.clone(),
-                        continuation: Box::new(FromStringContinuation),
+                        continuation: Box::new(PassThroughContinuation),
                     }
                 }
                 None => parse_error(format!("{fqn} does not implement baml.FromString")),
@@ -343,20 +341,6 @@ fn string_to_dispatch(vm: &mut BexVm, s: &str, ty: &RuntimeTy) -> NativeCallResu
         }
         other => parse_error(format!("cannot parse a string into {other:?}")),
     }
-}
-
-/// Pass-through continuation for `string.to<T>` dispatching to a class's
-/// `from_string`: the callee returns the parsed instance, which we hand back.
-struct FromStringContinuation;
-
-impl Continuation for FromStringContinuation {
-    fn call(self: Box<Self>, _vm: &mut BexVm, value: Value) -> NativeCallResult {
-        NativeCallResult::Done(value)
-    }
-    fn gc_roots(&self) -> Vec<HeapPtr> {
-        Vec::new()
-    }
-    fn apply_forwarding(&mut self, _forwarding: &HashMap<HeapPtr, HeapPtr>) {}
 }
 
 /// Throw `baml.errors.ParseError { message }` from `string.to<T>`.

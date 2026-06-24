@@ -7218,26 +7218,27 @@ impl<'db> LoweringContext<'db> {
         if !args.is_empty() {
             return false;
         }
-        // The fallback fires only when TIR left the `to_string` callee *untyped*
-        // (`Unknown`) — i.e. no real `to_string` method resolved. A real
-        // implementor (any `baml.ToString` / interface impl) types the callee as a
-        // method and is dispatched by the normal paths. Keying on the callee's TIR
-        // type (not on resolution presence) is essential: a generic typevar
-        // receiver records a placeholder resolution yet still has an `Unknown`
-        // callee type, and must take the fallback rather than ICE on the unknown.
-        let callee_unknown = self
-            .expr_types
-            .get(&self.expr_metadata_key(callee))
-            .is_none_or(|t| matches!(t, Tir2Ty::Unknown { .. }));
-        if !callee_unknown {
+        let callee_expr = self.body.exprs[callee].clone();
+        // Trigger shape (shared with TIR type inference + throws analysis): a
+        // `to_string` member/path call.
+        if !baml_compiler2_tir::throws_analysis::is_to_string_call_callee(&callee_expr) {
             return false;
         }
-        let callee_expr = self.body.exprs[callee].clone();
+        // Fires only when TIR left the callee *untyped* (`Unknown`/`Error`) — no
+        // real `to_string` method resolved. A real implementor (any `baml.ToString`
+        // / interface impl) types the callee as a method and is dispatched by the
+        // normal paths. Key on the callee's TIR type, not on resolution presence: a
+        // generic typevar receiver records a placeholder resolution yet still has an
+        // untyped callee, and must take the fallback rather than ICE on it.
+        let callee_untyped = self
+            .expr_types
+            .get(&self.expr_metadata_key(callee))
+            .is_none_or(|t| matches!(t, Tir2Ty::Unknown { .. } | Tir2Ty::Error { .. }));
+        if !callee_untyped {
+            return false;
+        }
         let (recv_op, recv_tir_ty): (Operand, Option<Tir2Ty>) = match &callee_expr {
-            AstExpr::MemberAccess { base, member } => {
-                if member.as_str() != "to_string" {
-                    return false;
-                }
+            AstExpr::MemberAccess { base, .. } => {
                 let base_id = *base;
                 let ty = self
                     .expr_types
@@ -7246,9 +7247,6 @@ impl<'db> LoweringContext<'db> {
                 (self.lower_to_operand(base_id), ty)
             }
             AstExpr::Path(segments) => {
-                if segments.len() < 2 || segments.last().is_none_or(|s| s.as_str() != "to_string") {
-                    return false;
-                }
                 let receiver_segments = &segments[..segments.len() - 1];
                 // Lower the receiver, mirroring normal path-method receiver
                 // handling: a single-segment root may be a local OR a closure
