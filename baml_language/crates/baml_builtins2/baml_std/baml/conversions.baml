@@ -31,8 +31,11 @@ interface ToString {
 /// Internal: default structural rendering used by `string.from` for values
 /// whose runtime type does not implement `baml.ToString`. Primitives render
 /// naturally (`5`, `true`, `null`); containers and class instances render
-/// structurally (`[1, 2]`, `Point { x: 1, y: 2 }`). Never throws.
-//baml:vm
+/// structurally (`[1, 2]`, `Point { x: 1, y: 2 }`). A nested value whose runtime
+/// class *does* implement `baml.ToString` is rendered via that override (so the
+/// default honors overrides at every depth, like `string.from`). Never throws.
+//baml:mut_vm
+//baml:may_yield
 function _to_string_default<T>(value: T) -> string throws never {
   $rust_function
 }

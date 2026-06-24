@@ -79,7 +79,7 @@ function user.OptionalIndex(node: user.Node | null, items: int[] | null, lookup:
     let b6 = node?.labels?.["main"] : user.Node | null
     let b7 = node?.labels?.["main"].value : int | null
     let b8 = node?.children?.[0] : user.Node | null
-    let b9 = items?.[0].to_string() : unknown
+    let b9 = items?.[0].to_string() : string
     let b10 = node?.children?.[node?.value] : user.Node | null
     let b11 = node?.children?.[items?.[0] ?? 0] : user.Node | null
     let b12 = nonNullItems?.[0] : int | null
@@ -92,9 +92,6 @@ function user.OptionalIndex(node: user.Node | null, items: int[] | null, lookup:
     let b13 = <missing> : never
     return b1 ?? 0 : unknown
   }
-  !! 3611..3634: did you mean `items?.[0]?.to_string`? `items?.[0].to_string` does not handle the case when `items?.[0]` is null
-  !! 3625..3634: type `int` has no member `to_string`
-  !! 3611..3636: `unknown | null` is not a function — it cannot be called
   !! 3926..3943: did you mean `nonNullItems[0]`? `nonNullItems?.[0]` is unnecessary, because `nonNullItems` cannot be null
   ?? 4309..4390: unreachable code: 1 statement(s) after diverging statement
 }
@@ -148,8 +145,6 @@ function user.Combined(user: user.User | null, node: user.Node | null, items: in
     node?.children?.[node?.value ?? 0]?.next?.value = node?.value ?? 0 : unknown
     return e3 : unknown
   }
-  !! 8142..8151: type `int` has no member `to_string`
-  !! 8111..8153: `unknown | null` is not a function — it cannot be called
   !! 8080..8175: did you mean `user?.profile?.name ?? node?.labels?.["name"]?.value.to_string()`? `user?.profile?.name ?? node?.labels?.["name"]?.value.to_string() ?? "fallback"` is unnecessary, because `user?.profile?.name ?? node?.labels?.["name"]?.value.to_string()` cannot be null
   ?? 8369..8478: unreachable code: 6 statement(s) after diverging statement
 }
