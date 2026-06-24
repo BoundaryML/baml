@@ -666,10 +666,76 @@ impl KnownKind for RawString {
     }
 }
 impl Printable for RawString {
-    fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let text = &printer.input[self.span()];
         let multi_lined = text.contains('\n');
-        printer.print_raw_token(self);
+        if !multi_lined {
+            // print as-is
+            printer.print_raw_token(self);
+            return PrintInfo { multi_lined };
+        }
+
+        // we need to re-organize the interior
+        let (Some(start_quote), Some(end_quote)) = (text.find('"'), text.rfind('"')) else {
+            // should never happen, but print as-is if it does
+            printer.print_raw_token(self);
+            return PrintInfo { multi_lined };
+        };
+        if end_quote <= start_quote {
+            // should never happen, but print as-is if it does
+            printer.print_raw_token(self);
+            return PrintInfo { multi_lined };
+        }
+
+        let interior = &text[start_quote + 1..end_quote].trim();
+        let mut lines = interior.lines();
+        let Some(first_line) = lines.next() else {
+            // Interior is empty after trim (e.g. `#"\n"#`) — print as-is.
+            printer.print_raw_token(self);
+            return PrintInfo { multi_lined };
+        };
+        let min_indent = lines
+            .clone()
+            .map(|line| {
+                let count = line.bytes().take_while(|c| *c == b' ').count();
+                if count == line.len() {
+                    // it is all spaces
+                    usize::MAX
+                } else {
+                    count
+                }
+            })
+            .min()
+            .unwrap_or(0);
+
+        let inner_base_indent = shape.indent + printer.config.indent_width;
+        printer.print_str(&text[..=start_quote]);
+        printer.print_newline();
+        printer.print_spaces(inner_base_indent);
+        printer.print_str(first_line.trim_start_matches(' '));
+        for line in lines {
+            if line.len() <= min_indent {
+                // This line must be all spaces since otherwise it would have affected `min_indent`.
+                // So we can print an empty line.
+                printer.print_newline();
+                continue;
+            }
+
+            let (removed_indent, line) = line.split_at(min_indent);
+            debug_assert!(
+                removed_indent.bytes().all(|c| c == b' '),
+                "should not have removed non-indent"
+            );
+            debug_assert!(!line.is_empty(), "should have been handled above");
+
+            printer.print_newline();
+            printer.print_spaces(inner_base_indent);
+            printer.print_str(line);
+        }
+        printer.print_newline();
+        printer.print_spaces(shape.indent);
+        printer.print_str(&text[end_quote..]);
+
         PrintInfo { multi_lined }
     }
     fn leftmost_token(&self) -> TextRange {
