@@ -20,21 +20,6 @@ function user.Config.from_json(j: baml.json.json) -> Config {
     return
 }
 
-function user.Config.to_json(self: Config) -> baml.json.json {
-    load_type string
-    load_var self
-    load_field .key
-    call baml.json.to_json
-    load_type string
-    load_var self
-    load_field .model
-    call baml.json.to_json
-    load_const "key"
-    load_const "model"
-    alloc_map 2
-    return
-}
-
 function user.GetResponse(cfg: Config) -> llm.Response {
     load_const "hello"
     load_var cfg
@@ -67,20 +52,5 @@ function user.llm.Response.from_json(j: baml.json.json) -> llm.Response {
     load_var _6
     call baml.json.from_json
     init_instance user.llm.Response .text, .model
-    return
-}
-
-function user.llm.Response.to_json(self: llm.Response) -> baml.json.json {
-    load_type string
-    load_var self
-    load_field .text
-    call baml.json.to_json
-    load_type string
-    load_var self
-    load_field .model
-    call baml.json.to_json
-    load_const "text"
-    load_const "model"
-    alloc_map 2
     return
 }

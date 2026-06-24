@@ -221,13 +221,6 @@ class Array<T> {
     $rust_function
   }
 
-  /// Serializes the array to a JSON array. Each element must be JSON-serializable.
-  //baml:mut_vm
-  //baml:may_yield
-  function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-    $rust_function
-  }
-
   // ─── Predicate scans (callback-driven) ────────────────────────────────────
   //
   // These methods all take a callback and either short-circuit (`some`,
@@ -540,13 +533,6 @@ class Map<K, V> {
   /// ```
   //baml:vm
   function get(self, key: K) -> V? throws never {
-    $rust_function
-  }
-
-  /// Serializes the map to a JSON object. Keys must be strings.
-  //baml:mut_vm
-  //baml:may_yield
-  function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
     $rust_function
   }
 

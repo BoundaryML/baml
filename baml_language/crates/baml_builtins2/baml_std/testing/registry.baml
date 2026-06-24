@@ -6,24 +6,12 @@ class TestRegistration {
   name string
   body TestBody
   runner TestRunner?
-
-  // body/runner are function-type aliases that have no `to_json` method, so we
-  // must use the runtime walker rather than per-field dispatch.
-  function to_json(self) -> json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-    baml.json.parse(baml.json.to_string<TestRegistration>(self))
-  }
 }
 
 class TestSetRegistration {
   name string
   collector TestSetBody
   runner TestSetRunner?
-
-  // collector/runner are function-type aliases that have no `to_json` method, so
-  // we must use the runtime walker rather than per-field dispatch.
-  function to_json(self) -> json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-    baml.json.parse(baml.json.to_string<TestSetRegistration>(self))
-  }
 }
 
 class TestCollector {

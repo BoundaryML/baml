@@ -5,9 +5,6 @@ source: crates/baml_tests/src/generated_tests.rs
 class user.MyRunner {
   threshold: float
 }
-function user.MyRunner.to_json(self: user.MyRunner) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "threshold": baml.json.to_json(self.threshold) } : map<string, baml.json.json>
-}
 function user.MyRunner.from_json(j: baml.json.json) -> user.MyRunner throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   MyRunner { threshold: baml.json.from_json<float>(baml.json.field(j, "threshold")) } : user.MyRunner
 }

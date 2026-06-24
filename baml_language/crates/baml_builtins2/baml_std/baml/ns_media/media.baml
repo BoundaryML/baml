@@ -2,13 +2,6 @@
 class Pdf {
   _data $rust_type
 
-  /// Serializes this PDF to a JSON representation for passing to an LLM provider.
-  //baml:mut_vm
-  //baml:fallible
-  function to_json(self) -> baml.json.json throws never {
-    $rust_function
-  }
-
   /// Returns the URL of this PDF, or `null` if it was not constructed from a URL.
   //baml:vm
   function url(self) -> string? throws never {
@@ -52,13 +45,6 @@ class Pdf {
 /// An audio clip value. Construct with `Audio.from_url`, `Audio.from_file`, or `Audio.from_base64`.
 class Audio {
   _data $rust_type
-
-  /// Serializes this audio clip to a JSON representation for passing to an LLM provider.
-  //baml:mut_vm
-  //baml:fallible
-  function to_json(self) -> baml.json.json throws never {
-    $rust_function
-  }
 
   /// Returns the URL of this audio clip, or `null` if it was not constructed from a URL.
   //baml:vm
@@ -104,13 +90,6 @@ class Audio {
 class Video {
   _data $rust_type
 
-  /// Serializes this video clip to a JSON representation for passing to an LLM provider.
-  //baml:mut_vm
-  //baml:fallible
-  function to_json(self) -> baml.json.json throws never {
-    $rust_function
-  }
-
   /// Returns the URL of this video clip, or `null` if it was not constructed from a URL.
   //baml:vm
   function url(self) -> string? throws never {
@@ -154,13 +133,6 @@ class Video {
 /// An image value. Construct with `Image.from_url`, `Image.from_file`, or `Image.from_base64`.
 class Image {
   _data $rust_type
-
-  /// Serializes this image to a JSON representation for passing to an LLM provider.
-  //baml:mut_vm
-  //baml:fallible
-  function to_json(self) -> baml.json.json throws never {
-    $rust_function
-  }
 
   /// Returns the URL of this image, or `null` if it was not constructed from a URL.
   //baml:vm

@@ -88,69 +88,6 @@ fn user.MetaField.from_json(j: baml.json.json) -> MetaField {
     }
 }
 
-fn user.MetaField.to_json(self: MetaField) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: MetaField // self // param
-    let _2: baml.json.json
-    let _3: type
-    let _4: MetaField
-    let _5: type
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _5 = load_type(type);
-        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _0 = { const "type": copy _2 };
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-}
-
-fn user.RiskFactor.to_json(self: RiskFactor) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: RiskFactor // self // param
-    let _2: baml.json.json
-    let _3: string
-    let _4: RiskFactor
-    let _5: type
-    let _6: baml.json.json
-    let _7: float
-    let _8: RiskFactor
-    let _9: type
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _5 = load_type(string);
-        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _8 = copy _1;
-        _7 = copy _8.1;
-        _9 = load_type(float);
-        _6 = call const fn baml.json.to_json<copy _9>(copy _7) -> [bb2];
-    }
-
-    bb2: {
-        _0 = { const "type": copy _2, const "severity": copy _6 };
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
 fn user.test_let_binding(function_name: string) -> string {
     // Locals:
     let _0: string // _0 // return

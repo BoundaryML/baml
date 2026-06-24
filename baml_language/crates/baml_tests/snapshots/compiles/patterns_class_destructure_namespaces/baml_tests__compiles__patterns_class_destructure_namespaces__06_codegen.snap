@@ -192,16 +192,6 @@ function user.llm.openai.Box.from_json(j: baml.json.json) -> llm.openai.Box<T> {
     return
 }
 
-function user.llm.openai.Box.to_json(self: llm.openai.Box<T>) -> baml.json.json {
-    load_type #0
-    load_var self
-    load_field .value
-    call baml.json.to_json
-    load_const "value"
-    alloc_map 1
-    return
-}
-
 function user.llm.openai.DestructureBareInNamespace(response: llm.openai.Response) -> int {
     load_var response
     load_field .score
@@ -221,16 +211,6 @@ function user.llm.openai.Outer.from_json(j: baml.json.json) -> llm.openai.Outer<
     return
 }
 
-function user.llm.openai.Outer.to_json(self: llm.openai.Outer<T>) -> baml.json.json {
-    load_type llm.openai.Box<#0>
-    load_var self
-    load_field .inner
-    call baml.json.to_json
-    load_const "inner"
-    alloc_map 1
-    return
-}
-
 function user.llm.openai.Response.from_json(j: baml.json.json) -> llm.openai.Response {
     load_var j
     load_const "text"
@@ -247,20 +227,5 @@ function user.llm.openai.Response.from_json(j: baml.json.json) -> llm.openai.Res
     load_var _6
     call baml.json.from_json
     init_instance user.llm.openai.Response .text, .score
-    return
-}
-
-function user.llm.openai.Response.to_json(self: llm.openai.Response) -> baml.json.json {
-    load_type string
-    load_var self
-    load_field .text
-    call baml.json.to_json
-    load_type int
-    load_var self
-    load_field .score
-    call baml.json.to_json
-    load_const "text"
-    load_const "score"
-    alloc_map 2
     return
 }

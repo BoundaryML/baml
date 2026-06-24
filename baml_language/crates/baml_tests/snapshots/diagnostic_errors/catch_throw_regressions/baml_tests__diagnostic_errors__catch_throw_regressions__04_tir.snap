@@ -85,9 +85,6 @@ function user.CatchRecursiveThrow(n: int) -> string throws never {
 class user.BuildError {
   reason: string
 }
-function user.BuildError.to_json(self: user.BuildError) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "reason": baml.json.to_json(self.reason) } : map<string, baml.json.json>
-}
 function user.BuildError.from_json(j: baml.json.json) -> user.BuildError throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   BuildError { reason: baml.json.from_json<string>(baml.json.field(j, "reason")) } : user.BuildError
 }

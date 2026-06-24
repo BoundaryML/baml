@@ -969,7 +969,7 @@ fn render_describe_methods_respect_budget() {
 
     // A generous budget renders every method, with no elision marker.
     for needle in [
-        "function to_json(self) -> json",
+        "function to_upper_case(self) -> string",
         "static_methods:",
         "function from_code_points(unicode: int[]) -> string",
     ] {
@@ -983,11 +983,11 @@ fn render_describe_methods_respect_budget() {
         "no elision marker expected at budget 1000:\n{full}"
     );
     assert!(
-        !tight.contains("function to_json(self) -> json"),
+        !tight.contains("function to_upper_case(self) -> string"),
         "late methods should be elided under budget 5:\n{tight}"
     );
     assert!(
-        full.contains("function to_json(self) -> json")
+        full.contains("function to_upper_case(self) -> string")
             && full.contains("function from_code_points(unicode: int[]) -> string"),
         "generous budgets should still show full method details:\n{full}"
     );

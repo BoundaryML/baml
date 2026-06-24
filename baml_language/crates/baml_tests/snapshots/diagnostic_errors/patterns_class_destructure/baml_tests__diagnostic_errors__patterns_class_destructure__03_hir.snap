@@ -143,24 +143,3 @@ function user.nested_class_field_type_narrower_than_field_is_refutable() -> int 
 function user.nested_generic_class_destructure_duplicate_binding_name() -> int  [expr] {
   { let boxed: user.Box<user.SameNameInner> = user.Box { value: user.SameNameInner { field: 1 } }; let Box<user.SameNameInner> { value: value: SameNameInner { field: value } } = boxed } 0
 }
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "age": baml.json.to_json(self.age), "flexible_age": baml.json.to_json(self.flexible_age), "address": baml.json.to_json(self.address) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "value": baml.json.to_json(self.value) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "zip": baml.json.to_json(self.zip) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "field": baml.json.to_json(self.field), "other": baml.json.to_json(self.other) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "age": baml.json.to_json(self.age) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "field": baml.json.to_json(self.field) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "age": baml.json.to_json(self.age) }
-}

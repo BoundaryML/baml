@@ -174,13 +174,3 @@ function user.TopLevelClass.from_json(j: baml.json.json) -> TopLevelClass {
     init_instance user.TopLevelClass .a
     return
 }
-
-function user.TopLevelClass.to_json(self: TopLevelClass) -> baml.json.json {
-    load_type string
-    load_var self
-    load_field .a
-    call baml.json.to_json
-    load_const "a"
-    alloc_map 1
-    return
-}

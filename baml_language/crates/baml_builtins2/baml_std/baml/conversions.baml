@@ -57,3 +57,66 @@ function _to_string_default<T>(value: T) -> string throws never {
 function _to_string_shim<T>(value: T) -> string throws never {
   $rust_function
 }
+
+/// Opt-in JSON conversion.
+///
+/// A type implements `baml.ToJson` to control how `baml.json.from(value)`
+/// renders it. This is the json analog of `baml.ToString`: `baml.json.from`
+/// provides a default structural rendering for non-implementors (primitives
+/// natural, lists/maps/instances structural), and an implementor customizes its
+/// own json shape.
+///
+/// ```
+/// class Temp {
+///   celsius float
+///   implements baml.ToJson {
+///     function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+///       { "c": baml.json.from(self.celsius), "f": baml.json.from(self.celsius * 1.8 + 32.0) }
+///     }
+///   }
+/// }
+/// ```
+///
+/// Unlike `to_string`, conversion can fail: a value with no json representation
+/// (`uint8array` without explicit encoding, function values, ...) throws
+/// `baml.json.JsonSerializationError`.
+///
+/// `to_json` has a default body — the same structural rendering `baml.json.from`
+/// falls back to for non-implementors — so `implements baml.ToJson {}` with no
+/// override is valid and renders identically to a non-implementor.
+interface ToJson {
+  function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+    root._to_json_default(self)
+  }
+}
+
+/// Internal: default structural json rendering used by `baml.json.from` for
+/// values whose runtime type does not implement `baml.ToJson`. Primitives render
+/// naturally; containers and class instances render structurally (`[1, 2]`,
+/// `{"field": value}`), enums as their variant name, media as the tagged form. A
+/// nested value whose runtime class *does* implement `baml.ToJson` is rendered
+/// via that override (so the default honors overrides at every depth, like
+/// `baml.json.from`). Throws `JsonSerializationError` for non-representable values.
+//baml:mut_vm
+//baml:may_yield
+function _to_json_default<T>(value: T) -> baml.json.json throws baml.json.JsonSerializationError {
+  $rust_function
+}
+
+/// Internal: dispatch `to_json` on `value`'s *runtime* class, honoring a
+/// user-defined override. `baml.json.from` routes through this rather than a
+/// static `match (value) { baml.ToJson => value.to_json() }`, for the same reason
+/// `string.from` uses [`_to_string_shim`]: static interface dispatch from this
+/// (stdlib) package can only see implementors visible here, not downstream user
+/// classes. Resolving on the receiver's runtime class instead picks up a user
+/// `implements baml.ToJson { function to_json ... }` override; a class that
+/// inherits the structural default body falls back to [`_to_json_default`].
+///
+/// TODO: temporary. Once Kai's TIR rework moves interface conformance checks to
+/// runtime, `baml.json.from` can use the literal `is baml.ToJson` form and this
+/// shim can be removed.
+//baml:mut_vm
+//baml:may_yield
+function _to_json_shim<T>(value: T) -> baml.json.json throws baml.json.JsonSerializationError {
+  $rust_function
+}

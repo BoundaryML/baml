@@ -20,6 +20,3 @@ function user.TypeBuilderFn$render_prompt(from_text: string, client: baml.llm.Cl
 function user.from_json(j: baml.json.json) -> user.Resume  [expr] {
   user.Resume { name: baml.json.from_json(baml.json.field(j, "name")) }
 }
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": baml.json.to_json(self.name) }
-}

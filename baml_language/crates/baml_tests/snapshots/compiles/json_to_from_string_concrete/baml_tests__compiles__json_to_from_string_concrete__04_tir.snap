@@ -6,9 +6,6 @@ class user.User {
   name: string
   age: int
 }
-function user.User.to_json(self: user.User) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "name": baml.json.to_json(self.name), "age": baml.json.to_json(self.age) } : map<string, baml.json.json>
-}
 function user.User.from_json(j: baml.json.json) -> user.User throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   User { name: baml.json.from_json<string>(baml.json.field(j, "name")), age: baml.json.from_json<int>(baml.json.field(j, "age")) } : user.User
 }

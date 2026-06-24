@@ -36,9 +36,6 @@ function user.UnknownFieldAccess(raw: unknown) -> string throws never {
 class user.Envelope {
   payload: unknown
 }
-function user.Envelope.to_json(self: user.Envelope) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<Envelope>(self)) : baml.json.json
-}
 function user.Envelope.from_json(j: baml.json.json) -> user.Envelope throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   baml.json.from_string<T>(baml.json.stringify(j)) : user.Envelope
 }
