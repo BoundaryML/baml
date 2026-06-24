@@ -1,10 +1,8 @@
 //! `BexExternalValue` -> `BamlOutboundValue` conversion.
 
-use base64::Engine as _;
-use bex_events::run::{RunError, RunErrorClass, RunOutcome, RunResult};
+use bex_events::run::{RunOutcome, RunResult};
 use bex_project::{BexExternalAdt, BexExternalValue};
 use indexmap::IndexMap;
-use prost::Message;
 
 use crate::{
     baml_core::cffi::{
@@ -202,25 +200,14 @@ pub fn external_to_outbound(
 }
 
 pub fn encoded_success_outcome(
-    result: &BexExternalValue,
+    _result: &BexExternalValue,
     renderer_hint: &'static str,
 ) -> RunOutcome {
-    let handle_options = CffiHandleTableOptions::for_wire();
-    match external_to_outbound(result, &handle_options) {
-        Ok(baml_val) => {
-            let b64 = base64::engine::general_purpose::STANDARD.encode(baml_val.encode_to_vec());
-            RunOutcome::Succeeded(RunResult {
-                value: Some(b64),
-                renderer_hint: Some(renderer_hint.to_string()),
-                supporting_payload_ids: Vec::new(),
-            })
-        }
-        Err(e) => RunOutcome::Failed(RunError {
-            class: RunErrorClass::Host,
-            message: format!("Failed to encode result: {e}"),
-            details: None,
-        }),
-    }
+    RunOutcome::Succeeded(RunResult {
+        value_ref: None,
+        renderer_hint: Some(renderer_hint.to_string()),
+        supporting_payload_ids: Vec::new(),
+    })
 }
 
 fn media_kind_to_proto_enum(kind: bex_project::MediaKind) -> crate::baml_core::cffi::MediaTypeEnum {

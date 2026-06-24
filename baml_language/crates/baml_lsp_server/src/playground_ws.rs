@@ -77,6 +77,15 @@ pub enum WsInMessage {
         #[serde(rename = "boundaryId")]
         boundary_id: String,
     },
+    #[serde(rename = "readValue")]
+    ReadValue {
+        #[serde(rename = "requestId")]
+        request_id: u64,
+        #[serde(rename = "boundaryId")]
+        boundary_id: String,
+        #[serde(rename = "valueRef")]
+        value_ref: WsValueRef,
+    },
     #[serde(rename = "subscribe")]
     Subscribe {
         #[serde(rename = "requestId")]
@@ -146,6 +155,12 @@ pub enum WsInMessage {
     /// User deleted an env var override in the UI.
     #[serde(rename = "deleteEnvVar")]
     DeleteEnvVar { key: String },
+}
+
+#[derive(Debug, Deserialize)]
+pub struct WsValueRef {
+    pub id: String,
+    pub codec: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -233,6 +248,21 @@ pub enum WsOutMessage {
         #[serde(rename = "boundaryId")]
         boundary_id: String,
         snapshot: serde_json::Value,
+    },
+    #[serde(rename = "valueBody")]
+    ValueBody {
+        #[serde(rename = "requestId")]
+        request_id: u64,
+        #[serde(rename = "boundaryId")]
+        boundary_id: String,
+        #[serde(rename = "valueRefId")]
+        value_ref_id: String,
+        codec: String,
+        availability: String,
+        #[serde(rename = "bodyBase64", skip_serializing_if = "Option::is_none")]
+        body_base64: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        diagnostic: Option<String>,
     },
     #[serde(rename = "runCursorExpired")]
     RunCursorExpired {
@@ -466,6 +496,30 @@ mod tests {
                 }),
             } if project_id == "/tmp/project" && function_name == "Extract"
         ));
+
+        let read_value = serde_json::from_value::<WsInMessage>(json!({
+            "type": "readValue",
+            "requestId": 15,
+            "boundaryId": "baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ",
+            "valueRef": {
+                "id": "value_1",
+                "codec": "bamlOutboundValue"
+            }
+        }))
+        .unwrap();
+        assert!(matches!(
+            read_value,
+            WsInMessage::ReadValue {
+                request_id: 15,
+                ref boundary_id,
+                value_ref: WsValueRef {
+                    ref id,
+                    codec: Some(ref codec),
+                },
+            } if boundary_id == "baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ"
+                && id == "value_1"
+                && codec == "bamlOutboundValue"
+        ));
     }
 
     #[test]
@@ -482,5 +536,27 @@ mod tests {
         assert_eq!(wire["subscriptionId"], "sub-1");
         assert_eq!(wire["boundaryId"], "baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ");
         assert_eq!(wire["reason"], "compacted");
+    }
+
+    #[test]
+    fn value_body_frame_uses_value_ref_identity() {
+        let msg = WsOutMessage::ValueBody {
+            request_id: 15,
+            boundary_id: "baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ".to_string(),
+            value_ref_id: "value_1".to_string(),
+            codec: "bamlOutboundValue".to_string(),
+            availability: "available".to_string(),
+            body_base64: Some("AQID".to_string()),
+            diagnostic: None,
+        };
+        let wire = serde_json::to_value(msg).unwrap();
+        assert_eq!(wire["type"], "valueBody");
+        assert_eq!(wire["requestId"], 15);
+        assert_eq!(wire["boundaryId"], "baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ");
+        assert_eq!(wire["valueRefId"], "value_1");
+        assert_eq!(wire["codec"], "bamlOutboundValue");
+        assert_eq!(wire["availability"], "available");
+        assert_eq!(wire["bodyBase64"], "AQID");
+        assert!(wire.get("diagnostic").is_none());
     }
 }

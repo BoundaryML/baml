@@ -1,0 +1,26 @@
+//! Target-neutral `.bamlvalue` metadata and framing.
+//!
+//! RunStore carries [`ValueRef`] metadata only. The bytes live in a value
+//! artifact and are hydrated by `readValue(boundaryId, valueRef)`.
+
+pub mod artifact;
+pub mod encode;
+pub mod read;
+pub mod record;
+pub mod writer;
+
+/// The `.bamlvalue` wire types, generated from `value/proto/bamlvalue.proto`.
+#[allow(
+    clippy::pedantic,
+    clippy::doc_markdown,
+    unreachable_pub,
+    reason = "prost-generated code"
+)]
+pub mod pb {
+    include!(concat!(env!("OUT_DIR"), "/baml.value.v1.rs"));
+}
+
+pub use artifact::{ByteValueArtifactSink, ValueArtifactRef, ValueArtifactSink};
+pub use read::{BamlvalueContents, read_bamlvalue_from_bytes, read_bamlvalue_from_reader};
+pub use record::{ValueAvailability, ValueCodec, ValueRecord, ValueRef};
+pub use writer::{ValueWriteOutcome, ValueWriter};

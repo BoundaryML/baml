@@ -19,6 +19,7 @@ async-trait = { workspace = true }
 futures = { workspace = true }
 indexmap = { workspace = true }
 num-bigint = { workspace = true }
+prost = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = [ "sync", "macros" ] }
 tokio-util = { workspace = true }

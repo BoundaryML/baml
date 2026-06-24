@@ -111,7 +111,8 @@ export type PlaygroundNotification =
       maxBytes?: number;
       droppedBytes: number;
       droppedChunks: number;
-    };
+    }
+  | ({ type: 'valueBody' } & ValueBodyResponse);
 
 export type ProfileArtifactChunkMessage = Extract<
   PlaygroundNotification,
@@ -211,6 +212,33 @@ export interface EnvVarRequest {
 export type BoundaryId = string;
 export type RunCursor = number;
 
+export type ValueCodec = 'bamlOutboundValue';
+export type ValueAvailability =
+  | 'pending'
+  | 'available'
+  | 'missing'
+  | 'omitted'
+  | 'lost';
+
+export interface ValueRef {
+  id: string;
+  codec: ValueCodec;
+  availability: ValueAvailability;
+  originalSizeBytes: number | null;
+  retainedSizeBytes: number | null;
+  diagnostic: string | null;
+}
+
+export interface ValueBodyResponse {
+  requestId: number;
+  boundaryId: BoundaryId;
+  valueRefId: string;
+  codec: ValueCodec;
+  availability: ValueAvailability;
+  bodyBase64?: string;
+  diagnostic?: string;
+}
+
 export type RunStatus =
   | 'pending'
   | 'running'
@@ -244,7 +272,9 @@ export interface RunRequestSummary {
 }
 
 export interface RunResult {
-  value: string | null;
+  valueRef: ValueRef | null;
+  /** Compatibility for older runtimes during local development. */
+  value?: string | null;
   rendererHint: string | null;
   supportingPayloadIds: string[];
 }
@@ -253,6 +283,7 @@ export interface RunError {
   class: string;
   message: string;
   details: string | null;
+  valueRef: ValueRef | null;
 }
 
 export interface RunCancellation {
@@ -354,8 +385,8 @@ export interface PayloadEvent {
         state: RunRequestState;
         waiterCount: number;
       }
-    | {
-        type: 'envResolved';
+	    | {
+	        type: 'envResolved';
         requestId: string;
         key: string;
         status:
@@ -365,9 +396,15 @@ export interface PayloadEvent {
           | 'declinedMissing';
         state: RunRequestState;
         valueRedacted: boolean;
-        displayValue: string | null;
-      }
-    | { type: 'log'; level: string | null; message: string };
+	        displayValue: string | null;
+	      }
+	    | { type: 'log'; level: string | null; message: string }
+	    | {
+	        type: 'capturedValue';
+	        role: 'rootInput';
+	        label: string | null;
+	        valueRef: ValueRef | null;
+	      };
   redaction: {
     valueRedacted: boolean;
     displaySafe: boolean;
@@ -491,6 +528,7 @@ export type WebSocketOutMessage =
   | { type: 'commandError'; requestId: number; code: string; message: string }
   | { type: 'runList'; requestId: number; runs: RunSummary[] }
   | { type: 'runSnapshot'; requestId?: number; boundaryId: BoundaryId; snapshot: Run }
+  | ({ type: 'valueBody' } & ValueBodyResponse)
   | {
       type: 'runCursorExpired';
       requestId?: number;
@@ -578,6 +616,12 @@ export type WebSocketInMessage =
   | { type: 'listRuns'; requestId: number; filter?: RunListFilter }
   | { type: 'snapshot'; requestId: number; boundaryId: BoundaryId }
   | {
+      type: 'readValue';
+      requestId: number;
+      boundaryId: BoundaryId;
+      valueRef: ValueRef;
+    }
+  | {
       type: 'subscribe';
       requestId: number;
       subscriptionId: string;
@@ -624,6 +668,7 @@ export type WorkerOutMessage =
   | { type: 'commandError'; requestId: number; code: string; message: string }
   | { type: 'runList'; requestId: number; runs: RunSummary[] }
   | { type: 'runSnapshot'; requestId?: number; boundaryId: BoundaryId; snapshot: Run }
+  | ({ type: 'valueBody' } & ValueBodyResponse)
   | {
       type: 'runCursorExpired';
       requestId?: number;
@@ -702,6 +747,12 @@ export type WorkerInMessage =
     }
   | { type: 'listRuns'; requestId: number; filter?: RunListFilter }
   | { type: 'snapshot'; requestId: number; boundaryId: BoundaryId }
+  | {
+      type: 'readValue';
+      requestId: number;
+      boundaryId: BoundaryId;
+      valueRef: ValueRef;
+    }
   | {
       type: 'subscribe';
       requestId: number;

@@ -127,6 +127,18 @@ pub enum PlaygroundNotification {
         snapshot: serde_json::Value,
     },
     #[serde(rename_all = "camelCase")]
+    ValueBody {
+        request_id: u64,
+        boundary_id: String,
+        value_ref_id: String,
+        codec: String,
+        availability: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        body_base64: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        diagnostic: Option<String>,
+    },
+    #[serde(rename_all = "camelCase")]
     RunList {
         request_id: u64,
         runs: Vec<serde_json::Value>,

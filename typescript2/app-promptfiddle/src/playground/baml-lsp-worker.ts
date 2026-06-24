@@ -425,6 +425,18 @@ function onPlaygroundNotification(notification: PlaygroundNotification): void {
         snapshot: notification.snapshot,
       } as WorkerOutMessage);
       break;
+    case "valueBody":
+      postOut({
+        type: "valueBody",
+        requestId: notification.requestId,
+        boundaryId: notification.boundaryId,
+        valueRefId: notification.valueRefId,
+        codec: notification.codec,
+        availability: notification.availability,
+        bodyBase64: notification.bodyBase64,
+        diagnostic: notification.diagnostic,
+      } as WorkerOutMessage);
+      break;
     case "runList":
       postOut({
         type: "runList",
@@ -863,6 +875,23 @@ self.onmessage = async (event: MessageEvent) => {
             type: "commandError",
             requestId: msg.requestId,
             code: "wasmSnapshotFailed",
+            message: e instanceof Error ? e.message : String(e),
+          });
+        }
+        return;
+      }
+
+    case "readValue":
+      {
+        const rt = runtimeForCommand(msg.requestId, "wasmRuntimeNotReady");
+        if (!rt) return;
+        try {
+          rt.readValue(msg.requestId, msg.boundaryId, msg.valueRef);
+        } catch (e) {
+          postOut({
+            type: "commandError",
+            requestId: msg.requestId,
+            code: "wasmReadValueFailed",
             message: e instanceof Error ? e.message : String(e),
           });
         }

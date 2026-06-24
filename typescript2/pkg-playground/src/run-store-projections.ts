@@ -7,7 +7,9 @@ import type {
   Run,
   BoundaryId,
   RunTarget,
+  ValueRef,
 } from './worker-protocol';
+import type { ValueBodyCache } from './value-body-cache';
 
 export type RunStoreDisplayRun = {
   id: BoundaryId;
@@ -19,8 +21,10 @@ export type RunStoreDisplayRun = {
   argsJson: string;
   fetchLogs: FetchLogEntry[];
   inputRequests: Array<{ id: string; prompt: string | null }>;
+  rootInput: BamlJsValue | null;
   result: BamlJsValue | null;
   error: string | null;
+  errorValue: BamlJsValue | null;
   status: 'running' | 'success' | 'error' | 'cancelled';
   startTime: number;
   durationMs: number | null;
@@ -83,6 +87,7 @@ export type ExecutionProfileFilters = {
 export function runToDisplayRun(
   run: Run,
   argsJsonByBoundaryId: Record<string, string>,
+  valueBodyCache?: ValueBodyCache,
 ): RunStoreDisplayRun | null {
   const identity = runDisplayIdentity(run);
   if (!identity) return null;
@@ -96,8 +101,10 @@ export function runToDisplayRun(
     argsJson: argsJsonByBoundaryId[run.boundaryId] ?? run.request.argsSummary ?? '',
     fetchLogs: payloadsToFetchLogs(run.payloads),
     inputRequests: payloadsToPendingInputs(run.payloads),
-    result: decodeRunResultValue(run),
+    rootInput: decodeRootInputValue(run, valueBodyCache),
+    result: decodeRunResultValue(run, valueBodyCache),
     error: run.error?.message ?? null,
+    errorValue: decodeRunErrorValue(run, valueBodyCache),
     status: runStatusToDisplayStatus(run.status),
     startTime: run.startedAtMs ?? run.createdAtMs,
     durationMs: runDurationMs(run),
@@ -619,23 +626,83 @@ function payloadsToPendingInputs(
   return [...pending.values()];
 }
 
-export function decodeRunResultValue(run: Run): BamlJsValue | null {
+export function decodeRunResultValue(
+  run: Run,
+  valueBodyCache?: ValueBodyCache,
+): BamlJsValue | null {
+  const valueRef = run.result?.valueRef;
+  if (valueRef) return decodeValueRef(run.boundaryId, valueRef, valueBodyCache);
   const encoded = run.result?.value;
   if (!encoded) return null;
+  return decodeBase64BamlOutboundValue(encoded);
+}
+
+export function decodeRunErrorValue(
+  run: Run,
+  valueBodyCache?: ValueBodyCache,
+): BamlJsValue | null {
+  const valueRef = run.error?.valueRef;
+  if (!valueRef) return null;
+  return decodeValueRef(run.boundaryId, valueRef, valueBodyCache);
+}
+
+export function decodeRootInputValue(
+  run: Run,
+  valueBodyCache?: ValueBodyCache,
+): BamlJsValue | null {
+  for (const payload of run.payloads) {
+    const kind = payload.kind;
+    if (kind.type === 'capturedValue' && kind.role === 'rootInput') {
+      return decodeValueRef(run.boundaryId, kind.valueRef, valueBodyCache);
+    }
+  }
+  return null;
+}
+
+function decodeValueRef(
+  boundaryId: BoundaryId,
+  valueRef: ValueRef | null,
+  valueBodyCache?: ValueBodyCache,
+): BamlJsValue | null {
+  if (!valueRef || valueRef.availability !== 'available') return null;
+  const cached = valueBodyCache?.get(boundaryId, valueRef);
+  if (!cached) {
+    void valueBodyCache?.read(boundaryId, valueRef).catch(() => {});
+    return null;
+  }
+  if (
+    cached.availability !== 'available' ||
+    cached.codec !== 'bamlOutboundValue' ||
+    !cached.bytes
+  ) {
+    return null;
+  }
+  try {
+    return decodeBamlOutboundValue(cached.bytes);
+  } catch {
+    return null;
+  }
+}
+
+function decodeBase64BamlOutboundValue(encoded: string): BamlJsValue | null {
   try {
     const binary = atob(encoded);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i += 1) {
       bytes[i] = binary.charCodeAt(i);
     }
-    return decodeCallResult(bytes, (key, handleType, typeName) => ({
-      handle_key: key,
-      handle_type: handleType,
-      type_name: typeName,
-    }));
+    return decodeBamlOutboundValue(bytes);
   } catch {
     return null;
   }
+}
+
+function decodeBamlOutboundValue(bytes: Uint8Array): BamlJsValue {
+  return decodeCallResult(bytes, (key, handleType, typeName) => ({
+    handle_key: key,
+    handle_type: handleType,
+    type_name: typeName,
+  }));
 }
 
 function payloadsToFetchLogs(payloads: PayloadEvent[]): FetchLogEntry[] {

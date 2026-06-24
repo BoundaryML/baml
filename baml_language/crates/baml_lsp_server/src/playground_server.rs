@@ -9,9 +9,10 @@
 //!   Serves pre-built static assets with SPA fallback.
 
 use std::{
+    collections::HashMap,
     net::SocketAddr,
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{Arc, Mutex},
 };
 
 use axum::{
@@ -28,13 +29,13 @@ use axum::{
 };
 use base64::Engine as _;
 use bex_events::run::{
-    AttachRootTraceResult, BoundaryId, CancellationState, ExecutionRequest, HostCallId,
-    InMemoryRunStore, ProjectGeneration, ProjectId, RequestId, RunCursor, RunCursorExpiredReason,
-    RunError, RunErrorClass, RunFilter, RunKind, RunOutcome, RunSubscription, RunTarget,
-    RunVisibilityFilter, StartedHostRun,
+    AttachRootTraceResult, BoundaryId, CancellationState, DiagnosticSeverity, ExecutionRequest,
+    HostCallId, InMemoryRunStore, ProjectGeneration, ProjectId, RequestId, RunCursor,
+    RunCursorExpiredReason, RunDiagnostic, RunError, RunErrorClass, RunFilter, RunKind, RunOutcome,
+    RunResult, RunSubscription, RunTarget, RunVisibilityFilter, StartedHostRun,
 };
+use bex_events::value::{ByteValueArtifactSink, ValueCodec, ValueRef, ValueWriter};
 use bex_project::{is_cancelled_engine_error, is_cancelled_runtime_error};
-use bridge_ctypes::encoded_success_outcome;
 use futures::{SinkExt, stream::StreamExt};
 use tokio::{net::TcpListener, sync::broadcast};
 
@@ -133,7 +134,10 @@ fn broadcast_root_trace_attachment(
     }
 }
 
-fn engine_error_outcome(err: &bex_project::EngineError) -> RunOutcome {
+fn engine_error_outcome_with_ref(
+    err: &bex_project::EngineError,
+    value_ref: Option<ValueRef>,
+) -> RunOutcome {
     if is_cancelled_engine_error(err) {
         let now = epoch_ms();
         return RunOutcome::Cancelled(CancellationState {
@@ -146,6 +150,7 @@ fn engine_error_outcome(err: &bex_project::EngineError) -> RunOutcome {
         class: RunErrorClass::Runtime,
         message: format!("{err}"),
         details: None,
+        value_ref,
     })
 }
 
@@ -287,7 +292,10 @@ fn runtime_error_class(err: &bex_project::RuntimeError) -> RunErrorClass {
     }
 }
 
-fn runtime_error_outcome(err: &bex_project::RuntimeError) -> RunOutcome {
+fn runtime_error_outcome_with_ref(
+    err: &bex_project::RuntimeError,
+    value_ref: Option<ValueRef>,
+) -> RunOutcome {
     if is_cancelled_runtime_error(err) {
         let now = epoch_ms();
         return RunOutcome::Cancelled(CancellationState {
@@ -300,6 +308,7 @@ fn runtime_error_outcome(err: &bex_project::RuntimeError) -> RunOutcome {
         class: runtime_error_class(err),
         message: format!("{err}"),
         details: None,
+        value_ref,
     })
 }
 
@@ -343,12 +352,111 @@ struct WsState {
     env_state: Arc<PlaygroundEnvState>,
     io_state: Arc<PlaygroundIoState>,
     run_store: Arc<InMemoryRunStore>,
+    value_store: LiveValueStore,
     /// LSP output (responses + publishDiagnostics) destined for `/api/lsp`.
     lsp_out_tx: broadcast::Sender<lsp_server::Message>,
     /// What the browser currently has per file (for disk-watcher echo avoidance).
     doc_mirror: DocMirror,
     /// Workspace roots that browser-mode LSP saves are allowed to write under.
     workspace_roots: Arc<Vec<PathBuf>>,
+}
+
+type LiveValueStore = Arc<Mutex<HashMap<(BoundaryId, String), LiveValueBody>>>;
+
+#[derive(Clone)]
+struct LiveValueBody {
+    codec: ValueCodec,
+    body: Vec<u8>,
+}
+
+#[derive(Default)]
+struct RootValueRefs {
+    output: Option<ValueRef>,
+    error: Option<ValueRef>,
+}
+
+fn root_value_success_outcome(value_ref: Option<ValueRef>, renderer_hint: &str) -> RunOutcome {
+    RunOutcome::Succeeded(RunResult {
+        value_ref,
+        renderer_hint: Some(renderer_hint.to_string()),
+        supporting_payload_ids: Vec::new(),
+    })
+}
+
+fn drain_captured_values_and_broadcast(
+    broadcast_tx: &broadcast::Sender<WsOutMessage>,
+    run_store: &InMemoryRunStore,
+    value_store: &LiveValueStore,
+    boundary_id: BoundaryId,
+    producer: &bex_project::TraceCaptureProducer,
+) -> RootValueRefs {
+    let mut writer = match ValueWriter::new(ByteValueArtifactSink::new(), boundary_id) {
+        Ok(writer) => writer,
+        Err(err) => {
+            broadcast_value_capture_diagnostic(broadcast_tx, run_store, boundary_id, err);
+            return RootValueRefs::default();
+        }
+    };
+    let encoded_values = match producer.drain_to_value_writer(&mut writer) {
+        Ok(encoded_values) => encoded_values,
+        Err(err) => {
+            broadcast_value_capture_diagnostic(broadcast_tx, run_store, boundary_id, err);
+            return RootValueRefs::default();
+        }
+    };
+
+    let mut refs = RootValueRefs::default();
+    for encoded in encoded_values {
+        let value_ref = encoded.value_ref;
+        let value_key = (encoded.boundary_id, value_ref.id.clone());
+        if let Ok(mut store) = value_store.lock() {
+            store.insert(
+                value_key,
+                LiveValueBody {
+                    codec: value_ref.codec,
+                    body: encoded.body,
+                },
+            );
+        }
+
+        match encoded.kind {
+            bex_project::CaptureKind::RootInput => {
+                if let Some(patch) =
+                    run_store.ingest_root_input_value_ref(encoded.boundary_id, Some(value_ref))
+                {
+                    broadcast_run_patch(broadcast_tx, &patch);
+                }
+            }
+            bex_project::CaptureKind::RootOutput => {
+                refs.output = Some(value_ref);
+            }
+            bex_project::CaptureKind::RootError => {
+                refs.error = Some(value_ref);
+            }
+        }
+    }
+
+    refs
+}
+
+fn broadcast_value_capture_diagnostic(
+    broadcast_tx: &broadcast::Sender<WsOutMessage>,
+    run_store: &InMemoryRunStore,
+    boundary_id: BoundaryId,
+    err: impl std::fmt::Display,
+) {
+    if let Some(patch) = run_store.add_diagnostic(
+        boundary_id,
+        RunDiagnostic {
+            severity: DiagnosticSeverity::Warning,
+            code: Some("valueCaptureFailed".to_string()),
+            message: format!("Failed to retain captured value bytes: {err}"),
+            call_node_id: None,
+            payload_id: None,
+        },
+    ) {
+        broadcast_run_patch(broadcast_tx, &patch);
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -485,12 +593,14 @@ fn build_router(
     workspace_roots: Arc<Vec<PathBuf>>,
     access_guard: PlaygroundAccessGuard,
 ) -> anyhow::Result<Router> {
+    let value_store = Arc::new(Mutex::new(HashMap::new()));
     let ws_state = WsState {
         bex,
         broadcast_tx,
         env_state,
         io_state,
         run_store,
+        value_store,
         lsp_out_tx,
         doc_mirror,
         workspace_roots,
@@ -1124,8 +1234,14 @@ async fn handle_function_run(
     let project_generation = state.bex.project_generation(&project).unwrap_or(0);
     let fs_path = bex_project::FsPath::from_str(project);
     let boundary_id = BoundaryId::new_random();
-    let function_call_ctx =
-        bex_project::FunctionCallContextBuilder::new(call_id).with_boundary_id(boundary_id);
+    let value_capture =
+        bex_project::TraceCaptureProducer::new(bex_project::TraceCaptureConfig::enabled(16));
+    let function_call_ctx = bex_project::FunctionCallContextBuilder::new(call_id)
+        .with_boundary_id(boundary_id)
+        .with_capture_defaults(bex_project::CaptureDefaults {
+            values_enabled: true,
+        })
+        .with_value_capture(value_capture.clone());
 
     let bex = match state.bex.get_bex_for_project(&fs_path) {
         Ok(bex) => bex,
@@ -1143,6 +1259,7 @@ async fn handle_function_run(
     };
 
     let run_store = state.run_store.clone();
+    let value_store = state.value_store.clone();
     let started = run_store.create_attached_run(
         boundary_id,
         ExecutionRequest {
@@ -1176,18 +1293,32 @@ async fn handle_function_run(
                     traced.entry_call_ref,
                     "",
                 );
+                let refs = drain_captured_values_and_broadcast(
+                    &broadcast_tx,
+                    &run_store,
+                    &value_store,
+                    boundary_id,
+                    &value_capture,
+                );
                 let outcome = match traced.value {
-                    Ok(result) => encoded_success_outcome(&result, "baml.outbound.base64"),
-                    Err(e) => runtime_error_outcome(&e),
+                    Ok(_result) => root_value_success_outcome(refs.output, "baml.outbound.base64"),
+                    Err(e) => runtime_error_outcome_with_ref(&e, refs.error),
                 };
                 complete_run_and_broadcast(&broadcast_tx, &run_store, boundary_id, outcome);
             }
             Err(e) => {
+                let refs = drain_captured_values_and_broadcast(
+                    &broadcast_tx,
+                    &run_store,
+                    &value_store,
+                    boundary_id,
+                    &value_capture,
+                );
                 complete_run_and_broadcast(
                     &broadcast_tx,
                     &run_store,
                     boundary_id,
-                    runtime_error_outcome(&e),
+                    runtime_error_outcome_with_ref(&e, refs.error),
                 );
             }
         };
@@ -1203,12 +1334,19 @@ fn handle_test_run(
     state: &WsState,
 ) {
     let boundary_id = BoundaryId::new_random();
+    let value_capture =
+        bex_project::TraceCaptureProducer::new(bex_project::TraceCaptureConfig::enabled(16));
     let ctx = bex_project::FunctionCallContextBuilder::new(call_id)
         .with_boundary_id(boundary_id)
+        .with_capture_defaults(bex_project::CaptureDefaults {
+            values_enabled: true,
+        })
+        .with_value_capture(value_capture.clone())
         .build();
     let broadcast_tx = state.broadcast_tx.clone();
     let bex = state.bex.clone();
     let run_store = state.run_store.clone();
+    let value_store = state.value_store.clone();
     let started = run_store.create_attached_run(
         boundary_id,
         ExecutionRequest {
@@ -1244,18 +1382,32 @@ fn handle_test_run(
                     traced.entry_call_ref,
                     "test ",
                 );
+                let refs = drain_captured_values_and_broadcast(
+                    &broadcast_tx,
+                    &run_store,
+                    &value_store,
+                    boundary_id,
+                    &value_capture,
+                );
                 let outcome = match traced.value {
-                    Ok(result) => encoded_success_outcome(&result, "testReport"),
-                    Err(e) => engine_error_outcome(&e),
+                    Ok(_result) => root_value_success_outcome(refs.output, "testReport"),
+                    Err(e) => engine_error_outcome_with_ref(&e, refs.error),
                 };
                 complete_run_and_broadcast(&broadcast_tx, &run_store, boundary_id, outcome);
             }
             Err(e) => {
+                let refs = drain_captured_values_and_broadcast(
+                    &broadcast_tx,
+                    &run_store,
+                    &value_store,
+                    boundary_id,
+                    &value_capture,
+                );
                 complete_run_and_broadcast(
                     &broadcast_tx,
                     &run_store,
                     boundary_id,
-                    engine_error_outcome(&e),
+                    engine_error_outcome_with_ref(&e, refs.error),
                 );
             }
         };
@@ -1426,6 +1578,52 @@ async fn handle_ws_in_message(
                     .await;
                 }
             }
+        }
+
+        WsInMessage::ReadValue {
+            request_id,
+            boundary_id,
+            value_ref,
+        } => {
+            let boundary_id = match parse_boundary_id_for_request(request_id, &boundary_id) {
+                Ok(boundary_id) => boundary_id,
+                Err(msg) => {
+                    send_ws(sink, &msg).await;
+                    return;
+                }
+            };
+            let value_ref_id = value_ref.id;
+            let stored = state
+                .value_store
+                .lock()
+                .ok()
+                .and_then(|store| store.get(&(boundary_id, value_ref_id.clone())).cloned());
+            let response = if let Some(stored) = stored {
+                WsOutMessage::ValueBody {
+                    request_id,
+                    boundary_id: boundary_id.to_wire_string(),
+                    value_ref_id,
+                    codec: stored.codec.as_wire_str().to_string(),
+                    availability: "available".to_string(),
+                    body_base64: Some(
+                        base64::engine::general_purpose::STANDARD.encode(stored.body),
+                    ),
+                    diagnostic: None,
+                }
+            } else {
+                WsOutMessage::ValueBody {
+                    request_id,
+                    boundary_id: boundary_id.to_wire_string(),
+                    value_ref_id,
+                    codec: value_ref
+                        .codec
+                        .unwrap_or_else(|| ValueCodec::BamlOutboundValue.as_wire_str().to_string()),
+                    availability: "missing".to_string(),
+                    body_base64: None,
+                    diagnostic: Some("value body is not available".to_string()),
+                }
+            };
+            send_ws(sink, &response).await;
         }
 
         WsInMessage::Subscribe {

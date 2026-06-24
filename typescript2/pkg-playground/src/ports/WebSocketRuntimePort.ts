@@ -206,6 +206,13 @@ export class WebSocketRuntimePort implements RuntimePort {
         return { type: 'listRuns', requestId: msg.requestId, filter: msg.filter };
       case 'snapshot':
         return { type: 'snapshot', requestId: msg.requestId, boundaryId: msg.boundaryId };
+      case 'readValue':
+        return {
+          type: 'readValue',
+          requestId: msg.requestId,
+          boundaryId: msg.boundaryId,
+          valueRef: msg.valueRef,
+        };
       case 'subscribe':
         return {
           type: 'subscribe',
@@ -329,6 +336,17 @@ export class WebSocketRuntimePort implements RuntimePort {
           requestId: raw.requestId,
           boundaryId: raw.boundaryId,
           snapshot: raw.snapshot,
+        };
+      case 'valueBody':
+        return {
+          type: 'valueBody',
+          requestId: raw.requestId,
+          boundaryId: raw.boundaryId,
+          valueRefId: raw.valueRefId,
+          codec: raw.codec,
+          availability: raw.availability,
+          bodyBase64: raw.bodyBase64,
+          diagnostic: raw.diagnostic,
         };
       case 'runCursorExpired':
         return {

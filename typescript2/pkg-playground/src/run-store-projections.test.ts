@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { BamlOutboundValue } from '@b/pkg-proto';
 
 import {
   buildExecutionProfileProjection,
@@ -8,7 +9,8 @@ import {
   runToDisplayRun,
   runToTraceRows,
 } from './run-store-projections';
-import type { Run } from './worker-protocol';
+import type { Run, ValueRef } from './worker-protocol';
+import type { ValueBodyCache } from './value-body-cache';
 
 describe('run-store-projections', () => {
   it('projects fetch payloads from RunStore snapshots without exposing values', () => {
@@ -84,6 +86,7 @@ describe('run-store-projections', () => {
         class: 'Runtime',
         message: 'boom',
         details: null,
+        valueRef: null,
       },
     });
 
@@ -92,6 +95,84 @@ describe('run-store-projections', () => {
     expect(display?.status).toBe('error');
     expect(display?.durationMs).toBe(65);
     expect(display?.error).toBe('boom');
+  });
+
+  it('hydrates RunResult valueRef bytes through the value body cache', () => {
+    const bytes = outboundStringBytes('hello from ref');
+    const valueRef = valueRefFixture('value_1', bytes);
+    const cache = cacheWith('value_1', bytes);
+    const run = runFixture({
+      result: {
+        valueRef,
+        rendererHint: 'baml.outbound.base64',
+        supportingPayloadIds: [],
+      },
+    });
+
+    const display = runToDisplayRun(run, {}, cache);
+
+    expect(display?.result).toBe('hello from ref');
+  });
+
+  it('hydrates root thrown value refs through the value body cache', () => {
+    const bytes = outboundStringBytes('bad input');
+    const valueRef = valueRefFixture('error_value', bytes);
+    const display = runToDisplayRun(
+      runFixture({
+        status: 'failed',
+        error: {
+          class: 'Runtime',
+          message: 'failed',
+          details: null,
+          valueRef,
+        },
+      }),
+      {},
+      cacheWith('error_value', bytes),
+    );
+
+    expect(display?.error).toBe('failed');
+    expect(display?.errorValue).toBe('bad input');
+  });
+
+  it('hydrates root input capturedValue payload refs through the value body cache', () => {
+    const bytes = BamlOutboundValue.encode({
+      value: {
+        $case: 'mapValue',
+        mapValue: {
+          keyType: undefined,
+          valueType: undefined,
+          entries: [
+            {
+              key: 'topic',
+              value: {
+                value: { $case: 'stringValue', stringValue: 'volcanoes' },
+              },
+            },
+          ],
+        },
+      },
+    }).finish();
+    const valueRef = valueRefFixture('input_value', bytes);
+    const display = runToDisplayRun(
+      runFixture({
+        payloads: [
+          payloadFixture({
+            id: 'payload-input',
+            kind: {
+              type: 'capturedValue',
+              role: 'rootInput',
+              label: 'inputs',
+              valueRef,
+            },
+          }),
+        ],
+      }),
+      {},
+      cacheWith('input_value', bytes),
+    );
+
+    expect(display?.rootInput).toEqual({ topic: 'volcanoes' });
   });
 
   it('projects test execution runs without modeling discovery as a run', () => {
@@ -538,6 +619,40 @@ function payloadFixture(
     },
     body: null,
     ...overrides,
+  };
+}
+
+function outboundStringBytes(value: string): Uint8Array {
+  return BamlOutboundValue.encode({
+    value: { $case: 'stringValue', stringValue: value },
+  }).finish();
+}
+
+function valueRefFixture(id: string, bytes: Uint8Array): ValueRef {
+  return {
+    id,
+    codec: 'bamlOutboundValue',
+    availability: 'available',
+    originalSizeBytes: bytes.length,
+    retainedSizeBytes: bytes.length,
+    diagnostic: null,
+  };
+}
+
+function cacheWith(valueRefId: string, bytes: Uint8Array): ValueBodyCache {
+  return {
+    get: () => ({
+      boundaryId: 'run-1',
+      valueRefId,
+      codec: 'bamlOutboundValue',
+      availability: 'available',
+      bytes,
+      diagnostic: null,
+    }),
+    read: async () => {
+      throw new Error('cache hit should not read');
+    },
+    subscribe: () => () => {},
   };
 }
 

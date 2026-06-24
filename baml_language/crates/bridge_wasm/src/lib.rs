@@ -36,7 +36,7 @@
 //! runtime.startRun(1, "/project", "Greet", argsBytes);
 //! ```
 
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 mod error;
 mod handle;
@@ -65,11 +65,12 @@ use bex_events::{
         AttachRootTraceResult, BoundaryId, CancellationState, EnvResolutionStatus,
         ExecutionRequest, HostCallId, InMemoryRunStore, ProjectGeneration, ProjectId, RequestId,
         RunCursor, RunCursorExpiredReason, RunDiagnostic, RunError, RunErrorClass, RunFilter,
-        RunKind, RunOutcome, RunRequestState, RunSubscription, RunTarget, RunVisibilityFilter,
-        RuntimeTarget, StartedHostRun, patch_to_wire, run_summary_to_wire, run_to_wire,
+        RunKind, RunOutcome, RunRequestState, RunResult, RunSubscription, RunTarget,
+        RunVisibilityFilter, RuntimeTarget, StartedHostRun, patch_to_wire, run_summary_to_wire,
+        run_to_wire,
     },
+    value::{ByteValueArtifactSink, ValueCodec, ValueRef, ValueWriter},
 };
-use bridge_ctypes::encoded_success_outcome;
 pub use bridge_ctypes::{
     HANDLE_TABLE, baml_core, external_to_outbound, playground_run_args_to_bex_values,
 };
@@ -112,6 +113,26 @@ enum WasmRunListVisibility {
     HistoryOnly,
     IncludeHidden,
     AllForDebug,
+}
+
+#[derive(Debug, Deserialize)]
+struct WasmValueRef {
+    id: String,
+    codec: Option<String>,
+}
+
+type WasmLiveValueStore = Rc<RefCell<HashMap<(BoundaryId, String), WasmLiveValueBody>>>;
+
+#[derive(Clone)]
+struct WasmLiveValueBody {
+    codec: ValueCodec,
+    body: Vec<u8>,
+}
+
+#[derive(Default)]
+struct RootValueRefs {
+    output: Option<ValueRef>,
+    error: Option<ValueRef>,
 }
 
 fn run_filter_from_js(filter: JsValue) -> Result<RunFilter, String> {
@@ -296,6 +317,7 @@ pub struct BamlWasmRuntime {
     bex: std::sync::Arc<dyn bex_project::BexLsp>,
     run_store: std::sync::Arc<InMemoryRunStore>,
     profile_drain: Rc<RefCell<CooperativeProfileDrain>>,
+    value_store: WasmLiveValueStore,
     playground_callback: send_wrapper::SendWrapper<Function>,
 }
 
@@ -339,6 +361,7 @@ impl BamlWasmRuntime {
         #[allow(clippy::arc_with_non_send_sync)]
         let wasm_vfs_arc = std::sync::Arc::new(wasm_vfs);
         let run_store = std::sync::Arc::new(InMemoryRunStore::default());
+        let value_store = Rc::new(RefCell::new(HashMap::new()));
         let profile_drain = Rc::new(RefCell::new(CooperativeProfileDrain::new(
             CooperativeProfileDrainOptions {
                 target: RuntimeTarget::Wasm,
@@ -404,6 +427,7 @@ impl BamlWasmRuntime {
             bex: std::sync::Arc::from(bex),
             run_store,
             profile_drain,
+            value_store,
             playground_callback,
         })
     }
@@ -458,9 +482,16 @@ impl BamlWasmRuntime {
         let run_store = self.run_store.clone();
         let callback = self.playground_callback.clone();
         let profile_drain = self.profile_drain.clone();
+        let value_store = self.value_store.clone();
         let function_name = name.to_string();
+        let value_capture =
+            bex_project::TraceCaptureProducer::new(bex_project::TraceCaptureConfig::enabled(16));
         let ctx = bex_project::FunctionCallContextBuilder::new(call_id)
             .with_boundary_id(boundary_id)
+            .with_capture_defaults(bex_project::CaptureDefaults {
+                values_enabled: true,
+            })
+            .with_value_capture(value_capture.clone())
             .build();
         wasm_bindgen_futures::spawn_local(async move {
             match bex
@@ -469,19 +500,35 @@ impl BamlWasmRuntime {
             {
                 Ok(traced) => {
                     publish_root_trace(&callback, &run_store, boundary_id, traced.entry_call_ref);
+                    let refs = drain_wasm_captured_values(
+                        &callback,
+                        &run_store,
+                        &value_store,
+                        boundary_id,
+                        &value_capture,
+                    );
                     drain_wasm_profiles(&callback, &run_store, &profile_drain, Some(boundary_id));
                     let outcome = match traced.value {
-                        Ok(result) => encoded_success_outcome(&result, "baml.outbound.base64"),
-                        Err(e) => runtime_error_outcome(&e),
+                        Ok(_result) => {
+                            root_value_success_outcome(refs.output, "baml.outbound.base64")
+                        }
+                        Err(e) => runtime_error_outcome_with_ref(&e, refs.error),
                     };
                     complete_wasm_run(&callback, &run_store, boundary_id, outcome);
                 }
                 Err(e) => {
+                    let refs = drain_wasm_captured_values(
+                        &callback,
+                        &run_store,
+                        &value_store,
+                        boundary_id,
+                        &value_capture,
+                    );
                     complete_wasm_run(
                         &callback,
                         &run_store,
                         boundary_id,
-                        runtime_error_outcome(&e),
+                        runtime_error_outcome_with_ref(&e, refs.error),
                     );
                     drain_wasm_profiles(&callback, &run_store, &profile_drain, Some(boundary_id));
                 }
@@ -541,9 +588,16 @@ impl BamlWasmRuntime {
         let run_store = self.run_store.clone();
         let callback = self.playground_callback.clone();
         let profile_drain = self.profile_drain.clone();
+        let value_store = self.value_store.clone();
         let function_name = function_name.to_string();
+        let value_capture =
+            bex_project::TraceCaptureProducer::new(bex_project::TraceCaptureConfig::enabled(16));
         let ctx = bex_project::FunctionCallContextBuilder::new(call_id)
             .with_boundary_id(boundary_id)
+            .with_capture_defaults(bex_project::CaptureDefaults {
+                values_enabled: true,
+            })
+            .with_value_capture(value_capture.clone())
             .build();
         wasm_bindgen_futures::spawn_local(async move {
             match bex
@@ -552,19 +606,35 @@ impl BamlWasmRuntime {
             {
                 Ok(traced) => {
                     publish_root_trace(&callback, &run_store, boundary_id, traced.entry_call_ref);
+                    let refs = drain_wasm_captured_values(
+                        &callback,
+                        &run_store,
+                        &value_store,
+                        boundary_id,
+                        &value_capture,
+                    );
                     drain_wasm_profiles(&callback, &run_store, &profile_drain, Some(boundary_id));
                     let outcome = match traced.value {
-                        Ok(result) => encoded_success_outcome(&result, "baml.outbound.base64"),
-                        Err(e) => runtime_error_outcome(&e),
+                        Ok(_result) => {
+                            root_value_success_outcome(refs.output, "baml.outbound.base64")
+                        }
+                        Err(e) => runtime_error_outcome_with_ref(&e, refs.error),
                     };
                     complete_wasm_run(&callback, &run_store, boundary_id, outcome);
                 }
                 Err(e) => {
+                    let refs = drain_wasm_captured_values(
+                        &callback,
+                        &run_store,
+                        &value_store,
+                        boundary_id,
+                        &value_capture,
+                    );
                     complete_wasm_run(
                         &callback,
                         &run_store,
                         boundary_id,
-                        runtime_error_outcome(&e),
+                        runtime_error_outcome_with_ref(&e, refs.error),
                     );
                     drain_wasm_profiles(&callback, &run_store, &profile_drain, Some(boundary_id));
                 }
@@ -743,6 +813,56 @@ impl BamlWasmRuntime {
         Ok(())
     }
 
+    #[wasm_bindgen(js_name = readValue)]
+    pub fn read_value(
+        &self,
+        request_id: u32,
+        boundary_id: String,
+        value_ref: JsValue,
+    ) -> Result<(), JsValue> {
+        let parsed = parse_boundary_id(&boundary_id)?;
+        let value_ref: WasmValueRef = serde_wasm_bindgen::from_value(value_ref)
+            .map_err(|err| JsError::new(&format!("Invalid valueRef: {err}")))?;
+        let value_ref_id = value_ref.id;
+        let stored = self
+            .value_store
+            .borrow()
+            .get(&(parsed, value_ref_id.clone()))
+            .cloned();
+        if let Some(stored) = stored {
+            send_wasm_notification(
+                &self.playground_callback,
+                wasm_playground::PlaygroundNotification::ValueBody {
+                    request_id: u64::from(request_id),
+                    boundary_id,
+                    value_ref_id,
+                    codec: stored.codec.as_wire_str().to_string(),
+                    availability: "available".to_string(),
+                    body_base64: Some(
+                        base64::engine::general_purpose::STANDARD.encode(stored.body),
+                    ),
+                    diagnostic: None,
+                },
+            );
+        } else {
+            send_wasm_notification(
+                &self.playground_callback,
+                wasm_playground::PlaygroundNotification::ValueBody {
+                    request_id: u64::from(request_id),
+                    boundary_id,
+                    value_ref_id,
+                    codec: value_ref
+                        .codec
+                        .unwrap_or_else(|| ValueCodec::BamlOutboundValue.as_wire_str().to_string()),
+                    availability: "missing".to_string(),
+                    body_base64: None,
+                    diagnostic: Some("value body is not available".to_string()),
+                },
+            );
+        }
+        Ok(())
+    }
+
     #[wasm_bindgen(js_name = subscribe)]
     pub fn subscribe(
         &self,
@@ -887,11 +1007,18 @@ impl BamlWasmRuntime {
         let run_store = self.run_store.clone();
         let callback = self.playground_callback.clone();
         let profile_drain = self.profile_drain.clone();
+        let value_store = self.value_store.clone();
         let project = project.to_string();
         let test_name = test_name.to_string();
         let generation = u64::from(generation);
+        let value_capture =
+            bex_project::TraceCaptureProducer::new(bex_project::TraceCaptureConfig::enabled(16));
         let ctx = bex_project::FunctionCallContextBuilder::new(call_id)
             .with_boundary_id(boundary_id)
+            .with_capture_defaults(bex_project::CaptureDefaults {
+                values_enabled: true,
+            })
+            .with_value_capture(value_capture.clone())
             .build();
         wasm_bindgen_futures::spawn_local(async move {
             match bex
@@ -900,19 +1027,33 @@ impl BamlWasmRuntime {
             {
                 Ok(traced) => {
                     publish_root_trace(&callback, &run_store, boundary_id, traced.entry_call_ref);
+                    let refs = drain_wasm_captured_values(
+                        &callback,
+                        &run_store,
+                        &value_store,
+                        boundary_id,
+                        &value_capture,
+                    );
                     drain_wasm_profiles(&callback, &run_store, &profile_drain, Some(boundary_id));
                     let outcome = match traced.value {
-                        Ok(result) => encoded_success_outcome(&result, "testReport"),
-                        Err(e) => runtime_error_outcome(&e),
+                        Ok(_result) => root_value_success_outcome(refs.output, "testReport"),
+                        Err(e) => runtime_error_outcome_with_ref(&e, refs.error),
                     };
                     complete_wasm_run(&callback, &run_store, boundary_id, outcome);
                 }
                 Err(e) => {
+                    let refs = drain_wasm_captured_values(
+                        &callback,
+                        &run_store,
+                        &value_store,
+                        boundary_id,
+                        &value_capture,
+                    );
                     complete_wasm_run(
                         &callback,
                         &run_store,
                         boundary_id,
-                        runtime_error_outcome(&e),
+                        runtime_error_outcome_with_ref(&e, refs.error),
                     );
                     drain_wasm_profiles(&callback, &run_store, &profile_drain, Some(boundary_id));
                 }
@@ -1172,7 +1313,91 @@ fn hex_process_id(process_id: [u8; 16]) -> String {
     encoded
 }
 
-fn runtime_error_outcome(error: &impl std::fmt::Display) -> RunOutcome {
+fn root_value_success_outcome(value_ref: Option<ValueRef>, renderer_hint: &str) -> RunOutcome {
+    RunOutcome::Succeeded(RunResult {
+        value_ref,
+        renderer_hint: Some(renderer_hint.to_string()),
+        supporting_payload_ids: Vec::new(),
+    })
+}
+
+fn drain_wasm_captured_values(
+    callback: &send_wrapper::SendWrapper<Function>,
+    run_store: &InMemoryRunStore,
+    value_store: &WasmLiveValueStore,
+    boundary_id: BoundaryId,
+    producer: &bex_project::TraceCaptureProducer,
+) -> RootValueRefs {
+    let mut writer = match ValueWriter::new(ByteValueArtifactSink::new(), boundary_id) {
+        Ok(writer) => writer,
+        Err(err) => {
+            send_value_capture_diagnostic(callback, run_store, boundary_id, err);
+            return RootValueRefs::default();
+        }
+    };
+    let encoded_values = match producer.drain_to_value_writer(&mut writer) {
+        Ok(encoded_values) => encoded_values,
+        Err(err) => {
+            send_value_capture_diagnostic(callback, run_store, boundary_id, err);
+            return RootValueRefs::default();
+        }
+    };
+
+    let mut refs = RootValueRefs::default();
+    for encoded in encoded_values {
+        let value_ref = encoded.value_ref;
+        value_store.borrow_mut().insert(
+            (encoded.boundary_id, value_ref.id.clone()),
+            WasmLiveValueBody {
+                codec: value_ref.codec,
+                body: encoded.body,
+            },
+        );
+
+        match encoded.kind {
+            bex_project::CaptureKind::RootInput => {
+                if let Some(patch) =
+                    run_store.ingest_root_input_value_ref(encoded.boundary_id, Some(value_ref))
+                {
+                    send_run_patch(callback, &patch);
+                }
+            }
+            bex_project::CaptureKind::RootOutput => {
+                refs.output = Some(value_ref);
+            }
+            bex_project::CaptureKind::RootError => {
+                refs.error = Some(value_ref);
+            }
+        }
+    }
+
+    refs
+}
+
+fn send_value_capture_diagnostic(
+    callback: &send_wrapper::SendWrapper<Function>,
+    run_store: &InMemoryRunStore,
+    boundary_id: BoundaryId,
+    err: impl std::fmt::Display,
+) {
+    if let Some(patch) = run_store.add_diagnostic(
+        boundary_id,
+        RunDiagnostic {
+            severity: bex_events::run::DiagnosticSeverity::Warning,
+            code: Some("valueCaptureFailed".to_string()),
+            message: format!("Failed to retain captured value bytes: {err}"),
+            call_node_id: None,
+            payload_id: None,
+        },
+    ) {
+        send_run_patch(callback, &patch);
+    }
+}
+
+fn runtime_error_outcome_with_ref(
+    error: &impl std::fmt::Display,
+    value_ref: Option<ValueRef>,
+) -> RunOutcome {
     let message = format!("{error}");
     if message.to_lowercase().contains("cancel") {
         let now = epoch_ms();
@@ -1186,6 +1411,7 @@ fn runtime_error_outcome(error: &impl std::fmt::Display) -> RunOutcome {
             class: RunErrorClass::Runtime,
             message,
             details: None,
+            value_ref,
         })
     }
 }

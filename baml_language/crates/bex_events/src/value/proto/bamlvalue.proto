@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package baml.value.v1;
+
+enum ValueCodec {
+  VALUE_CODEC_UNSPECIFIED = 0;
+  VALUE_CODEC_BAML_OUTBOUND_VALUE = 1;
+}
+
+enum ValueAvailability {
+  VALUE_AVAILABILITY_UNSPECIFIED = 0;
+  VALUE_AVAILABILITY_PENDING = 1;
+  VALUE_AVAILABILITY_AVAILABLE = 2;
+  VALUE_AVAILABILITY_MISSING = 3;
+  VALUE_AVAILABILITY_OMITTED = 4;
+  VALUE_AVAILABILITY_LOST = 5;
+}
+
+message ValueFileHeaderV1 {
+  bytes boundary_id = 1;
+}
+
+message ValueMetadataV1 {
+  string id = 1;
+  ValueCodec codec = 2;
+  ValueAvailability availability = 3;
+  optional uint64 original_size_bytes = 4;
+  optional uint64 retained_size_bytes = 5;
+  optional string diagnostic = 6;
+}
+
+message ValueRecordV1 {
+  ValueMetadataV1 metadata = 1;
+  bytes body = 2;
+}

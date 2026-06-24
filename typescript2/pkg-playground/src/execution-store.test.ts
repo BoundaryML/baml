@@ -66,6 +66,7 @@ describe('execution-store', () => {
           outcome: {
             status: 'succeeded',
             result: {
+              valueRef: null,
               value: 'ok',
               rendererHint: null,
               supportingPayloadIds: [],
@@ -203,6 +204,7 @@ function mockRunStoreClient(): RunStoreClient {
     respondToEnv: vi.fn(),
     listRuns: vi.fn(),
     snapshot: vi.fn(),
+    readValue: vi.fn(),
     subscribe: vi.fn(),
     unsubscribe: vi.fn(),
     dispose: vi.fn(),

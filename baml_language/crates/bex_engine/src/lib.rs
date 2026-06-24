@@ -72,6 +72,9 @@ mod conversion;
 mod function_call_context;
 mod future;
 mod thread;
+pub mod trace_heap;
+mod trace_value_encode;
+pub mod value_capture;
 use std::{
     collections::HashMap,
     sync::{
@@ -115,6 +118,7 @@ use sys_types::{OpError, SysOpResult};
 use thiserror::Error;
 pub use tokio_util::sync::CancellationToken;
 
+use crate::value_capture::{CaptureKind, TraceCaptureProducer};
 pub use crate::{
     future::{FutureManager, FutureManagerGuard, FutureManagerInner},
     thread::{BexThread, ChildErrorQueue},
@@ -240,6 +244,13 @@ pub struct UserFunctionInfo {
 pub struct BexCallResult {
     pub value: Result<BexExternalValue, EngineError>,
     pub entry_call_ref: CallRef,
+}
+
+#[derive(Clone)]
+struct RootValueCaptureContext {
+    boundary_id: bex_events::ids::BoundaryId,
+    call: bex_events::run::TraceCallKey,
+    producer: TraceCaptureProducer,
 }
 
 /// Internal call argument after host binding has distinguished omission from
@@ -1841,6 +1852,7 @@ impl BexEngine {
         FunctionCallContext {
             host_call_id,
             boundary,
+            value_capture,
             cancel,
             profile_enabled,
             type_args,
@@ -1857,6 +1869,7 @@ impl BexEngine {
             FunctionCallContext {
                 host_call_id,
                 boundary,
+                value_capture,
                 cancel,
                 profile_enabled,
                 type_args,
@@ -1899,6 +1912,7 @@ impl BexEngine {
         FunctionCallContext {
             host_call_id,
             boundary,
+            value_capture,
             cancel,
             profile_enabled,
             type_args,
@@ -2092,6 +2106,11 @@ impl BexEngine {
                 BexCallArg::OmittedDefault => Ok(Value::OMITTED_ARG),
             })
             .collect::<Result<Vec<_>, _>>()?;
+        let root_input_values = params
+            .iter()
+            .zip(vm_args.iter())
+            .map(|((name, _, _), value)| ((*name).to_string(), *value))
+            .collect::<Vec<_>>();
 
         // `function_index` is the entry function's `HeapPtr`. The call's named
         // `type_args` are lowered to positional De Bruijn slots against the
@@ -2105,6 +2124,8 @@ impl BexEngine {
             throws_type,
             host_call_id,
             boundary,
+            value_capture,
+            Some(root_input_values),
             cancel,
             copy_objects,
         )
@@ -2172,6 +2193,8 @@ impl BexEngine {
         throws_type: Option<RuntimeTy>,
         host_call_id: CallId,
         boundary: BoundaryContext,
+        value_capture: TraceCaptureProducer,
+        root_input_values: Option<Vec<(String, Value)>>,
         cancel: CancellationToken,
         copy_objects: bool,
     ) -> Result<BexCallResult, EngineError> {
@@ -2212,6 +2235,31 @@ impl BexEngine {
             thread_id: BexThreadId(thread.vm.prof_thread_id),
             call_id: BexCallId(thread.vm.current_call_id()),
         };
+        let root_capture =
+            boundary
+                .capture_defaults
+                .values_enabled
+                .then(|| RootValueCaptureContext {
+                    boundary_id: boundary.boundary_id,
+                    call: bex_events::run::TraceCallKey {
+                        process_euid: entry_call_ref.process_euid,
+                        engine_id: entry_call_ref.engine_id,
+                        thread_id: entry_call_ref.thread_id,
+                        call_id: entry_call_ref.call_id,
+                    },
+                    producer: value_capture,
+                });
+        if let (Some(capture), Some(entries)) = (root_capture.as_ref(), root_input_values.as_ref())
+        {
+            let _ = capture.producer.capture_with(
+                capture.boundary_id,
+                capture.call,
+                CaptureKind::RootInput,
+                |trace_heap| {
+                    trace_heap.copy_named_values_from_bex_heap(&self.heap, thread.proof(), entries)
+                },
+            );
+        }
 
         // Run the event loop.
         let result = self
@@ -2220,6 +2268,7 @@ impl BexEngine {
                 throws_type,
                 thread,
                 host_call_id,
+                root_capture.clone(),
                 &cancel,
                 copy_objects,
             )
@@ -2287,6 +2336,7 @@ impl BexEngine {
         FunctionCallContext {
             host_call_id,
             boundary,
+            value_capture,
             cancel,
             profile_enabled,
             type_args: _,
@@ -2464,6 +2514,8 @@ impl BexEngine {
             throws_type,
             host_call_id,
             boundary,
+            value_capture,
+            None,
             cancel,
             copy_objects,
         )
@@ -2944,6 +2996,21 @@ impl BexEngine {
         Ok(())
     }
 
+    fn capture_root_value(
+        &self,
+        thread: &ActiveHeapPermit<BexThread>,
+        capture: &RootValueCaptureContext,
+        kind: CaptureKind,
+        value: Value,
+    ) {
+        let _ =
+            capture
+                .producer
+                .capture_with(capture.boundary_id, capture.call, kind, |trace_heap| {
+                    trace_heap.copy_value_from_bex_heap(&self.heap, thread.proof(), value)
+                });
+    }
+
     /// Route an unhandled VM throw value through the embedder's terminal
     /// paths: settle a spawned child errored (or cancelled), surface a clean
     /// `baml.panics.Exit`, or surface as `EngineError::UnhandledThrow`.
@@ -2959,6 +3026,7 @@ impl BexEngine {
         value: Value,
         trace: Vec<bex_vm::StackFrame>,
         throws_type: Option<&RuntimeTy>,
+        root_capture: Option<&RootValueCaptureContext>,
     ) -> Result<ThreadOutcome, EngineError> {
         if let Some(future_id) = thread.vm_thread_settles_future() {
             let is_cancel_panic =
@@ -2984,6 +3052,9 @@ impl BexEngine {
         // process exit code.
         if let Some(code) = extract_exit_code(&external) {
             return Err(EngineError::Exit { code });
+        }
+        if let Some(capture) = root_capture {
+            self.capture_root_value(thread, capture, CaptureKind::RootError, value);
         }
         Err(EngineError::UnhandledThrow {
             value: Box::new(external),
@@ -3037,6 +3108,7 @@ impl BexEngine {
         op_err: OpError,
         throws_type: Option<&RuntimeTy>,
         host_callable_throws_contract: Option<&RuntimeTy>,
+        root_capture: Option<&RootValueCaptureContext>,
     ) -> Result<Option<ThreadOutcome>, EngineError> {
         let materialized = match op_err.payload {
             sys_types::OpErrorPayload::HostThrown(thrown) => {
@@ -3056,15 +3128,29 @@ impl BexEngine {
             // never inside a watch-filter mini-runner.
             Ok(_crossed) => Ok(None),
             Err(bex_vm::errors::VmError::ThrownUnhandled { value, trace }) => Ok(Some(
-                self.route_unhandled_vm_throw(thread, call_id, value, trace, throws_type)
-                    .await?,
+                self.route_unhandled_vm_throw(
+                    thread,
+                    call_id,
+                    value,
+                    trace,
+                    throws_type,
+                    root_capture,
+                )
+                .await?,
             )),
             // Degenerate frame stack (e.g. all-Native at root): mirror the
             // existing `VmError::Thrown` arm by routing with no trace and no
             // `throws_type`-driven re-typing.
             Err(bex_vm::errors::VmError::Thrown(value)) => Ok(Some(
-                self.route_unhandled_vm_throw(thread, call_id, value, Vec::new(), None)
-                    .await?,
+                self.route_unhandled_vm_throw(
+                    thread,
+                    call_id,
+                    value,
+                    Vec::new(),
+                    None,
+                    root_capture,
+                )
+                .await?,
             )),
             Err(bex_vm::errors::VmError::InternalError(err)) => {
                 Err(EngineError::VmInternalError(err))
@@ -3350,7 +3436,15 @@ impl BexEngine {
             // wrapper on every exit path from here on.
             prof_closer.defuse();
             match engine
-                .run_thread_event_loop(return_type, None, permit, call_id, &child_cancel, true)
+                .run_thread_event_loop(
+                    return_type,
+                    None,
+                    permit,
+                    call_id,
+                    None,
+                    &child_cancel,
+                    true,
+                )
                 .await
             {
                 Ok(ThreadOutcome::SettledChild(_)) => {}
@@ -3416,6 +3510,7 @@ impl BexEngine {
         throws_type: Option<RuntimeTy>,
         thread: ActiveHeapPermit<BexThread>,
         call_id: CallId,
+        root_capture: Option<RootValueCaptureContext>,
         cancel: &CancellationToken,
         copy_objects: bool,
     ) -> Result<ThreadOutcome, EngineError> {
@@ -3433,6 +3528,7 @@ impl BexEngine {
                 throws_type,
                 thread,
                 call_id,
+                root_capture,
                 cancel,
                 copy_objects,
             )
@@ -3487,6 +3583,7 @@ impl BexEngine {
         throws_type: Option<RuntimeTy>,
         mut thread: ActiveHeapPermit<BexThread>,
         call_id: CallId,
+        root_capture: Option<RootValueCaptureContext>,
         cancel: &CancellationToken,
         copy_objects: bool,
     ) -> Result<ThreadOutcome, EngineError> {
@@ -3509,6 +3606,7 @@ impl BexEngine {
                             value,
                             trace,
                             throws_type.as_ref(),
+                            root_capture.as_ref(),
                         )
                         .await;
                 }
@@ -3540,6 +3638,9 @@ impl BexEngine {
                     let external = self.vm_value_to_owned(thread.proof(), value);
                     if let Some(code) = extract_exit_code(&external) {
                         return Err(EngineError::Exit { code });
+                    }
+                    if let Some(capture) = root_capture.as_ref() {
+                        self.capture_root_value(&thread, capture, CaptureKind::RootError, value);
                     }
                     return Err(EngineError::UnhandledThrow {
                         value: Box::new(external),
@@ -3585,6 +3686,14 @@ impl BexEngine {
                     // completed VM step, report a cancellation panic rather
                     // than returning a success value.
                     let cancelled = cancel.is_cancelled();
+
+                    if cancelled {
+                        return Err(cancelled_unhandled_throw());
+                    }
+
+                    if let Some(capture) = root_capture.as_ref() {
+                        self.capture_root_value(&thread, capture, CaptureKind::RootOutput, value);
+                    }
 
                     let (return_value, _event_result) = if !copy_objects {
                         if let Some(ptr) = value.as_object_ptr() {
@@ -3637,10 +3746,6 @@ impl BexEngine {
                         )?;
                         (external.clone(), external)
                     };
-
-                    if cancelled {
-                        return Err(cancelled_unhandled_throw());
-                    }
 
                     return Ok(ThreadOutcome::RootValue(return_value));
                 }
@@ -3817,6 +3922,7 @@ impl BexEngine {
                                         op_err,
                                         throws_type.as_ref(),
                                         host_throws_ty.as_ref(),
+                                        root_capture.as_ref(),
                                     )
                                     .await?
                                 {
@@ -3859,6 +3965,7 @@ impl BexEngine {
                                     op_err,
                                     throws_type.as_ref(),
                                     host_throws_ty.as_ref(),
+                                    root_capture.as_ref(),
                                 )
                                 .await?
                             {

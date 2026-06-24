@@ -133,6 +133,52 @@ describe('run-store-client', () => {
     client.dispose();
   });
 
+  it('reads value bodies with request correlation', async () => {
+    const port = new FakeRuntimePort();
+    const client = createRunStoreClient(port);
+    const boundaryId = 'baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ';
+    const valueRef = {
+      id: 'value_1',
+      codec: 'bamlOutboundValue' as const,
+      availability: 'available' as const,
+      originalSizeBytes: 3,
+      retainedSizeBytes: 3,
+      diagnostic: null,
+    };
+
+    const pending = client.readValue(boundaryId, valueRef);
+
+    expect(port.sent).toEqual([
+      {
+        type: 'readValue',
+        requestId: 1,
+        boundaryId,
+        valueRef,
+      },
+    ]);
+
+    port.emit({
+      type: 'valueBody',
+      requestId: 1,
+      boundaryId,
+      valueRefId: 'value_1',
+      codec: 'bamlOutboundValue',
+      availability: 'available',
+      bodyBase64: 'AQID',
+    });
+
+    await expect(pending).resolves.toEqual({
+      type: 'valueBody',
+      requestId: 1,
+      boundaryId,
+      valueRefId: 'value_1',
+      codec: 'bamlOutboundValue',
+      availability: 'available',
+      bodyBase64: 'AQID',
+    });
+    client.dispose();
+  });
+
   it('clears pending subscribe requests after initial cursor expiration', async () => {
     const port = new FakeRuntimePort();
     const client = createRunStoreClient(port);

@@ -5,6 +5,7 @@ pub mod prof;
 pub mod run;
 mod run_wire;
 mod span_id;
+pub mod value;
 
 pub use collector::{Collector, FunctionLog, LLMCall, Timing, Usage};
 pub use metadata::{

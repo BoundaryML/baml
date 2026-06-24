@@ -12,8 +12,9 @@ use std::{collections::HashMap, sync::Arc};
 pub use baml_builtins2::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
 pub use bex::{Bex, BexCallTraceResult};
 pub use bex_engine::{
-    CANCELLED_PANIC_CLASS, EngineError, FunctionCallContext, FunctionCallContextBuilder,
-    is_cancelled_engine_error,
+    CANCELLED_PANIC_CLASS, CaptureDefaults, EngineError, FunctionCallContext,
+    FunctionCallContextBuilder, is_cancelled_engine_error,
+    value_capture::{CaptureKind, EncodedTraceValue, TraceCaptureConfig, TraceCaptureProducer},
 };
 pub use bex_external_types::{
     BexExternalAdt, BexExternalValue, Handle, HostReleaseFn, HostReturnTypeError, HostValueArc,

@@ -8,6 +8,8 @@ import type {
   RunListFilter,
   RunPatch,
   RunSummary,
+  ValueBodyResponse,
+  ValueRef,
   WorkerOutMessage,
 } from './worker-protocol';
 
@@ -65,6 +67,7 @@ export interface RunStoreClient {
   ): Promise<RequestCommandOutcome | string>;
   listRuns(filter?: RunListFilter): Promise<RunSummary[]>;
   snapshot(boundaryId: BoundaryId): Promise<Run>;
+  readValue(boundaryId: BoundaryId, valueRef: ValueRef): Promise<ValueBodyResponse>;
   subscribe(boundaryId: BoundaryId, cursor?: RunCursor): RunSubscriptionHandle;
   unsubscribe(subscriptionId: string): Promise<RequestCommandOutcome | string>;
   dispose(): void;
@@ -75,6 +78,7 @@ type PendingRequest =
   | { kind: 'command'; resolve: (outcome: RequestCommandOutcome | string) => void; reject: (error: Error) => void }
   | { kind: 'listRuns'; resolve: (runs: RunSummary[]) => void; reject: (error: Error) => void }
   | { kind: 'snapshot'; resolve: (run: Run) => void; reject: (error: Error) => void }
+  | { kind: 'valueBody'; resolve: (body: ValueBodyResponse) => void; reject: (error: Error) => void }
   | { kind: 'subscribe'; subscriptionId: string; reject: (error: Error) => void };
 
 class AsyncQueue<T> implements AsyncIterable<T> {
@@ -186,6 +190,13 @@ export function createRunStoreClient(port: RuntimePort): RunStoreClient {
             subscription.queue.push({ type: 'snapshot', snapshot: msg.snapshot });
           }
         }
+        return;
+      }
+      case 'valueBody': {
+        const waiter = pending.get(msg.requestId);
+        if (!waiter || waiter.kind !== 'valueBody') return;
+        pending.delete(msg.requestId);
+        waiter.resolve(msg);
         return;
       }
       case 'runPatch':
@@ -328,6 +339,14 @@ export function createRunStoreClient(port: RuntimePort): RunStoreClient {
       return new Promise((resolve, reject) => {
         pending.set(id, { kind: 'snapshot', resolve, reject });
         port.postMessage({ type: 'snapshot', requestId: id, boundaryId });
+      });
+    },
+
+    readValue(boundaryId, valueRef) {
+      const id = requestId();
+      return new Promise((resolve, reject) => {
+        pending.set(id, { kind: 'valueBody', resolve, reject });
+        port.postMessage({ type: 'readValue', requestId: id, boundaryId, valueRef });
       });
     },
 

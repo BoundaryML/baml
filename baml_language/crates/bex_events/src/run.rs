@@ -23,6 +23,7 @@ use web_time::{SystemTime, UNIX_EPOCH};
 pub use crate::ids::BoundaryId;
 use crate::ids::{BexCallId, BexThreadId, CallRef, EngineId, FunctionId, ProcessEuid, ThreadRef};
 pub use crate::run_wire::{patch_to_wire, run_summary_to_wire, run_to_wire};
+use crate::value::ValueRef;
 
 pub trait ProfileEventObserver: Send + Sync + 'static {
     fn ingest_profile_event(&self, envelope: ProfileEventEnvelope);
@@ -309,7 +310,7 @@ impl RunOutcome {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RunResult {
-    pub value: Option<String>,
+    pub value_ref: Option<ValueRef>,
     pub renderer_hint: Option<String>,
     pub supporting_payload_ids: Vec<PayloadId>,
 }
@@ -319,6 +320,7 @@ pub struct RunError {
     pub class: RunErrorClass,
     pub message: String,
     pub details: Option<String>,
+    pub value_ref: Option<ValueRef>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -360,6 +362,19 @@ pub enum PayloadKind {
     EnvRequested(EnvRequested),
     EnvResolved(EnvResolved),
     Log(LogPayload),
+    CapturedValue(CapturedValuePayload),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CapturedValuePayload {
+    pub role: CapturedValueRole,
+    pub label: Option<String>,
+    pub value_ref: Option<ValueRef>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CapturedValueRole {
+    RootInput,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1180,6 +1195,33 @@ impl InMemoryRunStore {
             kind,
             redaction,
             body,
+        };
+        Some(push_payload_patch(record, &retention, payload, None))
+    }
+
+    pub fn ingest_root_input_value_ref(
+        &self,
+        boundary_id: BoundaryId,
+        value_ref: Option<ValueRef>,
+    ) -> Option<RunPatch> {
+        let mut inner = self
+            .inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let payload_id = inner.allocate_payload_id();
+        let retention = inner.retention.clone();
+        let record = inner.runs.get_mut(&boundary_id)?;
+        let payload = PayloadEvent {
+            id: payload_id,
+            call_node_id: record.run.root_call_node_id,
+            timestamp_ms: epoch_ms(),
+            kind: PayloadKind::CapturedValue(CapturedValuePayload {
+                role: CapturedValueRole::RootInput,
+                label: Some("inputs".to_string()),
+                value_ref,
+            }),
+            redaction: RedactionMetadata::display_safe(),
+            body: None,
         };
         Some(push_payload_patch(record, &retention, payload, None))
     }
@@ -2185,6 +2227,23 @@ fn recompute_record_profile(
     record.run.root_call_node_id = root_call_node_id;
     record.run.calls.clone_from(&reconstructed.calls);
     record.run.threads.clone_from(&reconstructed.threads);
+    let mut payload_updates = Vec::new();
+    if let Some(root_call_node_id) = root_call_node_id {
+        for payload in &mut record.run.payloads {
+            if payload.call_node_id.is_none()
+                && matches!(
+                    &payload.kind,
+                    PayloadKind::CapturedValue(CapturedValuePayload {
+                        role: CapturedValueRole::RootInput,
+                        ..
+                    })
+                )
+            {
+                payload.call_node_id = Some(root_call_node_id);
+                payload_updates.push(payload.clone());
+            }
+        }
+    }
     let graph_runtime_overlay =
         build_graph_runtime_overlay(&record.run, graph_overlay_span_provider);
     record.run.graph_runtime_overlay = Some(graph_runtime_overlay.clone());
@@ -2211,6 +2270,11 @@ fn recompute_record_profile(
             .calls
             .into_iter()
             .map(RunPatchChange::UpsertCallNode),
+    );
+    changes.extend(
+        payload_updates
+            .into_iter()
+            .map(RunPatchChange::UpsertPayload),
     );
     changes.extend(
         diagnostics
@@ -3366,6 +3430,7 @@ mod tests {
             class: RunErrorClass::Runtime,
             message: "boom".to_string(),
             details: None,
+            value_ref: None,
         });
         assert_eq!(outcome.status(), RunStatus::Failed);
         assert!(outcome.status().is_terminal());
@@ -4124,13 +4189,112 @@ mod tests {
     }
 
     #[test]
+    fn run_store_projects_root_value_refs_to_wire() {
+        use crate::value::{ValueCodec, ValueRef};
+
+        let store = InMemoryRunStore::default();
+        let success = create_test_run(&store, request("success"), RequestId(1));
+        let output_ref = ValueRef::available("value_output", ValueCodec::BamlOutboundValue, 4, 4);
+        store.complete_run(
+            success.boundary_id,
+            RunOutcome::Succeeded(RunResult {
+                value_ref: Some(output_ref),
+                renderer_hint: None,
+                supporting_payload_ids: Vec::new(),
+            }),
+            200,
+        );
+        let success_wire = run_to_wire(&store.snapshot(success.boundary_id).unwrap());
+        let result = success_wire["result"].as_object().unwrap();
+        assert!(!result.contains_key("value"));
+        assert_eq!(result["valueRef"]["id"], "value_output");
+        assert_eq!(result["valueRef"]["codec"], "bamlOutboundValue");
+        assert_eq!(result["valueRef"]["availability"], "available");
+
+        let failure = create_test_run(&store, request("failure"), RequestId(2));
+        let error_ref = ValueRef::available("value_error", ValueCodec::BamlOutboundValue, 2, 2);
+        store.complete_run(
+            failure.boundary_id,
+            RunOutcome::Failed(RunError {
+                class: RunErrorClass::Runtime,
+                message: "boom".to_string(),
+                details: None,
+                value_ref: Some(error_ref),
+            }),
+            300,
+        );
+        let failure_wire = run_to_wire(&store.snapshot(failure.boundary_id).unwrap());
+        assert_eq!(failure_wire["error"]["valueRef"]["id"], "value_error");
+
+        let inputs = create_test_run(&store, request("inputs"), RequestId(3));
+        let input_ref = ValueRef::available("value_inputs", ValueCodec::BamlOutboundValue, 8, 8);
+        store
+            .ingest_root_input_value_ref(inputs.boundary_id, Some(input_ref))
+            .unwrap();
+        assert_eq!(
+            store.snapshot(inputs.boundary_id).unwrap().payloads[0].call_node_id,
+            None
+        );
+        for event in [
+            envelope(
+                ProfileEventKind::StartThread {
+                    thread_id: BexThreadId(1),
+                    parent_thread_id: None,
+                    parent_call_id: None,
+                    name: None,
+                },
+                10,
+            ),
+            envelope(
+                ProfileEventKind::CallFunction {
+                    thread_id: BexThreadId(1),
+                    call_id: BexCallId(1),
+                    parent_call_id: None,
+                    function_id: FunctionId(1),
+                    call_site_source: None,
+                },
+                20,
+            ),
+        ] {
+            store.ingest_profile_event(event);
+        }
+        let AttachRootTraceResult::Attached { patches } =
+            store.attach_root_trace(inputs.boundary_id, root_call_ref(1, 1))
+        else {
+            panic!("root trace should attach");
+        };
+        assert!(patches.iter().any(|patch| {
+            patch.changes.iter().any(|change| {
+                matches!(
+                    change,
+                    RunPatchChange::UpsertPayload(PayloadEvent {
+                        call_node_id: Some(_),
+                        kind: PayloadKind::CapturedValue(CapturedValuePayload {
+                            role: CapturedValueRole::RootInput,
+                            ..
+                        }),
+                        ..
+                    })
+                )
+            })
+        }));
+        let inputs_wire = run_to_wire(&store.snapshot(inputs.boundary_id).unwrap());
+        let payload = &inputs_wire["payloads"][0];
+        assert!(payload["callNodeId"].is_string());
+        assert_eq!(payload["kind"]["type"], "capturedValue");
+        assert_eq!(payload["kind"]["role"], "rootInput");
+        assert_eq!(payload["kind"]["label"], "inputs");
+        assert_eq!(payload["kind"]["valueRef"]["id"], "value_inputs");
+    }
+
+    #[test]
     fn run_store_request_commands_report_terminal_and_cancelled_state() {
         let store = InMemoryRunStore::default();
         let start_terminal = create_test_run(&store, request("main"), RequestId(1));
         store.complete_run(
             start_terminal.boundary_id,
             RunOutcome::Succeeded(RunResult {
-                value: Some("ok".to_string()),
+                value_ref: None,
                 renderer_hint: None,
                 supporting_payload_ids: Vec::new(),
             }),
@@ -4196,7 +4360,7 @@ mod tests {
         store.complete_run(
             start.boundary_id,
             RunOutcome::Succeeded(RunResult {
-                value: Some("ok".to_string()),
+                value_ref: None,
                 renderer_hint: None,
                 supporting_payload_ids: Vec::new(),
             }),

@@ -58,6 +58,7 @@ import { FunctionSidebar } from './FunctionSidebar';
 import { companionFunctionName } from './shared/companion-functions';
 import { createExecutionStore, type ExecutionStore } from './execution-store';
 import { createRunStoreClient } from './run-store-client';
+import { createValueBodyCache } from './value-body-cache';
 import type { ExecutionStoreSnapshot } from './execution-store';
 import {
   decodeRunResultValue,
@@ -542,15 +543,21 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   argsByFunction,
   initialSidebarOpen = true,
 }) => {
+  const runStoreClient = useMemo(() => createRunStoreClient(port), [port]);
   const executionStore = useMemo(
-    () => createExecutionStore(createRunStoreClient(port)),
-    [port],
+    () => createExecutionStore(runStoreClient),
+    [runStoreClient],
+  );
+  const valueBodyCache = useMemo(
+    () => createValueBodyCache(runStoreClient),
+    [runStoreClient],
   );
   const pendingExecutionStoreDisposalsRef = useRef(
     new Map<ExecutionStore, ReturnType<typeof setTimeout>>(),
   );
   const [executionSnapshot, setExecutionSnapshot] =
     useState<ExecutionStoreSnapshot>(() => executionStore.getSnapshot());
+  const [valueBodyCacheVersion, setValueBodyCacheVersion] = useState(0);
   const [argsJsonByBoundaryId, setArgsJsonByBoundaryId] = useState<
     Record<string, string>
   >({});
@@ -559,6 +566,14 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     setExecutionSnapshot(executionStore.getSnapshot());
     return executionStore.subscribe(setExecutionSnapshot);
   }, [executionStore]);
+
+  useEffect(
+    () =>
+      valueBodyCache.subscribe(() => {
+        setValueBodyCacheVersion((version) => version + 1);
+      }),
+    [valueBodyCache],
+  );
 
   useEffect(() => {
     const pendingDispose =
@@ -610,12 +625,12 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   const displayRuns = useMemo(
     () =>
       executionSnapshot.runs
-        .map((run) => runToDisplayRun(run, argsJsonByBoundaryId))
+        .map((run) => runToDisplayRun(run, argsJsonByBoundaryId, valueBodyCache))
         .filter(
           (run): run is RunStoreDisplayRun =>
             run != null,
         ),
-    [executionSnapshot.runs, argsJsonByBoundaryId],
+    [executionSnapshot.runs, argsJsonByBoundaryId, valueBodyCache, valueBodyCacheVersion],
   );
   const functionRuns = useMemo(
     () =>
@@ -1162,6 +1177,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
         case 'commandError':
         case 'runList':
         case 'runSnapshot':
+        case 'valueBody':
         case 'runCursorExpired':
         case 'profileArtifactChunk':
           // RunStoreClient consumes these during the staged migration. The
@@ -1467,7 +1483,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
         if (run.status === 'cancelled') {
           throw new Error('Cancelled');
         }
-        const resultValue = decodeRunResultValue(run);
+        if (run.result?.valueRef) {
+          await valueBodyCache.read(run.boundaryId, run.result.valueRef);
+        }
+        const resultValue = decodeRunResultValue(run, valueBodyCache);
         if (resultValue == null) {
           throw new Error('Preview completed without a result');
         }
@@ -1497,6 +1516,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     argsJson,
     port,
     executionStore,
+    valueBodyCache,
     projectUpdateVersion,
   ]);
 
@@ -2530,6 +2550,17 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                           </span>
                         )}
                       </div>
+                      {run.rootInput != null && (
+                        <div className="py-1.5 pr-2.5 pl-[22px] border-b border-vsc-border-subtle">
+                          <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">
+                            Input
+                          </div>
+                          <ResultDisplay
+                            result={run.rootInput}
+                            customRenderers={resultRenderers}
+                          />
+                        </div>
+                      )}
                       {run.fetchLogs.map((log) => {
                         const isExp = expandedLogId === log.id;
                         const statusColorCls =
@@ -2648,6 +2679,14 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                             Error
                           </div>
                           <ErrorDisplay error={run.error} />
+                          {run.errorValue != null && (
+                            <div className="mt-1">
+                              <ResultDisplay
+                                result={run.errorValue}
+                                customRenderers={resultRenderers}
+                              />
+                            </div>
+                          )}
                         </div>
                       )}
                       {run.result != null && (
@@ -2923,6 +2962,18 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                             )}
                           </div>
 
+                          {run.rootInput != null && (
+                            <div className="py-1.5 pr-2.5 pl-[22px] border-b border-vsc-border-subtle">
+                              <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">
+                                Input
+                              </div>
+                              <ResultDisplay
+                                result={run.rootInput}
+                                customRenderers={resultRenderers}
+                              />
+                            </div>
+                          )}
+
                           {/* Fetch logs for this run */}
                           {run.fetchLogs.map((log) => {
                             const isExp = expandedLogId === log.id;
@@ -3048,6 +3099,14 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                                 error={run.error}
                                 onRetry={onRunFunction}
                               />
+                              {run.errorValue != null && (
+                                <div className="mt-1">
+                                  <ResultDisplay
+                                    result={run.errorValue}
+                                    customRenderers={resultRenderers}
+                                  />
+                                </div>
+                              )}
                             </div>
                           )}
                           {run.result != null && (
